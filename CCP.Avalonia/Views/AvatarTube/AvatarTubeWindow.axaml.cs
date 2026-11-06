@@ -56,18 +56,19 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
     ///         <c>ShowInTaskbar="False"</c> in the XAML, plus <c>ShowActivated="False"</c> for the
     ///         WS_EX_NOACTIVATE half. Declarative, so nothing to call.</item>
     ///   <item><c>SetWindowLongPtr(GWL_HWNDPARENT)</c> - native ownership, which is what glued the
-    ///         tube directly above main in z-order - -> <see cref="X11Overlay.RestackAbove"/> in
-    ///         <c>OnOpened</c>. Called unconditionally: the shim returns false off X11.</item>
+    ///         tube directly above main in z-order - -> <see cref="X11Overlay.SetTransientFor"/>
+    ///         (WM_TRANSIENT_FOR) while attached, plus <see cref="X11Overlay.RestackAbove"/> on open
+    ///         and when main activates (ApplyStacking). Both return false off X11.</item>
     ///   <item><c>SetWindowPos(SWP_FRAMECHANGED)</c>, <c>HwndSource.AddHook(WndProc)</c>,
     ///         <c>WindowInteropHelper</c>, <c>DisableProcessWindowsGhosting</c> - all dropped. They
     ///         exist to flush a LAYERED window's cached frame and to intercept WM_ messages; X11 has
     ///         neither the cache nor the message pump, so there is nothing to work around.</item>
     /// </list>
     ///
-    /// <para><b>ponytail: the restack is a one-shot.</b> Win32 ownership is PERSISTENT - the window
-    /// manager re-applies it every time main is raised. <c>_NET_RESTACK_WINDOW</c> is a single
-    /// request, so the tube can fall behind main after the user raises main again. Fixing that needs
-    /// the shim to grow a "follow this window" mode, which is its own layer.</para>
+    /// <para><b>Ownership is persistent.</b> Win32 ownership is re-applied by the window manager
+    /// every time main is raised. <c>_NET_RESTACK_WINDOW</c> alone is a single request, so the tube
+    /// fell behind main after the user raised main again; WM_TRANSIENT_FOR is the persistent X11
+    /// form, and the restack on main's activation covers window managers that ignore it.</para>
     ///
     /// <para><b>ponytail: no own-thread mode.</b> WPF ran this window on its own STA thread behind
     /// <c>AppSettings.AvatarOwnThread</c>, which is why every public method starts with a
@@ -300,10 +301,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             DispatcherTimer.RunOnce(() => { if (IsVisible) RestoreSavedPlacement(force: true); }, TimeSpan.FromSeconds(1));
             ToggleDetachedSink = ToggleDetached;
 
-            // The z-order pairing the WPF head got from native (GWL_HWNDPARENT) ownership. Safe to
-            // call unconditionally - the shim returns false off X11 and on the headless render.
-            if (_parentWindow is not null && _isAttached)
-                X11Overlay.RestackAbove(this, _parentWindow);
+            // The z-order pairing the WPF head got from native (GWL_HWNDPARENT) ownership is set by
+            // ApplyStacking (AvatarTubeWindow.InputShape.cs) from the Opened event and on every
+            // attach/detach. X11-only; a no-op on Windows and the headless render.
 
             // The live tube owns the static chat command for as long as it is open. WPF routed the
             // RoutedUICommand up the tree to whichever window handled it; there is no routed-command

@@ -74,6 +74,8 @@ internal static class X11Overlay
     [DllImport(LibX11)] private static extern int XSetInputFocus(IntPtr display, IntPtr window, int revertTo, nuint time);
     [DllImport(LibX11)] private static extern int XRaiseWindow(IntPtr display, IntPtr window);
     [DllImport(LibX11)] private static extern int XSendEvent(IntPtr display, IntPtr window, bool propagate, long mask, IntPtr sendEvent);
+    [DllImport(LibX11)] private static extern int XSetTransientForHint(IntPtr display, IntPtr window, IntPtr owner);
+    [DllImport(LibX11)] private static extern int XDeleteProperty(IntPtr display, IntPtr window, IntPtr property);
 
     [DllImport(LibXfixes)] private static extern int XFixesQueryExtension(IntPtr display, out int eventBase, out int errorBase);
     [DllImport(LibXfixes)] private static extern IntPtr XFixesCreateRegion(IntPtr display, IntPtr rectangles, int count);
@@ -284,6 +286,26 @@ internal static class X11Overlay
                 return !_xErrored; // e.g. BadWindow: the server refused the request
             }
             finally { Marshal.FreeHGlobal(attrs); }
+        }
+    }
+
+    /// <summary>X11 ownership, the form of Win32 GWL_HWNDPARENT that window managers keep: a
+    /// window with WM_TRANSIENT_FOR set is stacked directly above its owner, raised and lowered
+    /// with it, and goes behind other applications with it (ICCCM 4.1.2.6). Null clears it.
+    /// X11-only: false on Windows, headless and native Wayland, where nothing is changed.</summary>
+    internal static bool SetTransientFor(TopLevel window, TopLevel? owner)
+    {
+        if (!TryGetXid(window, out var xid)) return false;
+        var ownerXid = IntPtr.Zero;
+        if (owner != null && !TryGetXid(owner, out ownerXid)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            _xErrored = false;
+            if (ownerXid != IntPtr.Zero) XSetTransientForHint(_display, xid, ownerXid);
+            else XDeleteProperty(_display, xid, (IntPtr)68 /* XA_WM_TRANSIENT_FOR, X11/Xatom.h */);
+            XSync(_display, false);   // a different connection from Avalonia's: land before its XMapWindow
+            return !_xErrored;
         }
     }
 

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -85,6 +86,126 @@ public sealed class AvatarTubeWindowingTests
         Assert.True(f.X > 0 && f.Right < (int)Math.Round(tube.Width), $"float rect {f}");
         Assert.True(f.Width > tube.Width / 4);
     });
+
+    /// <summary>The painted-pixel shape never reaches over the shell either, on either dock side.</summary>
+    [Fact]
+    public Task InputShapeStaysInsideTheDockCut() => Run(detached: false, (main, tube) =>
+    {
+        void AssertClear()
+        {
+            tube.ApplyInputShape();
+            var clip = tube.InputRect!.Value;
+            var shell = new PixelRect(main.Position, PixelSize.FromSize(main.ClientSize, 1));
+            Assert.NotEmpty(tube.InputRects!);
+            foreach (var r in tube.InputRects!)
+            {
+                Assert.Equal(r, clip.Intersect(r));
+                Assert.False(r.Translate(new PixelVector(tube.Position.X, tube.Position.Y)).Intersects(shell), $"{r} over the shell");
+            }
+        }
+        AssertClear();
+        main.Position = new PixelPoint(0, 200);   // right dock
+        Dispatcher.UIThread.RunJobs();
+        AssertClear();
+    });
+
+    /// <summary>Owner, Linux beta: the transparent 780x1080 box swallowed clicks meant for the desktop.
+    /// WPF's layered window only takes the mouse on painted pixels (TubeArtAlpha.cs:8-18); the X11
+    /// input shape is the art's alpha plus the visible elements over it, and follows the bubble.</summary>
+    [Fact]
+    public Task InputShapeIsThePaintedPartsAndFollowsTheBubble() => Run(detached: false, (main, tube) =>
+    {
+        PixelRect[]? sent = null;
+        int writes = 0;
+        tube.InputShapeWriter = r => { sent = r; writes++; };
+        tube.ApplyInputShape();
+        var rects = tube.InputRects!;
+        Assert.Same(rects, sent);
+        int w = (int)Math.Round(tube.Width), h = (int)Math.Round(tube.Height);
+        // The canvas corners and the clear band above the glass are empty: clicks fall through.
+        Assert.False(TubeInputShape.Hits(rects, 2, 2));
+        Assert.False(TubeInputShape.Hits(rects, w - 3, h - 3));
+        Assert.False(TubeInputShape.Hits(rects, w / 2, 40));
+        // ...while her, her plate and the glass take them.
+        Assert.True(TubeInputShape.Hits(rects, Center(tube, "ImgAvatar").X, Center(tube, "ImgAvatar").Y));
+        Assert.True(TubeInputShape.Hits(rects, Center(tube, "TitleBox").X, Center(tube, "TitleBox").Y));
+        long area = 0;
+        foreach (var r in rects) area += (long)r.Width * r.Height;
+        Assert.True(area < (long)w * h / 2, $"{area} of {w * h} px take input");
+
+        tube.ApplyInputShape();
+        Assert.Equal(1, writes);   // unchanged: the server is not asked again
+
+        var bubble = tube.FindControl<Border>("SpeechBubble")!;
+        tube.FindControl<TextBlock>("TxtSpeech")!.Text = "Could not load those pictures. Try again in a moment?";
+        bubble.IsVisible = true;
+        Dispatcher.UIThread.RunJobs();
+        tube.ApplyInputShape();
+        var box = new PixelRect(PixelPoint.FromPoint(bubble.TranslatePoint(default, tube)!.Value, 1),
+            PixelPoint.FromPoint(bubble.TranslatePoint(new Point(bubble.Bounds.Width, bubble.Bounds.Height), tube)!.Value, 1));
+        var withBubble = tube.InputRects!;
+        Assert.True(TubeInputShape.Hits(withBubble, box.Center.X, box.Center.Y));
+        Assert.True(TubeInputShape.Hits(withBubble, box.X + 4, box.Y + 4));
+        Assert.Equal(2, writes);
+
+        bubble.IsVisible = false;
+        Dispatcher.UIThread.RunJobs();
+        tube.ApplyInputShape();
+        Assert.False(TubeInputShape.Hits(tube.InputRects!, box.X + 4, box.Y + 4));   // its corner is clear air again
+    });
+
+    [Fact]
+    public Task DetachedShapeHasNoDockCutButStillPassesTheClearAir() => Run(detached: true, (main, tube) =>
+    {
+        tube.InputShapeWriter = _ => { };
+        tube.ApplyInputShape();
+        Assert.Null(tube.InputRect);
+        Assert.NotEmpty(tube.InputRects!);
+        Assert.False(TubeInputShape.Hits(tube.InputRects!, 2, 2));
+        Assert.True(TubeInputShape.Hits(tube.InputRects!, Center(tube, "ImgAvatar").X, Center(tube, "ImgAvatar").Y));
+    });
+
+    [Fact]
+    public void ArtMaskMergesRowsAndDropsTheHaze()
+    {
+        var px = new byte[4 * 3 * 4];
+        void A(int x, int y, byte a) => px[(y * 4 + x) * 4 + 3] = a;
+        A(1, 0, 255); A(2, 0, 255);
+        A(1, 1, 200); A(2, 1, 9);
+        A(0, 2, 8); A(3, 2, 9);   // 8 is TubeArtAlpha's haze floor: gone; 9 is art
+        var mask = TubeArtMask.FromPixels(px, 4, 3, 16);
+        Assert.Equal(new[] { new MaskRun(1, 0, 3, 2), new MaskRun(3, 2, 4, 3) },
+            mask.Runs.OrderBy(r => r.Y0).ToArray());
+
+        var into = new System.Collections.Generic.List<PixelRect>();
+        TubeInputShape.AddArt(into, mask, new Rect(10, 20, 8, 6));   // 2x scale, offset
+        Assert.Contains(new PixelRect(12, 20, 4, 4), into);
+        Assert.Contains(new PixelRect(16, 24, 2, 2), into);
+    }
+
+    /// <summary>The owner's WSLg desk in X coordinates (xdpyinfo XINERAMA): the 1680x1050 monitor at
+    /// 0,235 and the 2048x1152@125% primary as 2560x1440 at 1680,0. Docking only ever looks at MAIN's
+    /// monitor, as WPF's DockWorkAreaPx does: no room left of main on its own monitor means a right
+    /// dock, even with another monitor on that side. Tube 768x1005, insets 232/345 as UpdatePosition
+    /// computes them for that size.</summary>
+    [Theory]
+    [InlineData(1998, 229, ConditioningControlPanel.AvatarTubeLayout.DockSide.Left, 1575)]   // live state 11-06: X has the tube at +1575
+    [InlineData(1700, 229, ConditioningControlPanel.AvatarTubeLayout.DockSide.Right, 3129)]  // main near the primary's left edge
+    public void OwnersTwoMonitorDeskDocksLikeWpf(int mainX, int mainY, ConditioningControlPanel.AvatarTubeLayout.DockSide side, int left)
+    {
+        var primary = new ConditioningControlPanel.AvatarTubeLayout.Box(1680, 0, 2560, 1440);
+        var plan = ConditioningControlPanel.AvatarTubeLayout.TubeDockPlacement.Place(
+            new ConditioningControlPanel.AvatarTubeLayout.Box(mainX, mainY, 1661, 1002), 768, 1005, 232, 345, 20, primary);
+        Assert.Equal(side, plan.Side);
+        Assert.Equal(left, plan.Left);
+    }
+
+    private static PixelPoint Center(AvatarTubeWindow tube, string name)
+    {
+        var c = tube.FindControl<Control>(name)!;
+        var p = c.TranslatePoint(new Point(c.Bounds.Width / 2, c.Bounds.Height / 2), tube)!.Value;
+        return new PixelPoint((int)p.X, (int)p.Y);
+    }
 
     [Fact]
     public Task AttachFromMenu_RestoresTheShellFirst() => Run(detached: true, (main, tube) =>

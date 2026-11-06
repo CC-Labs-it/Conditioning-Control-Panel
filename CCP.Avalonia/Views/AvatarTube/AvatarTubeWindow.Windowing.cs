@@ -83,11 +83,13 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 if (e.Property == IsVisibleProperty && !IsVisible) RestoreMadeRoom();
             };
             ApplyModeChrome();
+            InitInputShape();
         }
 
         private void ReleaseWindowing()
         {
             RestoreMadeRoom();
+            ReleaseInputShape();
             if (ToggleDetachedSink == (Action)ToggleDetached) ToggleDetachedSink = null;
             if (_parentWindow == null) return;
             _parentWindow.PositionChanged -= OnParentPositionChanged;
@@ -134,8 +136,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             RefreshTubeLayout();
             ApplyModeChrome();
             UpdatePosition();
-            if (attached && _parentWindow != null) Platform.X11Overlay.RestackAbove(this, _parentWindow);
-            if (!attached) Platform.X11Overlay.SetInputRect(this, null);
+            if (!attached) InputRect = null;   // free: no shell under her margin to protect
+            ApplyStacking();                   // owned by main when attached, free and Topmost when not
+            RequestInputShape();
             Log.Information("Avatar tube {Mode}", attached ? "attached" : "detached");
             if (_restoringPlacement) return;
             CoreSettings.Current.AvatarTubeDetached = !attached;
@@ -263,19 +266,21 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 (int)Math.Round(VerticalOffset * art), ToBox(work));
             Position = new PixelPoint(plan.Left, plan.Top);
             // WPF's transparent margin was click-through (layered window); an X11 window takes
-            // clicks on every pixel, so cut her input down to everything left of the seam or the
+            // clicks on every pixel, so her input is cut down to everything left of the seam or the
             // shell's rail under that margin goes dead. The cut follows the side she docked to: on a
-            // right dock her LEFT margin is the one over the shell. Detach gives the whole window back.
+            // right dock her LEFT margin is the one over the shell. It clips the painted-pixel input
+            // shape (AvatarTubeWindow.InputShape.cs); detached there is no clip.
             InputRect = plan.Side switch
             {
                 DockSide.Left => new PixelRect(0, 0, size.Width - rightInset, size.Height),
                 DockSide.Right => new PixelRect(leftInset, 0, size.Width - leftInset, size.Height),
                 _ => new PixelRect(leftInset, 0, Math.Max(0, size.Width - leftInset - rightInset), size.Height),   // floating over the shell: both margins
             };
-            Platform.X11Overlay.SetInputRect(this, InputRect);
+            RequestInputShape();
         }
 
-        /// <summary>The attached tube's input region (window px) as last set by <see cref="UpdatePosition"/>.</summary>
+        /// <summary>The attached tube's dock-side input clip (window px) as last set by
+        /// <see cref="UpdatePosition"/>; null while detached.</summary>
         internal PixelRect? InputRect { get; private set; }
 
         /// <summary>WPF RestoreSavedPlacement: a detached tube comes back where it was left, with at
