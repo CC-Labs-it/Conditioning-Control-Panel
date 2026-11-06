@@ -347,6 +347,11 @@
              the spark snaps back to its parked Opacity="0" - the same "cut it dead" intent the
              WPF comment states, minus the 80ms ramp. -->
   <ControlTheme x:Key="ToggleStyle" TargetType="CheckBox">
+    <!-- The spark grows to 36px around x = 33, past the 44x22 box. An Avalonia CheckBox clips
+         to its bounds, which cut WPF's soft round halo into a hard-edged square (measured in
+         the headless render); WPF never clips here. The halo also plays when a toggle loads
+         checked, as WPF's EnterActions do when the trigger is already true at template apply. -->
+    <Setter Property="ClipToBounds" Value="False"/>
     <Setter Property="Template">
       <ControlTemplate TargetType="CheckBox">
         <Grid x:Name="toggleRoot">
