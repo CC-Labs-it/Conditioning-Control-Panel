@@ -6,14 +6,16 @@ namespace ConditioningControlPanel.Services.Safety
     /// everything and then exits the app through the double-press rung. This admits the first report
     /// of a press and drops the other route's echo. The same route is never dropped, so a real double
     /// press still exits, and the first report of a press is never dropped, so panic is never delayed.
+    /// A dropped report still counts for the route's own bookkeeping: the caller decides what that is.
     /// </summary>
     internal sealed class PanicRouteGate
     {
         internal enum Route { X11, Portal }
 
-        /// <summary>Both reports landed in the same millisecond on Hyprland. A person cannot press
-        /// twice this fast, and losing one would only mean pressing again.</summary>
-        internal const int EchoWindowMs = 150;
+        /// <summary>Hyprland reports both within 1 ms; KWin consumes the key, so only the portal reports.
+        /// The margin is for a loaded desktop, where a late echo would exit the app. It costs little: only a
+        /// press heard solely by the other route can be lost, and pressing again recovers it.</summary>
+        internal const int EchoWindowMs = 500;
 
         private readonly object _gate = new();
         private Route? _lastRoute;

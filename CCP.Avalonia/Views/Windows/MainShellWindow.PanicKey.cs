@@ -45,24 +45,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             return X11PanicKey.Start(() => CoreSettings.Current.PanicKey, OnX11PanicPress);
         }
 
-        /// <summary>One X11 raw press of the panic key (listener thread): the panic, then the leash hold.</summary>
+        /// <summary>One X11 raw press of the panic key (listener thread): the panic, then the leash hold,
+        /// unless the portal's report of this press already ran both.</summary>
         internal void OnX11PanicPress()
         {
             Serilog.Log.Information("Panic trigger: XInput2 key press");
             if (!AdmitPanicRoute(PanicRouteGate.Route.X11)) return;
-            var s = CoreSettings.Current;
-            if (!s.PanicKeyEnabled || CapturingPanicKey || LockdownActive || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey)
-                Dispatcher.UIThread.Post(() => HandlePanicKeyPress(DateTime.Now));
-            else
-                PanicWatchdog.QueueWatched(() => HandlePanicKeyPress(DateTime.Now));   // #919b
+            QueuePanic(() => HandlePanicKeyPress(DateTime.Now));
             Dispatcher.UIThread.Post(LeashHoldPressed);   // after the panic: hold-to-cut (MainShellWindow.LeashHold.cs)
         }
 
-        /// <summary>One portal Activated (D-Bus thread): the same press as an XInput2 report, or a press of its own.</summary>
+        /// <summary>One portal Activated (D-Bus thread): a press of its own, or the XInput2 press again.
+        /// The echo adds no panic, but the hold still has to become a portal hold.</summary>
         internal void OnPortalPanicActivated()
         {
             Serilog.Log.Information("Panic trigger: GlobalShortcuts portal Activated");
-            if (AdmitPanicRoute(PanicRouteGate.Route.Portal)) Dispatcher.UIThread.Post(OnPortalPanicPressed);
+            if (AdmitPanicRoute(PanicRouteGate.Route.Portal)) QueuePanic(OnPortalPanicPressed);
+            else Dispatcher.UIThread.Post(AdoptPortalHold);
+        }
+
+        // Either route can win the race, so both are watched (#919b): if the UI thread never runs the
+        // press, the watchdog still stops things. A panic that is off or capturing has nothing to tear down.
+        private void QueuePanic(Action handler)
+        {
+            var s = CoreSettings.Current;
+            if (!s.PanicKeyEnabled || CapturingPanicKey || LockdownActive || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey)
+                Dispatcher.UIThread.Post(handler);
+            else
+                PanicWatchdog.QueueWatched(handler);
         }
 
         // Asked on the listener threads, where a report arrives: the first press's stop pass holds the UI

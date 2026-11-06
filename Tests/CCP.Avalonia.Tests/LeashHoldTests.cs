@@ -290,6 +290,56 @@ public sealed class LeashHoldTests
         }
     });
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void HoldHeardOnBothRoutes_KeepsThePortal_AndStillAsks(bool x11First) => WithPortalShell(() => true, (shell, clock) =>
+    {
+        // PR #4442: dropping the portal's echo also dropped the hold's portal ownership, so the idle poll
+        // closed the grab at 2 s, the hold ended with the key still down and the cut was never offered.
+        CoreSettings.Current.PanicKeyEnabled = true;
+        shell.PanicRouteClock = () => 1000;
+        PortalPanicShortcut.SetSessionForTests("/test/session", shell.OnPortalPanicReleased);
+        Action portal = () => PortalPanicShortcut.Route("/test/session", "panic", true, shell.OnPortalPanicActivated, shell.OnPortalPanicReleased, clock.Now.UtcDateTime);
+        if (x11First) { shell.OnX11PanicPress(); portal(); } else { portal(); shell.OnX11PanicPress(); }
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(MainShellWindow.PortalHoldLive);
+        for (int t = 250; t <= 2000; t += 250) { clock.Now += TimeSpan.FromMilliseconds(250); shell.LeashHoldClockTick(); }
+        MainShellWindow.ReleasePortalWhenUnused();    // the 2 s poll, with no effect left running
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(PortalPanicShortcut.IsBound);
+        Assert.True(LeashHoldRing.IsShown);
+        for (int t = 2250; t <= 5500; t += 250) { clock.Now += TimeSpan.FromMilliseconds(250); shell.LeashHoldClockTick(); }
+        Dispatcher.UIThread.RunJobs();
+        Assert.NotNull(LeashCutConfirmWindow.Current);
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PressHeardOnBothRoutes_IsWatchedWhicheverRouteWon(bool x11First) => WithPortalShell(() => true, (shell, clock) =>
+    {
+        // PR #4442: only the X11 route armed the watchdog, so a portal win left a wedged UI with no fallback.
+        CoreSettings.Current.PanicKeyEnabled = true;
+        shell.PanicRouteClock = () => 1000;
+        var fired = new System.Threading.ManualResetEventSlim();
+        var old = PanicWatchdog.Teardown;
+        PanicWatchdog.Teardown = fired.Set;
+        try
+        {
+            if (x11First) { shell.OnX11PanicPress(); shell.OnPortalPanicActivated(); }
+            else { shell.OnPortalPanicActivated(); shell.OnX11PanicPress(); }
+            // This thread is the UI thread and does not pump, so the queued press never runs.
+            Assert.True(fired.Wait(PanicWatchdog.Timeout + TimeSpan.FromSeconds(8)));
+        }
+        finally
+        {
+            Dispatcher.UIThread.RunJobs();       // the press was left queued: run it before its hold state leaks
+            shell.LeashHoldReleased();
+            PanicWatchdog.Teardown = old;
+        }
+    });
+
     [Fact]
     public void UnprovenPortalHold_NoX11Listener_EndsOnFirstTick_NeverAsks() => WithPortalShell(() => null, (shell, clock) =>
     {

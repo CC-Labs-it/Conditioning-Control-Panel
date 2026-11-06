@@ -94,6 +94,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (_leashHold.Held) LeashHoldReleased();
             HandlePanicKeyPress(DateTime.Now);
+            AdoptPortalHold();
+        }
+
+        /// <summary>Marks the hold as the portal's, so the grab outlives the effects and only Deactivated
+        /// can end it. Also runs for the echo of an XInput2 press, which panics no further.</summary>
+        internal void AdoptPortalHold()
+        {
             _leashHoldFromPortal = PortalPanicShortcut.ReportsRelease;
             _leashHoldPortalUnproven = !_leashHoldFromPortal;
             LeashHoldPressed();
