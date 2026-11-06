@@ -143,6 +143,33 @@ public sealed partial class FirstShowStageTests
         finally { FirstShowStageWindow.DeviceCacheFetch = real; }
     });
 
+    /// <summary>The owner's fresh-profile run (Linux beta, 2026-11-06): the feed answers but the device cache refuses every
+    /// picture at once (no remote-media consent yet, exactly as WPF RemoteMediaCache -> ScrolllerDiskCache.GetOrFetchAsync
+    /// does). The card is WPF's error (FirstShowDesktopWindow.cs:190-191: the menu again, built-in pictures, later) and
+    /// nothing else: a progress report the loader posted before it gave up must not bring back "0/8 pictures ready".</summary>
+    [Fact]
+    public Task EveryPictureRefusedShowsOnlyTheErrorAndItsThreeChoices() => Run(async stage =>
+    {
+        var real = FirstShowStageWindow.DeviceCacheFetch;
+        int asked = 0;
+        FirstShowStageWindow.DeviceCacheFetch = (_, _, _) => { asked++; return Task.FromResult<string?>(null); };   // refused
+        try
+        {
+            ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.Apply(true, null);
+            stage.FetchFeed = (_, _, _) => Task.FromResult<IReadOnlyList<FypAssetManifest.Entry>>(
+                Enumerable.Range(0, 8).Select(n => new FypAssetManifest.Entry { Url = $"https://images.scrolller.com/x/{n}.webp" }).ToList());
+            double t = S.GreetAfter + .1; stage.Clock = () => t; stage.Frame();
+            await stage.Load("HypnoGoneWild");
+            for (int i = 0; i < 5; i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }   // let any posted progress land
+            Assert.Equal(16, asked);   // two attempts of eight, never a fetch around the device cache
+            Assert.Equal(Loc.Get("first_show_error"), stage.SpeechText);
+            Assert.False(stage.LoadingShown);
+            Assert.Equal(new[] { Loc.Get("first_show_pickQuestion"), Loc.Get("first_show_bundled"), Loc.Get("first_show_later") },
+                stage.ChoiceButtons.Select(b => ((TextBlock)b.Content!).Text).ToArray());
+        }
+        finally { FirstShowStageWindow.DeviceCacheFetch = real; }
+    });
+
     [Fact]
     public Task AScrolllerCopyIsRefusedWhileTheSwitchIsOffAndPrefixedWhenOn() => AvaloniaTestDispatcher.RunAsync(async () =>
     {

@@ -104,6 +104,8 @@ internal sealed partial class FirstShowStageWindow : Window
     internal static string Text(string key) => Loc.Get("first_show_" + key);
     internal string SpeechText => _speech.Text ?? string.Concat(_speech.Inlines?.OfType<Run>().Select(r => r.Text) ?? Array.Empty<string>());
     internal IReadOnlyList<Button> ChoiceButtons => _choices.Children.OfType<Button>().ToArray();
+    /// <summary>The loading bar and its status line are up (tests read it).</summary>
+    internal bool LoadingShown => _loadingPanel.IsVisible;
     internal bool Playing => _playing;
     internal FirstShowAudio Audio => _audio;
     internal double LogoOpacity => _logo.Opacity;
@@ -300,9 +302,16 @@ internal sealed partial class FirstShowStageWindow : Window
         var paths = new List<string>(); FirstShowEffects? candidate = null;
         try
         {
-            int attempt = 0;
-            paths = await FirstShowMediaLoader.LoadAsync(token => FetchFeed(preset, attempt++, token), Download, Release, request.Token,
-                progress => Dispatcher.UIThread.Post(() => { if (!_closed && _load == request) ShowLoading(progress); }));
+            int attempt = 0; bool loading = true;
+            // WPF :172 reports progress inline, so the error or "preparing" line that follows always wins. Posted
+            // here, a report can land after the loader has given up (every picture refused at once): drop it then,
+            // or the error card keeps a stale "0/8 pictures ready" under it.
+            try
+            {
+                paths = await FirstShowMediaLoader.LoadAsync(token => FetchFeed(preset, attempt++, token), Download, Release, request.Token,
+                    progress => Dispatcher.UIThread.Post(() => { if (loading && !_closed && _load == request) ShowLoading(progress); }));
+            }
+            finally { loading = false; }
             if (paths.Count == 0) throw new IOException("No demo images available");
             ShowPreparing();
             candidate = new FirstShowEffects(_audio.Cue);
