@@ -2810,6 +2810,7 @@
   "label_session_xp_boost": "Bonus XP in sessione",
   "label_screen_text_detection_ocr": "Lettura del testo a schermo (OCR)",
   "label_scans_your_screen_for_trigger_keywords_using": "Cerca sullo schermo le parole chiave dei trigger con l'OCR di Windows",
+  "label_scans_your_screen_for_trigger_keywords_using_linux": "Cerca sullo schermo le parole chiave dei trigger",
   "setting_highlight_matched_keywords_on_screen": "Evidenzia le parole trovate sullo schermo",
   "tooltip_show_a_glowing_overlay_over_the_word_when_ocr": "Mostra un alone luminoso sulla parola quando l'OCR trova una parola chiave",
   "label_highlight_mode": "Evidenziazione:",

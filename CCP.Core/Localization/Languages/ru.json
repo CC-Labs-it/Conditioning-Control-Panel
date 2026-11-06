@@ -1939,6 +1939,7 @@
   "label_session_xp_boost": "Бонус XP сессии",
   "label_screen_text_detection_ocr": "Распознавание текста на экране (OCR)",
   "label_scans_your_screen_for_trigger_keywords_using": "Сканирует экран на триггерные слова с помощью Windows OCR",
+  "label_scans_your_screen_for_trigger_keywords_using_linux": "Сканирует экран на триггерные слова",
   "setting_highlight_matched_keywords_on_screen": "Подсвечивать совпавшие слова на экране",
   "tooltip_show_a_glowing_overlay_over_the_word_when_ocr": "Показать светящийся оверлей над словом при совпадении OCR",
   "label_highlight_mode": "Режим подсветки:",
