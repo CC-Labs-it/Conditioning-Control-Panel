@@ -76,8 +76,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         // Asked on the listener threads, where a report arrives: the first press's stop pass holds the UI
         // thread for longer than the echo window, so a check after the post would miss the echo.
-        private bool AdmitPanicRoute(PanicRouteGate.Route route)
+        internal bool AdmitPanicRoute(PanicRouteGate.Route route)
         {
+            // With the shortcut released there is no portal report for this one to echo.
+            if (route == PanicRouteGate.Route.X11 && !PortalPanicShortcut.IsBound) return true;
             if (_panicRoutes.Admit(route, PanicRouteClock())) return true;
             Serilog.Log.Information("Panic: {Route} report dropped, the other route already took this press", route);
             return false;

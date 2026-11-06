@@ -72,7 +72,7 @@ internal static class PanicWatchdog
         try
         {
             var finished = await Task.WhenAny(handler, Task.Delay(timeout ?? Timeout)).ConfigureAwait(false);
-            if (finished == handler) return;
+            if (finished == handler && !handler.IsFaulted) return;   // a throw stopped nothing, so it counts as unhandled
             RunGuarded();
         }
         catch (Exception ex)
