@@ -172,7 +172,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             _shownOn = want;
             QuestMinutes.Follow(Windows.Count > 0);
+            if (s.PinkFilterUnderEffects) SyncOrder();   // a fresh tint maps on top: put the effects back over it
             Log.Debug("Pink filter showing on {Count} screen(s) at {Opacity}%", Windows.Count, s.PinkFilterOpacity);
+        }
+
+        /// <summary>The effect windows the tint goes under when <see cref="Models.AppSettings.PinkFilterUnderEffects"/>
+        /// is on (#1546): spirals, subliminals, bubbles and bouncing text, the layers WPF's
+        /// <c>CompositorLayers.PinkTintUnder</c> slot sits beneath.</summary>
+        internal static Func<IEnumerable<Window>> EffectWindows = () =>
+            ((global::Avalonia.Application.Current?.ApplicationLifetime as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.Windows
+                ?? (IReadOnlyList<Window>)Array.Empty<Window>())
+            .Where(w => w.IsVisible && w is SpiralOverlayWindow or SubliminalOverlayWindow or SharedOverlayStageWindow
+                                              or BubbleOverlayWindow or BouncingTextOverlayWindow);
+
+        internal static Func<Window, bool> RaiseWindow = w => X11Overlay.Raise(w);
+
+        /// <summary>WPF <c>OverlayService.RefreshPinkFilterOrder</c> (#1546). WPF re-sorts its
+        /// compositor layers; this head has one window per effect, so the order is the X stacking
+        /// order: under raises the effect windows over the tint, over raises the tint back on top.
+        /// No tint on screen: nothing to sort, the next show applies the setting.</summary>
+        internal static void SyncOrder()
+        {
+            if (Windows.Count == 0) return;
+            var raise = CoreSettings.Current.PinkFilterUnderEffects ? EffectWindows().ToArray() : Windows.ToArray<Window>();
+            foreach (var w in raise)
+            {
+                try { RaiseWindow(w); }
+                catch (Exception ex) { Log.Debug("Pink filter: re-sort raise failed: {E}", ex.Message); }
+            }
         }
 
         public static void CloseAll()
