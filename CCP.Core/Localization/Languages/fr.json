@@ -1939,6 +1939,7 @@
   "label_session_xp_boost": "Boost XP de Session",
   "label_screen_text_detection_ocr": "Détection de Texte à l'Écran (OCR)",
   "label_scans_your_screen_for_trigger_keywords_using": "Scanne ton écran à la recherche de mots-clés déclencheurs avec Windows OCR",
+  "label_scans_your_screen_for_trigger_keywords_using_linux": "Scanne ton écran à la recherche de mots-clés déclencheurs",
   "setting_highlight_matched_keywords_on_screen": "Surligner les mots-clés détectés à l'écran",
   "tooltip_show_a_glowing_overlay_over_the_word_when_ocr": "Afficher un halo lumineux sur le mot quand l'OCR détecte une correspondance",
   "label_highlight_mode": "Mode de surlignage :",

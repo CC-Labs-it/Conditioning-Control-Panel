@@ -2948,6 +2948,7 @@
   "label_session_xp_boost": "Session XP Boost",
   "label_screen_text_detection_ocr": "Screen Text Detection (OCR)",
   "label_scans_your_screen_for_trigger_keywords_using": "Scans your screen for trigger keywords using Windows OCR",
+  "label_scans_your_screen_for_trigger_keywords_using_linux": "Scans your screen for trigger keywords",
   "setting_highlight_matched_keywords_on_screen": "Highlight matched keywords on screen",
   "tooltip_show_a_glowing_overlay_over_the_word_when_ocr": "Show a glowing overlay over the word when OCR detects a keyword match",
   "label_highlight_mode": "Highlight mode:",

@@ -2677,6 +2677,7 @@
   "label_session_xp_boost": "疗程 XP 加成",
   "label_screen_text_detection_ocr": "屏幕文字检测（OCR）",
   "label_scans_your_screen_for_trigger_keywords_using": "使用 Windows OCR 扫描屏幕上的触发关键词",
+  "label_scans_your_screen_for_trigger_keywords_using_linux": "扫描屏幕上的触发关键词",
   "setting_highlight_matched_keywords_on_screen": "在屏幕上高亮匹配的关键词",
   "tooltip_show_a_glowing_overlay_over_the_word_when_ocr": "当 OCR 检测到关键词匹配时，在该词上方显示发光覆盖层",
   "label_highlight_mode": "高亮模式：",

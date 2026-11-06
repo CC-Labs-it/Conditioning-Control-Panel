@@ -1939,6 +1939,7 @@
   "label_session_xp_boost": "セッションXPブースト",
   "label_screen_text_detection_ocr": "画面テキスト検出（OCR）",
   "label_scans_your_screen_for_trigger_keywords_using": "Windows OCRを使用して画面上のトリガーキーワードをスキャン",
+  "label_scans_your_screen_for_trigger_keywords_using_linux": "画面上のトリガーキーワードをスキャン",
   "setting_highlight_matched_keywords_on_screen": "マッチしたキーワードを画面上でハイライト",
   "tooltip_show_a_glowing_overlay_over_the_word_when_ocr": "OCRがキーワードマッチを検出した時、その単語上に光るオーバーレイを表示",
   "label_highlight_mode": "ハイライトモード：",

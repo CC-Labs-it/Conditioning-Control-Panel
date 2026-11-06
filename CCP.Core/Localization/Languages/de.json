@@ -1939,6 +1939,7 @@
   "label_session_xp_boost": "Sitzungs-XP-Boost",
   "label_screen_text_detection_ocr": "Bildschirmtext-Erkennung (OCR)",
   "label_scans_your_screen_for_trigger_keywords_using": "Scannt deinen Bildschirm nach Trigger-Keywords mit Windows OCR",
+  "label_scans_your_screen_for_trigger_keywords_using_linux": "Scannt deinen Bildschirm nach Trigger-Keywords",
   "setting_highlight_matched_keywords_on_screen": "Erkannte Keywords auf dem Bildschirm hervorheben",
   "tooltip_show_a_glowing_overlay_over_the_word_when_ocr": "Ein leuchtendes Overlay über dem Wort anzeigen, wenn OCR eine Keyword-Übereinstimmung erkennt",
   "label_highlight_mode": "Hervorhebungsmodus:",

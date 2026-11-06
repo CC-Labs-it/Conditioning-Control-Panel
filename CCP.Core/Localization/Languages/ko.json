@@ -1939,6 +1939,7 @@
   "label_session_xp_boost": "세션 XP 부스트",
   "label_screen_text_detection_ocr": "화면 텍스트 감지 (OCR)",
   "label_scans_your_screen_for_trigger_keywords_using": "Windows OCR을 사용하여 화면에서 트리거 키워드를 스캔해요",
+  "label_scans_your_screen_for_trigger_keywords_using_linux": "화면에서 트리거 키워드를 스캔해요",
   "setting_highlight_matched_keywords_on_screen": "매칭된 키워드를 화면에 강조 표시",
   "tooltip_show_a_glowing_overlay_over_the_word_when_ocr": "OCR이 키워드 매칭을 감지하면 해당 단어 위에 빛나는 오버레이를 표시해요",
   "label_highlight_mode": "강조 모드:",

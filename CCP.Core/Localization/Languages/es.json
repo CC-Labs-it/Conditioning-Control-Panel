@@ -1939,6 +1939,7 @@
   "label_session_xp_boost": "Boost de XP en Sesión",
   "label_screen_text_detection_ocr": "Detección de Texto en Pantalla (OCR)",
   "label_scans_your_screen_for_trigger_keywords_using": "Escanea tu pantalla en busca de palabras clave disparadoras usando Windows OCR",
+  "label_scans_your_screen_for_trigger_keywords_using_linux": "Escanea tu pantalla en busca de palabras clave disparadoras",
   "setting_highlight_matched_keywords_on_screen": "Resaltar palabras clave coincidentes en pantalla",
   "tooltip_show_a_glowing_overlay_over_the_word_when_ocr": "Mostrar una capa brillante sobre la palabra cuando OCR detecta una coincidencia de palabra clave",
   "label_highlight_mode": "Modo de resaltado:",
