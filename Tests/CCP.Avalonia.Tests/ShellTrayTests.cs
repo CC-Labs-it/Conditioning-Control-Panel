@@ -93,6 +93,12 @@ public sealed class ShellTrayTests
         var closed = false;
         shell.Closed += (_, _) => closed = true;
         shell.Close();
+        if (OperatingSystem.IsWindows())   // no watcher to ask: the listing is the answer, so X hides at once
+        {
+            Assert.False(shell.IsVisible);
+            Assert.False(closed);
+            return;
+        }
         Assert.True(shell.IsVisible);
         Assert.False(closed);
         for (var i = 0; i < 300 && shell.IsVisible; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(10); }
@@ -126,7 +132,7 @@ public sealed class ShellTrayTests
     {
         MainShellWindow.TrayItemQuery = () => TrayItemState.Unknown;
         await shell.HideToTrayOnceHeld();
-        Assert.True(shell.IsVisible);
+        Assert.Equal(!OperatingSystem.IsWindows(), shell.IsVisible);   // Windows answers from the listing
     });
 
     [Fact]
