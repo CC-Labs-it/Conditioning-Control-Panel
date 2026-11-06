@@ -170,6 +170,106 @@ public sealed partial class FirstShowStageTests
         finally { FirstShowStageWindow.DeviceCacheFetch = real; }
     });
 
+    /// <summary>Owner decision 2026-11-06 (option B), the same as WPF FirstShowDesktopWindow.Pick: picking a preset
+    /// without remote-media consent first asks the Assets page's consent card, word for word. Yes records the consent
+    /// and the online source, then loads that preset's feed; no plays the built-in pictures and changes nothing.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task APresetWithoutConsentAsksTheConsentCardFirst(bool yes) => Run(async stage =>
+    {
+        var s = CoreSettings.Current;
+        s.MediaSource = "local"; s.RemoteMediaConsented = false; s.FypOnlineConsented = false;
+        var fetched = new List<string>();
+        var asked = new List<(string, string)>();
+        await WithPictures(stage, fetched, async () =>
+        {
+            stage.ConsentOverride = (title, message) => { asked.Add((title, message)); return Task.FromResult(yes); };
+            await stage.Pick("HypnoGoneWild");
+        });
+        Assert.Equal(new[] { ConditioningControlPanel.Avalonia.Views.Tabs.AssetsTabView.RemoteMediaConsentText() }, asked);
+        Assert.Equal(yes, s.RemoteMediaConsented);
+        Assert.False(s.FypOnlineConsented);
+        Assert.Equal(yes ? "online" : "local", s.MediaSource);
+        Assert.Equal(yes ? new[] { "HypnoGoneWild" } : Array.Empty<string>(), fetched.Distinct().ToArray());
+        AssertWarningThenStart(stage, credited: yes);   // the built-in pictures carry no "via Scrolller"
+    });
+
+    /// <summary>Already consented with a fetching source: no card, the preset loads, the source stays the user's.</summary>
+    [Fact]
+    public Task AConsentedSourceLoadsThePresetWithoutAsking() => Run(async stage =>
+    {
+        var s = CoreSettings.Current;
+        s.MediaSource = "mixed"; s.RemoteMediaConsented = true;
+        var fetched = new List<string>();
+        int asked = 0;
+        await WithPictures(stage, fetched, async () =>
+        {
+            stage.ConsentOverride = (_, _) => { asked++; return Task.FromResult(false); };
+            await stage.Pick("cosplay");
+        });
+        Assert.Equal(0, asked);
+        Assert.Equal("mixed", s.MediaSource);
+        Assert.Equal(new[] { "cosplay" }, fetched.Distinct().ToArray());
+        AssertWarningThenStart(stage, credited: true);
+    });
+
+    /// <summary>Not consent, so not asked: the licence switch off, a spent share or Offline mode load as before
+    /// (and then fall back), and leave consent and the source untouched.</summary>
+    [Theory]
+    [InlineData("licence")]
+    [InlineData("spent")]
+    [InlineData("offline")]
+    public Task OtherBlockersAreNotAskedAbout(string blocker) => Run(async stage =>
+    {
+        var s = CoreSettings.Current;
+        s.MediaSource = "local"; s.RemoteMediaConsented = false; s.FypOnlineConsented = false;
+        s.OfflineMode = blocker == "offline";
+        var fetched = new List<string>();
+        int asked = 0;
+        await WithPictures(stage, fetched, async () =>
+        {
+            FirstShowPresets.LicenceOn = () => blocker != "licence";
+            FirstShowPresets.ShareSpent = () => blocker == "spent";
+            stage.ConsentOverride = (_, _) => { asked++; return Task.FromResult(true); };
+            await stage.Pick("sissyhypno");
+        });
+        s.OfflineMode = false;
+        Assert.Equal(0, asked);
+        Assert.False(s.HasRemoteMediaConsent);
+        Assert.Equal("local", s.MediaSource);
+        Assert.Equal(new[] { "sissyhypno" }, fetched.Distinct().ToArray());   // Load ran, exactly as before
+    });
+
+    /// <summary>A feed of local stand-in pictures, the licence on and the share open, around <paramref name="body"/>.</summary>
+    private static async Task WithPictures(FirstShowStageWindow stage, List<string> fetched, Func<Task> body)
+    {
+        var (licence, spent) = (FirstShowPresets.LicenceOn, FirstShowPresets.ShareSpent);
+        FirstShowPresets.LicenceOn = () => true; FirstShowPresets.ShareSpent = () => false;
+        try
+        {
+            var pics = Enumerable.Range(0, 4).Select(i => ContentLocator.Resolve(Path.Combine("Resources", "web", "backroom", "stations", "slot", "fallback", $"gif{i}.webp"))).ToArray();
+            stage.BundledPictures = () => pics;
+            stage.FetchFeed = (preset, _, _) =>
+            {
+                fetched.Add(preset);
+                return Task.FromResult<IReadOnlyList<FypAssetManifest.Entry>>(pics.Select(p => new FypAssetManifest.Entry { Url = p }).ToList());
+            };
+            stage.Download = (url, ct) => FirstShowStageWindow.SaveCapped(File.OpenRead(url), ct);
+            double t = S.GreetAfter + .1; stage.Clock = () => t; stage.Frame();
+            await body();
+        }
+        finally { FirstShowPresets.LicenceOn = licence; FirstShowPresets.ShareSpent = spent; }
+    }
+
+    private static void AssertWarningThenStart(FirstShowStageWindow stage, bool credited)
+    {
+        Assert.Equal(Loc.Get("first_show_warning") + S.PanicLabel(CoreSettings.Current.PanicKey) + " " + Loc.Get("first_show_panicHint"), stage.SpeechText);
+        Click(stage, 0);   // "ready"
+        Assert.True(stage.Playing);
+        Assert.Equal(credited, stage.CreditShown);
+    }
+
     [Fact]
     public Task AScrolllerCopyIsRefusedWhileTheSwitchIsOffAndPrefixedWhenOn() => AvaloniaTestDispatcher.RunAsync(async () =>
     {

@@ -211,8 +211,46 @@ internal sealed partial class FirstShowStageWindow : Window
     {
         _centered = true; _moveAt = Clock();
         Ask(Text("pickQuestion") + "\n\n" + Text("pickHint"));
-        foreach (var id in FirstShowPresets.All) AddButton(id == "censored" ? Text("censored") : id, () => _ = Load(id));
+        foreach (var id in FirstShowPresets.All) AddButton(id == "censored" ? Text("censored") : id, () => _ = Pick(id));
         AddButton(Text("later"), Close);
+    }
+    /// <summary>Test seam: the consent card's answer for (title, message). Default: the Assets page's ask.</summary>
+    internal Func<string, string, Task<bool>>? ConsentOverride;
+    private bool _asking;
+    /// <summary>
+    /// Owner decision 2026-11-06 (option B), the same in both heads (WPF FirstShowDesktopWindow.Pick): a preset's
+    /// pictures are Scrolller's, which the device cache refuses until remote media is consented and the source is not
+    /// "local". When that is all that stands in the way (<see cref="FirstShowPresets.AsksForRemoteMedia(AppSettings?)"/>),
+    /// the preset first asks the Assets page's one-time consent card, word for word (AssetsTabView
+    /// RemoteMediaConsentText, WPF MainWindow.Assets.cs AskRemoteMediaConsent). Yes records the consent and the online
+    /// source, then loads the preset; no plays the built-in pictures. The card is the only place consent turns on.
+    /// </summary>
+    internal async Task Pick(string preset)
+    {
+        if (_asking || _closed) return;
+        var s = CoreSettings.Current;
+        if (FirstShowPresets.AsksForRemoteMedia(s))
+        {
+            bool yes;
+            _asking = true;
+            try
+            {
+                var (title, message) = ConditioningControlPanel.Avalonia.Views.Tabs.AssetsTabView.RemoteMediaConsentText();
+                Window owner = _speechWindow.IsVisible ? _speechWindow : (Window?)_main ?? this;
+                yes = ConsentOverride != null ? await ConsentOverride(title, message)
+                    : await ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog.ConfirmAsync(owner, title, message, okText: Loc.Get("label_yes"));
+            }
+            catch (Exception ex) { Log.Warning(ex, "First show: the remote media ask failed"); yes = false; }
+            finally { _asking = false; }
+            if (_closed) return;
+            if (!yes) { await Bundled(); return; }
+            FirstShowPresets.AcceptRemoteMedia(s);
+            FypOnlineCoordinator.ResetAllChannels();   // as the source chip does
+            CoreSettings.Save();
+            OnlineMeterHead.Poke();
+            Log.Information("[remote media] first show: consent given, source -> {Source}", s.MediaSource);
+        }
+        await Load(preset);
     }
     private static async Task<IReadOnlyList<FypAssetManifest.Entry>> DefaultFetch(string preset, int attempt, CancellationToken token)
     {
