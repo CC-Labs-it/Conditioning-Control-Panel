@@ -40,6 +40,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             BillboardArt.Register(BuiltInArtKeys.Spiral, d => new SpiralArtView(d as string));
             BillboardArt.Register(BuiltInArtKeys.Calendar, d => new CalendarArtView(CalendarData(d)));
             BillboardArt.Register(BuiltInArtKeys.Tip, d => TipScenes.Create(d as string));
+            BillboardArt.Register(BuiltInArtKeys.Invite, _ => new InviteArtView());
             BillboardArt.Register(BuiltInArtKeys.Quests, d => new QuestsArtView(d));
         }
 

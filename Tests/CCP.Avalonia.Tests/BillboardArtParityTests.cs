@@ -48,6 +48,7 @@ public sealed class BillboardArtParityTests
         yield return ("tip-lockdown", () => new LockdownTipArt(), "#ff4fa8");
         yield return ("tip-remote", () => new RemoteTipArt(), "#5fe3ff");
         yield return ("tip", () => new TipArtView(), "#9b7bff");
+        yield return ("invite", () => new InviteArtView(), "#ffc94a");
         yield return ("spiral", () => new SpiralArtView(null), "#ff4fa8");
         yield return ("calendar", () => new CalendarArtView(BuiltInArt.CalendarData(
             new Dictionary<string, int> { ["counted"] = 6, ["need"] = 25, ["days"] = 31, ["today"] = 7 }, new DateTime(2026, 10, 7))), "#ff4fa8");
