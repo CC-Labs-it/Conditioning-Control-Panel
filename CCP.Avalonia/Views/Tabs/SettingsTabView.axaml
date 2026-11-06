@@ -1071,9 +1071,11 @@
                  lilac at 24% fill, a 70% border, 40% on hover - Tag carries the hover brush). -->
             <!-- The folded glow (lag fix, P82): a sibling BoxShadow layer whose Opacity breathes on the
                  30 fps beat, never a DropShadowEffect on the button (PaintFoldArrow). -->
-            <!-- ClipToBounds: WPF clips the pill to the star column when the header is narrow; without
-                 it the pill overflowed onto the status and webcam pills (parity VA). -->
-            <Panel Grid.Column="2" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="48,0,8,0" ClipToBounds="True">
+            <!-- WPF clips the pill to its star column when the header is narrow; without a clip it overflowed
+                 onto the status and webcam pills (parity VA). The clip sits on the COLUMN, not the pill's panel,
+                 so the fold glow still draws in the margins around the pill (GlowRenderProofTests). -->
+            <Panel Grid.Column="2" ClipToBounds="True">
+            <Panel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="48,0,8,0">
             <Border x:Name="FoldGlow" CornerRadius="13" IsVisible="False" IsHitTestVisible="False"/>
             <Button x:Name="BtnFoldBrowser" Theme="{StaticResource FoldArrowButton}"
                     MinWidth="120" Height="26" Padding="12,0"
@@ -1090,6 +1092,7 @@
                            FontSize="12" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
               </StackPanel>
             </Button>
+            </Panel>
             </Panel>
             <!-- Status indicator -->
             <TextBlock Grid.Column="3" x:Name="TxtBrowserStatus" Text="{loc:Str label_loading}"
