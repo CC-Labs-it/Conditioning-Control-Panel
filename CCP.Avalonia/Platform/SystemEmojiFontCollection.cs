@@ -55,11 +55,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         /// <summary>The system colour-emoji typeface. fontconfig answers the generic "emoji" alias; DirectWrite has no
-        /// such alias (MatchFamily("emoji") is null on Windows), so there it is Segoe UI Emoji by name. Without that the
-        /// Windows head only ever had the bundled monochrome Noto Emoji (parity pass 2026-11-06: 📅 📈 💕 drew mono).</summary>
+        /// such alias (MatchFamily("emoji") is null on Windows), so there the system's own fallback for an emoji code point
+        /// answers (the Windows colour emoji face). Without that the Windows head only ever had the bundled monochrome
+        /// Noto Emoji (parity pass 2026-11-06: calendar, chart and heart content emoji drew mono).</summary>
         internal static SKTypeface? MatchSystemEmoji()
             => SKFontManager.Default.MatchFamily("emoji")
-               ?? (OperatingSystem.IsWindows() ? SKFontManager.Default.MatchFamily("Segoe UI Emoji") : null);
+               ?? (OperatingSystem.IsWindows() ? SKFontManager.Default.MatchCharacter(0x1F600) : null);
 
         /// <summary>The system "emoji" font file as a memory stream, or null.</summary>
         internal static Stream? OpenSystemEmoji()
