@@ -49,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF GameSurfaces.cs:53-55 backroom/breakout: every web game window (Views/Games/GameWindow).
             new("games", _ => { Platform.RaceEngineDownload.Cancel(); Games.GameWindow.CloseAllForPanic(); }, Games.GameWindow.IsAnyOpen),
             new("upgrade-intro", MainShellWindow.StopUpgradeIntroForPanic),
+            new("online-licence", MainShellWindow.CloseOnlineLicenceCardForPanic),   // stricter, as upgrade-intro: closes unseen, owed next launch
             new("first-show", _ => WelcomeShow.FirstShowService.Stop()),   // WPF MainWindow.xaml.cs:1553, before CancelPendingAi
             // WPF KillAllAudio App.xaml.cs:1847 stops Flash; stamp dismissal is stricter.
             new("quest-stamps", sh => sh?.StopQuestStampsForPanic()),   // #3235 HideStampPopup, then the stamped pop (flash, scale) resets

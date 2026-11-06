@@ -172,7 +172,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void RefreshOnlineMeterPill()
         {
-            try { PaintOnlineMeterPill(OnlineMeterHead.Now()); }
+            try
+            {
+                var st = OnlineMeterHead.Now();
+                PaintOnlineMeterPill(st);
+                OfferOnlineLicenceCard(st);   // WPF RefreshOnlineMeter :163 (MainShellWindow.OnlineLicence.cs)
+            }
             catch (Exception ex) { Log.Debug("Online meter pill refresh failed: {E}", ex.Message); }
         }
 
