@@ -33,7 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>ponytail: not here yet, each a later branch - audio + ducking (lifetime then follows the sound's length),
     /// the lucky glow pulse and toast, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
-    /// GIF animation (first frame only), remote pools, gaze pop/linger, solid hosting and avatar pre-announce.</para>
+    /// remote pools, gaze pop/linger, solid hosting and avatar pre-announce.</para>
     /// </summary>
     internal static class FlashOverlay
     {
@@ -96,7 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var flashes = await Task.Run(() => LoadPictures(BurstCount(amount, s, Rng), screens, targets, s, occupied, size));
                 if (generation != _generation || _closed)
                 {
-                    foreach (var f in flashes) f.Bitmap.Dispose();
+                    foreach (var f in flashes) Drop(f.Bitmap);
                     return;
                 }
                 if (flashes.Count == 0)
@@ -141,7 +141,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     try
                     {
                         // WPF FlashService.cs:1705-1711 reads the current cap at each spawn.
-                        if (refused || _closed || generation != _generation || Active.Count >= Cap(CoreSettings.Current, ambient)) { bmp.Dispose(); return; }
+                        if (refused || _closed || generation != _generation || Active.Count >= Cap(CoreSettings.Current, ambient)) { Drop(bmp); return; }
                         refused = !Show(bmp, rect, path, screen, alpha, fade, lifetime, clickable, ambient, hydraGeneration, inheritMotion, notify: !notified);
                         notified |= !refused;
                     }
@@ -157,7 +157,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, FlashMotionStyle? inheritMotion = null, bool notify = true)
         {
             var s = CoreSettings.Current;
-            if (Active.Count >= Cap(s, ambient)) { bmp.Dispose(); return false; }
+            if (Active.Count >= Cap(s, ambient)) { Drop(bmp); return false; }
             var multiplier = FlashFxRules.RollLucky(SkillTreeRules.HasSkill(s, FlashFxRules.LuckySkillId), hydraGeneration, remixMirror: false, Rng);
             if (multiplier > 1) LuckyProc(App.Mods?.GetLuckyFlashLabel() ?? ConditioningControlPanel.Localization.Loc.Get("skill_lucky_flash"), multiplier);
             var glow = FlashFxRules.ResolveGlow(s.FlashGlowEnabled, ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier,
@@ -167,6 +167,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 HydraGeneration = hydraGeneration, Ambient = ambient, Lifetime = lifetime,
                 SpawnedAt = Clock.GetTimestamp(), SpawnScreen = screen, InheritMotion = inheritMotion,
             };
+            // WPF FlashService.cs:1774-1776 + heartbeat :3328-3340: an animated flash plays at the GIF speed slider.
+            if (GifFrames.TryGetValue(bmp, out var gif))
+            {
+                GifFrames.Remove(bmp);
+                w.Animate(gif.Frames, GifFrameDelay(gif.Delay, s.FlashGifSpeedMultiplier));
+            }
             if (!Spawn(w, rect, screen.Bounds, screen.Scaling, glow, alpha, fade, lifetime, clickable)) return false;
             if (notify) Displayed?.Invoke();
             Paid(path, s, hydraGeneration, multiplier);
@@ -191,6 +197,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         internal static Action<string, int> LuckyProc = LuckyFlashToast.ShowLucky;
+
+        /// <summary>The frames of an animated flash, keyed by its first frame (the Bitmap the burst
+        /// carries), until <see cref="Show"/> hands them to the window.</summary>
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Bitmap, GifAnimation> GifFrames = new();
+        private sealed record GifAnimation(List<Bitmap> Frames, TimeSpan Delay);
+
+        /// <summary>A picture that will not be shown, with any animation frames it carries.</summary>
+        private static void Drop(Bitmap bmp)
+        {
+            if (GifFrames.TryGetValue(bmp, out var gif))
+            {
+                GifFrames.Remove(bmp);
+                for (var i = 1; i < gif.Frames.Count; i++) gif.Frames[i].Dispose();
+            }
+            bmp.Dispose();
+        }
+
+        /// <summary>WPF FlashService.ScaleFrameDelay (:119-126) then the gentle-visuals slow-down
+        /// (:1775-1776): 2x plays twice as fast, never under 10 ms a frame.</summary>
+        internal static TimeSpan GifFrameDelay(TimeSpan sourceDelay, double multiplier)
+        {
+            var ms = sourceDelay.TotalMilliseconds;
+            if (double.IsNaN(ms) || double.IsInfinity(ms) || ms <= 0) ms = 100.0;
+            if (double.IsNaN(multiplier) || double.IsInfinity(multiplier) || multiplier <= 0) multiplier = 1.0;
+            ms = Math.Max(10.0, ms / Math.Clamp(multiplier, 0.25, 4.0));
+            if (ConditioningControlPanel.Services.Safety.GentleVisuals.On)
+                ms = ConditioningControlPanel.Services.Safety.GentleVisuals.ScaleDelayMs(ms);
+            return TimeSpan.FromMilliseconds(ms);
+        }
 
         /// <summary>The chime a lucky flash plays (tests swap it).</summary>
         internal static Action<AppSettings> LuckyChime = s =>
@@ -494,7 +529,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var occupied = Active.Select(a => a.Rect).ToList();
                 RemoteFlashSource.EnsurePrefetch();
                 var flashes = await Task.Run(() => LoadPictures(count, new[] { screen }, new[] { 0 }, s, occupied, null));
-                if (generation != _generation) { foreach (var f in flashes) f.Bitmap.Dispose(); return; }
+                if (generation != _generation) { foreach (var f in flashes) Drop(f.Bitmap); return; }
                 Schedule(flashes, 0, 100, generation, Math.Clamp(s.FlashOpacity / 100.0, 0, 1),
                     TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent), lifetime, s.FlashClickable,
                     parent.Ambient, hydraGeneration, done: null, parent.MotionStyle);
@@ -553,20 +588,45 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 try
                 {
                     SkiaSharp.SKImageInfo info;
+                    int frameCount;
                     using (var codec = SkiaSharp.SKCodec.Create(path))
                     {
                         if (codec is null) continue;
                         info = codec.Info;
+                        frameCount = codec.FrameCount;
                     }
                     var screen = screens[targets[Rng.Next(targets.Length)]];
                     var rect = Place(screen.Bounds, screen.Scaling, info.Width, info.Height, s, Rng, occupied, size);
-                    using var stream = File.OpenRead(path);
-                    result.Add((Bitmap.DecodeToWidth(stream, rect.Width), rect, remote?.Url ?? path, screen));
+                    if (frameCount > 1 && DecodeAnimated(path, rect) is { } first)
+                        result.Add((first, rect, remote?.Url ?? path, screen));
+                    else
+                    {
+                        using var stream = File.OpenRead(path);
+                        result.Add((Bitmap.DecodeToWidth(stream, rect.Width), rect, remote?.Url ?? path, screen));
+                    }
                     occupied.Add(rect);
                 }
                 catch (Exception ex) { Log.Debug("Flash: could not decode {Path}: {E}", path, ex.Message); }
             }
             return result;
+        }
+
+        /// <summary>An animated GIF/WebP decoded at its display size, under WPF's flash frame budget
+        /// (FlashService LoadGifFrames / AnimatedWebp.DecodeFrames: at most 60 frames, 30 MB kept).
+        /// Answers the first frame, with the rest recorded in <see cref="GifFrames"/>; null when the
+        /// decode came back with fewer than two frames, and the caller decodes a still.</summary>
+        private static Bitmap? DecodeAnimated(string path, PixelRect rect)
+        {
+            var frameBytes = Math.Max(1L, (long)rect.Width * rect.Height * 4);
+            var maxFrames = (int)Math.Clamp(30L * 1024 * 1024 / frameBytes, 2, 60);
+            var (frames, delay) = SpiralOverlay.Decode(path, Math.Max(rect.Width, rect.Height), maxFrames);
+            if (frames.Count < 2)
+            {
+                foreach (var f in frames) f.Dispose();
+                return null;
+            }
+            GifFrames.AddOrUpdate(frames[0], new GifAnimation(frames, delay));
+            return frames[0];
         }
     }
 }
