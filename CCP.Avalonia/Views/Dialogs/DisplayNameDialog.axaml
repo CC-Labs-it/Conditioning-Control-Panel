@@ -1,7 +1,7 @@
 <!-- PORTED from ConditioningControlPanel/Dialogs/DisplayNameDialog.xaml. Deviations, all forced:
        ResizeMode="NoResize" / WindowStyle="None" -> CanResize="False" / SystemDecorations="None"
        AllowsTransparency="False"                 -> dropped (Avalonia default)
-       Height="240"                               -> 260: the star row holding the 0/20 counter
+       Height="240"                               -> 280: the star row holding the 0/20 counter, plus the WPF-height TextBox (2026-11-06)
                                                      collapsed to nothing under Linux font metrics
        KeyDown="..." / Click="..."                -> wired in the constructor
        Window.Resources PinkBrush/DarkPinkBrush   -> dropped. PinkBrush re-declared the global
@@ -16,7 +16,7 @@
         xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         x:Class="ConditioningControlPanel.Avalonia.Views.Dialogs.DisplayNameDialog"
         Title="{loc:Str dialog_choose_your_display_name}"
-        Height="260" Width="450"
+        Height="280" Width="450"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource DarkerBgBrush}"
         CanResize="False"
