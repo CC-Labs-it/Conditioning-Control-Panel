@@ -15,7 +15,7 @@ public static class LockdownDoseRecovery
         // Never consume a recovery record into CoreSettings' unsaved fallback model.
         if (CoreSettings.Service is not { } settings) return;
         Recover(Path.Combine(CorePaths.UserData, "lockdown-dose.json"), settings.Current,
-            () => settings.SaveImmediate());
+            () => settings.TrySaveImmediate());
     }
 
     private sealed class RecoveryState
@@ -23,7 +23,9 @@ public static class LockdownDoseRecovery
         public List<string>? Flipped { get; set; }
     }
 
-    internal static void Recover(string path, AppSettings settings, Action save)
+    /// <param name="save">True when the flags reached disk; SaveImmediate swallows failures, so the record is
+    /// consumed only on a confirmed save (review 2026-11-06).</param>
+    internal static void Recover(string path, AppSettings settings, Func<bool> save)
     {
         try
         {
@@ -31,8 +33,12 @@ public static class LockdownDoseRecovery
             var state = JsonConvert.DeserializeObject<RecoveryState>(File.ReadAllText(path));
             if (state?.Flipped == null) return;
             ApplyFlipped(state.Flipped, settings);
-            save();
-            // Stricter than the old lane: keep the record if parsing or saving throws.
+            // Stricter than the old lane: keep the record if parsing or saving fails.
+            if (!save())
+            {
+                Serilog.Log.Warning("Lockdown dose recovery: settings save failed; record kept for the next launch");
+                return;
+            }
             File.Delete(path);
         }
         catch (Exception ex) { Serilog.Log.Warning(ex, "Lockdown dose recovery failed"); }

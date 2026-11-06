@@ -44,7 +44,7 @@ public partial class MainShellWindow
         {
             if (Tray != null && TrayHostPresent()) { Hide(); HideAvatarTube(); }
             Platform.OsNotifications.Show(Loc.Get("scheduler_started_title"), Loc.Get("scheduler_started_body"));
-            if (!CoreEngine.IsRunning) StartEngine();
+            if (!CoreEngine.IsRunning) StartEngine(systemInitiated: false);   // WPF :789/:807 StartEngine() defaults to false: Relapse check + empty-library notice run
         }
         else if (action == SchedulerRun.Action.Stop)
         {

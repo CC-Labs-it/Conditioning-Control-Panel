@@ -725,7 +725,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             {
                 ++p._audioLoad; ++p._videoLoad; p._localAudio?.Pause(); p._isPlaying = false;
                 p._txtPlayPauseGlyph.Kind = IconKind.Play;
-                if (p._videoNavigated) _ = p._videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke("l.pause();"));
+                // port/7.2's reach (review 2026-11-06): every video/audio, same-origin iframes and page fullscreen,
+                // not just the page player; the playhead is kept.
+                if (p._videoNavigated) _ = p._videoBrowser.InvokeScriptAsync(Controls.WebHostMedia.PanicPauseScript);
+                p._txtStatus.Text = Loc.Get("deeper_player_status_stopped");
+                p.UpdateStatusPill();
             }
         }
         private void TearDownVideo()

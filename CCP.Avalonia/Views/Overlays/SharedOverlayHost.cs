@@ -12,8 +12,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 // ponytail: per-screen legacy stages; existing chaos/tint consumers still need a compositor migration.
 internal static class SharedOverlayHost
 {
+    // No compositor -> no per-pixel transparency: the stage would paint an opaque full-screen block for the
+    // whole run. Refuse like PinkFilterOverlay/CornerGifOverlay; the caller falls back to classic cards.
     internal static Func<Window, PixelRect, bool> Configure = (w, bounds) =>
-        X11Overlay.SetClickThrough(w, true) && X11Overlay.SetOverrideRedirect(w, bounds);
+        X11Overlay.IsCompositing && X11Overlay.SetClickThrough(w, true) && X11Overlay.SetOverrideRedirect(w, bounds);
 
     internal static Func<Window, bool> Raise = X11Overlay.Raise; // WPF SubliminalService.cs:829
 

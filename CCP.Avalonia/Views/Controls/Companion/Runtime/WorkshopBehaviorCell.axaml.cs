@@ -57,14 +57,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                     }
                 };
 
-            SliderVoiceLevelCompanion.ValueChanged += (_, _) =>
-            {
-                if (_isLoading) return;
-                var value = (int)Math.Round(SliderVoiceLevelCompanion.Value);
-                TxtVoiceLevelCompanion.Text = value.ToString();
-                CoreSettings.Current.CompanionVoiceLevel = value;
-                CoreSettings.Save();
-            };
             ChkIdleVoiceEngineOffCompanion.IsCheckedChanged += (_, _) =>
             {
                 if (_isLoading) return;
@@ -104,8 +96,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 ChkMuteWhispersCompanion.IsChecked = s.SubAudioMuted;
                 ChkVoiceLinesCompanion.IsChecked = s.CompanionVoiceLinesMuted;
                 ChkIdleVoiceEngineOffCompanion.IsChecked = s.CompanionSpeaksIdleWhenEngineOff;
-                SliderVoiceLevelCompanion.Value = s.CompanionVoiceLevel;
-                TxtVoiceLevelCompanion.Text = s.CompanionVoiceLevel.ToString();
 
                 // Labels set explicitly rather than left to ValueChanged, which _isLoading blocks.
                 SliderIdleIntervalCompanion.Value = s.IdleGiggleIntervalSeconds;

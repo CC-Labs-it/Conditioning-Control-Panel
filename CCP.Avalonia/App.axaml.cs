@@ -76,10 +76,10 @@ namespace ConditioningControlPanel.Avalonia
             return timer;
         }
 
-        /// <summary>WPF AchievementService.cs:947-954: flush even when an autosave already cleared IsDirty.</summary>
         /// <summary>The automatic cloud settings backup (WPF ProfileSyncService.BackupSettingsAsync, force: false).</summary>
         internal static AutoSettingsBackup? CloudAutoBackup { get; private set; }
 
+        /// <summary>WPF AchievementService.cs:947-954: flush even when an autosave already cleared IsDirty.</summary>
         internal static void SaveAchievementsOnExit(DispatcherTimer? timer, AchievementEngine? engine)
         {
             try { timer?.Stop(); }

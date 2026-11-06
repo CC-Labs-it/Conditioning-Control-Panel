@@ -169,4 +169,13 @@ public sealed class ExclusivesVaultClickTests
         return Task.CompletedTask;
     });
 
+    /// <summary>Review 2026-11-06: the Play wall launches Breakout and DtRH on this head, so their Premium cards
+    /// open the same doors (WPF OpenExclusiveFeature :205/:208) instead of an inert "not on this build" card.</summary>
+    [Theory]
+    [InlineData("breakout", true)]
+    [InlineData("dtrh", true)]
+    [InlineData("backroom", false)]
+    [InlineData("arcademy", false)]
+    public void PremiumCardsMatchThePlayWallDoors(string key, bool onThisBuild) =>
+        Assert.Equal(onThisBuild, ExclusivesTabView.IsOnThisBuild(key));
 }

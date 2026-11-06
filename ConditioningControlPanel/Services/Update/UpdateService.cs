@@ -23,7 +23,7 @@ namespace ConditioningControlPanel.Services
         public const string AppVersion = "7.2.2";
 
         /// <summary>
-        /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
+        /// Patch notes for the current version: an alias of CCP.Core ReleaseNotes.Current, edit them there when bumping.
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
         public const string CurrentPatchNotes = ReleaseNotes.Current;

@@ -14,6 +14,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.Haptics;
 using ConditioningControlPanel.Services.PieceByPiece;
@@ -47,12 +48,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>Test seam: the last net relay; done once its reply is queued on the UI thread.</summary>
         internal Task GlassroadPending { get; private set; } = Task.CompletedTask;
 
+        // The settings object the race watches; a cloud restore/reset swaps CoreSettings.Current (Breakout's rebind).
+        private AppSettings? _grSettings;
+        private SettingsService? _grSettingsService;
+
+        private void HookGlassroadSettings()
+        {
+            if (_grSettings != null) _grSettings.PropertyChanged -= OnGlassroadSettingsChanged;
+            _grSettings = CoreSettings.Current;
+            _grSettings.PropertyChanged += OnGlassroadSettingsChanged;
+        }
+
+        private void OnGlassroadSettingsReplaced() => Dispatcher.UIThread.Post(() => { if (_grOpen) HookGlassroadSettings(); });
+
         /// <summary>WPF Launch after the window exists: watchdog, presence, the load-time init.</summary>
         private void OpenGlassroad()
         {
             if (_grOpen) return;
             _grOpen = true;
-            CoreSettings.Current.PropertyChanged += OnGlassroadSettingsChanged;
+            _grSettingsService = CoreSettings.Service;
+            if (_grSettingsService != null) _grSettingsService.CurrentReplaced += OnGlassroadSettingsReplaced;
+            HookGlassroadSettings();
             _grEarlyInitSent = _grPinged = false;
             _grLastBeatUtc = _grLastProgressUtc = DateTime.UtcNow;
             _grLastLoadingUtc = null;
@@ -79,7 +95,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (_grHaptics != null) _grHaptics.ConnectionChanged -= OnGlassroadToys;
             _grHaptics = null;
             GlassroadHapticDirector.Stop();
-            CoreSettings.Current.PropertyChanged -= OnGlassroadSettingsChanged;
+            if (_grSettings != null) _grSettings.PropertyChanged -= OnGlassroadSettingsChanged;
+            if (_grSettingsService != null) _grSettingsService.CurrentReplaced -= OnGlassroadSettingsReplaced;
+            _grSettings = null;
+            _grSettingsService = null;
             try { _grWatch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _grWatch = null;
             DisposeGlassroadPictures();

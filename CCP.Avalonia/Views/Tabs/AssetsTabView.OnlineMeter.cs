@@ -67,7 +67,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             RefreshOnlineMeter();
         }
 
-        /// <summary>The "?" slip: the title, then every paragraph (OnlineMeterRules.HelpParagraphKeys).</summary>
+        /// <summary>The help's text: the title, then every paragraph (OnlineMeterRules.HelpParagraphKeys).</summary>
         internal static string HelpText() =>
             string.Join("\n\n", new[] { Loc.Get(OnlineMeterRules.HelpTitleKey) }.Concat(OnlineMeterRules.HelpParagraphs(Loc.Get)));
 
@@ -80,7 +80,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         internal void PaintOnlineMeter(OnlineMeterState st, DateTime now, DateTime reset)
         {
-            ToolTip.SetTip(OnlineMeterHelp, HelpText());
+            // No ToolTip on the host: the LeashHelpButton's hover card is the help (WPF MainWindow.OnlineMeter.cs:104-106);
+            // a tip on top showed the same text twice.
             OnlineMeterCard.IsVisible = st.Show;
             OnlineMeterStamped.IsVisible = st.ShowStampedLine;
             OnlineOfficialNote.IsVisible = st.ShowOfficialNote;

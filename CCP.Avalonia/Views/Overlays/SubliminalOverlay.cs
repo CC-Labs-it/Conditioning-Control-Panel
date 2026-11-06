@@ -68,11 +68,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 if (!retired) card.Opacity = Math.Clamp(value, 0, 1);
             }, at);
-            var fade = TimeSpan.FromMilliseconds(SubliminalCard.DefaultFadeMs);
-            for (var i = 1; i <= 3; i++)
+            // Gentle Visuals scales the fade here as on the classic path (FadeDuration/Ramp) and WPF
+            // SubliminalService.cs:636-637, which scales it before choosing host or classic.
+            var fade = SubliminalOverlayWindow.FadeDuration;
+            var steps = Math.Max(3, (int)Math.Ceiling(fade.TotalMilliseconds / 17));
+            for (var i = 1; i <= steps; i++)
             {
-                Step(alpha * i / 3, fade * i / 3);
-                Step(alpha * (1 - i / 3.0), fade + hold + fade * i / 3);
+                Step(alpha * i / steps, fade * i / steps);
+                Step(alpha * (1 - (double)i / steps), fade + hold + fade * i / steps);
             }
             DispatcherTimer.RunOnce(() =>
             {
@@ -118,7 +121,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
                 if (UseSolidHost(s.SubliminalSolidMode, s.SubliminalStealsFocus, MandatoryVideoOverlay.Instance.Windows.Count) &&
-                    ShowHosted(screens[i].Bounds, text, alpha, hold)) continue;
+                    ShowHosted(screens[i].Bounds, text, alpha, hold))
+                {
+                    // WPF raises the bark and Displayed on every path; Present (which does it) is skipped here.
+                    if (!barkRaised)
+                    {
+                        Platform.BarkHead.Engine?.Raise("SubliminalDisplayed");
+                        Displayed?.Invoke();
+                    }
+                    barkRaised = true;
+                    continue;
+                }
                 var w = new SubliminalOverlayWindow(text);
                 if (!X11Overlay.SetClickThrough(w, true) || !X11Overlay.SetOpacity(w, 0) || !X11Overlay.SetOverrideRedirect(w, screens[i].Bounds))
                 {

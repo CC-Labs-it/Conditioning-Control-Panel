@@ -60,7 +60,7 @@ public sealed class LockdownDoseRecoveryTests : IDisposable
             MandatoryVideosEnabled = true, LockCardEnabled = true };
         File.WriteAllText(_path, "{\"Flipped\":[\"" + key + "\",\"unknown\"]}");
         int saved = 0;
-        LockdownDoseRecovery.Recover(_path, s, () => { Assert.True(File.Exists(_path)); saved++; });
+        LockdownDoseRecovery.Recover(_path, s, () => { Assert.True(File.Exists(_path)); saved++; return true; });
         Assert.Equal(key != "flash", s.FlashEnabled);
         Assert.Equal(key != "subliminal", s.SubliminalEnabled);
         Assert.Equal(key != "spiral", s.SpiralEnabled);
@@ -71,7 +71,7 @@ public sealed class LockdownDoseRecoveryTests : IDisposable
         Assert.True(s.LockCardEnabled);
         Assert.Equal(1, saved);
         Assert.False(File.Exists(_path));
-        LockdownDoseRecovery.Recover(_path, s, () => saved++);
+        LockdownDoseRecovery.Recover(_path, s, () => { saved++; return true; });
         Assert.Equal(1, saved);
     }
 
@@ -84,7 +84,7 @@ public sealed class LockdownDoseRecoveryTests : IDisposable
         File.WriteAllText(_path, json);
         var s = new AppSettings { FlashEnabled = true };
         int saved = 0;
-        LockdownDoseRecovery.Recover(_path, s, () => saved++);
+        LockdownDoseRecovery.Recover(_path, s, () => { saved++; return true; });
         Assert.True(s.FlashEnabled);
         Assert.Equal(0, saved);
         Assert.True(File.Exists(_path));
@@ -98,8 +98,19 @@ public sealed class LockdownDoseRecoveryTests : IDisposable
         LockdownDoseRecovery.Recover(_path, s, () => throw new IOException("test save failure"));
         Assert.True(File.Exists(_path));
         s.FlashEnabled = true;
-        LockdownDoseRecovery.Recover(_path, s, () => { });
+        LockdownDoseRecovery.Recover(_path, s, () => true);
         Assert.False(s.FlashEnabled);
         Assert.False(File.Exists(_path));
+    }
+
+    /// <summary>SaveImmediate never throws: a failed save reports false, and the record must survive it,
+    /// or the flipped features return next launch with nothing left to undo them.</summary>
+    [Fact]
+    public void Failed_save_retains_record_for_next_launch()
+    {
+        File.WriteAllText(_path, "{\"Flipped\":[\"flash\"]}");
+        var s = new AppSettings { FlashEnabled = true };
+        LockdownDoseRecovery.Recover(_path, s, () => false);
+        Assert.True(File.Exists(_path));
     }
 }
