@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -183,24 +184,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     }
 
     /// <summary>
-    /// Phase 8's first run: three steps (Welcome, mod pick, doors tour) in place of the up-to-ten
-    /// popup gauntlet a fresh install used to walk through.
+    /// The first run, in two steps: Welcome (language, your own content folder, the 18+ gate) and
+    /// Flavour (which mod to run), in place of the popup gauntlet a fresh install used to walk
+    /// through.
     ///
     /// <para>PORTED from ConditioningControlPanel/Windows/FirstRunWizard.xaml.cs. What survives is
-    /// everything the VIEW owns - the three steps and their copy, the step counter and footer
-    /// captions, card selection, the seven door rows, the chrome (drag, Esc, X, Back/Next/Skip) -
+    /// everything the VIEW owns - the two steps and their copy, the language row, the step counter
+    /// and footer captions, card selection, the chrome (drag, Esc, X, Enter/Keep the default) -
     /// plus everything the Core seams can now answer: the <c>Welcomed</c> gate
     /// (<see cref="ShouldRunAndClaim"/> / <see cref="HandBackFirstRun"/>, on
-    /// <c>CoreSettings</c> and <c>CoreReleaseContent.AppVersion</c>), the affirmation in the
-    /// welcome heading, the active mod the cards pre-select against, the real pack ids and sizes
-    /// (see <see cref="ModPickerCatalog"/>), and the pack-installed signal.</para>
+    /// <c>CoreSettings</c> and <c>CoreReleaseContent.AppVersion</c>), the active mod the cards
+    /// pre-select against, the real pack ids and sizes (see <see cref="ModPickerCatalog"/>), and
+    /// the pack-installed signal.</para>
     ///
-    /// <para><see cref="Run"/> is now real, and <c>MainShellWindow.FirstRun.cs</c> calls it: the
-    /// shell claims the gate in its constructor and opens this window once it is on screen. Both
-    /// of the wizard's outgoing actions land on this head - the content-folder picker is
-    /// <c>MainShellWindow.PickAssetsFolder</c>, opened at once from the button, and the short walk is
-    /// <c>CoreTutorial.Start("ShortWalk")</c>, seeded by <c>Tours.TutorialHead.Seed</c>, so that
-    /// button starts the real tour on the shell.</para>
+    /// <para><b>One tour.</b> As in WPF there is no doors step and no "Take the tour" button: EMI
+    /// offers the single walk there is from her chip, after this window is gone.</para>
+    ///
+    /// <para><see cref="Run"/> is real, and <c>MainShellWindow.FirstRun.cs</c> calls it: the
+    /// shell claims the gate in its constructor and opens this window once it is on screen. The
+    /// content-folder picker is <c>MainShellWindow.PickAssetsFolder</c>, opened at once from the
+    /// button (docs/avalonia-decisions.html).</para>
     ///
     /// <para>Step 2 commits for real: <see cref="PrepareModStep"/> spends (or, offline, latches)
     /// the picker's one-shot offer and <see cref="CommitModChoice"/> switches through the shell's
@@ -213,7 +216,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// </summary>
     public partial class FirstRunWizard : Window
     {
-        private const int StepCount = 3;
+        private const int StepCount = 2;
 
         private readonly ObservableCollection<FirstRunModCard> _cards = new();
 
@@ -227,28 +230,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly TextBlock _txtAppTitle;
         private readonly TextBlock _txtWelcomeHeading;
         private readonly TextBlock _txtWelcomeBody;
-        private readonly TextBlock _txtTipsTitle;
-        private readonly TextBlock _txtTipHelp;
-        private readonly TextBlock _txtTipHover;
-        private readonly TextBlock _txtTipAssets;
-        private readonly TextBlock _txtPerfTitle;
-        private readonly TextBlock _txtPerfBody;
+        private readonly TextBlock _txtLanguageLabel;
+        private readonly TextBlock _txtLanguageHint;
+        private readonly ComboBox _cmbWizardLanguage;
+        private readonly TextBlock _txtFolderLabel;
+        private readonly TextBlock _txtFolderHint;
         private readonly TextBlock _txtModHeading;
         private readonly TextBlock _txtModSub;
         private readonly TextBlock _txtModHint;
-        private readonly TextBlock _txtTourHeading;
-        private readonly TextBlock _txtTourOutro;
         private readonly TextBlock _txtPickFolder;
-        private readonly TextBlock _txtBack;
         private readonly TextBlock _txtSkip;
         private readonly TextBlock _txtNext;
         private readonly Grid _step1;
         private readonly Grid _step2;
-        private readonly Grid _step3;
-        private readonly Button _btnBack;
         private readonly Button _btnPickFolder;
         private readonly ItemsControl _modCardsList;
-        private readonly StackPanel _doorsHost;
         private readonly CheckBox _chkAgeConfirm;
         private readonly TextBlock _txtAgeConfirm;
         private readonly TextBlock _txtContentPolicy;
@@ -259,8 +255,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>True once Enter was pressed on the Welcome step with the 18+ box ticked.</summary>
         public bool AgeAccepted { get; private set; }
 
-        /// <summary>Set by "Take the tour"; read by the caller after the modal returns.</summary>
-        public bool StartTourRequested { get; private set; }
+        private bool _populatingLanguage;
 
         /// <summary>The folder the Welcome step's button applied, shown on that button.</summary>
         private string? _pickedFolder;
@@ -281,28 +276,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _txtAppTitle = this.FindControl<TextBlock>("TxtAppTitle")!;
             _txtWelcomeHeading = this.FindControl<TextBlock>("TxtWelcomeHeading")!;
             _txtWelcomeBody = this.FindControl<TextBlock>("TxtWelcomeBody")!;
-            _txtTipsTitle = this.FindControl<TextBlock>("TxtTipsTitle")!;
-            _txtTipHelp = this.FindControl<TextBlock>("TxtTipHelp")!;
-            _txtTipHover = this.FindControl<TextBlock>("TxtTipHover")!;
-            _txtTipAssets = this.FindControl<TextBlock>("TxtTipAssets")!;
-            _txtPerfTitle = this.FindControl<TextBlock>("TxtPerfTitle")!;
-            _txtPerfBody = this.FindControl<TextBlock>("TxtPerfBody")!;
+            _txtLanguageLabel = this.FindControl<TextBlock>("TxtLanguageLabel")!;
+            _txtLanguageHint = this.FindControl<TextBlock>("TxtLanguageHint")!;
+            _cmbWizardLanguage = this.FindControl<ComboBox>("CmbWizardLanguage")!;
+            _txtFolderLabel = this.FindControl<TextBlock>("TxtFolderLabel")!;
+            _txtFolderHint = this.FindControl<TextBlock>("TxtFolderHint")!;
             _txtModHeading = this.FindControl<TextBlock>("TxtModHeading")!;
             _txtModSub = this.FindControl<TextBlock>("TxtModSub")!;
             _txtModHint = this.FindControl<TextBlock>("TxtModHint")!;
-            _txtTourHeading = this.FindControl<TextBlock>("TxtTourHeading")!;
-            _txtTourOutro = this.FindControl<TextBlock>("TxtTourOutro")!;
             _txtPickFolder = this.FindControl<TextBlock>("TxtPickFolder")!;
-            _txtBack = this.FindControl<TextBlock>("TxtBack")!;
             _txtSkip = this.FindControl<TextBlock>("TxtSkip")!;
             _txtNext = this.FindControl<TextBlock>("TxtNext")!;
             _step1 = this.FindControl<Grid>("Step1")!;
             _step2 = this.FindControl<Grid>("Step2")!;
-            _step3 = this.FindControl<Grid>("Step3")!;
-            _btnBack = this.FindControl<Button>("BtnBack")!;
             _btnPickFolder = this.FindControl<Button>("BtnPickFolder")!;
             _modCardsList = this.FindControl<ItemsControl>("ModCardsList")!;
-            _doorsHost = this.FindControl<StackPanel>("DoorsHost")!;
             _chkAgeConfirm = this.FindControl<CheckBox>("ChkAgeConfirm")!;
             _txtAgeConfirm = this.FindControl<TextBlock>("TxtAgeConfirm")!;
             _txtContentPolicy = this.FindControl<TextBlock>("TxtContentPolicy")!;
@@ -310,9 +298,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _btnSkip = this.FindControl<Button>("BtnSkip")!;
             _btnNext = this.FindControl<Button>("BtnNext")!;
 
+            DetectSystemLanguage();
             ApplyStaticText();
+            PopulateLanguages();
             BuildModCards();
-            BuildDoorRows();
             _modCardsList.ItemsSource = _cards;
 
             // A pack finishing while this window is open flips its card to Installed. Raised on the
@@ -328,9 +317,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             this.FindControl<Border>("TitleBar")!.PointerPressed += TitleBar_PointerPressed;
             this.FindControl<Button>("BtnCloseX")!.Click += (_, _) => CloseSafely();
             _btnPickFolder.Click += BtnPickFolder_Click;
-            _btnBack.Click += (_, _) => ShowStep(_step - 1);
-            _btnSkip.Click += (_, _) => CloseSafely();
+            _btnSkip.Click += BtnSkip_Click;
             _btnNext.Click += BtnNext_Click;
+            _cmbWizardLanguage.SelectionChanged += CmbWizardLanguage_SelectionChanged;
             _chkAgeConfirm.IsCheckedChanged += (_, _) => ApplyStepChrome();
             // WPF AgeConfirmLabel_Click: the sentence is the target too.
             _txtAgeConfirm.PointerReleased += (_, _) => _chkAgeConfirm.IsChecked = _chkAgeConfirm.IsChecked != true;
@@ -454,20 +443,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>
-        /// Opens the wizard modally on <paramref name="owner"/> and performs whatever the user
-        /// asked for on the way out: the short walk (the folder picker already ran from its button). Never throws - a first-run screen must
-        /// never be the reason a fresh install fails to start.
+        /// Opens the wizard modally on <paramref name="owner"/> and opens the quiet window on the way
+        /// out (the folder picker already ran from its button). Never throws - a first-run screen
+        /// must never be the reason a fresh install fails to start.
         ///
         /// <para>WPF's <c>Run(MainWindow)</c> is synchronous because <c>ShowDialog</c> is;
         /// Avalonia's is awaitable, so this returns a Task and the caller awaits it. The tail runs
         /// straight after the await rather than from a second dispatcher post: WPF needed the post
         /// only to get off <c>ShowDialog</c>'s nested message loop, and <c>await</c> already is
         /// that.</para>
-        ///
-        /// <para><c>StartTutorial(TutorialType.ShortWalk)</c> becomes
-        /// <c>CoreTutorial.Start("ShortWalk")</c> - the seam takes the head's tutorial-type name as
-        /// a string, and <c>Tours.TutorialHead.Seed</c> backs it with the imported TutorialService,
-        /// so the button starts the real tour.</para>
         /// </summary>
         public static async Task Run(MainShellWindow owner)
         {
@@ -476,6 +460,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 MainShellWindow.IsStartupDialogShowing = true;
                 wizard = new FirstRunWizard { ShellOwner = owner };
+                // The constructor may have switched to the OS language before it had an owner
+                // (WPF passes the owner in and calls ApplyLanguageSelection there): re-select the
+                // shell's own two language surfaces on that code.
+                owner.ApplyLanguageSelection(CoreSettings.Current.Language);
                 wizard.FitToWorkingArea(wizard.Screens.ScreenFromWindow(owner) ?? wizard.Screens.Primary);
                 await wizard.ShowDialogSafe(owner);
             }
@@ -500,17 +488,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // passive surfaces go to the Inbox instead of popping.
             Platform.StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
             Platform.RemoteMediaOffer.FlushPending();
-
-            if (wizard.StartTourRequested)
-            {
-                // The SHORT WALK, not the door-by-door tour: seven cards, about ninety seconds,
-                // and it teaches the app rather than the furniture. Somebody who has just been
-                // shown all seven doors on the screen behind this button does not need them named
-                // again. The full tour is the first row in the ? panel, which is what the wizard's
-                // outro says.
-                try { CoreTutorial.Start("ShortWalk"); }
-                catch (Exception ex) { Log.Warning(ex, "[FirstRun] Could not start the short walk"); }
-            }
         }
 
         /// <summary>
@@ -599,56 +576,48 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Debug("[FirstRun] logo resolve failed: {E}", ex.Message); }
         }
 
+        /// <summary>
+        /// Every string on the screen, re-runnable: the language row switches the app's language in
+        /// place, and this window's own copy is code-behind rather than <c>{loc:Str}</c> bindings,
+        /// so it has to be repainted by hand when that happens (WPF FirstRunWizard.xaml.cs:572-612).
+        /// </summary>
         private void ApplyStaticText()
         {
-            Title = Str("fr8_wizard_title", "Getting started");
+            Title = Str("fr8_wizard_title", "First run");
             _txtWizardTitle.Text = Title;
 
-            // --- step 1 ---
+            // --- step 1: welcome ---
             RefreshWelcomeLogo();
 
             _txtAppTitle.Text = Loc.Get("app_title");
-            _txtWelcomeHeading.Text = StrF("fr8_welcome_heading", "Welcome, {0}.", CoreMods.Affirmation);
+            _txtWelcomeHeading.Text = Str("fr8_welcome_title", "Welcome.");
             _txtWelcomeBody.Text = Str("fr8_welcome_body",
-                "Conditioning Control Panel layers the effects you choose - flashes, videos, subliminals, " +
-                "screen overlays and a companion who reacts to all of it - over whatever you are already doing. " +
-                "Nothing runs until you press START, and every camera, microphone or screen-reading feature " +
-                "asks for your consent separately, the first time you use it.");
+                "Two choices and you are in. Everything else waits until you go looking for it.");
 
-            _txtTipsTitle.Text = Loc.Get("label_tips");
-            _txtTipHelp.Text = Str("fr8_welcome_tip_help",
-                "Click the ? button in the title bar any time for the full tour and per-feature guides.");
-            _txtTipHover.Text = Str("fr8_welcome_tip_hover", "Hover over any setting to see what it does.");
-            _txtTipAssets.Text = Str("fr8_welcome_tip_assets",
-                "Add your own images and videos from the Library door, or point the app at any folder you like.");
+            _txtLanguageLabel.Text = Str("fr8_welcome_language", "Language");
+            _txtLanguageHint.Text = Str("fr8_welcome_language_hint", "You can change this later in Settings.");
 
-            _txtPerfTitle.Text = Loc.Get("label_performance_warning");
-            _txtPerfBody.Text = Str("fr8_welcome_perf_warning",
-                "Running many features at once, especially at high frequencies, is heavy on older machines. " +
-                "Turn some off or lower their rates in Settings if things get sluggish.");
+            _txtFolderLabel.Text = Str("fr8_welcome_folder", "Your own content");
+            _txtFolderHint.Text = Str("fr8_welcome_folder_hint",
+                "Optional. Point the app at a folder of your own images and videos.");
 
+            // Keep the chosen folder if one was already picked: this method also runs on a
+            // language switch, and repainting the button would quietly un-say it.
             _txtPickFolder.Text = _pickedFolder ?? Str("fr8_welcome_pick_folder", "Choose a content folder");
+
             _txtAgeConfirm.Text = Str("fr8_age_confirm", "I am 18 or older and I have read the content policy.");
             _txtContentPolicy.Text = Str("fr8_age_policy_link", "Read the content policy");
 
-            // --- step 2 ---
+            // --- step 2: flavour ---
             _txtModHeading.Text = Str("fr8_modpick_heading", "Pick your flavour");
             _txtModSub.Text = Str("fr8_modpick_sub",
-                "A mod re-skins the whole app: her name and voice, the art, the phrases, the programs. " +
-                "Pick the one you want to start with - you can switch any time from the title bar.");
-            _txtModHint.Text = Str("fr8_modpick_skip_hint",
-                "Skipping keeps the neutral CCP Default. Downloads carry on in the background, so you can " +
-                "close this window whenever you like.");
-
-            // --- step 3 ---
-            _txtTourHeading.Text = Str("fr8_tour_heading", "Seven doors");
-            _txtTourOutro.Text = Str("fr8_tour_outro",
-                "The rail on the left is always there. Take the tour for a ninety-second walk through the " +
-                "essentials, or explore on your own - the ? button replays it, and the full door-by-door " +
-                "tour is in there too.");
-
-            // --- chrome ---
-            _txtBack.Text = Str("fr8_wizard_back", "Back");
+                "A mod re-skins the whole app: your companion's name and voice, the art, the phrases, " +
+                "the programs. Pick one to start with. You can switch any time from the title bar.");
+            if (!_modStepOffline)
+            {
+                _txtModHint.Text = Str("fr8_modpick_offline_hint",
+                    "Offline? The download waits. There is no second ask.");
+            }
         }
 
         // ------------------------------------------------------------------ steps
@@ -659,40 +628,138 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             _step1.IsVisible = _step == 1;
             _step2.IsVisible = _step == 2;
-            _step3.IsVisible = _step == 3;
 
-            _txtStepCounter.Text = StrF("fr8_wizard_step_of", "Step {0} of {1}", _step, StepCount);
-            _btnBack.IsVisible = _step != 1;
-            ApplyStepChrome();
-
-            // WPF re-called RefreshWelcomeLogo from ShowStep(1), so Back-navigation after a mod
-            // pick repaints instead of showing the previous mod's mark.
             if (_step == 1) RefreshWelcomeLogo();
             if (_step == 2) PrepareModStep();
 
+            ApplyStepChrome();
             FadeInCurrentStep();
         }
 
-        /// <summary>WPF ApplyStepChrome (FirstRunWizard.xaml.cs:637-661): step 1 has no skip, its
-        /// primary is Enter and stays disabled until the 18+ box is ticked.</summary>
+        /// <summary>
+        /// WPF ApplyStepChrome (FirstRunWizard.xaml.cs:635-660): the title-bar counter and the two
+        /// footer buttons. Split out of <see cref="ShowStep"/> because a language switch and a card
+        /// selection both change this copy without changing which step is on screen.
+        /// </summary>
         private void ApplyStepChrome()
         {
-            _btnSkip.IsVisible = _step != 1;
-            _btnNext.IsEnabled = _step != 1 || _chkAgeConfirm.IsChecked == true;
-            _txtCloseHint.Text = _step == 1 ? Str("fr8_welcome_close_hint", "Not for you? Close this window.") : "";
-            _txtCloseHint.IsVisible = _step == 1;
+            _txtStepCounter.Text = StrF("fr8_wizard_step_of", "Step {0} of {1}", _step, StepCount);
 
-            if (_step == 1) _txtNext.Text = Str("fr8_welcome_enter", "Enter");
-            else if (_step == 3)
+            if (_step == 1)
             {
-                _txtSkip.Text = Str("fr8_tour_explore", "Explore on my own");
-                _txtNext.Text = Str("fr8_tour_take", "Take the tour");
+                // No skip on the gate: not accepting is closing the window, and the muted line
+                // under the button says so rather than dressing it up as a third choice.
+                _btnSkip.IsVisible = false;
+                _txtNext.Text = Str("fr8_welcome_enter", "Enter");
+                _btnNext.IsEnabled = _chkAgeConfirm.IsChecked == true;
+
+                _txtCloseHint.Text = Str("fr8_welcome_close_hint", "Not for you? Close this window.");
+                _txtCloseHint.IsVisible = true;
             }
             else
             {
-                _txtSkip.Text = Str("fr8_wizard_skip", "Skip setup");
-                _txtNext.Text = Str("fr8_wizard_next", "Next");
+                _btnSkip.IsVisible = true;
+                _txtSkip.Text = Str("fr8_modpick_keep_default", "Keep the default");
+                _btnNext.IsEnabled = true;
+                UpdateFlavourButton();
+
+                _txtCloseHint.Text = "";
+                _txtCloseHint.IsVisible = false;
             }
+        }
+
+        /// <summary>"Enter with Circe", or plain "Enter" for the in-box default.</summary>
+        private void UpdateFlavourButton()
+        {
+            if (_step != 2) return;
+
+            var card = _selected;
+            var isDefault = card == null
+                            || string.Equals(card.ModId, BuiltInMods.CCPDefaultId, StringComparison.OrdinalIgnoreCase);
+
+            _txtNext.Text = isDefault
+                ? Str("fr8_welcome_enter", "Enter")
+                : StrF("fr8_modpick_enter_with", "Enter with {0}", card!.Name);
+        }
+
+        // ------------------------------------------------------------------ step 1: language
+
+        /// <summary>
+        /// The same language list Settings · General offers, from the same helper -
+        /// <see cref="MainShellWindow.FillLanguageCombo"/> - so this screen can never drift from it.
+        /// The list opens on whatever <see cref="DetectSystemLanguage"/> settled on.
+        /// </summary>
+        private void PopulateLanguages()
+        {
+            _populatingLanguage = true;
+            try { MainShellWindow.FillLanguageCombo(_cmbWizardLanguage, shortLabels: false); }
+            catch (Exception ex) { Log.Warning(ex, "[FirstRun] Could not fill the language list"); }
+            finally { _populatingLanguage = false; }
+        }
+
+        /// <summary>The OS display language, read once. Tests pin it so a run on a non-English box
+        /// does not switch the whole test process's language.</summary>
+        internal static Func<CultureInfo> SystemUiCulture { get; set; } = () => CultureInfo.InstalledUICulture;
+
+        /// <summary>
+        /// WPF DetectSystemLanguage (FirstRunWizard.xaml.cs:726-748): a fresh box starts in the OS
+        /// display language when the app ships it. Runs once, from the constructor, before the
+        /// static text is applied: the setting is still at its "en" default on a first run, so
+        /// nothing a person chose can be overwritten. Exact match first (pt-BR, zh-CN), then the
+        /// two-letter language, then an xx- prefix, then leave English alone. Never throws.
+        ///
+        /// <para>Skipped with no settings service (a render or a headless view check), which is
+        /// <see cref="ShouldRunAndClaim"/>'s own "is there settings to claim against" test: those
+        /// runs must not switch the process language. The owner is not known yet here (it is set
+        /// after construction), so the static writer is used and <see cref="Run"/> re-syncs the
+        /// shell's selectors.</para>
+        /// </summary>
+        private static void DetectSystemLanguage()
+        {
+            try
+            {
+                if (CoreSettings.Service == null) return;
+                var current = CoreSettings.Current.Language;
+                if (current != null && current != "en") return;
+
+                var ui = SystemUiCulture();
+                var codes = LocalizationManager.AvailableLanguages.Select(l => l.Code).ToArray();
+                var match = codes.FirstOrDefault(c => string.Equals(c, ui.Name, StringComparison.OrdinalIgnoreCase))
+                         ?? codes.FirstOrDefault(c => string.Equals(c, ui.TwoLetterISOLanguageName, StringComparison.OrdinalIgnoreCase))
+                         ?? codes.FirstOrDefault(c => c.StartsWith(ui.TwoLetterISOLanguageName + "-", StringComparison.OrdinalIgnoreCase));
+                if (match == null || match == "en") return;
+
+                MainShellWindow.SetApplicationLanguage(match);
+                Log.Information("[FirstRun] Language defaulted to {Code} from the OS display language {Culture}", match, ui.Name);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "[FirstRun] Could not read the OS display language");
+            }
+        }
+
+        private void CmbWizardLanguage_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+        {
+            if (_populatingLanguage) return;
+            if (_cmbWizardLanguage.SelectedItem is not ComboBoxItem item) return;
+
+            try
+            {
+                // The one writer of the saved language, either through the shell (which also
+                // re-selects its own two surfaces and raises the restart banner) or, when there is
+                // no owner, through the same static core it calls.
+                if (ShellOwner != null) ShellOwner.ApplyLanguageSelection(item.Tag as string);
+                else MainShellWindow.SetApplicationLanguage(item.Tag as string);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "[FirstRun] Language switch failed");
+            }
+
+            // This window's copy is assigned in code-behind, so it does not follow the live
+            // LocalizationManager change on its own.
+            ApplyStaticText();
+            ApplyStepChrome();
         }
 
         /// <summary>
@@ -711,7 +778,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// </summary>
         private void FadeInCurrentStep()
         {
-            var host = _step == 1 ? (Control)_step1 : _step == 2 ? _step2 : _step3;
+            var host = _step == 1 ? (Control)_step1 : _step2;
 
             if (AmbientFxCanvas.Env.Level == MotionLevel.Off)
             {
@@ -798,6 +865,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             _selected = card;
             foreach (var c in _cards) c.IsSelected = ReferenceEquals(c, card);
+            UpdateFlavourButton();
         }
 
         private void ModCard_PointerReleased(object? sender, PointerReleasedEventArgs e)
@@ -979,83 +1047,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             else card.MarkFailed();
         }
 
-        // ------------------------------------------------------------------ step 3: the doors
-
-        /// <summary>
-        /// The seven doors, in rail order. Mirrors <c>MainWindow.NavDoorMap</c> (which is private,
-        /// and is navigation truth - this list is only the wizard's description of it). Glyphs match
-        /// the rail headers; the labels reuse the existing <c>nav_door_*</c> keys, so only the
-        /// one-line blurbs are new copy.
-        /// </summary>
-        private static readonly (string Glyph, string LabelKey, string BlurbKey, string Blurb)[] Doors =
-        {
-            ("\U0001F3E0", "nav_door_home", "fr8_door_home_blurb",
-                "Your dashboard: the START hero, the feature mosaic, the browser card, today's program and the marquee."),
-            ("\U0001F39B️", "nav_door_studio", "fr8_door_studio_blurb",
-                "Where every effect is tuned: the rack, presets and sessions, the scheduler, the intensity ramp and your toys."),
-            ("\U0001F916", "nav_door_companion", "fr8_door_companion_blurb",
-                "Her room: personality, Takeover, She's Listening, Awareness, and every AI permission in one grid."),
-            ("\U0001F3AE", "nav_door_play", "fr8_door_play_blurb",
-                "The card wall: DTRH, Goon, Gaze, Bureau, Deeper, Graded Intake, Lockdown, Remote Control and the Showcase shelf."),
-            ("\U0001F464", "nav_door_you", "fr8_door_you_blurb",
-                "Your progress: Trainer Card, quests, achievements, the Skill Tree, training programs and the leaderboard."),
-            ("\U0001F4DA", "nav_door_library", "fr8_door_library_blurb",
-                "Everything you own: assets and content packs, mods, the catalogue, your phrase pools and the media log."),
-            ("⚙️", "nav_door_settings", "fr8_door_settings_blurb",
-                "The system side: language, audio, devices, performance, notifications, account, data and updates."),
-        };
-
-        private void BuildDoorRows()
-        {
-            foreach (var door in Doors)
-            {
-                var row = new Grid { Margin = new Thickness(0, 0, 0, 10) };
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-                var glyph = new TextBlock
-                {
-                    Text = door.Glyph,
-                    FontSize = 20,
-                    VerticalAlignment = VerticalAlignment.Top,
-                    Margin = new Thickness(2, 0, 14, 0)
-                };
-                row.Children.Add(glyph);
-
-                var text = new StackPanel();
-                text.Children.Add(new TextBlock
-                {
-                    Text = Loc.Get(door.LabelKey),
-                    Foreground = Brushes.White,
-                    FontSize = 14,
-                    FontWeight = FontWeight.Bold
-                });
-                text.Children.Add(new TextBlock
-                {
-                    Text = Str(door.BlurbKey, door.Blurb),
-                    Foreground = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
-                    FontSize = 12,
-                    TextWrapping = TextWrapping.Wrap,
-                    LineHeight = 18,
-                    Margin = new Thickness(0, 2, 0, 0)
-                });
-                Grid.SetColumn(text, 1);
-                row.Children.Add(text);
-
-                var shell = new Border
-                {
-                    // Avalonia's TryFindResource is an extension on the control, not on Application:
-                    // the lookup has to start somewhere in the tree to see this window's resources.
-                    Background = this.TryFindResource("PanelBgBrush", out var bg) ? bg as IBrush : null,
-                    CornerRadius = new CornerRadius(8),
-                    Padding = new Thickness(12, 10, 12, 10),
-                    Margin = new Thickness(0, 0, 0, 8),
-                    Child = row
-                };
-                _doorsHost.Children.Add(shell);
-            }
-        }
-
         // ------------------------------------------------------------------ pack events
 
         private void OnPackInstalled(object? sender, string packId) =>
@@ -1079,21 +1070,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!_btnPickFolder.IsEnabled) return;   // folder picker still open: finish after it answers
             if (_step == 1)
             {
-                // Belt and braces, as WPF: the button is disabled until the box is ticked.
+                // Belt and braces, as WPF: the button is disabled until the box is ticked, but the
+                // gate is the one thing on this screen that must not be reachable by accident.
                 if (_chkAgeConfirm.IsChecked != true) return;
-                RecordAgeAcceptance();
-            }
-            if (_step == 2) CommitModChoice();
 
-            if (_step >= StepCount)
-            {
-                // Last step's primary action is the doors tour itself.
-                StartTourRequested = true;
-                CloseSafely();
+                RecordAgeAcceptance();
+                ShowStep(2);
                 return;
             }
 
-            ShowStep(_step + 1);
+            CommitModChoice();
+            CloseSafely();
+        }
+
+        /// <summary>
+        /// WPF BtnSkip_Click (FirstRunWizard.xaml.cs:1165-1171), "Keep the default": puts the
+        /// selection back on whatever this install is already running before closing, so a card
+        /// the user clicked and then changed their mind about is not committed on the way out.
+        /// </summary>
+        private void BtnSkip_Click(object? sender, RoutedEventArgs e)
+        {
+            var activeModId = CoreMods.ActiveModId;
+            Select(_cards.FirstOrDefault(c => string.Equals(c.ModId, activeModId, StringComparison.OrdinalIgnoreCase))
+                   ?? _cards.FirstOrDefault());
+            CloseSafely();
         }
 
         private async void BtnPickFolder_Click(object? sender, RoutedEventArgs e)
@@ -1135,7 +1135,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _closed = true;
             if (!AgeAccepted) return;   // declined: Run hands the first run back and shuts down
 
-            // A choice made but never "Next"-ed (Esc, the X, Explore on my own) still counts - the
+            // A choice made but never entered (Esc, the X on the flavour step) still counts - the
             // user ticked a mod, and honouring it is what the picker's own contract promises.
             CommitModChoice();
         }
