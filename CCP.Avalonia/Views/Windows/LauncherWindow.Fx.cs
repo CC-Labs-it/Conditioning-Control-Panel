@@ -641,7 +641,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                if (anchor == null || !Env.AllowParticles || !anchor.IsEffectivelyVisible || anchor.Bounds.Width <= 0) return;
+                if (anchor == null || !Env.AllowFeedbackParticles || !anchor.IsEffectivelyVisible || anchor.Bounds.Width <= 0) return;   // a press: kept on the CPU path (fix3 pop 1b)
                 if (anchor.TranslatePoint(new Point(anchor.Bounds.Width / 2, anchor.Bounds.Height / 2), BurstLayer) is not { } p) return;
                 if (p.X < 0 || p.Y < 0 || p.X > BurstLayer.Bounds.Width || p.Y > BurstLayer.Bounds.Height) return;
                 BurstLayer.Burst(p.X, p.Y, color, count);

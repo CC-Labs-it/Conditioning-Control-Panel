@@ -298,6 +298,9 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// <summary>True while the clock is actually ticking.</summary>
         public bool IsRunning => _timer.IsEnabled;
 
+        /// <summary>The tick timer's interval (tests: a burst on the CPU path steps at the user's tier's rate).</summary>
+        internal TimeSpan StepInterval => _timer.Interval;
+
         // ================================ public API ================================
 
         /// <summary>Compose the surface from the layer flags with default tuning.</summary>
@@ -413,17 +416,22 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// One-shot particle burst at an element-local point: 60-150 sparks over ~1.2s, then the
         /// buffer is released. Skipped entirely when particles are not allowed - event moments cost
         /// nothing at the Performance tier or under reduced motion.
+        /// <para>Every caller is a moment the user caused (an unlock, a level-up, a completion, a click), so
+        /// the gate and the budget are <see cref="Env.AllowFeedbackParticles"/> / <see cref="Env.FeedbackTier"/>:
+        /// WPF's at the user's own settings, without the CPU path's lighter tier (owner decision 1b,
+        /// fix3 pop). The user's Performance mode, Reduced/Off motion and Gentle visuals still skip it.</para>
         /// </summary>
         public void Burst(double x, double y, Color? color = null, int count = 90)
         {
             try
             {
-                if (!Env.AllowParticles) return;
+                if (!Env.AllowFeedbackParticles) return;
                 double w = Bounds.Width, h = Bounds.Height;
                 if (w <= 1 || h <= 1) return;
 
                 if (_particleBudget <= 0) ReadEnvironment();
-                count = Math.Clamp(count, 60, Math.Min(MaxBurstParticles, Math.Max(60, _particleBudget * 2)));
+                int budget = Env.MaxAmbientParticles(Env.FeedbackTier);
+                count = Math.Clamp(count, 60, Math.Min(MaxBurstParticles, Math.Max(60, budget * 2)));
 
                 _burstDot = MakeDot(color ?? Env.ParticleColor, 0f);
 
@@ -604,7 +612,10 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 _tier = Env.CurrentTier;
                 _particleBudget = Env.MaxAmbientParticles(_tier);
                 _targetFps = Env.FxTargetFps(_tier);
-                _timer.Interval = TimeSpan.FromMilliseconds(1000.0 / Math.Max(1, _targetFps));
+                // No ambient clock at this tier (the CPU path's floor): the timer then only ever runs a one-shot
+                // burst, which steps at the user's own tier's rate, not once a second.
+                int stepFps = _targetFps > 0 ? _targetFps : Math.Max(1, Env.FxTargetFps(Env.FeedbackTier));
+                _timer.Interval = TimeSpan.FromMilliseconds(1000.0 / stepFps);
 
                 var mist = Env.MistColor;
                 var particle = Env.ParticleColor;
@@ -1496,7 +1507,12 @@ namespace ConditioningControlPanel.Avalonia.Controls
             /// Off motion, Gentle visuals and a user's own Performance mode still drop it, exactly as in WPF.
             /// </summary>
             public static bool AllowFeedbackParticles =>
-                Level == MotionLevel.Full && AllowAmbientMotion(SettingsTier) && MaxAmbientParticles(SettingsTier) > 0;
+                Level == MotionLevel.Full && AllowAmbientMotion(FeedbackTier) && MaxAmbientParticles(FeedbackTier) > 0;
+
+            /// <summary>The tier a user-triggered burst sizes and paces itself by (<see cref="AllowFeedbackParticles"/>):
+            /// the settings tier, without the CPU path's floor. Owner decision 2026-11-06 (fix3 pop, 1b): pops,
+            /// unlock/level-up/completion bursts, click sparks and reward particles keep playing on the CPU path.</summary>
+            internal static PerformanceTier FeedbackTier => SettingsTier;
 
             /// <summary>
             /// MotionFx.AllowTransitions. Interaction motion - hover, press, entrances, a stamp

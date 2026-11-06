@@ -288,7 +288,7 @@ internal sealed partial class BillboardCardHost
     /// <summary>Sparks in the card's hue flying out of a point, falling under a little gravity.</summary>
     private void Burst(Point at, Color hue, int count, double speed)
     {
-        if (!Env.AllowParticles) return;
+        if (!Env.AllowFeedbackParticles) return;   // press, snooze and CTA hover: the user's own action (fix3 pop 1b)
         for (int i = 0; i < count && _sparks.Count < MaxParticles; i++)
         {
             double a = _rng.NextDouble() * Math.PI * 2, v = (70 + _rng.NextDouble() * 230) * speed;
