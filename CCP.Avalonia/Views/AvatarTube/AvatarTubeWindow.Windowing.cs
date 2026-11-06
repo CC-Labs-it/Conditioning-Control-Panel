@@ -66,6 +66,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             {
                 _parentWindow.PositionChanged += OnParentPositionChanged;
                 _parentWindow.PropertyChanged += OnParentPropertyChanged;
+                // A press on main may start a WM move that X11 WMs only report at its end (FollowDrag.cs).
+                _parentWindow.AddHandler(PointerPressedEvent, OnParentPointerPressedForFollow, RoutingStrategies.Tunnel, handledEventsToo: true);
             }
             AddHandler(PointerWheelChangedEvent, (_, e) =>
             {
@@ -92,9 +94,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             RestoreMadeRoom();
             ReleaseInputShape();
             if (ToggleDetachedSink == (Action)ToggleDetached) ToggleDetachedSink = null;
+            StopFollowPoll();
             if (_parentWindow == null) return;
             _parentWindow.PositionChanged -= OnParentPositionChanged;
             _parentWindow.PropertyChanged -= OnParentPropertyChanged;
+            _parentWindow.RemoveHandler(PointerPressedEvent, OnParentPointerPressedForFollow);
         }
 
         private void OnParentPositionChanged(object? s, PixelPointEventArgs e) => UpdatePosition();
@@ -254,17 +258,22 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private static Box ToBox(PixelRect r) => new(r.X, r.Y, r.Width, r.Height);
 
         /// <summary>WPF UpdatePosition's physical route: dock beside main per TubeDockPlacement.</summary>
-        internal void UpdatePosition()
+        /// <param name="parentAt">Main's position read live from the X server while a WM moves it
+        /// (AvatarTubeWindow.FollowDrag.cs); null = Avalonia's Position. While main is in the WM's hands
+        /// make-room is not applied: resizing main mid-move would fight the WM. It runs on the final
+        /// PositionChanged as before.</param>
+        internal void UpdatePosition(PixelPoint? parentAt = null)
         {
             if (_applyingRoom || !_isAttached || _parentWindow is not { } p || p.WindowState == WindowState.Minimized) return;
-            var pr = new PixelRect(p.Position, PixelSize.FromSize(p.ClientSize, p.DesktopScaling));
+            var pr = new PixelRect(parentAt ?? p.Position, PixelSize.FromSize(p.ClientSize, p.DesktopScaling));
             if (pr.Width <= 0 || pr.Height <= 0) return;
-            var work = p.Screens.ScreenFromWindow(p)?.WorkingArea ?? new PixelRect(-100000, -100000, 200000, 200000);
+            var screen = parentAt != null ? p.Screens.ScreenFromBounds(pr) : p.Screens.ScreenFromWindow(p);
+            var work = screen?.WorkingArea ?? new PixelRect(-100000, -100000, 200000, 200000);
             double art = _scaleFactor * DesktopScaling, day = DockDaylight * DesktopScaling;
             var size = TubePixelSize;
             int rightInset = (int)Math.Round(Math.Max(0, (TubeArtRightPadding - SeamOverlapOverMain) * art - day));
             int leftInset = (int)Math.Round(Math.Max(0, TubeArtLeftPadding * art - day));
-            var parent = MakeRoom(ToBox(pr), work, size.Width - leftInset - rightInset);
+            var parent = parentAt != null ? ToBox(pr) : MakeRoom(ToBox(pr), work, size.Width - leftInset - rightInset);
             var plan = TubeDockPlacement.Place(parent, size.Width, size.Height, leftInset, rightInset,
                 (int)Math.Round(VerticalOffset * art), ToBox(work));
             Position = new PixelPoint(plan.Left, plan.Top);

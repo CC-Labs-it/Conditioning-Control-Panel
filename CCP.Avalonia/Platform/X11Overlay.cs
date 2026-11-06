@@ -79,6 +79,8 @@ internal static class X11Overlay
     [DllImport(LibX11)] private static extern int XGetWindowProperty(IntPtr display, IntPtr window, IntPtr property, IntPtr longOffset, IntPtr longLength,
         bool delete, IntPtr reqType, out IntPtr actualType, out int actualFormat, out IntPtr nItems, out IntPtr bytesAfter, out IntPtr prop);
     [DllImport(LibX11)] private static extern int XFree(IntPtr data);
+    [DllImport(LibX11)] private static extern bool XTranslateCoordinates(IntPtr display, IntPtr src, IntPtr dest, int srcX, int srcY,
+        out int destX, out int destY, out IntPtr child);
 
     [DllImport(LibXfixes)] private static extern int XFixesQueryExtension(IntPtr display, out int eventBase, out int errorBase);
     [DllImport(LibXfixes)] private static extern IntPtr XFixesCreateRegion(IntPtr display, IntPtr rectangles, int count);
@@ -381,6 +383,24 @@ internal static class X11Overlay
             XChangeProperty(_display, xid, typeAtom, (IntPtr)4, 32, 0 /* PropModeReplace */, types, types.Length);
             XSync(_display, false);
             return !_xErrored;
+        }
+    }
+
+    /// <summary>Where <paramref name="window"/>'s client area is on the root RIGHT NOW, asked of the server
+    /// (XTranslateCoordinates). Avalonia's cached Position only moves when the WM sends a ConfigureNotify,
+    /// which openbox and others do only when an interactive move ENDS. False when not X11.</summary>
+    internal static bool TryGetRootOrigin(TopLevel window, out PixelPoint origin)
+    {
+        origin = default;
+        if (!TryGetXid(window, out var xid)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            _xErrored = false;
+            if (!XTranslateCoordinates(_display, xid, XDefaultRootWindow(_display), 0, 0, out var x, out var y, out _) || _xErrored)
+                return false;
+            origin = new PixelPoint(x, y);
+            return true;
         }
     }
 
