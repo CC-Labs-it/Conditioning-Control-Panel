@@ -868,6 +868,9 @@ namespace ConditioningControlPanel.Avalonia
                 }
                 // After the version seed: installing / loading a mod checks its MinAppVersion.
                 StartMods();
+                // Once the active mod is known (its overrides key the entries): decode the art the last
+                // launch's first seconds asked for on worker threads, ahead of the shell build that wants it.
+                if (SplashOnStartup) Helpers.StartupArt.Start(StartupArtManifest, Helpers.ModArt.PrewarmOverride, Helpers.ModArt.Prewarm);
                 // Every panic opens Circe's Tab safety hold through this one seam (PanicSurfaces, PanicWatchdog,
                 // a controller's trigger_panic in Core RemoteCommands).
                 ConditioningControlPanel.Services.Safety.PanicChasterHold.Service = () => Platform.ChasterHead.Service;
@@ -1146,6 +1149,8 @@ namespace ConditioningControlPanel.Avalonia
                 desktop.MainWindow = sessions is null
                     ? new Views.Windows.MainShellWindow()
                     : new Views.Windows.MainShellWindow(sessions);
+                // WPF CenterOnPrimaryScreen, with the Linux default size (Views/Windows/MainShellWindow.WorkAreaFit.cs).
+                (desktop.MainWindow as Views.Windows.MainShellWindow)?.PlaceForFirstShow();
                 if (global::Avalonia.Controls.ControlExtensions.FindControl<global::Avalonia.Controls.Panel>(desktop.MainWindow, "NotificationHost") is { } toastHost)
                     Notifications.AttachHost(toastHost);
 
@@ -1274,8 +1279,14 @@ namespace ConditioningControlPanel.Avalonia
                 });
                 // WPF App.xaml.cs:4858: pending-outcome report + background update check.
                 Dispatcher.UIThread.Post(async () => await Platform.AppUpdater.StartupAsync(shell));
+                // The startup art list for the next launch: what the shell, the boot surface and their first
+                // repaints loaded. Nothing is recorded without a splash (tests, renders, checks).
+                if (Helpers.StartupArt.Recording)
+                    DispatcherTimer.RunOnce(() => Helpers.StartupArt.Finish(StartupArtManifest), TimeSpan.FromSeconds(8));
             }
         }
+
+        private static string StartupArtManifest => Path.Combine(CorePaths.UserData, Helpers.StartupArt.ManifestName);
 
         /// <summary>Stops every desktop overlay and its schedule. <paramref name="final"/> is the shell
         /// closing; the tray's Stop everything passes false so the overlays can be started again.</summary>
