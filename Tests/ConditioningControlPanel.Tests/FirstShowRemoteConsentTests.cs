@@ -106,6 +106,39 @@ public class FirstShowRemoteConsentTests
         Assert.Equal(new[] { "HypnoGoneWild" }, o.Loaded);
     }
 
+    /// <summary>The card's two keys are in every language file, and en.json is the code's fallback word for word, so
+    /// a build that falls back and one that reads en.json ask exactly the same question.</summary>
+    [Fact]
+    public void The_consent_card_is_translated_in_every_language_and_English_matches_the_fallback()
+    {
+        foreach (var lang in new[] { "en", "de", "es", "fr", "it", "ja", "ko", "pt-BR", "ru", "zh-CN" })
+        {
+            var file = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(
+                System.IO.Path.Combine(SourceRoots.LanguagesDirectory, lang + ".json")));
+            foreach (var key in new[] { "title_remote_media_consent", "msg_remote_media_consent" })
+                Assert.False(string.IsNullOrWhiteSpace((string?)file[key]), $"{lang}.json lacks {key}");
+            if (lang != "en") continue;
+            // Read from source, not through Loc: other suites switch the live language.
+            foreach (var head in new[] { "ConditioningControlPanel/MainWindow/MainWindow.Assets.cs", "CCP.Avalonia/Views/Tabs/AssetsTabView.MediaPicker.cs" })
+            {
+                var source = System.IO.File.ReadAllText(System.IO.Path.Combine(SourceRoots.RepoRoot, head));
+                Assert.Equal((string?)file["title_remote_media_consent"], Fallback(source, "title_remote_media_consent"));
+                Assert.Equal((string?)file["msg_remote_media_consent"], Fallback(source, "msg_remote_media_consent"));
+            }
+        }
+    }
+
+    /// <summary>The English a <c>LocOr("key", "..." + "...")</c> call falls back to, unescaped.</summary>
+    private static string Fallback(string source, string key)
+    {
+        int start = source.IndexOf("LocOr(\"" + key + "\",", StringComparison.Ordinal);
+        Assert.True(start >= 0, "no LocOr for " + key);
+        start += key.Length + 9;
+        int end = source.IndexOf(')', start);
+        var parts = System.Text.RegularExpressions.Regex.Matches(source[start..end], "\"((?:[^\"\\\\]|\\\\.)*)\"");
+        return string.Concat(System.Linq.Enumerable.Select(parts, m => System.Text.RegularExpressions.Regex.Unescape(m.Groups[1].Value)));
+    }
+
     /// <summary>Not consent, so not asked: the licence switch off, a spent share or Offline mode load as before
     /// (and fall back as before), leaving consent and the source alone.</summary>
     [Theory]

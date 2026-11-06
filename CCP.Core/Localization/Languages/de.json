@@ -8327,6 +8327,8 @@
   "label_active_phrase_count": "{0} aktiv",
   "remote_media_offer_title": "Medien ohne Download",
   "remote_media_offer_summary": "Deine Ordner sind leer - sie kann stattdessen aus dem Online-Pool streamen.",
+  "title_remote_media_consent": "Reddit-Medien verwenden?",
+  "msg_remote_media_consent": "Medien von Reddit holen?\n\nDie App streamt Bilder und Clips aus den Subreddits, die du auswählst, direkt auf deinem eigenen Rechner. Nichts wird auf deiner Festplatte gespeichert, nichts wird hochgeladen und nichts davon läuft über unsere Server.\n\nEs sind Inhalte für Erwachsene, und wir kuratieren sie nicht - du wählst die Nischen und Subreddits, und nur diese werden jemals abgerufen.\n\nEinschalten?",
   "lucky_xp_multiplier": "{0}x XP",
   "chaos_dvd_title": "Porno-DVD",
   "chaos_dvd_loading": "wird geladen",

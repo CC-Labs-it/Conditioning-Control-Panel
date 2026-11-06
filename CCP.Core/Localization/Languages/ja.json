@@ -8327,6 +8327,8 @@
   "label_active_phrase_count": "{0} 件有効",
   "remote_media_offer_title": "ダウンロード不要のメディア",
   "remote_media_offer_summary": "フォルダーが空です - 代わりに彼女がオンラインのメディアをストリーミングできます。",
+  "title_remote_media_consent": "Reddit のメディアを使いますか？",
+  "msg_remote_media_consent": "Reddit からメディアを取得しますか？\n\nアプリはあなたが選んだサブレディットの画像やクリップを、あなた自身のマシンに直接ストリーミングします。ディスクには何も保存されず、何もアップロードされず、私たちのサーバーを経由することもありません。\n\nこれは成人向けコンテンツで、私たちは内容を選別していません - ニッチとサブレディットはあなたが選び、取得されるのはそれだけです。\n\nオンにしますか？",
   "lucky_xp_multiplier": "{0}x XP",
   "chaos_dvd_title": "ポルノDVD",
   "chaos_dvd_loading": "読み込み中",
