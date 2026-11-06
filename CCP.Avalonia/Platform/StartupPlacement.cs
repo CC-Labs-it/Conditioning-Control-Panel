@@ -28,6 +28,19 @@ internal static class StartupPlacement
         return primary >= 0 && primary < bounds.Count ? primary : 0;
     }
 
+    /// <summary>The screen the main window opens on: WPF MainWindow.CenterOnPrimaryScreen's primary; with no
+    /// primary reported (WSLg's XWayland has none) the splash's choice, the screen under the pointer.</summary>
+    internal static int PickForShell(IReadOnlyList<PixelRect> bounds, int primary, PixelPoint? pointer) =>
+        primary >= 0 && primary < bounds.Count ? primary : Pick(bounds, -1, pointer);
+
+    /// <summary>Owner 11-06: on Linux the main window first opens 20% smaller per axis than WPF's 1661 x 1002 DIP
+    /// (which filled a 1680 x 1050 monitor); Windows keeps WPF's size. Never under the XAML floors.</summary>
+    internal const double LinuxShellScale = 0.8;
+
+    internal static (double Width, double Height) ShellSize(double width, double height, double minWidth, double minHeight, bool linux) =>
+        linux ? (Math.Max(minWidth, Math.Round(width * LinuxShellScale)), Math.Max(minHeight, Math.Round(height * LinuxShellScale)))
+              : (width, height);
+
     /// <summary>Top-left, in physical pixels, that centres a <paramref name="widthDip"/> x
     /// <paramref name="heightDip"/> window in <paramref name="workArea"/> at <paramref name="scaling"/>.</summary>
     internal static PixelPoint CenterIn(PixelRect workArea, double widthDip, double heightDip, double scaling)
