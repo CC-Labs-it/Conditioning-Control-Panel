@@ -854,9 +854,8 @@
                                                    Foreground="{DynamicResource PinkBrush}"
                                                    HorizontalAlignment="Center"
                                                    VerticalAlignment="Center"><Run Text="M"/><InlineUIContainer
-                                                       BaselineAlignment="Baseline"><TextBlock
-                                                           Text="&#xE713;" FontFamily="Segoe MDL2 Assets, Segoe UI Symbol, Segoe UI"
-                                                           FontSize="10" FontWeight="Normal"
+                                                       BaselineAlignment="Baseline"><fx:IconGlyph
+                                                           Kind="Settings" Size="10"
                                                            Foreground="{DynamicResource PinkBrush}"
                                                            Margin="0.7,0,0.7,-1"/></InlineUIContainer><Run
                                                        Text="D MANAGER"/></TextBlock>

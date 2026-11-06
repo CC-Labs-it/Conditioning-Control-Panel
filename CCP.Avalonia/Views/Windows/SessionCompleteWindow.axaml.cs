@@ -141,12 +141,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void LoadRandomCard()
         {
-            // ponytail: only the MOD half resolves. Helpers.ModArt asks CoreModArt for an override
-            // and then falls back to avares://, and Cards/*.png is NOT linked into this head - the
-            // csproj links Assets/features, /nav, /quests and the loose Assets/*.png, not Cards.
-            // So a .ccpmod that ships resources/Cards/hearth.png paints; a stock install collapses
-            // the Border, which is the WPF null path rather than a blank plate. Linking the stock
-            // cards is a .csproj change, which this layer does not own.
+            // Helpers.ModArt asks CoreModArt for a mod override, then falls back to the stock card the csproj
+            // links at Resources/Cards (WPF csproj:471). A missing file collapses the Border, the WPF null path.
             var card = Helpers.ModArt.TryLoad(CardImages[Random.Shared.Next(CardImages.Length)]);
             if (card != null) this.FindControl<Image>("ImgCard")!.Source = card;
             this.FindControl<Border>("CardBorder")!.IsVisible = card != null;

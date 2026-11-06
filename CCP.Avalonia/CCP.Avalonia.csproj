@@ -241,6 +241,11 @@
                       Link="Resources\billboard\%(Filename)%(Extension)" />
     <AvaloniaResource Include="..\Assets\features\*.png"
                       Link="Resources\features\%(Filename)%(Extension)" />
+    <!-- WPF csproj:471 session-complete cards (recap card, Presets chip, Mod Creator Cards slots; ModArt fallback). -->
+    <AvaloniaResource Include="..\Assets\Cards\*.png" Link="Resources\Cards\%(Filename)%(Extension)" />
+    <!-- WPF csproj:198-205 shipped AI personality presets: both pickers read BaseDirectory/assets/prompts. -->
+    <Content Include="..\ConditioningControlPanel\assets\prompts\*.json" Link="assets\prompts\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <AvaloniaResource Include="..\Assets\BlinkTrainer\Demo\*.png"
                       Link="Resources\BlinkTrainer\Demo\%(Filename)%(Extension)" />
     <AvaloniaResource Include="..\Assets\app.ico" Link="Resources\app.ico" />
