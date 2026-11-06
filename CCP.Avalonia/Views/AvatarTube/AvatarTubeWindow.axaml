@@ -74,14 +74,6 @@
         Width="780" Height="1080"
         UseLayoutRounding="True">
 
-    <Window.Resources>
-        <!-- Purplish gradient background for speech bubble -->
-        <LinearGradientBrush x:Key="BubbleGradient" StartPoint="0%,0%" EndPoint="100%,100%">
-            <GradientStop Color="{StaticResource PatreonDarkPurple}" Offset="0"/>
-            <GradientStop Color="{StaticResource DarkerBg}" Offset="1"/>
-        </LinearGradientBrush>
-    </Window.Resources>
-
     <Window.Styles>
         <!-- ponytail: local copy of AvatarTubeWindow.xaml:ContextMenu.Style / MenuItem Style,
              reduced to the property setters that survive without a template. Hoist when a second
@@ -102,49 +94,53 @@
             <Setter Property="Margin" Value="8,4"/>
             <Setter Property="Background" Value="{DynamicResource PinkBrush}"/>
         </Style>
-
-        <!-- Chat-history bubble. Replaces the WPF DataTrigger on ChatMessage.IsUser: the companion's
-             lines sit left on plum, the user's right on pink. -->
-        <Style Selector="Border.chatBubble">
-            <Setter Property="HorizontalAlignment" Value="Left"/>
-            <Setter Property="Background" Value="#3D2A55"/>
-        </Style>
-        <Style Selector="Border.chatBubble.user">
-            <Setter Property="HorizontalAlignment" Value="Right"/>
-            <Setter Property="Background" Value="#FF69B4"/>
-        </Style>
     </Window.Styles>
 
     <Grid>
-        <!-- Viewbox scales content uniformly to fit any screen size -->
-        <Viewbox x:Name="ContentViewbox" Stretch="Uniform" ClipToBounds="False">
-            <!-- Design canvas at fixed reference size - will be scaled -->
-            <Grid Width="780" Height="1080" ClipToBounds="False">
-            <!-- Tube frame FIRST (behind) - Z-Index 0 implicit. Sourceless in markup ON PURPOSE:
-                 WPF's pack:// URI becomes a mod-aware lookup, so SetTubeStyle (code-behind) points
-                 this at the active mod's tube.png / tube2.png and falls back to this head's own
-                 avares:// copy. Setting a Source here would win over a mod's chamber art. -->
-            <Image x:Name="ImgTubeFrame"
-                   Stretch="Uniform"
-                   HorizontalAlignment="Center"
-                   VerticalAlignment="Center"
-                   IsHitTestVisible="False"/>
-
-            <!-- Speech Bubble - Z-Index 10, positioned next to avatar -->
-            <!-- Dynamic bubble that sizes to content, grows UPWARD, scrolls when exceeding max -->
+        <!-- Speech bubble. WPF xaml:84-282: its own window, OUTSIDE the scaled design canvas, so text
+             is real size and the bubble can go anywhere on the monitor instead of wherever the tube
+             window happens to reach. This Grid is only parked here so its names stay in this
+             window's name scope: the constructor lifts it out and AvatarTubeWindow.SpeechWindow.cs
+             makes it the content of the bubble's own window (WPF CreateBubbleWindow, Speech.cs:1071).
+             Placed in physical px by AvatarTubeLayout.SpeechBubblePlacement: inside the work area,
+             off main's window, tail aimed at the avatar. Metrics are WPF's real-size ones. -->
+        <Grid x:Name="SpeechPopupRoot" IsVisible="False">
+            <Grid.Styles>
+                <!-- Chat-history bubble. Replaces the WPF DataTrigger on ChatMessage.IsUser: the
+                     companion's lines sit left on plum, the user's right on pink. Here, not in
+                     Window.Styles, because this subtree is rendered by the bubble's window. -->
+                <Style Selector="Border.chatBubble">
+                    <Setter Property="HorizontalAlignment" Value="Left"/>
+                    <Setter Property="Background" Value="#3D2A55"/>
+                </Style>
+                <Style Selector="Border.chatBubble.user">
+                    <Setter Property="HorizontalAlignment" Value="Right"/>
+                    <Setter Property="Background" Value="#FF69B4"/>
+                </Style>
+            </Grid.Styles>
+            <Path x:Name="SpeechTail"
+                  ZIndex="1"
+                  HorizontalAlignment="Left"
+                  VerticalAlignment="Top"
+                  IsHitTestVisible="False"
+                  Data="M0,0 L7,9 L14,0"
+                  Fill="#EB150F1E"
+                  Stroke="{DynamicResource PinkBrush}"
+                  StrokeThickness="1"
+                  RenderTransformOrigin="50%,50%"
+                  IsVisible="{Binding #SpeechBubble.IsVisible}"/>
             <Border x:Name="SpeechBubble"
-                    ZIndex="10"
                     IsVisible="False"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Bottom"
-                    Opacity="0.92"
-                    Margin="0,0,125,550"
-                    MinWidth="120" MaxWidth="380"
-                    Background="{StaticResource BubbleGradient}"
-                    CornerRadius="20"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    Margin="16"
+                    MinWidth="120" MaxWidth="340"
+                    Background="#EB150F1E"
+                    CornerRadius="14"
                     BorderBrush="{DynamicResource PinkBrush}"
-                    BorderThickness="3"
-                    Padding="15,12">
+                    BorderThickness="1"
+                    Padding="16,14"
+                    BoxShadow="0 3 18 0 #8C000000">
 
                 <Grid>
                     <!-- Single-message mode: existing bubble content -->
@@ -154,19 +150,16 @@
                                   MaxHeight="280">
 
                         <StackPanel>
-                        <!-- Speech text with bubbly pink font -->
+                        <!-- Speech text: white on dark glass, real 15px, relaxed leading (WPF xaml:140-149) -->
                         <TextBlock x:Name="TxtSpeech"
                                    Text=""
-                                   Foreground="{DynamicResource PinkBrush}"
-                                   FontSize="20"
-                                   FontWeight="Bold"
+                                   Foreground="#F4EEF8"
+                                   FontSize="15"
+                                   FontWeight="Normal"
+                                   LineHeight="21"
                                    TextWrapping="Wrap"
                                    TextAlignment="Left"
-                                   Padding="0,0,8,0">
-                            <TextBlock.Effect>
-                                <DropShadowEffect Color="Black" BlurRadius="2" OffsetX="1" OffsetY="1" Opacity="0.8"/>
-                            </TextBlock.Effect>
-                        </TextBlock>
+                                   Padding="0,0,6,0"/>
                         <!-- Ask card answers (AvatarTubeWindow.Chat.cs); empty and hidden otherwise -->
                         <WrapPanel x:Name="AskButtons" IsVisible="False" Margin="0,10,0,0"/>
                         </StackPanel>
@@ -289,6 +282,21 @@
                     </Grid>
                 </Grid>
             </Border>
+        </Grid>
+
+        <!-- Viewbox scales content uniformly to fit any screen size -->
+        <Viewbox x:Name="ContentViewbox" Stretch="Uniform" ClipToBounds="False">
+            <!-- Design canvas at fixed reference size - will be scaled -->
+            <Grid Width="780" Height="1080" ClipToBounds="False">
+            <!-- Tube frame FIRST (behind) - Z-Index 0 implicit. Sourceless in markup ON PURPOSE:
+                 WPF's pack:// URI becomes a mod-aware lookup, so SetTubeStyle (code-behind) points
+                 this at the active mod's tube.png / tube2.png and falls back to this head's own
+                 avares:// copy. Setting a Source here would win over a mod's chamber art. -->
+            <Image x:Name="ImgTubeFrame"
+                   Stretch="Uniform"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   IsHitTestVisible="False"/>
 
             <!-- WPF polish wave 13: motes rising inside the glass, over the chamber and behind her.
                  Placed on the chamber's interior box by ApplyTubeMotes; only over OUR tube art. -->

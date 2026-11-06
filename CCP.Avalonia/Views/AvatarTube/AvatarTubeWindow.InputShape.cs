@@ -27,9 +27,10 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         private void InitInputShape()
         {
-            // Any layout pass is a candidate change: the bubble showing, hiding, growing with its
-            // text or scrolling; the chat input; a card; a new avatar pose; a refit. Coalesced to
-            // one recompute per dispatcher turn and deduped against what the server already has.
+            // Any layout pass is a candidate change: the chat input; a card; a new avatar pose; a
+            // refit. Coalesced to one recompute per dispatcher turn and deduped against what the
+            // server already has. The speech bubble is its own window with its own region
+            // (AvatarTubeWindow.SpeechWindow.cs), so it never appears in this one.
             LayoutUpdated += (_, _) => RequestInputShape();
             Opened += (_, _) => { ApplyStacking(); RequestInputShape(); };
             if (_parentWindow != null) _parentWindow.Activated += OnParentActivated;
@@ -89,7 +90,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         }
 
         /// <summary>The painted parts of the tube, in window px: the tube art's alpha, then the box of
-        /// every visible element drawn over it. Attached it is also cut to the dock-side rect so her
+        /// every visible element drawn over it (chat input, title plate, Takeover bar, candle,
+        /// Possession card; not the bubble, which has its own window). Attached it is also cut to the dock-side rect so her
         /// clear margin never sits over the shell (#1847).</summary>
         private PixelRect[] ComputeInputShape()
         {
@@ -132,13 +134,14 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             }
         }
 
-        /// <summary>A control's laid-out box mapped into window px, including the Viewbox fit and
-        /// any render transform; null before it has been laid out.</summary>
-        private Rect? WindowBox(Visual control, double s)
+        /// <summary>A control's laid-out box mapped into the px of <paramref name="root"/> (this tube
+        /// by default), including the Viewbox fit and any render transform; null before it has been
+        /// laid out.</summary>
+        private Rect? WindowBox(Visual control, double s, Visual? root = null)
         {
             var size = control.Bounds.Size;
             if (size.Width <= 0 || size.Height <= 0) return null;
-            if (control.TransformToVisual(this) is not { } m) return null;
+            if (control.TransformToVisual(root ?? this) is not { } m) return null;
             var a = new Point(0, 0).Transform(m);
             var b = new Point(size.Width, 0).Transform(m);
             var c = new Point(0, size.Height).Transform(m);

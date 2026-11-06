@@ -44,7 +44,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         private Control[] DragSurfaces() => new Control[]
         {
-            _avatarBorder, _speechBubble, this.FindControl<Border>("TitleBox")!, _imgTubeFrame,
+            // Not the speech bubble: it is its own window now (WPF's bubble window is no drag surface).
+            _avatarBorder, this.FindControl<Border>("TitleBox")!, _imgTubeFrame,
         };
 
         private void InitWindowing()
@@ -138,6 +139,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             UpdatePosition();
             if (!attached) InputRect = null;   // free: no shell under her margin to protect
             ApplyStacking();                   // owned by main when attached, free and Topmost when not
+            ApplyBubbleStacking();             // the bubble rides in the tube's band (WPF DemoteSpeechBubble / ReassertTopmost)
+            SyncSpeechPopupOpen();             // attached, it also goes with main
             RequestInputShape();
             Log.Information("Avatar tube {Mode}", attached ? "attached" : "detached");
             if (_restoringPlacement) return;

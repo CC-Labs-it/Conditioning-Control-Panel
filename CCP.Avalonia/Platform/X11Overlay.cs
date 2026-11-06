@@ -309,6 +309,21 @@ internal static class X11Overlay
         }
     }
 
+    /// <summary>Native ownership on either backend: WM_TRANSIENT_FOR on X11, GWL_HWNDPARENT on
+    /// Windows (<see cref="Win32Overlay.SetOwner"/>). Null clears it. For a window whose Windows
+    /// behaviour is meant to match WPF's raw-owner windows (the tube's speech bubble); the tube itself
+    /// keeps the X11-only <see cref="SetTransientFor"/>. False headless and before either has a handle.</summary>
+    internal static bool SetOwner(TopLevel window, TopLevel? owner)
+    {
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd))
+        {
+            var ownerHwnd = IntPtr.Zero;
+            if (owner != null && !TryGet(owner, OverlayBackend.Win32, out ownerHwnd)) return false;
+            return Win32Overlay.SetOwner(hwnd, ownerHwnd);
+        }
+        return SetTransientFor(window, owner);
+    }
+
     internal static Action<TopLevel>? RaiseRequestedForTests; // Headless call-order observation only.
 
     /// <summary>Back on top of everything (WPF ReassertTopmost: SetWindowPos HWND_TOPMOST). An

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -111,9 +112,10 @@ public sealed class AvatarTubeWindowingTests
 
     /// <summary>Owner, Linux beta: the transparent 780x1080 box swallowed clicks meant for the desktop.
     /// WPF's layered window only takes the mouse on painted pixels (TubeArtAlpha.cs:8-18); the X11
-    /// input shape is the art's alpha plus the visible elements over it, and follows the bubble.</summary>
+    /// input shape is the art's alpha plus the visible elements over it. The speech bubble is its own
+    /// window now (WPF Speech.cs:1060), so a line going up leaves the tube's region alone.</summary>
     [Fact]
-    public Task InputShapeIsThePaintedPartsAndFollowsTheBubble() => Run(detached: false, (main, tube) =>
+    public Task InputShapeIsThePaintedPartsAndTheBubbleLeavesIt() => Run(detached: false, (main, tube) =>
     {
         PixelRect[]? sent = null;
         int writes = 0;
@@ -136,22 +138,119 @@ public sealed class AvatarTubeWindowingTests
         tube.ApplyInputShape();
         Assert.Equal(1, writes);   // unchanged: the server is not asked again
 
-        var bubble = tube.FindControl<Border>("SpeechBubble")!;
-        tube.FindControl<TextBlock>("TxtSpeech")!.Text = "Could not load those pictures. Try again in a moment?";
-        bubble.IsVisible = true;
+        tube.GigglePriority("I'm right here, sweetie. Just say the word.", playSound: false, aiGenerated: false);
         Dispatcher.UIThread.RunJobs();
+        Assert.True(tube.BubbleWindow!.IsVisible);
         tube.ApplyInputShape();
-        var box = new PixelRect(PixelPoint.FromPoint(bubble.TranslatePoint(default, tube)!.Value, 1),
-            PixelPoint.FromPoint(bubble.TranslatePoint(new Point(bubble.Bounds.Width, bubble.Bounds.Height), tube)!.Value, 1));
-        var withBubble = tube.InputRects!;
-        Assert.True(TubeInputShape.Hits(withBubble, box.Center.X, box.Center.Y));
-        Assert.True(TubeInputShape.Hits(withBubble, box.X + 4, box.Y + 4));
-        Assert.Equal(2, writes);
+        Assert.True(TubeInputShape.SameRects(rects, tube.InputRects));   // not a pixel more over the desktop
+        Assert.Equal(1, writes);
+    });
 
-        bubble.IsVisible = false;
+    /// <summary>Owner decision 11-06: WPF's bubble window (Speech.cs:1060-1140) on Linux too - its own
+    /// non-topmost window owned by the tube, placed beside her and off main, real size.</summary>
+    [Fact]
+    public Task BubbleIsItsOwnWindowBesideHerAndOffTheShell() => Run(detached: false, (main, tube) =>
+    {
+        var bubble = tube.FindControl<Border>("SpeechBubble")!;
+        Assert.NotNull(tube.BubbleWindow);
+        Assert.False(tube.BubbleWindow!.IsVisible);   // created on open, hidden until she speaks
+
+        tube.GigglePriority("I'm right here, sweetie. Just say the word.", playSound: false, aiGenerated: false);
         Dispatcher.UIThread.RunJobs();
-        tube.ApplyInputShape();
-        Assert.False(TubeInputShape.Hits(tube.InputRects!, box.X + 4, box.Y + 4));   // its corner is clear air again
+        var w = tube.BubbleWindow!;
+        Assert.True(w.IsVisible);
+        Assert.False(w.Topmost);                                    // attached: behind other apps with the tube
+        Assert.False(w.ShowActivated);
+        Assert.False(w.ShowInTaskbar);
+        Assert.Same(w, TopLevel.GetTopLevel(bubble));               // drawn by its own window...
+        Assert.Same(tube, TopLevel.GetTopLevel(tube.FindControl<Border>("InputPanel")!));   // ...the chat input stays in the tube
+        Assert.Equal(15, tube.FindControl<TextBlock>("TxtSpeech")!.FontSize);
+
+        // Placed by Core's SpeechBubblePlacement in physical px: off main (she is docked left of it),
+        // the window at the bubble less its 16 DIP margin.
+        var plan = tube.LastBubblePlan!.Value;
+        Assert.True(plan.Bubble.Right <= main.Position.X - ConditioningControlPanel.AvatarTubeLayout.SpeechBubblePlacement.Gap + 0.5,
+            $"bubble {plan.Bubble} reaches main at {main.Position.X}");
+        Assert.True(plan.Bubble.W <= AvatarTubeWindow.SpeechBubbleMaxWidth + 0.5);
+        Assert.Equal(new PixelPoint((int)Math.Round(plan.Bubble.X - 16), (int)Math.Round(plan.Bubble.Y - 16)), w.Position);
+
+        tube.EndSpeechBubble();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(w.IsVisible);
+    });
+
+    /// <summary>Its own input shape: only the bubble (and its tail) takes the mouse; the margin
+    /// around it, room for the shadow, is click-through like WPF's per-pixel layered window.</summary>
+    [Fact]
+    public Task BubbleWindowTakesInputOnlyOnTheBubble() => Run(detached: false, (main, tube) =>
+    {
+        PixelRect[]? sent = null;
+        tube.BubbleShapeWriter = r => sent = r;
+        tube.GigglePriority("Could you tell me what you want to see next?", playSound: false, aiGenerated: false);
+        Dispatcher.UIThread.RunJobs();
+        tube.ApplyBubbleShape();
+        var w = tube.BubbleWindow!;
+        var bubble = tube.FindControl<Border>("SpeechBubble")!;
+        var c = bubble.TranslatePoint(new Point(bubble.Bounds.Width / 2, bubble.Bounds.Height / 2), w)!.Value;
+        Assert.NotNull(sent);
+        Assert.True(TubeInputShape.Hits(sent!, (int)c.X, (int)c.Y));
+        Assert.False(TubeInputShape.Hits(sent!, 2, 2));                                         // the margin
+        Assert.False(TubeInputShape.Hits(sent!, (int)w.ClientSize.Width - 3, 2));
+        Assert.InRange(sent!.Length, 1, 2);                                                     // the bubble, the tail
+    });
+
+    /// <summary>WPF ReassertTopmost / DemoteSpeechBubble (Windowing.cs:1928-1975) and
+    /// SpeechBubbleVisibility: the bubble rides in the tube's band and goes with the tube (and,
+    /// attached, with main).</summary>
+    [Fact]
+    public Task BubbleWindowFollowsTheTubesBandAndVisibility() => Run(detached: false, (main, tube) =>
+    {
+        tube.GigglePriority("Still with you.", playSound: false, aiGenerated: false);
+        Dispatcher.UIThread.RunJobs();
+        var w = tube.BubbleWindow!;
+        Assert.True(w.IsVisible);
+
+        tube.Detach();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(w.Topmost);           // a free tube is topmost; its bubble sits in that band above it
+        Assert.True(w.IsVisible);
+        tube.Attach();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(w.Topmost);
+
+        main.WindowState = WindowState.Minimized;   // attached: the bubble goes with main
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(w.IsVisible);
+        main.WindowState = WindowState.Normal;
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(w.IsVisible);
+
+        tube.Hide();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(w.IsVisible);
+        tube.Show();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(w.IsVisible);         // the line is still up: it comes back with her
+    });
+
+    /// <summary>The buttons riding the bubble still take real clicks in its window: the chat log's
+    /// close button, hit-tested by a pointer press and release at its centre.</summary>
+    [Fact]
+    public Task ButtonsInTheBubbleWindowStillClick() => Run(detached: false, (main, tube) =>
+    {
+        tube.ShowChatHistory();
+        Dispatcher.UIThread.RunJobs();
+        var w = tube.BubbleWindow!;
+        Assert.True(w.IsVisible);
+        Assert.Equal(AvatarTubeWindow.SpeechBubbleHistoryWidth, tube.FindControl<Border>("SpeechBubble")!.MaxWidth);
+        var close = tube.FindControl<Button>("BtnCloseChatHistory")!;
+        Assert.Same(w, TopLevel.GetTopLevel(close));
+        var p = close.TranslatePoint(new Point(close.Bounds.Width / 2, close.Bounds.Height / 2), w)!.Value;
+        w.MouseDown(p, MouseButton.Left);
+        w.MouseUp(p, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(tube.FindControl<Border>("SpeechBubble")!.IsVisible);
+        Assert.False(w.IsVisible);
     });
 
     [Fact]

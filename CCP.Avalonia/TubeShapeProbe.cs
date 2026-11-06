@@ -13,12 +13,14 @@ namespace ConditioningControlPanel.Avalonia
     /// <c>--tube-shape-probe [holdSeconds]</c>: opens a REAL avatar tube docked beside a stand-in
     /// shell on the live X server and reads back what the server holds - the tube's input shape
     /// (XShapeGetRectangles, ShapeInput) and its WM_TRANSIENT_FOR - attached, with the bubble up,
-    /// with it down, detached and re-attached. Same reasoning as <see cref="X11OverlayProbe"/>:
+    /// with it down, detached and re-attached - and the same for the speech bubble's own window
+    /// (owned by the tube, its shape only the bubble, off the shell while attached, the tube's shape
+    /// untouched while it is up). Same reasoning as <see cref="X11OverlayProbe"/>:
     /// a dropped or mis-marshalled request returns success and changes nothing, so only the
     /// server's answer counts. Read-only towards everything but its own two windows, which it
     /// closes; no settings are written (no settings service is seeded). Exit 0 = PASS.
     ///
-    /// <para><c>holdSeconds</c> keeps both windows open (attached, bubble up) after the checks so a
+    /// <para><c>holdSeconds</c> keeps the windows open (attached, bubble up) after the checks so a
     /// host-side tool can look at them - e.g. WindowFromPoint on WSLg's RAIL windows.</para>
     /// </summary>
     internal static class TubeShapeProbe
@@ -74,78 +76,114 @@ namespace ConditioningControlPanel.Avalonia
             }
 
             // Server shape vs our computed rects: sampled on an 8 px grid over the whole window.
-            void CompareShape(string label)
+            // Returns the server's samples that take input, so two states can be compared.
+            System.Collections.Generic.HashSet<int> CompareShape(string label, Window window, PixelRect[]? computed, double maxShare = 0.5)
             {
-                var xid = Xid(tube!);
-                var server = Rects(display, xid);
-                var ours = tube!.InputRects ?? Array.Empty<PixelRect>();
-                int w = (int)Math.Ceiling(tube.ClientSize.Width * tube.RenderScaling);
-                int h = (int)Math.Ceiling(tube.ClientSize.Height * tube.RenderScaling);
-                int samples = 0, mismatches = 0, inside = 0;
+                var server = Rects(display, Xid(window));
+                var ours = computed ?? Array.Empty<PixelRect>();
+                int w = (int)Math.Ceiling(window.ClientSize.Width * window.RenderScaling);
+                int h = (int)Math.Ceiling(window.ClientSize.Height * window.RenderScaling);
+                int samples = 0, mismatches = 0;
+                var inside = new System.Collections.Generic.HashSet<int>();
                 for (int y = 0; y < h; y += 8)
                     for (int x = 0; x < w; x += 8)
                     {
                         samples++;
                         bool s = Hit(server, x, y), o = TubeInputShape.Hits(ours, x, y);
-                        if (s) inside++;
+                        if (s) inside.Add(y * 65536 + x);
                         if (s != o) mismatches++;
                     }
                 Console.WriteLine($"{label}: window {w}x{h}, server {server.Length} rects, ours {ours.Length}; " +
-                                  $"{inside}/{samples} samples take input");
+                                  $"{inside.Count}/{samples} samples take input");
                 Check(server.Length > 0, $"{label}: the server has a non-empty input shape");
                 Check(mismatches == 0, $"{label}: server shape == computed shape ({mismatches} sample mismatches)");
-                Check(inside < samples / 2, $"{label}: less than half the window takes input");
-                Check(!Hit(server, 2, 2) && !Hit(server, w - 3, h - 3), $"{label}: the canvas corners are click-through");
+                Check(inside.Count < samples * maxShare, $"{label}: under {maxShare:P0} of the window takes input");
+                Check(!Hit(server, 2, 2) && !Hit(server, w - 3, h - 3), $"{label}: the corners are click-through");
+                return inside;
             }
 
-            bool Owned()
+            bool OwnedBy(Window window, Window? owner)
             {
-                var owner = IntPtr.Zero;
-                return XGetTransientForHint(display, Xid(tube!), out owner) != 0 && owner == Xid(shell);
+                var got = IntPtr.Zero;
+                bool has = XGetTransientForHint(display, Xid(window), out got) != 0 && got != IntPtr.Zero;
+                return owner == null ? !has : has && got == Xid(owner);
+            }
+
+            // The bubble's own window (WPF Speech.cs:1060): mapped, owned by the tube, its own shape,
+            // off the shell while attached.
+            void CheckBubble(string label, bool attached)
+            {
+                var b = tube!.BubbleWindow;
+                Check(b is { IsVisible: true }, $"{label}: the bubble's own window is up");
+                if (b is not { IsVisible: true }) return;
+                tube.ApplyBubbleShape();
+                // The bubble fills most of its window; what must stay clear is the margin around it.
+                CompareShape($"{label} (bubble window)", b, tube.BubbleInputRects, maxShare: 0.9);
+                Check(OwnedBy(b, tube), $"{label}: bubble WM_TRANSIENT_FOR = the tube");
+                var bb = new PixelRect(b.Position, PixelSize.FromSize(b.ClientSize, b.RenderScaling));
+                var sb = new PixelRect(shell.Position, PixelSize.FromSize(shell.ClientSize, shell.RenderScaling));
+                if (attached) Check(!bb.Intersects(sb), $"{label}: the bubble window {bb} stays off the shell {sb}");
+                Console.WriteLine($"{label}: bubble window at {b.Position}, size {b.ClientSize}, topmost {b.Topmost}");
+            }
+
+            void Say(string text) => tube!.GigglePriority(text, playSound: false, aiGenerated: false);
+
+            void Begin()
+            {
+                Console.WriteLine($"shell {shell.Position} {shell.ClientSize}; tube {tube!.Position} {tube.ClientSize} scaling {tube.RenderScaling}");
+                var attached = CompareShape("attached", tube, tube.InputRects);
+                Check(OwnedBy(tube, shell), "attached: WM_TRANSIENT_FOR = the shell");
+                Check(tube.BubbleWindow is { IsVisible: false }, "attached: the bubble window exists and is hidden while she is quiet");
+                Step(() => Say("I'm right here, sweetie. Tell me what you want to see next?"), () =>
+                {
+                    var withBubble = CompareShape("bubble up (tube)", tube, tube.InputRects);
+                    Check(withBubble.SetEquals(attached), "bubble up: the tube's own shape did not change");
+                    CheckBubble("bubble up", attached: true);
+                    Step(() => tube.EndSpeechBubble(), () =>
+                    {
+                        Check(tube.BubbleWindow is { IsVisible: false }, "bubble down: its window is hidden again");
+                        Step(() => tube.Detach(), () =>
+                        {
+                            CompareShape("detached", tube, tube.InputRects);
+                            Check(OwnedBy(tube, null), "detached: WM_TRANSIENT_FOR cleared");
+                            Step(() => Say("Free at last. Where shall we go?"), () =>
+                            {
+                                CheckBubble("detached bubble", attached: false);
+                                Step(() => { tube.EndSpeechBubble(); tube.Attach(); }, () =>
+                                {
+                                    CompareShape("re-attached", tube, tube.InputRects);
+                                    Check(OwnedBy(tube, shell), "re-attached: WM_TRANSIENT_FOR = the shell");
+                                    if (holdSeconds <= 0) { Finish(); return; }
+                                    Step(() => Say("Holding still so you can look at me."), () =>
+                                    {
+                                        var b = tube.BubbleWindow!;
+                                        Console.WriteLine($"holding {holdSeconds}s: tube at {tube.Position}, size {tube.ClientSize}; " +
+                                                          $"bubble at {b.Position}, size {b.ClientSize}");
+                                        Console.Out.Flush();
+                                        DispatcherTimer.RunOnce(Finish, TimeSpan.FromSeconds(holdSeconds));
+                                    });
+                                });
+                            });
+                        });
+                    });
+                });
             }
 
             shell.Opened += (_, _) =>
             {
                 tube = new AvatarTubeWindow(shell);
                 if (tube.IsDetached) tube.Attach();
-                Step(() => tube.Show(), () =>
+                // Under CPU rendering a cold start can take seconds before the tube really opens; the
+                // first run sampled it at 0,0 with no shape computed yet. Wait for Opened and a shape.
+                var started = DateTime.UtcNow;
+                void WaitForShape()
                 {
-                    Console.WriteLine($"shell {shell.Position} {shell.ClientSize}; tube {tube.Position} {tube.ClientSize} scaling {tube.RenderScaling}");
-                    CompareShape("attached");
-                    Check(Owned(), "attached: WM_TRANSIENT_FOR = the shell");
-                    var bubble = tube.FindControl<Border>("SpeechBubble")!;
-                    Step(() =>
-                    {
-                        tube.FindControl<TextBlock>("TxtSpeech")!.Text = "Could not load those pictures. Try again in a moment?";
-                        bubble.IsVisible = true;
-                    }, () =>
-                    {
-                        CompareShape("bubble up");
-                        var p = bubble.TranslatePoint(new Point(4, 4), tube)!.Value * tube.RenderScaling;
-                        var server = Rects(display, Xid(tube));
-                        Check(Hit(server, (int)p.X, (int)p.Y), "bubble up: its corner takes input");
-                        Step(() => bubble.IsVisible = false, () =>
-                        {
-                            CompareShape("bubble down");
-                            Check(!Hit(Rects(display, Xid(tube)), (int)p.X, (int)p.Y), "bubble down: the same corner is click-through again");
-                            Step(() => tube.Detach(), () =>
-                            {
-                                CompareShape("detached");
-                                Check(!Owned(), "detached: WM_TRANSIENT_FOR cleared");
-                                Step(() => tube.Attach(), () =>
-                                {
-                                    CompareShape("re-attached");
-                                    Check(Owned(), "re-attached: WM_TRANSIENT_FOR = the shell");
-                                    if (holdSeconds <= 0) { Finish(); return; }
-                                    bubble.IsVisible = true;
-                                    Console.WriteLine($"holding {holdSeconds}s: tube at {tube.Position}, size {tube.ClientSize}");
-                                    Console.Out.Flush();
-                                    DispatcherTimer.RunOnce(Finish, TimeSpan.FromSeconds(holdSeconds));
-                                });
-                            });
-                        });
-                    });
-                }, 1500);
+                    if (tube.BubbleWindow != null && tube.InputRects is { Length: > 0 }) { DispatcherTimer.RunOnce(Begin, TimeSpan.FromMilliseconds(600)); return; }
+                    if (DateTime.UtcNow - started > TimeSpan.FromSeconds(20)) { Check(false, "the tube opened and computed a shape within 20 s"); Finish(); return; }
+                    DispatcherTimer.RunOnce(WaitForShape, TimeSpan.FromMilliseconds(250));
+                }
+                tube.Show();
+                WaitForShape();
             };
 
             shell.Show();

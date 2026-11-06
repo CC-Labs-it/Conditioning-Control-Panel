@@ -171,9 +171,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // proves ApplyTubeLayoutOffsets + ApplySpeechBubblePlacement execute and land on the
             // XAML defaults rather than only that they compile.
             RefreshTubeLayout();
-            // A real spoken line, so the frame carries the glass, the avatar, the caption AND the
-            // priority bubble with its AI badge. The bubble and the chat log share one slot, so
-            // showing this one hides the log; the log's own frame is the earlier layer's PNG.
+            // A real spoken line, so the speech path runs in the render too. The bubble itself is its
+            // own window that only exists once the tube opens (AvatarTubeWindow.SpeechWindow.cs, as
+            // WPF's), so this frame shows the glass, the avatar and the caption without it.
             GigglePriority("always, sweetie. i've been waiting for you to say something.",
                            playSound: false, aiGenerated: true);
         }
@@ -206,6 +206,10 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _avatarBorder = this.FindControl<Border>("AvatarBorder")!;
             _txtAvatarTitle = this.FindControl<TextBlock>("TxtAvatarTitle")!;
             _txtAvatarLevel = this.FindControl<TextBlock>("TxtAvatarLevel")!;
+
+            // The bubble is its own window (AvatarTubeWindow.SpeechWindow.cs); lift it out of this
+            // window's tree before anything lays it out here.
+            InitSpeechWindow();
 
             // Bind chat history list to the rolling collection of conversational messages.
             _chatHistoryList.ItemsSource = ChatHistory;
@@ -336,6 +340,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             CancelAvatarSwitch();
             StopFloatingAnimation(); // WPF Windowing.cs:1507
             ReleaseWindowing();
+            ReleaseSpeechWindow();   // WPF Speech.cs:1099: the bubble's window closes with the tube
             DetachAwareness();
             UnwireContentPolicyWarning();
 
@@ -425,11 +430,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // Hide the per-message AI badge when showing the chat history list (mixed AI + user lines).
             _aiBadge.IsVisible = false;
 
-            // Enlarge the bubble for the chat-history layout and RE-PLACE it: the attached margin
-            // is derived from MaxWidth (a 600px bubble gives the seam up rather than hang off the
-            // canvas), so widening without recomputing lands the panel clipped. The old note here
-            // blamed Windowing.cs; ApplySpeechBubblePlacement came across with RefreshTubeLayout.
-            _speechBubble.MaxWidth = 600;
+            // Enlarge the bubble for the chat-history layout (WPF ChatInput.cs:495) and re-place it:
+            // the placement measures at MaxWidth, so widening without it lands the panel clipped.
+            _speechBubble.MaxWidth = SpeechBubbleHistoryWidth;
             ApplySpeechBubblePlacement();
             _speechBubble.IsVisible = true;
 
@@ -443,7 +446,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _isShowingChatHistory = false;
             _chatHistoryView.IsVisible = false;
             _speechScroller.IsVisible = true;
-            _speechBubble.MaxWidth = 380; // Restore default bubble width.
+            _speechBubble.MaxWidth = SpeechBubbleMaxWidth; // Restore default bubble width (WPF ChatInput.cs:511).
             _speechBubble.IsVisible = false;
         }
 
@@ -796,12 +799,6 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// door rail; 60 is the ceiling. The seam is a HIT-TEST budget, not just a look.</summary>
         private const double SeamOverlapOverMain = 0;
 
-        /// <summary>12px of daylight so a short bubble does not read as glued to main's frame.</summary>
-        private const double AttachedBubbleSeamGap = 12;
-
-        private const double AttachedBubbleRightMargin =
-            TubeArtRightPadding - SeamOverlapOverMain + AttachedBubbleSeamGap;
-
         /// <summary>Attached = riding beside main. Seeded from the state the user left the tube
         /// in, which is what makes a detached user's layout and glass come back detached.
         /// Flipped by <see cref="ToggleDetached"/> (AvatarTubeWindow.Windowing.cs).</summary>
@@ -882,41 +879,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 if (takeoverBar != null) takeoverBar.Margin = new Thickness(0, 0, 416 - dx, 264);
             }
 
+            // She moved with the mod's offsets: the bubble window follows her (AvatarTubeWindow.SpeechWindow.cs).
             ApplySpeechBubblePlacement();
-        }
-
-        /// <summary>
-        /// Places the speech bubble. Attached it is anchored by its RIGHT edge on the seam and grows
-        /// leftward, because an OPAQUE pixel right of the tube art is NOT click-through: it swallows
-        /// the click and main's door rail goes dead for as long as she is talking (v6.8.6). A bubble
-        /// too wide to fit left of the seam gives the seam up rather than hang off the canvas and get
-        /// clipped - an unreadable bubble is the worse bug. Detached there is nothing underneath to
-        /// protect, so that mode keeps the centred placement it has always had.
-        /// </summary>
-        private void ApplySpeechBubblePlacement()
-        {
-            var useAttached = _isAttached || ModOverridesAttachedTubeOnly();
-            var dx = useAttached ? EffAvatarOffsetX() : EffAvatarDetachedOffsetX();
-
-            double right;
-            if (useAttached)
-            {
-                // A mod's avatar offset may pull the bubble LEFT with the art it belongs to, never
-                // right - the seam is main's, not the mod's.
-                right = Math.Max(AttachedBubbleRightMargin, AttachedBubbleRightMargin - dx);
-
-                var maxWidth = _speechBubble.MaxWidth;
-                if (double.IsFinite(maxWidth) && maxWidth > 0)
-                    right = Math.Min(right, Math.Max(0, DesignWidth - maxWidth));
-            }
-            else
-            {
-                right = 425 - dx;
-            }
-
-            _speechBubble.HorizontalAlignment = useAttached ? HorizontalAlignment.Right
-                                                            : HorizontalAlignment.Center;
-            _speechBubble.Margin = new Thickness(0, 0, right, 550);
         }
 
         /// <summary>
@@ -1361,7 +1325,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
                     SyncAskButtonsFor(text);
                     _txtSpeech.Text = text;
-                    _speechBubble.MaxWidth = 380;
+                    // WPF AdjustBubbleSize (Speech.cs:857-881): real DIPs now, 14 only for long replies.
+                    _txtSpeech.FontSize = text.Length > 250 ? 14 : 15;
+                    _speechBubble.MaxWidth = SpeechBubbleMaxWidth;
                     ApplySpeechBubblePlacement();
                     _speechBubble.IsVisible = true;
                     _isGiggling = true;
@@ -1404,7 +1370,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 _policyBadge.IsVisible = false;
                 var baseText = text ?? "";
                 _txtSpeech.Text = baseText;
-                _speechBubble.MaxWidth = 380;
+                _speechBubble.MaxWidth = SpeechBubbleMaxWidth;
                 ApplySpeechBubblePlacement();
                 _speechBubble.IsVisible = true;
 
