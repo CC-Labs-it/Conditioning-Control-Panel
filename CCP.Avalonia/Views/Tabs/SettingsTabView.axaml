@@ -90,17 +90,34 @@
       <Setter Property="FontSize" Value="10"/>
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Margin" Value="2,1"/>
+      <!-- Polish wave 10 (WPF SettingsTabView.xaml:1253-1290): a raised pill (bevel + sheen)
+           that sits PRESSED IN (pressed bevel and shade, 1px down) while it is the site. -->
       <Setter Property="Template">
         <ControlTemplate>
-          <Border x:Name="border" Background="Transparent" CornerRadius="8" Padding="8,3">
-            <ContentPresenter Content="{TemplateBinding Content}"
-                              ContentTemplate="{TemplateBinding ContentTemplate}"
-                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          <Border x:Name="border" Background="Transparent" CornerRadius="8"
+                  BorderBrush="{DynamicResource DepthRaisedBevel}" BorderThickness="1">
+            <Border x:Name="face" CornerRadius="7" Padding="7,2" Background="{DynamicResource DepthRaisedSheen}">
+              <ContentPresenter Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
           </Border>
         </ControlTemplate>
       </Setter>
+      <Style Selector="^:pointerover /template/ Border#border">
+        <Setter Property="RenderTransform" Value="translateY(-1px)"/>
+      </Style>
       <Style Selector="^:checked /template/ Border#border">
         <Setter Property="Background" Value="{DynamicResource PinkBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource DepthPressedBevel}"/>
+        <Setter Property="RenderTransform" Value="translateY(1px)"/>
+      </Style>
+      <Style Selector="^:checked /template/ Border#face">
+        <Setter Property="Background" Value="{DynamicResource DepthPressedShade}"/>
+      </Style>
+      <Style Selector="^:pressed /template/ Border#border">
+        <Setter Property="BorderBrush" Value="{DynamicResource DepthPressedBevel}"/>
+        <Setter Property="RenderTransform" Value="translateY(2px)"/>
       </Style>
       <Style Selector="^:checked">
         <Setter Property="Foreground" Value="White"/>
@@ -1021,7 +1038,8 @@
               <Button x:Name="HelpBtnBrowser" Theme="{StaticResource HelpButtonStyle}" Tag="Browser"/>
             </StackPanel>
             <!-- Site Toggle - inline -->
-            <Border Grid.Column="1" Background="{DynamicResource PanelAccentBrush}" CornerRadius="10" Padding="2" Margin="10,0,0,0" VerticalAlignment="Center">
+            <Border Grid.Column="1" Background="{DynamicResource PanelAccentBrush}" CornerRadius="10" Padding="1" Margin="10,0,0,0" VerticalAlignment="Center"
+                    BorderBrush="{DynamicResource DepthPressedBevel}" BorderThickness="1">
               <StackPanel Orientation="Horizontal">
                 <!-- #867: Click, not Checked. A RadioButton raises Checked only when it CHANGES,
                      so clicking the site you are already on did nothing - which is exactly what
@@ -1053,7 +1071,9 @@
                  lilac at 24% fill, a 70% border, 40% on hover - Tag carries the hover brush). -->
             <!-- The folded glow (lag fix, P82): a sibling BoxShadow layer whose Opacity breathes on the
                  30 fps beat, never a DropShadowEffect on the button (PaintFoldArrow). -->
-            <Panel Grid.Column="2" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="48,0,8,0">
+            <!-- ClipToBounds: WPF clips the pill to the star column when the header is narrow; without
+                 it the pill overflowed onto the status and webcam pills (parity VA). -->
+            <Panel Grid.Column="2" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="48,0,8,0" ClipToBounds="True">
             <Border x:Name="FoldGlow" CornerRadius="13" IsVisible="False" IsHitTestVisible="False"/>
             <Button x:Name="BtnFoldBrowser" Theme="{StaticResource FoldArrowButton}"
                     MinWidth="120" Height="26" Padding="12,0"

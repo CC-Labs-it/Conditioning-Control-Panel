@@ -200,10 +200,12 @@ public sealed class LeashAskCard : Border
         Answered?.Invoke(_offer, accept, _level);
     }
     internal void Dismiss() => Dismissed?.Invoke();
-    private static Control Explainer(string name)
+    /// <summary>The four-step leashed explainer. <paramref name="row"/>: WPF LeashExplainLayout.Row (4 x 1, the
+    /// "?" window); otherwise Grid (2 x 2, the ask card).</summary>
+    internal static Control Explainer(string? name, bool row = false)
     {
         var root = new StackPanel { Margin = new Thickness(0, 14, 0, 0), Tag = "leash-explain-card:leashed" };
-        var grid = new UniformGrid { Columns = 2, Rows = 2 };
+        var grid = new UniformGrid { Columns = row ? 4 : 2, Rows = row ? 1 : 2 };
         var art = new[] { IconKind.PersonAdd, IconKind.Link, IconKind.Eye, IconKind.Cut };
         for (var i = 0; i < 4; i++) grid.Children.Add(Panel(i + 1, art[i], Loc.Get($"leash_explain_step{i + 1}_leashed"), i == 3));
         root.Children.Add(grid);
