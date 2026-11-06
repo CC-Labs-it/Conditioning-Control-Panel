@@ -42,6 +42,63 @@ public sealed class SoftwareRenderTierTests
     [InlineData("maybe", null)]
     public void OverrideParses(string? value, bool? expected) => Assert.Equal(expected, SoftwareRender.ParseOverride(value));
 
+    [Theory]
+    [InlineData(LighterEffectsMode.Auto, null, false)]
+    [InlineData(LighterEffectsMode.Auto, false, false)]
+    [InlineData(LighterEffectsMode.Auto, true, true)]
+    [InlineData(LighterEffectsMode.On, false, true)]
+    [InlineData(LighterEffectsMode.On, null, true)]
+    [InlineData(LighterEffectsMode.Off, true, false)]
+    public void LighterEffectsSettingDecides(LighterEffectsMode mode, bool? detected, bool applied)
+        => Assert.Equal(applied, SoftwareRender.Decide(mode, detected));
+
+    /// <summary>Settings ▸ Performance ▸ Lighter effects (owner decision): Auto / On / Off, seeded from the
+    /// settings, persisted, and live through the motion gate.</summary>
+    [Fact]
+    public Task LighterEffectsComboDrivesTheTierLive() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var s = CoreSettings.Current;
+        var saved = (s.LighterEffects, s.PerformanceMode, s.AutoPerformanceMode, s.MotionLevel);
+        (s.PerformanceMode, s.AutoPerformanceMode, s.MotionLevel) = (false, false, MotionLevel.Full);
+        s.LighterEffects = LighterEffectsMode.Off;
+        SoftwareRender.ResetForTests();
+        int gates = 0;
+        void OnGate() => gates++;
+        AmbientFxCanvas.Env.MotionGateChanged += OnGate;
+        Window? w = null;
+        try
+        {
+            var section = new global::ConditioningControlPanel.Avalonia.Views.Controls.AppSettings.PerformanceSettingsSection();
+            w = new Window { Content = section, Width = 700, Height = 1400 };
+            w.Show();
+            Dispatcher.UIThread.RunJobs();
+            var combo = section.FindControl<ComboBox>("CmbLighterEffects")!;
+            Assert.Equal(2, combo.SelectedIndex);                       // seeded from the file: Off
+            SoftwareRender.Report(true);                                 // the probe says CPU...
+            Assert.Equal(PerformanceTier.Quality, AmbientFxCanvas.Env.CurrentTier);   // ...but Off wins
+            gates = 0;
+            combo.SelectedIndex = 0;                                     // Auto: follow the probe
+            Assert.Equal(LighterEffectsMode.Auto, s.LighterEffects);
+            Assert.Equal(1, gates);
+            Assert.Equal(PerformanceTier.Performance, AmbientFxCanvas.Env.CurrentTier);
+            SoftwareRender.ResetForTests();                              // a GPU machine
+            Assert.Equal(PerformanceTier.Quality, AmbientFxCanvas.Env.CurrentTier);
+            combo.SelectedIndex = 1;                                     // On: forced
+            Assert.Equal(LighterEffectsMode.On, s.LighterEffects);
+            Assert.Equal(PerformanceTier.Performance, AmbientFxCanvas.Env.CurrentTier);
+            Assert.True(AmbientFxCanvas.Env.SoftwareFloorHoldsIdleLoops);
+        }
+        finally
+        {
+            AmbientFxCanvas.Env.MotionGateChanged -= OnGate;
+            w?.Close();
+            SoftwareRender.ResetForTests();
+            (s.LighterEffects, s.PerformanceMode, s.AutoPerformanceMode, s.MotionLevel) = saved;
+        }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public void FogOnlyHasHysteresis()
     {
