@@ -59,8 +59,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// The echo adds no panic, but the hold still has to become a portal hold.</summary>
         internal void OnPortalPanicActivated()
         {
-            if (AdmitPanicRoute(PanicRouteGate.Route.Portal)) QueuePanic(OnPortalPanicPressed);
-            else Dispatcher.UIThread.Post(OnPortalEchoPressed);
+            try
+            {
+                if (AdmitPanicRoute(PanicRouteGate.Route.Portal)) QueuePanic(OnPortalPanicPressed);
+                else Dispatcher.UIThread.Post(OnPortalEchoPressed);
+            }
+            catch (Exception ex)   // a throw here would land in the D-Bus reader, and the press must still count
+            {
+                Serilog.Log.Error(ex, "Panic: portal report failed before it was queued");
+                Dispatcher.UIThread.Post(OnPortalPanicPressed);
+            }
         }
 
         // Either route can win the race, so both are watched (#919b): if the UI thread never runs the
@@ -76,10 +84,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         // Asked on the listener threads, where a report arrives: the first press's stop pass holds the UI
         // thread for longer than the echo window, so a check after the post would miss the echo.
-        internal bool AdmitPanicRoute(PanicRouteGate.Route route)
+        private bool AdmitPanicRoute(PanicRouteGate.Route route)
         {
-            // With the shortcut released there is no portal report for this one to echo.
-            if (route == PanicRouteGate.Route.X11 && !PortalPanicShortcut.IsBound) return true;
             if (_panicRoutes.Admit(route, PanicRouteClock())) return true;
             Serilog.Log.Information("Panic: {Route} report dropped, the other route already took this press", route);
             return false;

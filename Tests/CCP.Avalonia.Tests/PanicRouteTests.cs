@@ -32,7 +32,6 @@ public sealed class PanicRouteTests
         var oldTeardown = PanicWatchdog.Teardown;
         PanicWatchdog.Teardown = () => { };           // a slow first press must not run the real teardown
         var shell = new MainShellWindow { PanicRouteClock = () => 1000 };
-        PortalPanicShortcut.SetSessionForTests("/test/session", null);   // the portal only hears a bound key
         try
         {
             if (x11First) { shell.OnX11PanicPress(); shell.OnPortalPanicActivated(); }
@@ -42,7 +41,6 @@ public sealed class PanicRouteTests
         }
         finally
         {
-            PortalPanicShortcut.SetSessionForTests(null, null);
             shell.LeashHoldReleased();                // a never-shown window raises no Closed, so stop its clock here
             shell.Close();
             Dispatcher.UIThread.RunJobs();

@@ -17,7 +17,6 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Leash;
-using ConditioningControlPanel.Services.Safety;
 using F = ConditioningControlPanel.Avalonia.Views.Controls.FriendsDrawer;
 using Xunit;
 
@@ -376,20 +375,6 @@ public sealed class LeashHoldTests
         Dispatcher.UIThread.RunJobs();
         Assert.False(LeashHoldRing.IsShown);
         Assert.True(MainShellWindow.PortalHoldLive);
-    });
-
-    [Fact]
-    public void AnX11PressAfterThePortalLetGo_IsNotTakenForAnEcho() => WithPortalShell(() => true, (shell, clock) =>
-    {
-        // KWin hides the key from XInput2 only while the shortcut is bound, and the poll can release it
-        // between two presses, so the second one arrives on XInput2 alone.
-        shell.PanicRouteClock = () => 1000;
-        PortalPanicShortcut.SetSessionForTests("/test/session", shell.OnPortalPanicReleased);
-        Assert.True(shell.AdmitPanicRoute(PanicRouteGate.Route.Portal));
-        Assert.False(shell.AdmitPanicRoute(PanicRouteGate.Route.X11));   // bound: this is the echo
-        Assert.True(shell.AdmitPanicRoute(PanicRouteGate.Route.Portal));
-        PortalPanicShortcut.SetSessionForTests(null, null);
-        Assert.True(shell.AdmitPanicRoute(PanicRouteGate.Route.X11));
     });
 
     [Fact]
