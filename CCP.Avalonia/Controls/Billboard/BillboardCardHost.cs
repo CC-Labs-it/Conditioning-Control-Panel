@@ -519,6 +519,8 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             Control? art = null;
             try { art = BillboardArt.Create(card.Spec.ArtKey ?? string.Empty, card.Spec.ArtData); }
             catch (Exception ex) { Log.Debug("Billboard art {Key} did not build: {E}", card.Spec.ArtKey, ex.Message); }
+            // WPF :645 a view the host can tint takes the card's hue.
+            if (art is IAccentedArt tinted) tinted.Accent = HueOf(card);
             if (art != null)
             {
                 root.Children.Add(art);

@@ -111,6 +111,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static readonly Lazy<bool> ShowcaseArt = new(() =>
         {
             BillboardArt.Register(BuiltInArtKeys.Quests, data => new QuestsArtView(data));
+            // WPF BuiltInArt.Register: a house poster stem picks its drawn scene.
+            BillboardArt.Register(BuiltInArtKeys.Poster, data => HouseScenes.Create(data as string));
             BillboardArt.Register(ShowcaseRules.ArtKey, data => new ClipArtView(data as ShowcaseClipArt));
             return true;
         });
