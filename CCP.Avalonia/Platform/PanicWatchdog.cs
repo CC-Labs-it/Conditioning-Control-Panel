@@ -1,8 +1,8 @@
 // PORTED from ConditioningControlPanel/MainWindow/MainWindow.xaml.cs ArmPanicWatchdog (:1025) and
-// RunEmergencyPanicTeardown (:1046), #919b. The listener (Win32PanicKey / X11PanicKey) runs on its own
+// RunEmergencyPanicTeardown (:1046), #919b. The listener (Win32PanicKey / X11PanicKey / the portal) runs on its own
 // thread here, so a wedged UI thread can no longer lose the key itself; it can still sit on the queued
 // handler. This watches that handler from a background thread and, if it has not finished inside
-// 2 s or it threw, runs the thread-safe part of the stop off the UI thread. WPF only logs a throw.
+// 2 s, runs the thread-safe part of the stop off the UI thread.
 // ponytail: WPF also stops BrainDrain and the screen OCR here and queues the OCR restart; neither has
 // a twin on this head yet (keyword triggers / OCR are not ported). Add them when they land.
 
@@ -72,7 +72,7 @@ internal static class PanicWatchdog
         try
         {
             var finished = await Task.WhenAny(handler, Task.Delay(timeout ?? Timeout)).ConfigureAwait(false);
-            if (finished == handler && !handler.IsFaulted) return;   // a throw stopped nothing, so it counts as unhandled
+            if (finished == handler) return;   // as WPF: a throw is logged, and may have been a press that was no panic
             RunGuarded();
         }
         catch (Exception ex)
@@ -93,7 +93,7 @@ internal static class PanicWatchdog
         {
             try
             {
-                Log.Warning("PANIC FALLBACK: the panic key's handler threw or did not finish within {Ms}ms - tearing down off-thread",
+                Log.Warning("PANIC FALLBACK: the UI thread did not handle the panic key within {Ms}ms - tearing down off-thread",
                     (int)Timeout.TotalMilliseconds);
             }
             catch { }

@@ -288,6 +288,7 @@ public sealed class LeashHoldTests
             Dispatcher.UIThread.RunJobs();
             PortalPanicShortcut.SetSessionForTests(null, null);
             PanicWatchdog.Teardown = oldTeardown;
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
             (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldKeyDown, MainShellWindow.LeashHoldClockInterval) = (oldSvc, oldClock, oldKey, oldInterval);
             CoreSettings.ServiceProvider = oldSettings;
         }

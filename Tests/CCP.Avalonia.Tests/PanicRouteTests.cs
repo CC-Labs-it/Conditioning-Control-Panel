@@ -45,6 +45,7 @@ public sealed class PanicRouteTests
             shell.Close();
             Dispatcher.UIThread.RunJobs();
             PanicWatchdog.Teardown = oldTeardown;
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
             CoreSettings.ServiceProvider = oldProvider;
         }
     });

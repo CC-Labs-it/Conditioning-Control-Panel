@@ -22,16 +22,16 @@ public sealed class PanicLeftoversTests
     private static readonly DateTime T0 = new(2026, 10, 9, 12, 0, 0, DateTimeKind.Utc);
 
     [Fact]
-    public async Task WatchdogTearsDownWhenTheHandlerThrows()
+    public async Task WatchdogLeavesAThrownHandlerAlone()
     {
-        // A press that throws before the stop pass has stopped nothing, however quickly it failed.
+        // As WPF. The fallback arms the panic aftermath, which a press that was only a game's pause must not.
         var old = PanicWatchdog.Teardown;
         var fired = 0;
         PanicWatchdog.Teardown = () => Interlocked.Increment(ref fired);
         try
         {
             await PanicWatchdog.Arm(Task.FromException(new InvalidOperationException("test")), TimeSpan.FromSeconds(30));
-            Assert.Equal(1, fired);
+            Assert.Equal(0, fired);
         }
         finally { PanicWatchdog.Teardown = old; }
     }
