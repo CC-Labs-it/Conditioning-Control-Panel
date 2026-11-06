@@ -42,6 +42,10 @@ namespace ConditioningControlPanel.Avalonia
         {
             var lifetime = new ClassicDesktopStyleApplicationLifetime { ShutdownMode = ShutdownMode.OnExplicitShutdown };
             Program.BuildAvaloniaApp().SetupWithLifetime(lifetime);
+            Platform.FramelessShadow.Install();   // idempotent; the app installs it in OnFrameworkInitializationCompleted
+            var wm = Platform.X11Overlay.WindowManagerName;
+            bool wantNoShadow = Platform.FramelessShadow.WmDrawsGhostShadow(wm, Environment.GetEnvironmentVariable("CCP_X11_FRAME_SHADOW"));
+            Console.WriteLine($"window manager: {wm ?? "(none)"}; no-shadow hint expected: {wantNoShadow}");
 
             var shell = new Window
             {
@@ -120,6 +124,7 @@ namespace ConditioningControlPanel.Avalonia
                 // The bubble fills most of its window; what must stay clear is the margin around it.
                 CompareShape($"{label} (bubble window)", b, tube.BubbleInputRects, maxShare: 0.9);
                 Check(OwnedBy(b, tube), $"{label}: bubble WM_TRANSIENT_FOR = the tube");
+                Check(Platform.X11Overlay.HasNoFrameShadowHint(b) == wantNoShadow, $"{label}: bubble no-shadow window type = {wantNoShadow}");
                 var bb = new PixelRect(b.Position, PixelSize.FromSize(b.ClientSize, b.RenderScaling));
                 var sb = new PixelRect(shell.Position, PixelSize.FromSize(shell.ClientSize, shell.RenderScaling));
                 if (attached) Check(!bb.Intersects(sb), $"{label}: the bubble window {bb} stays off the shell {sb}");
@@ -133,6 +138,8 @@ namespace ConditioningControlPanel.Avalonia
                 Console.WriteLine($"shell {shell.Position} {shell.ClientSize}; tube {tube!.Position} {tube.ClientSize} scaling {tube.RenderScaling}");
                 var attached = CompareShape("attached", tube, tube.InputRects);
                 Check(OwnedBy(tube, shell), "attached: WM_TRANSIENT_FOR = the shell");
+                Check(Platform.X11Overlay.HasNoFrameShadowHint(tube) == wantNoShadow, $"attached: tube no-shadow window type = {wantNoShadow}");
+                Check(!Platform.X11Overlay.HasNoFrameShadowHint(shell), "the opaque shell keeps the WM's frame");
                 Check(tube.BubbleWindow is { IsVisible: false }, "attached: the bubble window exists and is hidden while she is quiet");
                 Step(() => Say("I'm right here, sweetie. Tell me what you want to see next?"), () =>
                 {

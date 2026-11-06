@@ -580,6 +580,9 @@ namespace ConditioningControlPanel.Avalonia
             // "[SANDBOX] " on every window title of a CCP_USERDATA_DIR run. Desktop only: offscreen renders/snapshots
             // reach this callback too and must keep the real titles.
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime) Platform.SandboxMarker.Install();
+            // Transparent frameless windows (tube, EMI, cards) show only their painted pixels, as WPF's layered
+            // windows do: no WSLg/Weston frame shadow "ghost" around them. Before the splash, the first such window.
+            Platform.FramelessShadow.Install();
             // Lane perf: a machine without a GPU backend takes the lighter FX tier before the shell is built.
             Platform.SoftwareRender.DetectEarly();
             // WPF App.xaml.cs:1949 shows the splash before anything else and threads SetProgress
