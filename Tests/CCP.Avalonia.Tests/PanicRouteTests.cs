@@ -3,6 +3,7 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Leash;
 using ConditioningControlPanel.Services;
@@ -28,6 +29,8 @@ public sealed class PanicRouteTests
         CoreSettings.ServiceProvider = () => settings;
         CoreSettings.Current.PanicKeyEnabled = true;
         CoreSettings.Current.MasterVolume = 0;
+        var oldTeardown = PanicWatchdog.Teardown;
+        PanicWatchdog.Teardown = () => { };           // a slow first press must not run the real teardown
         var shell = new MainShellWindow { PanicRouteClock = () => 1000 };
         try
         {
@@ -38,8 +41,11 @@ public sealed class PanicRouteTests
         }
         finally
         {
-            CoreSettings.ServiceProvider = oldProvider;
+            shell.LeashHoldReleased();                // a never-shown window raises no Closed, so stop its clock here
             shell.Close();
+            Dispatcher.UIThread.RunJobs();
+            PanicWatchdog.Teardown = oldTeardown;
+            CoreSettings.ServiceProvider = oldProvider;
         }
     });
 }

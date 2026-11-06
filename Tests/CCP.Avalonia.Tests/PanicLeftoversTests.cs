@@ -40,6 +40,36 @@ public sealed class PanicLeftoversTests
     }
 
     [Fact]
+    public async Task AHandlerThatThrowsAfterTheFallbackIsStillLogged()
+    {
+        var old = PanicWatchdog.Teardown;
+        PanicWatchdog.Teardown = () => { };
+        var previous = Serilog.Log.Logger;
+        var logged = new TaskCompletionSource();
+        Serilog.Log.Logger = new Serilog.LoggerConfiguration().WriteTo.Sink(new FaultSink(logged)).CreateLogger();
+        try
+        {
+            var handler = new TaskCompletionSource();
+            await PanicWatchdog.Arm(handler.Task, TimeSpan.FromMilliseconds(50));
+            handler.SetException(new InvalidOperationException("late"));
+            Assert.Same(logged.Task, await Task.WhenAny(logged.Task, Task.Delay(TimeSpan.FromSeconds(5))));
+        }
+        finally
+        {
+            Serilog.Log.Logger = previous;
+            PanicWatchdog.Teardown = old;
+        }
+    }
+
+    private sealed class FaultSink(TaskCompletionSource logged) : Serilog.Core.ILogEventSink
+    {
+        public void Emit(Serilog.Events.LogEvent entry)
+        {
+            if (entry.Exception?.ToString().Contains("late") == true) logged.TrySetResult();
+        }
+    }
+
+    [Fact]
     public async Task WatchdogStaysOutOfAShutdown()
     {
         var old = PanicWatchdog.Teardown;

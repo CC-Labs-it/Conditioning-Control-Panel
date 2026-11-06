@@ -59,16 +59,20 @@ internal static class PanicWatchdog
     }
 
     /// <summary>WPF ArmPanicWatchdog: a background watcher, never a wait on the calling thread.</summary>
-    internal static Task Arm(Task handler, TimeSpan? timeout = null) => Task.Run(async () =>
+    internal static Task Arm(Task handler, TimeSpan? timeout = null)
+    {
+        // Attached here, not after the wait: a handler can still throw once the fallback has run.
+        handler.ContinueWith(t => Log.Error(t.Exception, "Panic: the press handler threw"),
+            CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+        return Watch(handler, timeout);
+    }
+
+    private static Task Watch(Task handler, TimeSpan? timeout) => Task.Run(async () =>
     {
         try
         {
             var finished = await Task.WhenAny(handler, Task.Delay(timeout ?? Timeout)).ConfigureAwait(false);
-            if (finished == handler)
-            {
-                if (handler.Exception is { } thrown) Log.Error(thrown, "Panic: the press handler threw");
-                return;
-            }
+            if (finished == handler) return;
             RunGuarded();
         }
         catch (Exception ex)

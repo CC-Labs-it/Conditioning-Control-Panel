@@ -52,7 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Serilog.Log.Information("Panic trigger: XInput2 key press");
             if (!AdmitPanicRoute(PanicRouteGate.Route.X11)) return;
             QueuePanic(() => HandlePanicKeyPress(DateTime.Now));
-            Dispatcher.UIThread.Post(LeashHoldPressed);   // after the panic: hold-to-cut (MainShellWindow.LeashHold.cs)
+            Dispatcher.UIThread.Post(OnX11HoldPressed);   // after the panic: hold-to-cut (MainShellWindow.LeashHold.cs)
         }
 
         /// <summary>One portal Activated (D-Bus thread): a press of its own, or the XInput2 press again.

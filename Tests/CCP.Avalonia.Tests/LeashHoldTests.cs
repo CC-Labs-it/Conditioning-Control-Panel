@@ -341,6 +341,47 @@ public sealed class LeashHoldTests
         }
     });
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ProvenPortalHold_HeardOnBothRoutes_OnlyDeactivatedEndsIt(bool x11First) => WithPortalShell(() => false, (shell, clock) =>
+    {
+        // Real desktops send Deactivated, so a hold both routes heard is the portal's: X11's release and key
+        // state are ignored, or a focus change to a Wayland window would end it with the key still down.
+        CoreSettings.Current.PanicKeyEnabled = true;
+        shell.PanicRouteClock = () => 1000;
+        PortalPanicShortcut.SetSessionForTests("/test/session", shell.OnPortalPanicReleased);
+        Action<bool> route = pressed => PortalPanicShortcut.Route("/test/session", "panic", pressed, shell.OnPortalPanicActivated, shell.OnPortalPanicReleased, clock.Now.UtcDateTime);
+        route(false);                                 // the portal has proven it reports release
+        if (x11First) { shell.OnX11PanicPress(); route(true); } else { route(true); shell.OnX11PanicPress(); }
+        Dispatcher.UIThread.RunJobs();
+        X11PanicKey.PanicReleased?.Invoke();
+        Dispatcher.UIThread.RunJobs();
+        for (int t = 250; t <= 1000; t += 250) { clock.Now += TimeSpan.FromMilliseconds(250); shell.LeashHoldClockTick(); }
+        Assert.True(MainShellWindow.PortalHoldLive);
+        route(false);
+        Assert.False(MainShellWindow.PortalHoldLive);
+    });
+
+    [Fact]
+    public void AnEchoThatOvertakesTheX11HoldStep_ShowsNoRing() => WithPortalShell(() => true, (shell, clock) =>
+    {
+        // The echo is posted from the D-Bus thread and can land before the X11 thread posts its hold step.
+        shell.OnPortalEchoPressed();
+        shell.OnX11HoldPressed();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(LeashHoldRing.IsShown);
+        Assert.True(MainShellWindow.PortalHoldLive);
+    });
+
+    [Fact]
+    public void APortalPressWhoseStopPassThrows_StillStartsTheHold() => WithPortalShell(() => true, (shell, clock) =>
+    {
+        // XInput2's report of this press was dropped as an echo, so this is the only route that can start it.
+        Assert.Throws<InvalidOperationException>(() => shell.RunPortalPress(() => throw new InvalidOperationException("stop pass")));
+        Assert.True(MainShellWindow.PortalHoldLive);
+    });
+
     [Fact]
     public void UnprovenPortalHold_NoX11Listener_EndsOnFirstTick_NeverAsks() => WithPortalShell(() => null, (shell, clock) =>
     {
