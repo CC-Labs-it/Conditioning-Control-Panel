@@ -21,7 +21,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard;
 public sealed class Wdc
 {
     private readonly DrawingContext _c;
-    private readonly Stack<DrawingContext.PushedState> _pushed = new();
+    private readonly Stack<(DrawingContext.PushedState State, double Opacity)> _pushed = new();
 
     private readonly bool _recording;
 
@@ -62,29 +62,37 @@ public sealed class Wdc
 
     public void DrawLine(IPen pen, Point a, Point b) => _c.DrawLine(pen, a, b);
 
+    /// <summary>Note: WPF fades a pushed opacity as one layer; Avalonia multiplies each primitive's
+    /// alpha. The pictures match except where a faded drawing overlaps itself (the wheel's motion
+    /// ghosts read a little fainter). Group opacity (RequiresFullOpacityHandling, a save layer per
+    /// push) measured 1.4x-7x the CPU frame cost, so the cheap form stays.</summary>
     public void DrawDrawing(Drawing d) => d.Draw(_c);
 
     public void DrawText(FormattedText text, Point origin) => _c.DrawText(text, origin);
 
     public void DrawImage(IImage image, Rect r) => _c.DrawImage(image, r);
 
-    public void PushTransform(WTransform t) => _pushed.Push(_c.PushTransform(t.Value));
+    public void PushTransform(WTransform t) => _pushed.Push((_c.PushTransform(t.Value), 1));
 
-    public void PushTransform(WMatrix m) => _pushed.Push(_c.PushTransform(m));
+    public void PushTransform(WMatrix m) => _pushed.Push((_c.PushTransform(m), 1));
 
-    public void PushOpacity(double a) => _pushed.Push(_c.PushOpacity(Math.Clamp(a, 0, 1)));
+    public void PushOpacity(double a)
+    {
+        a = Math.Clamp(a, 0, 1);
+        _pushed.Push((_c.PushOpacity(a), a));
+    }
 
-    public void PushClip(Geometry clip) => _pushed.Push(_c.PushGeometryClip(clip));
+    public void PushClip(Geometry clip) => _pushed.Push((_c.PushGeometryClip(clip), 1));
 
     public void Pop()
     {
-        if (_pushed.Count > 0) _pushed.Pop().Dispose();
+        if (_pushed.Count > 0) _pushed.Pop().State.Dispose();
     }
 
     /// <summary>Pops whatever a paint left pushed (WPF closes a DrawingGroup the same way).</summary>
     public void Unwind()
     {
-        while (_pushed.Count > 0) _pushed.Pop().Dispose();
+        while (_pushed.Count > 0) _pushed.Pop().State.Dispose();
     }
 }
 
@@ -117,6 +125,25 @@ public struct WMatrix
 
     public void ScaleAt(double sx, double sy, double cx, double cy) =>
         this = this * new WMatrix(sx, 0, 0, sy, cx - sx * cx, cy - sy * cy);
+
+    public void ScalePrepend(double sx, double sy) => this = new WMatrix(sx, 0, 0, sy, 0, 0) * this;
+
+    public void TranslatePrepend(double x, double y) => this = new WMatrix(1, 0, 0, 1, x, y) * this;
+
+    public void RotatePrepend(double degrees) => this = Rotation(degrees, 0, 0) * this;
+
+    public readonly double Determinant => M11 * M22 - M12 * M21;
+
+    public readonly bool HasInverse => Math.Abs(Determinant) > double.Epsilon;
+
+    /// <summary>WPF Matrix.Invert (throws on a singular matrix, as WPF).</summary>
+    public void Invert()
+    {
+        double d = Determinant;
+        if (Math.Abs(d) <= double.Epsilon) throw new InvalidOperationException("Matrix is not invertible");
+        this = new WMatrix(M22 / d, -M12 / d, -M21 / d, M11 / d,
+            (M21 * OffsetY - M22 * OffsetX) / d, (M12 * OffsetX - M11 * OffsetY) / d);
+    }
 
     public void Rotate(double degrees) => this = this * Rotation(degrees, 0, 0);
 

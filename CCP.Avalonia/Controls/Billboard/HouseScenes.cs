@@ -16,6 +16,9 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
                 "discord" => new DiscordHouseArt(),
                 "webapp" => new WebAppHouseArt(),
                 "remix" => new RemixHouseArt(),
+                "loom" => new LoomHouseArt(),
+                "support" => new SupportHouseArt(),
+                "backroom" => new WheelArtView(),
                 _ => null,
             };
 

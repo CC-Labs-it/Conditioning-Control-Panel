@@ -35,6 +35,9 @@ public sealed class BillboardArtParityTests
         yield return ("discord", () => new DiscordHouseArt(), "#7b86ff");
         yield return ("webapp", () => new WebAppHouseArt(), "#5fe3ff");
         yield return ("remix", () => new RemixHouseArt(), "#ff4fa8");
+        yield return ("loom", () => new LoomHouseArt(), "#9b7bff");
+        yield return ("support", () => new SupportHouseArt(), "#ff4fa8");
+        yield return ("wheel", () => new WheelArtView(), "#ffc94a");
     }
 
     private static (string Name, Func<BillboardVectorArt> Make, string Hue) Scene(string name) => Scenes().Single(s => s.Name == name);
@@ -85,6 +88,9 @@ public sealed class BillboardArtParityTests
         Assert.IsType<DiscordHouseArt>(HouseScenes.Create("billboard/discord.png"));
         Assert.IsType<WebAppHouseArt>(HouseScenes.Create("billboard/webapp.png"));
         Assert.IsType<RemixHouseArt>(HouseScenes.Create("billboard/remix.png"));
+        Assert.IsType<LoomHouseArt>(HouseScenes.Create("billboard/loom.png"));
+        Assert.IsType<SupportHouseArt>(HouseScenes.Create("billboard/support.png"));
+        Assert.IsType<WheelArtView>(HouseScenes.Create("billboard/backroom.png"));
     }
 
     [Fact]
@@ -94,6 +100,7 @@ public sealed class BillboardArtParityTests
         if (string.IsNullOrWhiteSpace(dir)) return Task.CompletedTask;
         Directory.CreateDirectory(dir);
         Setup();
+        var timings = new List<string>();
         foreach (var s in Scenes())
         {
             var art = s.Make();
@@ -108,9 +115,19 @@ public sealed class BillboardArtParityTests
                     using var bmp = Render(host);
                     bmp.Save(Path.Combine(dir, $"port-{s.Name}-{t.ToString("0.0", CultureInfo.InvariantCulture)}.png"));
                 }
+                // CPU (software Skia) cost of a frame, the no-GPU path: 60 frames across the loop.
+                using var frame = new RenderTargetBitmap(new PixelSize(1000, 420));
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                for (int i = 0; i < 60; i++)
+                {
+                    art.SecondsForTests = i / 30.0 * 3;
+                    frame.Render(art);
+                }
+                timings.Add($"{s.Name}: {sw.Elapsed.TotalMilliseconds / 60:0.00} ms/frame");
             }
             finally { window.Close(); art.Release(); }
         }
+        File.WriteAllLines(Path.Combine(dir, "port-timings.txt"), timings);
         return Task.CompletedTask;
     });
 
