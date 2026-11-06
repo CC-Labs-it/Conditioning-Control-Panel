@@ -158,6 +158,10 @@ public sealed class PhrasePoolCustodyTests : IDisposable
 
     private ModService Launch(bool freshProfile = true, bool backupB = true)
     {
+        // An earlier test's service (default 500 ms debounce, no Core-wide disarm hook) can still publish
+        // ITS settings.json into this shared sandbox between our write and the relaunch Load: CI read a
+        // foreign profile and the relaunch came up without ByMod[A] ("sub: missing Asub", 2026-11-06).
+        SettingsService.DisarmAllPendingSaves();
         Directory.CreateDirectory(CorePaths.UserData);
         if (freshProfile)
         {
