@@ -34,7 +34,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal TrayIcon? Tray { get; private set; }
 
         /// <summary>Is this app's icon in a tray, to hide behind? Re-probed on every X; tests inject it.</summary>
-        internal Func<bool> TrayHostPresent { get; set; } = ProbeTrayItemRegistered;
+        internal Func<bool> TrayHostPresent
+        {
+            get => _trayHostSeam ?? ProbeTrayItemRegistered;
+            set => _trayHostSeam = value;
+        }
+        private Func<bool>? _trayHostSeam;
 
         /// <summary>`--tray-check`: a deliberate live probe, the one sandboxed run that may publish.</summary>
         internal static bool TrayCheck { get; set; }
@@ -45,7 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Test seam for the sandbox check.</summary>
         internal static Func<bool> TraySandboxed { get; set; } = () => global::ConditioningControlPanel.Services.SandboxNet.Active;
 
-        private static volatile bool _trayListed;
+        private volatile bool _trayListed;
 
         private bool _exitRequested;
         // Test seam: headless cannot raise an OS/app shutdown, so tests set the shutdown flag directly.
@@ -168,6 +173,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>TrayIconService.ShowWindow + MainWindow's OnShowRequested (ShowAvatarTube).</summary>
         public void ShowFromTray()
         {
+            _shownSinceStart = true;   // asked for: a late StartMinimized must not undo it
             if (_windowClosed) return;
             RestoreLauncherPanelOpacity();
             Show();
@@ -183,7 +189,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Hide();
             HideAvatarTube();
             RestoreLauncherPanelOpacity();
-            if (!quiet && TrayHostPresent()) NotifyFirstMinimize();
+            if (!quiet && !_shownFirstMinimizeNotification && TrayHostPresent()) NotifyFirstMinimize();
         }
 
         private void NotifyFirstMinimize()
@@ -253,10 +259,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         private bool _trayRechecking;
+        private bool _shownSinceStart;
         private bool? _trayXVerdict;
 
-        private bool TrayAnswerMayChange => _trayListed && !OperatingSystem.IsWindows()
-            && TrayHostPresent == (Func<bool>)ProbeTrayItemRegistered;
+        private bool TrayAnswerMayChange => _trayHostSeam is null && _trayListed && !OperatingSystem.IsWindows();
 
         // Unlisted, as seen from the UI thread, can just mean registration is still queued on this thread or
         // a new watcher took over. X ends the session only if that is still so with this thread free.
@@ -268,6 +274,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_windowClosed || _exitRequested) return;
             _trayXVerdict = TrayItemRule.XMayHide(state);
             Close();
+            _trayXVerdict = null;   // Lockdown can refuse that Close before it reads the verdict
         }
 
         /// <summary>WPF MainWindow.xaml.cs:3594: StartMinimized sends the shown window to the tray, here once
@@ -279,19 +286,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (attempt > 0) await Task.Delay(TimeSpan.FromSeconds(1));
                 if (await Task.Run(ProbeTrayItem) != TrayItemState.Held) continue;
-                if (IsVisible) HideForLauncher(quiet: true);
+                if (IsVisible && !_shownSinceStart) HideForLauncher(quiet: true);
                 return;
             }
         }
 
+        /// <summary>For work that belongs to startup: Opened fires on every Show, so a restore from the tray
+        /// would rerun it, which for Takeover means stopping a live run as if its flag were stale.</summary>
+        private void OnceOpened(Action startup)
+        {
+            void Run(object? s, EventArgs e) { Opened -= Run; startup(); }
+            Opened += Run;
+        }
+
         /// <summary>The X answer: hide unless the tray said no. See <see cref="TrayItemRule.XMayHide"/>.</summary>
-        internal static bool ProbeTrayItemRegistered() => TrayItemRule.XMayHide(ProbeTrayItem());
+        internal bool ProbeTrayItemRegistered() => TrayItemRule.XMayHide(ProbeTrayItem());
 
         /// <summary>Is this process's icon really in the tray? A watcher can own its name and still refuse the
         /// item, and Avalonia only logs that, so we ask the watcher rather than trusting that it exists.
         /// Registration is asynchronous, hence the short retry. Avalonia finishes it on the UI thread, so a
         /// retry there could never see it, and only freezes the window: that caller gets one attempt.</summary>
-        internal static TrayItemState ProbeTrayItem()
+        internal TrayItemState ProbeTrayItem()
         {
             if (!_trayListed) return TrayItemState.NotHeld;
             if (OperatingSystem.IsWindows()) return TrayItemState.Held;
@@ -303,7 +318,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private static TrayItemState AskTrayWatcher()
         {
-            var attempts = global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess() ? 1 : 5;
+            var onUiThread = global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess();
+            var attempts = onUiThread ? 1 : 5;
             var refusals = 0;
             try
             {
@@ -314,13 +330,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     for (var attempt = 0; attempt < attempts; attempt++)
                     {
                         if (attempt > 0) await Task.Delay(250);
-                        if (await TrayItemListedAsync(bus) is not { } listed) continue;   // no proper answer
-                        if (listed) return true;
+                        var (listed, noWatcher) = await TrayItemListedAsync(bus);
+                        if (listed is null) continue;   // no proper answer
+                        if (listed.Value) return true;
                         Interlocked.Increment(ref refusals);
+                        if (noWatcher) return false;    // no tray: nothing to wait for
                     }
                     return false;
                 });
-                var finished = probe.Wait(TimeSpan.FromSeconds(2));
+                var finished = probe.Wait(TimeSpan.FromSeconds(onUiThread ? 2 : 6));
                 if (finished && probe.Result) return TrayItemState.Held;
                 if (Volatile.Read(ref refusals) > 0) return TrayItemState.NotHeld;   // slow, but it did say no
                 Serilog.Log.Warning("Tray item probe got no proper answer from the watcher");
@@ -335,21 +353,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         // Names, not PIDs: in a Flatpak the bus and the app do not agree on PIDs. Avalonia owns the name on a
         // private connection, so only the name's PID part ties it to us, and two Flatpaks can share one.
-        private static async Task<bool?> TrayItemListedAsync(DBusConnection bus)
+        // A watcher can run with no host at all (kded with no tray-capable bar), and then nothing draws the icon.
+        private static async Task<(bool? Listed, bool NoWatcher)> TrayItemListedAsync(DBusConnection bus)
         {
             try
             {
-                if (!await TrayWatcherOwnedAsync(bus)) return false;   // not there, or restarting
+                if (!await TrayWatcherOwnedAsync(bus)) return (false, true);
                 var items = await RegisteredTrayItemsAsync(bus);
                 var prefix = TrayItemRule.ItemNamePrefix(Environment.ProcessId);
                 var mine = (await BusNamesAsync(bus)).Where(n => n.StartsWith(prefix, StringComparison.Ordinal)).ToList();
                 foreach (var name in mine.ToArray()) mine.Add(await BusNameOwnerAsync(bus, name));
-                return TrayItemRule.Holds(items, mine);
+                return (TrayItemRule.Holds(items, mine) && await TrayHostRegisteredAsync(bus), false);
             }
             catch (Exception ex)   // the watcher went away mid-probe, or errored: that is not a refusal
             {
                 Serilog.Log.Debug(ex, "Tray item probe: no proper answer");
-                return null;
+                return (null, false);
             }
         }
 
@@ -362,15 +381,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             return await bus.CallMethodAsync(w.CreateMessage(), (Message m, object? _) => m.GetBodyReader().ReadBool(), null);
         }
 
-        private static async Task<string[]> RegisteredTrayItemsAsync(DBusConnection bus)
+        private static Task<string[]> RegisteredTrayItemsAsync(DBusConnection bus) =>
+            WatcherPropertyAsync(bus, "RegisteredStatusNotifierItems", v => v.GetArray<string>());
+
+        private static Task<bool> TrayHostRegisteredAsync(DBusConnection bus) =>
+            WatcherPropertyAsync(bus, "IsStatusNotifierHostRegistered", v => v.GetBool());
+
+        private static async Task<T> WatcherPropertyAsync<T>(DBusConnection bus, string name, Func<VariantValue, T> read)
         {
             var w = bus.GetMessageWriter();
             w.WriteMethodCallHeader(destination: "org.kde.StatusNotifierWatcher", path: "/StatusNotifierWatcher",
                 @interface: "org.freedesktop.DBus.Properties", member: "Get", signature: "ss");
             w.WriteString("org.kde.StatusNotifierWatcher");
-            w.WriteString("RegisteredStatusNotifierItems");
-            return await bus.CallMethodAsync(w.CreateMessage(),
-                (Message m, object? _) => m.GetBodyReader().ReadVariantValue().GetArray<string>(), null);
+            w.WriteString(name);
+            return await bus.CallMethodAsync(w.CreateMessage(), (Message m, object? _) => read(m.GetBodyReader().ReadVariantValue()), null);
         }
 
         private static async Task<string[]> BusNamesAsync(DBusConnection bus)
@@ -392,7 +416,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>`--tray-check`: exit 0 only if the watcher confirmed this process's item. Unlike X, no
         /// answer is a failure: a proof that cannot fail is not a proof.</summary>
-        internal static void RunTrayCheck() => Task.Run(async () =>
+        internal void RunTrayCheck() => Task.Run(async () =>
         {
             await Task.Delay(TimeSpan.FromSeconds(2));
             var state = ProbeTrayItem();

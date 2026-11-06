@@ -3,7 +3,7 @@ using System.Linq;
 
 namespace ConditioningControlPanel.Services.Notifications;
 
-/// <summary>What the desktop's tray said about this app's icon. Unknown means it gave no proper answer: a refusal is a list without this item.</summary>
+/// <summary>What the desktop's tray said about this app's icon. Held means a watcher lists it and a host exists to draw it. Unknown means it gave no proper answer: a refusal is a list without this item.</summary>
 internal enum TrayItemState { Held, NotHeld, Unknown }
 
 /// <summary>When the app may publish a tray icon and rely on it. Pure, so every head shares the rules.</summary>

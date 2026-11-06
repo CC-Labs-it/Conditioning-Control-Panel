@@ -40,7 +40,7 @@ public sealed class ShellTrayTests
                 Assert.DoesNotContain(shell.Tray!, TrayIcon.GetIcons(Application.Current!) ?? new TrayIcons());
                 // An icon never published has nothing to hide behind, whatever the bus would say.
                 MainShellWindow.TrayItemQuery = () => global::ConditioningControlPanel.Services.Notifications.TrayItemState.Held;
-                Assert.Equal(global::ConditioningControlPanel.Services.Notifications.TrayItemState.NotHeld, MainShellWindow.ProbeTrayItem());
+                Assert.Equal(global::ConditioningControlPanel.Services.Notifications.TrayItemState.NotHeld, shell.ProbeTrayItem());
             }
             finally
             {
@@ -100,7 +100,7 @@ public sealed class ShellTrayTests
         Assert.Equal(exits, closed);
         if (!exits) return;
         MainShellWindow.TrayItemQuery = () => throw new InvalidOperationException("a closed shell has no icon to ask about");
-        Assert.Equal(TrayItemState.NotHeld, MainShellWindow.ProbeTrayItem());
+        Assert.Equal(TrayItemState.NotHeld, shell.ProbeTrayItem());
     });
 
     [Fact]
@@ -110,6 +110,15 @@ public sealed class ShellTrayTests
         MainShellWindow.TrayItemQuery = () => answers.Dequeue();
         await shell.HideToTrayOnceHeld();
         Assert.False(shell.IsVisible);
+    });
+
+    [Fact]
+    public Task AnExplicitShowOutranksALateStartMinimized() => WithListedTray(async shell =>
+    {
+        MainShellWindow.TrayItemQuery = () => TrayItemState.Held;
+        shell.ShowFromTray();
+        await shell.HideToTrayOnceHeld();
+        Assert.True(shell.IsVisible);
     });
 
     [Fact]
