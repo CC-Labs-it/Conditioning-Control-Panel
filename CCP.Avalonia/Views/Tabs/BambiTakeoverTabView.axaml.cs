@@ -164,7 +164,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>
         /// Repaints the hero strip, the description thumb and the side plate. A null resolve is
         /// left alone deliberately, exactly as the WPF version does: the plate degrades to its
-        /// authored wash + glyph rather than to an empty rectangle.
+        /// authored wash rather than to an empty rectangle.
         /// </summary>
         private void ApplyFeatureArt()
         {
