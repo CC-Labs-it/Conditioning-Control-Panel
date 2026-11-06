@@ -35,6 +35,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     {
         private readonly Image _image;
         private bool _closed;
+        private DispatcherTimer? _gifTimer;
+        private System.Collections.Generic.List<Bitmap>? _gifFrames;
+        internal int GifFrameIndex { get; private set; }
+        internal TimeSpan? GifFrameDelay { get; private set; }
+
+        /// <summary>WPF FlashService heartbeat (:3328-3340): an animated flash shows frame
+        /// elapsed / FrameDelay, looping. <paramref name="frames"/>[0] is the picture this window was
+        /// built with; the window owns the rest and disposes them on close.</summary>
+        internal void Animate(System.Collections.Generic.List<Bitmap> frames, TimeSpan frameDelay)
+        {
+            if (_closed || frames.Count < 2 || frameDelay <= TimeSpan.Zero) return;
+            _gifFrames = frames;
+            GifFrameDelay = frameDelay;
+            var start = FlashOverlay.Clock.GetTimestamp();
+            _gifTimer = new DispatcherTimer(frameDelay, DispatcherPriority.Render, (_, _) =>
+            {
+                if (_closed || _gifFrames is not { } f) return;
+                var i = (int)(FlashOverlay.Clock.GetElapsedTime(start).TotalMilliseconds / frameDelay.TotalMilliseconds % f.Count);
+                if (i == GifFrameIndex) return;
+                GifFrameIndex = i;
+                _image.Source = f[i];
+            });
+            _gifTimer.Start();
+        }
+
         private readonly RotateTransform _motionRotate = new();
         private readonly ScaleTransform _dwellScale = new();
 
@@ -556,7 +581,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             _root = new Panel { Children = { _card } };
             Content = _root;
-            Closed += (_, _) => { _lifetimeTimer?.Stop(); _lifetimeTimer = null; _closed = true; _image.Source = null; picture.Dispose(); };
+            Closed += (_, _) =>
+            {
+                _lifetimeTimer?.Stop(); _lifetimeTimer = null; _closed = true; _image.Source = null;
+                _gifTimer?.Stop(); _gifTimer = null;
+                if (_gifFrames is { } frames) for (var i = 1; i < frames.Count; i++) frames[i].Dispose();
+                _gifFrames = null;
+                picture.Dispose();
+            };
         }
 
         /// <summary>

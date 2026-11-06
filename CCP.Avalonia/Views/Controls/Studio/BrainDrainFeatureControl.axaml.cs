@@ -54,23 +54,55 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
                 CoreSettings.Current.BrainDrainKeepPicturesClear = on;
                 CoreSettings.Save();
             };
+
+            // WPF SliderVolume_Changed (.xaml.cs:269-282): Brain Drain's own clip volume. BrainDrainPlayer
+            // follows BrainDrainVolume itself, so a playing clip picks the change up too.
+            _volume = this.FindControl<Slider>("SliderVolume")!;
+            _volumeText = this.FindControl<TextBlock>("TxtVolume")!;
+            LoadVolume();
+            _volume.ValueChanged += (_, e) =>
+            {
+                if (_loadingVolume) return;
+                var v = (int)e.NewValue;
+                _volumeText.Text = $"{v}%";
+                if (CoreSettings.Current.BrainDrainVolume == v) return;
+                CoreSettings.Current.BrainDrainVolume = v;
+                CoreSettings.Save();
+            };
         }
 
         private readonly CheckBox _keepClear;
+        private readonly Slider _volume;
+        private readonly TextBlock _volumeText;
+        private bool _loadingVolume;
+
+        private void LoadVolume()
+        {
+            var v = CoreSettings.Current.BrainDrainVolume;
+            _loadingVolume = true;
+            try
+            {
+                _volume.Value = v;
+                _volumeText.Text = $"{v}%";
+                if (v != 100) this.FindControl<MoreFold>("FoldMore")!.IsOpen = true; // never hide a changed setting
+            }
+            finally { _loadingVolume = false; }
+        }
 
         // WPF re-reads on Loaded and on its settings rebind hook; the Studio tab keeps this control
         // alive, so a Reset or cloud restore (CurrentReplaced) must repaint the toggle.
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
-            if (CoreSettings.Service is { } svc) svc.CurrentReplaced += LoadKeepClear;
+            if (CoreSettings.Service is { } svc) { svc.CurrentReplaced += LoadKeepClear; svc.CurrentReplaced += LoadVolume; }
             LoadKeepClear();
+            LoadVolume();
             RefreshClipCount(); // WPF .xaml.cs:40-43: re-scan whenever the rack is shown.
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
-            if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= LoadKeepClear;
+            if (CoreSettings.Service is { } svc) { svc.CurrentReplaced -= LoadKeepClear; svc.CurrentReplaced -= LoadVolume; }
             base.OnDetachedFromVisualTree(e);
         }
 
