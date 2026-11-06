@@ -149,7 +149,7 @@
                     BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
                     Background="{StaticResource SectionHueStudioWashBrush}"
                     VerticalAlignment="Stretch" MinHeight="200">
-                <fx:IconGlyph Kind="Eye" Size="120" Opacity="0.18"
+                <fx:IconGlyph Kind="Eye" Variant="Filled" Size="120" Opacity="0.18"
                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
         </Grid>
