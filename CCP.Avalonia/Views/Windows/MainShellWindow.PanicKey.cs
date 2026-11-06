@@ -85,12 +85,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // thread for longer than the echo window, so a check after the post would miss the echo.
         private bool AdmitPanicRoute(PanicRouteGate.Route route)
         {
-            if (_panicRoutes.Admit(route, PanicRouteClock())) return true;
+            if (PanicRoutes.Admit(route, PanicRouteClock())) return true;
             Serilog.Log.Information("Panic: {Route} report dropped, the other route already took this press", route);
             return false;
         }
 
-        private readonly PanicRouteGate _panicRoutes = new();
+        internal PanicRouteGate PanicRoutes { get; } = new();
         internal Func<long> PanicRouteClock = () => Environment.TickCount64;
         internal int PanicPressCountForTest => _panicPressCount;
 
@@ -405,13 +405,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         // Shared with the headless tests so they exercise the real idle-release poll.
-        internal static void ReleasePortalWhenUnused()
+        internal static void ReleasePortalWhenUnused(MainShellWindow? shell = null)
         {
             if (KeepPortalBound) return;
             _portalWatch?.Stop();
             _portalWatch = null;
             _portalBind = null;
             _ = PortalPanicShortcut.UnbindAsync();
+            (shell ?? Current)?.PanicRoutes.Forget();   // the next press reaches XInput2 alone, inside a fast double press
         }
 
         /// <summary>WPF LockCardService.Stop(dismissOpenCards: true).</summary>

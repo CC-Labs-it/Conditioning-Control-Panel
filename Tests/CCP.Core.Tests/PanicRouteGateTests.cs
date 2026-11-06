@@ -18,6 +18,15 @@ public sealed class PanicRouteGateTests
     }
 
     [Fact]
+    public void A_route_that_went_away_cannot_echo()
+    {
+        var gate = new PanicRouteGate();
+        Assert.True(gate.Admit(Route.Portal, 1000));
+        gate.Forget();
+        Assert.True(gate.Admit(Route.X11, 1100));
+    }
+
+    [Fact]
     public void A_real_double_press_on_one_route_is_never_dropped()
     {
         var gate = new PanicRouteGate();

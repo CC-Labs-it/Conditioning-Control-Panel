@@ -37,5 +37,11 @@ namespace ConditioningControlPanel.Services.Safety
                 return true;
             }
         }
+
+        /// <summary>A route has gone away, so it can no longer echo: what the other reports next is a new press.</summary>
+        internal void Forget()
+        {
+            lock (_gate) _lastRoute = null;
+        }
     }
 }

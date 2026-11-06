@@ -52,7 +52,7 @@ internal static class PanicWatchdog
         {
             // The dispatcher refused the post (shutting down or broken): the press must still stop things.
             Log.Error(ex, "Panic: could not queue the handler; tearing down off-thread");
-            RunGuarded();
+            _ = Task.Run(RunGuarded);   // this can be the hook or the D-Bus reader, which must never wait
             return;
         }
         Arm(op.GetTask());
