@@ -11,7 +11,7 @@ namespace ConditioningControlPanel.Tests;
 /// Owner decision 2026-11-06 (option B), the same as Avalonia FirstShowStageWindow.Pick: a first-show preset's
 /// pictures are Scrolller's, which ScrolllerDiskCache refuses without remote-media consent and a non-local source.
 /// Picking one then asks the Assets page's consent card first (MainWindow.AskRemoteMediaConsent's words). Yes records
-/// the consent and the online source and loads the preset; no plays the built-in pictures.
+/// the consent and the mixed source (own files plus the feed) and loads the preset; no plays the built-in pictures.
 /// </summary>
 [Collection(CompanionWpfRenderCollection.Name)]
 public class FirstShowRemoteConsentTests
@@ -58,14 +58,14 @@ public class FirstShowRemoteConsentTests
     private static AppSettings Fresh() => new() { MediaSource = "local", RemoteMediaConsented = false, FypOnlineConsented = false };
 
     [Fact]
-    public void Yes_records_consent_and_the_online_source_then_loads_the_preset()
+    public void Yes_records_consent_and_the_mixed_source_then_loads_the_preset()
     {
         var s = Fresh();
         var o = PickWith(s, answer: true);
         Assert.Equal(new[] { MainWindow.RemoteMediaConsentText() }, o.Asked);
         Assert.True(s.RemoteMediaConsented);
         Assert.False(s.FypOnlineConsented);
-        Assert.Equal("online", s.MediaSource);
+        Assert.Equal("mixed", s.MediaSource);
         Assert.Equal(new[] { "HypnoGoneWild" }, o.Loaded);
         Assert.Equal(0, o.Bundled);
     }
@@ -102,7 +102,7 @@ public class FirstShowRemoteConsentTests
         var s = new AppSettings { MediaSource = "local", FypOnlineConsented = true };
         var o = PickWith(s, answer: true);
         Assert.Single(o.Asked);
-        Assert.Equal("online", s.MediaSource);
+        Assert.Equal("mixed", s.MediaSource);
         Assert.Equal(new[] { "HypnoGoneWild" }, o.Loaded);
     }
 

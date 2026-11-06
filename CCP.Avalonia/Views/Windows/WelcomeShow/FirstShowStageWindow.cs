@@ -222,7 +222,7 @@ internal sealed partial class FirstShowStageWindow : Window
     /// pictures are Scrolller's, which the device cache refuses until remote media is consented and the source is not
     /// "local". When that is all that stands in the way (<see cref="FirstShowPresets.AsksForRemoteMedia(AppSettings?)"/>),
     /// the preset first asks the Assets page's one-time consent card, word for word (AssetsTabView
-    /// RemoteMediaConsentText, WPF MainWindow.Assets.cs AskRemoteMediaConsent). Yes records the consent and the online
+    /// RemoteMediaConsentText, WPF MainWindow.Assets.cs AskRemoteMediaConsent). Yes records the consent and the mixed
     /// source, then loads the preset; no plays the built-in pictures. The card is the only place consent turns on.
     /// </summary>
     internal async Task Pick(string preset)

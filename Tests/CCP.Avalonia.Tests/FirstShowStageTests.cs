@@ -172,7 +172,7 @@ public sealed partial class FirstShowStageTests
 
     /// <summary>Owner decision 2026-11-06 (option B), the same as WPF FirstShowDesktopWindow.Pick: picking a preset
     /// without remote-media consent first asks the Assets page's consent card, word for word. Yes records the consent
-    /// and the online source, then loads that preset's feed; no plays the built-in pictures and changes nothing.</summary>
+    /// and the mixed source, then loads that preset's feed; no plays the built-in pictures and changes nothing.</summary>
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -190,7 +190,7 @@ public sealed partial class FirstShowStageTests
         Assert.Equal(new[] { ConditioningControlPanel.Avalonia.Views.Tabs.AssetsTabView.RemoteMediaConsentText() }, asked);
         Assert.Equal(yes, s.RemoteMediaConsented);
         Assert.False(s.FypOnlineConsented);
-        Assert.Equal(yes ? "online" : "local", s.MediaSource);
+        Assert.Equal(yes ? "mixed" : "local", s.MediaSource);
         Assert.Equal(yes ? new[] { "HypnoGoneWild" } : Array.Empty<string>(), fetched.Distinct().ToArray());
         AssertWarningThenStart(stage, credited: yes);   // the built-in pictures carry no "via Scrolller"
     });
