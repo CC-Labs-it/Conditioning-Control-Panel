@@ -42,6 +42,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             // x:Name fields, and the seed below reads them.
             InitializeComponent();
 
+            // The Wayland panic-key note is only true on a Wayland session (same test as
+            // MainShellWindow.PanicKey); WPF has no such row, so Windows and X11 never show it.
+            TxtPanicWaylandHint.IsVisible = OperatingSystem.IsLinux()
+                && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"));
+
             SliderWakePrecision.ValueChanged += SliderWakePrecision_ValueChanged;
             SliderCmdPrecision.ValueChanged += SliderCmdPrecision_ValueChanged;
             ChkHeadphones.IsCheckedChanged += ChkHeadphones_Changed;
