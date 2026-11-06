@@ -282,12 +282,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// after CreateTray returns, on the UI thread, which a busy startup can hold for a while.</summary>
         internal async Task HideToTrayOnceHeld()
         {
-            for (var attempt = 0; attempt < 3; attempt++)
+            void TookIt(object? s, global::Avalonia.Interactivity.RoutedEventArgs e) => _shownSinceStart = true;
+            AddHandler(KeyDownEvent, TookIt, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            AddHandler(PointerPressedEvent, TookIt, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            try
             {
-                if (attempt > 0) await Task.Delay(TimeSpan.FromSeconds(1));
-                if (await Task.Run(ProbeTrayItem) != TrayItemState.Held) continue;
-                if (IsVisible && !_shownSinceStart) HideForLauncher(quiet: true);
-                return;
+                for (var attempt = 0; attempt < 6; attempt++)   // an autostart can beat the bar by a few seconds
+                {
+                    if (attempt > 0) await Task.Delay(TimeSpan.FromSeconds(1));
+                    // Windows knows at once, so its window never shows.
+                    var state = OperatingSystem.IsWindows() ? ProbeTrayItem() : await Task.Run(ProbeTrayItem);
+                    if (state != TrayItemState.Held) continue;
+                    if (IsVisible && !_shownSinceStart) HideForLauncher(quiet: true);
+                    return;
+                }
+                Serilog.Log.Information("StartMinimized: no tray icon confirmed, leaving the window up");
+            }
+            finally
+            {
+                RemoveHandler(KeyDownEvent, TookIt);
+                RemoveHandler(PointerPressedEvent, TookIt);
             }
         }
 
