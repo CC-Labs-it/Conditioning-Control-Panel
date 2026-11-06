@@ -20,6 +20,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services.Leash;
 using Tmds.DBus.Protocol;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -30,7 +31,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal TrayIcon? Tray { get; private set; }
 
         /// <summary>Is there a tray host to hide behind? Re-probed on every X; tests inject it.</summary>
-        internal Func<bool> TrayHostPresent { get; set; } = ProbeTrayHost;
+        internal Func<bool> TrayHostPresent { get; set; } = ProbeTrayItemRegistered;
+
+        /// <summary>`--tray-check`: a deliberate live probe, the one sandboxed run that may publish.</summary>
+        internal static bool TrayCheck { get; set; }
+
+        // Every desktop side effect checks the sandbox (repo CLAUDE.md, test hygiene): a sandboxed icon
+        // would sit beside the real one, and its Stop everything would leave the real engine running.
+        internal static bool ShouldPublishTray(bool sandboxed, bool liveProbe) => !sandboxed || liveProbe;
 
         private bool _exitRequested;
         // Test seam: headless cannot raise an OS/app shutdown, so tests set the shutdown flag directly.
@@ -42,7 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal TrayIcon CreateTray()
         {
-            Tray = new TrayIcon
+            var tray = new TrayIcon
             {
                 ToolTipText = "Conditioning Control Panel",
                 Icon = new WindowIcon(AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/app.ico"))),
@@ -51,9 +59,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             };
             // Avalonia publishes only a TrayIcon listed on the Application: unlisted, the tray menu
             // objects exist on the bus but no StatusNotifierItem does, so no bar ever shows it.
-            if (Application.Current is { } app) TrayIcon.SetIcons(app, new TrayIcons { Tray });
+            // Tray is set last: publishing throws here on a bad platform, and X must not hide to nothing.
+            if (ShouldPublishTray(global::ConditioningControlPanel.Services.SandboxNet.Active, TrayCheck))
+                TrayIcon.SetIcons(Application.Current!, new TrayIcons { tray });
+            Tray = tray;
             // SNI Activate (left click) arrives as Clicked; WPF restores on single and double click.
             Tray.Clicked += (_, _) => ShowFromTray();
+            // Avalonia's Linux exporter raises no Opening, so WPF's refresh on open never runs there.
+            var refresh = new global::Avalonia.Threading.DispatcherTimer(TimeSpan.FromSeconds(2),
+                global::Avalonia.Threading.DispatcherPriority.Background, (_, _) => RefreshTrayMenu());
+            refresh.Start();
+            Closed += (_, _) => refresh.Stop();
             AttachFeedTooltip(Platform.FriendsHead.Feed, Platform.FriendsHead.Service);
             return Tray;
         }
@@ -90,7 +106,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Refresh();
         }
 
-        /// <summary>WPF order: Show, Back to CC Labs, Wake, separator, Exit - with Stop everything above Exit.</summary>
+        private Action? _refreshTrayMenu;
+        /// <summary>Applies the live state to the items that depend on it.</summary>
+        internal void RefreshTrayMenu() => _refreshTrayMenu?.Invoke();
+
+        /// <summary>WPF order: Show, Back to CC Labs, Wake, Cut leash, separator, Exit - with Stop everything above Exit.</summary>
         internal NativeMenu BuildTrayMenu()
         {
             var menu = new NativeMenu();
@@ -98,14 +118,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF TrayIconService.cs:102: the way back to the launcher, only while it is part of this
             // run, greyed under Lockdown (BackToLauncher refuses anyway).
             var back = Item("launcher_back_to_client", () => LauncherWindow.BackToLauncher(this));
-            void RefreshBack(object? s, EventArgs e) { back.IsVisible = LauncherWindow.SurfaceInPlay; back.IsEnabled = !LockdownActive; }
-            RefreshBack(null, EventArgs.Empty);
-            menu.Opening += RefreshBack;
-            menu.NeedsUpdate += RefreshBack;
+            // WPF TrayIconService.cs:119: one click, only while leashed, never greyed under any lock.
+            var cut = Item(LeashTrayRule.CutActionId, () => _ = CutLeashAsync());
+            void RefreshItems(object? s, EventArgs e)
+            {
+                back.IsVisible = LauncherWindow.SurfaceInPlay;
+                back.IsEnabled = !LockdownActive;
+                cut.IsVisible = LeashHoldLeashed;
+            }
+            _refreshTrayMenu = () => RefreshItems(null, EventArgs.Empty);
+            RefreshItems(null, EventArgs.Empty);
+            menu.Opening += RefreshItems;
+            menu.NeedsUpdate += RefreshItems;
             menu.Add(back);
             // WPF reads the label once at tray creation (TrayIconService.cs Initialize);
             // App.Mods.IsBambiMode there is the active-mod check AppSettings.IsBambiMode makes here.
             menu.Add(Item(CoreSettings.Current.IsBambiMode ? "tray_wake_bambi" : "tray_wake", WakeBambiUp));
+            menu.Add(cut);
             menu.Add(new NativeMenuItemSeparator());
             menu.Add(Item("tray_stop_everything", StopEverything));
             menu.Add(Item("tray_exit", RequestExit));
@@ -206,7 +235,72 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             base.OnClosing(e);
         }
 
-        /// <summary>Windows always has a tray; Linux has one only while a StatusNotifierWatcher owns its name.</summary>
+        /// <summary>Is this process's icon really in the tray? A watcher can own its name and still refuse the
+        /// item, and Avalonia only logs that, so X asks the watcher rather than trusting that it exists. Watchers
+        /// store a well-known name or a unique one, so each item is matched by the process that owns it.
+        /// Registration is asynchronous, hence the short retry. Windows always has a tray.</summary>
+        internal static bool ProbeTrayItemRegistered()
+        {
+            if (OperatingSystem.IsWindows()) return true;
+            try
+            {
+                var probe = Task.Run(async () =>
+                {
+                    var bus = DBusConnection.Session;
+                    await bus.ConnectAsync();
+                    for (var attempt = 0; attempt < 3; attempt++)
+                    {
+                        if (attempt > 0) await Task.Delay(250);
+                        foreach (var item in await RegisteredTrayItemsAsync(bus))
+                            if (await TrayItemOwnerAsync(bus, item.Split('/')[0]) == (uint)Environment.ProcessId) return true;
+                    }
+                    return false;
+                });
+                return probe.Wait(TimeSpan.FromSeconds(2)) && probe.Result;
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "Tray item probe failed; X will exit instead of hiding");
+                return false;
+            }
+        }
+
+        private static async Task<string[]> RegisteredTrayItemsAsync(DBusConnection bus)
+        {
+            var w = bus.GetMessageWriter();
+            w.WriteMethodCallHeader(destination: "org.kde.StatusNotifierWatcher", path: "/StatusNotifierWatcher",
+                @interface: "org.freedesktop.DBus.Properties", member: "Get", signature: "ss");
+            w.WriteString("org.kde.StatusNotifierWatcher");
+            w.WriteString("RegisteredStatusNotifierItems");
+            return await bus.CallMethodAsync(w.CreateMessage(),
+                (Message m, object? _) => m.GetBodyReader().ReadVariantValue().GetArray<string>(), null);
+        }
+
+        private static async Task<uint> TrayItemOwnerAsync(DBusConnection bus, string name)
+        {
+            try
+            {
+                var w = bus.GetMessageWriter();
+                w.WriteMethodCallHeader(destination: "org.freedesktop.DBus", path: "/org/freedesktop/DBus",
+                    @interface: "org.freedesktop.DBus", member: "GetConnectionUnixProcessID", signature: "s");
+                w.WriteString(name);
+                return await bus.CallMethodAsync(w.CreateMessage(), (Message m, object? _) => m.GetBodyReader().ReadUInt32(), null);
+            }
+            catch (DBusErrorReplyException) { return 0; }   // an item whose owner has gone
+        }
+
+        /// <summary>`--tray-check`: exit 0 only if the watcher really holds this process's item.</summary>
+        internal static void RunTrayCheck() => Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(2));
+            var registered = ProbeTrayItemRegistered();
+            Console.WriteLine($"tray item registered: {registered}");
+            // Through the lifetime: Environment.Exit from here segfaults in native teardown (exit 139).
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Shutdown(registered ? 0 : 1));
+        });
+
+        /// <summary>Linux has a tray host only while a StatusNotifierWatcher owns its name.</summary>
         internal static bool ProbeTrayHost()
         {
             if (OperatingSystem.IsWindows()) return true;

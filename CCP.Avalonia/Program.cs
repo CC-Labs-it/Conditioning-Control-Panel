@@ -142,6 +142,9 @@ namespace ConditioningControlPanel.Avalonia
                 return present ? 0 : 1;
             }
 
+            // --tray-check: runs the app until the icon has had time to register, then asks the watcher.
+            if (Array.IndexOf(args, "--tray-check") >= 0) Views.Windows.MainShellWindow.TrayCheck = true;
+
             // --notify-check: org.freedesktop.Notifications Notify -> id -> CloseNotification, live.
             if (Array.IndexOf(args, "--notify-check") >= 0)
                 return Platform.OsNotifications.CheckAsync().GetAwaiter().GetResult();
@@ -244,9 +247,9 @@ namespace ConditioningControlPanel.Avalonia
                             as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.Shutdown());
                 });
             App.SplashOnStartup = true;
-            app.StartWithClassicDesktopLifetime(args);
+            var exitCode = app.StartWithClassicDesktopLifetime(args);
             App.StartupFailure?.Throw();   // a failed startup crashes non-zero, as it did before the splash
-            return 0;
+            return Views.Windows.MainShellWindow.TrayCheck ? exitCode : 0;
         }
 
         public static AppBuilder BuildAvaloniaApp()

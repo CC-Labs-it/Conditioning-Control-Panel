@@ -19,6 +19,13 @@ namespace CCP.Avalonia.Tests;
 /// <summary>The shell tray: WPF's menu order, Stop everything, X-to-tray, Show and the real Exit.</summary>
 public sealed class ShellTrayTests
 {
+    [Theory]
+    [InlineData(false, false, true)]    // the real app
+    [InlineData(true, false, false)]    // a sandbox never reaches the user's bar
+    [InlineData(true, true, true)]      // --tray-check opts in
+    public void OnlyTheRealAppOrTheLiveProbePublishes(bool sandboxed, bool liveProbe, bool published) =>
+        Assert.Equal(published, MainShellWindow.ShouldPublishTray(sandboxed, liveProbe));
+
     [Fact]
     public async Task TrayMenuStopsOverlaysHidesOnCloseAndExits()
     {
@@ -31,18 +38,21 @@ public sealed class ShellTrayTests
 
             var shell = new MainShellWindow();
             shell.Show();
-            shell.CreateTray();   // also proves the avares app.ico resource loads
+            MainShellWindow.TrayCheck = true;     // publishes whatever a previous test did to the sandbox flag
+            try { shell.CreateTray(); }           // also proves the avares app.ico resource loads
+            finally { MainShellWindow.TrayCheck = false; }
             // Unlisted on the Application, Avalonia never publishes the icon: no bar shows it, and
             // the tray is the panic control a desktop without a global hotkey relies on.
             Assert.Contains(shell.Tray!, TrayIcon.GetIcons(Application.Current!)!);
             shell.TrayHostPresent = () => true;
             var items = shell.Tray!.Menu!.Items.OfType<NativeMenuItem>().Where(i => i is not NativeMenuItemSeparator).ToList();
             Assert.Equal(
-                new[] { "tray_show", "launcher_back_to_client", CoreSettings.Current.IsBambiMode ? "tray_wake_bambi" : "tray_wake", "tray_stop_everything", "tray_exit" }
+                new[] { "tray_show", "launcher_back_to_client", CoreSettings.Current.IsBambiMode ? "tray_wake_bambi" : "tray_wake", "leash_cut", "tray_stop_everything", "tray_exit" }
                     .Select(Loc.Get),
                 items.Select(i => i.Header));
-            Assert.IsType<NativeMenuItemSeparator>(shell.Tray.Menu.Items[3]);
+            Assert.IsType<NativeMenuItemSeparator>(shell.Tray.Menu.Items[4]);
             Assert.False(items[1].IsVisible);   // Back to CC Labs: a panel boot with no launcher built
+            Assert.False(items[3].IsVisible);   // Cut leash: only while leashed
 
             // Stop everything is StopEngine: schedules stop, queued flashes are dropped, the saved
             // flags stay On (the card stays ticked), and the shell stays open. A plain Start never
@@ -63,7 +73,7 @@ public sealed class ShellTrayTests
                 Assert.True(cardEnable.IsChecked);
                 Assert.True(cardEnable.IsEnabled);
                 var generation = FlashOverlay.Generation;
-                items[3].Command!.Execute(null);
+                items[4].Command!.Execute(null);
                 Assert.False(CoreEngine.IsRunning);
                 Assert.False(CoreFlash.IsRunning);
                 Assert.False(CoreSubliminal.IsRunning);
@@ -90,7 +100,7 @@ public sealed class ShellTrayTests
             Assert.False(shell.IsVisible);
             items[0].Command!.Execute(null);
             Assert.True(shell.IsVisible);
-            items[4].Command!.Execute(null);
+            items[5].Command!.Execute(null);
             Assert.True(closed);
             shell.Tray.Dispose();
             return Task.CompletedTask;
