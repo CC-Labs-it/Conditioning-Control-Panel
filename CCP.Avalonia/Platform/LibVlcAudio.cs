@@ -98,7 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// </summary>
         internal static string[] WithOutput(string[] options, bool windows) =>
             options.Any(o => o.StartsWith("--aout", StringComparison.Ordinal)) ? options
-                : options.Prepend(windows ? "--aout=directsound,any" : "--aout=pulse,alsa,none").ToArray();
+                : options.Prepend(windows ? "--aout=directsound,any" : "--aout=pulse,alsa,jack,none").ToArray();
 
         /// <summary>WPF's linear sample gain (0-1) as LibVLC's cubic 0-100 volume: 0.5 lands at about -6 dB.</summary>
         internal static int VlcVolume(float gain) => (int)Math.Round(Math.Cbrt(Math.Clamp(gain, 0f, 1f)) * 100);
