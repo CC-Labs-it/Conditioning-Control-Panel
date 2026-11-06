@@ -131,7 +131,7 @@ public class TestIsolationTests
         foreach (var (family, expected) in new[]
         {
             (ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter, "Inter"),
-            (ConditioningControlPanel.Avalonia.Platform.AppFonts.Fredoka, "Fredoka Light"),
+            (ConditioningControlPanel.Avalonia.Platform.AppFonts.Fredoka, "Fredoka"),   // static instances; Bold is Fredoka Bold, not the variable font's Light default
             (ConditioningControlPanel.Avalonia.Platform.AppFonts.Mono, "Noto Sans Mono"),
         })
         {

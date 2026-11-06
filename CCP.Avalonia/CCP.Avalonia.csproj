@@ -259,7 +259,10 @@
          monochrome Noto Emoji (OFL) for content emoji when the system has no emoji font; Noto Sans Mono
          (AppFonts.Mono) is the app-wide monospace. Licenses ship
          next to the binary. -->
-    <AvaloniaResource Include="..\ConditioningControlPanel\Fonts\Fredoka.ttf" Link="Resources\fonts\Fredoka.ttf" />
+    <!-- Fredoka as static instances (Light..Bold) cut from WPF's variable Fredoka.ttf (OFL, no Reserved Font Name):
+         Avalonia draws a variable font at its default (Light, 300) whatever the FontWeight; WPF/DirectWrite picks the
+         named instance. Regenerate with fontTools instancer when WPF's file changes (2026-11-06). -->
+    <AvaloniaResource Include="..\Assets\fonts\fredoka\*.ttf" Link="Resources\fonts\fredoka\%(Filename)%(Extension)" />
     <!-- WPF unlock-card art convention, without staging artwork. -->
     <Content Include="..\ConditioningControlPanel\assets\Chaos\upgrades\*.png"
              Link="assets\Chaos\upgrades\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

@@ -112,6 +112,14 @@ public sealed class AppFontsTests
             Assert.True(face!.FamilyName.StartsWith(family, StringComparison.Ordinal), $"{chain} {weight} -> {face.FamilyName}");
             Assert.True((int)face.Weight >= minWeight, $"{chain} {weight} -> {face.FamilyName} weight {face.Weight}");
         }
+        // Fredoka (both OSes): each weight draws its own instance, as WPF's DirectWrite does, not the
+        // variable font's Light default (every "Fredoka, Segoe UI" label drew thin; 2026-11-06).
+        foreach (var (weight, expected) in new[] { (FontWeight.Normal, 400), (FontWeight.SemiBold, 600), (FontWeight.Bold, 700) })
+        {
+            Assert.True(fonts.TryGetGlyphTypeface(new Typeface(new FontFamily("Fredoka, Segoe UI"), FontStyle.Normal, weight), out var fredoka));
+            Assert.StartsWith("Fredoka", fredoka!.FamilyName);
+            Assert.Equal(expected, (int)fredoka.Weight);
+        }
         // Selawik is Latin-only: Cyrillic (ru UI) and Greek go to the bundled Inter, not a fontconfig pick.
         foreach (var cp in new[] { 0x0416, 0x03A9 })
         {

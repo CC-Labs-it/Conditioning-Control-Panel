@@ -7,7 +7,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// The head's font setup (distro-check F1/F4, decision 2026-10-10 in docs/avalonia-decisions.html).
     /// - Default family = the bundled Inter: never empty, so a system with no fonts at all starts instead
     ///   of aborting with "Default font family name can't be null or empty".
-    /// - "Fredoka" resolves to the bundled Fredoka.ttf (WPF packs the same file as /Fonts/#Fredoka), so
+    /// - "Fredoka" resolves to static Light..Bold instances of WPF's variable Fredoka.ttf (/Fonts/#Fredoka), so
     ///   every "Fredoka, Segoe UI" site draws the WPF display face instead of the fontconfig default.
     /// - Content emoji: the system emoji font first (keeps colour emoji on desktops that have one), then
     ///   the bundled monochrome Noto Emoji, so a minimal install shows glyphs instead of tofu.
@@ -15,7 +15,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     internal static class AppFonts
     {
         public const string Inter = "fonts:Inter#Inter";
-        public const string Fredoka = "avares://CCP.Avalonia/Resources/fonts#Fredoka";
+        public const string Fredoka = "avares://CCP.Avalonia/Resources/fonts/fredoka#Fredoka";
         public const string NotoEmoji = "avares://CCP.Avalonia/Resources/fonts#Noto Emoji";
         public const string Mono = "avares://CCP.Avalonia/Resources/emi/fonts#Noto Sans Mono";
         // Off-Windows stand-ins for the Windows faces WPF names (2026-11-06, owner: "bundle free look-alikes").
