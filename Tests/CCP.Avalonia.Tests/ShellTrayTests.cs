@@ -134,21 +134,6 @@ public sealed class ShellTrayTests
     });
 
     [Fact]
-    public Task StartMinimizedNeverHidesAnOpenDialog() => WithListedTray(async shell =>
-    {
-        // The age gate and the name picker are owned dialogs, and a hidden gate is a skipped gate.
-        MainShellWindow.TrayItemQuery = () => TrayItemState.Held;
-        var dialog = new Window();
-        dialog.Show(shell);
-        try
-        {
-            await shell.HideToTrayOnceHeld();
-            Assert.True(shell.IsVisible);
-        }
-        finally { dialog.Close(); }
-    });
-
-    [Fact]
     public Task StartMinimizedOutwaitsADialogThatCloses() => WithListedTray(async shell =>
     {
         MainShellWindow.TrayItemQuery = () => TrayItemState.Held;
@@ -156,30 +141,10 @@ public sealed class ShellTrayTests
         splash.Show(shell);
         var hiding = shell.HideToTrayOnceHeld();
         await Task.Delay(200);
+        Assert.True(shell.IsVisible);   // a hidden age gate or name picker is a skipped question
         splash.Close();
         await hiding;
         Assert.False(shell.IsVisible);
-    });
-
-    [Fact]
-    public Task ASecondXDuringTheRecheckIsStillAnX() => WithListedTray(async shell =>
-    {
-        if (OperatingSystem.IsWindows()) return;   // no recheck there
-        var release = new System.Threading.ManualResetEventSlim();
-        var calls = 0;
-        MainShellWindow.TrayItemQuery = () =>
-        {
-            if (Interlocked.Increment(ref calls) == 2) release.Wait(TimeSpan.FromSeconds(5));
-            return TrayItemState.NotHeld;
-        };
-        var closed = false;
-        shell.Closed += (_, _) => closed = true;
-        shell.Close();
-        shell.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.F4 });
-        shell.Close();
-        release.Set();
-        for (var i = 0; i < 300 && !closed; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(10); }
-        Assert.True(closed);
     });
 
     [Fact]
@@ -193,11 +158,12 @@ public sealed class ShellTrayTests
     });
 
     [Theory]
-    [InlineData("show")]
-    [InlineData("launcher")]
-    [InlineData("key")]
-    [InlineData("lockdown")]
-    public Task WhatComesAfterAnXDuringTheRecheckCancelsIt(string next) => WithListedTray(async shell =>
+    [InlineData("show", false)]
+    [InlineData("launcher", false)]
+    [InlineData("key", false)]
+    [InlineData("lockdown", false)]
+    [InlineData("second X", true)]   // its press is a key or a click too, but it is no change of mind
+    public Task WhatComesAfterAnXDuringTheRecheckDecidesIt(string next, bool closes) => WithListedTray(async shell =>
     {
         if (OperatingSystem.IsWindows()) return;   // no recheck there
         var release = new System.Threading.ManualResetEventSlim();
@@ -218,11 +184,12 @@ public sealed class ShellTrayTests
         {
             if (next == "show") shell.ShowFromTray();
             if (next == "launcher") shell.HideForLauncher(quiet: true);
-            if (next == "key") shell.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.A });
+            if (next is "key" or "second X") shell.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.F4 });
+            if (next == "second X") shell.Close();
             if (next == "lockdown") { LockdownService.Current = lockdown; lockdown.Activate(TimeSpan.FromMinutes(30)); }
             release.Set();
-            for (var i = 0; i < 30; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(10); }
-            Assert.False(closed);
+            for (var i = 0; i < 60 && !closed; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(10); }
+            Assert.Equal(closes, closed);
             Assert.Equal(0, escapes);
         }
         finally { lockdown.Dispose(); LockdownService.Current = oldLock; }

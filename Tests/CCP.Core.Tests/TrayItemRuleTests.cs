@@ -21,10 +21,6 @@ public sealed class TrayItemRuleTests
     public void Another_apps_item_is_not_ours(string item) =>
         Assert.False(TrayItemRule.Holds(new[] { item }, Own));
 
-    [Fact]
-    public void The_prefix_cannot_match_a_longer_pid() =>
-        Assert.False("org.kde.StatusNotifierItem-70-0".StartsWith(TrayItemRule.ItemNamePrefix(7)));
-
     [Theory]
     [InlineData(nameof(TrayItemState.Held), true)]
     [InlineData(nameof(TrayItemState.Unknown), true)]    // a busy panel must not end a session

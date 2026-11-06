@@ -47,7 +47,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>A failure until a verdict lands, so a signal or a closed window cannot pass the check.</summary>
         internal static int TrayCheckExit { get; private set; } = 1;
 
-        /// <summary>Test seam for the sandbox check.</summary>
         internal static Func<bool> TraySandboxed { get; set; } = () => global::ConditioningControlPanel.Services.SandboxNet.Active;
 
         private volatile bool _trayListed;
@@ -233,12 +232,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
             var byUser = Tray is not null && !_exitRequested && e.CloseReason == WindowCloseReason.WindowClosing;
-            if (byUser && _trayRechecking)
-            {
-                _trayRecheckStale = false;   // the press behind this repeat X was no change of mind
-                e.Cancel = true;
-                return;
-            }
+            // The press behind a repeat X was no change of mind.
+            if (byUser && _trayRechecking) { _trayRecheckStale = false; e.Cancel = true; return; }
             var verdict = _trayXVerdict;
             _trayXVerdict = null;
             var mayHide = byUser && (verdict ?? TrayHostPresent());
@@ -290,17 +285,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _trayXVerdict = null;   // Lockdown can refuse that Close before it reads the verdict
         }
 
-        /// <summary>The window stays usable while the tray is asked: any key or click means the user moved on.</summary>
+        // The window stays usable while the tray is asked: any key or click means the user moved on.
         private Action WatchInput(Action tookIt)
         {
             void Took(object? s, global::Avalonia.Interactivity.RoutedEventArgs e) => tookIt();
             AddHandler(KeyDownEvent, Took, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
             AddHandler(PointerPressedEvent, Took, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
-            return () =>
-            {
-                RemoveHandler(KeyDownEvent, Took);
-                RemoveHandler(PointerPressedEvent, Took);
-            };
+            return () => { RemoveHandler(KeyDownEvent, Took); RemoveHandler(PointerPressedEvent, Took); };
         }
 
         /// <summary>WPF MainWindow.xaml.cs:3594: StartMinimized sends the shown window to the tray, here once
@@ -324,11 +315,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         // no. Once up, it or a name picker is an owned dialog, and hiding one skips the question.
                         // A splash is owned too and soon gone, so this waits rather than gives up.
                         var asking = !CoreSettings.Current.HasAcceptedAgeVerification || OwnedWindows.Count > 0;
-                        if (!asking)
-                        {
-                            if (IsVisible) HideForLauncher(quiet: true);
-                            return;
-                        }
+                        if (!asking) { if (IsVisible) HideForLauncher(quiet: true); return; }
                     }
                     await Task.Delay(TimeSpan.FromSeconds(1));
                 }
@@ -384,11 +371,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     {
                         if (attempt > 0) await Task.Delay(250);
                         var (listed, noWatcher) = await TrayItemListedAsync(bus);
-                        if (listed is null)   // no proper answer, which outdates any earlier no
-                        {
-                            Interlocked.Exchange(ref refusals, 0);
-                            continue;
-                        }
+                        // No proper answer, which outdates any earlier no.
+                        if (listed is null) { Interlocked.Exchange(ref refusals, 0); continue; }
                         if (listed.Value) return true;
                         Interlocked.Increment(ref refusals);
                         if (noWatcher) return false;    // no tray: nothing to wait for
@@ -416,11 +400,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 if (!await TrayWatcherOwnedAsync(bus)) return (false, true);
-                var items = await RegisteredTrayItemsAsync(bus);
+                var items = await WatcherPropertyAsync(bus, "RegisteredStatusNotifierItems", v => v.GetArray<string>());
                 var prefix = TrayItemRule.ItemNamePrefix(Environment.ProcessId);
                 var mine = (await bus.ListServicesAsync()).Where(n => n.StartsWith(prefix, StringComparison.Ordinal)).ToList();
                 foreach (var name in mine.ToArray()) mine.Add(await BusNameOwnerAsync(bus, name));
-                return (TrayItemRule.Holds(items, mine) && await TrayHostRegisteredAsync(bus), false);
+                return (TrayItemRule.Holds(items, mine)
+                    && await WatcherPropertyAsync(bus, "IsStatusNotifierHostRegistered", v => v.GetBool()), false);
             }
             catch (Exception ex)   // the watcher went away mid-probe, or errored: that is not a refusal
             {
@@ -437,12 +422,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             w.WriteString("org.kde.StatusNotifierWatcher");
             return await bus.CallMethodAsync(w.CreateMessage(), (Message m, object? _) => m.GetBodyReader().ReadBool(), null);
         }
-
-        private static Task<string[]> RegisteredTrayItemsAsync(DBusConnection bus) =>
-            WatcherPropertyAsync(bus, "RegisteredStatusNotifierItems", v => v.GetArray<string>());
-
-        private static Task<bool> TrayHostRegisteredAsync(DBusConnection bus) =>
-            WatcherPropertyAsync(bus, "IsStatusNotifierHostRegistered", v => v.GetBool());
 
         private static async Task<T> WatcherPropertyAsync<T>(DBusConnection bus, string name, Func<VariantValue, T> read)
         {
