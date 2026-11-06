@@ -67,6 +67,9 @@
 
             <!-- Provider Selection (Initial State) -->
             <StackPanel x:Name="ProviderPanel" Grid.Row="2" VerticalAlignment="Center">
+                <!-- WPF's glyphs are FontSize-20 TextBlocks: a ~26px line box (the EmojiTextBlock ones
+                     ~23px), which is what makes those buttons 52-56px tall. An IconGlyph's box is its
+                     20px Size, so each glyph keeps WPF's line height as its Height. -->
                 <Button x:Name="BtnLoginDiscord"
                         Padding="20,15" Margin="0,0,0,15"
                         Background="#5865F2" Foreground="White"
@@ -74,7 +77,7 @@
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                         Cursor="Hand">
                     <StackPanel Orientation="Horizontal">
-                        <fx:IconGlyph Kind="Games" Size="20" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                        <fx:IconGlyph Kind="Games" Size="20" Height="23" Margin="0,0,10,0" VerticalAlignment="Center"/>
                         <TextBlock Text="{loc:Str login_discord}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
@@ -86,7 +89,7 @@
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                         Cursor="Hand">
                     <StackPanel Orientation="Horizontal">
-                        <fx:IconGlyph Kind="Star" Variant="Filled" Size="20" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                        <fx:IconGlyph Kind="Star" Variant="Filled" Size="20" Height="26" Margin="0,0,10,0" VerticalAlignment="Center"/>
                         <TextBlock Text="{loc:Str login_patreon}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
@@ -98,7 +101,7 @@
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                         Cursor="Hand">
                     <StackPanel Orientation="Horizontal">
-                        <fx:IconGlyph Kind="Star" Variant="Filled" Size="20" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                        <fx:IconGlyph Kind="Star" Variant="Filled" Size="20" Height="26" Margin="0,0,10,0" VerticalAlignment="Center"/>
                         <TextBlock Text="Login with SubscribeStar" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
@@ -110,7 +113,7 @@
                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                         Cursor="Hand">
                     <StackPanel Orientation="Horizontal">
-                        <fx:IconGlyph Kind="LockClosed" Variant="Filled" Size="20" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                        <fx:IconGlyph Kind="LockClosed" Variant="Filled" Size="20" Height="23" Margin="0,0,10,0" VerticalAlignment="Center"/>
                         <TextBlock Text="{loc:Str login_anonymous}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>

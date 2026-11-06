@@ -141,7 +141,7 @@ public sealed class ModChoiceTests
         var manager = await Owned<ConditioningControlPanel.Avalonia.Views.Dialogs.ModManagerDialog>(shell);
         var list = manager.FindControl<ListBox>("ModList")!;
         list.SelectedItem = list.Items.OfType<ListBoxItem>().Single(i => (string)i.Tag! == "choice-test-mod");
-        manager.FindControl<Button>("BtnUninstall")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        manager.FindControl<MenuItem>("BtnUninstall")!.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
         var confirm = await Owned<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>(manager);
         confirm.FindControl<Button>("BtnOk")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         await WaitFor(() => !AvApp.Mods.InstalledMods.ContainsKey("choice-test-mod"));
