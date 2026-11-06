@@ -48,16 +48,23 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// which a stream-loaded typeface cannot address).</summary>
         internal static string? SystemFamilyName()
         {
-            using var tf = SKFontManager.Default.MatchFamily("emoji");
+            using var tf = MatchSystemEmoji();
             if (tf is null) return null;
             using var asset = tf.OpenStream(out var index);
             return asset is null || index != 0 ? null : tf.FamilyName;
         }
 
+        /// <summary>The system colour-emoji typeface. fontconfig answers the generic "emoji" alias; DirectWrite has no
+        /// such alias (MatchFamily("emoji") is null on Windows), so there it is Segoe UI Emoji by name. Without that the
+        /// Windows head only ever had the bundled monochrome Noto Emoji (parity pass 2026-11-06: 📅 📈 💕 drew mono).</summary>
+        internal static SKTypeface? MatchSystemEmoji()
+            => SKFontManager.Default.MatchFamily("emoji")
+               ?? (OperatingSystem.IsWindows() ? SKFontManager.Default.MatchFamily("Segoe UI Emoji") : null);
+
         /// <summary>The system "emoji" font file as a memory stream, or null.</summary>
         internal static Stream? OpenSystemEmoji()
         {
-            using var tf = SKFontManager.Default.MatchFamily("emoji");
+            using var tf = MatchSystemEmoji();
             if (tf is null) return null;
             using var asset = tf.OpenStream(out var index);
             if (asset is null || index != 0) return null;
