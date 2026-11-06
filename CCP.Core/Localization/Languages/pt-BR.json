@@ -8327,6 +8327,8 @@
   "label_active_phrase_count": "{0} ativas",
   "remote_media_offer_title": "Mídia sem download",
   "remote_media_offer_summary": "Suas pastas estão vazias - ela pode transmitir do acervo online no lugar.",
+  "title_remote_media_consent": "Usar mídia do Reddit?",
+  "msg_remote_media_consent": "Buscar mídia do Reddit?\n\nO app vai transmitir imagens e clipes dos subreddits que você escolher, direto na sua própria máquina. Nada é salvo no seu disco, nada é enviado e nada passa pelos nossos servidores.\n\nÉ conteúdo adulto e não é selecionado por nós - você escolhe os nichos e os subreddits, e só eles são buscados.\n\nAtivar?",
   "lucky_xp_multiplier": "{0}x XP",
   "chaos_dvd_title": "DVD pornô",
   "chaos_dvd_loading": "carregando",

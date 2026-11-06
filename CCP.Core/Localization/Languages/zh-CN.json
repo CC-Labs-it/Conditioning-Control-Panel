@@ -8833,6 +8833,8 @@
   "label_active_phrase_count": "{0} 项启用",
   "remote_media_offer_title": "无需下载的媒体",
   "remote_media_offer_summary": "文件夹为空 - 她可以改为播放在线媒体库中的内容。",
+  "title_remote_media_consent": "使用 Reddit 素材？",
+  "msg_remote_media_consent": "要从 Reddit 获取素材吗？\n\n应用会从你选择的子版块直接把图片和短片串流到你自己的电脑上。不会在硬盘上保存任何内容，不会上传任何内容，也不会经过我们的服务器。\n\n这是成人内容，且未经我们筛选 - 领域和子版块由你选择，只会获取这些内容。\n\n要开启吗？",
   "lucky_xp_multiplier": "{0}x XP",
   "chaos_dvd_title": "色情DVD",
   "chaos_dvd_loading": "正在加载",

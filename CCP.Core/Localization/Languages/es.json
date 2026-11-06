@@ -8327,6 +8327,8 @@
   "label_active_phrase_count": "{0} activas",
   "remote_media_offer_title": "Contenido sin descargar",
   "remote_media_offer_summary": "Tus carpetas están vacías - ella puede transmitir desde el catálogo en línea.",
+  "title_remote_media_consent": "¿Usar medios de Reddit?",
+  "msg_remote_media_consent": "¿Traer medios desde Reddit?\n\nLa app transmitirá imágenes y clips de los subreddits que elijas, directamente en tu propio equipo. No se guarda nada en tu disco, no se sube nada y nada pasa por nuestros servidores.\n\nEs contenido para adultos y no lo seleccionamos nosotros - tú eliges los nichos y los subreddits, y solo se obtiene eso.\n\n¿Activarlo?",
   "lucky_xp_multiplier": "{0}x XP",
   "chaos_dvd_title": "DVD porno",
   "chaos_dvd_loading": "cargando",

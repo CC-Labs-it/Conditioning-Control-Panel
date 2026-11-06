@@ -104,6 +104,8 @@ internal sealed partial class FirstShowStageWindow : Window
     internal static string Text(string key) => Loc.Get("first_show_" + key);
     internal string SpeechText => _speech.Text ?? string.Concat(_speech.Inlines?.OfType<Run>().Select(r => r.Text) ?? Array.Empty<string>());
     internal IReadOnlyList<Button> ChoiceButtons => _choices.Children.OfType<Button>().ToArray();
+    /// <summary>The loading bar and its status line are up (tests read it).</summary>
+    internal bool LoadingShown => _loadingPanel.IsVisible;
     internal bool Playing => _playing;
     internal FirstShowAudio Audio => _audio;
     internal double LogoOpacity => _logo.Opacity;
@@ -209,8 +211,46 @@ internal sealed partial class FirstShowStageWindow : Window
     {
         _centered = true; _moveAt = Clock();
         Ask(Text("pickQuestion") + "\n\n" + Text("pickHint"));
-        foreach (var id in FirstShowPresets.All) AddButton(id == "censored" ? Text("censored") : id, () => _ = Load(id));
+        foreach (var id in FirstShowPresets.All) AddButton(id == "censored" ? Text("censored") : id, () => _ = Pick(id));
         AddButton(Text("later"), Close);
+    }
+    /// <summary>Test seam: the consent card's answer for (title, message). Default: the Assets page's ask.</summary>
+    internal Func<string, string, Task<bool>>? ConsentOverride;
+    private bool _asking;
+    /// <summary>
+    /// Owner decision 2026-11-06 (option B), the same in both heads (WPF FirstShowDesktopWindow.Pick): a preset's
+    /// pictures are Scrolller's, which the device cache refuses until remote media is consented and the source is not
+    /// "local". When that is all that stands in the way (<see cref="FirstShowPresets.AsksForRemoteMedia(AppSettings?)"/>),
+    /// the preset first asks the Assets page's one-time consent card, word for word (AssetsTabView
+    /// RemoteMediaConsentText, WPF MainWindow.Assets.cs AskRemoteMediaConsent). Yes records the consent and the online
+    /// source, then loads the preset; no plays the built-in pictures. The card is the only place consent turns on.
+    /// </summary>
+    internal async Task Pick(string preset)
+    {
+        if (_asking || _closed) return;
+        var s = CoreSettings.Current;
+        if (FirstShowPresets.AsksForRemoteMedia(s))
+        {
+            bool yes;
+            _asking = true;
+            try
+            {
+                var (title, message) = ConditioningControlPanel.Avalonia.Views.Tabs.AssetsTabView.RemoteMediaConsentText();
+                Window owner = _speechWindow.IsVisible ? _speechWindow : (Window?)_main ?? this;
+                yes = ConsentOverride != null ? await ConsentOverride(title, message)
+                    : await ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog.ConfirmAsync(owner, title, message, okText: Loc.Get("label_yes"));
+            }
+            catch (Exception ex) { Log.Warning(ex, "First show: the remote media ask failed"); yes = false; }
+            finally { _asking = false; }
+            if (_closed) return;
+            if (!yes) { await Bundled(); return; }
+            FirstShowPresets.AcceptRemoteMedia(s);
+            FypOnlineCoordinator.ResetAllChannels();   // as the source chip does
+            CoreSettings.Save();
+            OnlineMeterHead.Poke();
+            Log.Information("[remote media] first show: consent given, source -> {Source}", s.MediaSource);
+        }
+        await Load(preset);
     }
     private static async Task<IReadOnlyList<FypAssetManifest.Entry>> DefaultFetch(string preset, int attempt, CancellationToken token)
     {
@@ -300,9 +340,16 @@ internal sealed partial class FirstShowStageWindow : Window
         var paths = new List<string>(); FirstShowEffects? candidate = null;
         try
         {
-            int attempt = 0;
-            paths = await FirstShowMediaLoader.LoadAsync(token => FetchFeed(preset, attempt++, token), Download, Release, request.Token,
-                progress => Dispatcher.UIThread.Post(() => { if (!_closed && _load == request) ShowLoading(progress); }));
+            int attempt = 0; bool loading = true;
+            // WPF :172 reports progress inline, so the error or "preparing" line that follows always wins. Posted
+            // here, a report can land after the loader has given up (every picture refused at once): drop it then,
+            // or the error card keeps a stale "0/8 pictures ready" under it.
+            try
+            {
+                paths = await FirstShowMediaLoader.LoadAsync(token => FetchFeed(preset, attempt++, token), Download, Release, request.Token,
+                    progress => Dispatcher.UIThread.Post(() => { if (loading && !_closed && _load == request) ShowLoading(progress); }));
+            }
+            finally { loading = false; }
             if (paths.Count == 0) throw new IOException("No demo images available");
             ShowPreparing();
             candidate = new FirstShowEffects(_audio.Cue);

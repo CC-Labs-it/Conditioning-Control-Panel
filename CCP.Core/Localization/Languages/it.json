@@ -9073,6 +9073,8 @@
   "label_active_phrase_count": "{0} attive",
   "remote_media_offer_title": "Media senza download",
   "remote_media_offer_summary": "Le tue cartelle sono vuote - lei può riprodurre i media online al loro posto.",
+  "title_remote_media_consent": "Usare i media di Reddit?",
+  "msg_remote_media_consent": "Prendere i media da Reddit?\n\nL'app mostrerà in streaming immagini e clip dai subreddit che scegli, direttamente sul tuo computer. Niente viene salvato sul disco, niente viene caricato online e niente passa dai nostri server.\n\nSono contenuti per adulti e non sono selezionati da noi - scegli tu le nicchie e i subreddit, e vengono recuperati solo quelli.\n\nAttivarli?",
   "lucky_xp_multiplier": "{0}x XP",
   "chaos_dvd_title": "DVD porno",
   "chaos_dvd_loading": "caricamento",
