@@ -181,7 +181,7 @@
                             </WrapPanel>
 
                             <!-- Advanced / diagnostics (everything from the old card preserved) -->
-                            <Expander Header="Advanced" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11" Margin="0,12,0,0">
+                            <Expander Header="{loc:Str label_devices_advanced}" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11" Margin="0,12,0,0">
                                 <StackPanel Margin="4,8,0,0">
                                     <WrapPanel Orientation="Horizontal">
                                         <Button x:Name="BtnWebcamDebugTrackerTest" Content="Tracker Test"

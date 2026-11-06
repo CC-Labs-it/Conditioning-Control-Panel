@@ -1194,6 +1194,83 @@
     </Style>
   </ControlTheme>
 
+  <!-- The default Expander = WPF's stock Aero2 one, which every unstyled WPF Expander wears (webcam
+       Advanced, Gaze "Advanced settings", the prompt editor sections, Takeover, Personality Studio):
+       no card, a 19px white circle with a dark chevron left of the header text, content straight
+       below. Fluent drew a full-width bordered header bar with the chevron on the right (~60px a
+       row) and its chevron rotation caught mid-flight read as a broken corner. ExpandDirection Down
+       only, as in every WPF use. Colours are Aero2's Expander.* resources. -->
+  <ControlTheme x:Key="AeroExpanderHeader" TargetType="ToggleButton">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="FocusAdorner" Value="{x:Null}"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="ToggleButton">
+        <Border Padding="{TemplateBinding Padding}" Background="Transparent">
+          <Grid ColumnDefinitions="19,*" Background="Transparent">
+            <Ellipse x:Name="circle" Width="19" Height="19" HorizontalAlignment="Center" VerticalAlignment="Center"
+                     Fill="#FFFFFFFF" Stroke="#FF333333" StrokeThickness="1"/>
+            <Path x:Name="arrow" HorizontalAlignment="Center" VerticalAlignment="Center"
+                  Data="M 1,1.5 L 4.5,5 L 8,1.5" Stroke="#FF333333" StrokeThickness="2"/>
+            <ContentPresenter x:Name="PART_ContentPresenter" Grid.Column="1" Margin="4,0,0,0"
+                              HorizontalAlignment="Left" VerticalAlignment="Center"
+                              RecognizesAccessKey="True"
+                              Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"/>
+          </Grid>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:checked /template/ Path#arrow">
+      <Setter Property="Data" Value="M 1,4.5 L 4.5,1 L 8,4.5"/>
+    </Style>
+    <Style Selector="^:pointerover /template/ Ellipse#circle">
+      <Setter Property="Stroke" Value="#FF5593FF"/>
+      <Setter Property="Fill" Value="#FFF3F9FF"/>
+    </Style>
+    <Style Selector="^:pointerover /template/ Path#arrow">
+      <Setter Property="Stroke" Value="#FF000000"/>
+    </Style>
+    <Style Selector="^:pressed /template/ Ellipse#circle">
+      <Setter Property="Stroke" Value="#FF3C77DD"/>
+      <Setter Property="StrokeThickness" Value="1.5"/>
+      <Setter Property="Fill" Value="#FFD9ECFF"/>
+    </Style>
+    <Style Selector="^:disabled /template/ Ellipse#circle">
+      <Setter Property="Stroke" Value="#FFBCBCBC"/>
+      <Setter Property="Fill" Value="#FFE6E6E6"/>
+    </Style>
+    <Style Selector="^:disabled /template/ Path#arrow">
+      <Setter Property="Stroke" Value="#FF707070"/>
+    </Style>
+  </ControlTheme>
+
+  <ControlTheme x:Key="{x:Type Expander}" TargetType="Expander">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderBrush" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="Expander">
+        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3">
+          <DockPanel>
+            <ToggleButton x:Name="PART_toggle" DockPanel.Dock="Top" Margin="1" MinWidth="0" MinHeight="0"
+                          Theme="{StaticResource AeroExpanderHeader}"
+                          Padding="{TemplateBinding Padding}"
+                          Foreground="{TemplateBinding Foreground}"
+                          Content="{TemplateBinding Header}" ContentTemplate="{TemplateBinding HeaderTemplate}"
+                          IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}"/>
+            <ContentPresenter x:Name="PART_ContentPresenter" Margin="{TemplateBinding Padding}"
+                              IsVisible="{TemplateBinding IsExpanded}"
+                              Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+          </DockPanel>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
   <!-- MainWindow.xaml:1366. Gradient-border card with a left accent strip and a chevron that
        rotates on expand. Expander's IsExpanded drives the content; the chevron rotation is a
        :expanded selector rather than a Storyboard. DropShadowEffect dropped. -->
