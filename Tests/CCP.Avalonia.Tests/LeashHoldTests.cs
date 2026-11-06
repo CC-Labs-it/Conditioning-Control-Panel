@@ -304,6 +304,7 @@ public sealed class LeashHoldTests
         if (x11First) { shell.OnX11PanicPress(); portal(); } else { portal(); shell.OnX11PanicPress(); }
         Dispatcher.UIThread.RunJobs();
         Assert.True(MainShellWindow.PortalHoldLive);
+        Assert.False(LeashHoldRing.IsShown);          // a tap shows no ring: the echo is not a repeat
         for (int t = 250; t <= 2000; t += 250) { clock.Now += TimeSpan.FromMilliseconds(250); shell.LeashHoldClockTick(); }
         MainShellWindow.ReleasePortalWhenUnused();    // the 2 s poll, with no effect left running
         Dispatcher.UIThread.RunJobs();

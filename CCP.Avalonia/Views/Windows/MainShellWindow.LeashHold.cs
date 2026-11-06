@@ -94,12 +94,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (_leashHold.Held) LeashHoldReleased();
             HandlePanicKeyPress(DateTime.Now);
-            AdoptPortalHold();
+            StartPortalHold();
         }
 
-        /// <summary>Marks the hold as the portal's, so the grab outlives the effects and only Deactivated
-        /// can end it. Also runs for the echo of an XInput2 press, which panics no further.</summary>
-        internal void AdoptPortalHold()
+        /// <summary>The portal's report of a press XInput2 already panicked for: no second panic, but the
+        /// hold still restarts as the portal's. A plain Down here would read as a repeat and show the ring.</summary>
+        internal void OnPortalEchoPressed()
+        {
+            if (_leashHold.Held) LeashHoldReleased();
+            StartPortalHold();
+        }
+
+        // The hold is the portal's, so the grab outlives the effects and only Deactivated can end it.
+        private void StartPortalHold()
         {
             _leashHoldFromPortal = PortalPanicShortcut.ReportsRelease;
             _leashHoldPortalUnproven = !_leashHoldFromPortal;

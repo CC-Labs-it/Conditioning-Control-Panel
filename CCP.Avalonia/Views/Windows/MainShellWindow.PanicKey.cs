@@ -59,9 +59,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// The echo adds no panic, but the hold still has to become a portal hold.</summary>
         internal void OnPortalPanicActivated()
         {
-            Serilog.Log.Information("Panic trigger: GlobalShortcuts portal Activated");
             if (AdmitPanicRoute(PanicRouteGate.Route.Portal)) QueuePanic(OnPortalPanicPressed);
-            else Dispatcher.UIThread.Post(AdoptPortalHold);
+            else Dispatcher.UIThread.Post(OnPortalEchoPressed);
         }
 
         // Either route can win the race, so both are watched (#919b): if the UI thread never runs the
@@ -370,7 +369,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static async Task BindPortalAsync()
         {
             var trigger = await PortalPanicShortcut.BindAsync(CoreSettings.Current.PanicKey, Loc.Get("panic_portal_description"),
-                () => Current?.OnPortalPanicActivated(),
+                () =>
+                {
+                    Serilog.Log.Information("Panic trigger: GlobalShortcuts portal Activated");
+                    Current?.OnPortalPanicActivated();
+                },
                 () => Dispatcher.UIThread.Post(() => Current?.OnPortalPanicReleased()));
             Dispatcher.UIThread.Post(() =>
             {

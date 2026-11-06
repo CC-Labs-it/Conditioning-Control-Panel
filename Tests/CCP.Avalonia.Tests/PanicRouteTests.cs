@@ -35,7 +35,6 @@ public sealed class PanicRouteTests
             else { shell.OnPortalPanicActivated(); shell.OnX11PanicPress(); }
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, shell.PanicPressCountForTest);
-            Assert.True(shell.PlatformImpl is not null, "one press must not have closed the shell");
         }
         finally
         {

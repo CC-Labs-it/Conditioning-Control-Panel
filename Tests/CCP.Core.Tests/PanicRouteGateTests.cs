@@ -14,7 +14,6 @@ public sealed class PanicRouteGateTests
         var (first, echo) = x11First ? (Route.X11, Route.Portal) : (Route.Portal, Route.X11);
         var gate = new PanicRouteGate();
         Assert.True(gate.Admit(first, 1000));
-        Assert.False(gate.Admit(echo, 1000));
         Assert.False(gate.Admit(echo, 1000 + EchoWindowMs - 1));
     }
 
@@ -34,6 +33,16 @@ public sealed class PanicRouteGateTests
         Assert.False(gate.Admit(Route.Portal, 1001));
         Assert.True(gate.Admit(Route.X11, 1300));
         Assert.False(gate.Admit(Route.Portal, 1301));
+    }
+
+    [Fact]
+    public void A_press_only_the_other_route_reports_is_not_taken_for_a_second_echo()
+    {
+        // The portal swallows a repeat when Deactivated was lost, so press two reaches only XInput2.
+        var gate = new PanicRouteGate();
+        Assert.True(gate.Admit(Route.Portal, 1000));
+        Assert.False(gate.Admit(Route.X11, 1001));
+        Assert.True(gate.Admit(Route.X11, 1300));
     }
 
     [Fact]

@@ -4,8 +4,9 @@ namespace ConditioningControlPanel.Services.Safety
     /// One physical press can reach the app twice on Linux: the XInput2 listener and the GlobalShortcuts
     /// portal both hear it when an X11 window has focus. Counted twice, that single press stops
     /// everything and then exits the app through the double-press rung. This admits the first report
-    /// of a press and drops the other route's echo. The same route is never dropped, so a real double
-    /// press still exits, and the first report of a press is never dropped, so panic is never delayed.
+    /// of a press and drops the other route's echo, once per press. The same route is never dropped, so
+    /// a real double press still exits. The route that swallows repeats (the portal) may never report a
+    /// press at all, so a second report from the other route must not be taken for its echo.
     /// A dropped report still counts for the route's own bookkeeping: the caller decides what that is.
     /// </summary>
     internal sealed class PanicRouteGate
@@ -26,7 +27,11 @@ namespace ConditioningControlPanel.Services.Safety
         {
             lock (_gate)
             {
-                if (_lastRoute is { } last && last != route && nowMs - _lastMs < EchoWindowMs) return false;
+                if (_lastRoute is { } last && last != route && nowMs - _lastMs < EchoWindowMs)
+                {
+                    _lastRoute = null;   // this press has had its echo
+                    return false;
+                }
                 _lastRoute = route;
                 _lastMs = nowMs;
                 return true;

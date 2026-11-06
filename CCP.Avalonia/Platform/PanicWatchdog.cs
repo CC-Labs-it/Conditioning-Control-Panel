@@ -66,7 +66,7 @@ internal static class PanicWatchdog
             var finished = await Task.WhenAny(handler, Task.Delay(timeout ?? Timeout)).ConfigureAwait(false);
             if (finished == handler)
             {
-                try { _ = handler.Exception; } catch { }   // observe a faulted handler
+                if (handler.Exception is { } thrown) Log.Error(thrown, "Panic: the press handler threw");
                 return;
             }
             RunGuarded();
