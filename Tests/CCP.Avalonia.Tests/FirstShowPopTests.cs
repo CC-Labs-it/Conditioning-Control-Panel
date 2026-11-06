@@ -118,8 +118,14 @@ public sealed class FirstShowPopTests(ITestOutputHelper output)
             {
                 for (; at < n; at++) { t += Frame; fx.Tick(t, Frame); }
                 var on = Shot(fx, crop, true); var off = Shot(fx, crop, false);
+                for (int r = 0; r < 4; r++)   // best of five: the first render pays JIT and the dot sprite's build
+                {
+                    var on2 = Shot(fx, crop, true); var off2 = Shot(fx, crop, false);
+                    if (on2.Ticks < on.Ticks) { on.Image.Dispose(); on = on2; } else on2.Image.Dispose();
+                    if (off2.Ticks < off.Ticks) { off.Image.Dispose(); off = off2; } else off2.Image.Dispose();
+                }
                 long lit = Lit(on.Image, off.Image);
-                output.WriteLine($"{variant} frame {n} ({n * Frame:0.000} s): {fx.SparkCount} sparks, {lit} px changed by the burst");
+                output.WriteLine($"{variant} frame {n} ({n * Frame:0.000} s): {fx.SparkCount} sparks, {lit} px changed by the burst, render {Ms(on.Ticks):0.00} ms vs {Ms(off.Ticks):0.00} ms without");
                 if (burst && n <= 18) Assert.True(lit > 1500, $"frame {n}: only {lit} px of burst");
                 if (!burst) Assert.Equal(0, lit);
                 Save(dir, $"port-{variant}-f{n}.png", on.Image);
@@ -127,7 +133,7 @@ public sealed class FirstShowPopTests(ITestOutputHelper output)
                 on.Image.Dispose(); off.Image.Dispose();
             }
             if (burst)
-                output.WriteLine($"CPU raster, 1600x900 stage, mean over {timed} pop frames: {Ms(withMs / timed):0.00} ms with the burst, {Ms(withoutMs / timed):0.00} ms without");
+                output.WriteLine($"CPU raster, 1600x900 stage, mean over {timed} pop frames (best of five each): {Ms(withMs / timed):0.00} ms with the burst, {Ms(withoutMs / timed):0.00} ms without");
         }
         finally { host.Content = null; host.Close(); }
     });
