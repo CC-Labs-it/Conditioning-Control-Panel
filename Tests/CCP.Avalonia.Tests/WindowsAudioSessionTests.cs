@@ -20,7 +20,7 @@ public sealed class WindowsAudioSessionTests
     {
         Assert.Equal("--aout=directsound,any", LibVlcAudio.WithOutput(Array.Empty<string>(), windows: true)[0]);
         Assert.Equal(new[] { "--aout=dummy" }, LibVlcAudio.WithOutput(new[] { "--aout=dummy" }, windows: true));
-        Assert.Empty(LibVlcAudio.WithOutput(Array.Empty<string>(), windows: false));   // Linux: pulse is per stream
+        Assert.Equal("--aout=pulse,any", LibVlcAudio.WithOutput(Array.Empty<string>(), windows: false).Single());   // Linux: pulse is per stream
     }
 
     [Fact]
