@@ -38,6 +38,20 @@ public sealed class BillboardArtParityTests
         yield return ("loom", () => new LoomHouseArt(), "#9b7bff");
         yield return ("support", () => new SupportHouseArt(), "#ff4fa8");
         yield return ("wheel", () => new WheelArtView(), "#ffc94a");
+        yield return ("tip-quests", () => new QuestsTipArt(), "#3ce67d");
+        yield return ("tip-awareness", () => new AwarenessTipArt(), "#5fe3ff");
+        yield return ("tip-programs", () => new ProgramsTipArt(), "#ffc94a");
+        yield return ("tip-deeper", () => new DeeperTipArt(), "#9b7bff");
+        yield return ("tip-blink", () => new BlinkTipArt(), "#ff4fa8");
+        yield return ("tip-haptics", () => new HapticsTipArt(), "#ff4fa8");
+        yield return ("tip-folders", () => new FoldersTipArt(), "#ffc94a");
+        yield return ("tip-lockdown", () => new LockdownTipArt(), "#ff4fa8");
+        yield return ("tip-remote", () => new RemoteTipArt(), "#5fe3ff");
+        yield return ("tip", () => new TipArtView(), "#9b7bff");
+        yield return ("spiral", () => new SpiralArtView(null), "#ff4fa8");
+        yield return ("calendar", () => new CalendarArtView(BuiltInArt.CalendarData(
+            new Dictionary<string, int> { ["counted"] = 6, ["need"] = 25, ["days"] = 31, ["today"] = 7 }, new DateTime(2026, 10, 7))), "#ff4fa8");
+        yield return ("tables", () => new TablesArtView(new[] { "Velvet", "mort5366", "Pika" }, 3), "#5fe3ff");
     }
 
     private static (string Name, Func<BillboardVectorArt> Make, string Hue) Scene(string name) => Scenes().Single(s => s.Name == name);
@@ -91,6 +105,23 @@ public sealed class BillboardArtParityTests
         Assert.IsType<LoomHouseArt>(HouseScenes.Create("billboard/loom.png"));
         Assert.IsType<SupportHouseArt>(HouseScenes.Create("billboard/support.png"));
         Assert.IsType<WheelArtView>(HouseScenes.Create("billboard/backroom.png"));
+    }
+
+    [Fact]
+    public void TipScenesAreDispatchedByTipId()
+    {
+        // WPF TipScenes.Create: one picture per tip id, the generic tip art otherwise.
+        Assert.IsType<QuestsTipArt>(TipScenes.Create("quests"));
+        Assert.IsType<AwarenessTipArt>(TipScenes.Create("awareness"));
+        Assert.IsType<ProgramsTipArt>(TipScenes.Create("programs"));
+        Assert.IsType<DeeperTipArt>(TipScenes.Create("deeper"));
+        Assert.IsType<BlinkTipArt>(TipScenes.Create("blink"));
+        Assert.IsType<HapticsTipArt>(TipScenes.Create("haptics"));
+        Assert.IsType<FoldersTipArt>(TipScenes.Create("folders"));
+        Assert.IsType<LockdownTipArt>(TipScenes.Create("lockdown"));
+        Assert.IsType<RemoteTipArt>(TipScenes.Create("remote"));
+        Assert.IsType<TipArtView>(TipScenes.Create("nope"));
+        Assert.IsType<TipArtView>(TipScenes.Create(null));
     }
 
     [Fact]
