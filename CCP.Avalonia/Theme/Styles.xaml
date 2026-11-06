@@ -191,6 +191,8 @@
     <Setter Property="VerticalContentAlignment" Value="Center"/>
     <Setter Property="HorizontalAlignment" Value="Stretch"/>
     <Setter Property="VerticalAlignment" Value="Stretch"/>
+    <!-- Aero2's button border is square; Fluent rounds it 4px (ChatShortcutCapture Reset/Cancel). -->
+    <Setter Property="CornerRadius" Value="0"/>
   </ControlTheme>
 
   <!-- Controls.xaml:36. The press-feedback Storyboards (scale 0.97 in, BackEase out) become a
