@@ -96,6 +96,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 var splash = new SplashScreen();
+                // WPF CenterScreen: the monitor under the cursor, else the primary (Platform/StartupPlacement.cs).
+                Platform.StartupPlacement.CenterOnPointerScreen(splash);
                 splash.Show();
                 return splash;
             }
