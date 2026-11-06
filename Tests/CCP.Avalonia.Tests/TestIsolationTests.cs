@@ -78,7 +78,7 @@ public class TestIsolationTests
                 ConditioningControlPanel.Avalonia.Platform.AppFonts.Default).Name,
             global::Avalonia.Media.FontManager.Current.DefaultFontFamily.Name);
         foreach (var family in new[] { ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter,
-                     ConditioningControlPanel.Avalonia.Platform.AppFonts.Selawik,
+                     ConditioningControlPanel.Avalonia.Platform.AppFonts.UiSans,
                      ConditioningControlPanel.Avalonia.Platform.AppFonts.Fredoka,
                      ConditioningControlPanel.Avalonia.Platform.AppFonts.Mono })
             Assert.NotNull(new global::Avalonia.Media.Typeface(family,

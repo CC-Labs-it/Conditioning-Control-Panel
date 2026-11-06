@@ -98,14 +98,14 @@ public sealed class AppFontsTests
         foreach (var (chain, weight, family, minWeight) in new[]
         {
             ("Impact, Arial Black, Segoe UI", FontWeight.Bold, "Anton", 400),
-            ("Segoe UI", FontWeight.Normal, "Selawik", 400),
-            ("Segoe UI", FontWeight.SemiBold, "Selawik", 600),
-            ("Segoe UI", FontWeight.Bold, "Selawik", 700),
+            ("Segoe UI", FontWeight.Normal, "CCP Sans", 400),
+            ("Segoe UI", FontWeight.SemiBold, "CCP Sans", 600),
+            ("Segoe UI", FontWeight.Bold, "CCP Sans", 700),
             ("Comic Sans MS, Segoe UI", FontWeight.Normal, "Comic Neue", 400),
             ("Comic Sans MS", FontWeight.Bold, "Comic Neue", 700),
             // The bundled Inter package tops out at Bold (as before this mapping); Selawik's own max is Bold too.
             ("Segoe UI Black, Segoe UI", FontWeight.Black, "Inter", 700),
-            ("$Default", FontWeight.Normal, "Selawik", 400),
+            ("$Default", FontWeight.Normal, "CCP Sans", 400),
         })
         {
             Assert.True(fonts.TryGetGlyphTypeface(new Typeface(new FontFamily(chain), FontStyle.Normal, weight), out var face), chain);
@@ -120,11 +120,16 @@ public sealed class AppFontsTests
             Assert.StartsWith("Fredoka", fredoka!.FamilyName);
             Assert.Equal(expected, (int)fredoka.Weight);
         }
+        // SemiBold is its own face (WPF Segoe UI Semibold), not Bold.
+        Assert.True(fonts.TryGetGlyphTypeface(new Typeface(new FontFamily("Segoe UI"), FontStyle.Normal, FontWeight.SemiBold), out var semi));
+        Assert.Equal(600, (int)semi!.Weight);
+        // CCP Sans keeps Segoe UI's line height (2210+514 / 2048 em), which WPF lays text out on.
+        Assert.InRange(semi.Metrics.LineSpacing / (double)semi.Metrics.DesignEmHeight, 1.32, 1.34);
         // Selawik is Latin-only: Cyrillic (ru UI) and Greek go to the bundled Inter, not a fontconfig pick.
         foreach (var cp in new[] { 0x0416, 0x03A9 })
         {
             Assert.True(fonts.TryMatchCharacter(cp, FontStyle.Normal, FontWeight.Normal, FontStretch.Normal,
-                new FontFamily(AppFonts.Selawik), null, out var match), $"U+{cp:X4}");
+                new FontFamily(AppFonts.UiSans), null, out var match), $"U+{cp:X4}");
             Assert.Contains("Inter", match.FontFamily.Name);
         }
         return Task.CompletedTask;
@@ -148,7 +153,7 @@ public sealed class AppFontsTests
             foreach (var family in new[] { text.FontFamily, button.FontFamily })
             {
                 Assert.True(FontManager.Current.TryGetGlyphTypeface(new Typeface(family), out var face), family.ToString());
-                Assert.True(face!.FamilyName.StartsWith("Selawik", StringComparison.Ordinal), $"{family} -> {face.FamilyName}");
+                Assert.True(face!.FamilyName.StartsWith("CCP Sans", StringComparison.Ordinal), $"{family} -> {face.FamilyName}");
             }
         }
         finally { host.Close(); }

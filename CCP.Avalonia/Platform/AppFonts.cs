@@ -19,13 +19,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
         public const string NotoEmoji = "avares://CCP.Avalonia/Resources/fonts#Noto Emoji";
         public const string Mono = "avares://CCP.Avalonia/Resources/emi/fonts#Noto Sans Mono";
         // Off-Windows stand-ins for the Windows faces WPF names (2026-11-06, owner: "bundle free look-alikes").
-        public const string Selawik = "avares://CCP.Avalonia/Resources/fonts/selawik#Selawik";     // Segoe UI
+        public const string UiSans = "avares://CCP.Avalonia/Resources/fonts/ccpsans#CCP Sans";    // Segoe UI: Selawik with Segoe UI line height (OFL-CCPSans.txt)
         public const string Anton = "avares://CCP.Avalonia/Resources/fonts/display#Anton";          // Impact
         public const string ComicNeue = "avares://CCP.Avalonia/Resources/fonts/display#Comic Neue"; // Comic Sans MS
 
         /// <summary>The never-empty default face: bundled Inter on Windows (2026-10-10), bundled Selawik elsewhere
         /// (WPF draws unstyled text in Segoe UI, which Linux lacks; 2026-11-06).</summary>
-        public static string Default => System.OperatingSystem.IsWindows() ? Inter : Selawik;
+        public static string Default => System.OperatingSystem.IsWindows() ? Inter : UiSans;
 
         // Emoji blocks only, so text symbols Inter lacks (arrows, CJK, ...) still go to the system.
         private static readonly UnicodeRange EmojiRange = UnicodeRange.Parse("2300-23FF, 2600-27BF, 2B00-2BFF, 1F000-1FAFF");
@@ -57,7 +57,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     mappings["monospace"] = new FontFamily(Mono);
                 // WPF's display faces, none of which Linux has: without these "Impact, Arial Black, Segoe UI"
                 // (marquee, bubble count, video overlay) and every "Segoe UI" site drew Inter or a fontconfig pick.
-                mappings["Segoe UI"] = mappings["Segoe UI Semibold"] = mappings["Segoe UI Light"] = new FontFamily(Selawik);
+                mappings["Segoe UI"] = mappings["Segoe UI Semibold"] = mappings["Segoe UI Light"] = new FontFamily(UiSans);
                 mappings["Impact"] = new FontFamily(Anton);
                 mappings["Comic Sans MS"] = mappings["Comic Sans"] = new FontFamily(ComicNeue);
                 // Heavy grotesques: Inter has the 900 weight Selawik lacks.
