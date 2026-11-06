@@ -64,22 +64,20 @@ internal static class PanicWatchdog
         // Attached here, not after the wait: a handler can still throw once the fallback has run.
         handler.ContinueWith(t => Log.Error(t.Exception, "Panic: the press handler threw"),
             CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
-        return Watch(handler, timeout);
+        return Task.Run(async () =>
+        {
+            try
+            {
+                var finished = await Task.WhenAny(handler, Task.Delay(timeout ?? Timeout)).ConfigureAwait(false);
+                if (finished == handler) return;   // as WPF: a thrown handler is logged and not torn down
+                RunGuarded();
+            }
+            catch (Exception ex)
+            {
+                try { Log.Error(ex, "Panic watchdog failed"); } catch { }
+            }
+        });
     }
-
-    private static Task Watch(Task handler, TimeSpan? timeout) => Task.Run(async () =>
-    {
-        try
-        {
-            var finished = await Task.WhenAny(handler, Task.Delay(timeout ?? Timeout)).ConfigureAwait(false);
-            if (finished == handler) return;   // as WPF: a throw is logged, and may have been a press that was no panic
-            RunGuarded();
-        }
-        catch (Exception ex)
-        {
-            try { Log.Error(ex, "Panic watchdog failed"); } catch { }
-        }
-    });
 
     private static void RunGuarded()
     {

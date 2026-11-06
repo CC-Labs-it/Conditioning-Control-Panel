@@ -31,9 +31,11 @@ public sealed class PanicRouteTests
         CoreSettings.Current.MasterVolume = 0;
         var oldTeardown = PanicWatchdog.Teardown;
         PanicWatchdog.Teardown = () => { };           // a slow first press must not run the real teardown
-        var shell = new MainShellWindow { PanicRouteClock = () => 1000 };
+        MainShellWindow? shell = null;
         try
         {
+            shell = new MainShellWindow { PanicRouteClock = () => 1000 };
+            Dispatcher.UIThread.RunJobs();            // the ctor's own work must not run inside the press
             if (x11First) { shell.OnX11PanicPress(); shell.OnPortalPanicActivated(); }
             else { shell.OnPortalPanicActivated(); shell.OnX11PanicPress(); }
             Dispatcher.UIThread.RunJobs();
@@ -41,8 +43,8 @@ public sealed class PanicRouteTests
         }
         finally
         {
-            shell.LeashHoldReleased();                // a never-shown window raises no Closed, so stop its clock here
-            shell.Close();
+            shell?.LeashHoldReleased();               // a never-shown window raises no Closed, so stop its clock here
+            shell?.Close();
             Dispatcher.UIThread.RunJobs();
             PanicWatchdog.Teardown = oldTeardown;
             ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();

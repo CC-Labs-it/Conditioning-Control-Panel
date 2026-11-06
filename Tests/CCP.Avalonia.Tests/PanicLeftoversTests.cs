@@ -24,7 +24,7 @@ public sealed class PanicLeftoversTests
     [Fact]
     public async Task WatchdogLeavesAThrownHandlerAlone()
     {
-        // As WPF. The fallback arms the panic aftermath, which a press that was only a game's pause must not.
+        // WPF's watchdog only observes a fault, and the fallback is for a UI thread that never answered.
         var old = PanicWatchdog.Teardown;
         var fired = 0;
         PanicWatchdog.Teardown = () => Interlocked.Increment(ref fired);
