@@ -155,7 +155,9 @@ internal sealed class EmergencyExitWindow : Window
             var root = CorePaths.EffectiveAssets;
             var folder = Path.Combine(root, "images");
             if (!Directory.Exists(folder)) return Array.Empty<string>();
-            return Directory.EnumerateFiles(folder, "*.gif", SearchOption.AllDirectories)
+            // WPF matches *.gif case-insensitively (Windows); Linux needs it spelled out for "PHOTO.GIF".
+            return Directory.EnumerateFiles(folder, "*.gif", new EnumerationOptions
+                    { RecurseSubdirectories = true, MatchCasing = MatchCasing.CaseInsensitive, IgnoreInaccessible = true })
                 .OrderBy(_ => Random.Shared.Next()).Take(12)
                 .Select(f => WebAssetServer.Shared.AssetUrl(Path.GetRelativePath(root, f).Replace('\\', '/'))).ToArray();
         }

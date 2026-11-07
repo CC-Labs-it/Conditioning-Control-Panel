@@ -45,7 +45,7 @@ public partial class PresetsTabView
             _fxWindow.PropertyChanged += OnFxWindowProperty;
         }
         CoreMods.ModChanged += OnFxModChanged;
-        Env.MotionGateChanged += RefreshCardSheen;
+        Env.MotionGateChanged += OnMotionGateChanged;
         RefreshCardSheen();
     }
 
@@ -60,10 +60,17 @@ public partial class PresetsTabView
         }
         _fxWindow = null;
         CoreMods.ModChanged -= OnFxModChanged;
-        Env.MotionGateChanged -= RefreshCardSheen;
+        Env.MotionGateChanged -= OnMotionGateChanged;
         CancelEntrances();
         DetachCardSheen();
         DetachRowSweep();
+    }
+
+    private void OnMotionGateChanged()
+    {
+        // A running arrival can otherwise keep overriding hover transforms after motion is off.
+        if (!Env.AllowTransitions) CancelEntrances();
+        RefreshCardSheen();
     }
 
     private void OnFxWindowChanged(object? sender, EventArgs e) => RefreshCardSheen();
@@ -135,7 +142,7 @@ public partial class PresetsTabView
         return group;
     }
 
-    private void PrepareChipFx(Control chip)
+    internal void PrepareChipFx(Control chip)
     {
         CardTransforms(chip);
         chip.PointerEntered += (_, _) => ScaleCard(chip, 1.02, 150);

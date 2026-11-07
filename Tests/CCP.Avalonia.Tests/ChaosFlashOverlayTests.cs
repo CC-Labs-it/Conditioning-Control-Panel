@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
 using ConditioningControlPanel.Avalonia.Platform;
+using Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -24,6 +26,64 @@ public sealed class ChaosFlashOverlayTests
         "R0lGODlhBAAEAIEAAP8AAAAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQAAwAAACwAAAAABAAEAAAICQABCBxIsCCAgAAh+QQBAwABACwAAAAABAAEAIEA/wAAAAAAAAAAAAAICQABCBxIsCCAgAAh+QQBAwABACwAAAAABAAEAIEAAP8AAAAAAAAAAAAICQABCBxIsCCAgAA7";
 
     private static readonly PixelRect[] TwoScreens = { new(0, 0, 1920, 1080), new(1920, 0, 1280, 1024) };
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PinnedRunRaisesBothFlashLayersAfterBubbles(bool ambient)
+    {
+        var gif = WriteGif(out var dir);
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            Setup();
+            var pin = CoreSettings.Current.ChaosPinOnTop;
+            var schedule = ChaosFlashOverlay.Schedule;
+            var raised = new List<Window>();
+            var spawning = typeof(ChaosRunHost).GetField("_spawning", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+            var wasSpawning = (bool)spawning.GetValue(null)!;
+            FlashOverlayWindow? flash = null;
+            try
+            {
+                CoreSettings.Current.ChaosPinOnTop = true;
+                ChaosFlashOverlay.SkipPlatformChecksForTests = true;
+                ChaosFlashOverlay.Schedule = (_, _) => { };
+                ChaosRunHost.RaiseChromeWindow = raised.Add;
+                ChaosRunHost.RaiseOverlayWindow = raised.Add;
+                var bubble = new BubbleOverlayWindow();
+                ChaosRunHost.RaiseBubbles = () => raised.Add(bubble);
+                spawning.SetValue(null, true);
+                await ChaosFlashOverlay.ShowPath(TwoScreens, gif, 4500, 0.30);
+                flash = new FlashOverlayWindow();
+                flash.Show();
+                FlashOverlay.Active.Add((flash, new PixelRect(0, 0, 1, 1)));
+                ChaosRunHost.KeepChromeTopmost();
+                var bubbleIndex = raised.IndexOf(bubble);
+                Assert.True(bubbleIndex >= 0);
+                Assert.NotEmpty(ChaosFlashOverlay.Shown);
+                if (ambient) Assert.True(raised.IndexOf(flash) > bubbleIndex);
+                else Assert.All(ChaosFlashOverlay.Shown, w => Assert.True(raised.IndexOf(w) > bubbleIndex));
+                if (raised.Contains(ChaosFlashOverlay.Shown[^1]))
+                    Assert.True(raised.IndexOf(flash) > raised.IndexOf(ChaosFlashOverlay.Shown[^1]));
+                raised.Clear();
+                CoreSettings.Current.ChaosPinOnTop = false;
+                ChaosRunHost.KeepChromeTopmost();
+                Assert.Empty(raised);
+            }
+            finally
+            {
+                if (flash != null) { FlashOverlay.Active.RemoveAll(e => e.Window == flash); flash.Close(); }
+                ChaosFlashOverlay.CloseActive();
+                ChaosFlashOverlay.SkipPlatformChecksForTests = false;
+                ChaosFlashOverlay.Schedule = schedule;
+                spawning.SetValue(null, wasSpawning);
+                ChaosRunHost.RaiseChromeWindow = w => X11Overlay.RaiseManaged(w);
+                ChaosRunHost.RaiseOverlayWindow = w => X11Overlay.Raise(w);
+                ChaosRunHost.RaiseBubbles = () => BubbleOverlay.RaiseAll(ChaosRunHost.RaiseOverlayWindow);
+                CoreSettings.Current.ChaosPinOnTop = pin;
+                Directory.Delete(dir, true);
+            }
+        });
+    }
 
     [Fact]
     public async Task WashFadesOnTheCurveLoopsTheGifAndPanicClosesIt()
@@ -286,8 +346,9 @@ public sealed class ChaosFlashOverlayTests
     }
 
     [Fact]
-    public void DecodeKeepsAtMostMaxFramesStridedAcrossTheAnimation()
+    public void DecodeKeepsAtMostMaxFramesStridedAcrossTheAnimation() => AvaloniaTestDispatcher.Run(() =>
     {
+        Setup(); // Bitmap creation needs Skia even when this is the first test in the process.
         var gif = WriteGif(out var dir);
         try
         {
@@ -297,7 +358,7 @@ public sealed class ChaosFlashOverlayTests
             foreach (var f in frames) f.Dispose();
         }
         finally { Directory.Delete(dir, true); }
-    }
+    });
 
     [Fact]
     public async Task APlatformWithoutClickThroughShowsNothing()
@@ -339,6 +400,7 @@ public sealed class ChaosFlashOverlayTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }

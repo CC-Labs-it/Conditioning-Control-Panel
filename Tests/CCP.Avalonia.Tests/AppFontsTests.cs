@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -66,8 +67,8 @@ public sealed class AppFontsTests
         // chain's FIRST link must be mapped or an installed face could win before the bundled one.
         var mappings = AppFonts.Options(systemEmoji: false).FontFamilyMappings!;
         // Other suites in the same testhost build the app without AppFonts.Options; only resolve the
-        // raw names through the live FontManager when it carries our options (Inter default).
-        var live = FontManager.Current.DefaultFontFamily.Name.Contains("Inter");
+        // raw names through the live FontManager when it carries our options (Selawik default off Windows).
+        var live = FontManager.Current.DefaultFontFamily.Name == new FontFamily(AppFonts.Default).Name;
         foreach (var name in new[] { "Cascadia Mono, Consolas, Courier New", "Cascadia Mono", "Consolas", "Courier New", "monospace" })
         {
             var first = new FontFamily(name).FamilyNames[0];
@@ -81,6 +82,99 @@ public sealed class AppFontsTests
             Assert.True(glyphs.TryGetHorizontalGlyphAdvance(wide, out var wideAdvance));
             Assert.True(narrowAdvance > 0);
             Assert.Equal(narrowAdvance, wideAdvance);
+        }
+        return Task.CompletedTask;
+    });
+
+    /// <summary>2026-11-06: off Windows every WPF display face draws its bundled look-alike, at the asked weight
+    /// (the marquee's "Impact, Arial Black, Segoe UI" drew a fallback face on the Linux beta).</summary>
+    [Fact]
+    public Task EveryWpfDisplayFamilyResolvesToBundledLookAlikeOffWindows() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApplication();
+        if (OperatingSystem.IsWindows()) return Task.CompletedTask;
+        var fonts = FontManager.Current;
+        if (fonts.DefaultFontFamily.Name != new FontFamily(AppFonts.Default).Name) return Task.CompletedTask; // foreign font setup
+        foreach (var (chain, weight, family, minWeight) in new[]
+        {
+            ("Impact, Arial Black, Segoe UI", FontWeight.Bold, "Anton", 400),
+            ("Segoe UI", FontWeight.Normal, "CCP Sans", 400),
+            ("Segoe UI", FontWeight.SemiBold, "CCP Sans", 600),
+            ("Segoe UI", FontWeight.Bold, "CCP Sans", 700),
+            ("Comic Sans MS, Segoe UI", FontWeight.Normal, "Comic Neue", 400),
+            ("Comic Sans MS", FontWeight.Bold, "Comic Neue", 700),
+            // The bundled Inter package tops out at Bold (as before this mapping); Selawik's own max is Bold too.
+            ("Segoe UI Black, Segoe UI", FontWeight.Black, "Inter", 700),
+            ("$Default", FontWeight.Normal, "CCP Sans", 400),
+        })
+        {
+            Assert.True(fonts.TryGetGlyphTypeface(new Typeface(new FontFamily(chain), FontStyle.Normal, weight), out var face), chain);
+            Assert.True(face!.FamilyName.StartsWith(family, StringComparison.Ordinal), $"{chain} {weight} -> {face.FamilyName}");
+            Assert.True((int)face.Weight >= minWeight, $"{chain} {weight} -> {face.FamilyName} weight {face.Weight}");
+        }
+        // Fredoka (both OSes): each weight draws its own instance, as WPF's DirectWrite does, not the
+        // variable font's Light default (every "Fredoka, Segoe UI" label drew thin; 2026-11-06).
+        foreach (var (weight, expected) in new[] { (FontWeight.Normal, 400), (FontWeight.SemiBold, 600), (FontWeight.Bold, 700) })
+        {
+            Assert.True(fonts.TryGetGlyphTypeface(new Typeface(new FontFamily("Fredoka, Segoe UI"), FontStyle.Normal, weight), out var fredoka));
+            Assert.StartsWith("Fredoka", fredoka!.FamilyName);
+            Assert.Equal(expected, (int)fredoka.Weight);
+        }
+        // SemiBold is its own face (WPF Segoe UI Semibold), not Bold.
+        Assert.True(fonts.TryGetGlyphTypeface(new Typeface(new FontFamily("Segoe UI"), FontStyle.Normal, FontWeight.SemiBold), out var semi));
+        Assert.Equal(600, (int)semi!.Weight);
+        // CCP Sans keeps Segoe UI's line height (2210+514 / 2048 em), which WPF lays text out on.
+        Assert.InRange(semi.Metrics.LineSpacing / (double)semi.Metrics.DesignEmHeight, 1.32, 1.34);
+        // Selawik is Latin-only: Cyrillic (ru UI) and Greek go to the bundled Inter, not a fontconfig pick.
+        foreach (var cp in new[] { 0x0416, 0x03A9 })
+        {
+            Assert.True(fonts.TryMatchCharacter(cp, FontStyle.Normal, FontWeight.Normal, FontStretch.Normal,
+                new FontFamily(AppFonts.UiSans), null, out var match), $"U+{cp:X4}");
+            Assert.Contains("Inter", match.FontFamily.Name);
+        }
+        return Task.CompletedTask;
+    });
+
+    /// <summary>The default face must reach controls, not only FontManager: a theme resource
+    /// (Fluent ContentControlThemeFontFamily) naming Inter would keep every unstyled label in Inter.</summary>
+    [Fact]
+    public Task UnstyledTextDrawsTheDefaultFaceOffWindows() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApplication();
+        if (OperatingSystem.IsWindows()) return Task.CompletedTask;
+        if (FontManager.Current.DefaultFontFamily.Name != new FontFamily(AppFonts.Default).Name) return Task.CompletedTask;
+        var text = new TextBlock { Text = "Settings" };
+        var button = new Button { Content = "Start" };
+        var host = new Window { Content = new StackPanel { Children = { text, button } } };
+        host.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            foreach (var family in new[] { text.FontFamily, button.FontFamily })
+            {
+                Assert.True(FontManager.Current.TryGetGlyphTypeface(new Typeface(family), out var face), family.ToString());
+                Assert.True(face!.FamilyName.StartsWith("CCP Sans", StringComparison.Ordinal), $"{family} -> {face.FamilyName}");
+            }
+        }
+        finally { host.Close(); }
+        return Task.CompletedTask;
+    });
+
+    // Deliberately bypass Program.BuildAvaloniaApp, as the headless hosts and designer do.
+    [Fact]
+    public Task HeadlessSystemFallbackBuildsTextGeometry() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+
+        foreach (var family in new[] { "$Default", "Segoe UI Black, Segoe UI", "fonts:Inter#Inter, $Default", "CCP Missing Font, $Default" })
+        {
+            var typeface = new Typeface(new FontFamily(family), FontStyle.Normal, FontWeight.Black);
+            var text = new FormattedText("PREMIUM", CultureInfo.InvariantCulture,
+                FlowDirection.LeftToRight, typeface, 18, Brushes.Black);
+            Assert.True(text.Width > 0, family);
+            Assert.True(text.BuildGeometry(default)!.Bounds.Width > 0, family);
         }
         return Task.CompletedTask;
     });

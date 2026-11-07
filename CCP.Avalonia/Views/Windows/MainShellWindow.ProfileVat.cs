@@ -18,9 +18,7 @@
 // silent no-op forever.
 //
 // The shared DescentService now supplies read-only server data, sign-in/logout and gated polling.
-// ponytail: ApplyDescentToVat (the only ArmVat caller) remains follow-up wire-shell-profile-vat-b;
-// the faucet host is row shell-profile-faucet. Until the jar is armed it stays dark, and the 60 s
-// poll stays off with it (P07): one read on card open still feeds the curve-epoch follow.
+// The faucet host applies the shared hold before revealing the jar.
 
 using System;
 using System.Globalization;
@@ -58,12 +56,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (ProfilePage is not { } page) return;
             _vatDescent = App.Descent;
             if (_vatDescent != null) _vatDescent.BlockChanged += OnDescentBlockChanged;
+            if (VatGlass is { } glass) glass.FillPercentChanged += OnVatFillPercentChanged;
             page.PropertyChanged += (_, e) =>
             {
                 if (e.Property == IsVisibleProperty) OnProfileVatVisibilityChanged(page.IsEffectivelyVisible);
             };
             Activated += (_, _) => EvaluateVatPoll();
-            Deactivated += (_, _) => EvaluateVatPoll();
+            Deactivated += (_, _) => { _faucetKeyHeld = false; CancelFaucetCharge(); EvaluateVatPoll(); };
             PropertyChanged += (_, e) =>
             {
                 if (e.Property == WindowStateProperty) EvaluateVatPoll();
@@ -71,6 +70,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Closed += (_, _) =>
             {
                 _vatPollTimer?.Stop();
+                CancelFaucetCharge();
+                if (VatGlass is { } glass) glass.FillPercentChanged -= OnVatFillPercentChanged;
                 if (_vatDescent != null) _vatDescent.BlockChanged -= OnDescentBlockChanged;
             };
             if (page.IsEffectivelyVisible) OnProfileVatVisibilityChanged(true);
@@ -79,16 +80,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void OnProfileVatVisibilityChanged(bool onScreen)
         {
             _vatOnScreen = onScreen;
-            if (onScreen) _vatDescent?.RequestRefresh("trainer card open");
-            // ponytail: keep the jar dark until the faucet host can honor the persisted hold.
-            // A server reading alone must not auto-pour or strand held XP in a jar without a tap.
+            if (onScreen)
+            {
+                if (_vatArmed && _faucetHold.HeldXp > 0) VatGlass?.SnapTo(_faucetHold.DisplayFill);
+                ApplyFaucetReading();
+                _vatDescent?.RequestRefresh("trainer card open");
+            }
+            else { _faucetKeyHeld = false; CancelFaucetCharge(); }
             EvaluateVatPoll();
         }
 
         private bool VatPollWanted => _vatArmed && _vatOnScreen && ProfilePage?.IsEffectivelyVisible == true
             && _vatDescent?.HasSeenBlock == true && VatGlassCanvas.WindowIsPresenting(this);
 
-        private void OnDescentBlockChanged(object? sender, EventArgs e) => EvaluateVatPoll();
+        private void OnDescentBlockChanged(object? sender, EventArgs e)
+        {
+            ApplyFaucetReading();
+            EvaluateVatPoll();
+        }
 
         private void EvaluateVatPoll()
         {
@@ -117,8 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The glass, or null before the Profile tab has been realized.</summary>
         private VatGlassCanvas? VatGlass => ProfilePage?.FindControl<VatGlassCanvas>("ProfileVatGlass");
 
-        /// <summary>Repaint the readout when the drawn percent changes. Wired by WireProfileVat on
-        /// WPF; fill application and its subscription remain in the faucet follow-up.</summary>
+        /// <summary>Repaint the readout when the drawn percent changes (WPF ProfileVat.cs:175-205).</summary>
         private void OnVatFillPercentChanged(object? sender, int pct)
         {
             try { UpdateVatReadout(); }
@@ -212,7 +220,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             UpdateVatReadout();
             EvaluateVatPoll();   // the jar is drawn now: the recurring read has a reader
 
-            // ponytail: ArmFaucet(glass, jarW, jarH) belongs here - see the header.
+            ArmFaucet(glass, jarW, jarH);
             Log.Information("[Descent] vat armed on the Trainer Card");
         }
 
@@ -246,7 +254,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (readout != null) readout.IsVisible = false;
             EvaluateVatPoll();
 
-            // ponytail: DisarmFaucet() belongs here - see the header.
+            CancelFaucetCharge();
+            foreach (var name in new[] { "ProfileVatFaucet", "ProfileVatChip", "ProfileVatFaucetBadge" })
+                if (FaucetControl<Control>(name) is { } control) control.IsVisible = false;
+            if (glass != null) glass.ExternalSpoutXFraction = null;
         }
     }
 }

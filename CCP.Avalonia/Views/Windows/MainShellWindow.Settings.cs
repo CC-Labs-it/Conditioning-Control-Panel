@@ -128,6 +128,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             CoreSettings.Save();
             ContentPackStore.Current?.Rescan();
             // Flash reads the folder on every burst; the dealt video queues need an explicit reset.
+            Overlays.FlashOverlay.ReloadAssets();
             Overlays.MandatoryVideoOverlay.Instance.Scheduler.ReloadAssets();
             BubbleCountHost.Instance.Scheduler.ReloadAssets();
             if (owner is MainShellWindow shell)
@@ -181,8 +182,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (overlay != null) overlay.IsVisible = open;
             // WPF hides the browser first because WebView2 ignores WPF z-order. This head has no
             // WebView2 yet, but it is the same control and the panel behaves identically.
+            if (!open)
+            {
+                RestoreBrowser();
+                return;
+            }
             var browser = Named<Tabs.SettingsTabView>("SettingsTab")?.BrowserContainer;
-            if (browser != null) browser.IsVisible = !open;
+            if (browser != null) browser.IsVisible = false;
         }
 
         private void StartHelpTutorial(string tour)

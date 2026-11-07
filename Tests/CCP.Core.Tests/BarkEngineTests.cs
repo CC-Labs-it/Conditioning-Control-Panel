@@ -34,6 +34,21 @@ public sealed class BarkEngineTests : IDisposable
         return e;
     }
 
+    [Theory]
+    [InlineData("FaceLost", true)]
+    [InlineData("FaceFound", true)]
+    [InlineData("Blink", true)]
+    [InlineData("TrackingStateChanged", true)]
+    [InlineData("IdleStateChanged", true)]
+    [InlineData("ActivityChanged", true)]
+    [InlineData("StillOnActivity", true)]
+    [InlineData("TongueOut", false)]
+    public void SensingClassificationReachesTheMouth(string trigger, bool unprompted)
+    {
+        Assert.True(Engine(Rule(trigger, "line")).Raise(trigger, guaranteed: true));
+        Assert.Equal(unprompted, Assert.Single(_said).Unprompted);
+    }
+
     [Fact]
     public void IdleRotatesAcrossRulesAndPersistsWithoutImmediateCycleRepeat()
     {
@@ -196,6 +211,27 @@ public sealed class BarkEngineTests : IDisposable
         Assert.False(e.Raise("AttentionCheckFail"));
         clock.Advance(TimeSpan.FromSeconds(0.2));
         Assert.True(e.Raise("AttentionCheckFail"));
+    }
+
+    [Fact]   // WPF AudioService.MarkWhisperAudio (:948) + EvaluateGate (:1668): a whisper holds the floor for its length + 0.25 s
+    public void AnAudibleWhisperHoldsOrdinaryBarksButNotGuaranteedOrAttributionLines()
+    {
+        var clock = new PopQuizSchedulerTests.FakeClock();
+        var e = Engine(Rule("AttentionCheckFail", "eyes"), Rule("PossessionEffect", "mine"));
+        e.Clock = clock;
+        e.MarkWhisperAudio(double.NaN);
+        e.MarkWhisperAudio(-1);
+        Assert.False(e.IsWhisperAudioPlaying);
+        e.MarkWhisperAudio(3);
+        e.MarkWhisperAudio(1);   // a shorter clip never cuts the longer window short
+        Assert.False(e.Raise("AttentionCheckFail"));
+        Assert.True(e.Raise("PossessionEffect"));   // text-only attribution, never a second voice
+        clock.Advance(TimeSpan.FromSeconds(3.2));
+        Assert.True(e.IsWhisperAudioPlaying);
+        Assert.False(e.Raise("AttentionCheckFail"));
+        Assert.True(e.Raise("AttentionCheckFail", guaranteed: true));
+        clock.Advance(TimeSpan.FromSeconds(0.1));
+        Assert.False(e.IsWhisperAudioPlaying);
     }
 
     [Fact]

@@ -115,7 +115,7 @@
                             <fx:IconGlyph Kind="Eye" Size="22" VerticalAlignment="Center" Margin="0,0,10,0"/>
                             <StackPanel VerticalAlignment="Center">
                                 <TextBlock Theme="{StaticResource Type.CardTitle}" Text="Awareness Engine"/>
-                                <TextBlock Text="She's watching your screen and your typing. React in real time."
+                                <TextBlock Text="{loc:Str awareness_hero_subtitle}"
                                            FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,1,0,0"/>
                             </StackPanel>
                         </StackPanel>
@@ -210,7 +210,7 @@
                             <Grid Margin="4,0,4,10">
                                 <TextBlock Text="PRESETS" Foreground="{StaticResource TabHueBrush}" FontSize="10" FontWeight="Bold"
                                            VerticalAlignment="Center"/>
-                                <TextBlock Text="One-click packs — click any card to preview or install"
+                                <TextBlock Text="{loc:Str awareness_presets_hint}"
                                            HorizontalAlignment="Right"
                                            Foreground="{DynamicResource TextDimBrush}" FontSize="10" FontStyle="Italic"/>
                             </Grid>
@@ -632,13 +632,15 @@
                          Border clips its Background to CornerRadius but does NOT clip child content,
                          so a child Image would square off the rounded corners (round-2 lesson).
                          Pinned to the top with a fixed height - this is a very tall page and a
-                         stretched plate would be a 2000px column of upscaled art. The bitmap is not
-                         on this head yet, so the plate keeps its frame, its scrim and its geometry
-                         and stands the feature glyph in for the art. -->
+                         stretched plate would be a 2000px column of upscaled art. WPF
+                         AwarenessTabView.xaml:625-648: the feature art is the plate's background. -->
                     <Border hover:HoverPop.IsEnabled="True" Grid.Column="1" Margin="10,0,0,0" CornerRadius="14"
                             BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
-                            Background="{StaticResource TabHueWashBrush}"
                             VerticalAlignment="Top" Height="520">
+                        <Border.Background>
+                            <ImageBrush Source="avares://CCP.Avalonia/Resources/features/awareness.png"
+                                        Stretch="UniformToFill"/>
+                        </Border.Background>
                         <!-- Scrim so the plate sits under the page instead of fighting it. -->
                         <Border CornerRadius="12">
                             <Border.Background>
@@ -647,8 +649,6 @@
                                     <GradientStop Color="#00000000" Offset="0.45"/>
                                 </LinearGradientBrush>
                             </Border.Background>
-                            <fx:IconGlyph Kind="Eye" Size="72" Opacity="0.45"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                     </Border>
                 </Grid>

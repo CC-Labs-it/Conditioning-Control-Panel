@@ -10,6 +10,8 @@ using Avalonia.Headless;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
+using Avalonia.VisualTree;
+using ConditioningControlPanel;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
@@ -28,6 +30,61 @@ namespace CCP.Avalonia.Tests;
 /// process (never a server), and the service's timer seam.</summary>
 public sealed partial class FriendsDrawerTests
 {
+    /// <summary>WPF FriendsSfx on the card: an action button clicks (FriendsDrawer.cs:714), a sent poke pops and a
+    /// refused one is denied (ShowResult, :1144), through the landing's Sfx (same files, levels and tags).</summary>
+    [Theory]
+    [InlineData("click")]
+    [InlineData("sent")]
+    [InlineData("denied")]
+    public Task TheCardsActionsAndSendResultsSoundLikeWpf(string cue) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, _) = Service();
+        var d = new FriendsRailChip(svc).Drawer;
+        await svc.RefreshAsync();
+        d.Toggle("u_on");
+        var cues = new List<string>();
+        var saved = new CueState();
+        saved.Quiet();
+        ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => cues.Add(tag);
+        ConditioningControlPanel.CoreSettings.Current.MasterVolume = 50;
+        try
+        {
+            FriendsLanding.SfxGate = new();
+            if (cue == "click") Click(d, "friends-action:poke");
+            else
+            {
+                Assert.Equal(SendResult.Sent, await d.PokeAsync("u_on", PokeSet.Shipped[0]));
+                if (cue == "denied")
+                {
+                    cues.Clear();
+                    FriendsLanding.SfxGate = new();
+                    Assert.Equal(SendResult.TooFast, await d.PokeAsync("u_on", PokeSet.Shipped[1]));
+                }
+            }
+            Assert.Equal(new[] { "friends-" + cue }, cues);
+        }
+        finally { saved.Restore(); }
+    });
+
+    /// <summary>WPF FriendsDrawer.Platforms + :558: an online row wears one mark per platform, desktop / phone / web
+    /// order whatever the wire said, each with its tooltip; an offline row wears none.</summary>
+    [Fact]
+    public Task AnOnlineRowWearsItsPlatformMarksWithTooltips() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, wire) = Service();
+        wire.StateBody = State.Replace("\"squelched\":false}", "\"squelched\":false,\"platforms\":[\"web\",\"phone\",\"desktop\"]}");
+        var d = new FriendsDrawer(svc);
+        await svc.RefreshAsync();
+        d.Render();
+        var marks = Tagged<StackPanel>(Tagged<Border>(d, "friends-row:u_on")!, "friends-platforms")!;
+        Assert.Equal(new[] { "friends-platform:desktop", "friends-platform:phone", "friends-platform:web" }, marks.Children.Select(c => c.Tag as string));
+        Assert.Equal(new[] { IconKind.Desktop, IconKind.Phone, IconKind.Globe },
+            marks.Children.Select(c => c.GetLogicalDescendants().OfType<IconGlyph>().Single().Kind));
+        Assert.Equal(new object?[] { Loc.Get("friends_platform_desktop"), Loc.Get("friends_platform_phone"), Loc.Get("friends_platform_web") },
+            marks.Children.Select(c => ToolTip.GetTip(c)));
+        Assert.Null(Tagged<StackPanel>(Tagged<Border>(d, "friends-row:u_off")!, "friends-platforms"));
+    });
+
     private const string State = """
         {"ok":true,"code":"CCP-ABCDE","me":{"activity":"panel","lock_day":null,"shared":false},
          "friends":[{"id":"u_on","name":"Mia","tier":0,"online":true,"activity":"session","lock_day":3,"last_seen":null,"squelched":false},
@@ -40,16 +97,23 @@ public sealed partial class FriendsDrawerTests
         public readonly List<string> Ops = new();
         /// <summary>The bodies of every "send" (poke / invite / watch), in order.</summary>
         public readonly List<string> Sends = new();
+        public readonly List<string> Reports = new();
         /// <summary>When set, a "send" waits for it: the answer is still out while the test folds the drawer.</summary>
         public TaskCompletionSource? HoldSends;
         public string StateBody = State;
         public bool ActSucceeds = true;
+        public string? LinkBody, ClaimBody;
+        public readonly List<string> Polls = new();
+        public TaskCompletionSource? HoldLinks;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             var op = r.RequestUri!.AbsolutePath.Split('/').Last();
             lock (Ops) Ops.Add(op);
+            if (op == "report") Reports.Add(await r.Content!.ReadAsStringAsync(ct));
             if (op == "send") { Sends.Add(await r.Content!.ReadAsStringAsync(ct)); if (HoldSends != null) await HoldSends.Task; }
-            var body = op == "state" ? StateBody : op == "poll" ? """{"ok":true,"online":[],"inbox":[],"receipts":[]}"""
+            if (op == "poll") Polls.Add(await r.Content!.ReadAsStringAsync(ct));
+            if (op is "link" or "claim" && HoldLinks != null) await HoldLinks.Task;
+            var body = op == "link" ? LinkBody ?? "{}" : op == "claim" ? ClaimBody ?? """{"ok":true,"status":"friends"}""" : op == "state" ? StateBody : op == "poll" ? """{"ok":true,"online":[],"inbox":[],"receipts":[]}"""
                 : op == "send" ? """{"ok":true,"status":"sent"}""" : ActSucceeds ? """{"ok":true}""" : """{"ok":false,"error":"try_later"}""";
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) };
         }
@@ -117,11 +181,11 @@ public sealed partial class FriendsDrawerTests
         Assert.Contains(wire.Sends, s => s.Contains("\"kind\":\"flavour\"") && s.Contains("\"id\":\"trance\""));
         Assert.Contains(wire.Sends, s => s.Contains("\"kind\":\"ht\"") && s.Contains("\"id\":\"" + FriendsDrawerRules.NormaliseHtId("ht-1234!") + "\""));
 
-        // The Goon room and the chess board are not hosted on this head: those tiles are shut and say why.
+        // Goon waits for its host; chess challenges use the board host.
         Click(d, "friends-action:invite");
         Assert.Equal("invite", d.OpenPicker);
-        foreach (var shut in new[] { InviteDestination.Goon, InviteDestination.Chess })
-            Assert.False(Tagged<Button>(d, "friends-invite:" + shut)!.IsEnabled);
+        Assert.False(Tagged<Button>(d, "friends-invite:" + InviteDestination.Goon)!.IsEnabled);
+        Assert.True(Tagged<Button>(d, "friends-invite:" + InviteDestination.Chess)!.IsEnabled);
         Click(d, "friends-invite:" + InviteDestination.BackRoom);
         Assert.Equal(SendResult.Sent, await d.InviteAsync("u_on", InviteDestination.Ramp, null));
         Assert.Contains(wire.Sends, s => s.Contains("\"kind\":\"invite\"") && s.Contains("\"destination\":\"backroom\""));
@@ -132,6 +196,27 @@ public sealed partial class FriendsDrawerTests
         d.OpenPickerFor("u_on", "poke");
         d.Toggle("u_on");
         Assert.Null(d.OpenPicker);
+    });
+
+    [Fact]
+    public Task ChessPickerWaitsForTheChallengeBeforeSendingItsInvite() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var old = FriendsInviteCodes.ChallengeFriend;
+        var ready = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (svc, wire) = Service();
+        try
+        {
+            FriendsInviteCodes.ChallengeFriend = (id, timeout) => { Assert.Equal("u_on", id); Assert.Equal(TimeSpan.FromSeconds(45), timeout); return ready.Task; };
+            var d = new FriendsRailChip(svc).Drawer;
+            await svc.RefreshAsync(); d.Toggle("u_on");
+            Click(d, "friends-action:invite"); Click(d, "friends-invite:chess");
+            Assert.Empty(wire.Sends);
+            ready.SetResult("c_0123456789abcdef");
+            await Until(() => wire.Sends.Count > 0);
+            Assert.Contains("\"destination\":\"chess\"", wire.Sends.Single());
+            Assert.Contains("c_0123456789abcdef", wire.Sends.Single());
+        }
+        finally { FriendsInviteCodes.ChallengeFriend = old; svc.Dispose(); }
     });
 
     /// <summary>WPF ShowResult: a send answered after the drawer folded says so outside, over the rail chip's
@@ -196,6 +281,10 @@ public sealed partial class FriendsDrawerTests
 
     internal static (FriendsService Svc, Wire Wire) Service(string? account = "u_me")
     {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var wire = new Wire();
         var shared = false;
         var api = new FriendsApi(new HttpClient(wire), () => account == null ? null : (account, "tok"), "http://127.0.0.1:9");
@@ -321,6 +410,8 @@ public sealed partial class FriendsDrawerTests
         Assert.Contains("remove", wire.Ops);
         Assert.Equal(ActResult.Done, await d.ReportAsync("u_on", "spam"));
         Assert.Contains("report", wire.Ops);
+        Assert.Contains("u_on", Assert.Single(wire.Reports));
+        Assert.DoesNotContain("in:u_on", wire.Reports[0]);
         Assert.Equal(Loc.Get("friends_report_done"), Tagged<TextBlock>(d, "friends-result")!.Text);
     });
 
@@ -671,6 +762,10 @@ public sealed partial class FriendsDrawerTests
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        ConditioningControlPanel.CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        ConditioningControlPanel.CoreSettings.Current.GentleVisuals = false;
+        UiMotionPreference.OsProbe = () => true;
+        UiMotionPreference.CacheStamp = long.MinValue;
         var (svc, _) = Service();
         var feed = new FriendsFeed(() => "u_me");
         var chip = new FriendsRailChip(svc);
@@ -687,12 +782,14 @@ public sealed partial class FriendsDrawerTests
             Assert.True(feed.Add(Ev("b", "u_x", "Kit", 2)));
             Assert.True(feed.Add(Ev("c", "u_x", "Kit", 3)));
             Assert.Equal(3, chip.UnreadBadge);
+            Assert.IsType<global::Avalonia.Media.ScaleTransform>(Tagged<Border>(chip, "friends-chip-unread")!.RenderTransform);
 
             chip.Toggle();
             Assert.True(chip.IsOpen);
             var d = chip.Drawer;
             Assert.True(d.FeedSection.IsVisible);
             Assert.Equal(new[] { "c", "b", "a" }, d.FeedLineKeys);
+            Assert.Null(Tagged<Border>(d, "friends-feed-line:c")!.RenderTransform);
             Assert.Equal(0, feed.Unread);
             Assert.Equal(0, chip.UnreadBadge);
             Assert.Equal(3, d.GetLogicalDescendants().OfType<Control>().Count(c => c.Tag as string == "friends-feed-new"));
@@ -705,6 +802,16 @@ public sealed partial class FriendsDrawerTests
             Assert.True(feed.Add(Ev("d", "u_x", "Kit", 4)));
             Assert.Equal("d", d.FeedLineKeys[0]);
             Assert.Equal(0, feed.Unread);
+            Assert.IsType<global::Avalonia.Media.TranslateTransform>(Tagged<Border>(d, "friends-feed-line:d")!.RenderTransform);
+            var dot = Assert.IsType<Border>(Tagged<Control>(d, "friends-feed-new"));
+            Assert.Null(dot.Effect); // P82: an object initializer must not sneak an Effect into a row.
+            Assert.Equal((6d, 6d, new CornerRadius(3)), (dot.Width, dot.Height, dot.CornerRadius));
+            Assert.Same(FriendsDrawer.Pink, dot.Background);
+            Assert.Equal(1, dot.BoxShadow.Count);
+            var glow = dot.BoxShadow[0];
+            Assert.Equal(6, glow.Blur);
+            Assert.Equal(global::Avalonia.Media.Color.FromArgb(0xE6, 0xFF, 0x5F, 0xB4), glow.Color);
+            Assert.Equal((0d, 0d, 0d), (glow.OffsetX, glow.OffsetY, glow.Spread));
 
             // WPF FriendsRailChip.cs:388: a dismissing press cannot reopen for 250 ms.
             chip.Toggle();
@@ -728,8 +835,188 @@ public sealed partial class FriendsDrawerTests
             Click(d, "friends-feed-more");
             d.OpenFromFeed("u_on");
             Assert.NotNull(Tagged<Button>(d, "friends-action:poke"));
+            ConditioningControlPanel.CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            Assert.True(feed.Add(Ev("e", "u_x", "Kit", 5)));
+            Assert.Null(Tagged<Border>(d, "friends-feed-line:e")!.RenderTransform);
         }
         finally { chip.Toggle(); w.Close(); }
+    });
+
+    // Uses the normal feed subscriptions without Window.Show, which needs system fonts on Linux.
+    [Fact]
+    public Task LiveFeedVisualsFollowArrivalReadAndMotion() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        ConditioningControlPanel.CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        ConditioningControlPanel.CoreSettings.Current.GentleVisuals = false;
+        UiMotionPreference.OsProbe = () => true;
+        UiMotionPreference.CacheStamp = long.MinValue;
+        var feed = new FriendsFeed(() => "visual-test");
+        FriendsHead.Feed = feed;
+        var (svc, _) = Service();
+        var chip = new FriendsRailChip(svc);
+        var d = chip.Drawer;
+        FriendEvent Ev(string key) => new(FriendEventKind.PokeReceived, "u_on", "Mia", DateTime.UtcNow, key, Detail: PokeSet.Shipped[0]);
+        try
+        {
+            Assert.Equal(1, Assert.IsType<global::Avalonia.Media.ScaleTransform>(Tagged<Border>(chip, "friends-chip-unread")!.RenderTransform).ScaleX); // #3657: resting ScaleTransform from construction
+            feed.Add(Ev("first"));
+            Assert.IsType<global::Avalonia.Media.ScaleTransform>(Tagged<Border>(chip, "friends-chip-unread")!.RenderTransform);
+            d.OnOpened();
+            Assert.Null(Tagged<Border>(d, "friends-feed-line:first")!.RenderTransform);
+            Assert.True(feed.Add(Ev("second")));
+            Assert.IsType<global::Avalonia.Media.TranslateTransform>(Tagged<Border>(d, "friends-feed-line:second")!.RenderTransform);
+            var dot = Assert.IsType<Border>(Tagged<Control>(d, "friends-feed-new"));
+            Assert.Null(dot.Effect); // P82: an object initializer must not sneak an Effect into a row.
+            Assert.Equal((6d, 6d, new CornerRadius(3)), (dot.Width, dot.Height, dot.CornerRadius));
+            Assert.Same(FriendsDrawer.Pink, dot.Background);
+            Assert.Equal(1, dot.BoxShadow.Count);
+            var glow = dot.BoxShadow[0];
+            Assert.Equal(6, glow.Blur);
+            Assert.Equal(global::Avalonia.Media.Color.FromArgb(0xE6, 0xFF, 0x5F, 0xB4), glow.Color);
+            Assert.Equal((0d, 0d, 0d), (glow.OffsetX, glow.OffsetY, glow.Spread));
+            Assert.Equal(0, feed.Unread);
+            ConditioningControlPanel.CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            feed.Add(Ev("still"));
+            Assert.Null(Tagged<Border>(d, "friends-feed-line:still")!.RenderTransform);
+        }
+        finally { d.OnClosed(); }
+        return Task.CompletedTask;
+    });
+
+    // WPF Feed.cs:334-344 and RailChip.cs:363-374: observe playback, not just its recipe.
+    [Fact]
+    public Task FeedAnimationsPlayToRestAndCancelOnDetach() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        ConditioningControlPanel.CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        ConditioningControlPanel.CoreSettings.Current.GentleVisuals = false;
+        UiMotionPreference.OsProbe = () => true;
+        UiMotionPreference.CacheStamp = long.MinValue;
+        var clock = new FeedStepClock();
+        var rowClock = new FeedStepClock();
+        void Step(double ms) { clock.Step(ms); rowClock.Step(ms); }
+        var feed = new FriendsFeed(() => "playback-test");
+        FriendsHead.Feed = feed;
+        var (svc, _) = Service();
+        await svc.RefreshAsync();
+        var chip = new FriendsRailChip(svc);
+        var drawer = new FriendsDrawer(svc, asPage: true);
+        drawer.SetValue(FeedStepClock.Property, rowClock.Instance);
+        var host = new Canvas();
+        var window = new Window { Width = 800, Height = 600, Content = host };
+        window.SetValue(FeedStepClock.Property, clock.Instance);
+        window.Show();
+        // Attach before starting motion; the stepped clock owns animation time.
+        host.Children.Add(chip);
+        host.Children.Add(drawer);
+        var badge = Tagged<Border>(chip, "friends-chip-unread")!;
+        var now = DateTime.UtcNow;
+        FriendEvent Ev(string key, int seconds) => new(FriendEventKind.PokeReceived, "u_on", "Mia", now.AddSeconds(seconds), key, Detail: PokeSet.Shipped[0]);
+        double Scale() => badge.RenderTransform!.Value.M11;
+        try
+        {
+            feed.Add(Ev("first", 0));
+            Step(0); Step(60);
+            Assert.Equal(1.225, Scale(), 4);
+            Assert.Equal(Scale(), badge.RenderTransform!.Value.M22, 6);
+            Step(120);
+            Assert.Equal(1.45, Scale(), 4);
+            Step(240);
+            Assert.True(Scale() < 1); // elastic undershoot
+            Step(420); Step(421);
+            Assert.Equal(1, Scale(), 6);
+
+            drawer.OnOpened();
+            // Materialize the scroller without text measurement (Segoe UI may be absent on Linux).
+            for (var pass = 0; pass < 3; pass++)
+                foreach (var control in drawer.GetLogicalDescendants().OfType<global::Avalonia.Controls.Primitives.TemplatedControl>().ToArray())
+                    control.ApplyTemplate();
+            Assert.True(drawer.FeedSection.IsAttachedToVisualTree());
+            feed.Add(Ev("second", 1));
+            var row = Tagged<Border>(drawer, "friends-feed-line:second")!;
+            Step(500); Step(570);
+            Assert.InRange(row.RenderTransform!.Value.M31, -2.518, -2.516); // BackEase, t=0.25
+            Assert.Equal(0.25, row.Opacity, 4); // fade stays linear
+            Step(640);
+            Assert.Equal(0.9, row.RenderTransform!.Value.M31, 4); // slight overshoot at t=0.5
+            Assert.Equal(0.5, row.Opacity, 4);
+            Step(780); Step(781);
+            Assert.Equal(0, row.RenderTransform!.Value.M31, 6);
+            Assert.Equal(1, row.Opacity, 6);
+            Assert.False(rowClock.Watching);
+
+            feed.Add(Ev("detach", 2));
+            row = Tagged<Border>(drawer, "friends-feed-line:detach")!;
+            Step(900); Step(970);
+            Assert.InRange(row.Opacity, 0.24, 0.26);
+            Assert.True(rowClock.Watching);
+            host.Children.Remove(drawer);
+            Step(980);
+            Assert.False(rowClock.Watching); // stopped child clocks release their parent on the next pulse
+            Assert.Equal(0, row.RenderTransform!.Value.M31, 6);
+            Assert.Equal(1, row.Opacity, 6);
+            drawer.OnClosed();
+
+            feed.Add(Ev("badge-detach", 3));
+            Step(1000); Step(1060);
+            Assert.Equal(1.225, Scale(), 4);
+            Assert.True(clock.Watching);
+            host.Children.Remove(chip); // Unwire cancels the badge's in-flight run
+            Step(1070);
+            Assert.False(clock.Watching);
+            Assert.Equal(1, Scale(), 6);
+            Step(2000);
+            Assert.Equal(1, Scale(), 6);
+            Assert.Equal(0, row.RenderTransform!.Value.M31, 6);
+            Assert.Equal(1, row.Opacity, 6);
+        }
+        finally { drawer.OnClosed(); window.Close(); }
+    });
+
+    // Same Avalonia 12 clock technique as SharedDeeperThemeTests: fail loudly on API drift.
+    private sealed class FeedStepClock
+    {
+        private const System.Reflection.BindingFlags Any = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+        private static readonly Type Base = typeof(global::Avalonia.Animation.Animatable).Assembly.GetType("Avalonia.Animation.ClockBase", true)!;
+        private static readonly System.Reflection.MethodInfo Pulse = Base.GetMethod("Pulse", Any | System.Reflection.BindingFlags.Instance)!;
+        public static readonly AvaloniaProperty Property = (AvaloniaProperty)typeof(global::Avalonia.Animation.Animatable)
+            .GetField("ClockProperty", Any | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+        private static readonly System.Reflection.PropertyInfo Subscriptions = Base.GetProperty("HasSubscriptions", Any | System.Reflection.BindingFlags.Instance)!;
+        public bool Watching => (bool)Subscriptions.GetValue(Instance)!;
+        public readonly object Instance = Activator.CreateInstance(Base, nonPublic: true)!;
+        public void Step(double ms) => Pulse.Invoke(Instance, new object[] { TimeSpan.FromMilliseconds(ms) });
+    }
+
+    [Theory]
+    [InlineData(MotionLevel.Off, 0)]
+    [InlineData(MotionLevel.Reduced, 0.5)]
+    [InlineData(MotionLevel.Full, 1)]
+    public Task FeedMotionMatchesWpfTimingAndAmount(MotionLevel level, double amount) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        ConditioningControlPanel.CoreSettings.Current.MotionLevel = level;
+        ConditioningControlPanel.CoreSettings.Current.GentleVisuals = false;
+        UiMotionPreference.OsProbe = () => true;
+        UiMotionPreference.CacheStamp = long.MinValue;
+        var landing = FriendsDrawer.LandingAnimation();
+        var bump = FriendsRailChip.BadgeAnimation();
+        if (amount == 0) { Assert.Null(landing); Assert.Null(bump); return Task.CompletedTask; }
+        Assert.NotNull(landing);
+        Assert.NotNull(bump);
+        Assert.Equal(TimeSpan.FromMilliseconds(280), landing.Duration);
+        Assert.Equal(-12 * amount, Assert.IsType<global::Avalonia.Styling.Setter>(landing.Children[0].Setters[0]).Value);
+        Assert.Equal(0.4 * amount, Assert.IsType<global::ConditioningControlPanel.Avalonia.Theme.BackEaseOutAmplitude>(landing.Easing).Amplitude);
+        Assert.Equal(TimeSpan.FromMilliseconds(420), bump.Duration);
+        Assert.Equal(1 + 0.45 * amount, Assert.IsType<global::Avalonia.Styling.Setter>(bump.Children[1].Setters[0]).Value);
+        Assert.Equal(0, bump.Easing.Ease(0), 8);
+        Assert.Equal(1, bump.Easing.Ease(120d / 420), 8);
+        Assert.Equal(0, bump.Easing.Ease(1), 8);
+        Assert.True(bump.Easing.Ease(240d / 420) < 0); // elastic return overshoots below rest
+        return Task.CompletedTask;
     });
 
     /// <summary>WPF FriendsDrawer.Trail.cs: under a friend's name, the latest send's trail (kind, pips, state),
@@ -781,4 +1068,374 @@ public sealed partial class FriendsDrawerTests
         }
         finally { foreach (var w in host.OwnedWindows.ToArray()) w.Close(); host.Close(); }
     });
+    /// <summary>WPF FriendsDrawer.cs:799-818 + BuildRequestMenu (.Honesty.cs:80): an incoming request's
+    /// "more" pill and right-click both carry Block and Report (one line per reason); a report goes to
+    /// the wire and its words land on the request row.</summary>
+    [Fact]
+    public Task ARequestsMoreButtonOffersBlockAndReportByReason() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, wire) = Service();
+        var d = new FriendsDrawer(svc);
+        await svc.RefreshAsync();
+        d.Render();
+        var more = Tagged<Button>(d, "friends-request-more")!;
+        Assert.Equal(Loc.Get("friends_action_more"), ToolTip.GetTip(more));
+        Assert.Equal(IconKind.MoreHorizontal, more.GetLogicalDescendants().OfType<IconGlyph>().Single().Kind);
+        var host = new Window { Width = 600, Height = 500, Content = d };
+        try
+        {
+            host.Show();
+            more = Tagged<Button>(d, "friends-request-more")!;   // shown: the row may have been redrawn
+            more.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.True(more.ContextMenu!.IsOpen);   // the click opens the request menu, not just the right-click
+            Assert.Equal("friends-request-menu:u_req", more.ContextMenu.Tag);
+            more.ContextMenu.Close();
+        }
+        finally { host.Content = null; host.Close(); }
+        var menu = Tagged<Border>(d, "friends-request-in:u_req")!.ContextMenu!;
+        var items = menu.ItemsSource!.Cast<MenuItem>().ToList();
+        Assert.Equal(new[] { "friends-menu-item:block", "friends-menu-item:report" }, items.Select(i => (string)i.Tag!));
+        var reasons = items[1].ItemsSource!.Cast<MenuItem>().ToList();
+        Assert.Equal(ReportReason.All.Select(r => "friends-menu-item:report_" + r), reasons.Select(i => (string)i.Tag!));
+        reasons[0].RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+        await Until(() => Tagged<TextBlock>(d, "friends-result") != null);
+        Assert.Contains("report", wire.Ops);
+        Assert.Contains("u_req", Assert.Single(wire.Reports));
+        Assert.DoesNotContain("in:u_req", wire.Reports[0]);
+        Assert.Equal(Loc.Get("friends_report_done"), Tagged<TextBlock>(d, "friends-result")!.Text);
+    });
+
+    /// <summary>WPF FriendsSfx on the block paths (.Honesty.cs:35/121, .Blocked.cs:143/240-247): a refused
+    /// block is denied, a block sinks, an unblock clicks then unlocks.</summary>
+    [Fact]
+    public Task BlockAndUnblockPlayWpfsCues() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, wire) = Service();
+        var d = new FriendsDrawer(svc);
+        await svc.RefreshAsync();
+        var tags = new List<string>();
+        var saved = new CueState();
+        saved.Quiet();
+        try
+        {
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => tags.Add(tag);
+            CoreModArt.AudioOverridePathProvider = _ => typeof(FriendsDrawerTests).Assembly.Location;
+            FriendsLanding.SfxGate = new();
+            FriendsLanding.SfxNow = SfxStep;   // past every gap: each cue is judged on its own
+            CoreSettings.Current.MasterVolume = 50;
+            wire.ActSucceeds = false;
+            Assert.NotEqual(ActResult.Done, await d.BlockRequesterAsync(svc.Snapshot.Incoming[0]));
+            wire.ActSucceeds = true;
+            Assert.Equal(ActResult.Done, await d.BlockRequesterAsync(svc.Snapshot.Incoming[0]));
+            Assert.Equal(ActResult.Done, await d.ConfirmAsync("u_on", "Mia", "block"));
+            Assert.Equal(ActResult.Done, await d.UnblockAsync(new BlockedFriend("u_bad", "Bob")));
+            Assert.Equal(new[] { "friends-denied", "friends-sink", "friends-sink", "friends-click", "friends-accepted" }, tags);
+        }
+        finally
+        {
+            saved.Restore();
+        }
+    });
+
+    private sealed class CueState
+    {
+        private readonly Action<string, float, string, Action<TimeSpan>?, Action?>? _audio = CoreAudio.PlayOneShotProvider;
+        private readonly Func<bool>? _suppressed = CoreAudio.IsOutputSuppressedProvider;
+        private readonly Func<string, string?>? _art = CoreModArt.AudioOverridePathProvider;
+        private readonly FriendsSfxGate _gate = FriendsLanding.SfxGate;
+        private readonly Func<DateTime> _now = FriendsLanding.SfxNow;
+        private readonly int _volume = CoreSettings.Current.MasterVolume;
+        private readonly DateTime _clock = _sfxClock;
+        private static readonly System.Reflection.FieldInfo HeldBy = typeof(ConditioningControlPanel.Services.EmiDesk.EmiLineEngine).GetField("_heldBy", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        private static readonly System.Reflection.FieldInfo HoldUntil = typeof(ConditioningControlPanel.Services.EmiDesk.EmiLineEngine).GetField("_holdUntilUtc", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        private static ConditioningControlPanel.Services.EmiDesk.EmiLineEngine Engine => ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance;
+        private readonly object? _heldBy = HeldBy.GetValue(Engine);
+        private readonly object? _holdUntil = HoldUntil.GetValue(Engine);
+        private readonly ConditioningControlPanel.Services.MandatoryVideoScheduler? _video = CoreEngine.Video;
+        /// <summary>FriendsLanding.Sfx is silent under an EMI hold or panic silence, a playing video or a
+        /// suppressed output (WPF FriendsSfx.cs:47-51). A test earlier in the shard that failed before its
+        /// finally can leave any of them behind (an open Intake page holds "intakeRunning"); a cue test
+        /// judges only its own cues, so it starts quiet and Restore puts the leftovers back.</summary>
+        public void Quiet()
+        {
+            HeldBy.SetValue(Engine, null);
+            HoldUntil.SetValue(Engine, DateTime.MinValue);
+            CoreEngine.Video = null;
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+        }
+        public void AssertRestored()
+        {
+            Assert.Equal(_heldBy, HeldBy.GetValue(Engine));
+            Assert.Equal(_holdUntil, HoldUntil.GetValue(Engine));
+            Assert.Same(_video, CoreEngine.Video);
+            Assert.Same(_audio, CoreAudio.PlayOneShotProvider);
+            Assert.Same(_suppressed, CoreAudio.IsOutputSuppressedProvider);
+            Assert.Same(_art, CoreModArt.AudioOverridePathProvider);
+            Assert.Same(_gate, FriendsLanding.SfxGate);
+            Assert.Same(_now, FriendsLanding.SfxNow);
+            Assert.Equal(_volume, CoreSettings.Current.MasterVolume);
+            Assert.Equal(_clock, _sfxClock);
+        }
+        public void Restore()
+        {
+            HeldBy.SetValue(Engine, _heldBy);
+            HoldUntil.SetValue(Engine, _holdUntil);
+            CoreEngine.Video = _video;
+            CoreAudio.PlayOneShotProvider = _audio;
+            CoreAudio.IsOutputSuppressedProvider = _suppressed;
+            CoreModArt.AudioOverridePathProvider = _art;
+            FriendsLanding.SfxGate = _gate;
+            FriendsLanding.SfxNow = _now;
+            CoreSettings.Current.MasterVolume = _volume;
+            _sfxClock = _clock;
+        }
+    }
+
+    [Fact]
+    public Task CueTestsRestoreStateWithoutAnAssemblyHookBetweenThem() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var original = new CueState();
+        try
+        {
+            CoreAudio.IsOutputSuppressedProvider = () => true;
+            var expected = new CueState();
+            await ReportAndPickerCuesReflectTheWireAndMute();
+            expected.AssertRestored();
+            await BlockAndUnblockPlayWpfsCues();
+            expected.AssertRestored();
+            await AnsweringARequestPlaysWpfsCues();
+            expected.AssertRestored();
+        }
+        finally { original.Restore(); }
+    });
+
+    [Fact]
+    public Task SquelchAndUnsquelchPlayOnlyTheWireResultCue() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, wire) = Service();
+        var d = new FriendsDrawer(svc);
+        await svc.RefreshAsync();
+        var saved = new CueState();
+        saved.Quiet();
+        var tags = new List<string>();
+        try
+        {
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => tags.Add(tag);
+            CoreModArt.AudioOverridePathProvider = _ => typeof(FriendsDrawerTests).Assembly.Location;
+            FriendsLanding.SfxGate = new();
+            FriendsLanding.SfxNow = SfxStep;
+            CoreSettings.Current.MasterVolume = 50;
+            var friend = svc.Snapshot.Friends.First(f => f.Id == "u_on");
+            await d.RunMenuAsync(friend, "squelch");
+            await d.RunMenuAsync(friend, "unsquelch");
+            wire.ActSucceeds = false;
+            await d.RunMenuAsync(friend, "squelch");
+            Assert.Equal(new[] { "friends-click", "friends-click", "friends-denied" }, tags);
+        }
+        finally { saved.Restore(); }
+    });
+
+    /// <summary>Each cue test uses a fresh gate and steps past every gap. CueState restores both
+    /// the gate and the clock so no test changes the next one's timing.</summary>
+    private static DateTime _sfxClock = DateTime.UtcNow;
+    private static DateTime SfxStep() => _sfxClock = (_sfxClock > DateTime.UtcNow ? _sfxClock : DateTime.UtcNow).AddSeconds(2);
+
+    /// <summary>WPF AnswerRequestAsync (FriendsDrawer.Honesty.cs:52-74): every answer clicks; a refused one
+    /// is denied, an accept unlocks, a decline or withdraw sinks.</summary>
+    [Fact]
+    public Task AnsweringARequestPlaysWpfsCues() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, wire) = Service();
+        var d = new FriendsDrawer(svc);
+        await svc.RefreshAsync();
+        var r = svc.Snapshot.Incoming[0];
+        var tags = new List<string>();
+        var saved = new CueState();
+        saved.Quiet();
+        try
+        {
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => tags.Add(tag);
+            CoreModArt.AudioOverridePathProvider = _ => typeof(FriendsDrawerTests).Assembly.Location;
+            FriendsLanding.SfxGate = new();
+            FriendsLanding.SfxNow = SfxStep;
+            CoreSettings.Current.MasterVolume = 50;
+            wire.ActSucceeds = false;
+            Assert.NotEqual(ActResult.Done, await d.AnswerRequestAsync(r, "accept"));
+            wire.ActSucceeds = true;
+            Assert.Equal(ActResult.Done, await d.AnswerRequestAsync(r, "accept"));
+            Assert.Equal(ActResult.Done, await d.AnswerRequestAsync(r, "decline"));
+            Assert.Equal(new[] { "friends-click", "friends-denied", "friends-click", "friends-accepted", "friends-click", "friends-sink" }, tags);
+        }
+        finally
+        {
+            saved.Restore();
+        }
+    });
+
+    /// <summary>WPF BackRoomHostService.cs:385/765 and EnhancementPlayerWindow.xaml.cs:113-114: the Breakout
+    /// window and the Deeper player are the friends activity while they are on screen, and leave it on close.</summary>
+    [Fact]
+    public Task TheBreakoutAndDeeperWindowsArePresenceWhileOpen() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var (svc, _) = Service();
+        var oldHead = FriendsHead.Service;
+        global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow? game = null;
+        global::ConditioningControlPanel.Avalonia.Views.Deeper.EnhancementPlayerWindow? player = null;
+        try
+        {
+            FriendsHead.Service = svc;
+            game = new global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow();
+            game.Show();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(PresenceActivity.Breakout, svc.Activity);
+            player = new global::ConditioningControlPanel.Avalonia.Views.Deeper.EnhancementPlayerWindow(null, null);
+            player.Show();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(PresenceActivity.Deeper, svc.Activity);
+            game.Close();
+            Assert.Equal(PresenceActivity.Deeper, svc.Activity);
+            player.Close();
+            Assert.Equal(PresenceActivity.Panel, svc.Activity);
+        }
+        finally
+        {
+            try { game?.Close(); player?.Close(); }
+            finally { FriendsHead.Service = oldHead; }
+        }
+        return Task.CompletedTask;
+    });
+    [Fact]
+    public Task SessionPresenceRestoresTheUnderlyingActivity() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var (svc, _) = Service();
+        var oldHead = FriendsHead.Service;
+        var oldSessions = global::ConditioningControlPanel.Avalonia.App.Sessions;
+        var runner = new ConditioningControlPanel.Services.SessionRunner(new ConditioningControlPanel.Services.SessionLogService());
+        global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow? shell = null;
+        try
+        {
+            FriendsHead.Service = svc;
+            global::ConditioningControlPanel.Avalonia.App.Sessions = runner;
+            svc.EnterActivity(PresenceActivity.Deeper);
+            FriendsHead.WatchSessionStop(runner); // Startup subscription is pinned separately by FriendsPresenceWiringTests.
+            shell = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+            shell.StartSession(new Session { Id = "presence-test", Name = "Presence", DurationMinutes = 5 });
+            Assert.Equal(PresenceActivity.Session, svc.Activity);
+            runner.Stop();
+            Assert.Equal(PresenceActivity.Deeper, svc.Activity);
+        }
+        finally
+        {
+            try { runner.Stop(); shell?.Close(); }
+            finally
+            {
+                FriendsHead.Service = oldHead;
+                global::ConditioningControlPanel.Avalonia.App.Sessions = oldSessions;
+            }
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ReportAndPickerCuesReflectTheWireAndMute() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, wire) = Service();
+        var d = new FriendsDrawer(svc);
+        await svc.RefreshAsync();
+        var tags = new List<string>();
+        var saved = new CueState();
+        saved.Quiet();
+        try
+        {
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => tags.Add(tag);
+            CoreModArt.AudioOverridePathProvider = _ => typeof(FriendsDrawerTests).Assembly.Location;
+            FriendsLanding.SfxGate = new();
+            FriendsLanding.SfxNow = SfxStep;
+            CoreSettings.Current.MasterVolume = 50;
+            wire.ActSucceeds = false;
+            Assert.NotEqual(ActResult.Done, await d.ReportAsync("in:u_req", "u_req", ReportReason.All[0]));
+            Assert.Equal(Loc.Get(FriendsDrawerRules.ActResultKey(ActResult.TryLater)), Tagged<TextBlock>(d, "friends-result")?.Text);
+            Assert.Equal(new[] { "friends-click", "friends-denied" }, tags);
+            tags.Clear();
+            d.Toggle("u_on");
+            Tagged<Button>(d, "friends-action:poke")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(new[] { "friends-click" }, tags);
+            tags.Clear();
+            await d.PokeAsync("u_on", PokeSet.Shipped[0]);
+            Assert.Equal(new[] { "friends-sent" }, tags);
+            tags.Clear();
+            CoreAudio.IsOutputSuppressedProvider = () => true;
+            await d.PokeAsync("u_on", PokeSet.Shipped[0]);
+            Assert.Empty(tags);
+        }
+        finally { saved.Restore(); }
+    });
+
+    private sealed class PresenceRelay : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            { Content = new StringContent(r.RequestUri!.AbsolutePath.EndsWith("/start") ? "{\"code\":\"ABC123\"}" : "{}") });
+    }
+
+    [Fact]
+    public Task RemotePresenceStartsAfterPairingAndEndsWithTheSession() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, _) = Service();
+        var oldHead = FriendsHead.Service;
+        var oldRelay = global::ConditioningControlPanel.Avalonia.Views.Tabs.RemoteControlTabView.Relay;
+        using var relay = new ConditioningControlPanel.Services.RemoteRelay(() => "token", () => "test", "test",
+            (_, _) => null, _ => { }, new PresenceRelay()) { AutoPoll = false };
+        global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow? shell = null;
+        try
+        {
+            FriendsHead.Service = svc;
+            svc.EnterActivity(PresenceActivity.Deeper);
+            global::ConditioningControlPanel.Avalonia.Views.Tabs.RemoteControlTabView.Relay = new Lazy<ConditioningControlPanel.Services.RemoteRelay>(() => relay);
+            shell = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+            var tab = new global::ConditioningControlPanel.Avalonia.Views.Tabs.RemoteControlTabView();
+            await tab.StartAsync(shell, "light");
+            Assert.Equal(PresenceActivity.Remote, svc.Activity);
+            shell.OnRemoteSessionEnded();
+            Assert.Equal(PresenceActivity.Deeper, svc.Activity);
+        }
+        finally
+        {
+            try { await relay.StopAsync(); shell?.Close(); }
+            finally
+            {
+                FriendsHead.Service = oldHead;
+                global::ConditioningControlPanel.Avalonia.Views.Tabs.RemoteControlTabView.Relay = oldRelay;
+            }
+        }
+    });
+
+    [Fact]
+    public Task RequestReportUsesTheAccountIdAndWordsTheRequestRow() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, wire) = Service();
+        var d = new FriendsDrawer(svc);
+        await svc.RefreshAsync();
+        d.Render();
+        var menu = Tagged<Button>(d, "friends-request-more")!.ContextMenu!;
+        Assert.Equal(global::Avalonia.Controls.PlacementMode.Bottom, menu.Placement);
+        var items = menu.ItemsSource!.Cast<MenuItem>().ToList();
+        Assert.Equal(new[] { "friends-menu-item:block", "friends-menu-item:report" }, items.Select(i => (string)i.Tag!));
+        var reasons = items[1].ItemsSource!.Cast<MenuItem>().ToList();
+        Assert.Equal(ReportReason.All.Select(r => "friends-menu-item:report_" + r), reasons.Select(i => (string)i.Tag!));
+        reasons[0].RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+        await Until(() => Tagged<TextBlock>(d, "friends-result") != null);
+        Assert.Contains("u_req", Assert.Single(wire.Reports));
+        Assert.DoesNotContain("in:u_req", wire.Reports[0]);
+        Assert.Equal(Loc.Get("friends_report_done"), Tagged<TextBlock>(d, "friends-result")!.Text);
+    });
+
 }

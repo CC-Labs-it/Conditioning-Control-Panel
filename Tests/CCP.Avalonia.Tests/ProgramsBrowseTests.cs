@@ -21,6 +21,9 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class ProgramsBrowseTests
 {
+    private static bool IsUpsell(ProgramBrowseItem row) =>
+        row.IsLocked && ProgramService.UnavailableReason(row.Definition, ConditioningControlPanel.Avalonia.Platform.ProgramCapabilities.IsAvailable) == null;
+
     private static string ExpectedReason(ProgramDefinition p) =>
         ProgramService.UnavailableReason(p, ConditioningControlPanel.Avalonia.Platform.ProgramCapabilities.IsAvailable)
         ?? Loc.Get(p.Tier == ProgramTier.Premium && !CoreEntitlement.HasPremium
@@ -125,7 +128,8 @@ public sealed class ProgramsBrowseTests
                 // Locked cards open Account; nothing can enroll without a service. Programs this
                 // head cannot finish still name the missing feature (programs-3a decision).
                 var unavailable = Loc.Get("programs_unavailable");
-                Assert.All(rows, row => Assert.Equal(ExpectedReason(row.Definition), row.ReasonText));
+                Assert.All(rows, row => Assert.Equal(
+                    IsUpsell(row) ? Loc.Get("programs_locked_hint") : ExpectedReason(row.Definition), row.ReasonText));
                 Assert.Equal(unavailable, rows.Single(row => row.ProgramId == "first_week").ReasonText);
                 Assert.All(rows, row => Assert.True(row.ReasonVisible));
                 Assert.Contains(rows, row => row.IsLocked);
@@ -226,7 +230,8 @@ public sealed class ProgramsBrowseTests
                     view.FindControl<TextBlock>("TxtProgramDetailsTitle")!.Text);
                 Assert.Equal(selected.Chapters.Count,
                     view.FindControl<ItemsControl>("ProgramDetailsChapterList")!.ItemCount);
-                Assert.Equal(ExpectedReason(selected), ((ProgramBrowseItem)list.SelectedItem!).ReasonText);
+                var picked = (ProgramBrowseItem)list.SelectedItem!;
+                Assert.Equal(IsUpsell(picked) ? Loc.Get("programs_locked_hint") : ExpectedReason(selected), picked.ReasonText);
             }
             finally
             {

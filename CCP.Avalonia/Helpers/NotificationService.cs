@@ -119,8 +119,6 @@ namespace ConditioningControlPanel.Avalonia.Helpers
                 },
             };
 
-            // ponytail: no product caller passes a secondary action yet; WPF's WarnIfFlashLibraryEmpty /
-            // WarnIfWallpaperLibraryEmpty (MainWindow.StartStop.cs:236-274) are not on this head (wire-shell-notifications-toasts-b).
             bool hasSecondary = !string.IsNullOrWhiteSpace(secondaryActionLabel) && secondaryAction != null;
             var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"),
                 RowDefinitions = new RowDefinitions(hasSecondary ? "Auto,Auto" : "Auto") };

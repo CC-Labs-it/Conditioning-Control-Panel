@@ -25,7 +25,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // ponytail: WPF's aggregate runtime viewmodel/compat surface remains in
             // wire-views-tab-companion-b; the room already owns live per-zone viewmodels.
 
-            // WorkshopAccordion owns the single roster switch subscription.
+            // WorkshopAccordion owns the single roster switch and personality subscriptions; inside the
+            // shell it forwards both to MainShellWindow (WPF WorkshopRosterCell -> MainWindow).
 
             // WPF CompanionTabView.xaml.cs:36-40: the room is collapsed (XAML) and the page reads its zones.
             Conversation.Room = Room;
@@ -61,6 +62,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (shown)
             {
                 Room.HeroZone.ApplyAvatarArt();   // the hero re-read + portrait the page header shows (WPF Room.Sync)
+                Room.WorkshopParts?.Behavior.SyncFromSettings(); // WPF MainWindow.CompanionTab.cs:52-60
+                Room.WorkshopParts?.Triggers.SyncFromSettings();
                 Room.RefreshCommunity();   // WPF SyncCompanionTabUI -> UpdateCommunityPromptsUI (MainWindow.CompanionTab.cs:147)
                 // WPF MainWindow.TabNavigation.cs:505 ShowTab("companion") -> InitializePhrasePresets, v2 or not:
                 // the Triggers cell's combo (on Companion > AI under v2) re-reads presets saved elsewhere.

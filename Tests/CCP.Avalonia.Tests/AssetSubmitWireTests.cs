@@ -171,13 +171,13 @@ public sealed class AssetSubmitWireTests
             Dispatcher.UIThread.RunJobs();
             var manager = shell.OwnedWindows.OfType<ModManagerDialog>().Single();
             var list = manager.FindControl<ListBox>("ModList")!;
-            var share = manager.FindControl<Button>("BtnShare")!;
+            var share = manager.FindControl<MenuItem>("BtnShare")!;
             list.SelectedItem = list.Items.OfType<ListBoxItem>().Single(i => (string)i.Tag! == BuiltInMods.CCPDefaultId);
             Assert.False(share.IsVisible);                                  // built-in: no Share
             list.SelectedItem = list.Items.OfType<ListBoxItem>().Single(i => (string)i.Tag! == id);
             Assert.True(share.IsVisible);
 
-            share.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            share.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             var dialog = manager.OwnedWindows.OfType<AssetSubmitDialog>().Single();
             Assert.False(share.IsEnabled);                                  // disabled for the upload
@@ -236,14 +236,14 @@ public sealed class AssetSubmitWireTests
         try
         {
             var list = manager.FindControl<ListBox>("ModList")!;
-            var button = manager.FindControl<Button>("BtnShare")!;
+            var button = manager.FindControl<MenuItem>("BtnShare")!;
             list.SelectedItem = list.Items.OfType<ListBoxItem>().Single(i => Equals(i.Tag, builtIn.Id));
             Assert.False(button.IsVisible);
             list.SelectedItem = list.Items.OfType<ListBoxItem>().Single(i => Equals(i.Tag, noPath.Id));
             Assert.False(button.IsVisible);   // WPF also needs an InstalledPath
             list.SelectedItem = list.Items.OfType<ListBoxItem>().Single(i => Equals(i.Tag, mod.Id));
             Assert.True(button.IsVisible);
-            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            button.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             Assert.False(button.IsEnabled);
             var cancelled = manager.OwnedWindows.OfType<AssetSubmitDialog>().Single();
@@ -254,7 +254,7 @@ public sealed class AssetSubmitWireTests
 
             // RefreshModList follows WPF and may change selection; choose the custom row again.
             list.SelectedItem = list.Items.OfType<ListBoxItem>().Single(i => Equals(i.Tag, mod.Id));
-            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            button.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             var dialog = manager.OwnedWindows.OfType<AssetSubmitDialog>().Single();
             dialog.FindControl<TextBox>("TxtCreator")!.Text = "creator";

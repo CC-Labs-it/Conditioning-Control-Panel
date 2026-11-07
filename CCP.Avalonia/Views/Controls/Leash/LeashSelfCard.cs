@@ -56,7 +56,7 @@ public sealed class LeashSelfCard : Border
         who.Children.Add(Label(_me.Holder.Name + " " + Loc.Get("leash_self_holds"), 16, F.Text, "leash-self-title"));
         who.Children.Add(Label(Loc.GetF("leash_self_day", _me.Day), 11, F.Pink, "leash-self-day"));
         var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        var avatar = F.Avatar(_me.Holder.Name, 40, null);
+        var avatar = F.Avatar(_me.Holder.Name, 40, null, _me.Holder.Look);
         avatar.Margin = new Thickness(0, 0, 10, 0);
         head.Children.Add(avatar);
         Grid.SetColumn(who, 1); head.Children.Add(who);
@@ -95,6 +95,7 @@ public sealed class LeashSelfCard : Border
         _body.Children.Add(Caption(Loc.Get("leash_self_level")));
         _body.Children.Add(Segments(new[] { "leash_level_soft", "leash_level_standard", "leash_level_strict" },
             (int)_me.Intensity, "leash-level", i => _ = SetLevelAsync((LeashIntensity)i)));
+        _body.Children.Add(new LeashLevelHelp(_me.Intensity, lines: true));
         var quiet = LeashUiRules.DndOn(_me.DndUntil, DateTimeOffset.UtcNow);
         _body.Children.Add(Caption(quiet && _me.DndUntil is { } u ? Loc.GetF("leash_self_quiet_until", LeashUiRules.DndUntilText(u)) : Loc.Get("leash_self_quiet"), "leash-self-quiet"));
         _body.Children.Add(Segments(new[] { "leash_dnd_off", "leash_dnd_1h", "leash_dnd_4h", "leash_dnd_today" },

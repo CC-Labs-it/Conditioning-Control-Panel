@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
 using ConditioningControlPanel.Services.Diagnostics;
@@ -7,11 +8,17 @@ using Xunit;
 
 namespace ConditioningControlPanel.Tests;
 
+// Native Thread.Start latency is measured here. Other suites create many STA/render threads;
+// run this safety timing contract without that unrelated parallel load, at the same 1 s limit.
+[CollectionDefinition(nameof(UiThreadExitTests), DisableParallelization = true)]
+public sealed class UiThreadExitCollection { }
+
 /// <summary>
 /// ccp-bugs #1458 / #1468 / #1469 / #1471 / #1472 (one 7.1.9 hang report): the render-failure exit
 /// ran Environment.Exit on the UI thread, ProcessExit's SystemEvents.Shutdown waited on a Send to
 /// that same thread, and the app froze instead of leaving.
 /// </summary>
+[Collection(nameof(UiThreadExitTests))]
 public sealed class UiThreadExitTests
 {
     [Fact]

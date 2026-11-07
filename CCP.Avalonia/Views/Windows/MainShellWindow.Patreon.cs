@@ -1,77 +1,8 @@
-// PORTED-AS-A-STUB from ConditioningControlPanel/MainWindow/MainWindow.Patreon.cs (2195 lines).
-//
-// ponytail: wholesale stub. Every member below reaches App.*, a service, a device, a
-// WebView2 or Win32 - none of which this head may touch (see the layer rules: "Do not
-// move services"). The file exists and each member is NAMED so nothing disappears
-// silently; the bodies come back when the services move to Core.
-//
-// The handlers named by MainShellWindow.axaml are real (empty) methods, because a
-// missing one is a XAML compile error, not a runtime gap.
-//
-// Members dropped (64; BtnGateUnlock_Click, RefreshPremiumGate, EnforceEntitlementLapse, RefreshEntitlementVeils,
-// MaybeShowPremiumCelebration and OnPatreonTierChanged's celebration half restored below; UpdatePatreonUI,
-// BtnPatreonLogin/Discord/Link*, UpdateAccountLinkingUI and BtnVisitPatreon live in AccountSettingsSection;
-// the ten Chk*_Changed privacy/sharing/presence handlers live in Views/Controls/ProfilePrivacyPanel):
-//   private void UpdatePatreonUI(…)
-//   internal async void BtnPatreonLogin_Click(…)
-//   internal async void BtnDiscordLogin_Click(…)
-//   private void UpdateDiscordUI(…)
-//   private void UpdateAccountLinkingUI(…)
-//   internal async void BtnLinkPatreon_Click(…)
-//   internal async void BtnLinkDiscord_Click(…)
-//   internal void BtnVisitPatreon_Click(…)
-//   private void OnPatreonTierChanged(…)
-//   private void MaybeShowPremiumCelebration(…)
-//   private void InitializePatreonTab(…)
-//   internal void BtnDetachCompanion_Click(…)
-//   internal void BtnCustomizeCompanion_Click(…)
-//   internal void BtnManagePhrases_Click(…)
-//   private void UpdatePhraseCountDisplay(…)
-//   (RestoreCompanionSectionStates / PersistCompanionDrawerStates and the two drawer keys are
-//    ported: CompanionRoomView.Restore/PersistDrawerStates, called from MainShellWindow.CompanionFx.cs)
-//   internal void SliderIdleInterval_ValueChanged(…)
-//   internal void SliderBubbleDuration_ValueChanged(…)
-//   internal void ChkTriggerMode_Changed(…)
-//   public void SyncTriggerModeUI(…)
-//   internal void SliderTriggerInterval_ValueChanged(…)
-//   internal void BtnEditTriggers_Click(…)
-//   internal void BtnPrivacySpoiler_Click(…)
-//   internal void SliderAwarenessCooldown_ValueChanged(…)
-//   internal void SliderAwarenessCooldownMax_ValueChanged(…)
-//   internal void BtnSwitchCompanion_Click(…)
-//   (RevealCompanionWorkshopCell + the cell -> page map are ported: MainShellWindow.CompanionFx.cs)
-//   private void OnCompanionProviderSelected(…)
-//   internal void BtnLabEffectsSetupLocal_Click(…)
-//   private void LaunchLocalAiSetupWizard(…)
-//   private static void CommitFocusedEdit(…)
-//   internal async void BtnTestOllamaConnection_Click(…)
-//   internal void BtnOpenAiSamplerSettings_Click(…)
-//   internal async void BtnTestOpenAiConnection_Click(…)
-//   internal void BtnClearChatMemory_Click(…)
-//   internal void ChkChatMemoryEnabled_Changed(…)
-//   internal void ChkCapEffects_Changed(…)
-//   internal void ChkAllowEffect_Changed(…)
-//   internal void SliderMaxHapticIntensity_ValueChanged(…)
-//   private void UpdateAiBrainPills(…)
-//   private static bool ProviderSupportsEffects(…)
-//   private void UpdateLiveActionsPlaceholder(…)
-//   internal void SyncLabEffectPermsUI(…)
-//   private void SyncAiBrainUI(…)
-//   internal void ChkMuteWhispers_Changed(…)
-//   (ChkPauseBrowser_Changed / SetBrowserPaused: Home browser part ported, WorkshopBehaviorCell ->
-//    MainShellWindow.WorkshopBehavior.cs; the Avatar Tube mirror is not)
-//   internal void ChkVoiceLines_Changed(…)
-//   public void SyncQuickControlsUI(…)
-//   public void SyncWhispersUI(…)
-//   private int _preMuteMasterVolume
-//   public void ApplyVoiceMute(…)
-//   public void AdjustMasterVolume(…)
-//   internal async void BtnRefreshPrompts_Click(…)
-//   internal void BtnDeactivatePrompt_Click(…)
-//   internal async void BtnBrowsePrompts_Click(…)
-//   internal void BtnImportPrompt_Click(…)
-//   internal async void BtnExportPrompt_Click(…)
+// WPF MainWindow.Patreon.cs: subscription gates, live tier rises and voice audio controls.
+// Account and companion editors live in their owning controls.
+// Community prompt transport and checkout/conversion follow-up remain unported.
 
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.LogicalTree;
@@ -82,10 +13,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
-        // WPF MainWindow.Patreon.cs:1312. ponytail: UpdatePhraseCountDisplay skipped - the
-        // Companion tab's TxtPhraseCount needs CompanionPhraseService, still head-side.
-        internal void BtnManagePhrases_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
-            => _ = new Dialogs.CompanionPhraseEditorDialog().ShowDialogSafe(this);
+        // WPF MainWindow.Patreon.cs:1396-1406: refresh after the modal editor closes.
+        internal async void BtnManagePhrases_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            await new Dialogs.CompanionPhraseEditorDialog().ShowDialogSafe(this);
+            foreach (var cell in this.GetLogicalDescendants().OfType<Controls.Companion.Runtime.WorkshopTriggersCell>())
+                cell.RefreshPhraseCount();
+        }
 
         /// <summary>WPF MainWindow.Patreon.cs RefreshEntitlementVeils. Called on every navigation, on
         /// sign-in/out (UpdateQuickLoginUI), on either provider's TierChanged and on the ? box's
@@ -98,6 +32,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void RefreshEntitlementVeils(bool persist)
         {
             EnforceEntitlementLapse(persist);
+            Named<Tabs.AvailableSubjectsTabView>("AvailableSubjectsTab")?.Repaint();
+            RefreshTierDependentViews();
             var haptics = StudioRack?.HapticsPanel;
             var hapticsOpen = CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("haptics");
             if (haptics?.FindControl<Control>("HapticsContentGrid") is { } grid)
@@ -120,8 +56,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF MainWindow.Patreon.cs:92, over the shared Core flag pass. Skipped while the seam is
         /// unseeded: WPF never runs it before App.Patreon exists, and a head that cannot read the account
-        /// must not wipe a patron's settings. Keyword and window awareness reconcile below;
-        /// OCR, autonomy, mantra chant and the haptics mixer remain follow-ups here.</summary>
+        /// must not wipe a patron's settings. Keyword and window awareness reconcile below and the lapse
+        /// stops the mantra chant; OCR, autonomy and the haptics mixer remain follow-ups here.</summary>
         private bool _lapseUnsaved;   // cleared in memory, not yet written by an entitlement event
 
         private void EnforceEntitlementLapse(bool persist)
@@ -138,6 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     _lapseUnsaved = false;
                 }
                 // WPF MainWindow.Patreon.cs:108 - the lapse stops the engine, not just the flag.
+                if (cleared.Contains("mantra-chant")) App.MantraChant.Stop(); // WPF MainWindow.Patreon.cs:196
                 if (cleared.Contains("awareness-mode")) App.WindowAwareness.Stop();
                 // WPF Patreon.cs:152 - the mirror case: entitlement resolving late re-arms what the
                 // settings (and consent) already ask for. Start() re-checks everything itself.
@@ -190,6 +127,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var view = (sender as global::Avalonia.LogicalTree.ILogical)?.FindLogicalAncestorOfType<UserControl>(includeSelf: true)?.GetType().Name;
             if (Services.Vault.VaultOffer.KeepsAccountRoute(view)) { OpenAppSettingsSection("account"); return; }
             ShowVaultGate(Services.Vault.VaultOffer.FeatureKeyForView(view), 1);
+        }
+
+        /// <summary>WPF MainWindow.QuestsTab.cs:96 OpenPricedCard: a priced CTA sends a patron whose grant died
+        /// to Reconnect instead of the price card.</summary>
+        internal void OpenPricedCard(string featureKey, int tier)
+        {
+            if (LockdownActive) return;
+            if (TierGate.ReconnectIsTheAnswer()) { _ = ReconnectFromGate(); return; }
+            ShowVaultGate(featureKey, tier);
         }
 
         /// <summary>WPF App.xaml.cs:505, seeded into TierGate.ReconnectIsTheAnswerProvider: a patron linked server-side
@@ -274,43 +220,154 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// celebration half; the veils already repaint from App.axaml.cs. Unsubscribed when the shell closes (P41).</summary>
         private void InitializePremiumCelebration()
         {
-            Opened += (_, _) => MaybeShowPremiumCelebration();
-            System.EventHandler<Models.PatreonTier> tier = (_, _) => global::Avalonia.Threading.Dispatcher.UIThread.Post(MaybeShowPremiumCelebration);
+            Opened += (_, _) => { MaybeShowPremiumCelebration(); TierOnNoticePass(); };
+            // The one-time tier-on notice follows each entitlement reading and each return to the panel (#3820).
+            Platform.EntitlementRefresh.Changed += TierOnNoticePass;
+            Activated += (_, _) => TierOnNoticePass();
+            Closed += (_, _) => Platform.EntitlementRefresh.Changed -= TierOnNoticePass;
             var patreon = Platform.AccountSeed.Patreon;
             var substar = Platform.AccountSeed.SubscribeStar;
+            var closed = false;
+            System.EventHandler<Models.PatreonTier> tier = (sender, _) => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (closed) return;   // a repaint queued before Close is dropped, as in MainShellWindow.SubscribeStar.cs (P41)
+                // WPF OnPatreonTierChanged: Programs rebuilds on a tier change only, not on every navigation. A SubscribeStar
+                // change rebuilds it once, in InitializeSubscribeStarDependents (WPF OnSubscribeStarTierChanged).
+                if (ReferenceEquals(sender, patreon)) Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshPrograms();
+                RefreshTierDependentViews();
+                RefreshProfileBubble();
+                MaybeShowPremiumCelebration();
+                TierOnNoticePass();
+            });
+            // WPF MainWindow.Patreon.cs:1363-1377: a live rise's fanfare, and a focus refresh when the user clicks
+            // back in. Both ride the head's one tier path (AccountSeed.ApplyTierReading: rise AND lower).
+            Platform.AccountSeed.TierRaised += OnEntitlementTierRaised;
+            void Focused(object? sender, System.EventArgs e) => _ = Platform.AccountSeed.OnAppFocusedAsync();
+            Activated += Focused;
+            // WPF OnGraceClosed: the veils repaint from App.axaml.cs; Programs gate on the same entitlement at build time.
+            void GraceClosed() => Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshPrograms();
+            Platform.AccountSeed.GraceClosed += GraceClosed;
             if (patreon != null) patreon.TierChanged += tier;
             if (substar != null) substar.TierChanged += tier;
             Closed += (_, _) =>
             {
+                closed = true;
+                Activated -= Focused;
+                Platform.AccountSeed.TierRaised -= OnEntitlementTierRaised;
+                Platform.AccountSeed.GraceClosed -= GraceClosed;
                 if (patreon != null) patreon.TierChanged -= tier;
                 if (substar != null) substar.TierChanged -= tier;
             };
         }
 
-        /// <summary>WPF MaybeShowPremiumCelebration (MainWindow.Patreon.cs:1118): the one-time card per tier, re-read from
+        /// <summary>WPF MaybeShowPremiumCelebration (MainWindow.Patreon.cs:1140): the one-time card per tier, re-read from
         /// the combined entitlement, never for an invite week, through the presenter (an Inbox row when quiet). The seen-flag
-        /// is spent at open time. ponytail: no live-rise path (EntitlementTierSync.TierRaised, the immediate card and the
-        /// profile-bubble fanfare) on this head yet, so every grant takes the presenter route.</summary>
+        /// is spent at open time. A live rise bypasses the launch quiet window when the user is free.</summary>
         internal void MaybeShowPremiumCelebration()
         {
+            var onRise = _pendingRiseTier > 0;
+            _pendingRiseTier = 0;
             try
             {
                 if (!CoreAccount.HasPremiumAccess) return;
                 var s = CoreSettings.Current;
                 if (ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, s)) return;
                 var tier = CoreAccount.HasLabAccess ? 2 : 1;
-                if (!TierCelebration.IsOwed(s.SeenFeatureIntros, tier, onRise: false)) return;
+                if (!TierCelebration.IsOwed(s.SeenFeatureIntros, tier, onRise)) return;
                 var key = TierCelebration.KeyFor(tier)!;
-                Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
+                if (onRise && CanCelebrateNow())
+                {
+                    FeatureIntroPopup.ShowCelebrationIfFirstTime(this, key);
+                    return;
+                }
+                var item = new Services.Startup.InboxItem
                 {
                     Key = "intro:" + key,
                     Glyph = "💖",
                     Title = Loc.Get(tier >= 2 ? "premium_celebration_inbox_t2" : "premium_celebration_inbox_t1"),
                     Summary = Loc.Get("premium_celebration_inbox_summary"),
                     Open = () => FeatureIntroPopup.ShowCelebrationIfFirstTime(this, key),
-                });
+                };
+                Platform.StartupLadder.PresentOrInbox(item);   // WPF Patreon.cs: a busy rise goes through the presenter too
             }
             catch (System.Exception ex) { Serilog.Log.Warning(ex, "Premium celebration hook failed"); }
+        }
+
+        private int _pendingRiseTier;
+
+        private bool CanCelebrateNow() => IsVisible && WindowState != WindowState.Minimized
+            && !CoreSession.IsSessionRunning && !CoreTutorial.IsActive
+            && !Games.GameWindow.IsAnyOpen() && !OwnedWindows.Any(w => w.IsVisible)
+            && !Platform.AppUpdater.IsUpdateDialogActive && !IsStartupDialogShowing;
+
+        private void OnEntitlementTierRaised(int tier)
+        {
+            _pendingRiseTier = tier;
+            var colour = tier >= 2 ? global::Avalonia.Media.Color.FromRgb(0x5E, 0xE6, 0xFF)
+                : global::Avalonia.Media.Color.FromRgb(0xFF, 0xD7, 0x00);
+            RefreshProfileBubble();
+            if (Named<Button>("BtnProfileBubble") is { } bubble) _profileBubbleBurst.Fire(bubble, 60, color: colour);
+            FlashProfileBubbleGlow(colour);
+        }
+
+        internal void RefreshTierDependentViews()
+        {
+            var takeover = Named<Tabs.BambiTakeoverTabView>("BambiTakeoverTab");
+            var unlocked = CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("takeover");
+            if (takeover?.FindControl<Control>("AutonomyLocked") is { } locked) locked.IsVisible = !unlocked;
+            if (takeover?.FindControl<Control>("AutonomyUnlocked") is { } open) open.IsVisible = unlocked;
+            // WPF UiUpdates.cs:937-938 re-sets the two lock texts; here the axaml binds the same keys ({loc:Str}/IconLabel Key).
+        }
+
+        private readonly VoiceAudioState _voiceAudio = new();
+
+        internal void ApplyVoiceMute(bool muted)
+        {
+            _voiceAudio.ApplyMute(CoreSettings.Current, muted);
+            SyncHero();
+            foreach (var behavior in this.GetLogicalDescendants().OfType<Controls.Companion.Runtime.WorkshopBehaviorCell>())
+                behavior.SyncFromSettings();
+            _avatarTubeWindow?.SetWindowMute(false);
+            if (muted) _avatarTubeWindow?.StopVoiceLineAudio();
+            SetMasterVolume(CoreSettings.Current.MasterVolume);
+        }
+
+        internal void AdjustMasterVolume(int delta) => SetMasterVolume(CoreSettings.Current.MasterVolume + delta);
+
+        internal void SetMasterVolume(int value)
+        {
+            CoreSettings.Current.MasterVolume = value; // AppSettings.MasterVolume clamps to 0..100.
+            Controls.AppSettings.AudioSettingsBinder.RaiseChanged();
+            Platform.LayeredAudio.Instance?.SetMasterVolumeLive();
+            Overlays.MandatoryVideoOverlay.Instance.UpdateVolume();
+            CoreSettings.Save();
+        }
+
+        internal void TierOnNoticePass()
+        {
+            try
+            {
+                var s = CoreSettings.Current;
+                var current = Platform.EntitlementRefresh.EffectiveTier;
+                var verdict = Services.TierOnNotice.Decide(s.LastKnownEffectiveTier, current,
+                    Platform.EntitlementRefresh.ServerAnsweredThisRun);
+                if (verdict.Record != s.LastKnownEffectiveTier)
+                {
+                    // The first cached reading joins the next user save or desktop exit. Startup must not write migrations.
+                    var hadReading = s.LastKnownEffectiveTier.HasValue;
+                    s.LastKnownEffectiveTier = verdict.Record;
+                    if (hadReading) CoreSettings.Save();
+                }
+                if (!verdict.Owed || TierCelebration.IsOwed(s.SeenFeatureIntros, current, onRise: true)) return;
+                var title = Loc.Get(Services.TierOnNotice.TitleKey(current));
+                var body = Loc.Get("tier_on_body");
+                Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
+                {
+                    Key = "tier-on:" + current, IconKey = "Heart", Title = title, Summary = body,
+                    Open = () => Dialogs.InboxNoticeCard.Present(this, title, body, null, null),
+                });
+            }
+            catch (System.Exception ex) { Serilog.Log.Debug(ex, "Tier-on notice failed"); }
         }
 
         private static void MarkIntroSeen(string key)

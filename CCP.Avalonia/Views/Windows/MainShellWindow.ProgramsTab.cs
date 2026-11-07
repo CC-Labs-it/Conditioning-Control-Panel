@@ -34,6 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // same answer CoreEntitlement is seeded with): owned premium cards drop the padlock.
                 var locked = premium && !CoreEntitlement.HasPremium;
                 var canEnroll = !locked && svc is { IsReadOnly: false } && svc.CanEnroll(definition, out _);
+                var missing = ProgramService.UnavailableReason(definition, Platform.ProgramCapabilities.IsAvailable);
                 var accent = AccentBrush(definition.AccentColor);
                 // WPF ProgramsTab.cs:633-660. Banner: no default, five cards in the same fallback
                 // strip read as a copy-paste bug. Crest: sigil, else day 1's mood plate; the art is a
@@ -69,7 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     ActionOpacity = locked || canEnroll ? 1.0 : 0.5,
                     // WPF :624-628: locked cards open App Info. Keep the capability reason on programs this
                     // head cannot finish, so opening Account never promises an unavailable feature.
-                    ReasonText = canEnroll ? null : ProgramService.UnavailableReason(definition, Platform.ProgramCapabilities.IsAvailable)
+                    ReasonText = canEnroll ? null : missing
                                  ?? Loc.Get(locked ? "programs_locked_hint" : "programs_unavailable"),
                     ReasonVisible = !canEnroll,
                     CardOpacity = locked ? 0.72 : 1.0
@@ -110,11 +111,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var svc = App.Programs;
                 var def = svc?.Library.FirstOrDefault(p => string.Equals(p.Id, programId, StringComparison.OrdinalIgnoreCase));
                 if (svc == null || def == null) return;
-                // WPF :1982: the premium card opens App Info before enrollment checks. This
-                // head's existing App Info route is Settings > Account (ShowTab("patreon")).
+                // WPF :1981-1985: premium the user can't take is an ad, not an entry point -> Settings · Account
+                // (WPF ShowAppInfoPopup -> ShowAccountSettings). Lockdown refuses the door first (P05).
                 if (def.Tier == ProgramTier.Premium && !CoreEntitlement.HasPremium)
                 {
-                    OpenAppSettingsSection("account");
+                    if (!await ProgramRefusedByLockdown()) OpenAppSettingsSection("account");
                     return;
                 }
                 if (svc.IsReadOnly) return;
