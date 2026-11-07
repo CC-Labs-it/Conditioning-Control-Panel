@@ -100,7 +100,7 @@ namespace ConditioningControlPanel.Services
             _http.DefaultRequestHeaders.UserAgent.ParseAdd($"ConditioningControlPanel/{appVersion}");
         }
 
-        /// <summary>Head-provided merged-account recovery, as in WPF AuthPostAsync. Unseeded until the head can complete the swap.</summary>
+        /// <summary>Head-provided merged-account recovery, as in WPF AuthPostAsync (RemoteControlService.cs:129); the Avalonia head seeds it in Platform/MergedAccountHead.Seed.</summary>
         public static volatile Func<HttpResponseMessage, Task<bool>>? MergedRecovery;
 
         private async Task<HttpResponseMessage> PostAsync(string path, object body)

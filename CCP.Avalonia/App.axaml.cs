@@ -682,6 +682,8 @@ namespace ConditioningControlPanel.Avalonia
                         if (amount > 0 && Sessions?.IsRunning != true) sync.Nudge($"xp:{source}");
                     };
                     Platform.AccountSeed.RestoreSession();
+                    // WPF App.xaml.cs:419 MergedAccountRecoveryHead.Seed, with the Remote Control door.
+                    Platform.MergedAccountHead.Seed();
                     // WPF CheckCloudSettingsRestoreAsync: a fresh settings file arms the welcome-back sheet.
                     Platform.WelcomeBackOffer.Arm(CoreSettings.Service?.WasSettingsFileMissing == true, CorePaths.UserData);
                     Dispatcher.UIThread.Post(async () =>

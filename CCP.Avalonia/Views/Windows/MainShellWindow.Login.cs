@@ -62,6 +62,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
+        /// <summary>WPF MainWindow.Login.cs:49 RefreshAccountUiAfterMergedSwap, with the painters this head carries.</summary>
+        internal void RefreshAccountUiAfterMergedSwap()
+        {
+            UpdateQuickLoginUI();
+            // WPF UpdatePatreonUI/UpdateDiscordUI/UpdateSubscribeStarUI/UpdateAccountLinkingUI: the account section here.
+            AppSettingsPage?.FindControl<Controls.AppSettings.AccountSettingsSection>("SectionAccount")?.Refresh();
+            UpdateBannerWelcomeMessage();
+        }
+
+        /// <summary>WPF MainWindow.Login.cs:67: the no-credential landing of a merged swap, one line of
+        /// explanation, then the ordinary sign-in dialog (the canonical id is already stored, so the
+        /// re-login reads as the same account and keeps local progression).</summary>
+        internal async Task OpenLoginAfterMergedSwap()
+        {
+            if (!await MessageDialog.ConfirmAsync(this, Loc.Get("account_merged_signin_title"),
+                Loc.Get("account_merged_signin_body"))) return;
+            await OpenUnifiedLoginDialog();
+        }
+
         private static bool _notRememberedShown;
 
         /// <summary>WPF OpenUnifiedLoginDialog, up to the sync it starts (units 6-7). Then, once per run,
