@@ -52,6 +52,8 @@ public sealed class ProgramsBrowseTests
                 var texts = view.FindControl<ListBox>("ProgramLibraryList")!
                     .GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToArray();
                 Assert.Contains("Not available on this build yet: needs Rituals.", texts);
+                // Linux has no keyboard source, so Kept also names the keyword engine there.
+                if (!OperatingSystem.IsWindows()) Assert.Contains(texts, t => t.Contains("Keyword Triggers"));
                 Assert.DoesNotContain(texts, t => t.Contains("programs_needs_feature"));
             }
             finally

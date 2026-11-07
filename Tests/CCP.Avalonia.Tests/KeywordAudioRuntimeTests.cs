@@ -221,16 +221,17 @@ public sealed class KeywordAudioRuntimeTests
     [Fact]
     public void TypedMatchCreditsTheActiveKeywordQuest() => Run((engine, s, played) =>
     {
+        var dir = Directory.CreateTempSubdirectory("ccp-keyword-quest-").FullName;
         var old = AvApp.Quests;
-        using var quests = new QuestService();
         try
         {
+            using var quests = new QuestService(null, dir);
             AvApp.Quests = quests;
             quests.Progress.DailyQuests = new List<ActiveQuest> { new("trigger_words_d") };
             Type(engine, "sit");
             Assert.Equal(1, quests.Progress.DailyQuests[0].CurrentProgress);
         }
-        finally { AvApp.Quests = old; }
+        finally { AvApp.Quests = old; Directory.Delete(dir, recursive: true); }
     });
 
     [Fact]
