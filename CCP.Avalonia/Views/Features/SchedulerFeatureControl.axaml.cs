@@ -5,7 +5,6 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using ConditioningControlPanel.Models;
-using ConditioningControlPanel.Avalonia.Views.Windows;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Features
@@ -119,7 +118,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             Log.Information("[Scheduler] enabled {Enabled} (window {Start}-{End})",
                 enabled, s.SchedulerStartTime, s.SchedulerEndTime);
             CoreSettings.Save();
-            (TopLevel.GetTopLevel(this) as MainShellWindow)?.SchedulerSettingsChanged(DateTime.Now);
         }
 
         private void TxtTime_LostFocus(object? sender, RoutedEventArgs e)
@@ -129,7 +127,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             s.SchedulerStartTime = TxtStart.Text ?? string.Empty;
             s.SchedulerEndTime = TxtEnd.Text ?? string.Empty;
             CoreSettings.Save();
-            (TopLevel.GetTopLevel(this) as MainShellWindow)?.SchedulerSettingsChanged(DateTime.Now);
         }
 
         private void Day_Changed(object? sender, RoutedEventArgs e)
@@ -144,7 +141,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             s.SchedulerSaturday = DaySat.IsChecked ?? true;
             s.SchedulerSunday = DaySun.IsChecked ?? true;
             CoreSettings.Save();
-            (TopLevel.GetTopLevel(this) as MainShellWindow)?.SchedulerSettingsChanged(DateTime.Now);
         }
     }
 }

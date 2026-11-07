@@ -115,11 +115,14 @@ public sealed class StartStopScheduleTests
         Assert.Null(CoreEngine.StoppedHook); Assert.Same(oldSink, OsNotify.Sink);
     });
     [Fact]
-    public void SettingsEditsStartImmediatelyAndRespectHolds() => AvaloniaTestDispatcher.Run(() =>
+    public void SettingsEditsWaitForTheNextSchedulerTick() => AvaloniaTestDispatcher.Run(() =>
     {
+        // WPF has no live kick: SchedulerFeatureControl only saves, and SchedulerTimer_Tick (30 s,
+        // after the 60 s grace) starts the engine (MainWindow.Settings.cs:358, SchedulerRackPanel.xaml.cs:12).
         if (Application.Current is null)
             ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var oldProvider = CoreSettings.ServiceProvider;
         var service = new SettingsService(); CoreSettings.ServiceProvider = () => service;
         var s = service.Current; var now = DateTime.Now;
         s.FlashEnabled = s.SubliminalEnabled = s.BouncingTextEnabled = s.BubblesEnabled = s.LockCardEnabled = false;
@@ -130,26 +133,23 @@ public sealed class StartStopScheduleTests
         var control = new ConditioningControlPanel.Avalonia.Views.Features.SchedulerFeatureControl();
         var shell = new MainShellWindow { TrayHostPresent = () => false, Content = control };
         var oldSink = OsNotify.Sink; var notices = new List<string>();
+        void Invoke(string handler) => typeof(ConditioningControlPanel.Avalonia.Views.Features.SchedulerFeatureControl)
+            .GetMethod(handler, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(control, new object?[] { null, new RoutedEventArgs() });
         try
         {
             OsNotify.Sink = (title, body) => notices.Add(title); shell.Show();
-            control.FindControl<CheckBox>("ChkEnabled")!.IsChecked = true;
-            Assert.False(CoreEngine.IsRunning);
             control.FindControl<TextBox>("TxtStart")!.Text = now.AddHours(-1).ToString("HH:mm");
             control.FindControl<TextBox>("TxtEnd")!.Text = now.AddHours(1).ToString("HH:mm");
-            typeof(ConditioningControlPanel.Avalonia.Views.Features.SchedulerFeatureControl)
-                .GetMethod("TxtTime_LostFocus", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
-                .Invoke(control, new object?[] { null, new RoutedEventArgs() });
-            Assert.True(CoreEngine.IsRunning); Assert.True(shell.Scheduler.AutoStarted);
-            var count = notices.Count;
-            shell.SchedulerSettingsChanged(now); Assert.Equal(count, notices.Count);
-            MainShellWindow.StopEngine(); shell.Scheduler.AutoStarted = false; shell.Scheduler.ManuallyStopped = true;
-            shell.SchedulerSettingsChanged(now); Assert.False(CoreEngine.IsRunning);
-            shell.Scheduler.ManuallyStopped = false;
-            PanicSurfaces.StopAll("schedule settings", shell);
-            shell.SchedulerSettingsChanged(now); Assert.False(CoreEngine.IsRunning); Assert.False(shell.Scheduler.AutoStarted);
+            Invoke("TxtTime_LostFocus");
+            control.FindControl<CheckBox>("ChkEnabled")!.IsChecked = true;
+            Invoke("Day_Changed");
+            Assert.True(s.SchedulerEnabled);
+            Assert.False(CoreEngine.IsRunning); Assert.False(shell.Scheduler.AutoStarted); Assert.Empty(notices);
+            shell.SchedulerTick(now);
+            Assert.True(CoreEngine.IsRunning); Assert.True(shell.Scheduler.AutoStarted); Assert.Single(notices);
         }
-        finally { CoreEngine.Stop(); OsNotify.Sink = oldSink; shell.Close(); ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
+        finally { CoreEngine.Stop(); OsNotify.Sink = oldSink; shell.Close(); CoreSettings.ServiceProvider = oldProvider; }
     });
     [Fact]
     public System.Threading.Tasks.Task RampReachesNativeVideoWithoutAnAudioPage() => AvaloniaTestDispatcher.RunAsync(async () =>
