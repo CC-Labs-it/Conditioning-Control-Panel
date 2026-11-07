@@ -4,13 +4,17 @@
  * keeps the context suspended until the first gesture resumes it; cues fired while it is suspended are dropped,
  * never queued into a burst on the first click. duck(on) drops the bus when the counter opens inside a game. */
 export const BUS = { level: 0.7, ducked: 0.3, thudGap: 0.05 };
-const GESTURES = ['pointerdown', 'keydown', 'touchstart'];
+// Chromium and Safari count only some events as audio activation (a touch pointerdown/touchstart and
+// Escape do not), so every candidate tries and the listeners stay until the context really runs.
+const GESTURES = ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'click', 'keydown'];
+const CAPTURE = { capture: true }; // an object, not `true`: Node's EventTarget ignores a boolean on remove
 
 export function createSfx({ target = globalThis, Ctx = globalThis.AudioContext || globalThis.webkitAudioContext, rng = Math.random } = {}) {
   let ac = null, bus = null, noise = null, ducked = false, lastThud = -1;
   const gain = () => BUS.level * (ducked ? BUS.ducked : 1);
-  /** True while the context actually plays (a context with no state field is taken as playing). */
-  const on = () => !!ac && ac.state !== 'suspended' && ac.state !== 'closed';
+  /** True only while the context runs (a context with no state field is taken as running). Safari's
+   * 'interrupted' freezes currentTime like 'suspended', so cues then would burst on resume. */
+  const on = () => !!ac && (ac.state === undefined || ac.state === 'running');
   function wake() {
     if (!ac && Ctx) {
       try {
@@ -20,13 +24,17 @@ export function createSfx({ target = globalThis, Ctx = globalThis.AudioContext |
         for (let i = 0; i < d.length; i++) d[i] = rng() * 2 - 1;
       } catch { ac = null; }
     }
-    if (ac && ac.resume) { try { const p = ac.resume(); if (p && p.catch) p.catch(() => {}); } catch { /* stays suspended */ } }
+    if (ac && ac.resume) { try { const p = ac.resume(); if (p && p.then) return p.then(() => {}, () => {}); } catch { /* stays suspended */ } }
+    return null;
   }
+  const release = () => GESTURES.forEach((g) => target.removeEventListener && target.removeEventListener(g, unlock, CAPTURE));
   function unlock() {
-    wake();
-    GESTURES.forEach((g) => target.removeEventListener && target.removeEventListener(g, unlock, true));
+    const p = wake();
+    const settle = () => { if (on()) release(); };
+    settle();
+    if (p) p.then(settle);
   }
-  GESTURES.forEach((g) => target.addEventListener && target.addEventListener(g, unlock, true));
+  GESTURES.forEach((g) => target.addEventListener && target.addEventListener(g, unlock, CAPTURE));
   wake();
 
   const env = (t, peak, dur) => { const g = ac.createGain(); g.gain.setValueAtTime(peak, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur); g.connect(bus); return g; };
@@ -63,6 +71,6 @@ export function createSfx({ target = globalThis, Ctx = globalThis.AudioContext |
       tone('sine', 170, 55, t, 0.24, 0.5); hiss(t, 0.05, 'highpass', 1800, 1800, 0.22); hiss(t, 0.14, 'lowpass', 700, 300, 0.3);
     },
     duck(down) { ducked = !!down; if (bus) bus.gain.setTargetAtTime(gain(), ac.currentTime, 0.08); },
-    dispose() { GESTURES.forEach((g) => target.removeEventListener && target.removeEventListener(g, unlock, true)); if (ac && ac.close) ac.close(); ac = null; },
+    dispose() { release(); if (ac && ac.close) ac.close(); ac = null; },
   };
 }

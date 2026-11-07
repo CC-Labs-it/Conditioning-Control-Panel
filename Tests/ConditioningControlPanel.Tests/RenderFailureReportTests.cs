@@ -49,5 +49,8 @@ public sealed class RenderFailureReportTests
     {
         var block = RenderFailureReport.Build();
         Assert.StartsWith("Render diagnostics:", block);
+        // Off the UI thread: no WPF reads (tier, windows) and no UI stack.
+        Assert.DoesNotContain("render tier", block);
+        Assert.DoesNotContain("UI stack", block);
     }
 }

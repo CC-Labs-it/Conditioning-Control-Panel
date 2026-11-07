@@ -149,6 +149,35 @@ test('the sfx bus plays from the first frame where the host waives the gesture r
   sfx.dispose();
 });
 
+test('a touch that is not an audio gesture keeps the listeners for the tap that is (phone browsers)', async () => {
+  const policy = { allowed: false }, { made, Ctx } = mockAudio(policy);
+  let resumes = 0;
+  const origResume = Ctx.prototype.resume;
+  Ctx.prototype.resume = function () { resumes++; return origResume.call(this); };
+  const target = new EventTarget(), sfx = createSfx({ target, Ctx });
+  target.dispatchEvent(new Event('touchstart'));
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(sfx.live, false, 'touchstart did not activate audio');
+  policy.allowed = true;
+  const tries = resumes;
+  target.dispatchEvent(new Event('touchend'));
+  await Promise.resolve(); await Promise.resolve();
+  assert.deepEqual([sfx.live, resumes, made.length], [true, tries + 1, 1], 'touchend still reached unlock');
+  target.dispatchEvent(new Event('click'));
+  assert.equal(resumes, tries + 1, 'listeners leave once the context runs');
+  sfx.dispose();
+});
+
+test('an interrupted context (Safari) is not live, so cues do not pile up at a frozen clock', () => {
+  const { made, Ctx } = mockAudio({ allowed: true });
+  const sfx = createSfx({ target: new EventTarget(), Ctx });
+  made[0].state = 'interrupted';
+  const before = made[0].made;
+  sfx.thud(); sfx.slam();
+  assert.deepEqual([sfx.live, made[0].made], [false, before]);
+  sfx.dispose();
+});
+
 test('the sfx bus is silent until a gesture, then plays and ducks', () => {
   const policy = { allowed: false }, { made, Ctx } = mockAudio(policy);
   const target = new EventTarget(), sfx = createSfx({ target, Ctx });

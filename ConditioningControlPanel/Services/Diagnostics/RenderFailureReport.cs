@@ -40,11 +40,25 @@ namespace ConditioningControlPanel.Services.Diagnostics
             var sb = new StringBuilder();
             sb.AppendLine("Render diagnostics:");
             Safe(sb, () => "- GPU: " + Adapters());
-            Safe(sb, () => "- WPF render tier: " + (RenderCapability.Tier >> 16).ToString(CultureInfo.InvariantCulture));
+            // RenderCapability builds a Dispatcher + MediaContext on a thread that has none (a TASK
+            // report can come from the finalizer): read it only where WPF already lives.
+            Safe(sb, () => OnUiThread() ? "- WPF render tier: " + (RenderCapability.Tier >> 16).ToString(CultureInfo.InvariantCulture) : null);
             Safe(sb, () => "- Private memory: " + (System.Diagnostics.Process.GetCurrentProcess().PrivateMemorySize64 / (1024 * 1024)).ToString(CultureInfo.InvariantCulture) + " MB");
             Safe(sb, Monitors);
             Safe(sb, Windows);
+            Safe(sb, UiStack);
             return sb.ToString();
+        }
+
+        private static bool OnUiThread() => Application.Current?.Dispatcher.CheckAccess() == true;
+
+        /// <summary>The crash stack stops at the WndProc's ExceptionWrapper, so it never names the call that
+        /// moved the window. The UI thread's own stack still holds those frames, down to Main. Built
+        /// without file info, so no source path ever reaches the log.</summary>
+        private static string? UiStack()
+        {
+            if (!OnUiThread()) return null;
+            return "- UI stack:" + Environment.NewLine + new System.Diagnostics.StackTrace(1, false).ToString().TrimEnd();
         }
 
         private static void Safe(StringBuilder sb, Func<string?> part)
@@ -93,8 +107,8 @@ namespace ConditioningControlPanel.Services.Diagnostics
         /// <summary>The app's visible windows. Only on the UI thread (WPF objects refuse other threads).</summary>
         private static string? Windows()
         {
-            var app = Application.Current;
-            if (app == null || !app.Dispatcher.CheckAccess()) return null;
+            if (!OnUiThread()) return null;
+            var app = Application.Current!;
             var rows = new List<WindowRow>();
             foreach (Window w in app.Windows)
             {
