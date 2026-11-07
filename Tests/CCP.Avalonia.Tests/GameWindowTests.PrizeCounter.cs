@@ -89,6 +89,11 @@ public sealed partial class GameWindowTests
         w.HandleMessage("{\"type\":\"request\",\"reqId\":\"r2\",\"op\":\"shop-buy\",\"idem\":\"i1\",\"body\":{\"itemId\":\"rain.x\"}}");
         Assert.Equal("unavailable", (string?)AwaitReply(sent, "r2")["reason"]);
         Assert.Single(wire.Urls);
+
+        Assert.Same(w, GameWindow.LaunchPrizeCounter("", "chess"));   // another tab reloads; a blank door keeps the source (WPF :320)
+        sent.Clear(); w.HandleMessage("{\"type\":\"ready\"}");
+        var again = sent.Single(o => (string?)o["type"] == "init");
+        Assert.Equal(("chess", "glassroad"), ((string?)again["tab"], (string?)again["from"]));
     });
 
     /// <summary>WPF SignInFromPage: signed out answers signed_out; signin opens the sign-in, then pins and reloads.</summary>
@@ -103,8 +108,7 @@ public sealed partial class GameWindowTests
 
         int dialogs = 0;
         GameWindow.CounterSignIn = _ => { dialogs++; CoreSettings.Current.UnifiedId = "acct-2"; return Task.CompletedTask; };
-        w.HandleMessage("{\"type\":\"signin\"}");
-        Dispatcher.UIThread.RunJobs();
+        w.HandleMessage("{\"type\":\"signin\"}"); Dispatcher.UIThread.RunJobs();
         Assert.Equal((1, false), (dialogs, w.IsReady));                      // the page loads again
         sent.Clear();
         w.HandleMessage("{\"type\":\"ready\"}");
@@ -122,16 +126,13 @@ public sealed partial class GameWindowTests
         OpenCounter(sent, r => heard.Add("a:" + r));
         GameWindow.LaunchPrizeCounter("piecebypiece", null, _ => throw new InvalidOperationException("bad opener"));
         GameWindow.LaunchPrizeCounter("piecebypiece", null, r => heard.Add("b:" + r));
-        GameWindow.OpenForTests(GameWindow.PrizeCounterId)!.HandleMessage("{\"type\":\"close\",\"reason\":\"back\"}");
-        Dispatcher.UIThread.RunJobs();
+        GameWindow.OpenForTests(GameWindow.PrizeCounterId)!.HandleMessage("{\"type\":\"close\",\"reason\":\"back\"}"); Dispatcher.UIThread.RunJobs();
         Assert.Equal(new[] { "a:back", "b:back" }, heard);
         heard.Clear();
         OpenCounter(sent, r => heard.Add(r));
-        GameWindow.CloseAllForPanic();
-        Dispatcher.UIThread.RunJobs();
+        GameWindow.CloseAllForPanic(); Dispatcher.UIThread.RunJobs();
         OpenCounter(sent, r => heard.Add(r));
-        GameWindow.CloseCounterForExit();
-        Dispatcher.UIThread.RunJobs();
+        GameWindow.CloseCounterForExit(); Dispatcher.UIThread.RunJobs();
         Assert.Equal(new[] { "panic", "app-exit" }, heard);
         Assert.False(GameWindow.IsAnyOpen());
     });
@@ -147,11 +148,9 @@ public sealed partial class GameWindowTests
         Assert.Same(w, GameWindow.EscapePauseInFront());
         sent.Clear();
         var t0 = new DateTime(2026, 1, 1, 12, 0, 0);
-        shell.HandlePanicKeyPress(t0);
-        Dispatcher.UIThread.RunJobs();
+        shell.HandlePanicKeyPress(t0); Dispatcher.UIThread.RunJobs();
         Assert.Equal(("kept-escape", true), ((string?)Assert.Single(sent)["type"], GameWindow.IsAnyOpen()));
-        shell.HandlePanicKeyPress(t0.AddSeconds(1));
-        Dispatcher.UIThread.RunJobs();
+        shell.HandlePanicKeyPress(t0.AddSeconds(1)); Dispatcher.UIThread.RunJobs();
         Assert.Equal((false, "panic"), (GameWindow.IsAnyOpen(), Assert.Single(heard)));
     });
 }

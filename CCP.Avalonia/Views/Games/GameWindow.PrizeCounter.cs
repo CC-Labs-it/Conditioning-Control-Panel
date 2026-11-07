@@ -35,30 +35,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private string _counterFrom = "wallet";
         private string? _counterTab, _counterOpener, _closeReason;
         private PrizeCounterRelay? _counterRelay;
-        private int _counterGeneration;
-        private bool _counterSigningIn;
+        private int _counterGeneration; private bool _counterSigningIn;
         private readonly List<Action<string>> _counterOnClosed = new();
 
         /// <summary>WPF Launch (:311): open the counter or bring it forward; a door naming another tab reloads it there.</summary>
         internal static GameWindow? LaunchPrizeCounter(string from = "wallet", string? tab = null, Action<string>? onClosed = null)
         {
             tab = PrizeCounterRules.CounterTab(tab);
-            from = string.IsNullOrWhiteSpace(from) ? "wallet" : from;
             var w = OpenCounterWindow();
             if (w != null)
             {
                 if (onClosed != null) w._counterOnClosed.Add(onClosed);
                 if (PrizeCounterRules.ReopensOnTab(w._counterTab, tab))
                 {
-                    (w._counterTab, w._counterFrom) = (tab, from);
+                    (w._counterTab, w._counterFrom) = (tab, string.IsNullOrWhiteSpace(from) ? w._counterFrom : from);   // WPF :320
                     w.ReloadCounter(w._counterOpener);
                 }
-                w.Activate();
-                return w;
+                w.Activate(); return w;
             }
             try
             {
-                w = new GameWindow(Games[PrizeCounterId]) { _counterFrom = from, _counterTab = tab };
+                w = new GameWindow(Games[PrizeCounterId]) { _counterFrom = string.IsNullOrWhiteSpace(from) ? "wallet" : from, _counterTab = tab };
                 if (onClosed != null) w._counterOnClosed.Add(onClosed);
                 w.Load(Server());
                 w.Show();
@@ -109,8 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF Reload (:376): the page again in the same window, with a fresh init.</summary>
         private void ReloadCounter(string? opener)
         {
-            StartCounter(opener);
-            IsReady = false;
+            StartCounter(opener); IsReady = false;
             if (PageUrl != null) Web.Navigate(PageUrl);
         }
 
@@ -142,12 +138,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     if (o["sp"] is JValue { Type: JTokenType.Integer } sp && _counterRelay?.HandleWalletFrame(sp.Value<int>()) != true)
                         Log.Debug("PrizeCounter: wallet frame {Sp} names no receipt, ignored", sp);
                     break;
-                case "close":
-                    CloseFor(PrizeCounterRules.PageCloseReason((string?)o["reason"]));
-                    break;
-                case "signin":
-                    Dispatcher.UIThread.Post(() => _ = SignInFromCounterPage());   // never inside the page's message callback
-                    break;
+                case "close": CloseFor(PrizeCounterRules.PageCloseReason((string?)o["reason"])); break;
+                case "signin": Dispatcher.UIThread.Post(() => _ = SignInFromCounterPage()); break;   // never inside the page's message callback
                 default:
                     Log.Debug("PrizeCounter: page message '{Type}' {Msg}", (string?)o["type"], (string?)o["msg"]);
                     break;
@@ -176,22 +168,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var id = FriendsHead.Identity();
             return new
             {
-                type = "init",
-                protocol = 1,
+                type = "init", protocol = 1, sp = s.SkillPoints, locale = LocalizationManager.Instance.CurrentLanguage,
                 identity = id == null ? null : new { unifiedId = id.Value.UnifiedId },
-                sp = s.SkillPoints,
-                locale = LocalizationManager.Instance.CurrentLanguage,
                 lexicon = LocalizationManager.Instance.KeysWithPrefix("shop_").Distinct(StringComparer.Ordinal)
                     .ToDictionary(k => k, k => Loc.Get(k), StringComparer.Ordinal),
                 motion = PrizeCounterRules.MotionWire(s.MotionLevel, GentleVisuals.On),
-                gentle = GentleVisuals.On,
-                reducedMotion = false,
+                gentle = GentleVisuals.On, reducedMotion = false,
                 tab = !RainV2Gate.On && PrizeCounterRules.IsRainId(_counterTab) ? null : _counterTab,
-                from = _counterFrom,
-                wears = Array.Empty<string>(),
-                platform = "desktop",
-                companion = CompanionName.ForActiveMod(),
-                rainV2 = RainV2Gate.On,
+                from = _counterFrom, wears = Array.Empty<string>(), platform = "desktop",
+                companion = CompanionName.ForActiveMod(), rainV2 = RainV2Gate.On,
             };
         }
     }

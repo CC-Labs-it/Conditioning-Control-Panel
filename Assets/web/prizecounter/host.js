@@ -7,11 +7,12 @@
  *   asHost(obj)      mounted inside a game: a plain object with the same methods (missing ones are no-ops).
  * request() never rejects: a missing reply answers { ok:false, reason:'offline' }. */
 
+import { carrier } from '../shared/carrier.js';
 const OFFLINE = { ok: false, reason: 'offline' };
 const mintId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
 
 export function createHost(win = window, { timeoutMs = 15000 } = {}) {
-  const webview = win.chrome && win.chrome.webview;
+  const webview = carrier(win);   // WPF chrome.webview, or the Avalonia head's WebKitGTK string carrier
   const parent = !webview && win.parent && win.parent !== win ? win.parent : null;
   const post = (m) => { try { if (webview) webview.postMessage(m); else if (parent) parent.postMessage(m, '*'); } catch (e) { /* host gone */ } };
   const waiting = new Map();
@@ -27,7 +28,7 @@ export function createHost(win = window, { timeoutMs = 15000 } = {}) {
   else win.addEventListener('message', (e) => { if (parent && e.source === parent) onFrame(e.data); });
   const hosted = !!(webview || parent);
   return {
-    hosted,
+    hosted, carrier: webview,
     ready() {
       if (init) return Promise.resolve(init);
       const p = new Promise((res) => initWaiters.push(res));

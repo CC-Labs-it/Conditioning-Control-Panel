@@ -23,8 +23,7 @@ public static class PrizeCounterRules
     {
         if (string.IsNullOrWhiteSpace(tab)) return null;
         var t = tab.Trim().ToLowerInvariant();
-        if (t == "rain") return "rain-clothes";
-        return Array.IndexOf(Tabs, t) >= 0 ? t : null;
+        return t == "rain" ? "rain-clothes" : Array.IndexOf(Tabs, t) >= 0 ? t : null;
     }
 
     /// <summary>An open counter asked again reloads only when the door names a different tab.</summary>
@@ -42,10 +41,8 @@ public static class PrizeCounterRules
     public static void NotifyOpeners(IEnumerable<Action<string>> openers, string reason)
     {
         foreach (var opener in openers)
-        {
             try { opener(reason); }
             catch (Exception ex) { Log.Warning("PrizeCounter: an opener's close hook threw: {E}", ex.Message); }
-        }
     }
 
     /// <summary>True for a Rain row id (<c>rain.*</c>) or a Rain tab id (<c>rain-*</c>).</summary>
