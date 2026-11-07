@@ -77,7 +77,7 @@ public sealed class KeywordOcrMatcherTests
     }
 
     [Fact]
-    public void RuntimeGatesAndBlockedScanResetStreak() => AvaloniaTestDispatcher.RunAsync(() =>
+    public void RuntimeGatesKeepGuardsAndBlockedScanResetsStreak() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
@@ -85,7 +85,7 @@ public sealed class KeywordOcrMatcherTests
         var s = CoreSettings.Current;
         var saved = (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope, s.OcrConfirmationScans, s.OcrHighlightAll, CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider);
         var now = Time;
-        var runtime = new KeywordAudioRuntime { Now = () => now, QuestCredit = () => { } };
+        var runtime = new KeywordAudioRuntime { Now = () => now, QuestCredit = () => { }, AddXp = _ => { }, Haptic = (_, _) => { } };
         try
         {
             s.KeywordTriggers = Settings().KeywordTriggers; s.KeywordTriggersEnabled = true; s.OcrConfirmationScans = 2; s.OcrHighlightAll = true;
@@ -96,12 +96,17 @@ public sealed class KeywordOcrMatcherTests
             Assert.Empty(runtime.CheckOcrWords(new[] { Hit() }, "other"));
             CoreEntitlement.HasPremiumProvider = () => false;
             Assert.Empty(runtime.CheckOcrWords(new[] { Hit() }, "other")); Assert.False(runtime.NeedsOcrConfirmation);
+            // An entitlement gap keeps the streak (WPF KeywordTriggerService.cs:720).
             CoreEntitlement.HasPremiumProvider = () => true;
-            Assert.Empty(runtime.CheckOcrWords(new[] { Hit() }, "other"));
             Assert.Single(runtime.CheckOcrWords(new[] { Hit() }, "other"));
             Assert.Equal("OCR", Assert.Single(runtime.GetRecentFires()).Source);
             // Re-enabling while active (Sync -> Start) keeps the guard, like WPF KeywordTriggerService.cs:178.
             now = Time.AddHours(1); runtime.Start();
+            Assert.Empty(runtime.CheckOcrWords(new[] { Hit() }, "other"));
+            Assert.Empty(runtime.CheckOcrWords(new[] { Hit() }, "other"));
+            Assert.Single(runtime.GetRecentFires());
+            // Awareness off and on keeps the guard too: WPF Start/Stop (:176-198) never clear it.
+            runtime.Stop(); runtime.Start();
             Assert.Empty(runtime.CheckOcrWords(new[] { Hit() }, "other"));
             Assert.Empty(runtime.CheckOcrWords(new[] { Hit() }, "other"));
             Assert.Single(runtime.GetRecentFires());

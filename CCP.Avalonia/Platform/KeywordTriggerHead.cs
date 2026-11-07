@@ -124,14 +124,15 @@ internal sealed class KeywordAudioRuntime
     internal Func<DateTime> Now = () => DateTime.Now;
     internal Func<int, CancellationToken, Task> Delay = Task.Delay;
     internal bool IsActive { get; private set; }
-    internal void Start() { if (IsActive) return; IsActive = true; _input.Clear(); _ocr.Reset(); }   // WPF KeywordTriggerService.cs:178
-    internal void Stop() { IsActive = false; _input.Clear(); _ocr.Reset(); StopAudio(); }
+    internal void Start() { if (IsActive) return; IsActive = true; _input.Clear(); }   // WPF KeywordTriggerService.cs:178
+    internal void Stop() { IsActive = false; _input.Clear(); StopAudio(); }   // OCR guards survive, WPF :194-198
+
+    private static bool Entitled => CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness");
 
     private bool Accept(string? process, bool own)
     {
         var s = CoreSettings.Current;
-        if (!IsActive || !s.KeywordTriggersEnabled ||
-            !(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return false;
+        if (!IsActive || !s.KeywordTriggersEnabled || !Entitled) return false;
         if (KeywordMatchRules.AppAllowed(s, process, own)) return true;
         _input.Clear(); // never join text typed on either side of a blocked app
         return false;
@@ -154,7 +155,13 @@ internal sealed class KeywordAudioRuntime
     // The capture lane supplies the foreground process captured with the scan.
     internal IReadOnlyList<KeywordOcrHit> CheckOcrWords(IReadOnlyList<KeywordOcrHit> hits, string? process = null, bool own = false)
     {
-        if (!Accept(process, own)) { _ocr.Reset(); return Array.Empty<KeywordOcrHit>(); }
+        // WPF KeywordTriggerService.cs:714-742: guards reset only on an empty or app-blocked scan.
+        _ocr.NeedsConfirmation = false;
+        var s = CoreSettings.Current;
+        if (!IsActive || !Entitled) return Array.Empty<KeywordOcrHit>();
+        if (hits == null || hits.Count == 0 || !KeywordMatchRules.AppAllowed(s, process, own))
+        { _ocr.Reset(); return Array.Empty<KeywordOcrHit>(); }
+        if (!s.KeywordTriggersEnabled) return Array.Empty<KeywordOcrHit>();
         var now = Now();
         var (fired, words) = _ocr.Scan(hits, CoreSettings.Current, _cooldowns, now);
         if (fired.Count > 0) Fire(fired, "OCR", now);

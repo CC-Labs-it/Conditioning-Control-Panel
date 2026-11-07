@@ -15,7 +15,7 @@ internal sealed class KeywordOcrMatcher
 {
     private Dictionary<string, int> _seen = new();
     private readonly HashSet<string> _guarded = new();
-    internal bool NeedsConfirmation { get; private set; }
+    internal bool NeedsConfirmation { get; set; }
     internal void Reset() { _seen.Clear(); _guarded.Clear(); NeedsConfirmation = false; }
 
     internal (List<KeywordTrigger> Triggers, List<KeywordOcrHit> Hits) Scan(
