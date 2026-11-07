@@ -70,14 +70,14 @@ public sealed class EmiDeskSettingsSpeechTests
         var window = desk.Window!;
         window.Say("test line", "^_~", () => done = true);
         Assert.False(done);
-        var timer = (DispatcherTimer)typeof(EmiDeskWindow).GetField("_speechTimer", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(window)!;
-        Assert.Equal(TimeSpan.FromMilliseconds(420), timer.Interval); Assert.Equal(".", window.BubbleText); Assert.Equal("0_0", window.Face);
+        var player = window.ChainPlayer; // Say runs WPF's MakeSay chain on the shared chain player
+        Assert.Equal(TimeSpan.FromMilliseconds(420), player.PendingHold); Assert.Equal(".", window.BubbleText); Assert.Equal("0_0", window.Face);
         window.AdvanceSpeech();
         Assert.Equal("..", window.BubbleText);
         window.AdvanceSpeech();
-        Assert.Equal("...", window.BubbleText); Assert.Equal(TimeSpan.FromMilliseconds(520), timer.Interval);
+        Assert.Equal("...", window.BubbleText); Assert.Equal(TimeSpan.FromMilliseconds(520), player.PendingHold);
         window.AdvanceSpeech();
-        Assert.Equal("test line", window.BubbleText); Assert.Equal(TimeSpan.FromMilliseconds(EmiChains.SayHoldMs("test line")), timer.Interval); Assert.Equal("^_~", window.Face); Assert.False(done);
+        Assert.Equal("test line", window.BubbleText); Assert.Equal(TimeSpan.FromMilliseconds(EmiChains.SayHoldMs("test line")), player.PendingHold); Assert.Equal("^_~", window.Face); Assert.False(done);
         window.AdvanceSpeech();
         Assert.Null(window.BubbleText); Assert.Equal("0_0", window.Face);
         window.AdvanceSpeech();

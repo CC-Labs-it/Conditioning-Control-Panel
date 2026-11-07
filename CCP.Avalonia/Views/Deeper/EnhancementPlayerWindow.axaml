@@ -376,7 +376,7 @@
                 <TextBlock DockPanel.Dock="Right" x:Name="TxtMiniTimelineReadout"
                            Text="0:00 / 0:00"
                            Foreground="{DynamicResource TextMutedBrush}"
-                           FontSize="10" FontFamily="monospace"
+                           FontSize="10" FontFamily="{DynamicResource Font.Mono}"
                            VerticalAlignment="Center"/>
             </DockPanel>
             <Border x:Name="MiniTimelineHost"
@@ -422,13 +422,13 @@
             </Button>
             <TextBlock x:Name="TxtCurrent" DockPanel.Dock="Left"
                        Text="0:00" Foreground="{DynamicResource TextLightBrush}"
-                       FontSize="12" FontFamily="monospace"
+                       FontSize="12" FontFamily="{DynamicResource Font.Mono}"
                        VerticalAlignment="Center" Margin="14,0,4,0"/>
             <TextBlock DockPanel.Dock="Left" Text="/" Foreground="{DynamicResource TextDimBrush}"
                        FontSize="12" VerticalAlignment="Center"/>
             <TextBlock x:Name="TxtTotal" DockPanel.Dock="Left"
                        Text="0:00" Foreground="{DynamicResource TextMutedBrush}"
-                       FontSize="12" FontFamily="monospace"
+                       FontSize="12" FontFamily="{DynamicResource Font.Mono}"
                        VerticalAlignment="Center" Margin="4,0,0,0"/>
 
             <!-- Secondary cluster (right side). DockPanel.Dock=Right reverses visual order — the
@@ -568,7 +568,7 @@
                                     <Grid ColumnDefinitions="50,18,*,Auto">
                                         <TextBlock Grid.Column="0" Text="{Binding TimestampDisplay}"
                                                    Foreground="{DynamicResource TextDimBrush}"
-                                                   FontFamily="monospace" FontSize="9"
+                                                   FontFamily="{DynamicResource Font.Mono}" FontSize="9"
                                                    VerticalAlignment="Center"/>
                                         <fx:IconGlyph Grid.Column="1" Kind="{Binding IconGlyph}"
                                                       Foreground="{Binding IconBrush}" HorizontalAlignment="Left"
@@ -581,11 +581,11 @@
                                             <TextBlock Text="{Binding RuleLabel}"
                                                        Foreground="{Binding RuleLabelBrush}"
                                                        FontWeight="SemiBold"
-                                                       FontFamily="monospace" FontSize="10"
+                                                       FontFamily="{DynamicResource Font.Mono}" FontSize="10"
                                                        IsVisible="{Binding HasRuleLabel}"/>
                                             <TextBlock Text="{Binding Description}"
                                                        Foreground="{DynamicResource TextLightBrush}"
-                                                       FontFamily="monospace" FontSize="10"
+                                                       FontFamily="{DynamicResource Font.Mono}" FontSize="10"
                                                        TextTrimming="CharacterEllipsis"/>
                                         </StackPanel>
                                         <Button Grid.Column="3"

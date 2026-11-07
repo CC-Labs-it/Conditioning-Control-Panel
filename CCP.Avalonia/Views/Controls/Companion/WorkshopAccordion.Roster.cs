@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.LogicalTree;
 using Avalonia.Platform.Storage;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
@@ -57,6 +58,13 @@ public partial class WorkshopAccordion
         // WPF CompanionService.cs:307: IsCompanionUnlocked always returns true.
         // WPF MainWindow.CompanionTab.cs:367-456: picker, assignment and result dialog.
         var name = CompanionDefinition.GetById((CompanionId)index).Name;
+        // One owner: inside the shell the WPF path (MainWindow.CompanionTab.cs:367-456: import through the
+        // room's community service, assign, apply if active, refresh labels) runs there, on this picker.
+        if (owner is Windows.MainShellWindow shell && this.FindLogicalAncestorOfType<CompanionRoomView>() is { } room)
+        {
+            await shell.AssignCompanionPersonalityAsync(index, room, () => RosterPromptPicker(owner, name));
+            return;
+        }
         try
         {
             var path = await RosterPromptPicker(owner, name);

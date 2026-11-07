@@ -8,8 +8,9 @@ using System;
 using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Media;
-using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Threading;
+using Avalonia.Markup.Xaml.MarkupExtensions;
+using Avalonia.Styling;
 using ConditioningControlPanel.Services.Descent;
 using Serilog;
 

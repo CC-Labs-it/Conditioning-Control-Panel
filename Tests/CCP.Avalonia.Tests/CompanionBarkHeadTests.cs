@@ -228,7 +228,7 @@ public sealed class CompanionBarkHeadTests
                 var batch = Enumerable.Range(0, 3).Select(_ => ((global::Avalonia.Media.Imaging.Bitmap)new global::Avalonia.Media.Imaging.WriteableBitmap(
                     new global::Avalonia.PixelSize(1, 1), new global::Avalonia.Vector(96, 96)), default(global::Avalonia.PixelRect), "synthetic.png",
                     (global::Avalonia.Platform.Screen)null!)).ToList();
-                FlashOverlay.Schedule(batch, 0, 0, int.MinValue, 99, 1, System.TimeSpan.Zero, System.TimeSpan.Zero, false, false, 0, null);
+                FlashOverlay.Schedule(batch, 0, 0, int.MinValue, 1, System.TimeSpan.Zero, System.TimeSpan.Zero, false, false, 0, null);
             }
             else SubliminalOverlay.Present(card);
             Assert.Equal("shown", spoken());

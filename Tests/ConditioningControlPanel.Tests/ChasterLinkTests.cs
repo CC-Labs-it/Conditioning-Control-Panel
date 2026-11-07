@@ -45,7 +45,7 @@ public class ChasterLinkTests : IDisposable
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "ccp-chaster-link-" + Guid.NewGuid().ToString("N"));
     private readonly Broker _broker = new();
     private readonly MemoryStore _store = new();
-    private readonly HttpClient _browser = new();
+    private readonly HttpClient _browser = new(new HttpClientHandler { UseProxy = false });
     private readonly ChasterService _service;
 
     public ChasterLinkTests()
@@ -115,9 +115,11 @@ public class ChasterLinkTests : IDisposable
     {
         var (flow, state) = Start();
 
-        var page = await _browser.GetStringAsync(Callback + "?state=" + state);
-
+        using var response = await _browser.GetAsync(Callback + "?state=" + state, HttpCompletionOption.ResponseHeadersRead);
+        response.EnsureSuccessStatusCode();
+        Assert.True(response.Headers.ConnectionClose);
         Assert.Equal(LinkOutcome.Failed, await flow);
+        var page = await response.Content.ReadAsStringAsync();
         Assert.Contains("Not linked", page);
         Assert.Empty(_broker.Bodies);
     }
@@ -127,8 +129,30 @@ public class ChasterLinkTests : IDisposable
     {
         var (flow, state) = Start();
 
-        await _browser.GetStringAsync(Callback + "?error=denied&state=" + state);
+        using var response = await _browser.GetAsync(Callback + "?error=denied&state=" + state);
+        response.EnsureSuccessStatusCode();
+        var page = await response.Content.ReadAsStringAsync();
 
+        Assert.True(response.Headers.ConnectionClose, "The one-shot callback must close the browser connection gracefully.");
+        Assert.Contains("Not linked", page);
+        Assert.Equal(LinkOutcome.Denied, await flow);
+        Assert.False(_service.IsLinked);
+        Assert.Empty(_broker.Bodies);
+    }
+
+    [Fact]
+    public async Task A_refusal_delivers_a_complete_page_on_a_closed_connection()
+    {
+        var (flow, state) = Start();
+        using var response = await _browser.GetAsync(Callback + "?error=denied&state=" + state,
+            HttpCompletionOption.ResponseHeadersRead);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.Headers.ConnectionClose);
+        var body = await response.Content.ReadAsByteArrayAsync();
+        Assert.Equal(response.Content.Headers.ContentLength, body.LongLength);
+        var page = System.Text.Encoding.UTF8.GetString(body);
+        Assert.Contains("Not linked", page);
+        Assert.EndsWith("</html>", page);
         Assert.Equal(LinkOutcome.Denied, await flow);
         Assert.False(_service.IsLinked);
         Assert.Empty(_broker.Bodies);

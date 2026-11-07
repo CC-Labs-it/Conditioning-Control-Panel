@@ -188,6 +188,9 @@ public sealed class ProgramTodayCardTests
         double Nudged(double seconds)
         {
             time.Advance(TimeSpan.FromSeconds(seconds));
+            // A forced tick needs a pending composition batch. A wall-clock frame can
+            // re-run the nudge at unchanged X, so request a commit before stepping.
+            art.InvalidateVisual();
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             // A real 60 fps headless tick between pumps renders a frame at the same stepped time, which
             // commits nothing; MediaContext then hands the next frame to its 16 ms wall-clock timer, which

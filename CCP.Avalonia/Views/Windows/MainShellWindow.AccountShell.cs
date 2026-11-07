@@ -1,15 +1,16 @@
-// PORTED-AS-A-STUB from ConditioningControlPanel/MainWindow/MainWindow.AccountShell.cs (506 lines).
-//
-// Most account/update members still need services that are not on this head. Language is different:
-// CoreSettings and LocalizationManager are already cross-platform, so the two selectors share the
-// WPF head's single writer and persistence path here.
+// PORTED from ConditioningControlPanel/MainWindow/MainWindow.AccountShell.cs.
+// Account navigation lives in Settings/TabNavigation, Rich Presence in SettingsTabView and
+// ProfilePrivacyPanel, and notifications in App startup. The legacy quick-provider buttons and
+// shell check-updates handler have no live WPF caller (ledger row shell-account-shell, docs/avalonia-parity.html).
 
 using System;
 using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Data.Converters;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -52,14 +53,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ? "tooltip_update_to_version_install" : "tooltip_update_to_version_download", version));
         }
 
-        /// <summary>WPF MainWindow.AccountShell.cs:510.</summary>
-        internal void ShowUpdateAvailableButton(bool updateAvailable)
+        /// <summary>WPF MainWindow.AccountShell.cs:509: status notifications may arrive off-thread;
+        /// paint the tag, caption and tooltip together before returning, as Dispatcher.Invoke does there.</summary>
+        internal void ShowUpdateAvailableButton(bool updateAvailable) => Dispatcher.UIThread.Invoke(() =>
         {
             if (Named<Button>("BtnUpdateAvailable") is not { } b) return;
             b.Tag = updateAvailable ? "UpdateAvailable" : "NoUpdate";
             b.Bind(ContentControl.ContentProperty, LocF(updateAvailable ? "btn_update_now" : "btn_update_up_to_date", null));
             b.Bind(ToolTip.TipProperty, LocF(updateAvailable ? "tooltip_update_now" : "tooltip_update_up_to_date", null));
-        }
+        });
 
         private static Binding LocF(string key, string? arg) => new($"[{key}]")
         {
@@ -82,31 +84,59 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (combo is null) return;
 
             _syncingLanguageSelectors = true;
-            try
-            {
-                combo.Items.Clear();
-                var current = CoreSettings.Current.Language;
-                var selectedIndex = 0;
-
-                for (var i = 0; i < LocalizationManager.AvailableLanguages.Length; i++)
-                {
-                    var (code, displayName, shortName) = LocalizationManager.AvailableLanguages[i];
-                    var item = new ComboBoxItem
-                    {
-                        Content = shortLabels ? $"🌐 {shortName}" : displayName,
-                        Tag = code,
-                    };
-                    ToolTip.SetTip(item, displayName);
-                    combo.Items.Add(item);
-                    if (code == current) selectedIndex = i;
-                }
-
-                combo.SelectedIndex = selectedIndex;
-            }
+            try { FillLanguageCombo(combo, shortLabels); }
             finally
             {
                 _syncingLanguageSelectors = false;
             }
+        }
+
+        /// <summary>
+        /// WPF MainWindow.FillLanguageCombo: the language list itself, and the only copy of it.
+        /// Shared with the first-run wizard's Welcome step, which offers the same languages in the
+        /// same order before the shell has a Settings page to offer them from. Static and unguarded
+        /// on purpose: the re-entrancy flag belongs to the shell's surfaces, not to the list.
+        /// </summary>
+        internal static void FillLanguageCombo(ComboBox? combo, bool shortLabels)
+        {
+            if (combo is null) return;
+
+            combo.Items.Clear();
+            var current = CoreSettings.Current.Language;
+            var selectedIndex = 0;
+
+            for (var i = 0; i < LocalizationManager.AvailableLanguages.Length; i++)
+            {
+                var (code, displayName, shortName) = LocalizationManager.AvailableLanguages[i];
+                var item = new ComboBoxItem
+                {
+                    Tag = code,
+                };
+                LanguageFlag.Dress(combo, item, code, shortLabels ? shortName : displayName);
+                ToolTip.SetTip(item, displayName);
+                combo.Items.Add(item);
+                if (code == current) selectedIndex = i;
+            }
+
+            combo.SelectedIndex = selectedIndex;
+        }
+
+        /// <summary>
+        /// WPF MainWindow.SetApplicationLanguage: the language write with no shell chrome attached -
+        /// the setting, the live LocalizationManager switch and the save. True when it changed.
+        /// The first-run wizard takes this path before it has an owner; everything else goes
+        /// through <see cref="ApplyLanguageSelection"/>, which wraps it.
+        /// </summary>
+        internal static bool SetApplicationLanguage(string? langCode)
+        {
+            var code = string.IsNullOrWhiteSpace(langCode) ? "en" : langCode!;
+            var settings = CoreSettings.Current;
+            if (settings.Language == code) return false;
+
+            settings.Language = code;
+            LocalizationManager.Instance.SetLanguage(code);
+            CoreSettings.Save();
+            return true;
         }
 
         private void CmbLanguagePill_SelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -124,14 +154,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (_syncingLanguageSelectors) return;
             var code = string.IsNullOrWhiteSpace(langCode) ? "en" : langCode!;
-            var settings = CoreSettings.Current;
 
-            if (settings.Language != code)
+            if (SetApplicationLanguage(code))
             {
-                settings.Language = code;
-                LocalizationManager.Instance.SetLanguage(code);
-                CoreSettings.Save();
-
                 // Match WPF: the live bindings update now, while code-behind strings finish on a
                 // restart. This control is absent on the headless view paths, so the notification
                 // remains safe before a Window has been shown.

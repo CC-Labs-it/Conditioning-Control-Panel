@@ -336,7 +336,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     public sealed class CompanionHeroCardViewModel : INotifyPropertyChanged
     {
         private string _name = string.Empty, _modName = string.Empty, _flavor = string.Empty;
-        private bool _isCompanionEnabled = true, _isAiLive, _isAiLocked, _isAwarenessOpen, _isMuted, _isCompanionShown = true;
+        private bool _isCompanionEnabled = true, _isAiLive, _isAiLocked, _isAwarenessOpen, _isMuted, _isCompanionShown = true, _isRainWardrobeAvailable;
         private string _aiPillText = string.Empty, _awarenessPillText = string.Empty;
         private int _level = 1;
         private double _xpFraction;
@@ -351,7 +351,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         internal static CompanionHeroCardViewModel CreatePreview(string exhibit)
         {
             var vm = new CompanionHeroCardViewModel { _preview = true };
-            vm.ChatCommand = vm.DetachCommand = vm.WakeCommand = new RelayCommand(() => { });
+            vm.ChatCommand = vm.DetachCommand = vm.WakeCommand = vm.OpenRainWardrobeCommand = new RelayCommand(() => { });
+            vm.IsRainWardrobeAvailable = true;   // WPF MockCompanionHeroCardVm.IsRainWardrobeAvailable defaults true
             vm.ToggleMuteCommand = new RelayCommand(() => vm.IsMuted = !vm.IsMuted);
             vm.ToggleShownCommand = new RelayCommand(() => vm.IsCompanionShown = !vm.IsCompanionShown);
             vm.Name = "Bambi";
@@ -410,6 +411,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             ToggleMuteCommand = new RelayCommand(() => { Shell?.SetAvatarMuted(!IsMuted); Sync(); });
             ToggleShownCommand = new RelayCommand(() => { Shell?.SetAvatarEnabled(!IsCompanionShown); Sync(); });
             WakeCommand = new RelayCommand(() => { Shell?.SetAvatarEnabled(true); Sync(); });
+            // WPF CompanionHeroRuntimeVm: RainWardrobeHostService.Open. This head has no wardrobe host yet;
+            // the chip stays hidden while RainV2Gate is off (see IsRainWardrobeAvailable in Sync).
+            OpenRainWardrobeCommand = new RelayCommand(() => Log.Debug("Companion hero: Rain's wardrobe has no host on this head"));
             OpenEngineRoomCommand = new RelayCommand(() => Navigator?.RevealEngineRoom());
             FocusAwarenessCommand = new RelayCommand(() => Navigator?.FocusAwareness());
             Header = new CompanionHeaderViewModel(this);
@@ -449,6 +453,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 IsCompanionEnabled = IsCompanionShown;
                 IsMuted = s.AvatarMuted;
                 ChatShortcutHint = AvatarTube.AvatarTubeWindow.FormatChatShortcut();
+                // WPF CompanionHeroRuntimeVm.SyncCore: RainV2Gate.On && a V2 emote folder. The gate is off in this
+                // release and this head ships no wardrobe host, so the live hero shows no wardrobe chip.
+                IsRainWardrobeAvailable = false;
 
                 bool aiOn = s.AiChatEnabled;
                 bool entitled = Header!.Sync();
@@ -515,10 +522,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public string ChatShortcutHint { get => _chatShortcutHint; private set => Set(ref _chatShortcutHint, value); }
         public bool IsMuted { get => _isMuted; private set => Set(ref _isMuted, value); }
         public bool IsCompanionShown { get => _isCompanionShown; private set => Set(ref _isCompanionShown, value); }
+        public bool IsRainWardrobeAvailable { get => _isRainWardrobeAvailable; private set => Set(ref _isRainWardrobeAvailable, value); }
 
         public ICommand ChatCommand { get; private set; }
         public ICommand SwitchCommand { get; }
         public ICommand DetachCommand { get; private set; }
+        public ICommand OpenRainWardrobeCommand { get; private set; }
         public ICommand ToggleMuteCommand { get; private set; }
         public ICommand ToggleShownCommand { get; private set; }
         public ICommand OpenEngineRoomCommand { get; }

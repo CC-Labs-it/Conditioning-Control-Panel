@@ -35,6 +35,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
+        // WPF 325af5076: the 8 px bead is centered on the fill tip, hidden below 5 px.
+        private void XPBar_SizeChanged(object? sender, SizeChangedEventArgs e)
+        {
+            if (Named<Control>("XPTubeBead") is { } bead)
+                bead.IsVisible = !double.IsNaN(e.NewSize.Width) && e.NewSize.Width >= 5;
+        }
+
         private double _xpFraction;
         private Transitions? _xpFillTransition;
 
@@ -163,7 +170,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // instead of importing the trunk's independent 16ms DispatcherTimer.
         private void AnimateXpReadout(TextBlock txt, double xp, double needed, int level)
         {
-            string target = $"{(int)xp} / {(int)needed} XP";
+            // WPF MainWindow.ChromeFx.cs:681 rounds the odometer; :690 truncates the snap path.
+            string target = xp.ToString("F0", System.Globalization.CultureInfo.CurrentCulture) + $" / {(int)needed} XP";
             // Awarded and LevelUp can repaint the same total in one dispatcher turn. Keep the
             // first count alive rather than snapping it to its own target on the second repaint.
             if (_xpOdometer?.IsRunning == true && level == _lastXpLevelShown && xp == _lastXpShown
@@ -171,7 +179,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             double from = !double.IsNaN(_lastXpShown) && level == _lastXpLevelShown ? _lastXpShown : 0;
             (_lastXpShown, _lastXpLevelShown) = (xp, level);
             _xpOdometer?.Stop();
-            _xpReadoutTarget = target;
+            // WPF MainWindow.ChromeFx.cs:677 selects the text independently of visibility.
+            bool wpfCounts = AmbientFxCanvas.Env.AllowTransitions && Math.Abs(xp - from) >= 0.5;
+            _xpReadoutTarget = wpfCounts ? target : $"{(int)xp} / {(int)needed} XP";
             if (_heroClosed || !AmbientFxCanvas.Env.AllowTransitions || !IsVisible
                 || WindowState == WindowState.Minimized || Math.Abs(xp - from) < 0.5)
             {
@@ -179,6 +189,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
             string tail = $" / {(int)needed} XP";
+            txt.Text = from.ToString("F0", System.Globalization.CultureInfo.CurrentCulture) + tail;
             _xpOdometer = new BeatLoop(txt, seconds =>
             {
                 double p = Math.Clamp(seconds / 0.7, 0, 1);
@@ -254,6 +265,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             scale.ScaleX = scale.ScaleY = 1 + 0.35 * amount;
             rotate.Angle = -4 * amount;
         }
+
+        // WPF FlashSaveAbsorb (MainWindow.HeroFx.cs:104-109,702-754) lives in MainShellWindow.HeroMoments.cs
+        // on the shared beat, stopped by panic (shell-hero) and on close.
 
         /// <summary>CelebrateLevelUp's FlashOverlay(XPBarFlashOverlay): 0 -> 1 over 250ms, auto-reversed.</summary>
         private void FlashLevelUp()

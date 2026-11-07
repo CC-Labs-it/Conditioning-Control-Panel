@@ -38,6 +38,10 @@ public sealed class ProgramsToastsTests
         var (seenTab, seenIntro, motion) = (settings.HasSeenProgramsTab, settings.HasSeenProgramsIntro, settings.MotionLevel);
         settings.HasSeenProgramsTab = settings.HasSeenProgramsIntro = true;
         settings.MotionLevel = MotionLevel.Full;
+        // Pinned: an idle engine's start warns about an empty local image library (WPF StartEngine), whatever ran before.
+        var (flash, source, audioOnly, oldAssets) = (settings.FlashEnabled, settings.MediaSource, settings.AudioOnlySession, CorePaths.EffectiveAssetsProvider);
+        (settings.FlashEnabled, settings.MediaSource, settings.AudioOnlySession) = (true, "local", false);
+        CorePaths.EffectiveAssetsProvider = () => Path.Combine(dir, "assets");
         MainShellWindow? shell = null;
         try
         {
@@ -71,6 +75,8 @@ public sealed class ProgramsToastsTests
             AvApp.Programs?.Dispose();
             (AvApp.Programs, AvApp.Sessions, CoreProgram.TaskAvailableProvider) = (oldPrograms, oldSessions, oldTask);
             (settings.HasSeenProgramsTab, settings.HasSeenProgramsIntro, settings.MotionLevel) = (seenTab, seenIntro, motion);
+            (settings.FlashEnabled, settings.MediaSource, settings.AudioOnlySession) = (flash, source, audioOnly);
+            CorePaths.EffectiveAssetsProvider = oldAssets;
             CoreSession.IsSessionRunningProvider = null;
             Directory.Delete(dir, true);
         }
@@ -88,17 +94,20 @@ public sealed class ProgramsToastsTests
         var toasts = new System.Collections.Generic.List<Control>();
         host.Children.CollectionChanged += (_, e) => { foreach (Control c in e.NewItems ?? Array.Empty<Control>()) toasts.Add(c); };
         var title = svc.ActiveProgram!.Title;
+        // WPF StartProgramSession -> StartEngineFromUser -> StartEngine (StartStop.cs:313-318): an idle engine's
+        // start warns about the empty image library first, then OnSessionStarted announces the program.
+        var noImages = string.Format(Loc.Get("msg_no_flash_images"), Loc.Get("nav_door_library"), Loc.Get("tab_assets"));
 
         await shell.StartProgramSessionAsync();
         Dispatcher.UIThread.RunJobs();
         Assert.True(runner.IsRunning && svc.IsProgramSession(runner.CurrentSession));
-        Assert.Single(toasts);
-        Assert.Equal(Loc.GetF("programs_toast_session_started", title, svc.ActiveEnrollment!.CurrentDay), ToastText(toasts[^1]));
+        Assert.Equal(new[] { noImages, Loc.GetF("programs_toast_session_started", title, svc.ActiveEnrollment!.CurrentDay) },
+            toasts.Select(ToastText));
 
         // Panic cuts it short: WPF still says so (OnSessionStopped -> AnnounceProgramSessionEnded).
         PanicSurfaces.StopAll("test", shell);
         Dispatcher.UIThread.RunJobs();
-        Assert.Equal(2, toasts.Count);
+        Assert.Equal(3, toasts.Count);
         Assert.Equal(Loc.GetF("programs_toast_session_ended_early", title), ToastText(toasts[^1]));
 
         await shell.StartProgramSessionAsync();
@@ -107,8 +116,10 @@ public sealed class ProgramsToastsTests
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(new[]
         {
+            noImages,
             Loc.GetF("programs_toast_session_started", title, svc.ActiveEnrollment!.CurrentDay),
             Loc.GetF("programs_toast_session_ended_early", title),
+            noImages,   // the panic stopped the engine, so this start warns again
             Loc.GetF("programs_toast_session_started", title, svc.ActiveEnrollment!.CurrentDay),
             Loc.GetF("programs_toast_session_completed", title),
         }, toasts.Select(ToastText));
@@ -124,14 +135,14 @@ public sealed class ProgramsToastsTests
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("programs", shell.CurrentTab);
 
-        // A foreign session is silent at both ends.
+        // A foreign session is silent at both ends: only its idle engine's library warning shows.
         var count = toasts.Count;
         shell.StartSession(Session.MorningDrift);
         Dispatcher.UIThread.RunJobs();
         Assert.True(runner.IsRunning);
         runner.Stop(completed: false);
         Dispatcher.UIThread.RunJobs();
-        Assert.Equal(count, toasts.Count);
+        Assert.Equal(new[] { noImages }, toasts.Skip(count).Select(ToastText));
     });
 
     [Theory]

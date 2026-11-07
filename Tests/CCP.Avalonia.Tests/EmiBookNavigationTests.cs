@@ -54,7 +54,7 @@ public sealed class EmiBookNavigationTests : IDisposable
             for (int tab = 0; tab < 3; tab++)
             {
                 Click(book, "Tab" + tab);
-                var cards = EmiBookCards.All.Where(c => c.Tab == tab).ToArray();
+                var cards = EmiBookCards.All.Where(c => c.Id != "prize-counter" && c.Tab == tab).ToArray();
                 var rail = book.FindControl<StackPanel>("Rail")!;
                 Assert.Equal(cards.Length, rail.Children.Count);
                 for (int i = 0; i < cards.Length; i++)
@@ -73,7 +73,7 @@ public sealed class EmiBookNavigationTests : IDisposable
                 Assert.Equal(cards[^1].Id, book.Painter!.Id);
                 Assert.Equal(1, ((Image)((Button)rail.Children[^1]).Content!).Opacity);
             }
-            Assert.Equal(EmiBookCards.All.Count, seen.Distinct().Count());
+            Assert.Equal(EmiBookCards.All.Count - 1, seen.Distinct().Count());
             Assert.Contains("avares://", book.FindControl<TextBlock>("CardTitle")!.FontFamily.ToString());
             Assert.Contains("avares://", book.FindControl<TextBlock>("CardGist")!.FontFamily.ToString());
             foreach (var (name, expected) in new[] { ("CardTitle", "Press Start 2P"), ("CardGist", "Noto Sans Mono") })
@@ -82,6 +82,47 @@ public sealed class EmiBookNavigationTests : IDisposable
                 Assert.True(FontManager.Current.TryGetGlyphTypeface(new Typeface(family), out var face));
                 Assert.Equal(expected, face!.FamilyName);
             }
+        }
+        finally { book.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public void CounterCardStaysInWpfButEveryAvaloniaIndexUsesTheVisibleDeck()
+    {
+        Assert.Single(EmiBookCards.All, card => card.Id == "prize-counter");
+        Assert.DoesNotContain(AvaloniaEmiBookCards.All, card => card.Id == "prize-counter");
+        Assert.Equal(EmiBookCards.All.Where(card => card.Id != "prize-counter"), AvaloniaEmiBookCards.All);
+        Assert.Equal(-1, AvaloniaEmiBookCards.IndexOf("prize-counter"));
+        Assert.Equal(-1, AvaloniaEmiBookCards.IndexOf(null));
+        Assert.Equal(-1, AvaloniaEmiBookCards.IndexOf("missing"));
+        for (int i = 0; i < AvaloniaEmiBookCards.All.Count; i++)
+            Assert.Equal(i, AvaloniaEmiBookCards.IndexOf(AvaloniaEmiBookCards.All[i].Id));
+        for (int tab = 0; tab < 3; tab++)
+        {
+            int first = AvaloniaEmiBookCards.FirstOnTab(tab);
+            Assert.True(AvaloniaEmiBookCards.TabHasCards(tab));
+            Assert.Equal(tab, AvaloniaEmiBookCards.All[first].Tab);
+        }
+        Assert.False(AvaloniaEmiBookCards.TabHasCards(3));
+    }
+
+    [Fact]
+    public Task HiddenCounterBookmarkCannotOpenOrNavigateToTheShopCard() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var book = new EmiBookWindow();
+        try
+        {
+            book.OpenBook("prize-counter");
+            Assert.Equal(AvaloniaEmiBookCards.All[0].Id, book.Painter!.Id);
+            var last = AvaloniaEmiBookCards.All[^1];
+            book.GoTo(last.Id);
+            Assert.Equal(last.Id, book.Painter!.Id);
+            book.GoTo("prize-counter");
+            Assert.Equal(last.Id, book.Painter!.Id);
+            Click(book, "BtnNext");
+            Assert.Equal(last.Id, book.Painter!.Id);
         }
         finally { book.Close(); }
         return Task.CompletedTask;

@@ -4,45 +4,9 @@ using ConditioningControlPanel.Services.EmiDesk;
 namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 public partial class EmiDeskWindow
 {
-    private DispatcherTimer? _speechTimer;
-    private int _speechStage;
-    private EmiChain? _speechChain;
-    private Action? _speechDone;
-    private void BeginSpeech(string? line, string face, Action? done)
-    {
-        if (PresentationActive) return; // WPF EmiDeskWindow.xaml.cs:1048,1077
-        CancelChain();
-        _speechChain = EmiChains.MakeSay(line, face, EmiChains.SayHoldMs(line));
-        _speechDone = done;
-        _speechStage = -1;
-        _speechTimer = new DispatcherTimer();
-        _speechTimer.Tick += (_, _) => AdvanceSpeech();
-        AdvanceSpeech();
-        _speechTimer.Start();
-    }
-    internal void AdvanceSpeech()
-    {
-        if (_speechTimer == null || _speechChain == null) return;
-        if (++_speechStage >= _speechChain.Seq.Count)
-        {
-            var done = _speechDone;
-            CancelSpeech();
-            done?.Invoke();
-            return;
-        }
-        var frame = _speechChain.Seq[_speechStage];
-        DrawFace(frame.Text);
-        OnBubbleTextCore(frame.Bubble);
-        _speechTimer.Interval = TimeSpan.FromMilliseconds(frame.Ms);
-    }
-    private void CancelSpeech()
-    {
-        _speechTimer?.Stop();
-        _speechTimer = null;
-        _speechChain = null;
-        _speechDone = null;
-        OnBubbleTextCore(null);
-    }
+    // Say plays WPF's MakeSay chain through the shared chain player (WPF EmiDeskWindow.xaml.cs:1080-1087);
+    // this test seam elapses its current frame hold, as the frame clock would.
+    internal void AdvanceSpeech() => _player.ElapsePendingHold();
     internal void SpeakLine(LineDraw line, EmiLineEngine engine)
     {
         if (PresentationActive || !IsVisible) return;

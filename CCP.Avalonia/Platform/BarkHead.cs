@@ -94,6 +94,9 @@ internal static class BarkHead
     internal static void Seed(BarkEngine e)
     {
         e.Speak = Speak;
+        // WPF App.xaml.cs:3006: a held idle line is not recorded as spoken (#1468), same policy as the tube.
+        ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.IdleLineVoiced = trigger =>
+            Views.AvatarTube.AvatarTubeWindow.MayVoice(ConditioningControlPanel.Services.Companion.CompanionVoicePolicy.IsUnprompted(trigger));
         e.IsSpeaking = () => Views.AvatarTube.AvatarTubeWindow.Live?.IsSpeaking == true;
         e.IsCompanionBusy = ms => Views.AvatarTube.AvatarTubeWindow.Live?.IsCompanionBusy(ms) == true;
         e.EmiDeskAvatarMuted = () => Views.Windows.EmiDesk.EmiDeskService.Instance.AvatarMuted;
@@ -126,16 +129,19 @@ internal static class BarkHead
         CoreSettingsHooks.SettingChangedSink = name => OnSettingChanged(e, name);
     }
 
+    // The desktop lifetime owns the live tube; headless tests supply their shown tube.
+    internal static Func<Views.AvatarTube.AvatarTubeWindow?> TubeProvider = () => Views.AvatarTube.AvatarTubeWindow.Live;
+
     /// <summary>WPF Speak (:1985): preempting barks through GigglePriority, the clip as her voice.
     /// ponytail: an ordinary VOICED bark goes the same way (this tube's Giggle takes no clip); the gate has
     /// already dropped it if she was speaking, so it never cuts a line off.</summary>
     internal static void Speak(BarkSpeech s)
     {
-        var tube = Views.AvatarTube.AvatarTubeWindow.Live;
+        var tube = TubeProvider();
         if (tube == null) return;
-        if (s.SilentEgg || (!s.Priority && s.AudioPath == null)) { tube.Giggle(s.Text); return; }
+        if (s.SilentEgg || (!s.Priority && s.AudioPath == null)) { tube.Giggle(s.Text, unprompted: s.Unprompted); return; }
         tube.GigglePriority(s.Text, playSound: s.AudioPath == null, aiGenerated: false,
-            phraseAudioPath: s.AudioPath, barkVoice: s.AudioPath != null, mood: s.Mood);
+            phraseAudioPath: s.AudioPath, barkVoice: s.AudioPath != null, mood: s.Mood, unprompted: s.Unprompted);
     }
 
     private static readonly Dictionary<string, PropertyInfo?> SettingProps = new(StringComparer.Ordinal);

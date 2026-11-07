@@ -178,7 +178,14 @@ public sealed class ProfileWardrobeTests
 
             // Every pool entry whose art loads is offered (WPF BuildBanners/BuildAvatars), plus "none".
             Assert.Equal(1 + CosmeticsPool.Banners.Count, dialog.FindControl<WrapPanel>("BannerHost")!.Children.Count);
-            Assert.Equal(1 + CosmeticsPool.AvatarPresets.Count, dialog.FindControl<WrapPanel>("AvatarHost")!.Children.Count);
+            var avatars = dialog.FindControl<WrapPanel>("AvatarHost")!.Children;
+            Assert.Equal(1 + CosmeticsPool.AvatarPresets.Count + ShopCosmeticsRegistry.Avatars.Count(), avatars.Count);
+            foreach (var item in ShopCosmeticsRegistry.Avatars)
+            {
+                var name = Loc.Get(item.NameKey);
+                Assert.Single(avatars.OfType<Border>(), tile => ToolTip.GetTip(tile) is string tip
+                    && (tip == name || tip.StartsWith(name + Environment.NewLine, StringComparison.Ordinal)));
+            }
             Assert.IsType<ImageBrush>(((Border)Tile("AvatarHost", "Twin Tails").Child!).Background);
 
             // Pins draw the achievement art; an achievement without art is not offered (WPF BuildPinTile).

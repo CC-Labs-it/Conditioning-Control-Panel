@@ -25,8 +25,10 @@ public sealed class ConditioningSyncTests
         s.TotalConditioningMinutes = local;
         ProfileAdopt.ApplySyncResponse(s, new JObject { ["user"] = new JObject(), ["total_conditioning_minutes"] = server }, System.DateTime.UtcNow);
         Assert.Equal(expected, s.TotalConditioningMinutes);
-        var body = JObject.Parse(JsonConvert.SerializeObject(SyncPush.Body(s, null)));
+        // The minutes ride the push once a read has armed them (SyncPush.NoteProgressRead / a sync reply).
+        var body = JObject.Parse(JsonConvert.SerializeObject(SyncPush.Body(s, null, knownProgress: SyncBody.Field.TotalConditioningMinutes)));
         Assert.Equal(expected, body.Value<double>("total_conditioning_minutes"));
+        Assert.Null(JObject.Parse(JsonConvert.SerializeObject(SyncPush.Body(s, null)))["total_conditioning_minutes"]);
     }
 
     [Theory]

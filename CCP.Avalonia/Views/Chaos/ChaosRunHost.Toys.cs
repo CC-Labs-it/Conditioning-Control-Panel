@@ -53,8 +53,24 @@ internal static partial class ChaosRunHost
                 if (s.Config.ColorFlashesEnabled) _fx?.Pulse(Color.FromRgb(150, 220, 255), 0.35);
                 s.PushEvent(Loc.Get(maxed ? "chaos_toy_snap_all" : "chaos_toy_snap_live"));
                 return true;
+            case "porn_dvd":
+            {
+                if (_overlay == null) return false;
+                // WPF ChaosModeService.cs:2722-2734, :2780. Reuse the existing toy gates and flock.
+                int lvl = ChaosMeta.BoonLevel(toy.Id);
+                double speed = lvl switch { 1 => 0.7, 2 => 0.85, _ => 1.0 };
+                double scale = lvl switch { 1 => 0.8, 2 => 0.9, _ => 1.0 };
+                ChaosDvdOverlay.Launch(_overlay, Math.Max(5, power), speed, scale,
+                    count: maxed ? 2 : 1, splitBounces: s.DvdSplitBounces);
+                ChaosOverlayWindow.ChaosSfx.Play("dvd_launch", 0.55f);
+                ChaosEffectBannerOverlay.Show("dvd", Loc.Get("chaos_dvd_title"), Color.FromRgb(0xFF, 0x69, 0xB4));
+                _dvdBannerOn = true;
+                // WPF ChaosModeService.cs:2733; the HUD draws the catalogue prefix as an IconGlyph.
+                s.PushEvent($"{toy.Glyph} {Loc.Get("chaos_dvd_loading")}");
+                return true;
+            }
             default:
-                // ponytail: freeze, DVD contact, rabbit motion/aim and charged arcs need their
+                // ponytail: freeze, rabbit motion/aim and charged arcs need their
                 // BubbleService mechanics ported; do not award first_play for an inert toy.
                 return false;
         }
@@ -108,13 +124,21 @@ internal static partial class ChaosRunHost
             }
         }
         _snapRemaining = Math.Max(0, _snapRemaining - ChaosRunEngine.TICK_SEC);
+        // WPF TickActiveToys (:3020-3027): DVD glow and banner follow toy logos, not thoughts.
+        bool dvdLive = ChaosDvdOverlay.AnyToyActive;
         foreach (var toy in _state.ActiveToys)
             toy.IsEffectActive = toy.Id switch
             {
                 "vibe_popping" => _vibeRemaining > 0,
                 "snap_field" => _snapRemaining > 0,
+                "porn_dvd" => dvdLive,
                 _ => false,
             };
+        if (_dvdBannerOn && !dvdLive)
+        {
+            ChaosEffectBannerOverlay.End("dvd");
+            _dvdBannerOn = false;
+        }
     }
 
     // WPF ChaosModeService.cs:3177-3181,3230-3234,3313-3317.
@@ -124,6 +148,7 @@ internal static partial class ChaosRunHost
         _sweepTimer = null;
         _vibeRemaining = _snapRemaining = 0;
         _afterglow = _vibeHover = false;
+        _dvdBannerOn = false;
         ChaosVibeTrailOverlay.CloseActive();
         ChaosEffectBannerOverlay.End("vibe");
     }

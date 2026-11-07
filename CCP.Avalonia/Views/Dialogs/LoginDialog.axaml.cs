@@ -52,6 +52,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         /// <summary>Test seams: the device-code client and the clock its poll loop waits on.</summary>
         internal static Func<V2DeviceCodeService> DeviceCodes = () => new V2DeviceCodeService();
         internal static TimeProvider Clock = TimeProvider.System;
+        internal static Func<Window, string, string, Task> Tell =
+            (owner, title, message) => MessageDialog.ShowAsync(owner, title, message);
         private CancellationTokenSource? _deviceCts;
         private string? _deviceCode;
         private DateTimeOffset _deviceCodeExpiresAt;
@@ -139,9 +141,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             public bool ShouldShowOgWelcome { get; set; }
             public string? UnifiedId { get; set; }
             public string? DisplayName { get; set; }
+            public bool? ServerNeedsDisplayName { get; set; }
             public string? Provider { get; set; }
             public string? LinkedProvider { get; set; }
-            public bool? ServerNeedsDisplayName { get; set; }
         }
 
         public LoginDialog()
@@ -748,7 +750,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         {
             // A 5-minute OAuth timeout can land after the dialog closed; a dialog on a closed owner throws and kills the app.
             if (_closed) { Log.Warning("Login error after the dialog closed: {Message}", message); return; }
-            await MessageDialog.ShowAsync(this, Loc.Get("title_error"), message);
+            await Tell(this, Loc.Get("title_error"), message);
             ShowProviderSelection();
         }
 
@@ -764,7 +766,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             if (_closed) { Log.Warning("Sign-in finished after the login dialog closed; ignored"); return; }
             // WPF MainWindow.Login.cs:110-141: a PROVEN different account never inherits the last one's progression.
             ClearIfOtherAccount(user.UnifiedId);
-            ProfileAdopt.ApplyUserData(CoreSettings.Current, user, authToken, DateTime.UtcNow);
+            AccountSeed.ApplyLoginUserData(CoreSettings.Current, user, authToken, DateTime.UtcNow);
             // WPF V2AuthServiceHead: an invite week rides its own exact end date (main 6f5e76610).
             ConditioningControlPanel.Services.Invites.InviteRules.ApplyGrant(CoreSettings.Current, ConditioningControlPanel.Services.Invites.InviteRules.ParseUtc(user.InviteGrantUntilRaw), DateTime.UtcNow);
             Controls.Invites.InvitePanel.ArmExpiry();
@@ -790,12 +792,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             Close(true);
         }
 
-        private static void ClearIfOtherAccount(string? newId)
+        internal static void ClearIfOtherAccount(string? newId)
         {
             var previousId = CoreSettings.Current.UnifiedId;
             if (!string.IsNullOrEmpty(previousId) && !string.IsNullOrEmpty(newId) && previousId != newId)
             {
-                ProgressionClear.Apply(CoreSettings.Current);
+                ProgressionClear.Apply(CoreSettings.Current, clearMigration: true);
                 App.Achievements?.Reset();
                 AccountSeed.Sync?.Reset();
             }
@@ -823,7 +825,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
         private async void BtnLoginDeviceCode_Click()
         {
-            ShowLoading("Generating sign-in code...");
+            ShowLoading(Loc.Get("login_device_generating"));
             try
             {
                 var resp = await DeviceCodes().InitiateAsync();
@@ -865,7 +867,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 ? $"{code[..3]}-{code[3..]}"
                 : code;
             _txtVerificationUrl.Text = VerificationUrl;
-            _txtDeviceStatus.Text = "Waiting for browser confirmation...";
+            _txtDeviceStatus.Text = Loc.Get("login_device_waiting");
         }
 
         /// <summary>WPF used Process.Start with UseShellExecute; Avalonia's Launcher is the
@@ -895,7 +897,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                     // Hard expiry against the server-issued expires_at.
                     if (Clock.GetUtcNow() > _deviceCodeExpiresAt)
                     {
-                        await HandleDeviceCodeError("Sign-in code expired. Please try again.");
+                        await HandleDeviceCodeError(Loc.Get("login_device_expired"));
                         return;
                     }
 
@@ -911,26 +913,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                         case V2DeviceCodeService.PollStatus.Pending:
                             intervalMs = 3000;
                             consecutiveUnknown = 0;
-                            _txtDeviceStatus.Text = "Waiting for browser confirmation...";
+                            _txtDeviceStatus.Text = Loc.Get("login_device_waiting");
                             break;
 
                         case V2DeviceCodeService.PollStatus.Expired:
-                            await HandleDeviceCodeError("Sign-in code expired. Please try again.");
+                            await HandleDeviceCodeError(Loc.Get("login_device_expired"));
                             return;
 
                         case V2DeviceCodeService.PollStatus.NotFound:
-                            await HandleDeviceCodeError("Sign-in code wasn't recognized. Please try again.");
+                            await HandleDeviceCodeError(Loc.Get("login_device_failed"));
                             return;
 
                         case V2DeviceCodeService.PollStatus.RateLimited:
                         case V2DeviceCodeService.PollStatus.ServiceUnavailable:
                             intervalMs = Math.Min(intervalMs * 2, 30000);
-                            _txtDeviceStatus.Text = "Connection busy, retrying...";
+                            _txtDeviceStatus.Text = Loc.Get("login_device_retrying");
                             break;
 
                         case V2DeviceCodeService.PollStatus.BadRequest:
                         case V2DeviceCodeService.PollStatus.Unauthorized:
-                            await HandleDeviceCodeError("Sign-in failed. Please try again.");
+                            await HandleDeviceCodeError(Loc.Get("login_device_failed"));
                             return;
 
                         case V2DeviceCodeService.PollStatus.Unknown:
@@ -938,11 +940,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                             consecutiveUnknown++;
                             if (consecutiveUnknown >= 5)
                             {
-                                await HandleDeviceCodeError("Lost connection to server. Please try again.");
+                                await HandleDeviceCodeError(Loc.Get("login_device_lost"));
                                 return;
                             }
                             intervalMs = Math.Min(intervalMs * 2, 30000);
-                            _txtDeviceStatus.Text = "Connection issue, retrying...";
+                            _txtDeviceStatus.Text = Loc.Get("login_device_retrying");
                             break;
                     }
 
@@ -953,7 +955,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             catch (Exception ex)
             {
                 Log.Error(ex, "[DeviceCode] Poll loop crashed");
-                await HandleDeviceCodeError("Unexpected error. Please try again.");
+                await HandleDeviceCodeError(Loc.Get("login_device_failed"));
             }
         }
 
@@ -961,7 +963,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         {
             if (string.IsNullOrEmpty(result.AuthToken) || string.IsNullOrEmpty(result.UnifiedId))
             {
-                await HandleDeviceCodeError("Server returned an incomplete response.");
+                await HandleDeviceCodeError(Loc.Get("login_device_failed"));
                 return;
             }
             _deviceCts?.Cancel();
@@ -1011,7 +1013,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             {
                 if (Clipboard is null) return;
                 await Clipboard.SetTextAsync(_deviceCode);
-                _txtDeviceStatus.Text = "Code copied. Paste in your browser.";
+                _txtDeviceStatus.Text = Loc.Get("login_device_copied");
             }
             catch (Exception)
             {

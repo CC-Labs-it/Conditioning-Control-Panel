@@ -4,12 +4,17 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
+using Avalonia.LogicalTree;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls;
+using IconKind = FluentIcons.Common.Symbol;
+using IconVariant = FluentIcons.Common.IconVariant;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
@@ -21,6 +26,42 @@ namespace CCP.Avalonia.Tests;
 /// recents, old-name hint, row verbs, pin menu) and the What moved card, driven from the shell.</summary>
 public sealed class NavSearchTests
 {
+    [Fact]
+    public Task EmptyBoxLeadsWithStarredPinsThenRecentsOnce() => Run(() =>
+    {
+        var s = CoreSettings.Current;
+        s.RailFavorites = new() { "tab.leash", "game.backroom", "tab.quests", "unknown" };
+        s.NavSearchRecents = SettingsPaletteIndex.PushRecent(null, "tab.friends");
+        s.NavSearchRecents = SettingsPaletteIndex.PushRecent(s.NavSearchRecents, "tab.leash");
+        var palette = new SettingsPaletteWindow();
+        // Exercise row generation without measuring text on machines without Inter.
+        typeof(SettingsPaletteWindow).GetMethod("Refresh", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(palette, null);
+        var rows = palette.FindControl<ListBox>("ListResults")!.Items.Cast<PaletteRow>().ToList();
+        Assert.Equal(new[] { "tab.leash", "game.backroom", "tab.quests", "tab.friends" },
+            rows.Take(4).Select(r => r.Entry.Id).ToArray());
+        Assert.All(rows.Take(3), r => Assert.True(r.IsPinned));
+        Assert.False(rows[3].IsPinned);
+        Assert.All(rows.Take(3), r => Assert.Empty(r.WasHint));
+        var template = palette.FindControl<ListBox>("ListResults")!.ItemTemplate!;
+        foreach (var row in rows.Take(4))
+        {
+            var content = template.Build(row)!;
+            content.DataContext = row;
+            var caption = content.GetLogicalDescendants().OfType<TextBlock>().First();
+            var mark = Assert.IsType<IconGlyph>(Assert.Single(caption.Inlines!.OfType<InlineUIContainer>()).Child);
+            Assert.Equal(IconKind.Star, mark.Kind);
+            Assert.Equal(IconVariant.Filled, mark.Variant);
+            Assert.Null(mark.Emoji);
+            Assert.Equal(row.IsPinned, mark.IsVisible);
+        }
+        Assert.Equal("", rows[3].WasHint);
+        Assert.Equal(rows.Count, rows.Select(r => r.Entry.Id).Distinct().Count());
+        Assert.All(SettingsPaletteIndex.Search(""), e => Assert.Contains(rows, r => r.Entry.Id == e.Id));
+        Assert.DoesNotContain(rows, r => r.Entry.Id == "unknown");
+        palette.Close();
+    });
+
     [Fact]
     public Task NoHitsShowsWhatWasTypedTheNearestGuessAndEveryPage() => Run(() =>
     {
