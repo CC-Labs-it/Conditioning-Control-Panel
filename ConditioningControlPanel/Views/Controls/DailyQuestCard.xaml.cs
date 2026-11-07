@@ -61,6 +61,7 @@ namespace ConditioningControlPanel.Views.Controls
         internal event EventHandler? NavigateRequested;
 
         private bool _canNavigate;
+        private bool _pressArmed; // the press began on this card (a drag ending here must not navigate)
 
         /// <summary>Zero-based seat index, echoed back on <see cref="RerollRequested"/> by way of
         /// the sender. Set by <see cref="Apply"/>.</summary>
@@ -95,6 +96,7 @@ namespace ConditioningControlPanel.Views.Controls
             Track.SizeChanged += (_, _) => ApplyFraction(animate: false);
             Root.MouseEnter += OnCardMouseEnter;
             Root.MouseLeave += OnCardMouseLeave;
+            Root.MouseLeftButtonDown += OnCardMouseDown;
             Root.MouseLeftButtonUp += OnCardMouseUp;
         }
 
@@ -103,12 +105,18 @@ namespace ConditioningControlPanel.Views.Controls
         {
             _canNavigate = on;
             Root.Cursor = on ? System.Windows.Input.Cursors.Hand : null;
+            if (!on) _pressArmed = false;
             if (!on && Root.IsMouseOver) OnCardMouseLeave(Root, null!);
         }
 
+        private void OnCardMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+            => _pressArmed = _canNavigate;
+
         private void OnCardMouseUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            if (!_canNavigate) return;
+            bool armed = _pressArmed;
+            _pressArmed = false;
+            if (!armed || !_canNavigate || !Root.IsMouseOver) return;
             e.Handled = true;
             NavigateRequested?.Invoke(this, EventArgs.Empty);
         }

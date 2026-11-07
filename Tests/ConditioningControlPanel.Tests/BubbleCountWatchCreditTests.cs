@@ -32,7 +32,38 @@ public class BubbleCountWatchCreditTests
     {
         var w = new BubbleCountWatchCredit();
         w.MarkPlaying(0);
-        Assert.Equal(30, w.Take(95, clipSeconds: 30), 3); // stalled clip, safety timer end
+        Assert.Equal(30, w.Take(95, clipSeconds: 30), 3); // no position known (browser engine)
+    }
+
+    [Fact]
+    public void A_stalled_clip_credits_only_what_played()
+    {
+        var w = new BubbleCountWatchCredit();
+        w.MarkPlaying(0);
+        w.NotePosition(4);
+        w.NotePosition(10);   // stalls here
+        w.NotePosition(9.5);  // an older report never lowers the furthest point
+        Assert.Equal(10, w.Take(65, clipSeconds: 60), 3); // safety timer end
+    }
+
+    [Fact]
+    public void Position_never_raises_the_credit_above_wall_time()
+    {
+        var w = new BubbleCountWatchCredit();
+        w.MarkPlaying(0);
+        w.NotePosition(50);   // a seek forward
+        Assert.Equal(20, w.Take(20, clipSeconds: 60), 3);
+    }
+
+    [Fact]
+    public void The_libvlc_player_reports_its_position()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources")))
+            dir = dir.Parent;
+        Assert.NotNull(dir);
+        var src = File.ReadAllText(Path.Combine(dir!.FullName, "ConditioningControlPanel", "Windows", "BubbleCountWindow.xaml.cs"));
+        Assert.Contains("watch.NotePosition(args.Time / 1000.0)", src);
     }
 
     [Fact]

@@ -32,6 +32,7 @@ namespace ConditioningControlPanel.Views.Tabs
             DailyCard0.NavigateRequested += OnDailyCardNavigateRequested;
             DailyCard1.NavigateRequested += OnDailyCardNavigateRequested;
             DailyCard2.NavigateRequested += OnDailyCardNavigateRequested;
+            WeeklyQuestCard.MouseLeftButtonDown += (_, _) => _weeklyPressArmed = _weeklyNavigable;
             WeeklyQuestCard.MouseLeftButtonUp += OnWeeklyCardMouseUp;
 
             InitDepth();
@@ -50,6 +51,7 @@ namespace ConditioningControlPanel.Views.Tabs
         }
 
         private bool _weeklyNavigable;
+        private bool _weeklyPressArmed; // the press began on the card (a drag ending here must not navigate)
 
         /// <summary>The weekly card is a door only when its quest has a single home and is not done.
         /// A plain card keeps the arrow cursor.</summary>
@@ -61,7 +63,10 @@ namespace ConditioningControlPanel.Views.Tabs
 
         private void OnWeeklyCardMouseUp(object sender, MouseButtonEventArgs e)
         {
-            if (!_weeklyNavigable || Window.GetWindow(this) is not MainWindow mw) return;
+            bool armed = _weeklyPressArmed;
+            _weeklyPressArmed = false;
+            if (!armed || !_weeklyNavigable || !WeeklyQuestCard.IsMouseOver
+                || Window.GetWindow(this) is not MainWindow mw) return;
             e.Handled = true;
             mw.OpenWeeklyQuestDestination();
         }

@@ -634,6 +634,12 @@ namespace ConditioningControlPanel
                     var player = _mediaPlayer;
                     var watch = _watch;
                     int audioRouted = 0; // Playing can fire again after a restart - route once
+                    // #1571 review: the furthest position caps the credit, so a stall that the
+                    // safety timer ends credits what played, not the clip.
+                    player.TimeChanged += (s, args) =>
+                    {
+                        lock (watch) watch.NotePosition(args.Time / 1000.0);
+                    };
                     player.Playing += (s, args) =>
                     {
                         VideoDiag.Log("BUBBLE", "PLAYING (aout is live)");

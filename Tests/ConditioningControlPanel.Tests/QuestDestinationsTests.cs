@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using ConditioningControlPanel.Models;
@@ -58,13 +59,39 @@ public class QuestDestinationsTests
         }
     }
 
-    [Fact]
-    public void Highlighted_controls_exist_in_the_xaml()
+    /// <summary>The XAML file that owns each tab a destination highlights in. A new highlighted
+    /// destination must add its tab here.</summary>
+    private static readonly Dictionary<string, string> TabXaml = new(StringComparer.OrdinalIgnoreCase)
     {
-        var xaml = string.Join("\n", Directory.EnumerateFiles(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Views"), "*.xaml", SearchOption.AllDirectories)
-            .Select(File.ReadAllText));
+        ["lockdown"] = "Views/Tabs/LockdownTabView.xaml",
+        ["bambitakeover"] = "Views/Tabs/BambiTakeoverTabView.xaml",
+        ["remotecontrol"] = "Views/Tabs/RemoteControlTabView.xaml",
+        ["awareness"] = "Views/Tabs/AwarenessTabView.xaml",
+        ["blinktrainer"] = "Views/Tabs/BlinkTrainerTabView.xaml",
+    };
+
+    /// <summary>The palette's FindElementByName walks from the WINDOW root, so a highlighted name
+    /// must live in its own tab's XAML and nowhere else in the app.</summary>
+    [Fact]
+    public void Highlighted_controls_live_in_their_tab_and_are_unique()
+    {
+        var app = Path.Combine(RepoRoot(), "ConditioningControlPanel");
+        var allXaml = Directory.EnumerateFiles(app, "*.xaml", SearchOption.AllDirectories)
+            .Where(f => !f.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar)
+                     && !f.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar))
+            .Select(f => (Path: f, Text: File.ReadAllText(f))).ToList();
+
         foreach (var (c, d) in QuestDestinations.Map.Where(kv => kv.Value.ElementName != null))
-            Assert.True(xaml.Contains($"x:Name=\"{d.ElementName}\""), $"{c}: no element named {d.ElementName}");
+        {
+            Assert.True(TabXaml.TryGetValue(d.TabKey, out var rel), $"{c}: add the XAML file for tab '{d.TabKey}'");
+            var own = Path.GetFullPath(Path.Combine(app, rel!));
+            var mark = $"x:Name=\"{d.ElementName}\"";
+            int Count(string text) => (text.Length - text.Replace(mark, "").Length) / mark.Length;
+
+            var hits = allXaml.Where(x => Count(x.Text) > 0).ToList();
+            Assert.True(hits.Count == 1 && Path.GetFullPath(hits[0].Path) == own && Count(hits[0].Text) == 1,
+                $"{c}: {d.ElementName} should be named once, in {rel}; found in [{string.Join(", ", hits.Select(h => Path.GetFileName(h.Path)))}]");
+        }
     }
 
     [Fact]
