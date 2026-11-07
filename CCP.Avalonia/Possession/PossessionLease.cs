@@ -139,6 +139,23 @@ namespace ConditioningControlPanel.Avalonia.Possession
         public static bool GetExclude(Control c) => c.GetValue(ExcludeProperty);
         public static void SetExclude(Control c, bool v) => c.SetValue(ExcludeProperty, v);
 
+        /// <summary>WPF poss:Possession.Role: an author's hand tag, which beats the shell walk's type
+        /// inference and its never-names blocklist. Not inherited (tagging a card must not enrol its
+        /// children).</summary>
+        public static readonly AttachedProperty<PossessionRole> RoleProperty =
+            AvaloniaProperty.RegisterAttached<PossessionTree, Control, PossessionRole>("Role");
+
+        public static PossessionRole GetRole(Control c) => c.GetValue(RoleProperty);
+        public static void SetRole(Control c, PossessionRole v) => c.SetValue(RoleProperty, v);
+
+        /// <summary>WPF poss:Possession.Name: what the warden calls the control ("the Stop button").
+        /// Deliberately not a loc key (the bark packs own the sentence around it).</summary>
+        public static readonly AttachedProperty<string?> NameProperty =
+            AvaloniaProperty.RegisterAttached<PossessionTree, Control, string?>("Name");
+
+        public static string? GetName(Control c) => c.GetValue(NameProperty);
+        public static void SetName(Control c, string? v) => c.SetValue(NameProperty, v);
+
         /// <summary>Off limits when the control IS excluded, CONTAINS anything excluded, or it or any
         /// ancestor is named for a room the user must be able to leave (lockdown/emergency/secret).</summary>
         public static bool IsOffLimits(Control? el)

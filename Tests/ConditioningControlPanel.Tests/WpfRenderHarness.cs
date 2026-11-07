@@ -127,6 +127,13 @@ internal static class WpfRenderHarness
 
     private static readonly object Gate = new();
     private static bool _ready;
+
+    /// <summary>The one bootstrap pump, its completion signal and what escaped it. Started once
+    /// per process: a slow runner that outlives the wait must not get a rival pump racing the
+    /// first one over the same Application (2026-11-04 windows CI: a 30 s timeout, then
+    /// NullReferenceExceptions inside ResourceDictionary as two threads merged at once).</summary>
+    private static ManualResetEventSlim? _booted;
+    private static Exception? _bootFailure;
     private static Dispatcher? _dispatcher;
 
     /// <summary>The app theme, parked while no render body is running.</summary>
@@ -144,68 +151,70 @@ internal static class WpfRenderHarness
         lock (Gate)
         {
             if (_ready) return;
-
-            Exception? escaped = null;
-            using var ready = new ManualResetEventSlim(false);
-
-            var pump = new Thread(() =>
-            {
-                try
-                {
-                    if (Application.Current == null)
-                    {
-                        _ = new Application
-                        {
-                            // Nothing here opens a Window, so the default OnLastWindowClose would
-                            // shut the Application down the moment a test closed one.
-                            ShutdownMode = ShutdownMode.OnExplicitShutdown
-                        };
-                    }
-
-                    // Merged into a live, Application-owned dictionary one at a time and in
-                    // App.xaml's order. That ordering is not cosmetic: Resources/Theme/
-                    // MainWindow.xaml carries setters like
-                    //   <Setter Property="Foreground" Value="{StaticResource TextLightBrush}"/>
-                    // whose key lives in Brushes.xaml, and those resolve against what is already
-                    // merged when MainWindow.xaml's deferred content is first realized. Build the
-                    // set off to the side and assign it in one go and they resolve to
-                    // DependencyProperty.UnsetValue instead - which surfaces far from the cause, as
-                    // a TextBlock wearing SettingLabel throwing inside MeasureOverride.
-                    _theme = new ResourceDictionary();
-                    Application.Current!.Resources = _theme;
-                    foreach (var relative in AppThemeDictionaries)
-                    {
-                        _theme.MergedDictionaries.Add(new ResourceDictionary
-                        {
-                            Source = new Uri(
-                                "pack://application:,,,/ConditioningControlPanel;component/" + relative,
-                                UriKind.Absolute)
-                        });
-                    }
-
-                    Application.Current.Resources = Empty;
-
-                    _dispatcher = Dispatcher.CurrentDispatcher;
-                }
-                catch (Exception ex) { escaped = ex; }
-                finally { ready.Set(); }
-
-                // Keep the Application's dispatcher alive for the rest of the run, so anything
-                // reaching for Application.Current.Dispatcher finds a pump and not a dead thread.
-                if (escaped == null) Dispatcher.Run();
-            });
-
-            pump.SetApartmentState(ApartmentState.STA);
-            pump.IsBackground = true;   // never keeps the test host alive
-            pump.Start();
-
-            if (!ready.Wait(TimeSpan.FromSeconds(30)))
+            if (_booted == null) StartBootstrap();
+            if (!_booted!.Wait(TimeSpan.FromSeconds(120)))
                 throw new InvalidOperationException("WPF render harness: Application bootstrap timed out");
-            if (escaped != null)
-                throw new InvalidOperationException("WPF render harness: Application bootstrap failed", escaped);
+            if (_bootFailure != null)
+                throw new InvalidOperationException("WPF render harness: Application bootstrap failed", _bootFailure);
 
             _ready = true;
         }
+    }
+
+    private static void StartBootstrap()
+    {
+        var ready = _booted = new ManualResetEventSlim(false);
+
+        var pump = new Thread(() =>
+        {
+            try
+            {
+                if (Application.Current == null)
+                {
+                    _ = new Application
+                    {
+                        // Nothing here opens a Window, so the default OnLastWindowClose would
+                        // shut the Application down the moment a test closed one.
+                        ShutdownMode = ShutdownMode.OnExplicitShutdown
+                    };
+                }
+
+                // Merged into a live, Application-owned dictionary one at a time and in
+                // App.xaml's order. That ordering is not cosmetic: Resources/Theme/
+                // MainWindow.xaml carries setters like
+                //   <Setter Property="Foreground" Value="{StaticResource TextLightBrush}"/>
+                // whose key lives in Brushes.xaml, and those resolve against what is already
+                // merged when MainWindow.xaml's deferred content is first realized. Build the
+                // set off to the side and assign it in one go and they resolve to
+                // DependencyProperty.UnsetValue instead - which surfaces far from the cause, as
+                // a TextBlock wearing SettingLabel throwing inside MeasureOverride.
+                _theme = new ResourceDictionary();
+                Application.Current!.Resources = _theme;
+                foreach (var relative in AppThemeDictionaries)
+                {
+                    _theme.MergedDictionaries.Add(new ResourceDictionary
+                    {
+                        Source = new Uri(
+                            "pack://application:,,,/ConditioningControlPanel;component/" + relative,
+                            UriKind.Absolute)
+                    });
+                }
+
+                Application.Current.Resources = Empty;
+
+                _dispatcher = Dispatcher.CurrentDispatcher;
+            }
+            catch (Exception ex) { _bootFailure = ex; }
+            finally { ready.Set(); }
+
+            // Keep the Application's dispatcher alive for the rest of the run, so anything
+            // reaching for Application.Current.Dispatcher finds a pump and not a dead thread.
+            if (_bootFailure == null) Dispatcher.Run();
+        });
+
+        pump.SetApartmentState(ApartmentState.STA);
+        pump.IsBackground = true;   // never keeps the test host alive
+        pump.Start();
     }
 
     /// <summary>

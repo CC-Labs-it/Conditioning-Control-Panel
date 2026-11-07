@@ -16,6 +16,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using ConditioningControlPanel.Lab.GazeMinigame;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls;
@@ -42,15 +43,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
     ///    <c>App.Flash</c> suspend/resume -> <c>CoreFlash</c>; <c>App.Haptics</c> -> <c>CoreHaptics</c>.
     ///  - Panic closes the game (PanicSurfaces "gaze-minigame"): panic also closes the camera here.
     ///  - Video panes reuse InlineLoopVideo's muted VLC frame sink; GIFs reuse the spiral decoder.
-    ///  - ponytail: still missing - the Flashes / Bubbles / MindWipe / OverlayPulse rewards.
+    ///  - ponytail: Flashes / Bubbles / MindWipe rewards are covered by a separate lane.
     ///  - <c>MessageBox.Show</c> -> this head's <c>Views/Dialogs/MessageDialog.ConfirmAsync</c>,
     ///    so the mid-run "quit the session?" confirmation is raised again (awaited, hence the
     ///    re-test of <c>_gameRunning</c> after it).
     ///  - <c>FolderBrowserDialog</c> -> <c>StorageProvider.OpenFolderPickerAsync</c>.
     ///  - Mouse* -> Pointer*; Avalonia 12's <c>DoDragDropAsync</c> only takes a
-    ///    <see cref="PointerPressedEventArgs"/>, so the drag starts on press and the WPF
-    ///    drag-threshold arming (<c>_dragStart</c> / <c>_dragArmed</c>) is gone, as in
-    ///    SessionEditorWindow. <c>DataObject</c> -> <c>DataTransfer</c> + a typed
+    ///    <see cref="PointerPressedEventArgs"/>, retain the original press until movement crosses the
+    ///    platform threshold. <c>DataObject</c> -> <c>DataTransfer</c> + a typed
     ///    <see cref="DataFormat"/>.
     ///  - Storyboards -> transitions plus awaited delays; the shake is literally its nine
     ///    40ms keyframes written as a loop.
@@ -408,6 +408,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
 
             // Drag to (re)assign.
             card.PointerPressed += Card_PointerPressed;
+            card.PointerMoved += Card_PointerMoved;
+            card.PointerReleased += (_, _) => _dragPress = null;
             return card;
         }
 
@@ -420,21 +422,41 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             VerticalAlignment = VerticalAlignment.Center,
         };
 
-        // ── Drag source ──
-        // WPF armed a flag on PreviewMouseLeftButtonDown and called DoDragDrop from
-        // PreviewMouseMove once the drag threshold was passed. Avalonia 12's DoDragDropAsync
-        // only accepts a PointerPressedEventArgs, so the drag starts on press and the
-        // threshold arming is gone (same trade SessionEditorWindow made).
-        private async void Card_PointerPressed(object? sender, PointerPressedEventArgs e)
+        // WPF GazeMinigameWindow.xaml.cs:307-325: arm on press, drag after movement.
+        private PointerPressedEventArgs? _dragPress;
+        private Point _dragStart;
+        internal Func<PointerPressedEventArgs, IDataTransfer, DragDropEffects, Task<DragDropEffects>> DragPack =
+            DragDrop.DoDragDropAsync;
+
+        private void Card_PointerPressed(object? sender, PointerPressedEventArgs e)
         {
+            _dragPress = null;
             if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+            _dragStart = e.GetPosition(this);
+            _dragPress = e;
+        }
+
+        private async void Card_PointerMoved(object? sender, PointerEventArgs e)
+        {
+            if (_dragPress is not { } press) return;
+            if (e.Pointer != press.Pointer || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            {
+                _dragPress = null;
+                return;
+            }
+            var pos = e.GetPosition(this);
+            // ponytail: Avalonia exposes its platform tap tolerance, not WPF SystemParameters.
+            var threshold = this.GetPlatformSettings()?.GetTapSize(e.Pointer.Type) ?? new Size(4, 4);
+            if (Math.Abs(pos.X - _dragStart.X) < threshold.Width &&
+                Math.Abs(pos.Y - _dragStart.Y) < threshold.Height) return;
+            _dragPress = null; // one drag per press, including while the native drag is awaited
             if (sender is not Border card || card.Tag is not string path) return;
 
             var data = new DataTransfer();
             data.Add(DataTransferItem.Create(DragFormat, path));
             e.Handled = true;
 
-            try { await DragDrop.DoDragDropAsync(e, data, DragDropEffects.Move); }
+            try { await DragPack(press, data, DragDropEffects.Move); }
             catch (Exception ex) { Log.Warning(ex, "GazeMinigame: drag failed"); }
         }
 
@@ -995,8 +1017,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             {
                 // Own IsVisible alone controls InlineLoopVideo's pause; removing the panes below
                 // detaches both players before the feedback screen can hide their ancestor.
-                var leftView = new InlineLoopVideo(leftPath, randomStart: true) { Stretch = Stretch.Uniform };
-                var rightView = new InlineLoopVideo(rightPath, randomStart: true) { Stretch = Stretch.Uniform };
+                var leftView = CreateRoundVideo(leftPath);
+                var rightView = CreateRoundVideo(rightPath);
                 _leftPane.Children.Add(leftView);
                 _rightPane.Children.Add(rightView);
                 AnimateAssetIn(leftView);
@@ -1012,6 +1034,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             _gameRunning = true;
             StartRoundTicker();
         }
+
+        // WPF GazeMinigameWindow.xaml.cs:962-994: each pane plays once, muted, with random seeking.
+        internal static InlineLoopVideo CreateRoundVideo(string path) =>
+            new(path, randomStart: true, loop: false) { Stretch = Stretch.Uniform };
 
         private readonly List<GazeRoundImage> _roundImages = new();
 
@@ -1138,7 +1164,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
                         if (_settings.VibrationMode == GazeVibrationMode.OnCorrect) FireVibration("reward");
                         DisposeCurrentRoundPlayers();
                         PlayJingle();
-                        await ShowFullscreenFeedbackAsync("GOOD GIRL", Color.FromRgb(0xFF, 0x69, 0xB4));
+                        // WPF GazeMinigameWindow.xaml.cs:1208-1210: resolve the active mod at feedback time.
+                        await ShowFullscreenFeedbackAsync(App.Mods?.GetGazeCorrectMessage() ?? "GOOD", Color.FromRgb(0xFF, 0x69, 0xB4));
                         break;
                     case RoundOutcome.Wrong:
                         if (_settings.VibrationMode == GazeVibrationMode.OnWrong) FireVibration("punish");
@@ -1164,13 +1191,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
         //  Reward / vibration triggers
         // ─────────────────────────────────────────────────────────────────────
 
-        /// <summary>
-        /// ponytail: reward-effects follow-up. Audio is wired; port the other four together:
-        /// CoreFlash.ShowProvider / CoreMindWipe.TriggerOnce exist, but WPF's five one-shot
-        /// bubbles and pulse of all active overlays still need equivalent head service entry points.
-        /// </summary>
+        // WPF GazeMinigameWindow.xaml.cs:1263. Other reward effects are covered by a separate lane.
         private void FireRewardEffect(GazeRewardEffect effect)
         {
+            if (effect == GazeRewardEffect.OverlayPulse) { Overlays.OverlayPulse.PulseOverlays(); return; }
             if (effect == GazeRewardEffect.Audio) { PlayRewardAudio(_settings.RewardAudioFile); return; }
             if (effect == GazeRewardEffect.None) return;
             Log.Debug("GazeMinigame: reward effect {Effect} suppressed (reward-effects follow-up)", effect);

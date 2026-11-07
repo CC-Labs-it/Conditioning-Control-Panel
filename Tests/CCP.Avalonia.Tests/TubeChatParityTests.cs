@@ -37,7 +37,8 @@ public sealed class TubeChatParityTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<AvApp>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .WithInterFont().With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var previousSettings = CoreSettings.ServiceProvider;
         var previousAccount = CoreAccount.UnifiedUserId;
@@ -153,8 +154,7 @@ public sealed class TubeChatParityTests
             Assert.Equal(question, speech.Text);   // the thinking ticker is dead
 
             var chip = (Border)buttons.Children[0];
-            tube.UpdateLayout();
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            HeadlessInput.RenderLiveTree(tube);
             var at = chip.TranslatePoint(new Point(chip.Bounds.Width / 2, chip.Bounds.Height / 2), tube)!.Value;
             tube.MouseDown(at, MouseButton.Left);
             tube.MouseUp(at, MouseButton.Left);
@@ -220,7 +220,8 @@ public sealed class TubeChatParityTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<AvApp>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .WithInterFont().With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
@@ -238,7 +239,9 @@ public sealed class TubeChatParityTests
             AvApp.SeedCompanionTubeSeams();
             CompanionBrain.ActivitiesProvider = () => Array.Empty<CompanionActivity>();   // no games, as below
             const string ask = "what can I do";
-            // No launcher here: no games, no sessions -> nothing to build -> no promise.
+            // Explicitly model an unavailable session rack now that the head has a real launcher.
+            CompanionAskService.SessionOptions = () => Array.Empty<AskOption>();
+            // No games, no sessions -> nothing to build -> no promise.
             Assert.False(ConversationDelivery.AskCardsShown!(ask));
             // A Watch card follows only with a mod video pool. CoreMods.Service is process-global and stays
             // attached once any test ran App.StartMods (StartModsTests, ModChoiceTests...), so read it.
