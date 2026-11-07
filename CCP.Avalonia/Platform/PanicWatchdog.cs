@@ -1,5 +1,5 @@
 // PORTED from ConditioningControlPanel/MainWindow/MainWindow.xaml.cs ArmPanicWatchdog (:1025) and
-// RunEmergencyPanicTeardown (:1046), #919b. The listener (Win32PanicKey / X11PanicKey) runs on its own
+// RunEmergencyPanicTeardown (:1046), #919b. The listener (Win32PanicKey / X11PanicKey / the portal) runs on its own
 // thread here, so a wedged UI thread can no longer lose the key itself; it can still sit on the queued
 // handler. This watches that handler from a background thread and, if it has not finished inside
 // 2 s, runs the thread-safe part of the stop off the UI thread.
@@ -51,30 +51,32 @@ internal static class PanicWatchdog
         {
             // The dispatcher refused the post (shutting down or broken): the press must still stop things.
             Log.Error(ex, "Panic: could not queue the handler; tearing down off-thread");
-            RunGuarded();
+            _ = Task.Run(RunGuarded);   // this can be the hook or the D-Bus reader, which must never wait
             return;
         }
         Arm(op.GetTask());
     }
 
     /// <summary>WPF ArmPanicWatchdog: a background watcher, never a wait on the calling thread.</summary>
-    internal static Task Arm(Task handler, TimeSpan? timeout = null) => Task.Run(async () =>
+    internal static Task Arm(Task handler, TimeSpan? timeout = null)
     {
-        try
+        // Attached here, not after the wait: a handler can still throw once the fallback has run.
+        handler.ContinueWith(t => Log.Error(t.Exception, "Panic: the press handler threw"),
+            CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+        return Task.Run(async () =>
         {
-            var finished = await Task.WhenAny(handler, Task.Delay(timeout ?? Timeout)).ConfigureAwait(false);
-            if (finished == handler)
+            try
             {
-                try { _ = handler.Exception; } catch { }   // observe a faulted handler
-                return;
+                var finished = await Task.WhenAny(handler, Task.Delay(timeout ?? Timeout)).ConfigureAwait(false);
+                if (finished == handler) return;   // as WPF: a thrown handler is logged and not torn down
+                RunGuarded();
             }
-            RunGuarded();
-        }
-        catch (Exception ex)
-        {
-            try { Log.Error(ex, "Panic watchdog failed"); } catch { }
-        }
-    });
+            catch (Exception ex)
+            {
+                try { Log.Error(ex, "Panic watchdog failed"); } catch { }
+            }
+        });
+    }
 
     private static void RunGuarded()
     {
