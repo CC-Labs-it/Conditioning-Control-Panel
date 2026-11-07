@@ -6,7 +6,7 @@
 // button lock while a controller drives.
 // ponytail: still missing here - remote-driven session verbs (StartSessionFromRemote & co; Core
 // RemoteCommands refuses them "not on this build"), tray minimise/restore
-// for remote, the RemoteHud pill and controller browser video playback.
+// for remote and controller browser video playback.
 
 using System;
 using System.Linq;
@@ -18,6 +18,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.RemoteHud;
 using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -48,6 +49,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Overlays.SpiralOverlay.Refresh(this);
             };
             RemoteCommands.RefreshOverlays = refreshOverlays;
+            // WPF StopSessionFromRemote (MainWindow.RemoteControl.cs:1407): a forced remote stop ends the session.
+            Action stopSession = () =>
+            {
+                if (App.Sessions is not { IsRunning: true } runner) return;
+                runner.Stop(completed: false);
+                Platform.AccountSeed.Sync?.Nudge("session end");
+            };
+            RemoteCommands.StopSession = stopSession;
             var r = RemoteControlTabView.Relay.Value;
             EventHandler connected = (_, _) => Dispatcher.UIThread.Post(OnRemoteControllerChanged);
             EventHandler idle = (_, _) => Dispatcher.UIThread.Post(OnRemoteControllerIdleChanged);
@@ -65,6 +74,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 r.CommandReceived -= command;
                 _remoteOverlayTimer?.Stop();
                 if (RemoteCommands.RefreshOverlays == refreshOverlays) RemoteCommands.RefreshOverlays = null;
+                if (RemoteCommands.StopSession == stopSession) RemoteCommands.StopSession = null;
+                DisposeRemoteHud();   // WPF OnClosing: an unowned visible window would hold the app open
             };
             // WPF fades the overlay in 300 ms and the toast in 200 ms (out: 200 / 300 ms).
             if (Named<Border>("RemoteControlOverlay") is { } o)
@@ -78,8 +89,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             var connected = RemoteControllerConnected;
             UpdateStartButtonForRemoteControl(connected);
-            if (connected) { ShowRemoteControlOverlay(); NotifyRemoteControllerJoined(); }
-            else HideRemoteControlOverlay();
+            if (connected) { ShowRemoteControlOverlay(); NotifyRemoteControllerJoined(); EnsureRemoteHud(); }
+            else { HideRemoteControlOverlay(); RemoteHudPill?.Refresh(); }
+        }
+
+        /// <summary>WPF MainWindow.RemoteHud.cs: the subject's More / Easy / Stop pill.</summary>
+        internal RemoteHudWindow? RemoteHudPill { get; private set; }
+
+        private void EnsureRemoteHud()
+        {
+            try
+            {
+                RemoteHudPill ??= new RemoteHudWindow(() => RemoteControlTabView.Relay.Value, StopFromRemoteHud, () => this);
+                RemoteHudPill.Refresh();
+            }
+            catch (Exception ex) { Serilog.Log.Warning("RemoteHud: could not show: {E}", ex.Message); }
+        }
+
+        private void DisposeRemoteHud()
+        {
+            var hud = RemoteHudPill;
+            RemoteHudPill = null;
+            hud?.Dispose();
+        }
+
+        /// <summary>WPF StopFromRemoteHud: the local half is exactly what the panic key would do now; with the
+        /// panic key off only the leash safety, else nothing local (the signal still stops the remote's effects).</summary>
+        internal void StopFromRemoteHud()
+        {
+            if (RemoteHudRules.LocalPanicAllowed(CoreSettings.Current.PanicKeyEnabled)) HandlePanicKeyPress(DateTime.Now);
+            else if (LeashHoldLeashed) PanicKeyLeashOnly();
         }
 
         /// <summary>WPF OnRemoteControllerIdleChanged (:818): orange "may be idle", else the grey default.</summary>
@@ -95,6 +134,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF OnRemoteSessionEnded (:832), shell half; the tab unticks itself.</summary>
         internal void OnRemoteSessionEnded()
         {
+            DisposeRemoteHud();   // WPF OnRemoteSessionEnded
             HideRemoteControlOverlay();
             UpdateStartButtonForRemoteControl(false);
         }
@@ -102,6 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF OnRemoteCommandReceived (:1091): quiet verbs make no toast.</summary>
         internal void OnRemoteCommandReceived(string action)
         {
+            RemoteHudPill?.NoteAction(action);
             if (RemoteCommands.Quiet.Contains(action)) return;
             ShowCommandNotification(action);
         }
