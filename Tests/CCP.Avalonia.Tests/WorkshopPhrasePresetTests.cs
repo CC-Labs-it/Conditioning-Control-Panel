@@ -14,6 +14,7 @@ using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Services;
 using Xunit;
 
@@ -33,7 +34,7 @@ public sealed class WorkshopPhrasePresetTests
         s.DisabledPhraseIds.Add("Greeting:0"); s.RemovedPhraseIds.Add("Greeting:2");
         drawer.RefreshPhrasePresets();
         var count = parts.Triggers.FindControl<TextBlock>("TxtPhraseCount")!;
-        Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("label_0_active_2", 1), count.Text);
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("label_active_phrase_count", 1), count.Text);
         Click(CellButton(parts.Triggers, "Save")); Dispatcher.UIThread.RunJobs();
         var dialog = Assert.Single(owner.OwnedWindows);
         Click(CellButton(dialog, "Save")); await Task.Yield(); Dispatcher.UIThread.RunJobs();
@@ -41,7 +42,7 @@ public sealed class WorkshopPhrasePresetTests
         var other = new PhrasePreset { Name = "All", DisabledPhraseIds = new(), RemovedPhraseIds = new() };
         s.PhrasePresets.Add(other); drawer.RefreshPhrasePresets();
         parts.Triggers.FindControl<ComboBox>("CmbPhrasePresets")!.SelectedItem = other;
-        Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("label_0_active_2", 3), count.Text);
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("label_active_phrase_count", 3), count.Text);
     });
 
     [Fact]
@@ -175,6 +176,24 @@ public sealed class WorkshopPhrasePresetTests
         Assert.DoesNotContain("REMOVE", s.UserAddedCustomTriggers);
     });
 
+    [Fact] // WPF MainWindow.Patreon.cs:1557 MarkSilentLines(App.Subliminal.HasRecordedVoice)
+    public Task TriggerEditorMarksLinesWithNoRecordedVoice() => Run(async (drawer, parts, owner, s) =>
+    {
+        const string phrase = "NO CLIP RECORDED FOR THIS TRIGGER 4C72";
+        s.CustomTriggers = new() { phrase };
+        Click(parts.Triggers.FindControl<Button>("BtnEditTriggersCompanion")!);
+        Dispatcher.UIThread.RunJobs();
+        var dialog = Assert.IsType<global::ConditioningControlPanel.Avalonia.Views.Dialogs.TextEditorDialog>(Assert.Single(owner.OwnedWindows));
+        var item = Assert.Single(dialog.FindControl<ItemsControl>("ItemList")!.Items
+            .Cast<global::ConditioningControlPanel.Avalonia.Views.Dialogs.TextItem>());
+        Assert.Equal(phrase, item.Text);
+        Assert.True(item.IsSilent);
+        Assert.True(dialog.FindControl<TextBlock>("TxtSilentHint")!.IsVisible);
+        Click(dialog.FindControl<Button>("BtnCancel")!);
+        await Task.Yield(); Dispatcher.UIThread.RunJobs();
+        Assert.Equal(new[] { phrase }, s.CustomTriggers);
+    });
+
     [Fact]
     public Task CancellingEmptyTriggerEditorKeepsEmptyPool() => Run(async (drawer, parts, owner, s) =>
     {
@@ -216,6 +235,8 @@ public sealed class WorkshopPhrasePresetTests
     {
         var saved = new PhrasePreset { Name = "Saved", DisabledPhraseIds = new() { "saved" } };
         var other = new PhrasePreset { Name = "Other", DisabledPhraseIds = new() { "other" } };
+        other.CustomPhrases.AddRange(s.CustomCompanionPhrases);
+        other.CustomPhrases.Add(new CustomCompanionPhrase { Id = "preset-count", Text = "Preset phrase", Enabled = true });
         s.PhrasePresets.AddRange(new[] { saved, other });
         s.CurrentPhrasePresetId = saved.Id;
         s.DisabledPhraseIds.Add("live");
@@ -225,7 +246,11 @@ public sealed class WorkshopPhrasePresetTests
         Assert.Equal(saved, combo.SelectedItem);
         Assert.Contains("live", s.DisabledPhraseIds);
         Assert.DoesNotContain("saved", s.DisabledPhraseIds);
+        var count = parts.Triggers.FindControl<TextBlock>("TxtPhraseCount")!;
+        var before = count.Text;
         combo.SelectedItem = other;
+        Assert.NotEqual(before, count.Text);
+        Assert.Equal(Loc.GetF("label_active_phrase_count", CompanionPhraseEditorDialog.ActivePhraseCount()), count.Text);
         Assert.Equal(other.Id, s.CurrentPhrasePresetId);
         Assert.Contains("other", s.DisabledPhraseIds);
         s.DisabledPhraseIds.Add("later");

@@ -13,6 +13,8 @@ using App = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
+// The FunScript playhead seed is App.SeedHapticPlaybackTime (#3288 as landed on port/7.2); the overlay's
+// SubscribePlaybackTime is the one clock the effects lane and this seed share (FunScriptPlayheadTests).
 public sealed class StartupServiceWiringTests
 {
     [Fact]

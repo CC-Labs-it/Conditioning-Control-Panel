@@ -2,11 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using ConditioningControlPanel.Models;
-using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Prizes;
 using Xunit;
 
+#if CCP_PRIZE_FEED_CORE_TESTS
+namespace CCP.Core.Tests;
+#else
 namespace ConditioningControlPanel.Tests;
+#endif
 
 /// <summary>
 /// Back Room prize ownership feed 1 (backroom CONTRACT 10.17.E): ProfileSyncService hands the
@@ -14,7 +17,11 @@ namespace ConditioningControlPanel.Tests;
 /// the request was made for, and clears it on logout and account switch. The ownership service
 /// gets an injected account source and a synchronous event marshal, so no App or dispatcher runs.
 /// </summary>
+#if CCP_PRIZE_FEED_CORE_TESTS
+public class PrizesFeedTests
+#else
 public class ProfileSyncPrizesFeedTests
+#endif
 {
     private const string Me = "uid-me";
     private const string Other = "uid-other";
@@ -22,13 +29,17 @@ public class ProfileSyncPrizesFeedTests
     private string? _account = Me;
     private readonly List<OwnershipChangedEventArgs> _events = new();
     private readonly OwnershipService _ownership;
-    private readonly ProfileSyncService.PrizesFeed _feed;
+    private readonly PrizesFeed _feed;
 
+#if CCP_PRIZE_FEED_CORE_TESTS
+    public PrizesFeedTests()
+#else
     public ProfileSyncPrizesFeedTests()
+#endif
     {
         _ownership = new OwnershipService(() => _account, null, invoke => invoke());
         _ownership.OwnershipChanged += (_, e) => _events.Add(e);
-        _feed = new ProfileSyncService.PrizesFeed(() => _ownership, () => _account, invoke => invoke());
+        _feed = new PrizesFeed(() => _ownership, () => _account, invoke => invoke());
     }
 
     private static PrizesBlock Block(long revision, params string[] grants)
@@ -139,7 +150,7 @@ public class ProfileSyncPrizesFeedTests
         var ownership = new OwnershipService(() => account, null, invoke => { if (onUi) invoke(); else queue.Enqueue(invoke); });
         var heard = new HashSet<string>();
         ownership.OwnershipChanged += (_, e) => { heard.UnionWith(e.Added); heard.ExceptWith(e.Removed); };
-        var feed = new ProfileSyncService.PrizesFeed(() => ownership, () => account, queue.Enqueue);
+        var feed = new PrizesFeed(() => ownership, () => account, queue.Enqueue);
 
         // A Task.Run sync answers on a pool thread...
         feed.Apply(Me, Me, Block(3, PrizeGrants.JackpotRemix), "V2 sync");

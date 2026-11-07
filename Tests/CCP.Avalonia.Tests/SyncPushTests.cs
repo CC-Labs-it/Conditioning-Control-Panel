@@ -23,7 +23,7 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed partial class AccountSeedTests
 {
-    private static readonly string[] Allowed = { "unified_id", "xp", "level", "descent_epoch", "achievements", "total_conditioning_minutes" };
+    private static readonly string[] Allowed = { "unified_id", "xp", "level", "descent_epoch", "descent_auto", "achievements", "total_conditioning_minutes" };
 
     /// <summary>Records every request with its body; profile GET answers <see cref="Profile"/> (500 when null).</summary>
     private sealed class SyncWire : HttpMessageHandler
@@ -64,8 +64,7 @@ public sealed partial class AccountSeedTests
         wire ??= new SyncWire();
         wire.Profile = profile;
         var local = new List<string>();
-        var sync = new SyncPush(() => local, () => true, wire,
-            global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.SanitizeOwnWardrobe);   // as App seeds it
+        var sync = AccountSeed.NewSync(() => local, () => true, wire);   // as App seeds it: NewSync carries the wardrobe sanitizer and PrizeOwnership.Feed
         var now = T0;
         sync.UtcNow = () => now;
         AccountSeed.Sync = sync;
@@ -85,13 +84,16 @@ public sealed partial class AccountSeedTests
 
     private async Task Fresh(Func<Task> body)
     {
+        var oldSettings = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
         var s = CoreSettings.Current;
         var saved = Touched.ToDictionary(n => n, n => Get(s, n));
         var (oldToken, oldNew, oldOffline) = (s.AuthToken, AccountSeed.NewV2, s.OfflineMode);
         try
         {
             Assert.True(AccountSeed.Seed(Make, p => new DiscordAccount(() => p, () => new AppSettings())));
-            ProgressionClear.Apply(s);
+            ProgressionClear.Apply(s, clearMigration: true);
             s.DescentMigrationCompleted = false;
             await body();
         }
@@ -102,6 +104,7 @@ public sealed partial class AccountSeedTests
             foreach (var n in Touched) Set(s, n, saved[n]);
             (s.AuthToken, AccountSeed.NewV2, s.OfflineMode) = (oldToken, oldNew, oldOffline);
             CoreAccount.UnifiedUserId = null;
+            CoreSettings.ServiceProvider = oldSettings;
         }
     }
 
@@ -146,6 +149,34 @@ public sealed partial class AccountSeedTests
         Assert.Equal(1, (int)body["descent_epoch"]!);
         Assert.Superset(new HashSet<string> { "first_steps", "night_owl", "linux_only" },
             body["achievements"]!.Values<string>().ToHashSet()!);
+    });
+
+    [Fact]
+    public void CompanionAndTimePushOnlyAfterReadAndDisarmOnLogout() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
+        var s = CoreSettings.Current;
+        s.TotalConditioningMinutes = 0;
+        s.CompanionProgressData = new Dictionary<int, CompanionProgress>();
+        wire.SyncReply = """{"success":true,"total_conditioning_minutes":15,"companion_progress":{"0":{"Level":3,"TotalXPEarned":90}}}""";
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.Null(wire.Syncs.Last()["companion_progress"]);
+        Assert.Null(wire.Syncs.Last()["total_conditioning_minutes"]);
+        s.CompanionProgressData[0].TotalXPEarned = 100;
+        s.TotalConditioningMinutes = 16;
+        sync.UtcNow = () => T0.AddSeconds(31);
+        Assert.True(await sync.PushAsync("progress"));
+        var sent = wire.Syncs.Last();
+        Assert.Equal(16, (double)sent["total_conditioning_minutes"]!);
+        Assert.Equal(100, (double)sent["companion_progress"]!["0"]!["TotalXPEarned"]!);
+        await AccountSeed.Logout();
+        (s.UnifiedId, s.AuthToken) = ("u1", "tok");
+        CoreAccount.UnifiedUserId = "u1";
+        wire.SyncReply = """{"success":true}""";
+        sync.UtcNow = () => T0.AddSeconds(62);
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.Null(wire.Syncs.Last()["companion_progress"]);
+        Assert.Null(wire.Syncs.Last()["total_conditioning_minutes"]);
     });
 
     [Fact]
@@ -293,7 +324,7 @@ public sealed partial class AccountSeedTests
         sync.UtcNow = () => T0.AddSeconds(31);
         var push = sync.PushAsync("level-up");
         sync.Reset();                                             // a logout that did not wait (the 5 s bound ran out)
-        ProgressionClear.Apply(s);
+        ProgressionClear.Apply(s, clearMigration: true);
         (s.UnifiedId, s.CurrentSeason) = ("u2", "2026-08");
         wire.Hold.SetResult();
         Assert.False(await push);

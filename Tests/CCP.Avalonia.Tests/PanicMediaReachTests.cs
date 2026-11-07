@@ -48,6 +48,7 @@ public sealed class PanicMediaReachTests
 
             Assert.False(Get<bool>("_isPlaying"));
             Assert.Equal(12.0, Get<double>("_currentSec"));
+            // port/7.2's reach: every video/audio and same-origin iframe, page fullscreen exited; playhead kept.
             Assert.Equal(WebHostMedia.PanicPauseScript, Assert.Single(sent));
             Assert.Equal(Loc.Get("deeper_player_status_stopped"), Get<TextBlock>("_txtStatus").Text);
         }

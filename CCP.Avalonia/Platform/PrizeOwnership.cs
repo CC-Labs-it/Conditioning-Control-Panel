@@ -1,65 +1,79 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Avalonia;
+using Avalonia.Threading;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.BackRoom;
 using ConditioningControlPanel.Services.Prizes;
-
-namespace ConditioningControlPanel.Avalonia.Platform
+using Serilog;
+namespace ConditioningControlPanel.Avalonia.Platform;
+internal static class PrizeOwnership
 {
-    /// <summary>
-    /// Back Room prize ownership on this head. WPF asks <c>PrizeGrants.IsGranted</c>, backed by
-    /// OwnershipService snapshots from BackRoomApi. Here only the snapshots a counter reply carries
-    /// (<see cref="ApplySnapshot"/>, fed by <see cref="V2PurchaseHead"/>) are held, for this run;
-    /// the profile-sync feed is parity row svc-prize-ownership. The other source is WPF's DEBUG-only
-    /// <c>CCP_PRIZE_GRANTS</c> override (Core OwnershipService.ReadDebugOverride): same variable,
-    /// same patterns (exact id, <c>prefix.*</c>, <c>*</c>), and a Release build never reads it.
-    /// Parsing is Core's, so an empty id never matches and a pattern holding whitespace or a
-    /// misplaced <c>*</c> is dropped.
-    /// </summary>
-    internal static class PrizeOwnership
+    internal const string FlashDriftBounce = PrizeGrants.FlashDriftBounce;
+    internal const string FlashPendulum = PrizeGrants.FlashPendulum;
+    internal const string JackpotRemix = PrizeGrants.JackpotRemix;
+    internal const string BubbleRain = PrizeGrants.BubbleRain;
+    internal const string BubbleSpiralIn = PrizeGrants.BubbleSpiralIn;
+    internal static bool OwnsFlashV2() => IsGranted(FlashDriftBounce) || IsGranted(FlashPendulum);
+    internal static bool FlashV2Owned() => IsGranted(FlashDriftBounce) || IsGranted(FlashPendulum) || IsGranted(JackpotRemix);
+    internal static bool BubbleV2Owned() => IsGranted(BubbleRain) || IsGranted(BubbleSpiralIn);
+    internal static readonly string? OverrideSpec = OwnershipService.ReadDebugOverride();
+    private static readonly OwnershipService Service = new(() => CoreAccount.UnifiedUserId, OverrideSpec, Raise);
+    internal static readonly PrizesFeed Feed = new(() => Service, () => CoreAccount.UnifiedUserId, Post);
+    internal static Func<string, bool> IsGranted = PrizeGrants.IsGranted;
+    /// <summary>WPF PrizeGrants.GrantsChanged under this head's older name.</summary>
+    internal static event Action? Changed { add => PrizeGrants.GrantsChanged += value; remove => PrizeGrants.GrantsChanged -= value; }
+    static PrizeOwnership()
     {
-        /// <summary>Core prize ids, shared with the WPF ownership gate.</summary>
-        internal const string FlashDriftBounce = PrizeGrants.FlashDriftBounce;
-        internal const string FlashPendulum = PrizeGrants.FlashPendulum;
-        internal const string JackpotRemix = PrizeGrants.JackpotRemix;
-        internal const string BubbleRain = PrizeGrants.BubbleRain;
-        internal const string BubbleSpiralIn = PrizeGrants.BubbleSpiralIn;
-        internal static bool OwnsFlashV2() => IsGranted(FlashDriftBounce) || IsGranted(FlashPendulum);
-
-        /// <summary>The DEBUG override spec, read once; always null in Release.</summary>
-        internal static readonly string? OverrideSpec = OwnershipService.ReadDebugOverride();
-
-        /// <summary>Test seam: the owned-check every caller uses.</summary>
-        internal static Func<string, bool> IsGranted = id => Matches(OverrideSpec, id) || Held(id);
-
-        // Reuse Core's account/revision rules and change detection for every snapshot source.
-        private static readonly OwnershipService HeldOwnership = new(
-            () => FriendsHead.Identity()?.UnifiedId, overrideSpec: null, raise: action => action());
-
-        static PrizeOwnership() => HeldOwnership.OwnershipChanged += (_, _) =>
-        {
-            Changed?.Invoke();
-            PrizeGrants.RaiseGrantsChanged();   // WPF OwnershipService -> PrizeGrants.GrantsChanged
-        };
-
-        /// <summary>WPF GrantsChanged: snapshot grants changed, possibly off the UI thread.</summary>
-        internal static event Action? Changed;
-
-        internal static bool Held(string id) => HeldOwnership.IsGranted(id);
-
-        internal static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants)
-            => HeldOwnership.ApplySnapshot(accountId, revision, grants);
-
-        /// <summary>Test cleanup (P02): forget every held snapshot.</summary>
-        internal static void ResetHeld() => HeldOwnership.Clear();
-
-        /// <summary>WPF V2Badges.FlashOwned: any flashes v2 prize (both motions or Jackpot Remix).</summary>
-        internal static bool FlashV2Owned() =>
-            IsGranted(FlashDriftBounce) || IsGranted(FlashPendulum) || IsGranted(JackpotRemix);
-
-        /// <summary>WPF V2Badges.BubbleOwned: either ambient bubble motion.</summary>
-        internal static bool BubbleV2Owned() => IsGranted(BubbleRain) || IsGranted(BubbleSpiralIn);
-
-        /// <summary>Core OwnershipService's override rules over one comma list.</summary>
-        internal static bool Matches(string? spec, string id) =>
-            !string.IsNullOrEmpty(id) && OwnershipService.MatchesOverride(OwnershipService.ParseOverride(spec), id);
+        PrizeGrants.Attach(Service);
+        PrizeGrants.GrantsChanged += () => GrantsChanged?.Invoke();
     }
+    internal static void Seed()
+    {
+        ProviderSubscription.PrizesSink = (requested, answered, prizes, source) => Feed.Apply(requested, answered, prizes, source);
+        BackRoomApi.DefaultApplyPrizes = ApplySnapshot;
+    }
+    private static volatile bool _shutdown;
+    private static void Raise(Action work)
+    {
+        if (Application.Current == null || Dispatcher.UIThread.CheckAccess()) { if (!_shutdown) work(); }
+        else Post(work);
+    }
+    private static void Post(Action work)
+    {
+        void Safe()
+        {
+            if (_shutdown) return;
+            try { work(); }
+            catch (Exception ex) { Log.Debug("[Prizes] ownership update failed: {Error}", ex.Message); }
+        }
+        if (Application.Current == null) Safe();
+        else Dispatcher.UIThread.Post(Safe);
+    }
+    internal static void WatchShutdown() => Dispatcher.UIThread.ShutdownStarted += (_, _) => _shutdown = true;
+    internal static bool Held(string id) => Service.Grants.Contains(id);
+    /// <summary>The held grant ids, for the Racing Thoughts garage's kart rows (WPF GlassroadHostService init.grants).</summary>
+    internal static string[] Grants => Service.Grants.ToArray();
+    internal static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants)
+    {
+        Service.ApplySnapshot(accountId, revision, grants);
+        GrantsChanged?.Invoke();
+    }
+    internal static void ResetHeld() => Service.Clear();
+    internal static bool Matches(string? spec, string id) =>
+        !string.IsNullOrEmpty(id) && OwnershipService.MatchesOverride(OwnershipService.ParseOverride(spec), id);
+
+    /// <summary>A direct snapshot (counter, chess wardrobe) or any change of the held set: the chess page and
+    /// the desk re-read their grants. An unchanged direct snapshot still raises it, so a first empty answer
+    /// turns "unknown" into "known none".</summary>
+    internal static event Action? GrantsChanged;
+    /// <summary>The desk's name for <see cref="GrantsChanged"/>.</summary>
+    internal static event Action? DeskGrantsChanged { add => GrantsChanged += value; remove => GrantsChanged -= value; }
+    /// <summary>Null until the signed-in account has a revisioned snapshot: unknown grants keep stored picks.</summary>
+    internal static ISet<string>? KnownGrants() => Service.Revision > 0 && Service.HoldsCurrentAccount
+        ? new HashSet<string>(Service.Grants, StringComparer.Ordinal) : null;
+    /// <summary>Desk items the signed-in account holds, or null before any snapshot for it.</summary>
+    internal static IEnumerable<string>? KnownDeskGrants() => KnownGrants() is null ? null
+        : ConditioningControlPanel.Services.EmiDesk.DeskEquipment.Items.Where(i => IsGranted(i.Grant)).Select(i => i.Grant).ToArray();
 }

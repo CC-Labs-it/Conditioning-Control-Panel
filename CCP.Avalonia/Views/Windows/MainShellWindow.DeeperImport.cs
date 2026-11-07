@@ -67,4 +67,46 @@ public partial class MainShellWindow
         }
         if (result.RevealPath is { } reveal) Named<DeeperTabView>("DeeperTab")?.RevealLibraryRow(reveal);
     }
+    // WPF MainWindow.DeeperTab.cs:604-674: file-association and player editor entry points.
+    public void OpenInDeeperPlayer(string mediaPath)
+    {
+        try { ShowOrActivateDeeperPlayer().OpenLocalMediaFile(mediaPath); }
+        catch (Exception ex) { ReportDeeperOpenError(ex, "Player"); }
+    }
+
+    public void OpenDeeperEditorFromPlayer(string path)
+    {
+        if (!string.IsNullOrWhiteSpace(path)) OpenDeeperFile(path);
+    }
+
+    public void OpenInDeeperEditorForMedia(string mediaPath)
+    {
+        try
+        {
+            OpenDeeperEditor(new Models.Deeper.Enhancement
+            {
+                MediaType = Services.DropRules.AssetVideoExtensions.Contains(Path.GetExtension(mediaPath))
+                    ? Models.Deeper.MediaTypes.Video : Models.Deeper.MediaTypes.Audio,
+                MediaSource = mediaPath
+            }, null);
+        }
+        catch (Exception ex) { ReportDeeperOpenError(ex, "Editor"); }
+    }
+
+    public void HandlePendingFileOpen(string action, string path)
+    {
+        if (string.IsNullOrEmpty(action) || string.IsNullOrEmpty(path)) return;
+        if (action == "play") OpenInDeeperPlayer(path);
+        else if (action == "edit") OpenInDeeperEditorForMedia(path);
+    }
+
+    private async void ReportDeeperOpenError(Exception ex, string surface)
+    {
+        Serilog.Log.Error(ex, "Failed to open Deeper {Surface}", surface);
+        // WPF MainWindow.DeeperTab.cs:611-616,662-665: preserve exception details.
+        var prefix = surface == "Player" ? "deeper_open_player_failed" : "deeper_open_editor_failed";
+        if (IsVisible) await Dialogs.MessageDialog.ShowAsync(this, Loc.Get(prefix + "_title"),
+            Loc.GetF(prefix + "_fmt", ex.GetType().Name, ex.Message));
+    }
+
 }

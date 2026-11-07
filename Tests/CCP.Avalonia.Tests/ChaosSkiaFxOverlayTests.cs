@@ -10,6 +10,9 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
 
@@ -41,7 +44,7 @@ public sealed class ChaosSkiaFxOverlayTests
     public Task SparkleWindowLivesOnlyWhileEffectsAreLiveAndPanicClosesIt() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
@@ -145,7 +148,7 @@ public sealed class ChaosSkiaFxOverlayTests
     public Task RunEndAndRecapDismissCloseTheField() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
@@ -161,8 +164,13 @@ public sealed class ChaosSkiaFxOverlayTests
             ChaosRunHost.StartRun(new ConditioningControlPanel.Services.Chaos.ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
             var overlay = ChaosRunHost.Overlay!;
             overlay.FinishCountdown();
+            var prewarmed = ChaosSkiaFxOverlay.Active;
+            Assert.NotNull(prewarmed);
+            Assert.False(prewarmed.IsVisible);
+            Assert.False(prewarmed.IsRendering);
+            Assert.Equal(0, prewarmed.Fx.ParticleCount);
             ChaosSkiaFxOverlay.TrailDot(new Point(200, 200), 0.4);
-            Assert.NotNull(ChaosSkiaFxOverlay.Active);
+            Assert.Same(prewarmed, ChaosSkiaFxOverlay.Active);
             ChaosRunHost.RequestStop();                       // EndRun: the recap
             Assert.True(ChaosRunHost.IsActive);
             Assert.Null(ChaosSkiaFxOverlay.Active);
@@ -181,6 +189,77 @@ public sealed class ChaosSkiaFxOverlayTests
             ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;
             ChaosSkiaFxOverlay.FramesForTests = null;
             s.ChaosSkiaFxEnabled = savedEnabled;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task ChaosPopEmitsOnceInPayloadOrSnapColour(bool live) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var enabled = CoreSettings.Current.ChaosSkiaFxEnabled;
+        var composited = ChaosSkiaFxOverlay.Composited;
+        var field = BubbleOverlay.Field;
+        var held = field.HoldChaos;
+        try
+        {
+            ChaosSkiaFxOverlay.CloseActive();
+            CoreSettings.Current.ChaosSkiaFxEnabled = true;
+            ChaosSkiaFxOverlay.Composited = () => true;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
+            ChaosSkiaFxOverlay.FramesForTests = new SteppedFrames();
+            var b = new AmbientBubble
+            {
+                X = 150, Y = 150, Size = 100,
+                Spec = new EffectBubbleSpec
+                    { Tint = 0xFFFF0000, IsLive = live }
+            };
+            field.HoldChaos = true;
+            BubbleOverlay.PopChaos(b);
+            Assert.Null(ChaosSkiaFxOverlay.Active);
+            Assert.False(b.Popping);
+            field.HoldChaos = false;
+            CoreSettings.Current.ChaosSkiaFxEnabled = false;
+            BubbleOverlay.PopChaos(b);
+            Assert.Null(ChaosSkiaFxOverlay.Active);
+            b.Popping = false;
+            CoreSettings.Current.ChaosSkiaFxEnabled = true;
+            BubbleOverlay.PopChaos(b);
+            var w = ChaosSkiaFxOverlay.Active;
+            Assert.NotNull(w);
+            var count = w.Fx.ParticleCount;
+            Assert.InRange(count, 20, 24);
+            using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(400, 400));
+            w.Fx.Render(surface.Canvas, new SkiaSharp.SKRectI(0, 0, 400, 400), 1, TimeSpan.Zero);
+            using var image = surface.Snapshot();
+            using var bitmap = SkiaSharp.SKBitmap.FromImage(image);
+            var center = bitmap.GetPixel(200, 200);
+            Assert.True(center.Alpha > 200);
+            var body = bitmap.GetPixel(225, 200);
+            Assert.True(live ? body.Blue > body.Red : body.Red > body.Blue);
+            BubbleOverlay.PopChaos(b);
+            Assert.Equal(count, w.Fx.ParticleCount); // a duplicate pop must not emit twice
+            ChaosSkiaFxOverlay.CloseActive();
+            ChaosSkiaFxOverlay.EnsureCreated();
+            var idle = ChaosSkiaFxOverlay.Active;
+            Assert.NotNull(idle);
+            Assert.False(idle.IsVisible);
+            Assert.False(idle.IsRendering);
+            Assert.Equal(0, idle.Fx.ParticleCount);
+        }
+        finally
+        {
+            field.HoldChaos = held;
+            ChaosSkiaFxOverlay.CloseActive();
+            ChaosSkiaFxOverlay.Composited = composited;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;
+            ChaosSkiaFxOverlay.FramesForTests = null;
+            CoreSettings.Current.ChaosSkiaFxEnabled = enabled;
         }
         return Task.CompletedTask;
     });

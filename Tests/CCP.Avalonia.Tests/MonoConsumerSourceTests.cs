@@ -51,8 +51,9 @@ public sealed class MonoConsumerSourceTests
             Assert.All(lines, l => Assert.Contains("FontGuard.Startup.Family(", l));
         }
         Assert.DoesNotContain("Consolas", Code(root, "CCP.Avalonia/Views/Windows/EmiDesk/EmiDeskWindow.axaml"));
-        // The dock face is the EmiFace control (port/7.2), which draws with the guarded EmiFace.FaceFont checked above.
+        // The desk window hosts the EmiFace control itself, so its face draws with the guarded EmiFace.FaceFont above.
         Assert.Contains("FindControl<EmiFace>(\"FaceView\")", Code(root, "CCP.Avalonia/Views/Windows/EmiDesk/EmiDeskWindow.axaml.cs"));
+        Assert.Contains("<emi:EmiFace x:Name=\"FaceView\"", Code(root, "CCP.Avalonia/Views/Windows/EmiDesk/EmiDeskWindow.axaml"));
     }
 
     // P23: comments are removed (string literals kept: they are what is matched), so a

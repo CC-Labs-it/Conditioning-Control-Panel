@@ -239,8 +239,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _leashGate.Dismiss();
             if (!_leashHidBrowser) return;
             _leashHidBrowser = false;
-            // Never hand the browser back over the remote overlay's own blindfold.
-            if (Named<Border>("RemoteControlOverlay")?.IsVisible != true && LeashBrowser is { } b) b.IsVisible = true;
+            // Never hand the browser back over the remote overlay's own blindfold or a tour.
+            RestoreBrowser();
         }
 
         /// <summary>The browser card's native host (WPF SettingsTab.BrowserContainer).</summary>
@@ -264,6 +264,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _leashSnoozeUntilUtc = DateTime.UtcNow + LeashUiRules.PanicSnooze;
             HideLeashGate();
             PanicSurfaces.StopAll("leash gate", this);
+            NoteLocalPanicPause(); // WPF MainWindow.Leash.cs:307 -> local stop-button panic
         }
 
         /// <summary>WPF CutRequested -> LeashSurfaces.Cut: the gate goes, the cut is said, and the Core
