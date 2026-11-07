@@ -33,6 +33,7 @@ public sealed class RemoteSessionPauseTests
             }
             var shell = new MainShellWindow();
             shell.Show();
+            var oldSessions = AvApp.Sessions;
             var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
             try
             {
@@ -50,7 +51,7 @@ public sealed class RemoteSessionPauseTests
             finally
             {
                 runner.Stop();
-                AvApp.Sessions = null;
+                AvApp.Sessions = oldSessions;
                 CoreEngine.Stop();
                 shell.Close();
             }
