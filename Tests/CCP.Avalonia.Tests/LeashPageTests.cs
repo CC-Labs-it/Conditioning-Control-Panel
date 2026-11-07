@@ -108,8 +108,9 @@ public sealed class LeashPageTests
             service.ApplyBlock(block); Dispatcher.UIThread.RunJobs();
             Assert.Equal(new[] { id }, seen);
             LeashGateCardTests.Click(Find(page, "leash-offer-look"));
-            Assert.True(page.GetLogicalDescendants().OfType<StackPanel>().Single(p => p.Tag as string == "leash-offer-ask").IsVisible);
-            LeashGateCardTests.Click(Find(page, "leash-ask-no"));
+            var ask = Assert.IsType<Window>(shell.OfferSurfaces!.AskWindow);
+            Assert.Empty(page.GetLogicalDescendants().OfType<LeashOfferCard>());
+            LeashGateCardTests.Click(Find(ask, "leash-ask-no"));
             Assert.Equal("answer", wire.Calls.Last().Op);
             Assert.Equal(false, (bool?)wire.Calls.Last().Body["accept"]);
             shell.ShowTab("friends");
@@ -118,6 +119,36 @@ public sealed class LeashPageTests
             Assert.Single(seen);
             shell.ShowTab("leash"); Dispatcher.UIThread.RunJobs();
             Assert.Equal(new[] { id, "0123456789abcdef" }, seen);
+        });
+
+    [Fact]
+    public void LookReplacesTheOpenAskAndAReorderedOfferKeepsItsReadClock() =>
+        Run(false, (shell, _, _) =>
+        {
+            var service = new LeashService(new Wire(), () => "u_me", cutSafety: () => { });
+            LeashHead.Service = service;
+            shell.Show(); shell.ShowTab("leash"); shell.CheckLeashGate(); Dispatcher.UIThread.RunJobs();
+            var at = DateTimeOffset.UtcNow.ToString("o");
+            var block = new JObject { ["me"] = null, ["holding"] = new JArray(), ["events"] = new JArray(),
+                ["offers"] = new JArray {
+                    new JObject { ["id"] = "abcdef0123456789", ["from"] = new JObject { ["id"] = "u_a", ["name"] = "A" }, ["at"] = at },
+                    new JObject { ["id"] = "0123456789abcdef", ["from"] = new JObject { ["id"] = "u_b", ["name"] = "B" }, ["at"] = at } } };
+            service.ApplyBlock(block); Dispatcher.UIThread.RunJobs();
+            var auto = Assert.IsType<Window>(shell.OfferSurfaces!.AskWindow);
+            Assert.Equal("leash-ask:u_a", auto.GetLogicalDescendants().OfType<LeashOfferCard>().Single().Tag);
+            var page = shell.Named<LeashTabView>("LeashTab")!;
+            var row = page.GetLogicalDescendants().OfType<Border>().Single(b => b.Tag as string == "leash-offer-row:u_b");
+            LeashGateCardTests.Click(Find(row, "leash-offer-look"));
+            var ask = Assert.IsType<Window>(shell.OfferSurfaces.AskWindow);
+            Assert.NotSame(auto, ask); Assert.False(auto.IsVisible);
+            ask.UpdateLayout();
+            var card = ask.GetLogicalDescendants().OfType<LeashOfferCard>().Single();
+            Assert.Equal("leash-ask:u_b", card.Tag); Assert.True(card.ReadClockRunning);
+            block["offers"] = new JArray(((JArray)block["offers"]!).Reverse().Select(o => o.DeepClone()));
+            service.ApplyBlock(block); shell.CheckLeashGate(); Dispatcher.UIThread.RunJobs();
+            Assert.Same(ask, shell.OfferSurfaces.AskWindow); Assert.True(card.ReadClockRunning);
+            for (int i = 0; i < 25; i++) card.AdvanceReadClock();
+            Assert.True(Find(ask, "leash-ask-yes").IsEnabled);
         });
 
     [Fact]

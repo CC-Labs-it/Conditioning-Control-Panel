@@ -6,6 +6,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Leash;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Leash;
@@ -70,15 +71,28 @@ internal sealed class LeashOfferSurfaces : IDisposable
         var owner = _owner();
         if (_service?.Available != true || _window != null || _waiting.Count == 0 || owner == null || !owner.IsVisible || owner.WindowState == WindowState.Minimized) return;
         var offer = _waiting[0]; _waiting.RemoveAt(0);
-        var card = new LeashOfferCard(offer, () => _service);
-        var screen = owner.Screens.ScreenFromWindow(owner);
+        if (!Open(offer, owner)) _waiting.Insert(0, offer);
+    }
+    // WPF LeashDrawerSection row Look -> LeashSurfaces.ShowAsk (:209); Open (:232) closes any ask or snap first.
+    internal void ShowAsk(LeashOffer offer)
+    {
+        var old = _window; _window = null;
+        try { old?.Close(); } catch { }
+        _waiting.RemoveAll(o => o.From.Id == offer.From.Id);
+        Open(offer, _owner());
+    }
+    private bool Open(LeashOffer offer, Window? owner)
+    {
+        // WPF ShowAsk reads the live service (LeashSurfaces.cs:211,217), so a page Look between rebinds answers on it.
+        var card = new LeashOfferCard(offer, () => LeashHead.Service);
+        var screen = owner?.Screens.ScreenFromWindow(owner);
         var height = screen == null ? 700 : Math.Max(100, Math.Min(700, screen.WorkingArea.Height / screen.Scaling - 24));
-        var window = new Window { Tag = "leash-auto-ask", Title = offer.From.Name, Width = 440, MaxHeight = height, ShowInTaskbar = false, CanResize = false,
-            SizeToContent = SizeToContent.Height, WindowStartupLocation = WindowStartupLocation.CenterOwner,
+        var window = new Window { Tag = "leash-auto-ask", Title = Loc.Get("leash_title"), Width = 440, MaxHeight = height, ShowInTaskbar = false, CanResize = false,
+            SizeToContent = SizeToContent.Height, WindowStartupLocation = owner != null ? WindowStartupLocation.CenterOwner : WindowStartupLocation.CenterScreen,
             Content = new ScrollViewer { Content = card, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
         _window = window;
         card.AskClosed += () => window.Close();
-        window.KeyDown += (_, e) => { if (e.Key == Key.Escape) { card.Fold(); e.Handled = true; } };
+        window.KeyDown += (_, e) => { if (e.Key == Key.Escape) { card.Later(); e.Handled = true; } };
         window.Closed += (_, _) =>
         {
             if (!ReferenceEquals(_window, window)) return;
@@ -88,11 +102,13 @@ internal sealed class LeashOfferSurfaces : IDisposable
         };
         try
         {
-            window.Show(owner); card.OpenAsk();
+            if (owner != null) window.Show(owner); else window.Show();
+            LeashSound.Ask(DateTime.UtcNow);
         }
-        catch (Exception ex) { _window = null; try { window.Close(); } catch { } _waiting.Insert(0, offer); Serilog.Log.Debug("[Leash] ask failed: {E}", ex.Message); return; }
-        try { if (window.IsVisible) _service?.NoteShown(offer.Id); }
+        catch (Exception ex) { _window = null; try { window.Close(); } catch { } Serilog.Log.Debug("[Leash] ask failed: {E}", ex.Message); return false; }
+        try { if (window.IsVisible) LeashHead.Service?.NoteShown(offer.Id); }
         catch (Exception ex) { Serilog.Log.Debug("[Leash] ask seen failed: {E}", ex.Message); }
+        return true;
     }
     public void Dispose()
     {

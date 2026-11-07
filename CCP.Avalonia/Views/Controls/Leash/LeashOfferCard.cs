@@ -19,13 +19,12 @@ using F = ConditioningControlPanel.Avalonia.Views.Controls.FriendsDrawer;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 
-// WPF LeashDrawerSection.OfferRow, LeashAskCard and the leashed side of LeashSnapCard.
+// WPF LeashAskCard and the leashed side of LeashSnapCard; LeashOfferSurfaces hosts it in the one ask window.
 public sealed class LeashOfferCard : Border
 {
     private readonly LeashOffer _offer;
     private readonly Func<ILeashService?> _service;
-    private readonly StackPanel _ask = new() { IsVisible = false, Spacing = 6, Tag = "leash-offer-ask" };
-    private readonly Button _look = new() { Content = Loc.Get("leash_offer_look"), Tag = "leash-offer-look" };
+    private readonly StackPanel _ask = new() { Spacing = 6, Tag = "leash-offer-ask" };
     private readonly Button _yes = new() { Content = Loc.Get("leash_ask_yes"), Tag = "leash-ask-yes" };
     private readonly Button _no = new() { Content = Loc.Get("leash_ask_no"), Tag = "leash-ask-no" };
     private readonly TextBlock _error = new() { TextWrapping = TextWrapping.Wrap, Tag = "leash-ask-error" };
@@ -41,23 +40,16 @@ public sealed class LeashOfferCard : Border
     internal bool ReadClockRunning => _readTimer?.IsEnabled == true;
     internal event Action? AskClosed;
 
-    internal LeashOfferCard() : this(new LeashOffer(new LeashPerson("sample", "Juno", null), DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(1)), () => null) { }
-
     internal LeashOfferCard(LeashOffer offer, Func<ILeashService?> service)
     {
         _offer = offer; _service = service;
-        Tag = "leash-offer-row:" + offer.From.Id;
+        Tag = "leash-ask:" + offer.From.Id;
         Background = new SolidColorBrush(Color.Parse("#24102F"));
         BorderBrush = new SolidColorBrush(Color.Parse("#B49552"));
         BorderThickness = new Thickness(1); CornerRadius = new CornerRadius(12);
         Padding = new Thickness(10); Margin = new Thickness(0, 4, 0, 4);
-        var body = new StackPanel { Spacing = 8 }; Child = body;
-        body.Children.Add(new TextBlock { Text = offer.From.Name + " " + Loc.Get("leash_ask_title"), TextWrapping = TextWrapping.Wrap });
-        body.Children.Add(_look); body.Children.Add(_ask);
-        _look.Click += (_, _) => OpenAsk();
-        var dismiss = new Button { Content = Loc.Get("btn_close"), Tag = "leash-ask-dismiss", HorizontalAlignment = HorizontalAlignment.Right };
-        dismiss.Click += (_, _) => { if (!_busy) Dismiss(); };
-        _ask.Children.Add(dismiss);
+        Child = _ask;
+        _ask.Children.Add(new TextBlock { Text = offer.From.Name + " " + Loc.Get("leash_ask_title"), TextWrapping = TextWrapping.Wrap });
         var panels = new UniformGrid { Columns = 2 };
         foreach (var key in new[] { "leash_explain_step1_leashed", "leash_explain_step2_leashed", "leash_explain_step3_leashed", "leash_explain_step4_leashed" })
             panels.Children.Add(new Border { Margin = new Thickness(3), Padding = new Thickness(8), CornerRadius = new CornerRadius(8), Background = F.Raised,
@@ -75,22 +67,15 @@ public sealed class LeashOfferCard : Border
         _ask.Children.Add(actions); _ask.Children.Add(_error);
         _no.Click += async (_, _) => await AnswerAsync(false);
         _yes.Click += async (_, _) => await AnswerAsync(true);
-        KeyDown += (_, e) => { if (e.Key == Key.Escape && _ask.IsVisible && !_busy) { Dismiss(); e.Handled = true; } };
+        // WPF LeashOverlayWindow: Escape is "later".
+        KeyDown += (_, e) => { if (e.Key == Key.Escape) { Later(); e.Handled = true; } };
         DetachedFromVisualTree += (_, _) => { _readTimer?.Stop(); _readTimer = null; };
         AttachedToVisualTree += (_, _) => StartReadClock();
-        PaintLevel();
-    }
-
-    internal void OpenAsk()
-    {
-        _ask.IsVisible = true; _look.IsVisible = false; _error.Text = ""; _gone = false;
-        _readTime = TimeSpan.Zero;
+        // A fresh card per ask (WPF LeashSurfaces.ShowAsk), so the read clock starts at zero.
         _ready = !LeashIntroRule.ShouldExplain(CoreSettings.Service?.Current, LeashIntroSide.Leashed);
         _yes.IsEnabled = _ready;
         ToolTip.SetTip(_yes, _ready ? null : Loc.Get("leash_explain_read_first"));
-        _readTimer?.Stop(); _readTimer = null;
-        StartReadClock();
-        LeashSound.Ask(DateTime.UtcNow);
+        PaintLevel();
     }
 
     private void StartReadClock()
@@ -128,13 +113,13 @@ public sealed class LeashOfferCard : Border
         ToolTip.SetTip(_yes, null);
     }
 
-    internal void Fold() { if (!_busy) Dismiss(); }
+    internal void Later() { if (!_busy) Dismiss(); }
 
     private void Dismiss()
     {
         _readTimer?.Stop(); _readTimer = null;
         var wasOpen = _ask.IsVisible;
-        _ask.IsVisible = false; _look.IsVisible = true;
+        _ask.IsVisible = false;
         if (wasOpen) AskClosed?.Invoke();
     }
 
@@ -188,22 +173,24 @@ public sealed class LeashOfferCard : Border
     // Independent of the offer row, which a successful answer can remove on the next poll.
     private void ShowSnap(Window? owner)
     {
-        var title = new TextBlock { Text = Loc.Get("leash_snap_title"), FontSize = 24, Foreground = F.Gold, HorizontalAlignment = HorizontalAlignment.Center, Tag = "leash-snap-title" };
-        var holder = new TextBlock { Text = Loc.GetF("leash_snap_holder", _offer.From.Name), TextWrapping = TextWrapping.Wrap };
+        var title = new TextBlock { Text = Loc.Get("leash_snap_title"), FontSize = 26, Foreground = F.Gold, HorizontalAlignment = HorizontalAlignment.Center, Tag = "leash-snap-title" };
+        var holder = new TextBlock { Text = Loc.GetF("leash_snap_holder", _offer.From.Name), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4) };
         var me = MeName();
-        var leashed = new TextBlock { Text = Loc.GetF("leash_snap_leashed", me), TextWrapping = TextWrapping.Wrap };
+        var leashed = new TextBlock { Text = Loc.GetF("leash_snap_leashed", me), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4) };
         var ok = new Button { Content = Loc.Get("leash_snap_ok"), Tag = "leash-snap-ok", HorizontalAlignment = HorizontalAlignment.Center };
-        var chain = new Canvas { Width = 120, Height = 24, VerticalAlignment = VerticalAlignment.Center, Tag = "leash-snap-chain" };
-        for (int i = 0; i < 6; i++)
+        var chain = new Canvas { Width = 190, Height = 24, VerticalAlignment = VerticalAlignment.Center, Tag = "leash-snap-chain" };
+        for (int i = 0; i < 10; i++)
         {
             var link = new Ellipse { Width = 24, Height = 13, Stroke = F.Gold, StrokeThickness = 2 };
-            Canvas.SetLeft(link, i * 19); Canvas.SetTop(link, 5); chain.Children.Add(link);
+            Canvas.SetLeft(link, i * 18.5); Canvas.SetTop(link, 5); chain.Children.Add(link);
         }
         var figures = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-        figures.Children.Add(F.Avatar(_offer.From.Name, 60, null));
+        figures.Children.Add(F.Avatar(_offer.From.Name, 68, null));
         chain.HorizontalAlignment = HorizontalAlignment.Center; Grid.SetColumn(chain, 1); figures.Children.Add(chain);
-        var you = F.Avatar(me, 60, null); Grid.SetColumn(you, 2); figures.Children.Add(you);
-        var body = new StackPanel { Spacing = 12, Margin = new Thickness(22), Width = 340, Children = { figures, title, holder, leashed, ok } };
+        var you = F.Avatar(me, 68, null); Grid.SetColumn(you, 2); figures.Children.Add(you);
+        // WPF LeashSnapCard.cs:57-89: 68 px avatars, a 190 px chain, the two recaps side by side.
+        var recap = new UniformGrid { Columns = 2, Children = { holder, leashed } };
+        var body = new StackPanel { Spacing = 12, Margin = new Thickness(22), Width = 380, Children = { figures, title, recap, ok } };
         var window = new Window { Title = Loc.Get("leash_snap_title"), Tag = "leash-snap", Content = body, CanResize = false, ShowInTaskbar = false,
             SizeToContent = SizeToContent.WidthAndHeight, WindowStartupLocation = owner != null ? WindowStartupLocation.CenterOwner : WindowStartupLocation.CenterScreen };
         SnapWindow = window;

@@ -1,7 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Media;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -16,7 +20,7 @@ public partial class LeashTabView : UserControl
     private ILeashService? _service;
     private LeashSelfCard? _self;
     private readonly Dictionary<string, LeashHolderCard> _holders = new();
-    private readonly Dictionary<string, LeashOfferCard> _offers = new();
+    private readonly Dictionary<string, Control> _offers = new();
 
     public LeashTabView() : this(() => LeashHead.Service) { }
     internal LeashTabView(Func<ILeashService?> service)
@@ -43,7 +47,6 @@ public partial class LeashTabView : UserControl
     {
         if (_service != null) { _service.SnapshotChanged -= OnSnapshot; _service.ReceiptsChanged -= Render; }
         foreach (var card in _holders.Values) card.Fold();
-        foreach (var card in _offers.Values) card.Fold();
     }
     private void OnSnapshot(LeashSnapshot _) => Render();
 
@@ -59,7 +62,7 @@ public partial class LeashTabView : UserControl
         {
             var key = offer.From.Id + "@" + offer.At.ToUnixTimeSeconds() + "@" + offer.Id;
             if (!_offers.TryGetValue(key, out var card))
-                _offers[key] = card = new LeashOfferCard(offer, () => _service);
+                _offers[key] = card = OfferRow(offer);
             cards.Add(card);
         }
         foreach (var key in _offers.Keys.Except(offers.Select(o => o.From.Id + "@" + o.At.ToUnixTimeSeconds() + "@" + o.Id)).ToArray()) _offers.Remove(key);
@@ -91,5 +94,18 @@ public partial class LeashTabView : UserControl
         // WPF LeashDrawerSection.NoteOnScreen: receipt only after the row is hosted and visible.
         if (IsEffectivelyVisible)
             foreach (var offer in offers) _service?.NoteShown(offer.Id);
+    }
+
+    // WPF LeashDrawerSection.OfferRow (:160-192): Look opens the one ask overlay (LeashSurfaces.ShowAsk).
+    private Control OfferRow(LeashOffer offer)
+    {
+        var look = new Button { Content = new TextBlock { Text = Loc.Get("leash_offer_look") }, Tag = "leash-offer-look", Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        look.Click += (_, _) => (TopLevel.GetTopLevel(this) as MainShellWindow)?.OfferSurfaces?.ShowAsk(offer);
+        var text = new TextBlock { Text = offer.From.Name + " " + Loc.Get("leash_ask_title"), TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = { text, look } };
+        Grid.SetColumn(look, 1);
+        return new Border { Tag = "leash-offer-row:" + offer.From.Id, Child = grid, Background = new SolidColorBrush(Color.Parse("#24102F")),
+            BorderBrush = new SolidColorBrush(Color.Parse("#B49552")), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(10, 8, 8, 8), Margin = new Thickness(0, 4, 0, 4) };
     }
 }
