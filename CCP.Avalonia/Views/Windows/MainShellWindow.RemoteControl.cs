@@ -19,6 +19,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Safety;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -122,8 +123,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>The HUD's local stop: the panic key's own reach (Core VoicePanicReach), so Lockdown or panic
-        /// off refuses it and a leash alone gets the leash-only stop.</summary>
-        internal void StopFromRemoteHud() => HandlePanicKeyPress(DateTime.Now, fromStopButton: true);
+        /// off refuses it and a leash alone gets the leash-only stop. True when the full panic ran: only then may the
+        /// relay add its forced stop (RemoteRelay.SendSignalAsync actLocally).</summary>
+        internal bool StopFromRemoteHud()
+        {
+            var full = VoicePanicReach.PanicKeyRuns(LockdownActive, CoreSettings.Current.PanicKeyEnabled);
+            HandlePanicKeyPress(DateTime.Now, fromStopButton: true);
+            return full;
+        }
 
         /// <summary>WPF OnRemoteCommandReceived (:1091): quiet verbs make no toast.</summary>
         internal void OnRemoteCommandReceived(string action)

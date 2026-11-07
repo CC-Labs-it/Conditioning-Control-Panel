@@ -351,12 +351,14 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>Send the wearer's More or Stop signal (WPF RemoteControlService.V2.cs:45).
-        /// Stop tears down locally before the network request and bypasses emote debounce.</summary>
-        public async Task<bool> SendSignalAsync(string kind)
+        /// Stop tears down locally before the network request and bypasses emote debounce.
+        /// <paramref name="actLocally"/> false posts the Stop without the forced local stop: the caller's panic
+        /// reach refused it (Lockdown or panic off, Core VoicePanicReach), and no stop reaches past the panic key.</summary>
+        public async Task<bool> SendSignalAsync(string kind, bool actLocally = true)
         {
             kind = (kind ?? "").Trim().ToLowerInvariant();
             if (!IsActive || kind is not ("more" or "stop")) return false;
-            if (kind == "stop")
+            if (kind == "stop" && actLocally)
             {
                 var (done, _) = CoreDispatch.Invoke(() => { _stopEffects(true); return 0; }, TimeSpan.FromSeconds(10));
                 if (!done) CoreDispatch.Post(() => _stopEffects(true));

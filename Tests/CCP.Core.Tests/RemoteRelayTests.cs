@@ -62,6 +62,18 @@ public sealed class RemoteRelayTests
         Assert.Equal("stop", (string?)body["text"]);
     }
 
+    /// <summary>A Stop the panic reach refused (Lockdown, panic off) still tells the controller, with no forced stop.</summary>
+    [Fact]
+    public async Task Stop_signal_without_local_reach_posts_and_never_stops()
+    {
+        var f = new FakeRelay();
+        using var r = Relay(f);
+        await r.StartAsync("light");
+        Assert.True(await r.SendSignalAsync("stop", actLocally: false));
+        Assert.Empty(_stops);
+        Assert.Equal("stop", (string?)f.Seen.Last().Body["text"]);
+    }
+
     [Fact]
     public async Task More_signal_posts_without_stopping_and_rejects_unknown_kinds()
     {

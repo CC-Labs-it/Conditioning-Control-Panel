@@ -15,7 +15,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows;
 internal sealed class RemoteHudWindow : Window, IDisposable
 {
     private readonly RemoteRelay _relay;
-    private readonly Action _localStop;
+    private readonly Func<bool> _localStop;
     private readonly Func<(PixelRect WorkingArea, double Scaling)?> _anchorScreen;
     private readonly DispatcherTimer _timer;
     // WPF palette (RemoteHudWindow.cs:56-61): ink pill, pink edge, white headline, muted subline.
@@ -33,7 +33,9 @@ internal sealed class RemoteHudWindow : Window, IDisposable
     internal static readonly TimeSpan ConfirmFor = TimeSpan.FromMilliseconds(1600);   // WPF RemoteHudRules.cs:22
 
     /// <param name="anchorScreen">Work area and scaling of the monitor the main window is on (WPF Place :345).</param>
-    internal RemoteHudWindow(RemoteRelay relay, Action localStop, Func<(PixelRect WorkingArea, double Scaling)?> anchorScreen)
+    /// <param name="localStop">The local half of Stop; true only when the panic key's full reach ran, which alone
+    /// lets the relay add its forced stop (Core VoicePanicReach: never more than the panic key).</param>
+    internal RemoteHudWindow(RemoteRelay relay, Func<bool> localStop, Func<(PixelRect WorkingArea, double Scaling)?> anchorScreen)
     {
         _relay = relay;
         _localStop = localStop;
@@ -127,17 +129,19 @@ internal sealed class RemoteHudWindow : Window, IDisposable
     internal async Task SignalAsync(string kind)
     {
         if (_disposed || !_relay.IsActive || !_relay.ControllerConnected) return;
+        var stoppedHere = false;
         if (kind == "stop")
         {
             var now = Clock.GetUtcNow();
             if (_lastStop is { } last && now >= last && now - last < TimeSpan.FromMilliseconds(2500)) return;
             _lastStop = now;
-            try { _localStop(); } catch (Exception ex) { Serilog.Log.Warning(ex, "Remote HUD local stop failed"); }
+            try { stoppedHere = _localStop(); } catch (Exception ex) { Serilog.Log.Warning(ex, "Remote HUD local stop failed"); }
         }
-        var sent = await _relay.SendSignalAsync(kind);
+        // A refused local stop (Lockdown, panic off) still tells the controller, without the relay's forced stop.
+        var sent = await _relay.SendSignalAsync(kind, actLocally: stoppedHere);
         if (_disposed) return;
-        _confirm = kind == "stop" ? Loc.Get(sent ? "remote_hud_stopped" : "remote_hud_stopped_not_sent")
-            : sent ? Loc.GetF("remote_hud_sent", Loc.Get("remote_hud_more")) : Loc.Get("remote_hud_not_sent");
+        _confirm = kind == "stop" && stoppedHere ? Loc.Get(sent ? "remote_hud_stopped" : "remote_hud_stopped_not_sent")
+            : sent ? Loc.GetF("remote_hud_sent", Loc.Get(kind == "stop" ? "remote_hud_stop" : "remote_hud_more")) : Loc.Get("remote_hud_not_sent");
         _confirmUntil = Clock.GetUtcNow() + ConfirmFor;
         Refresh();
     }

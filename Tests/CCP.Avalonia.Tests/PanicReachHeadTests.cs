@@ -202,7 +202,7 @@ public sealed class PanicReachHeadTests
         finally { (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider) = (oldPremium, oldFree); }
     });
 
-    private sealed class FakeRunner : ILeashTaskRunner
+    internal sealed class FakeRunner : ILeashTaskRunner
     {
         internal readonly List<string> Calls = new();
         public bool IsRunning => true;

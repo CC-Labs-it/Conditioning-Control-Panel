@@ -9,7 +9,9 @@ using Avalonia.Threading;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Services.Leash;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
@@ -50,7 +52,7 @@ public class RemoteHudTests
         var clock = new Clock();
         // A second monitor right of the first: WPF Place (:345) centres the pill on the main window's monitor.
         var screen = (WorkingArea: new PixelRect(1920, 40, 2560, 1400), Scaling: 1.5);
-        using var hud = new RemoteHudWindow(relay, () => stops.Add("panic"), () => screen) { Clock = clock };
+        using var hud = new RemoteHudWindow(relay, () => { stops.Add("panic"); return true; }, () => screen) { Clock = clock };
         Assert.False(hud.ShowActivated);
         hud.Refresh();
         Assert.False(hud.IsVisible);
@@ -107,20 +109,42 @@ public class RemoteHudTests
     public Task Pill_has_the_wpf_tooltips() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         using var relay = new RemoteRelay(() => "token", () => "uid", "1", (_, _) => null, _ => { }, new FakeRelay()) { AutoPoll = false };
-        using var hud = new RemoteHudWindow(relay, () => { }, () => null);
+        using var hud = new RemoteHudWindow(relay, () => true, () => null);
         Assert.Equal(Loc.Get("remote_hud_more_tip"), ToolTip.GetTip(hud.MoreButton));
         Assert.Equal(Loc.Get("remote_hud_stop_tip"), ToolTip.GetTip(hud.StopButton));
         Assert.False(hud.StopButton.Focusable);
         return Task.CompletedTask;
     });
 
-    /// <summary>Hard rule 6: the HUD Stop never reaches further than the panic key, so Lockdown refuses it
-    /// even with the panic key on (LockdownDisablePanicKey off).</summary>
+    /// <summary>One HUD Stop click through the production wiring (shell.StopFromRemoteHud), on a fresh pill so
+    /// the 2.5 s debounce never hides a press. Returns the relay's forced stops and the pill's confirmation.</summary>
+    private static async Task<(int Forced, List<string> Signals, string? Detail)> HudStop(MainShellWindow shell)
+    {
+        var server = new FakeRelay();
+        var forced = 0;
+        using var relay = new RemoteRelay(() => "token", () => "uid", "1", (_, _) => null,
+            force => { if (force) forced++; }, server) { AutoPoll = false };
+        await relay.StartAsync("light");
+        server.Poll = "{\"controller_connected\":true}";
+        await relay.PollOnceAsync();
+        using var hud = new RemoteHudWindow(relay, shell.StopFromRemoteHud, () => null);
+        hud.Refresh();
+        await hud.SignalAsync("stop");
+        var detail = hud.Detail.Text;
+        await relay.StopAsync();
+        Dispatcher.UIThread.RunJobs();
+        return (forced, server.Signals, detail);
+    }
+
+    /// <summary>Hard rule 6: the HUD Stop never reaches further than the panic key. Under Lockdown (panic key on,
+    /// LockdownDisablePanicKey off) neither the local panic nor the relay's forced stop (session, engine, Chaster
+    /// hold: RemoteCommands.StopEffects(force: true)) runs; the controller is still told.</summary>
     [Fact]
-    public void Stop_button_is_refused_under_lockdown() => AvaloniaTestDispatcher.Run(() =>
+    public Task Stop_button_is_refused_under_lockdown() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var settings = CoreSettings.Current;
-        var (enabled, key, strict) = (settings.PanicKeyEnabled, settings.PanicKey, settings.StrictLockEnabled);
+        var (enabled, key, strict, ldPanic, ldStrict) = (settings.PanicKeyEnabled, settings.PanicKey, settings.StrictLockEnabled,
+            settings.LockdownDisablePanicKey, settings.LockdownForceStrictLock);
         var old = PanicSurfaces.All;
         var oldLockdown = LockdownService.Current;
         var ld = new LockdownService();
@@ -129,16 +153,24 @@ public class RemoteHudTests
         var shell = new MainShellWindow();
         try
         {
+            (settings.LockdownDisablePanicKey, settings.LockdownForceStrictLock) = (false, false);
             LockdownService.Current = ld;
             ld.Activate(TimeSpan.FromMinutes(30));
             (settings.PanicKeyEnabled, settings.PanicKey) = (true, "F8");
             Assert.True(MainShellWindow.LockdownActive);
-            shell.StopFromRemoteHud();
+            var (forced, signals, detail) = await HudStop(shell);
             Assert.Equal(0, stopped);
+            Assert.Equal(0, forced);
+            Assert.Equal(new[] { "stop" }, signals);
+            Assert.Equal(Loc.GetF("remote_hud_sent", Loc.Get("remote_hud_stop")), detail);
+            Assert.True(ld.IsActive);
             ld.Deactivate();   // restores the pre-Lockdown panic flag
             settings.PanicKeyEnabled = true;
-            shell.StopFromRemoteHud();
+            (forced, signals, detail) = await HudStop(shell);
             Assert.Equal(1, stopped);
+            Assert.Equal(1, forced);
+            Assert.Equal(new[] { "stop" }, signals);
+            Assert.Equal(Loc.Get("remote_hud_stopped"), detail);
         }
         finally
         {
@@ -146,31 +178,53 @@ public class RemoteHudTests
             ld.Deactivate();
             LockdownService.Current = oldLockdown;
             PanicSurfaces.All = old;
-            (settings.PanicKeyEnabled, settings.PanicKey, settings.StrictLockEnabled) = (enabled, key, strict);
+            (settings.PanicKeyEnabled, settings.PanicKey, settings.StrictLockEnabled, settings.LockdownDisablePanicKey, settings.LockdownForceStrictLock)
+                = (enabled, key, strict, ldPanic, ldStrict);
         }
     });
+
+    /// <summary>Panic key off: no local panic and no forced relay stop; on a leash only the leash part runs
+    /// (WPF LeashPanicKeyWhilePanicOff), as the key itself does.</summary>
     [Fact]
-    public void Stop_button_uses_local_panic_only_when_enabled() => AvaloniaTestDispatcher.Run(() =>
+    public Task Stop_button_uses_local_panic_only_when_enabled() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var settings = CoreSettings.Current;
         var (enabled, key) = (settings.PanicKeyEnabled, settings.PanicKey);
         var old = PanicSurfaces.All;
+        var (oldService, oldRunner) = (LeashHead.Service, LeashTaskHost.Runner);
         var stopped = 0;
         PanicSurfaces.All = new[] { new PanicSurfaces.Surface("probe", _ => stopped++) };
         var shell = new MainShellWindow();
         try
         {
             settings.PanicKeyEnabled = false;
-            shell.StopFromRemoteHud();
+            var (forced, signals, detail) = await HudStop(shell);
             Assert.Equal(0, stopped);
+            Assert.Equal(0, forced);
+            Assert.Equal(new[] { "stop" }, signals);
+            Assert.Equal(Loc.GetF("remote_hud_sent", Loc.Get("remote_hud_stop")), detail);
+
+            var leash = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            leash.ApplyBlock(LeashHeadTests.BlockWithPunishment());
+            Assert.NotNull(leash.Snapshot.Me);
+            var runner = new PanicReachHeadTests.FakeRunner();
+            (LeashHead.Service, LeashTaskHost.Runner) = (leash, runner);
+            (forced, _, _) = await HudStop(shell);
+            Assert.Equal(new[] { "park+session" }, runner.Calls);   // the leash-only stop, nothing more
+            Assert.Equal(0, stopped);
+            Assert.Equal(0, forced);
+            (LeashHead.Service, LeashTaskHost.Runner) = (oldService, oldRunner);
+
             settings.PanicKeyEnabled = true;
             settings.PanicKey = "F8";
-            shell.StopFromRemoteHud();
+            (forced, _, _) = await HudStop(shell);
             Assert.Equal(1, stopped);
+            Assert.Equal(1, forced);
         }
         finally
         {
             shell.Close();
+            (LeashHead.Service, LeashTaskHost.Runner) = (oldService, oldRunner);
             PanicSurfaces.All = old;
             (settings.PanicKeyEnabled, settings.PanicKey) = (enabled, key);
         }
