@@ -32,11 +32,11 @@ namespace ConditioningControlPanel.Avalonia.Helpers
         private Action? _unwatch;
         private global::Avalonia.Controls.TopLevel? _top;
 
-        public BeatLoop(Visual owner, Action<double> step)
+        public BeatLoop(Visual owner, Action<double> step, TimeSpan? interval = null)
         {
             _owner = owner;
             _step = step;
-            _clock = new FrameClock(owner) { Interval = TimeSpan.FromSeconds(1.0 / 30) };
+            _clock = new FrameClock(owner) { Interval = interval ?? TimeSpan.FromSeconds(1.0 / 30) };
             _clock.Tick += (_, _) => { if (Parked) _clock.Stop(); else Step(); };
         }
 

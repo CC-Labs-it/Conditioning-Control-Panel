@@ -20,6 +20,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         internal static void RaiseSessionChanged() => SessionChanged?.Invoke();
 
+        /// <summary>The program's OWN session ended, after its completion was credited (WPF
+        /// Presets.cs:2030 captures wasProgramSession before the credit clears it).</summary>
+        internal static event Action? ProgramSessionEnded;
+
         public static void AttachSessionRunner(this ProgramService service, SessionRunner runner)
         {
             if (_attached != null && _stopped != null) _attached.Stopped -= _stopped;
@@ -28,8 +32,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
             // rollover, so the completion below always lands first either way.
             _stopped = (session, completed) =>
             {
+                var ours = service.IsProgramSession(session);   // before the credit clears the expected id
                 if (completed) service.OnEngineSessionCompleted(session.Id);
                 service.OnEngineSessionEnded();   // the row repaints from MainShellWindow.OnEngineStopped
+                if (ours) ProgramSessionEnded?.Invoke();
             };
             runner.Stopped += _stopped;
             _attached = runner;

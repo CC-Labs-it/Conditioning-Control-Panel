@@ -2,6 +2,8 @@
 using System;
 using System.IO;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
+using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Avalonia.Platform;
 using LibVLCSharp.Shared;
 using Serilog;
@@ -13,6 +15,8 @@ internal static partial class SpiralOverlay
     private static IDisposable? _videoPlayer;
     internal static bool IsVideoPlaying => _videoPlayer != null;
     internal static int VideoFrames => (_videoPlayer as VideoPlayer)?.Frames ?? 0;
+    internal static float VideoRate => (_videoPlayer as VideoPlayer)?.Rate ?? 0;
+    internal static long VideoTime => (_videoPlayer as VideoPlayer)?.Time ?? -1;
 
     // WPF CreateSpiralVideoWindow: muted, UniformToFill, MediaEnded -> restart. One decoder feeds all screens.
     internal static bool IsVideo(string path) => Path.GetExtension(path).ToLowerInvariant()
@@ -47,11 +51,19 @@ internal static partial class SpiralOverlay
         private readonly Media _media;
         private readonly VlcFrameSink _sink;
         internal int Frames => _sink.FrameCount;
+        internal float Rate => _player.Rate;
+        internal long Time => _player.Time;
+        private bool _disposed;
 
         internal VideoPlayer(LibVLC vlc, string path, Action<Bitmap> show)
         {
             _player = new MediaPlayer(vlc) { EnableHardwareDecoding = true };
             _media = new Media(vlc, path, FromType.FromPath);
+            var speed = (float)GentleVisuals.Speed;
+            _player.Playing += (_, _) => Dispatcher.UIThread.Post(() =>
+            {
+                if (!_disposed) _player.SetRate(speed);
+            });
             _sink = new VlcFrameSink(_player, () => _media, show, () =>
             {
                 if (_sink!.Bitmap is { } bitmap) show(bitmap);
@@ -68,6 +80,7 @@ internal static partial class SpiralOverlay
 
         public void Dispose()
         {
+            _disposed = true;
             try { _player.Stop(); } // joins decoder callbacks before freeing the buffer
             finally { _player.Dispose(); _media.Dispose(); _sink.Free(); }
         }

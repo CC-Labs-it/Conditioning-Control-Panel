@@ -5,8 +5,8 @@
 // big emote picker, End Session), the 2 s command toast, the controller-joined notice and the Start
 // button lock while a controller drives.
 // ponytail: still missing here - remote-driven session start, resume and stop, the directory opt-in chain, tray minimise/restore
-// for remote, the taskbar flash on join (no Avalonia API), the RemoteHud pill and the browser
-// blindfold (no embedded browser under the overlay on this head).
+// for remote, the RemoteHud pill and remote
+// browser video playback and reveal.
 
 using System;
 using System.Linq;
@@ -29,6 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void BtnAvailableSubjects_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
             => ShowTab("availablesubjects");
 
+        internal static Action<Window> RemoteJoinAttention = Platform.RemoteJoinAttention.Flash;
         /// <summary>Clock for the toast hold and the fade-out collapse; tests step it.</summary>
         internal static TimeProvider RemoteOverlayTime = TimeProvider.System;
         internal static readonly TimeSpan RemoteToastHold = TimeSpan.FromSeconds(2), RemoteOverlayFadeOut = TimeSpan.FromMilliseconds(200);
@@ -44,7 +45,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void InitializeRemoteControlOverlay()
         {
             RemoteCommandOwner = this;
+            Action refreshOverlays = () =>
+            {
+                Overlays.PinkFilterOverlay.Refresh(this);
+                Overlays.SpiralOverlay.Refresh(this);
+            };
+            RemoteCommands.RefreshOverlays = refreshOverlays;
             var r = RemoteControlTabView.Relay.Value;
+            r.SessionsProvider = () => ConditioningControlPanel.Models.Session.GetAllSessions()
+                .Concat(Named<Tabs.PresetsTabView>("PresetsTab")?.RemoteSessionManager?.CustomSessions ?? Enumerable.Empty<ConditioningControlPanel.Models.Session>());
+            r.SessionRunnerProvider = () => App.Sessions;
             EventHandler connected = (_, _) => Dispatcher.UIThread.Post(OnRemoteControllerChanged);
             EventHandler idle = (_, _) => Dispatcher.UIThread.Post(OnRemoteControllerIdleChanged);
             EventHandler ended = (_, _) => Dispatcher.UIThread.Post(OnRemoteSessionEnded);
@@ -55,12 +65,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             r.CommandReceived += command;
             Closed += (_, _) =>
             {
+                r.SessionsProvider = null;
+                r.SessionRunnerProvider = null;
                 r.ControllerConnectedChanged -= connected;
                 r.ControllerIdleChanged -= idle;
                 r.SessionEnded -= ended;
                 r.CommandReceived -= command;
                 if (ReferenceEquals(RemoteCommandOwner, this)) RemoteCommandOwner = null;
                 _remoteOverlayTimer?.Stop();
+                if (RemoteCommands.RefreshOverlays == refreshOverlays) RemoteCommands.RefreshOverlays = null;
             };
             // WPF fades the overlay in 300 ms and the toast in 200 ms (out: 200 / 300 ms).
             if (Named<Border>("RemoteControlOverlay") is { } o)
@@ -75,7 +88,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var connected = RemoteControllerConnected;
             UpdateStartButtonForRemoteControl(connected);
             if (connected) { ShowRemoteControlOverlay(); NotifyRemoteControllerJoined(); }
-            else HideRemoteControlOverlay();
+            else
+            {
+                HideRemoteControlOverlay();
+                // WPF RemoteControlService.cs:1189: opt-in disconnect stops an idle overlay service.
+                if (CoreSettings.Current.StopEffectsOnRemoteDisconnect && !CoreEngine.IsRunning)
+                {
+                    Overlays.SpiralOverlay.Stop(); Overlays.PinkFilterOverlay.Stop();
+                }
+            }
         }
 
         /// <summary>WPF OnRemoteControllerIdleChanged (:818): orange "may be idle", else the grey default.</summary>
@@ -91,8 +112,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF OnRemoteSessionEnded (:832), shell half; the tab unticks itself.</summary>
         internal void OnRemoteSessionEnded()
         {
+            // WPF RemoteControlService.cs:1045: session cleanup leaves the wearer's engine running.
+            if (!CoreEngine.IsRunning) { Overlays.SpiralOverlay.Stop(); Overlays.PinkFilterOverlay.Stop(); }
             HideRemoteControlOverlay();
             UpdateStartButtonForRemoteControl(false);
+            Platform.FriendsHead.Service?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Remote);   // WPF RemoteControlService.cs:410
         }
 
         /// <summary>WPF OnRemoteCommandReceived (:1091): quiet verbs make no toast.</summary>
@@ -106,6 +130,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void ShowRemoteControlOverlay()
         {
             var r = RemoteControlTabView.Relay.Value;
+            if (LeashBrowser is { } browser) browser.IsVisible = false; // native web view airspace, WPF :904
             var text = string.IsNullOrEmpty(r.SessionCode) ? "" : $"Session: {string.Join(" ", r.SessionCode.ToCharArray())}";
             if (!string.IsNullOrEmpty(r.ConnectPin)) text += $"  PIN: {r.ConnectPin}";
             if (Named<TextBlock>("TxtOverlaySessionCode") is { } code) code.Text = text;
@@ -132,7 +157,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF HideRemoteControlOverlay (:915): fade 200 ms, then collapse; the toast stops too.</summary>
-        private void HideRemoteControlOverlay()
+        internal void HideRemoteControlOverlay()
         {
             if (Named<Border>("RemoteControlOverlay") is not { IsVisible: true } o) return;
             o.Opacity = 0;
@@ -150,6 +175,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _remoteOverlayHidingAt = null;
                 _remoteOverlayTimer?.Stop();
                 if (Named<Border>("RemoteControlOverlay") is { } o) o.IsVisible = false;
+                // WPF MainWindow.Leash.cs:185-201: the gate owns the browser until it goes; a tour that is
+                // still up keeps it hidden too (#4384). One rule: RestoreBrowser (MainShellWindow.BrowserCover.cs).
+                RestoreBrowser();
                 if (Named<Border>("RemoteCommandNotification") is { } n0) n0.Opacity = 0;
                 return;
             }
@@ -190,10 +218,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF NotifyRemoteControllerJoined (:1481): the tray balloon (here the OS notification).</summary>
-        private static void NotifyRemoteControllerJoined()
+        private void NotifyRemoteControllerJoined()
         {
             try { Platform.OsNotifications.Show(Loc.Get("title_remote_controller_joined"), Loc.Get("msg_remote_controller_joined")); }
             catch (Exception ex) { Serilog.Log.Debug("Remote controller notice failed: {Error}", ex.Message); }
+            if (WindowState == WindowState.Minimized || !IsVisible)
+                try { RemoteJoinAttention(this); }
+                catch (Exception ex) { Serilog.Log.Debug("Remote controller attention failed: {Error}", ex.Message); }
         }
 
         /// <summary>WPF UpdateStartButtonForRemoteControl (StartStop.cs:992): disabled, green, 🎮 REMOTE CONNECTED.</summary>
@@ -206,6 +237,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (Named<TextBlock>("TxtStartIcon") is { } icon) icon.Text = "\U0001F3AE";
             Named<TextBlock>("TxtStartLabel")?.Bind(TextBlock.TextProperty,
                 (Binding)new Localization.StrExtension("label_remote_connected").ProvideValue(null!));
+            ApplyStartHeroState();
         }
 
         /// <summary>WPF BtnEndRemoteSession_Click (:1255): stop the relay; the tab unticks on SessionEnded.</summary>

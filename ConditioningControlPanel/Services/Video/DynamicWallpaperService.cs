@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -18,7 +19,7 @@ namespace ConditioningControlPanel.Services
     /// <summary>
     /// DYNAMIC wallpaper: the same collage as the static one (<see cref="CollageComposer"/>'s geometry and
     /// look), but up to <see cref="AnimatedCap"/> of its gif/webp tiles MOVE, live, behind the desktop icons.
-    /// One collage on every monitor, in sync, scaled to each.
+    /// One collage PER MONITOR, each planned at that monitor's own pixel size, rotating together.
     ///
     /// Why it looks like this: the 24H2+ "raised desktop" refuses normal window painting (GDI, WPF and
     /// windowed WebView2 all show black under the icons). Only a DirectComposition visual gets composited
@@ -83,8 +84,8 @@ namespace ConditioningControlPanel.Services
             new Vortice.DCommon.PixelFormat(Format.B8G8R8A8_UNorm, Vortice.DCommon.AlphaMode.Premultiplied), 96, 96, BitmapOptions.None);
 
         // ---- desktop + render (wallpaper thread only) ----
-        private Collage? _current, _outgoing;
-        private Collage? _pending;                 // builder to render thread hand-off (Interlocked)
+        private CollageSet? _current, _outgoing;
+        private CollageSet? _pending;                 // builder to render thread hand-off (Interlocked)
         private bool _deviceLost;
         private long _lastTick, _fadeStart, _fadeMs;
 
@@ -515,12 +516,12 @@ namespace ConditioningControlPanel.Services
             long dt = Math.Clamp(now - _lastTick, 0, 250);   // a sleep/stall must not leave a backlog
             _lastTick = now;
 
-            // Advance the shared collage ONCE (not per monitor, or it would play N times as fast).
+            // Advance every tile ONCE per tick, whichever monitor shows it.
             bool changed = false;
             if (!_holdStill)
             {
                 double speed = GentleVisuals.Speed;
-                foreach (var t in c.Tiles)
+                foreach (var t in c.Screens.SelectMany(m => m.Tiles))
                     changed |= DynamicFrameBudget.Advance(t, dt, speed);
             }
 
@@ -542,12 +543,16 @@ namespace ConditioningControlPanel.Services
                 if (!s.NeedsDraw || s.Covered) continue;   // nothing new, or nobody can see it
                 try
                 {
-                    var monitor = Matrix3x2.CreateScale(s.Width / c.RefW, s.Height / c.RefH);
+                    // Each monitor has its own collage at its own size, so this is 1:1. Only between a display
+                    // change and its rebuild can a collage meet another size: cover, never stretch (#1544).
+                    var mine = c.For(s);
+                    if (mine == null) continue;
                     ctx.Target = s.Target;
                     ctx.BeginDraw();
                     ctx.Clear(new Color4(0f, 0f, 0f, 1f));
-                    if (_outgoing != null) DrawCollage(ctx, _outgoing, monitor, 1f, 1f);
-                    DrawCollage(ctx, c, monitor, _outgoing != null ? fade : 1f, fade);
+                    var old = _outgoing?.For(s);
+                    if (old != null) DrawCollage(ctx, old, FitTo(s, old), 1f, 1f);
+                    DrawCollage(ctx, mine, FitTo(s, mine), old != null ? fade : 1f, fade);
                     ctx.Transform = Matrix3x2.Identity;
                     var drawn = ctx.EndDraw();
 
@@ -568,6 +573,12 @@ namespace ConditioningControlPanel.Services
                 }
                 catch (Exception ex) { Diag.Swallowed(ex, "dynamic render frame"); }
             }
+        }
+
+        private static Matrix3x2 FitTo(Surface s, Collage c)
+        {
+            var (k, ox, oy) = DynamicFrameBudget.CoverFit(s.Width, s.Height, c.RefW, c.RefH);
+            return Matrix3x2.CreateScale(k) * Matrix3x2.CreateTranslation(ox, oy);
         }
 
         private static void DrawCollage(ID2D1DeviceContext ctx, Collage c, Matrix3x2 monitor, float baseOpacity, float layerOpacity)
@@ -647,13 +658,37 @@ namespace ConditioningControlPanel.Services
             lock (_gpuLock) { _gpuGone = false; }
         }
 
+        /// <summary>One build: a collage for every monitor, sharing one frame budget and one rotation.</summary>
+        private sealed class CollageSet : IDisposable
+        {
+            public readonly List<Collage> Screens = new();
+            public int MovingGif, MovingWebp, FrameTotal;
+            public long BudgetLeft = DynamicFrameBudget.Bytes;   // shared by every monitor
+            private List<(int X, int Y, int W, int H)>? _rects;
+
+            /// <summary>The collage planned for this monitor (<see cref="DynamicFrameBudget.MatchMonitor"/>).</summary>
+            public Collage? For(Surface s)
+            {
+                _rects ??= Screens.Select(c => (c.MonX, c.MonY, c.MonW, c.MonH)).ToList();
+                int i = DynamicFrameBudget.MatchMonitor(_rects,
+                    s.X, s.Y, s.Width, s.Height);
+                return i < 0 ? null : Screens[i];
+            }
+
+            public void Dispose()
+            {
+                foreach (var c in Screens) c.Dispose();
+                Screens.Clear();
+            }
+        }
+
+        /// <summary>One monitor's collage, planned at that monitor's physical size.</summary>
         private sealed class Collage : IDisposable
         {
-            public float RefW, RefH;
+            public int MonX, MonY, MonW, MonH;   // the monitor it was planned for
+            public float RefW, RefH;              // its canvas (= the monitor's size)
             public ID2D1Bitmap? Base, Overlay;
             public readonly List<Tile> Tiles = new();
-            public int MovingGif, MovingWebp, FrameTotal;
-            public long BudgetLeft = DynamicFrameBudget.Bytes;
 
             public void Dispose()
             {

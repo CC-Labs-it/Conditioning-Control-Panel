@@ -41,6 +41,13 @@ internal static class Win32Overlay
     [DllImport("user32.dll")] private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint colorKey, byte alpha, uint flags);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
 
+    // Native call seam: tests verify HWND_NOTOPMOST and the no-activation flags on Linux too.
+    internal static Func<IntPtr, IntPtr, int, int, int, int, uint, bool> PositionWindow = SetWindowPos;
+
+    // WPF ChaosWindowZ.cs:47-53: unpinned windows leave the topmost band.
+    internal static bool SetStacking(IntPtr hwnd, bool topmost) =>
+        PositionWindow(hwnd, new IntPtr(topmost ? -1 : -2), 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+
     // Per window: whether it should currently be click-through, read by the style callback.
     private static readonly ConditionalWeakTable<TopLevel, StrongBox<bool>> Wanted = new();
 
@@ -50,7 +57,7 @@ internal static class Win32Overlay
     // Subliminal opt-in: keep TRANSPARENT but clear NOACTIVATE, including on Avalonia rebuilds.
     private static readonly ConditionalWeakTable<TopLevel, object> FocusAllowed = new();
     private static bool AllowsFocus(TopLevel window) => FocusAllowed.TryGetValue(window, out _);
-    private static bool IsPassive(TopLevel window) => Passive.TryGetValue(window, out _);
+    internal static bool IsPassive(TopLevel window) => Passive.TryGetValue(window, out _);
 
     internal static uint Style(uint exStyle, bool clickThrough, bool passive = false, bool allowFocus = false)
         => (exStyle | OverlayBits) & ~ClickThroughBits
@@ -64,14 +71,26 @@ internal static class Win32Overlay
         return Apply(hwnd, clickThrough, IsPassive(window), AllowsFocus(window));
     }
 
-    /// <summary>Tool/no-activate/layered + HWND_TOPMOST: the Windows form of an override-redirect overlay.</summary>
-    internal static bool SetOverrideRedirect(TopLevel window, IntPtr hwnd, bool passive = false)
+    /// <summary>Tool/no-activate/layered + the requested stacking band: the Windows form of an override-redirect overlay.</summary>
+    internal static bool SetOverrideRedirect(TopLevel window, IntPtr hwnd, bool passive = false, bool topmost = true)
     {
         if (!OperatingSystem.IsWindows()) return false;
         if (passive) Passive.AddOrUpdate(window, Passive);
         return Apply(hwnd, Track(window).Value, IsPassive(window), AllowsFocus(window))
-            && SetWindowPos(hwnd, new IntPtr(-1), 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+            && SetStacking(hwnd, topmost);
     }
+
+    // WPF ChaosUnlockCardOverlay.cs:388-396: take clicks without activating or changing z-order.
+    internal static bool SetPassive(TopLevel window, IntPtr hwnd)
+    {
+        Passive.AddOrUpdate(window, Passive);
+        if (!OperatingSystem.IsWindows()) return false;
+        return Apply(hwnd, Track(window).Value, true, AllowsFocus(window));
+    }
+
+    // Raise only: keep existing extended styles, including NOACTIVATE on interactive chrome.
+    internal static bool Raise(IntPtr hwnd, Func<IntPtr, IntPtr, int, int, int, int, uint, bool>? setPosition = null)
+        => (setPosition ?? SetWindowPos)(hwnd, new IntPtr(-1), 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
 
     /// <summary>WPF ApplyWindowStyles(stealsFocus): activation and mouse pass-through are independent.</summary>
     internal static bool AllowFocus(TopLevel window, IntPtr hwnd)
@@ -92,6 +111,10 @@ internal static class Win32Overlay
     [StructLayout(LayoutKind.Sequential)] private struct RectI { public int Left, Top, Right, Bottom; }
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out PointI p);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RectI r);
+
+    /// <summary>WPF MainWindow.Chaster.CursorPx: desktop pointer in physical pixels.</summary>
+    internal static global::Avalonia.PixelPoint? CursorPosition() =>
+        OperatingSystem.IsWindows() && GetCursorPos(out var p) ? new(p.X, p.Y) : null;
 
     /// <summary>Is the window-relative px point inside any of the first <paramref name="count"/> rects?</summary>
     internal static bool Hits(global::Avalonia.PixelRect[] rects, int count, int x, int y)

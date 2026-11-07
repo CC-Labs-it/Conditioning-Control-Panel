@@ -34,6 +34,100 @@ public sealed class BarkEngineTests : IDisposable
         return e;
     }
 
+    [Theory]
+    [InlineData("FaceLost", true)]
+    [InlineData("FaceFound", true)]
+    [InlineData("Blink", true)]
+    [InlineData("TrackingStateChanged", true)]
+    [InlineData("IdleStateChanged", true)]
+    [InlineData("ActivityChanged", true)]
+    [InlineData("StillOnActivity", true)]
+    [InlineData("TongueOut", false)]
+    public void SensingClassificationReachesTheMouth(string trigger, bool unprompted)
+    {
+        Assert.True(Engine(Rule(trigger, "line")).Raise(trigger, guaranteed: true));
+        Assert.Equal(unprompted, Assert.Single(_said).Unprompted);
+    }
+
+    [Fact]
+    public void IdleRotatesAcrossRulesAndPersistsWithoutImmediateCycleRepeat()
+    {
+        var old = _s.BarkIdleRotation;
+        try
+        {
+            _s.BarkIdleRotation = new();
+            var rules = Enumerable.Range(0, 4).Select(i => Rule("Idle", "idle" + i)).ToArray();
+            var e = Engine(rules);
+            var clock = new PopQuizSchedulerTests.FakeClock();
+            e.Clock = clock;
+            for (int i = 0; i < 4; i++) { Assert.True(e.DispatchIdle()); clock.Advance(TimeSpan.FromSeconds(61)); }
+            Assert.Equal(4, _said.Select(x => x.Text).Distinct().Count());
+            Assert.Equal(4, _s.BarkIdleRotation.Count);
+            var last = _said.Last().Text;
+            Assert.True(e.DispatchIdle());
+            Assert.NotEqual(last, _said.Last().Text);
+        }
+        finally { _s.BarkIdleRotation = old; }
+    }
+
+    [Fact]
+    public void IdleSkipsMuteAndSpeakingAndUsesConditions()
+    {
+        var rule = Rule("Idle", "eligible");
+        rule.Conditions = new() { ["player_level_gte"] = _s.PlayerLevel + 1 };
+        var e = Engine(rule);
+        Assert.False(e.DispatchIdle());
+        rule.Conditions = null;
+        _s.MasterVolume = 0;
+        Assert.False(e.DispatchIdle());
+        _s.MasterVolume = 50;
+        e.IsSpeaking = () => true;
+        Assert.False(e.DispatchIdle());
+        e.IsSpeaking = () => false;
+        Assert.True(e.DispatchIdle());
+    }
+
+    [Fact]
+    public void IdlePrefersEligibleGatedLinesDespiteAnUngatedMajority()
+    {
+        var old = _s.BarkIdleRotation;
+        int gated = 0;
+        try
+        {
+            var rules = Enumerable.Range(0, 32).Select(i => Rule("Idle", "plain")).ToList();
+            var band = Rule("Idle", "band");
+            band.Conditions = new() { ["player_level_gte"] = 0 };
+            rules.Add(band);
+            for (int seed = 0; seed < 200; seed++)
+            {
+                _s.BarkIdleRotation = new();
+                var e = new BarkEngine(() => new BarkRuleSet(rules), new Random(seed))
+                { Speak = speech => { if (speech.Text == "band") gated++; }, DryRun = false };
+                e.Start();
+                Assert.True(e.DispatchIdle());
+            }
+            Assert.InRange(gated, 45, 110); // uniform selection would yield only about six
+        }
+        finally { _s.BarkIdleRotation = old; }
+    }
+
+    [Fact]
+    public void DryRunExercisesSessionGatesWithoutSpeechOrPersistedWrites()
+    {
+        var rule = Rule("T", "silent");
+        rule.Repeatable = false;
+        rule.ScopeRaw = "lifetime";
+        var e = Engine(rule);
+        e.DryRun = true;
+        var before = _s.BarkVariantRotation.Count;
+        Assert.False(e.Raise("T"));
+        Assert.Empty(_said);
+        Assert.False(_s.IsBarkFired(rule.Id));
+        Assert.Equal(before, _s.BarkVariantRotation.Count);
+        e.DryRun = false;
+        Assert.False(e.Raise("T")); // dry-run still spends the in-memory one-shot
+    }
+
     [Fact]
     public void TheHighestPriorityRuleWhoseConditionsPassSpeaksWithSubstitutions()
     {
@@ -117,6 +211,27 @@ public sealed class BarkEngineTests : IDisposable
         Assert.False(e.Raise("AttentionCheckFail"));
         clock.Advance(TimeSpan.FromSeconds(0.2));
         Assert.True(e.Raise("AttentionCheckFail"));
+    }
+
+    [Fact]   // WPF AudioService.MarkWhisperAudio (:948) + EvaluateGate (:1668): a whisper holds the floor for its length + 0.25 s
+    public void AnAudibleWhisperHoldsOrdinaryBarksButNotGuaranteedOrAttributionLines()
+    {
+        var clock = new PopQuizSchedulerTests.FakeClock();
+        var e = Engine(Rule("AttentionCheckFail", "eyes"), Rule("PossessionEffect", "mine"));
+        e.Clock = clock;
+        e.MarkWhisperAudio(double.NaN);
+        e.MarkWhisperAudio(-1);
+        Assert.False(e.IsWhisperAudioPlaying);
+        e.MarkWhisperAudio(3);
+        e.MarkWhisperAudio(1);   // a shorter clip never cuts the longer window short
+        Assert.False(e.Raise("AttentionCheckFail"));
+        Assert.True(e.Raise("PossessionEffect"));   // text-only attribution, never a second voice
+        clock.Advance(TimeSpan.FromSeconds(3.2));
+        Assert.True(e.IsWhisperAudioPlaying);
+        Assert.False(e.Raise("AttentionCheckFail"));
+        Assert.True(e.Raise("AttentionCheckFail", guaranteed: true));
+        clock.Advance(TimeSpan.FromSeconds(0.1));
+        Assert.False(e.IsWhisperAudioPlaying);
     }
 
     [Fact]

@@ -5372,6 +5372,15 @@ namespace ConditioningControlPanel.Models
             set { _pinkFilterColor = value ?? ""; OnPropertyChanged(); }
         }
 
+        // ccp-bugs #1546: draw the tint UNDER spirals, subliminals, bubbles and bouncing text so it
+        // stops washing them out. Off = today's order (tint over every session effect). Compositor only.
+        private bool _pinkFilterUnderEffects = false;
+        public bool PinkFilterUnderEffects
+        {
+            get => _pinkFilterUnderEffects;
+            set { _pinkFilterUnderEffects = value; OnPropertyChanged(); }
+        }
+
         #endregion
 
         #region Attention Game
@@ -6189,7 +6198,7 @@ namespace ConditioningControlPanel.Models
         /// <summary>
         /// ccp-bugs #1468: false (default) keeps the idle-timer lines quiet while neither the engine
         /// nor a session runs; the bubble and text still show. True speaks them as before. Lines that
-        /// answer a player action are never affected. Rule: Services.Companion.CompanionIdleVoice.
+        /// answer a player action are never affected. Rule: Services.Companion.CompanionVoicePolicy.
         /// </summary>
         [JsonProperty]
         public bool CompanionSpeaksIdleWhenEngineOff
