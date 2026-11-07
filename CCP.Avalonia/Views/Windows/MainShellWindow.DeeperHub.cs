@@ -70,14 +70,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF OpenDeeperEditor: one editor per file (re-activated, not duplicated); closing
         /// it refreshes the hub list.</summary>
-        internal void OpenDeeperEditor(Models.Deeper.Enhancement enhancement, string? filePath)
+        internal DeeperEditorWindow OpenDeeperEditor(Models.Deeper.Enhancement enhancement, string? filePath)
         {
             string? key = filePath is null ? null : DeeperTabViewModel.FullPath(filePath);
             if (key != null && _deeperOpenEditors.TryGetValue(key, out var existing))
             {
                 if (existing.WindowState == WindowState.Minimized) existing.WindowState = WindowState.Normal;
                 existing.Activate();
-                return;
+                return existing;
             }
             var window = new DeeperEditorWindow(enhancement, filePath);
             if (key != null) _deeperOpenEditors[key] = window;
@@ -87,6 +87,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ReloadDeeperLibraryFromDisk();
             };
             if (IsVisible) window.Show(this); else window.Show();
+            return window;
         }
 
         /// <summary>WPF EnhancementPlayerWindow.ShowOrActivate: one player window, reused.</summary>
@@ -103,6 +104,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _deeperPlayer = player;
             if (IsVisible) player.Show(this); else player.Show();
             return player;
+        }
+
+        /// <summary>Test seam: throws inside the open path, as a failing player or editor would.</summary>
+        internal static Action<string>? MediaRequestFault;
+
+        // WPF MainWindow.DeeperTab.cs:604-616,649-675, used by file-open handoffs. Only a second
+        // launch restores the panel (WPF App.xaml.cs:2209); the first leaves it to the boot.
+        internal Window? OpenMediaRequest(string action, string path, bool restore)
+        {
+            if (restore) try { ShowFromTray(); } catch (Exception ex) { Log.Warning(ex, "ShowFromTray failed"); }
+            var play = action == "play";
+            try
+            {
+                MediaRequestFault?.Invoke(action);
+                if (play) { var player = ShowOrActivateDeeperPlayer(); player.OpenLocalMediaFile(path); return player; }
+                if (action == "edit")
+                {
+                    var type = DeeperPreview.IsLocalVideoFile(path) ? Models.Deeper.MediaTypes.Video : Models.Deeper.MediaTypes.Audio;
+                    // CreateBlank's initializer inlined, as in DeeperTab: a library here would leak its watcher.
+                    return OpenDeeperEditor(new Models.Deeper.Enhancement { MediaType = type, MediaSource = path, Metadata = new() }, null);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to open Deeper {Action} for {Path}", action, path);
+                // WPF's English text (MainWindow.DeeperTab.cs:613-615,664-666). Not awaited: the handoff ack must not wait for OK.
+                var what = play ? "Player" : "Editor";
+                _ = MessageDialog.ShowAsync(this, $"Open {what} failed", $"Couldn't open Deeper {what}:\n\n{ex.GetType().Name}: {ex.Message}");
+            }
+            return null;
         }
 
         /// <summary>WPF BtnDeeperOpenPlayer_Click (MainWindow.DeeperTab.cs:202).</summary>
