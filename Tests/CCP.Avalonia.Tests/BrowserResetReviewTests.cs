@@ -24,7 +24,7 @@ namespace CCP.Avalonia.Tests;
 
 public class BrowserResetReviewTests
 {
-    [Fact] public async Task ManualLaterSurvivesExitWhileGameOpenAndRestart() { await AvaloniaTestDispatcher.RunAsync(async () => { Setup(); var oldApi = Environment.GetEnvironmentVariable("CCP_UPDATE_API_URL"); var feed = new Feed("99.1.0"); var shell = new MainShellWindow(); var shell2 = new MainShellWindow(); var game = new global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow(); try { Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", "http://127.0.0.1:9/api"); AppUpdater.Handler = feed; CoreSettings.Current.OfflineMode = false; ReleaseFeed.SetPendingUpdateAttempt(CorePaths.UserData, CoreReleaseContent.AppVersion); File.WriteAllText(ReleaseFeed.AttemptResultFilePath(CorePaths.UserData), "0"); shell.Show(); game.Show(); var startup = AppUpdater.StartupAsync(shell); await Until(() => Volatile.Read(ref feed.Requests) > 0 && AppUpdater.Latest is { Version: "99.1.0", IsNewer: true }); Assert.False(File.Exists(ReleaseFeed.AttemptFilePath(CorePaths.UserData))); var manual = AppUpdater.ManualCheckAsync(game); await Until(() => AppUpdater.OpenDialog != null); AppUpdater.OpenDialog!.FindControl<Button>("BtnLater")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await manual; Assert.Equal("99.1.0", ReleaseFeed.GetSkippedUpdateVersion(CorePaths.UserData)); shell.Close(); await startup; shell2.Show(); var restart = AppUpdater.StartupAsync(shell2); await Until(() => Volatile.Read(ref feed.Requests) > 1); game.Close(); await restart; Assert.Equal("99.1.0", ReleaseFeed.GetSkippedUpdateVersion(CorePaths.UserData)); Assert.Null(AppUpdater.OpenDialog); } finally { AppUpdater.OpenDialog?.Close(); game.Close(); shell.Close(); shell2.Close(); ReleaseFeed.ClearPendingUpdateAttempt(CorePaths.UserData); ReleaseFeed.ClearSkippedUpdateVersion(CorePaths.UserData); AppUpdater.Handler = null; Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", oldApi); } }); }
+    [Fact] public async Task ManualLaterSurvivesExitWhileGameOpenAndRestart() { if (OperatingSystem.IsWindows()) Assert.Skip("Needs the update check, which the Windows path runs only for an Inno install."); await AvaloniaTestDispatcher.RunAsync(async () => { Setup(); var oldApi = Environment.GetEnvironmentVariable("CCP_UPDATE_API_URL"); var feed = new Feed("99.1.0"); var shell = new MainShellWindow(); var shell2 = new MainShellWindow(); var game = new global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow(); try { Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", "http://127.0.0.1:9/api"); AppUpdater.Handler = feed; CoreSettings.Current.OfflineMode = false; ReleaseFeed.SetPendingUpdateAttempt(CorePaths.UserData, CoreReleaseContent.AppVersion); File.WriteAllText(ReleaseFeed.AttemptResultFilePath(CorePaths.UserData), "0"); shell.Show(); game.Show(); var startup = AppUpdater.StartupAsync(shell); await Until(() => Volatile.Read(ref feed.Requests) > 0 && AppUpdater.Latest is { Version: "99.1.0", IsNewer: true }); Assert.False(File.Exists(ReleaseFeed.AttemptFilePath(CorePaths.UserData))); var manual = AppUpdater.ManualCheckAsync(game); await Until(() => AppUpdater.OpenDialog != null); AppUpdater.OpenDialog!.FindControl<Button>("BtnLater")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await manual; Assert.Equal("99.1.0", ReleaseFeed.GetSkippedUpdateVersion(CorePaths.UserData)); shell.Close(); await startup; shell2.Show(); var restart = AppUpdater.StartupAsync(shell2); await Until(() => Volatile.Read(ref feed.Requests) > 1); game.Close(); await restart; Assert.Equal("99.1.0", ReleaseFeed.GetSkippedUpdateVersion(CorePaths.UserData)); Assert.Null(AppUpdater.OpenDialog); } finally { AppUpdater.OpenDialog?.Close(); game.Close(); shell.Close(); shell2.Close(); ReleaseFeed.ClearPendingUpdateAttempt(CorePaths.UserData); ReleaseFeed.ClearSkippedUpdateVersion(CorePaths.UserData); AppUpdater.Handler = null; Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", oldApi); } }); }
     internal static void Setup()
     {
         if (Application.Current is null)
@@ -82,6 +82,8 @@ public class BrowserResetReviewTests
     [Fact]
     public async Task LauncherBootOwnsNoticeAndStartupSurfacesDoNotOverlap()
     {
+        // Windows CI is not an Inno install, so CheckAsync never calls the feed there (AppUpdater.cs:91; same skip as AppUpdaterTests.cs:63).
+        if (OperatingSystem.IsWindows()) Assert.Skip("Needs the update check, which the Windows path runs only for an Inno install.");
         await AvaloniaTestDispatcher.RunAsync(async () =>
         {
             Setup();
@@ -281,6 +283,8 @@ public class BrowserResetReviewTests
     [Fact]
     public async Task PendingNoticeDoesNotDelayUpdateCheckOrFailedUpdateReport()
     {
+        // Windows CI is not an Inno install, so CheckAsync never calls the feed there (AppUpdater.cs:91; same skip as AppUpdaterTests.cs:63).
+        if (OperatingSystem.IsWindows()) Assert.Skip("Needs the update check, which the Windows path runs only for an Inno install.");
         await AvaloniaTestDispatcher.RunAsync(async () =>
         {
             Setup();
