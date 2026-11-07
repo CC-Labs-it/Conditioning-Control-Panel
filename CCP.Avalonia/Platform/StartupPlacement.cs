@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Threading;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
@@ -64,8 +65,27 @@ internal static class StartupPlacement
             var screen = screens[at];
             window.WindowStartupLocation = WindowStartupLocation.Manual;
             window.Position = CenterIn(screen.WorkingArea, window.Width, window.Height, screen.Scaling);
+            ReassertAfterMap(window, window.Position);
         }
         catch (Exception ex) { Serilog.Log.Debug(ex, "[Placement] startup centring failed; Avalonia places the window"); }
+    }
+
+    /// <summary>WSLg's window manager (Weston's xwm) ignores where a new X window asks to be on its first map but
+    /// honours a move after it (owner's PC 2026-11-07: the splash landed low-left, the shell asked for 2129,219 and
+    /// was put at 1952,37; an XConfigureWindow after the map went exactly where asked). So on Linux the startup
+    /// position is sent once more after the window is shown. Window managers that honoured it see no change.</summary>
+    internal static void ReassertAfterMap(Window window, PixelPoint at, bool? linux = null)
+    {
+        if (!(linux ?? OperatingSystem.IsLinux())) return;
+        EventHandler? opened = null;
+        opened = (_, _) =>
+        {
+            window.Opened -= opened;
+            void Move() { if (window.IsVisible && window.WindowState == WindowState.Normal) window.Position = at; }
+            Dispatcher.UIThread.Post(Move, DispatcherPriority.Background);
+            DispatcherTimer.RunOnce(Move, TimeSpan.FromMilliseconds(250));   // a WM that maps late
+        };
+        window.Opened += opened;
     }
 
     private static int IndexOfPrimary(Window window)

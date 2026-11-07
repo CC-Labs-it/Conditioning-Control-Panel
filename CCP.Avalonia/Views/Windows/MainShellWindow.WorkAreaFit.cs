@@ -111,6 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var centre = Platform.StartupPlacement.CenterIn(wa, Width, Height, scale);
                 // Top-left kept on the work area when a floor still overflows it: the title bar stays grabbable.
                 Position = new PixelPoint(Math.Max(wa.X, centre.X), Math.Max(wa.Y, centre.Y));
+                Platform.StartupPlacement.ReassertAfterMap(this, Position);
                 Log.Information("MainShellWindow first placement: {W:0}x{H:0} DIP at {Pos} on {Screen} (work area {WA}, {Scale:0.##}x)",
                     Width, Height, Position, screen.DisplayName, wa, scale);
             }

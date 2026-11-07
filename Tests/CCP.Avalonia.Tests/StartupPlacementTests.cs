@@ -1,4 +1,8 @@
+using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Threading;
+using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
 using Xunit;
 
@@ -64,6 +68,30 @@ public sealed class StartupPlacementTests
         Assert.False(X11ScreenSettle.IsPlaceholder(new[] { new PixelRect(0, 0, 640, 480), Left }));
         Assert.False(X11ScreenSettle.IsPlaceholder(System.Array.Empty<PixelRect>()));
     }
+
+    /// <summary>Owner 11-07: WSLg's window manager ignored the first-map position (the splash sat low-left) but
+    /// honours a move after the map, so the startup position is sent again once the window is shown.</summary>
+    [Fact]
+    public Task AWindowManagerThatIgnoresTheFirstPositionIsOverruledAfterTheMap() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var w = new Window { Width = 400, Height = 215, WindowStartupLocation = WindowStartupLocation.Manual };
+        try
+        {
+            var at = new PixelPoint(2760, 612);
+            w.Position = at;
+            StartupPlacement.ReassertAfterMap(w, at, linux: true);
+            w.Show();
+            w.Position = new PixelPoint(184, 950);   // where the window manager put it
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(at, w.Position);
+            w.Position = new PixelPoint(10, 10);     // the user drags it later: not undone by the Opened hook
+            w.Hide(); w.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new PixelPoint(10, 10), w.Position);
+        }
+        finally { w.Close(); }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public void TheShellCentresOnThePrimaryAsWpfAndOnThePointersScreenWhenThereIsNone()
