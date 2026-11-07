@@ -51,6 +51,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:hx="clr-namespace:ConditioningControlPanel.Views.Controls;assembly=CCP.Core"
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.HapticsTabView"
              mc:Ignorable="d"
@@ -363,10 +364,12 @@
                             <!-- Chevron state is a plain class, not a storyboard: a DataTemplate is
                                  re-realised per item and an animation clock left running on a
                                  recycled container is a much worse trade than a 150 ms rotate. -->
-                            <TextBlock x:Name="RowChevron" Grid.Column="3" Text="&#x25B8;" FontSize="11"
-                                       Foreground="{DynamicResource TextDimBrush}" VerticalAlignment="Center"
-                                       Margin="4,0,2,0" RenderTransformOrigin="50%,50%"
-                                       Classes.chevopen="{Binding IsExpanded}"/>
+                            <!-- WPF "&#x25B8;" at 11px; a filled caret, since the Linux fallback for
+                                 U+25B8 drew it about twice as large. -->
+                            <fx:IconGlyph x:Name="RowChevron" Grid.Column="3" Kind="CaretRight" Variant="Filled" Size="7"
+                                          Foreground="{DynamicResource TextDimBrush}" VerticalAlignment="Center"
+                                          Margin="4,0,2,0" RenderTransformOrigin="50%,50%"
+                                          Classes.chevopen="{Binding IsExpanded}"/>
                         </Grid>
                     </ToggleButton>
                 </Grid>
@@ -452,7 +455,7 @@
         <Style Selector="Border.ghost">
             <Setter Property="Opacity" Value="0.4"/>
         </Style>
-        <Style Selector="TextBlock.chevopen">
+        <Style Selector="fx|IconGlyph.chevopen">
             <Setter Property="Foreground" Value="{DynamicResource PinkBrush}"/>
             <Setter Property="RenderTransform" Value="rotate(90deg)"/>
         </Style>

@@ -40,8 +40,6 @@ namespace ConditioningControlPanel.Avalonia.Tours
         {
             "BtnProgression",
             "BtnSettings",          // trunk's shell names it; this tip's does not yet
-            "TutorialActionIntensityField",
-            "TutorialTriggerTimeField",
         };
 
         private static bool _seeded;
@@ -60,6 +58,12 @@ namespace ConditioningControlPanel.Avalonia.Tours
             CoreTutorial.PreviousAction = Service.Previous;
             CoreTutorial.SkipAction = Service.Skip;
             CoreTutorial.StartAction = StartByName;
+
+            // WPF Services/TutorialService.cs:927: one 1600 ms demo flash.
+            TutorialHeadHooks.FlashDemo ??= () =>
+            {
+                if (TutorialHeadHooks.Shell is { } shell) Views.Overlays.FlashOverlay.TriggerOnce(shell, amount: 1, durationMs: 1600);
+            };
 
             if (_seeded) return;      // the seam is re-pointed every call, the events are wired once
             _seeded = true;
@@ -107,7 +111,8 @@ namespace ConditioningControlPanel.Avalonia.Tours
             overlay.Closed += (_, _) =>
             {
                 if (ReferenceEquals(_shellOverlay, overlay)) _shellOverlay = null;
-                if (browser != null) browser.IsVisible = true;
+                // Through the shell's one rule: never back over the remote overlay or a leash gate.
+                if (browser != null) shell.RestoreBrowser();
             };
             overlay.Show();
         }
@@ -115,6 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
         /// <summary>Panic: a tour ends at once, by the abandon route (never latched as walked).</summary>
         internal static void OnPanic()
         {
+            try { Views.Deeper.DeeperEditorWindow.StopTutorialsForPanic(); } catch { /* still skip below */ }
             try { if (Service.IsActive) Service.Skip(); } catch { /* panic never throws */ }
         }
 

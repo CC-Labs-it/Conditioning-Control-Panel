@@ -38,47 +38,7 @@ namespace ConditioningControlPanel.Controls.Billboard
         protected override Freezable CreateInstanceCore() => new CubicBezierEase(X1, Y1, X2, Y2);
 
         /// <summary>The curve's y at time x (0..1), solved the way browsers do it: Newton, then bisection.</summary>
-        public static double Ease(double x, double x1, double y1, double x2, double y2)
-        {
-            if (x <= 0) return 0;
-            if (x >= 1) return 1;
-            double t = Solve(x, x1, x2);
-            return Bezier(t, y1, y2);
-        }
-
-        private static double Bezier(double t, double p1, double p2)
-        {
-            double u = 1 - t;
-            return 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t;
-        }
-
-        private static double Slope(double t, double p1, double p2)
-        {
-            double u = 1 - t;
-            return 3 * u * u * p1 + 6 * u * t * (p2 - p1) + 3 * t * t * (1 - p2);
-        }
-
-        private static double Solve(double x, double x1, double x2)
-        {
-            double t = x;
-            for (int i = 0; i < 8; i++)
-            {
-                double err = Bezier(t, x1, x2) - x;
-                if (Math.Abs(err) < 1e-6) return t;
-                double d = Slope(t, x1, x2);
-                if (Math.Abs(d) < 1e-6) break;
-                t -= err / d;
-            }
-            double lo = 0, hi = 1;
-            t = x;
-            for (int i = 0; i < 40; i++)
-            {
-                double v = Bezier(t, x1, x2);
-                if (Math.Abs(v - x) < 1e-7) break;
-                if (v < x) lo = t; else hi = t;
-                t = (lo + hi) / 2;
-            }
-            return t;
-        }
+        public static double Ease(double x, double x1, double y1, double x2, double y2) =>
+            Services.Billboard.BillboardTiming.Ease(x, x1, y1, x2, y2);
     }
 }

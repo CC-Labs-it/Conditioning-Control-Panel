@@ -26,13 +26,14 @@ public sealed class WebcamTrackerTests
 
         public bool OpenResult = true;
         public int Opens, Reads;
+        public Action? Opening;
         public volatile bool Disposed;
         /// <summary>Set = the next Read blocks until <see cref="Released"/>, as a wedged driver does, and
         /// signals <see cref="Blocked"/> first. A flag, not a gate reset: a Read already past its counter
         /// when the gate closed would block without ever being counted (the old 25 s wedge).</summary>
         public volatile bool Wedge;
         public readonly ManualResetEventSlim Blocked = new(false), Released = new(false);
-        public bool Open() { Opens++; return OpenResult; }
+        public bool Open() { Opens++; Opening?.Invoke(); return OpenResult; }
         public bool Read(Mat bgr)
         {
             Interlocked.Increment(ref Reads);
@@ -98,6 +99,24 @@ public sealed class WebcamTrackerTests
             Assert.True(src.Disposed);
         });
     }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void StopDuringOpenRetainsStoppedAndReleasesTheUnpublishedSource(bool opened) => WithConsent(true, () =>
+    {
+        var tracker = WebcamTracker.Instance;
+        var src = new FakeSource { OpenResult = opened, Opening = tracker.Stop };
+        WebcamTracker.SourceFactory = () => src;
+        Assert.False(tracker.Start());
+        Assert.True(tracker.StartWasStopped);
+        Assert.Equal(WebcamTrackingState.Stopped, tracker.State);
+        Assert.False(tracker.IsRunning);
+        Assert.False(tracker.IsStarting);
+        Assert.True(src.Disposed);
+        Assert.Equal(0, src.Reads);
+        Assert.StartsWith("Webcam tracking was stopped", tracker.LastError);
+    });
 
     [Fact]
     public void Consented_FramesFlowThroughTheModels_AndStopReleasesTheSource()

@@ -15,12 +15,12 @@ namespace ConditioningControlPanel.Services.Billboard.Board
     {
         public const string CardAccent = "#ff4fa8";
 
-        private readonly BoardService _service;
+        private readonly BoardCacheService _service;
         private readonly Func<string, string> _loc;
 
         public BoardProvider() : this(BoardService.Shared, Loc.Get) { }
 
-        public BoardProvider(BoardService service, Func<string, string> loc)
+        public BoardProvider(BoardCacheService service, Func<string, string> loc)
         {
             _service = service;
             _loc = loc;

@@ -26,11 +26,24 @@ namespace ConditioningControlPanel.Avalonia.Platform
     internal static class V4l2Cameras
     {
         /// <summary>sysfs root; tests point it at a fake tree.</summary>
-        internal static string Root = "/sys/class/video4linux";
+        internal const string DefaultRoot = "/sys/class/video4linux";
+        internal static string Root = DefaultRoot;
 
         public static IReadOnlyList<(int Index, string Name)> Enumerate()
         {
+            return EnumerateForPlatform(OperatingSystem.IsWindows(), WindowsCameras.Enumerate);
+        }
+
+        // WPF WebcamDeviceEnumerator.cs:79. Keep DirectShow order and indices, including duplicate names.
+        internal static IReadOnlyList<(int Index, string Name)> EnumerateForPlatform(bool windows,
+            Func<IReadOnlyList<WindowsCameras.WebcamDevice>> enumerateWindows)
+        {
             var list = new List<(int, string)>();
+            if (windows && Root == DefaultRoot)
+            {
+                foreach (var camera in enumerateWindows()) list.Add((camera.Index, camera.Name));
+                return list;
+            }
             try
             {
                 if (!Directory.Exists(Root)) return list;
@@ -54,19 +67,101 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// index; live checks point it at one with no /dev/videoN so no real camera is opened.</summary>
     internal sealed class OpenCvFrameSource : IFrameSource
     {
-        private VideoCapture? _cap;
+        internal interface ICapture : IDisposable
+        {
+            bool IsOpened();
+            bool Read(Mat frame);
+            void Set(VideoCaptureProperties property, double value);
+        }
+        private sealed class NativeCapture(int index, VideoCaptureAPIs api) : ICapture
+        {
+            private readonly VideoCapture _capture = new(index, api);
+            public bool IsOpened() => _capture.IsOpened();
+            public bool Read(Mat frame) => _capture.Read(frame);
+            public void Set(VideoCaptureProperties property, double value) => _capture.Set(property, value);
+            public void Dispose() => _capture.Dispose();
+        }
+        private ICapture? _cap;
+        internal Func<int, VideoCaptureAPIs, ICapture> Create = (index, api) => new NativeCapture(index, api);
+        internal Func<DateTime> Now = () => DateTime.UtcNow;
+        internal Action<int> Delay = Thread.Sleep;
+        internal Func<bool> Abandoned = () => false;
+
+        // WPF WebcamTrackingService.cs:239. Keep the default format first for each backend.
+        internal static (VideoCaptureAPIs Api, string? Fourcc)[] Attempts(bool linux, bool windows) =>
+            windows ? new[] { (VideoCaptureAPIs.DSHOW, (string?)null), (VideoCaptureAPIs.DSHOW, "MJPG"),
+                (VideoCaptureAPIs.MSMF, (string?)null), (VideoCaptureAPIs.MSMF, "MJPG") }
+            : new[] { (linux ? VideoCaptureAPIs.V4L2 : VideoCaptureAPIs.ANY, (string?)null) };
 
         public bool Open()
         {
             int index = int.TryParse(Environment.GetEnvironmentVariable("CCP_WEBCAM_DEVICE"), out var i)
                 ? Math.Max(0, i) : ResolveSavedIndex();
-            _cap = new VideoCapture(index, OperatingSystem.IsLinux() ? VideoCaptureAPIs.V4L2 : VideoCaptureAPIs.ANY);
-            if (!_cap.IsOpened()) return false;
-            // WPF's default mode (WebcamTrackingService CaptureWidth/Height/TargetFps).
-            _cap.Set(VideoCaptureProperties.FrameWidth, 640);
-            _cap.Set(VideoCaptureProperties.FrameHeight, 480);
-            _cap.Set(VideoCaptureProperties.Fps, 30);
-            return true;
+            return Open(index, OperatingSystem.IsLinux(), OperatingSystem.IsWindows());
+        }
+
+        internal bool Open(int index, bool linux, bool windows)
+        {
+            foreach (var attempt in Attempts(linux, windows))
+            {
+                if (Abandoned()) return false;
+                ICapture? candidate = null;
+                try
+                {
+                    candidate = Create(index, attempt.Api);
+                    if (!candidate.IsOpened()) continue;
+                    if (attempt.Fourcc is { } f)
+                        candidate.Set(VideoCaptureProperties.FourCC, VideoWriter.FourCC(f[0], f[1], f[2], f[3]));
+                    candidate.Set(VideoCaptureProperties.FrameWidth, 640);
+                    candidate.Set(VideoCaptureProperties.FrameHeight, 480);
+                    candidate.Set(VideoCaptureProperties.Fps, 30);
+                    if (windows) candidate.Set(VideoCaptureProperties.BufferSize, 1);
+                    if (windows && !Probe(candidate)) continue;
+                    if (Abandoned()) return false;
+                    _cap = candidate;
+                    candidate = null; // The source owns only the adopted handle.
+                    return true;
+                }
+                catch (Exception ex) when (ex is not DllNotFoundException && ex is not TypeInitializationException)
+                {
+                    Log.Warning(ex, "Webcam: {Api}/{Format} attempt failed", attempt.Api, attempt.Fourcc);
+                }
+                finally
+                {
+                    try { candidate?.Dispose(); }
+                    catch (Exception ex) { Log.Debug(ex, "Webcam: rejected capture disposal failed"); }
+                }
+            }
+            return false;
+        }
+
+        // WPF :1410-1458: 3 s warm-up, 200 ms between reads; spatial contrast OR temporal motion.
+        private bool Probe(ICapture capture)
+        {
+            using var frame = new Mat();
+            using var previous = new Mat();
+            using var diff = new Mat();
+            bool havePrevious = false;
+            var deadline = Now().AddMilliseconds(3000);
+            while (Now() < deadline && !Abandoned())
+            {
+                if (capture.Read(frame) && !frame.Empty())
+                {
+                    Cv2.MeanStdDev(frame, out _, out var std);
+                    double spatial = Math.Max(std.Val0, Math.Max(std.Val1, std.Val2)), temporal = 0;
+                    if (havePrevious && previous.Size() == frame.Size() && previous.Type() == frame.Type())
+                    {
+                        Cv2.Absdiff(frame, previous, diff);
+                        var mean = Cv2.Mean(diff);
+                        temporal = Math.Max(mean.Val0, Math.Max(mean.Val1, mean.Val2));
+                    }
+                    if (spatial >= 3.0 || temporal >= 2.0) return !Abandoned();
+                    frame.CopyTo(previous);
+                    havePrevious = true;
+                }
+                Delay(200);
+            }
+            return false;
         }
 
         /// <summary>The saved /dev/videoN when it is listed, else the first listed camera - the one the
@@ -81,7 +176,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         public bool Read(Mat bgr) => _cap != null && _cap.Read(bgr) && !bgr.Empty();
 
-        public void Dispose() { _cap?.Release(); _cap?.Dispose(); _cap = null; }
+        public void Dispose() { _cap?.Dispose(); _cap = null; }
     }
 
     /// <summary>
@@ -89,11 +184,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// BlinkDetector + GazeEngine, the same pipeline WebcamTrackingService.ProcessFrame runs on WPF:
     /// blinks, face lost/found, head pose, raw iris, gaze side and the projected gaze point. Camera
     /// open only between Start and Stop, only with current consent.
-    /// Mouth MAR is shared with Core. ponytail: tongue HSV remains WPF-only, so calibration's tongue
-    /// prompt times out to "moving on", as WPF does on a miss. Gaze lock-on (Core GazeLock) and long
+    /// Mouth MAR and tongue timing are shared with Core. Gaze lock-on (Core GazeLock) and long
     /// stare (Core LongStareDetector) run as WPF EmitGazeEvents does.
     /// </summary>
-    internal sealed class WebcamTracker
+    internal sealed partial class WebcamTracker
     {
         internal static WebcamTracker Instance { get; } = new();
 
@@ -130,6 +224,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         public event Action<GazeSide>? OnGazeSide;
         /// <summary>Tests: what a classified frame publishes, without a face in front of a camera.</summary>
         internal void RaiseGazeSideForTest(GazeSide side) => OnGazeSide?.Invoke(side);
+        internal void RaiseMouthForTest() => OnMouthOpen?.Invoke();
         internal void RaiseBlinkForTest() => OnBlink?.Invoke();
         /// <summary>Gaze in DIPs of the calibrated monitor; fires only with a calibration.</summary>
         public event Action<ScreenPoint>? OnGazeMove;
@@ -267,6 +362,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 }
                 Progress(0.55, "Opening camera…");
                 run.Source = SourceFactory();
+                if (run.Source is OpenCvFrameSource capture) capture.Abandoned = () => gen != Volatile.Read(ref _gen);
                 bool opened;
                 try
                 {
@@ -280,6 +376,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     opened = false;
                 }
                 catch (Exception ex) { Log.Warning(ex, "[Webcam] open threw"); opened = false; }
+                if (!opened && Volatile.Read(ref _gen) != gen)
+                {
+                    LastError = "Webcam tracking was stopped before the camera finished opening.";
+                    StartWasStopped = true;
+                    run.Release();
+                    return false;
+                }
                 if (!opened)
                 {
                     LastError = "No camera could be opened. Check that a webcam is connected, camera access is allowed, and it is not in use by another app.";
@@ -288,6 +391,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 }
                 _blink.Reset();
                 _mouth.Reset();
+                _tongue.FaceMissing();
                 _gaze.Reset();
                 _longStare.Clear();
                 run.Thread = new Thread(() => Loop(run)) { IsBackground = true, Name = "WebcamCapture", Priority = ThreadPriority.BelowNormal };
@@ -440,7 +544,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 composed.X0, composed.X1, composed.Y0, composed.Y1, persist);
         }
 
-        /// <summary>WPF ProcessFrame without tongue: face, mesh, face lost/found, head pose,
+        /// <summary>WPF ProcessFrame with mouth and tongue: face, mesh, face lost/found, head pose,
         /// iris, EAR blink, mouth MAR, then the shared gaze lock, follower and long-stare chain.</summary>
         private void ProcessFrame(Run run, Mat bgr)
         {
@@ -470,6 +574,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 else if (ev == BlinkEvent.EyesClosedLong) Dispatcher.UIThread.Post(() => OnEyesClosedLong?.Invoke());
             }
             ProcessMouthLandmarks(lm, DateTime.UtcNow, run);   // WPF :1740 order: after blink, skipped when both irises are missing
+            ProcessTongue(bgr, lm, DateTime.UtcNow, run);
             (double Dx, double Dy)? vl = left == null ? null
                 : _gaze.NormalizeIris(left.IrisCenter, lm[FaceMeshDetector.LeftEyeOuterIdx], lm[FaceMeshDetector.LeftEyeInnerIdx], rightEye: false);
             (double Dx, double Dy)? vr = right == null ? null
@@ -542,6 +647,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
             _blink.CancelClosure();
             _mouth.FaceMissing();
+            _tongue.FaceMissing();
             if (_gaze.NoFaceFrames > GazeEngine.FaceLostFramesThreshold * 2) _longStare.Clear();
         }
     }

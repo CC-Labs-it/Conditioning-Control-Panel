@@ -3,6 +3,9 @@ using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Controls;
+using Avalonia.Interactivity;
+using ConditioningControlPanel.Avalonia.Views.Tabs;
 using Avalonia.Skia;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -18,12 +21,62 @@ namespace CCP.Avalonia.Tests;
 public sealed class IntakeHostWindowTests
 {
     [Fact]
+    public async Task LiveIntakeWinsOverTheSpentPassGate()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<AvApp>().WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var previous = CoreSettings.ServiceProvider;
+            var settings = new SettingsService();
+            CoreSettings.ServiceProvider = () => settings;
+            var loggedIn = CoreAccount.IsLoggedInProvider;
+            var lab = CoreAccount.HasLabAccessProvider;
+            CoreAccount.IsLoggedInProvider = () => true;
+            CoreAccount.HasLabAccessProvider = () => false;
+            var spentWeek = settings.Current.IntakePassSpentWeek;
+            var spentUtc = settings.Current.IntakePassSpentUtc;
+            var notifications = new StackPanel();
+            AvApp.Notifications.AttachHost(notifications);
+            notifications.Children.Clear();
+            var live = new IntakeHostWindow();
+            try
+            {
+                settings.Current.IntakePassSpentWeek = IntakePassService.CurrentWeekKey();
+                settings.Current.IntakePassSpentUtc = DateTime.UtcNow;
+                Assert.False(AvApp.IntakePass.CanStartIntake);
+                live.Show();
+                new GradedIntakeTabView().BtnStartIntake_Click(null, new RoutedEventArgs());
+                Assert.Empty(notifications.Children);
+                Assert.Same(live, Assert.Single(IntakeHostWindow.Snapshot()));
+            }
+            finally
+            {
+                live.Close();
+                settings.Current.IntakePassSpentWeek = spentWeek;
+                settings.Current.IntakePassSpentUtc = spentUtc;
+                CoreSettings.ServiceProvider = previous;
+                CoreAccount.IsLoggedInProvider = loggedIn;
+                CoreAccount.HasLabAccessProvider = lab;
+                AvApp.Notifications.AttachHost(new StackPanel());
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task OnlyACompletedIntakeSpendsThePass()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>().UseSkia()
+                AppBuilder.Configure<AvApp>().WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
@@ -35,6 +88,9 @@ public sealed class IntakeHostWindowTests
             CoreAccount.HasLabAccessProvider = () => false;
             (service.Current.IntakePassSpentWeek, service.Current.IntakePassSpentUtc) = ("", null);
             var dir = Directory.CreateTempSubdirectory("intake-host-").FullName;
+            var previousCard = AvApp.IntakePunchCard;
+            using var card = new IntakePunchCardService(Path.Combine(dir, "card.json"));
+            AvApp.IntakePunchCard = card;
             var host = new IntakeHostWindow { SessionsFolder = dir };
             var drafted = 0;
             host.Drafted += (_, path) => { drafted++; Assert.True(File.Exists(path)); };
@@ -66,16 +122,22 @@ public sealed class IntakeHostWindowTests
                 host.Web.OnWebMessage(result);
                 Assert.True(AvApp.IntakePass.IsPassAvailable);
                 Assert.Equal(0, drafted);
+                Assert.False(card.HasEverCompletedIntake);
                 host.Web.OnNavigationCompleted(new Uri("http://127.0.0.1:5000/intake/index.html?x=1#y"));
                 host.Web.OnWebMessage(result);
                 Assert.Equal(IntakePassService.CurrentWeekKey(), service.Current.IntakePassSpentWeek);
                 Assert.False(AvApp.IntakePass.IsPassAvailable);
                 Assert.Single(Directory.GetFiles(dir, "*.session.json"));
+                Assert.True(card.HasEverCompletedIntake);
+                Assert.Single(card.State.PendingDrafts);
+                Assert.Equal(1, card.PunchedCount);
                 Assert.Equal(1, drafted);   // the Sessions refresh + toast hang off this
             }
             finally
             {
                 host.Close();
+                card.Save();
+                AvApp.IntakePunchCard = previousCard;
                 Directory.Delete(dir, true);
                 CoreAccount.IsLoggedInProvider = loggedIn;
                 CoreAccount.HasLabAccessProvider = lab;
