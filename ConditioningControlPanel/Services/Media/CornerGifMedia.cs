@@ -156,12 +156,31 @@ namespace ConditioningControlPanel.Services
         /// thread, downscaled to the physical pixels the overlay actually occupies, then play the
         /// frozen frames back as a keyframe animation. Pair with <see cref="Detach"/> at teardown -
         /// a RepeatBehavior.Forever clock pins its target until it is cleared.
+        /// <paramref name="diagTag"/> (ccp-bugs #1577) logs the decoded frame set and its timings
+        /// once, when the frames land.
         /// </summary>
-        internal static void Attach(Image img, Uri uri, double renderWidth, double renderHeight, double dpiScale)
+        internal static void Attach(Image img, Uri uri, double renderWidth, double renderHeight, double dpiScale,
+            string? diagTag = null)
         {
             double longEdge = Math.Max(renderWidth, renderHeight) * (dpiScale > 0 ? dpiScale : 1.0);
             int maxDim = (int)Math.Clamp(Math.Ceiling(longEdge), 64, MaxDecodeDimension);
-            AnimatedWebp.AttachAnimation(img, uri, maxDim, MaxDecodeFrames);
+            AnimatedWebp.AttachAnimation(img, uri, maxDim, MaxDecodeFrames, diagTag);
+        }
+
+        /// <summary>
+        /// The facts a corner-GIF show line carries (ccp-bugs #1577): the SOURCE size and file
+        /// size (what "heavier" means), the UI-thread cost of the header read and the layered
+        /// Show, and which renderer the fullscreen effects use. With the unified renderer off the
+        /// spiral is its own fullscreen layered window ticking on the UI thread, which shares the
+        /// render thread with this overlay. Pure, pinned by CornerGifMediaTests.
+        /// </summary>
+        internal static string DescribeSource(double srcW, double srcH, long fileBytes, long headerMs, long showMs,
+            bool unifiedRenderer)
+        {
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            string size = fileBytes >= 0 ? string.Format(inv, "{0:0.0} MB", fileBytes / (1024.0 * 1024.0)) : "size unknown";
+            return string.Format(inv, "source {0}x{1}, {2}; UI header read {3} ms, layered Show {4} ms; renderer {5}",
+                (int)srcW, (int)srcH, size, headerMs, showMs, unifiedRenderer ? "unified" : "legacy windows");
         }
 
         /// <summary>Release the animation clock's pin on <paramref name="img"/>.</summary>
