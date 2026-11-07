@@ -153,6 +153,17 @@ namespace ConditioningControlPanel.Services
                         return false;
                     }
 
+                    // A slideshow can hand back a READABLE path: Windows' own transcoded cache, which our
+                    // first write overwrites, so the restore put back a dead file and left a white desktop
+                    // (ccp-bugs #1584). Same refusal as Studio > Wallpaper, plus that cache.
+                    WriteWouldLoseDesktop(out var lost);
+                    var refusal = TakeoverRefusal(lost, original, TranscodedCachePath());
+                    if (refusal != null)
+                    {
+                        App.Logger?.Warning("[Wallpaper] Takeover wallpaper skipped: {Why} (desktop reports {Path})", refusal, original);
+                        return false;
+                    }
+
                     // Scan wallpapers folder — user-chosen folder if set, else the default
                     // assets/wallpapers folder under the effective assets path.
                     var custom = App.Settings?.Current?.WallpaperSourceFolder;
@@ -240,12 +251,16 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var original = _originalWallpaperPath;
+                    // The user's own fit rides the restore, so it lands with their picture (#1544).
+                    var style = _originalStyle;
+                    _originalStyle = null;
                     if (MustCoverRemote(original, _currentImagePath))
                     {
                         // The user's own is gone and an online picture is up: it must not stay
                         // set in Windows (licence 3.4). A neutral picture goes up instead.
                         var neutral = NeutralWallpaperPath(WindowsDefaultWallpaper(), App.UserDataPath);
-                        if (neutral != null) SetWallpaper(neutral, "neutral");
+                        if (neutral != null) SetWallpaper(neutral, "neutral", style);
+                        else RestoreStyleOnly(style);
                         App.Logger?.Warning("[Wallpaper] No usable original to restore: an online picture was up, a neutral one replaces it");
                     }
                     else if (!IsRestorable(original))
@@ -253,6 +268,7 @@ namespace ConditioningControlPanel.Services
                         // Never hand SPI_SETDESKWALLPAPER an empty/missing path: Windows clears the
                         // desktop to a flat colour and writes that to the registry (#692).
                         App.Logger?.Warning("[Wallpaper] No usable original to restore ({Path}) — leaving the desktop as-is", original ?? "<null>");
+                        RestoreStyleOnly(style);
                     }
                     else
                     {
@@ -260,7 +276,7 @@ namespace ConditioningControlPanel.Services
                         // Windows took the restore, and only if nothing re-activated meanwhile; a
                         // refusal keeps it so the next launch gets another go at it.
                         var target = RestoreTarget(original!);
-                        _setQueue.Enqueue(target).ContinueWith(t =>
+                        _setQueue.Enqueue(() => ApplyWallpaperNow(target, style)).ContinueWith(t =>
                         {
                             if (t.Result)
                             {
@@ -716,10 +732,11 @@ namespace ConditioningControlPanel.Services
 
         #endregion
 
-        /// <summary>Queue a wallpaper write and return at once (#1453); a refusal is only logged.</summary>
-        private void SetWallpaper(string path, string why)
+        /// <summary>Queue a wallpaper write and return at once (#1453); a refusal is only logged.
+        /// <paramref name="style"/> is a packed fit written just before the set; null leaves the user's.</summary>
+        private void SetWallpaper(string path, string why, string? style = null)
         {
-            _setQueue.Enqueue(path).ContinueWith(t =>
+            _setQueue.Enqueue(() => ApplyWallpaperNow(path, style)).ContinueWith(t =>
             {
                 if (!t.Result)
                     App.Logger?.Warning("[Wallpaper] Windows refused the {Why} wallpaper {File}", why, Path.GetFileName(path));
@@ -728,8 +745,12 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>The write itself, on the queue's worker. SPIF_UPDATEINIFILE only: the
         /// desktop repaints without SENDCHANGE, and the notify broadcast below never waits.</summary>
-        private static bool ApplyWallpaperNow(string path)
+        private static bool ApplyWallpaperNow(string path) => ApplyWallpaperNow(path, null);
+
+        /// <summary>The set, with a fit first: Windows reads WallpaperStyle at SPI_SETDESKWALLPAPER time.</summary>
+        private static bool ApplyWallpaperNow(string path, string? style)
         {
+            if (style != null) WriteWallpaperStyle(style);
             if (SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, path, SPIF_UPDATEINIFILE) == 0)
             {
                 App.Logger?.Warning("[Wallpaper] SPI_SETDESKWALLPAPER failed (win32 {Err})", Marshal.GetLastWin32Error());
@@ -780,6 +801,32 @@ namespace ConditioningControlPanel.Services
             return path;
         }
 
+        /// <summary>No picture to put back, but the user's fit still goes back into the registry: Windows
+        /// uses it at their next wallpaper change. Queued behind any write still running.</summary>
+        private void RestoreStyleOnly(string? style)
+        {
+            if (style == null) return;
+            _setQueue.Enqueue(() => { WriteWallpaperStyle(style); return true; });
+        }
+
+        /// <summary>Remember (or forget) the user's own fit beside the original, for the crash restore.</summary>
+        private static void PersistOriginalStyle(string? packed)
+        {
+            try
+            {
+                var s = App.Settings?.Current;
+                if (s == null) return;
+                var value = packed ?? "";
+                if (s.WallpaperOriginalStyle == value) return;
+                s.WallpaperOriginalStyle = value;
+                App.Settings?.SaveImmediate();   // same reason as PersistOriginal: a kill must find it
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Warning(ex, "[Wallpaper] Could not persist the original desktop fit");
+            }
+        }
+
         /// <summary>
         /// Remember (or forget) the captured original in settings so a session that dies without
         /// reaching Deactivate() can put the user's wallpaper back on the next launch.
@@ -793,9 +840,12 @@ namespace ConditioningControlPanel.Services
                 if (s == null) return;
 
                 var value = string.IsNullOrWhiteSpace(path) ? "" : path!;
-                if (s.WallpaperOriginalPath == value) return;
+                // Forgetting the original forgets its fit too: both went back together.
+                bool styleGoes = value.Length == 0 && s.WallpaperOriginalStyle.Length > 0;
+                if (s.WallpaperOriginalPath == value && !styleGoes) return;
 
                 s.WallpaperOriginalPath = value;
+                if (styleGoes) s.WallpaperOriginalStyle = "";
                 // SaveImmediate, NOT Save(): the debounced path waits 500ms for quiet, and a kill
                 // inside that window leaves no breadcrumb at all — the next launch then captures
                 // OUR wallpaper as "the original" and the user's is stranded for good. That is #692
@@ -816,13 +866,24 @@ namespace ConditioningControlPanel.Services
         private void RestoreStaleOriginal()
         {
             var s = App.Settings?.Current;
-            var stale = s?.WallpaperOriginalPath;
-            if (s == null || string.IsNullOrWhiteSpace(stale)) return;
+            if (s == null) return;
+            var stale = s.WallpaperOriginalPath;
+            var staleStyle = string.IsNullOrWhiteSpace(s.WallpaperOriginalStyle) ? null : s.WallpaperOriginalStyle;
+            if (string.IsNullOrWhiteSpace(stale))
+            {
+                if (staleStyle == null) return;
+                RestoreStyleOnly(staleStyle);
+                s.WallpaperOriginalStyle = "";
+                App.Settings?.Save();
+                return;
+            }
 
             if (!IsRestorable(stale))
             {
                 App.Logger?.Warning("[Wallpaper] Stale original {Path} could not be restored (gone)", stale);
+                RestoreStyleOnly(staleStyle);
                 s.WallpaperOriginalPath = "";
+                s.WallpaperOriginalStyle = "";
                 App.Settings?.Save();
                 return;
             }
@@ -831,7 +892,7 @@ namespace ConditioningControlPanel.Services
             // write is what froze the first seconds of a launch (#1453). Activate refuses while
             // it is in flight, so the restore can never be captured as "the original".
             var staleTarget = RestoreTarget(stale);
-            _setQueue.Enqueue(staleTarget).ContinueWith(t =>
+            _setQueue.Enqueue(() => ApplyWallpaperNow(staleTarget, staleStyle)).ContinueWith(t =>
             {
                 if (t.Result) DropFrozenOriginal(staleTarget);
                 if (t.Result)
@@ -844,6 +905,7 @@ namespace ConditioningControlPanel.Services
                     if (cur == null || cur.WallpaperOriginalPath != stale) return;
                     lock (_lock) { if (_isActive) return; }
                     cur.WallpaperOriginalPath = "";
+                    cur.WallpaperOriginalStyle = "";
                     App.Settings?.Save();
                 });
             }, TaskScheduler.Default);
