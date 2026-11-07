@@ -118,6 +118,7 @@ public sealed class PanicSurfacesTests
         "program-session",
         "remote-haptics",
         "takeover",
+        "remote-browser-video",
         "program-session",
         "engine",
         "flash",
@@ -160,6 +161,8 @@ public sealed class PanicSurfacesTests
         // WPF :1786 remote haptics and :1992 haptics PanicStop come before StopEngine (:1827).
         ("haptics", "engine", "toys to zero before the engine stop"),
         ("remote-haptics", "engine", "toys to zero before the engine stop"),
+        // WPF :2066 "web video" in PanicStopEverySurface (:1710) before RunPanicStopTail's StopEngine (:1711).
+        ("remote-browser-video", "engine", "the controller's web video ends before the engine stop"),
         // WPF :1811 Autonomy.CancelActivePulses before StopEngine (:1827).
         ("takeover", "engine", "takeover pulses cancelled before the engine stop"),
         // WPF StopEngine -> MainWindow.StartStop.cs:505 App.SkillTree?.Stop(): the 3x ends with/after the engine.

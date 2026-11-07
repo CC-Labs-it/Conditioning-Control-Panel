@@ -246,8 +246,27 @@ public sealed class RemoteControlShellTests
             shell.RemoteOverlayTick();
             Assert.True(browser.IsVisible);
 
-            // Offline: the browser cannot open it, the controller is told, the blindfold stays.
+            // Graded Intake owns the screen: refused, the blindfold stays, the page is untouched (WPF Browser.cs:3195).
             await Poll("{\"controller_connected\":true}");
+            Assert.False(browser.IsVisible);
+            var intake = new IntakeHostWindow();
+            try
+            {
+                intake.Show();
+                Assert.Equal("Graded Intake is on screen", RemoteCommands.Execute("play_hypnotube", new Newtonsoft.Json.Linq.JObject { ["url"] = video }));
+                Assert.False(browser.IsVisible);
+                Assert.Equal(new Uri("https://hypnotube.com/"), web.Source);
+            }
+            finally { intake.Close(); }
+
+            // The local panic key ends the controller's video too (WPF MainWindow.xaml.cs:2066 PanicEndBrowserMedia).
+            Assert.Null(RemoteCommands.Execute("play_hypnotube", new Newtonsoft.Json.Linq.JObject { ["url"] = video }));
+            Assert.True(browser.IsVisible);
+            PanicSurfaces.All.Single(s => s.Id == "remote-browser-video").Stop(shell);
+            Assert.False(browser.IsVisible);
+            Assert.Equal(new Uri("https://hypnotube.com/"), web.Source);
+
+            // Offline: the browser cannot open it, the controller is told, the blindfold stays.
             service.Current.OfflineMode = true;
             Assert.Equal("the browser could not open it", RemoteCommands.Execute("play_hypnotube", new Newtonsoft.Json.Linq.JObject { ["url"] = video }));
             Assert.False(browser.IsVisible);

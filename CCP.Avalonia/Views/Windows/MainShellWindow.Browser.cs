@@ -29,7 +29,7 @@
 //   * CCP.Avalonia/Views/Tabs/DiscordTabView.axaml.cs:BtnClearProfile_Click now forwards
 //     (`Host?.BtnClearProfile_Click`), which wires
 //     ClearProfileViewer -> SetProfileViewingSelf. NavigateToUrlInBrowser stays public for
-//     AvatarTubeWindow's speech-bubble links and the remote controller, neither on this head.
+//     AvatarTubeWindow's speech-bubble links (not on this head); PlayHypnotubeFromRemote calls it.
 // STILL BLOCKED, grouped by what is actually missing (60 members):
 //   * WebView2 itself (36): the init/teardown chain (InitializeBrowserAsync, InitAndNavigateAsync,
 //     TearDownBrowserForReinit, NavigateWhenBrowserReadyAsync, BrowserLoadingText_Click,
