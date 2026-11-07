@@ -359,12 +359,18 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>Send the wearer's More, Easy or Stop signal (WPF RemoteControlService.V2.cs:45).
-        /// Easy and Stop act locally before the network request; no emote debounce.</summary>
+        /// Easy and Stop act locally before the network request; no emote debounce.
+        /// Stop is never more permissive than the panic key (RemoteHudRules.LocalPanicAllowed): the forced stop
+        /// (session, engine, Chaster hold) runs only when the key would; under Lockdown or with the key off it
+        /// stops the remote's effects only. WPF RemoteControlService.V2.cs:53 forces unconditionally; this head gates it.</summary>
         public async Task<bool> SendSignalAsync(string kind)
         {
             kind = (kind ?? "").Trim().ToLowerInvariant();
             if (!IsActive || kind is not ("more" or "easy" or "stop")) return false;
-            Action? local = kind == "easy" ? RemoteCommands.ApplyEasy : kind == "stop" ? () => _stopEffects(true) : null;
+            Action? local = kind == "easy" ? RemoteCommands.ApplyEasy
+                : kind == "stop" ? () => _stopEffects(Safety.VoicePanicReach.PanicKeyRuns(
+                    LockdownService.Current?.IsActive == true, CoreSettings.Current.PanicKeyEnabled))
+                : null;
             if (local != null)
             {
                 var (done, _) = CoreDispatch.Invoke(() => { local(); return 0; }, TimeSpan.FromSeconds(10));

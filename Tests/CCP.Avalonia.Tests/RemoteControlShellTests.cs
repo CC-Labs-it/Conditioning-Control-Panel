@@ -240,9 +240,10 @@ public sealed class RemoteControlShellTests
     });
 
     // WPF Windows/RemoteHud/RemoteHudWindow.cs + RemoteControlService.V2.cs: the pill's More / Easy / Stop reach the
-    // relay, Easy halves the remote strength, Stop ends the running session (WPF StopSessionFromRemote).
+    // relay, Easy halves the remote strength; Stop ends the running session (WPF StopSessionFromRemote) only when
+    // the panic key would run, else it stops the remote's effects and the session survives.
     [Fact]
-    public Task Hud_pill_sends_more_easy_and_stop_and_stop_ends_the_running_session() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task Hud_pill_sends_more_easy_and_stop_and_stop_ends_the_session_only_when_the_panic_key_would() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
@@ -254,7 +255,6 @@ public sealed class RemoteControlShellTests
         MainShellWindow.RemoteJoinAttention = _ => { };
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
-        service.Current.PanicKeyEnabled = false;   // WPF StopFromRemoteHud: panic key off, the local half is the signal only
         var f = new FakeRelay();
         var relay = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
         RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
@@ -291,7 +291,16 @@ public sealed class RemoteControlShellTests
 
             runner.Start(new Session { DurationMinutes = 1 });
             Assert.True(runner.IsRunning);
+            var engineRan = CoreEngine.IsRunning;
+            service.Current.PanicKeyEnabled = false;   // WPF StopFromRemoteHud: panic key off, no local panic
             await Press("stop", Loc.Get("remote_hud_stopped"));
+            // Panic key off: Stop is never more permissive than the key, so only the remote's effects stop.
+            Assert.True(runner.IsRunning);
+            Assert.Equal(engineRan, CoreEngine.IsRunning);
+
+            service.Current.PanicKeyEnabled = true;   // the key would run: the forced stop ends the session
+            Assert.True(await relay.SendSignalAsync("stop"));
+            Dispatcher.UIThread.RunJobs();
             Assert.False(runner.IsRunning);   // WPF StopAllRemoteEffects -> StopSessionFromRemote
             Assert.False(CoreEngine.IsRunning);
 

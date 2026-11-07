@@ -50,16 +50,74 @@ public sealed class RemoteRelayTests
     [Fact]
     public async Task Stop_signal_forces_local_teardown_even_when_post_fails_and_emote_was_recent()
     {
-        var f = new FakeRelay();
-        using var r = Relay(f);
-        await r.StartAsync("light");
-        Assert.True((await r.SendEmoteAsync("hi", "", "custom")).ok);
-        f.Answer = _ => throw new HttpRequestException("offline");
-        Assert.False(await r.SendSignalAsync("stop"));
-        Assert.Contains(true, _stops);
-        var body = f.Seen.Last().Body;
-        Assert.Equal("signal", (string?)body["kind"]);
-        Assert.Equal("stop", (string?)body["text"]);
+        var (old, prevLd) = (CoreSettings.ServiceProvider, LockdownService.Current);
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        LockdownService.Current = null;
+        try
+        {
+            settings.Current.PanicKeyEnabled = true;
+            var f = new FakeRelay();
+            using var r = Relay(f);
+            await r.StartAsync("light");
+            Assert.True((await r.SendEmoteAsync("hi", "", "custom")).ok);
+            f.Answer = _ => throw new HttpRequestException("offline");
+            Assert.False(await r.SendSignalAsync("stop"));
+            Assert.Contains(true, _stops);
+            var body = f.Seen.Last().Body;
+            Assert.Equal("signal", (string?)body["kind"]);
+            Assert.Equal("stop", (string?)body["text"]);
+        }
+        finally { (CoreSettings.ServiceProvider, LockdownService.Current) = (old, prevLd); }
+    }
+
+    // Safety (RemoteHudRules.LocalPanicAllowed, VoicePanicReach.PanicKeyRuns): the wearer's Stop is never more
+    // permissive than the panic key. Under Lockdown or with the key off it stops the remote's effects only:
+    // the session and engine survive and Circe's safety hold stays shut. The signal still goes out.
+    [Theory]
+    [InlineData(true, true)]    // Lockdown on, panic key on
+    [InlineData(false, false)]  // panic key off
+    [InlineData(true, false)]
+    public async Task Stop_signal_under_Lockdown_or_panic_off_stops_only_the_remote_effects(bool lockdown, bool panicKey)
+    {
+        var (old, prevLd, oldStopSession, oldRefresh, oldChaster) = (CoreSettings.ServiceProvider, LockdownService.Current,
+            RemoteCommands.StopSession, RemoteCommands.RefreshOverlays, ConditioningControlPanel.Services.Safety.PanicChasterHold.Service);
+        var (sessionStops, holds) = (0, 0);
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var s = settings.Current;
+        (s.LockdownForceStrictLock, s.LockdownDisablePanicKey, s.LockdownTripwiresEnabled) = (false, false, false);
+        var ld = LockdownService.Current = new LockdownService();
+        RemoteCommands.StopSession = () => sessionStops++;
+        RemoteCommands.RefreshOverlays = () => { };
+        ConditioningControlPanel.Services.Safety.PanicChasterHold.Service = () => { holds++; return null; };
+        try
+        {
+            if (lockdown) ld.Activate(TimeSpan.FromMinutes(30));
+            s.PanicKeyEnabled = panicKey;
+            Assert.Equal(lockdown, ld.IsActive);
+            CoreEngine.Start();
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
+            await r.StartAsync("light");
+            Assert.True(await r.SendSignalAsync("stop"));
+            Assert.Equal("stop", (string?)f.Seen.Last().Body["text"]);
+            Assert.Equal(0, sessionStops);
+            Assert.True(CoreEngine.IsRunning);
+            Assert.Equal(0, holds);
+            Assert.Equal(lockdown, ld.IsActive);
+        }
+        finally
+        {
+            ld.Deactivate();
+            ld.Dispose();
+            CoreEngine.Stop();
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            RemoteCommands.ReleaseOverlayStop();
+            (CoreSettings.ServiceProvider, LockdownService.Current, RemoteCommands.StopSession, RemoteCommands.RefreshOverlays,
+                ConditioningControlPanel.Services.Safety.PanicChasterHold.Service) = (old, prevLd, oldStopSession, oldRefresh, oldChaster);
+        }
     }
 
     // WPF RemoteControlService.V2.cs:87 ApplyEasy: a showing spiral and a controller-set pink halve, the remote
