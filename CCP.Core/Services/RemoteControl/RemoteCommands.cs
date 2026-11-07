@@ -167,8 +167,9 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>WPF StopAllRemoteEffects: everything a controller could start stops and the wearer's own
         /// values come back (RemoteWearer: their strict lock, panic on unless a running Lockdown holds it off).
-        /// Only <paramref name="force"/> (trigger_panic) takes the subject's own engine down (#878).</summary>
-        public static void StopEffects(bool force)
+        /// Only <paramref name="force"/> (trigger_panic) takes the subject's own engine down (#878).
+        /// <paramref name="leashCut"/> keeps the full teardown over a local run (WPF RemoteEndRule.cs:26-27).</summary>
+        public static void StopEffects(bool force, bool leashCut = false)
         {
             if (force) Commands.AiCommandService.CancelAll();   // a remote panic cancels pending AI follow-ups too
             // A controller's panic is a way out like the key: Circe's Tab opens its safety hold (PanicChasterHold).
@@ -178,12 +179,14 @@ namespace ConditioningControlPanel.Services
             if (force) Safety.PanicAftermath.ArmQuiet();
             if (force) StopHaptics(); else RemoteHaptics.Stop();
             // Remote session verbs are refused on this head, so a running engine is wearer-owned.
-            // WPF LeavesLocalRun returns holdings without disturbing its services or audio.
-            if (force || !CoreEngine.IsRunning)
+            // WPF LeavesLocalRun returns holdings without disturbing its services or audio; only a
+            // session end skips the teardown, a leash cut and a panic keep it (RemoteEndRule.cs:26-27).
+            if (force || leashCut || !CoreEngine.IsRunning)
             {
                 try { CoreHaptics.Service?.PanicStop(); } catch { }
                 CoreAudio.Unduck();
-                StopOverlays();
+                // WPF RemoteControlService.cs:1044-1047: the overlay service stops only with nothing running.
+                if (force || !CoreEngine.IsRunning) StopOverlays();
                 if (force) CoreEngine.Stop();
                 else
                 {

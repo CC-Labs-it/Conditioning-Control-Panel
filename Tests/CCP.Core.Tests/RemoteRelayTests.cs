@@ -208,6 +208,38 @@ public sealed class RemoteRelayTests
         }
     }
 
+    // WPF RemoteEndRule.cs:26-27: only a session end leaves the local run; a leash cut keeps the full teardown.
+    [Fact]
+    public async Task Leash_cut_over_a_local_run_stops_the_services_and_keeps_the_engine()
+    {
+        var old = CoreSettings.ServiceProvider;
+        var oldRefresh = RemoteCommands.RefreshOverlays;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        RemoteCommands.RefreshOverlays = () => { };
+        var f = new FakeRelay();
+        using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
+        try
+        {
+            CoreEngine.Start();
+            CoreFlash.Start();
+            settings.Current.PinkFilterOpacity = 17;
+            await r.StartAsync("basic");
+            Poll(f, "{\"controller_connected\":true}"); await r.PollOnceAsync();
+            RemoteCommands.Execute("set_pink_opacity", JObject.FromObject(new { value = 30 }));
+            r.EndSessionNow();
+            Assert.True(CoreEngine.IsRunning);
+            Assert.False(CoreFlash.IsRunning);
+            Assert.Equal(17, settings.Current.PinkFilterOpacity);
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            CoreEngine.Stop(); CoreFlash.Stop(); RemoteCommands.ReleaseOverlayStop();
+            RemoteCommands.RefreshOverlays = oldRefresh; CoreSettings.ServiceProvider = old;
+        }
+    }
+
     [Fact]
     public void Remote_cleanup_over_a_local_run_and_panic_keep_wearer_values()
     {

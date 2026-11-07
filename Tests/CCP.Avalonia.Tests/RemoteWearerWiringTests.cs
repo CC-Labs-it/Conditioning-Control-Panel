@@ -26,7 +26,7 @@ public sealed class RemoteWearerWiringTests
         var tab = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Views", "Tabs", "RemoteControlTabView.axaml.cs"));
         Assert.Contains("RemoteCommands.Execute, RemoteCommands.StopEffects", tab);
         var commands = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Core", "Services", "RemoteControl", "RemoteCommands.cs"));
-        var stop = commands.Substring(commands.IndexOf("public static void StopEffects(bool force)", StringComparison.Ordinal));
+        var stop = commands.Substring(commands.IndexOf("public static void StopEffects(bool force", StringComparison.Ordinal));
         Assert.Contains("Remote.RemoteWearer.ReleaseSafetyState();", stop);
         Assert.DoesNotContain("s.StrictLockEnabled = false;", stop);
     }
