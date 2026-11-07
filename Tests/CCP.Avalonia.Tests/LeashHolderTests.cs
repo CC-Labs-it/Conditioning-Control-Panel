@@ -98,6 +98,11 @@ public sealed class LeashHolderTests
     public void ReleaseRequiresConfirmationAndFailureStaysVisible() => Run((page, svc, held) =>
     {
         var card = Assert.Single(page.HolderCards.Values);
+        // Stub both outcome sinks: the real Notify queues a toast on the static App.Notifications, which the
+        // next MainShellWindow in another test flushes over its content (CI shard 0 click tests failed on it).
+        var notices = new List<(string, NotificationType)>();
+        card.PlayCue = _ => { };
+        card.Notify = (text, type) => notices.Add((text, type));
         var more = Tagged<Button>(card, "leash-holder-more");
         var release = Assert.IsType<MenuItem>(Assert.Single(more.ContextMenu!.Items));
         release.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
@@ -111,6 +116,7 @@ public sealed class LeashHolderTests
         Assert.Equal(Loc.GetF("leash_release_failed", held.Who.Name), card.ResultText);
         card.Render();
         Assert.Equal(Loc.GetF("leash_release_failed", held.Who.Name), card.ResultText);
+        Assert.Single(notices);
     });
     [Theory]
     [InlineData(false)]
