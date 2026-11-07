@@ -41,6 +41,7 @@ public sealed class PrizeCounterRelay
     private readonly Func<bool> _offline;
     private readonly Action<string, bool, int>? _adoptSp;
     private readonly Action<string, long, string[]>? _applyPrizes;
+    private readonly string _baseUrl;
     private (string Account, int Sp)? _lastReceipt;
 
     /// <param name="http">Null = the shared client. Tests pass one over a fake handler.</param>
@@ -48,9 +49,11 @@ public sealed class PrizeCounterRelay
     /// <param name="offline">True while the app is in offline mode: every request answers <c>offline</c>.</param>
     /// <param name="adoptSp">(account the request went out under, is it a settlement, balance).</param>
     /// <param name="applyPrizes">(account, revision, grants) from a reply's <c>prizes</c> block.</param>
+    /// <param name="baseUrl">Null = <see cref="BackRoomApi.BaseUrl"/>. The Avalonia head passes its sandbox-checked proxy.</param>
     public PrizeCounterRelay(HttpClient? http, Func<(string UnifiedId, string Token)?> identity, Func<bool> offline,
-        Action<string, bool, int>? adoptSp, Action<string, long, string[]>? applyPrizes)
+        Action<string, bool, int>? adoptSp, Action<string, long, string[]>? applyPrizes, string? baseUrl = null)
     {
+        _baseUrl = baseUrl ?? BackRoomApi.BaseUrl;
         _http = http ?? SharedHttp;
         _identity = identity ?? throw new ArgumentNullException(nameof(identity));
         _offline = offline ?? (() => false);
@@ -73,13 +76,15 @@ public sealed class PrizeCounterRelay
 
     /// <summary>The request for one op. A buy carries only the fields the route reads; the page cannot
     /// name another account, because <c>unified_id</c> is the host's and stamped last.</summary>
-    internal static HttpRequestMessage BuildRequest(string op, (string UnifiedId, string Token) id, string? idem, JObject? body)
+    internal static HttpRequestMessage BuildRequest(string op, (string UnifiedId, string Token) id, string? idem, JObject? body,
+        string? baseUrl = null)
     {
+        baseUrl ??= BackRoomApi.BaseUrl;
         if (!TryRoute(op, out var method, out var path)) throw new ArgumentException("unknown op", nameof(op));
         HttpRequestMessage req;
         if (method == HttpMethod.Get)
         {
-            req = new HttpRequestMessage(HttpMethod.Get, $"{BackRoomApi.BaseUrl}{path}?unified_id={Uri.EscapeDataString(id.UnifiedId)}");
+            req = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}{path}?unified_id={Uri.EscapeDataString(id.UnifiedId)}");
         }
         else
         {
@@ -91,7 +96,7 @@ public sealed class PrizeCounterRelay
                 ["week"] = body?["week"]?.DeepClone(),
                 ["unified_id"] = id.UnifiedId,
             };
-            req = new HttpRequestMessage(HttpMethod.Post, BackRoomApi.BaseUrl + path)
+            req = new HttpRequestMessage(HttpMethod.Post, baseUrl + path)
             {
                 Content = new StringContent(o.ToString(Formatting.None), Encoding.UTF8, "application/json"),
             };
@@ -118,7 +123,7 @@ public sealed class PrizeCounterRelay
         {
             try
             {
-                using var req = BuildRequest(op!, id.Value, idem, body);
+                using var req = BuildRequest(op!, id.Value, idem, body, _baseUrl);
                 using var res = await _http.SendAsync(req, budget.Token).ConfigureAwait(false);
                 var text = await res.Content.ReadAsStringAsync(budget.Token).ConfigureAwait(false);
                 // The account changed under the request: its answer belongs to nobody signed in now.
