@@ -276,6 +276,7 @@ namespace ConditioningControlPanel.Services
             var ss = session.Settings;
             if (ss.FlashEnabled && !_deferred.IsPending("flash")) CoreFlash.Start();
             if (ss.SubliminalEnabled && !_deferred.IsPending("subliminal")) CoreSubliminal.Start();
+            if (ss.BubblesEnabled) CoreBubbles.Start();   // SessionEngine.cs:570, the session's flag, no deferral check
             if (ss.LockCardEnabled && !_deferred.IsPending("lock cards")) LockCardScheduler.Instance.Start(Remaining.TotalMinutes);
             if (ss.BouncingTextEnabled && !_deferred.IsPending("bouncing text")) CoreBouncingText.Start();
             if (CoreSettings.Current.PopQuizEnabled) CoreEngine.PopQuiz?.Start();   // SessionEngine.cs:574

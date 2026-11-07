@@ -221,25 +221,36 @@ public sealed class SessionRunnerTests : IDisposable
         finally { CoreProgression.AddXPProvider = old; CoreSettings.Current.PlayerXP = oldXp; }
     }
 
-    [Fact]
-    public void Pause_StopsBubblesAndMindWipe()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Pause_StopsBubblesAndMindWipe_ResumeRestartsSessionBubbles(bool sessionBubbles)
     {
         var oldBubbles = CoreBubbles.StopAction;
+        var oldBubblesStart = CoreBubbles.StartAction;
         var oldMindWipe = CoreMindWipe.StopProvider;
         var bubbles = 0;
+        var started = 0;
         var mindWipe = 0;
         try
         {
-            _runner.Start(OneMinute());
+            var session = OneMinute();
+            session.Settings.BubblesEnabled = sessionBubbles;
+            _runner.Start(session);
             CoreBubbles.StopAction = () => bubbles++;
+            CoreBubbles.StartAction = () => started++;
             CoreMindWipe.StopProvider = () => mindWipe++;
             _runner.Pause();
             Assert.Equal(1, bubbles);
             Assert.Equal(1, mindWipe);
+            Assert.Equal(0, started);
+            _runner.Resume();   // SessionEngine.cs:570
+            Assert.Equal(sessionBubbles ? 1 : 0, started);
         }
         finally
         {
             CoreBubbles.StopAction = oldBubbles;
+            CoreBubbles.StartAction = oldBubblesStart;
             CoreMindWipe.StopProvider = oldMindWipe;
         }
     }
