@@ -129,6 +129,18 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public bool Activate()
         {
+            if (IsActive) return true;
+
+            // The desktop check talks to IDesktopWallpaper, so it runs before the lock: an Autonomy pulse
+            // must not hold _lock across COM calls (Shuffle calls in here with the lock released).
+            // Same refusal as Studio > Wallpaper: a slideshow, Spotlight or per-monitor pictures cannot
+            // be put back with one write (ccp-bugs #1584).
+            if (WriteWouldLoseDesktop(out var lost))
+            {
+                App.Logger?.Warning("[Wallpaper] Takeover wallpaper skipped: {Why} on the desktop", lost);
+                return false;
+            }
+
             lock (_lock)
             {
                 if (_isActive) return true;
@@ -146,23 +158,18 @@ namespace ConditioningControlPanel.Services
                     // Save current wallpaper path. If Windows can't hand back a usable one we do
                     // NOT touch the desktop at all — a skipped effect is far cheaper than a
                     // wallpaper the user can never get back (#692).
-                    var original = ReadCurrentWallpaper();
-                    if (original == null)
+                    var reported = ReadCurrentWallpaper();
+                    if (reported == null)
                     {
                         App.Logger?.Warning("[Wallpaper] Current desktop wallpaper is unreadable (solid colour, slideshow, theme or Spotlight?) — skipping so the desktop stays restorable");
                         return false;
                     }
 
-                    // A slideshow can hand back a READABLE path: Windows' own transcoded cache, which our
-                    // first write overwrites, so the restore put back a dead file and left a white desktop
-                    // (ccp-bugs #1584). Same refusal as Studio > Wallpaper, plus that cache.
-                    WriteWouldLoseDesktop(out var lost);
-                    var refusal = TakeoverRefusal(lost, original, TranscodedCachePath());
-                    if (refusal != null)
-                    {
-                        App.Logger?.Warning("[Wallpaper] Takeover wallpaper skipped: {Why} (desktop reports {Path})", refusal, original);
-                        return false;
-                    }
+                    // Windows can name its own transcoded cache, which our first write overwrites: the
+                    // restore then set that file from itself and left a white desktop (#1584). A frozen
+                    // copy is the original instead, as Studio > Wallpaper does.
+                    var original = OriginalFromReported(reported);
+                    if (original == null) return false;
 
                     // Scan wallpapers folder — user-chosen folder if set, else the default
                     // assets/wallpapers folder under the effective assets path.
@@ -320,13 +327,21 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public bool Shuffle()
         {
+            bool activate;
             lock (_lock)
             {
                 // The collage owns the desktop while it runs; don't let the Takeover/Autonomy shuffle
                 // swap a raw pool image in over a composed collage.
                 if (_collageRunning) return false;
+                activate = !_isActive;
+            }
+            // Outside the lock: Activate's desktop check makes COM calls (#1584).
+            if (activate) return Activate();
 
-                if (!_isActive) return Activate();
+            lock (_lock)
+            {
+                if (_collageRunning) return false;
+                if (!_isActive) return false;   // deactivated in between: the next pulse starts it again
 
                 // Never stack writes behind a slow one: a shuffle is cosmetic, skip it.
                 if (_setQueue.IsBusy) return false;

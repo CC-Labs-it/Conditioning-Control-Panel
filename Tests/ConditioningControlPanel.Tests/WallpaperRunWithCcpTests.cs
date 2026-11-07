@@ -124,17 +124,35 @@ public class WallpaperRunWithCcpTests
     private const string Cache = @"C:\Users\u\AppData\Roaming\Microsoft\Windows\Themes\TranscodedWallpaper";
 
     [Fact]
-    public void The_takeover_wallpaper_refuses_what_the_studio_wallpaper_refuses()
+    public void Windows_own_cache_is_recognised_whatever_the_case()
     {
-        Assert.Equal("slideshow", WallpaperService.TakeoverRefusal("slideshow", @"C:\pics\a.jpg", Cache));
-        Assert.Null(WallpaperService.TakeoverRefusal(null, @"C:\pics\a.jpg", Cache));
+        Assert.True(WallpaperService.IsTranscodedCache(Cache, Cache));
+        Assert.True(WallpaperService.IsTranscodedCache(Cache.ToLowerInvariant(), Cache));
+        Assert.False(WallpaperService.IsTranscodedCache(@"C:\pics\a.jpg", Cache));
+        Assert.False(WallpaperService.IsTranscodedCache(null, Cache));
+    }
+
+    [Theory]
+    [InlineData(1, @"C:\pics\a.jpg", "")]              // solid colour: clear
+    [InlineData(0, @"C:\pics\a.jpg", @"C:\pics\a.jpg")] // picture: re-set it
+    [InlineData(0, Cache, null)]                        // picture via Photos / a browser: never re-set the cache from itself
+    [InlineData(2, @"C:\pics\a.jpg", null)]             // slideshow: redraw only
+    [InlineData(-1, Cache, null)]                       // no BackgroundType (Windows 10 slideshow): redraw only
+    public void Dynamics_stop_repaint_never_re_sets_windows_own_cache(int backgroundType, string path, string? target)
+    {
+        var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { @"C:\pics\a.jpg", Cache };
+        Assert.Equal(target, DynamicWallpaperService.RepaintTarget(backgroundType, path, files.Contains,
+            p => WallpaperService.IsTranscodedCache(p, Cache)));
     }
 
     [Fact]
-    public void The_takeover_wallpaper_never_captures_windows_own_cache_as_the_original()
+    public void A_cloud_restore_keeps_this_pcs_wallpaper_breadcrumb_and_fit()
     {
-        Assert.NotNull(WallpaperService.TakeoverRefusal(null, Cache, Cache));
-        Assert.NotNull(WallpaperService.TakeoverRefusal(null, Cache.ToLowerInvariant(), Cache));
+        var current = new AppSettings { WallpaperOriginalPath = @"C:\pics\mine.jpg", WallpaperOriginalStyle = "22|0" };
+        var restored = new AppSettings { WallpaperOriginalPath = @"D:\other-pc.jpg", WallpaperOriginalStyle = "2|0" };
+        ConditioningControlPanel.Services.ProfileSyncService.PreserveLocalOnlyFields(current, restored);
+        Assert.Equal(@"C:\pics\mine.jpg", restored.WallpaperOriginalPath);
+        Assert.Equal("22|0", restored.WallpaperOriginalStyle);
     }
 
     [Fact]

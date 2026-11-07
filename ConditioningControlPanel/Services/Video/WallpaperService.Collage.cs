@@ -96,16 +96,29 @@ namespace ConditioningControlPanel.Services
             catch { return string.Equals(path, transcodedCache, StringComparison.OrdinalIgnoreCase); }
         }
 
-        /// <summary>Why the Takeover wallpaper (<see cref="Activate"/>) must not take the desktop, or null.
-        /// Pure. The same refusal as Studio > Wallpaper (<see cref="DesktopLossReason"/>), plus one more:
-        /// a desktop that only reports Windows' own cache, since that file is overwritten by our first write
-        /// and the restore would put back a dead file (ccp-bugs #1584).</summary>
-        internal static string? TakeoverRefusal(string? desktopLoss, string? original, string? transcodedCache)
+        /// <summary>The original to remember for a path Windows reports: the path itself, or, when it is
+        /// Windows' own cache (a picture set from Photos, a browser or theme sync), a frozen copy of it, since
+        /// our first write overwrites that file (#1584). Null when the copy could not be made.</summary>
+        private static string? OriginalFromReported(string path)
         {
-            if (desktopLoss != null) return desktopLoss;
-            if (IsTranscodedCache(original, transcodedCache)) return "only Windows' transcoded cache to put back";
-            return null;
+            if (!IsTranscodedCache(path, TranscodedCachePath())) return path;
+            try
+            {
+                var frozen = FrozenOriginalPath();
+                File.Copy(path, frozen, overwrite: true);
+                App.Logger?.Information("[Wallpaper] Desktop reports Windows' own cache; a frozen copy is the original");
+                return frozen;
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Warning("[Wallpaper] Could not freeze Windows' wallpaper cache: {Error}", ex.Message);
+                return null;
+            }
         }
+
+        /// <summary>For Dynamic's stop repaint (<see cref="DynamicWallpaperService"/>): is this registry path
+        /// Windows' own cache, which must never be re-set from itself?</summary>
+        internal static bool IsTranscodedCachePath(string? path) => IsTranscodedCache(path, TranscodedCachePath());
 
         /// <summary>The real wallpaper is back: the frozen copy has done its job. Kept when Windows is
         /// pointing at it (the source was gone), since Windows re-reads that path on logon.</summary>
@@ -169,18 +182,30 @@ namespace ConditioningControlPanel.Services
                 using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop");
                 var style = key?.GetValue("WallpaperStyle")?.ToString() ?? "";
                 var tile = key?.GetValue("TileWallpaper")?.ToString() ?? "0";
-                return style.Length == 0 ? null : PackStyle(style, tile);
+                return style.Length == 0 ? NoStyleMarker : PackStyle(style, tile);
             }
             catch (Exception ex) { Diag.Swallowed(ex, "wallpaper style"); return null; }
         }
 
-        /// <summary>Write the pair. Windows applies it at the next SPI_SETDESKWALLPAPER, so this runs on the
-        /// write queue right before the set. REG_SZ, as Windows itself writes them.</summary>
+        /// <summary>Captured when the desktop has no WallpaperStyle value at all: the restore deletes ours, so
+        /// the registry ends exactly as it was.</summary>
+        internal const string NoStyleMarker = "none";
+
+        /// <summary>Write the pair, or delete it for <see cref="NoStyleMarker"/>. Windows applies it at the next
+        /// SPI_SETDESKWALLPAPER, so this runs on the write queue right before the set. REG_SZ, as Windows
+        /// itself writes them.</summary>
         private static void WriteWallpaperStyle(string? packed)
         {
-            if (!TryUnpackStyle(packed, out var style, out var tile)) return;
             try
             {
+                if (packed == NoStyleMarker)
+                {
+                    using var desk = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop", writable: true);
+                    desk?.DeleteValue("WallpaperStyle", throwOnMissingValue: false);
+                    desk?.DeleteValue("TileWallpaper", throwOnMissingValue: false);
+                    return;
+                }
+                if (!TryUnpackStyle(packed, out var style, out var tile)) return;
                 using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Control Panel\Desktop");
                 key?.SetValue("WallpaperStyle", style, Microsoft.Win32.RegistryValueKind.String);
                 key?.SetValue("TileWallpaper", tile, Microsoft.Win32.RegistryValueKind.String);
@@ -193,7 +218,11 @@ namespace ConditioningControlPanel.Services
         {
             if (_originalStyle != null || OurFitStyle() == null) return;
             _originalStyle = ReadWallpaperStyleRaw();
-            if (_originalStyle == null) return;
+            if (_originalStyle == null)
+            {
+                App.Logger?.Warning("[Collage] Could not read the desktop fit - the chosen fit is not applied this time");
+                return;
+            }
             PersistOriginalStyle(_originalStyle);
             App.Logger?.Information("[Collage] Captured desktop fit {Style}; it comes back on stop", ReadWallpaperStyle());
         }
