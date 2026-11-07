@@ -69,14 +69,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow.xaml.cs:888: Lockdown ignores every GLOBAL key, whatever LockdownDisablePanicKey
             // says. Only this listener layer: window and TextBox input (the secret phrase) are untouched.
             // Panic off is the same refusal. Both share Core VoicePanicReach.PanicKeyRuns with the voice
-            // panic and the blink stop (hard rule 6: no stop is more permissive than this key).
-            if (!fromStopButton && !VoicePanicReach.PanicKeyRuns(LockdownActive, s.PanicKeyEnabled))
+            // panic and the blink stop (hard rule 6: no stop is more permissive than this key). The Remote HUD
+            // Stop goes through it too: WPF HandlePanicFromStopButton (MainWindow.xaml.cs:1597) skips the hook's
+            // Lockdown check, against its own RemoteHudRules.LocalPanicAllowed (avalonia-decisions.html 2026-11-04).
+            if (!VoicePanicReach.PanicKeyRuns(LockdownActive, s.PanicKeyEnabled))
             {
                 if (LockdownActive) Serilog.Log.Information("Panic key ignored under Lockdown");
                 // WPF LeashPanicKeyWhilePanicOff: panic always works on a leash. The leash part alone runs
                 // (the task parks, a lines card it opened closes, its window closes, the gate stands back);
                 // the session, effects and exit ladder are untouched. The hold-to-cut rides LeashHoldPressed.
-                if (LeashHoldLeashed) PanicKeyLeashOnly(fromKey: true);
+                if (LeashHoldLeashed) PanicKeyLeashOnly(fromKey: !fromStopButton);
                 return;
             }
             // WPF MainWindow.xaml.cs:1557: a game's pause, BEFORE everything below: a pause is not a panic.

@@ -86,9 +86,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (connected)
             {
                 ShowRemoteControlOverlay(); NotifyRemoteControllerJoined();
-                RemoteHud ??= new RemoteHudWindow(RemoteControlTabView.Relay.Value, StopFromRemoteHud,
-                    () => (Screens?.ScreenFromWindow(this) ?? Screens?.Primary) is { } sc ? (sc.WorkingArea, sc.Scaling) : null);
-                RemoteHud.Refresh();
+                // WPF EnsureRemoteHud: a HUD failure is logged, never thrown out of the controller handler.
+                try
+                {
+                    RemoteHud ??= new RemoteHudWindow(RemoteControlTabView.Relay.Value, StopFromRemoteHud,
+                        () => (Screens?.ScreenFromWindow(this) ?? Screens?.Primary) is { } sc ? (sc.WorkingArea, sc.Scaling) : null);
+                    RemoteHud.Refresh();
+                }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Remote HUD failed to show"); }
             }
             else { HideRemoteControlOverlay(); RemoteHud?.Refresh(); }
         }
@@ -116,11 +121,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var hud = RemoteHud; RemoteHud = null; hud?.Dispose();
         }
 
-        internal void StopFromRemoteHud()
-        {
-            if (CoreSettings.Current.PanicKeyEnabled) HandlePanicKeyPress(DateTime.Now, fromStopButton: true);
-            else if (LeashHoldLeashed) PanicKeyLeashOnly();
-        }
+        /// <summary>The HUD's local stop: the panic key's own reach (Core VoicePanicReach), so Lockdown or panic
+        /// off refuses it and a leash alone gets the leash-only stop.</summary>
+        internal void StopFromRemoteHud() => HandlePanicKeyPress(DateTime.Now, fromStopButton: true);
 
         /// <summary>WPF OnRemoteCommandReceived (:1091): quiet verbs make no toast.</summary>
         internal void OnRemoteCommandReceived(string action)

@@ -18,7 +18,9 @@ internal sealed class RemoteHudWindow : Window, IDisposable
     private readonly Action _localStop;
     private readonly Func<(PixelRect WorkingArea, double Scaling)?> _anchorScreen;
     private readonly DispatcherTimer _timer;
-    internal readonly TextBlock Detail = new() { Foreground = Brushes.Black };
+    // WPF palette (RemoteHudWindow.cs:56-61): ink pill, pink edge, white headline, muted subline.
+    private static readonly Color Ink = Color.FromRgb(0x1A, 0x1A, 0x2E), Pink = Color.FromRgb(0xFF, 0x69, 0xB4);
+    internal readonly TextBlock Detail = new() { Foreground = new SolidColorBrush(Color.FromRgb(0xB0, 0xA8, 0xC8)), FontSize = 11 };
     private DateTimeOffset _connectedAt;
     private DateTimeOffset? _lastStop;
     private string? _lastAction, _confirm;
@@ -46,27 +48,50 @@ internal sealed class RemoteHudWindow : Window, IDisposable
         SizeToContent = SizeToContent.WidthAndHeight;
         Background = Brushes.Transparent;
         var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(10) };
-        var text = new StackPanel();
-        text.Children.Add(new TextBlock { Text = Loc.Get("remote_hud_someone"), Foreground = Brushes.Black, FontWeight = FontWeight.Bold });
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        text.Children.Add(new TextBlock { Text = Loc.Get("remote_hud_someone"), Foreground = Brushes.White, FontSize = 13, FontWeight = FontWeight.SemiBold });
         text.Children.Add(Detail);
         panel.Children.Add(text);
-        MoreButton = new Button { Content = Loc.Get("remote_hud_more") };
-        StopButton = new Button { Content = Loc.Get("remote_hud_stop") };
+        MoreButton = RoundButton(Color.FromRgb(0x4F, 0xE0, 0xB5), "remote_hud_more", "remote_hud_more_tip");
+        StopButton = RoundButton(Color.FromRgb(0xFF, 0x54, 0x68), "remote_hud_stop", "remote_hud_stop_tip");
         MoreButton.Click += async (_, _) => await SignalAsync("more");
         StopButton.Click += async (_, _) => await SignalAsync("stop");
         panel.Children.Add(MoreButton);
         panel.Children.Add(StopButton);
-        Content = new Border { Background = Brushes.White, CornerRadius = new CornerRadius(16), Child = panel };
+        Content = new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(0xEE, Ink.R, Ink.G, Ink.B)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x99, Pink.R, Pink.G, Pink.B)),
+            BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(26), Padding = new Thickness(8, 6), Child = panel,
+        };
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += (_, _) => Refresh();
         _timer.Start();
+        // WPF :213-214: re-centre when the detail line grows, and stop ticking once the window is gone
+        // (a window manager close would otherwise leave the tick calling Show on a closed window).
+        SizeChanged += (_, _) => { if (IsVisible) Place(); };
+        Closed += (_, _) => { _disposed = true; _timer.Stop(); };
+    }
+
+    /// <summary>WPF MakeSignalButton (:398): a 40 px round, non-focusable button with its tooltip.</summary>
+    private static Button RoundButton(Color fill, string labelKey, string tipKey)
+    {
+        var b = new Button
+        {
+            Width = 40, Height = 40, CornerRadius = new CornerRadius(20), Padding = new Thickness(0), Focusable = false,
+            Background = new SolidColorBrush(fill), Foreground = new SolidColorBrush(Ink),
+            HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center,
+            Content = new TextBlock { Text = Loc.Get(labelKey), FontSize = 11, FontWeight = FontWeight.Bold },
+        };
+        ToolTip.SetTip(b, Loc.Get(tipKey));
+        return b;
     }
 
     internal void Refresh()
     {
         if (_disposed) return;
         var connected = _relay.IsActive && _relay.ControllerConnected;
-        if (connected && !_connected) { _connectedAt = Clock.GetUtcNow(); _lastStop = null; _lastAction = null; _confirm = null; }
+        if (connected && !_connected) { _connectedAt = Clock.GetUtcNow(); _lastStop = null; _confirm = null; }   // WPF keeps the last action until the session ends
         _connected = connected;
         if (!connected) { if (IsVisible) Hide(); return; }
         var now = Clock.GetUtcNow();
