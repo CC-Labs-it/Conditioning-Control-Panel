@@ -28,6 +28,12 @@ namespace ConditioningControlPanel.Views.Tabs
             DailyCard1.RerollRequested += OnDailyCardRerollRequested;
             DailyCard2.RerollRequested += OnDailyCardRerollRequested;
 
+            // ccp-bugs#1534: a quest card opens the page that finishes it (navigation only).
+            DailyCard0.NavigateRequested += OnDailyCardNavigateRequested;
+            DailyCard1.NavigateRequested += OnDailyCardNavigateRequested;
+            DailyCard2.NavigateRequested += OnDailyCardNavigateRequested;
+            WeeklyQuestCard.MouseLeftButtonUp += OnWeeklyCardMouseUp;
+
             InitDepth();
         }
 
@@ -35,6 +41,29 @@ namespace ConditioningControlPanel.Views.Tabs
         {
             if (sender is Controls.DailyQuestCard card && Window.GetWindow(this) is MainWindow mw)
                 mw.RerollDailySlot(card.Slot);
+        }
+
+        private void OnDailyCardNavigateRequested(object? sender, EventArgs e)
+        {
+            if (sender is Controls.DailyQuestCard card && Window.GetWindow(this) is MainWindow mw)
+                mw.OpenDailyQuestDestination(card.Slot);
+        }
+
+        private bool _weeklyNavigable;
+
+        /// <summary>The weekly card is a door only when its quest has a single home and is not done.
+        /// A plain card keeps the arrow cursor.</summary>
+        internal void SetWeeklyNavigable(bool on)
+        {
+            _weeklyNavigable = on;
+            WeeklyQuestCard.Cursor = on ? Cursors.Hand : null;
+        }
+
+        private void OnWeeklyCardMouseUp(object sender, MouseButtonEventArgs e)
+        {
+            if (!_weeklyNavigable || Window.GetWindow(this) is not MainWindow mw) return;
+            e.Handled = true;
+            mw.OpenWeeklyQuestDestination();
         }
 
         private void QuestsTabView_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
