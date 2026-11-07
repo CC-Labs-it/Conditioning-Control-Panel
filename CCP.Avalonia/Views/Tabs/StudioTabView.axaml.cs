@@ -358,7 +358,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (e.Art == null) continue;                 // art-less module: nothing to resolve
 
                 Bitmap? bmp;
-                try { bmp = ModArt.TryLoad("features/" + e.Art); }
+                // WPF RackArtDecodeWidth: the 56px tile and its resting chip share one 256px
+                // decode. Keeping the source PNG here retained ~39 MiB for twelve small rows.
+                try { bmp = ModArt.TryLoad("features/" + e.Art, 256); }
                 catch (Exception ex)
                 {
                     Log.Debug(ex, "[Studio] feature art {Art} would not load", e.Art);
@@ -405,7 +407,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (ImgStudioDoorArt == null) return;
 
             Bitmap? bmp;
-            try { bmp = ModArt.TryLoad("nav/door_studio.png"); }
+            // WPF ApplyDoorIcon decodes the medallion at 128px.
+            try { bmp = ModArt.TryLoad("nav/door_studio.png", 128); }
             catch (Exception ex)
             {
                 Log.Debug(ex, "[Studio] the door medallion would not load");

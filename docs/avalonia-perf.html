@@ -59,7 +59,7 @@ regression, missing reports, missing/extra tabs or invalid measurements. Tab key
 <tr><td>startup (ms)</td><td>see ledger</td><td>5124 (info: scope differs)</td><td>4268</td><td>info</td></tr>
 <tr><td>tab switch median, worst tab (ms)</td><td>see ledger</td><td>423.0 (ExclusivesTab)</td><td>171.4 (AchievementsTab; ExclusivesTab 108.7)</td><td>FAIL</td></tr>
 <tr><td>tab switch p95, worst tab (ms)</td><td>see ledger</td><td>492.6 (ExclusivesTab)</td><td>223.5 (AchievementsTab; ExclusivesTab 123.8)</td><td>FAIL</td></tr>
-<tr><td>working set after GC (MB)</td><td>see ledger</td><td>1172.4</td><td>1030.8</td><td>FAIL (limit 1133.9)</td></tr>
+<tr><td>working set after GC (MB)</td><td>see ledger</td><td>1123.6 (rgate 40987994844)</td><td>1036.2</td><td>pass (limit 1139.8)</td></tr>
 </table>
 <h2 id="ledger">Ledger</h2>
 <p>One line per run: date, machine/runner, commit, artifact or evidence path, headline numbers.</p>
@@ -71,6 +71,8 @@ Artifact <code>perf-bench-linux</code>.</li>
 startup (info) Avalonia 5124 / WPF 4268 ms; working set 1172.4 / 1030.8 MB (FAIL); 12 of 48 tab rows FAIL: SettingsTab 99.7/18.4, ProgramsTab 64.3/31.1,
 EnhancementsTab 72.6/44.4, AvailableSubjectsTab 64.0/12.9, BlinkTrainerTab 65.1/24.3, <strong>ExclusivesTab 423.0/108.7 ms median</strong> (p95 also DiscordTab, RemoteControlTab).
 WPF missing-tab run exited 3 with no JSON. One run; report-only until three stable runs are reviewed. Artifact <code>perf-bench-windows</code>.</li>
+<li>2026-10-30, CI windows-latest (job perf-bench-windows, rgate run 40987994844, snapshot 93e6ba502 of avalonia-port/r72-perf-working-set: Studio/Play art decoded at WPF widths), medians:
+working set 1123.6 / 1036.2 MB (pass, limit 1139.8); tab rows unchanged in kind: SettingsTab, ProgramsTab, EnhancementsTab, AvailableSubjectsTab, BlinkTrainerTab, ExclusivesTab still FAIL.</li>
 </ul>
 
 <script>
