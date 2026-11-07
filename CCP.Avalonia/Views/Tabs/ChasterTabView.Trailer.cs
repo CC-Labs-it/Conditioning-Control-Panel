@@ -34,6 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal BookedFlashPlan.Plan? TrailerFigurePlan => _trailerShown && _trailerPrice is { } price
             ? BookedFlashPlan.For(price.Id, price.Seconds, CoreSettings.Current.MotionLevel) : null;
         internal bool TrailerFigureRunning => _trailerFigureTimer.IsEnabled;
+        internal void TrailerFigureElapsed() => TrailerFigure();   // stepped-timer seam (P08): one repeat by hand
 
         private void TrailerFigure()
         {
@@ -139,7 +140,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _trailerFigureTimer.Start();
             }
             catch (Exception ex) { Serilog.Log.Debug(ex, "[Chaster] trailer"); }
-            try { Trailer.IsOpen = true; TrailerFigure(); }
+            // WPF (Fx.cs:621): the first figure lands once the popup has a layer, so it is posted, not called.
+            try { Trailer.IsOpen = true; Dispatcher.UIThread.Post(TrailerFigure, DispatcherPriority.Background); }
             catch (Exception ex) { Serilog.Log.Debug(ex, "[Chaster] trailer open"); }
         }
 

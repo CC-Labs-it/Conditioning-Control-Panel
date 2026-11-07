@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Chaster;
@@ -30,9 +31,18 @@ public sealed partial class ChasterMenuTests
         tab.CommitPriceEdit();
         Assert.Equal(BookedFlashPlan.For("typo", 120, CoreSettings.Current.MotionLevel), tab.TrailerFigurePlan);
         tab.OpenTrailer(tab.PriceRows["typo"]);
+        Dispatcher.UIThread.RunJobs();   // the first figure is posted until the popup has a layer (WPF Fx.cs:621)
+        var layer = AdornerLayer.GetAdornerLayer(tab.FindControl<TextBlock>("TxtTrailerFigure")!)!;
+        var first = layer.Children.OfType<ChasterBookedFlash>().Single();
+        Assert.Equal(BookedFlashPlan.For("typo", 120, CoreSettings.Current.MotionLevel)!.Value.Text, first.Figure.Text);
+        tab.TrailerFigureElapsed();   // the repeat: a fresh figure replaces the one in flight
+        var second = layer.Children.OfType<ChasterBookedFlash>().Single();
+        Assert.NotSame(first, second);
         tab.HideTrailer();
         Assert.False(tab.TrailerFigureRunning);
         Assert.Null(tab.TrailerFigurePlan);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(layer.Children.OfType<ChasterBookedFlash>());
         await Task.CompletedTask;
     }));
 
