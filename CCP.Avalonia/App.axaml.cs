@@ -863,6 +863,7 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.StakeHead.Seed();
                 CoreProgression.TrackBubbleCountResultProvider = correct => Achievements?.TrackBubbleCountResult(correct);
                 CoreProgression.TrackBubbleCountGameStartedProvider = () => Achievements?.TrackBubbleCountGameStarted();
+                CoreProgression.TrackPanicPressedProvider = () => Achievements?.TrackPanicPressed();
                 CoreProgression.TrackBubbleCountCompletedProvider = () => Quests?.TrackBubbleCountCompleted();
                 // WPF MantraService's App.Quests / App.Chaster reads (seeded in WPF App.xaml.cs the same way).
                 CoreProgression.TrackMantraCompletedProvider = () => Quests?.TrackMantraCompleted();

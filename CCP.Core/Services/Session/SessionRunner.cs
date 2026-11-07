@@ -523,7 +523,11 @@ namespace ConditioningControlPanel.Services
                 Log.Information("Session completed: {Name}, XP: {XP} (banked {Banked}, paused {PauseCount}x, penalty: -{Penalty})",
                     session.Name, award, xp, PauseCount, XPPenalty);
             }
-            else Log.Information("Session stopped early");
+            else
+            {
+                Log.Information("Session stopped early");
+                CoreProgression.TrackPanicPressed();   // SessionEngine.cs:478, Relapse
+            }
 
             try { SessionLog.EndSession(completed, elapsed, xp); }
             catch (Exception ex) { Log.Error(ex, "SessionLog.EndSession failed"); }

@@ -122,7 +122,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static void StopAll(string reason, MainShellWindow? shell = null)
         {
             Serilog.Log.Information("Panic: stopping every surface ({Reason})", reason);
-            App.Achievements?.TrackPanicPressed();
+            // WPF MainWindow.xaml.cs:1904-1916 tracks only a running stop; voice panic always (RemoteControl.cs:1493).
+            if (CoreEngine.IsRunning || reason == "voice") App.Achievements?.TrackPanicPressed();
             shell ??= MainShellWindow.Current;
             foreach (var s in All)
             {

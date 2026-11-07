@@ -124,6 +124,23 @@ public sealed class SessionRunnerTests : IDisposable
         Assert.Single(Directory.GetFiles(_logs.LogsFolder, "*_" + Id + ".json"));
     }
 
+    [Theory]   // WPF SessionEngine.cs:478: only an incomplete stop records the Relapse timestamp
+    [InlineData(false, 1)]
+    [InlineData(true, 0)]
+    public void OnlyAnEarlyStopTracksPanic(bool completed, int expected)
+    {
+        var old = CoreProgression.TrackPanicPressedProvider;
+        var calls = 0;
+        CoreProgression.TrackPanicPressedProvider = () => calls++;
+        try
+        {
+            _runner.Start(OneMinute());
+            _runner.Stop(completed);
+            Assert.Equal(expected, calls);
+        }
+        finally { CoreProgression.TrackPanicPressedProvider = old; }
+    }
+
     [Fact]
     public void ShortSessionWithoutMedia_IsNotSaved()
     {
