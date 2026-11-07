@@ -20,6 +20,7 @@ public class LockCardStrictCopyTests
     private static readonly string[] NewKeys =
     {
         LockCardStrictCopy.HintPanicIsEscape,
+        LockCardStrictCopy.HintStrictPanicOff,
         LockCardStrictCopy.ConfirmTitle,
         LockCardStrictCopy.ConfirmBody,
         LockCardStrictCopy.ConfirmBodyPanicIsEscape,
@@ -52,6 +53,17 @@ public class LockCardStrictCopyTests
     {
         Assert.Equal(LockCardStrictCopy.HintEscCloses, LockCardStrictCopy.HintKey(true, "Escape"));
         Assert.Equal(LockCardStrictCopy.HintEscCloses, LockCardStrictCopy.HintKey(true, "F8"));
+    }
+
+    /// <summary>ccp-bugs#1582: strict on, panic switched off. Escape closes the card on purpose;
+    /// the hint says why rather than reading as strict being broken.</summary>
+    [Fact]
+    public void A_strict_card_with_panic_off_says_strict_needs_panic()
+    {
+        Assert.Equal(LockCardStrictCopy.HintStrictPanicOff, LockCardStrictCopy.HintKey(true, "Escape", strictWithPanicOff: true));
+        Assert.Equal(LockCardStrictCopy.HintStrictPanicOff, LockCardStrictCopy.HintKey(true, "F8", strictWithPanicOff: true));
+        // A live panic escape still wins: the card does not close on Escape then.
+        Assert.Equal(LockCardStrictCopy.HintPanicIsEscape, LockCardStrictCopy.HintKey(false, "Escape", strictWithPanicOff: true));
     }
 
     [Fact]
@@ -107,5 +119,6 @@ public class LockCardStrictCopyTests
 
         var win = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Windows", "LockCardWindow.xaml.cs"));
         Assert.Contains("LockCardStrictCopy.HintKey(EscClosesCard", win);
+        Assert.Contains("PanicKeyEnabled == false", win);
     }
 }

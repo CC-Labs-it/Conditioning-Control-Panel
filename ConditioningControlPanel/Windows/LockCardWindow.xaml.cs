@@ -678,7 +678,9 @@ namespace ConditioningControlPanel
             // #1547: Escape is the default panic key, so on a strict card it still ends the card
             // through panic. Say so instead of "only the panic key (Escape) closes this".
             var panicKey = App.Settings?.Current?.PanicKey;
-            var hintKey = LockCardStrictCopy.HintKey(EscClosesCard, panicKey);
+            // #1582: a strict card with panic switched off closes on Escape by design; say why.
+            var strictPanicOff = _strictMode && App.Settings?.Current?.PanicKeyEnabled == false;
+            var hintKey = LockCardStrictCopy.HintKey(EscClosesCard, panicKey, strictPanicOff);
             TxtEscHint.Text = hintKey == LockCardStrictCopy.HintOnlyPanicKey
                 ? Loc.GetF(hintKey, panicKey ?? "?")
                 : Loc.Get(hintKey);
