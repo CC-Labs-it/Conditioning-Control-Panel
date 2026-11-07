@@ -44,6 +44,7 @@ public sealed class ModCatalogueShareTests
     }
 
     private static void Click(Button b) => b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    private static void Click(MenuItem m) => m.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
     private static async Task Until(Func<bool> done)
     {
         var deadline = DateTime.UtcNow.AddSeconds(10);
@@ -93,7 +94,7 @@ public sealed class ModCatalogueShareTests
         try
         {
             var list = manager.FindControl<ListBox>("ModList")!;
-            var share = manager.FindControl<Button>("BtnShare")!;
+            var share = manager.FindControl<MenuItem>("BtnShare")!;
             list.SelectedItem = list.Items.OfType<ListBoxItem>().Single(i => (string)i.Tag! == builtin.Id);
             Assert.False(share.IsVisible);
             list.SelectedItem = list.Items.OfType<ListBoxItem>().Single(i => (string)i.Tag! == mod.Id);

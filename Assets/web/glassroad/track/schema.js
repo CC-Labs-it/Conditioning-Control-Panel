@@ -13,6 +13,7 @@ export const FLOW_MAX = Object.freeze([12, 6]);
 export const SPACING_M = Object.freeze([8, 15]);
 /** Track `items` kinds known to the engine (B1): an item box row member, a pickup bubble. Others warn. */
 export const ITEM_KINDS = Object.freeze(['box', 'bubble']);
+import { validateRamps, validateLift } from './ramps.js';
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const isInt = (v) => Number.isInteger(v);
@@ -117,6 +118,7 @@ export function validate(t) {
     if (e.ds !== undefined && (!isNum(e.ds) || e.ds < 0 || e.ds > 40)) err(at + '.ds must be 0..40 m');
     if (!ITEM_KINDS.includes(e.kind)) warn(at + ' unknown kind ' + e.kind);
     if (nodes[e.node].flags.includes('jump')) err(at + ' sits over a jump gap');
+    validateLift(e, at, err);
   });
   list('boosts', (e, at) => {
     if (!isNum(e.x) || !isNum(e.w) || e.w <= 0 || !isNum(e.len) || e.len <= 0) err(at + ' needs x, w > 0, len > 0');
@@ -243,6 +245,9 @@ export function validate(t) {
       });
     }
   }
+
+  // ramps (handoff-1030 GLASSROAD-RAMPS.md): jump wedges, track/ramps.js
+  validateRamps(t, nodes, err, warn);
 
   if (!t.ai || typeof t.ai !== 'object' || !Array.isArray(t.ai.lines) || !Array.isArray(t.ai.pace)) err('ai must have lines[] and pace[]');
   else {

@@ -28,7 +28,7 @@ public sealed class MandatoryVideoToyInputTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia().WithInterFont()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             using var h = new HapticService(new HapticSettings { ToyInputEnabled = true, AttentionCheckToyButton = true });
             using var p = new ButtonProvider();
@@ -45,7 +45,7 @@ public sealed class MandatoryVideoToyInputTests
             var w = new Window { Content = layer, Width = 800, Height = 600 };
             w.Show();
             var buttons = new MandatoryVideoOverlay.VideoButtons(o.ToggleUserMute, o.CloseFromButton);
-            ((List<MandatoryVideoOverlay.Surface>)o.Surfaces).Add(new(w, new Image(), new Border(), new Image(), layer, new Border(), new TextBlock(), buttons));
+            ((List<MandatoryVideoOverlay.Surface>)o.Surfaces).Add(new(w, new Image(), new Border(), new Image(), layer, new Border(), new TextBlock(), buttons, new Panel()));
             void Drain() { while (pending.TryDequeue(out var work)) work(); Dispatcher.UIThread.RunJobs(); }
             try
             {
@@ -85,7 +85,7 @@ public sealed class MandatoryVideoToyInputTests
         await AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia().WithInterFont()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var old = CoreEngine.Video;
             var fake = new VideoHost();

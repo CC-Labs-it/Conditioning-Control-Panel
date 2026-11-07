@@ -98,6 +98,7 @@ public sealed class LanguageSelectorTests
 
             try
         {
+            Assert.Equal(CoreReleaseContent.AppVersion, CoreSettings.Current.LastSeenVersion);
             Assert.Equal("ja", LocalizationManager.Instance.CurrentLanguage);
             Assert.Equal("ja", SelectedCode(Pill(shell)));
             Assert.Equal("ja", SelectedCode(General(shell)));
@@ -351,9 +352,19 @@ public sealed class LanguageSelectorTests
                 Assert.Equal(diskBeforeExit, File.ReadAllText(settingsPath));
                 Thread.Sleep(650); // Beyond the production 500ms due time, without pumping the UI queue.
                 Assert.Equal(diskBeforeExit, File.ReadAllText(settingsPath));
+                var achievementsPath = Path.Combine(TestProfile.DirectoryPath, "achievements.json");
+                var achievements = Assert.IsType<AchievementEngine>(typeof(App)
+                    .GetProperty("Achievements", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null));
+                Assert.False(achievements.IsDirty);
+                Assert.Empty(achievements.Progress.UnlockedAchievements);
+                Assert.False(File.Exists(achievementsPath)); // idle startup must not create the file
+                var expectedProgress = System.Text.Json.JsonSerializer.Serialize(achievements.Progress);
                 lifetime.Shutdown();
-                // Nothing earned this run: the exit handler must not rewrite achievements.json.
-                Assert.False(File.Exists(Path.Combine(TestProfile.DirectoryPath, "achievements.json")));
+                // WPF AchievementService.cs:947-954 always flushes on exit, even a clean idle profile.
+                Assert.True(File.Exists(achievementsPath));
+                var savedProgress = Assert.IsType<AchievementProgress>(
+                    System.Text.Json.JsonSerializer.Deserialize<AchievementProgress>(File.ReadAllText(achievementsPath)));
+                Assert.Equal(expectedProgress, System.Text.Json.JsonSerializer.Serialize(savedProgress));
                 var reloaded = new SettingsService();
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal(0, Volatile.Read(ref queuedBeforeExit));
@@ -469,6 +480,12 @@ public sealed class LanguageSelectorTests
         settings.Current.Language = "ja";
         settings.Current.SessionRackSourceFilter = "all";
         settings.Current.Welcomed = true;
+        // A current-version profile has no upgrade bookkeeping (WPF MainWindow.Marquee.cs:311-325).
+        // Versionless startup is separately exercised by FeatureIntroUpgradeTests.
+        var version = typeof(App).Assembly.GetName().Version!; // the provider is seeded only by StartApp
+        settings.Current.LastSeenVersion = $"{version.Major}.{version.Minor}.{version.Build}";
+        // Returning profile: first-run demo seeding legitimately saves this flag, as WPF does.
+        settings.Current.HasSeededDeeperDemos = true;
         // The Dashboard's launch cards spend their seen-flag (a real save) when they open, like WPF;
         // spent here so the no-startup-save assertion keeps measuring startup itself.
         settings.Current.SeenFeatureIntros.AddRange(new[] { "daily-free", "one-account" });
@@ -534,6 +551,9 @@ public sealed class LanguageSelectorTests
         };
 
         AppBuilder.Configure<CatalogueTestApp>(() => new CatalogueTestApp(customFolder, builtInFolder))
+            .WithInterFont()
+            .With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+            .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
             .UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
             .SetupWithLifetime(lifetime);

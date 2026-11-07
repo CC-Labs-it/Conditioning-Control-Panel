@@ -11,6 +11,7 @@ using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using Newtonsoft.Json;
 using OpenCvSharp;
+using ConditioningControlPanel.Services.Webcam;
 using Serilog;
 
 // Disambiguate WPF System.Windows types from OpenCvSharp types.
@@ -255,42 +256,25 @@ namespace ConditioningControlPanel.Services
         private const double MarCloseRatio = MouthOpenDetector.CloseRatio;
         private const int MouthDiagLogIntervalMs = 3000;
 
+        // Thresholds, lip indices and timing now live in Core TongueDetector.
         // Tongue-out detection — HSV color heuristic on pixels inside the inner-
         // lip polygon. Only runs when MAR says the mouth is currently open, so
-        // closed-mouth lipstick can't false-fire. The 16 indices below trace the
+        // closed-mouth lipstick can't false-fire. Core's 20 indices trace the
         // inner-lip ring clockwise from upper-center (canonical MediaPipe
         // FaceMesh layout). Per-pixel HSV bands and the open/close ratio are
         // tuned for typical webcam lighting; documented limitation: red lipstick
         // on the inner lip can false-fire (would need a dedicated model to fix).
-        private static readonly int[] InnerLipPolygonIndices =
-        {
-            13, 312, 311, 310, 415, 308, 324, 318, 402, 317,
-            14, 87, 178, 88, 95, 78, 191, 80, 81, 82
-        };
         // Enter/leave ratios and the minimum hold were tightened together
         // (0.22/0.14/150ms → 0.28/0.18/350ms): with the looser values, pink
         // inner-lip pixels during ordinary talking cleared the ratio for a
         // couple of frames and fired constantly. A real deliberate tongue-out
         // shows a big pink area and is held — it clears all three easily.
-        private const double TongueEnterRatio = 0.28;   // tongue_px / valid_px
-        private const double TongueLeaveRatio = 0.18;
-        private const int MinTongueOutMs = 350;
-        private const int TongueCooldownMs = 700;
         private const int TongueDiagLogIntervalMs = 3000;
         // HSV bands (OpenCV: H ∈ [0,179], S/V ∈ [0,255]). Tuned loose because
         // consumer webcams often desaturate skin/tongue tones — a strict S>80
         // gate misclassifies real tongue pixels as "other". Sat/val floor was
         // 50/50 — bumped down because users with dim or color-corrected
         // cameras had the detector miss real protrusions entirely.
-        private const int TongueHueLow1 = 0;
-        private const int TongueHueHigh1 = 20;
-        private const int TongueHueLow2 = 160;
-        private const int TongueHueHigh2 = 179;
-        private const int TongueMinSat = 30;
-        private const int TongueMinVal = 40;
-        private const int TeethMinVal = 200;            // bright + low sat = teeth (excluded)
-        private const int TeethMaxSat = 50;
-        private const int ShadowMaxVal = 40;            // very dark = shadow / mouth interior void (excluded)
 
         // Gaze parameters (long stare): Core LongStareDetector.
 
@@ -570,9 +554,8 @@ namespace ConditioningControlPanel.Services
         private DateTime _lastMouthDiagAt = DateTime.MinValue;
 
         // Tongue state (gated on _mouthOpen)
-        private DateTime _lastTongueOutAt = DateTime.MinValue;
-        private bool _tongueOut;
-        private DateTime? _tongueOutSince;
+        private readonly TongueDetector _tongue = new();
+        private bool _tongueOut => _tongue.IsOut;
         private double _maxTongueRatioThisFire;
         private double _windowMaxTongueRatio;
         private DateTime _lastTongueDiagAt = DateTime.MinValue;
@@ -1560,8 +1543,7 @@ namespace ConditioningControlPanel.Services
             _blink.Reset();
             _mouth.Reset();
             _lastMouthDiagAt = DateTime.MinValue;
-            _tongueOut = false;
-            _tongueOutSince = null;
+            _tongue.FaceMissing();
             _maxTongueRatioThisFire = 0;
             _windowMaxTongueRatio = 0;
             _lastTongueDiagAt = DateTime.MinValue;
@@ -1837,8 +1819,7 @@ namespace ConditioningControlPanel.Services
             _lastRightEyeRect = null;
             _blink.CancelClosure();
             _mouth.FaceMissing();
-            _tongueOut = false;
-            _tongueOutSince = null;
+            _tongue.FaceMissing();
             // (GazeEngine.FaceMissing dropped the gaze-smoothing state above.)
             if (_gaze.NoFaceFrames > GazeEngine.FaceLostFramesThreshold * 2)
             {
@@ -2093,8 +2074,7 @@ namespace ConditioningControlPanel.Services
             {
                 if (_tongueOut)
                 {
-                    _tongueOut = false;
-                    _tongueOutSince = null;
+                    _tongue.FaceMissing();
                     _maxTongueRatioThisFire = 0;
                 }
                 return;
@@ -2113,114 +2093,26 @@ namespace ConditioningControlPanel.Services
             var now = DateTime.UtcNow;
             MaybeLogTongueDiag(now);
 
-            bool nowOut = _tongueOut
-                ? tongueRatio > TongueLeaveRatio
-                : tongueRatio > TongueEnterRatio;
-
-            if (nowOut && !_tongueOut)
+            bool wasOut = _tongueOut;
+            bool fired = _tongue.Update(_mouthOpen, tongueRatio, now);
+            if (_tongueOut)
             {
-                _tongueOutSince = now;
-                _maxTongueRatioThisFire = tongueRatio;
-            }
-            else if (nowOut)
-            {
-                if (tongueRatio > _maxTongueRatioThisFire) _maxTongueRatioThisFire = tongueRatio;
-                if (_tongueOutSince.HasValue && _lastTongueOutAt < _tongueOutSince.Value)
+                if (!wasOut) _maxTongueRatioThisFire = tongueRatio;
+                else if (tongueRatio > _maxTongueRatioThisFire) _maxTongueRatioThisFire = tongueRatio;
+                if (fired)
                 {
-                    var outMs = (now - _tongueOutSince.Value).TotalMilliseconds;
-                    if (outMs >= MinTongueOutMs
-                        && (now - _lastTongueOutAt).TotalMilliseconds >= TongueCooldownMs)
-                    {
-                        _lastTongueOutAt = now;
-                        _tongueOutCount++;
-                        Dispatch(() => OnTongueOut?.Invoke());
-                        // Debug, not Information — see blink fire log for reasoning.
-                        App.Logger?.Debug(
-                            "WebcamTrackingService: tongue-out #{N} FIRED (visible for {Ms:F0}ms, max ratio={Max:P0})",
-                            _tongueOutCount, outMs, _maxTongueRatioThisFire);
-                    }
+                    _tongueOutCount++;
+                    Dispatch(() => OnTongueOut?.Invoke());
+                    App.Logger?.Debug(
+                        "WebcamTrackingService: tongue-out #{N} FIRED (visible for {Ms:F0}ms, max ratio={Max:P0})",
+                        _tongueOutCount, _tongue.HeldMilliseconds(now), _maxTongueRatioThisFire);
                 }
             }
-            else if (!nowOut && _tongueOut)
-            {
-                _tongueOutSince = null;
-                _maxTongueRatioThisFire = 0;
-            }
-
-            _tongueOut = nowOut;
+            else if (wasOut) _maxTongueRatioThisFire = 0;
         }
 
         private static double ComputeTongueRatio(Mat bgr, float[][] landmarks,
-            out int tongue, out int teeth, out int shadow, out int other)
-        {
-            tongue = teeth = shadow = other = 0;
-
-            // Build polygon in source-frame pixel coords + bounding box.
-            int n = InnerLipPolygonIndices.Length;
-            var pts = new CvPoint[n];
-            int xMin = int.MaxValue, yMin = int.MaxValue, xMax = int.MinValue, yMax = int.MinValue;
-            for (int i = 0; i < n; i++)
-            {
-                int px = (int)Math.Round(landmarks[InnerLipPolygonIndices[i]][0]);
-                int py = (int)Math.Round(landmarks[InnerLipPolygonIndices[i]][1]);
-                pts[i] = new CvPoint(px, py);
-                if (px < xMin) xMin = px;
-                if (py < yMin) yMin = py;
-                if (px > xMax) xMax = px;
-                if (py > yMax) yMax = py;
-            }
-
-            // Clip bbox to source frame; bail if degenerate.
-            xMin = Math.Max(0, xMin);
-            yMin = Math.Max(0, yMin);
-            xMax = Math.Min(bgr.Width - 1, xMax);
-            yMax = Math.Min(bgr.Height - 1, yMax);
-            int bbW = xMax - xMin + 1;
-            int bbH = yMax - yMin + 1;
-            if (bbW < 4 || bbH < 4) return 0.0;
-
-            // Translate polygon into bbox-local coords for the mask.
-            var localPts = new CvPoint[n];
-            for (int i = 0; i < n; i++)
-                localPts[i] = new CvPoint(pts[i].X - xMin, pts[i].Y - yMin);
-
-            using var mask = new Mat(bbH, bbW, MatType.CV_8UC1, Scalar.All(0));
-            Cv2.FillPoly(mask, new[] { localPts }, Scalar.All(255));
-
-            using var crop = new Mat(bgr, new CvRect(xMin, yMin, bbW, bbH));
-            using var hsv = new Mat();
-            Cv2.CvtColor(crop, hsv, ColorConversionCodes.BGR2HSV);
-
-            // Walk pixels by raw byte access for speed (avoids per-pixel C# Mat
-            // indexer calls). HSV is CV_8UC3, so 3 bytes per pixel, row-major.
-            int total = bbW * bbH;
-            var hsvBytes = new byte[total * 3];
-            System.Runtime.InteropServices.Marshal.Copy(hsv.Data, hsvBytes, 0, hsvBytes.Length);
-            var maskBytes = new byte[total];
-            System.Runtime.InteropServices.Marshal.Copy(mask.Data, maskBytes, 0, maskBytes.Length);
-
-            for (int i = 0; i < total; i++)
-            {
-                if (maskBytes[i] == 0) continue;
-                byte h = hsvBytes[3 * i + 0];
-                byte s = hsvBytes[3 * i + 1];
-                byte v = hsvBytes[3 * i + 2];
-
-                // Order matters: shadow first (V is dominant), then teeth (V high
-                // + S low), then tongue (red-pink hue + saturated + bright enough),
-                // else "other" (lip surface, in-between).
-                if (v < ShadowMaxVal) { shadow++; continue; }
-                if (v >= TeethMinVal && s <= TeethMaxSat) { teeth++; continue; }
-                bool inHue = (h >= TongueHueLow1 && h <= TongueHueHigh1)
-                          || (h >= TongueHueLow2 && h <= TongueHueHigh2);
-                if (inHue && s >= TongueMinSat && v >= TongueMinVal) { tongue++; continue; }
-                other++;
-            }
-
-            int valid = tongue + other;     // exclude teeth and shadow from the denominator
-            if (valid < 8) return 0.0;      // too few useful pixels to trust the ratio
-            return (double)tongue / valid;
-        }
+            out int tongue, out int teeth, out int shadow, out int other) => TongueDetector.Ratio(bgr, landmarks, out tongue, out teeth, out shadow, out other);
 
         private void MaybeLogTongueDiag(DateTime now)
         {

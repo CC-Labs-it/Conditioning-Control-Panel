@@ -171,6 +171,7 @@
 /* the small doors: past games, profile, ladder, pictures, as four tiles you can press */
 .door-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .door-tiles.three { grid-template-columns: repeat(3, 1fr); }
+.door-tiles.five { grid-template-columns: repeat(5, 1fr); }
 .door-tile {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-width: 0;
   min-height: 66px; padding: 9px 4px 8px; border-radius: 14px; cursor: pointer;
@@ -213,6 +214,12 @@
 .setup-row { display: grid; grid-template-columns: 92px 1fr; align-items: center; gap: 8px; }
 .setup-k { font: 500 12px/1.2 var(--d-face); opacity: 0.65; }
 .setup-row .level-row { justify-content: flex-start; }
+
+/* the wardrobe: one row a slot; what you do not own stays on the shelf, locked, saying where it is */
+.wardrobe { display: grid; gap: 12px; margin: 4px 0 10px; }
+.level-pill.locked { opacity: 0.5; cursor: default; display: inline-flex; flex-direction: column; align-items: center; gap: 2px; }
+.level-pill.locked:hover { transform: none; border-color: rgba(251, 241, 226, 0.12); }
+.ward-lock { font: 500 10px/1.1 var(--d-face); opacity: 0.8; }
 
 /* --- the stamp: the opening card's "Mostly.", a word that lands tilted with an ink edge --- */
 .door-stamp {

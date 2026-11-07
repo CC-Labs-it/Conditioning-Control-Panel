@@ -11,6 +11,10 @@ effects close these windows. No remote picture becomes a GPU texture, and no ser
 Pause freezes the seven-second picture changes; source-off, feed expiry and disposal clear them.
 The origin-clean desktop clip path below remains independent.
 
+Phone path (2026-10-31, `host/devicePictures.js`): the phone host serves cached stills from the page's own
+loopback origin, so they are real textures on the same prewarmed owners as clips: `setSource` with a borrowed
+canvas, then `swapStill` in place. One upload per picture, 640 px long edge, owners = `mediaClipLimit` (phone 3).
+
 Files: `render/media.js` (three.js), `render/mediaMath.js` (three-free placement, fitting, budget, url
 guard), `render/mediaPlaceholders.js` (the placeholder programs, three-free), `tracks/threshold.media.json`
 (the layout), `tests/render-media.test.mjs`.

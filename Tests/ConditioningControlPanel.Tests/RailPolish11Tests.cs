@@ -22,6 +22,7 @@ namespace ConditioningControlPanel.Tests;
 /// carries an inner shadow ring and a small crisp specular crescent instead of a milky veil.
 /// CCP_RAIL11_DIR saves rail renders for a look.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class RailPolish11Tests
 {
     private const double RailColumnHeight = 901 - 36;

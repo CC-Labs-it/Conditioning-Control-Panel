@@ -204,38 +204,6 @@ namespace ConditioningControlPanel
         // silent, and only a user-initiated start earns a toast.
         // ==============================================================================
 
-        /// <summary>What a flash image can be. Mirrors the loader in FlashService.</summary>
-        private static readonly string[] FlashImageExtensions =
-            { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp" };
-
-        /// <summary>Wallpapers are set through Windows, which will not take a webp or a gif.</summary>
-        private static readonly string[] WallpaperImageExtensions =
-            { ".jpg", ".jpeg", ".png", ".bmp" };
-
-        /// <summary>
-        /// Cheap "is there anything at all in here" probe: stops at the first hit rather than
-        /// enumerating the folder, so it costs nothing on a full library and nothing on an
-        /// empty one. Any IO failure counts as "do not nag".
-        /// </summary>
-        private static bool FolderHasAnyMedia(string folder, string[] extensions)
-        {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return false;
-                foreach (var file in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories))
-                {
-                    var ext = Path.GetExtension(file);
-                    if (string.IsNullOrEmpty(ext)) continue;
-                    foreach (var wanted in extensions)
-                    {
-                        if (string.Equals(ext, wanted, StringComparison.OrdinalIgnoreCase)) return true;
-                    }
-                }
-                return false;
-            }
-            catch { return true; }
-        }
-
         /// <summary>
         /// True only when the media pool really is the local folder. With Reddit media on
         /// ("online" or "mixed") an empty folder is not a problem to report.
@@ -264,7 +232,7 @@ namespace ConditioningControlPanel
                 if (!IsLocalOnlyMediaSource(s)) return;
 
                 var imagesDir = Path.Combine(App.EffectiveAssetsPath ?? string.Empty, "images");
-                if (FolderHasAnyMedia(imagesDir, FlashImageExtensions)) return;
+                if (NotificationLibrary.HasMedia(imagesDir, wallpaper: false)) return;
 
                 App.Notifications?.Show(
                     string.Format(Loc.Get("msg_no_flash_images"), Loc.Get("nav_door_library"), Loc.Get("tab_assets")),
@@ -295,7 +263,7 @@ namespace ConditioningControlPanel
                 var dir = !string.IsNullOrWhiteSpace(custom) && Directory.Exists(custom)
                     ? custom
                     : Path.Combine(App.EffectiveAssetsPath ?? string.Empty, "wallpapers");
-                if (FolderHasAnyMedia(dir, WallpaperImageExtensions)) return;
+                if (NotificationLibrary.HasMedia(dir, wallpaper: true)) return;
 
                 App.Notifications?.Show(
                     string.Format(Loc.Get("msg_no_wallpaper_images"), Loc.Get("nav_door_library"), Loc.Get("tab_assets")),
@@ -349,6 +317,10 @@ namespace ConditioningControlPanel
                 // every few seconds and must not stack toasts.
                 if (!systemInitiated) WarnIfFlashLibraryEmpty();
             }
+
+            // Collage wallpaper: an ambient desktop effect, runs for any session (incl. audio-only).
+            // Self-suppresses unless CollageWallpaperEnabled is on.
+            App.Wallpaper?.StartCollage();
 
             if (!audioOnly && settings.MandatoryVideosEnabled)
                 App.Video.Start();
@@ -498,6 +470,12 @@ namespace ConditioningControlPanel
         {
             // Stop flash first (safe, no complex cleanup)
             App.Flash.Stop();
+
+            // Collage wallpaper: stop composing and put the user's real wallpaper back, unless
+            // "Run with CCP" keeps it up while CCP is open. Panic never gets here first (KillAllAudio).
+            // engineRunning: false = "after this stop"; App.IsEngineRunning is still true here.
+            if (!Services.WallpaperService.ShouldBeUp(App.Settings?.Current, engineRunning: false))
+                App.Wallpaper?.StopCollage();
 
             // Stop stops everything (owner, 7.1.8): the audio player with a playlist goes quiet
             // with the engine. The list stays. StartEngine never touches the player.

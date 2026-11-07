@@ -50,8 +50,11 @@ public sealed class ChasterLadderTests
 
     private static async Task Run(Func<ChasterService, FakeProxy, Task> body, string? overrideUrl = "http://127.0.0.1:47999/")
     {
+        // Match the desktop builder: a fresh testhost must resolve Fredoka without system fonts
+        // or another fixture registering the app's bundled font mappings first.
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var settings = new SettingsService();
@@ -87,6 +90,84 @@ public sealed class ChasterLadderTests
     }
 
     private static Point Centre(Window w, Control c) => c.TranslatePoint(new Point(c.Bounds.Width / 2, c.Bounds.Height / 2), w)!.Value;
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task ServiceCardUpdatesDotsWithoutRedrawingTheSheet(bool subscribed) => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, _) =>
+    {
+        var oldId = CoreAccount.UnifiedUserId;
+        CoreAccount.UnifiedUserId = "raffle-owner";
+        chaster.WatchIdentity();
+        var tab = new ChasterTabView();
+        tab.Subscribe(true);
+        try
+        {
+            var first = new DateTime(2026, 10, 1);
+            tab.BuildCalendar((first, first.AddDays(4)), first.AddDays(4));
+            var grid = tab.FindControl<UniformGrid>("Calendar")!;
+            var square = (Border)grid.Children[0];
+            var plate = (Panel)square.Child!;
+            var cross = plate.Children.Last();
+            Assert.DoesNotContain(plate.Children.OfType<global::Avalonia.Controls.Shapes.Ellipse>(), e => Equals(e.Tag, ChasterTabView.RaffleDotTag));
+            Assert.NotNull(await chaster.RaffleAsync());
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(square, grid.Children[0]);
+            Assert.Contains(cross, plate.Children);
+            Assert.Single(plate.Children.OfType<global::Avalonia.Controls.Shapes.Ellipse>(), e => Equals(e.Tag, ChasterTabView.RaffleDotTag));
+            tab.ShowRaffleCard(chaster.LastRaffleCard); // the page also cached this account's card
+            if (!subscribed) tab.Subscribe(false);
+            CoreAccount.UnifiedUserId = subscribed ? null : "raffle-other";
+            Dispatcher.UIThread.RunJobs();
+            if (!subscribed) tab.RefreshCalendarRaffle(); // next visit, without a live subscription
+            Assert.DoesNotContain(plate.Children.OfType<global::Avalonia.Controls.Shapes.Ellipse>(), e => Equals(e.Tag, ChasterTabView.RaffleDotTag));
+            Assert.False(tab.FindControl<DockPanel>("CalendarRaffleKey")!.IsVisible);
+        }
+        finally { tab.Subscribe(false); CoreAccount.UnifiedUserId = oldId; }
+    }));
+
+    [Fact]
+    public void CreatedServiceWatchesIdentityUntilDisposed()
+    {
+        using var chaster = ChasterHead.Create("sandbox", null, new FakeProxy());
+        var epoch = chaster.RaffleEpoch;
+        CoreAccount.UnifiedUserId = "sync7-created-service";
+        Assert.Equal(epoch + 1, chaster.RaffleEpoch);
+        chaster.Dispose();
+        CoreAccount.UnifiedUserId = null;
+        Assert.Equal(epoch + 1, chaster.RaffleEpoch);
+    }
+
+    [Fact]
+    public Task AccountChangeDropsThePageCardAndStopsListeningOnDispose() => AvaloniaTestDispatcher.RunAsync(async () =>
+        await Run(async (chaster, _) =>
+        {
+            var tab = new ChasterTabView();
+            var w = new Window { Content = tab };
+            w.Show();
+            try
+            {
+                tab.ShowRaffleCard(await chaster.RaffleAsync());
+                Assert.NotEmpty(tab.FindControl<WrapPanel>("RafflePips")!.Children);
+                var epoch = chaster.RaffleEpoch;
+                CoreAccount.UnifiedUserId = "sync7-other-account";
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(epoch + 1, chaster.RaffleEpoch);
+                Assert.Null(chaster.LastRaffleCard);
+                Assert.Empty(tab.FindControl<WrapPanel>("RafflePips")!.Children);
+                tab.IsVisible = false;
+                tab.ShowRaffleCard(await chaster.RaffleAsync());
+                CoreAccount.UnifiedUserId = null;
+                tab.IsVisible = true;
+                Dispatcher.UIThread.RunJobs();
+                Assert.Empty(tab.FindControl<WrapPanel>("RafflePips")!.Children);
+                chaster.Dispose();
+                epoch = chaster.RaffleEpoch;
+                CoreAccount.UnifiedUserId = "sync7-after-dispose";
+                Assert.Equal(epoch, chaster.RaffleEpoch);
+            }
+            finally { w.Close(); }
+        }));
 
     [Fact]
     public Task RaffleReachesOnlyTheLoopbackProxy() => AvaloniaTestDispatcher.RunAsync(async () =>

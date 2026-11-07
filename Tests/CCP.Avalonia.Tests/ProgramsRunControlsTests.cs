@@ -6,6 +6,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Models;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
@@ -30,6 +33,42 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed class ProgramsRunControlsTests
 {
+    [Fact]
+    public Task RitualCelebratesCurrentCardAfterImmediateAndQueuedRefreshes() => Run(async (shell, tab, svc, path) =>
+    {
+        shell.Width = 1400;
+        shell.Height = 900;
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        CoreSettings.Current.PerformanceMode = false;
+        BeatLoop.Time = new SteppedTime();
+        ProgramCapabilities.RitualsAvailable = true;
+        var enrollment = svc.Enroll(svc.Library.First(p => p.Id == "first_week"))!;
+        enrollment.CurrentDay = 6;
+        enrollment.GetOrCreateRecord(6, enrollment.CurrentDayDate);
+        tab.RefreshPrograms();
+        Dispatcher.UIThread.RunJobs();
+        const string taskId = "d6_ritual_pink";
+        var photo = Path.Combine(Path.GetDirectoryName(path)!, "photo.png");
+        File.WriteAllBytes(photo, new byte[] { 1 });
+        MainShellWindow.RitualPhotoPicker = _ => Task.FromResult<(bool, string?)>((true, photo));
+        var before = tab.CompletionBursts;
+        await shell.SubmitProgramRitualAsync(taskId); // immediate refresh, with TodayChanged still queued
+        Assert.Contains(taskId, svc.TodayRecord!.CompletedTaskIds);
+        tab.RefreshPrograms(); // replace the first completed-task ItemsSource again before Loaded
+        Dispatcher.UIThread.RunJobs();
+        var card = tab.GetVisualDescendants().OfType<Border>()
+            .Single(b => b.Name == "TaskCard" && b.DataContext is ProgramTaskItem t && t.TaskId == taskId);
+        Assert.Equal(.93, ((ScaleTransform)card.RenderTransform!).ScaleX, 3);
+        var chip = card.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TaskDoneChip");
+        Assert.Equal(.2, ((ScaleTransform)chip.RenderTransform!).ScaleX, 3);
+        Assert.Equal(before + 1, tab.CompletionBursts);
+        var loops = BeatLoop.Running.Count(b => b.Owner == card || b.Owner == chip);
+        tab.RefreshPrograms();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(before + 1, tab.CompletionBursts);
+        Assert.Equal(2, loops);
+    });
+
     [Fact]
     public Task PauseResumeRestartDismissAndRitualFromTheRunPanel() => Run(async (shell, tab, svc, path) =>
     {

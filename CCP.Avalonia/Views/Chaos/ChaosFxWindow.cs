@@ -146,7 +146,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         public void Pulse(Color color, double strength)
         {
             _vignette.Border.Background = Edge(color, 0.9, 1.0, 0.45);
-            Run(_vignette, ChaosFxEnvelope.Pulse(_vignette.Border.Opacity, strength));
+            Run(_vignette, ChaosFxEnvelope.Pulse(_vignette.Border.Opacity, strength,
+                ConditioningControlPanel.Services.Safety.GentleVisuals.On));
         }
 
         private void Run(Layer layer, ChaosFxRamp ramp)

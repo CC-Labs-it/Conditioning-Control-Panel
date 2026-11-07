@@ -484,14 +484,14 @@ public sealed class VaultGateDialog : Window
     /// account reads the full list.</summary>
     private static readonly string[] BasicPerks =
     {
-        "vaultgate_basic_1", "vaultgate_basic_2", "vaultgate_basic_3", "vaultgate_basic_4",
+        "vaultgate_basic_1", "vaultgate_basic_10", "vaultgate_basic_2", "vaultgate_basic_3", "vaultgate_basic_4",
         "vaultgate_basic_5", "vaultgate_basic_6", "vaultgate_basic_7", "vaultgate_basic_8",
         "vaultgate_basic_9",
     };
 
     private static readonly string[] PrimePerks =
     {
-        "vaultgate_prime_1", "vaultgate_prime_2", "vaultgate_prime_3", "vaultgate_prime_4",
+        "vaultgate_prime_8", "vaultgate_prime_1", "vaultgate_prime_3", "vaultgate_prime_4",
         "vaultgate_prime_6", "vaultgate_prime_7",
     };
 

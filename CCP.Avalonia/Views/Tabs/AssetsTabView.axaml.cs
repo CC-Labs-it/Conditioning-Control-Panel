@@ -37,8 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///
     /// The remote media picker is ported in AssetsTabView.MediaPicker.cs.
     ///
-    /// ponytail: not on this head yet - pack cards (the section is hidden in WPF too), video thumbnails (WPF uses the
-    /// Windows shell thumbnailer; videos draw the 🎬 placeholder), BtnCreatorDiscord /
+    /// ponytail: not on this head yet - pack cards (the section is hidden in WPF too), BtnCreatorDiscord /
     /// PacksScrollViewer wheel-to-pan. Pack-card hover FX is wired on the existing dormant template.
     /// </summary>
     public partial class AssetsTabView : UserControl
@@ -59,6 +58,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>Every thumbnail decode started by the last folder load (tests await it).</summary>
         internal Task ThumbnailLoads { get; private set; } = Task.CompletedTask;
+        internal Func<string, Task<Bitmap?>> LoadVideoThumbnail = Platform.VideoThumbnail.LoadAsync;
         internal bool MediaLogPulsing => _mediaLogPulse is { IsCancellationRequested: false };
         internal IReadOnlyList<AssetTreeItem> AssetTree => _assetTree;
         internal IReadOnlyList<AssetThumbnailViewModel> CurrentFolderFiles => _currentFolderFiles;
@@ -304,7 +304,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var rel = Rel(file);
                 var item = new AssetThumbnailViewModel(file, rel) { IsChecked = !S.DisabledAssetPaths.Contains(rel) };
                 _currentFolderFiles.Add(item);
-                if (!item.IsVideo) loads.Add(LoadThumbnailAsync(item, generation));
+                loads.Add(LoadThumbnailAsync(item, generation));
             }
             ThumbnailLoads = Task.WhenAll(loads);
         }
@@ -323,6 +323,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     try
                     {
                         if (generation != Volatile.Read(ref _thumbGeneration)) return null;
+                        // WPF MainWindow.Assets.cs:799-807, 921-925: local and decrypted pack video.
+                        if (item.IsVideo)
+                        {
+                            var path = item.PackFile != null
+                                ? item.PackStore?.GetPackFileTempPath(item.PackId!, item.PackFile)
+                                : item.FullPath;
+                            if (path == null) return null;
+                            try { return await LoadVideoThumbnail(path).ConfigureAwait(false); }
+                            finally
+                            {
+                                if (item.PackFile != null) item.PackStore?.DeleteTempFile(path);
+                            }
+                        }
+                        // WPF Assets.cs:921-937: the shell first for local images too (HEIC/AVIF), direct decode as fallback.
+                        if (item.PackFile == null && OperatingSystem.IsWindows()
+                            && Platform.ShellVideoThumbnail.Load(item.FullPath, _ => null) is { } shell) return shell;
                         using Stream? fs = item.PackFile != null
                             ? item.PackStore?.GetPackFileStream(item.PackId!, item.PackFile)
                             : File.OpenRead(item.FullPath);
@@ -495,6 +511,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// nothing autosaves: the explicit (debounced) save keeps the toggle across a restart.</summary>
         private static void InvalidateAssetPoolsAfterSelectionChange()
         {
+            Overlays.FlashOverlay.ReloadAssets();
             Overlays.MandatoryVideoOverlay.Instance.Scheduler.ReloadAssets();
             Windows.BubbleCountHost.Instance.Scheduler.ReloadAssets();
             CoreSettings.Save();

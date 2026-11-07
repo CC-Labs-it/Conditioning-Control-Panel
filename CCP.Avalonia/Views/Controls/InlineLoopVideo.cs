@@ -28,6 +28,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     public sealed class InlineLoopVideo : Image
     {
         private readonly string? _path;
+        internal bool Loops { get; }
         private MediaPlayer? _player;
         private Media? _media;
         private VlcFrameSink? _sink;
@@ -37,9 +38,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         /// <param name="randomStart">WPF GazeMinigameWindow.xaml.cs:976-989: once playing, jump to a
         /// random point in the first half of the clip.</param>
-        public InlineLoopVideo(string? clipPath, bool randomStart = false)
+        /// <param name="loop">False for WPF gaze rounds, which play once and retain the last frame.</param>
+        public InlineLoopVideo(string? clipPath, bool randomStart = false, bool loop = true)
         {
             _path = clipPath;
+            Loops = loop;
             if (randomStart) StartOffset = (float)(Random.Shared.NextDouble() * 0.5);
             Stretch = Stretch.UniformToFill;
         }
@@ -101,10 +104,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 System.Threading.Interlocked.Increment(ref LivePlayers);
                 _sink = new VlcFrameSink(player, () => _media, bmp => Source = bmp, () => { InvalidateVisual(); FrameShown?.Invoke(); });
                 // EndReached re-play is WPF's fallback in case :input-repeat isn't honoured.
-                player.EndReached += OnEndReached;
+                if (Loops) player.EndReached += OnEndReached;
                 if (StartOffset != null) player.Playing += OnFirstPlaying;
                 _media = new Media(vlc, _path, FromType.FromPath);
-                _media.AddOption(":input-repeat=65535"); // loop natively
+                if (Loops) _media.AddOption(":input-repeat=65535"); // loop natively
                 _media.AddOption(ConditioningControlPanel.Services.LibVlcSilence.NoAudioOption);           // muted; Mute would silence every player
                 player.Play(_media);
             }

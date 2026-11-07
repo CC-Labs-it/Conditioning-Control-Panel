@@ -67,6 +67,21 @@ export function lipLeave(prevQ, q) {
   return !!(prevQ && prevQ.onRoad && q && q.hole && q.hole.lip === true && !q.stone);
 }
 
+/**
+ * True when a flying kart moves from a field's void, still inside the snap band under the deck (the band sim/kart.js
+ * keeps on its own road: no void, no hole latch), onto supported ground: the next stone or the deck past the field.
+ * That is a landing even though the kart already sits a little under the deck plane. Without it a descending arc that
+ * crosses deck level over the void met the next deck's front edge from below and fell through it (Threshold, after
+ * the second stone, owner 2026-10-30). clearSpeed() assumes exactly this catch.
+ * @param {object} prevQ the query at the start of the tick
+ * @param {object} q the query after the move
+ * @param {number} snapM the landing snap band (kart.snapM)
+ */
+export function fromLipVoid(prevQ, q, snapM) {
+  return !!(prevQ && q && prevQ.hole && prevQ.hole.lip === true && !prevQ.stone && prevQ.height > -snapM &&
+    q.onRoad && !q.hole && (prevQ.forkId || null) === (q.forkId || null));
+}
+
 /** A broad landing deck renews an early hop once at its actual lip, never over the rest of the void. */
 export function broadPlatformEdgeKick(track, prevQ, q, normalSpeed, kickUpMps) {
   const stone = prevQ?.stone;

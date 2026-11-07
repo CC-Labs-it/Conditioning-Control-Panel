@@ -14,7 +14,7 @@ namespace ConditioningControlPanel.Services
     /// from the user's chosen wallpapers folder (settings.WallpaperSourceFolder, or the
     /// default assets/wallpapers folder). Restores the original on deactivate/dispose.
     /// </summary>
-    public class WallpaperService : IDisposable
+    public partial class WallpaperService : IDisposable
     {
         [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern int SystemParametersInfo(int uAction, int uParam, string? lpvParam, int fuWinIni);
@@ -229,6 +229,12 @@ namespace ConditioningControlPanel.Services
         {
             lock (_lock)
             {
+                // While the collage owns the desktop, external teardown callers (Autonomy pulse revert,
+                // KillAllAudio panic, remote-control) must NOT restore + clear the #692 breadcrumb out
+                // from under it. StopCollage clears _collageRunning BEFORE it calls Deactivate, so its
+                // own restore still runs.
+                if (_collageRunning) return;
+
                 if (!_isActive) return;
 
                 try
@@ -242,7 +248,7 @@ namespace ConditioningControlPanel.Services
                         if (neutral != null) SetWallpaper(neutral, "neutral");
                         App.Logger?.Warning("[Wallpaper] No usable original to restore: an online picture was up, a neutral one replaces it");
                     }
-                    else if (string.IsNullOrWhiteSpace(original) || !File.Exists(original))
+                    else if (!IsRestorable(original))
                     {
                         // Never hand SPI_SETDESKWALLPAPER an empty/missing path: Windows clears the
                         // desktop to a flat colour and writes that to the registry (#692).
@@ -253,10 +259,12 @@ namespace ConditioningControlPanel.Services
                         // Queued, never waited on (#1453). The breadcrumb is dropped only once
                         // Windows took the restore, and only if nothing re-activated meanwhile; a
                         // refusal keeps it so the next launch gets another go at it.
-                        _setQueue.Enqueue(original).ContinueWith(t =>
+                        var target = RestoreTarget(original!);
+                        _setQueue.Enqueue(target).ContinueWith(t =>
                         {
                             if (t.Result)
                             {
+                                DropFrozenOriginal(target);
                                 App.Logger?.Information("[Wallpaper] Restored original wallpaper");
                                 OnUi(() =>
                                 {
@@ -298,6 +306,10 @@ namespace ConditioningControlPanel.Services
         {
             lock (_lock)
             {
+                // The collage owns the desktop while it runs; don't let the Takeover/Autonomy shuffle
+                // swap a raw pool image in over a composed collage.
+                if (_collageRunning) return false;
+
                 if (!_isActive) return Activate();
 
                 // Never stack writes behind a slow one: a shuffle is cosmetic, skip it.
@@ -807,7 +819,7 @@ namespace ConditioningControlPanel.Services
             var stale = s?.WallpaperOriginalPath;
             if (s == null || string.IsNullOrWhiteSpace(stale)) return;
 
-            if (!File.Exists(stale))
+            if (!IsRestorable(stale))
             {
                 App.Logger?.Warning("[Wallpaper] Stale original {Path} could not be restored (gone)", stale);
                 s.WallpaperOriginalPath = "";
@@ -818,8 +830,10 @@ namespace ConditioningControlPanel.Services
             // Queued: this runs at startup on the UI thread, and the old synchronous SENDCHANGE
             // write is what froze the first seconds of a launch (#1453). Activate refuses while
             // it is in flight, so the restore can never be captured as "the original".
-            _setQueue.Enqueue(stale).ContinueWith(t =>
+            var staleTarget = RestoreTarget(stale);
+            _setQueue.Enqueue(staleTarget).ContinueWith(t =>
             {
+                if (t.Result) DropFrozenOriginal(staleTarget);
                 if (t.Result)
                     App.Logger?.Information("[Wallpaper] Previous session never restored - put {File} back", Path.GetFileName(stale));
                 else
@@ -841,6 +855,7 @@ namespace ConditioningControlPanel.Services
             _disposed = true;
             // Order matters: Deactivate puts the user's own wallpaper back on the desktop, and
             // only then is it safe to delete the temp file the desktop was pointing at.
+            StopCollage();        // clears _collageRunning so Deactivate's guard doesn't skip the restore
             Deactivate();
             // The restore is queued; give it a bounded moment before the temp files go. A timeout
             // keeps the breadcrumb, so the next launch puts the wallpaper back.

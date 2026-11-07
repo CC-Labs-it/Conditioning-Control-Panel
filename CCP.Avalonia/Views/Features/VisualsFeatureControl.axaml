@@ -108,6 +108,24 @@
                                            FontSize="13" FontWeight="Bold"/>
                             </Grid>
 
+                            <!-- #1194 (WPF VisualsFeatureControl.xaml:107-123): animated flashes only. 1.0x is the
+                                 file's own timing; the row simply disappears into the same dial stack. -->
+                            <Grid Height="36" Background="Transparent" ToolTip.Tip="{loc:Str tooltip_playback_speed_for_animated_flash_images_gif}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="56"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{loc:Str setting_gif_speed}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <Slider Grid.Column="1" Theme="{StaticResource PinkSlider}" x:Name="SliderGifSpeed" Minimum="0.25" Maximum="4" Value="1"
+                                        SmallChange="0.25" LargeChange="0.25" TickFrequency="0.25" IsSnapToTickEnabled="True"
+                                        VerticalAlignment="Center" Margin="14,0"/>
+                                <TextBlock Grid.Column="2" x:Name="TxtGifSpeed" Text="1.0x" HorizontalAlignment="Right"
+                                           VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
+                                           FontSize="13" FontWeight="Bold"/>
+                            </Grid>
+
                             <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
                             <!-- Link to Audio. Deliberately NOT SessionLock.Owned: killing sound is the one
@@ -131,7 +149,7 @@
                     BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
                     Background="{StaticResource SectionHueStudioWashBrush}"
                     VerticalAlignment="Stretch" MinHeight="200">
-                <fx:IconGlyph Kind="Eye" Size="120" Opacity="0.18"
+                <fx:IconGlyph Kind="Eye" Variant="Filled" Size="120" Opacity="0.18"
                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
         </Grid>

@@ -5,8 +5,7 @@
 // The mic opens only under WPF's conditions: VoiceInputRules.ModesToRun (consent + an armed mode +
 // premium or the "voice" free day + an available engine), re-read at every reconcile.
 // ponytail: no sherpa KWS spotter (the Vosk wake grammar is WPF's fallback path). Intents with no
-// seam here (spiral, pink, mind wipe, quiz, keyword triggers, bubble count, shake, deeper,
-// session pause/resume, volume/mute, video pause/resume) are left out of the grammar.
+// seam here (keyword triggers, deeper) are left out of the grammar.
 
 using System;
 using System.Linq;
@@ -128,18 +127,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             "bubbles_off" when CoreBubbles.StopAction != null => CoreBubbles.Stop,
             "video_on" when CoreEngine.Video != null => () => CoreEngine.Video?.Trigger(),
             "video_off" when CoreEngine.Video != null => () => CoreEngine.Video?.Stop(),
+            "video_pause" when CoreEngine.Video == MandatoryVideoOverlay.Instance.Scheduler => MandatoryVideoOverlay.Instance.PausePrimary,
+            "video_resume" when CoreEngine.Video == MandatoryVideoOverlay.Instance.Scheduler => MandatoryVideoOverlay.Instance.PlayPrimary,
+            "shake_once" => () => Deeper.ScreenShake.Shake(60, 1200),
+            "pause" => PauseSessionFromRemote,
+            "resume" => ResumeSessionFromRemote,
             "flash_once" when CoreFlash.ShowProvider != null => () => CoreFlash.ShowProvider?.Invoke(),
             "subliminals_on" when CoreSubliminal.ShowProvider != null => CoreSubliminal.Start,
             "subliminals_off" when CoreSubliminal.ShowProvider != null => CoreSubliminal.Stop,
             "bouncing_on" when CoreBouncingText.StartAction != null => CoreBouncingText.Start,
             "bouncing_off" when CoreBouncingText.StopAction != null => CoreBouncingText.Stop,
+            // WPF Services/AutonomyService.VoiceCommandHost.cs:84-112: sustained effects, toys and audio.
+            "spiral_on" => () => SpiralOverlay.SetVoiceHold(this, true),
+            "spiral_off" => () => SpiralOverlay.SetVoiceHold(this, false),
+            "pink_on" => () => PinkFilterOverlay.SetVoiceHold(this, true),
+            "pink_off" => () => PinkFilterOverlay.SetVoiceHold(this, false),
+            "wipe_once" when CoreMindWipe.TriggerOnceProvider != null => CoreMindWipe.TriggerOnce,
+            "quiz_once" when CoreEngine.PopQuiz != null => () => CoreEngine.PopQuiz?.Show(),
+            "count_once" when CoreEngine.BubbleCount != null => () => CoreEngine.BubbleCount?.Trigger(forceTest: true),
+            "mantra" => () => { }, // Core returns this intent to the existing spoken-mantra funnel.
             "lock_once" when CoreLockCard.ShowHandler != null => () => CoreLockCard.Show(),
             "freeze_once" when CoreSubliminal.BambiFreezeProvider != null => CoreSubliminal.TriggerBambiFreeze,
             "takeover_on" => () => Autonomy.Start(),
             "takeover_off" => () => Autonomy.Stop(),
+            "mute" => () => ApplyVoiceMute(true),
+            "unmute" => () => ApplyVoiceMute(false),
+            "louder" => () => AdjustMasterVolume(15),
+            "quieter" => () => AdjustMasterVolume(-15),
             "stop_listening" => StopVoiceInput,
             _ => null,
         };
+
+        // Mute, unmute, louder and quieter run MainShellWindow.Patreon.cs ApplyVoiceMute / AdjustMasterVolume
+        // (WPF MainWindow.Patreon.cs:2233 / :2286, Core VoiceAudioState keeps the pre-mute volume and the 70% fallback).
 
         /// <summary>WPF TriggerPanicFromRemote: the spoken safe word. Hard rule 6 (owner, 2026-10-22, WPF
         /// 769373c28): it reaches exactly as far as the panic key (Core VoicePanicReach). Under Lockdown or

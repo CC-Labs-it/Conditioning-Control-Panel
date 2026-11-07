@@ -112,7 +112,7 @@ public sealed class ShellLabTabTests
         {
             s.RestrictGazeContentToCalibratedScreen = true;
             WebcamScreens.Enumerate = () => screens;
-            WebcamTracker.Instance.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord { DeviceName = WebcamScreens.Name(second) } };
+            WebcamTracker.Instance.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord { DeviceName = WebcamScreens.Name(second), DpiScale = second.Scaling } };
             Assert.True(GazeFocus.TargetOnCalibratedScreen(new Rect(-1100, 100, 100, 100)));
             Assert.False(GazeFocus.TargetOnCalibratedScreen(new Rect(100, 100, 100, 100)));
             var bubble = new AmbientBubble { X = 100, Y = 100, Size = 100, Clickable = true };
@@ -122,7 +122,10 @@ public sealed class ShellLabTabTests
             try
             {
                 gaze.MasterEnabled = true;
-                gaze.HandleGazeMove(new Point(150, 150)); gaze.HandleBlink();
+                // HandleGazeMove accepts monitor-local DIPs; the bubble lives in desktop DIPs.
+                var localGaze = new Point(150 - second.Bounds.X / second.Scaling, 150 - second.Bounds.Y / second.Scaling);
+                Assert.Equal(new Point(150, 150), GazeFocus.GazeToDesktop(localGaze));
+                gaze.HandleGazeMove(localGaze); gaze.HandleBlink();
                 Assert.Equal(0, pops); // actual selection excludes the other screen
                 s.RestrictGazeContentToCalibratedScreen = false;
                 gaze.HandleBlink();

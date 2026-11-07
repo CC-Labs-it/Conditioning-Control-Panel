@@ -21,6 +21,7 @@ import { lerp, clamp } from '../core/math.js';
 import { gap } from './gaps.js';
 import { applyBoost } from './boost.js';
 import { tickTrick } from './trick.js';
+import { NEUTRAL_KART } from './kartStats.js';
 
 // per-kart drift extras beside the frozen state layout, keyed by the state array
 const SIDE = new WeakMap();
@@ -86,7 +87,7 @@ function release(st, feel, events) {
 export function driftYaw(st, steer, feel, gripYaw) {
   const dir = st[S.driftDir];
   const tight = lerp(feel.get('drift.tightMin'), feel.get('drift.tightMax'), (clamp(steer * dir, -1, 1) + 1) / 2);
-  return dir * feel.get('drift.yawMul') * gripYaw * tight;
+  return dir * feel.get('drift.yawMul') * (1 + ((feel.kart || NEUTRAL_KART).driftMul - 1) / 2) * gripYaw * tight;
 }
 
 /** One tick: the trick clock, a power slide start, then a running drift's release, cancels, charge and tiers. */
@@ -102,12 +103,12 @@ export function updateDrift(st, a, feel, dt, events, grounded, speed, slipDeg) {
   // a power slide with the throttle held: give back the brake kart.js took, run the throttle it skipped
   // (the engine's band ramp), keep a light drag
   if (r.brake && a.brake > 0 && a.brake >= a.throttle && a.throttle >= feel.get('drift.brakeThrottleMin') && st[S.engineV] > 0) {
-    const top = feel.get('speed.topMps');
+    const top = feel.get('speed.topMps'), K = feel.kart || NEUTRAL_KART, cap = top * K.topMul;
     let e = st[S.engineV];
     e = Math.min(Math.max(e, r.prevE), e + feel.get('engine.brakeMps2') * a.brake * dt);
-    if (e < top) {
+    if (e < cap) {
       const g = feel.get('engine.bandGains'), band = clamp(Math.floor(e / top * g.length), 0, g.length - 1);
-      e = Math.min(top, e + g[band] * top * a.throttle * dt);
+      e = Math.min(cap, e + g[band] * top * a.throttle * K.accelMul * dt);
     }
     st[S.engineV] = Math.max(0, e - feel.get('drift.brakeDragMps2') * dt);
   }
@@ -126,9 +127,9 @@ export function updateDrift(st, a, feel, dt, events, grounded, speed, slipDeg) {
   const m = gap(feel, 'drift.steerMin'), into = a.steer * dir;
   const mul = into > m ? feel.get('drift.softInMul') : into < -m ? feel.get('drift.softOutMul') : 1;
   st[S.driftCharge] += dt * mul;
-  const tiers = feel.get('drift.tierS');
+  const tiers = feel.get('drift.tierS'), quick = (feel.kart || NEUTRAL_KART).driftMul;   // the body's drift charges its tiers sooner
   let tier = 0;
-  while (tier < tiers.length && st[S.driftCharge] >= tiers[tier]) tier++;
+  while (tier < tiers.length && st[S.driftCharge] >= tiers[tier] / quick) tier++;
   if (tier > st[S.driftStage]) {
     st[S.driftStage] = tier;
     events.emit('drift-tier', { tier, dir });

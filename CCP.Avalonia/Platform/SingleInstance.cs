@@ -1,7 +1,7 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
-using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -10,42 +10,42 @@ using System.Threading.Tasks;
 namespace ConditioningControlPanel.Avalonia.Platform
 {
     /// <summary>
-    /// WPF's single-instance gate (App.xaml.cs:1819-1922) on both OSes. The mutex name is WPF's, because the
+    /// WPF's single-instance gate (App.xaml.cs:2056-2223) on both OSes. The mutex name is WPF's, because the
     /// installer's AppMutex and InitializeSetup look for it. WPF's named EventWaitHandles do not exist on Unix,
     /// so the show request and its ack travel over a named pipe (a Unix socket on Linux) instead. The request
     /// carries WPF's surface handoff (LauncherHandoff payload, App.xaml.cs:1951) in place of its handoff file:
-    /// one length byte for short payloads, or 255 and a four-byte length for long UTF-8 payloads; 0 is bare.
-    /// That framing and file requests use the "_v2" pipe. The original pipe keeps the one-byte framing, so
-    /// older builds (which route any payload as a surface) only ever exchange surface payloads with this one.
+    /// one length byte (255 introduces a four-byte little-endian length, capped at 65536 bytes),
+    /// then the UTF-8 payload; length 0 is a bare relaunch.
     /// </summary>
     internal sealed class SingleInstance : IDisposable
     {
         public const string MutexName = "ConditioningControlPanel_SingleInstance_Mutex";
-        internal const int MaxPayloadBytes = 131072;
-        internal const string V2Suffix = "_v2";
-        const int LegacyFallbackAfterMs = 2000;
-        const int ShowAckTimeoutMs = 10000;                          // WPF App.xaml.cs:68
-        static readonly TimeSpan LegacyTakeoverWait = TimeSpan.FromSeconds(8);   // WPF App.xaml.cs:1862
-        static readonly TimeSpan StaleTakeoverWait = TimeSpan.FromSeconds(3);    // WPF App.xaml.cs:1914
+        internal static int ShowAckTimeoutMs = 10000;                // WPF App.xaml.cs:68; tests shorten it
+        /// <summary>WPF KillStaleInstances (App.xaml.cs:4157); tests swap it so nothing real is killed.</summary>
+        internal static Func<int> KillStale = KillStaleInstances;
+        static readonly TimeSpan LegacyTakeoverWait = TimeSpan.FromSeconds(8);   // WPF App.xaml.cs:2099
+        internal static TimeSpan StaleTakeoverWait = TimeSpan.FromSeconds(3);    // WPF App.xaml.cs:2151; tests shorten it
 
         readonly Mutex _mutex;
         readonly bool _owned;
+        readonly Mutex? _profileMarker;
         readonly CancellationTokenSource _cts = new();
+        volatile bool _startupPhase = true;
 
-        SingleInstance(Mutex mutex, bool owned, string pipe, Func<string?, Task> show)
+        SingleInstance(Mutex mutex, bool owned, string pipe, string suffix, Func<string?, Task> show)
         {
             _mutex = mutex;
             _owned = owned;
+            if (owned) _profileMarker = RegisterProfileMarker(suffix);
             // Only the mutex owner answers; an unowned run (wedged primary) would fight it for the pipe.
-            if (!owned) return;
-            // v2 is created first, so a sender reaching only the original pipe has found an older build.
-            var current = TryCreateServer(pipe + V2Suffix);
-            var legacy = TryCreateServer(pipe);
-            _ = Task.Run(() => ListenAsync(pipe + V2Suffix, current, true, show, _cts.Token));
-            _ = Task.Run(() => ListenAsync(pipe, legacy, false, show, _cts.Token));
+            if (owned) _ = Task.Run(() => ListenAsync(pipe, show, () => _startupPhase, _cts.Token));
         }
 
-        internal static string PipeName(string suffix) => "ConditioningControlPanel_ShowWindow_Signal_" + Environment.UserName + suffix;
+        /// <summary>WPF App.xaml.cs:4069-4074: called after successful desktop initialization. Until then the listener
+        /// acks before the show runs (WPF 2177-2185), so a relaunch during a slow cold start does not kill a healthy
+        /// primary whose UI thread is not pumping yet; afterwards the ack waits for the show, so a wedged
+        /// dispatcher reads as wedged again.</summary>
+        public void EndStartupPhase() => _startupPhase = false;
 
         /// <summary>A sandboxed profile (CCP_USERDATA_DIR) is a different instance, so kc and tests never
         /// wake or block the user's real app. A shipped build never sets it and holds WPF's exact name.</summary>
@@ -57,25 +57,27 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         /// <summary>Null means a live primary acknowledged the show request and this launch must exit.</summary>
         public static SingleInstance? Claim(string suffix, Func<string?, Task> show, string? payload = null)
-            => Claim(suffix, show, payload, payload);
-
-        /// <summary><paramref name="legacyPayload"/> is what an older primary receives in place of <paramref name="payload"/>.</summary>
-        public static SingleInstance? Claim(string suffix, Func<string?, Task> show, string? payload, string? legacyPayload)
         {
-            var pipe = PipeName(suffix);
+            var pipe = "ConditioningControlPanel_ShowWindow_Signal_" + Environment.UserName + suffix;
             var mutex = CreateMutex(MutexName + suffix, out bool owned);
             if (!owned)
             {
-                bool? acked = RequestShow(pipe, payload, legacyPayload);
+                bool? acked = RequestShow(pipe, payload);
                 if (acked == true) { mutex.Dispose(); return null; }
-                // No listener: a primary still exiting mid-update (#466) - wait for it, else exit (WPF 1861-1870).
-                // Listener but no ack: wedged primary. ponytail: WPF also kills it (KillStaleInstances);
-                // here this launch runs without the mutex after the short wait, as WPF does when the kill fails.
+                // No listener: a primary still exiting mid-update (#466) - wait for it, else exit (WPF 2089-2108).
+                // Listener but no ack: wedged primary. Kill it and take over (WPF 2147); the kill fails closed.
+                // If nothing is killed, run without the mutex after the short wait (WPF 2140-2154).
+                if (acked == false)
+                {
+                    int killed = 0;
+                    try { killed = KillStale(); } catch (Exception ex) { Serilog.Log.Warning(ex, "[LIFECYCLE] Takeover failed"); }
+                    Serilog.Log.Warning("[LIFECYCLE] Recovered from a stale instance that did not acknowledge the show request; killed {Killed}", killed);
+                }
                 try { owned = mutex.WaitOne(acked == null ? LegacyTakeoverWait : StaleTakeoverWait); }
                 catch (AbandonedMutexException) { owned = true; }
                 if (!owned && acked == null) { mutex.Dispose(); return null; }
             }
-            return new SingleInstance(mutex, owned, pipe, show);
+            return new SingleInstance(mutex, owned, pipe, suffix, show);
         }
 
         /// <summary>The options of the instance mutex on Unix, null on Windows. Windows keeps WPF's plain
@@ -86,41 +88,151 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static NamedWaitHandleOptions? UnixMutexOptions() =>
             OperatingSystem.IsWindows() ? null : new NamedWaitHandleOptions { CurrentUserOnly = true, CurrentSessionOnly = false };
 
-        internal static Mutex CreateMutex(string name, out bool owned) =>
+        static Mutex CreateMutex(string name, out bool owned) =>
             UnixMutexOptions() is { } options
                 ? new Mutex(true, name, options, out owned)
                 : new Mutex(true, name, out owned);
 
+        static StringComparison PathCmp => OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
+        /// <summary>Only the app's own executable may kill: under `dotnet x.dll` or a testhost the same path is
+        /// shared by unrelated processes (other apps, parallel test shards), so the takeover aborts.</summary>
+        internal static bool IsAppExecutable(string? selfPath)
+        {
+            if (string.IsNullOrWhiteSpace(selfPath)) return false;
+            var name = Path.GetFileName(selfPath.Trim());   // not GetFileNameWithoutExtension: "CCP.Avalonia" -> "CCP"
+            if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) name = name[..^4];
+            return string.Equals(name, typeof(SingleInstance).Assembly.GetName().Name, PathCmp);
+        }
+
+        /// <summary>WPF's fail-closed match (App.xaml.cs:4141-4155): kill only a process whose image path is
+        /// readable AND equals ours; an unreadable path is never a target.</summary>
+        internal static bool IsSameBuild(string? selfPath, string? otherPath) =>
+            Normalize(selfPath) is { } s && Normalize(otherPath) is { } o && string.Equals(s, o, PathCmp);
+
+        static string? Normalize(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return null;
+            try { return Path.GetFullPath(path.Trim()); } catch { return path.Trim(); }
+        }
+
+        // Linux answers from the kernel (/proc/<pid>/exe), like WPF's QueryFullProcessImageName; MainModule second.
+        static string? ImagePath(Process proc)
+        {
+            try { if (OperatingSystem.IsLinux() && new FileInfo($"/proc/{proc.Id}/exe").LinkTarget is { } t) return t; }
+            catch (Exception) { }
+            try { return proc.MainModule?.FileName; } catch { return null; }
+        }
+
+        // WPF App.xaml.cs:4157 targets this executable. CCP_USERDATA_DIR adds a profile boundary:
+        // a live kernel object proves the target claimed our profile, on Windows as well as Unix.
+        // PID + start time prevent an old marker from identifying a reused PID. No target memory is read.
+        static string ProfileMarkerName(Process process, string suffix)
+        {
+            // Linux Process.StartTime converts boot ticks through a per-process boot-time estimate.
+            // Use the kernel's stable start tick directly so two processes compute the same marker.
+            string started;
+            if (OperatingSystem.IsLinux())
+            {
+                string stat = File.ReadAllText($"/proc/{process.Id}/stat");
+                started = stat[(stat.LastIndexOf(')') + 2)..].Split(' ', StringSplitOptions.RemoveEmptyEntries)[19];
+            }
+            else started = process.StartTime.ToUniversalTime().Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return $"CCP_InstanceProfile_{process.Id}_{started}{suffix}";
+        }
+
+        internal static Mutex RegisterProfileMarker(string suffix)
+        {
+            using var me = Process.GetCurrentProcess();
+            return CreateMutex(ProfileMarkerName(me, suffix), out _);
+        }
+
+        internal static bool HasProfileMarker(Process process, string suffix)
+        {
+            try
+            {
+                string name = ProfileMarkerName(process, suffix);
+                bool found = UnixMutexOptions() is { } options
+                    ? Mutex.TryOpenExisting(name, options, out var marker)
+                    : Mutex.TryOpenExisting(name, out marker);
+                marker?.Dispose();
+                return found;
+            }
+            catch { return false; } // Missing, inaccessible or exited: never a kill target.
+        }
+
+        /// <summary>WPF App.xaml.cs:4157-4217: terminate every OTHER process running our exact executable;
+        /// returns how many were actually terminated. Each verdict is logged.</summary>
+        static int KillStaleInstances()
+        {
+            int killed = 0;
+            try
+            {
+                string? self = Normalize(Environment.ProcessPath);
+                string suffix = SandboxSuffix();
+                if (!IsAppExecutable(self))
+                {
+                    Serilog.Log.Warning("[LIFECYCLE] Takeover aborted: we run {Self}, not the app executable, so no other process can be confirmed to be this build", self);
+                    return 0;
+                }
+                using var me = Process.GetCurrentProcess();
+                foreach (var proc in Process.GetProcessesByName(me.ProcessName))
+                {
+                    int id = -1;
+                    try
+                    {
+                        id = proc.Id;
+                        if (id == Environment.ProcessId) continue;
+                        var other = ImagePath(proc);
+                        if (!IsSameBuild(self, other))
+                        {
+                            Serilog.Log.Warning("[LIFECYCLE] Takeover skipped pid {Pid}: it runs {Other}, we run {Self}", id, other ?? "(unreadable)", self);
+                            continue;
+                        }
+                        if (!HasProfileMarker(proc, suffix))
+                        {
+                            Serilog.Log.Warning("[LIFECYCLE] Takeover skipped pid {Pid}: not provably the same profile (CCP_USERDATA_DIR)", id);
+                            continue;
+                        }
+                        proc.Kill();
+                        if (!proc.WaitForExit(5000)) continue;
+                        killed++;
+                        Serilog.Log.Warning("[LIFECYCLE] Takeover killed pid {Pid} ({Path}) after it failed to acknowledge the show request", id, other);
+                    }
+                    catch (Exception ex) { Serilog.Log.Warning("[LIFECYCLE] Takeover could not act on pid {Pid}: {Error}", id, ex.Message); }
+                    finally { proc.Dispose(); }
+                }
+            }
+            catch (Exception ex) { Serilog.Log.Warning("[LIFECYCLE] Takeover could not enumerate processes: {Error}", ex.Message); }
+            return killed;
+        }
+
         /// <summary>true = acked, false = connected but no ack in time, null = nobody listening.</summary>
-        static bool? RequestShow(string pipe, string? payload, string? legacyPayload)
+        static bool? RequestShow(string pipe, string? payload)
         {
             var bytes = Encoding.UTF8.GetBytes(payload ?? "");
-            if (bytes.Length > MaxPayloadBytes) return null;
-            // Serialize senders across processes. Unix pipe connect can succeed just as another
-            // connected server closes, so competing clients otherwise lose their request.
+            if (bytes.Length > 65536) bytes = Array.Empty<byte>();   // unreadable reads as a bare relaunch
+            // One sender at a time. The listener serves one request at a time, so a launch racing another
+            // (several files opened at once) timed out connecting and its request was lost.
             using var gate = CreateMutex(pipe + "_send", out bool ownsGate);
             try
             {
                 if (!ownsGate)
                 {
-                    try { ownsGate = gate.WaitOne(ShowAckTimeoutMs); }
+                    try { ownsGate = gate.WaitOne(ShowAckTimeoutMs + 2000); }
                     catch (AbandonedMutexException) { ownsGate = true; }
+                    if (!ownsGate) return null;
                 }
-                if (!ownsGate) return null;
-                using var c = ConnectPipe(pipe, out bool current);
-                if (!current)
+                using var c = new NamedPipeClientStream(".", pipe, PipeDirection.InOut,
+                    PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+                c.Connect(1000);
+                // Preserve short launcher payloads; 255 introduces a bounded extended length for media paths.
+                c.WriteByte(bytes.Length >= byte.MaxValue ? byte.MaxValue : (byte)bytes.Length);
+                if (bytes.Length >= byte.MaxValue)
                 {
-                    bytes = Encoding.UTF8.GetBytes(legacyPayload ?? "");
-                    if (bytes.Length > byte.MaxValue) bytes = Array.Empty<byte>();   // unreadable reads as a bare relaunch
-                    c.WriteByte((byte)bytes.Length);
-                }
-                else if (bytes.Length < byte.MaxValue) c.WriteByte((byte)bytes.Length);
-                else
-                {
-                    c.WriteByte(byte.MaxValue);
-                    var extended = new byte[4];
-                    BinaryPrimitives.WriteInt32LittleEndian(extended, bytes.Length);
-                    c.Write(extended);
+                    var size = new byte[4];
+                    System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(size, bytes.Length);
+                    c.Write(size);
                 }
                 c.Write(bytes);
                 c.Flush();
@@ -134,107 +246,51 @@ namespace ConditioningControlPanel.Avalonia.Platform
             finally { if (ownsGate) gate.ReleaseMutex(); }
         }
 
-        // Prefer v2; only after a grace period with v2 unreachable accept the original pipe of an older build.
-        static NamedPipeClientStream ConnectPipe(string pipe, out bool current)
-        {
-            var start = Environment.TickCount64;
-            while (true)
-            {
-                var elapsed = Environment.TickCount64 - start;
-                if (TryConnect(pipe + V2Suffix) is { } v2) { current = true; return v2; }
-                if (elapsed >= LegacyFallbackAfterMs)
-                {
-                    if (TryConnect(pipe) is { } legacy) { current = false; return legacy; }
-                    // Neither pipe answers: a mutex holder without a listener. Go to the mutex wait, as WPF does (App.xaml.cs:2096-2099).
-                    throw new TimeoutException("No single-instance listener");
-                }
-                Thread.Sleep(25);
-            }
-        }
-
-        static NamedPipeClientStream? TryConnect(string pipe)
-        {
-            var client = new NamedPipeClientStream(".", pipe, PipeDirection.InOut,
-                PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-            try
-            {
-                client.Connect(250); return client;
-            }
-            catch (Exception ex) when (ex is TimeoutException or IOException)
-            {
-                client.Dispose();
-                return null;
-            }
-        }
-
-        static NamedPipeServerStream CreateServer(string pipe) =>
-            new(pipe, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances,
-                PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-
-        static NamedPipeServerStream? TryCreateServer(string pipe)
-        {
-            try { return CreateServer(pipe); }
-            catch (Exception ex) { Serilog.Log.Warning(ex, "Single-instance listener"); return null; }
-        }
-
-        static async Task ListenAsync(string pipe, NamedPipeServerStream? first, bool extended, Func<string?, Task> show, CancellationToken ct)
+        static async Task ListenAsync(string pipe, Func<string?, Task> show, Func<bool> startupPhase, CancellationToken ct)
         {
             while (!ct.IsCancellationRequested)
             {
-                var server = first;
-                first = null;
                 try
                 {
-                    server ??= CreateServer(pipe);
-                    await server.WaitForConnectionAsync(ct);
-                    _ = HandleConnectionAsync(server, extended, show, ct);
-                    server = null; // the handler owns it
+                    await using var s = new NamedPipeServerStream(pipe, PipeDirection.InOut, 1,
+                        PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+                    await s.WaitForConnectionAsync(ct);
+                    var len = new byte[1];
+                    await s.ReadExactlyAsync(len, ct);
+                    int count = len[0];
+                    if (count == byte.MaxValue)
+                    {
+                        var size = new byte[4];
+                        await s.ReadExactlyAsync(size, ct);
+                        count = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(size);
+                        if (count < 0 || count > 65536) continue;
+                    }
+                    var body = new byte[count];
+                    await s.ReadExactlyAsync(body, ct);
+                    string? payload = body.Length == 0 ? null : Encoding.UTF8.GetString(body);
+                    if (startupPhase())
+                    {
+                        // Starting, not wedged: ack now and let the show run when the dispatcher pumps.
+                        await s.WriteAsync(new byte[] { 1 }, ct);
+                        await s.FlushAsync(ct);
+                        _ = Task.Run(() => show(payload)).ContinueWith(
+                            t => Serilog.Log.Warning(t.Exception, "Single-instance show failed"),
+                            TaskContinuationOptions.OnlyOnFaulted);
+                        continue;
+                    }
+                    // Ack even when showing fails: WPF acks after the attempt (App.xaml.cs:2220), and a
+                    // missing ack reads as "wedged" to the second launch.
+                    try { await show(payload); } catch (Exception ex) { Serilog.Log.Warning(ex, "Single-instance show failed"); }
+                    await s.WriteAsync(new byte[] { 1 }, ct);
+                    await s.FlushAsync(ct);
                 }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
+                catch (OperationCanceledException) { return; }
                 catch (Exception ex)
                 {
                     Serilog.Log.Warning(ex, "Single-instance listener");
                     try { await Task.Delay(1000, ct); } catch (OperationCanceledException) { return; }
                 }
-                finally { server?.Dispose(); }
             }
-            first?.Dispose();   // cancelled before the first wait
-        }
-
-        static async Task HandleConnectionAsync(NamedPipeServerStream server, bool extended, Func<string?, Task> show, CancellationToken ct)
-        {
-            await using (server)
-            {
-                try
-                {
-                    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    timeout.CancelAfter(ShowAckTimeoutMs);
-                    var payload = await ReadPayloadAsync(server, timeout.Token, extended);
-                    // Ack after the request is accepted, even if showing it failed (WPF App.xaml.cs:1985).
-                    try { await show(payload); } catch (Exception ex) { Serilog.Log.Warning(ex, "Single-instance show failed"); }
-                    await server.WriteAsync(new byte[] { 1 }, timeout.Token);
-                    await server.FlushAsync(timeout.Token);
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
-                catch (Exception ex) { Serilog.Log.Warning(ex, "Single-instance request failed"); }
-            }
-        }
-
-        internal static async Task<string?> ReadPayloadAsync(Stream stream, CancellationToken ct, bool extended = true)
-        {
-            var len = new byte[1];
-            await stream.ReadExactlyAsync(len, ct);
-            int count = len[0];
-            if (extended && count == byte.MaxValue)
-            {
-                var wide = new byte[4];
-                await stream.ReadExactlyAsync(wide, ct);
-                count = BinaryPrimitives.ReadInt32LittleEndian(wide);
-                if (count < byte.MaxValue || count > MaxPayloadBytes) throw new InvalidDataException("Invalid handoff length");
-            }
-            var body = new byte[count];
-            await stream.ReadExactlyAsync(body, ct);
-            return count == 0 ? null : new UTF8Encoding(false, true).GetString(body);
         }
 
         /// <summary>Call on the thread that claimed: a mutex is released by its owning thread (WPF OnExit 6135).</summary>
@@ -243,6 +299,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
             _cts.Cancel();
             if (_owned) try { _mutex.ReleaseMutex(); } catch (ApplicationException) { }
             _mutex.Dispose();
+            if (_profileMarker != null)
+            {
+                try { _profileMarker.ReleaseMutex(); } catch (ApplicationException) { }
+                _profileMarker.Dispose();
+            }
         }
     }
 }

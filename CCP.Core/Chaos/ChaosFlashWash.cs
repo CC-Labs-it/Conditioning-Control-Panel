@@ -5,8 +5,8 @@ namespace ConditioningControlPanel;
 
 /// <summary>
 /// The envelope of the Chaos "braindrain" wash (WPF ConditioningControlPanel/Chaos/ChaosFlashOverlay.cs):
-/// fade in from 0 to the peak over 500 ms (:287), hold until the life timer fires at
-/// max(600, duration) after the wash began (:288), then fade to 0 over 700 ms (:180). Linear, as
+/// fade in from 0 to the peak over 500 ms (:298), hold until the life timer fires at
+/// max(600, duration) after the wash began (:299), then fade to 0 over 700 ms (:189). Linear, as
 /// WPF's DoubleAnimation is. Every head draws the same curve from here.
 /// </summary>
 public static class ChaosFlashWash
@@ -18,10 +18,9 @@ public static class ChaosFlashWash
     public const int FadeInMs = 500;
     public const int FadeOutMs = 700;
     public const int MinLifeMs = 600;
-    /// <summary>WPF :222/:231 - animations decode capped at 1280 px (WPF stills go up to 2560, :254;
-    /// this head decodes both at this cap - a faint wash needs no native size).</summary>
+    /// <summary>WPF :238/:246 - animations decode capped at 1280 px (stills go up to 2560, :255).</summary>
     public const int MaxDecodeDim = 1280;
-    /// <summary>WPF :222/:231 - at most 40 animation frames resident (#476 OOM).</summary>
+    /// <summary>WPF :238/:246 - at most 40 animation frames resident (#476 OOM).</summary>
     public const int MaxFrames = 40;
 
     /// <summary>One wash: its peak alpha and when the fade-out starts (ms after the wash began).</summary>
@@ -30,7 +29,7 @@ public static class ChaosFlashWash
         public int EndMs => FadeOutAtMs + FadeOutMs;
     }
 
-    /// <summary>WPF DisplayCore: peak clamped to 0.02..1 (:286), life at least 600 ms (:288).</summary>
+    /// <summary>WPF DisplayCore: peak clamped to 0.02..1 (:297), life at least 600 ms (:299).</summary>
     public static Plan For(int durationMs, double opacity)
         => new(double.IsNaN(opacity) ? 0.02 : Math.Clamp(opacity, 0.02, 1.0), Math.Max(MinLifeMs, durationMs));
 

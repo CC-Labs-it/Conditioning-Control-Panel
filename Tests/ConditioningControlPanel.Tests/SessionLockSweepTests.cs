@@ -27,6 +27,7 @@ namespace ConditioningControlPanel.Tests;
 /// WPF objects have thread affinity and must be created on an STA thread; xunit's worker threads
 /// are MTA, hence the OnSta helper.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class SessionLockSweepTests
 {
     /// <summary>Runs <paramref name="body"/> on a dedicated STA thread, rethrowing faithfully.</summary>

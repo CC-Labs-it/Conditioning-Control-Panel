@@ -42,6 +42,10 @@ namespace ConditioningControlPanel
         /// </summary>
         public static volatile Action<string>? ShowProvider;
 
+        /// <summary>WPF FlashSubliminalCustom: a point-fired silent card, with sanitization and
+        /// haptic anticipation, distinct from a pool phrase's optional whisper. Null = unavailable.</summary>
+        public static volatile Action<string>? CustomShowProvider;
+
         /// <summary>
         /// The scheduler armed (true) or disarmed (false). A head hangs its transition work off
         /// this: the WPF head fires its EMI Desk moment on the way up and, on the way down, blanks

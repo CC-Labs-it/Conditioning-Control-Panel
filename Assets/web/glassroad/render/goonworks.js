@@ -4,8 +4,8 @@ import { Group, Mesh, InstancedMesh, BoxGeometry, SphereGeometry, CylinderGeomet
   Matrix4, Quaternion, Vector3, BackSide, FrontSide } from 'three/webgpu';
 import { vec3, float, uv, attribute, positionWorld, normalWorld, normalize, abs, mix, smoothstep, min } from 'three/tsl';
 import { goonworksWorldPlan } from './goonworksWorld.js';
-import { createGoonworksMaterial, createGoonworksTubeMaterial, createGoonworksPlatformMaterial, GOONWORKS_PAPER_MATERIALS, GOONWORKS_PALETTE as C } from './goonworksMaterials.js';
-import {goonworksTubeShell,goonworksTubeSolids,goonworksPlatformGeometry} from './goonworksGeometry.js';
+import { createGoonworksMaterial, createGoonworksWallMaterial, createGoonworksTubeMaterial, createGoonworksPlatformMaterial, GOONWORKS_PAPER_MATERIALS, GOONWORKS_PALETTE as C } from './goonworksMaterials.js';
+import {goonworksTubeShell,goonworksTubeSolids,goonworksPlatformGeometry,goonworksWallGeometry} from './goonworksGeometry.js';
 import { Q } from './quality.js';
 import { machineryBeatAt, gearBeatTravel } from '../track/machineryBeat.js';
 import { createGearSpiralPaint } from './gearSpirals.js';
@@ -92,7 +92,15 @@ export function buildGoonworks(track,art=null,pal=null,samples=null,{shareHulls=
   // Static ink hulls share one flat outline material, so one instanced draw per SHAPE carries every
   // colour's hull (Firefox pays per draw). Moving hulls stay with their batch for the spin update.
   const sharedHulls=new Map();
-  for(const row of plan.rows){const key=row.shape+':'+row.material+(row.motion?':moving':'');if(!batches.has(key))batches.set(key,[]);batches.get(key).push(row);}
+  const walls=new Map();
+  for(const row of plan.rows){
+    if(row.wallCorners){if(!walls.has(row.material))walls.set(row.material,[]);walls.get(row.material).push(row);continue;}
+    const key=row.shape+':'+row.material+(row.motion?':moving':'');if(!batches.has(key))batches.set(key,[]);batches.get(key).push(row);
+  }
+  for(const [name,rows]of walls){const material=createGoonworksWallMaterial(C[name]);owned.push(material);
+    const wall=new Mesh(upload(goonworksWallGeometry(rows)),material);wall.name='goonworks-joined-wall-'+name;
+    wall.userData.screenPlacementSolids=rows;group.add(wall);
+  }
   for(const[key,rows]of batches){const[shape,material]=key.split(':'),geo=geometries[shape],mesh=new InstancedMesh(geo,materials[material],rows.length);
     mesh.name='goonworks-'+key.replaceAll(':','-');group.add(mesh);
     const outlined=rows.filter(r=>r.outline&&r.material!=='ink'&&r.material!=='distant');

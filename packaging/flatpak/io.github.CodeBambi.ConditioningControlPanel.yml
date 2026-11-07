@@ -9,6 +9,11 @@ runtime: org.gnome.Platform
 runtime-version: '50'
 sdk: org.gnome.Sdk
 command: conditioning-control-panel
+# Racing Thoughts fetches its pinned Electron into the app data dir on first race.
+# Existing network: HTTPS fetch + loopback bridge; ipc: Chromium/X11 shared memory;
+# dri: GPU rendering. No new device, share, host filesystem or D-Bus grants.
+# X11/XWayland keeps the existing panic key usable while the race has focus.
+# Sandbox probe and licence gate: packaging/linux/rt-engine-check.sh.
 finish-args:
   - --share=ipc
   - --share=network
@@ -51,7 +56,7 @@ modules:
       - mkdir -p /app/bin && printf '#!/bin/sh\nexec /app/lib/ccp/CCP.Avalonia "$@"\n' > /app/bin/conditioning-control-panel
       - chmod 755 /app/bin/conditioning-control-panel
       - cp -a share/. /app/share/
-      - install -Dm644 LICENSE -t /app/share/licenses/io.github.CodeBambi.ConditioningControlPanel
+      - install -Dm644 LICENSE RT-ENGINE-NOTICES.txt -t /app/share/licenses/io.github.CodeBambi.ConditioningControlPanel
     sources:
       - type: archive
         path: ConditioningControlPanel-linux-x64.tar.gz

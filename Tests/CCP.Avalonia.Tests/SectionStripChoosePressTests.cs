@@ -17,6 +17,7 @@ using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
 using Xunit;
+using ConditioningControlPanel.Avalonia.Platform;
 
 namespace CCP.Avalonia.Tests;
 
@@ -41,7 +42,7 @@ public sealed class SectionStripChoosePressTests : IDisposable
         // The same bare builder the sibling shell tests use, so whichever class starts the app first
         // the host is identical and the result does not depend on run order.
         AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-            .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            .UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
             .SetupWithoutStarting();
     }
 

@@ -62,12 +62,15 @@ namespace ConditioningControlPanel.Services
 
         private double Elapsed => (_clock.GetUtcNow() - _start).TotalMinutes;
 
-        /// <summary>WPF SkillTreeService.AddConditioningTime (:659-669). ponytail: WPF also mirrors into the
-        /// season bucket (SeasonRecapService.AddConditioningMinutes); this head has no season-key service yet.</summary>
+        /// <summary>WPF SkillTreeService.AddConditioningTime + SeasonRecapService.AddConditioningMinutes:
+        /// one save for both counters, initializing (never auto-rolling) the season bucket.</summary>
         public static void AddConditioningTime(AppSettings s, double minutes)
         {
             if (!(minutes > 0)) return;
             s.TotalConditioningMinutes += minutes;
+            if (string.IsNullOrEmpty(s.SeasonStatsSeason))
+                s.SeasonStatsSeason = EnhancementAnalytics.CurrentSeasonKey(s, DateTime.UtcNow);
+            s.SeasonConditioningMinutes += minutes;
             CoreSettings.Save();
         }
     }

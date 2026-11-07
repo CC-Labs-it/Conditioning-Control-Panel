@@ -14,15 +14,15 @@ namespace ConditioningControlPanel
     /// <para>This is deliberately a separate partial from <c>MainWindow.ChromeFx.cs</c>. Chrome FX
     /// owns the shell's *ambient* dressing (glow breath, sheen passes, tab choreography); everything
     /// here is a <i>moment</i> - a charged idle that says "press me", an ignition that answers the
-    /// press, a bar that reads as liquid, a chip that pops when the number changes. The two files
+    /// press, a chip that pops when the number changes. The two files
     /// share one funnel: <see cref="ApplyHeroFxLoops"/> is called from ApplyChromeFxLoops, so window
     /// focus, the reduced-motion setting and the performance tier stop these loops through exactly
     /// the same gate as everything else in the chrome.</para>
     ///
     /// <para>House rules kept (identical to ChromeFx, they are not restated per method):</para>
     /// <list type="bullet">
-    ///   <item>Ambient clocks (the 9s gradient drift, the 4.2s ring exhale, the 2s meniscus pulse,
-    ///   the running-state heartbeat) ask <see cref="ChromeAmbientAllowed"/> BEFORE they start and
+    ///   <item>Ambient clocks (the 9s gradient drift, the 4.2s ring exhale, the running-state
+    ///   heartbeat) ask <see cref="ChromeAmbientAllowed"/> BEFORE they start and
     ///   park at a static resting state otherwise. Interaction one-shots (the press ignition, the
     ///   level-up pop, the save tick) ask <see cref="MotionFx.AllowTransitions"/> and are simply
     ///   skipped at MotionLevel.Off.</item>
@@ -81,20 +81,6 @@ namespace ConditioningControlPanel
 
         // ---- tuning: XP bar --------------------------------------------------------
 
-        /// <summary>
-        /// Deliberately the same duration AND the same easing as <c>MotionFx.BarFill</c>'s default:
-        /// the dot has to ride the fill's edge, and two different curves over the same distance means
-        /// a dot that floats ahead of the liquid for a third of a second and reads as broken.
-        /// </summary>
-        private const int XpMeniscusSlideMs = 600;
-        private const double XpMeniscusPulseSeconds = 2.0;
-        private const double XpMeniscusMinOpacity = 0.35;
-        private const double XpMeniscusMaxOpacity = 0.95;
-        private const double XpMeniscusRestOpacity = 0.55;
-        /// <summary>Below this fill width the dot would sit on the track's rounded cap rather than
-        /// on a surface, so it is simply not shown.</summary>
-        private const double XpMeniscusMinFillPx = 5.0;
-
         private const int LevelChipPopMs = 600;
         private const double LevelChipPopScale = 1.35;
         private const double LevelChipPopDegrees = -4.0;
@@ -126,8 +112,6 @@ namespace ConditioningControlPanel
         private bool _startChargeApplied;
         private bool _startDipInFlight;
 
-        private double _xpMeniscusFillWidth;
-
         // ============================== lifecycle ==============================
 
         /// <summary>Called once from InitializeChromeFx, after the window is loaded.</summary>
@@ -147,7 +131,6 @@ namespace ConditioningControlPanel
         private void ApplyHeroFxLoops()
         {
             ApplyStartHeroState();
-            ApplyXpMeniscusPulse();
         }
 
         // ============================== 1. START: charged idle ==============================
@@ -555,81 +538,7 @@ namespace ConditioningControlPanel
         private static double GrowFactor(double size, double growPx)
             => size <= 1 ? 1.0 : (size + growPx) / size;
 
-        // ============================== 4. XP bar: meniscus ==============================
-
-        /// <summary>
-        /// Moves the glow dot to the fill's new tip. Called from AnimateXpDisplay with the same
-        /// target width the fill itself is tweening to, on the same clock and the same curve, so the
-        /// dot rides the surface the whole way instead of teleporting to where the bar will end up.
-        /// </summary>
-        private void AnimateXpMeniscus(double toWidth)
-        {
-            try
-            {
-                _xpMeniscusFillWidth = toWidth;
-                if (XPMeniscus == null || XPMeniscusSlide == null) return;
-
-                double dot = double.IsNaN(XPMeniscus.Width) ? 12 : XPMeniscus.Width;
-                double target = Math.Max(0, toWidth - dot / 2);
-                if (!MotionFx.AllowTransitions)
-                {
-                    XPMeniscusSlide.BeginAnimation(TranslateTransform.XProperty, null);
-                    XPMeniscusSlide.X = target;
-                }
-                else
-                {
-                    var slide = new DoubleAnimation(target, TimeSpan.FromMilliseconds(XpMeniscusSlideMs))
-                    {
-                        EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
-                    };
-                    XPMeniscusSlide.BeginAnimation(TranslateTransform.XProperty, slide,
-                                                   HandoffBehavior.SnapshotAndReplace);
-                }
-
-                ApplyXpMeniscusPulse();
-            }
-            catch (Exception ex) { App.Logger?.Debug("AnimateXpMeniscus: {E}", ex.Message); }
-        }
-
-        /// <summary>
-        /// The dot's own soft pulse. Ambient, so it parks at a static opacity (not at zero - a
-        /// still dot on the surface is the reduced-motion version of a breathing one) and hides
-        /// outright when there is no fill to sit on.
-        /// </summary>
-        private void ApplyXpMeniscusPulse()
-        {
-            try
-            {
-                if (XPMeniscus == null) return;
-
-                if (_xpMeniscusFillWidth < XpMeniscusMinFillPx)
-                {
-                    XPMeniscus.BeginAnimation(OpacityProperty, null);
-                    XPMeniscus.Opacity = 0;
-                    return;
-                }
-
-                if (!ChromeAmbientAllowed)
-                {
-                    XPMeniscus.BeginAnimation(OpacityProperty, null);
-                    XPMeniscus.Opacity = XpMeniscusRestOpacity;
-                    return;
-                }
-
-                var pulse = new DoubleAnimation(XpMeniscusMinOpacity, XpMeniscusMaxOpacity,
-                                                TimeSpan.FromSeconds(XpMeniscusPulseSeconds))
-                {
-                    AutoReverse = true,
-                    RepeatBehavior = RepeatBehavior.Forever,
-                    EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
-                };
-                Timeline.SetDesiredFrameRate(pulse, AmbientFrameRate);
-                XPMeniscus.BeginAnimation(OpacityProperty, pulse, HandoffBehavior.SnapshotAndReplace);
-            }
-            catch (Exception ex) { App.Logger?.Debug("ApplyXpMeniscusPulse: {E}", ex.Message); }
-        }
-
-        // ============================== 5. XP bar: level-up chip ==============================
+        // ============================== 4. XP bar: level-up chip ==============================
 
         /// <summary>
         /// The LVL chip's pop. Added to the EXISTING level-up celebration (CelebrateLevelUp already
@@ -691,7 +600,7 @@ namespace ConditioningControlPanel
             catch (Exception ex) { App.Logger?.Debug("PopLevelChip: {E}", ex.Message); }
         }
 
-        // ============================== 6. Save: absorb ==============================
+        // ============================== 5. Save: absorb ==============================
 
         /// <summary>
         /// The Save button's acknowledgement: a tick that draws itself (animated StrokeDashOffset,

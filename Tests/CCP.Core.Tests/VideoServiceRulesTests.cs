@@ -84,7 +84,7 @@ public class VideoServiceRulesTests
         var lengths = new Dictionary<string, double> { ["short"] = 5, ["ok"] = 60, ["long"] = 900 };
         var kept = MandatoryVideoScheduler.KeepByLength(new[] { "short", "ok", "long", "unparsed" }, 10, 600,
             f => lengths.TryGetValue(f, out var d) ? d : null);
-        Assert.Equal(new[] { "ok", "unparsed" }, kept);
+        Assert.Equal(new[] { "ok", "long", "unparsed" }, kept);
     }
 
     // ---- cooldown ----

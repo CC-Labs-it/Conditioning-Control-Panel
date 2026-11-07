@@ -184,6 +184,8 @@ public class EmiBookCardsTests
     {
         var cards = new HashSet<string>(StringComparer.Ordinal);
         foreach (var c in EmiBookCards.All) cards.Add(c.Id);
+        // The Rain page is held back while RainV2Gate is off; its glyph waits for it (gate on).
+        foreach (var c in Services.EmiDesk.EmiBookDeckShop.Shipping(rainOn: true)) cards.Add(c.Id);
         foreach (var id in EmiBookGlyphs.Ids)
             Assert.True(cards.Contains(id), $"glyph '{id}' belongs to no card");
     }

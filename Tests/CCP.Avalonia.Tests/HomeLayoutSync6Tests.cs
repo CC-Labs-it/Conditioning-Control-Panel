@@ -137,7 +137,10 @@ public sealed class HomeLayoutSync6Tests
                 Assert.Null(dash.FindControl<Border>("CompanionStrip"));
 
                 // Shut: "Show browser", a glow that breathes, in the header's star column.
-                Assert.Equal(2, Grid.GetColumn((Control)btn.Parent!));
+                // The header grid's cell (a clipping column panel holds the pill and its glow).
+                var cell = (Control)btn.Parent!;
+                while (cell.Parent is not Grid) cell = (Control)cell.Parent!;
+                Assert.Equal(2, Grid.GetColumn(cell));
                 Assert.Equal(Loc.Get("btn_browser_fold_show"), label.Text);
                 Assert.Equal(Loc.Get("btn_browser_fold_show"), AutomationProperties.GetName(btn));
                 // The glow is a sibling BoxShadow layer, never an Effect on the button (P82).

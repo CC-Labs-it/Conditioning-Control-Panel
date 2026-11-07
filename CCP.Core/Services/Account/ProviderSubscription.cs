@@ -118,12 +118,16 @@ namespace ConditioningControlPanel.Services
                 if (IsAuthenticated) await ValidateSubscriptionAsync();
                 else if (_patreon && _settings() is { } s)
                 {
-                    // No tokens: clear the cached tier. Grace stamps are kept while a unified session
-                    // exists (Discord/SubscribeStar accounts have no Patreon tokens); logout clears them.
-                    s.PatreonTier = 0;
+                    // No tokens. Neither the stored tier nor the grace stamps are Patreon-OAuth-shaped: a
+                    // Discord or SubscribeStar account has no Patreon tokens by construction. Zeroing the
+                    // tier made every launch read as a purchase and left a lower server reading nothing to
+                    // compare against (EntitlementTierRule). It stays only where a reading can land, which
+                    // needs both the id and the token; logout clears the rest.
                     var hasUnifiedSession = !string.IsNullOrWhiteSpace(s.UnifiedId) || !string.IsNullOrWhiteSpace(s.AuthToken);
+                    var readingsCanLand = !string.IsNullOrWhiteSpace(s.UnifiedId) && !string.IsNullOrWhiteSpace(s.AuthToken);
+                    if (!readingsCanLand) s.PatreonTier = 0;
                     if (!hasUnifiedSession) s.PatreonPremiumValidUntil = s.PatreonLabValidUntil = null;
-                    Log.Debug("No Patreon tokens found, cleared cached tier (grace stamps kept: {Kept})", hasUnifiedSession);
+                    Log.Debug("No Patreon tokens found (tier kept: {Tier}, grace stamps kept: {Kept})", readingsCanLand, hasUnifiedSession);
                 }
             }
             catch (Exception ex) { Log.Warning(ex, "Failed to validate {Provider} subscription on startup", _label); }
@@ -188,6 +192,8 @@ namespace ConditioningControlPanel.Services
                     s.PatreonPremiumValidUntil = s.PatreonLabValidUntil = null;
                     s.PatreonTier = 0;
                     s.InviteGrantUntil = null; // the week belongs to the account, not the machine
+                    s.GraceClosedTier = null;
+                    s.GraceClosedAtUtc = null;
                     CoreSettings.Save();
                 }
             }

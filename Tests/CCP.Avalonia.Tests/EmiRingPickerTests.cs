@@ -22,11 +22,13 @@ public sealed class EmiRingPickerTests
     public Task TilesWriteTheOnePinStore() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var pins = EmiState.Current.Pins;
         var saved = pins.ToList();
+        bool gist = EmiState.Current.PinGistGot;
+        EmiState.Current.PinGistGot = false;
         var host = new Window { Width = 700, Height = 600 };
         try
         {
@@ -47,6 +49,7 @@ public sealed class EmiRingPickerTests
             foreach (var t in free) t.IsChecked = true;
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(EmiSuggester.MaxPins, pins.Count);
+            Assert.True(EmiState.Current.PinGistGot);
             Assert.All(free, t => Assert.Contains((string)t.Tag!, pins));
             // SaveNow, not the debounced save: the pin is on disk the moment the tile flips.
             var onDisk = System.IO.File.ReadAllText(EmiState.FilePath);
@@ -61,6 +64,7 @@ public sealed class EmiRingPickerTests
 
             picker.ResetPins();
             Assert.Empty(pins);
+            Assert.True(EmiState.Current.PinGistGot); // clearing pins never revives the tutorial
             Assert.All(tiles, t => Assert.False(t.IsChecked));
             Assert.False(picker.CanReset);
         }
@@ -68,6 +72,7 @@ public sealed class EmiRingPickerTests
         {
             host.Close();
             pins.Clear(); pins.AddRange(saved);
+            EmiState.Current.PinGistGot = gist;
         }
         return Task.CompletedTask;
     });

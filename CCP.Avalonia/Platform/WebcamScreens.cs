@@ -17,10 +17,14 @@ internal static class WebcamScreens
 
     internal static string Name(Screen screen) => screen.DisplayName ?? $"{screen.Bounds.X},{screen.Bounds.Y}";
 
-    internal static Screen? Resolve(IReadOnlyList<Screen> screens, string? saved) =>
-        (!string.IsNullOrEmpty(saved) && !string.Equals(saved, "Primary", StringComparison.OrdinalIgnoreCase)
-            ? screens.FirstOrDefault(s => string.Equals(Name(s), saved, StringComparison.OrdinalIgnoreCase)) : null)
-        ?? screens.FirstOrDefault(s => s.IsPrimary) ?? screens.FirstOrDefault();
+    internal static Screen? Resolve(IReadOnlyList<Screen> screens, string? saved)
+    {
+        var names = screens.Select(Name).ToArray();
+        var primary = -1;
+        for (int i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
+        var choice = WebcamMonitorRule.Select(saved, names, primary);
+        return choice.Index >= 0 ? screens[choice.Index] : null;
+    }
 
     internal static void Place(Window window)
     {

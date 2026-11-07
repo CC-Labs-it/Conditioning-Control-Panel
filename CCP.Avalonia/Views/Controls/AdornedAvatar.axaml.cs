@@ -30,6 +30,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private readonly Grid _root;
         private readonly Border _avatarRing;
         private readonly Image _decoLayer;
+        private readonly Image _frameLayer;
+        public static readonly StyledProperty<string?> FrameIdProperty =
+            AvaloniaProperty.Register<AdornedAvatar, string?>(nameof(FrameId));
+        public string? FrameId { get => GetValue(FrameIdProperty); set => SetValue(FrameIdProperty, value); }
         private readonly Ellipse _presenceDot;
 
         public AdornedAvatar()
@@ -37,6 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             AvaloniaXamlLoader.Load(this);
             _root = this.FindControl<Grid>("Root")!;
             _avatarRing = this.FindControl<Border>("AvatarRing")!;
+            _frameLayer = this.FindControl<Image>("FrameLayer")!;
             _decoLayer = this.FindControl<Image>("DecoLayer")!;
             _presenceDot = this.FindControl<Ellipse>("PresenceDotShape")!;
             ApplySize();
@@ -133,6 +138,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             base.OnPropertyChanged(change);
             if (_root == null) return; // still loading XAML
             if (change.Property == AvatarImageProperty) AvatarBrush.Source = change.GetNewValue<IImageBrushSource?>();
+            else if (change.Property == FrameIdProperty)
+            {
+                _frameLayer.Source = Helpers.ModArt.ShopFrame(FrameId);
+                _frameLayer.IsVisible = _frameLayer.Source != null;
+            }
             else if (change.Property == DecorationIdProperty) ApplyDecoration();
             else if (change.Property == DecorationTransformProperty) ApplyDecorationTransform();
             else if (change.Property == AvatarSizeProperty || change.Property == RingBrushProperty
@@ -212,6 +222,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 _avatarRing.CornerRadius = new CornerRadius(size / 2d);
                 _avatarRing.BorderThickness = new Thickness(RingThickness);
                 if (RingBrush != null) _avatarRing.BorderBrush = RingBrush;
+
+                var frame = size / ConditioningControlPanel.Services.ShopCosmeticsRegistry.FrameWindowRatio;
+                _frameLayer.Width = _frameLayer.Height = frame;
+                _frameLayer.Margin = new Thickness(-(frame - size) / 2);
 
                 // The one piece of wardrobe geometry in the app.
                 var canvas = size / AvatarCircleRatio;

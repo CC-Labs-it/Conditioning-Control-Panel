@@ -43,6 +43,16 @@ public class ChaosEStimMathTests
     }
 
     [Fact]
+    public void Gentle_strike_rises_holds_fades_and_finishes_on_elapsed_time()
+    {
+        Assert.Equal(0, ChaosEStimMath.GentleStrikeOpacityAt(0, 400, 1000));
+        Assert.Equal(0.425, ChaosEStimMath.GentleStrikeOpacityAt(200, 400, 1000)!.Value, 6);
+        Assert.Equal(0.85, ChaosEStimMath.GentleStrikeOpacityAt(519, 400, 1000));
+        Assert.Equal(0.425, ChaosEStimMath.GentleStrikeOpacityAt(1020, 400, 1000)!.Value, 6);
+        Assert.Null(ChaosEStimMath.GentleStrikeOpacityAt(1520, 400, 1000));
+    }
+
+    [Fact]
     public void Halo_centres_on_the_cursor_in_physical_pixels_and_pulses_between_wpf_bounds()
     {
         Assert.Equal((454, 254), ChaosEStimMath.HaloOrigin(500, 300, 1.0));     // 92/2 = 46

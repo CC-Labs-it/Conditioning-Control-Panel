@@ -39,9 +39,11 @@ test('both bypasses, raised weights and remote/rescued karts stay free', () => {
 });
 
 test('the enlarged visible weight reaches its new contact lane and stays inside its shared sphere', async () => {
-  const r = racer(115, 3.6), chains = createKeepChains(track, { chains: [row] });
-  assert.equal(chains.apply(r, place(track, { s:105, lateral:3.6, speed:40 }), .01), row.id,
-    'the enlarged outer body has real contact beyond the old 3.15 m kart clearance');
+  // At the bottom of its swing the ball reaches 2.08 m at kart height, plus the kart's own half width.
+  const r = racer(115, 2.5), chains = createKeepChains(track, { chains: [row] });
+  assert.equal(chains.apply(r, place(track, { s:105, lateral:2.5, speed:40 }), .01), row.id, 'a kart under the drawn body is hit');
+  const beside = racer(115, 3.2), clear = createKeepChains(track, { chains: [row] });
+  assert.equal(clear.apply(beside, place(track, { s:105, lateral:3.2, speed:40 }), .01), null, 'a kart beside the drawn body is not');
   const hooks = registerHooks({ resolve(specifier, context, next) {
     const file = { 'three/webgpu':'three.webgpu.min.js', 'three/tsl':'three.tsl.min.js' }[specifier];
     return file ? {url:new URL('../vendor/three/build/'+file,import.meta.url).href,shortCircuit:true} : next(specifier,context);

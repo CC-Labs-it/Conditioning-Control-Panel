@@ -84,6 +84,12 @@ that combination fails with `NETSDK1191`.
 `DOTNET_ROLL_FORWARD=Major` is needed because no 8.0 runtime is installed alongside the .NET 10 SDK,
 so `dotnet run` on any of these projects otherwise refuses to start. It affects running, not building.
 
+On a Codex Cloud image, wrap test runs in `bash .github/scripts/cloud-test-env.sh dotnet test ...`.
+It excludes the cloud image's OpenAI Sans WOFF2 files, which Skia cannot load, while retaining
+the distro fallback order. The temporary fontconfig and cache are removed when the command exits.
+Run `AppFontsTests.HeadlessSystemFallbackBuildsTextGeometry` alone in a fresh testhost to exercise
+the bare headless builder before another suite installs the shipped font setup.
+
 Three runners prove behaviour rather than compilation, and each answers a different question:
 
 ```bash

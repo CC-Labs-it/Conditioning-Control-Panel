@@ -91,6 +91,9 @@ namespace ConditioningControlPanel.Services.Prizes
         /// <summary>The revision of the held snapshot, 0 when nothing is held.</summary>
         public long Revision { get { lock (_gate) return _revision; } }
 
+        /// <summary>True when the held snapshot belongs to the signed-in account (a known set, even an empty one).</summary>
+        public bool HoldsCurrentAccount { get { lock (_gate) return HeldForCurrentAccount(); } }
+
         /// <summary>
         /// Adopt a server snapshot (the seam the server lane calls). Dropped when it is for another
         /// account or older than the held revision; raises <see cref="OwnershipChanged"/> only when

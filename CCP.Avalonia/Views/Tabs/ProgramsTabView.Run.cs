@@ -71,9 +71,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void OnProgramChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(() =>
         {
             if (VisualRoot is not null) RefreshPrograms();
-        });
+        }, DispatcherPriority.Normal); // WPF ProgramsTab.cs:130-140: refresh before Loaded celebrations
 
-        private void OnProgramSessionChanged() => OnProgramChanged(null, EventArgs.Empty);
+        private void OnProgramSessionChanged()
+        {
+            // WPF MainWindow.ProgramsTab.cs:2169-2196 starts a fresh session. Preserve the base's explicit
+            // restart path after panic, while ordinary service repaints stay suppressed.
+            if (AvApp.Sessions is { IsRunning: true } runner &&
+                AvApp.Programs?.IsProgramSession(runner.CurrentSession) == true)
+                _programFxSuppressed = false;
+            OnProgramChanged(null, EventArgs.Empty);
+        }
 
         /// <summary>WPF :509-516: a hidden tab only remembers that it is stale; showing it flushes.</summary>
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -81,6 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             base.OnPropertyChanged(change);
             if (change.Property != IsVisibleProperty) return;
             if (!IsVisible || VisualRoot is null) { SyncIgnition(); return; }
+            _programFxSuppressed = false;
             var enrollment = AvApp.Programs?.ActiveEnrollment;
             var boundaryCrossed = _builtStale is { } built && enrollment != null &&
                                   built != IsSnapshotStale(enrollment, Clock.GetLocalNow().DateTime);
@@ -93,6 +102,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (!IsVisible && VisualRoot is not null)
             {
+                // WPF ProgramsTab.cs:469,1665 defers the rebuild and celebration until shown.
                 _refreshPending = true;
                 return;
             }
@@ -146,7 +156,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ToolTip.SetTip(Find<Button>("BtnProgramRestart"), restartBlocked);
                 Find<Button>("BtnProgramDismissGraduated").IsEnabled = !readOnly;
                 // WPF :540: the edge glow is a sibling of the whole view; leaving the run parks it.
-                if (!run) { StopIgnitionLoops(); _ignitionEnrollment = null; }
+                if (!run) { StopIgnitionLoops(); StopSessionSheen(); _ignitionEnrollment = null; }
             }
         }
 
@@ -221,7 +231,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BuildDayStrip(program, enrollment, accent, stale);
             BuildTodayPanel(svc, program, enrollment, accent, stale);
             ApplyIgnition(enrollment);
-            if (_dayJustCompleted) PlayDayCompleteMoment(svc.Today);
+            if (_dayJustCompleted)
+            {
+                // WPF ProgramsTab.cs:978-985,1833-1845: banner spring and theme-coloured day burst.
+                Pop(Find<Border>("TodayCompleteBanner"), .9, .35, .6);
+                QueueProgramBurst(Find<Border>("TodayCompleteBanner"), 90);
+                PlayDayCompleteMoment(svc.Today);
+            }
         }
 
         /// <summary>WPF UpdateProgramSessionRow :1451-1585, button and glyph states. Repainted on every
@@ -455,6 +471,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                                   && !complete && !isBlocked && !paused,
                 };
 
+                var seenKey = $"{RunKey(enrollment)}:{enrollment.CurrentDay}:{task.Id}";
+                if (complete) item.JustCompleted = _tasksSeenIncomplete.Remove(seenKey);
+                else _tasksSeenIncomplete.Add(seenKey);
+
                 var icon = ModArt.TryLoad(TaskIconPath(task));
                 if (icon != null)
                 {
@@ -482,6 +502,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
 
             Find<ItemsControl>("TodayTaskList").ItemsSource = items;
+            if (items.Any(item => item.JustCompleted)) CelebrateTasks(items);
             Find<TextBlock>("TxtTodayNoTasks").IsVisible = items.Count == 0;
             Find<TextBlock>("TxtRitualPrivacyNote").IsVisible = hasRitual;
             Find<Grid>("TaskArcGrid").ColumnDefinitions[0].MaxWidth = Math.Clamp(items.Count, 1, 3) * 370;

@@ -30,6 +30,8 @@ function run(extra = '') {
     function resetAll(){introElapsed=0;introTarget=null;events.push('reset')}
     function unpause(){paused=false}
     function raceLook(){return 'look'}
+    function soloLook(){return 'look'}
+    function setSoloBody(){events.push('body')}
     function syncAssist(){events.push('assist')}
     function playSong(align){events.push(['song',align()])}
     function stopSong(){events.push('song-stop')}

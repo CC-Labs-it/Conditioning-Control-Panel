@@ -194,13 +194,24 @@ namespace ConditioningControlPanel.Services.Awareness
         private readonly bool[] _samples = new bool[WindowSamples];
         private readonly object _lock = new();
 
-        private Timer? _timer;
+        private readonly TimeProvider _clock;
+        private readonly Action _sample;
+        private ITimer? _timer;
         private int _cursor;
         private int _typingSamples;
         private uint _lastInputTick;
         private int _lastX, _lastY;
         private volatile bool _burst;
         private bool _disposed;
+
+        public Win32InputProbe() : this(TimeProvider.System) { }
+
+        // Tests drive the timer lifecycle without depending on input in an interactive desktop.
+        internal Win32InputProbe(TimeProvider clock, Action? sample = null)
+        {
+            _clock = clock;
+            _sample = sample ?? Sample;
+        }
 
         /// <inheritdoc />
         public int IdleSeconds => ReadIdleSeconds();
@@ -223,13 +234,13 @@ namespace ConditioningControlPanel.Services.Awareness
                 catch (ObjectDisposedException) { _timer = null; }
             }
 
-            _timer = new Timer(_ => Sample(), null, SampleInterval, SampleInterval);
+            _timer = _clock.CreateTimer(_ => _sample(), null, SampleInterval, SampleInterval);
         }
 
         /// <inheritdoc />
         public void Stop()
         {
-            try { _timer?.Change(Timeout.Infinite, Timeout.Infinite); } catch (ObjectDisposedException) { }
+            try { _timer?.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan); } catch (ObjectDisposedException) { }
             lock (_lock)
             {
                 Array.Clear(_samples, 0, _samples.Length);

@@ -742,7 +742,7 @@
                         <Button x:Name="BtnMenuFallIn" Click="Menu_FallIn_Click"
                                 Height="64" Margin="0,0,0,14" FontSize="22" FontWeight="Bold" Foreground="White"
                                 Background="{StaticResource Brand}" BorderThickness="0" Cursor="Hand"
-                                HorizontalContentAlignment="Left" Padding="22,0" CornerRadius="12"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="22,0" CornerRadius="12"
                                 ToolTip.Tip="you were always going to.">
                             <Button.Effect><DropShadowEffect Color="#FFE84393" BlurRadius="18" OffsetX="0" OffsetY="0" Opacity="0.6"/></Button.Effect>
                             <fx:IconLabel Text="FALL IN" Kind="Play" Spacing="12"/>
@@ -757,7 +757,7 @@
                         </Button>
                         <Button x:Name="BtnMenuStory" Theme="{StaticResource MenuBtn}"
                                 Click="Menu_Story_Click" ToolTip.Tip="the Madam's narrated descent — coming soon.">
-                            <StackPanel Orientation="Horizontal" Spacing="12"><fx:IconGlyph Kind="BookOpen" VerticalAlignment="Center"/><TextBlock Text="STORY MODE" VerticalAlignment="Center"/><fx:IconGlyph Kind="LockClosed" VerticalAlignment="Center"/></StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="12"><fx:IconGlyph Kind="BookOpen" Size="19" VerticalAlignment="Center"/><TextBlock Text="STORY MODE" VerticalAlignment="Center"/><fx:IconGlyph Kind="LockClosed" Size="19" VerticalAlignment="Center"/></StackPanel>
                         </Button>
                         <Button x:Name="BtnMenuOptions" Theme="{StaticResource MenuBtn}" Click="Menu_Options_Click">
                             <fx:IconLabel Text="OPTIONS" Kind="Settings" Spacing="12"/>

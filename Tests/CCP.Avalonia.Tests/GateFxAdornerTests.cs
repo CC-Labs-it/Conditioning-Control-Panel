@@ -71,6 +71,32 @@ public sealed class GateFxAdornerTests
     });
 
     [Fact]
+    public Task CtaSheenHoldsTheTravelEndpointUntilTheDiscreteReset() => Run(shell =>
+    {
+        shell.ShowTab("lockdown");
+        Settle(shell);
+        var gate = shell.Named<Control>("LockdownTab")!.FindControl<Border>("LockdownGate")!;
+        var sheen = Assert.IsType<CardSheenAdorner>(PremiumGateFx.For(gate)!.CtaSheen);
+        sheen.Start();
+        long start = Clock.Now;
+        // WPF Controls/CardSheenAdorner.cs:106-112: linear travel, 50 ms hold,
+        // discrete reset, then rest until the next twelve-second cycle.
+        foreach (var (seconds, shift) in new[]
+        {
+            (0.65, 0.70), (1.30, 1.40), (1.349, 1.40), (1.35, 0.0),
+            (11.999, 0.0), (12.0, 0.0), (12.65, 0.70)
+        })
+        {
+            Clock.Now = start + TimeSpan.FromSeconds(seconds).Ticks;
+            sheen.Tick();
+            Assert.Equal(-0.17 + shift, sheen.BandOffset, 6);
+        }
+        sheen.Stop();
+        Assert.Equal(-0.17, sheen.BandOffset, 6);
+        Assert.False(sheen.IsTicking);
+    });
+
+    [Fact]
     public Task StudioActiveTileWearsALappingComet_ThatMovesParksAndDegrades() => Run(shell =>
     {
         shell.ShowTab("studio");

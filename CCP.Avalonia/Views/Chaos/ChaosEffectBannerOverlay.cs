@@ -236,7 +236,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         /// <summary>WPF ChaosArt.Resolve("announce", key): user assets first, then the app folder.</summary>
-        private static Bitmap? ResolveArt(string key)
+        internal static Bitmap? ResolveArt(string key)
         {
             foreach (var root in new[] { Path.Combine(CorePaths.UserData, "assets"), AppContext.BaseDirectory })
             {

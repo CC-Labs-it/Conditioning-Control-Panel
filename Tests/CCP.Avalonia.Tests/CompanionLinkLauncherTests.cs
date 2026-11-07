@@ -12,6 +12,33 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class CompanionLinkLauncherTests
 {
+    [Fact]
+    public Task OfflineRejectionCannotFallThroughToExternalBrowser() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var oldOffline = ConditioningControlPanel.CoreSettings.Current.OfflineMode;
+        var oldNavigate = CompanionLinkLauncher.Navigate;
+        var oldOpen = AppUpdater.OpenUrl;
+        var oldRelay = RemoteControlTabView.Relay;
+        var opens = 0;
+        try
+        {
+            ConditioningControlPanel.CoreSettings.Current.OfflineMode = true;
+            RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => oldRelay.Value);
+            CompanionLinkLauncher.Navigate = _ => false;
+            AppUpdater.OpenUrl = (_, _) => { opens++; return Task.CompletedTask; };
+            await CompanionLinkLauncher.OpenAsync("https://127.0.0.1/video");
+            Assert.Equal(0, opens);
+        }
+        finally
+        {
+            ConditioningControlPanel.CoreSettings.Current.OfflineMode = oldOffline;
+            CompanionLinkLauncher.Navigate = oldNavigate;
+            AppUpdater.OpenUrl = oldOpen;
+            RemoteControlTabView.Relay = oldRelay;
+        }
+    });
+
     [Theory]
     [InlineData(false, true, "https://127.0.0.1/video", 1, 0)]
     [InlineData(false, false, "https://127.0.0.1/video", 1, 1)]

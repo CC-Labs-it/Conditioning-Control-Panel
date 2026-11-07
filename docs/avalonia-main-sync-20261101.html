@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Main sync #12 delta ledger (2026-11-01)</title>
+<style>
+:root{color-scheme:light dark;--fg:#1f2328;--bg:#fff;--muted:#59636e;--line:#d1d9e0;--code:#f6f8fa;--link:#0969da}
+@media (prefers-color-scheme:dark){:root{--fg:#e6edf3;--bg:#0d1117;--muted:#9198a1;--line:#3d444d;--code:#151b23;--link:#4493f8}}
+body{font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--fg);background:var(--bg);max-width:1200px;margin:2rem auto;padding:0 1.25rem}
+h1,h2,h3,h4{line-height:1.25;margin:1.5em 0 .5em}h1,h2{border-bottom:1px solid var(--line);padding-bottom:.3em}
+a{color:var(--link)}code,pre{font:13px/1.5 ui-monospace,Consolas,monospace;background:var(--code);border-radius:5px}
+code{padding:.1em .3em;overflow-wrap:anywhere}pre{padding:1em;overflow:auto}pre code{padding:0;background:none}
+table{border-collapse:collapse;margin:1em 0;width:100%}th,td{border:1px solid var(--line);padding:.35em .6em;vertical-align:top}
+th{background:var(--code);position:sticky;top:0}td{overflow-wrap:anywhere}blockquote{margin:0;padding:0 1em;color:var(--muted);border-left:.25em solid var(--line)}
+.counts{font-weight:600}.src{color:var(--muted);font-size:.85em}
+</style>
+<script type="application/json" id="ledger-meta">{"total": 28, "pin": "c70d1a8f95", "base": "b3bfe652df"}</script>
+</head>
+<body>
+<h1>Main sync #12 delta ledger (2026-11-01)</h1>
+<p>Branch <code>avalonia-port/main-20261101</code> (ledger + merge) and <code>avalonia-port/main-20261101-compat</code> (hand ports and red checks),
+from <code>avalonia-port/main-20261031b-compat</code> (<code>b3bfe652df</code>: main sync #11).
+Pin: <code>origin/main</code> = <code>c70d1a8f95</code>, which is 7.2.1 (Latest). Delta: 28 non-merge commits. Rows: n/a 9, ported 11, ported-by-merge 8.</p>
+<p>Status legend as in the earlier ledgers: <strong>ported-by-merge</strong>: the change landed in a file both heads use.
+<strong>ported</strong>: done on this sync's <code>-compat</code> branch. <strong>n/a</strong>: no counterpart by design, reason given.
+Nothing in this delta is left as needs-port.</p>
+
+<h2>Scope calls</h2>
+<ul>
+<li><strong>Prize Counter on Linux (owner, 2026-11-01):</strong> not in this sync, and a lane is owed (<code>prize-counter-linux</code>). This replaces the B3 "desktop only" reason, which the owner's Oct 31 shared shop call had already overturned. The rows in the sync 10 and 11 ledgers now read "lane owed".</li>
+<li><strong>Wallpaper on Linux (owner, 2026-11-01):</strong> the door stays hidden, and <code>docs/avalonia-linux-install.html</code> says so.</li>
+<li><strong>B2:</strong> pictures on Linux stay My files / Off, so the race clip host row is n/a.</li>
+</ul>
+
+<h2>Grace and entitlement (#4073)</h2>
+<p>Most of the conflict list, and the part that changes money. All five rules hold on this head:</p>
+<ul>
+<li>The tier is kept on a launch where a reading can land (<code>ProviderSubscription.InitializeAsync</code>; an id with no token still zeroes it).</li>
+<li>Grace renews on any reading with a tier (<code>RenewGrace</code>, through <code>EntitlementReadings</code>).</li>
+<li>The same lower reading at least 90 s later closes the grace, with no session, engine, Lockdown or game running (<code>AccountSeed.HoldGraceClose</code>). A heartbeat comes every 120 s, so a close lands about two minutes after the first lower reading.</li>
+<li><code>EntitlementLapse.Enforce</code> only clears flags. Nothing restores a setting. A close repaints through <code>AccountSeed.GraceClosed</code>, not <code>TierChanged</code>, so it does not celebrate.</li>
+<li>A closed plan answers "subscribe" rather than "reconnect" (<code>TierGate.ReconnectIsTheAnswer</code> in Core, so both heads).</li>
+</ul>
+<p>WPF keeps <code>EntitlementTierSync</code> as main has it. <code>EntitlementReadings</code> is the settings half for a head without it. Draft #3301 adds a rise-only <code>EntitlementTierMonitor</code>; re-cut it onto <code>ApplyTierReading</code>, because a rise-only path on a kept tier never renews a grace.</p>
+
+<h2>Race build proof</h2>
+<p><code>Assets/web/glassroad</code> is the same git tree as main's <code>Resources/web/glassroad</code> (<code>4603039b9f</code>). <code>onlineCourseHash</code> run in Node on the merged tree, against <code>rooms/src/tracks.js</code> on CCP-Server main and the <code>tests/garage-shop.test.mjs</code> literals:</p>
+<table>
+<tr><th>course</th><th>hash</th><th>room card</th><th>test literal</th></tr>
+<tr><td>threshold</td><td><code>9f5a909c689f0f1a</code></td><td>match</td><td>match</td></tr>
+<tr><td>mainframe</td><td><code>940481a7288753b2</code></td><td>match</td><td>match</td></tr>
+<tr><td>keep</td><td><code>389f7635768ebecd</code></td><td>match</td><td>match</td></tr>
+<tr><td>boudoir</td><td><code>a097773aa3c012b7</code></td><td>match</td><td>match</td></tr>
+<tr><td>goonworks</td><td><code>b463b2a20bfe17bf</code></td><td>match</td><td>match</td></tr>
+</table>
+<p>This proves the hash, not a seat. A Linux client joining a live room is still owed, on a Linux box.</p>
+
+<h2>Sync 11 red checks, explained</h2>
+<table>
+<tr><th>check</th><th>cause</th><th>where it was</th><th>fix here</th></tr>
+<tr><td><code>core-linux</code></td><td><code>packaging/aur/PKGBUILD</code> pkgver 7.1.15 did not match the 7.2.0 tarball (tests passed)</td><td>#3894, #3895</td><td>pkgver follows Version.props, 7.2.1</td></tr>
+<tr><td><code>windows</code></td><td><code>ShopCosmeticsTests</code> read the csproj from its WPF-layout path</td><td>#3894, #3895</td><td>port path</td></tr>
+<tr><td><code>avalonia-linux (0)</code>, <code>avalonia-windows (0)</code></td><td><code>ExclusivesVaultTests</code> still shelved DtRH under Prime</td><td>#3894, #3895</td><td>under Basic</td></tr>
+<tr><td><code>avalonia-coverage (linux)</code></td><td>Knock-on: <code>avalonia-linux (2)</code> was cancelled, so the shards ran 1530 of 2078</td><td>#3895</td><td>no change; it follows a clean run</td></tr>
+</table>
+
+<h2>Sync 11 lanes</h2>
+<table>
+<tr><th>lane</th><th>state at this sync</th></tr>
+<tr><td><code>sync11-dtrh-basic</code> #3897</td><td>Merged into this sync's <code>-compat</code>: 7.2.1 announces DtRH at Basic, and the door would otherwise refuse Basic on this head.</td></tr>
+<tr><td><code>sync11-wallet-net</code> #3899</td><td>Not landed. Green at its own base.</td></tr>
+<tr><td><code>sync11-profile-equip</code> #3898</td><td>Not landed.</td></tr>
+<tr><td><code>sync11-race-pictures</code> #3896</td><td>Not landed, and do not land it as is. It sets <code>caps.scrolller</code> on every OS and starts <code>GoonOnlineMedia.ForGameStills</code> with no platform check, so it offers Scrolller on a Linux host. B2 says My files / Off until a gate exists. Omit the cap and refuse its messages off Windows, or hold it for the 7.2.x work.</td></tr>
+<tr><td><code>sync11-xp-tip</code></td><td>Not landed. Branch only, no PR.</td></tr>
+</table>
+
+<h2>Rows</h2>
+<table>
+<tr><th>#</th><th>sha</th><th>subject</th><th>files</th><th>Avalonia/Core counterpart</th><th>status</th><th>notes</th></tr>
+<tr><td>1</td><td><code>505e7f5060</code></td><td>fix(entitlement): a lower server tier ends the grace at once</td><td>3</td><td>CCP.Core/Services/Account/EntitlementTierRule.cs, EntitlementReadings.cs, ProviderSubscription.cs; CCP.Avalonia/Platform/AccountSeed.cs</td><td>ported</td><td>Superseded within the stack by the later rows; read together with them.</td></tr>
+<tr><td>2</td><td><code>4df512aec6</code></td><td>fix(entitlement): confirm a drop before closing the grace</td><td>8</td><td>CCP.Core/Services/Account/EntitlementTierRule.cs, EntitlementReadings.cs, ProviderSubscription.cs; CCP.Avalonia/Platform/AccountSeed.cs</td><td>ported</td><td>The 90 s second reading: EntitlementTierRule.ApplyReading, Core by merge, driven on Linux by AccountSeed.ApplyTierReading from the profile load and every heartbeat.</td></tr>
+<tr><td>3</td><td><code>b5fa74aefa</code></td><td>fix(lobby): show every Remote Control tag</td><td>2</td><td>CCP.Core/Services/Lobby/LobbyModel.cs</td><td>ported-by-merge</td><td>Core.</td></tr>
+<tr><td>4</td><td><code>90b55df5c5</code></td><td>fix(companion): Slut Mode stops feeding the model lines to repeat</td><td>2</td><td>CCP.Core/Services/Companion/SlutModeBite.cs</td><td>ported-by-merge</td><td>Core.</td></tr>
+<tr><td>5</td><td><code>2b7aea3752</code></td><td>fix(entitlement): close the grace from the stamps, not the stored tier</td><td>13</td><td>CCP.Core/Services/Account/EntitlementTierRule.cs, EntitlementReadings.cs, ProviderSubscription.cs; CCP.Avalonia/Platform/AccountSeed.cs</td><td>ported</td><td>Core CloseGrace by merge.</td></tr>
+<tr><td>6</td><td><code>93a4c95c39</code></td><td>fix(audio): a bug report names the sounds that just played</td><td>9</td><td>CCP.Core/Services/Audio/RecentSounds.cs, BugReportService.cs; CCP.Avalonia/Platform/LibVlcAudio.cs</td><td>ported</td><td>The ring moves to Core with BugReportService. LibVLC one-shots feed it; looped layers on this head do not yet.</td></tr>
+<tr><td>7</td><td><code>b99874d31e</code></td><td>fix(glassroad): hazards hit with what they draw, on every course</td><td>17</td><td>Assets/web/glassroad</td><td>ported-by-merge</td><td>Web tree identical to main. Moves the course hashes: see the proof below.</td></tr>
+<tr><td>8</td><td><code>9a3ea9379e</code></td><td>fix(glassroad): a thumper&#x27;s floor warning paints what can hit you</td><td>1</td><td>Assets/web/glassroad</td><td>ported-by-merge</td><td>Web tree identical to main.</td></tr>
+<tr><td>9</td><td><code>92e7366199</code></td><td>fix(companion): the ask cards&#x27; off switch is reachable again; quest ding follows the perk opt-out</td><td>4</td><td>CCP.Avalonia/Views/Controls/Companion/Pages/PermissionsPage.axaml; App.axaml.cs PlayQuestCompletionEffects</td><td>ported</td><td>Ask cards switch on Permissions. The quest ding sits behind Core&#x27;s PlayCompletionEffectsProvider, so the perk switch goes in each head&#x27;s provider.</td></tr>
+<tr><td>10</td><td><code>9b100eec5a</code></td><td>fix(entitlement): stop the launch reset, close on a confirmed drop</td><td>10</td><td>CCP.Core/Services/Account/EntitlementTierRule.cs, EntitlementReadings.cs, ProviderSubscription.cs; CCP.Avalonia/Platform/AccountSeed.cs</td><td>ported</td><td>The launch reset lived in Core ProviderSubscription.InitializeAsync, so WPF PatreonService&#x27;s hunk resolves to the port side and the change is redone there. RenewGrace runs on Linux through EntitlementReadings: with the tier kept, no launch reads as a rise, so without it a Linux payer&#x27;s grace would lapse after 14 days.</td></tr>
+<tr><td>11</td><td><code>57f879ccf5</code></td><td>fix(entitlement): review fixes for the grace close</td><td>12</td><td>CCP.Core/Services/Account/EntitlementTierRule.cs, EntitlementReadings.cs, ProviderSubscription.cs; CCP.Avalonia/Platform/AccountSeed.cs; CCP.Core/Services/TierGate.cs, DiscordAccount.cs, ProgressionClear.cs, Settings/CloudSettingsBackup.cs</td><td>ported</td><td>ClosedRowWindow moves to Core so ClosedTierNow compiles; WPF ConversionRules reads it. Closed row and lapse greeting: this head has no conversion rows, nothing to post. EntitlementLapse.Enforce only clears, so nothing restores a setting.</td></tr>
+<tr><td>12</td><td><code>6998d7ab56</code></td><td>fix(glassroad): the garage stays live while the lights warm</td><td>3</td><td>Assets/web/glassroad</td><td>ported-by-merge</td><td>#4079 garage warm. Web tree identical to main.</td></tr>
+<tr><td>13</td><td><code>6104286647</code></td><td>feat(wallpaper): settings and strings for Settings &gt; Wallpaper</td><td>12</td><td>CCP.Core/Models/AppSettings.cs, languages; CCP.Core/Services/Settings/CloudSettingsBackup.cs</td><td>ported</td><td>Settings and strings by merge. CollageRunWithCcp and CollageOwnImagePath stay out of the cloud backup on the compat branch.</td></tr>
+<tr><td>14</td><td><code>5ac853794c</code></td><td>feat(wallpaper): collage drawing helpers</td><td>1</td><td>none on this head</td><td>n/a</td><td>n/a (owner 2026-11-01: no Wallpaper door on Linux)</td></tr>
+<tr><td>15</td><td><code>86ed49d7b2</code></td><td>feat(wallpaper): collage layouts and image selection</td><td>2</td><td>none on this head</td><td>n/a</td><td>n/a (owner 2026-11-01: no Wallpaper door on Linux)</td></tr>
+<tr><td>16</td><td><code>bef2fd2f33</code></td><td>feat(wallpaper): Static and Own image on the desktop, panic takes it down</td><td>6</td><td>none on this head</td><td>n/a</td><td>n/a (owner 2026-11-01: no Wallpaper door on Linux). The panic takedown has nothing to take down here.</td></tr>
+<tr><td>17</td><td><code>c66258b886</code></td><td>feat(wallpaper): Settings &gt; Wallpaper section</td><td>7</td><td>none on this head</td><td>n/a</td><td>n/a (owner 2026-11-01: no Wallpaper door on Linux)</td></tr>
+<tr><td>18</td><td><code>20f1157dfe</code></td><td>feat(wallpaper): the desktop layer under the icons</td><td>4</td><td>none on this head</td><td>n/a</td><td>n/a (owner 2026-11-01: no Wallpaper door on Linux). DirectComposition.</td></tr>
+<tr><td>19</td><td><code>d72c2c3d02</code></td><td>feat(wallpaper): Dynamic render host</td><td>4</td><td>none on this head</td><td>n/a</td><td>n/a (owner 2026-11-01: no Wallpaper door on Linux). DirectComposition.</td></tr>
+<tr><td>20</td><td><code>ad332c7fff</code></td><td>fix(mantra): drone obeys the master volume during the streak ramp</td><td>2</td><td>CCP.Avalonia/Views/Windows/MantraWindow.axaml.cs</td><td>ported</td><td>DroneGain in every phase. This head has no master-volume event, so the float tick compares and reapplies.</td></tr>
+<tr><td>21</td><td><code>f165962178</code></td><td>feat(wallpaper): Dynamic mode on</td><td>4</td><td>none on this head</td><td>n/a</td><td>n/a (owner 2026-11-01: no Wallpaper door on Linux)</td></tr>
+<tr><td>22</td><td><code>912f79e6ca</code></td><td>chore(wallpaper): plain hyphens in two comments</td><td>1</td><td>none on this head</td><td>n/a</td><td>n/a (owner 2026-11-01: no Wallpaper door on Linux)</td></tr>
+<tr><td>23</td><td><code>e61c2dd478</code></td><td>feat(wallpaper): live in the Studio rack, with its own picture</td><td>27</td><td>CCP.Core/Services/SettingsPaletteIndex.cs; CCP.Avalonia/App.axaml.cs</td><td>ported</td><td>Door stays WPF only. Core&#x27;s palette row is hidden through WallpaperDoorAvailableProvider, which this head answers false. Assets/features/wallpaper.png taken from main.</td></tr>
+<tr><td>24</td><td><code>62c54adcf1</code></td><td>release: 7.2.1 &quot;Racing Thoughts&quot;</td><td>16</td><td>Version.props, packaging/aur/PKGBUILD</td><td>ported</td><td>7.2.1. The csproj keeps importing Version.props (no Version element). Languages and root notes by merge.</td></tr>
+<tr><td>25</td><td><code>5d23173abe</code></td><td>docs(7.2.1): the notes present Racing Thoughts</td><td>2</td><td>notes-section-7.2.1.txt</td><td>ported-by-merge</td><td>Shared root notes. They announce the Wallpaper; the Linux install doc says it is not on Linux.</td></tr>
+<tr><td>26</td><td><code>2e566cd542</code></td><td>feat(glassroad): moving Scrolller clips on the desktop race screens</td><td>6</td><td>Assets/web/glassroad</td><td>ported-by-merge</td><td>Web only; nothing on this head offers clips.</td></tr>
+<tr><td>27</td><td><code>c8810c3e63</code></td><td>feat(race): the desktop host offers Scrolller clips to the race</td><td>4</td><td>none on this head</td><td>n/a</td><td>n/a (B2: Linux is My files / Off; Scrolller is a 7.2.x follow-up behind its own gate).</td></tr>
+<tr><td>28</td><td><code>cb42918a8a</code></td><td>docs(7.2.1): the notes mention clips on the race screens</td><td>2</td><td>notes-section-7.2.1.txt</td><td>ported-by-merge</td><td>Shared root notes.</td></tr>
+</table>
+</body>
+</html>

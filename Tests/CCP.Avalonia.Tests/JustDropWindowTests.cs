@@ -7,6 +7,7 @@ using Avalonia.Skia;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -27,7 +28,7 @@ public sealed class JustDropWindowTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
@@ -58,6 +59,56 @@ public sealed class JustDropWindowTests
     }
 
     private static GameWindow? Open() => GameWindow.OpenForTests(GameWindow.JustDropId);
+
+    [Fact]
+    public void ShopAndReplayStayIndependentWhenThePanelIsMinimizedOrHidden() => Run(shell =>
+    {
+        JustDropService.SetServerEnabledForTests(true);
+        shell.ShowTab("justdrop");
+        var shop = Open()!;
+        Assert.Null(shop.Owner); // A plain native owner would hide the shop with the panel on Windows.
+        Assert.True(shop.ShowInTaskbar);
+        shell.WindowState = global::Avalonia.Controls.WindowState.Minimized;
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(shop.IsVisible);
+        Assert.NotEqual(global::Avalonia.Controls.WindowState.Minimized, shop.WindowState);
+        shell.Hide();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(shop.IsVisible);
+        shell.Show();
+        shell.WindowState = global::Avalonia.Controls.WindowState.Normal;
+        shop.Close();
+        var replay = GameWindow.LaunchJustDropReplay("kept-order", shell)!;
+        Assert.Null(replay.Owner); // Replay ducks the panel itself, so it must not inherit its minimize.
+        Assert.True(replay.ShowInTaskbar);
+        Assert.Equal(global::Avalonia.Controls.WindowState.Minimized, shell.WindowState);
+        Assert.Equal(global::Avalonia.Controls.WindowState.FullScreen, replay.WindowState);
+        Assert.True(replay.IsVisible);
+        shell.Hide();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(replay.IsVisible);
+    });
+
+    [Fact]
+    public void ShopCountsEveryOpenOnceAndUsesItsOwnChromiumProfile() => Run(shell =>
+    {
+        var state = ConditioningControlPanel.Services.EmiDesk.EmiState.Current;
+        state.OpenScore.Remove("justdrop");
+        state.UsageAt.Remove("justdrop");
+        JustDropService.SetServerEnabledForTests(false);
+        shell.ShowTab("justdrop");
+        Assert.False(state.OpenScore.ContainsKey("justdrop"));
+        JustDropService.SetServerEnabledForTests(true);
+        shell.ShowTab("justdrop");
+        var w = Open()!;
+        double first = state.OpenScore["justdrop"];
+        Assert.Equal(1, first);
+        Assert.Equal(GameWindow.JustDropBrowserArguments, w.Web.WindowsBrowserArguments);
+        Assert.Equal(Path.Combine(CorePaths.UserData, "browser_data_avalonia_justdrop"), w.Web.WindowsUserDataFolder);
+        shell.ShowTab("justdrop");
+        Assert.Same(w, Open());
+        Assert.InRange(state.OpenScore["justdrop"], first + 0.99, first + 1);
+    });
 
     [Fact]
     public void ShowTab_OpensTheShopOnlyWhenTheDoorIsOpen_AndPanicClosesIt() => Run(shell =>
@@ -117,6 +168,74 @@ public sealed class JustDropWindowTests
         Assert.Equal(40, paid);                           // untimed first play: a taste (Core settlement)
         Assert.Equal(0, posted);                          // the site never gets the local games' init
         Assert.True(w.IsVisible);                         // and no game frame closes it
+    });
+
+    /// <summary>WPF JustDropHostService.cs:105-108,249-253 keeps the site bridge after auth redirects;
+    /// ChaosWebViewHost.cs:238,1704 applies its document fence only to NavigatePage transfers.</summary>
+    [Theory]
+    [InlineData(JustDropHandoff.ShopPath)]
+    [InlineData(JustDropHandoff.PlayerPath)]
+    public void SignedInHandoffRedirect_StillDeliversSiteMessages(string destination) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        CoreAccount.UnifiedUserId = "handoff-test-user";
+        CoreSecrets.RetrieveProvider = name => name == CoreSecrets.AuthToken ? "test-token" : null;
+        (settings.Current.PlayerLevel, settings.Current.JustDropXpDayKey, settings.Current.JustDropCreditedToday) = (1, "", 0);
+        var root = Directory.CreateTempSubdirectory("jd-redirect-").FullName;
+        CreditedOrders.FilePathOverride = Path.Combine(root, "credited.json");
+        using var server = new WebAssetServer(root);
+        var w = new GameWindow(GameWindow.Games[GameWindow.JustDropId] with { Query = destination });
+        try
+        {
+            w.Load(server);
+            Assert.Equal(JustDropHandoff.HandoffPath, w.PageUrl!.AbsolutePath);
+            Assert.Contains(Uri.EscapeDataString(destination), w.PageUrl.Query);
+            double paid = 0;
+            CoreProgression.AddXPProvider = (xp, _) => paid += xp;
+            var complete = "{\"source\":\"justdrop\",\"v\":1,\"type\":\"session-complete\",\"payload\":{\"orderCode\":\"JD-"
+                + Guid.NewGuid().ToString("N") + "\",\"sizeId\":\"S\"}}";
+            w.Web.OnWebMessage(complete);   // no completed navigation yet
+            Assert.Equal(0, paid);
+            foreach (var foreign in new[]
+            {
+                "https://evil.example" + destination,
+                "https://app.cclabs.app.evil.example" + destination,
+                "http://app.cclabs.app" + destination,
+                "https://app.cclabs.app:444" + destination,
+            })
+            {
+                var url = new Uri(foreign);
+                Assert.False(w.Web.AllowNavigation!(url));
+                w.Web.OnNavigationCompleted(url);
+                w.Web.OnWebMessage(complete);
+                Assert.Equal(0, paid);
+            }
+            var redirected = new Uri(JustDropHandoff.SiteOrigin + destination);
+            Assert.True(w.Web.AllowNavigation!(redirected));
+            w.Web.OnNavigationCompleted(redirected);
+            w.Web.OnWebMessage(complete);
+            Assert.Equal(40, paid);   // Core's untimed first-play settlement proves completion reached it
+            Assert.Equal(JustDropHandoff.HandoffPath, w.PageUrl.AbsolutePath);   // the requested URL stays the handoff
+        }
+        finally { w.Close(); Directory.Delete(root, true); }
+    });
+
+    [Fact]
+    public void TheStripPillOpensTheShopOnlyAfterOpenIt() => Run(shell =>
+    {
+        JustDropService.SetServerEnabledForTests(true);
+        shell.ShowTab("presets");
+        var strip = shell.PageStrip!;
+        strip.PillFor("justdrop")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Null(Open());                              // the pill only asks
+        var yes = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(strip.ConfirmationCard!)
+            .OfType<global::Avalonia.Controls.Button>().Single(b => b.Name == "NavOpenWindowYes");
+        yes.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        Assert.NotNull(Open());                           // Open it -> ShowTab -> OpenJustDrop -> GameWindow.Launch
+        Assert.Equal("presets", shell.CurrentTab);
     });
 
     [Fact]

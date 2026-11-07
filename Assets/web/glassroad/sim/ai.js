@@ -143,7 +143,8 @@ export function createAi(track, feel, { seed = 1, forkChoice = null } = {}) {
     }
   }
   const at = (s) => (Math.floor(wrap(s, L) / STEP)) % N;
-  const lips = (track.jumps || []).map((j) => j.s);
+  // ramp lips count as jump lips: no hops, drifts or brakes on the run-up, the line calms (the ramp launches itself)
+  const lips = [...(track.jumps || []).map((j) => j.s), ...(track.ramps || []).map((r) => r.lipS)];
   const lipAhead = (s, m) => lips.some((ls) => wrap(ls - s, L) <= m);
   const openAhead = (s, m) => { for (let d = 0; d <= m; d += STEP) { const k = at(s + d); if (openL[k] || openR[k]) return true; } return false; };
   // boost pads followed (within ai.padRiskM) by an open bend tighter than ai.padRiskPct of top: the bots skip them

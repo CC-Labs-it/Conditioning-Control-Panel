@@ -19,6 +19,7 @@ namespace ConditioningControlPanel.Tests;
 /// Set NAV_STRIP_SHOTS to a folder to save strip-&lt;section&gt;.png and strip-&lt;section&gt;-locked.png
 /// (rendered at Motion Full, so the glow is in the shot).
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class NavStripPolishGlyphTests
 {
     private readonly ITestOutputHelper _out;

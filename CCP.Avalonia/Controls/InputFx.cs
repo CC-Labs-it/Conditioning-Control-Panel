@@ -28,6 +28,17 @@ public static class InputFx
     public static double GetGlowLevel(Control c) => c.GetValue(GlowLevelProperty);
     public static void SetGlowLevel(Control c, double v) => c.SetValue(GlowLevelProperty, v);
 
+    /// <summary>Inputs.xaml's state glows on a template Border (ComboBox open, CheckBox checked): a
+    /// DropShadowEffect ShadowDepth=0 becomes a BoxShadow that follows GlowColor (the mod accent).</summary>
+    public static readonly AttachedProperty<double> GlowOpacityProperty =
+        AvaloniaProperty.RegisterAttached<Control, double>("GlowOpacity", typeof(InputFx));
+    public static readonly AttachedProperty<double> GlowBlurProperty =
+        AvaloniaProperty.RegisterAttached<Control, double>("GlowBlur", typeof(InputFx));
+    public static double GetGlowOpacity(Control c) => c.GetValue(GlowOpacityProperty);
+    public static void SetGlowOpacity(Control c, double v) => c.SetValue(GlowOpacityProperty, v);
+    public static double GetGlowBlur(Control c) => c.GetValue(GlowBlurProperty);
+    public static void SetGlowBlur(Control c, double v) => c.SetValue(GlowBlurProperty, v);
+
     static InputFx()
     {
         IsEnabledProperty.Changed.AddClassHandler<TextBox>((box, e) =>
@@ -49,6 +60,21 @@ public static class InputFx
         });
         GlowLevelProperty.Changed.AddClassHandler<TextBox>((box, _) => Paint(box));
         GlowColorProperty.Changed.AddClassHandler<TextBox>((box, _) => Paint(box));
+        GlowOpacityProperty.Changed.AddClassHandler<Border>((b, _) => PaintBorder(b));
+        GlowBlurProperty.Changed.AddClassHandler<Border>((b, _) => { if (GetGlowOpacity(b) > 0) PaintBorder(b); });
+        GlowColorProperty.Changed.AddClassHandler<Border>((b, _) => { if (GetGlowOpacity(b) > 0) PaintBorder(b); });
+    }
+
+    private static void PaintBorder(Border border)
+    {
+        var level = Math.Clamp(GetGlowOpacity(border), 0, 1);
+        if (level <= 0) { border.ClearValue(Border.BoxShadowProperty); return; }
+        var c = GetGlowColor(border);
+        border.BoxShadow = new BoxShadows(new BoxShadow
+        {
+            Blur = GetGlowBlur(border),
+            Color = Color.FromArgb((byte)Math.Round(level * 255), c.R, c.G, c.B),
+        });
     }
 
     private static void OnBoxChanged(object? sender, AvaloniaPropertyChangedEventArgs e)

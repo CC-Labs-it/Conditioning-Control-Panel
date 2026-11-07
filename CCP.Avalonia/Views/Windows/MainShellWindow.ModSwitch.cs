@@ -7,8 +7,9 @@
 //
 // ponytail: ApplyActiveModChange repaints what this head has - the selector, the palette. WPF also
 // reloads the takeover art, achievement grid, BambiCloud radio + browser URL, Hypnotube link
-// editor and per-mod defaults; each joins here when its surface is live. Home tile art now follows
-// CoreMods.ModChanged as well as startup; the manager footer is the WPF 7.1.5 action row.
+// editor; each joins here when its surface is live. Home tile art now follows
+// CoreMods.ModChanged as well as startup; the per-mod default presets picked in the Customise
+// window apply last (ApplyModDefaultPresets), as WPF.
 
 using System;
 using System.Linq;
@@ -191,7 +192,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             foreach (var personality in this.GetLogicalDescendants().OfType<Controls.Companion.MakeHerYoursView>())
                 personality.ViewModel.Sync();
 
+            // Last: the user's per-mod default presets (Customise window), if they picked any.
+            ApplyModDefaultPresets(mods.ActiveModId);
+
             Log.Information("Mod changed to {ModId}", mods.ActiveModId);
+        }
+
+        /// <summary>
+        /// WPF ApplyModDefaultPresets (MainWindow.Presets.cs:2299): the per-mod defaults picked in the
+        /// Customise window, applied on every switch to <paramref name="modId"/>. Only the user's
+        /// stored choice applies (ModPresetDefaults); assets go through the one asset apply path,
+        /// settings through the Presets tab's LoadPreset (session-lock guard included), quietly.
+        /// </summary>
+        internal void ApplyModDefaultPresets(string? modId)
+        {
+            var s = CoreSettings.Service?.Current;
+            if (s == null) return;
+
+            var assetId = ModPresetDefaults.ForActivation(s.ModDefaultAssetPreset, modId);
+            if (assetId != null && AssetPresetService.Find(s.AssetPresets, assetId) != null)
+                ApplyAssetPresetFromLauncher(assetId);
+
+            var settingsId = ModPresetDefaults.ForActivation(s.ModDefaultSettingsPreset, modId);
+            var preset = settingsId == null ? null
+                : Preset.GetDefaultPresets().Concat(s.UserPresets).FirstOrDefault(p => p.Id == settingsId);
+            if (preset != null) Named<Tabs.PresetsTabView>("PresetsTab")?.LoadPreset(preset);
         }
 
         /// <summary>WPF InitializeModSelector: stock mods in canonical order, then user mods A-Z.</summary>
@@ -237,10 +262,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>
-        /// The palette half of WPF RefreshThemeAwareElements: the same keys, the same math, written to
-        /// the application resources so every DynamicResource repaints. ponytail: the Descent-fuse
-        /// dimming (DescentFuseChrome, WPF-only, step 0 on every install without a countdown) and the
-        /// per-control writes (title bar, level label, XP bar, banner) are not ported.
+        /// WPF MainWindow/MainWindow.xaml.cs:2489-2536, RefreshThemeAwareElements: the same keys, the same math, written to
+        /// the application resources so every DynamicResource repaints. Only neutrals see the fuse's
+        /// dim step; accent washes always blend from the active mod's original ground, as WPF.
+        /// ponytail: per-control writes (title bar, level label, XP bar, banner) are not ported.
         /// </summary>
         private void RefreshThemeAwareElements()
         {
@@ -271,14 +296,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var surface = C(mods.GetSurfaceColorHex(), "#1E1E3A");
                 var pressed = Color.FromRgb((byte)Math.Max(0, accent.R - 30), (byte)Math.Max(0, accent.G - 30), (byte)Math.Max(0, accent.B - 30));
 
+                var step = AvApp.DescentCountdown?.DimStep ?? 0;
+                var neutralBg = Helpers.DescentFuseChrome.Dim(bg, step);
+                var neutralPanel = Helpers.DescentFuseChrome.Dim(panel, step);
+                var neutralSurface = Helpers.DescentFuseChrome.Dim(surface, step);
+
                 void Put(string key, Color c) { res[key] = c; res[key + "Brush"] = new SolidColorBrush(c); }
-                Put("DarkerBg", bg);
-                Put("PanelBg", panel);
-                Put("SurfaceBg", surface);
-                Put("PanelAccent", Lighten(panel, 0.15));
-                Put("PanelAccentHover", Lighten(panel, 0.25));
-                Put("PreviewBg", Darken(bg, 0.15));
-                Put("PanelBgTransparent", A(0xB0, panel));
+                Put("DarkerBg", neutralBg);
+                Put("PanelBg", neutralPanel);
+                Put("SurfaceBg", neutralSurface);
+                Put("PanelAccent", Lighten(neutralPanel, 0.15));
+                Put("PanelAccentHover", Lighten(neutralPanel, 0.25));
+                Put("PreviewBg", Darken(neutralBg, 0.15));
+                Put("PanelBgTransparent", A(0xB0, neutralPanel));
                 Put("DarkPink", dark);
                 Put("PinkButtonHovered", light);
                 Put("TransparentPink", A(0x30, accent));

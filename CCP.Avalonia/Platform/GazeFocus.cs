@@ -17,11 +17,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// or blinking while looking near it, pops it through the bubble's own pop pipeline (sound, XP,
     /// quests, haptics). Follows the camera, never powers it (WPF EvaluateDesiredState).
     ///
-    /// <para>ponytail: the two-stage refine overlay and gaze-lock attractor/debug cursor remain unported.</para>
+    /// <para>ponytail: the two-stage refine overlay and debug cursor remain unported.</para>
     ///
     /// <para>Coordinates: OnGazeMove is GAZE space (DIPs local to the calibrated monitor); bubbles are
     /// global DIPs (screen px / scaling). The conversion is the calibrated monitor's origin, a pure
-    /// translation (WPF CalOriginDips), here read from the saved MonitorBounds.</para>
+    /// translation (WPF CalOriginDips), resolved from the live display set.</para>
     /// </summary>
     internal sealed class GazeFocus
     {
@@ -144,6 +144,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             Unsubscribe();
             if (_timer != null) { _timer.Stop(); _timer.Tick -= OnTimerTick; _timer = null; }
             ClearTarget();
+            SetCursorLock(null); // WPF GazeFocusService.cs:290
             _lastGazePoint = null;
             _faceLost = false;
             _cooldownUntil = DateTimeOffset.MinValue;
@@ -174,13 +175,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
             _subscribed = false;
         }
 
-        /// <summary>WPF CalOriginDips/GazeToDesktop: the calibrated monitor's origin in global DIPs, or
-        /// none for a primary-monitor (or pre-hotfix, DeviceName-less) calibration.</summary>
+        /// <summary>Resolve on every gaze event so a sleeping display can return at a new origin.
+        /// The primary fallback never replaces the calibration's saved identity or geometry.</summary>
         internal static Point GazeToDesktop(Point p)
         {
-            if (WebcamTracker.Instance.Calibration?.MonitorBounds is not { DeviceName: not null } mb || (mb.X == 0 && mb.Y == 0)) return p;
-            double dpi = mb.DpiScale is > 0.25 and < 8.0 ? mb.DpiScale : 1.0;
-            return new Point(p.X + mb.X / dpi, p.Y + mb.Y / dpi);
+            var bounds = WebcamTracker.Instance.Calibration?.MonitorBounds;
+            var screen = WebcamScreens.Resolve(WebcamScreens.Enumerate(), bounds?.DeviceName);
+            if (screen == null) return p;
+            // WPF CalOriginDips uses the saved calibration scale even after a display scale change.
+            var dpi = bounds is { DpiScale: > 0.25 and < 8.0 } ? bounds.DpiScale : 1.0;
+            return new Point(p.X + screen.Bounds.X / dpi, p.Y + screen.Bounds.Y / dpi);
         }
 
         internal void HandleGazeMove(Point p) => _lastGazePoint = GazeToDesktop(p);
@@ -211,13 +215,43 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             try
             {
-                if (Clock.GetUtcNow() < _cooldownUntil || _faceLost || _lastGazePoint is not { } p) { ClearTarget(); return; }
+                if (Clock.GetUtcNow() < _cooldownUntil || _faceLost || _lastGazePoint is not { } p) { ClearTarget(); SetCursorLock(null); return; }
                 var target = FindBestTarget(p);
-                if (target == null) { ClearTarget(); return; }
+                if (target == null) { ClearTarget(); SetCursorLock(null); return; }
+                SetCursorLock(TargetBounds(target));
                 if (target is AmbientBubble b) AdvanceBubbleDwell(b);
                 else AdvanceOtherDwell(target);
             }
             catch (Exception ex) { Log.Debug("GazeFocus tick error: {Error}", ex.Message); }
+        }
+
+        // WPF GazeFocusService.cs:531-592: lock every live target, in tracker-local DIPs.
+        private static Rect? TargetBounds(object target)
+        {
+            if (target is AmbientBubble b) return new Rect(b.X, b.Y, b.Size, b.Size);
+            if (target is MandatoryVideoOverlay.Target v) return v.GazeBounds;
+            foreach (var (w, r) in FlashOverlay.Active)
+                if (ReferenceEquals(w, target))
+                {
+                    var k = w.DesktopScaling > 0 ? w.DesktopScaling : 1;
+                    return new Rect(r.X / k, r.Y / k, r.Width / k, r.Height / k);
+                }
+            return null;
+        }
+
+        internal static void SetCursorLock(Rect? bounds)
+        {
+            // Calibration's bubble test owns the same tracker attractor (WPF :574).
+            if (Views.Windows.WebcamCalibrationWindow.IsShowing) return;
+            var tracker = WebcamTracker.Instance;
+            if (bounds is not { Width: > 0, Height: > 0 } r)
+            {
+                tracker.ClearGazeAttractor();
+                return;
+            }
+            var origin = GazeToDesktop(default);
+            tracker.SetGazeAttractor(r.Center.X - origin.X, r.Center.Y - origin.Y,
+                Math.Clamp(Math.Max(r.Width, r.Height) / 2 + 30, 50, 240));
         }
 
         /// <summary>WPF FindBestTarget: topmost first within each type, geometry + type prior + sticky.</summary>

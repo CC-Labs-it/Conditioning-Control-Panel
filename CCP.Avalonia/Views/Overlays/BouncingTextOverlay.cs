@@ -389,6 +389,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// ease-out) while fading 0.9 -> 0 over 550 ms. Aged by the frame loop.</summary>
         public void SpawnBurst(double x, double y, Color color)
         {
+            if (CoreSettings.Current.GentleVisuals) return;
             const double size = 240;
             var p = BouncingTextOverlay.ToLocal(x, y, _screen, _k);
             var scale = new ScaleTransform(0.1, 0.1);

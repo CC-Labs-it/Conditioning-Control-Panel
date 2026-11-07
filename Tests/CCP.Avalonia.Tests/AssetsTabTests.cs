@@ -31,6 +31,122 @@ namespace CCP.Avalonia.Tests;
 /// Avalonia Assets tab, entered through the shell's Library door like a user.</summary>
 public sealed class AssetsTabTests
 {
+    // WPF MainWindow.Assets.cs:910-948: videos load too; failures leave a usable placeholder.
+    [Fact]
+    public Task VideoThumbnailsLoadAndAStaleFolderCannotReceiveTheirResult() => RunThumbnails(async (tab, s) =>
+    {
+        var pending = new TaskCompletionSource<global::Avalonia.Media.Imaging.Bitmap?>();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        tab.LoadVideoThumbnail = path =>
+        {
+            if (System.Threading.Interlocked.Increment(ref calls) == 2) started.TrySetResult();
+            return pending.Task;
+        };
+        tab.AssetTreeView.SelectedItem = tab.AssetTree.Single(n => n.Name == "videos");
+        var loads = tab.ThumbnailLoads;
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var videos = tab.CurrentFolderFiles.ToArray();
+        Assert.All(videos, v => Assert.True(v.IsLoadingThumbnail));
+        tab.AssetTreeView.SelectedItem = tab.AssetTree.Single(n => n.Name == "images");
+        var bmp = new global::Avalonia.Media.Imaging.Bitmap(Path.Combine(ConditioningControlPanel.CorePaths.EffectiveAssets, "images", "a.png"));
+        pending.SetResult(bmp);
+        await loads;
+        Assert.All(videos, v => { Assert.Null(v.Thumbnail); Assert.False(v.IsLoadingThumbnail); });
+        await tab.ThumbnailLoads;
+        tab.LoadVideoThumbnail = path => Task.FromResult<global::Avalonia.Media.Imaging.Bitmap?>(
+            new global::Avalonia.Media.Imaging.Bitmap(Path.Combine(ConditioningControlPanel.CorePaths.EffectiveAssets, "images", "a.png")));
+        tab.AssetTreeView.SelectedItem = tab.AssetTree.Single(n => n.Name == "videos");
+        await tab.ThumbnailLoads;
+        Assert.All(tab.CurrentFolderFiles, v => { Assert.NotNull(v.Thumbnail); Assert.False(v.IsLoadingThumbnail); });
+        tab.AssetTreeView.SelectedItem = tab.AssetTree.Single(n => n.Name == "images");
+        await tab.ThumbnailLoads;
+        tab.LoadVideoThumbnail = _ => throw new InvalidDataException();
+        tab.AssetTreeView.SelectedItem = tab.AssetTree.Single(n => n.Name == "videos");
+        await tab.ThumbnailLoads;
+        Assert.All(tab.CurrentFolderFiles, v => { Assert.Null(v.Thumbnail); Assert.False(v.IsLoadingThumbnail); });
+    });
+
+    // WPF MainWindow.Assets.cs:799-807: decrypt for the thumbnail, then remove the temporary video.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PackVideoThumbnailAlwaysDeletesItsDecryptedTemporaryFile(bool fail) => RunThumbnails(async (tab, s) =>
+    {
+        var oldStore = ContentPackStore.Current;
+        var assets = ConditioningControlPanel.CorePaths.EffectiveAssets;
+        var guid = Guid.NewGuid().ToString("N");
+        var dir = Path.Combine(assets, ".packs", guid);
+        Directory.CreateDirectory(Path.Combine(dir, "content"));
+        var bytes = new byte[] { 1, 2, 3, 4 };
+        File.WriteAllBytes(Path.Combine(dir, "content", "video.enc"), PackEncryptionService.Encrypt(bytes));
+        var manifest = new InstalledPackManifest
+        {
+            PackId = guid, PackGuid = guid, PackName = "Thumbnail pack",
+            Files = new List<PackFileEntry> { new() { OriginalName = "v.mp4", ObfuscatedName = "video.enc", FileType = "video", Extension = ".mp4" } }
+        };
+        PackEncryptionService.SaveEncryptedManifest(JsonConvert.SerializeObject(manifest), Path.Combine(dir, ContentPackStore.ManifestFileName));
+        ContentPackStore.Current = new ContentPackStore(() => assets, () => s, () => { });
+        string? extracted = null;
+        var decrypted = false;
+        tab.LoadVideoThumbnail = path =>
+        {
+            extracted = path;
+            decrypted = File.ReadAllBytes(path).SequenceEqual(bytes);
+            if (fail) throw new InvalidDataException();
+            return Task.FromResult<global::Avalonia.Media.Imaging.Bitmap?>(new global::Avalonia.Media.Imaging.Bitmap(Path.Combine(assets, "images", "a.png")));
+        };
+        try
+        {
+            tab.RefreshAssetTree();
+            tab.AssetTreeView.SelectedItem = tab.AssetTree.Single(n => n.IsPackFolder).Children.Single().Children.Single();
+            await tab.ThumbnailLoads;
+            Assert.NotNull(extracted);
+            Assert.True(decrypted);
+            Assert.False(File.Exists(extracted));
+            var video = Assert.Single(tab.CurrentFolderFiles);
+            Assert.Equal(!fail, video.Thumbnail != null);
+            Assert.False(video.IsLoadingThumbnail);
+        }
+        finally { ContentPackStore.Current = oldStore; }
+    });
+
+    // No shell or layout is needed to exercise a real TreeView selection. This also keeps
+    // thumbnail fail-proofs usable on Linux images without the shell's Segoe UI Black face.
+    private static Task RunThumbnails(Func<AssetsTabView, AppSettings, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        LocalizationManager.Instance.SetLanguage("en");
+        var root = Directory.CreateTempSubdirectory("ccp-video-thumbs-").FullName;
+        var provider = ConditioningControlPanel.CorePaths.EffectiveAssetsProvider;
+        var settings = ConditioningControlPanel.CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        try
+        {
+            ConditioningControlPanel.CorePaths.EffectiveAssetsProvider = () => root;
+            ConditioningControlPanel.CoreSettings.ServiceProvider = () => service;
+            service.Current.DisabledAssetPaths.Clear();
+            service.Current.DisabledAssetFolders.Clear();
+            Png(Path.Combine(root, "images", "a.png"));
+            Directory.CreateDirectory(Path.Combine(root, "videos"));
+            File.WriteAllBytes(Path.Combine(root, "videos", "v.mp4"), new byte[16]);
+            File.WriteAllBytes(Path.Combine(root, "videos", "w.mp4"), new byte[16]);
+            var tab = new AssetsTabView();
+            tab.OnTabShown();
+            await body(tab, service.Current);
+            await tab.ThumbnailLoads;
+        }
+        finally
+        {
+            service.SealForReset();
+            ConditioningControlPanel.CorePaths.EffectiveAssetsProvider = provider;
+            ConditioningControlPanel.CoreSettings.ServiceProvider = settings;
+            try { Directory.Delete(root, true); } catch { }
+        }
+    });
+
     [Fact]
     public Task ActivePackFoldersExposeEncryptedImagesAndPersistSelection() => Run(async (shell, tab, s) =>
     {

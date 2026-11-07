@@ -726,7 +726,7 @@ public static partial class BuiltInPrograms
         "COMPLIANCE OVERRIDES RESISTANCE",
         "RESISTANCE IS A PROCESSING ERROR",
         "FREE WILL: ACCESS DENIED",
-        "SYSTEM OVERLOAD — SHUTDOWN"
+        "SYSTEM OVERLOAD - SHUTDOWN"
     };
 
     /// <summary>

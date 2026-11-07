@@ -10,13 +10,13 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 {
     public partial class AvatarTubeWindow
     {
-        /// <summary>Where a line came from: decides the gap after it (WPF Speech.cs:71). WPF's Trigger
-        /// source has no producer on this head (no trigger loop), so it is not here.</summary>
-        internal enum SpeechSource { Preset, AI }
+        /// <summary>Where a line came from: decides the gap after it (WPF Speech.cs:71); a queued
+        /// Trigger replays through its own bubble (ShowSpeechBySource :217).</summary>
+        internal enum SpeechSource { Preset, AI, Trigger }
 
-        // WPF Speech.cs:35: a QUEUED line carries text only - its clip is dropped, as WPF ("audio is
-        // still text-only on this delayed path", Speech.cs:283).
-        private readonly Queue<string> _speechQueue = new();
+        // Queued lines keep their sensing classification and their source until delivery; clips still drop as on
+        // WPF (Speech.cs:35: a QUEUED line carries text only, "audio is still text-only on this delayed path", :283).
+        private readonly Queue<(string Text, bool Unprompted, SpeechSource Source)> _speechQueue = new();
         private DateTime _lastSpeechEndTime = DateTime.MinValue;
         private SpeechSource _lastSpeechSource = SpeechSource.Preset;
         private int _lastSpeechLength;
@@ -28,7 +28,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private const double PerCharDelaySeconds = 0.02;
 
         /// <summary>Cancels the pending post-line gap (WPF _speechDelayTimer.Stop). Never null.</summary>
-        private Action _cancelSpeechDelay = static () => { };
+        private Action _cancelSpeechDelay = NoSpeechDelay;
+        /// <summary>The idle cancel; anything else means a gap is pending (the stale-latch check reads it).</summary>
+        private static readonly Action NoSpeechDelay = static () => { };
 
         /// <summary>Runs <c>fire</c> once after the delay and returns its cancel. A DispatcherTimer, as
         /// WPF; tests swap in a manual one (P08).</summary>
@@ -71,27 +73,31 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             var next = _speechQueue.Dequeue();
             var remaining = SecondsUntilSpeechReady();
             _cancelSpeechDelay();
-            _cancelSpeechDelay = static () => { };
+            _cancelSpeechDelay = NoSpeechDelay;
             if (remaining > 0)
                 _cancelSpeechDelay = SpeechDelayScheduler(TimeSpan.FromSeconds(remaining), () =>
                 {
-                    _cancelSpeechDelay = static () => { };
-                    ShowQueuedPreset(next);
+                    _cancelSpeechDelay = NoSpeechDelay;
+                    ShowQueued(next);
                 });
             else
-                ShowQueuedPreset(next);
+                ShowQueued(next);
         }
 
-        /// <summary>WPF ShowSpeechBySource for a Preset: the giggle cue on every fifth.</summary>
-        private void ShowQueuedPreset(string text) =>
-            ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true);
+        /// <summary>WPF ShowSpeechBySource: a trigger gets its own bubble, a preset the giggle cue on every fifth.</summary>
+        private void ShowQueued((string Text, bool Unprompted, SpeechSource Source) line)
+        {
+            if (line.Source == SpeechSource.Trigger) ShowTriggerBubbleImmediate(line.Text);
+            else ShowSpeech(line.Text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true, unprompted: line.Unprompted);
+        }
 
         /// <summary>WPF GigglePriority / PanicSilence: drop every waiting line and the pending gap.</summary>
         private void ClearSpeechQueue()
         {
+            CancelTriggerAnimation(); // panic, close and priority speech retire pending lead-in and typing
             _speechQueue.Clear();
             _cancelSpeechDelay();
-            _cancelSpeechDelay = static () => { };
+            _cancelSpeechDelay = NoSpeechDelay;
         }
 
         /// <summary>A line left the screen (or was skipped): remember what it earned, then the next.</summary>
@@ -109,6 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>The bubble's auto-hide (WPF Speech.cs:588-596): collapse it, then the next line.</summary>
         internal void EndSpeechBubble()
         {
+            CancelTriggerAnimation();
             _speechTimer?.Stop();
             _speechBubble.IsVisible = false;
             _isShowingAiBubble = false;

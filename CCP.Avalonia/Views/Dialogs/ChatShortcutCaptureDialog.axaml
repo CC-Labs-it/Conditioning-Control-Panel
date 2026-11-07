@@ -41,12 +41,12 @@
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button x:Name="BtnReset"
                         Background="{DynamicResource SurfaceBgBrush}" Foreground="White"
-                        BorderBrush="#505050" BorderThickness="1" Padding="12,5" Margin="0,0,8,0" Cursor="Hand">
+                        BorderBrush="#505050" BorderThickness="1" CornerRadius="0" Padding="12,5" Margin="0,0,8,0" Cursor="Hand">
                     <TextBlock Text="{Binding LocReset}"/>
                 </Button>
                 <Button x:Name="BtnCancel" IsCancel="True"
                         Background="{DynamicResource SurfaceBgBrush}" Foreground="White"
-                        BorderBrush="#505050" BorderThickness="1" Padding="12,5" Cursor="Hand">
+                        BorderBrush="#505050" BorderThickness="1" CornerRadius="0" Padding="12,5" Cursor="Hand">
                     <TextBlock Text="{Binding LocCancel}"/>
                 </Button>
             </StackPanel>

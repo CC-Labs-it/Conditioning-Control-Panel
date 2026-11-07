@@ -151,6 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             try
             {
                 if (!await h.TestDeviceAsync(deviceKey, token: token)) SetKey(TxtHapticActivity, "haptics_test_toy_failed");
+                else NoteTestWhileHapticsOff();
             }
             catch (Exception ex) { Log.Warning(ex, "Haptics toy test failed"); }
             finally { EndPreview(token); }
@@ -411,9 +412,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var token = NewPreview();
             try
             {
-                await (LastPreview = string.IsNullOrEmpty(deviceKey)
-                    ? h.PlayPatternAsync(SelectedPatternIntensity, 1500, SelectedPatternMode, priority: 5, token: token)
-                    : h.TestDeviceAsync(deviceKey, SelectedPatternMode, SelectedPatternIntensity, 1500, token));
+                var preview = string.IsNullOrEmpty(deviceKey)
+                    ? h.TestPatternAsync(SelectedPatternIntensity, 1500, SelectedPatternMode, token)
+                    : h.TestDeviceAsync(deviceKey, SelectedPatternMode, SelectedPatternIntensity, 1500, token);
+                LastPreview = preview;
+                if (await preview) NoteTestWhileHapticsOff();
             }
             catch (Exception ex) { Log.Warning(ex, "Haptics pattern play failed"); }
             finally { EndPreview(token); }

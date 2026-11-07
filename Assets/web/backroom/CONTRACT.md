@@ -2490,3 +2490,20 @@ The room Options switch `dragLook` (Click and drag to look) is opt-in and defaul
 It persists per device in `br.dragLook.v1` localStorage, like room quality, without a host message.
 When on, mouse clicks never request pointer lock; existing drag-to-look and click-to-visit controls apply.
 Touch controls and camera inversion keep their existing behavior. Switching releases any pointer lock.
+
+### 10.22 The 3D Prize Counter door (7.2, 2026-10-30)
+
+Walking to the counter and pressing E (or the Stations list, or a `locked` race refusal) opens THE PRIZE COUNTER
+(`Resources/web/prizecounter/`) over the room on its Back Room tab, instead of the 2D station cards. Only a host that
+sends `init.prizeCounter: true` gets it (the WPF host on the room page); any other host keeps `stations/counter/`.
+
+- Page -> host `{ type: 'open-prize-counter', tab: 'backroom', from: 'backroom' }` (shop lanes brief, contract 1).
+  The page holds the scene first (`room/counter-door.js`) and asks once until the counter closes; Back is the
+  counter's meanwhile.
+- The host suspends the room (`suspend { on: true, reason: 'counter' }`) and opens the counter WINDOW over it
+  (`PrizeCounterHostService.Launch("backroom", "backroom", onClosed)`, no per-game relay). Panic closes the counter
+  first (GameSurfaces id `prizecounter`; the legacy ladder closes it before the room's own rung).
+- Host -> page on close `{ type: 'owned', grants: [...] }`: the room resumes (`suspend { on: false }`, unless a panic
+  press holds it), takes the keyboard back on a plain back, and the page re-reads `counter/state`. Every row bought
+  meanwhile gets its shelf stamp one after another (`STAMP_GAP_MS` apart, all at once when still).
+- The four 2D Racing Thoughts rows stay hidden: the server shows them only to owners on both counters.

@@ -38,11 +38,14 @@ internal static class OnlineMeterHead
         _clock = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
         _clock.Tick += (_, _) => Raise();
         _clock.Start();
+        LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
         ScrolllerAllowance.Changed += (_, _) => Dispatcher.UIThread.Post(() => { if (_throttle is { IsEnabled: false } t) t.Start(); });
     }
 
     /// <summary>A surface changed something the meter reads (source, consent, the note): repaint now.</summary>
     internal static void Poke() => Dispatcher.UIThread.Post(Raise);
+
+    private static void OnLanguageChanged(object? sender, EventArgs e) => Poke();
 
     private static void Raise()
     {

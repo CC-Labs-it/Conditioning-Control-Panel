@@ -18,7 +18,7 @@
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         x:Class="ConditioningControlPanel.Avalonia.Views.Dialogs.LocalAiSetupWizard"
         Title="{loc:Str dialog_local_ai_setup_title}"
-        Width="560" Height="540"
+        Width="560" Height="650"
         WindowStartupLocation="CenterOwner"
         CanResize="False"
         Background="{DynamicResource DarkerBgBrush}">
@@ -131,6 +131,18 @@
                             <TextBlock x:Name="TxtConsentLine3" Theme="{StaticResource WizardBody}"
                                        Text="{loc:Str label_local_ai_consent_runs_local}"/>
                         </DockPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="PerfCard" Margin="0,14,0,0" Padding="14,10" CornerRadius="6"
+                        Background="{DynamicResource PanelBgBrush}" BorderThickness="1"
+                        BorderBrush="{StaticResource PinkBrush}">
+                    <StackPanel>
+                        <TextBlock x:Name="TxtPerfTitle" Theme="{StaticResource WizardBody}" FontWeight="SemiBold"
+                                   Text="{loc:Str label_local_ai_perf_title}"/>
+                        <TextBlock Margin="0,6,0,0" Theme="{StaticResource WizardBody}"
+                                   Text="{loc:Str label_local_ai_perf_body}"/>
+                        <TextBlock x:Name="TxtPerfFound" Margin="0,6,0,0" Theme="{StaticResource WizardSub}"/>
                     </StackPanel>
                 </Border>
 

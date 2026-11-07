@@ -207,7 +207,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Padding = new Thickness(10, 6, 10, 6),
                     Margin = new Thickness(0, 0, 6, 6),
                     Cursor = new Cursor(StandardCursorType.Hand),
-                    Child = new IconLabel { Kind = arrow, Text = label, Spacing = 4 },
+                    // WPF's label is "↖ Top left": a text-sized arrow hugging the word. A default-size
+                    // icon at Spacing 4 is wide enough to push "Bottom right" onto a second row.
+                    Child = new IconLabel { Kind = arrow, Text = label, Spacing = 2, IconSize = 10 },
                 };
                 b.SetValue(TextElement.ForegroundProperty, Brushes.White);
                 b.SetValue(TextElement.FontSizeProperty, 11d);
@@ -292,8 +294,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF applies PinkSlider implicitly (Resources/Theme/MainWindow.xaml has a keyless
         /// <c>Style TargetType="Slider" BasedOn="{StaticResource PinkSlider}"</c>), so the original's
         /// bare <c>new Slider</c> was pink. Avalonia has no implicit style, so the theme is looked up
-        /// by key here. Height=32 because PinkSlider sets Height=18 and clips its own thumb without
-        /// it - the same fix DevicesSettingsSection carries.
+        /// by key here. Height is raised a little above PinkSlider's 18 so its thumb is not clipped
+        /// (DevicesSettingsSection carries the same fix at 32).
         /// Minimum/Maximum before Value: RangeBase clamps on assignment, so a Value set first would
         /// be pinned to the default 0..100 range.</summary>
         private Slider NewSlider(double min, double max, double value)
@@ -302,7 +304,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (this.TryFindResource("PinkSlider", out var theme) && theme is ControlTheme t)
             {
                 s.Theme = t;
-                s.Height = 32;
+                // WPF's PinkSlider row is 18px; 22 keeps the 14px thumb's hover ring clear of the
+                // edge without the extra 14px per slider that made each slot card ~60px taller.
+                s.Height = 22;
             }
             return s;
         }

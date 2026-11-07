@@ -28,7 +28,7 @@ public sealed class RainWardrobeRouteTests
             RainWardrobeHostService.CounterLauncher = (from, tab) => calls.Add((from, tab));
             RainWardrobeHostService.Route(Msg(new { type = "open-counter", tab = "rain-hair" }), null, _ => { }, () => new JObject(), () => soon++);
             RainWardrobeHostService.Route(JObject.Parse("{\"type\":\"open-counter\",\"tab\":null}"), null, _ => { }, () => new JObject(), () => soon++);
-            Assert.Equal(new[] { ("wardrobe", (string?)"rain-hair"), ("wardrobe", (string?)null) }, calls);
+            Assert.Equal(new[] { ("rain-wardrobe", (string?)"rain-hair"), ("rain-wardrobe", (string?)null) }, calls);
             Assert.Equal(1, soon);
         }
         finally { RainWardrobeHostService.CounterLauncher = saved; }

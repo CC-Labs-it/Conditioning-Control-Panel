@@ -20,6 +20,31 @@ namespace CCP.Avalonia.Tests;
 public sealed class BlinkTrainerTabLiveTests
 {
     [Fact]
+    public void DirectStartHandlerDemandsPremiumBeforeOpeningTheCamera() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var old = ConditioningControlPanel.CoreEntitlement.HasPremiumProvider;
+        var oldDenied = ConditioningControlPanel.CoreEntitlement.ShowDeniedHandler;
+        var denied = 0;
+        ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => false;
+        ConditioningControlPanel.CoreEntitlement.ShowDeniedHandler = _ => denied++;
+        try
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<AvApp>().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            new BlinkTrainerTabView().BtnBlinkTrainerStartSession_Click(null, new global::Avalonia.Interactivity.RoutedEventArgs());
+            Assert.Equal(1, denied);
+            Assert.False(ConditioningControlPanel.Avalonia.Views.Overlays.BlinkTrainerSession.IsRunning);
+        }
+        finally
+        {
+            ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = old;
+            ConditioningControlPanel.CoreEntitlement.ShowDeniedHandler = oldDenied;
+        }
+    });
+
+    [Fact]
     public void ShowingTheTab_LoadsSettings_GatesAndDemos_AndStatusFollowsFolders()
     {
         AvaloniaTestDispatcher.Run(() =>

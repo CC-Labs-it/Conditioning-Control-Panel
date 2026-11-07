@@ -5,26 +5,31 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Controls.Documents;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using Avalonia.Platform.Storage;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Serilog;
+using Path = System.IO.Path;
 
 namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 {
     /// <summary>
-    /// Mod browser/manager dialog — list, details, install/uninstall/activate.
+    /// The Customise window: pick a mod, then its companion (look + personality) in one card.
     ///
-    /// PORTED from ConditioningControlPanel/Dialogs/ModManagerDialog.xaml.cs. Deviations:
+    /// PORTED from ConditioningControlPanel/Dialogs/ModManagerDialog.xaml.cs (the 2026-09-24
+    /// "Customise" redesign). Deviations:
     ///  - The listing reads the real thing: <c>CoreMods.InstalledMods</c> and
     ///    <c>CoreMods.ActiveModId</c>, over the real <c>ModPackage</c>/<c>ModManifest</c> models in
     ///    Core. With no mod service seeded (this head today) that is the one built-in CCP Default,
@@ -37,9 +42,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
     ///    <c>ColorConverter.ConvertFromString</c> -> <c>Color.Parse</c>;
     ///    <c>BitmapImage</c> -> <c>Bitmap</c> (<c>DecodePixelWidth</c> becomes
     ///    <c>DecodeToWidth</c>); <c>OpenFileDialog</c>/<c>SaveFileDialog</c> -> the
-    ///    <c>StorageProvider</c> pickers.
+    ///    <c>StorageProvider</c> pickers; <c>pack://application:,,,/Resources/features</c> ->
+    ///    <c>avares://CCP.Avalonia/Resources/features</c>.
     ///  - <c>MessageBox.Show</c> becomes <c>MessageDialog.ConfirmAsync</c>, this head's message box.
     ///  - The share-status pill comes from <c>MainShellWindow.CreateCatalogueStatusBadge</c>.
+    ///  - <c>Owner as MainWindow ?? App.MainWindowRef</c> -> <c>Owner as MainShellWindow ?? MainShellWindow.Current</c>.
     ///  - Handlers are wired in the constructor rather than in markup, per the porting convention.
     /// </summary>
     public partial class ModManagerDialog : Window
@@ -62,20 +69,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         private readonly HashSet<string> _packsJustInstalled = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
-        /// Which mod the star, the active indicator and the button rules read as active. Seeded from
+        /// Which mod the IN USE tag, the in-use pill and the menu rules read as active. Seeded from
         /// <c>CoreMods.ActiveModId</c>; re-read from <c>App.Mods</c> after each activate/uninstall.
         /// </summary>
         private string _activeModId = CoreMods.ActiveModId;
 
         private readonly ListBox _modList;
         private readonly StackPanel _detailsPanel;
-        private readonly TextBlock _txtModName, _txtModAuthor, _txtModVersion, _txtModDescription;
-        private readonly TextBlock _txtArtOverrides, _txtPackState, _txtThemeColor, _txtCompanion, _txtActiveIndicator;
-        private readonly Border _previewImagePanel, _packPanel, _themeColorPreview;
+        private readonly TextBlock _txtModName, _txtModAuthor, _txtModDescription, _txtPackState;
+        private readonly Border _bannerPanel, _packPanel, _txtActiveIndicator;
         private readonly Image _imgModPreview;
         private readonly ProgressBar _packProgress;
-        private readonly Button _btnDownloadPack, _btnActivate, _btnShare, _btnTubeFit, _btnUninstall;
-        private readonly Button _btnInstall, _btnExport;
+        private readonly Button _btnDownloadPack, _btnActivate, _btnMore;
+        private readonly MenuItem _btnShare, _btnUninstall, _btnInstall, _btnExport;
+        private readonly Separator _sepModActions;
+        private readonly ComboBox _cmbDefaultSettings, _cmbDefaultAssets;
+        private readonly CompanionPickerCard _companionCard;
 
         public ModManagerDialog()
         {
@@ -85,36 +94,44 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             _detailsPanel = this.FindControl<StackPanel>("DetailsPanel")!;
             _txtModName = this.FindControl<TextBlock>("TxtModName")!;
             _txtModAuthor = this.FindControl<TextBlock>("TxtModAuthor")!;
-            _txtModVersion = this.FindControl<TextBlock>("TxtModVersion")!;
             _txtModDescription = this.FindControl<TextBlock>("TxtModDescription")!;
-            _txtArtOverrides = this.FindControl<TextBlock>("TxtArtOverrides")!;
             _txtPackState = this.FindControl<TextBlock>("TxtPackState")!;
-            _txtThemeColor = this.FindControl<TextBlock>("TxtThemeColor")!;
-            _txtCompanion = this.FindControl<TextBlock>("TxtCompanion")!;
-            _txtActiveIndicator = this.FindControl<TextBlock>("TxtActiveIndicator")!;
-            _previewImagePanel = this.FindControl<Border>("PreviewImagePanel")!;
+            _txtActiveIndicator = this.FindControl<Border>("TxtActiveIndicator")!;
+            _bannerPanel = this.FindControl<Border>("BannerPanel")!;
             _packPanel = this.FindControl<Border>("PackPanel")!;
-            _themeColorPreview = this.FindControl<Border>("ThemeColorPreview")!;
             _imgModPreview = this.FindControl<Image>("ImgModPreview")!;
             _packProgress = this.FindControl<ProgressBar>("PackProgress")!;
             _btnDownloadPack = this.FindControl<Button>("BtnDownloadPack")!;
             _btnActivate = this.FindControl<Button>("BtnActivate")!;
-            _btnShare = this.FindControl<Button>("BtnShare")!;
-            _btnTubeFit = this.FindControl<Button>("BtnTubeFit")!;
-            _btnUninstall = this.FindControl<Button>("BtnUninstall")!;
-            _btnInstall = this.FindControl<Button>("BtnInstall")!;
-            _btnExport = this.FindControl<Button>("BtnExport")!;
+            _btnMore = this.FindControl<Button>("BtnMore")!;
+            _btnShare = this.FindControl<MenuItem>("BtnShare")!;
+            _btnUninstall = this.FindControl<MenuItem>("BtnUninstall")!;
+            _btnInstall = this.FindControl<MenuItem>("BtnInstall")!;
+            _btnExport = this.FindControl<MenuItem>("BtnExport")!;
+            _sepModActions = this.FindControl<Separator>("SepModActions")!;
+            _cmbDefaultSettings = this.FindControl<ComboBox>("CmbDefaultSettings")!;
+            _cmbDefaultAssets = this.FindControl<ComboBox>("CmbDefaultAssets")!;
+            _companionCard = this.FindControl<CompanionPickerCard>("CompanionCard")!;
+
+            // The deeper personality editor, shown under the personality choice (v2 only: the
+            // studio edits the v2 prompt).
+            if (ConditioningControlPanel.Services.Companion.CompanionExperience.IsV2Enabled)
+                _companionCard.MorePersonalityOptions = PersonalityStudio.ShowAsync;
 
             _modList.SelectionChanged += ModList_SelectionChanged;
+            _cmbDefaultSettings.SelectionChanged += (_, _) =>
+                StoreDefault(_cmbDefaultSettings, CoreSettings.Service?.Current?.ModDefaultSettingsPreset);
+            _cmbDefaultAssets.SelectionChanged += (_, _) =>
+                StoreDefault(_cmbDefaultAssets, CoreSettings.Service?.Current?.ModDefaultAssetPreset);
 
             this.FindControl<Border>("TitleBar")!.PointerPressed += TitleBar_PointerPressed;
             this.FindControl<Button>("BtnClose")!.Click += (_, _) => Close();
             this.FindControl<Button>("BtnBrowseCatalogue")!.Click += (_, _) => BtnBrowseCatalogue_Click();
             this.FindControl<Button>("BtnCreate")!.Click += (_, _) => BtnCreate_Click();
+            _btnMore.Click += (_, _) => BtnMore_Click();
             _btnDownloadPack.Click += (_, _) => _ = BtnDownloadPack_Click();
             _btnActivate.Click += (_, _) => BtnActivate_Click();
             _btnShare.Click += (_, _) => ShareTask = BtnShare_Click();
-            _btnTubeFit.Click += (_, _) => BtnTubeFit_Click();
             _btnUninstall.Click += (_, _) => BtnUninstall_Click();
             _btnInstall.Click += (_, _) => BtnInstall_Click();
             _btnExport.Click += (_, _) => BtnExport_Click();
@@ -347,15 +364,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
             foreach (var mod in CoreMods.InstalledMods.Values.OrderBy(m => !m.IsBuiltIn).ThenBy(m => m.Name))
             {
-                // WPF prefixes "★ " for the active mod and two spaces otherwise: a fixed-width slot keeps names aligned.
+                var inUse = mod.Id == _activeModId;
+                var line = new DockPanel { LastChildFill = true };
+                if (inUse)
+                {
+                    var tag = new TextBlock
+                    {
+                        Text = Loc.Get("modmgr_in_use"),
+                        Foreground = new SolidColorBrush(Color.FromRgb(0x7F, 0xF0, 0xCB)),
+                        FontSize = 10,
+                        FontWeight = FontWeight.Bold,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(6, 0, 0, 0)
+                    };
+                    DockPanel.SetDock(tag, Dock.Right);
+                    line.Children.Add(tag);
+                }
                 var row = new StackPanel { Orientation = Orientation.Horizontal };
-                var star = new IconGlyph { Kind = IconKind.Star, Variant = IconVariant.Filled, Size = 12, Width = 16,
-                    VerticalAlignment = VerticalAlignment.Center, Opacity = mod.Id == _activeModId ? 1 : 0 };
-                star.Bind(IconGlyph.ForegroundProperty, star.GetResourceObservable(IconBrushes.Gold));
-                row.Children.Add(star);
+                line.Children.Add(row);
+                row.Children.Add(new Ellipse
+                {
+                    Width = 10,
+                    Height = 10,
+                    Fill = new SolidColorBrush(AccentOf(mod)),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 10, 0)
+                });
                 row.Children.Add(new TextBlock
                 {
                     Text = mod.Name,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
                     VerticalAlignment = VerticalAlignment.Center
                 });
 
@@ -380,14 +418,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
                 var item = new ListBoxItem
                 {
-                    Content = row,
+                    Content = line,
                     Tag = mod.Id,
                     Foreground = Brushes.White
                 };
                 _modList.Items.Add(item);
 
                 // Auto-select active mod
-                if (mod.Id == _activeModId)
+                if (inUse)
                     _modList.SelectedItem = item;
             }
         }
@@ -411,77 +449,165 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             _detailsPanel.IsVisible = true;
 
             _txtModName.Text = mod.Name;
-            _txtModAuthor.Text = Loc.GetF("label_by_author", mod.Manifest.Author);
-            _txtModVersion.Text = Loc.GetF("label_version_prefix", mod.Manifest.Version);
+            _txtModAuthor.Text = Loc.GetF("modmgr_by_version", mod.Manifest.Author, mod.Manifest.Version);
             _txtModDescription.Text = mod.Manifest.Description ?? "";
+            ToolTip.SetTip(_txtModDescription, string.IsNullOrWhiteSpace(mod.Manifest.Description) ? null : mod.Manifest.Description);
 
-            // Preview image + what the mod actually overrides on disk.
+            // Banner across the top; what the mod overrides on disk rides its tooltip.
             ShowArtSummary(mod);
 
-            // Theme color
-            var colorHex = mod.Manifest.Theme?.AccentColor ?? "#FF69B4";
-            _txtThemeColor.Text = colorHex;
-            try
-            {
-                _themeColorPreview.Background = new SolidColorBrush(Color.Parse(colorHex));
-            }
-            catch
-            {
-                _themeColorPreview.Background = new SolidColorBrush(Colors.HotPink);
-            }
-
-            // Companion
-            _txtCompanion.Text = mod.Manifest.Identity?.CompanionName ?? "BambiSprite";
-
-            // Active state
+            // One primary action: "Use this mod", or IN USE.
             var isActive = mod.Id == _activeModId;
             _txtActiveIndicator.IsVisible = isActive;
             _btnActivate.IsVisible = !isActive;
 
-            // Tube Fit edits the avatar's fit inside the tube for the mod that's actually rendering,
-            // so it only makes sense (and only previews correctly) for the active mod.
-            _btnTubeFit.IsVisible = isActive;
+            // The card edits the LIVE companion, which is the active mod's. Any other mod gets a
+            // read-only preview of its companion, read off its manifest without activating it.
+            if (isActive) _companionCard.Refresh();
+            else _companionCard.ShowPreview(mod, AccentOf(mod));
 
-            // Can't uninstall built-in mods or active mod
+            // Overflow verbs for this mod: uninstall (never a built-in or the active one) and
+            // share (user-installed mods only).
             _btnUninstall.IsVisible = !mod.IsBuiltIn && !isActive;
-
-            // WPF ModManagerDialog.xaml.cs:459: custom installed mods can share their creator-hosted archive.
             _btnShare.IsVisible = !mod.IsBuiltIn && !string.IsNullOrEmpty(mod.InstalledPath);
+            _sepModActions.IsVisible = _btnUninstall.IsVisible || _btnShare.IsVisible;
+
+            ShowDefaults(mod);
 
             // Built-in mods whose media still has to come down off the release.
             UpdatePackPanel(mod);
         }
 
+        /// <summary>The mod's theme accent, for its list dot and its preview glyph.</summary>
+        private static Color AccentOf(ModPackage mod)
+        {
+            try { return Color.Parse(mod.Manifest.Theme?.AccentColor ?? "#FF69B4"); }
+            catch { return Colors.HotPink; }
+        }
+
+        // ------------------------------------------------------------------ per-mod defaults
+        //
+        // Two dropdowns: the settings preset and the asset preset to load each time this mod is
+        // switched to. Stored per mod id in AppSettings (ModPresetDefaults), applied by
+        // MainShellWindow.ApplyModDefaultPresets on every activation. A mod's suggestion is only
+        // LABELLED "(recommended)"; the dropdown shows Keep current until the user picks, and only
+        // that explicit pick is stored (owner, 2026-09-24). Nothing is applied behind the user's back.
+
+        private bool _fillingDefaults;
+
+        private static List<Preset> AllSettingsPresets()
+        {
+            var list = Preset.GetDefaultPresets();
+            var user = CoreSettings.Service?.Current?.UserPresets;
+            if (user != null) list.AddRange(user);
+            return list;
+        }
+
+        private void ShowDefaults(ModPackage mod)
+        {
+            var s = CoreSettings.Service?.Current;
+            var none = new Dictionary<string, string>();
+            _fillingDefaults = true;
+            try
+            {
+                var settings = AllSettingsPresets();
+                FillDefaults(_cmbDefaultSettings, settings.Select(p => (p.Id, p.IsDefault ? PresetNaming.DisplayName(p, mod.Id) : p.Name)),
+                    ModPresetDefaults.ResolveSettings(settings, mod.Manifest.SuggestedSettingsPreset)?.Id,
+                    s?.ModDefaultSettingsPreset ?? none, mod.Id);
+
+                var assets = s?.AssetPresets ?? new List<AssetPreset>();
+                FillDefaults(_cmbDefaultAssets, assets.Select(p => (p.Id, p.Name)),
+                    ModPresetDefaults.ResolveAssets(assets, mod.Manifest.SuggestedAssetPreset)?.Id,
+                    s?.ModDefaultAssetPreset ?? none, mod.Id);
+            }
+            finally
+            {
+                _fillingDefaults = false;
+            }
+        }
+
+        private static void FillDefaults(ComboBox combo, IEnumerable<(string Id, string Name)> presets,
+            string? suggestedId, IReadOnlyDictionary<string, string> stored, string modId)
+        {
+            combo.Items.Clear();
+            combo.Items.Add(new ComboBoxItem { Content = Loc.Get("modmgr_keep_current"), Tag = ModPresetDefaults.KeepCurrent });
+            foreach (var (id, name) in presets)
+            {
+                var label = id == suggestedId ? Loc.GetF("modmgr_recommended_fmt", name) : name;
+                combo.Items.Add(new ComboBoxItem { Content = label, Tag = id });
+            }
+
+            var initial = ModPresetDefaults.Initial(stored, modId, suggestedId);
+            combo.SelectedItem = combo.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string?)i.Tag == initial)
+                                 ?? combo.Items[0];
+        }
+
+        /// <summary>An explicit pick is the consent: store it for the selected mod.</summary>
+        private void StoreDefault(ComboBox combo, Dictionary<string, string>? map)
+        {
+            if (_fillingDefaults || map == null || _selectedMod == null) return;
+            if (combo.SelectedItem is not ComboBoxItem { Tag: string id }) return;
+            ModPresetDefaults.Store(map, _selectedMod.Id, id);
+            CoreSettings.Save();
+        }
+
         // ------------------------------------------------------------------ art summary
         //
-        // Two read-only rows under the description: the manifest's own previewImage (declared
-        // by every mod exported from the creator, and never rendered anywhere in the app until
-        // now) and a count of what the mod shadows. Mod art is pure path shadowing -- a file at
-        // resources/<path> replaces the app's Resources/<same path> -- so a plain file count
-        // per top-level folder is an honest picture of how much of the app the mod repaints.
-        // Both rows stay hidden for built-in mods, which have no InstalledPath to read.
+        // The banner: the mod's own bannerImage, else the manifest's previewImage, else the
+        // built-in mod's stock art. What the mod shadows rides the banner's tooltip. Mod art is pure
+        // path shadowing -- a file at resources/<path> replaces the app's Resources/<same path> --
+        // so a plain file count per top-level folder is an honest picture of how much of the app
+        // the mod repaints. Built-in mods have no InstalledPath to read, so no tooltip.
 
         private void ShowArtSummary(ModPackage mod)
         {
             _imgModPreview.Source = null;
-            _previewImagePanel.IsVisible = false;
-            _txtArtOverrides.IsVisible = false;
+            ToolTip.SetTip(_bannerPanel, null);
 
             var installed = mod.InstalledPath;
-            if (string.IsNullOrEmpty(installed) || !Directory.Exists(installed)) return;
+            var hasFolder = !string.IsNullOrEmpty(installed) && Directory.Exists(installed);
 
-            var preview = LoadPreviewImage(installed!, mod.Manifest.PreviewImage);
-            if (preview != null)
+            // Banner: the mod's own bannerImage, else its previewImage, else the built-in art.
+            var banner = hasFolder
+                ? LoadPreviewImage(installed!, mod.Manifest.BannerImage) ?? LoadPreviewImage(installed!, mod.Manifest.PreviewImage)
+                : null;
+            banner ??= LoadBuiltInBanner(BuiltInBannerFor(mod.Id));
+            if (banner != null)
             {
-                _imgModPreview.Source = preview;
-                _previewImagePanel.IsVisible = true;
+                _imgModPreview.Source = banner;
             }
+
+            if (!hasFolder) return;
 
             var summary = SummarizeOverrides(Path.Combine(installed!, "resources"));
             if (summary != null)
             {
-                _txtArtOverrides.Text = summary;
-                _txtArtOverrides.IsVisible = true;
+                ToolTip.SetTip(_bannerPanel, summary);
+            }
+        }
+
+        /// <summary>Stock banner art for the built-in mods (Resources/features), or null.</summary>
+        internal static string? BuiltInBannerFor(string? modId) => modId switch
+        {
+            BuiltInMods.CCPDefaultId => "ccp_banner.png",
+            BuiltInMods.BambiSleepId => "vault_bambi.png",
+            BuiltInMods.SissyHypnoId => "vault_sissy.png",
+            BuiltInMods.DronificationId => "vault_drone.png",
+            BuiltInMods.LockedId => "vault_locked.png",
+            _ => null
+        };
+
+        private static Bitmap? LoadBuiltInBanner(string? file)
+        {
+            if (file == null) return null;
+            try
+            {
+                using var stream = AssetLoader.Open(new Uri($"avares://CCP.Avalonia/Resources/features/{file}"));
+                return Bitmap.DecodeToWidth(stream, 400);
+            }
+            catch
+            {
+                return null;
             }
         }
 
@@ -501,9 +627,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 if (!File.Exists(full)) return null;
 
                 using var stream = File.OpenRead(full);
-                // The row is 260px wide; a full-size decode here costs MBs. WPF spelled this
-                // DecodePixelWidth on BitmapImage.
-                return Bitmap.DecodeToWidth(stream, 320);
+                // The banner is a few hundred px wide; a full-size decode here costs MBs. WPF spelled
+                // this DecodePixelWidth on BitmapImage.
+                return Bitmap.DecodeToWidth(stream, 400);
             }
             catch
             {
@@ -567,28 +693,41 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             try
             {
                 await shell.ShareModToCatalogueAsync(_selectedMod, this);
-                RefreshModList();
+                RefreshModList(); // pick up the new status badge
             }
             finally { _btnShare.IsEnabled = true; }
         }
 
         private void BtnActivate_Click()
         {
-            if (_selectedMod == null) return;
+            if (_selectedMod == null || App.Mods == null) return;
+            var mod = _selectedMod;
+            // Defaults are stored only by an explicit dropdown selection.
 
-            if (App.Mods == null) return;
-
-            // WPF ModManagerDialog.xaml.cs:578-582
-            App.Mods.ActivateMod(_selectedMod.Id);
-            CoreSettings.Current.ActiveModId = _selectedMod.Id;
-            CoreSettings.Save();
+            // The one switching path the top-bar combo and the launcher use (ActivateMod +
+            // ApplyActiveModChange), run NOW so the companion card below reads the new mod.
+            if ((Owner as MainShellWindow ?? MainShellWindow.Current) is { } shell)
+            {
+                shell.SwitchActiveModFromLauncher(mod.Id);
+            }
+            else
+            {
+                App.Mods.ActivateMod(mod.Id);
+                CoreSettings.Current.ActiveModId = mod.Id;
+                CoreSettings.Save();
+                ModWasChanged = true;
+            }
             _activeModId = App.Mods.ActiveModId;
 
-            ModWasChanged = true;
-            RefreshModList();
+            RefreshListKeepingSelection();
+        }
 
-            // Re-show details for the newly active mod
-            ShowModDetails(_selectedMod);
+        /// <summary>WPF BtnMore_Click: the overflow menu opens above the button.</summary>
+        private void BtnMore_Click()
+        {
+            if (_btnMore.ContextMenu is not { } menu) return;
+            menu.Placement = PlacementMode.Top;
+            menu.Open(_btnMore);
         }
 
         private async void BtnUninstall_Click()
@@ -603,7 +742,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
             if (!confirmed) return;
 
-            // WPF ModManagerDialog.xaml.cs:605-614
+            // WPF ModManagerDialog.xaml.cs:750-765
             var wasActive = _selectedMod.Id == App.Mods.ActiveModId;
             App.Mods.UninstallMod(_selectedMod.Id);
             if (wasActive)
@@ -689,14 +828,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             {
                 _btnExport.IsEnabled = true;
             }
-        }
-
-        // Live WYSIWYG editor for the avatar's scale/offsets inside the tube. Saves a per-mod user
-        // override in settings (never into the mod), so no ModWasChanged refresh is needed.
-        private void BtnTubeFit_Click()
-        {
-            var dialog = new TubeFitDialog();
-            dialog.ShowDialogSafe(this);
         }
 
         /// <summary>

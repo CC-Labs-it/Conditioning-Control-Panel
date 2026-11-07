@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -90,6 +91,7 @@ public sealed class LocalAiSetupWizardTests
         CoreSettings.ServiceProvider = () => service;
         CoreSettings.Current.CompanionPrompt.AiProvider = AiProviderType.Cloud;
         CoreSettings.Current.CompanionPrompt.AiModel = "test-model:1b";
+        CoreSettings.Current.CompanionPrompt.AiOllamaHost = "http://stale-server:1234/";
     }
 
     private static void Pump()
@@ -103,6 +105,76 @@ public sealed class LocalAiSetupWizardTests
     {
         C<Button>(w, name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Pump();
+    }
+
+    [Theory]
+    [InlineData(8, 4, true)]
+    [InlineData(16, 8, false)]
+    [InlineData(32, 0, false)]
+    [InlineData(0, 0, false)]
+    public Task ConsentHardwareCardIsAdvisoryAndUnknownDoesNotWarn(int ramGb, int vramGb, bool below) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        using var fakes = new Fakes(canAutoInstall: false);
+        var saved = LocalAiSetupWizard.ReadHardware;
+        LocalAiSetupWizard.ReadHardware = () => (ramGb * LocalAiHardwareRules.Gb, vramGb * LocalAiHardwareRules.Gb);
+        LocalAiSetupWizard? w = null;
+        try
+        {
+            w = new LocalAiSetupWizard();
+            w.Show();
+            Pump();
+            Assert.True(C<StackPanel>(w, "PanelConsent").IsVisible);
+            var card = C<Border>(w, "PerfCard");
+            Assert.True(card.IsVisible);
+            Assert.True(card.Bounds.Height > 0);
+            Assert.True(card.TranslatePoint(new Point(0, card.Bounds.Height), w)!.Value.Y
+                < C<Button>(w, "BtnPrimary").TranslatePoint(default, w)!.Value.Y);
+            if (Environment.GetEnvironmentVariable("CCP_LOCAL_AI_FRAMES") is { Length: > 0 } dir)
+            {
+                System.IO.Directory.CreateDirectory(dir);
+                using var frame = w.CaptureRenderedFrame();
+                frame?.Save(System.IO.Path.Combine(dir, $"local-ai-consent-{ramGb}-{vramGb}.png"));
+            }
+            Assert.Equal(Loc.Get(below ? "label_local_ai_perf_title_below" : "label_local_ai_perf_title"), C<TextBlock>(w, "TxtPerfTitle").Text);
+            var expected = ramGb == 0 && vramGb == 0
+                ? Loc.Get("label_local_ai_perf_recommended")
+                : Loc.GetF("label_local_ai_perf_found", LocalAiHardwareRules.FormatGb(ramGb * LocalAiHardwareRules.Gb),
+                    LocalAiHardwareRules.FormatGb(vramGb * LocalAiHardwareRules.Gb)) + " " + Loc.Get("label_local_ai_perf_recommended");
+            Assert.Equal(expected, C<TextBlock>(w, "TxtPerfFound").Text);
+            Assert.True(C<Button>(w, "BtnPrimary").IsEnabled); // low measurements never block setup
+        }
+        finally { w?.Close(); LocalAiSetupWizard.ReadHardware = saved; CoreSettings.ServiceProvider = null; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task FailedHardwareProbeStillOffersSetupWithoutFalseWarning() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        using var fakes = new Fakes(canAutoInstall: false);
+        var saved = LocalAiSetupWizard.ReadHardware;
+        LocalAiSetupWizard.ReadHardware = () => throw new InvalidOperationException("probe unavailable");
+        LocalAiSetupWizard? w = null;
+        try
+        {
+            w = new LocalAiSetupWizard();
+            w.Show();
+            Pump();
+            Assert.Equal(Loc.Get("label_local_ai_perf_title"), C<TextBlock>(w, "TxtPerfTitle").Text);
+            Assert.Equal(Loc.Get("label_local_ai_perf_recommended"), C<TextBlock>(w, "TxtPerfFound").Text);
+            Assert.True(C<Button>(w, "BtnPrimary").IsEnabled);
+        }
+        finally { w?.Close(); LocalAiSetupWizard.ReadHardware = saved; CoreSettings.ServiceProvider = null; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public void NonWindowsReadsRamAndLeavesVramUnknown()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        Assert.True(ConditioningControlPanel.Avalonia.Platform.LocalAiHardwareProbe.TotalRamBytes() > LocalAiHardwareRules.Gb / 4);
+        Assert.Equal(0, ConditioningControlPanel.Avalonia.Platform.LocalAiHardwareProbe.LargestVramBytes());
     }
 
     [Fact]
@@ -172,9 +244,41 @@ public sealed class LocalAiSetupWizardTests
             Assert.Equal(Loc.GetF("label_local_ai_done_detail", "test-model:1b", 3), C<TextBlock>(w, "TxtDoneDetail").Text);
             Assert.True(w.LocalAiReady);
             Assert.Equal(AiProviderType.Local, CoreSettings.Current.CompanionPrompt.AiProvider);
+            Assert.Equal(OllamaSetupService.DefaultHost, CoreSettings.Current.CompanionPrompt.AiOllamaHost);
         }
         finally { w.Close(); CoreSettings.ServiceProvider = null; }
         return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task EngineRoomRefreshesTheTestedHostWhenDoneClosesWithX() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        using var fakes = new Fakes(canAutoInstall: false);
+        fakes.DetectResults.Enqueue(Status.Ready);
+        var drawer = new EngineRoomDrawer();
+        var shell = new Window { Content = drawer };
+        var vm = new EngineRoomVm(drawer);
+        drawer.DataContext = vm;
+        try
+        {
+            shell.Show();
+            Pump();
+            Assert.Equal("http://stale-server:1234/", vm.OllamaHost);
+            vm.SetupLocalCommand.Execute(null);
+            Pump();
+            var wizard = Assert.IsType<LocalAiSetupWizard>(Assert.Single(shell.OwnedWindows));
+            Assert.True(wizard.LocalAiReady);
+            wizard.Close(); // done-page X: settings were saved even without Close(true)
+            for (var i = 0; i < 100 && vm.OllamaHost != OllamaSetupService.DefaultHost; i++)
+            {
+                await Task.Yield();
+                Pump();
+            }
+            Assert.Equal(OllamaSetupService.DefaultHost, vm.OllamaHost);
+            Assert.Equal("test-model:1b", vm.OllamaModel);
+        }
+        finally { shell.Close(); CoreSettings.ServiceProvider = null; }
     });
 
     [Fact]

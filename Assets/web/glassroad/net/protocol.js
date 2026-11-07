@@ -49,14 +49,34 @@ export const LOOK_OUTFITS = Object.freeze(['emi-outfit-croupier', 'emi-outfit-po
   'emi-outfit-cheer', 'emi-outfit-swim', 'emi-outfit-drone-protocol', 'emi-outfit-snow-day']);
 export const LOOK_VEHICLES = Object.freeze(['emi-teacup-kart', 'emi-vehicle-petal', 'emi-vehicle-trinket', 'emi-vehicle-pendulum', 'emi-vehicle-reverie', 'emi-vehicle-house-edge', 'emi-vehicle-checkmate', 'emi-vehicle-lovebomb', 'emi-vehicle-feedback', 'emi-vehicle-velvet-lock', 'emi-vehicle-undertow']);
 export const DEFAULT_LOOK = Object.freeze({ outfit: null, vehicle: 'emi-teacup-kart' });
+/* Prize Counter looks (lane B3-G1, CONTRACT.md section 7): the three shop outfits ride `outfit`; a paint, the lace
+ * umbrella and the podium trail ride their own optional keys. Bots never wear them (botLook reads LOOK_OUTFITS only).
+ * Rooms and seat tickets clamp them to owned grants; a room that predates them drops them (fail soft). */
+export const SHOP_LOOK_OUTFITS = Object.freeze(['emi-outfit-pit-crew', 'emi-outfit-ringmaster', 'emi-outfit-ballerina']);
+export const LOOK_PAINTS = Object.freeze(['hearts', 'spiral', 'host-gold']);
+export const LOOK_UMBRELLAS = Object.freeze(['lace']);
+export const LOOK_TRAILS = Object.freeze(['podium']);
+const LOOK_EXTRAS = Object.freeze({ paint: LOOK_PAINTS, umbrella: LOOK_UMBRELLAS, trail: LOOK_TRAILS });
 
-/** A look with unknown ids replaced by the defaults. */
+/** A look with unknown ids replaced by the defaults; unknown extras are dropped. */
 export function normLook(look) {
   const o = look && typeof look === 'object' ? look : {};
   const outfit=o.outfit==='emi-outfit-labcoat'?'emi-outfit-builder':o.outfit;
-  return {outfit: LOOK_OUTFITS.includes(outfit) ? outfit : null,
+  const out = {outfit: LOOK_OUTFITS.includes(outfit) || SHOP_LOOK_OUTFITS.includes(outfit) ? outfit : null,
     vehicle: LOOK_VEHICLES.includes(o.vehicle) ? o.vehicle : DEFAULT_LOOK.vehicle,
     ...(typeof o.skin === 'string' && /^[0-9a-f]{36}[0-3]$/.test(o.skin) ? {skin:o.skin} : {})};
+  for (const [k, list] of Object.entries(LOOK_EXTRAS)) if (list.includes(o[k])) out[k] = o[k];
+  return out;
+}
+
+/** The look a client sends in a room `look` message (C2R.look): outfit, vehicle, skin and the extras worn. The room
+ * keeps a change inside what the seat's ticket carried (rooms/src/contracts.js boundLook, CCP-Server #371), so a
+ * lobby change that left the extras off would take them off for the race. */
+export function roomLook(look) {
+  const n = normLook(look);
+  const out = { outfit: n.outfit, vehicle: n.vehicle, ...(n.skin ? { skin: n.skin } : {}) };
+  for (const k of Object.keys(LOOK_EXTRAS)) if (n[k] !== undefined) out[k] = n[k];
+  return out;
 }
 
 /** The look a bot wears in a seat (NET.md section 10). */
@@ -196,7 +216,11 @@ export function fromHex(hex) {
 const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 const LOOK_ID = /^[a-z0-9-]{1,48}$/;
 const SEATS_OK = (v) => Array.isArray(v) && v.length <= 8 && v.every((s) => isInt(s, 0, 7));
-const isLook = (v) => !!v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).every(k=>['outfit','vehicle','skin'].includes(k)) && Object.keys(v).length >= 2 && Object.keys(v).length <= 3 && (v.skin === undefined || (typeof v.skin === 'string' && /^[0-9a-f]{36}[0-3]$/.test(v.skin)))
+// A seat look: outfit, vehicle, optional skin, and (Prize Counter) optional paint / umbrella / trail ids; normLook
+// then drops any extra id this build does not know.
+const LOOK_KEYS = ['outfit', 'vehicle', 'skin', 'paint', 'umbrella', 'trail'];
+const isLook = (v) => !!v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).every(k=>LOOK_KEYS.includes(k)) && Object.keys(v).length >= 2 && Object.keys(v).length <= 6 && (v.skin === undefined || (typeof v.skin === 'string' && /^[0-9a-f]{36}[0-3]$/.test(v.skin)))
+  && ['paint', 'umbrella', 'trail'].every((k) => v[k] === undefined || (typeof v[k] === 'string' && LOOK_ID.test(v[k])))
   && (v.outfit === null || (typeof v.outfit === 'string' && LOOK_ID.test(v.outfit)))
   && typeof v.vehicle === 'string' && LOOK_ID.test(v.vehicle);
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -242,11 +266,12 @@ export const TYPES = Object.freeze({
 
 /** Client -> room messages: field -> type ('?' suffix = optional). */
 export const C2R = Object.freeze({
-  hello: { v: 'u8', ticket: 'str', clientMs: 'num', courseHash: 'str?' },
+  hello: { v: 'u8', ticket: 'str', clientMs: 'num', courseHash: 'str?', loads: 'bool?' },
+  loaded: {},
   ping: { c: 'num' },
   ready: { on: 'bool' },
   start: {},
-  look: { outfit: 'lookId', vehicle: 'lookId', skin: 'skin?' },
+  look: { outfit: 'lookId', vehicle: 'lookId', skin: 'skin?', paint: 'lookId?', umbrella: 'lookId?', trail: 'lookId?' },
   pickup: { box: 'u16', tick: 'u32', seat: 'seat?' },
   fire: { id: 'u16', item: 'item', mode: 'mode', tick: 'u32', s: 'num', x: 'num', seat: 'seat?' },
   cp: { idx: 'u8', lap: 'u8', tick: 'u32', seat: 'seat?' },
@@ -263,6 +288,7 @@ export const R2C = Object.freeze({
   pong: { c: 'num', s: 'num' },
   seats: { seats: 'seatList' },
   seat: { seat: 'seat', ready: 'bool?', idle: 'bool?', left: 'bool?', reason: 'leftWhy?', look: 'look?', paused: 'bool?' },
+  hold: { seats: 'seats' },
   start: { countAt: 'num', startAt: 'num', goTick: 'u32', seed: 'u32' },
   keep: { seats: 'seats' },
   roll: { seat: 'seat', box: 'u16', item: 'item' },

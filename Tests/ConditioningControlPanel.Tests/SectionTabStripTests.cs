@@ -23,6 +23,7 @@ namespace ConditioningControlPanel.Tests;
 /// round-trips, and ShowTab's door (registry, redirects, built-in keys) agrees with its switch.
 /// Set NAV_STRIP_SHOTS to a folder to also save offscreen renders of every section's strip.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class SectionTabStripTests
 {
     private static string RepoRoot()

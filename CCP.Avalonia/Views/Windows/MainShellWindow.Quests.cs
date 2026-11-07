@@ -18,7 +18,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _questCompletionBurst.Fire(anchor, QuestsTabView.QuestBurstCount);
         }
 
-        // ponytail: flash voice lines still need the FlashService audio pool, and header stamps
-        // remain MainShellWindow.QuestStamps.cs. Banner/popup/sync live in QuestsTabView.Quests.cs.
+        // Voice/banner/popup/sync live in QuestsTabView.Quests.cs; stamps in QuestStamps.cs.
     }
 }

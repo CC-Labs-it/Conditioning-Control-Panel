@@ -37,6 +37,7 @@ export function safeBoostStation(track, s, { x = 0, w = BOOST_PLAN.widthM, len =
   const L = track.lengthM;
   for (const [a, b] of exclusions) for (const shift of [-L, 0, L]) if (s + len >= a + shift && s <= b + shift) return false;
   for (const item of track.items || []) {
+    if (item.liftM > 0) continue;   // a floating box over a ramp arc never meets a road pad
     const ahead = wrap(item.s - s, L);
     if (ahead <= len + BOOST_PLAN.itemClearM || distance(item.s, s, L) < BOOST_PLAN.itemClearM) return false;
   }
@@ -62,7 +63,7 @@ export function safeBoostStation(track, s, { x = 0, w = BOOST_PLAN.widthM, len =
 
 /** Deterministic runs of 2-4 actual boost entries, with a visible gap between each pad. */
 export function densifyBoosts(json) {
-  const track = loadTrack(json, { aerials: false, boostSafety: false, courseShape: false }), originals = json.boosts.map((p) => ({ ...p }));
+  const track = loadTrack(json, { aerials: false, boostSafety: false, courseShape: false, ramps: false }), originals = json.boosts.map((p) => ({ ...p }));
   const exclusions = boostExclusions(track), candidates = [];
   const compact = track.id === 'threshold', spacing = compact ? 10 : BOOST_PLAN.spacingM;
   for (let node = 0; node < track.nodeCount; node++) {

@@ -21,6 +21,9 @@ namespace ConditioningControlPanel.Services.UI
         public static bool ShowsHeader(string? section) =>
             section != null && section != NavSections.Home;
 
+        /// <summary>A pill that opens its own window asks before raising a navigation request.</summary>
+        public static bool AsksBeforeOpening(NavTab tab) => tab.Kind == NavTabKind.Window;
+
         /// <summary>The pills a section draws, in table order, hidden tabs skipped.</summary>
         public static IReadOnlyList<NavTab> Pills(string? section)
         {

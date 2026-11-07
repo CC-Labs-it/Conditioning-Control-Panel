@@ -15,6 +15,7 @@ using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services.Descent;
 using Xunit;
 
@@ -93,6 +94,53 @@ public sealed class SpiralFirstLightVisualTests
             Assert.DoesNotContain(BeatLoop.Running, loop => loop.Owner == visual);
         }
         finally { window.Close(); settings.MotionLevel = before; BeatLoop.Time = TimeProvider.System; }
+    });
+
+    // WPF SpiralTabView.xaml.cs:785 snapshots MotionFx.Level; MotionFx.cs:35-54 applies both caps.
+    [Theory]
+    [InlineData(true, true, true)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, false)]
+    public Task RevealSnapshotsEffectiveMotion(bool gentle, bool osAnimations, bool reduced) => Run(() =>
+    {
+        var settings = CoreSettings.Current;
+        var before = (settings.MotionLevel, settings.GentleVisuals);
+        var oldProbe = UiMotionPreference.OsProbe;
+        var time = new SteppedTime();
+        BeatLoop.Time = time;
+        settings.MotionLevel = MotionLevel.Full;
+        settings.GentleVisuals = gentle;
+        UiMotionPreference.OsProbe = () => osAnimations;
+        UiMotionPreference.CacheStamp = long.MinValue;
+        var tab = new SpiralTabView();
+        var window = new Window { Content = tab, Width = 800, Height = 500 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            tab.BeginFirstLight();
+            var visual = Assert.IsType<SpiralFirstLightVisual>(Assert.Single(tab.FindControl<Grid>("FogHost")!.Children));
+            time.Advance(TimeSpan.FromSeconds(.5));
+            BeatLoop.StepAll();
+            Assert.Equal(reduced ? SpiralFirstLightTimeline.HandoffStartSeconds(true) : .5, visual.ElapsedSeconds, 3);
+            Assert.Equal(MotionLevel.Full, settings.MotionLevel);
+
+            // The reveal keeps its entry snapshot if the preference changes mid-reveal.
+            settings.GentleVisuals = false;
+            UiMotionPreference.OsProbe = () => true;
+            UiMotionPreference.CacheStamp = long.MinValue;
+            time.Advance(TimeSpan.FromSeconds(.5));
+            BeatLoop.StepAll();
+            Assert.Equal(reduced ? SpiralFirstLightTimeline.HandoffStartSeconds(true) : 1, visual.ElapsedSeconds, 3);
+        }
+        finally
+        {
+            window.Close();
+            (settings.MotionLevel, settings.GentleVisuals) = before;
+            UiMotionPreference.OsProbe = oldProbe;
+            UiMotionPreference.CacheStamp = long.MinValue;
+            BeatLoop.Time = TimeProvider.System;
+        }
     });
 
     private static byte[] Draw(SpiralFirstLightVisual control, double elapsed, double ambient)

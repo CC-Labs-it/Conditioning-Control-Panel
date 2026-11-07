@@ -17,9 +17,6 @@ using Visual = global::Avalonia.Visual;
 // app: TutorialHeadHooks (shell, demos, folder reveal) and the three prep helpers.
 //
 // not ported: EMI narrating a tour (WPF Services/EmiDesk/EmiTourNarrator.cs is not in Core).
-// not ported: the short walk's one demo flash on "sw-flash" (no one-shot flash entry on this head;
-//             TutorialHeadHooks.FlashDemo is the seam, unassigned = the card reads the same, WPF's
-//             own fallback when the assets folder is empty).
 namespace ConditioningControlPanel.Avalonia.Tours
 {
     public enum TutorialStepPosition { Top, Bottom, Left, Right, Center }
@@ -68,7 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
 
         internal static MainShellWindow? Shell { get { try { return ShellProvider(); } catch { return null; } } }
 
-        /// <summary>WPF App.Flash.TriggerFlashOnce(1, 1600, suppressHaptic: true). Unassigned on this head.</summary>
+        /// <summary>WPF App.Flash.TriggerFlashOnce(1, 1600, suppressHaptic: true). Seeded by TutorialHead.</summary>
         internal static Action? FlashDemo;
 
         internal static bool HasCloudIdentity => !string.IsNullOrEmpty(CoreAccount.UnifiedUserId);

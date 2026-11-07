@@ -33,6 +33,13 @@
             </Border.Background>
         </Border>
 
+        <!-- Prize Counter frame (ShopCosmetics): a square 512 canvas whose transparent window
+             sits around the circle, sized in code from AvatarSize. Under the decoration, so a
+             hat still reads over the frame. -->
+        <Image x:Name="FrameLayer" Stretch="Fill" Visibility="Collapsed"
+               IsHitTestVisible="False" SnapsToDevicePixels="True"
+               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+
         <!-- Decoration layer. Sized/centred in code from AvatarSize; Fill because
              the canvas is square and must map onto the avatar exactly. The negative
              margin that keeps WPF from layout-clipping it to the avatar box is set

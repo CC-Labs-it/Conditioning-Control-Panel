@@ -25,6 +25,32 @@ namespace CCP.Avalonia.Tests;
 /// real microphone. The WAV says "one zero zero zero one", which the user sets as the wake phrase.</summary>
 public sealed class VoiceCommandsTests
 {
+    [Fact]
+    public Task DeviceReopenCancelsWakeWaitAndRespectsRevokedConsent() =>
+        AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            CoreSettings.Current.MicConsentGiven = true;
+            CoreSettings.Current.SpeechWakeWordEnabled = true;
+            CoreEntitlement.HasPremiumProvider = () => true;
+            CoreEntitlement.IsFreeTodayProvider = _ => false;
+            CoreSpeech.IsAvailableProvider = () => true;
+            var shell = new MainShellWindow();
+            using var wait = new CancellationTokenSource();
+            typeof(MainShellWindow).GetField("_wakeWaitCts", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(shell, wait);
+            shell.ReopenVoiceInput();
+            Assert.True(wait.IsCancellationRequested);
+            Assert.True(shell.WakeLoopArmed);
+            CoreSettings.Current.MicConsentGiven = false;
+            shell.ReopenVoiceInput();
+            Assert.False(shell.WakeLoopArmed);
+            shell.RequestExit();
+            return Task.CompletedTask;
+        });
+
     private const string WavPhrase = "one zero zero zero one";
 
     [Fact]
@@ -97,20 +123,23 @@ public sealed class VoiceCommandsTests
 
     /// <summary>"what can I say" and the tab's list name only what this head can run.</summary>
     [Fact]
-    public Task HelpAndTheTabNameOnlyRunnableCommands() => Run(async (shell, mic, engine) =>
+    public Task HelpAndTheTabNameOnlyRunnableCommands() => RunUi(async shell =>
     {
         var help = shell.VoiceCmds.HelpLine();
         Assert.Contains("take over", help);
-        Assert.DoesNotContain("spiral", help);
-        Assert.DoesNotContain("quiz", help);
+        Assert.Contains("spiral", help);
+        Assert.Equal(shell.VoiceCmds.Available.Any(i => i.Name == "quiz_once"), help.Contains("quiz"));
         shell.ShowTab("shelistening");
         Dispatcher.UIThread.RunJobs();
         var rows = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(shell.SheListeningPage!)
             .OfType<ConditioningControlPanel.Avalonia.Controls.IconLabel>().Where(t => t.Tag is string g && g.StartsWith("voice:")).ToList();
-        Assert.False(rows.Single(t => t.Text!.Contains("Spiral")).IsVisible);
+        Assert.True(rows.Single(t => t.Text!.Contains("Spiral")).IsVisible);
         Assert.True(rows.Single(t => t.Text!.Contains("Takeover")).IsVisible);
-        var toys = rows.Single(t => t.Text!.Contains("Quick toys"));   // freeze runs here only if its seam is seeded
-        Assert.Equal(shell.VoiceCmds.Available.Any(i => i.Name == "freeze_once"), toys.IsVisible);
+        // WPF SheListeningTabView.xaml:536-540 groups freeze, shake and count. Shake now runs
+        // even when the optional freeze/count seams are absent.
+        var toys = rows.Single(t => t.Text!.Contains("Quick toys"));
+        Assert.Contains(shell.VoiceCmds.Available, i => i.Name == "shake_once");
+        Assert.True(toys.IsVisible);
         // fluent-icons design ref: hearts Filled + pink, pause Filled.
         var heart = (ConditioningControlPanel.Avalonia.Controls.IconGlyph)rows.Single(t => t.Text!.Contains("Pink filter")).Children[0];
         Assert.Equal(FluentIcons.Common.IconVariant.Filled, heart.Variant);
@@ -316,6 +345,17 @@ public sealed class VoiceCommandsTests
                 (s.AutonomyModeEnabled, s.AutonomyConsentGiven) = (false, false);
                 System.IO.Directory.Delete(dir, true);
             }
+        });
+
+    // The help row is UI state; no recognition or microphone is exercised by this test.
+    private static Task RunUi(Func<MainShellWindow, Task> body) =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            AmbientBeatLoopsTests.Setup();
+            var shell = new MainShellWindow();
+            shell.Show();
+            try { await body(shell); }
+            finally { shell.RequestExit(); }
         });
 
     private static Task Run(Func<MainShellWindow, WavMic, SpeechEngine, Task> body) => Run(null, body);

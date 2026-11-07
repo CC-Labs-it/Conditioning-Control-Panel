@@ -10,7 +10,9 @@ public sealed class EmiBookGlyphPaintersTests
     [Fact]
     public void EveryCardHasDistinctTransparentRailArtAndNoPainterIsOrphaned()
     {
-        Assert.Equal(EmiBookCards.All.Select(c => c.Id).OrderBy(x => x), EmiBookGlyphPainters.Ids.OrderBy(x => x));
+        // The Rain page is held back while RainV2Gate is off; its glyph waits for it (gate on), as on WPF.
+        var cards = EmiBookCards.All.Select(c => c.Id).Concat(EmiBookDeckShop.Shipping(rainOn: true).Select(c => c.Id)).Distinct();
+        Assert.Equal(cards.OrderBy(x => x), EmiBookGlyphPainters.Ids.OrderBy(x => x));
         var images = EmiBookGlyphPainters.Ids.Select(id =>
         {
             var canvas = new EmiPixelCanvas(16, 16);

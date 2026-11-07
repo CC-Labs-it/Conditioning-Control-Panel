@@ -133,7 +133,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 Kind = IconKind.LockClosed,
                 Size = 36,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 34, 0, 8),
+                // WPF's 34px emoji is a ~45px text line; the 36px glyph gets the difference as margin.
+                Margin = new Thickness(0, 38, 0, 13),
             });
             body.Children.Add(new TextBlock
             {
@@ -192,7 +193,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     Variant = IconVariant.Filled,
                     Size = 36,
                     HorizontalAlignment = HorizontalAlignment.Center,
-                    Margin = new Thickness(0, 34, 0, 8),
+                    Margin = new Thickness(0, 38, 0, 13),   // as the locked card: WPF's ~45px emoji line
                 });
                 body.Children.Add(new TextBlock
                 {

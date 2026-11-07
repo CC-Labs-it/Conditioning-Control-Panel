@@ -149,6 +149,63 @@ public sealed class AwarenessPrivacyCardTests
     });
 
     [Fact]
+    public Task PanicKeepsHostedReadoutRefreshingAndDisarmsWipe() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("awareness");
+            Dispatcher.UIThread.RunJobs();
+            var tab = shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.AwarenessTabView>("AwarenessTab")!;
+            var card = Assert.IsType<AwarenessPrivacyView>(tab.FindControl<ContentControl>("CompanionPrivacyHost")!.Content);
+            AwarenessPause.Resume();
+            AwarenessPause.Pause(AwarenessPause.DefaultDuration);
+            var vm = card.ViewModel!;
+            vm.Sync();
+            Assert.True(vm.IsPaused);
+            var pausedLabel = vm.PauseLabel;
+            var blink = typeof(AwarenessPrivacyView).GetField("_blink",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            // No invented observer frames: explicitly exercise the public clock start seam.
+            card.StartCursorBlink();
+            card.WipeConfirm.ArmCommand.Execute(null);
+            Assert.True(card.IsRefreshing);
+            Assert.NotNull(blink.GetValue(card));
+            Assert.True(card.WipeConfirm.IsArmed);
+
+            var stop = PanicSurfaces.All.Single(s => s.Id == "awareness-companion").Stop;
+            stop(shell);
+            Assert.Null(blink.GetValue(card));
+            Assert.False(card.WipeConfirm.IsArmed);
+            stop(shell); // safe when already stopped
+            stop(null); // safe off the desktop path
+
+            // Expire through the shared clock seam. Only the card's real refresh timer may
+            // update the VM afterward: no Sync, navigation, or visibility edge here.
+            Assert.False(AwarenessPause.IsPaused(AwarenessPause.PausedUntil!.Value.AddSeconds(1)));
+            Assert.True(vm.IsPaused);
+            var deadline = System.Diagnostics.Stopwatch.StartNew();
+            while (vm.IsPaused && deadline.Elapsed < TimeSpan.FromSeconds(10))
+                await Task.Delay(25);
+            Assert.False(vm.IsPaused, "Pause expiry must update the visible card after panic without changing tabs.");
+            Assert.NotEqual(pausedLabel, vm.PauseLabel);
+            Assert.True(card.IsEffectivelyVisible);
+            Assert.True(card.IsRefreshing);
+        }
+        finally
+        {
+            AwarenessPause.Resume();
+            shell.RequestExit();
+            Dispatcher.UIThread.RunJobs();
+        }
+    });
+
+    [Fact]
     public Task RefreshTicksOnlyWhileTheCardIsShown() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)

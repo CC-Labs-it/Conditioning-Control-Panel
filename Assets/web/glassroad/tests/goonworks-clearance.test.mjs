@@ -42,7 +42,7 @@ test('side piston contact is inset on both axes without changing other course de
     assert.equal(movingOverlap(row, pose, { x: row.x, z: 0, h: 0 }), true);
     assert.equal(movingOverlap(row, pose, { x: row.x + row.w / 2, z: 0, h: 0 }), false);
     assert.equal(movingOverlap(row, pose, { x: row.x, z: row.len / 2 + .5, h: 0 }), false);
-    assert.equal(movingOverlap({ ...row, hitboxScale: undefined }, pose, { x: row.x + row.w / 2, z: 0, h: 0 }), true);
+    assert.equal(movingOverlap({ ...row, hitboxScale: undefined, contactW: undefined, contactLen: undefined }, pose, { x: row.x + row.w / 2, z: 0, h: 0 }), true);
   }
 });
 

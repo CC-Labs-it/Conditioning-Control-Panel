@@ -138,6 +138,8 @@ public sealed class TutorialTourTests : IDisposable
                 names.Add(m.Groups[1].Value);
         }
 
+        // Code-built inspector fields are covered by NewEnhancementTutorialTests.
+        names.UnionWith(new[] { "TutorialTriggerTimeField", "TutorialActionIntensityField" });
         var targets = TutorialHead.AllSteps().Select(x => x.Step.TargetElementName).Where(n => n != null).Distinct().ToList();
         Assert.True(targets.Count > 50, "the tours lost their targets");
 

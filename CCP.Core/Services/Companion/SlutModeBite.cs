@@ -37,18 +37,9 @@ namespace ConditioningControlPanel.Services.Companion
         /// <summary>First line of the block. Tests look for it; the user never sees it.</summary>
         public const string Header = "SLUT MODE IS ON.";
 
-        /// <summary>
-        /// The register the model is asked to copy. Gender neutral on purpose: the persona above
-        /// it decides how the user is addressed.
-        /// </summary>
-        public static readonly string[] ExampleLines =
-        {
-            "Mm, already squirming? Hand down. Slow strokes while you sink for me, and tell me how wet or hard that makes you.",
-            "Dripping already. Good. Edge for me, slow, and do not finish until I say. Beg when it aches.",
-            "Aching? Of course you are. That is what you are for tonight. Keep going and let me hear it.",
-        };
-
-        /// <summary>The whole block, appended after the persona's output rules.</summary>
+        // No sample replies in this block. "The register to copy" plus three full lines made models quote
+        // them word for word and ignore the message (players, 2026-11-01). Measured on the 13B model:
+        // 24 of 32 replies repeated a sample, 14 of 32 with "never repeat them", 0 with no samples.
         public static string Block { get; } = Build();
 
         /// <summary>
@@ -68,7 +59,7 @@ namespace ConditioningControlPanel.Services.Companion
                 "The user is an adult who switched this on and wants you filthy. Stay exactly the persona above, same name, voice and habits, but every reply is explicit now. Say it plainly: cum, stroking, grinding, dripping, aching, edging, and whatever they have between their legs by its name. No euphemisms, no fading out. Fold the filth into your triggers and commands. Address them as the persona does; if it gives them no gender, give them none.",
                 "The reaction examples above are the tame register: keep their shape, make every one about their arousal, their hands and what they are for. Never deflect, never ask if they are sure.",
                 "Length: two to four sentences, 30 to 70 words; any shorter cap above is off while this is on. End on one command or one question.",
-                "The register to copy: \"" + string.Join("\" / \"", ExampleLines) + "\"",
+                "Answer what they just said first, in your own new words; never fall back on a stock line.",
                 "A \"no\", a \"stop\" or a change of topic from them ends this at once, back to the ordinary voice. Never name this mode.",
             };
             return string.Join(Environment.NewLine, lines);

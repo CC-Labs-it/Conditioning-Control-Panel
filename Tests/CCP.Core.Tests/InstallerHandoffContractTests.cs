@@ -12,16 +12,24 @@ using Xunit;
 namespace CCP.Core.Tests;
 
 // Text-level cross-head contract, not a substitute for a real Windows upgrade (part B).
-public class InstallerHandoffContractTests
+public partial class InstallerHandoffContractTests
 {
-    private static string RepoPath(string path)
+    private static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null && !File.Exists(Path.Combine(dir.FullName, "installer.iss"))) dir = dir.Parent;
         Assert.NotNull(dir);
-        return Path.Combine(dir!.FullName, path);
+        return dir!.FullName;
     }
-    private static string Read(string path) => File.ReadAllText(RepoPath(path));
+    private static string Read(string path)
+    {
+        var text = File.ReadAllText(Path.Combine(RepoRoot(), path));
+        if (path == "installer-avalonia.iss")
+            text = Regex.Replace(text, "#include \"(installer-avalonia-code-[123456]\\.iss)\"",
+                m => File.ReadAllText(Path.Combine(RepoRoot(), m.Groups[1].Value)));
+        return text;
+    }
+    private static string RepoPath(string path) => Path.Combine(RepoRoot(), path);
     private static string Define(string source, string name) =>
         Regex.Match(source, "#define " + name + " \"([^\"]+)\"").Groups[1].Value;
     private static string Directive(string source, string name) =>
@@ -103,6 +111,18 @@ public class InstallerHandoffContractTests
         Assert.Contains("public static string UserDataPath => CorePaths.UserData;", Read("ConditioningControlPanel/App.xaml.cs"));
         Assert.Contains("Settings = new SettingsService();", Read("CCP.Avalonia/App.axaml.cs"));
         Assert.Contains("Path.Combine(CorePaths.UserData, \"settings.json\")", Read("CCP.Core/Services/Settings/SettingsService.cs"));
+    }
+
+    [Fact]
+    public void AvaloniaCodeFragmentsAreVerbatimWpfBaseExcerpts()
+    {
+        var wpf = Read("installer.iss");
+        for (var i = 1; i <= 6; i++)
+        {
+            var fragment = Read($"installer-avalonia-code-{i}.iss");
+            Assert.NotEmpty(fragment);
+            Assert.Contains(fragment, wpf);
+        }
     }
 
     [Fact]

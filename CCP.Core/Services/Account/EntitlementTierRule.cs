@@ -18,9 +18,8 @@ namespace ConditioningControlPanel.Services
         Rise,
 
         /// <summary>
-        /// The server says less. Recorded, never applied: the 14-day grace stamps run out on
-        /// their own (owner-approved default), and a live read must never yank a feature out
-        /// from under someone mid-session.
+        /// The server says less than the stored tier. Remembered for the lapse rows; the same reading
+        /// again ends the grace it no longer backs (<see cref="EntitlementTierRule.ApplyReading"/>).
         /// </summary>
         Lower
     }
@@ -34,9 +33,10 @@ namespace ConditioningControlPanel.Services
     /// the sign-in path writes. The live half is <see cref="EntitlementTierSync"/>.</para>
     ///
     /// <para>Compared against the STORED <see cref="AppSettings.PatreonTier"/> and never against
-    /// live access, on purpose: Patreon's server tier is a frozen snapshot, so a lapsed patron
-    /// still reads 1 there. Comparing with live access would re-stamp that snapshot every
-    /// heartbeat and hand out permanent premium.</para>
+    /// live access, so a rise means someone really gained a tier. A signed-in launch keeps that
+    /// value (owner, 2026-11-01): zeroing it made every launch read as a purchase and left the
+    /// server's "no" nothing to compare against. While the server says a tier, the grace is renewed;
+    /// with PATREON_ALLOW_LOWER on, that tier falls when the patron goes.</para>
     /// </summary>
     public static class EntitlementTierRule
     {
@@ -103,7 +103,105 @@ namespace ConditioningControlPanel.Services
             ExtendGrace(settings, serverTier.Value, nowUtc);
             return true;
         }
+
+        /// <summary>How long a closed plan stays the news. Here because Core cannot see the head's
+        /// ConversionRules, which reads this same value.</summary>
+        public static readonly TimeSpan ClosedRowWindow = TimeSpan.FromDays(30);
+
+        /// <summary>The shortest time between the two agreeing readings that end a grace window.</summary>
+        public static readonly TimeSpan GraceConfirmGap = TimeSpan.FromSeconds(90);
+
+        /// <summary>
+        /// One server reading against the grace (owner, 2026-11-01). A Lower verdict needs the same
+        /// reading again at least <see cref="GraceConfirmGap"/> later, because a reading carries no
+        /// account or order, and waits while <paramref name="held"/> (a session or a game owns the
+        /// screen). Then the stamps close, the stored tier falls to the server's, and
+        /// <see cref="AppSettings.GraceClosedTier"/> keeps the closed row owed. Paying again is then an
+        /// ordinary rise. A sign-in that lowers the stored tier gives a Same verdict and never closes
+        /// anything: it can be a blank twin record that has no tier yet.
+        /// </summary>
+        public static GraceOutcome ApplyReading(AppSettings settings, EntitlementVerdict verdict, int? serverTier,
+            GracePending? pending, Func<bool> held, DateTime nowUtc)
+        {
+            if (verdict == EntitlementVerdict.NoSignal || serverTier is not int tier) return new GraceOutcome(false, false, pending);
+
+            var dirty = false;
+            var closed = false;
+            GracePending? next = null;
+            if (verdict == EntitlementVerdict.Lower)
+            {
+                next = pending?.Tier == tier ? pending : new GracePending(tier, nowUtc);
+                if (nowUtc - next.SinceUtc >= GraceConfirmGap && !held())
+                {
+                    settings.GraceClosedTier = Math.Clamp(settings.PatreonTier, 0, MaxTier);
+                    settings.GraceClosedAtUtc = nowUtc;
+                    CloseGrace(settings, tier, nowUtc);
+                    settings.PatreonTier = tier;
+                    closed = dirty = true;
+                    next = null;
+                }
+            }
+            if (!closed && verdict != EntitlementVerdict.Rise && RenewGrace(settings, tier, nowUtc)) dirty = true;
+            if (settings.GraceClosedTier is int lost && (tier >= lost || ClosedTierNow(settings, nowUtc) == null))
+            {
+                settings.GraceClosedTier = null;
+                settings.GraceClosedAtUtc = null;
+                dirty = true;
+            }
+            return new GraceOutcome(closed, dirty, next);
+        }
+
+        /// <summary>
+        /// While the server says a tier, its grace stays full. This is what used to happen by accident
+        /// on every launch, when the zeroed stored tier made the reading a rise; it keeps PayPal and
+        /// Stripe payers open. Moves at most about once a day, so a heartbeat does not save each time.
+        /// </summary>
+        public static bool RenewGrace(AppSettings settings, int tier, DateTime nowUtc)
+        {
+            if (settings == null || tier < 1) return false;
+            var due = nowUtc.AddDays(GraceDays - 1);
+            var stale = !(settings.PatreonPremiumValidUntil >= due) || (tier >= 2 && !(settings.PatreonLabValidUntil >= due));
+            if (stale) ExtendGrace(settings, tier, nowUtc);
+            return stale;
+        }
+
+        /// <summary>
+        /// A believed reading ends the stamps it no longer backs (owner, 2026-11-01). The stamp is
+        /// what a Discord sign-in patron's access rides on, so it stays: an offline PC has no reading
+        /// and keeps its window. Set to now rather than cleared, so the lapse row can name the day.
+        /// </summary>
+        public static void CloseGrace(AppSettings settings, int tier, DateTime nowUtc)
+        {
+            if (tier < 1 && settings.PatreonPremiumValidUntil > nowUtc) settings.PatreonPremiumValidUntil = nowUtc;
+            if (tier < 2 && settings.PatreonLabValidUntil > nowUtc) settings.PatreonLabValidUntil = nowUtc;
+        }
+
+        /// <summary>
+        /// The tier a confirmed reading closed, while that is still the news: for the closed row's
+        /// window, then null. It says "subscribe" rather than "reconnect", and a link that broke months
+        /// later needs the Reconnect answer back.
+        /// </summary>
+        public static int? ClosedTierNow(AppSettings? settings, DateTime nowUtc)
+            => settings?.GraceClosedTier is int tier && settings.GraceClosedAtUtc is DateTime at
+               && nowUtc - at <= ClosedRowWindow
+                ? tier
+                : null;
+
+        /// <summary>
+        /// The whitelist's premium refresh: at least this far ahead, never shorter than a reading's
+        /// stamp. Writing it flat made every sync shorten what the next reading renewed.
+        /// </summary>
+        public static void ExtendPremiumTo(AppSettings settings, DateTime untilUtc)
+        {
+            if (!(settings.PatreonPremiumValidUntil >= untilUtc)) settings.PatreonPremiumValidUntil = untilUtc;
+        }
     }
+
+    /// <summary>A lower reading waiting for the same reading again.</summary>
+    public sealed record GracePending(int Tier, DateTime SinceUtc);
+
+    /// <summary>What one reading did: <see cref="EntitlementTierRule.ApplyReading"/>.</summary>
+    public sealed record GraceOutcome(bool Closed, bool Dirty, GracePending? Pending);
 
     /// <summary>
     /// Which "premium unlocked" card an install still owes. One seen-flag per tier, so a

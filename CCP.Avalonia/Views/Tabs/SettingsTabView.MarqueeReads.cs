@@ -542,7 +542,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     internal sealed class TeletypeAct : ReadAct
     {
         private const double PerCharMs = 35, TypeCapMs = 2300, StopMs = 1200, TailMs = 1000, Size = 12;
-        private static readonly FontFamily Pixel = new("avares://CCP.Avalonia/Resources/emi/fonts#Press Start 2P, Consolas, monospace");
+        private static readonly FontFamily Pixel = Platform.FontGuard.Startup.Family("avares://CCP.Avalonia/Resources/emi/fonts#Press Start 2P, Consolas, monospace");
 
         private readonly ReadStage _stage;
         private readonly ReadWord _typed, _cursor;

@@ -34,7 +34,7 @@ for (const id of ['threshold', 'keep', 'mainframe']) {
     assert.ok(plan.runs.length >= 2);
     assert.ok(plan.runs.every((r) => r.length >= (id === 'keep' ? 1 : 2) && r.length <= 4));
     const authored = loadTrack(id === 'keep' ? { ...json, courts: [] } : json,
-      { aerials: false, boostSafety: false, courseShape: false }), exclusions = boostExclusions(authored);
+      { aerials: false, boostSafety: false, courseShape: false, ramps: false }), exclusions = boostExclusions(authored);
     for (const p of json.boosts.slice(originalCount)) assert.ok(safeBoostStation(authored, authored.nodeS[p.node], { ...p, exclusions }), 'safe authored pad at ' + p.node);
     for (const r of plan.runs) for (let i = 1; i < r.length; i++) {
       const gap = authoredTrack.nodeS[r[i]] - authoredTrack.nodeS[r[i - 1]];

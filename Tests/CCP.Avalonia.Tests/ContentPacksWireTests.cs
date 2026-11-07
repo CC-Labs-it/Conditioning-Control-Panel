@@ -54,6 +54,32 @@ public sealed class ContentPacksWireTests : IDisposable
         return new ContentPackStore(() => _root, () => _settings, () => { }, tempDir: () => Path.Combine(_root, ".temp"));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FlashLifecycleRetriesRefusedPackDeletes(bool closing)
+    {
+        var store = StoreWithPack(("a.png", "image"));
+        ContentPackStore.Current = store;
+        var path = FlashOverlay.NextFlashPath(Array.Empty<string>())!;
+        File.Delete(path);
+        Directory.CreateDirectory(path);
+        void Sweep()
+        {
+            if (closing) FlashOverlay.CloseAll(final: false);
+            else typeof(ConditioningControlPanel.Avalonia.Views.Tabs.AssetsTabView)
+                .GetMethod("InvalidateAssetPoolsAfterSelectionChange", System.Reflection.BindingFlags.Static |
+                    System.Reflection.BindingFlags.NonPublic)!.Invoke(null, null);
+        }
+        Sweep();
+        Assert.True(FlashOverlay.PackImages.TempCount > 0);
+        Directory.Delete(path);
+        File.WriteAllText(path, "released");
+        Sweep();
+        Assert.False(File.Exists(path));
+        Assert.Equal(0, FlashOverlay.PackImages.TempCount);
+    }
+
     [Fact]
     public void StartContentPacks_SeedsStoreServiceAndVideoCount_AndASandboxSendsNothing()
     {

@@ -25,10 +25,11 @@ public sealed class InboxFlyoutTests
     private static Task Run(Action body) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        var fonts = global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp(); fonts.AfterSetupCallback(fonts);
         StartupLadder.ResetForTests();
         try { body(); }
         finally { StartupLadder.ResetForTests(); Dispatcher.UIThread.RunJobs(); }

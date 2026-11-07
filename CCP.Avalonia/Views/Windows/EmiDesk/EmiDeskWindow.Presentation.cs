@@ -23,7 +23,8 @@ public partial class EmiDeskWindow
         _stopPresentation = stop;
         try
         {
-            FinishSummon(); CancelChain(); CloseRing(); CloseOptionsPanel(); CloseBook();
+            _dismissPending = false; _dismissDone = null; // #3329: the show abandons a running dismissal
+            FinishSummon(); CancelChain(); CancelHold(); CloseRing(); CloseOptionsPanel(); CloseBook();
             StopIdleBeats(); DisarmPet(); _dragging = false; SweepFx(all: true); TearDownReactions();
         }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] presentation setup step failed"); }

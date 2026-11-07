@@ -172,7 +172,7 @@ public sealed class LeashDrawerSection : StackPanel
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var av = FriendsLook.Avatar(o.From.Name, o.From.AvatarUrl, 34);
+        var av = FriendsLook.Avatar(o.From.Name, o.From.AvatarUrl, 34, null, o.From.Look);
         av.Margin = new Thickness(0, 0, 8, 0);
         g.Children.Add(av);
         var t = new TextBlock { FontSize = 12.5, Foreground = FriendsLook.TextBrush, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };

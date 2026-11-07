@@ -13,6 +13,15 @@ namespace ConditioningControlPanel.Controls.Friends;
 /// </summary>
 internal static class FriendsDrawerRules
 {
+    // WPF FriendsLook.cs:260 and FriendsDrawer.Juice.cs:23.
+    public static int DisplayTier(int tier) => tier >= 2 ? 2 : tier == 1 ? 1 : 0;
+    public static double MotionAmount(ConditioningControlPanel.Models.MotionLevel level) => level switch
+    {
+        ConditioningControlPanel.Models.MotionLevel.Off => 0,
+        ConditioningControlPanel.Models.MotionLevel.Reduced => .5,
+        _ => 1,
+    };
+
     /// <summary>The four actions on an expanded card, in the owner's order. "more" is the
     /// dashed row that opens the same menu as a right-click.</summary>
     public static readonly IReadOnlyList<string> CardActions = new[] { "invite", "poke", "watch", "more" };

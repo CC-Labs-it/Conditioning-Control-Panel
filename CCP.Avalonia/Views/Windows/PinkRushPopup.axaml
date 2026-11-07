@@ -11,9 +11,8 @@
                                           same shape as Windows/AchievementPopup.axaml. The
                                           local Foreground on the button outranks it, so it was
                                           already dead in WPF and is dead here for the reason.
-       Skill art (pack:// PNG)         -> a "⚡" TextBlock. Resources/skills/*.png is not an
-                                          AvaloniaResource in this head; the glyph stands in,
-                                          same call as ItemUnlockedPopup's gift fallback.
+       Skill art (pack:// PNG)         -> avares://CCP.Avalonia/Resources/skills/pink_rush.png
+                                          (Assets/skills/*.png are AvaloniaResources).
        CardBorder VerticalAlignment    -> "Top" with an explicit 130px height (150 window minus
                                           the 2x10 margin). The WPF window is exactly card-sized
                                           and never resizes, so pinning the card to its own
@@ -62,8 +61,7 @@
             <!-- Skill Image -->
             <Border Grid.Column="0" Width="80" Height="80" Background="{DynamicResource DarkerBgBrush}"
                     CornerRadius="8" Margin="0,0,15,0">
-                <fx:IconGlyph Kind="Flash" Variant="Filled" Size="36" Foreground="{DynamicResource PinkBrush}"
-                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <Image Source="avares://CCP.Avalonia/Resources/skills/pink_rush.png" Stretch="Uniform" Margin="5"/>
             </Border>
 
             <!-- Text Content -->

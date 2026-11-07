@@ -21,6 +21,7 @@ namespace ConditioningControlPanel.Tests;
 /// Effect, and that the page wash hands the edge its hue. The block is also realised loose (the
 /// way NavFinalRenderTests realises the rail: MainWindow is too heavy to build here).
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class SectionEdgeRenderTests
 {
     private static readonly XNamespace X = "http://schemas.microsoft.com/winfx/2006/xaml";

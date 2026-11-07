@@ -299,6 +299,7 @@ namespace ConditioningControlPanel.Services
                 try { safety.Change(safetyMs, Timeout.Infinite); } catch (Exception ex) { Diag.Swallowed(ex); }
 
                 NoteOutputSuccess();
+                App.Logger?.Debug("[Audio] one-shot {Tag}: {File}", tag, Audio.EngineOffAudioLog.NameOf(path));
                 Audio.EngineOffAudioLog.Note("oneshot:" + tag, path);
                 if (onStarted != null)
                 {

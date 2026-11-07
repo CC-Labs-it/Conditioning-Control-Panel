@@ -267,6 +267,12 @@
                         <feat:FlashFeatureControl x:Name="PanelFlash"/>
                     </ScrollViewer>
 
+                    <ScrollViewer x:Name="HostWallpaper" Visibility="Collapsed"
+                                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                  Padding="2,0,14,10">
+                        <studio:WallpaperFeatureControl x:Name="PanelWallpaper"/>
+                    </ScrollViewer>
+
                     <ScrollViewer x:Name="HostVisuals" Visibility="Collapsed"
                                   VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                   Padding="2,0,14,10">

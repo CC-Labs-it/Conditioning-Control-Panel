@@ -23,6 +23,20 @@ internal sealed class AchievementEngine
     {
         _store = store;
         Progress = store.Load();
+        ResetContinuousSpiral(); // WPF AchievementService.cs:85-86: a saved run never resumes.
+    }
+
+    // WPF Services/Progression/AchievementService.cs:642-680. Keep the <=10s boundary (including clock rollback).
+    public void TrackPanicPressed(DateTime? now = null)
+    {
+        Progress.LastPanicPressTime = now ?? DateTime.Now;
+        IsDirty = true;
+    }
+
+    public void CheckRelapse(DateTime? now = null)
+    {
+        if (Progress.LastPanicPressTime is { } last && ((now ?? DateTime.Now) - last).TotalSeconds <= 10)
+            TryUnlock("relapse");
     }
 
     public AchievementProgress Progress { get; private set; }
@@ -45,6 +59,22 @@ internal sealed class AchievementEngine
     private void Write()
     {
         if (!_store.Write(() => Progress)) _isDirty = true;
+    }
+
+    public void TrackSkillPointsSpent(int amount)
+    {
+        if (amount <= 0) return;
+        Progress.LifetimeSkillPointsSpent += amount;
+        _isDirty = true;
+        if (Progress.LifetimeSkillPointsSpent >= AchievementRules.WindowShoppingPointsSpent) TryUnlock("window_shopping");
+    }
+
+    public void ReconcileLifetimePointsSpent(long serverValue)
+    {
+        if (serverValue <= Progress.LifetimeSkillPointsSpent) return;
+        Progress.LifetimeSkillPointsSpent = serverValue;
+        _isDirty = true;
+        if (Progress.LifetimeSkillPointsSpent >= AchievementRules.WindowShoppingPointsSpent) TryUnlock("window_shopping");
     }
 
     public void Save()
@@ -148,6 +178,20 @@ internal sealed class AchievementEngine
         TrackBubbleCountGameResult(correct);
     }
 
+    /// <summary>WPF TrackBubblesPopped: batch count, unlock, persist; return every 100-bubble milestone
+    /// crossed so the head credits points and presents one notification.</summary>
+    public int TrackBubblesPopped(int count)
+    {
+        if (count <= 0) return 0;
+        int before = Progress.TotalBubblesPopped;
+        Progress.TotalBubblesPopped += count;
+        IsDirty = true;
+        if (before < AchievementRules.PopTheThoughtBubbles && Progress.TotalBubblesPopped >= AchievementRules.PopTheThoughtBubbles)
+            TryUnlock("pop_the_thought");
+        Save();
+        return Progress.TotalBubblesPopped / 100 - before / 100;
+    }
+
     /// <summary>WPF AchievementService.TrackVideoWatched: minutes to the total, screen_time at 10 h.
     /// Returns the minutes so the caller can credit quests (WPF App.Quests.TrackVideoMinutes).</summary>
     public double TrackVideoWatched(double seconds)
@@ -159,6 +203,23 @@ internal sealed class AchievementEngine
         Save();
         if (Progress.TotalVideoMinutes >= AchievementRules.ScreenTimeVideoMinutes) TryUnlock("screen_time");
         return minutes;
+    }
+
+    /// <summary>WPF AchievementService.cs:378-413 ambient credit; milestone presentation stays in the head.</summary>
+    public void TrackBubblePopped()
+    {
+        Progress.TotalBubblesPopped++;
+        IsDirty = true;
+        if (Progress.TotalBubblesPopped >= AchievementRules.PopTheThoughtBubbles) TryUnlock("pop_the_thought");
+        if (Progress.TotalBubblesPopped % 100 == 0)
+        {
+            var settings = CoreSettings.Current;
+            var previous = settings.SkillPoints;
+            settings.SkillPoints++;
+            CoreSettings.Save();
+            SparklePointRewards.PublishCredit(previous, settings.SkillPoints, SparklePointSource.BubbleMilestone);
+        }
+        if (Progress.TotalBubblesPopped % 50 == 0) Save();
     }
 
     /// <summary>WPF AchievementService.TrackFlashImage: one more image shown, retinal_burn at 5000.
@@ -176,6 +237,74 @@ internal sealed class AchievementEngine
         Progress.GazePops++;
         _isDirty = true;
         if (Progress.GazePops >= AchievementRules.HandsFreeGazePops) TryUnlockExclusive("hands_free");
+    }
+
+    /// <summary>WPF AchievementService.TrackSkillPointsEarned:823: the lifetime Sparkles-earned stat.</summary>
+    public void TrackSkillPointsEarned(int amount)
+    {
+        if (amount <= 0) return;
+        Progress.TotalSkillPointsEarned += amount;
+        _isDirty = true;
+    }
+
+    /// <summary>WPF Services/GamificationBridge.cs:361-380: count every send, then check milestones.</summary>
+    public void TrackCompanionMessage()
+    {
+        Progress.CompanionMessages++;
+        IsDirty = true;
+        TryUnlock("pleased_to_meet_you");
+        if (Progress.CompanionMessages >= AchievementRules.PillowTalkMessages) TryUnlock("pillow_talk");
+    }
+
+    /// <summary>WPF AchievementService.TrackTimeBasedProgress :226-238, the achievement half of a pink
+    /// filter tick: minutes to the total, rose_tinted_reality at 10 h. The caller credits quests.</summary>
+    public void TrackPinkFilterMinutes(double minutes)
+    {
+        if (minutes <= 0) return;
+        Progress.TotalPinkFilterMinutes += minutes;
+        _isDirty = true;
+        if (Progress.TotalPinkFilterMinutes >= AchievementRules.RoseTintedPinkFilterMinutes) TryUnlock("rose_tinted_reality");
+    }
+
+    /// <summary>WPF TrackTimeBasedProgress :249-275, the spiral tick: total and continuous minutes,
+    /// spiral_eyes at 20 continuous, threadbare at 10 h. The caller credits quests.</summary>
+    public void TrackSpiralMinutes(double minutes)
+    {
+        if (minutes <= 0) return;
+        Progress.TotalSpiralMinutes += minutes;
+        Progress.ContinuousSpiralMinutes += minutes;
+        _isDirty = true;
+        if (Progress.ContinuousSpiralMinutes >= 20) TryUnlock("spiral_eyes");
+        if (Progress.TotalSpiralMinutes >= AchievementRules.ThreadbareSpiralMinutes) TryUnlock("threadbare");
+    }
+
+    /// <summary>WPF TrackTimeBasedProgress :252: the spiral is off, so the continuous run restarts.</summary>
+    public void ResetContinuousSpiral()
+    {
+        if (Progress.ContinuousSpiralMinutes == 0) return;
+        Progress.ContinuousSpiralMinutes = 0;
+        _isDirty = true;
+    }
+
+    /// <summary>WPF AchievementService.TrackLockCardCompletion :508-544 minus its quest and Chaster
+    /// calls (the head makes those): count + immediate save, word_perfect, typing_tutor, obedience_reflex.</summary>
+    public void TrackLockCardCompletion(double seconds, int errors, int phrases)
+    {
+        Progress.TotalLockCardsCompleted++;
+        _isDirty = true;
+        Log.Information("Lock card tracked. Total lock cards completed: {Count}", Progress.TotalLockCardsCompleted);
+        Save();
+        if (Progress.TotalLockCardsCompleted >= AchievementRules.WordPerfectLockCards) TryUnlock("word_perfect");
+        if (errors == 0)
+        {
+            Progress.HasPerfectLockCard = true;
+            TryUnlock("typing_tutor");
+        }
+        if (phrases >= 3 && seconds < 15)
+        {
+            if (seconds < Progress.FastestLockCardSeconds) Progress.FastestLockCardSeconds = seconds;
+            TryUnlock("obedience_reflex");
+        }
     }
 
     /// <summary>WPF AchievementService.TrackMindWipeDuration: clean_slate at 60 s of continuous loop.</summary>
@@ -200,6 +329,19 @@ internal sealed class AchievementEngine
         Progress.HasHitCorner = true;
         _isDirty = true;
         TryUnlock("corner_hit");
+    }
+
+    /// <summary>WPF AchievementService.TrackAvatarClick (:610): 20 clicks in 10 s unlocks neon_obsession
+    /// (with the haptic easter-egg pattern), 150 in 60 s unlocks needy_doll.</summary>
+    public void TrackAvatarClick()
+    {
+        if (Progress.TrackAvatarClick())
+        {
+            _ = CoreHaptics.Service?.AvatarEasterEggPatternAsync();
+            TryUnlock("neon_obsession");
+        }
+        if (Progress.TrackNeedyDollClick()) TryUnlock("needy_doll");
+        _isDirty = true;
     }
 
     /// <summary>WPF TrackAttentionCheckPassed: totals and eyes_front.</summary>

@@ -66,6 +66,20 @@ export function createGoonworksMaterial(hex, { ink = false, paper = false, unlit
   return material;
 }
 
+/** Large enamel wall panels keep metre-sized seams and rolled edges around each inset. */
+export function createGoonworksWallMaterial(hex){
+  const material=createGoonworksMaterial(hex);material.side=FrontSide;
+  const p=vec2(positionGeometry.x.add(positionGeometry.z),positionGeometry.y);
+  const cell=fract(p.div(vec2(9,6))),edge=min(min(cell.x,float(1).sub(cell.x)).mul(9),min(cell.y,float(1).sub(cell.y)).mul(6));
+  const pixel=max(max(fwidth(p.x),fwidth(p.y)),.02);
+  const seam=float(1).sub(smoothstep(.035,pixel.add(.075),edge));
+  const lip=smoothstep(.07,pixel.add(.13),edge).mul(float(1).sub(smoothstep(.19,pixel.add(.28),edge)));
+  const quiet=float(1).sub(smoothstep(.3,1.2,pixel));
+  material.colorNode=mix(material.colorNode,rgb(GOONWORKS_PALETTE.wine),seam.mul(quiet).mul(.32));
+  material.colorNode=mix(material.colorNode,rgb(GOONWORKS_PALETTE.ivory),lip.mul(quiet).mul(.24));
+  return material;
+}
+
 /** Apply after createRoadMaterial. Return the resource owner for scene disposal. */
 export function applyGoonworksRoad(road, art, track) {
   if (track?.id !== 'goonworks') return null;

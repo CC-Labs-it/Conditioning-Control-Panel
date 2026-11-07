@@ -80,6 +80,19 @@ public static class CompanionVoiceLines
         return changed;
     }
 
+    // WPF CompanionPhraseService.GetEnabledVoiceLineFiles: active mod plus enabled custom clips.
+    public static List<string> GetEnabledFiles(AppSettings settings)
+    {
+        var result = GetRows(settings).Where(row => row.IsEnabled).Select(row => row.AudioFilePath!).ToList();
+        foreach (var custom in settings.CustomCompanionPhrases)
+            if (custom.Category == "VoiceLine" && custom.Enabled && !string.IsNullOrEmpty(custom.AudioFileName))
+            {
+                var path = Path.Combine(CompanionPhrase.DefaultAudioFolder, custom.AudioFileName);
+                if (File.Exists(path)) result.Add(path);
+            }
+        return result;
+    }
+
     public static List<CompanionPhrase> GetRows(AppSettings settings)
     {
         var files = GetFiles();

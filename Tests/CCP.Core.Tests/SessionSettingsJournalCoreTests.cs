@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using Newtonsoft.Json.Linq;
 using Xunit;
@@ -76,6 +77,102 @@ public sealed class SessionSettingsJournalCoreTests : IDisposable
         _runner.Stop();
         Assert.False(File.Exists(path));
         Assert.Equal(mine, s.FlashFrequency);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Failed_restore_keeps_recovery_data_without_saving_partial_settings(bool failPools)
+    {
+        var previous = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = service.Current;
+        s.FlashFrequency = 20;
+        s.SubliminalPool = new() { ["user-phrase"] = true };
+        s.BouncingTextPool = new() { ["user-bounce"] = true };
+        var session = new Session
+        {
+            Id = "restore-failure", Name = "Restore", DurationMinutes = 1,
+            Settings = new SessionSettings
+            {
+                FlashEnabled = true, FlashPerHour = 77,
+                SubliminalEnabled = true, SubliminalPhrases = { "session-phrase" },
+                BouncingTextEnabled = true, BouncingTextPhrases = { "session-bounce" },
+            },
+        };
+        var poolField = typeof(AppSettings).GetField("_bouncingTextPool",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var bounce = s.BouncingTextPool;
+        System.ComponentModel.PropertyChangedEventHandler failSettings = (_, e) =>
+        {
+            if (e.PropertyName == nameof(AppSettings.FlashEnabled)) throw new InvalidOperationException("restore");
+        };
+        bool stopped = false;
+        _runner.Stopped += (_, _) => stopped = true;
+        try
+        {
+            _runner.Start(session);
+            var journalPath = Path.Combine(_dir, SessionSettingsJournal.FileName);
+            var journal = File.ReadAllText(journalPath);
+            var settingsPath = Path.Combine(CorePaths.UserData, "settings.json");
+            var disk = File.ReadAllText(settingsPath);
+            Assert.False(service.HasPendingSave);
+            // A broken pool exercises the second restore after the first one succeeds.
+            if (failPools) { bounce = s.BouncingTextPool; poolField.SetValue(s, null); }
+            else s.PropertyChanged += failSettings;
+            _runner.Stop();
+            Assert.True(stopped);
+            Assert.False(_runner.IsRunning || CoreEngine.IsRunning);
+            Assert.Null(_runner.CurrentSession);
+            Assert.True(File.Exists(journalPath));
+            Assert.Equal(journal, File.ReadAllText(journalPath));
+            Assert.False(service.HasPendingSave);
+            Assert.Equal(disk, File.ReadAllText(settingsPath));
+            // A repeated failure cannot overwrite the original journal with partial values.
+            var loc = LocalizationManager.Instance;
+            var previousLanguage = loc.CurrentLanguage;
+            try
+            {
+                foreach (var (code, _, _) in LocalizationManager.AvailableLanguages)
+                {
+                    var strings = JObject.Parse(File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Core", "Localization", "Languages", code + ".json")));
+                    var expected = (string?)strings["session_settings_recovery_failed"];
+                    Assert.False(string.IsNullOrWhiteSpace(expected), code);
+                    loc.Initialize(code);
+                    var error = Assert.Throws<InvalidOperationException>(() => _runner.Start(session));
+                    Assert.Equal(expected, error.Message);
+                }
+            }
+            finally { loc.Initialize(previousLanguage); }
+            Assert.Equal(journal, File.ReadAllText(journalPath));
+
+            var recovered = new AppSettings { ActiveModId = s.ActiveModId, FlashFrequency = 77 };
+            var launchDir = Path.Combine(_dir, "next-launch");
+            Directory.CreateDirectory(launchDir);
+            SessionSettingsJournal.Write(launchDir, journal);
+            Assert.True(SessionSettingsJournal.HealOnLaunch(launchDir, recovered));
+            Assert.Equal(20, recovered.FlashFrequency);
+            Assert.Equal(new System.Collections.Generic.Dictionary<string, bool> { ["user-phrase"] = true }, recovered.SubliminalPool);
+            Assert.Equal(new System.Collections.Generic.Dictionary<string, bool> { ["user-bounce"] = true }, recovered.BouncingTextPool);
+
+            s.PropertyChanged -= failSettings;
+            poolField.SetValue(s, bounce);
+            _runner.Start(session); // retained in-memory recovery runs before the new snapshot
+            Assert.Equal(20, (int)JObject.Parse(File.ReadAllText(journalPath))["fields"]![nameof(AppSettings.FlashFrequency)]!);
+            _runner.Stop();
+            Assert.Equal(20, s.FlashFrequency);
+            Assert.True(s.BouncingTextPool["user-bounce"]);
+            Assert.False(File.Exists(journalPath));
+        }
+        finally
+        {
+            s.PropertyChanged -= failSettings;
+            if (s.BouncingTextPool == null) poolField.SetValue(s, bounce);
+            _runner.Stop();
+            service.SealForReset();
+            CoreSettings.ServiceProvider = previous;
+        }
     }
 
     [Fact]

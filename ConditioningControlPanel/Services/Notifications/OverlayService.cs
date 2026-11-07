@@ -235,10 +235,19 @@ public class OverlayService : IDisposable
     {
         if (_pinkLayer == null)
         {
-            _pinkLayer = new Compositor.PinkTintLayer(App.Compositor!.Wake);
+            _pinkLayer = new Compositor.PinkTintLayer(App.Compositor!.Wake, App.Compositor!.ResortLayers);
             App.Compositor!.RegisterLayer(_pinkLayer);
         }
         return _pinkLayer;
+    }
+
+    /// <summary>The "Pink under spirals and text" switch moved (#1546): re-sort a live tint at once.
+    /// Compositor only. The legacy per-effect windows have no fixed order to move: each topmost
+    /// re-raise puts whichever window it touches last on top.</summary>
+    public void RefreshPinkFilterOrder()
+    {
+        try { _pinkLayer?.SyncOrder(); }
+        catch (Exception ex) { App.Logger?.Warning(ex, "PinkFilter order: re-sort failed"); }
     }
     private Compositor.SpiralLayer GetSpiralLayer()
     {

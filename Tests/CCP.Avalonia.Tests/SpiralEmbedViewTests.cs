@@ -102,6 +102,133 @@ public sealed class SpiralEmbedViewTests
         return Task.CompletedTask;
     });
 
+    // WPF SpiralTabView.xaml.cs:249,268,307-333,416-423,892.
+    [Fact]
+    public Task LiveReaderQueuesCurrent_StreamsUpdates_WithdrawsAndHonorsMigrationHold() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var oldReader = global::ConditioningControlPanel.Avalonia.App.Descent;
+        var oldFuse = global::ConditioningControlPanel.Avalonia.App.DescentCountdown;
+        using var fuse = new DescentCountdownService();
+        global::ConditioningControlPanel.Avalonia.App.DescentCountdown = fuse;
+        var oldEngine = global::ConditioningControlPanel.Avalonia.Views.Tabs.SpiralTabView.EngineAvailable;
+        global::ConditioningControlPanel.Avalonia.Views.Tabs.SpiralTabView.EngineAvailable = () => true;
+        var oldStart = global::ConditioningControlPanel.Avalonia.Views.Tabs.SpiralTabView.StartEmbed;
+        var oldDispatch = CoreDispatch.PostProvider;
+        var sent = new List<string>();
+        JObject? reply = JObject.Parse("{\"descent\":{\"devotion_days\":3}}");
+        var reader = new DescentService(_ => Task.FromResult(reply));
+        var settings = CoreSettings.Current;
+        settings.UnifiedId = "spiral-test";
+        CoreSecrets.RetrieveProvider = _ => "test-token";
+        settings.OfflineMode = false;
+        settings.DescentMigrationCompleted = false;
+        settings.DescentMigrationOffered = false;
+        settings.PendingDescentMigrationChoice = null;
+        CoreDispatch.PostProvider = action => action();
+        global::ConditioningControlPanel.Avalonia.App.Descent = reader;
+        global::ConditioningControlPanel.Avalonia.Views.Tabs.SpiralTabView.StartEmbed = embed =>
+            embed.SendJson = json => { sent.Add(json); return Task.CompletedTask; };
+        var window = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+        var tab = window.Named<global::ConditioningControlPanel.Avalonia.Views.Tabs.SpiralTabView>("SpiralTab")!;
+        try
+        {
+            Assert.True(reader.RefreshAsync("initial", force: true).GetAwaiter().GetResult());
+            window.Show();
+            fuse.ApplyCeremonyAt(DateTime.UtcNow.AddMinutes(30).ToString("yyyy-MM-ddTHH:mm:ssZ"));
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var chip = window.Named<global::ConditioningControlPanel.Avalonia.Controls.DescentFuseRailChip>("FuseRailChip")!;
+            Assert.True(chip.IsVisible);
+            chip.RaiseEvent(new global::Avalonia.Input.KeyEventArgs
+                { RoutedEvent = global::Avalonia.Input.InputElement.KeyDownEvent, Key = global::Avalonia.Input.Key.Enter });
+            Assert.True(tab.IsVisible);
+            Assert.False(tab.IsShowingSpiral);
+            // An ack from another device lands while the room is open: the existing settings
+            // listener re-reads the server block, just as WPF's BlockChanged does.
+            fuse.ApplyCeremonyAt(null); // server retires the fuse; WPF keeps fog while it burns
+            DescentMigrationAck.Apply(settings, true, DescentMigrationChoices.Restore);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var host = tab.FindControl<Grid>("EmbedHost")!;
+            Assert.True(tab.IsShowingSpiral); // no ApplyState: real visibility -> Refresh -> reader
+            var embed = Assert.IsType<SpiralEmbedView>(Assert.Single(host.Children));
+            embed.Receive("{\"type\":\"spiral:ready\"}");
+            Assert.Equal(3, (int)JObject.Parse(Assert.Single(sent))["devotion_days"]!);
+            reply = JObject.Parse("{\"descent\":{\"devotion_days\":8}}");
+            reader.RefreshAsync("live", force: true).GetAwaiter().GetResult();
+            Assert.Same(embed, Assert.Single(host.Children));
+            Assert.Equal(8, (int)JObject.Parse(sent[1])["devotion_days"]!);
+
+            // WPF's persisted unanswered offer keeps the server block behind the fog.
+            settings.DescentMigrationCompleted = false;
+            settings.PendingDescentMigrationChoice = null;
+            settings.DescentMigrationOffered = true;
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.False(tab.IsShowingSpiral);
+            Assert.Empty(host.Children);
+            settings.DescentMigrationCompleted = true;
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.True(tab.IsShowingSpiral);
+
+            reader.Reset(); // sign-out/withdrawal removes native airspace immediately
+            Assert.False(tab.IsShowingSpiral);
+            Assert.Empty(host.Children);
+            Assert.True(tab.FindControl<Border>("WaitingPanel")!.IsVisible);
+
+            tab.IsVisible = false;
+            reader.RefreshAsync("hidden", force: true).GetAwaiter().GetResult();
+            Assert.Empty(host.Children);
+            tab.IsVisible = true;
+            Assert.True(tab.IsShowingSpiral);
+            embed = Assert.IsType<SpiralEmbedView>(Assert.Single(host.Children));
+            embed.Receive("{\"type\":\"spiral:ready\"}");
+            Assert.Equal(8, (int)JObject.Parse(sent[^1])["devotion_days"]!);
+            window.Content = null; // detach also unwires a visible tab
+            reader.Reset();
+            Assert.Empty(host.Children);
+        }
+        finally
+        {
+            window.Close();
+            global::ConditioningControlPanel.Avalonia.App.Descent = oldReader;
+            global::ConditioningControlPanel.Avalonia.App.DescentCountdown = oldFuse;
+            global::ConditioningControlPanel.Avalonia.Views.Tabs.SpiralTabView.EngineAvailable = oldEngine;
+            global::ConditioningControlPanel.Avalonia.Views.Tabs.SpiralTabView.StartEmbed = oldStart;
+            CoreDispatch.PostProvider = oldDispatch;
+        }
+        return Task.CompletedTask;
+    });
+
+    // WPF SpiralEmbedView.cs:294-296 and MotionFx.cs:36-52.
+    [Theory]
+    [InlineData(false, false, true)]
+    [InlineData(true, true, true)]
+    [InlineData(true, false, false)]
+    public Task StateUsesEffectiveMotionCap(bool osAnimations, bool gentle, bool reduced) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var oldProbe = global::ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe;
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = () => osAnimations;
+            global::ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            CoreSettings.Current.GentleVisuals = gentle;
+            string? sent = null;
+            using var embed = new SpiralEmbedView("map")
+                { SendJson = json => { sent = json; return Task.CompletedTask; } };
+            embed.PostState(null);
+            embed.Receive("{\"type\":\"spiral:ready\"}");
+            Assert.Equal(reduced, (bool)JObject.Parse(sent!)["reduced_motion"]!);
+            Assert.Equal(MotionLevel.Full, CoreSettings.Current.MotionLevel);
+        }
+        finally
+        {
+            global::ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = oldProbe;
+            global::ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+        }
+        return Task.CompletedTask;
+    });
+
     // WPF catches host callback failures: the canvas remains decorative even when its host throws.
     [Theory]
     [InlineData("ready")]

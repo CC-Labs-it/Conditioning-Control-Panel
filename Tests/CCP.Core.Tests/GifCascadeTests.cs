@@ -21,6 +21,70 @@ public class GifCascadeTests
     }
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void FailedSpawnsReleaseResourcesAndStopOnTime(bool persistentFailures, bool cleanupFails)
+    {
+        var c = new GifCascade(new Random(1));
+        var gone = new List<GifCascade.Faller>();
+        var attempts = 0;
+        c.Gone += f =>
+        {
+            gone.Add(f);
+            if (cleanupFails) throw new InvalidOperationException("cleanup failed");
+        };
+        c.Spawned += f =>
+        {
+            attempts++;
+            f.Animated = true;
+            if (persistentFailures || attempts <= 2) throw new InvalidOperationException("spawn failed");
+        };
+        c.Restart(1, 1, 4, 100, 4, 1, 1, 100_000, 0, 1000);
+        Assert.Empty(c.Fallers);
+        Assert.Equal(0, c.AnimatedAlive);
+        Assert.Single(gone);
+
+        c.Step(1); // A failure during Step must still advance the next spawn time.
+        Assert.Equal(2, attempts);
+        Assert.Empty(c.Fallers);
+        c.Step(0.25);
+        Assert.Equal(2, attempts);
+        c.Step(1.75); // Subsequent spawns can succeed, or fail without leaking slots.
+        Assert.Equal(4, attempts);
+        Assert.Equal(persistentFailures ? 0 : 2, c.AnimatedAlive);
+        Assert.Equal(persistentFailures ? 4 : 2, gone.Count);
+        Assert.Equal(gone.Count, gone.Distinct().Count());
+        Assert.All(gone, f => Assert.False(f.Animated));
+
+        c.Step(1); // End of the four-second spawn window, even if every spawn failed.
+        Assert.False(c.Spawning);
+        c.Clear();
+        c.Step(10);
+        Assert.Equal(4, attempts);
+        Assert.Empty(c.Fallers);
+        Assert.False(c.IsRaining);
+    }
+
+    [Fact]
+    public void FailedSpawnsDuringOneLongFrameStillEndAtTheDeadline()
+    {
+        var c = new GifCascade(new Random(1));
+        var attempts = 0;
+        c.Spawned += f =>
+        {
+            f.Animated = true;
+            if (++attempts > 1) throw new InvalidOperationException("spawn failed");
+        };
+        c.Restart(1, 1, 4, 100, 4, 1, 1, 100_000, 0, 1000);
+        c.Step(4);
+        Assert.Equal(4, attempts);
+        Assert.Single(c.Fallers);
+        Assert.Equal(1, c.AnimatedAlive);
+        Assert.False(c.Spawning);
+    }
+
+    [Theory]
     [InlineData(1.67, 6.0, 17)]   // the payload: ceil(10.02) + 6
     [InlineData(0.1, 0.5, 8)]     // floor 8 (duration counts as at least 1 s)
     [InlineData(10, 10, 24)]      // ceiling 24

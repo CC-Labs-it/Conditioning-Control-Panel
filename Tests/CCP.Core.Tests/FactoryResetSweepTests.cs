@@ -75,9 +75,10 @@ public sealed class FactoryResetSweepTests
         int sealEnd = src.IndexOf("public void UnsealAfterFailedReset()", seal, StringComparison.Ordinal);
         Assert.Contains("lock (_saveLock) { }", src.Substring(seal, sealEnd - seal));
 
-        int save = src.IndexOf("public void SaveImmediate(", StringComparison.Ordinal);
+        Assert.Contains("public void SaveImmediate(bool suppressCloudBackup = false) => TrySaveImmediate(suppressCloudBackup);", src);
+        int save = src.IndexOf("public bool TrySaveImmediate(", StringComparison.Ordinal);
         int writeLock = src.IndexOf("lock (_saveLock)", save, StringComparison.Ordinal);
-        int recheck = src.IndexOf("if (_sealed) return;", writeLock, StringComparison.Ordinal);
+        int recheck = src.IndexOf("if (_sealed) return false;", writeLock, StringComparison.Ordinal);
         int write = src.IndexOf("File.Move(", writeLock, StringComparison.Ordinal);
         Assert.True(writeLock > save && recheck > writeLock && write > recheck, "the write re-checks the seal inside the lock");
     }
@@ -97,6 +98,11 @@ public sealed class FactoryResetSweepTests
         var move = body.IndexOf("File.Move(settingsPath, backupPath", StringComparison.Ordinal);
         var lastSweep = body.LastIndexOf("FactoryResetSweep.Delete(dir", StringComparison.Ordinal);
         Assert.True(seal >= 0 && move > seal && lastSweep > move, "seal, move aside, then sweep");
+        // baf86f0ac: disable the window, then leave off the UI thread; never Environment.Exit on it.
+        var disable = body.IndexOf("host.IsEnabled = false", StringComparison.Ordinal);
+        var exit = body.IndexOf("UiThreadExit.Begin(0)", StringComparison.Ordinal);
+        Assert.True(disable > lastSweep && exit > disable, "sweep, disable the window, then exit off the UI thread");
+        Assert.DoesNotContain("Environment.Exit(", body);
         Assert.DoesNotContain("SafeGlob(", src);
         Assert.Contains("FactoryResetSweep.RelaunchDelaySeconds", src);
     }

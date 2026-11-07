@@ -42,7 +42,7 @@ const DT = 1 / 60;
 
 /** One node player. @returns Promise of { uid, seat, place, timeMs, finished, rows } */
 export async function runNetBot({ lobbyBase, uid, auth = 'Bearer jwt-', mode = 'quick', roomId = null, open = null,
-  track: trackId = 'threshold', platform = 'web', pauseAtS = -1, start = false, quiet = false, out = console.log, onSeated = null } = {}) {
+  track: trackId = 'threshold', platform = 'web', pauseAtS = -1, start = false, quiet = false, out = console.log, onSeated = null, loadedAfterMs = -1 } = {}) {
   const say = (ev, o = {}) => { if (!quiet || ev === 'summary' || ev === 'error') out(JSON.stringify({ bot: uid, ev, ...o })); };
   const feel = createFeel(JSON.parse(readFileSync(new URL('feel.json', ROOT), 'utf8')));
   const trackJson = JSON.parse(readFileSync(new URL(`tracks/${trackId}.json`, ROOT), 'utf8'));
@@ -59,7 +59,8 @@ export async function runNetBot({ lobbyBase, uid, auth = 'Bearer jwt-', mode = '
   say('seated', { roomId: j.roomId, seat: j.seat });
   if (onSeated) onSeated(j);
 
-  const s = createRoomSession({ track, feel, courseHash: hash, lobby, platform, log: (lv, m) => say('log', { lv, m }) });
+  const s = createRoomSession({ track, feel, courseHash: hash, lobby, platform, loads: loadedAfterMs >= 0, log: (lv, m) => say('log', { lv, m }) });
+  if (loadedAfterMs >= 0) setTimeout(() => s.markLoaded(), loadedAfterMs);   // a slow page, for the room's load hold
   const queue = { emit(name, p) { if (name === 'item-hit' || name === 'item-fire') say(name, p.victim !== undefined ? { victim: p.victim, kind: p.kind, verdict: p.verdict } : { racer: p.racer, id: p.id }); } };
   const goS = feel.get('juice.countdownPulses') * 60 / feel.get('clock.bpm');
   let sim = null, loop = 0, done = null;

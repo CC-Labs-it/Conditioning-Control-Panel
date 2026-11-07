@@ -1,0 +1,23 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Replaced-by list for the old draft close script</title><style>:root{color-scheme:light dark}body{font:15px/1.5 system-ui;max-width:900px;margin:2rem auto;padding:0 1rem}code{background:#8882;padding:.1em .3em;border-radius:4px}</style></head><body>
+<h1>Replaced-by list for closing Mich's old long-stack drafts</h1>
+<p>For the owner-run close script (CB, #3702). Agents do not close PRs.</p>
+<ul>
+<li><code>replaced-by-20261031.csv</code>: one row per open old draft PR. Columns:
+<ul>
+<li><code>old-pr</code></li>
+<li><code>new-pr</code>: the replacing re-cut PR on <code>port-docs-html</code>, if any</li>
+<li><code>sha</code>: the old head</li>
+<li><code>lane</code></li>
+<li><code>class</code></li>
+<li><code>reason</code>: suggested close comment</li>
+</ul></li>
+<li><code>recut-triage-20261031.html</code>: the triage of all 594 local lanes that were not on 74ac6ce3d.</li>
+</ul>
+<p><strong>Classes in the CSV:</strong></p>
+<ul>
+<li><code>on-base</code> (746): the old head is already an ancestor of 74ac6ce3d (the 7.2 reconcile line plus #3140/#3149), so the work landed through the reconcile merge. Close comment: "already on the 7.2 reconcile line".</li>
+<li><code>noop</code> (1): docs or merge only.</li>
+</ul>
+<p>Drafts not in this list are either current re-cut PRs (heads <code>avalonia-port/cloud-r72-*</code>, <code>r72-*</code>, <code>sync*-rows-on-reconcile</code>, <code>main-2026*</code>, <code>port-docs-html</code>), which stay open, or lanes still being re-cut (see the triage, class <code>needed</code>).</p>
+<p>Produced by the port agent, 2026-10-31.</p>
+</body></html>

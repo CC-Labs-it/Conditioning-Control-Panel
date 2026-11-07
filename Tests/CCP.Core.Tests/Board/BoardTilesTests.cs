@@ -11,8 +11,8 @@ namespace ConditioningControlPanel.Tests;
 /// <summary>
 /// The Tonight Board's pixel board (2026-10-07): the wire block, the link allowlist, the audience
 /// and expiry rules, the picture, every effect curve ported from the approved mockup, the tile
-/// layout and the renderer's frame budget. The download, the card and the view are WPF-side
-/// (BoardServiceTests) until BoardService moves.
+/// layout and the renderer's frame budget. The cache runs in Core (BoardCacheServiceTests); the card, PNG codec
+/// and view remain covered by the WPF-side BoardServiceTests.
 /// </summary>
 [Collection(BoardFrameBudgetCollection.Name)]
 public class BoardTilesTests

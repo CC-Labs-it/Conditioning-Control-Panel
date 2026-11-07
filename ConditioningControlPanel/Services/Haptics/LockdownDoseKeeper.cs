@@ -553,19 +553,7 @@ public sealed class LockdownDoseKeeper : IDisposable
             var s = App.Settings?.Current;
             if (state?.Flipped != null && s != null)
             {
-                foreach (var key in state.Flipped)
-                {
-                    switch (key)
-                    {
-                        case "flash": s.FlashEnabled = false; break;
-                        case "subliminal": s.SubliminalEnabled = false; break;
-                        case "spiral": s.SpiralEnabled = false; break;
-                        case "pinkfilter": s.PinkFilterEnabled = false; break;
-                        case "bouncingtext": s.BouncingTextEnabled = false; break;
-                        case "bubbles": s.BubblesEnabled = false; break;
-                        case "video": s.MandatoryVideosEnabled = false; break;
-                    }
-                }
+                LockdownDoseRecovery.ApplyFlipped(state.Flipped, s);
                 try { App.Settings?.SaveImmediate(); } catch { }
                 App.Logger?.Information("Lockdown dose recovery: switched {Keys} back off after an interrupted lockdown",
                     string.Join(",", state.Flipped));

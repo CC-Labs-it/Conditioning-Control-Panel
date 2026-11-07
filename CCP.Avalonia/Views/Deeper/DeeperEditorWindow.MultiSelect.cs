@@ -1,3 +1,4 @@
+using Avalonia.Interactivity;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -52,6 +53,110 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             public static bool HasContent =>
                 Items.Count > 0 || Regions.Count > 0 || Haptics.Count > 0;
         }
+
+        // WPF DeeperEditorWindow.MultiSelect.cs:406, :631, :731-797.
+        internal void EnsurePrimaryInSelectionSet()
+        {
+            if (_selectionSet.Count > 0) return;
+            if (_selectedRegion != null) _selectionSet.Add(_selectedRegion);
+            else if (_selectedHaptic != null) _selectionSet.Add(_selectedHaptic);
+            else if (_selectedEffect != null) _selectionSet.Add(_selectedEffect);
+        }
+
+        /// <summary>Redraw every lane plus the summary strip and Items list after a
+        /// selection-set change that did not go through a SelectXxx setter.</summary>
+        internal void RefreshSelectionVisuals()
+        {
+            RebuildRegionVisuals();
+            RebuildHapticVisuals();
+            RebuildEffectVisuals();
+            RebuildRuleVisuals();
+            RefreshRulesList();
+        }
+
+        internal bool HasAnySelection =>
+            _selectionSet.Count > 0 || _selectedRegion != null || _selectedHaptic != null
+            || _selectedEffect != null || _selectedRule != null;
+
+        /// <summary>Delete key / context "Delete": bulk when a set is active, else
+        /// the primary item through its inspector delete path (same undo + cleanup).</summary>
+        internal void DeleteCurrentSelection()
+        {
+            if (_selectionSet.Count > 1) { DeleteSelection(); return; }
+            if (_selectedRegion != null) { BtnDeleteRegion_Click(this, new RoutedEventArgs()); return; }
+            if (_selectedHaptic != null) { BtnDeleteHaptic_Click(this, new RoutedEventArgs()); return; }
+            if (_selectedEffect != null) { BtnDeleteEffect_Click(this, new RoutedEventArgs()); return; }
+            if (_selectedRule != null) { BtnDeleteRule_Click(this, new RoutedEventArgs()); return; }
+            if (_selectionSet.Count == 1) DeleteSelection();
+        }
+
+        // -- Keyboard nudge / jump --------------------------------------------
+
+        private double ClampStart(double start, double length)
+        {
+            var max = _totalSeconds > 0 ? Math.Max(0, _totalSeconds - length) : double.MaxValue;
+            return Math.Max(0, Math.Min(max, start));
+        }
+
+        /// <summary>Left / Right arrow: shift the selection by <paramref name="delta"/> seconds.</summary>
+        internal void NudgeSelection(double delta)
+        {
+            EnsurePrimaryInSelectionSet();
+            var rule = _selectionSet.Count == 0 ? _selectedRule : null;
+            if (_selectionSet.Count == 0 && rule == null) return;
+            PushUndoSnapshot();
+            if (rule != null)
+            {
+                if (rule.Trigger is TimeReachedTrigger tr) tr.Time = ClampStart(tr.Time + delta, 0);
+                var band = _enhancement.Regions.FirstOrDefault(r => r != null && r.Id == rule.RegionConstraint);
+                if (band != null) ShiftItem(band, delta);
+            }
+            foreach (var sel in _selectionSet) ShiftItem(sel, delta);
+            MarkDirty();
+            UpdateSelectedSidePanel();
+            RefreshSelectionVisuals(); // rebuilds the pin lane too
+            ScheduleValidation();
+        }
+
+        private void ShiftItem(object item, double delta)
+        {
+            switch (item)
+            {
+                case Region r:
+                    var len = Math.Max(0, r.End - r.Start);
+                    r.Start = ClampStart(r.Start + delta, len);
+                    r.End = r.Start + len;
+                    break;
+                case HapticEvent ev:
+                    ev.Start = ClampStart(ev.Start + delta, ev.Duration);
+                    break;
+                case TimelineItem ti:
+                    ti.Start = ClampStart(ti.Start + delta, Math.Max(0, ti.Duration));
+                    break;
+            }
+        }
+
+        /// <summary>[ / ]: move the playhead to the previous / next item start.</summary>
+        internal void JumpToAdjacentItemStart(bool forward)
+        {
+            if (_totalSeconds <= 0) return;
+            var starts = new List<double>();
+            foreach (var r in _enhancement.Regions) if (r != null) starts.Add(r.Start);
+            foreach (var t in _enhancement.HapticTracks)
+                if (t?.Events != null) foreach (var ev in t.Events) if (ev != null) starts.Add(ev.Start);
+            foreach (var ti in _enhancement.TimelineItems)
+                if (ti != null && ti.Kind == TimelineItemKind.Effect) starts.Add(ti.Start);
+            foreach (var rule in _enhancement.Rules)
+                if (rule?.Trigger is TimeReachedTrigger tr) starts.Add(tr.Time);
+            const double eps = 0.01;
+            var candidates = forward
+                ? starts.Where(s => s > _currentSeconds + eps)
+                : starts.Where(s => s < _currentSeconds - eps);
+            if (!candidates.Any()) return;
+            var target = forward ? candidates.Min() : candidates.Max();
+            SeekToFraction(target / _totalSeconds);
+        }
+
 
         // -- Undo / Redo (snapshot-based) -------------------------------------
         // Snapshots are JSON of the entire Enhancement; for a typical project (~10-100KB) and a
@@ -584,6 +689,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 RebuildRegionVisuals();
                 RebuildHapticVisuals();
                 RebuildEffectVisuals();
+                RebuildRuleVisuals();
                 RefreshRulesList();
                 RestoreSelectionIds(sel);
                 ScheduleValidation();

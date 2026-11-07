@@ -68,6 +68,9 @@
             <Setter Property="FontFamily" Value="Consolas, Courier New"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="FontSize" Value="13"/>
+            <!-- Consolas' own 13px line (1.17 em). Off Windows the face is Noto Sans Mono, whose 1.36 em line
+                 made every header ~2.5px taller and pushed the last rows under PAUSE. -->
+            <Setter Property="LineHeight" Value="15.2"/>
             <Setter Property="Margin" Value="0,12,0,6"/>
         </ControlTheme>
 
@@ -272,7 +275,9 @@
 
                 <!-- header -->
                 <StackPanel Grid.Row="0">
-                    <StackPanel Orientation="Horizontal">
+                    <!-- Grids, not WPF's horizontal StackPanels (:281-294): those measure at infinite width,
+                         so a long "DEPTH II · ..." ran off the panel edge; here it trims. -->
+                    <Grid ColumnDefinitions="Auto,*">
                         <Border x:Name="PortraitHost" Width="44" Height="44" Margin="0,0,10,0" CornerRadius="10" VerticalAlignment="Center"
                                 Background="#33FF69B4" BorderThickness="0" ClipToBounds="True">
                             <Panel>
@@ -280,16 +285,17 @@
                                 <Border CornerRadius="10" BorderBrush="{StaticResource PanelBorder}" BorderThickness="3" IsHitTestVisible="False"/>
                             </Panel>
                         </Border>
-                        <StackPanel VerticalAlignment="Center">
-                            <StackPanel Orientation="Horizontal">
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <Grid ColumnDefinitions="Auto,Auto,*">
                                 <fx:IconGlyph Kind="AnimalRabbit" Variant="Filled" Foreground="{StaticResource Pink}" Size="22" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                <TextBlock Text="THE HOLE" Foreground="{StaticResource Pink}" FontWeight="Bold" FontSize="22"/>
-                                <TextBlock x:Name="TxtActWave" Text="{Binding ActWaveText}" Foreground="White" FontSize="13" VerticalAlignment="Bottom" Margin="8,0,0,3"/>
-                            </StackPanel>
+                                <TextBlock Grid.Column="1" Text="THE HOLE" Foreground="{StaticResource Pink}" FontWeight="Bold" FontSize="22"/>
+                                <TextBlock Grid.Column="2" x:Name="TxtActWave" Text="{Binding ActWaveText}" Foreground="White" FontSize="13" VerticalAlignment="Bottom" Margin="8,0,0,3"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </Grid>
                             <!-- Run clock + fill bar: Pocket Watch perks only (SetClockVisible) - time stays a mystery otherwise. -->
                             <TextBlock x:Name="TxtRunTime" Text="{Binding RunTimeText}" Foreground="{StaticResource TextDim}" FontSize="13" Margin="0,2,0,0" IsVisible="False"/>
                         </StackPanel>
-                    </StackPanel>
+                    </Grid>
                     <!-- same left/right side switch, mirrored UNDER the title so it's reachable while the
                          panel is open (e.g. the pre-run loadout glance, before you fall in) without
                          overlapping "THE HOLE - DEPTH". -->

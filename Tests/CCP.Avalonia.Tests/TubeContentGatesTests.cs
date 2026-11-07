@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -17,6 +18,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Companion;
 using ConditioningControlPanel.Services.Moderation;
 using Xunit;
+using ConditioningControlPanel.Avalonia.Platform;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
@@ -29,10 +31,25 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed class TubeContentGatesTests
 {
+    [Fact]
+    public Task QuickMenuPaletteIsSafeAcrossDispatchers() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var palette = new[] { "MenuRed", "MenuGreen", "MenuPatreon", "MenuLocked" }
+            .Select(name => typeof(AvatarTubeWindow).GetField(name,
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null))
+            .ToArray();
+        await Task.Run(() =>
+        {
+            foreach (var brush in palette)
+                Assert.IsAssignableFrom<global::Avalonia.Media.IImmutableBrush>(brush);
+        });
+    });
+
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -43,10 +60,32 @@ public sealed class TubeContentGatesTests
         return owner.OwnedWindows.OfType<T>().Single();
     }
 
+    // A type initializer may run on a worker before the UI constructs the tube (Windows CI).
+    // Fixed menu colors must be usable across threads, including by the icon compositor.
+    [Theory]
+    [InlineData("MenuRed", "#FFFF6347")]
+    [InlineData("MenuGreen", "#FF90EE90")]
+    [InlineData("MenuPatreon", "#FF9B59B6")]
+    [InlineData("MenuLocked", "#FF606070")]
+    public Task SharedMenuColorsAreSafeAcrossThreads(string name, string expected) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var brush = (global::Avalonia.Media.ISolidColorBrush)typeof(AvatarTubeWindow)
+            .GetField(name, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!;
+        var color = await Task.Run(() => brush.Color);
+        Assert.Equal(global::Avalonia.Media.Color.Parse(expected), color);
+        Assert.IsAssignableFrom<global::Avalonia.Media.IImmutableBrush>(brush);
+    });
+
     [Fact]
     public Task ExplicitPresetFromTheMenuWaitsOnTheAcknowledgement() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
+        // Pure tube helpers may initialize the cached palette on a worker before the first window.
+        var brushes = new[] { "MenuRed", "MenuGreen", "MenuPatreon", "MenuLocked" }.Select(name =>
+            (ISolidColorBrush)typeof(AvatarTubeWindow).GetField(name, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!).ToArray();
+        var colors = await Task.Factory.StartNew(() => brushes.Select(b => b.Color).ToArray(),
+            System.Threading.CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        Assert.Equal(new[] { "#FF6347", "#90EE90", "#9B59B6", "#606070" }.Select(Color.Parse), colors);
         var previous = CoreSettings.ServiceProvider;
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;

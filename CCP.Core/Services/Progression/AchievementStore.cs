@@ -18,8 +18,7 @@ namespace ConditioningControlPanel.Services;
 internal sealed class AchievementStore
 {
     public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "ConditioningControlPanel",
+        CorePaths.RoamingData,
         "achievements.json");
 
     /// <summary>Identical for every write - build them once, not once per save.</summary>

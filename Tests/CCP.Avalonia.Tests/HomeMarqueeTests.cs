@@ -47,7 +47,7 @@ public sealed class HomeMarqueeTests
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var s = CoreSettings.Current;
@@ -388,11 +388,22 @@ public sealed class HomeMarqueeTests
 
     // ---------------------------------------------------------------- Home actions
 
+    [Fact]
+    public Task DeeperEditorCardOpensDeeperPage() => WithShell((w, dash) =>
+    {
+        var card = dash.FindControl<ConditioningControlPanel.Avalonia.Views.Features.FeatureCard>("CardDeeperEditor")!;
+        card.RaiseEvent(new RoutedEventArgs(ConditioningControlPanel.Avalonia.Views.Features.FeatureCard.ClickEvent, card));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("deeper", w.CurrentTab);
+        return Task.CompletedTask;
+    });
+
     /// <summary>WPF CardMystery_Click (Presets.cs:1084): the ? box goes to today's free feature's page.</summary>
     [Fact]
     public Task MysteryBoxOpensTodaysFreeFeature() => WithShell((w, dash) =>
     {
         CoreEntitlement.IsFreeTodayProvider = k => k == "voice";
+        CoreEntitlement.DailyFreeKeyProvider = () => "voice";
         var box = dash.FindControl<ConditioningControlPanel.Avalonia.Views.Features.FeatureCard>("CardMystery")!;
         box.RaiseEvent(new RoutedEventArgs(ConditioningControlPanel.Avalonia.Views.Features.FeatureCard.ClickEvent, box));
         Dispatcher.UIThread.RunJobs();

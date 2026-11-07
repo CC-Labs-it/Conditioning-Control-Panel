@@ -10,6 +10,11 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
+using IconKind = FluentIcons.Common.Symbol;
+using IconVariant = FluentIcons.Common.IconVariant;
+using ConditioningControlPanel.Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
@@ -48,6 +53,86 @@ public sealed class LeashPageTests
             LeashGateCardTests.Click(Find(page, "leash-cut"));
             Assert.Null(svc.Snapshot.Me);
             Assert.True(page.ShowingEmpty);
+        });
+
+    [Fact]
+    public void VisiblePageRebindsWhenServiceArrivesAndIsDropped() =>
+        Run(true, (shell, _, svc) =>
+        {
+            LeashHead.Service = null;
+            shell.Show(); shell.ShowTab("leash");
+            var page = shell.Named<LeashTabView>("LeashTab")!;
+            Assert.True(page.ShowingEmpty);
+            LeashHead.Service = svc;
+            Assert.False(page.ShowingEmpty);
+            LeashHead.Service = null;
+            Assert.True(page.ShowingEmpty);
+        });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void OwnCardShowsHoldHintAndLatestFourteenStickerRecords(bool hint) =>
+        Run(true, (shell, _, svc) =>
+        {
+            shell.ShowTab("leash");
+            var page = shell.Named<LeashTabView>("LeashTab")!;
+            var me = svc.Snapshot.Me!;
+            var ids = new[] { "good", "star", "pet", "heart", "wow", "unknown", "x" };
+            page.SelfCard!.Update(me with { Stickers = Enumerable.Range(0, 16)
+                .Select(i => new Sticker(ids[i % ids.Length], new LeashPerson("from-" + i, "Sender " + i, null), DateTimeOffset.UtcNow)).ToArray() });
+            var words = page.GetLogicalDescendants().OfType<TextBlock>().ToArray();
+            if (hint)
+                Assert.Contains(words, t => t.Text == ConditioningControlPanel.Localization.Loc.GetF("leash_self_hold_hint",
+                    LeashHoldToCut.KeyLabel(ConditioningControlPanel.CoreSettings.Current.PanicKey)));
+            else
+            {
+                var wrap = Assert.Single(page.GetLogicalDescendants().OfType<WrapPanel>());
+                var discs = wrap.Children.Cast<Grid>().ToArray();
+                Assert.Equal(14, discs.Length);
+                for (var i = 0; i < discs.Length; i++)
+                {
+                    var source = 15 - i;
+                    var id = ids[source % ids.Length];
+                    var (word, color) = id switch
+                    {
+                        "good" => ("GOOD", "#FFCF6B"), "star" => ("★", "#FFCF6B"),
+                        "pet" => ("PET", "#B99CFF"), "heart" => ("♥", "#FF5FB4"),
+                        "wow" => ("WOW", "#5FFFD0"), "unknown" => ("UNKN", "#B99CFF"),
+                        _ => ("X", "#B99CFF"),
+                    };
+                    var disc = discs[i];
+                    Assert.Equal("leash-sticker:" + id, disc.Tag);
+                    Assert.Equal(26, disc.Width); Assert.Equal(26, disc.Height);
+                    Assert.Equal(new Thickness(0, 0, 5, 5), disc.Margin);
+                    Assert.Equal(((i * 37) % 21) - 10, Assert.IsType<RotateTransform>(disc.RenderTransform).Angle);
+                    Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("leash_sticker_from", "Sender " + source), ToolTip.GetTip(disc));
+                    var circle = Assert.IsType<Ellipse>(disc.Children[0]);
+                    Assert.Equal(Color.Parse(color), Assert.IsAssignableFrom<ISolidColorBrush>(circle.Fill).Color);
+                    var glow = Assert.IsType<DropShadowEffect>(circle.Effect);
+                    Assert.Equal(Color.Parse(color), glow.Color);
+                    Assert.Equal(6, glow.BlurRadius); Assert.Equal(0.35, glow.Opacity);
+                    if (id is "star" or "heart")
+                    {
+                        var icon = Assert.IsType<IconGlyph>(disc.Children[1]);
+                        Assert.Equal(id == "star" ? IconKind.Star : IconKind.Heart, icon.Kind);
+                        Assert.Equal(IconVariant.Filled, icon.Variant);
+                        Assert.Equal(13, icon.Size);
+                        Assert.Equal(Color.Parse("#1B1026"), Assert.IsAssignableFrom<ISolidColorBrush>(icon.Foreground).Color);
+                        continue;
+                    }
+                    var face = Assert.IsType<TextBlock>(disc.Children[1]);
+                    Assert.Equal(word, face.Text);
+                    Assert.Equal(Color.Parse("#1B1026"), Assert.IsAssignableFrom<ISolidColorBrush>(face.Foreground).Color);
+                    Assert.Equal(FontWeight.Bold, face.FontWeight);
+                    Assert.Equal(word.Length > 1 ? 26 * 0.26 : 26 * 0.5, face.FontSize);
+                }
+                wrap.Measure(new Size(70, double.PositiveInfinity));
+                wrap.Arrange(new Rect(0, 0, 70, wrap.DesiredSize.Height));
+                Assert.True(discs[2].Bounds.Y > discs[0].Bounds.Y);
+                Assert.DoesNotContain(words, t => t.Text?.Contains("Sender ") == true);
+
+            }
         });
 
     private sealed class Wire : ILeashApi

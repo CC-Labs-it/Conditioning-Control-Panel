@@ -4,8 +4,9 @@
  * is drawn RATES.renderDelayMs (100) in the past: between the two records around that time, in track space
  * (s wrap aware, lateral, height) so it follows the bends, quat slerped, velocity lerped. Past the newest record
  * it dead-reckons along s, lateral and height at the last rates for at most deadReckonMs (250), then holds.
- * When a new record moves the target from where the kart was shown, the difference is blended out over
- * blendMs (150); a jump over SNAP_M (a rescue) snaps. Output is a full sim KartState. Pure, three-free.
+ * When a new record moves the target at the drawn time (it replaces a dead reckoning), the difference is blended
+ * out over blendMs (150); a jump over SNAP_M (a rescue) snaps. A record that does not change the kart at the drawn
+ * time changes nothing on screen. Output is a full sim KartState. Pure, three-free.
  */
 import { pathFrame } from './trackPath.js';
 import { S, createState } from '../sim/state.js';
@@ -23,7 +24,7 @@ export function createInterp(track, { delayMs = RATES.renderDelayMs, deadMs = RA
 
   function slot(seat) {
     let e = seats.get(seat);
-    if (!e) seats.set(seat, (e = { buf: [], shown: null, err: { s: 0, x: 0, h: 0 }, errAt: 0, seenSeq: -1, hold: false }));
+    if (!e) seats.set(seat, (e = { buf: [], err: { s: 0, x: 0, h: 0 }, errAt: 0, seenSeq: -1, hold: false }));
     return e;
   }
 
@@ -40,9 +41,9 @@ export function createInterp(track, { delayMs = RATES.renderDelayMs, deadMs = RA
   /** Newest record of a seat (the bot keeper seeds from it). */
   const newest = (seat) => { const e = seats.get(seat); return e && e.buf.length ? e.buf[e.buf.length - 1] : null; };
 
-  /** Track-space target at render ms t into raw; @returns the record that rules the discrete fields. */
-  function target(e, t) {
-    const b = e.buf, n = b.length, top = b[n - 1];
+  /** Track-space target at render ms t from the first n records into raw; @returns the record that rules the discrete fields. */
+  function target(e, t, n = e.buf.length) {
+    const b = e.buf, top = b[n - 1];
     if (n === 1 || t <= b[0].ms) {
       const k = n === 1 ? top.k : b[0].k;
       raw.s = k.s; raw.x = k.x; raw.h = k.h; qnorm(qo, k.q);
@@ -67,27 +68,36 @@ export function createInterp(track, { delayMs = RATES.renderDelayMs, deadMs = RA
     return a < 0.5 ? A.k : B.k;
   }
 
+  const blendAt = (e, t) => Math.max(0, Math.min(1, 1 - (t - e.errAt) / blendMs));
+
+  /** New records landed: blend from where the kart would be at THIS drawn time without them, so nothing moves unless
+   * they changed it. (Against the last drawn pose instead, every record cost the kart one frame of travel: 40 m/s is
+   * 67 cm a frame, 15 to 20 times a second.) */
+  function rebase(e, t) {
+    const b = e.buf;
+    let n = b.length - 1;
+    while (n > 0 && b[n - 1].k.seq !== e.seenSeq) n--;
+    e.seenSeq = b[b.length - 1].k.seq;
+    if (n === 0) return;                                        // first record, or the old ones have left the buffer
+    const was = target(e, t, n), f = blendAt(e, t);
+    const os = wrap(raw.s + e.err.s * f, L), ox = raw.x + e.err.x * f, oh = raw.h + e.err.h * f, ofork = was.fork || 0;
+    const k = target(e, t);
+    const es = ds(raw.s, os), ex = ox - raw.x, eh = oh - raw.h;
+    const big = Math.abs(es) > SNAP_M || Math.abs(ex) > SNAP_X || ofork !== (k.fork || 0);
+    e.err.s = big ? 0 : es; e.err.x = big ? 0 : ex; e.err.h = big ? 0 : eh; e.errAt = t;
+  }
+
   /**
    * Write seat's kart at server ms `nowMs` (drawn at nowMs - delay) into the KartState `out`.
-   * `peek` (the per-frame render view) reads without moving the blend.
    * @returns the wire record whose discrete fields were used, or null when the seat has none yet
    */
-  function sample(seat, nowMs, out = createState(), peek = false) {
+  function sample(seat, nowMs, out = createState()) {
     const e = seats.get(seat);
     if (!e || !e.buf.length) return null;
-    const t = nowMs - delayMs, k = target(e, t), top = e.buf[e.buf.length - 1].k;
-    // a new record: blend from where the kart was shown to the new target
-    if (!peek && top.seq !== e.seenSeq) {
-      e.seenSeq = top.seq;
-      if (e.shown) {
-        const es = ds(raw.s, e.shown.s), ex = e.shown.x - raw.x, eh = e.shown.h - raw.h;
-        const big = Math.abs(es) > SNAP_M || Math.abs(ex) > SNAP_X || (e.shown.fork || 0) !== (k.fork || 0);
-        e.err.s = big ? 0 : es; e.err.x = big ? 0 : ex; e.err.h = big ? 0 : eh; e.errAt = t;
-      }
-    }
-    const f = Math.max(0, 1 - (t - e.errAt) / blendMs);
+    const t = nowMs - delayMs;
+    if (e.buf[e.buf.length - 1].k.seq !== e.seenSeq) rebase(e, t);
+    const k = target(e, t), f = blendAt(e, t);
     const s = wrap(raw.s + e.err.s * f, L), x = raw.x + e.err.x * f, h = raw.h + e.err.h * f;
-    if (!peek) e.shown = { s, x, h, fork: k.fork || 0 };
     writeState(out, k, s, x, h);
     return k;
   }

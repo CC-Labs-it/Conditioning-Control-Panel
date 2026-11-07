@@ -4,7 +4,7 @@
 // fill IS the 12 s hold, and the push between cards. It plays no sound (WPF c0c67ff47 silenced every
 // board cue). Not yet here (sync6-tonight-board-b): the drawn art views (board tiles, clips, wheel,
 // quests, invite, tip and house scenes, living posters), the text rise, badge thud, sparks, motes,
-// glint and the CTA press juice.
+// glint. CTA glow, shine and press motion live in BillboardCardHost.Cta.cs.
 
 using System;
 using System.Globalization;
@@ -37,7 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
 {
     /// <summary>WPF BillboardCardHost: one card at a time from a <see cref="BillboardDeck"/>, a row
     /// of dots under it with the hold filling the current one.</summary>
-    internal sealed class BillboardCardHost : Grid
+    internal sealed partial class BillboardCardHost : Grid
     {
         /// <summary>The hold reads elapsed time here; tests step it (P08/P40).</summary>
         internal static TimeProvider Time = TimeProvider.System;
@@ -129,7 +129,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
-            _visibilityWatch = EffectiveVisibility.Watch(this, UpdateRunning);
+            _visibilityWatch = EffectiveVisibility.Watch(this, () => { UpdateRunning(); ApplyDirty(); });
             UpdateRunning();
         }
 
@@ -138,6 +138,8 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             _visibilityWatch?.Dispose();
             _visibilityWatch = null;
             (_current?.Tag as IBillboardArtView)?.Hold();
+            _ctaOnScreen = false;
+            StopCtaFx();
             PauseHold();
             base.OnDetachedFromVisualTree(e);
         }
@@ -159,16 +161,40 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             Show(_deck.Next(), animate: true);
         }
 
-        public void MarkDirty() => _deck.MarkDirty();
+        public void MarkDirty()
+        {
+            _deck.MarkDirty();
+            ApplyDirty();
+        }
+
+        private void ApplyDirty()
+        {
+            if (!_begun || _folding || !IsEffectivelyVisible ||
+                TopLevel.GetTopLevel(this) is not { IsVisible: true } || _card == null || !_deck.IsDirty) return;
+            double progress = HoldProgress;
+            string ids = DeckIds();
+            bool arrived = _deck.Refresh();
+            if (_deck.IsDirty) return;
+            if (arrived && DashboardBillboard.JumpToArrival(progress, HoldMayRun)) { Advance(); return; }
+            if (ids == DeckIds()) return;
+            RebuildChips();
+            _holdBase = progress;
+            SetFill(progress);
+            UpdateRunning();
+        }
+
+        private string DeckIds() => string.Join("\n", _deck.Cards.Select(c => c.Spec.Id));
 
         /// <summary>The shell closed: every art view frees its player and bitmaps (P68).</summary>
         public void ReleaseArt()
         {
+            _ctaOnScreen = false;
+            StopCtaFx();
             foreach (var slide in _slides.Children) (slide.Tag as IBillboardArtView)?.Release();
         }
 
         /// <summary>The motion level or a visibility gate changed: re-read every gate now.</summary>
-        public void RefreshMotion() => UpdateRunning();
+        public void RefreshMotion() { UpdateRunning(); ApplyDirty(); }
 
         internal bool HoldMayRun =>
             !_folding && _card != null && _fill != null && IsEffectivelyVisible && TopLevel.GetTopLevel(this) is { IsVisible: true } &&
@@ -198,6 +224,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             _snooze.IsVisible = card.CanSnooze;
             RebuildChips();
             Lay();
+            LandCtaFx(animate);
             UpdateRunning();
         }
 
@@ -206,6 +233,8 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             foreach (var slide in _slides.Children.ToArray()) Retire(slide);
             _current = null;
             _card = null;
+            _ctaOnScreen = false;
+            StopCtaFx();
             _meta.IsVisible = _badge.IsVisible = _snooze.IsVisible = false;
             _chips.Children.Clear();
             _fill = null;
@@ -230,6 +259,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
                 else art?.Hold();
             }
             catch (Exception ex) { Log.Debug("Billboard art run/hold failed: {E}", ex.Message); }
+            RefreshCtaFx(onScreen && !_folding && _card != null && _cta.IsVisible);
             if (HoldMayRun) ResumeHold();
             else PauseHold();
         }
@@ -390,13 +420,21 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
         private Button BuildCta()
         {
             _ctaText.Foreground = new SolidColorBrush(Ink);
-            _ctaFace.Child = _ctaText;
+            var face = new Grid { ClipToBounds = true, Children = { _ctaShine, _ctaText } };
+            _ctaFace.Child = face;
+            var root = new Grid { Children = { _ctaGlow, _ctaFace } };
+            BuildCtaFx(root);
             _ctaFace.BorderBrush = new SolidColorBrush(Colors.White, 0.35);
             var button = new Button
             {
-                Template = Bare(), Content = _ctaFace, Cursor = new Cursor(StandardCursorType.Hand),
+                Template = Bare(), Content = root, Cursor = new Cursor(StandardCursorType.Hand),
                 HorizontalAlignment = HorizontalAlignment.Left, Focusable = true, Margin = new Thickness(0, 12, 0, 0),
             };
+            button.PointerEntered += (_, _) => SetCtaHover(true);
+            button.PointerExited += (_, _) => { SetCtaPressed(false); SetCtaHover(false); };
+            button.AddHandler(PointerPressedEvent, (_, e) => { if (e.GetCurrentPoint(button).Properties.IsLeftButtonPressed) SetCtaPressed(true); }, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            button.AddHandler(PointerReleasedEvent, (_, _) => SetCtaPressed(false), global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            button.PointerCaptureLost += (_, _) => SetCtaPressed(false);
             button.Click += (_, _) => { if (_card != null && !_folding) Press(); };
             button.GotFocus += (_, _) => _ctaFace.BorderBrush = Brushes.White;
             button.LostFocus += (_, _) => _ctaFace.BorderBrush = new SolidColorBrush(Colors.White, 0.35);

@@ -24,6 +24,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Services.Possession;
@@ -49,6 +50,12 @@ namespace ConditioningControlPanel.Avalonia.Possession
             public TimeSpan? Start;
             public double Tx, Ty, Rot, Sx = 1, Sy = 1;   // snapshot when the return begins
             public bool Returning;
+            /// <summary>Hold before the ease home. Directed ghosts (the Core director owns the hold)
+            /// hold until <see cref="Return"/> asks for the way home.</summary>
+            public double HoldMs;
+            public double ReturnMs = PossessionRuntime.ReturnMs;
+            public bool ReturnAsked;
+            public readonly TaskCompletionSource Done = new(TaskCreationOptions.RunContinuationsAsynchronously);
         }
 
         private readonly IFrameSource _frames;
@@ -82,7 +89,12 @@ namespace ConditioningControlPanel.Avalonia.Possession
 
         /// <summary>WPF CanApply + Apply: refuses an off-limits, hidden, zero-size, wrong-role or already
         /// possessed control, and an effect instance that is already live.</summary>
-        public bool TryApply(HeadEffect effect, PossessionHeadTarget target)
+        public bool TryApply(HeadEffect effect, PossessionHeadTarget target) => TryApply(effect, target, directed: false);
+
+        /// <summary>As <see cref="TryApply(HeadEffect, PossessionHeadTarget)"/>; a <paramref name="directed"/>
+        /// ghost is held until <see cref="Return"/> (the Core PossessionDirector owns the hold, the
+        /// 45 s cooldown and the ledger, exactly as WPF HoldThenUndoAsync does).</summary>
+        public bool TryApply(HeadEffect effect, PossessionHeadTarget target, bool directed)
         {
             var el = target.Element;
             if (PossessionTree.IsOffLimits(el)) return false;
@@ -93,7 +105,11 @@ namespace ConditioningControlPanel.Avalonia.Possession
             var lease = PossessionLease.Take(el);
             if (lease == null) return false;
             effect.Begin(lease, _rng, Photosafe);
-            _ghosts.Add(new Ghost { Effect = effect, Lease = lease, Target = target });
+            _ghosts.Add(new Ghost
+            {
+                Effect = effect, Lease = lease, Target = target,
+                HoldMs = directed ? double.PositiveInfinity : effect.HoldFor.TotalMilliseconds,
+            });
             _lastKey = target.Key;
             if (!_subscribed) { _subscribed = true; _frames.Subscribe(_onFrame); }
             return true;
@@ -129,7 +145,8 @@ namespace ConditioningControlPanel.Avalonia.Possession
             {
                 g.Start ??= now;
                 double ms = (now - g.Start.Value).TotalMilliseconds;
-                double hold = g.Effect.HoldFor.TotalMilliseconds;
+                if (g.ReturnAsked && !g.Returning) g.HoldMs = Math.Min(g.HoldMs, ms);   // home starts now
+                double hold = g.HoldMs;
                 if (ms < hold) { g.Effect.Frame(ms); continue; }
                 var l = g.Lease;
                 if (!g.Returning)
@@ -138,7 +155,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
                     g.Tx = l.Translate.X; g.Ty = l.Translate.Y; g.Rot = l.Rotate.Angle;
                     g.Sx = l.Scale.ScaleX; g.Sy = l.Scale.ScaleY;
                 }
-                double f = Math.Min(1, (ms - hold) / ReturnMs);
+                double f = g.ReturnMs <= 0 ? 1 : Math.Min(1, (ms - hold) / g.ReturnMs);
                 if (f >= 1) { Finish(g); continue; }
                 double k = 1 - HeadEffect.CubicInOut(f);
                 l.Translate.X = g.Tx * k; l.Translate.Y = g.Ty * k; l.Rotate.Angle = g.Rot * k;
@@ -153,6 +170,30 @@ namespace ConditioningControlPanel.Avalonia.Possession
             try { g.Lease.ReleaseImmediate(); }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Possession {Id} release failed", g.Effect.Id); }
             _cooldownUntil[g.Target.Key] = _time.GetTimestamp() + (long)(PossessionDeck.TargetCooldown.TotalSeconds * _time.TimestampFrequency);
+            g.Done.TrySetResult();
+        }
+
+        /// <summary>True while <paramref name="effect"/> holds a control on this runtime.</summary>
+        public bool IsRunning(HeadEffect effect) => _ghosts.Exists(g => ReferenceEquals(g.Effect, effect));
+
+        /// <summary>WPF UndoAsync(duration) for a directed ghost: ease home over <paramref name="duration"/>
+        /// (WPF's four transform effects clamp it to 600 ms), then release. Zero = home now, synchronously
+        /// (UndoAll, crash-safe exits). Completes when the control has its own transform back; a ghost that
+        /// is already gone (panic took it) completes at once.</summary>
+        public Task Return(HeadEffect effect, TimeSpan duration)
+        {
+            var g = _ghosts.Find(x => ReferenceEquals(x.Effect, effect));
+            if (g == null) return Task.CompletedTask;
+            double ms = Math.Min(Math.Max(0, duration.TotalMilliseconds), ReturnMs);
+            if (ms <= 0 || g.Start == null)
+            {
+                Finish(g);
+                if (_ghosts.Count == 0) Unsubscribe();
+                return Task.CompletedTask;
+            }
+            g.ReturnAsked = true;
+            g.ReturnMs = ms;
+            return g.Done.Task;
         }
 
         private void Unsubscribe()

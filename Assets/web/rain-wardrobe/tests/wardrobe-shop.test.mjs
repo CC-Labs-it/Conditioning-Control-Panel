@@ -165,3 +165,131 @@ test('paintShop fills the ribbon and the bar by the ids index.html carries', asy
   assert.equal(nodes.lookBlockerText.textContent, 'Buy Midnight cocktail at the Prize Counter');
   assert.deepEqual([nodes.openCounter.hidden, nodes.applyLook.disabled, nodes.discardLook.disabled], [false, true, false]);
 });
+
+test('the page calls her by the mod name from init.companion, Emi without one, and never "Rain"', async () => {
+  const { paintCompanion, companionName } = await import('../wardrobe-shop.js');
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  for (const id of ['brand', 'preview', 'sameName']) assert.match(html, new RegExp(`id="${id}"`));
+  assert.doesNotMatch(html.replace(/<!--[\s\S]*?-->/g, ''), /\bRain\b|\bRAIN\b/);
+  assert.equal(shopWith({}).shop.companion, 'Emi');
+  assert.equal(shopWith({ companion: 'Bambi' }).shop.companion, 'Bambi');
+  assert.equal(createShop({ items }).companion, 'Emi');
+  assert.deepEqual(['', '  ', 42, null, 'x'.repeat(25)].map(companionName), ['Emi', 'Emi', 'Emi', 'Emi', 'Emi']);
+  const attrs = {}, brandText = { nodeType: 3, nodeValue: 'EMI' };
+  const nodes = {
+    brand: { firstChild: brandText, setAttribute: (k, v) => { attrs.brand = v; } },
+    preview: { setAttribute: (k, v) => { attrs.preview = v; } },
+    sameName: { textContent: '' },
+  };
+  const doc = { title: '', getElementById: id => nodes[id] || null };
+  assert.equal(paintCompanion(doc, 'Bimbo'), 'Bimbo');
+  assert.equal(doc.title, 'Bimbo | Dressing room');
+  assert.equal(brandText.nodeValue, 'BIMBO');
+  assert.equal(attrs.brand, 'Bimbo dressing room');
+  assert.equal(attrs.preview, 'Bimbo. Drag to rotate, scroll to zoom.');
+  assert.equal(nodes.sameName.textContent, 'Your look. Same Bimbo.');
+});
+
+test('counter Wear door: init.tryOn and rain-tryon hand one known piece over once; unknown keys and bundled looks never', () => {
+  const { shop } = shopWith({ tryOn: 'dress:midnight-cocktail' });
+  assert.deepEqual(shop.takeTryOn(), { slot: 'dress', id: 'midnight-cocktail' });
+  assert.equal(shop.takeTryOn(), null, 'taken once');
+  assert.equal(shop.handle({ type: 'rain-tryon', key: 'accessories:hair-bow' }), 'tryon');
+  assert.deepEqual(shop.takeTryOn(), { slot: 'accessories', id: 'hair-bow' });
+  shop.handle({ type: 'rain-tryon', key: 'dress:not-a-dress' });
+  assert.equal(shop.takeTryOn(), null);
+  shop.handle({ type: 'rain-tryon', key: 'looks:anything' });
+  assert.equal(shop.takeTryOn(), null);
+  assert.equal(shop.handle({ type: 'rain-tryon', key: 7 }), null);
+});
+
+test('counter Wear door: a try-on that lands before items.json waits for it', () => {
+  const shop = createShop({ items: new Map() });
+  shop.handle({ type: 'init', look: look(), grants: [], tryOn: 'hair:rose-waves' });
+  assert.equal(shop.takeTryOn(), null);
+  shop.setItems(items);
+  assert.deepEqual(shop.takeTryOn(), { slot: 'hair', id: 'rose-waves' });
+});
+
+/** A fake element that remembers classes, attributes and inline style. */
+function meterEl() {
+  const cls = new Set(), attrs = {};
+  const fill = { style: { transition: '', transform: '' } };
+  return { firstElementChild: fill, offsetWidth: 0, style: {}, attrs, fill, setAttribute: (k, v) => { attrs[k] = v; }, classList: { toggle: (c, on) => (on ? cls.add(c) : cls.delete(c)), contains: c => cls.has(c), has: c => cls.has(c) } };
+}
+
+test('bake progress: rain-baking counts on the Apply button, the hint shows, and it clears on rain-applied', async () => {
+  const { paintShop, bakeLine } = await import('../wardrobe-shop.js');
+  const { shop } = shopWith({ applyMode: true, grants: ['cos.rain.dress.rose-flare'] });
+  shop.setDraft(look({ dress: 'rose-flare' }));
+  assert.equal(shop.apply(), true);
+  assert.equal(shop.status().bake, null, 'no meter until the host says it bakes (a cached look commits at once)');
+  assert.equal(shop.handle({ type: 'rain-baking', done: 2, total: 17, shown: 3, fraction: 0.15 }), 'baking');
+  assert.deepEqual(shop.status().bake, { shown: 3, total: 17, fraction: 0.15 });
+  assert.equal(bakeLine(STR, shop.status().bake), 'Getting dressed: 3 of 17');
+
+  const ids = ['tryonRibbon', 'lookNowLabel', 'lookNow', 'lookBlocker', 'lookBlockerText', 'openCounter', 'discardLook', 'applyLook'];
+  const el = () => { const cls = new Set(); return { textContent: '', hidden: false, disabled: false, setAttribute() {}, classList: { toggle: (c, on) => (on ? cls.add(c) : cls.delete(c)), has: c => cls.has(c), contains: c => cls.has(c) } }; };
+  const nodes = Object.fromEntries(ids.map(id => [id, el()]));
+  nodes.bakeMeter = meterEl();
+  const doc = { getElementById: id => nodes[id] || null, documentElement: { toggleAttribute() {} } };
+  paintShop(doc, shop);
+  assert.equal(nodes.applyLook.textContent, 'Getting dressed: 3 of 17');
+  assert.equal(nodes.applyLook.disabled, true);
+  assert.equal(nodes.lookBlockerText.textContent, STR.bakeHint);
+  assert.equal(nodes.lookBlocker.classList.has('on'), true);
+  assert.equal(nodes.bakeMeter.classList.contains('on'), true, 'IN: the meter fades up');
+  assert.equal(nodes.bakeMeter.fill.style.transform, 'scaleX(0.15)');
+  assert.equal(nodes.bakeMeter.attrs['aria-hidden'], 'false');
+
+  shop.handle({ type: 'rain-applied', lookHash: 'h' });
+  assert.deepEqual([shop.status().bake, shop.status().outcome, shop.status().applying], [null, 'applied', false]);
+  paintShop(doc, shop);
+  assert.equal(nodes.applyLook.textContent, STR.apply);
+  assert.equal(nodes.bakeMeter.classList.contains('on'), false, 'OUT: the meter fades');
+  assert.equal(nodes.bakeMeter.classList.contains('done'), true);
+  assert.equal(nodes.bakeMeter.fill.style.transform, 'scaleX(1)', 'OUT: an applied bake fills to the end first');
+});
+
+test('bake progress: a fresh bake starts the meter empty; a failed bake fades without filling; bad frames are ignored', async () => {
+  const { paintMeter } = await import('../wardrobe-shop.js');
+  const { shop } = shopWith({ applyMode: true, grants: ['cos.rain.dress.rose-flare'] });
+  assert.equal(shop.handle({ type: 'rain-baking', total: 0, shown: 1, fraction: 0 }), null);
+  assert.equal(shop.handle({ type: 'rain-baking', total: 17, shown: 'x', fraction: 0 }), null);
+  assert.deepEqual(shop.handle({ type: 'rain-baking', total: 17, shown: 40, fraction: 3 }) && shop.status().bake, { shown: 17, total: 17, fraction: 1 }, 'clamped');
+
+  const meter = meterEl();
+  meter.fill.style.transform = 'scaleX(1)';   // left over from the last applied bake
+  paintMeter(meter, { bake: { shown: 1, total: 17, fraction: 0.02 } }, true);
+  assert.equal(meter.fill.style.transform, 'scaleX(0.02)');
+  assert.equal(meter.fill.style.transition, '', 'the reset runs with no transition, then hands it back');
+  assert.equal(meter.classList.contains('calm'), true, 'Gentle / reduced motion lengthens the fades');
+
+  shop.setDraft(look({ dress: 'rose-flare' }));
+  shop.apply();
+  shop.handle({ type: 'rain-baking', total: 17, shown: 5, fraction: 0.25 });
+  assert.equal(shop.handle({ type: 'rain-applied', failed: true, reason: 'cancelled' }), 'apply-failed');
+  const st = shop.status();
+  assert.equal(st.outcome, 'failed');
+  paintMeter(meter, { bake: { shown: 5, total: 17, fraction: 0.25 } });
+  paintMeter(meter, st);
+  assert.equal(meter.classList.contains('on'), false);
+  assert.equal(meter.classList.contains('done'), false);
+  assert.equal(meter.fill.style.transform, 'scaleX(0.25)', 'a cancel never claims a finished bake');
+});
+
+test('bake progress: init.strings localises known lines only', async () => {
+  const { paintShop } = await import('../wardrobe-shop.js');
+  const { shop } = shopWith({ strings: { baking: 'Cambio in corso: {n} di {total}', bakeHint: 'Tieni aperta questa finestra.', nope: 'x', apply: 7 } });
+  assert.equal(shop.str.baking, 'Cambio in corso: {n} di {total}');
+  assert.equal(shop.str.nope, undefined);
+  assert.equal(shop.str.apply, STR.apply);
+  shop.handle({ type: 'rain-baking', total: 17, shown: 4, fraction: 0.2 });
+  const node = () => ({ textContent: '', hidden: false, disabled: false, setAttribute() {}, classList: { toggle() {}, has() {}, contains() { return false; } } });
+  const nodes = { applyLook: node(), lookBlocker: node(), lookBlockerText: node(), openCounter: node() };
+  paintShop({ getElementById: id => nodes[id] || null, documentElement: { toggleAttribute() {} } }, shop);
+  assert.equal(nodes.applyLook.textContent, 'Cambio in corso: 4 di 17');
+  assert.equal(nodes.lookBlockerText.textContent, 'Tieni aperta questa finestra.');
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(html, /id="bakeMeter"/);
+});

@@ -45,6 +45,7 @@ public sealed class ChaosFieldFxModel
         public bool Eased;
         public FieldFxColor Color;
         public double[]? Flicker;
+        public double Rise, Fade;
     }
 
     private struct Dot { public double X, Y, Start, Life; public bool Warm, Used; }
@@ -79,8 +80,21 @@ public sealed class ChaosFieldFxModel
     }
 
     /// <summary>WPF DrawResidue: a flicker keyframe every 90 ms at 0.55..1.0, then a linear fade to 0 at the end.</summary>
-    public void Residue(double x, double y, double r, double lifeMs, double now, Random? rng = null)
+    public void Residue(double x, double y, double r, double lifeMs, double now, Random? rng = null, bool gentle = false, double gentleFadeSeconds = 0.75)
     {
+        if (gentle)
+        {
+            // WPF RiseHoldFade clamps a negative hold to zero, extending short residues.
+            double rise = Safety.GentleVisuals.RiseMs(0, true);
+            double fade = Safety.GentleVisuals.Fade(0.09, true, gentleFadeSeconds) * 1000;
+            _transients.Add(new Transient
+            {
+                Kind = FieldFxKind.Residue, X = x, Y = y, R = r, Start = now,
+                Life = Math.Max(lifeMs, rise + fade), Rise = rise, Fade = fade,
+                Color = ResidueColor,
+            });
+            return;
+        }
         rng ??= Random.Shared;
         int steps = Math.Max(2, (int)(lifeMs / 90));
         var flicker = new double[steps];
@@ -158,7 +172,9 @@ public sealed class ChaosFieldFxModel
                 }
                 case FieldFxKind.Residue:
                     into.Add(new FieldFxPrim(FieldFxKind.Residue, t.X, t.Y, 0, 0, t.R, 0,
-                        ResidueOpacity(t.Flicker!, now - t.Start, t.Life), t.Color));
+                        t.Flicker != null ? ResidueOpacity(t.Flicker, now - t.Start, t.Life)
+                            : 0.8 * Math.Clamp(Math.Min((now - t.Start) / t.Rise,
+                                (t.Life - (now - t.Start)) / t.Fade), 0, 1), t.Color));
                     break;
             }
         }

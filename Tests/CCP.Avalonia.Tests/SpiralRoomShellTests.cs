@@ -20,6 +20,63 @@ namespace CCP.Avalonia.Tests;
 /// SpiralTabView.Refresh reading Core SpiralRoom.StateFor.</summary>
 public sealed class SpiralRoomShellTests
 {
+    // WPF MainWindow.TabNavigation.cs:725: ShowTab("spiral") calls OnTabShown, so explicit navigation
+    // to the tab already showing retries a failed embed (the visibility flip alone never fires).
+    [Fact]
+    public Task ShowTabSpiral_OnTheSameTab_RetriesAFailedEmbed() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var service = new SettingsService();
+        var oldSettings = CoreSettings.ServiceProvider;
+        CoreSettings.ServiceProvider = () => service;
+        var oldAudio = CoreAudio.PlayOneShotProvider;
+        var oldEngine = SpiralTabView.EngineAvailable;
+        var oldStart = SpiralTabView.StartEmbed;
+        var attempts = 0;
+        var chimes = 0;
+        service.Current.OfflineMode = true;
+        service.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
+        CoreSettings.Current.MasterVolume = 50;
+        CoreSettings.Current.DescentCountdownAudio = true;
+        CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => { if (tag == "descent-spiral-open") chimes++; };
+        SpiralTabView.EngineAvailable = () => true;
+        SpiralTabView.StartEmbed = _ => { attempts++; throw new InvalidOperationException("fixture"); };
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("spiral");
+            Dispatcher.UIThread.RunJobs();
+            var tab = shell.Named<SpiralTabView>("SpiralTab")!;
+            Assert.True(tab.IsVisible);
+            tab.SoundResolver = name => name;
+            tab.ApplyState(SpiralRoomState.Spiral);
+            tab.ApplyState(SpiralRoomState.Spiral);
+            Assert.Equal(1, attempts);   // latched for this entry
+            Assert.Equal(1, chimes);
+
+            shell.ShowTab("spiral");     // same tab: no hide/show, only OnTabShown clears the latch
+            Dispatcher.UIThread.RunJobs();
+            tab.ApplyState(SpiralRoomState.Spiral);
+            Assert.Equal(2, attempts);
+            Assert.Equal(1, chimes); // WPF SpiralTabView.xaml.cs:376-378: retry keeps the cue spent
+        }
+        finally
+        {
+            shell.Close();
+            CoreAudio.PlayOneShotProvider = oldAudio;
+            SpiralTabView.EngineAvailable = oldEngine;
+            SpiralTabView.StartEmbed = oldStart;
+            service.SealForReset();
+            CoreSettings.ServiceProvider = oldSettings;
+        }
+        Assert.Same(oldAudio, CoreAudio.PlayOneShotProvider);
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task FuseArmsTheRailChip_ChipOpensTheFog_KillSwitchEndsBoth() => AvaloniaTestDispatcher.RunAsync(() =>
     {
@@ -79,5 +136,105 @@ public sealed class SpiralRoomShellTests
             CoreSettings.ServiceProvider = null;
         }
         return Task.CompletedTask;
+    });
+
+    /// <summary>FIRST LIGHT through the shell's door (WPF MainWindow.BeginSpiralFirstLight -> SpiralTabView.BeginFirstLight): the reveal owns the room,
+    /// holds at the hand-off fade with no block, hands back to the waiting room at the 12 s timeout,
+    /// and leaving the tab mid-reveal ends it.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task FirstLightHoldsForTheBlockThenTimesOutToTheWaitingRoom(bool reduced) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = service.Current;
+        var (oldAt, oldDone, oldMotion) = (s.DescentCeremonyAtUtc, s.DescentMigrationCompleted, s.MotionLevel);
+        s.DescentCeremonyAtUtc = null;
+        s.DescentMigrationCompleted = false;
+        s.MotionLevel = reduced ? global::ConditioningControlPanel.Models.MotionLevel.Reduced
+            : global::ConditioningControlPanel.Models.MotionLevel.Full;
+        var time = new SteppedTime();
+        global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = time;
+        var oldFuse = global::ConditioningControlPanel.Avalonia.App.DescentCountdown;
+        global::ConditioningControlPanel.Avalonia.App.DescentCountdown = null;   // fuse dark: the room is the waiting room
+
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            var tab = shell.Named<SpiralTabView>("SpiralTab")!;
+            var fog = tab.FindControl<Grid>("FogHost")!;
+            var waiting = tab.FindControl<Border>("WaitingPanel")!;
+            var help = tab.FindControl<Button>("BtnSpiralHelp")!;
+
+            shell.BeginSpiralFirstLight();   // RunFirstLightReveal's landing (no desktop lifetime headless)
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(tab.IsVisible);
+            Assert.True(fog.IsVisible);
+            Assert.False(waiting.IsVisible);
+            Assert.False(tab.FindControl<StackPanel>("FogCopy")!.IsVisible);
+            Assert.False(help.IsVisible);
+            var visual = Assert.IsType<global::ConditioningControlPanel.Avalonia.Controls.SpiralFirstLightVisual>(Assert.Single(fog.Children));
+            Assert.Equal(0, visual.ElapsedSeconds);
+
+            // WPF snapshots the setting once, and duplicate entry must not reset the clock.
+            s.MotionLevel = reduced ? global::ConditioningControlPanel.Models.MotionLevel.Full
+                : global::ConditioningControlPanel.Models.MotionLevel.Reduced;
+            var holdAt = SpiralFirstLightTimeline.HandoffStartSeconds(reduced);
+            for (var t = 0.5; t <= 11.5; t += 0.5)
+            {
+                time.Advance(TimeSpan.FromSeconds(0.5));
+                global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+                Assert.Equal(Math.Min(t, holdAt), visual.ElapsedSeconds, 3);   // the reveal runs, then holds
+                shell.BeginSpiralFirstLight();
+                Assert.Equal(Math.Min(t, holdAt), visual.ElapsedSeconds, 3);
+                Assert.False(tab.IsShowingSpiral);
+            }
+            Assert.True(fog.IsVisible);
+            Assert.False(waiting.IsVisible);
+
+            // The visual clock parks while minimised. WPF's independent dispatcher deadline
+            // must still hand back, without a paint or restore to trigger it.
+            shell.WindowState = WindowState.Minimized;
+            Dispatcher.UIThread.RunJobs();
+            await Task.Delay(TimeSpan.FromSeconds(12.5));
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(fog.IsVisible);
+            Assert.True(waiting.IsVisible);
+            Assert.True(help.IsVisible);
+            Assert.DoesNotContain(global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Running, l => l.Owner == visual);
+
+            shell.WindowState = WindowState.Normal;
+
+            // Leaving the tab mid-reveal ends it; coming back is the ordinary room.
+            shell.BeginSpiralFirstLight();
+            Assert.True(fog.IsVisible);
+            Assert.Contains(global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Running, l => l.Owner == visual);
+            shell.ShowTab("appsettings");
+            Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain(global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Running, l => l.Owner == visual);
+            shell.ShowTab(SpiralRoom.TabKey);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(fog.IsVisible);
+            Assert.True(waiting.IsVisible);
+            shell.BeginSpiralFirstLight();
+            shell.Close();
+            Assert.DoesNotContain(global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Running, l => l.Owner == visual);
+        }
+        finally
+        {
+            shell.Close();
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = TimeProvider.System;
+            global::ConditioningControlPanel.Avalonia.App.DescentCountdown = oldFuse;
+            (s.DescentCeremonyAtUtc, s.DescentMigrationCompleted, s.MotionLevel) = (oldAt, oldDone, oldMotion);
+            service.SaveImmediate();
+            CoreSettings.ServiceProvider = null;
+        }
     });
 }

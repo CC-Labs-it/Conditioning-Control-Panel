@@ -141,7 +141,7 @@ public sealed class ModChoiceTests
         var manager = await Owned<ConditioningControlPanel.Avalonia.Views.Dialogs.ModManagerDialog>(shell);
         var list = manager.FindControl<ListBox>("ModList")!;
         list.SelectedItem = list.Items.OfType<ListBoxItem>().Single(i => (string)i.Tag! == "choice-test-mod");
-        manager.FindControl<Button>("BtnUninstall")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        manager.FindControl<MenuItem>("BtnUninstall")!.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
         var confirm = await Owned<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>(manager);
         confirm.FindControl<Button>("BtnOk")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         await WaitFor(() => !AvApp.Mods.InstalledMods.ContainsKey("choice-test-mod"));
@@ -184,7 +184,7 @@ public sealed class ModChoiceTests
     {
         var dash = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView>("SettingsTab")!;
         var cards = new[] { dash.CardFlash, dash.CardSubliminal, dash.CardBouncingText,
-            dash.CardBubblePop, dash.CardLockCard, dash.CardMystery, dash.CardVault };
+            dash.CardBubblePop, dash.CardLockCard, dash.CardDeeperEditor, dash.CardMystery, dash.CardVault };
         var pairs = new[] { dash.ComboVideoBubble, dash.ComboSpiralPink, dash.ComboMindDrain };
         var old = CoreModArt.OverridePathProvider;
         var scratch = Directory.CreateTempSubdirectory("ccp-home-art-");
@@ -205,10 +205,12 @@ public sealed class ModChoiceTests
                 Assert.Equal(2, ((global::Avalonia.Media.Imaging.Bitmap)pair.IconB!).Size.AspectRatio);
             });
             var custom = dash.CardFlash.Icon;
+            var deeperCustom = dash.CardDeeperEditor.Icon;
             // Uninstalling the active mod switches it without going through ApplyActiveModChange.
             AvApp.Mods!.ActivateMod(BuiltInMods.CCPDefaultId);
             Dispatcher.UIThread.RunJobs();
             Assert.NotSame(custom, dash.CardFlash.Icon);
+            Assert.NotSame(deeperCustom, dash.CardDeeperEditor.Icon);
             Assert.NotEqual(2, ((global::Avalonia.Media.Imaging.Bitmap)dash.CardFlash.Icon!).Size.AspectRatio);
         }
         finally { CoreModArt.OverridePathProvider = old; scratch.Delete(true); }

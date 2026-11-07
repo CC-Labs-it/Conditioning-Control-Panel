@@ -28,7 +28,7 @@ public sealed class DashboardClickChoiceTests
     public Task PreferencePopupPersistsPinsClaimsEscapeAndClosesWhenHidden() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var old = CoreSettings.ServiceProvider;
         var service = new SettingsService(); CoreSettings.ServiceProvider = () => service;
@@ -105,7 +105,7 @@ public sealed class DashboardClickChoiceTests
     public Task SingleAndSplitCardsUseSavedGestureWithoutSwappingNavigationOnlyCards() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var s = CoreSettings.Current; var old = s.DashboardInvertClicks; s.DashboardInvertClicks = true;
         var card = new FeatureCard { DashboardDepth = true, DimWhenInactive = true, Width = 200, Height = 200 };

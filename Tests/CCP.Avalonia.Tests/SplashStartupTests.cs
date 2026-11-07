@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using ConditioningControlPanel.Avalonia.Platform;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -10,20 +12,17 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
+using ConditioningControlPanel.Avalonia.Platform;
 
 namespace CCP.Avalonia.Tests;
 
 /// <summary>WPF App.xaml.cs:1949-3867 + Windows/SplashScreen.xaml.cs: the splash comes up first, each
 /// startup step paints its status before the next runs, then the shell shows and the splash fades.</summary>
+// Shared dispatcher/settings snapshots must remain exclusive across async lifecycle turns.
+[Collection(RunsAloneCollection.Name)]
 public sealed class SplashStartupTests
 {
-    private static void Setup()
-    {
-        if (Application.Current is null)
-            AppBuilder.Configure<App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
-    }
+    private static void Setup() => LifecycleTestPump.Setup();
 
     private static double Bar(SplashScreen s) =>
         ((ScaleTransform)s.FindControl<Border>("ProgressFill")!.RenderTransform!).ScaleX;
@@ -35,6 +34,8 @@ public sealed class SplashStartupTests
     {
         Setup();
         var splash = SplashScreen.ShowOnOwnThread()!;
+        var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        splash.Closed += (_, _) => closed.TrySetResult();
         var shell = new Window();
         var ran = new List<string>();
         try
@@ -43,8 +44,14 @@ public sealed class SplashStartupTests
             {
                 ran.Add("settings");
                 await step(0.2, "Loading settings...");
+                Assert.Equal("Loading settings...", Status(splash));
+                Assert.False(shell.IsVisible);
                 ran.Add("audio");
-                await step(0.6, "Initializing audio...");
+                var audioFrame = step(0.6, "Initializing audio...");
+                Assert.Equal(0.6, Bar(splash), 3); // before the live creep timer can advance it
+                await audioFrame;
+                Assert.Equal("Initializing audio...", Status(splash));
+                Assert.False(shell.IsVisible);
                 ran.Add("shell built");
             }, () => shell);
 
@@ -54,36 +61,99 @@ public sealed class SplashStartupTests
             Assert.Equal(0.2, Bar(splash), 3);   // jumped to WPF's value, not left creeping
             Assert.False(shell.IsVisible);
 
-            for (int i = 0; i < 10 && !start.IsCompleted; i++)
-            {
-                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-                Dispatcher.UIThread.RunJobs();
-            }
+            await LifecycleTestPump.UntilAsync(() => start.IsCompleted, "Startup did not complete.");
             await start;
             Assert.Equal(new[] { "settings", "audio", "shell built" }, ran);
             Assert.True(shell.IsVisible);
             Assert.Equal("Ready!", Status(splash));
             Assert.False(splash.Topmost);   // dropped first so the shell is not hidden under the fade
 
-            for (int i = 0; i < 120 && splash.IsVisible; i++)
-            {
-                AvaloniaHeadlessPlatform.ForceRenderTimerTick(16);
-                Dispatcher.UIThread.RunJobs();
-            }
+            await LifecycleTestPump.UntilAsync(() => !splash.IsVisible, "The splash fade did not close its window.");
             Assert.False(splash.IsVisible);
         }
         finally { splash.CloseImmediate(); shell.Close(); Dispatcher.UIThread.RunJobs(); }
+    });
+
+    // WPF App.xaml.cs:2182,4069: intermediate dispatcher pumps do not end startup protection.
+    [Fact]
+    public Task StartupThatPumpsThenBlocksStillAcknowledgesRelaunches() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var savedAck = SingleInstance.ShowAckTimeoutMs;
+        var savedWait = SingleInstance.StaleTakeoverWait;
+        var savedKill = SingleInstance.KillStale;
+        using var blocked = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var suffix = "_test_" + Guid.NewGuid().ToString("N");
+        using var primary = SingleInstance.Claim(suffix, _ => Dispatcher.UIThread.InvokeAsync(() => { }).GetTask());
+        Task<bool>? relaunch = null;
+        try
+        {
+            int kills = 0;
+            SingleInstance.ShowAckTimeoutMs = 100;
+            SingleInstance.StaleTakeoverWait = TimeSpan.FromMilliseconds(10);
+            SingleInstance.KillStale = () => { Interlocked.Increment(ref kills); return 0; };
+            bool pumped = false, completed = false;
+            Dispatcher.UIThread.Post(() => pumped = true);
+            relaunch = Task.Run(() =>
+            {
+                try
+                {
+                    Assert.True(blocked.Wait(TimeSpan.FromSeconds(10)));
+                    using var second = SingleInstance.Claim(suffix, _ => Task.CompletedTask);
+                    Thread.Sleep(300); // Keep the UI blocked beyond the 100 ms acknowledgement timeout.
+                    return second is null;
+                }
+                finally { release.Set(); }
+            });
+            var start = App.StartBehindSplash(null, async step =>
+            {
+                await step(0.2, "Loading settings...");
+                await Dispatcher.Yield(DispatcherPriority.Background); // Model a splash frame without creating fonts.
+                Assert.True(pumped);
+                blocked.Set();
+                Assert.True(release.Wait(TimeSpan.FromSeconds(10)));
+            }, () => null, () => { completed = true; primary!.EndStartupPhase(); });
+            Dispatcher.UIThread.RunJobs();
+            await start;
+            Assert.True(await relaunch);
+            Assert.True(completed);
+            Assert.Equal(0, Volatile.Read(ref kills));
+        }
+        finally
+        {
+            release.Set();
+            try { if (relaunch != null) await relaunch; }
+            finally
+            {
+                SingleInstance.ShowAckTimeoutMs = savedAck;
+                SingleInstance.StaleTakeoverWait = savedWait;
+                SingleInstance.KillStale = savedKill;
+                Dispatcher.UIThread.RunJobs();
+            }
+        }
     });
 
     [Fact]
     public Task WithoutASplashStartupRunsInline() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
-        bool done = false;
-        var start = App.StartBehindSplash(null, async step => { await step(0.2, "x"); done = true; }, () => null);
+        bool done = false, completed = false;
+        var start = App.StartBehindSplash(null, async step => { await step(0.2, "x"); done = true; }, () => null, () => completed = true);
         Assert.True(start.IsCompletedSuccessfully);   // tests and checks still get a synchronous start
         Assert.True(done);
+        Assert.True(completed);
         return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task FailedStartupNeverSignalsCompletion() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        bool completed = false;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => App.StartBehindSplash(null,
+            _ => Task.FromException(new InvalidOperationException("boom")), () => null, () => completed = true));
+        Assert.False(completed);
     });
 
     [Fact]
@@ -91,17 +161,19 @@ public sealed class SplashStartupTests
     {
         Setup();
         var splash = SplashScreen.ShowOnOwnThread()!;
+        bool completed = false;
         var start = App.StartBehindSplash(splash, async step =>
         {
             await step(0.2, "Loading settings...");
             throw new InvalidOperationException("boom");
-        }, () => null);
+        }, () => null, () => completed = true);
         AvaloniaHeadlessPlatform.ForceRenderTimerTick();
         Dispatcher.UIThread.RunJobs();
         try
         {
             await Assert.ThrowsAsync<InvalidOperationException>(() => start);
             Assert.False(splash.IsVisible);
+            Assert.False(completed);
             // Recorded for Program.Main to rethrow once the loop ends (closing the splash ends it with 0).
             Assert.Equal("boom", Assert.Throws<InvalidOperationException>(() => App.StartupFailure!.Throw()).Message);
         }

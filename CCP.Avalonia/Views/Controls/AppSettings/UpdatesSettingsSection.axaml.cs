@@ -20,6 +20,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         public UpdatesSettingsSection()
         {
             InitializeComponent();
+            Helpers.ParentWheel.Attach(this.FindControl<ScrollViewer>("ParentWheelScroll")!);
 
             TxtUpdatesVersion.Text = $"v{CoreReleaseContent.AppVersion}";
             TxtUpdatesProduct.Text = "Conditioning Control Panel";

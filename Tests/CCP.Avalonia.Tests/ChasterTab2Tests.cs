@@ -313,4 +313,57 @@ public sealed class ChasterTab2Tests
         finally { detach(); }
         await Task.CompletedTask;
     }));
+
+    /// <summary>WPF ChasterHooks.cs:65-69: a program day completed books program_done, a missed one program_skipped.</summary>
+    [Theory]
+    [InlineData("DayMissed", "program_skipped")]
+    [InlineData("DayCompleted", "program_done")]
+    public Task ProgramDaysBookDoneAndSkipped(string eventName, string expectedRow) => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, _, s) =>
+    {
+        s.ChasterTabEnabled = true;
+        s.ChasterPrices = new List<string> { "program_done", "program_skipped", "attention" };
+        Assert.True(chaster.Note("attention").Booked);   // something owed, so the earn has room
+        var booked = new List<string>();
+        chaster.Booked += (id, _) => booked.Add(id);
+        var dir = Directory.CreateTempSubdirectory("ccp-chaster-prog-").FullName;
+        var programs = new ConditioningControlPanel.Services.Program.ProgramService(Path.Combine(dir, "programs.json"), readOnly: true);
+        var detach = ChasterHead.AttachPrograms(programs);
+        void Raise(string evt) =>
+            ((Delegate?)typeof(ConditioningControlPanel.Services.Program.ProgramService)
+                .GetField(evt, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(programs))
+                ?.DynamicInvoke(programs, null);
+        try
+        {
+            Raise(eventName);
+            Assert.Equal(new[] { expectedRow }, booked);
+        }
+        finally { detach(); programs.Dispose(); try { Directory.Delete(dir, true); } catch { } }
+        await Task.CompletedTask;
+    }));
+
+    /// <summary>WPF ChasterServiceApp.cs:25: RemoteOpen is RemoteCounts(relay active, relay LastEndedUtc, now),
+    /// read by the options the head builds.</summary>
+    [Fact]
+    public Task RemoteOpenFollowsTheRelayAndItsGrace() => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, _, _) =>
+    {
+        var saved = ChasterHead.RemoteState;
+        var built = ChasterHead.Create("sandbox", null);
+        bool Open() => ((Func<ChasterOptions>)typeof(ChasterService)
+            .GetField("_options", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(built)!)().RemoteOpen;
+        try
+        {
+            ChasterHead.RemoteState = () => (true, null);
+            Assert.True(Open());
+            ChasterHead.RemoteState = () => (false, DateTime.UtcNow.AddSeconds(-30));
+            Assert.True(Open());   // inside ChasterService.RemoteGrace
+            ChasterHead.RemoteState = () => (false, DateTime.UtcNow - ChasterService.RemoteGrace - TimeSpan.FromSeconds(5));
+            Assert.False(Open());
+            ChasterHead.RemoteState = () => (false, null);
+            Assert.False(Open());
+            ChasterHead.RemoteState = () => throw new InvalidOperationException("relay gone");
+            Assert.False(Open());   // a broken relay never blocks a booking
+        }
+        finally { ChasterHead.RemoteState = saved; built.Dispose(); }
+        await Task.CompletedTask;
+    }));
 }

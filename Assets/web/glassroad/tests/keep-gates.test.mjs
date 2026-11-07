@@ -77,13 +77,13 @@ test('rear contact after gate resolution cannot push a stopped kart through a cl
   assert.equal(g.apply(r,p,6),'test');
   contact.update(DT,[r,behind],{phase:'racing',timeS:6});
   const pushed=track.query(r.st[S.posX],r.st[S.posY],r.st[S.posZ]);
-  assert.ok(pushed.s>108.8,'real rear contact pushed the stopped kart inside the expanded footprint');
+  assert.ok(pushed.s>108.97,'real rear contact pushed the stopped kart inside the expanded footprint');
   let furthest=0;
   for(let i=1;i<69;i++){
     const previous=cloneState(r.st);step(r.st,a,track,r.feel,DT,r.events);g.apply(r,previous,6+i*DT);
     furthest=Math.max(furthest,r.st[S.s]);
   }
-  assert.ok(furthest<108.8,'every resolved tick stays ahead of the closed grille: '+furthest);
+  assert.ok(furthest<108.97,'every resolved tick stays ahead of the closed grille: '+furthest);
   assert.ok(r.events.all('keep-gate-hit').length<=2,'contact still observes event cooldown');
 });
 

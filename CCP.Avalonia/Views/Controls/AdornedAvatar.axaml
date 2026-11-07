@@ -36,6 +36,9 @@
             </Border.Background>
         </Border>
 
+        <Image x:Name="FrameLayer" Stretch="Fill" IsVisible="False" IsHitTestVisible="False"
+               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+
         <!-- Decoration layer. Sized/centred in code from AvatarSize; Fill because
              the canvas is square and must map onto the avatar exactly. -->
         <Image x:Name="DecoLayer" Stretch="Fill" IsVisible="False"

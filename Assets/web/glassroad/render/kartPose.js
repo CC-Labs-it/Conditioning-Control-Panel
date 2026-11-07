@@ -725,8 +725,8 @@ export function rigStateWant(d, st, N) {
   if (d.armed) return 'item_ready';
   if (d.maxOn) return 'max_speed';
   if (st[S.driftDir]) return st[S.driftDir] < 0 ? 'lean_left' : 'lean_right';
-  if (!air && sp < N.idleBelow) return 'idle_bob';
-  return null;
+  // Ordinary driving keeps the authored breath alive between stronger actions.
+  return air ? null : 'idle_bob';
 }
 
 /**

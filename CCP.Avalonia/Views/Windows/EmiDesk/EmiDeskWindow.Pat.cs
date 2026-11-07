@@ -14,8 +14,8 @@ public partial class EmiDeskWindow
     private DateTimeOffset _patFeedbackFrom;
     private string? _patFaceDrawn;
 
-    // ponytail: wordless pat faces are live here; the full chain player, particle bursts,
-    // body art/moves and its speech priority/summon-cut are wire-win-emi-desk-b.
+    // Wordless pat frames retain the shared cooldown and poke clock. Full chains take
+    // the face through PlayChain; body art, moves, particles and speech still need hosts.
     private void StartPatFeedback(IReadOnlyList<EmiPatFrame> frames)
     {
         StopPatFeedback();

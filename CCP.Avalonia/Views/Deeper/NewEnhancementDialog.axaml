@@ -5,8 +5,7 @@
        ResizeMode="NoResize"       -> CanResize="False"
        ToolTip="{loc:Str …}"       -> ToolTip.Tip="{loc:Str …}"
        Click="…"                   -> wired in the constructor
-       MessageBox on empty source  -> TxtError TextBlock under the source hint (Avalonia has no
-                                      MessageBox; same pattern as Dialogs/UrlPromptDialog)
+       MessageBox on empty source  -> shared MessageDialog
 
      Buttons carry a TextBlock child rather than Content: Avalonia parses "_" in Content as an
      access key and every loc key here is snake_case. See the porting notes in CLAUDE.md. -->
@@ -86,9 +85,7 @@
                 <TextBlock Text="{loc:Str deeper_dialog_source_hint}"
                            Foreground="{DynamicResource TextDimBrush}" FontSize="11"
                            Margin="0,6,0,0" TextWrapping="Wrap"/>
-                <TextBlock x:Name="TxtError" Text="{loc:Str deeper_dialog_source_required}"
-                           Foreground="#FFFF6B6B" FontSize="11"
-                           Margin="0,4,0,0" TextWrapping="Wrap" IsVisible="False"/>
+
             </StackPanel>
 
             <!-- Three interactive on-rails tutorials: each walks the user through

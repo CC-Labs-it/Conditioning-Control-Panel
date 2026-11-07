@@ -66,6 +66,36 @@ public class CompositorLayerCoreTests
         }
     }
 
+    /// <summary>WPF 7.2.2 #1546: "pink under effects" moves the tint to its second slot and asks the
+    /// host to re-sort once per change, on the next show.</summary>
+    [Fact]
+    public void UnderEffects_MovesTheSlot_AndResortsOncePerChange()
+    {
+        var oldProvider = CoreSettings.ServiceProvider;
+        CoreSettings.ServiceProvider = null;
+        bool old = CoreSettings.Current.PinkFilterUnderEffects;
+        try
+        {
+            CoreSettings.Current.PinkFilterUnderEffects = false;
+            int resorts = 0;
+            var pink = new PinkTintLayer(() => { }, () => resorts++);
+            Assert.Equal(CompositorLayers.PinkTint, pink.ZIndex);
+
+            CoreSettings.Current.PinkFilterUnderEffects = true;
+            Assert.Equal(CompositorLayers.PinkTintUnder, pink.ZIndex);
+            pink.Show(255, 105, 180, 0.5);
+            pink.SyncOrder();                    // unchanged since: no second sort
+            Assert.Equal(1, resorts);
+            Assert.True(CompositorLayers.PinkTintUnder < CompositorLayers.Subliminal
+                        && CompositorLayers.PinkTintUnder > CompositorLayers.LockCard);
+        }
+        finally
+        {
+            CoreSettings.Current.PinkFilterUnderEffects = old;
+            CoreSettings.ServiceProvider = oldProvider;
+        }
+    }
+
     private sealed class FillProbe : BaseLayer
     {
         public FillProbe() : base(() => { }) { }

@@ -29,13 +29,15 @@ for (const [id, bpm] of [['threshold', 120], ['keep', 142], ['mainframe', 135], 
       moving.steer(r, out);
       if (id === 'mainframe') industry.steer(r, out);
     };
-    const step = run.racers.step;
+    const step = run.racers.step, fallsAtFinish = new Map();
     run.racers.step = (dt, actions, race, ctx) => {
       setMachineryBeat(track, { enabled: race.phase === 'racing', songS: race.timeS, raceS: race.timeS, bpm });
       step(dt, actions, race, { ...ctx, moving, hazards, industry });
+      // A racer past the line keeps driving a cooldown lap under the same machinery: a fall there costs no one anything.
+      for (const r of run.racers.list) if (r.finished && !fallsAtFinish.has(r.i)) fallsAtFinish.set(r.i, r.falls);
     };
     run.run(700, () => run.racers.list.every(r => r.finished));
     assert.ok(run.racers.list.every(r => r.finished), JSON.stringify(run.racers.list.map(r => ({ i: r.i, s: r.progressM, finished: r.finished, falls: r.falls }))));
-    assert.ok(run.racers.list.every(r => r.falls === 0), JSON.stringify(run.racers.list.map(r => ({ i: r.i, falls: r.falls }))));
+    assert.ok(run.racers.list.every(r => fallsAtFinish.get(r.i) === 0), JSON.stringify(run.racers.list.map(r => ({ i: r.i, falls: fallsAtFinish.get(r.i) }))));
   });
 }

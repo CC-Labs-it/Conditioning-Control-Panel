@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Companion;
 using Xunit;
 
@@ -11,12 +12,14 @@ namespace CCP.Core.Tests;
 [Collection(SessionStatics.Name)]
 public sealed class CompanionCoreTests : IDisposable
 {
+    private readonly string _oldLanguage = LocalizationManager.Instance.CurrentLanguage;
     private readonly AppSettings _s = CoreSettings.Current;
     private readonly (int, CompanionBonusType?, double, int, int, bool, bool, string) _old;
     private readonly Dictionary<int, CompanionProgress> _oldProgress;
 
     public CompanionCoreTests()
     {
+        LocalizationManager.Instance.Initialize("en");
         _old = (_s.ActiveCompanionId, _s.CompanionPerk, _s.PlayerXP, _s.PlayerLevel, _s.HighestLevelEver, _s.StrictLockEnabled, _s.OfflineMode, _s.OfflineUsername);
         (_oldProgress, _s.CompanionProgressData) = (_s.CompanionProgressData, new());
     }
@@ -25,6 +28,113 @@ public sealed class CompanionCoreTests : IDisposable
     {
         (_s.ActiveCompanionId, _s.CompanionPerk, _s.PlayerXP, _s.PlayerLevel, _s.HighestLevelEver, _s.StrictLockEnabled, _s.OfflineMode, _s.OfflineUsername) = _old;
         _s.CompanionProgressData = _oldProgress;
+        LocalizationManager.Instance.Initialize(_oldLanguage);
+    }
+
+    [Fact]
+    public void AwardAndDrainEventsMatchWpfPayloadAndObserveTheUpdatedSettings()
+    {
+        (_s.CompanionPerk, _s.StrictLockEnabled) = (CompanionBonusType.StrictModeBonus, false);
+        var awards = new List<(CompanionId Id, double Amount, double Modifier)>();
+        var drained = new List<double>();
+        Action<CompanionId, double, double> award = (id, amount, modifier) =>
+        {
+            Assert.Equal(amount, _s.ActiveCompanionProgress.CurrentXP);
+            awards.Add((id, amount, modifier));
+        };
+        Action<double> drain = amount => { Assert.Equal(0, _s.PlayerXP); drained.Add(amount); };
+        CompanionCore.XPAwarded += award;
+        CompanionCore.XPDrained += drain;
+        try
+        {
+            CompanionCore.AddCompanionXP(12, "test");
+            Assert.Equal((CompanionCore.ActiveCompanion, 6.0, 0.5), Assert.Single(awards));
+            _s.ActiveCompanionProgress.Level = CompanionProgress.MaxLevel;
+            CompanionCore.AddCompanionXP(12, "test");
+            Assert.Single(awards);
+            (_s.CompanionPerk, _s.PlayerXP) = (CompanionBonusType.XPDrain, 2);
+            Assert.True(CompanionCore.DrainTick(DateTime.UtcNow));
+            Assert.Equal(3.0, Assert.Single(drained)); // WPF announces its tick rate, even at the floor.
+            Assert.False(CompanionCore.DrainTick(DateTime.UtcNow));
+            Assert.Single(drained);
+        }
+        finally { CompanionCore.XPAwarded -= award; CompanionCore.XPDrained -= drain; }
+    }
+
+    [Theory]
+    [InlineData(9, null, null)]
+    [InlineData(10, "Companion level up", "Circe reached Level 10.")]
+    [InlineData(CompanionProgress.MaxLevel, "Max level", "Circe has reached maximum level.")]
+    public void MilestoneRuleUsesTheSuppliedModAwareName(int level, string? title, string? body)
+    {
+        var notice = CompanionCore.MilestoneNotification("Circe", level);
+        Assert.Equal(title, notice?.Title);
+        Assert.Equal(body, notice?.Body);
+    }
+    [Fact]
+    public void PromptStoreFailureStillCompletesTheSwitch()
+    {
+        var folder = System.IO.Path.Combine(CorePaths.UserData, InstalledCommunityPrompts.FolderName);
+        var backup = folder + Guid.NewGuid().ToString("N"); var hadFolder = System.IO.Directory.Exists(folder);
+        var oldAssigned = _s.GetCompanionPromptId(1); CompanionId? announced = null;
+        Action<CompanionId> on = id => announced = id;
+        if (hadFolder) System.IO.Directory.Move(folder, backup);
+        CompanionCore.Switched += on;
+        try
+        {
+            System.IO.Directory.CreateDirectory(CorePaths.UserData);
+            System.IO.File.WriteAllText(folder, "block directory creation");
+            _s.ActiveCompanionId = 0;
+            _s.SetCompanionPromptId(1, "assigned");
+            Assert.False(InstalledCommunityPrompts.ApplyAssigned((CompanionId)1));
+            Assert.True(CompanionCore.SwitchCompanion((CompanionId)1)); Assert.Equal(1, _s.ActiveCompanionId);
+            Assert.Equal((CompanionId)1, announced);
+        }
+        finally
+        {
+            CompanionCore.Switched -= on;
+            System.IO.File.Delete(folder);
+            if (hadFolder) System.IO.Directory.Move(backup, folder);
+            _s.SetCompanionPromptId(1, oldAssigned);
+        }
+    }
+
+    [Fact]
+    public void SwitchAppliesInstalledAssignmentBeforeAnnouncingTheCompanion()
+    {
+        var folder = System.IO.Path.Combine(CorePaths.UserData, InstalledCommunityPrompts.FolderName);
+        System.IO.Directory.CreateDirectory(folder);
+        var id = "roster-test-" + Guid.NewGuid().ToString("N");
+        var path = System.IO.Path.Combine(folder, id + ".json");
+        var oldPrompt = _s.CompanionPrompt;
+        var oldActive = _s.ActiveCommunityPromptId;
+        var oldAssigned = _s.GetCompanionPromptId(1);
+        var oldMode = _s.SlutModeEnabled;
+        try
+        {
+            _s.SlutModeEnabled = false;
+            _s.ActiveCompanionId = 0;
+            _s.SetCompanionPromptId(1, id);
+            System.IO.File.WriteAllText(path, "{\"Name\":\"Test persona\",\"PromptSettings\":{\"Personality\":\"a calm voice\"}}");
+            string? seen = null;
+            Action<CompanionId> on = _ => seen = _s.ActiveCommunityPromptId;
+            CompanionCore.Switched += on;
+            try { CompanionCore.SwitchCompanion((CompanionId)1); }
+            finally { CompanionCore.Switched -= on; }
+            Assert.Equal(id, seen);
+            Assert.Equal("a calm voice", _s.CompanionPrompt.Personality);
+            Assert.True(_s.CompanionPrompt.UseCustomPrompt);
+            CompanionCore.SwitchCompanion((CompanionId)0);
+            Assert.Equal(id, _s.ActiveCommunityPromptId); // unassigned leaves the current voice alone
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+            _s.SetCompanionPromptId(1, oldAssigned);
+            _s.CompanionPrompt = oldPrompt;
+            _s.ActiveCommunityPromptId = oldActive;
+            _s.SlutModeEnabled = oldMode;
+        }
     }
 
     [Fact]
@@ -88,5 +198,29 @@ public sealed class CompanionCoreTests : IDisposable
             Assert.NotEqual(DateTime.MinValue, _s.CompanionProgressData[(int)CompanionId.BrainParasite].FirstActivated);
         }
         finally { CompanionCore.Switched -= on; }
+    }
+}
+
+// The Windows CI failure was masked on Linux by another fixture loading English first.
+[Collection(SessionStatics.Name)]
+public sealed class CompanionCoreLocalizationTests
+{
+    [Fact]
+    public void FixtureSelectsEnglishAndRestoresThePreviousLanguage()
+    {
+        var loc = LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try
+        {
+            loc.Initialize("fr");
+            using (var fixture = new CompanionCoreTests())
+            {
+                Assert.Equal("en", loc.CurrentLanguage);
+                Assert.Equal("Companion level up", CompanionCore.MilestoneNotification("Circe", 10)?.Title);
+                Assert.Equal("Max level", CompanionCore.MilestoneNotification("Circe", CompanionProgress.MaxLevel)?.Title);
+            }
+            Assert.Equal("fr", loc.CurrentLanguage);
+        }
+        finally { loc.Initialize(previous); }
     }
 }

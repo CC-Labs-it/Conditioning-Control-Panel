@@ -24,6 +24,21 @@ public sealed class ConditioningTimeTrackerTests
     }
 
     [Fact]
+    public void ConditioningWritesMirrorIntoTheExistingSeasonBucket()
+    {
+        var s = new AppSettings { CurrentSeason = "2026-10", SeasonConditioningMinutes = 2 };
+        ConditioningTimeTracker.AddConditioningTime(s, 0.5);
+        Assert.Equal("2026-10", s.SeasonStatsSeason);
+        Assert.Equal(2.5, s.SeasonConditioningMinutes);
+        s.CurrentSeason = "2026-11";
+        ConditioningTimeTracker.AddConditioningTime(s, 1);
+        Assert.Equal("2026-10", s.SeasonStatsSeason); // rollover belongs to the recap host
+        Assert.Equal(3.5, s.SeasonConditioningMinutes);
+        ConditioningTimeTracker.AddConditioningTime(s, 0);
+        Assert.Equal(3.5, s.SeasonConditioningMinutes);
+    }
+
+    [Fact]
     public void AccruesAMinutePerSixtyTicksAndTheRemainderOnStop()
     {
         var s = new AppSettings { TotalConditioningMinutes = 10 };

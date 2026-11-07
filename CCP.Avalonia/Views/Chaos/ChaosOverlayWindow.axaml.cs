@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
+using IOPath = System.IO.Path;
 using Avalonia;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
@@ -49,7 +51,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///   <item><c>SetForegroundWindow</c>-style raising -> <c>Topmost</c> toggle + <c>Activate()</c>,
     ///         unchanged from the original's own fallback path.</item>
     ///   <item><c>SetWindowsHookEx(WH_MOUSE_LL)</c> + <c>Services.GlobalKeyboardHook</c> ->
-    ///         <b>stubbed, and the behaviour is lost.</b> See
+    ///         the existing platform listeners for the countdown lifetime. See
     ///         <see cref="InstallCountdownSkipHooks"/>.</item>
     ///   <item><c>GetModuleHandle</c> / <c>Process.MainModule</c> -> dropped; they only existed
     ///         to feed the hook install.</item>
@@ -68,7 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// those arcs read a little looser than WPF's.</para>
     ///
     /// <para>The portrait slide-in is written and guarded exactly as WPF guards it, on a non-null
-    /// portrait; with no <c>ChaosArt</c> here that resolves null and nothing slides, which is the
+    /// portrait; when no portrait is present nothing slides, which is the
     /// same branch the original takes for an unbacked portrait id. The ken-burns drift runs off the
     /// backdrop the CALLER passes, not <c>ChaosArt</c>, so it is motion over real content whenever
     /// there is any.</para>
@@ -82,8 +84,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// CoreAudio + the master-volume curve), <c>ChaosTips</c> (40 lines of control composition),
     /// <c>ChaosBoonColors</c> (an id table, now ChaosBoonColors.cs beside this file),
     /// <c>ChaosRanks</c>/<c>ChaosRank</c>/<c>ChaosGlyphs</c> (Core, Services/Chaos/ChaosRanks.cs)
-    /// and <c>ChaosWindowZ.BornTopmost</c> (<c>AppSettings.ChaosPinOnTop</c>). <c>ChaosArt</c> and
-    /// <c>ChaosNarrator</c> still live in the WPF head and are stubbed in the Stubs region below;
+    /// and <c>ChaosWindowZ.BornTopmost</c> (<c>AppSettings.ChaosPinOnTop</c>). <c>ChaosArt</c> resolves optional images below;
+    /// <c>ChaosNarrator</c> is still stubbed;
     /// <c>ChaosAnnouncerOverlay</c> is the head's real overlay (ChaosAnnouncerOverlay.cs). <c>ChaosBoon</c>, <c>ChaosRunState</c>, <c>ChaosMeta</c>,
     /// <c>ChaosLessons</c>, <c>RevealService</c> and <c>ChaosConversation</c> are the real Core
     /// types; <see cref="ChaosRunHost"/> (the run-lifecycle slice of WPF ChaosModeService) drives
@@ -158,10 +160,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         /// <summary>WPF's <c>new ChaosOverlayWindow()</c>: every panel collapsed, the run host
         /// drives it (ChaosModeService.StartRun -> ShowCountdown).</summary>
-        internal static ChaosOverlayWindow ForRun() => new(renderSample: false);
+        internal static ChaosOverlayWindow ForRun(string[]? artRoots = null) => new(renderSample: false, artRoots);
 
-        private ChaosOverlayWindow(bool renderSample)
+        private readonly string[]? _artRoots;
+
+        private ChaosOverlayWindow(bool renderSample, string[]? artRoots = null)
         {
+            _artRoots = artRoots;
             AvaloniaXamlLoader.Load(this);
 
             _backdrop = Part<Rectangle>("Backdrop");
@@ -291,32 +296,45 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             cb?.Invoke();
         }
 
-        /// <summary>
-        /// <b>Stubbed, and this is a real loss, not a formality.</b> WPF installed a low-level
-        /// <c>WH_MOUSE_LL</c> hook plus <c>Services.GlobalKeyboardHook</c> for the length of the
-        /// countdown, because the countdown window is deliberately click-through and therefore
-        /// cannot receive input itself. That made ANY click or keypress anywhere on the desktop
-        /// skip straight to "SINK".
-        ///
-        /// <para>ponytail: this is the ONE thing in this window that needs a capability
-        /// <see cref="X11Overlay"/> does not have - it exposes <c>SetClickThrough</c> and
-        /// <c>RestackAbove</c> and nothing else. Naming the missing member so a later layer does
-        /// not have to rediscover it: <c>X11Overlay.WatchRawInput(Action onAnyPress) : IDisposable</c>,
-        /// an <c>XISelectEvents</c> for <c>XI_RawButtonPress | XI_RawKeyPress</c> on the root
-        /// window of its OWN display connection, posting to the UI thread. That is its own layer -
-        /// a raw-input listener cannot be proved by a render, and it must be exercised inside a
-        /// nested compositor, never against the live session. It is also X11-only by construction:
-        /// Wayland has no equivalent at all, so on that session the countdown stays unskippable
-        /// whatever gets built.</para>
-        ///
-        /// <para><b>Until then the countdown cannot be skipped and always runs its full
-        /// 3·2·1·SINK duration.</b> Nothing else about it changes: the timer, the steps, the
-        /// completion callback and now the per-step pop and fade are all live.</para>
-        /// </summary>
-        private void InstallCountdownSkipHooks() { }
+        // WPF ChaosOverlayWindow.xaml.cs:124-162 watches any key and left/right presses without
+        // consuming them; :108-120 and :892 tear down on completion and close. Reuse the existing
+        // head listeners; ponytail: native Wayland windows cannot publish global input to XInput2.
+        internal static Func<Action, IDisposable?> WatchCountdownInput = WatchCountdownInputDefault;
+        private IDisposable? _countdownInput;
+        private int _countdownInputGeneration;
 
-        /// <summary>Paired with <see cref="InstallCountdownSkipHooks"/>; nothing to unhook.</summary>
-        private void RemoveCountdownSkipHooks() { }
+        private static IDisposable? WatchCountdownInputDefault(Action press)
+        {
+            // Tests/render jobs must never install a native hook on the real desktop.
+            if (SandboxMarker.Active) return null;
+            if (OperatingSystem.IsWindows())
+                return Win32OptionsDismiss.Start((_, _) => press(), anyKey: true);
+            X11PanicKey.CountdownPress += press;
+            return new CountdownSubscription(press);
+        }
+
+        private sealed class CountdownSubscription(Action press) : IDisposable
+        {
+            public void Dispose() => X11PanicKey.CountdownPress -= press;
+        }
+
+        private void InstallCountdownSkipHooks()
+        {
+            RemoveCountdownSkipHooks();
+            int generation = _countdownInputGeneration;
+            _countdownInput = WatchCountdownInput(() => Dispatcher.UIThread.Post(() =>
+            {
+                // A queued press from a closed/replaced countdown must never complete its successor.
+                if (!_closed && generation == _countdownInputGeneration) FinishCountdown();
+            }));
+        }
+
+        private void RemoveCountdownSkipHooks()
+        {
+            ++_countdownInputGeneration;
+            _countdownInput?.Dispose();
+            _countdownInput = null;
+        }
 
         private void ShowCountdownStep(string text)
         {
@@ -535,7 +553,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // boon's art. Real art at assets/Chaos/boons/{id}.png is used when present; until then a
             // placeholder (dark fill + the boon's glyph) stands in.
             var artBorderBrush = new SolidColorBrush(accent);
-            var artFill = ChaosArt.Resolve("boons", boon.Id);
+            var artFill = ChaosArt.Resolve("boons", boon.Id, _artRoots);
             var art = new Border
             {
                 Width = 190,
@@ -766,7 +784,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _resultsPanel.IsVisible = true;
             BringToFront();
 
-            _resultsHero.Source = ChaosArt.ResolveRecap();   // null = the gradient wash shows instead
+            _resultsHero.Source = ChaosArt.ResolveRecap(_artRoots);   // null = the gradient wash shows instead
 
             // PB / delta-vs-best (best already updated by AwardRunRewards; compare run score to the prior best).
             double score = s.Score;
@@ -1138,7 +1156,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _storyBg.IsVisible = backdrop != null;
 
             // full-bleed hero + its entrance side
-            var portrait = ChaosArt.Resolve("portraits", convo.PortraitId);
+            var portrait = ChaosArt.Resolve("portraits", convo.PortraitId, _artRoots);
             _storyPortrait.Source = portrait;
             _storyPortrait.IsVisible = portrait != null;
             _storyPortrait.HorizontalAlignment = convo.PortraitOnLeft ? HorizontalAlignment.Left : HorizontalAlignment.Right;
@@ -1162,10 +1180,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             StartTween("story:fade", 180, t => _storyCardPanel.Opacity = t);
             BringToFront();
 
-            // Portrait slide-in (snappy, settles). Guarded exactly as WPF guards it: with no
-            // ChaosArt on this head the portrait resolves null and is hidden, so nothing slides -
-            // the same branch the original takes when a portrait id has no art behind it. When
-            // ChaosArt lands, this runs with no further edit.
+            // Portrait slide-in runs only when the optional art is present, as in WPF.
             if (portrait != null)
             {
                 double fromX = convo.PortraitOnLeft ? -260 : 260;
@@ -1542,12 +1557,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
         }
 
-        private static class ChaosArt
+        internal static class ChaosArt
         {
-            // Bitmap, not IImage: an Image wants IImage and an ImageBrush wants
-            // IImageBrushSource, and Bitmap is both - which is what the real ChaosArt hands back.
-            public static Bitmap? Resolve(string folder, string id) => null;
-            public static Bitmap? ResolveRecap() => null;
+            private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Bitmap> Cache = new();
+
+            public static Bitmap? Resolve(string folder, string id, string[]? roots) => ResolveFromRoots(IOPath.Combine(folder, id + ".png"), roots);
+            public static Bitmap? ResolveRecap(string[]? roots) => ResolveFromRoots("recap.png", roots);
+
+            private static Bitmap? ResolveFromRoots(string relative, string[]? roots) => ResolvePath(relative,
+                roots ?? new[] { IOPath.Combine(CorePaths.UserData, "assets"), AppContext.BaseDirectory });
+
+            internal static Bitmap? ResolvePath(string relative, params string[] roots)
+            {
+                foreach (var root in roots)
+                {
+                    var path = IOPath.Combine(root, "assets", "Chaos", relative);
+                    try
+                    {
+                        if (Cache.TryGetValue(path, out var cached)) return cached;
+                        if (!File.Exists(path)) continue;
+                        var bitmap = new Bitmap(path);
+                        return Cache.GetOrAdd(path, bitmap);
+                    }
+                    catch { /* Optional art must not prevent the overlay from opening. */ }
+                }
+                return null;
+            }
         }
 
         /// <summary>Real now. <c>Services/Chaos/ChaosTips.cs</c> is 40 lines of WPF control
@@ -1560,7 +1595,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// files. Collapse them into one <c>Views/Chaos/ChaosTips.cs</c> the moment a third caller
         /// appears - not before, because the head's own class is the source both are copying and a
         /// third copy is where drift starts. ChaosToyButtonWindow reuses this one (internal) rather
-        /// than copying it; its tooltip has the default chrome, not this window's style.</para></summary>
+        /// than copying it; it supplies the same chrome on its own tooltip.</para></summary>
         internal static class ChaosTips
         {
             public static void Attach(Control target, string title, string? desc,

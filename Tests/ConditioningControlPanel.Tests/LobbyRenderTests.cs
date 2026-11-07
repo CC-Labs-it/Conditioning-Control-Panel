@@ -18,6 +18,7 @@ namespace ConditioningControlPanel.Tests;
 /// The Lobby page and the launcher dropdown, built offscreen from a sample snapshot through the
 /// same static paint the app calls. Set CCP_LOBBY_SHOT_DIR to also write PNGs for a look.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class LobbyRenderTests
 {
     private const long Now = 2_000_000_000_000L;

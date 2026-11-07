@@ -68,6 +68,29 @@ test('every landing releases into ordinary driving with retained forward speed',
 const tracks = ['threshold', 'keep', 'boudoir', 'mainframe', 'goonworks'].map(id =>
   loadTrack(JSON.parse(readFileSync(new URL(`../tracks/${id}.json`, import.meta.url), 'utf8'))));
 const song = { words: Array.from({ length: 30 }, (_, i) => ({ w: 'sample' + i, startS: i * .8 })) };
+// Online the room judges these flights (rooms/src/judge.js, owner 2026-10-30): over its speed cap (top x max x word bonus x 1.1 = 51.4
+// m/s on every course) for more than 0.5 s flags the seat, more than 15 s a lap above 2.5 m uncatchable by items too.
+test('every word flight stays inside the room judge limits, with or without a song', () => {
+  const CAP_MPS = 51.4, OVER_S = .5, HIGH_M = 2.5, IMMUNE_LAP_S = 15;
+  for (const tr of tracks) {
+    let lapHigh = 0;
+    for (const zone of tr.aerials) for (const music of [song, null]) {
+      const f = setup(tr, zone, 44, music);
+      let over = 0, longest = 0, high = 0, frames = 0;
+      for (; frames < 2400 && f.st[S.s] < zone.gapS1 + 12; frames++) {
+        tick(f, acts({ throttle: 1 }), music ? f.ev.t : NaN);
+        over = Math.hypot(f.st[S.velX], f.st[S.velZ]) > CAP_MPS ? over + DT : 0;
+        longest = Math.max(longest, over);
+        if (!f.st[S.grounded] && f.st[S.height] > HIGH_M) high += DT;
+      }
+      assert.equal(f.st[S.respawnPhase], RESPAWN.NONE, zone.id);
+      assert.ok(f.st[S.s] >= zone.gapS1 + 12, zone.id + ' crossed');
+      assert.ok(longest < OVER_S, `${zone.id}: ${longest.toFixed(2)} s over the cap`);
+      if (music) lapHigh += high;
+    }
+    assert.ok(lapHigh < IMMUNE_LAP_S / 2, `${tr.id}: ${lapHigh.toFixed(1)} s high a lap leaves the budget to its ramps`);
+  }
+});
 function setup(tr = tracks[0], zone = tr.aerials[0], speed = 26, music = song) {
   const st = place(tr, { s: zone.rampS0 + .5, speed }), ev = recorder(), feel = makeFeel();
   const run = createAirWordRun(music, tr); bindAirWords(st, run);

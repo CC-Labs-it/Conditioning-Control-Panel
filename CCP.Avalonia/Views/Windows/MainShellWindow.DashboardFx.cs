@@ -6,15 +6,7 @@
 // the vault CTA breath (ApplyVaultCtaBreath, :213). WPF reaches the same funnel through
 // ApplyChromeFxLoops; this head has no chrome-FX funnel yet, so the dashboard hooks its own.
 //
-// STILL MISSING (each a WPF member of MainWindow.DashboardFx.cs):
-//   the "? box" doorbell + hover flip - ApplyMysteryFx/ApplyMysteryBreath/ApplyMysteryBadgeVisibility/
-//     EnsureMysteryTileFx/RequestMysteryFace/RunMysteryFlip/Open/SettleMysteryPlate/StartMysteryPop;
-//   the centre wordmark's sheen - ApplyLogoSheenTimer/SweepLogoSheen (ApplyLogoDrift is LIVE for the logo's
-//     AmbientAllowed gate; its Ken Burns drift only runs for a mod's still logo in WPF, and is not ported);
-// LIVE: browser frame sweep and localized loading-status pulse (ApplyBrowserFx), shared BeatLoop.
-// Not to port: PrepareRailArtNudge/ApplyRailHover/ApplyRailDotPulse were retired with the premium
-// quick-toggle rail on WPF (2026-09-11); the dashboard column is the favorites rail now
-// (MainShellWindow.FavoritesRail.cs).
+// Remaining WPF dashboard decoration lives in SettingsTabView.DashboardFx.cs.
 
 using System;
 using System.Linq;
@@ -60,7 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 PropertyChanged += OnDashboardFxWindowProperty;
                 if (tab != null)
                 {
-                    tab.PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) ApplyVaultCtaBreath(); };
+                    tab.PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) ApplyDashboardFxLoops(); };
                     // The browser writes status from many paths. Watch the text as WPF does,
                     // so connected and failed statuses immediately stop the progress cue.
                     if (tab.FindControl<TextBlock>("TxtBrowserStatus") is { } status)
@@ -68,7 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
                 // A static event: subscribe while open, never root a closed shell (P41).
                 Opened += (_, _) => { Env.MotionGateChanged -= ApplyDashboardFxLoops; Env.MotionGateChanged += ApplyDashboardFxLoops; ApplyDashboardFxLoops(); };
-                Closed += (_, _) => { Env.MotionGateChanged -= ApplyDashboardFxLoops; StopVaultCtaBreath(); StopBrowserFx(); };
+                Closed += (_, _) => { Env.MotionGateChanged -= ApplyDashboardFxLoops; StopVaultCtaBreath(); StopBrowserFx(); tab?.StopDashboardDecoration(); };
             }
             catch (Exception ex) { Log.Warning(ex, "InitializeDashboardFx failed"); }
         }
@@ -95,6 +87,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 foreach (var combo in tab.GetLogicalDescendants().OfType<SplitFeatureCard>()) combo.RefreshFx();
                 ApplyVaultCtaBreath();
                 ApplyBrowserFx();
+                tab.ApplyDashboardDecoration(Env.AllowAmbientLoops && IsActive && WindowState != WindowState.Minimized, Env.AllowTransitions);
                 // WPF ApplyLogoDrift (:753): the logo animates under the chrome gate; BeatLoop parks it hidden.
                 if (tab.FindControl<AnimatedLogoImage>("ImgLogo") is { } logo)
                     logo.AmbientAllowed = Env.AllowAmbientLoops && IsActive && WindowState != WindowState.Minimized;
@@ -139,6 +132,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var file = CoreMods.IsCCPDefault || CoreSettings.Current.IsSissyMode ? "logo2.png" : "logo.png";
                 var custom = CoreModArt.OverridePath(file);
                 logo.SetArtwork(custom == null ? null : new global::Avalonia.Media.Imaging.Bitmap(custom));
+                ApplyDashboardFxLoops();
             }
             catch (Exception ex) { Log.Warning("Failed to load logo: {Error}", ex.Message); }
         }

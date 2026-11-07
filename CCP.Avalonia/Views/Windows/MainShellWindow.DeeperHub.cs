@@ -5,8 +5,7 @@
 // DeeperLocalLibrary; this partial owns the windows, dialogs, timers and files.
 //
 // Import picker/drop and the shared batch live in MainShellWindow.DeeperImport.cs.
-// Still out (shell-deeper-hub): startup demo seeding, the persistent library watcher,
-// and duration probing. The tab's tour uses the existing head tour lifecycle.
+// Library lifecycle follows WPF App.xaml.cs:3418,6541 and MainWindow.DeeperTab.cs:677-689.
 
 using System;
 using System.Collections.Generic;
@@ -45,9 +44,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private DeeperTabViewModel? DeeperModel => Named<DeeperTabView>("DeeperTab")?.DataContext as DeeperTabViewModel;
 
         /// <summary>Reloads the local index when the Deeper view is attached or the tab opens.</summary>
-        internal void InitializeDeeperHub() => ReloadDeeperLibraryFromDisk();
+        private EnhancementLibrary? _deeperLibrary;
+        private bool _deeperHubClosed;
+        internal void InitializeDeeperHub()
+        {
+            if (_deeperHubClosed) return;
+            EnsureDeeperLibrary();
+            ReloadDeeperLibraryFromDisk();
+        }
 
-        private void ReloadDeeperLibraryFromDisk() => DeeperModel?.ReloadLibrary();
+        /// <summary>Creates the watched library once, without a rescan (import reloads once itself).</summary>
+        private void EnsureDeeperLibrary()
+        {
+            if (_deeperHubClosed) return;
+            if (_deeperLibrary == null)
+            {
+                _deeperLibrary = new EnhancementLibrary();
+                _deeperLibrary.LibraryChanged += OnDeeperLibraryChanged;
+                Closed += (_, _) =>
+                {
+                    _deeperHubClosed = true;
+                    _deeperLibrary.LibraryChanged -= OnDeeperLibraryChanged;
+                    _deeperLibrary.Dispose();
+                };
+            }
+        }
+
+        private void OnDeeperLibraryChanged(object? sender, EventArgs e)
+            => Dispatcher.UIThread.Post(() => { if (!_deeperHubClosed && Named<DeeperTabView>("DeeperTab") is { IsVisible: true }) ReloadDeeperLibraryFromDisk(); });
+
+        private void ReloadDeeperLibraryFromDisk()
+        {
+            if (Named<DeeperTabView>("DeeperTab") is { DataContext: DeeperTabViewModel model } view)
+                model.ReloadLibrary(probeDurations: view.IsVisible);
+        }
 
         /// <summary>WPF ApplyDeeperFilterAndSort after a submission record changed: repaint badges.</summary>
         internal void RefreshDeeperLibraryRows() => DeeperModel?.Refresh();
@@ -70,14 +100,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF OpenDeeperEditor: one editor per file (re-activated, not duplicated); closing
         /// it refreshes the hub list.</summary>
-        internal DeeperEditorWindow OpenDeeperEditor(Models.Deeper.Enhancement enhancement, string? filePath)
+        internal void OpenDeeperEditor(Models.Deeper.Enhancement enhancement, string? filePath)
         {
             string? key = filePath is null ? null : DeeperTabViewModel.FullPath(filePath);
             if (key != null && _deeperOpenEditors.TryGetValue(key, out var existing))
             {
                 if (existing.WindowState == WindowState.Minimized) existing.WindowState = WindowState.Normal;
                 existing.Activate();
-                return existing;
+                return;
             }
             var window = new DeeperEditorWindow(enhancement, filePath);
             if (key != null) _deeperOpenEditors[key] = window;
@@ -87,7 +117,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ReloadDeeperLibraryFromDisk();
             };
             if (IsVisible) window.Show(this); else window.Show();
-            return window;
         }
 
         /// <summary>WPF EnhancementPlayerWindow.ShowOrActivate: one player window, reused.</summary>
@@ -104,36 +133,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _deeperPlayer = player;
             if (IsVisible) player.Show(this); else player.Show();
             return player;
-        }
-
-        /// <summary>Test seam: throws inside the open path, as a failing player or editor would.</summary>
-        internal static Action<string>? MediaRequestFault;
-
-        // WPF MainWindow.DeeperTab.cs:604-616,649-675, used by file-open handoffs. Only a second
-        // launch restores the panel (WPF App.xaml.cs:2209); the first leaves it to the boot.
-        internal Window? OpenMediaRequest(string action, string path, bool restore)
-        {
-            if (restore) try { ShowFromTray(); } catch (Exception ex) { Log.Warning(ex, "ShowFromTray failed"); }
-            var play = action == "play";
-            try
-            {
-                MediaRequestFault?.Invoke(action);
-                if (play) { var player = ShowOrActivateDeeperPlayer(); player.OpenLocalMediaFile(path); return player; }
-                if (action == "edit")
-                {
-                    var type = DeeperPreview.IsLocalVideoFile(path) ? Models.Deeper.MediaTypes.Video : Models.Deeper.MediaTypes.Audio;
-                    // CreateBlank's initializer inlined, as in DeeperTab: a library here would leak its watcher.
-                    return OpenDeeperEditor(new Models.Deeper.Enhancement { MediaType = type, MediaSource = path, Metadata = new() }, null);
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Failed to open Deeper {Action} for {Path}", action, path);
-                // WPF's English text (MainWindow.DeeperTab.cs:613-615,664-666). Not awaited: the handoff ack must not wait for OK.
-                var what = play ? "Player" : "Editor";
-                _ = MessageDialog.ShowAsync(this, $"Open {what} failed", $"Couldn't open Deeper {what}:\n\n{ex.GetType().Name}: {ex.Message}");
-            }
-            return null;
         }
 
         /// <summary>WPF BtnDeeperOpenPlayer_Click (MainWindow.DeeperTab.cs:202).</summary>

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
+using System.IO;
 using System.Runtime.CompilerServices;
 using Avalonia;
 using Avalonia.Animation.Easings;
@@ -35,11 +36,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///
     ///  - The window binds the real Core <see cref="ChaosRunState"/> (CCP.Core/Services/Chaos/
     ///    ChaosModels.cs) exactly as WPF does; the render proof feeds it <see cref="ChaosHudSample"/>.
-    ///    Tile brushes come from ChaosBoonColors.AccentOf/BackOf (the Visibility/Brush members
-    ///    left the shared model). ponytail: <c>ChaosModeService</c> (the effectful run loop:
-    ///    overlays, bubbles, drafts) is still WPF-only at
-    ///    ConditioningControlPanel/Services/Chaos/ChaosModeService.cs, so no run starts on this
-    ///    head yet; every "needs ChaosModeService" note below points there.
+    ///    Tile brushes come from ChaosBoonColors.AccentOf/BackOf. ChaosRunHost owns the live
+    ///    run and pause lifecycle. The Warren-phase sidebar commands remain unported.
     ///  - <b>Win32.</b> The WPF window P/Invoked <c>GetWindowLong</c>/<c>SetWindowLong</c> to add
     ///    <c>WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE</c>, and <c>SetWindowPos(HWND_TOPMOST)</c> via
     ///    <c>ChaosWindowZ</c>. Both map without a shim: the ex-styles are
@@ -250,6 +248,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Closed += (_, _) =>
             {
                 _closed = true;
+                (_portrait.Source as Bitmap)?.Dispose();
+                _portrait.Source = null;
                 _tweens.Clear();
                 _tweenTimer?.Stop();
                 _streakJitterTimer?.Stop();
@@ -378,20 +378,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ToolTip.SetTip(target, sp);
         }
 
-        /// <summary>
-        /// Sidebar portrait slot. WPF resolved art by convention through <c>ChaosArt.Resolve</c>
-        /// and collapsed the host when no file was present.
-        /// <para>ponytail: needs <c>Services/Chaos/ChaosArt.cs</c>, still in the WPF head because
-        /// it returns <c>System.Windows.Media.ImageSource</c>. Only the RESOLUTION half is
-        /// portable (<c>ChaosArt.PathFor</c> / <c>FilePath</c>, returning an absolute path each
-        /// head decodes itself) - that is the half to move, as <c>CoreModArt</c> did for mod art.
-        /// Whoever moves it: <c>Roots()</c> yields <c>App.UserAssetsPath</c> (= UserData/assets)
-        /// and the callers then append <c>assets/Chaos/...</c>, so the user root probes a doubled
-        /// <c>assets</c> segment; decide whether that is the intended layout before copying it.
-        /// Until then this is the no-art path - what a fresh install renders anyway.</para>
-        /// </summary>
+        /// <summary>WPF ChaosHudWindow.xaml.cs:196-201 and ChaosArt.cs:60-70,142-147.
+        /// Preserve its user-assets/assets convention, including the doubled assets segment.
+        /// Unreadable overrides fall through to bundled art; no art hides the slot.</summary>
         private void LoadPortrait()
         {
+            foreach (var root in new[] { Path.Combine(CorePaths.UserData, "assets"), AppContext.BaseDirectory })
+            {
+                try
+                {
+                    var path = Path.Combine(root, "assets", "Chaos", "portraits", "neutral.png");
+                    if (!File.Exists(path)) continue;
+                    _portrait.Source = new Bitmap(path);
+                    _portraitHost.IsVisible = true;
+                    return;
+                }
+                catch (Exception ex) { Log.Debug("ChaosHud portrait: {E}", ex.Message); }
+            }
             _portrait.Source = null;
             _portraitHost.IsVisible = false;
         }

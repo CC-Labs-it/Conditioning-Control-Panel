@@ -1,3 +1,6 @@
+using System;
+using System.Threading.Tasks;
+
 namespace ConditioningControlPanel.Services
 {
     /// <summary>
@@ -12,6 +15,15 @@ namespace ConditioningControlPanel.Services
     /// </summary>
     internal static class SessionSummaryPresentation
     {
+        /// <summary>WPF MainWindow/MainWindow.Presets.cs:1756-1772: let a short video finish
+        /// before opening the recap. The head rechecks playback after this bounded wait.
+        /// Avalonia tears down video synchronously, so it needs no WPF cleanup-only 10s extension.</summary>
+        internal static async Task WaitForVideoAsync(Func<bool> videoBusy, Func<TimeSpan, Task> delay, Func<bool> closed)
+        {
+            for (int attempt = 0; !closed() && videoBusy() && attempt < 15; attempt++)
+                await delay(TimeSpan.FromMilliseconds(200));
+        }
+
         internal enum Mode
         {
             /// <summary>Nothing blocking is up: modal, pulsed topmost, then dropped back.</summary>

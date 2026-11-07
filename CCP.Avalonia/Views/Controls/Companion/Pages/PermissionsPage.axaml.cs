@@ -22,6 +22,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages
                 CompanionPageHost.Adopt(grid, PermissionsHost);
                 grid.SyncFromSettings();   // WPF tab.Vm.Sync -> SyncLabEffectPermsUI
             }
+            ChkAsks.IsChecked = CoreSettings.Current.CompanionAsksEnabled != false;
+        }
+
+        private void ChkAsks_Click(object? sender, RoutedEventArgs e)
+        {
+            CoreSettings.Current.CompanionAsksEnabled = ChkAsks.IsChecked == true;
+            try { CoreSettings.Save(); }
+            catch (System.Exception ex) { Serilog.Log.Debug("Asks toggle not saved: {E}", ex.Message); }
         }
 
         private void OpenTakeover_Click(object? sender, RoutedEventArgs e)

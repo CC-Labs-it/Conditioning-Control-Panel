@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services.GoonGame;
@@ -63,30 +64,94 @@ public sealed class GoonClockAndRoundsTests : IDisposable
     [Fact]
     public async Task SyncedEventAndScheduledFireBothHopThroughCoreDispatch()
     {
+        var ct = TestContext.Current.CancellationToken;
+        var posted = Channel.CreateUnbounded<Action>();
         var hops = 0;
-        CoreDispatch.PostProvider = a => { Interlocked.Increment(ref hops); a(); };
+        CoreDispatch.PostProvider = a => { Interlocked.Increment(ref hops); posted.Writer.TryWrite(a); };
 
-        // P08: a stepped clock. On real time a ms tick between SafeFireAt and ScheduleAt left the
-        // lead 1 ms short of the buffer (RTT is 0 in-process) and ScheduleAt refused it (CI flake).
-        var clock = new PopQuizSchedulerTests.FakeClock();
+        // Advancing the PopQuiz fake across several delay slices races RunAsync's continuation:
+        // it can read the old time, then arm its next relative delay after Advance has moved on.
+        // Wait for each timer to be armed before moving time; complete it on a worker like a real timer.
+        var clock = new ScheduledClock();
         var (host, guest) = WiredPair(guestSkewMs: 0, clock);
         using (host) using (guest)
         {
             var synced = 0;
             host.Synced += (_, _) => synced++;
-            Assert.True(await host.SyncAsync(CancellationToken.None));
+            Assert.True(await host.SyncAsync(ct));
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            deadline.CancelAfter(TimeSpan.FromSeconds(5)); // same total fire budget as the original test
+            var waitToken = deadline.Token;
+            Assert.Equal(0, synced);                       // the dispatcher still owns the callback
+            (await posted.Reader.ReadAsync(waitToken))();
             Assert.Equal(1, synced);
             Assert.Equal(1, Volatile.Read(ref hops));
 
-            using var fired = new ManualResetEventSlim();
+            var fires = 0;
             var at = host.SafeFireAt();
-            using var handle = host.ScheduleAt(at, fired.Set, "fire");
+            var target = TimeSpan.FromMilliseconds(at - host.NowMatchMs).Ticks;
+            using var handle = host.ScheduleAt(at, () => fires++, "fire");
             Assert.NotNull(handle);
-            clock.Advance(TimeSpan.FromMilliseconds(at - host.NowMatchMs - 1));
-            Assert.False(fired.IsSet);                      // not a millisecond early
-            clock.Advance(TimeSpan.FromMilliseconds(1));
-            Assert.True(fired.Wait(TimeSpan.FromSeconds(5)));
+            // Keep the exact buffer boundary: do not hide rejection bugs with extra lead.
+            Assert.Null(host.ScheduleAt(at - 1, () => fires++, "too soon"));
+
+            var delay = await clock.NextDelayAsync(waitToken);
+            while (delay.Due < target)
+            {
+                clock.AdvanceTo(delay.Due);
+                await Task.Run(delay.Fire, waitToken);
+                Assert.False(posted.Reader.TryRead(out _));
+                delay = await clock.NextDelayAsync(waitToken);
+            }
+
+            Assert.Equal(target, delay.Due);               // not a millisecond early
+            Assert.Equal(1, Volatile.Read(ref hops));
+            clock.AdvanceTo(target);
+            await Task.Run(delay.Fire, waitToken);
+            var fire = await posted.Reader.ReadAsync(waitToken);
+            Assert.Equal(0, fires);                        // scheduling must not bypass the dispatcher
             Assert.Equal(2, Volatile.Read(ref hops));
+            fire();
+            Assert.Equal(1, fires);
+            Assert.False(posted.Reader.TryRead(out _));
+        }
+    }
+
+    // This test only needs one-shot Task.Delay timers. Publishing each armed timer lets
+    // the driver rendezvous with background continuations instead of guessing when they have run.
+    private sealed class ScheduledClock : TimeProvider
+    {
+        private long _ticks;
+        private readonly Channel<PendingDelay> _delays = Channel.CreateUnbounded<PendingDelay>();
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => Interlocked.Read(ref _ticks);
+        public override DateTimeOffset GetUtcNow() => DateTimeOffset.UnixEpoch.AddTicks(GetTimestamp());
+
+        public void AdvanceTo(long ticks)
+        {
+            Assert.True(ticks >= GetTimestamp(), "Test time must remain monotonic");
+            Interlocked.Exchange(ref _ticks, ticks);
+        }
+
+        public ValueTask<PendingDelay> NextDelayAsync(CancellationToken ct) => _delays.Reader.ReadAsync(ct);
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            Assert.Equal(Timeout.InfiniteTimeSpan, period);
+            Assert.True(dueTime > TimeSpan.Zero);
+            var delay = new PendingDelay(callback, state, GetTimestamp() + dueTime.Ticks);
+            _delays.Writer.TryWrite(delay);
+            return delay;
+        }
+
+        public sealed class PendingDelay(TimerCallback callback, object? state, long due) : ITimer
+        {
+            private int _disposed;
+            public long Due { get; } = due;
+            public void Fire() { if (Volatile.Read(ref _disposed) == 0) callback(state); }
+            public bool Change(TimeSpan dueTime, TimeSpan period) => throw new NotSupportedException("One-shot delay only");
+            public void Dispose() => Interlocked.Exchange(ref _disposed, 1);
+            public ValueTask DisposeAsync() { Dispose(); return default; }
         }
     }
 

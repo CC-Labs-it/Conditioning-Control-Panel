@@ -362,6 +362,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 : new ImageBrush(src) { Stretch = Stretch.UniformToFill, AlignmentY = AlignmentY.Center };
             var grey = CardArtDesaturate.Of(src);
             mute.Background = grey == null ? null : new ImageBrush(grey) { Stretch = Stretch.UniformToFill, AlignmentY = AlignmentY.Center };
+            // See FeatureCard.ApplyArt: invalidate the retained plate on an artwork change.
+            host.CacheMode = new BitmapCache { RenderAtScale = FeatureCard.ArtCacheScale };
         }
 
         // ============================== geometry ==============================

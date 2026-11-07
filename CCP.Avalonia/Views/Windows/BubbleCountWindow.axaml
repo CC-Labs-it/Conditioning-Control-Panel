@@ -6,8 +6,8 @@
        AllowsTransparency="False"        -> nothing; the window is opaque black either way
        ResizeMode="NoResize"             -> CanResize="False"
        Visibility="Collapsed"            -> IsVisible="False"
-       FontFamily="Comic Sans MS, Segoe UI" -> dropped; both are Windows faces and this head has
-                                            no fallback for either. Same call every prior port made.
+       FontFamily="Comic Sans MS, Segoe UI" -> kept; off Windows AppFonts maps it to the bundled
+                                            Comic Neue / Selawik (2026-11-06).
        DropShadowEffect ShadowDepth="0"  -> OffsetX="0" OffsetY="0"; Avalonia's DropShadowEffect
                                             takes offsets, it has no ShadowDepth/Direction pair.
 
@@ -24,6 +24,7 @@
         Topmost="True"
         ShowInTaskbar="False"
         ShowActivated="True"
+        FontFamily="Comic Sans MS, Segoe UI"
         CanResize="False">
 
     <Grid x:Name="MainGrid">

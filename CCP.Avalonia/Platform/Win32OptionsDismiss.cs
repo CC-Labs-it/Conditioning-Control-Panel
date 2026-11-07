@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using Avalonia;
+using Avalonia.Controls;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
@@ -9,6 +10,23 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// the panel is open, on Avalonia's message-pumping UI thread. No key or pointer history is kept.</summary>
 internal sealed class Win32OptionsDismiss : IDisposable
 {
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
+    private static extern uint GetWindowLong(IntPtr hwnd, int index);
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongW")]
+    private static extern uint SetWindowLong(IntPtr hwnd, int index, uint value);
+
+    // WPF Windows/EmiDesk/EmiOptionsWindow.xaml.cs:108-114: tool window, no activation.
+    internal static uint PassiveStyle(uint extendedStyle)
+        => extendedStyle | Win32Overlay.WsExToolWindow | Win32Overlay.WsExNoActivate;
+
+    internal static void PreventActivation(Window window)
+    {
+        if (!OperatingSystem.IsWindows() || window.TryGetPlatformHandle() is not { HandleDescriptor: "HWND" } handle) return;
+        // Avalonia rebuilds styles when decorations/taskbar properties change.
+        Win32Properties.AddWindowStylesCallback(window, (style, ex) => (style, PassiveStyle(ex)));
+        SetWindowLong(handle.Handle, -20, PassiveStyle(GetWindowLong(handle.Handle, -20)));
+    }
+
     private const int MouseHook = 14, KeyboardHook = 13;
     private const int LeftDown = 0x0201, RightDown = 0x0204, KeyDown = 0x0100, SysKeyDown = 0x0104;
     private delegate IntPtr HookProc(int code, IntPtr message, IntPtr data);
@@ -26,6 +44,9 @@ internal sealed class Win32OptionsDismiss : IDisposable
     private readonly Action<PixelPoint?, bool> _onPress;
     private IntPtr _mouse, _keys;
     private bool _disposed;
+    private bool _anyKey;
+    // The chaos countdown (any-key) reuses these hooks; keep its log lines out of EmiDesk's.
+    private string Tag => _anyKey ? "[Chaos] countdown skip" : "[EmiDesk] options dismissal";
 
     private Win32OptionsDismiss(Action<PixelPoint?, bool> onPress)
     {
@@ -34,19 +55,19 @@ internal sealed class Win32OptionsDismiss : IDisposable
         _keyProc = OnKey;
     }
 
-    internal static IDisposable? Start(Action<PixelPoint?, bool> onPress)
+    internal static IDisposable? Start(Action<PixelPoint?, bool> onPress, bool anyKey = false)
     {
         if (!OperatingSystem.IsWindows()) return null;
-        var listener = new Win32OptionsDismiss(onPress);
+        var listener = new Win32OptionsDismiss(onPress) { _anyKey = anyKey };
         try
         {
             var module = GetModuleHandle(null);
             listener._mouse = SetWindowsHookEx(MouseHook, listener._mouseProc, module, 0);
             listener._keys = SetWindowsHookEx(KeyboardHook, listener._keyProc, module, 0);
             if (listener._mouse != IntPtr.Zero && listener._keys != IntPtr.Zero) return listener;
-            Log.Warning("[EmiDesk] options dismissal hook install failed ({Code})", Marshal.GetLastWin32Error());
+            Log.Warning("{Tag} hook install failed ({Code})", listener.Tag, Marshal.GetLastWin32Error());
         }
-        catch (Exception ex) { Log.Warning(ex, "[EmiDesk] options dismissal hook install failed"); }
+        catch (Exception ex) { Log.Warning(ex, "{Tag} hook install failed", listener.Tag); }
         listener.Dispose();
         return null;
     }
@@ -58,7 +79,7 @@ internal sealed class Win32OptionsDismiss : IDisposable
             if (!_disposed && code >= 0 && (int)message is LeftDown or RightDown)
                 _onPress(new PixelPoint(Marshal.ReadInt32(data), Marshal.ReadInt32(data, 4)), false);
         }
-        catch (Exception ex) { Log.Debug(ex, "[EmiDesk] options mouse hook callback failed"); }
+        catch (Exception ex) { Log.Debug(ex, "{Tag} mouse hook callback failed", Tag); }
         // Always pass through: folding must not cost the click aimed at another application.
         return CallNextHookEx(IntPtr.Zero, code, message, data);
     }
@@ -67,12 +88,14 @@ internal sealed class Win32OptionsDismiss : IDisposable
     {
         try
         {
-            if (!_disposed && code >= 0 && (int)message is KeyDown or SysKeyDown && Marshal.ReadInt32(data) == 0x1b)
+            if (!_disposed && code >= 0 && (int)message is KeyDown or SysKeyDown && AcceptKey(_anyKey, Marshal.ReadInt32(data)))
                 _onPress(null, true);
         }
-        catch (Exception ex) { Log.Debug(ex, "[EmiDesk] options key hook callback failed"); }
+        catch (Exception ex) { Log.Debug(ex, "{Tag} key hook callback failed", Tag); }
         return CallNextHookEx(IntPtr.Zero, code, message, data);
     }
+
+    internal static bool AcceptKey(bool anyKey, int key) => anyKey || key == 0x1b;
 
     public void Dispose()
     {

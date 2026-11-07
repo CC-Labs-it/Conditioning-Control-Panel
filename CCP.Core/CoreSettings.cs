@@ -50,6 +50,13 @@ namespace ConditioningControlPanel
             try { Service?.Save(suppressCloudBackup); } catch { /* the service logs; a view must not die on a failed save */ }
         }
 
+        /// <summary>A checkpoint must have a live service and a successfully published snapshot.</summary>
+        public static bool TrySaveImmediate(bool suppressCloudBackup = false)
+        {
+            try { return Service?.TrySaveImmediate(suppressCloudBackup) == true; }
+            catch { return false; }
+        }
+
         /// <summary>Synchronous save, as <c>App.Settings?.SaveImmediate()</c> was. No-op with no service.</summary>
         public static void SaveImmediate(bool suppressCloudBackup = false)
         {

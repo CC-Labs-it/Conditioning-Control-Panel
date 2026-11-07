@@ -103,7 +103,9 @@ namespace ConditioningControlPanel.Avalonia.Controls
         {
             if (!_running) return;
             double t = Time.GetElapsedTime(_cycleStart).TotalSeconds % CycleSeconds;
-            SetOffsets(t < TravelSeconds ? t / TravelSeconds : 0);
+            // WPF Controls/CardSheenAdorner.cs:106-112 holds the endpoint until
+            // the discrete keyframe 50 ms later, then parks for the rest of the cycle.
+            SetOffsets(t < TravelSeconds + 0.05 ? Math.Min(t / TravelSeconds, 1) : 0);
         }
 
         private void SetOffsets(double k)

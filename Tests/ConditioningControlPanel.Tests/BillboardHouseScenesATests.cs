@@ -14,6 +14,7 @@ namespace ConditioningControlPanel.Tests;
 /// and actually moves. With CCP_HOUSE_A_SHOTS set to a folder, contact sheets are written there
 /// (a look check for the art lane, not a judge of the look); nothing is written otherwise.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class BillboardHouseScenesATests
 {
     private static readonly (string Name, Func<BillboardVectorArt> Make, string Hue)[] Scenes =

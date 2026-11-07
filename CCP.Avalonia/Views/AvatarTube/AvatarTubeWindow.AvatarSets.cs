@@ -16,6 +16,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube;
 
 public partial class AvatarTubeWindow
 {
+    private bool _rosterAvatarSwitchPending;
     private int _avatarSwitchGeneration;
     private bool _avatarSetsClosed;
     private Action _cancelAvatarSwitch = static () => { };
@@ -129,6 +130,18 @@ public partial class AvatarTubeWindow
         CoreSettings.Save();
         // WPF notifies as soon as the user picks; coupling waits until the fade settles.
         BarkHead.Engine?.Raise("AvatarChanged");
+        FadeAvatarSwitch(() =>
+        {
+            if (CompanionForAvatarSet(setNumber) is { } companion) CoreModsHooks.SwitchCompanion?.Invoke(companion);
+            ApplyAvatarSet();
+            UpdateNavigationArrows();
+        });
+        return true;
+    }
+
+    // WPF AvatarTubeWindow.Avatar.cs:477-497: paint between two 200 ms opacity fades.
+    private void FadeAvatarSwitch(Action paint)
+    {
         int generation = _avatarSwitchGeneration;
         _avatarBorder.Transitions ??= new Transitions
         {
@@ -139,20 +152,26 @@ public partial class AvatarTubeWindow
         {
             if (_avatarSetsClosed || generation != _avatarSwitchGeneration) return;
             _cancelAvatarSwitch = static () => { };
-            if (CompanionForAvatarSet(setNumber) is { } companion) CoreModsHooks.SwitchCompanion?.Invoke(companion);
-            ApplyAvatarSet();
-            UpdateNavigationArrows();
+            _rosterAvatarSwitchPending = false;
+            paint();
             _avatarBorder.Opacity = 1;
         });
-        return true;
     }
 
-    private void CancelAvatarSwitch()
+    private void CancelAvatarSwitch(bool finishRoster = false)
     {
+        bool settle = finishRoster && _rosterAvatarSwitchPending && !_avatarSetsClosed;
+        _rosterAvatarSwitchPending = false;
         ++_avatarSwitchGeneration;
         _cancelAvatarSwitch();
         _cancelAvatarSwitch = static () => { };
+        _avatarBorder.Transitions = null; // cancellation restores visibility immediately, including panic
         _avatarBorder.Opacity = 1;
+        if (settle)
+        {
+            ApplyAvatarSet();
+            UpdateNavigationArrows();
+        }
     }
 
     private void OnTubeModChanged(object? sender, ModPackage mod) => RunOnAvatar(() =>

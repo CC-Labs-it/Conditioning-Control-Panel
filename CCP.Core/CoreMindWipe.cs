@@ -62,6 +62,14 @@ namespace ConditioningControlPanel
         {
             try { StartProvider?.Invoke(frequencyPerHour, volume); } catch { }
         }
+        /// <summary>Start in session mode (base multiplier, 0..1 volume): WPF MindWipeService.StartSession,
+        /// escalating per five-minute block. A no-op while the service already runs, as WPF.</summary>
+        public static volatile Action<int, double>? StartSessionProvider;
+
+        public static void StartSession(int baseMultiplier, double volume)
+        {
+            try { StartSessionProvider?.Invoke(baseMultiplier, volume); } catch { }
+        }
         public static void Stop() { try { StopProvider?.Invoke(); } catch { } }
         public static bool IsRunning
         {

@@ -52,6 +52,39 @@ public sealed class CoreAudioTests
         Assert.False(audio.IsDucked);
     }
 
+    private const string WebAndMusic =
+        "[{\"index\":3,\"volume\":{\"mono\":{\"value\":65536}},\"properties\":{\"application.process.id\":\"2\",\"application.process.binary\":\"WebKitWebProcess\"}},"
+        + "{\"index\":4,\"volume\":{\"mono\":{\"value\":65536}},\"properties\":{\"application.process.id\":\"3\",\"application.process.binary\":\"spotify\"}}]";
+
+    [Theory]
+    [InlineData(true, new[] { "set-sink-input-volume 4 32768" })]
+    [InlineData(false, new[] { "set-sink-input-volume 3 32768", "set-sink-input-volume 4 32768" })]
+    public void ExcludeBambiCloudSkipsTheBrowsersStreamLikeWpf(bool exclude, string[] expected)
+    {
+        var settings = ConditioningControlPanel.CoreSettings.Current;
+        var (oldExclude, oldMaster) = (settings.ExcludeBambiCloudFromDucking, settings.MasterVolume);
+        settings.ExcludeBambiCloudFromDucking = exclude;
+        settings.MasterVolume = 50;
+        var sets = new List<string>();
+        var audio = new LibVlcAudio(args =>
+        {
+            if (args.StartsWith("-f json")) return WebAndMusic;
+            lock (sets) sets.Add(args);
+            return "";
+        });
+        try
+        {
+            audio.Duck(50);
+            audio.Drain();
+            Assert.Equal(expected, sets);
+        }
+        finally
+        {
+            audio.Shutdown();
+            (settings.ExcludeBambiCloudFromDucking, settings.MasterVolume) = (oldExclude, oldMaster);
+        }
+    }
+
     [Fact]
     public void ShutdownRestoresDuckedApps()
     {

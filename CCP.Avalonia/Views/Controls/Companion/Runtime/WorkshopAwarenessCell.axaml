@@ -46,19 +46,24 @@
                 <ResourceInclude Source="avares://CCP.Avalonia/Views/Controls/Companion/Runtime/WorkshopCellTheme.axaml"/>
             </ResourceDictionary.MergedDictionaries>
 
-            <ControlTheme x:Key="CmpIntensityRadioStyle" TargetType="RadioButton"
-                          BasedOn="{StaticResource {x:Type RadioButton}}">
-                <Setter Property="Foreground" Value="#FFE8E2F5"/>
-                <Setter Property="FontSize" Value="11.5"/>
-                <Setter Property="Cursor" Value="Hand"/>
-                <Setter Property="Margin" Value="0,0,0,5"/>
-                <Setter Property="VerticalContentAlignment" Value="Center"/>
-            </ControlTheme>
             <ControlTheme x:Key="CmpIntensityHintStyle" TargetType="TextBlock" BasedOn="{StaticResource CmpCellHintStyle}">
                 <Setter Property="Margin" Value="19,-4,0,7"/>
             </ControlTheme>
         </ResourceDictionary>
     </UserControl.Resources>
+
+    <!-- CmpIntensityRadioStyle as a class, not a ControlTheme: WPF's keyed Style has no BasedOn, so the radios
+         draw the stock (unthemed) RadioButton. A Theme here would pin Fluent's 20px blue-accent radio; a class keeps
+         whatever implicit RadioButton theme the app sets (the WPF stock look) and adds only these setters. -->
+    <UserControl.Styles>
+        <Style Selector="RadioButton.CmpIntensityRadioStyle">
+            <Setter Property="Foreground" Value="#FFE8E2F5"/>
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0,0,0,5"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+    </UserControl.Styles>
 
     <StackPanel>
         <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
@@ -75,25 +80,25 @@
                            Margin="0,0,0,6"/>
 
                 <RadioButton x:Name="RadioIntensityOff" GroupName="CmpAwarenessIntensity" Tag="Off"
-                             Theme="{StaticResource CmpIntensityRadioStyle}">
+                             Classes="CmpIntensityRadioStyle">
                     <TextBlock Text="{loc:Str companion_awareness_intensity_off}"/>
                 </RadioButton>
                 <TextBlock Text="{loc:Str companion_awareness_intensity_off_hint}" Theme="{StaticResource CmpIntensityHintStyle}"/>
 
                 <RadioButton x:Name="RadioIntensitySubtle" GroupName="CmpAwarenessIntensity" Tag="Subtle"
-                             Theme="{StaticResource CmpIntensityRadioStyle}">
+                             Classes="CmpIntensityRadioStyle">
                     <TextBlock Text="{loc:Str companion_awareness_intensity_subtle}"/>
                 </RadioButton>
                 <TextBlock Text="{loc:Str companion_awareness_intensity_subtle_hint}" Theme="{StaticResource CmpIntensityHintStyle}"/>
 
                 <RadioButton x:Name="RadioIntensityChatty" GroupName="CmpAwarenessIntensity" Tag="Chatty"
-                             Theme="{StaticResource CmpIntensityRadioStyle}">
+                             Classes="CmpIntensityRadioStyle">
                     <TextBlock Text="{loc:Str companion_awareness_intensity_chatty}"/>
                 </RadioButton>
                 <TextBlock Text="{loc:Str companion_awareness_intensity_chatty_hint}" Theme="{StaticResource CmpIntensityHintStyle}"/>
 
                 <RadioButton x:Name="RadioIntensityUnhinged" GroupName="CmpAwarenessIntensity" Tag="Unhinged"
-                             Theme="{StaticResource CmpIntensityRadioStyle}">
+                             Classes="CmpIntensityRadioStyle">
                     <TextBlock Text="{loc:Str companion_awareness_intensity_unhinged}"/>
                 </RadioButton>
                 <TextBlock Text="{loc:Str companion_awareness_intensity_unhinged_hint}" Theme="{StaticResource CmpIntensityHintStyle}"/>

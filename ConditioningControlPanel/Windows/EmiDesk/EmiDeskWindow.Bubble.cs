@@ -169,7 +169,7 @@ public partial class EmiDeskWindow
     {
         try
         {
-            _vox ??= new EmiVox();
+            _vox ??= new EmiVox(new EmiVoxOutput());
             if (string.IsNullOrEmpty(text)) { _vox.Stop(); return; }
 
             var t = text!.Trim();

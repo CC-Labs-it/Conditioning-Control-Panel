@@ -5,6 +5,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using System.Collections.Generic;
+using System.Linq;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
@@ -41,6 +45,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             // InitializeComponent, not AvaloniaXamlLoader.Load: only the generated one assigns the
             // x:Name fields, and everything below reads them.
             InitializeComponent();
+            _heroWash = VideoHeroArt.Background;
+            _sideWash = VideoSideArt.Background;
 
             ChkEnable.IsCheckedChanged += ChkEnable_Changed;
             CmbMonitor.DropDownOpened += (_, _) => PopulateMonitors();
@@ -51,11 +57,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             SliderPerHour.ValueChanged += SliderPerHour_Changed;
             ChkStrict.IsCheckedChanged += ChkStrict_Changed;
             CmbAppearance.SelectionChanged += CmbAppearance_Changed;
+            SliderFloatingSize.ValueChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.MandatoryVideoFloatingSizePercent = (int)Math.Round(SliderFloatingSize.Value);
+                TxtFloatingSize.Text = CoreSettings.Current.MandatoryVideoFloatingSizePercent + "%";
+                CoreSettings.Save();
+            };
             // WPF Lab.cs:640-647 / 726-732: greyed while a Lockdown forces Strict Lock, given back on exit.
             Windows.MainShellWindow.HoldWhileLockdown(ChkStrict, () => ConditioningControlPanel.Services.LockdownStrictHold.HoldsNow);
             SliderVideoMinDur.ValueChanged += SliderVideoMinDur_Changed;
             SliderVideoMaxDur.ValueChanged += SliderVideoMaxDur_Changed;
+            ChkVideoCutRandomStart.IsCheckedChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.VideoCutRandomStart = ChkVideoCutRandomStart.IsChecked ?? true;
+                CoreSettings.Save();
+            };
             ChkMiniGame.IsCheckedChanged += ChkMiniGame_Changed;
+            ChkReplayFailedCheck.IsCheckedChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.MandatoryVideoReplayAfterFailedCheck = ChkReplayFailedCheck.IsChecked == true;
+                CoreSettings.Save();
+            };
             SliderTargets.ValueChanged += SliderTargets_Changed;
             ChkRandomize.IsCheckedChanged += ChkRandomize_Changed;
             SliderDuration.ValueChanged += SliderDuration_Changed;
@@ -66,12 +91,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             BtnTestVideo.Click += BtnTestVideo_Click;
 
             LoadFromSettings();
-
-            // ponytail: WPF also repaints the hero and side art plates here (ApplyFeatureArt +
-            // App.Mods.ModChanged). The mod-override half of ResolveImageDecoded is portable now
-            // (CoreModArt.OverridePath), but the plate still needs a named ImageBrush in the
-            // .axaml, which Avalonia rejects (x:Name on a brush is AVLN2000); the port draws a
-            // static wash instead, so there is nothing here to repaint.
         }
 
         // ---- settings instance tracking (WPF: SettingsHook + ISettingsRebindable) --------------
@@ -83,6 +102,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             base.OnAttachedToVisualTree(e);
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
+            CoreMods.ModChanged += OnModChanged;
+            ApplyFeatureArt();
             RebindToCurrentSettings();
         }
 
@@ -90,8 +111,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
+            CoreMods.ModChanged -= OnModChanged;
+            ClearFeatureArt();
             Unhook();
             base.OnDetachedFromVisualTree(e);
+        }
+
+        private Bitmap? _heroArt, _sideArt;
+        private readonly IBrush? _heroWash, _sideWash; // the authored plates, restored on detach
+
+        private void OnModChanged(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(() =>
+        {
+            if (_hooked != null) ApplyFeatureArt();
+        });
+
+        private void ApplyFeatureArt()
+        {
+            // WPF Features/VideoFeatureControl.xaml.cs:563-586, .xaml:18/403: decode, paint, mod repaint.
+            Paint(VideoHeroArt, ref _heroArt, 480, true);
+            Paint(VideoSideArt, ref _sideArt, 800, false);
+        }
+
+        private static void Paint(Border plate, ref Bitmap? previous, int width, bool hero)
+        {
+            var art = Helpers.ModArt.TryLoad("features/mandatory_videos.png", width);
+            if (art == null) return; // WPF null resolve keeps the authored plate standing.
+            plate.Background = new ImageBrush(art)
+            {
+                Stretch = Stretch.UniformToFill,
+                AlignmentX = hero ? AlignmentX.Right : AlignmentX.Center,
+                Opacity = hero ? 0.9 : 1,
+            };
+            previous?.Dispose();
+            previous = art;
+        }
+
+        private void ClearFeatureArt()
+        {
+            VideoHeroArt.Background = _heroWash;
+            VideoSideArt.Background = _sideWash;
+            _heroArt?.Dispose(); _sideArt?.Dispose();
+            _heroArt = _sideArt = null;
         }
 
         private void OnCurrentReplaced() => Dispatcher.UIThread.Post(RebindToCurrentSettings);
@@ -140,6 +200,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 TxtVideoMinDur.Text = FormatDuration(s.VideoMinDurationSeconds);
                 SliderVideoMaxDur.Value = s.VideoMaxDurationSeconds;
                 TxtVideoMaxDur.Text = FormatDuration(s.VideoMaxDurationSeconds);
+                ChkVideoCutRandomStart.IsChecked = s.VideoCutRandomStart;
+                ChkVideoCutRandomStart.IsEnabled = s.VideoMaxDurationSeconds > 0;
+                ChkReplayFailedCheck.IsChecked = s.MandatoryVideoReplayAfterFailedCheck;
                 ChkMiniGame.IsChecked = s.AttentionChecksEnabled;
                 SliderTargets.Value = s.AttentionDensity;
                 TxtTargets.Text = s.AttentionDensity.ToString();
@@ -156,6 +219,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 CmbAppearance.Items.Add(new ComboBoxItem { Content = Loc.Get("video_appearance_floating"), Tag = true });
                 CmbAppearance.SelectedIndex = s.MandatoryVideoFloating ? 1 : 0;
                 TxtAppearanceNote.IsVisible = s.MandatoryVideoFloating;
+                FloatingSizeRow.IsVisible = s.MandatoryVideoFloating;
+                SliderFloatingSize.Value = s.MandatoryVideoFloatingSizePercent;
+                TxtFloatingSize.Text = s.MandatoryVideoFloatingSizePercent + "%";
                 ChkMercy.IsChecked = s.MercySystemEnabled;
                 CmbMercyAfter.IsVisible = s.MercySystemEnabled;
                 foreach (var obj in CmbMercyAfter.Items)
@@ -184,12 +250,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.StrictLockEnabled) ||
                 e.PropertyName == nameof(AppSettings.VideoMinDurationSeconds) ||
                 e.PropertyName == nameof(AppSettings.VideoMaxDurationSeconds) ||
+                e.PropertyName == nameof(AppSettings.VideoCutRandomStart) ||
                 e.PropertyName == nameof(AppSettings.AttentionChecksEnabled) ||
+                e.PropertyName == nameof(AppSettings.MandatoryVideoReplayAfterFailedCheck) ||
                 e.PropertyName == nameof(AppSettings.AttentionDensity) ||
                 e.PropertyName == nameof(AppSettings.RandomizeAttentionTargets) ||
                 e.PropertyName == nameof(AppSettings.AttentionLifespan) ||
                 e.PropertyName == nameof(AppSettings.AttentionSize) ||
                 e.PropertyName == nameof(AppSettings.VideoGazeClickEnabled) ||
+                e.PropertyName == nameof(AppSettings.MandatoryVideoFloatingSizePercent) ||
+                e.PropertyName == nameof(AppSettings.MandatoryVideoReplayAfterFailedCheck) ||
                 e.PropertyName == nameof(AppSettings.MandatoryVideoFloating) ||
                 e.PropertyName == nameof(AppSettings.VideoTargetMonitor) ||
                 e.PropertyName == nameof(AppSettings.MercySystemEnabled) ||
@@ -206,6 +276,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             var s = CoreSettings.Current;
             if (s.MandatoryVideoFloating == floating) return;
             s.MandatoryVideoFloating = floating;
+            FloatingSizeRow.IsVisible = TxtAppearanceNote.IsVisible = floating;
             CoreSettings.Save();
         }
 
@@ -434,14 +505,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// <summary>The last Test click's run, so a test can await it instead of yielding (P57).</summary>
         internal Task TestVideoRun { get; private set; } = Task.CompletedTask;
 
-        private void BtnTestVideo_Click(object? sender, RoutedEventArgs e) => TestVideoRun = LogFault(TestVideoAsync());
+        private void BtnTestVideo_Click(object? sender, RoutedEventArgs e) => TestVideoRun = ShowTestFailure(TestVideoAsync());
 
-        // The click used to be async void (faults reached the global handler); a stored Task
-        // would swallow them silently, so log here instead.
-        private static async Task LogFault(Task run)
+        private static readonly HashSet<MessageDialog> TestErrors = new();
+
+        internal static void CloseTestErrorsForPanic()
+        {
+            foreach (var dialog in TestErrors.ToArray()) dialog.Close();
+        }
+
+        // WPF Features/VideoFeatureControl.xaml.cs:530-533: report Test errors with one OK.
+        private async Task ShowTestFailure(Task run)
         {
             try { await run; }
-            catch (Exception ex) { Serilog.Log.Error(ex, "Test video failed"); }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error in BtnTestVideo_Click");
+                if (TopLevel.GetTopLevel(this) is not Window owner) return;
+                var dialog = new MessageDialog(Loc.Get("title_error"), Loc.GetF("msg_error_triggering_video_0", ex.Message), showCancel: false);
+                TestErrors.Add(dialog);
+                try { await dialog.ShowDialogSafe(owner); }
+                finally { TestErrors.Remove(dialog); }
+            }
         }
 
         private async Task TestVideoAsync()
@@ -459,7 +544,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 Serilog.Log.Warning("User requested force reset of stuck video state");
                 video.ForceCleanup();
             }
-            video.Trigger();
+            video.Trigger(userInitiated: true);
         }
     }
 }

@@ -92,6 +92,61 @@ public sealed class WebHostScrolllerGateTests
         Assert.Equal("edge", headers["User-Agent"]);
     });
 
+    [Theory]
+    [InlineData("https://images.scrolller.com/a/b.jpg", false)]
+    [InlineData("https://scrolller.com/a.jpg", false)]
+    [InlineData("http://127.0.0.1:5555/scrolller-media/~token/images/a.jpg", false)]
+    [InlineData("https://images.scrolller.com/a/b.mp4", true)]
+    public Task PanicClearsMediaIncludingRedirectsAndHeldPages(string url, bool redirect) => WithSwitch(true, () =>
+    {
+        var media = new Uri(url);
+        var web = new WebHost();
+        var report = web.NewScrolllerEngine();
+        if (redirect)
+        {
+            web.Source = new Uri("http://127.0.0.1:5555/preview.html");
+            web.OnNavigationCompleted(media);
+            Assert.Equal(media, web.CurrentUrl);
+        }
+        else web.Source = media;
+        Assert.NotNull(web.Source); // fail-proof: it really names a page before panic
+        var browser = new WebHost { GateScrolller = false, Source = media };
+        var other = new WebHost { Source = new Uri("http://127.0.0.1:5555/other.html") };
+        var stop = System.Linq.Enumerable.Single(
+            ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All, s => s.Id == "scrolller-web").Stop;
+        stop(null);
+        Assert.Null(web.Source);
+        Assert.Null(web.CurrentUrl);
+        report(true); // a late gate report cannot restore the held source
+        Assert.Null(web.Source);
+        Assert.Equal(media, browser.Source);
+        Assert.NotNull(other.Source);
+        Assert.True(ScrolllerPolicy.Enabled);
+        stop(null); // idle/idempotent
+        web.Navigate(media); // panic does not disable subsequent explicit use
+        Assert.Equal(media, web.Source);
+        stop(null);
+        Assert.Null(web.Source);
+        web.Source = null;
+        browser.Source = null;
+        other.Source = null;
+    });
+
+    [Fact]
+    public Task PanicClearsAnUncompletedMediaNavigation() => WithSwitch(true, () =>
+    {
+        var web = new WebHost { Source = new Uri("http://127.0.0.1:5555/preview.html") };
+        var media = new Uri("http://127.0.0.1:5555/scrolller-media/images/a.mp4");
+        var navigation = new WebViewNavigationStartingEventArgs { Request = media };
+        web.OnNavigationStarted(null, navigation);
+        Assert.False(navigation.Cancel);
+        Assert.Null(web.CurrentUrl); // the redirect has not completed yet
+        Assert.NotNull(web.Source);
+        System.Linq.Enumerable.Single(ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All,
+            s => s.Id == "scrolller-web").Stop(null);
+        Assert.Null(web.Source);
+    });
+
     /// <summary>The engine's own header collection, as the GTK/WebView2 adapters hand it over.</summary>
     private sealed class Headers : WebViewWebRequestHeaders
     {

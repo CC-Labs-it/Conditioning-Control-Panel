@@ -5,7 +5,8 @@ import { gateSweep, createKeepGates } from './keepGates.js';
 import { makeQuery } from '../track/query.js';
 import { BOUDOIR_HAZARD as K, getBoudoirSetpieces, powderPressHeads, powderPressPhase as pressPose, mascaraHeads, mascaraPhase as brushPose, ribbonPhase as ribbonPose, releasedMirrorGatePhase, releaseBoudoirMirror, breakBoudoirMirror, resetBoudoirMirrors } from '../track/boudoir-setpieces.js';
 import { machineryBeatAt } from '../track/machineryBeat.js';
-const RADIUS = .7, HEIGHT = 1.6;
+import { HAZARD_KART, roundReach, ellipseSweep, firstContact } from './hitShapes.js';
+const RADIUS = HAZARD_KART.radiusM, HEIGHT = HAZARD_KART.heightM;
 const dot = (a, b) => a.reduce((sum, v, i) => sum + v * b[i], 0);
 const dist = (a, b) => Math.hypot(...[0, 1, 2].map(i => a[S.posX + i] - b[S.posX + i]));
 function local(st, f) { const d = [0, 1, 2].map(i => st[S.posX + i] - f.p[i]); return [dot(d, f.b), dot(d, f.t), dot(d, f.n)]; }
@@ -22,6 +23,17 @@ export function createBoudoirHazards(track, layout = null) {
   let memory = new WeakMap(), hits = 0, ribbonPasses = 0;
   const query = makeQuery();
   function mem(r) { let m = memory.get(r); if (!m) { m = { time: null, after: null, cooldown: new Map(), ribbon: null }; memory.set(r, m); } return m; }
+  /** The brush is a round bar along the road: at kart height it reaches less far sideways than its full radius. */
+  function brushContact(row, A, B, ta, tb, travel) {
+    const solid = f => {
+      const p = mascaraPhase(row, ta + (tb - ta) * f), h = A[2] + (B[2] - A[2]) * f;
+      if (p.safe || h < -1.5) return false;
+      const reach = roundReach(p.radiusM, p.y, h, HEIGHT);
+      return reach >= 0 && Math.abs(A[0] + (B[0] - A[0]) * f - p.x) <= reach + RADIUS
+        && Math.abs(A[1] + (B[1] - A[1]) * f - p.z) <= p.depthM / 2 + RADIUS;
+    };
+    return firstContact(solid, Math.min(32, Math.max(2, Math.ceil((travel + (tb - ta) * 20) / .25))));
+  }
   function sweep(r, a, b, ta, tb, m, events) {
     const st = r.st, travel = dist(a, b); if (travel > 25) return null;
     for (const row of rows) {
@@ -30,8 +42,10 @@ export function createBoudoirHazards(track, layout = null) {
       const A = local(a, row.frame), B = local(b, row.frame), brush = row.kind === 'sweeper';
       const pa = brush ? mascaraPhase(row, ta) : null, pb = brush ? mascaraPhase(row, tb) : null;
       if (pa?.safe || pb?.safe) continue;
-      const fraction = gateSweep([A[0] - (brush ? pa.x : row.x), A[1] - (brush ? pa.z : 0)], [B[0] - (brush ? pb.x : row.x), B[1] - (brush ? pb.z : 0)],
-        (brush ? pa.radiusM : row.w / 2) + RADIUS, row.depthM / 2 + RADIUS);
+      // A thumper hits with the tip it draws, not the lane its warning paints.
+      const fraction = brush ? brushContact(row, A, B, ta, tb, travel)
+        : row.kind === 'press' ? ellipseSweep([A[0] - row.x, A[1]], [B[0] - row.x, B[1]], (row.contactX ?? row.w / 2) + RADIUS, (row.contactZ ?? row.depthM / 2) + RADIUS)
+        : gateSweep([A[0] - row.x, A[1]], [B[0] - row.x, B[1]], row.w / 2 + RADIUS, row.depthM / 2 + RADIUS);
       if (fraction === null) continue;
       const time = ta + (tb - ta) * fraction, h = A[2] + (B[2] - A[2]) * fraction;
       const phase = brush ? mascaraPhase(row, time) : row.kind === 'mirror' ? mirrorGatePhase(row, time) : powderPressPhase(row, time);

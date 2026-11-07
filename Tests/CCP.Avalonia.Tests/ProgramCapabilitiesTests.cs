@@ -88,6 +88,15 @@ public sealed class ProgramCapabilitiesTests
             Assert.Matches(@"QuestMinutes\.Follow\(false\)", src);
         }
         Assert.Matches(@"LockdownDeactivated \+=[^;]*?TrackLockdownCompleted\(", Src("App.axaml.cs"));
+
+        // The achievement half (WPF AchievementService:226-275, :508): totals, unlocks, continuous spiral reset.
+        // Whitespace is stripped first, so reformatting the lambdas does not break the scan.
+        string Flat(params string[] p) => Regex.Replace(Src(p), @"\s+", "");
+        Assert.Matches(@"QuestMinutes=new\(m=>\{App\.Achievements\?\.TrackPinkFilterMinutes\(m\);", Flat("Views", "Overlays", "PinkFilterOverlay.cs"));
+        Assert.Matches(@"QuestMinutes=new\(m=>\{App\.Achievements\?\.TrackSpiralMinutes\(m\);[^;]*;\},\(\)=>App\.Achievements\?\.ResetContinuousSpiral\(\)\)", Flat("Views", "Overlays", "SpiralOverlay.cs"));
+        Assert.Matches(@"App\.Achievements\?\.TrackLockCardCompletion\(completionTime,_totalErrors,_requiredRepeats\)", Flat("Views", "Windows", "LockCardWindow.axaml.cs"));
+        Assert.Contains("Platform.ChasterHead.Service?.Note(\"typo\", _totalErrors); Platform.ChasterHead.Service?.Note(\"lockcard\");",
+            File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Views", "Windows", "LockCardWindow.axaml.cs")));
     }
 
     // Strips comments and string literals (P23), as ShellInitializerScanTests does.

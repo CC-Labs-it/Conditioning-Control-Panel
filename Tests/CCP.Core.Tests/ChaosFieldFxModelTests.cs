@@ -66,6 +66,21 @@ public class ChaosFieldFxModelTests
         Assert.InRange(o, 0.55, 1.0);
     }
 
+    [Theory]
+    [InlineData(2000, 2000)]
+    [InlineData(500, 1050)]
+    public void Gentle_residue_rises_holds_and_fades_without_flicker(double requestedLife, double life)
+    {
+        var m = new ChaosFieldFxModel();
+        m.Residue(0, 0, 40, requestedLife, 0, gentle: true);
+        Assert.Equal(0, Assert.Single(At(m, 0)).Opacity, 6);
+        Assert.Equal(0.4, Assert.Single(At(m, 150)).Opacity, 6);
+        Assert.Equal(0.8, Assert.Single(At(m, 300)).Opacity, 6);
+        Assert.Equal(0.8, Assert.Single(At(m, life - 750)).Opacity, 6);
+        Assert.Equal(0.4, Assert.Single(At(m, life - 375)).Opacity, 6);
+        Assert.Empty(At(m, life));
+    }
+
     [Fact]
     public void Trail_pool_recycles_90_sparks_and_fades_0_65_and_shrinks_1_1_to_0_3()
     {

@@ -231,9 +231,19 @@ namespace ConditioningControlPanel.Avalonia
                 var rc = Run(Path.Combine(dir, t.Name + ".png"), () => Construct(t));
                 if (rc != 0) failed.Add(t.Name);
             }
+            // P122: the WPF first-light entry is capture-rig-only after ceremony retirement.
+            // Render its otherwise unreachable canvas explicitly, without a new production door.
+            const string firstLight = "SpiralFirstLightVisual";
+            if (Run(Path.Combine(dir, firstLight + ".png"), () =>
+            {
+                var visual = new Controls.SpiralFirstLightVisual(global::Avalonia.Media.Color.Parse("#E879B9"));
+                visual.Begin(false);
+                visual.SetFrame(2.5, 2.5);
+                return visual;
+            }) != 0) failed.Add(firstLight);
             // Before the summary: the gate reads the LAST line as "N/N views rendered".
             Console.WriteLine($"icon-census: {CensusTexts} icon-led texts, {CensusUnnamed} unnamed icon-only buttons");
-            Console.WriteLine($"{views.Count - failed.Count}/{views.Count} views rendered to {dir}");
+            Console.WriteLine($"{views.Count + 1 - failed.Count}/{views.Count + 1} views rendered to {dir}");
             foreach (var f in failed) Console.Error.WriteLine("  FAILED " + f);
             return failed.Count == 0 ? 0 : 1;
         }

@@ -19,6 +19,10 @@ internal static class TestUserDataProfile
         ConditioningControlPanel.Avalonia.Platform.X11ActiveWindow.Disabled = true;
         // The runner's Windows "Animation effects" flag (off on CI) must not cap every motion test to Reduced.
         ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = () => true;
+        // The first-run wizard opens in the OS display language; on a non-English runner that would
+        // switch the whole test process's strings.
+        ConditioningControlPanel.Avalonia.Views.Windows.FirstRunWizard.SystemUiCulture =
+            () => System.Globalization.CultureInfo.InvariantCulture;
         Environment.SetEnvironmentVariable("CCP_USERDATA_DIR", Root);
         _ = ConditioningControlPanel.CorePaths.UserData;   // installs the SandboxNet guard before any test runs
         // Strings load once, as App.Initialize does, so a test that calls Loc.Get before any test

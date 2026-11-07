@@ -38,6 +38,8 @@ export const WANT = [
   'emi-outfit-drone-protocol', 'emi-outfit-snow-day', 'emi-vehicle-petal', 'emi-vehicle-trinket',
   'emi-vehicle-pendulum','emi-vehicle-reverie','emi-vehicle-house-edge','emi-vehicle-checkmate',
   'emi-vehicle-lovebomb','emi-vehicle-feedback','emi-vehicle-velvet-lock','emi-vehicle-undertow',
+  // Prize Counter kart pieces (lane B3-G1): three outfits, the lace glide umbrella, the podium trail; owners only
+  'emi-outfit-pit-crew', 'emi-outfit-ringmaster', 'emi-outfit-ballerina', 'umbrella-lace', 'podium-trail',
   // Starting terrace: the delivered cabinet rows, selected by the current quality tier.
   'threshold-slot-row-lod0', 'threshold-slot-row-lod1',
   // wave 2 stepping stones (render/stones.js): Astra's static Threshold platform, one clone per stone
@@ -48,7 +50,7 @@ const LATER = new Set([]);
 
 let current = null;
 const liveLeases = new Set(), libraries = new WeakMap();
-export const GARAGE_ART_IDS = Object.freeze(WANT.filter(id => id === 'emi-teacup-kart' || id === 'emi-faces' || /^emi-(outfit|vehicle)-/.test(id)));
+export const GARAGE_ART_IDS = Object.freeze(WANT.filter(id => id === 'emi-teacup-kart' || id === 'emi-faces' || id === 'umbrella-lace' || id === 'podium-trail' || /^emi-(outfit|vehicle)-/.test(id)));
 /** Newest live course lease. Shared garage leases never replace the course's material context. */
 export const currentArt = () => current;
 

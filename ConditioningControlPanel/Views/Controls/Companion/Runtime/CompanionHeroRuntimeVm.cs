@@ -227,7 +227,8 @@ namespace ConditioningControlPanel.Views.Controls.Companion.Runtime
             IsCompanionEnabled = IsCompanionShown;
             IsMuted = settings?.AvatarMuted ?? false;
             ChatShortcutHint = SafeShortcut();
-            IsRainWardrobeAvailable = AvatarTubeWindow.EmoteGenerationFolder(
+            // RainV2Gate off (7.2.0): the hero card shows no wardrobe button.
+            IsRainWardrobeAvailable = Services.Companion.RainV2Gate.On && AvatarTubeWindow.EmoteGenerationFolder(
                 App.Mods?.ActiveModId, Services.Companion.AvatarGenerationRule.V2) != null;
 
             // ---- the pills ----

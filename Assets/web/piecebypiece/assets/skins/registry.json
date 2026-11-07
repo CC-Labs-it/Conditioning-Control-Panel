@@ -1,0 +1,344 @@
+{
+  "sourcePiecesUnmodified": true,
+  "shelfDisplay": "one actual dressed knight per clothing set",
+  "colourDirection": "cobalt/gold and emerald/copper, separate from the chess side colours",
+  "items": [
+    {
+      "id": "chess.banner.house-pink",
+      "piece": "pawn",
+      "file": "chess.banner.house-pink-pawn.glb",
+      "root": "attachment_chess_banner_house-pink_pawn",
+      "socket": "socket_pawn",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.banner.house-pink",
+      "piece": "rook",
+      "file": "chess.banner.house-pink-rook.glb",
+      "root": "attachment_chess_banner_house-pink_rook",
+      "socket": "socket_rook",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.banner.house-pink",
+      "piece": "knight",
+      "file": "chess.banner.house-pink-knight.glb",
+      "root": "attachment_chess_banner_house-pink_knight",
+      "socket": "socket_knight",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.banner.house-pink",
+      "piece": "bishop",
+      "file": "chess.banner.house-pink-bishop.glb",
+      "root": "attachment_chess_banner_house-pink_bishop",
+      "socket": "socket_bishop",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.banner.house-pink",
+      "piece": "queen",
+      "file": "chess.banner.house-pink-queen.glb",
+      "root": "attachment_chess_banner_house-pink_queen",
+      "socket": "socket_queen",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.banner.house-pink",
+      "piece": "king",
+      "file": "chess.banner.house-pink-king.glb",
+      "root": "attachment_chess_banner_house-pink_king",
+      "socket": "socket_king",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.banner.crest",
+      "piece": "pawn",
+      "file": "chess.banner.crest-pawn.glb",
+      "root": "attachment_chess_banner_crest_pawn",
+      "socket": "socket_pawn",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.banner.crest",
+      "piece": "rook",
+      "file": "chess.banner.crest-rook.glb",
+      "root": "attachment_chess_banner_crest_rook",
+      "socket": "socket_rook",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.banner.crest",
+      "piece": "knight",
+      "file": "chess.banner.crest-knight.glb",
+      "root": "attachment_chess_banner_crest_knight",
+      "socket": "socket_knight",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.banner.crest",
+      "piece": "bishop",
+      "file": "chess.banner.crest-bishop.glb",
+      "root": "attachment_chess_banner_crest_bishop",
+      "socket": "socket_bishop",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.banner.crest",
+      "piece": "queen",
+      "file": "chess.banner.crest-queen.glb",
+      "root": "attachment_chess_banner_crest_queen",
+      "socket": "socket_queen",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.banner.crest",
+      "piece": "king",
+      "file": "chess.banner.crest-king.glb",
+      "root": "attachment_chess_banner_crest_king",
+      "socket": "socket_king",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.insignia.heart",
+      "piece": "pawn",
+      "file": "chess.insignia.heart-pawn.glb",
+      "root": "attachment_chess_insignia_heart_pawn",
+      "socket": "socket_pawn",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.insignia.heart",
+      "piece": "rook",
+      "file": "chess.insignia.heart-rook.glb",
+      "root": "attachment_chess_insignia_heart_rook",
+      "socket": "socket_rook",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.insignia.heart",
+      "piece": "knight",
+      "file": "chess.insignia.heart-knight.glb",
+      "root": "attachment_chess_insignia_heart_knight",
+      "socket": "socket_knight",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.insignia.heart",
+      "piece": "bishop",
+      "file": "chess.insignia.heart-bishop.glb",
+      "root": "attachment_chess_insignia_heart_bishop",
+      "socket": "socket_bishop",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.insignia.heart",
+      "piece": "queen",
+      "file": "chess.insignia.heart-queen.glb",
+      "root": "attachment_chess_insignia_heart_queen",
+      "socket": "socket_queen",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.insignia.heart",
+      "piece": "king",
+      "file": "chess.insignia.heart-king.glb",
+      "root": "attachment_chess_insignia_heart_king",
+      "socket": "socket_king",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.insignia.star",
+      "piece": "pawn",
+      "file": "chess.insignia.star-pawn.glb",
+      "root": "attachment_chess_insignia_star_pawn",
+      "socket": "socket_pawn",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.insignia.star",
+      "piece": "rook",
+      "file": "chess.insignia.star-rook.glb",
+      "root": "attachment_chess_insignia_star_rook",
+      "socket": "socket_rook",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.insignia.star",
+      "piece": "knight",
+      "file": "chess.insignia.star-knight.glb",
+      "root": "attachment_chess_insignia_star_knight",
+      "socket": "socket_knight",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.insignia.star",
+      "piece": "bishop",
+      "file": "chess.insignia.star-bishop.glb",
+      "root": "attachment_chess_insignia_star_bishop",
+      "socket": "socket_bishop",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.insignia.star",
+      "piece": "queen",
+      "file": "chess.insignia.star-queen.glb",
+      "root": "attachment_chess_insignia_star_queen",
+      "socket": "socket_queen",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.insignia.star",
+      "piece": "king",
+      "file": "chess.insignia.star-king.glb",
+      "root": "attachment_chess_insignia_star_king",
+      "socket": "socket_king",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "prime.banner.arena",
+      "piece": "pawn",
+      "file": "prime.banner.arena-pawn.glb",
+      "root": "attachment_prime_banner_arena_pawn",
+      "socket": "socket_pawn",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "prime.banner.arena",
+      "piece": "rook",
+      "file": "prime.banner.arena-rook.glb",
+      "root": "attachment_prime_banner_arena_rook",
+      "socket": "socket_rook",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "prime.banner.arena",
+      "piece": "knight",
+      "file": "prime.banner.arena-knight.glb",
+      "root": "attachment_prime_banner_arena_knight",
+      "socket": "socket_knight",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "prime.banner.arena",
+      "piece": "bishop",
+      "file": "prime.banner.arena-bishop.glb",
+      "root": "attachment_prime_banner_arena_bishop",
+      "socket": "socket_bishop",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "prime.banner.arena",
+      "piece": "queen",
+      "file": "prime.banner.arena-queen.glb",
+      "root": "attachment_prime_banner_arena_queen",
+      "socket": "socket_queen",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "prime.banner.arena",
+      "piece": "king",
+      "file": "prime.banner.arena-king.glb",
+      "root": "attachment_prime_banner_arena_king",
+      "socket": "socket_king",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.set.royal-capes",
+      "piece": "pawn",
+      "file": "royal-capes-pawn.glb",
+      "root": "attachment_royal-capes_pawn",
+      "socket": "socket_pawn",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.set.royal-capes",
+      "piece": "rook",
+      "file": "royal-capes-rook.glb",
+      "root": "attachment_royal-capes_rook",
+      "socket": "socket_rook",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.set.royal-capes",
+      "piece": "knight",
+      "file": "royal-capes-knight.glb",
+      "root": "attachment_royal-capes_knight",
+      "socket": "socket_knight",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.set.royal-capes",
+      "piece": "bishop",
+      "file": "royal-capes-bishop.glb",
+      "root": "attachment_royal-capes_bishop",
+      "socket": "socket_bishop",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.set.royal-capes",
+      "piece": "queen",
+      "file": "royal-capes-queen.glb",
+      "root": "attachment_royal-capes_queen",
+      "socket": "socket_queen",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.set.royal-capes",
+      "piece": "king",
+      "file": "royal-capes-king.glb",
+      "root": "attachment_royal-capes_king",
+      "socket": "socket_king",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.set.velvet-court",
+      "piece": "pawn",
+      "file": "velvet-court-pawn.glb",
+      "root": "attachment_velvet-court_pawn",
+      "socket": "socket_pawn",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.set.velvet-court",
+      "piece": "rook",
+      "file": "velvet-court-rook.glb",
+      "root": "attachment_velvet-court_rook",
+      "socket": "socket_rook",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.set.velvet-court",
+      "piece": "knight",
+      "file": "velvet-court-knight.glb",
+      "root": "attachment_velvet-court_knight",
+      "socket": "socket_knight",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.set.velvet-court",
+      "piece": "bishop",
+      "file": "velvet-court-bishop.glb",
+      "root": "attachment_velvet-court_bishop",
+      "socket": "socket_bishop",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.set.velvet-court",
+      "piece": "queen",
+      "file": "velvet-court-queen.glb",
+      "root": "attachment_velvet-court_queen",
+      "socket": "socket_queen",
+      "placement": "identity under approved piece root"
+    },
+    {
+      "id": "chess.set.velvet-court",
+      "piece": "king",
+      "file": "velvet-court-king.glb",
+      "root": "attachment_velvet-court_king",
+      "socket": "socket_king",
+      "placement": "identity under approved piece root"
+    }
+  ],
+  "sideColourPolicy": "Recolour only the original piece material for side identity. Clothing, banners and insignias keep their authored cobalt, emerald, crimson, gold and copper palettes."
+}

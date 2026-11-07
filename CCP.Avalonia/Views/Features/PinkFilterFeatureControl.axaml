@@ -116,6 +116,19 @@
                                           Width="180" VerticalAlignment="Center"
                                           Theme="{DynamicResource DarkComboBoxStyle}"/>
                             </Grid>
+
+                            <!-- #1546: tint under spirals, subliminals, bubbles and text instead of over them
+                                 (WPF PinkFilterFeatureControl.xaml:124-135). -->
+                            <Grid Height="36" Background="Transparent" ToolTip.Tip="{loc:Str tooltip_pink_filter_under_effects}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{loc:Str setting_pink_filter_under_effects}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <CheckBox Grid.Column="1" x:Name="ChkUnderEffects"
+                                          Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
+                            </Grid>
                         </StackPanel>
                     </Grid>
                 </Border>

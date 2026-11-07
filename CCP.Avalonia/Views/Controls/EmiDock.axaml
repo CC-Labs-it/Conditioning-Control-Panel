@@ -40,7 +40,7 @@
             </Button.Template>
             <Grid>
                 <Border x:Name="RingGlow" CornerRadius="20" Background="#0E0E1C"
-                        BoxShadow="0 0 16 0 #FF69B4" Opacity="0" IsHitTestVisible="False"/>
+                        BoxShadow="0 0 0 0 #FF69B4" Opacity="0" IsHitTestVisible="False"/>
                 <!--
                     THE KNOCK'S RING. The knock animates the stroke colour, the thickness and the
                     glow. The face is NEVER animated: a live kaomoji pulsing reads as a glitch,

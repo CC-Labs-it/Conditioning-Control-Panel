@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -55,6 +56,11 @@ public sealed class ExclusivesVaultMotionTests
             var view = shell.Named<ExclusivesTabView>("ExclusivesTab")!;
             Assert.True(view.IsVisible);
             Assert.True(view.MotionRunning);
+            // WPF MainWindow.Exclusives.cs:1403: Premium uses the richer page intensity.
+            var room = view.FindControl<AmbientFxCanvas>("ExclusivesAmbientFx")!;
+            var config = (AmbientFxConfig)typeof(AmbientFxCanvas)
+                .GetField("_config", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(room)!;
+            Assert.Equal(0.75, config.Intensity);
 
             // Free account: both tier plates dim, none breathes.
             var p1 = view.FindControl<Border>("TierPlate1")!;

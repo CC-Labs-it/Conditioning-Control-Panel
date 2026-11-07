@@ -17,13 +17,14 @@ public sealed class BubbleCountSchedulerTests
         public readonly List<(string Path, int Difficulty, bool Strict, Action<bool> Done)> Shown = new();
         public readonly List<(string Text, Action Then)> Messages = new();
         public int Closes, NoVideoNotices;
+        public Action? Closing;
         public readonly List<bool> EffectsHolds = new();
         public void ShowNoVideos() => NoVideoNotices++;
         public void SetEffectsHold(bool hold) => EffectsHolds.Add(hold);
         public double LastVideoDurationSeconds { get; set; } = 60;
         public void Show(string path, int difficulty, bool strict, Action<bool> onComplete) => Shown.Add((path, difficulty, strict, onComplete));
         public void ShowMessage(string text, int ms, Action then) => Messages.Add((text, then));
-        public void CloseAll() => Closes++;
+        public void CloseAll() { Closes++; Closing?.Invoke(); }
         public bool Feed;
         public Func<bool>? FeedState;
         public bool FeedOwnsTheScreen => FeedState?.Invoke() ?? Feed;
@@ -48,6 +49,25 @@ public sealed class BubbleCountSchedulerTests
     }
 
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
+
+    [Fact]
+    public void PanicIgnoresCompletionRaisedWhileClosingAStrictRound() => With(true, true, true, () =>
+    {
+        var clock = new FakeClock();
+        var host = new Host();
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        b.Trigger(forceTest: true);
+        clock.Advance(BubbleCountScheduler.LeadIn);
+        var game = Assert.Single(host.Shown);
+        bool? busyDuringClose = null;
+        host.Closing = () => { busyDuringClose = b.IsBusy; game.Done(false); };
+        b.ForceCleanup();
+        Assert.False(busyDuringClose);
+        Assert.False(b.IsBusy);
+        Assert.Empty(host.Messages);
+        clock.Advance(TimeSpan.FromSeconds(10));
+        Assert.Single(host.Shown);
+    });
 
     [Fact]
     public void Rules_match_wpf()

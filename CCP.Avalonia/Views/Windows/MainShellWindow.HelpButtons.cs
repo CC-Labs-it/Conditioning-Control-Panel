@@ -68,13 +68,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             HelpContent content;
             if (button.Name == "BtnIntakePassHelp") content = BuildIntakePassHelpContent();
+            else if (button.Name == "BtnHelpRain") content = BuildRainHelpContent();
             else if (button.Name is { } name && HelpButtonSections.TryGetValue(name, out var sectionId))
                 content = HelpContentService.GetContent(sectionId);
             else return;
             if (HelpPopover.IsAttached(button)) return; // re-attaching would close a pinned card on every load
             ToolTip.SetTip(button, null); // popover and ToolTip must never double-render (WPF Presets.cs:130)
-            HelpPopover.Attach(button, content);
+            HelpPopover.Attach(button, content, button.Name == "BtnHelpRain"
+                ? new IconEntry(IconKind.Wand, IconVariant.Regular) : null);
         }
+
+        // WPF MainWindow.Presets.cs:126,132. Reuse the ten shared language files and mod token.
+        internal static HelpContent BuildRainHelpContent() => new()
+        {
+            SectionId = "RainV2",
+            Title = Loc.Get("help_rain_title"),
+            WhatItDoes = Loc.Get("help_rain_what"),
+            Tips = new List<string> { Loc.Get("help_rain_tip1"), Loc.Get("help_rain_tip2"), Loc.Get("help_rain_tip3") },
+            HowItWorks = Loc.Get("help_rain_how"),
+        };
 
         /// <summary>WPF MainWindow.UiUpdates.cs:1730. Its punch-card tip is gated on
         /// IntakePunchCardService.UiEnabled, a static readonly false, so it is left out.</summary>

@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
 using Avalonia;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
@@ -53,6 +55,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             _screenOcrIntervalPanel = this.FindControl<StackPanel>("ScreenOcrIntervalPanel")!;
             _txtHighlightOffHint = this.FindControl<TextBlock>("TxtHighlightOffHint")!;
             _highlightDurationPanel = this.FindControl<StackPanel>("HighlightDurationPanel")!;
+            // WPF's line names Windows OCR; elsewhere the same sentence without the engine.
+            if (!OperatingSystem.IsWindows())
+                this.FindControl<TextBlock>("TxtScreenOcrBlurb")!.Bind(TextBlock.TextProperty,
+                    (global::Avalonia.Data.Binding)new global::ConditioningControlPanel.Avalonia.Localization.StrExtension(
+                        "label_scans_your_screen_for_trigger_keywords_using_linux").ProvideValue(null!));
 
             this.FindControl<Button>("BtnAddKeywordTrigger")!.Click += (_, _) => AddTrigger();
             this.FindControl<Button>("BtnImportFromCustomTriggers")!.Click += async (_, _) => await ImportFromCustomTriggersAsync();
@@ -73,6 +80,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 CoreSettings.Save();
             };
 
+            // WPF KeywordTriggersPanel.xaml:192-193 / MainWindow.Assets.cs:444-456 redirects
+            // the custom list wheel to the nearest outer ScrollViewer.
+            var listScroll = this.FindControl<ScrollViewer>("KeywordTriggerScroller")!;
+            listScroll.AddHandler(PointerWheelChangedEvent, OnTriggerListWheel, RoutingStrategies.Tunnel);
+
             SyncFromSettings();
 
             var sliders = new[]
@@ -82,6 +94,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             };
             foreach (var name in sliders)
                 this.FindControl<Slider>(name)!.ValueChanged += OnSliderChanged;
+        }
+
+        private void OnTriggerListWheel(object? sender, PointerWheelEventArgs e)
+        {
+            if (sender is not ScrollViewer inner ||
+                inner.GetVisualAncestors().OfType<ScrollViewer>().FirstOrDefault() is not { } outer) return;
+            // Avalonia reports one unit per notch; WPF's e.Delta is 120 per notch.
+            outer.Offset = new Vector(outer.Offset.X, Math.Clamp(outer.Offset.Y - e.Delta.Y * 120,
+                0, Math.Max(0, outer.Extent.Height - outer.Viewport.Height)));
+            e.Handled = true;
         }
 
         protected override void OnAttachedToVisualTree(global::Avalonia.VisualTreeAttachmentEventArgs e)

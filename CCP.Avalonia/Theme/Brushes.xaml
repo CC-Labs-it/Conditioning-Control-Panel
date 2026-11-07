@@ -99,19 +99,19 @@
          ============================================================ -->
     <SolidColorBrush x:Key="SectionHueGeneralBrush" Color="{StaticResource SectionHueGeneral}"/>
     <SolidColorBrush x:Key="SectionHueGeneralBorderBrush" Color="{StaticResource SectionHueGeneralBorder}"/>
-    <LinearGradientBrush x:Key="SectionHueGeneralWashBrush" StartPoint="0,0" EndPoint="0.9,0.7">
+    <LinearGradientBrush x:Key="SectionHueGeneralWashBrush" StartPoint="0%,0%" EndPoint="90%,70%">
         <GradientStop Color="{StaticResource SectionHueGeneralWash}" Offset="0"/>
         <GradientStop Color="#00000000" Offset="0.55"/>
     </LinearGradientBrush>
     <SolidColorBrush x:Key="SectionHueStartupBrush" Color="{StaticResource SectionHueStartup}"/>
     <SolidColorBrush x:Key="SectionHueStartupBorderBrush" Color="{StaticResource SectionHueStartupBorder}"/>
-    <LinearGradientBrush x:Key="SectionHueStartupWashBrush" StartPoint="0,0" EndPoint="0.9,0.7">
+    <LinearGradientBrush x:Key="SectionHueStartupWashBrush" StartPoint="0%,0%" EndPoint="90%,70%">
         <GradientStop Color="{StaticResource SectionHueStartupWash}" Offset="0"/>
         <GradientStop Color="#00000000" Offset="0.55"/>
     </LinearGradientBrush>
     <SolidColorBrush x:Key="SectionHueAudioBrush" Color="{StaticResource SectionHueAudio}"/>
     <SolidColorBrush x:Key="SectionHueAudioBorderBrush" Color="{StaticResource SectionHueAudioBorder}"/>
-    <LinearGradientBrush x:Key="SectionHueAudioWashBrush" StartPoint="0,0" EndPoint="0.9,0.7">
+    <LinearGradientBrush x:Key="SectionHueAudioWashBrush" StartPoint="0%,0%" EndPoint="90%,70%">
         <GradientStop Color="{StaticResource SectionHueAudioWash}" Offset="0"/>
         <GradientStop Color="#00000000" Offset="0.55"/>
     </LinearGradientBrush>
@@ -122,43 +122,43 @@
          Static tokens by design, so literals lose nothing. Keep it this way. -->
     <SolidColorBrush x:Key="SectionHueStudioBrush" Color="#FFFF7E6B"/>
     <SolidColorBrush x:Key="SectionHueStudioBorderBrush" Color="#40FF7E6B"/>
-    <LinearGradientBrush x:Key="SectionHueStudioWashBrush" StartPoint="0,0" EndPoint="0.9,0.7">
+    <LinearGradientBrush x:Key="SectionHueStudioWashBrush" StartPoint="0%,0%" EndPoint="90%,70%">
         <GradientStop Color="#14FF7E6B" Offset="0"/>
         <GradientStop Color="#00000000" Offset="0.55"/>
     </LinearGradientBrush>
     <SolidColorBrush x:Key="SectionHueDevicesBrush" Color="{StaticResource SectionHueDevices}"/>
     <SolidColorBrush x:Key="SectionHueDevicesBorderBrush" Color="{StaticResource SectionHueDevicesBorder}"/>
-    <LinearGradientBrush x:Key="SectionHueDevicesWashBrush" StartPoint="0,0" EndPoint="0.9,0.7">
+    <LinearGradientBrush x:Key="SectionHueDevicesWashBrush" StartPoint="0%,0%" EndPoint="90%,70%">
         <GradientStop Color="{StaticResource SectionHueDevicesWash}" Offset="0"/>
         <GradientStop Color="#00000000" Offset="0.55"/>
     </LinearGradientBrush>
     <SolidColorBrush x:Key="SectionHuePerformanceBrush" Color="{StaticResource SectionHuePerformance}"/>
     <SolidColorBrush x:Key="SectionHuePerformanceBorderBrush" Color="{StaticResource SectionHuePerformanceBorder}"/>
-    <LinearGradientBrush x:Key="SectionHuePerformanceWashBrush" StartPoint="0,0" EndPoint="0.9,0.7">
+    <LinearGradientBrush x:Key="SectionHuePerformanceWashBrush" StartPoint="0%,0%" EndPoint="90%,70%">
         <GradientStop Color="{StaticResource SectionHuePerformanceWash}" Offset="0"/>
         <GradientStop Color="#00000000" Offset="0.55"/>
     </LinearGradientBrush>
     <SolidColorBrush x:Key="SectionHueNotificationsBrush" Color="{StaticResource SectionHueNotifications}"/>
     <SolidColorBrush x:Key="SectionHueNotificationsBorderBrush" Color="{StaticResource SectionHueNotificationsBorder}"/>
-    <LinearGradientBrush x:Key="SectionHueNotificationsWashBrush" StartPoint="0,0" EndPoint="0.9,0.7">
+    <LinearGradientBrush x:Key="SectionHueNotificationsWashBrush" StartPoint="0%,0%" EndPoint="90%,70%">
         <GradientStop Color="{StaticResource SectionHueNotificationsWash}" Offset="0"/>
         <GradientStop Color="#00000000" Offset="0.55"/>
     </LinearGradientBrush>
     <SolidColorBrush x:Key="SectionHueAccountBrush" Color="{StaticResource SectionHueAccount}"/>
     <SolidColorBrush x:Key="SectionHueAccountBorderBrush" Color="{StaticResource SectionHueAccountBorder}"/>
-    <LinearGradientBrush x:Key="SectionHueAccountWashBrush" StartPoint="0,0" EndPoint="0.9,0.7">
+    <LinearGradientBrush x:Key="SectionHueAccountWashBrush" StartPoint="0%,0%" EndPoint="90%,70%">
         <GradientStop Color="{StaticResource SectionHueAccountWash}" Offset="0"/>
         <GradientStop Color="#00000000" Offset="0.55"/>
     </LinearGradientBrush>
     <SolidColorBrush x:Key="SectionHueDataBrush" Color="{StaticResource SectionHueData}"/>
     <SolidColorBrush x:Key="SectionHueDataBorderBrush" Color="{StaticResource SectionHueDataBorder}"/>
-    <LinearGradientBrush x:Key="SectionHueDataWashBrush" StartPoint="0,0" EndPoint="0.9,0.7">
+    <LinearGradientBrush x:Key="SectionHueDataWashBrush" StartPoint="0%,0%" EndPoint="90%,70%">
         <GradientStop Color="{StaticResource SectionHueDataWash}" Offset="0"/>
         <GradientStop Color="#00000000" Offset="0.55"/>
     </LinearGradientBrush>
     <SolidColorBrush x:Key="SectionHueUpdatesBrush" Color="{StaticResource SectionHueUpdates}"/>
     <SolidColorBrush x:Key="SectionHueUpdatesBorderBrush" Color="{StaticResource SectionHueUpdatesBorder}"/>
-    <LinearGradientBrush x:Key="SectionHueUpdatesWashBrush" StartPoint="0,0" EndPoint="0.9,0.7">
+    <LinearGradientBrush x:Key="SectionHueUpdatesWashBrush" StartPoint="0%,0%" EndPoint="90%,70%">
         <GradientStop Color="{StaticResource SectionHueUpdatesWash}" Offset="0"/>
         <GradientStop Color="#00000000" Offset="0.55"/>
     </LinearGradientBrush>
@@ -170,7 +170,7 @@
          section should not restyle itself with whatever skin is loaded. -->
     <SolidColorBrush x:Key="SectionHueEmiDeskBrush" Color="#FFFF69B4"/>
     <SolidColorBrush x:Key="SectionHueEmiDeskBorderBrush" Color="#40FF69B4"/>
-    <LinearGradientBrush x:Key="SectionHueEmiDeskWashBrush" StartPoint="0,0" EndPoint="0.9,0.7">
+    <LinearGradientBrush x:Key="SectionHueEmiDeskWashBrush" StartPoint="0%,0%" EndPoint="90%,70%">
         <GradientStop Color="#14FF69B4" Offset="0"/>
         <GradientStop Color="#00000000" Offset="0.55"/>
     </LinearGradientBrush>
@@ -242,7 +242,7 @@
          Applied at the four brand anchors (logo, START button, XP bar, primary nav active)
          on CCP Default only; ApplyModTheme swaps AccentGradientBrush to point at this for
          CCP Default and to a solid SolidColorBrush(accent) for every other mod. -->
-    <LinearGradientBrush x:Key="BrandGradient" StartPoint="0,0" EndPoint="1,1">
+    <LinearGradientBrush x:Key="BrandGradient" StartPoint="0%,0%" EndPoint="100%,100%">
         <GradientStop Color="#E84393" Offset="0"/>
         <GradientStop Color="#8B5CF6" Offset="1"/>
     </LinearGradientBrush>
@@ -268,22 +268,22 @@
          (see Velvet-Kit round 2). Base tones match the established tier
          colours: gold #F0C24B = Tier 1, and Tier 2 wears DIAMOND (ice-white
          cyan) - the violet flask stays on the lockband glyphs only. -->
-    <LinearGradientBrush x:Key="Tier1GoldBorderBrush" StartPoint="0,0" EndPoint="1,1">
+    <LinearGradientBrush x:Key="Tier1GoldBorderBrush" StartPoint="0%,0%" EndPoint="100%,100%">
         <GradientStop Color="#F2D98C" Offset="0"/>
         <GradientStop Color="#C9963B" Offset="0.5"/>
         <GradientStop Color="#8C6218" Offset="1"/>
     </LinearGradientBrush>
-    <LinearGradientBrush x:Key="Tier1GoldHoverBrush" StartPoint="0,0" EndPoint="1,1">
+    <LinearGradientBrush x:Key="Tier1GoldHoverBrush" StartPoint="0%,0%" EndPoint="100%,100%">
         <GradientStop Color="#FFE9A9" Offset="0"/>
         <GradientStop Color="#F0C24B" Offset="0.5"/>
         <GradientStop Color="#C9963B" Offset="1"/>
     </LinearGradientBrush>
-    <LinearGradientBrush x:Key="Tier2DiamondBorderBrush" StartPoint="0,0" EndPoint="1,1">
+    <LinearGradientBrush x:Key="Tier2DiamondBorderBrush" StartPoint="0%,0%" EndPoint="100%,100%">
         <GradientStop Color="#EAFBFF" Offset="0"/>
         <GradientStop Color="#8FD4EF" Offset="0.5"/>
         <GradientStop Color="#4C93C4" Offset="1"/>
     </LinearGradientBrush>
-    <LinearGradientBrush x:Key="Tier2DiamondHoverBrush" StartPoint="0,0" EndPoint="1,1">
+    <LinearGradientBrush x:Key="Tier2DiamondHoverBrush" StartPoint="0%,0%" EndPoint="100%,100%">
         <GradientStop Color="#FFFFFF" Offset="0"/>
         <GradientStop Color="#BFEFFF" Offset="0.5"/>
         <GradientStop Color="#7FC4E8" Offset="1"/>

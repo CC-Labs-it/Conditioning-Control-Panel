@@ -51,6 +51,10 @@
             <Setter Property="Padding" Value="8,5"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="CaretBrush" Value="White"/>
+            <!-- WPF's template (Border padding 8,5 around a ScrollViewer host) measures 39px for one
+                 line of 13px text; Avalonia's text line is shorter, so single-line fields came out
+                 32px. Multi-line fields set their own Height. -->
+            <Setter Property="MinHeight" Value="39"/>
         </ControlTheme>
     </Window.Resources>
 

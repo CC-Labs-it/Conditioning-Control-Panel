@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Main sync #13 delta ledger (2026-11-04)</title>
+<style>
+:root{color-scheme:light dark;--fg:#1f2328;--bg:#fff;--muted:#59636e;--line:#d1d9e0;--code:#f6f8fa;--link:#0969da}
+@media (prefers-color-scheme:dark){:root{--fg:#e6edf3;--bg:#0d1117;--muted:#9198a1;--line:#3d444d;--code:#151b23;--link:#4493f8}}
+body{font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--fg);background:var(--bg);max-width:1200px;margin:2rem auto;padding:0 1.25rem}
+h1,h2,h3,h4{line-height:1.25;margin:1.5em 0 .5em}h1,h2{border-bottom:1px solid var(--line);padding-bottom:.3em}
+a{color:var(--link)}code,pre{font:13px/1.5 ui-monospace,Consolas,monospace;background:var(--code);border-radius:5px}
+code{padding:.1em .3em;overflow-wrap:anywhere}pre{padding:1em;overflow:auto}pre code{padding:0;background:none}
+table{border-collapse:collapse;margin:1em 0;width:100%}th,td{border:1px solid var(--line);padding:.35em .6em;vertical-align:top}
+th{background:var(--code);position:sticky;top:0}td{overflow-wrap:anywhere}blockquote{margin:0;padding:0 1em;color:var(--muted);border-left:.25em solid var(--line)}
+.counts{font-weight:600}.src{color:var(--muted);font-size:.85em}
+</style>
+<script type="application/json" id="ledger-meta">{"total": 10, "pin": "c21d381937", "base": "c70d1a8f95"}</script>
+</head>
+<body>
+<h1>Main sync #13 delta ledger (2026-11-04)</h1>
+<p>Branch <code>avalonia-port/main-20261104</code> (the merge) and <code>avalonia-port/main-20261104-compat</code> (ledger, Core replays and hand ports),
+from <code>origin/port/7.2</code> (<code>ca0d0a3b8f</code>: main sync #12, merged in #4097/#4098).
+Pin: <code>origin/main</code> = <code>c21d381937</code>, the merge of #4110 <code>release/7.2.2</code> "Second Lap". Base: <code>c70d1a8f95</code> (7.2.1).
+Delta: 10 non-merge commits, 51 files, +1836/-210. <span class="counts">Rows: ported 5, ported-by-merge 2, needs-port 2, n/a 1.</span></p>
+<p>Status legend as in the earlier ledgers: <strong>ported-by-merge</strong>: the change landed in a file both heads use.
+<strong>ported</strong>: done on this sync's <code>-compat</code> branch. <strong>n/a</strong>: no counterpart by design, reason given.
+<strong>needs-port</strong>: a lane is owed; the notes name the Avalonia file it has to build.</p>
+
+<h2>Scope calls</h2>
+<ul>
+<li><strong>Wallpaper on Linux (owner, 2026-11-01, #4098):</strong> no door, so every wallpaper hunk is n/a here.</li>
+<li><strong>Shop:</strong> WPF desktop only (B3). Nothing in this delta touches it.</li>
+<li><strong>Glassroad host rules:</strong> this head keeps its own twin, <code>GlassroadHostRules</code> (the header says why), so the 7.2.2 watchdog rules are copied there rather than moved; WPF keeps main's <code>GlassroadRules.Watch</code> untouched so later main syncs merge clean.</li>
+</ul>
+
+<h2>Merge notes (<code>avalonia-port/main-20261104</code>)</h2>
+<p>Conflict resolutions only. <code>git diff $(git merge-tree --write-tree HEAD^1 HEAD^2) HEAD</code> lists exactly the two content-conflicted files:</p>
+<ul>
+<li><code>CCP.Core/Services/Compositor/PinkTintLayer.cs</code> (moved to Core): main's #1546 change replayed Core-pure. No <code>App.</code> and no <code>CompositorEngine</code>: the slot reads <code>CoreSettings.Current.PinkFilterUnderEffects</code>, and the re-sort is an optional <code>Action resort</code> beside the existing <code>wake</code>. The WPF caller passes <code>App.Compositor!.ResortLayers</code> on -compat.</li>
+<li><code>ConditioningControlPanel/ConditioningControlPanel.csproj</code>: main's <code>&lt;Version&gt;7.2.2&lt;/Version&gt;</code> dropped; the version lives in <code>Version.props</code> (bumped on -compat, as sync #12 did).</li>
+<li>File-location conflict <code>Resources/web/glassroad/tests/boudoir-clearance.test.mjs</code>: taken at git's suggested <code>Assets/web/glassroad/tests/</code>. <code>Assets/web/glassroad</code> is the same git tree as main's <code>Resources/web/glassroad</code> (<code>2fe32769d3</code>).</li>
+</ul>
+<p><code>installer.iss</code> and <code>build-installer.bat</code> are byte-identical to main (auto-merged, <code>cmp</code> clean).</p>
+
+<h2>Compat notes (<code>avalonia-port/main-20261104-compat</code>)</h2>
+<ul>
+<li>Core build: main's <code>ScrolllerWebGate.Attach</code> (in Core) called the head-only <code>WebAudioWatch</code>. It now calls <code>ScrolllerWebGate.AttachHook</code>, which WPF <code>App.xaml.cs</code> sets to <code>WebAudioWatch.Attach</code> (its writer, <code>EngineOffAudioLog</code>, reads <code>App</code>).</li>
+<li><code>git mv</code> to Core at 100%: <code>Services/LockCard/LockCardStrictCopy.cs</code>, <code>Services/Launcher/LauncherPlacement.cs</code> (both pure, now used by both heads).</li>
+<li>WPF tests that read moved files go through <code>SourceRoots</code>: <code>PinkFilterUnderEffectsTests</code> (layer, OverlayService, feature page, languages), <code>LockCardStrictCopyTests</code> (languages).</li>
+<li><code>Version.props</code> 7.2.2 and <code>packaging/aur/PKGBUILD</code> pkgver 7.2.2.</li>
+</ul>
+
+<h2>Race build proof</h2>
+<p><code>garage-shop.test.mjs</code> "all five courses still match the room cards" passes on the merged tree with the sync #12 literals unchanged
+(threshold <code>9f5a909c689f0f1a</code>, mainframe <code>940481a7288753b2</code>, keep <code>389f7635768ebecd</code>, boudoir <code>a097773aa3c012b7</code>, goonworks <code>b463b2a20bfe17bf</code>).
+Boudoir's grid corridor check (a716e8159) keeps the same plan, so no room regenerate. Full glassroad suite, node 22: 3162 pass, 0 fail.</p>
+
+<h2>Rows</h2>
+<table>
+<tr><th>#</th><th>sha</th><th>subject</th><th>files</th><th>Avalonia/Core counterpart</th><th>status</th><th>notes</th></tr>
+<tr><td>1</td><td><code>c212d6e279</code></td><td>fix(chaster): the raffle card says its total is net</td><td>11</td><td>CCP.Avalonia/Views/Tabs/ChasterTabView.axaml:520; languages in Core</td><td>ported</td><td>The raffle card's note reads <code>chaster_raffle_net_note</code>. The limits panel note (:445) keeps <code>chaster_added_note</code>, as WPF :797 does.</td></tr>
+<tr><td>2</td><td><code>a0b6d5779e</code></td><td>fix(launcher, audio): settle unpainted launcher tiles; name web page sounds in the ring</td><td>7</td><td>CCP.Avalonia/Views/Windows/BubbleCountWindow.axaml.cs:422 (ported); CCP.Avalonia/Platform/ScrolllerWebView2Gate.cs and CCP.Avalonia/Views/Controls/WebHost.axaml.cs (owed)</td><td>needs-port</td><td>Bubble Count's primary video notes itself in the ring (ported). Launcher settle pass: n/a, this head has no entrance stagger (tiles are built at full opacity in <code>LauncherWindow.CreateTile</code>), so no tile can be left faded. Owed: web page sounds in the ring. WPF hooks <code>IsDocumentPlayingAudioChanged</code> through <code>ScrolllerWebGate.AttachHook</code>. To build: move <code>WebAudioWatch.Describe</code> to Core, have <code>ScrolllerWebView2Gate</code> (Windows) set a hook writing <code>RecentSounds.Shared.Note</code>, and on Linux note from WebKitGTK's <code>is-playing-audio</code> in <code>WebHost</code>.</td></tr>
+<tr><td>3</td><td><code>31ca6f5123</code></td><td>fix(lockcard): strict copy says the panic key still ends a card (#1547)</td><td>14</td><td>CCP.Core/Services/LockCard/LockCardStrictCopy.cs (git mv); CCP.Avalonia/Views/Windows/LockCardWindow.axaml.cs:692; CCP.Avalonia/Views/Features/LockCardFeatureControl.axaml.cs:234</td><td>ported</td><td>Card hint and strict confirm use the same keys as WPF. Strings and the tooltip rewording come in by merge. Test <code>Tests/CCP.Core.Tests/LockCardStrictCopyCoreTests.cs</code>.</td></tr>
+<tr><td>4</td><td><code>75aa68b92d</code></td><td>fix(glassroad): an unresponsive race page is waited for, not closed</td><td>3</td><td>CCP.Avalonia/Views/Games/GlassroadHostRules.cs:83; CCP.Avalonia/Views/Games/GameWindow.Glassroad.cs:133,214</td><td>ported</td><td>A <code>loading</code> frame marks the page busy for 120 s, and a busy page gets up to 90 s of silence before the close, both before and after ready. The unresponsive-report half is n/a: Avalonia.Controls.WebView raises no process-failed event. Tests <code>GameWindowTests.Glassroad_Watch_ABusyPageIsWaitedFor</code> and the extended watchdog steps in <code>Glassroad_InitFramesNetRelayExitAndWatchdog</code>.</td></tr>
+<tr><td>5</td><td><code>4a6dd8a855</code></td><td>fix(722): pink filter can sit under spirals and text; Dynamic wallpaper covers portrait monitors</td><td>22</td><td>CCP.Core/Services/Compositor/PinkTintLayer.cs, CompositorLayers.cs, AppSettings.cs (Core, done); CCP.Avalonia/Views/Overlays/PinkFilterOverlay.cs, TintOverlayWindow.cs, CCP.Avalonia/Views/Features/PinkFilterFeatureControl.axaml(.cs) (owed)</td><td>needs-port</td><td>Core: setting, <code>PinkTintUnder = 35</code> and the layer's slot and re-sort (merge resolution, test <code>CompositorLayerCoreTests.UnderEffects_MovesTheSlot_AndResortsOncePerChange</code>). This head draws the tint as one X11 window per monitor, not a compositor layer, so the order is the window stack. To build: with <code>PinkFilterUnderEffects</code> on, restack <code>TintOverlayWindow</code> under the spiral, subliminal, bubble and bouncing text overlays (and keep it there on every re-raise), then add the "Under spirals and text" switch (<code>setting_pink_filter_under_effects</code>, <code>tooltip_pink_filter_under_effects</code>) to the feature page. No switch until the restack works. Dynamic wallpaper half: n/a (owner 2026-11-01: no Wallpaper door on Linux).</td></tr>
+<tr><td>6</td><td><code>a716e81598</code></td><td>fix(glassroad): Boudoir plan corridor check through a grid, 8.6 s -&gt; 1.4 s, same plan</td><td>4</td><td>Assets/web/glassroad</td><td>ported-by-merge</td><td>Web tree identical to main. The new test landed under <code>Assets/web/glassroad/tests/</code> (file-location conflict). Course hashes unchanged.</td></tr>
+<tr><td>7</td><td><code>56944e5458</code></td><td>release: 7.2.2 &quot;Second Lap&quot;</td><td>16</td><td>Version.props, packaging/aur/PKGBUILD; CCP.Avalonia/Views/Windows/MainShellWindow.axaml:1231</td><td>ported</td><td>7.2.2. The csproj keeps importing Version.props. The update button uses <code>btn_v7_2_2_is_out</code> / <code>tooltip_v7_2_2_second_lap</code>. installer.iss and build-installer.bat match main byte for byte. UpdateService patch notes are WPF only; root notes and languages by merge.</td></tr>
+<tr><td>8</td><td><code>6852a7bb3f</code></td><td>fix(launcher): rebuild the render target after the grow and on re-show (ccp-bugs #1548)</td><td>5</td><td>CCP.Core/Services/Launcher/LauncherPlacement.cs (git mv); CCP.Avalonia/Views/Windows/LauncherWindow.axaml.cs:606</td><td>ported</td><td>The grow now goes through <code>LauncherPlacement.GrowWithin</code> in pixels, clamped on both axes to the one monitor's work area (it was clamped on Y only). Render target rebuild, paint probe and software fallback: n/a, because they patch WPF's D3D render target and DWM cloak, and this head draws through Skia with neither.</td></tr>
+<tr><td>9</td><td><code>2d10e01746</code></td><td>fix(wallpaper): Dynamic plans one collage per monitor at its own size</td><td>4</td><td>none on this head</td><td>n/a</td><td>n/a (owner 2026-11-01: no Wallpaper door on Linux)</td></tr>
+<tr><td>10</td><td><code>5ad49a0c3f</code></td><td>docs(7.2.2): notes cover the launcher and per-monitor wallpaper fixes</td><td>2</td><td>notes-section-7.2.2.txt</td><td>ported-by-merge</td><td>Shared root notes. They announce the wallpaper fix and the pink switch, which this head does not have yet (rows 5 and 9).</td></tr>
+</table>
+
+<h2>Watch list: on the way to main, not merged here yet</h2>
+<table>
+<tr><th>ref</th><th>sha</th><th>what</th><th>trap for the next sync</th></tr>
+<tr><td><code>feat/glassroad-a</code></td><td><code>2e02ae8ac0</code></td><td>2 commits past main: <code>7e02ed24e7</code> (the Boudoir grid, already on main as a716e8159) and <code>af3aedd7ee</code> (moving Scrolller clips)</td><td>web only, but it adds <code>Resources/web/glassroad</code> files (git mv to <code>Assets/web/glassroad</code>). Re-run the course-hash test. On Linux, B2 keeps clips off.</td></tr>
+</table>
+<p>Older open port debt still applies: the needs-port rows of syncs 8, 9 and 10, and the <code>prize-counter-linux</code> lane from sync 12.</p>
+</body>
+</html>

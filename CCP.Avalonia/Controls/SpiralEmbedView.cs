@@ -98,7 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             try
             {
                 var state = SpiralEmbedBridge.BuildState(block,
-                    CoreSettings.Current.MotionLevel != MotionLevel.Full, AmbientFxCanvas.Env.CurrentTier);
+                    AmbientFxCanvas.Env.Level != MotionLevel.Full, AmbientFxCanvas.Env.CurrentTier);
                 if (_bridge.Post(state.ToString(Formatting.None)) is { } message) _ = Send(message);
             }
             catch (Exception ex) { Log.Debug("[Spiral] PostState: {Error}", ex.Message); }

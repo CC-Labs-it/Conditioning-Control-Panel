@@ -39,6 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             InitializeComponent(); // generated: loads the XAML and fills the x:Name fields
 
             ChkEnable.IsCheckedChanged += ChkEnable_Changed;
+            ChkUnderEffects.IsCheckedChanged += ChkUnderEffects_Changed;
             SliderOpacity.ValueChanged += SliderOpacity_Changed;
             CmbMonitor.DropDownOpened += (_, _) => PopulateMonitors();
             CmbMonitor.SelectionChanged += CmbMonitor_Changed;
@@ -89,6 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 ChkEnable.IsChecked = s.PinkFilterEnabled;
                 SliderOpacity.Value = s.PinkFilterOpacity;
                 TxtOpacity.Text = $"{s.PinkFilterOpacity}%";
+                ChkUnderEffects.IsChecked = s.PinkFilterUnderEffects;
                 UpdateSwatch();
                 PopulateMonitors();
             }
@@ -102,6 +104,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (e.PropertyName == nameof(AppSettings.PinkFilterEnabled) ||
                 e.PropertyName == nameof(AppSettings.PinkFilterOpacity) ||
                 e.PropertyName == nameof(AppSettings.PinkFilterColor) ||
+                e.PropertyName == nameof(AppSettings.PinkFilterUnderEffects) ||
                 e.PropertyName == nameof(AppSettings.PinkFilterTargetMonitor))
             {
                 Dispatcher.UIThread.Post(LoadFromSettings);
@@ -117,6 +120,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             s.PinkFilterEnabled = want;
             CoreSettings.Save();
             PinkFilterOverlay.Refresh(this);
+        }
+
+        // #1546 (WPF PinkFilterFeatureControl.xaml.cs:90-98): tint under spirals, subliminals,
+        // bubbles and text. Re-sorts a live tint at once.
+        private void ChkUnderEffects_Changed(object? sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = CoreSettings.Current;
+            var want = ChkUnderEffects.IsChecked ?? false;
+            if (s.PinkFilterUnderEffects == want) return;   // an echo of the seed must not save
+            s.PinkFilterUnderEffects = want;
+            CoreSettings.Save();
+            PinkFilterOverlay.SyncOrder();
         }
 
         private void SliderOpacity_Changed(object? sender, RangeBaseValueChangedEventArgs e)

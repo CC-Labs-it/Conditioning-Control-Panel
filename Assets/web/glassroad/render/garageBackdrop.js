@@ -1,9 +1,12 @@
 // A layered toy-race showroom. One owned scenic kit, no media or frame-time allocations.
 import { Group, Mesh, InstancedMesh, Object3D, Color, SphereGeometry, PlaneGeometry, CylinderGeometry,
   TorusGeometry, OctahedronGeometry, BufferGeometry, Float32BufferAttribute, CatmullRomCurve3, Vector3,
-  MeshBasicNodeMaterial, MeshStandardNodeMaterial, BackSide, DoubleSide } from 'three/webgpu';
+  MeshBasicNodeMaterial, BackSide, DoubleSide } from 'three/webgpu';
 import { positionGeometry, positionWorld, normalWorld, normalView, positionView, vec3, float,
-  mix, sin, dot, normalize, smoothstep, floor, mod, max, fwidth, uniform } from 'three/tsl';
+  mix, sin, dot, normalize, smoothstep, floor, mod, max, fwidth, uniform, color, length } from 'three/tsl';
+
+// The CCP palette (Resources/Theme/Colors.xaml): deep navy panels, hot pink, lilac.
+export const CCP = Object.freeze({ deep: '#121220', panel: '#1c1c35', accent: '#2e2e4a', raised: '#3a3a5c', tint: '#251a38', pink: '#ff69b4', hot: '#ff1493', lilac: '#cbb9fc', mauve: '#e0b0ff', purple: '#8e44ad' });
 
 export const GARAGE_BACKDROP = Object.freeze({ clouds: 72, bubbles: 28, stars: 36, maxDraws: 15 });
 
@@ -54,21 +57,23 @@ export function createGarageBackdrop(scene) {
   // The accepted down-tilted camera sees a low skyline, so grade that whole visible band.
   const y = positionGeometry.y.div(3).add(.18);
   const wash = sin(positionGeometry.x.mul(.15).add(positionGeometry.z.mul(.11))).mul(.5).add(.5);
-  sky.colorNode = mix(vec3(.74, .38, .60), vec3(1, .91, .73), smoothstep(-.28, .65, y))
-    .add(vec3(.07, .015, .04).mul(wash));
+  sky.colorNode = mix(color(CCP.purple).mul(.55), color(CCP.deep), smoothstep(-.28, .65, y))
+    .add(vec3(.018, .004, .022).mul(wash));
   add(ownGeo(new SphereGeometry(28, 32, 16)), sky, 'garage-painted-sky', [0, 0, 3]).renderOrder = -20;
 
-  const clock = uniform(0), floorMat = ownMat(new MeshStandardNodeMaterial({ color: '#f2b4ce', roughness: .3, metalness: .12 }));
+  const clock = uniform(0), floorMat = ownMat(new MeshBasicNodeMaterial({ color: CCP.panel }));
   const cell = floor(positionWorld.xz.div(.85)), parity = mod(cell.x.add(cell.y), 2);
   const detail = float(1).sub(smoothstep(.55, 1.6, max(fwidth(positionWorld.x), fwidth(positionWorld.z))));
   const sheen = sin(positionWorld.z.mul(.5).add(positionWorld.x.mul(.3)).sub(clock.mul(.15))).mul(.016);
-  floorMat.colorNode = mix(vec3(.79, .43, .59), vec3(.96, .72, .80), mix(.5, parity, detail)).add(sheen);
+  floorMat.colorNode = mix(color(CCP.panel), color('#2a2a55'), mix(.5, parity, detail)).add(sheen);
   const floorMesh = add(ownGeo(new PlaneGeometry(70, 70)), floorMat, 'garage-gloss-checker-floor', [0, -.17, 6]);
   floorMesh.rotation.x = -Math.PI / 2;
-  const cream = ownMat(new MeshStandardNodeMaterial({ color: '#fff0df', roughness: .27, metalness: .12 }));
-  const pink = ownMat(new MeshBasicNodeMaterial({ color: '#ed559f', side: DoubleSide }));
-  const ink = ownMat(new MeshBasicNodeMaterial({ color: '#71335b', side: DoubleSide }));
-  const pearl = ownMat(new MeshBasicNodeMaterial({ color: '#fff4df', side: DoubleSide }));
+  // The showroom: a lit stage under the chosen kart that falls away to the panel colour at the rim.
+  const cream = ownMat(new MeshBasicNodeMaterial({ color: CCP.tint }));
+  cream.colorNode = mix(color('#43336f'), color(CCP.tint), smoothstep(.7, 3.4, length(positionWorld.xz)));
+  const pink = ownMat(new MeshBasicNodeMaterial({ color: CCP.pink, side: DoubleSide }));
+  const ink = ownMat(new MeshBasicNodeMaterial({ color: CCP.deep, side: DoubleSide }));
+  const pearl = ownMat(new MeshBasicNodeMaterial({ color: CCP.lilac, side: DoubleSide }));
   add(ownGeo(new CylinderGeometry(4.35, 4.42, .16, 80)), cream, 'garage-showroom-island', [0, -.105, 2.3]);
   const rim = add(ownGeo(new TorusGeometry(4.3, .045, 8, 96)), pink, 'garage-showroom-rim', [0, -.005, 2.3]);
   rim.rotation.x = Math.PI / 2;
@@ -85,16 +90,16 @@ export function createGarageBackdrop(scene) {
 
   const layout = garageBackdropLayout(), sphere = ownGeo(new SphereGeometry(1, 14, 10));
   const cloudMat = ownMat(new MeshBasicNodeMaterial({ color: '#ffffff' }));
-  cloudMat.colorNode = vec3(1).mul(dot(normalize(normalWorld), normalize(vec3(-.4, .85, -.2))).mul(.16).add(.84));
+  cloudMat.colorNode = vec3(1).mul(dot(normalize(normalWorld), normalize(vec3(-.4, .85, -.2))).mul(.32).add(.68));
   const cloudMesh = new InstancedMesh(sphere, cloudMat, layout.clouds.length); cloudMesh.name = 'garage-scalloped-cloud-banks';
-  const colours = ['#f6a6cc', '#fff0df', '#e57cb5'];
+  const colours = [CCP.tint, CCP.accent, '#4a2a68'];
   layout.clouds.forEach((row, i) => cloudMesh.setColorAt(i, new Color(colours[row.colour])));
   const bubbleMat = ownMat(new MeshBasicNodeMaterial({ transparent: true, depthWrite: false }));
   const rimLight = dot(normalize(normalView), normalize(positionView.negate())).abs().oneMinus();
-  bubbleMat.colorNode = mix(vec3(.94, .35, .67), vec3(1, .93, .76), rimLight.pow(2));
-  bubbleMat.opacityNode = rimLight.pow(2).mul(.58).add(.025);
+  bubbleMat.colorNode = mix(color(CCP.pink), color(CCP.mauve), rimLight.pow(2));
+  bubbleMat.opacityNode = rimLight.pow(3).mul(.3);
   const bubbleMesh = new InstancedMesh(sphere, bubbleMat, layout.bubbles.length); bubbleMesh.name = 'garage-near-far-soap-bubbles';
-  const starMat = ownMat(new MeshBasicNodeMaterial({ color: '#fff6d4' }));
+  const starMat = ownMat(new MeshBasicNodeMaterial({ color: CCP.mauve }));
   const starMesh = new InstancedMesh(ownGeo(new OctahedronGeometry(1)), starMat, layout.stars.length); starMesh.name = 'garage-floating-sparkles';
   for (const batch of [cloudMesh, bubbleMesh, starMesh]) { batch.frustumCulled = false; object.add(batch); batches.push(batch); }
   let time = 0, disposed = false;

@@ -19,6 +19,9 @@ public sealed class InstallerAssetsPathTests
     public void ReadsTheExactKeyAndValueTheInstallerWrites(string installer)
     {
         var iss = File.ReadAllText(Path.Combine(RepoRoot(), installer));
+        if (installer == "installer-avalonia.iss")
+            iss = Regex.Replace(iss, "#include \"(installer-avalonia-code-[123456]\\.iss)\"",
+                m => File.ReadAllText(Path.Combine(RepoRoot(), m.Groups[1].Value)));
         string Define(string name) => Regex.Match(iss, "#define " + name + " \"([^\"]+)\"").Groups[1].Value;
 
         var write = Regex.Match(iss, @"RegWriteStringValue\(HKEY_CURRENT_USER,\s*'([^']+)',\s*'([^']+)',\s*SelectedAssetsPath\)");

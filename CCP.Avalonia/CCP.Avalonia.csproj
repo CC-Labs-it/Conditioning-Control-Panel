@@ -35,31 +35,37 @@
 
   <ItemGroup>
     <Compile Include="..\ConditioningControlPanel\Services\ChromeFxNav.cs" Link="Services\ChromeFxNav.cs" />
-    <PackageReference Include="Avalonia" Version="12.1.2" />
-    <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.2" />
+    <!-- The audio player's order rules (list, loop, shuffle): no UI, no audio, one source for both heads. -->
+    <Compile Include="..\ConditioningControlPanel\Services\AudioPlayer\AudioPlaylistRules.cs" Link="Services\AudioPlayer\AudioPlaylistRules.cs" />
+    <PackageReference Include="Avalonia" Version="12.1.5" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.5" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.5" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.5" />
     <!-- Renders the real window offscreen so CI can prove the Linux head DRAWS, not just boots.
          A desktop screenshot cannot run on a headless runner; this can. -->
-    <PackageReference Include="Avalonia.Headless" Version="12.1.2" />
-    <PackageReference Include="Avalonia.Skia" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Headless" Version="12.1.5" />
+    <PackageReference Include="Avalonia.Skia" Version="12.1.5" />
     <!-- The Linux/Windows web view. Wraps WebKitGTK on Linux and WebView2 on Windows, so the
          WPF head's Microsoft.Web.WebView2 dependency does not follow us across. Only Views/Controls/WebHost
          touches it, and that control draws a fallback panel wherever no web view exists. -->
-    <PackageReference Include="Avalonia.Controls.WebView" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Controls.WebView" Version="12.1.1" />
     <!-- ColorView, the inline colour panel behind ColorPickerDialog. WPF opened
          System.Windows.Forms.ColorDialog; this is the cross-platform twin. PINNED to the same
-         12.1.2 as Avalonia itself - a control package built against a different Avalonia minor
+         12.1.5 as Avalonia itself - a control package built against a different Avalonia minor
          throws at attach, which no compiler catches. -->
-    <PackageReference Include="Avalonia.Controls.ColorPicker" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Controls.ColorPicker" Version="12.1.5" />
     <!-- Fluent UI System Icons (docs/avalonia-decisions.html, 2026-10-10). Only Controls/Icons/* may
          name FluentIcons.*: every view draws icons through fx:IconGlyph. Built against Avalonia 12.0;
-         IconGlyphRenderTests proves it draws on 12.1.2 headless. MIT: ThirdPartyNotices/FluentIcons.txt. -->
+         IconGlyphRenderTests proves it draws on 12.1.5 headless. MIT: ThirdPartyNotices/FluentIcons.txt. -->
     <PackageReference Include="FluentIcons.Avalonia" Version="2.1.343" />
     <Content Include="ThirdPartyNotices\FluentIcons.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!-- Audio (and later video) on both OSes; see docs/avalonia-decisions.html. Linux loads the
          system libvlc (libvlc.so.5); only Windows needs the bundled natives. -->
     <PackageReference Include="LibVLCSharp" Version="3.10.1" />
+    <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
+    <!-- Pure managed MP3 decoding for WPF-style sequential quiz loops. -->
+    <PackageReference Include="NLayer" Version="1.16.0" />
+    <Content Include="ThirdPartyNotices\NLayer.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!-- Vosk speech (Core SpeechEngine): the head references it itself so libvosk ships with it.
          Vosk.targets picks the native lib by the BUILD machine's OS; build Linux releases on Linux. -->
     <PackageReference Include="Vosk" Version="0.3.38" />
@@ -90,11 +96,21 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- WPF ChaosArt loads these from disk (ConditioningControlPanel.csproj:217).
+         Ship the overlay's promoted art at the same paths, including in single-file publishes. -->
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\recap.png" Link="assets\Chaos\recap.png"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\boons\*.png"
+             Link="assets\Chaos\boons\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\portraits\*.png"
+             Link="assets\Chaos\portraits\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <!-- The shared sounds at the same logical path as the WPF head (Resources\sounds), minus the
          content-pack audio in ..\ContentPackSounds.props, which both heads import. WPF's temporary
-         $(CirceNeutralInBoxOverride) (builtin-locked clips re-added in-box until the rebuilt
-         packs ship) is deliberately NOT mirrored: this head has no pack downloader and no bark path
-         that plays them. -->
+         $(CirceNeutralInBoxOverride) is mirrored further down: this head now runs the pack
+         downloader (App ReleaseContentService) and the bark path (BarkHead), so without it a Linux
+         Circe plays the stale mod-locked pack clips. -->
     <Content Include="..\Assets\sounds\**\*" Link="Resources\sounds\%(RecursiveDir)%(Filename)%(Extension)"
              Exclude="$(ContentPackSoundsExclude)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -152,6 +168,7 @@
                       ..\Assets\web\**\*demo.html;..\Assets\web\backroom\stations\breakout\**\*.test.js;
                       ..\Assets\web\backroom\stations\breakout\dev.html;..\Assets\web\backroom\stations\breakout\showcase*;
                       ..\Assets\web\piecebypiece\dev\**\*;..\Assets\web\piecebypiece\package.json;
+                      ..\Assets\web\prizecounter\mock\**\*;..\Assets\web\prizecounter\dev.html;
                       ..\Assets\web\intake\assets\vo\**\*.mp3;..\Assets\web\intake\assets\sfx\**\*.mp3;
                       ..\Assets\web\intake\assets\music\**\*.mp3;..\Assets\web\dtrh\assets\**\*.mp3">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -205,6 +222,7 @@
       Folders where the views use everything are globbed, so a new file is picked up without a
       csproj edit. Folders where they use a fraction are explicit, so growth stays a decision.
     -->
+    <!-- desk-lines.json ships through the Assets/emi glob below (WPF ConditioningControlPanel.csproj:665). -->
     <AvaloniaResource Include="..\Assets\quests\**\*"
                       Link="Resources\quests\%(RecursiveDir)%(Filename)%(Extension)" />
     <AvaloniaResource Include="..\Assets\nav\**\*"
@@ -224,6 +242,11 @@
                       Link="Resources\billboard\%(Filename)%(Extension)" />
     <AvaloniaResource Include="..\Assets\features\*.png"
                       Link="Resources\features\%(Filename)%(Extension)" />
+    <!-- WPF csproj:471 session-complete cards (recap card, Presets chip, Mod Creator Cards slots; ModArt fallback). -->
+    <AvaloniaResource Include="..\Assets\Cards\*.png" Link="Resources\Cards\%(Filename)%(Extension)" />
+    <!-- WPF csproj:198-205 shipped AI personality presets: both pickers read BaseDirectory/assets/prompts. -->
+    <Content Include="..\ConditioningControlPanel\assets\prompts\*.json" Link="assets\prompts\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <AvaloniaResource Include="..\Assets\BlinkTrainer\Demo\*.png"
                       Link="Resources\BlinkTrainer\Demo\%(Filename)%(Extension)" />
     <AvaloniaResource Include="..\Assets\app.ico" Link="Resources\app.ico" />
@@ -235,11 +258,31 @@
          monochrome Noto Emoji (OFL) for content emoji when the system has no emoji font; Noto Sans Mono
          (AppFonts.Mono) is the app-wide monospace. Licenses ship
          next to the binary. -->
-    <AvaloniaResource Include="..\ConditioningControlPanel\Fonts\Fredoka.ttf" Link="Resources\fonts\Fredoka.ttf" />
+    <!-- Fredoka as static instances (Light..Bold) cut from WPF's variable Fredoka.ttf (OFL, no Reserved Font Name):
+         Avalonia draws a variable font at its default (Light, 300) whatever the FontWeight; WPF/DirectWrite picks the
+         named instance. Regenerate with fontTools instancer when WPF's file changes (2026-11-06). -->
+    <AvaloniaResource Include="..\Assets\fonts\fredoka\*.ttf" Link="Resources\fonts\fredoka\%(Filename)%(Extension)" />
+    <!-- WPF unlock-card art convention, without staging artwork. -->
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\upgrades\*.png"
+             Link="assets\Chaos\upgrades\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <AvaloniaResource Include="..\ConditioningControlPanel\assets\Chaos\guide\intro.png" Link="Resources\chaos\guide\intro.png" />
-    <AvaloniaResource Include="..\Assets\fonts\NotoEmoji-wght.ttf" Link="Resources\fonts\NotoEmoji-wght.ttf" />
-    <Content Include="..\ConditioningControlPanel\Fonts\OFL-Fredoka.txt;..\Assets\fonts\OFL-NotoEmoji.txt;..\Assets\emi\fonts\OFL-NotoSansMono.txt" Link="ThirdPartyNotices\%(Filename)%(Extension)"
+    <!-- WPF ChaosAnnouncerOverlay.cs:177-195: shared announce word-art. -->
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\announce\*.png" Link="assets\Chaos\announce\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <AvaloniaResource Include="..\Assets\fonts\NotoEmoji-wght.ttf" Link="Resources\fonts\NotoEmoji-wght.ttf" />
+    <!-- Off-Windows look-alikes for WPF's Windows faces (AppFonts.Options, 2026-11-06): Selawik (Microsoft's
+         OFL Segoe UI fallback, metric-compatible), Anton for Impact, Comic Neue for Comic Sans MS. Own folders,
+         so each avares family source only scans its own faces. -->
+    <AvaloniaResource Include="..\Assets\fonts\ccpsans\*.ttf" Link="Resources\fonts\ccpsans\%(Filename)%(Extension)" />
+    <AvaloniaResource Include="..\Assets\fonts\display\*.ttf" Link="Resources\fonts\display\%(Filename)%(Extension)" />
+    <Content Include="..\ConditioningControlPanel\Fonts\OFL-Fredoka.txt;..\Assets\fonts\OFL-NotoEmoji.txt;..\Assets\emi\fonts\OFL-NotoSansMono.txt;..\Assets\fonts\OFL-CCPSans.txt;..\Assets\fonts\OFL-Anton.txt;..\Assets\fonts\OFL-ComicNeue.txt" Link="ThirdPartyNotices\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <AvaloniaResource Include="..\Assets\avatar0_emotes\idle.gif" Link="Resources\avatar0_emotes\idle.gif" />
+    <AvaloniaResource Include="..\Assets\circe_emotes\idle.gif" Link="Resources\circe_emotes\idle.gif" />
+    <AvaloniaResource Include="..\Assets\circe_emotes_p2\idle.gif" Link="Resources\circe_emotes_p2\idle.gif" />
+    <AvaloniaResource Include="..\Assets\circe_emotes_p3\idle.gif" Link="Resources\circe_emotes_p3\idle.gif" />
+    <AvaloniaResource Include="..\Assets\circe_emotes_p4\idle.gif" Link="Resources\circe_emotes_p4\idle.gif" />
+    <AvaloniaResource Include="..\Assets\rain_emotes\*.webp;..\Assets\rain_emotes\*.json;..\Assets\rain_emotes\ATTRIBUTION.txt" Link="Resources\rain_emotes\%(Filename)%(Extension)" />
     <AvaloniaResource Include="..\Assets\avatar_emotes_registry.json" Link="Resources\avatar_emotes_registry.json" />
     <AvaloniaResource Include="..\Assets\*.png"
                       Link="Resources\%(Filename)%(Extension)" />
@@ -280,12 +323,34 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Deeper demo enhancements: Core EnhancementLibrary seeds Resources/DeeperDemos/*.ccpenh.json into the
+         user's library on first launch; as WPF ConditioningControlPanel.csproj:722. -->
+    <Content Include="..\Assets\DeeperDemos\**\*" Link="Resources\DeeperDemos\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <!-- EMI's desk lines: Core EmiLineEngine.FindLinesFile reads Resources/emi/desk-lines.json beside the
+         binary (a dev run finds Assets/emi by walking up, a published install cannot); as WPF csproj:690. -->
+    <Content Include="..\Assets\emi\**\*.json" Link="Resources\emi\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <!-- profile.avatar.rain-portrait.png (shipped by the cosmetics glob) is Rain-derived, CC BY 4.0: its
+         attribution ships beside it; as WPF csproj:239. -->
+    <Content Include="..\Assets\cosmetics\shop\ATTRIBUTION.txt" Link="Resources\cosmetics\shop\ATTRIBUTION.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
     <!-- Webcam/wake-word/Vosk models, as WPF ConditioningControlPanel.csproj:680. -->
     <Content Include="..\Assets\Models\**\*" Link="Resources\Models\%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </Content>
+    <Content Include="..\Assets\emi\desk-items\**\*.png" Link="Resources\emi\desk-items\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!-- Wardrobe registry + art, read off disk by Core WardrobeCatalog; as WPF ConditioningControlPanel.csproj:236. -->
     <Content Include="..\Assets\cosmetics\**\*.png;..\Assets\cosmetics\*.json" Link="Resources\cosmetics\%(RecursiveDir)%(Filename)%(Extension)"
              Exclude="..\Assets\cosmetics\**\*_28.png;..\Assets\cosmetics\**\*_104.png;..\Assets\cosmetics\**\*_guide.png">
@@ -301,9 +366,148 @@
     </Content>
   </ItemGroup>
 
+  <!-- TEMPORARY, mirrors WPF ConditioningControlPanel.csproj $(CirceNeutralInBoxOverride): the gender-neutral
+       Circe clips re-added in-box until the rebuilt mod-locked pack ships (ReleaseContentService checks the
+       install folder before the content folder). The WPF csproj is the SOURCE OF TRUTH
+       (build-content-packs.ps1 reads it there): copy any change to that list here, and delete this block
+       together with the WPF one (see its TO REMOVE note). -->
+  <PropertyGroup>
+    <CirceNeutralInBoxOverride>
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\achievement_1.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\activity_change_3.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\activity_change_6.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\attention_lost_3.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\attention_lost_deep_1.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\blink_t1_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\blink_t1_5.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\blink_t2_5.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\blink_t3_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\blink_t4_3.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\blink_t5_1.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\braindrain_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\bubble_game_done_1.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\bubble_game_fail_1.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\bubble_miss_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\bubble_pop_1.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\bubble_pop_13.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\bubble_pop_7.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\cam_denied_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\chaos_pick_gg_rabbits_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\chaos_pick_gg_rabbits_4.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\chaos_wave_cleared_1.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\chaos_wave_cleared_4.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\egg_discord_1.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\egg_marathon_1.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\egg_maxlevel_1.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\egg_mute_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\egg_patreon_up_1.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\egg_streaming_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\egg_tutorial_1.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\face_found_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\flash_24.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\flash_3.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\gaze_reward_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\hold_success_1.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\hold_success_4.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\idle_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\idle_resume_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\kw_offlimits_1.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\kw_offlimits_3.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\kw_reinforce_1.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\kw_reinforce_4.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\level_up_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\lockcard_clean_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\lockcard_sloppy_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\lockdown_off_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\lockdown_on_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\lockdown_tick_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\lucky_proc_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\mantra_circe_36_resp.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\mantra_done_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\memory_recall_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\mindwipe_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\mobile_chat_reply_affection_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\mobile_chat_reply_affection_6.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\mobile_chat_reply_generic_12.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\mobile_chat_reply_generic_3.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\mobile_chat_reply_generic_7.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\mobile_chat_reply_question_4.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\mobile_greeting_3.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\mobile_idle_phone_4.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\mobile_idle_phone_8.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\mobile_session_nudge_3.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\mobile_voicenote_intro_3.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\mod_change_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\mouth_open_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\ms_session_60_4.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\phase_deepen_1.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\phase_deepen_4.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\phase_deepen_8.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\pinkrush_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\quest_done_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\quest_progress_1.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\quiz_done_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\remote_cmd_1.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\remote_cmd_3.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\remote_connect_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\roadmap_1.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\session_complete_3.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\session_start_absence_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\session_start_absence_4.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\session_start_latenight_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\session_start_latenight_3.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\session_start_long_absence_3.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\session_start_recent_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\session_start_recent_6.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\session_stopped_early_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\skill_unlock_1.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\still_10_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\still_5_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\streak_break_3.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\streak_up_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\subliminal_20.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\subliminal_3.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\subliminal_9.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\tongue_out_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\tongue_out_3.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\video_check_fail_3.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\video_check_fail_4.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\video_check_pass_1.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\video_end_1.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\video_end_4.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\video_pre_2.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\video_pre_3.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\video_pre_6.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\video_pre_7.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\video_start_3.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\video_start_6.mp3;
+      ..\Assets\sounds\companion_audio\mods\builtin-locked\xp_gain_2.mp3;
+      ..\Assets\web\intake\assets\vo\q_crc_h3_betaplace.mp3;
+      ..\Assets\web\intake\assets\vo\q_crc_h3_ci_betacomfort.mp3;
+      ..\Assets\web\intake\assets\vo\q_crc_h3_mantra_beta.mp3;
+      ..\Assets\web\intake\assets\vo\q_crc_h3_yn_betaadmit.mp3;
+      ..\Assets\web\intake\assets\vo\sure_circe_16.mp3
+    </CirceNeutralInBoxOverride>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Include="$(CirceNeutralInBoxOverride)" Link="Resources\$([MSBuild]::MakeRelative('$(MSBuildProjectDirectory)\..\Assets','%(FullPath)'))">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\CCP.Core\CCP.Core.csproj" />
   </ItemGroup>
+
+  <!-- Vosk.targets picks libvosk by the BUILD machine's OS, not the RID, so a linux-x64 publish made on Windows
+       shipped the four win-x64 DLLs and no libvosk.so (speech off, build-tarball.sh stops). Whatever the build
+       machine, a linux publish gets the package's linux-x64 lib and none of the Windows ones. -->
+  <Target Name="VoskLinuxNativeAfterPublish" AfterTargets="Publish" Condition="$(RuntimeIdentifier.StartsWith('linux'))">
+    <Copy SourceFiles="$(NuGetPackageRoot)vosk\0.3.38\build\lib\linux-x64\libvosk.so" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+    <Delete Files="$(PublishDir)libvosk.dll;$(PublishDir)libgcc_s_seh-1.dll;$(PublishDir)libstdc++-6.dll;$(PublishDir)libwinpthread-1.dll" />
+  </Target>
 
   <!-- Windows single-file publish bundles libvlc.dll and its plugins, where LibVLC cannot load them ("Dll was not
        found"). Same fix as the WPF head (ConditioningControlPanel.csproj CopyLibVLCAfterPublish): the x64 natives go
@@ -314,4 +518,11 @@
     </ItemGroup>
     <Copy SourceFiles="@(LibVLCFiles)" DestinationFolder="$(PublishDir)libvlc\%(RecursiveDir)" SkipUnchangedFiles="true" />
   </Target>
+  <ItemGroup>
+    <Content Include="../Assets/DeeperDemos/**/*" Link="Resources/DeeperDemos/%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+  </ItemGroup>
 </Project>

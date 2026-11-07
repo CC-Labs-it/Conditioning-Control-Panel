@@ -111,6 +111,10 @@ public partial class LauncherWindow : Window
             if (MotionFx.AllowTransitions)
                 foreach (var t in _tiles) t.Opacity = 0;
             MotionFx.StaggerIn(_tiles);
+            // #1548: a launcher shown again after a game came back with nothing presented at all.
+            // Rebuild the render target on every show but the first, under the fade-in.
+            if (!_firstShow) KickRenderTarget("reshow");
+            ScheduleTileSettle("show");
 
             LauncherSfx.Open();
             FxOnShown(_firstShow);
@@ -236,6 +240,15 @@ public partial class LauncherWindow : Window
 
     private void AccountChip_Click(object sender, RoutedEventArgs e) => OpenPanelTab("appsettings");
 
+    /// <summary>The wallet chip opens the Prize Counter over the launcher: the same door as the
+    /// panel's SparkleWallet (owner, 2026-10-29). The counter is its own window; the launcher stays.</summary>
+    private void WalletChip_Click(object sender, RoutedEventArgs e)
+    {
+        LauncherSfx.Click();
+        try { Services.PrizeCounter.PrizeCounterHostService.Launch(from: "launcher"); }
+        catch (Exception ex) { Log.Warning(ex, "[Launcher] Prize Counter failed to open"); }
+    }
+
     // ------------------------------------------------------------------ mod pill
 
     /// <summary>The pill reads the active mod's name. ModChanged is the authoritative signal
@@ -290,6 +303,7 @@ public partial class LauncherWindow : Window
             if (MotionFx.AllowTransitions)
                 foreach (var t in _tiles) t.Opacity = 0;
             MotionFx.StaggerIn(_tiles);
+            ScheduleTileSettle("rebuild");
         }
         catch (Exception ex) { Log.Warning(ex, "[Launcher] tile refresh on {Trigger} failed", trigger); }
     }
@@ -379,6 +393,7 @@ public partial class LauncherWindow : Window
         if (MotionFx.AllowTransitions)
             foreach (var t in _tiles) t.Opacity = 0;
         MotionFx.StaggerIn(_tiles);
+        ScheduleTileSettle("rebuild");
     }
 
     // ------------------------------------------------------------------ the panel card
@@ -515,6 +530,7 @@ public partial class LauncherWindow : Window
 
     private void BuildTiles()
     {
+        _tilesDimmed = false;
         GamesGrid.Children.Clear();
         _tiles.Clear();
         _tileById.Clear();
@@ -592,10 +608,22 @@ public partial class LauncherWindow : Window
         double old = ActualHeight > 0 ? ActualHeight : Height;
         double grown = LauncherGridLayout.FitWindowHeight(old, available, gridHeight, waHeight);
         if (grown <= old + 0.5) return;
-        double top = Top - (grown - old) / 2;
-        Height = grown;
-        Top = Math.Max(waTop, Math.Min(top, waTop + waHeight - grown));
-        Log.Debug("[Launcher] grew {Old:0} -> {New:0} px to seat every tile row", old, grown);
+        // #1548: one SetWindowPos in pixels inside this monitor's work area, then a fresh render
+        // target. The DIP route (Height, then Top) stays only as the fallback.
+        if (PlaceGrown(grown, out var placed))
+        {
+            Log.Debug("[Launcher] grew {Old:0} -> {New:0} px to seat every tile row (placed {X},{Y} {W}x{H}px on {Monitor})",
+                old, grown, placed.Left, placed.Top, placed.Width, placed.Height, System.Windows.Forms.Screen.FromHandle(hwnd).DeviceName);
+        }
+        else
+        {
+            double top = Top - (grown - old) / 2;
+            Height = grown;
+            Top = Math.Max(waTop, Math.Min(top, waTop + waHeight - grown));
+            Log.Debug("[Launcher] grew {Old:0} -> {New:0} px to seat every tile row (DIP fallback)", old, grown);
+        }
+        KickRenderTarget("grow");
+        ScheduleTileSettle("grow");
     }
 
     // ------------------------------------------------------------------ the stats strip

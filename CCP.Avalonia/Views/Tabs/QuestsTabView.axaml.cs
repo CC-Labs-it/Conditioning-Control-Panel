@@ -118,6 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void OnDailyCardRerollRequested(object? sender, EventArgs e)
         {
+            try { CoreBark.UiAction?.Invoke("reroll_daily"); } catch { } // WPF MainWindow.QuestsTab.cs:43
             var quests = App.Quests;
             if (quests == null || sender is not DailyQuestCard card) return;
             if (quests.RerollDailyQuest(card.Slot)) { RefreshQuestViews(); return; }
@@ -128,6 +129,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void RerollWeekly()
         {
+            try { CoreBark.UiAction?.Invoke("reroll_weekly"); } catch { } // WPF MainWindow.QuestsTab.cs:60
             var quests = App.Quests;
             if (quests == null) return;
             if (quests.RerollWeeklyQuest()) RefreshQuestViews();
@@ -142,6 +144,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void ShowRerollLimit(string key)
         {
+            if (!CoreEntitlement.HasPremium)
+            {
+                App.Notifications.Show(ConditioningControlPanel.Localization.Loc.Get(key),
+                    Helpers.NotificationType.Info, TimeSpan.FromSeconds(8),
+                    ConditioningControlPanel.Localization.Loc.Get("quest_reroll_see_basic"),
+                    () => (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.OpenPricedCard("quest_reroll", 1));
+                return;
+            }
             if (TopLevel.GetTopLevel(this) is Window owner)
                 _ = Dialogs.MessageDialog.ShowAsync(owner, ConditioningControlPanel.Localization.Loc.Get("quest_reroll_limit_title"), ConditioningControlPanel.Localization.Loc.Get(key));
         }

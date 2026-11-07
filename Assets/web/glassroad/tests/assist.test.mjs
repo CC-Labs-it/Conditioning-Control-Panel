@@ -234,7 +234,10 @@ test('how-to card: three picture panels named for the device in use, plain copy,
       assert.ok(p.art.startsWith('<svg') && p.art.length > 400, 'a drawing in every panel');
       assert.ok(p.cap.split(' ').length <= 7, 'near-zero text: ' + p.cap);
       assert.ok(!/[!–—]/.test(p.cap), 'no exclamation marks or dashes: ' + p.cap);
-      assert.ok(!/<image|<img|url\(/.test(p.art), 'inline drawings, no image files');
+      assert.ok(!/<image|<img|url\(/.test(p.art), 'the hands are inline drawings');
+      assert.ok(/^art\/guide\/[a-z-]+\.webp$/.test(p.img) && p.alt, 'a real capture with a description: ' + p.img);
+      assert.ok(p.title.split(' ').length <= 3 && p.gist.split(' ').length <= 6, 'near-zero text: ' + p.title + ' / ' + p.gist);
+      assert.ok(!/[!\u2013\u2014]/.test(p.title + p.gist + p.alt), 'no exclamation marks or dashes: ' + p.gist);
     }
   }
   assert.equal(kb[0].cap, 'Hold W / Up on GO');
@@ -248,6 +251,23 @@ test('how-to card: three picture panels named for the device in use, plain copy,
   assert.ok(/data-act="howto-off"[^>]*aria-pressed="true"/.test(html) || /aria-pressed="true"[^>]*>Don/.test(html), 'the switch shows its state');
   assert.ok(howtoHtml({ last: 'touch' }).includes('>Start<'), 'touch: a Start button (the throttle is automatic)');
   assert.ok(!/[–—]/.test(html) && !/[!][^=]/.test(html.replace(/<!--[^]*?-->/g, '')), 'plain copy');
+});
+
+test('how-to card: the three beats carry the gist, each capture exists and stays small', async () => {
+  const { statSync, readFileSync } = await import('node:fs');
+  const kb = howtoPanels({ last: 'keyboard' });
+  assert.deepEqual(kb.map((p) => p.title), ['Race the song', 'Drift, boost', 'Pop and throw']);
+  for (const p of kb) {
+    const url = new URL('../' + p.img, import.meta.url);
+    assert.ok(statSync(url).size <= 200 * 1024, p.img + ' is 200 KB or less');
+    assert.equal(readFileSync(url).subarray(8, 12).toString('latin1'), 'WEBP', p.img);
+  }
+  const html = howtoHtml({ last: 'keyboard' });
+  assert.equal((html.match(/<img class="hw-shot"/g) || []).length, 3, 'one print per beat');
+  assert.ok(html.includes('data-act="howto-go"') && html.includes('data-act="howto-off"'), 'the card keeps its two hooks');
+  const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+  assert.ok(/#card\.c-still \.hw-key \.hw-top/.test(css), 'Motion Off stills the keys');
+  assert.ok(readFileSync(new URL('../hud/cards.js', import.meta.url), 'utf8').includes("toggle('c-still', opts.motion === 'off')"), 'cards.js sets the switch');
 });
 
 test('how-to card: Throttle dismisses it, the Race door opens it as the pre-race card, and boot passes the throttle edge', async () => {

@@ -109,7 +109,7 @@ test('art5: bumps pick a side, hard ones spin; an item hit recoils; cooldowns an
   directorEvent(e, 'itemHit', { kind: 'shatter' }, T, N);
   assert.equal(directorStep(e, st, DT, T, N).clip, 'hit_recoil');
   const ch = step(e, st, 1.2);
-  assert.equal(ch.clip, null, 'a finished one-shot fades back to rest');
+  assert.equal(ch.clip, 'idle_bob', 'a finished one-shot returns to a living driving idle');
 });
 
 test('art5: held items, throws, countdown, finish and top speed come from events and state', () => {
@@ -117,7 +117,7 @@ test('art5: held items, throws, countdown, finish and top speed come from events
   directorEvent(d, 'countdown', { n: 1 }, T, N);
   assert.equal(directorStep(d, st, DT, T, N).clip, 'countdown_ready');
   directorEvent(d, 'go', {}, T, N);
-  assert.equal(directorStep(d, st, DT, T, N).clip, null);
+  assert.equal(directorStep(d, st, DT, T, N).clip, 'idle_bob');
   directorEvent(d, 'armed', { id: 'spiral' }, T, N);
   assert.equal(directorStep(d, st, DT, T, N).clip, 'item_ready');
   directorEvent(d, 'fire', { mode: 'lob' }, T, N);
@@ -127,11 +127,11 @@ test('art5: held items, throws, countdown, finish and top speed come from events
   st[S.speedPct] = 0.93;
   assert.equal(rigStateWant(d, st, N), 'max_speed', 'hysteresis: still on above the exit');
   st[S.speedPct] = 0.85;
-  assert.equal(rigStateWant(d, st, N), null);
+  assert.equal(rigStateWant(d, st, N), 'idle_bob');
   directorEvent(d, 'finish', { place: 8, count: 8 }, T, N);
   assert.equal(directorStep(d, st, DT, T, N).clip, 'sulk');
   directorEvent(d, 'countdown', { n: 3 }, T, N);
-  assert.equal(directorStep(d, st, DT, T, N).clip, null, 'a new race clears the sulk');
+  assert.equal(directorStep(d, st, DT, T, N).clip, 'idle_bob', 'a new race clears the sulk');
   directorEvent(d, 'finish', { place: 2, count: 8 }, T, N);
   assert.equal(directorStep(d, st, DT, T, N).clip, 'cheer');
   assert.deepEqual(reactionsFor('item-roll', { racer: 3, id: 'echo' }), [[3, 'armed', { id: 'echo' }]]);

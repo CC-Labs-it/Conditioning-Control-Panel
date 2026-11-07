@@ -6,14 +6,20 @@ import { expandWardrobe as expandTailoring } from './wardrobe-tailoring.js';
 import { createWardrobeColors } from './wardrobe-colors.js';
 import { expandWardrobe as expandJewelry } from './wardrobe-jewelry.js';
 import { installReviewStudio } from './wardrobe-review.js';
-import { hosted, BIG_ASSETS, reviewAllowed, qaAllowed, hostItems, hostColors, postLook, postHost, isLocked, toHostLook } from './host-bridge.js';
+import { hosted, BIG_ASSETS, reviewAllowed, qaAllowed, hostItems, hostColors, postLook, postHost, isLocked, toHostLook, bootCompanion, bootCalm, bootStrings, bootSizes } from './host-bridge.js';
+import { createLoadProgress, createRevealGate, paintCover, prefetchModule, reveal, LOAD_STR } from './wardrobe-loading.js';
 import { installBaker } from './bake.js';
-import { createShop, listenToHost, paintShop, STR as SHOP } from './wardrobe-shop.js';
-const shop=createShop({isLocked,post:postHost,nameOf:key=>{const at=key.indexOf(':');const item=findItem(key.slice(0,at),key.slice(at+1));return item?.name||item?.label||'';}});
+import { createShop, listenToHost, paintShop, paintCompanion, STR as SHOP } from './wardrobe-shop.js';
+const shop=createShop({isLocked,post:postHost,companion:bootCompanion,nameOf:key=>{const at=key.indexOf(':');const item=findItem(key.slice(0,at),key.slice(at+1));return item?.name||item?.label||'';}});
 const COLOR_CHANNELS=['fabric','trim','hair','skin','eyes','lips','nails','shoes','accessories'];
 
 const $ = id => document.getElementById(id);
 const canvas = $('preview');
+// Boot cover (wardrobe-loading.js): opaque until the first dressed frame, a real byte count, then OUT/IN.
+paintCompanion(document,shop.companion);
+const loadText={...LOAD_STR,...bootStrings},loadProgress=createLoadProgress({sizes:bootSizes}),revealGate=createRevealGate();
+let coverQueued=false;const paintLoad=()=>{if(coverQueued)return;coverQueued=true;requestAnimationFrame(()=>{coverQueued=false;if(!revealGate.open&&!$('loading').classList.contains('error'))paintCover(document,loadProgress,loadText,shop.companion);});};paintLoad();
+const bootCalmNow=()=>bootCalm||shop.calm||matchMedia('(prefers-reduced-motion: reduce)').matches;
 const stage = canvas.parentElement;
 const STORE = 'rain-wardrobe-v1';
 const COLOR_STORE='rain-wardrobe-colors-v1';
@@ -31,8 +37,8 @@ const state = { ready:false, slot:'dress', look:{}, animation:'idle', paused:mot
 const singleSlots=['dress','hair','skin','shoes','legwear','arms','ankles'];
 const meshSlots=['dress','hair','accessories','shoes','legwear','arms','ankles'];
 let expansionUpdates=[],coveredNodes=new Set(),transitionStart=0,transitionTimer,transitionOrbit=0;
-const garmentUniforms={mode:{value:1},color:{value:new THREE.Color(.075,.012,.038)},opacity:{value:.78},density:{value:5},lower:{value:.129},upper:{value:.713},hideBelow:{value:-1},bodyMaskRange:{value:new THREE.Vector2(0,-1)},bodyMaskHem:{value:new THREE.Vector4(0,0,0,-1)}};
-let demoTimers=[],demoPrevious=null;
+const garmentUniforms={mode:{value:1},color:{value:new THREE.Color(.075,.012,.038)},opacity:{value:.78},density:{value:5},lower:{value:.129},upper:{value:.713},hideBelow:{value:-1},bodyMaskRange:{value:new THREE.Vector2(0,-1)},bodyMaskHem:{value:new THREE.Vector4(0,0,0,-1)},strand:{value:.092}};
+let demoTimers=[],demoPrevious=null,onFirstFrame=null,hostInitWaiter=null;
 const titles = {dress:['The dress.','Pick a silhouette.'],hair:['A new mood.','Keep it loose. Change it up.'],skin:['Your palette.','A little warmth. A different glow.'],accessories:['Little details.','Wear one. Wear a few.'],shoes:['From the ground up.','A different finishing touch.'],legwear:['The next layer.','Sheer, patterned or tailored.'],looks:['The whole look.','One touch. Everything together.']};
 titles.arms=['On your arms.','Bracelets, cuffs and bands.'];titles.ankles=['A little glint.','Anklets, ribbons and cuffs.'];
 const knownAnimations = [{id:'idle',name:'Idle'},{id:'greeting',name:'Hello'},{id:'listening',name:'Listen'},{id:'giggle',name:'Giggle'},{id:'smirk',name:'Smirk'},{id:'jump',name:'Cheer'}];
@@ -62,10 +68,10 @@ scene.add(new THREE.HemisphereLight(0xfff6ec,0xc4b9b5,2.1));
 const key=new THREE.DirectionalLight(0xfff3e5,3.0);key.position.set(-3,5,4);scene.add(key);
 const fill=new THREE.DirectionalLight(0xdce7ff,.8);fill.position.set(3,2,3);scene.add(fill);
 const rim=new THREE.DirectionalLight(0xffe5dc,1.6);rim.position.set(1,3,-3);scene.add(rim);
-const ground=new THREE.Mesh(new THREE.CircleGeometry(.7,64),new THREE.MeshBasicMaterial({color:0xb8aaa0,transparent:true,opacity:.13,depthWrite:false}));
+const ground=new THREE.Mesh(new THREE.CircleGeometry(.7,64),new THREE.MeshBasicMaterial({color:0xff69b4,transparent:true,opacity:.07,depthWrite:false}));
 ground.rotation.x=-Math.PI/2;ground.position.y=.002;scene.add(ground);
 
-function fail(error){const message=error?.message || String(error);errors.push(message);postHost({type:'boot-error',msg:message});state.ready=false;console.error(error);$('loading').hidden=false;$('loading').classList.add('error');$('loadMessage').textContent=`The live model could not load. ${message}`;$('liveLabel').textContent='PREVIEW UNAVAILABLE';}
+function fail(error){revealGate.fail();document.body.classList.remove('booting','entering');const message=error?.message || String(error);errors.push(message);postHost({type:'boot-error',msg:message});state.ready=false;console.error(error);$('loading').hidden=false;$('loading').classList.add('error');$('loadMessage').textContent=`The live model could not load. ${message}`;$('liveLabel').textContent='PREVIEW UNAVAILABLE';}
 function resize(){width=stage.clientWidth;height=stage.clientHeight;renderer.setSize(width,height,false);camera.aspect=width/Math.max(1,height-controlSpace);camera.updateProjectionMatrix();}
 new ResizeObserver(resize).observe(stage);resize();
 
@@ -79,14 +85,15 @@ function render(now){
   const frameStart=performance.now();
   updateTransition(now);updateCamera(dt);if(mixer&&!state.paused){mixer.update(dt);elapsed+=dt;}
   for(const update of expansionUpdates)update(state.paused?0:dt,state.look);
-  drawPreview();
+  if(!state.ready)return; // never draw a half-built Rain; the cover is opaque anyway
+  drawPreview();if(!revealGate.open&&revealGate.mark('drawn'))onFirstFrame?.();
   frameCount++;frameCpuTotal+=performance.now()-frameStart;
   if(now-perfWindow>=1000){perf.fps=Math.round(frameCount*1000/(now-perfWindow));perf.frameCpuMs=Number((frameCpuTotal/frameCount).toFixed(2));perf.frameIntervalMs=Number(interval.toFixed(2));frameCount=0;frameCpuTotal=0;perfWindow=now;}
   if(qaPanel&&now-qaLast>=500){qaPanel.textContent=JSON.stringify(getDebugState(),null,2);qaLast=now;}
 }
 function drawPreview(){
   renderer.setScissorTest(false);renderer.setViewport(0,0,width,height);renderer.setClearColor(0xede9e2,0);renderer.clear();renderer.setViewport(0,controlSpace,width,height-controlSpace);renderer.render(scene,camera);
-  if(state.tube&&avatar){const tw=118,th=190,x=25,y=132;renderer.setScissorTest(true);renderer.setScissor(x,y,tw,th);renderer.setViewport(x,y,tw,th);renderer.setClearColor(0xf8f5ef,1);renderer.clear();tubeCamera.aspect=tw/th;tubeCamera.position.set(target.x,1.04,3.65);tubeCamera.lookAt(0,1.04,0);tubeCamera.updateProjectionMatrix();renderer.render(scene,tubeCamera);renderer.setScissorTest(false);}
+  if(state.tube&&avatar){const tw=118,th=190,x=25,y=132;renderer.setScissorTest(true);renderer.setScissor(x,y,tw,th);renderer.setViewport(x,y,tw,th);renderer.setClearColor(0x1c1c35,1);renderer.clear();tubeCamera.aspect=tw/th;tubeCamera.position.set(target.x,1.04,3.65);tubeCamera.lookAt(0,1.04,0);tubeCamera.updateProjectionMatrix();renderer.render(scene,tubeCamera);renderer.setScissorTest(false);}
 }
 requestAnimationFrame(render);
 if(qaMode){
@@ -344,7 +351,7 @@ function preserveStockingsMaterial(){
       for(const [name,value] of Object.entries(garmentUniforms))shader.uniforms[`wardrobe_${name}`]=value;
       shader.vertexShader='attribute vec3 wardrobeBodyReference;\nattribute float wardrobeLowerBody;\nvarying vec3 wardrobeRest;\nvarying vec3 wardrobeBodyRest;\nvarying float wardrobeBodyRegion;\n'+shader.vertexShader;
       shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nwardrobeRest = position;\nwardrobeBodyRest = wardrobeBodyReference;\nwardrobeBodyRegion = wardrobeLowerBody;');
-      shader.fragmentShader='varying vec3 wardrobeRest;\nvarying vec3 wardrobeBodyRest;\nvarying float wardrobeBodyRegion;\nuniform float wardrobe_mode;\nuniform vec3 wardrobe_color;\nuniform float wardrobe_opacity;\nuniform float wardrobe_density;\nuniform float wardrobe_lower;\nuniform float wardrobe_upper;\nuniform float wardrobe_hideBelow;\nuniform vec2 wardrobe_bodyMaskRange;\nuniform vec4 wardrobe_bodyMaskHem;\n'+shader.fragmentShader;
+      shader.fragmentShader='varying vec3 wardrobeRest;\nvarying vec3 wardrobeBodyRest;\nvarying float wardrobeBodyRegion;\nuniform float wardrobe_mode;\nuniform vec3 wardrobe_color;\nuniform float wardrobe_opacity;\nuniform float wardrobe_density;\nuniform float wardrobe_lower;\nuniform float wardrobe_upper;\nuniform float wardrobe_hideBelow;\nuniform vec2 wardrobe_bodyMaskRange;\nuniform vec4 wardrobe_bodyMaskHem;\nuniform float wardrobe_strand;\n'+shader.fragmentShader;
       shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
         float wardrobeZ = wardrobeRest.y / 1.03;
         if (wardrobeBodyRegion > .5) {
@@ -358,13 +365,13 @@ function preserveStockingsMaterial(){
         float wardrobeTheta = atan(wardrobeRest.x - sign(wardrobeRest.x) * .075, -wardrobeRest.z + .006);
         float wardrobeA = abs(sin(wardrobeTheta * wardrobe_density + wardrobeZ * wardrobe_density * 10.0));
         float wardrobeB = abs(sin(wardrobeTheta * wardrobe_density - wardrobeZ * wardrobe_density * 10.0));
-        float wardrobeGrid = max(1.0 - smoothstep(.092 - fwidth(wardrobeA), .092 + fwidth(wardrobeA), wardrobeA), 1.0 - smoothstep(.092 - fwidth(wardrobeB), .092 + fwidth(wardrobeB), wardrobeB));
+        float wardrobeGrid = max(1.0 - smoothstep(wardrobe_strand - fwidth(wardrobeA), wardrobe_strand + fwidth(wardrobeA), wardrobeA), 1.0 - smoothstep(wardrobe_strand - fwidth(wardrobeB), wardrobe_strand + fwidth(wardrobeB), wardrobeB));
         float wardrobeMask = wardrobe_mode < .5 ? 0.0 : (wardrobe_mode < 1.5 ? max(wardrobeGrid * wardrobe_opacity, step(wardrobe_upper-.029, wardrobeZ) * wardrobe_opacity) : wardrobe_opacity);
         wardrobeMask *= step(wardrobe_lower, wardrobeZ) * (1.0 - step(wardrobe_upper, wardrobeZ)) * step(.5, wardrobeBodyRegion);
         diffuseColor.rgb = mix(diffuseColor.rgb, wardrobe_color, wardrobeMask);`:''}
       `);
     };
-    material.customProgramCacheKey=()=> `rain-legwear-v3-${stockings}`;
+    material.customProgramCacheKey=()=> `rain-legwear-v4-${stockings}`;
     material.needsUpdate=true;
   }
 }
@@ -403,12 +410,15 @@ function expandPalettesAndLooks(){
 }
 
 async function init(){
+  const pelvisJob=prefetchModule(BIG_ASSETS+'pelvis-data.js',(l,t)=>{loadProgress.bytes('pelvis-data.js',l,t);paintLoad();});pelvisJob.then(()=>{loadProgress.done('pelvis-data.js');paintLoad();},()=>{});
   const response=await fetch('./assets/runtime-info.json',{cache:'no-store'});if(!response.ok)throw new Error(`Wardrobe manifest: HTTP ${response.status}`);info=await response.json();
-  const gltf=await new GLTFLoader().loadAsync(BIG_ASSETS+'avatar.glb',event=>{if(event.total){$('loadProgress').value=event.loaded/event.total;$('loadMessage').textContent=`Getting dressed · ${Math.round(event.loaded/event.total*100)}%`;}});
+  const gltf=await new GLTFLoader().loadAsync(BIG_ASSETS+'avatar.glb',event=>{loadProgress.bytes('avatar.glb',event.loaded,event.lengthComputable?event.total:0);paintLoad();});
+  loadProgress.done('avatar.glb');await pelvisJob.catch(()=>{});loadProgress.done('pelvis-data.js');loadProgress.stage(.15);paintLoad();
   avatar=gltf.scene;clips=gltf.animations;scene.add(avatar);
   avatar.traverse(obj=>{nodes.set(obj.name,obj);const originalName=gltf.parser.json.nodes?.[gltf.parser.associations.get(obj)?.nodes]?.name;if(originalName)nodes.set(originalName,obj);if(obj.userData.name)nodes.set(obj.userData.name,obj);if(!obj.isMesh)return;obj.frustumCulled=false;for(const mat of Array.isArray(obj.material)?obj.material:[obj.material]){if(!materials.has(mat.name))materials.set(mat.name,[]);if(!materials.get(mat.name).includes(mat))materials.get(mat.name).push(mat);if(!originals.has(mat))originals.set(mat,{color:mat.color?.clone(),roughness:mat.roughness});}});
   mixer=new THREE.AnimationMixer(avatar);setAnimation('idle');mixer.update(0);avatar.updateMatrixWorld(true);
   for(const expand of [expandFoundation,expandItems,expandTailoring,expandJewelry]){const result=await expand({THREE,avatar,nodes,materials,info});if(result?.update)expansionUpdates.push(result.update);}
+  loadProgress.stage(.55);paintLoad();
   isolateBodyMaterials();
   for(const list of materials.values())for(const mat of list)if(!originals.has(mat))originals.set(mat,{color:mat.color?.clone(),roughness:mat.roughness});
   expandPalettesAndLooks();
@@ -424,8 +434,18 @@ async function init(){
   applyLook(saved||info.defaultLook||{},{persist:!hosted&&!reviewMode});if(hosted){shop.markApplied();paintShop(document,shop);}setAnimation('idle');if(!action&&clips.length){const first=(info.animations||[])[0];setAnimation(typeof first==='string'?first:first?.id);}
   // Bake on Apply (bake.js): its own renderer, camera and mixer; every frame hands the visible pose back.
   const settle=()=>{for(const update of expansionUpdates)update(0,state.look);avatar.updateMatrixWorld(true);};
-  window.wardrobeDebug.bake=installBaker({THREE,scene,avatar,clips,getClip,hide:[ground],prepare:finishTransition,sync:settle,restore:()=>{mixer.update(0);settle();},post:postHost});
-  state.ready=true;postHost({type:'rain-ready'});$('demo').disabled=false;$('loading').hidden=true;updateCamera(1/60);
+  window.wardrobeDebug.bake=installBaker({THREE,scene,avatar,clips,getClip,hide:[ground],garment:garmentUniforms,prepare:finishTransition,sync:settle,restore:()=>{mixer.update(0);settle();},post:postHost});
+  loadProgress.stage(.8);paintLoad();updateCamera(1/60);
+  // Compile every shader behind the cover so the first visible frame is the finished one.
+  try{if(renderer.compileAsync)await renderer.compileAsync(scene,camera);}catch(e){console.warn('compileAsync',e);}
+  loadProgress.stage(1);paintLoad();
+  state.ready=true;postHost({type:'rain-ready'});$('demo').disabled=false;
+  // In the app the host answers rain-ready with init (look, name); give it a moment so the first frame wears it.
+  if(hosted&&shop.source!=='init')await new Promise(done=>{const t=setTimeout(done,900);hostInitWaiter=()=>{clearTimeout(t);done();};});
+  if(reviewMode)revealGate.mark('drawn'); // the review studio draws its own frames
+  await new Promise(done=>{onFirstFrame=done;if(revealGate.mark('dressed'))done();});
+  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+  await reveal(document,bootCalmNow());
   if(!clips.length){errors.push('No animation clips in avatar.glb');$('liveLabel').textContent='NO ANIMATIONS EXPORTED';}
   if(reviewMode)installReviewStudio({info,errors,renderCase:renderReviewCase});
 }
@@ -444,10 +464,12 @@ window.addEventListener('rain-locks',()=>{if(state.ready){paintChoices();paintSh
 // Shop layer: the draft is what Rain wears here, the applied look is what the tube wears.
 function shopSync(save){if(!state.demo)shop.setDraft(toHostLook(state.look,colorOverrides));if(save&&!shop.applyMode&&shop.status().wearable){postLook(state.look,colorOverrides);shop.markApplied();$('saveStatus').textContent=SHOP.saved;}paintShop(document,shop);}
 function showHostLook(look){colorOverrides=hostColors(COLOR_CHANNELS,look);applyLook(hostItems(look,shop.source!=='init')||info?.defaultLook||{},{persist:false});shop.markApplied();paintShop(document,shop);}
+// The Prize Counter's Wear door: put that one piece on as a draft (try-on, Apply stays the host's call).
+function wearTryOn(){if(!state.ready)return;const t=shop.takeTryOn();if(t&&findItem(t.slot,t.id)&&!selected(t.slot,t.id))toggleItem(t.slot,t.id);}
 if(hosted){
   document.body.classList.add('shop-on');$('lookBar').hidden=false;
-  fetch('./items.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(json=>{if(!json)return;shop.setItems(json);if(state.ready){paintChoices();paintShop(document,shop);}}).catch(()=>{});
-  listenToHost(window,shop,(kind,data)=>{if(kind==='init'&&state.ready&&shop.applied){showHostLook(shop.applied);return;}if(kind==='applied')$('saveStatus').textContent=SHOP.applied;
+  fetch('./items.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(json=>{if(!json)return;shop.setItems(json);if(state.ready){paintChoices();paintShop(document,shop);wearTryOn();}}).catch(()=>{});
+  listenToHost(window,shop,(kind,data)=>{if(kind==='init'&&hostInitWaiter){const w=hostInitWaiter;hostInitWaiter=null;setTimeout(w,0);}if(kind==='baking'){paintShop(document,shop);return;}if(kind==='init'&&state.ready&&shop.applied){showHostLook(shop.applied);wearTryOn();return;}if(kind==='tryon'||kind==='init')wearTryOn();if(kind==='applied')$('saveStatus').textContent=SHOP.applied;
     // A host clamp sends the look it would wear back as the draft (never applied, never baked).
     if(kind==='apply-failed'&&state.ready&&data&&data.look&&typeof data.look==='object'){stopDemo(false);colorOverrides=hostColors(COLOR_CHANNELS,data.look);applyLook(hostItems(data.look,false)||info?.defaultLook||{},{persist:false});}if(state.ready)paintChoices();paintShop(document,shop);});
   $('applyLook').addEventListener('click',()=>{if(!shop.apply())return;if(!shop.applyMode){postLook(state.look,colorOverrides);$('saveStatus').textContent=SHOP.saved;}paintShop(document,shop);});

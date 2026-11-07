@@ -278,14 +278,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
                 else if (query.Trim().Length == 0)
                 {
-                    // Empty box: the last few places first, then the authored opening list.
-                    var recents = SettingsPaletteIndex.Recents(CoreSettings.Current.NavSearchRecents);
-                    var seen = new HashSet<string>(recents.Select(e => e.Id), StringComparer.Ordinal);
-                    rows = recents.Select(e => new PaletteRow(e, null))
-                                  .Concat(SettingsPaletteIndex.Search(query)
-                                                              .Where(e => !seen.Contains(e.Id))
-                                                              .Select(e => new PaletteRow(e, null)))
-                                  .ToList();
+                    var s = CoreSettings.Current;
+                    rows = SettingsPaletteIndex.OpeningRows(s.RailFavorites, s.NavSearchRecents)
+                        .Select(e => new PaletteRow(e, null, FavoritesRailRule.IsPinned(s.RailFavorites, e.Id)))
+                        .ToList();
                 }
                 else
                 {
@@ -543,7 +539,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// </summary>
     public sealed class PaletteRow
     {
-        public PaletteRow(SettingsPaletteEntry entry, string? query)
+        public PaletteRow(SettingsPaletteEntry entry, string? query, bool pinned = false)
         {
             Entry = entry;
             Glyph = entry.Glyph;
@@ -565,11 +561,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Label = entry.Label;
             Context = entry.Context;
             var was = SettingsPaletteIndex.WasHint(entry, query);
-            WasHint = was == null ? string.Empty : "  " + Loc.GetF("nav_was_hint", was);
+            IsPinned = pinned;
+            WasHint = pinned || was == null ? string.Empty : "  " + Loc.GetF("nav_was_hint", was);
         }
 
         /// <summary>The retired name the row was found under ("(was Premium)"), or empty.</summary>
         public string WasHint { get; }
+
+        /// <summary>The caption carries a filled star through the standard icon control.</summary>
+        public bool IsPinned { get; }
 
         /// <summary>Caption, then its breadcrumb: what a screen reader announces for the row.</summary>
         public string AutomationName => string.IsNullOrEmpty(Context) ? Label : Label + ", " + Context;

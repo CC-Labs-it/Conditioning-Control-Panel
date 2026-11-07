@@ -723,6 +723,7 @@ namespace ConditioningControlPanel.Controls.Header
             }
             catch { /* services not up (tests): Refresh still reads null as Free */ }
             EntitlementTierSync.TierRaised += OnTierRaised;
+            EntitlementTierSync.GraceClosed += OnGraceClosed;
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
             Refresh();
             UpdateParking();
@@ -739,6 +740,7 @@ namespace ConditioningControlPanel.Controls.Header
             }
             catch { }
             EntitlementTierSync.TierRaised -= OnTierRaised;
+            EntitlementTierSync.GraceClosed -= OnGraceClosed;
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
             StopLoops();
         }
@@ -746,6 +748,9 @@ namespace ConditioningControlPanel.Controls.Header
         private void OnWindowStateChanged(object? sender, EventArgs e) => UpdateParking();
 
         private void OnTierChanged(object? sender, PatreonTier tier) =>
+            Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(Refresh));
+
+        private void OnGraceClosed() =>
             Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(Refresh));
 
         private void OnTierRaised(int tier) =>

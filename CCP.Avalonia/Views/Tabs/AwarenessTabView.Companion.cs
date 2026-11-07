@@ -24,6 +24,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             privacy.ViewModel?.Sync();   // WPF vm.AwarenessVm.Sync()
         }
 
+        // WPF AwarenessPrivacyView.xaml.cs:36-39,91-100 keeps a visible readout refreshing.
+        // Panic only stops its blink and disarms wipe (stricter than WPF unload:49-53).
+        internal void StopCompanionPrivacyForPanic()
+        {
+            if (this.FindControl<ContentControl>("CompanionPrivacyHost")?.Content is not AwarenessPrivacyView privacy) return;
+            privacy.StopCursorBlink();
+            privacy.WipeConfirm.Disarm();
+        }
+
         /// <summary>WPF RevealCompanionTuning: the room's "tune" link lands on the open fold.</summary>
         internal void RevealCompanionTuning(CompanionRoomView? room)
         {

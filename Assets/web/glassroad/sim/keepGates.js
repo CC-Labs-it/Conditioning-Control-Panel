@@ -11,7 +11,7 @@ import { trapStroke } from '../track/trapArrangement.js';
 
 export const KEEP_GATE = Object.freeze({ cycleS: 9.6, liftM: 8.4, heightM: 8,
   warnStartS: 3, lowerStartS: 5, holdStartS: 5.9, riseStartS: 7.2, clearStartS: 8.4,
-  halfDepthM: .55, kartRadiusM: .65, kartHeightM: 1.6, stallS: .4,
+  halfDepthM: .41, kartRadiusM: .62, kartHeightM: 1.21, stallS: .4,
   repeatS: .9, leadM: 55, leaveM: 12 });
 const ease = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 

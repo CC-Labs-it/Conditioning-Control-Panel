@@ -922,9 +922,12 @@ namespace ConditioningControlPanel.Services
         /// Writes settings to disk immediately (no debounce). Called by the debounce timer,
         /// on shutdown, and from RestoreFrom/Reset where the write must happen now.
         /// </summary>
-        public void SaveImmediate(bool suppressCloudBackup = false)
+        public void SaveImmediate(bool suppressCloudBackup = false) => TrySaveImmediate(suppressCloudBackup);
+
+        /// <summary>True only when this snapshot reached disk. Critical checkpoints must check the result.</summary>
+        public bool TrySaveImmediate(bool suppressCloudBackup = false)
         {
-            if (_sealed) return;   // factory reset in progress — see SealForReset
+            if (_sealed) return false;   // factory reset in progress; see SealForReset
 
             // Cancel any pending debounce — we're flushing now
             _savePending = false;
@@ -959,11 +962,11 @@ namespace ConditioningControlPanel.Services
                 lock (_saveLock)
                 {
                     // Sealed while this snapshot was being serialized: the reset owns the file now.
-                    if (_sealed) return;
+                    if (_sealed) return false;
                     if (sequence < Interlocked.Read(ref _lastWrittenSaveSequence))
                     {
                         Log.Debug("Settings save #{Sequence} dropped — a newer snapshot already reached disk", sequence);
-                        return;
+                        return false;
                     }
 
                     // Snapshot the previous good file into the rolling daily backups before the
@@ -1024,10 +1027,12 @@ namespace ConditioningControlPanel.Services
                         });
                     }
                 }
+                return true;
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "Could not save settings");
+                return false;
             }
         }
 

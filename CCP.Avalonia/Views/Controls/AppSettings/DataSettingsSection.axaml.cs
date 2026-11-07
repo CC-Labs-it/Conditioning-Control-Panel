@@ -296,7 +296,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         ///
         /// <para>Returns false, with the failure message, when settings.json could not be moved
         /// aside — the one path where this method RETURNS instead of exiting, so the caller has to
-        /// tell the user. Every other path ends in <c>Environment.Exit</c>.</para>
+        /// tell the user. Every other path begins an off-thread exit (<see cref="Services.Reset.UiThreadExit"/>).</para>
         /// </summary>
         private bool PerformFactoryReset(out string failure)
         {
@@ -363,11 +363,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             // SealForReset waited out any write already in flight, so this sweep is the last word.
             FactoryResetSweep.Delete(dir, LogSweep);
 
-            // Hard exit on purpose - see the method docs. Serilog buffers, so flush first or the
-            // whole [RESET] trail above is lost exactly when it matters.
+            // The window stays up for the exit's few seconds: nothing in it may be pressed meanwhile.
+            try { if (TopLevel.GetTopLevel(this) is Window host) host.IsEnabled = false; } catch { }
+
+            // Serilog buffers, so flush first or the whole [RESET] trail above is lost exactly when it
+            // matters. Then leave OFF this thread (WPF DataSettingsSection.xaml.cs:234, baf86f0ac):
+            // Environment.Exit here can freeze while a ProcessExit handler waits on the UI thread.
+            // Settings stay sealed for the whole exit window, so nothing writes them back.
             try { Log.Information("[RESET] flushing log before exit"); Serilog.Log.CloseAndFlush(); } catch { }
-            Environment.Exit(0);
-            return true;   // unreachable; Exit does not come back. Here for the compiler only.
+            Services.Reset.UiThreadExit.Begin(0);
+            return true;   // back to the UI pump while the background exit completes
         }
 
         private static void LogSweep(string path, string? error)

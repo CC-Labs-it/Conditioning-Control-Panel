@@ -112,7 +112,7 @@ public sealed partial class ChasterService
         }
     }
 
-    private static async Task RespondAsync(HttpListenerContext context, bool ok)
+    private static Task RespondAsync(HttpListenerContext context, bool ok)
     {
         var title = ok ? "Linked" : "Not linked";
         var line = ok ? "You can close this tab and go back to the app." : "Nothing was linked. Close this tab and try again from the app.";
@@ -122,14 +122,20 @@ public sealed partial class ChasterService
         try
         {
             var bytes = Encoding.UTF8.GetBytes(html);
+            // This one-shot listener is disposed next. HTTP.sys must finish the response and
+            // disconnect gracefully, rather than aborting a pooled keep-alive connection.
+            context.Response.KeepAlive = false;
             context.Response.ContentType = "text/html; charset=utf-8";
             context.Response.ContentLength64 = bytes.Length;
-            await context.Response.OutputStream.WriteAsync(bytes).ConfigureAwait(false);
-            context.Response.Close();
+            // A refusal returns straight into listener disposal. Finish the response first,
+            // or Windows http.sys can reset the browser's still-open connection.
+            context.Response.KeepAlive = false;
+            context.Response.Close(bytes, willBlock: true);
         }
         catch (Exception ex) when (ex is HttpListenerException or ObjectDisposedException or System.IO.IOException)
         {
             Diag.Swallowed(ex, "browser closed before the link page was written");
         }
+        return Task.CompletedTask;
     }
 }

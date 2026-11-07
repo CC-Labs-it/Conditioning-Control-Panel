@@ -609,7 +609,10 @@
     {"node":14,"x":-1,"kind":"bubble","ds":3},
     {"node":14,"x":0,"kind":"bubble","ds":6},
     {"node":14,"x":1,"kind":"bubble","ds":9},
-    {"node":14,"x":2,"kind":"bubble","ds":12}
+    {"node":14,"x":2,"kind":"bubble","ds":12},
+    {"node":117,"x":0,"kind":"box","ds":6.6,"liftM":4.1},
+    {"node":118,"x":0,"kind":"box","ds":7.8,"liftM":4.7},
+    {"node":119,"x":0,"kind":"box","ds":8.8,"liftM":4.1}
   ],
   "boosts": [
     {"node":4,"x":0,"w":6,"len":7.5},
@@ -927,6 +930,52 @@
     {"node":517,"x":7.5,"w":2.25,"len":7.5}
   ],
   "jumps": [{"node":504,"airLen":12,"height":6}],
+  "ramps": [
+    {
+      "id": "thr-ramp-king",
+      "node": 28,
+      "x": -10,
+      "widthM": 6,
+      "lenM": 7,
+      "heightM": 1.2,
+      "upMps": 13,
+      "purpose": "air",
+      "note": "left lane of the induction straight, launching past the chess king; lands well before the stepping stones"
+    },
+    {
+      "id": "thr-ramp-crest",
+      "node": 69,
+      "x": 10,
+      "widthM": 6,
+      "lenM": 7,
+      "heightM": 1.2,
+      "upMps": 13,
+      "purpose": "air",
+      "note": "top of the tidal climb: off the crest over the gallery vista, landing down the opening bend"
+    },
+    {
+      "id": "thr-ramp-tide",
+      "node": 116,
+      "x": 0,
+      "widthM": 6,
+      "lenM": 7,
+      "heightM": 1.2,
+      "upMps": 14,
+      "purpose": "item",
+      "note": "centre of the wide tidal stream: three floating boxes ride the arc, the ground lanes stay free"
+    },
+    {
+      "id": "thr-ramp-chute",
+      "node": 306,
+      "x": 7,
+      "widthM": 6,
+      "lenM": 7,
+      "heightM": 1.2,
+      "upMps": 13,
+      "purpose": "cut",
+      "note": "foot of the cascade chute: flies the chord over the inside of the bend into the lower gallery"
+    }
+  ],
   "routes": [
     {
       "id": "dare",

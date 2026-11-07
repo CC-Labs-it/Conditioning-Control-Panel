@@ -1,7 +1,10 @@
 // Rain V2 bake on Apply (lane R6, RAIN-V2-PLAN 2.3 / 2.5). The tube never runs live 3D: when the
 // host sends {type:'rain-bake', lookHash, clips, fps, w, h} the page renders each clip of the
-// CURRENT look offscreen at 2x, runs the tube clips' pixel pass (a port of
-// blender-scripting/rain-tube-1024/scripts/pixel.py) and streams PNG frames to the host:
+// CURRENT look offscreen at 2x, box-filters it down to the tube size (2x the tube's on-screen size, so
+// it stays crisp at 200% DPI), maps the colours onto one shared 256-colour palette (soft alpha kept:
+// a smaller pack, no visible banding) and streams PNG frames to the host. The old pixel pass (a port of
+// blender-scripting/rain-tube-1024/scripts/pixel.py, 2x2 grain, 48 colours, hard alpha) stays for
+// request.pixel / request.palette === 'shipped' (the side-by-side gate against the shipped clips):
 //   rain-bake-frame {clip, index, png}   rain-bake-progress {clip, frame, of}
 //   rain-bake-done {clip, frames}        rain-bake-done {all:true}   (plus lookHash on each)
 // A clip the GLB does not carry yet answers rain-bake-done {clip, frames:0, skipped:true}.
@@ -10,10 +13,10 @@
 // The visible view keeps running: the bake draws through its own renderer and its own mixer,
 // and every bake frame hands the pose back before the next paint.
 
-export const BAKE = Object.freeze({ scale: 2, grain: 2, colors: 48, alphaCut: 128, fps: 15, w: 192, h: 309, toneMapping: 'AgXToneMapping', exposure: 1 });
+export const BAKE = Object.freeze({ scale: 2, grain: 2, colors: 48, smoothColors: 256, alphaCut: 128, fps: 15, w: 384, h: 618, toneMapping: 'AgXToneMapping', exposure: 1 });
 const BAKE_TONE = { AgXToneMapping: 1, ACESFilmicToneMapping: 1, NeutralToneMapping: 1 };
 
-/** Opaque colours of the shipped idle.webp (Resources/rain_emotes, 44 of its 48 median-cut
+/** Opaque colours of the October 24 shipped idle.webp (the 192x309 pixel pass, 44 of its 48 median-cut
  *  entries are used). Only for request.palette === 'shipped' (the default-look side-by-side gate);
  *  a custom look gets its own median cut from its idle rest frame, as pixel.py builds one. */
 export const SHIPPED_IDLE_PALETTE = Object.freeze(['561b30', '854747', 'bb2c7a', 'ab5861', 'd45095', 'b26f5d', '9a7a68', 'b67767', 'd75c9c', 'bb7a67', 'd8619d', 'd962a0', 'da64a1', 'be7f67', 'be817a', 'dc6aa4', 'd5709d', 'c18472', 'c58875', 'dd72a8', 'b7927d', 'c98f7e', 'e28299', 'cc9482', 'd19787', 'cc9a89', 'bda28c', 'd39c89', 'd29d8d', 'd2a08f', 'd5a18f', 'b9b095', 'd4a395', 'd8a595', 'c8b29d', 'd7ac9e', 'ccb49f', 'ccb8a4', 'e6aea1', 'd0b9a6', 'cdbca8', 'd0beac', 'd7bfae', 'dac9b8']
@@ -123,6 +126,7 @@ export function nearestColor(palette) {
     const key = (r << 16) | (g << 8) | b;
     let hit = cache.get(key);
     if (hit) return hit;
+    if (cache.size >= 1 << 20) cache.clear();   // one lookup serves a whole bake: keep it bounded
     let best = Infinity;
     for (const p of palette) {
       const d = (p[0] - r) ** 2 + (p[1] - g) ** 2 + (p[2] - b) ** 2;
@@ -154,6 +158,19 @@ export function pixelate(frame, { grain = BAKE.grain, palette, alphaCut = BAKE.a
   return { data: out, width: W, height: H };
 }
 
+/** The tube pass: every visible pixel's colour snaps to the shared palette (pick = nearestColor),
+ *  its alpha is kept as is, so edges stay soft and nothing is cut to blocks. Straight RGBA in and out. */
+export function smoothPass(frame, pick) {
+  const src = frame.data, out = new Uint8ClampedArray(src.length);
+  for (let i = 0; i < src.length; i += 4) {
+    const a = src[i + 3];
+    if (!a) continue;
+    const c = pick(src[i], src[i + 1], src[i + 2]);
+    out[i] = c[0]; out[i + 1] = c[1]; out[i + 2] = c[2]; out[i + 3] = a;
+  }
+  return { data: out, width: frame.width, height: frame.height };
+}
+
 /** The alpha / premultiply self-check: a usable readback holds both clear and solid pixels
  *  and is not all black. */
 export function checkReadback(data, cut = BAKE.alphaCut) {
@@ -174,11 +191,105 @@ export function selfCheck(source) {
   return { ...checkReadback(raw.data), clip, raw };
 }
 
-function toTubeFrame(raw, w, h) {
+/** The tube look (owner 2026-10-30: the HD clips felt plasticky and blurry, the fishnets blended
+ *  into the legs; "black outlines on some hairs and the dress, the fishnets, the shoes", then "more
+ *  vibrancy, more definition, more contrast, more black outlines"). Two halves, the same in both
+ *  pipelines (shipped clips: rain-tube-1024 toon_render.py + palette_pass.mjs; in-app bake:
+ *  createThreeSource + tubeFrame):
+ *  - at render time, INK: an inverted hull per outlined mesh, pushed out along its normals by
+ *    INK.width metres (body, dress, boots: about 2.25 px of the 384x618 tube, 1 px = 3.74 mm), hair
+ *    INK.hairWidth (about 1.5 px: inked locks), head INK.headWidth; back faces only, opaque
+ *    near-black; and the fishnet grid darker, more opaque and a little wider (INK.fishnet*);
+ *  - after the 2x -> 1x box filter, the shared post pass (tubeFrame): an unsharp mask on the
+ *    premultiplied colour (5-tap Gaussian, alpha untouched, colour never above alpha), then a luma
+ *    S-curve (deeper shadows, brighter highlights: y - contrast * sin(2 pi y) / 2 pi, hue kept) and
+ *    the pop: chroma x (1 + saturation + vibrance * (1 - sat)); skin-hued pixels (hue 4-32 degrees)
+ *    get half the saturation step and no vibrance (warm, never orange), and the step is capped so no
+ *    channel clips (the pink dress punchy, never neon). */
+export const INK = Object.freeze({
+  color: 0x0b040a /* the #1b0f19 emission as Blender's AgX draws it */, width: 0.0084, hairWidth: 0.0056, headWidth: 0.0035,
+  skip: /eye|lash|brow|gum|teeth|tongue|mascara|hoop|zip|seam|clasp|cornea|dot|tip|welt/i,
+  hair: /hair/i, head: /GEO-rain-head/,
+  fishnetDarken: 0.3, fishnetOpacity: 0.95, fishnetStrand: 0.115
+});
+export const TOON = Object.freeze({ sharpen: 1.0, sharpenSigma: 0.9, contrast: 0.35, saturation: 0.32, vibrance: 0.35 });
+
+/** Unsharp mask, 5-tap Gaussian (sigma sharpenSigma px), on PREMULTIPLIED RGBA: colour sharpened and
+ *  kept within [0, alpha], alpha untouched (no halo past the silhouette). */
+export function sharpenPass(frame, opts = TOON) {
+  const t = { ...TOON, ...opts }, { width: W, height: H } = frame, src = frame.data;
+  const out = new Uint8ClampedArray(src);
+  if (!(t.sharpen > 0)) return { data: out, width: W, height: H };
+  const g = [0, 1, 2].map(d => Math.exp(-d * d / (2 * t.sharpenSigma * t.sharpenSigma)));
+  const sum = g[0] + 2 * g[1] + 2 * g[2], k = [g[0] / sum, g[1] / sum, g[2] / sum];
+  const n = W * H, tmp = new Float32Array(n * 3), blur = new Float32Array(n * 3);
+  const cx = x => (x < 0 ? 0 : x >= W ? W - 1 : x), cy = y => (y < 0 ? 0 : y >= H ? H - 1 : y);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const p = y * W + x, a2 = y * W + cx(x - 2), a1 = y * W + cx(x - 1), b1 = y * W + cx(x + 1), b2 = y * W + cx(x + 2);
+    for (let c = 0; c < 3; c++) tmp[p * 3 + c] = k[0] * src[p * 4 + c] + k[1] * (src[a1 * 4 + c] + src[b1 * 4 + c]) + k[2] * (src[a2 * 4 + c] + src[b2 * 4 + c]);
+  }
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const p = y * W + x, a2 = cy(y - 2) * W + x, a1 = cy(y - 1) * W + x, b1 = cy(y + 1) * W + x, b2 = cy(y + 2) * W + x;
+    for (let c = 0; c < 3; c++) blur[p * 3 + c] = k[0] * tmp[p * 3 + c] + k[1] * (tmp[a1 * 3 + c] + tmp[b1 * 3 + c]) + k[2] * (tmp[a2 * 3 + c] + tmp[b2 * 3 + c]);
+  }
+  for (let p = 0; p < n; p++) {
+    const i = p * 4, a = src[i + 3];
+    if (!a) continue;
+    for (let c = 0; c < 3; c++) {
+      const v = src[i + c] + t.sharpen * (src[i + c] - blur[p * 3 + c]);
+      out[i + c] = Math.round(v < 0 ? 0 : v > a ? a : v);
+    }
+  }
+  return { data: out, width: W, height: H };
+}
+
+/** The contrast + pop pass. Straight RGBA in and out, alpha untouched. */
+export function popPass(frame, opts = TOON) {
+  const t = { ...TOON, ...opts }, src = frame.data, out = new Uint8ClampedArray(src.length);
+  const TAU = 2 * Math.PI;
+  for (let i = 0; i < src.length; i += 4) {
+    let r = src[i], g = src[i + 1], b = src[i + 2];
+    out[i + 3] = src[i + 3];
+    if (!src[i + 3]) { out[i] = r; out[i + 1] = g; out[i + 2] = b; continue; }
+    // Contrast: an S-curve on luma, the colour scaled with it (hue kept, capped at white).
+    const Y0 = 0.299 * r + 0.587 * g + 0.114 * b;
+    if (t.contrast && Y0 > 0) {
+      const y = Y0 / 255, y1 = Math.min(1, Math.max(0, y - t.contrast * Math.sin(TAU * y) / TAU));
+      let f = y1 / y;
+      const mx0 = Math.max(r, g, b);
+      if (mx0 * f > 255) f = 255 / mx0;
+      r *= f; g *= f; b *= f;
+    }
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    if (mx - mn < 1e-6) { out[i] = Math.round(r); out[i + 1] = Math.round(g); out[i + 2] = Math.round(b); continue; }
+    const sat = (mx - mn) / mx;
+    // Skin: red leads, hue 4-32 degrees (blonde, about 40, is not skin), not already strongly saturated.
+    let skin = 0;
+    if (mx === r && g >= b) {
+      const hue = 60 * (g - b) / (mx - mn);
+      skin = Math.max(0, Math.min(1, (hue - 4) / 6, (32 - hue) / 6)) * Math.max(0, Math.min(1, (0.75 - sat) / 0.15));
+    }
+    let s = 1 + t.saturation * (1 - 0.5 * skin) + t.vibrance * (1 - sat) * (1 - skin);
+    const Y = 0.299 * r + 0.587 * g + 0.114 * b;
+    for (const c of [r, g, b]) {
+      if (c > Y) s = Math.min(s, (255 - Y) / (c - Y));
+      else if (c < Y) s = Math.min(s, Y / (Y - c));
+    }
+    if (s < 1) s = 1;
+    out[i] = Math.round(Y + (r - Y) * s); out[i + 1] = Math.round(Y + (g - Y) * s); out[i + 2] = Math.round(Y + (b - Y) * s);
+  }
+  return { data: out, width: frame.width, height: frame.height };
+}
+
+/** Render (premultiplied, an integer multiple of w x h) -> the tube frame (straight, w x h):
+ *  box down, then (toon, default) sharpenPass + popPass; toon false = the plain October downscale. */
+export function tubeFrame(raw, w, h, { toon = true, opts = TOON } = {}) {
   const factor = Math.max(1, Math.round(raw.width / w));
-  const down = factor > 1 ? boxDownscale(raw.data, raw.width, raw.height, factor) : { data: raw.data, width: raw.width, height: raw.height };
+  let down = factor > 1 ? boxDownscale(raw.data, raw.width, raw.height, factor) : { data: raw.data, width: raw.width, height: raw.height };
   if (down.width !== w || down.height !== h) throw new Error(`Bake frame ${down.width}x${down.height}, expected ${w}x${h}`);
-  return { data: unpremultiply(down.data), width: w, height: h };
+  if (toon) down = sharpenPass(down, opts);
+  const straight = { data: unpremultiply(down.data), width: w, height: h };
+  return toon ? popPass(straight, opts) : straight;
 }
 
 /** The bake loop. source = { hasClip(name), duration(name), render(name, t) -> premultiplied
@@ -197,7 +308,14 @@ export async function runBake({ request, source, post, yieldFrame = () => new Pr
       send({ type: 'rain-bake-done', all: true, error: check.reason });
       return { ok: false, reason: check.reason };
     }
-    const palette = request.palette === 'shipped' ? SHIPPED_IDLE_PALETTE : medianCut(toTubeFrame(check.raw, w, h).data);
+    const pixel = request.pixel === true || request.palette === 'shipped';
+    // The smooth (tube) pass inks and pops each frame before its palette, which comes from the INKED
+    // idle rest frame; the pixel / shipped-palette gate stays the plain October 24 pass.
+    const toon = { toon: !pixel };
+    const palette = request.palette === 'shipped' ? SHIPPED_IDLE_PALETTE
+      : medianCut(tubeFrame(check.raw, w, h, toon).data, pixel ? BAKE.colors : BAKE.smoothColors);
+    const pick = nearestColor(palette);
+    const pass = pixel ? frame => pixelate(frame, { palette }) : frame => smoothPass(frame, pick);
     const baked = {};
     for (const clip of clips) {
       if (cancelled()) break;
@@ -205,7 +323,7 @@ export async function runBake({ request, source, post, yieldFrame = () => new Pr
       const of = frameCount(source.duration(clip), fps);
       for (let index = 0; index < of; index++) {
         if (cancelled()) break;
-        const frame = pixelate(toTubeFrame(source.render(clip, index / fps), w, h), { palette });
+        const frame = pass(tubeFrame(source.render(clip, index / fps), w, h, toon));
         send({ type: 'rain-bake-frame', clip, index, png: await source.encode(frame) });
         send({ type: 'rain-bake-progress', clip, frame: index + 1, of });
         await yieldFrame();
@@ -227,11 +345,79 @@ export async function runBake({ request, source, post, yieldFrame = () => new Pr
   }
 }
 
+/** The bake-only layer: the ink hulls live on it, the bake camera sees it, the visible view never does. */
+export const INK_LAYER = 5;
+
+/** Hull width (metres) for one mesh, or 0 = no hull (INK.skip: eyes, lashes, mouth, zips, seams...). */
+export function inkWidth(mesh, ink = INK) {
+  const mats = (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).filter(Boolean);
+  const names = [mesh.name, mesh.parent?.name || '', ...mats.map(m => m.name || '')].join(' ');
+  if (ink.skip.test(names)) return 0;
+  return ink.head.test(names) ? ink.headWidth : ink.hair.test(names) ? ink.hairWidth : ink.width;
+}
+
+/** The inverted-hull material for one mesh material: the same program (skinning, morphs, the
+ *  wardrobe's own discards via its onBeforeCompile), pushed out along the skinned normal by width
+ *  (object units), back faces only, painted INK.color. */
+export function inkMaterial(THREE, base, width, { skinned = true, color = INK.color } = {}) {
+  const m = base.clone();
+  m.name = `${base.name}.ink`; m.side = THREE.BackSide;
+  const ink = new THREE.Color(color), rgb = [ink.r, ink.g, ink.b].map(v => v.toFixed(4)).join(', ');   // sRGB, written after the output transform
+  const prior = base.onBeforeCompile, key = base.customProgramCacheKey?.call(base) || '';
+  const normal = base.isMeshBasicMaterial && !skinned ? 'normal' : 'objectNormal';
+  m.onBeforeCompile = (shader, renderer) => {
+    prior?.call(base, shader, renderer);
+    shader.uniforms.rainInkWidth = { value: width };
+    shader.vertexShader = 'uniform float rainInkWidth;\n' + shader.vertexShader.replace('#include <skinning_vertex>', `#include <skinning_vertex>\ntransformed += normalize(${normal}) * rainInkWidth;`);
+    shader.fragmentShader = shader.fragmentShader.replace('#include <dithering_fragment>', `#include <dithering_fragment>\ngl_FragColor.rgb = vec3(${rgb});`);
+  };
+  m.customProgramCacheKey = () => `${key}|rain-ink-${width.toFixed(5)}-${normal}`;
+  return m;
+}
+
+/** Add an ink hull child to every outlined mesh under root (layer INK_LAYER only). Returns the undo. */
+export function addInkHulls(THREE, root, { ink = INK, skip = [] } = {}) {
+  const meshes = [];
+  root.updateMatrixWorld(true);
+  root.traverse(o => { if (o.isMesh && !o.userData.rainInk && !skip.includes(o)) meshes.push(o); });
+  const added = [];
+  for (const mesh of meshes) {
+    const width = inkWidth(mesh, ink);
+    if (!width) continue;
+    const local = width / (mesh.matrixWorld.getMaxScaleOnAxis() || 1);
+    const skinned = Boolean(mesh.isSkinnedMesh);
+    const mats = Array.isArray(mesh.material) ? mesh.material.map(m => inkMaterial(THREE, m, local, { skinned, color: ink.color })) : inkMaterial(THREE, mesh.material, local, { skinned, color: ink.color });
+    const hull = skinned ? new THREE.SkinnedMesh(mesh.geometry, mats) : new THREE.Mesh(mesh.geometry, mats);
+    if (skinned) { hull.bindMode = mesh.bindMode; hull.bind(mesh.skeleton, mesh.bindMatrix); }
+    if (mesh.morphTargetInfluences) { hull.morphTargetInfluences = mesh.morphTargetInfluences; hull.morphTargetDictionary = mesh.morphTargetDictionary; }
+    hull.name = `${mesh.name}.inkHull`; hull.userData.rainInk = true;
+    hull.frustumCulled = false; hull.castShadow = false; hull.receiveShadow = false;
+    hull.layers.set(INK_LAYER);
+    mesh.add(hull); added.push(hull);
+  }
+  return {
+    count: added.length,
+    remove() { for (const hull of added) { hull.removeFromParent(); for (const m of [].concat(hull.material)) m.dispose(); } added.length = 0; }
+  };
+}
+
+/** Fishnets read in the bake (INK.fishnet*, the same numbers as toon_render.py): while the bake
+ *  draws, the grid colour darkens, its opacity rises and its strands widen. Returns the undo. */
+export function inkFishnet(garment, ink = INK) {
+  if (!garment || garment.mode?.value !== 1) return () => {};
+  const color = garment.color.value.clone(), opacity = garment.opacity.value, strand = garment.strand?.value;
+  garment.color.value.multiplyScalar(ink.fishnetDarken);
+  garment.opacity.value = Math.max(opacity, ink.fishnetOpacity);
+  if (garment.strand) garment.strand.value = Math.max(strand, ink.fishnetStrand);
+  return () => { garment.color.value.copy(color); garment.opacity.value = opacity; if (garment.strand) garment.strand.value = strand; };
+}
+
 /** The three.js source: its own renderer (alpha, premultipliedAlpha false, preserveDrawingBuffer)
  *  on a detached canvas, its own mixer on the shared avatar. ctx = { THREE, scene, avatar,
  *  getClip, sync() (expansion updates + world matrices), restore() (visible pose back),
- *  hide: [objects kept out of the bake] }. options.toneMapping / options.exposure come from a desk
- *  check's request.render only; the host never sends them. */
+ *  hide: [objects kept out of the bake], garment: the legwear uniforms }. options.toneMapping /
+ *  options.exposure come from a desk check's request.render only; the host never sends them.
+ *  options.ink === false bakes without the ink hulls and the fishnet tweak (the pixel gate). */
 export function createThreeSource(ctx, w, h, options = {}) {
   const scale = BAKE.scale;
   const { THREE } = ctx;
@@ -245,6 +431,9 @@ export function createThreeSource(ctx, w, h, options = {}) {
   renderer.toneMappingExposure = Number(options.exposure) > 0 ? Number(options.exposure) : BAKE.exposure;
   renderer.setClearColor(0x000000, 0);
   const camera = makeTubeCamera(THREE);
+  const inked = options.ink !== false;
+  const hulls = inked ? addInkHulls(THREE, ctx.avatar, { skip: ctx.hide || [] }) : { count: 0, remove() {} };
+  if (inked) camera.layers.enable(INK_LAYER);
   const mixer = new THREE.AnimationMixer(ctx.avatar);
   const gl = renderer.getContext();
   const buffer = new Uint8Array(W * H * 4);
@@ -262,11 +451,13 @@ export function createThreeSource(ctx, w, h, options = {}) {
       ctx.sync();
       const hidden = (ctx.hide || []).filter(o => o.visible);
       for (const o of hidden) o.visible = false;
+      const fishnet = inked ? inkFishnet(ctx.garment) : () => {};
       try {
         renderer.setRenderTarget(null); renderer.clear(); renderer.render(ctx.scene, camera);
         gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, buffer);
       } finally {
         for (const o of hidden) o.visible = true;
+        fishnet();
         action.stop(); // deactivating restores the pose the bindings saw on play()
         ctx.restore();
       }
@@ -280,7 +471,7 @@ export function createThreeSource(ctx, w, h, options = {}) {
       return pngCanvas.toDataURL('image/png').slice('data:image/png;base64,'.length);
     },
     dispose() {
-      mixer.stopAllAction(); mixer.uncacheRoot(ctx.avatar); ctx.restore();
+      mixer.stopAllAction(); mixer.uncacheRoot(ctx.avatar); hulls.remove(); ctx.restore();
       renderer.dispose(); renderer.forceContextLoss();
     }
   };
@@ -299,7 +490,8 @@ export function installBaker(ctx, { makeSource = createThreeSource, webview = gl
     ctx.prepare?.();
     const w = Number(request.w) > 0 ? Number(request.w) : BAKE.w, h = Number(request.h) > 0 ? Number(request.h) : BAKE.h;
     let source;
-    try { source = makeSource(ctx, w, h, request.render || {}); } catch (error) {
+    const plain = request.pixel === true || request.palette === 'shipped';   // the October pixel gate stays un-inked
+    try { source = makeSource(ctx, w, h, { ...(request.render || {}), ...(plain ? { ink: false } : {}) }); } catch (error) {
       post({ type: 'boot-error', msg: `Rain bake renderer: ${error?.message || error}` });
       post({ type: 'rain-bake-done', all: true, error: 'renderer', lookHash: request.lookHash || '' });
       return { ok: false };

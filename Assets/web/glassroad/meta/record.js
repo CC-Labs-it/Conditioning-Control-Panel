@@ -6,6 +6,11 @@
  * earliest time, unlocks the union, recent the union by `at` (newest 20). Merging never lowers anything.
  * cleanRecord clamps every number and drops unknown keys, so an old or hand-edited record never breaks
  * the page. Storage access is always in try/catch (private windows, blocked site data).
+ *
+ * The optional `garage` block (72 contract C1) is the one exception to "merging never lowers": the kart look a player
+ * last chose, { state, look, updatedAt }. The newer updatedAt wins the WHOLE block, never field by field; a side
+ * without one (an older client, an old server) never erases it. It is stored as sent, unclamped, so a pick this device
+ * cannot wear yet survives; what is actually worn goes through hud/garageState.js cleanGarage when it is applied.
  */
 import { COURSES } from '../track/catalog.js';
 import { MEDAL_ORDER } from './medals.js';
@@ -20,6 +25,10 @@ export const COURSE_BESTS = Object.freeze(['bestRaceS', 'bestLapS', 'trialBestS'
 export const TOTALS = Object.freeze(['races', 'finishes', 'wins', 'podiums', 'online', 'distanceM', 'driftBoosts', 'airS',
   'falls', 'rescues', 'overtakes', 'itemsLanded', 'tetherBreaks', 'wordsCaught', 'songGates', 'cleanLaps']);
 const RECENT_KEYS = Object.freeze(['track', 'mode', 'place', 'of', 'timeS', 'at']);
+/** The server keeps a block under this size and drops only the block otherwise; the page reads the same way. */
+export const GARAGE_MAX_BYTES = 4096;
+/** What this device last applied or stamped: { at: <block updatedAt>, clamped: <something in it was not wearable> }. */
+export const GARAGE_SEEN_KEY = 'glassroad.garage.seen.v1';
 
 export function emptyCourse() {
   const c = {};
@@ -42,6 +51,21 @@ const num = (x) => (Number.isFinite(x) && x > 0 ? Math.min(x, NUM_MAX) : 0);
 const int = (x) => Math.floor(num(x));
 const iso = (x) => (typeof x === 'string' && x.length <= 40 && !Number.isNaN(Date.parse(x)) ? x : '');
 const medal = (m) => (MEDAL_ORDER.includes(m) ? m : null);
+const plain = (x) => !!x && typeof x === 'object' && !Array.isArray(x);
+
+/** A plain copy of the block, or null when it is the wrong shape or too big (only the block goes, never the record). */
+export function cleanGarageBlock(raw) {
+  if (!plain(raw) || !plain(raw.state) || !plain(raw.look) || !iso(raw.updatedAt)) return null;
+  try {
+    const json = JSON.stringify({ state: raw.state, look: raw.look, updatedAt: raw.updatedAt });
+    return new TextEncoder().encode(json).length < GARAGE_MAX_BYTES ? JSON.parse(json) : null;
+  } catch (e) { return null; }
+}
+/** The newer block whole; a tie keeps the first. */
+function newerGarage(a, b) {
+  if (!a || !b) return a || b || null;
+  return Date.parse(b.updatedAt) > Date.parse(a.updatedAt) ? b : a;
+}
 
 export function cleanRecord(raw) {
   const r = emptyRecord();
@@ -62,6 +86,8 @@ export function cleanRecord(raw) {
   }
   if (Array.isArray(raw.unlocks)) r.unlocks = [...new Set(raw.unlocks.filter((u) => typeof u === 'string' && ID_RE.test(u)))].sort();
   r.updatedAt = iso(raw.updatedAt);
+  const garage = cleanGarageBlock(raw.garage);
+  if (garage) r.garage = garage;
   return r;
 }
 
@@ -104,6 +130,8 @@ export function mergeRecords(a, b) {
   for (const id of new Set([...Object.keys(x.achievements), ...Object.keys(y.achievements)])) r.achievements[id] = earlier(x.achievements[id], y.achievements[id]);
   r.unlocks = [...new Set([...x.unlocks, ...y.unlocks])].sort();
   r.updatedAt = later(x.updatedAt, y.updatedAt);   // the later one (an empty side never blanks it)
+  const garage = newerGarage(x.garage, y.garage);
+  if (garage) r.garage = garage;
   return r;
 }
 
@@ -114,6 +142,39 @@ export function loadRecord(storage = defaultStorage()) {
 /** @returns {boolean} true when written */
 export function saveRecord(record, storage = defaultStorage()) {
   try { if (!storage) return false; storage.setItem(RECORD_KEY, JSON.stringify(cleanRecord(record))); return true; } catch (e) { return false; }
+}
+
+export function loadGarageSeen(storage = defaultStorage()) {
+  try {
+    const s = JSON.parse(storage && storage.getItem(GARAGE_SEEN_KEY) || 'null');
+    return s && iso(s.at) ? { at: s.at, clamped: s.clamped === true } : { at: '', clamped: false };
+  } catch (e) { return { at: '', clamped: false }; }
+}
+export function saveGarageSeen(at, clamped, storage = defaultStorage()) {
+  try { if (storage) storage.setItem(GARAGE_SEEN_KEY, JSON.stringify({ at, clamped: !!clamped })); } catch (e) { /* the next look just applies it again */ }
+}
+
+/** A real player change: the block goes on the local record, later than anything this device has seen even when its
+ * clock runs behind. Call only on a player's change, never on load. @returns the record to push, or null. */
+export function stampGarageBlock({ state, look }, storage = defaultStorage(), now = Date.now()) {
+  const record = loadRecord(storage);
+  const seen = record.garage ? Date.parse(record.garage.updatedAt) : 0;
+  const block = cleanGarageBlock({ state, look, updatedAt: new Date(Math.max(now, seen + 1)).toISOString() });
+  if (!block) return null;
+  record.garage = block;
+  if (!saveRecord(record, storage)) return null;
+  saveGarageSeen(block.updatedAt, false, storage);
+  return record;
+}
+
+/** The local record's block when it still has to be applied here: newer than what this device last took, or the same
+ * one if part of it could not be worn then (a grant may have landed since). Else null. */
+export function dueGarageBlock(storage = defaultStorage()) {
+  const block = loadRecord(storage).garage;
+  if (!block) return null;
+  const seen = loadGarageSeen(storage);
+  if (!seen.at || Date.parse(block.updatedAt) > Date.parse(seen.at)) return block;
+  return seen.clamped && seen.at === block.updatedAt ? block : null;
 }
 
 function defaultStorage() { try { return globalThis.localStorage || null; } catch (e) { return null; } }

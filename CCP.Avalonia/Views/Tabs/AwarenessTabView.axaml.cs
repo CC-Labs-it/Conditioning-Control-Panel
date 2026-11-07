@@ -25,8 +25,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// and write <c>AppSettings</c> for real and save.</para>
     ///
     /// <para>The master and keyboard switches drive the Windows keyboard/audio runtime.
-    /// ponytail: ScreenOcr, highlight windows, other response actions and recent-app chips remain
-    /// wire-shell-keyword-triggers-b; Linux has no keyword source yet.</para>
+    /// Haptic/XP/Chaster actions and the Last Detected feed run on it too.
+    /// ponytail: ScreenOcr, highlight windows, visual/avatar actions and recent-app chips remain
+    /// wire-shell-keyword-triggers-b-next; Linux has no keyword source yet.</para>
     /// </summary>
     public partial class AwarenessTabView : UserControl
     {
@@ -95,7 +96,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             // Tabs are shown and hidden rather than rebuilt, so re-read on every show: the master
             // switch is [JsonIgnore] session state and the app list can be edited elsewhere.
-            AttachedToVisualTree += (_, _) => SyncAwarenessTabUi();
+            AttachedToVisualTree += (_, _) => { AttachPulseFeed(); SyncAwarenessTabUi(); };
+            DetachedFromVisualTree += (_, _) => DetachPulseFeed();
             PropertyChanged += (_, e) =>
             {
                 if (e.Property == IsVisibleProperty && IsVisible) SyncAwarenessTabUi();
@@ -147,7 +149,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 AwarenessAppListPanel.IsVisible = s.KeywordTriggerAppScope != AwarenessAppScope.Everywhere;
 
                 UpdateStatusIndicator(masterOn);
+                RefreshAwarenessPulseFeed();
                 RefreshAwarenessPresetCards();
+                RefreshAwarenessSeenAppChips();
             }
             catch (Exception ex)
             {
@@ -193,20 +197,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var on = ChkAwarenessMaster.IsChecked == true;
 
                 // WPF MainWindow.Awareness.cs:395: ON needs premium or the awareness free day
-                // (KeywordTriggerService.HasAccess); the box bounces back. TierGate's toast stands
-                // in for WPF's message box.
-                if (on && !ConditioningControlPanel.Services.TierGate.DemandPremium(ConditioningControlPanel.Localization.Loc.Get("tab_awareness"), "awareness"))
+                // (KeywordTriggerService.HasAccess); the box bounces back and WPF's message box
+                // says why, the same prompt the OCR toggle below shows.
+                if (on && !ConditioningControlPanel.Services.TierGate.RequiresPremium(ConditioningControlPanel.Localization.Loc.Get("tab_awareness"), "awareness").Allowed)
                 {
                     _isLoading = true;
                     try { ChkAwarenessMaster.IsChecked = false; }
                     finally { _isLoading = false; }
+                    _ = Controls.Companion.KeywordTriggersPanel.Inform(TopLevel.GetTopLevel(this) as Window,
+                        ConditioningControlPanel.Localization.Loc.Get("title_patreon_feature"),
+                        ConditioningControlPanel.Localization.Loc.Get("msg_keyword_triggers_patreon_only"));
                     return;
                 }
 
                 CoreSettings.Current.KeywordTriggersEnabled = on;
 
                 Platform.KeywordTriggerHead.Sync();
-                // ponytail: OCR/highlights and non-audio actions remain wire-shell-keyword-triggers-b.
+                // ponytail: OCR/highlights and visual/avatar actions remain wire-shell-keyword-triggers-b-next.
 
                 _isLoading = true;
                 try { if ((ChkAwarenessKeyboard.IsChecked ?? false) != on) ChkAwarenessKeyboard.IsChecked = on; }
@@ -328,9 +335,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Log.Warning(ex, "Awareness tab: failed to write KeywordTriggerAppScope");
             }
 
-            // ponytail: WPF also rebuilds the "recently focused" chips from
-            // KeywordTriggerService.GetRecentForegroundApps(). That ring is fed by a foreground-
-            // window poll (Win32) and lives with the service, so the chip row stays empty here.
+            RefreshAwarenessSeenAppChips();
+        }
+
+        // WPF MainWindow.Awareness.cs:575-637. Names come only from the running keyboard source.
+        internal void RefreshAwarenessSeenAppChips()
+        {
+            AwarenessSeenAppsPanel.Children.Clear();
+            var listed = CoreSettings.Current.KeywordTriggerApps;
+            foreach (var app in Platform.KeywordTriggerHead.Engine.GetRecentForegroundApps()
+                .Where(a => !AwarenessAppScopeRules.MatchesAppList(listed, a)))
+            {
+                var chip = new Button
+                {
+                    Content = new TextBlock { Text = "+ " + app }, Tag = app, FontSize = 10,
+                    Padding = new Thickness(7, 3), Margin = new Thickness(0, 0, 5, 5),
+                    Cursor = new Cursor(StandardCursorType.Hand), Foreground = Brushes.White,
+                    Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x44)),
+                    BorderBrush = SwatchIdle, BorderThickness = new Thickness(1),
+                };
+                ToolTip.SetTip(chip, ConditioningControlPanel.Localization.Loc.GetF("awareness_add_app_tip", app));
+                chip.Click += (_, _) =>
+                {
+                    var apps = new System.Collections.Generic.List<string>(CoreSettings.Current.KeywordTriggerApps ?? new());
+                    if (!AwarenessAppScopeRules.MatchesAppList(apps, app)) apps.Add(app);
+                    CoreSettings.Current.KeywordTriggerApps = apps;
+                    CoreSettings.Save();
+                    // WPF MainWindow.Awareness.cs:637 refreshes only app-scope controls.
+                    TxtAwarenessAppList.Text = string.Join(", ", apps);
+                    RefreshAwarenessSeenAppChips();
+                };
+                AwarenessSeenAppsPanel.Children.Add(chip);
+            }
+            TxtAwarenessSeenAppsLabel.IsVisible = AwarenessSeenAppsPanel.Children.Count > 0;
         }
 
         private void TxtAwarenessAppList_LostFocus(object? sender, RoutedEventArgs e) => CommitAppList();
@@ -354,6 +391,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 settings.KeywordTriggerApps = parsed;
                 CoreSettings.Save();
                 TxtAwarenessAppList.Text = string.Join(", ", parsed);
+                RefreshAwarenessSeenAppChips();
                 Log.Information("Awareness app scope list set to {Count} app(s) ({Mode})",
                     parsed.Count, settings.KeywordTriggerAppScope);
             }

@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -100,6 +101,64 @@ public sealed class PremiumSparkTests
                 shell?.Close();
                 (s.MotionLevel, s.PerformanceMode) = old;
                 (CoreAccount.HasPremiumAccessProvider, CoreAccount.HasLabAccessProvider) = (premium, lab);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task ServerRiseBurstsOnlyWhileAttached()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Platform();
+            var s = CoreSettings.Current;
+            var old = (s.UnifiedId, s.PatreonTier, s.PatreonPremiumValidUntil,
+                s.PatreonLabValidUntil, s.ServerTierSeen, s.MotionLevel, s.PerformanceMode);
+            var (getSecret, premium, lab) = (CoreSecrets.RetrieveProvider,
+                CoreAccount.HasPremiumAccessProvider, CoreAccount.HasLabAccessProvider);
+            Window? w = null;
+            var rises = 0;
+            void Raised(int tier) => rises++;
+            try
+            {
+                s.UnifiedId = "spark-rise-test";
+                CoreSecrets.RetrieveProvider = _ => "test";
+                s.PatreonTier = 0;
+                s.MotionLevel = MotionLevel.Full;
+                s.PerformanceMode = false;
+                CoreAccount.HasPremiumAccessProvider = () => s.PatreonTier > 0;
+                CoreAccount.HasLabAccessProvider = () => s.PatreonTier >= 2;
+                var spark = new PremiumSpark();
+                w = new Window { Content = spark };
+                AccountSeed.TierRaised += Raised;
+                w.Show();
+                AccountSeed.ApplyTierReading(1, "test");
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(1, rises);
+                Assert.Contains(spark.Field.Alive, m => m.Kind == MoteKind.Burst);
+                AccountSeed.ApplyTierReading(1, "test");
+                AccountSeed.ApplyTierReading(0, "test");
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(1, rises);
+                w.Content = null;
+                spark.Advance(10);
+                AccountSeed.ApplyTierReading(2, "test");
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(2, rises);
+                Assert.DoesNotContain(spark.Field.Alive, m => m.Kind == MoteKind.Burst);
+            }
+            finally
+            {
+                AccountSeed.TierRaised -= Raised;
+                try { w?.Close(); }
+                finally
+                {
+                    (s.UnifiedId, s.PatreonTier, s.PatreonPremiumValidUntil, s.PatreonLabValidUntil,
+                        s.ServerTierSeen, s.MotionLevel, s.PerformanceMode) = old;
+                    (CoreSecrets.RetrieveProvider, CoreAccount.HasPremiumAccessProvider,
+                        CoreAccount.HasLabAccessProvider) = (getSecret, premium, lab);
+                }
             }
             return Task.CompletedTask;
         });

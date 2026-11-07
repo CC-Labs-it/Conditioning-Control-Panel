@@ -14,6 +14,7 @@ namespace ConditioningControlPanel.Tests;
 /// The one-time "What moved" card (nav rework, 2026-10-06): upgrades see it once, fresh installs
 /// never do, every row lands on a real destination, and the card realizes offscreen.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class WhatMovedCardTests
 {
     private static string RepoRoot()

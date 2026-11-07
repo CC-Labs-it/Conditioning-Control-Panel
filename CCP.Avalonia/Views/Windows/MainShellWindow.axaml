@@ -56,6 +56,7 @@
         xmlns:cmp="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls"
         xmlns:cmpPages="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages"
         xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+        xmlns:companion="clr-namespace:ConditioningControlPanel.Services.Companion;assembly=CCP.Core"
         xmlns:plat="clr-namespace:ConditioningControlPanel.Avalonia.Platform"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow"
         x:CompileBindings="False"
@@ -69,6 +70,10 @@
         DragDrop.AllowDrop="True">
 
     <Window.Resources>
+        <SolidColorBrush x:Key="AccountChipTier1Brush" Color="#FFD700"/>
+        <SolidColorBrush x:Key="AccountChipTier2Brush" Color="#B47BFF"/>
+        <SolidColorBrush x:Key="AccountChipNeutralBrush" Color="#3D3D60"/>
+
         <!-- ===================== THE SECTION RAIL (WPF MainWindow.xaml:20-135) =====================
              One row per NavSections section, always labelled, inside the 96px column. Template parts
              MainShellWindow.NavRail.cs paints: Background = the row tint (hue at 0x33, shown by
@@ -294,15 +299,15 @@
                             HorizontalAlignment="Right" VerticalAlignment="Center">
                     <!-- Online media today (WPF MainWindow.xaml:227-240): "Online 42%", visible while online media is in
                          the source, consented and switched on. Painted in MainShellWindow.OnlineMeter.cs. -->
-                    <Border x:Name="OnlineMeterPill" IsVisible="False" CornerRadius="11" Padding="9,3,11,3"
+                    <Border x:Name="OnlineMeterPill" IsVisible="False" CornerRadius="12" Padding="6,3,10,3"
                             Margin="0,0,8,0" VerticalAlignment="Center" Cursor="Hand" Background="#251A38">
                         <StackPanel Orientation="Horizontal">
-                            <Ellipse x:Name="OnlineMeterPillDot" Width="8" Height="8" Fill="#FF69B4" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                            <fx:OnlineMeterRing x:Name="OnlineMeterPillRing" Margin="0,0,7,0" VerticalAlignment="Center"/>
                             <TextBlock x:Name="TxtOnlineMeterPill" Foreground="White" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
 
-                    <!-- Directory listing status — Listed / Private only / Claimed.
+                    <!-- Remote directory status - Remote: listed / private / claimed.
                          Visible only while a remote-control session is active. Text,
                          dot colour and tooltip are set in UpdateDirectoryListingStatus(). -->
                     <Border x:Name="DirectoryStatusPill"
@@ -313,7 +318,7 @@
                         <StackPanel Orientation="Horizontal">
                             <Ellipse x:Name="DirectoryStatusDot" Width="8" Height="8"
                                      Fill="#B47BFF" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="TxtDirectoryStatus" Text="Private only"
+                            <TextBlock x:Name="TxtDirectoryStatus" Text="{loc:Str remote_directory_private}"
                                        Foreground="White" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
@@ -619,22 +624,6 @@
                     <fx:ChasterRailChip x:Name="ChasterRail"/>
                     <Border Height="1" Background="{DynamicResource PanelAccentBrush}" Margin="10,4,10,4"/>
                     <fx:DescentFuseRailChip x:Name="FuseRailChip"/>
-                    <!-- The Web App launcher. WPF moved it to a Play Games card (7e50c9381), which this
-                         head does not have yet (sync6-nav-rail-c), so it stays here as a slim pill. -->
-                    <Button x:Name="DoorWebApp" Height="26" Margin="6,2,7,2" Cursor="Hand"
-                            Click="DoorWebApp_Click" ToolTip.Tip="{loc:Str tooltip_nav_door_webapp}">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border CornerRadius="14" Background="#14FFFFFF" BorderBrush="#5EC8F2" BorderThickness="1">
-                                    <ContentPresenter Content="{TemplateBinding Content}"
-                                                      ContentTemplate="{TemplateBinding ContentTemplate}"/>
-                                </Border>
-                            </ControlTemplate>
-                        </Button.Template>
-                        <TextBlock x:Name="TxtNavWebAppLabel" Text="{loc:Str nav_door_webapp}" FontSize="11" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextLightBrush}" HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                    </Button>
                     <!-- THE GEAR. Tag "appsettings" (the tab key "settings" is the dashboard). -->
                     <Button x:Name="DoorSettings" Tag="appsettings" Theme="{StaticResource NavSectionButton}"
                             Click="NavDoor_Click" ToolTip.Tip="{loc:Str nav_door_settings}" AutomationProperties.Name="{loc:Str nav_door_settings}">
@@ -652,12 +641,26 @@
             </Grid>
         </Border>
 
+        <!-- WPF MainWindow.xaml:817-822: shade onto the page, below the rail, never intercept input. -->
+        <Rectangle x:Name="NavRailShadow" Grid.Row="1" Grid.RowSpan="5" Grid.Column="1"
+                   Width="6" HorizontalAlignment="Left" ZIndex="59" IsHitTestVisible="False">
+            <Rectangle.Fill>
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                    <GradientStop Color="#BF000000" Offset="0"/>
+                    <GradientStop Color="#00000000" Offset="1"/>
+                </LinearGradientBrush>
+            </Rectangle.Fill>
+        </Rectangle>
+
         <!-- THE HUD BAND (WPF MainWindow.xaml:805, nav polish wave 2): the header row and the XP row
              read as one zone - 20% black over the window ground and a 1px TextMuted divider at 30%
              under the XP row. Drawn before the header so its controls sit on it; never hit-testable.
              (The depth well along its top is sync6-nav-polish-c.) -->
         <Border x:Name="HudBand" Grid.Row="1" Grid.RowSpan="3" Grid.Column="1" Background="#33000000" IsHitTestVisible="False">
-            <Border Height="1" VerticalAlignment="Bottom" Background="{DynamicResource TextMutedBrush}" Opacity="0.3"/>
+            <Panel>
+                <Border x:Name="HudDepthTop" Height="9" VerticalAlignment="Top" Background="{DynamicResource DepthWellTop}"/>
+                <Border Height="1" VerticalAlignment="Bottom" Background="{DynamicResource TextMutedBrush}" Opacity="0.3"/>
+            </Panel>
         </Border>
 
         <!-- Header Bar - Row 1 -->
@@ -734,9 +737,12 @@
                             <ComboBox.Template>
                                 <ControlTemplate TargetType="ComboBox">
                                     <Grid>
+                                        <!-- Stretch: Fluent's ToggleButton theme sets Left/Center, which shrank the pill to
+                                             its 16px caret column (the stray pink bar). WPF fills the box. -->
                                         <ToggleButton x:Name="ToggleButton"
                                                       IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
-                                                      Focusable="False" ClickMode="Press">
+                                                      Focusable="False" ClickMode="Press"
+                                                      HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                                             <ToggleButton.Template>
                                                 <ControlTemplate TargetType="ToggleButton">
                                                     <Border x:Name="chip" CornerRadius="12" Cursor="Hand"
@@ -851,9 +857,8 @@
                                                    Foreground="{DynamicResource PinkBrush}"
                                                    HorizontalAlignment="Center"
                                                    VerticalAlignment="Center"><Run Text="M"/><InlineUIContainer
-                                                       BaselineAlignment="Baseline"><TextBlock
-                                                           Text="&#xE713;" FontFamily="Segoe MDL2 Assets, Segoe UI Symbol, Segoe UI"
-                                                           FontSize="10" FontWeight="Normal"
+                                                       BaselineAlignment="Baseline"><fx:IconGlyph
+                                                           Kind="Settings" Size="10"
                                                            Foreground="{DynamicResource PinkBrush}"
                                                            Margin="0.7,0,0.7,-1"/></InlineUIContainer><Run
                                                        Text="D MANAGER"/></TextBlock>
@@ -865,46 +870,6 @@
                             </Button.Template>
                         </Button>
 
-                        <!-- Account chip (Phase 1, net-new). Sits beside the mod chip so the two
-                             "who am I / what am I running" facts read as one cluster.
-                             States are painted by RefreshAccountChip (MainWindow.UiUpdates.cs):
-                             signed out = pink CTA border, no badge; signed in free = neutral;
-                             T1 = gold 🔒; T2/whitelist = violet 🧪. Background/BorderBrush are
-                             TemplateBindings on purpose - the refresh sets them on the Button,
-                             and the signed-out/free states use SetResourceReference so a mod
-                             switch still repaints the accent.
-                             Phase 2 re-points the click at the real Settings/Account page. -->
-                        <Button x:Name="BtnAccountChip" Click="BtnAccountChip_Click"
-                                Margin="8,0,0,0" Height="24" VerticalAlignment="Center" Cursor="Hand"
-                                Background="{DynamicResource SurfaceBgBrush}"
-                                BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1"
-                                ToolTip.Tip="{loc:Str tooltip_account_chip}">
-                            <Button.Template>
-                                <ControlTemplate TargetType="Button">
-                                    <Border x:Name="chip" CornerRadius="12" Padding="9,0"
-                                            Background="{TemplateBinding Background}"
-                                            BorderBrush="{TemplateBinding BorderBrush}"
-                                            BorderThickness="{TemplateBinding BorderThickness}">
-                                        <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Left"
-                                                         Content="{TemplateBinding Content}"
-                                                         ContentTemplate="{TemplateBinding ContentTemplate}"/>
-                                    </Border>
-                                    <!-- ponytail: WPF ControlTemplate.Triggers (IsMouseOver) dropped. Avalonia writes these as
-                                         Style selectors outside the template (":pointerover /template/ Border#x"); the
-                                         rest state renders correctly and only the hover/press/tag skins are lost. -->
-                                </ControlTemplate>
-                            </Button.Template>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock x:Name="TxtAccountChipBadge" Text="🔒" FontSize="10"
-                                           Margin="0,0,5,0" VerticalAlignment="Center"
-                                           IsVisible="False"/>
-                                <TextBlock x:Name="TxtAccountChipName" Text="{loc:Str account_chip_sign_in}"
-                                           FontSize="11" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}"
-                                           VerticalAlignment="Center"
-                                           MaxWidth="110" TextTrimming="CharacterEllipsis"/>
-                            </StackPanel>
-                        </Button>
                     </StackPanel>
                     <!-- The rank title used to ellipsise here: "PERFECT FUCKPUPPET" (level 100+,
                          MainWindow.UiUpdates.cs) measures past 200px at 18px bold and rendered as
@@ -960,13 +925,29 @@
                          nothing else. The third beat (the Platinum Puppets thanks hyperlink) was
                          retired with the row - see MainWindow.Marquee.cs, where the rotation is
                          now a two-beat crossfade. -->
+                    <!-- Keep the glow off the text container. -->
+                    <Border Grid.Column="3" x:Name="HeaderBannerGlowHost"
+                            Background="{DynamicResource SurfaceBgBrush}" CornerRadius="13"
+                            Height="26" Width="{Binding #HeaderBannerHost.Bounds.Width}"
+                            Margin="12,0,12,0" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            IsHitTestVisible="False">
+                        <Border.Effect>
+                            <DropShadowEffect Color="{DynamicResource PinkColor}" BlurRadius="12" OffsetX="0" OffsetY="0" Opacity="0.35"/>
+                        </Border.Effect>
+                    </Border>
                     <Border Grid.Column="3" x:Name="HeaderBannerHost"
-                            Background="{DynamicResource SurfaceBgBrush}"
+                            Background="{DynamicResource DepthWellFloorBrush}"
                             BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1"
-                            CornerRadius="13" Padding="12,0" Height="26" MaxWidth="620"
+                            CornerRadius="16" Padding="0" Height="31" MaxWidth="744"
                             Margin="12,0,12,0"
                             HorizontalAlignment="Center" VerticalAlignment="Center">
                         <Grid>
+                            <Border x:Name="BannerDrumShade" CornerRadius="15" IsHitTestVisible="False"/>
+                            <Border x:Name="BannerDrumLip" CornerRadius="15" IsHitTestVisible="False"/>
+                            <Border x:Name="BannerDrumFoot" CornerRadius="15" BorderThickness="0,0,0,1"
+                                    BorderBrush="{DynamicResource DepthWellFoot}" IsHitTestVisible="False"/>
+                            <Grid x:Name="BannerDrum" ClipToBounds="True" Margin="2,0">
+                            <Grid Margin="12,0">
                             <TextBlock x:Name="TxtBannerPrimary" Foreground="{DynamicResource PinkBrush}"
                                        FontSize="12" FontStyle="Italic"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -1031,13 +1012,15 @@
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
                                        Opacity="0" IsHitTestVisible="False"/>
+                            </Grid>
+                            </Grid>
                             <!-- Chrome FX (PR-1): one-shot sheen pass over the banner when the
                                  message changes. Its own ClipToBounds host so the band can't
                                  escape the card - deliberately NOT ClipToBounds on the shared
                                  Grid, which would start clipping the banner text itself.
                                  Hit-test invisible so the hyperlinks underneath keep working.
                                  Driven from MainWindow.ChromeFx.cs. -->
-                            <Grid x:Name="BannerSheenHost" ClipToBounds="True" IsHitTestVisible="False">
+                            <Grid x:Name="BannerSheenHost" Margin="14,0" ClipToBounds="True" IsHitTestVisible="False">
                                 <Border x:Name="BannerSheen" Width="110" HorizontalAlignment="Left" Opacity="0"
                                         RenderTransformOrigin="0.5,0.5">
                                     <Border.Background>
@@ -1055,6 +1038,15 @@
                                     </Border.RenderTransform>
                                 </Border>
                             </Grid>
+                            <Border x:Name="BannerGlass" CornerRadius="12,12,5,5" Height="11" Margin="7,2,7,0"
+                                    VerticalAlignment="Top" IsHitTestVisible="False">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                                        <GradientStop Offset="0" Color="#24FFFFFF"/>
+                                        <GradientStop Offset="1" Color="#00FFFFFF"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
                         </Grid>
                     </Border>
                 </Grid>
@@ -1153,9 +1145,10 @@
                          main retired the pill and tooltip_change_language with the WPF header chrome
                          (3ee513455), and no surviving key says "change language". This head still
                          draws the pill, so it carries a compatibility key holding main's own last
-                         translation verbatim in all nine languages. Temporary: it retires when this
-                         shell follows main and moves the picker into Settings. -->
-                    <ComboBox x:Name="CmbLanguagePill" Width="90" Margin="0,0,10,0"
+                         translation verbatim in all nine languages. Retired from view like WPF
+                         (parity 2026-11-06): Settings > General > Language is the picker; the pill
+                         stays collapsed but live (as CmbPresets) so the selector sync keeps working. -->
+                    <ComboBox x:Name="CmbLanguagePill" Width="90" Margin="0,0,10,0" IsVisible="False"
                               SelectionChanged="CmbLanguagePill_SelectionChanged"
                               ToolTip.Tip="{loc:Str avalonia_compat_language_hint}">
                         <ComboBox.Theme>
@@ -1228,8 +1221,8 @@
                             </ControlTheme>
                         </ComboBox.ItemContainerTheme>
                     </ComboBox>
-                    <Button x:Name="BtnUpdateAvailable" Content="{loc:Str btn_v7_1_15_is_out}"
-                            Click="BtnUpdateAvailable_Click" ToolTip.Tip="{loc:Str tooltip_v7_1_15_settle_down}"
+                    <Button x:Name="BtnUpdateAvailable" Content="{loc:Str btn_v7_2_2_is_out}"
+                            Click="BtnUpdateAvailable_Click" ToolTip.Tip="{loc:Str tooltip_v7_2_2_second_lap}"
                             FontSize="11" FontWeight="Bold" Cursor="Hand">
                         <Button.Theme>
                             <ControlTheme TargetType="Button">
@@ -1381,13 +1374,54 @@
                         </Grid>
                     </Button>
 
+                    <!-- Account chip (Phase 1, net-new). WPF nav polish wave 6 (MainWindow.xaml:1516-1526): it
+                         moved out of the identity cluster to sit immediately left of the profile
+                         bubble, the two reading as one "who am I" unit (chip then bubble, 6px apart).
+                         States are painted by RefreshAccountChip (MainWindow.UiUpdates.cs):
+                         signed out = pink CTA border, no badge; signed in free = neutral;
+                         T1 = gold 🔒; T2/whitelist = violet 🧪. Background/BorderBrush are
+                         TemplateBindings on purpose - the refresh sets them on the Button,
+                         and the signed-out/free states use SetResourceReference so a mod
+                         switch still repaints the accent.
+                         Phase 2 re-points the click at the real Settings/Account page. -->
+                    <Button x:Name="BtnAccountChip" Click="BtnAccountChip_Click"
+                            Margin="8,0,0,0" Height="24" VerticalAlignment="Center" Cursor="Hand"
+                            Background="{DynamicResource SurfaceBgBrush}"
+                            BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1"
+                            ToolTip.Tip="{loc:Str tooltip_account_chip}">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="chip" CornerRadius="12" Padding="9,0"
+                                        Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}">
+                                    <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Left"
+                                                     Content="{TemplateBinding Content}"
+                                                     ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                                </Border>
+                                <!-- ponytail: WPF ControlTemplate.Triggers (IsMouseOver) dropped. Avalonia writes these as
+                                     Style selectors outside the template (":pointerover /template/ Border#x"); the
+                                     rest state renders correctly and only the hover/press/tag skins are lost. -->
+                            </ControlTemplate>
+                        </Button.Template>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <fx:IconGlyph x:Name="TxtAccountChipBadge" Kind="LockClosed" Size="10"
+                                       Margin="0,0,5,0" VerticalAlignment="Center"
+                                       IsVisible="False"/>
+                            <TextBlock x:Name="TxtAccountChipName" Text="{loc:Str account_chip_sign_in}"
+                                       FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextLightBrush}"
+                                       VerticalAlignment="Center"
+                                       MaxWidth="110" TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                    </Button>
                     <!-- Profile bubble: the user's avatar (Discord photo / preset bust / initials).
                          Hover opens the account menu below; a direct click jumps to the Profile
                          tab (key "discord"). It also reacts to app moments - XP pulses, level-up
                          bounce+burst, flash wobble, achievement glow. All logic lives in
                          MainWindow.ProfileBubble.cs; the visuals are named here so that partial
                          can paint and animate them without template digging. -->
-                    <Button x:Name="BtnProfileBubble" Width="34" Height="34" Margin="8,0,0,0" ClipToBounds="False"
+                    <Button x:Name="BtnProfileBubble" Width="34" Height="34" Margin="6,0,0,0" ClipToBounds="False"
                             Click="BtnProfileBubble_Click" Cursor="Hand"
                             PointerEntered="ProfileBubble_MouseEnter" PointerExited="ProfileBubble_MouseLeave">
                         <Button.Template>
@@ -1657,11 +1691,15 @@
                          sits, and after a level-up the fill has already wrapped back to a sliver. -->
                     <!-- ToolTip is a live readout of the ambient-bubble daily XP budget (#1019/#1026);
                          the placeholder here only exists so ToolTipOpening fires, which rewrites it. -->
-                    <Border x:Name="XPBarTrack" Grid.Column="2" Background="{DynamicResource PanelAccentBrush}" CornerRadius="4" Height="8" Margin="0,0,10,0"
+                    <Border x:Name="XPBarTrack" Grid.Column="2" Background="{DynamicResource DepthWellFloorBrush}" CornerRadius="5" Height="10" Margin="0,0,10,0"
                             ToolTip.Tip=" ">
                         <Grid>
-                            <Border x:Name="XPBar" Background="{DynamicResource PinkBrush}" CornerRadius="4"
-                                    HorizontalAlignment="Left" Width="100">
+                            <!-- WPF MainWindow.xaml:1867: the groove (top and left inner shadow, foot light) under the fill. -->
+                            <Border x:Name="XpDepthTop" Height="5" CornerRadius="5,5,0,0" VerticalAlignment="Top" Background="{DynamicResource DepthWellTop}" IsHitTestVisible="False"/>
+                            <Border x:Name="XpDepthLeft" Width="6" CornerRadius="5,0,0,5" HorizontalAlignment="Left" Background="{DynamicResource DepthWellLeft}" IsHitTestVisible="False"/>
+                            <Border Height="1" VerticalAlignment="Bottom" Margin="5,0" Background="{DynamicResource DepthWellFoot}" IsHitTestVisible="False"/>
+                            <Border x:Name="XPBar" Background="{DynamicResource PinkBrush}" CornerRadius="5"
+                                    HorizontalAlignment="Left" Width="100" SizeChanged="XPBar_SizeChanged">
                                 <!-- Chrome FX (PR-1): a slow gloss travelling along the filled part of
                                      the bar. White on purpose - it reads as light catching the fill
                                      rather than a second accent colour on top of the accent. Parked at
@@ -1670,6 +1708,11 @@
                                 <!-- Inset past the pill's rounded caps: a Border does not clip its
                                      child to CornerRadius, so a full-bleed gloss would show square
                                      corners poking out of the 8px-tall bar at each end. -->
+                                <Grid>
+                                <Border x:Name="XpDepthGloss" CornerRadius="5" Background="{DynamicResource DepthTubeGloss}" IsHitTestVisible="False"/>
+                                <Ellipse x:Name="XPTubeBead" Width="8" Height="8" HorizontalAlignment="Right"
+                                         VerticalAlignment="Center" Margin="0,0,-4,0" IsVisible="False"
+                                         Fill="{DynamicResource DepthTubeBead}" IsHitTestVisible="False"/>
                                 <Border x:Name="XPBarSheen" Margin="4,0" IsHitTestVisible="False" Opacity="0">
                                     <Border.Background>
                                         <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
@@ -1679,8 +1722,9 @@
                                         </LinearGradientBrush>
                                     </Border.Background>
                                 </Border>
+                                </Grid>
                             </Border>
-                            <Border x:Name="XPBarFlashOverlay" Background="{DynamicResource PinkBrush}" CornerRadius="4"
+                            <Border x:Name="XPBarFlashOverlay" Background="{DynamicResource PinkBrush}" CornerRadius="5"
                                     HorizontalAlignment="Left"
                                     Width="{Binding #XPBar.Width}"
                                     Opacity="0" IsHitTestVisible="False">
@@ -1694,7 +1738,7 @@
                                  tweened on the fill's own clock from AnimateXpDisplay, and the pulse
                                  is an ambient loop owned by MainWindow.HeroFx.cs. No Effect: the
                                  halo IS the gradient, so nothing here needs an intermediate surface. -->
-                            <Border x:Name="XPMeniscus" Width="12" Height="12" CornerRadius="6"
+                            <Border x:Name="XPMeniscus" Width="10" Height="10" CornerRadius="5"
                                     HorizontalAlignment="Left" VerticalAlignment="Center"
                                     Opacity="0" IsHitTestVisible="False">
                                 <Border.Background>
@@ -2005,7 +2049,7 @@
 
                 <!-- Remember: snapshot current setup / recall it. Right-click to re-save. -->
                 <Button x:Name="BtnRemember" Grid.Column="0" Width="68" Height="50" Margin="0,0,8,0"
-                        Theme="{StaticResource PinkButton}" FontSize="20" Click="BtnRemember_Click"
+                        Theme="{StaticResource PinkButton}" fx:HudPlank.Kind="Plank" FontSize="20" Click="BtnRemember_Click"
                         PointerReleased="BtnRemember_RightClick"
                         ToolTip.Tip="Remember my current setup">
                     <TextBlock x:Name="TxtRememberIcon" Text="☆" FontSize="24" VerticalAlignment="Center" TextAlignment="Center"/>
@@ -2020,12 +2064,7 @@
                 <Border x:Name="StartGlowLayer" Grid.Column="1" Height="42" Margin="4,0"
                         VerticalAlignment="Center" CornerRadius="8"
                         Background="{DynamicResource FxGlowBrush}" IsHitTestVisible="False"
-                        Opacity="0" IsVisible="False">
-                    <Border.Effect>
-                        <DropShadowEffect Color="{DynamicResource FxGlowColor}"
-                                          BlurRadius="20" OffsetX="0" OffsetY="0" Opacity="1"/>
-                    </Border.Effect>
-                </Border>
+                        Opacity="0" IsVisible="False"/>
 
                 <!-- START ring layer (Velvet Kit 2, FX lane B). Three pre-built 2px rings sharing the
                      button's cell, CornerRadius and height, BEHIND the button so only the part that
@@ -2061,7 +2100,7 @@
                 <!-- StartPressScale is the ignition dip (Velvet Kit 2). It is the button's only
                      RenderTransform and nothing else may claim it - HoverPop deliberately refuses
                      named transforms, so this stays a lane-B-only surface. -->
-                <Button x:Name="BtnStart" Grid.Column="1" Theme="{StaticResource PinkButton}"
+                <Button x:Name="BtnStart" Grid.Column="1" Theme="{StaticResource PinkButton}" fx:HudPlank.Kind="Chunky"
                         Background="{DynamicResource AccentGradientBrush}"
                         Height="50" FontSize="18" Click="BtnStart_Click"
                         RenderTransformOrigin="0.5,0.5"
@@ -2114,6 +2153,7 @@
                      sliver glued to it. -->
                 <Button x:Name="BtnStartMenu" Grid.Column="2" Width="68" Height="50" Margin="8,0,0,0"
                         Theme="{StaticResource PinkButton}" Background="{DynamicResource AccentGradientBrush}"
+                        fx:HudPlank.Kind="Plank"
                         FontSize="22" Click="BtnStartMenu_Click"
                         ToolTip.Tip="Start options">
                     <TextBlock Text="▼" FontSize="18" VerticalAlignment="Center" HorizontalAlignment="Center" TextAlignment="Center"/>
@@ -2154,6 +2194,7 @@
                      right next to it, so the action bar had two primaries and no hierarchy. It is
                      the house SecondaryButton now; START is the only filled pink on the bar. -->
                 <Button x:Name="BtnSaveAll" Grid.Column="5" Content="{loc:Str btn_save_2}" Theme="{StaticResource SecondaryButton}"
+                        fx:HudPlank.Kind="Plank"
                         Height="50" FontSize="16" Margin="0,0,10,0" Click="BtnSave_Click"
                         ToolTip.Tip="{loc:Str tooltip_save_all_settings_to_disk}"/>
                 <!-- Save "absorb" (Velvet Kit 2, FX lane B): one ripple ring off the button's edge and
@@ -2179,7 +2220,10 @@
                      rest of the app uses for destructive actions (PANIC STOP does use the real
                      red). Quiet outline at rest, fills on hover: still findable, no longer
                      competing with the primary action for the eye. -->
-                <Button Grid.Column="6" Content="{loc:Str btn_exit}" Height="50" FontSize="16" Click="BtnExit_Click"
+                <!-- Depth (wave 10, lane B): Exit is a raised plank too. The red outline stays the
+                     signal; the lamp's bevel sits just inside it, the sheen over the face. -->
+                <Button x:Name="BtnExit" Grid.Column="6" Content="{loc:Str btn_exit}" Height="50" FontSize="16" Click="BtnExit_Click"
+                        fx:HudPlank.Kind="Plank"
                         ToolTip.Tip="{loc:Str tooltip_exit_the_application_completely}">
                     <Button.Theme>
                         <ControlTheme TargetType="Button">
@@ -2189,18 +2233,32 @@
                             <Setter Property="Cursor" Value="Hand"/>
                             <Setter Property="Template">
                                     <ControlTemplate TargetType="Button">
-                                        <Border x:Name="b" Background="{TemplateBinding Background}"
-                                                BorderBrush="{DynamicResource DangerBrush}" BorderThickness="1"
-                                                CornerRadius="6" Padding="20,10">
-                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                             Content="{TemplateBinding Content}"
-                                                             ContentTemplate="{TemplateBinding ContentTemplate}"/>
-                                        </Border>
-                                        <!-- ponytail: WPF ControlTemplate.Triggers (IsMouseOver) dropped. Avalonia writes these as
-                                             Style selectors outside the template (":pointerover /template/ Border#x"); the
-                                             rest state renders correctly and only the hover/press/tag skins are lost. -->
+                                        <Grid>
+                                            <Border x:Name="DepthDrop" VerticalAlignment="Bottom" Height="5" Margin="6,0,6,-5"
+                                                    CornerRadius="0,0,5,5" Background="{DynamicResource DepthDropBand}"
+                                                    IsHitTestVisible="False"/>
+                                            <Grid x:Name="DepthFace">
+                                                <Border x:Name="b" Background="{TemplateBinding Background}"
+                                                        BorderBrush="{DynamicResource DangerBrush}" BorderThickness="1"
+                                                        CornerRadius="6" Padding="20,10">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                     Content="{TemplateBinding Content}"
+                                                                     ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                                                </Border>
+                                                <Border Margin="1" CornerRadius="5" Background="{DynamicResource DepthRaisedSheen}"
+                                                        IsHitTestVisible="False"/>
+                                                <Border Margin="1" CornerRadius="5" BorderThickness="1"
+                                                        BorderBrush="{DynamicResource DepthRaisedBevel}" IsHitTestVisible="False"/>
+                                            </Grid>
+                                        </Grid>
                                     </ControlTemplate>
                             </Setter>
+                            <Style Selector="^:pointerover /template/ Border#b">
+                                <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
+                            </Style>
+                            <Style Selector="^:pointerover">
+                                <Setter Property="Foreground" Value="White"/>
+                            </Style>
                         </ControlTheme>
                     </Button.Theme>
                 </Button>
@@ -2409,6 +2467,9 @@
                             <Grid>
                                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                                 <!-- WPF MainWindow.xaml:2683 (nav rework): replay the current What moved card. -->
+                                <Button x:Name="BtnFirstShowReplay" Grid.Row="1" Content="{loc:Str first_show_replay}" Click="BtnFirstShowReplay_Click"
+                                        Theme="{StaticResource PinkButton}" FontSize="20" FontWeight="Bold"
+                                        HorizontalAlignment="Stretch" Padding="22,16" Margin="0,18,0,0"/>
                                 <Button x:Name="BtnHelpWhatMoved" Grid.Row="2" Content="{loc:Str help_whatmoved}" Click="BtnWhatMovedReplay_Click"
                                         Theme="{StaticResource SecondaryButton}" FontSize="14"
                                         HorizontalAlignment="Stretch" Padding="18,9" Margin="0,8,0,0"/>
@@ -2450,6 +2511,20 @@
                                                        Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
                                         <Button x:Name="BtnHelpWhatMovedRow" Grid.Column="2" Content="{loc:Str whatmoved_show}" Click="BtnWhatMovedReplay_Click"
+                                                Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Border>
+
+                                <!-- WPF MainWindow.xaml:2946. Rain V2 stays out of 7.2.0. -->
+                                <Border x:Name="HelpRainRow" IsVisible="{x:Static companion:RainV2Gate.On}"
+                                        Background="{DynamicResource SurfaceBgBrush}" CornerRadius="8" Padding="12" Margin="0,0,0,8">
+                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                        <fx:IconGlyph Kind="Wand" Size="22" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{loc:Str help_rain_title}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{loc:Str help_rain_sub}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                        <Button x:Name="BtnHelpRain" Grid.Column="2" Content="{loc:Str help_read_btn}"
                                                 Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
@@ -2761,7 +2836,7 @@
          not the mod accent, and a faint band of that hue fades 28 px into the window. Authored in
          Home's Lilac; MainShellWindow.SectionChrome.cs PaintSectionEdge repaints it with the page
          wash. Each band is a solid hue under a fade mask (WPF's three stops A / 0.42 A / 0), so
-         the retint is a BrushTransition. The lift sits at the top centre (WPF's Fixed motion). -->
+         the retint is a BrushTransition. The lift travels at Full, rests at Reduced and hides at Off. -->
     <Panel x:Name="SectionEdgeHost" Grid.RowSpan="6" Grid.ColumnSpan="2" ZIndex="9997" IsHitTestVisible="False">
         <Panel x:Name="SectionEdgeGlow">
             <Border Height="28" VerticalAlignment="Top" Background="#32B79CFF">
@@ -2793,14 +2868,9 @@
                 </Border.OpacityMask>
             </Border>
         </Panel>
+        <fx:EdgeParticles x:Name="SectionEdgeParticles"/>
         <Border x:Name="GlassWindowEdge" BorderBrush="#E6B79CFF" BorderThickness="3" CornerRadius="8"/>
-        <Border x:Name="SectionEdgeLiftTop" Height="3" VerticalAlignment="Top" Margin="8,0,8,0" Background="#FFD0BFFF">
-            <Border.OpacityMask>
-                <LinearGradientBrush StartPoint="0%,50%" EndPoint="100%,50%">
-                    <GradientStop Offset="0.4" Color="#00000000"/><GradientStop Offset="0.5" Color="#FF000000"/><GradientStop Offset="0.6" Color="#00000000"/>
-                </LinearGradientBrush>
-            </Border.OpacityMask>
-        </Border>
+        <cmp:SectionEdgeLift x:Name="SectionEdgeLift"/>
     </Panel>
 
     <!-- THE FUSE's corner readout (CONTRACT-FUSE-0816 2.2). From T-1h the T-minus stops being a
@@ -2820,7 +2890,7 @@
             Background="#B00A0514" BorderBrush="#40E0B052" BorderThickness="1">
         <StackPanel>
             <TextBlock x:Name="FuseCornerDigits" Text=""
-                       FontFamily="Consolas, Courier New, monospace" FontSize="15"
+                       FontFamily="{DynamicResource Font.Mono}" FontSize="15"
                        Foreground="#FFC9C4D6" HorizontalAlignment="Center"/>
             <TextBlock x:Name="FuseCornerPresence" Text="" IsVisible="False"
                        FontSize="10" Margin="0,3,0,0" Foreground="#8AC9C4D6"

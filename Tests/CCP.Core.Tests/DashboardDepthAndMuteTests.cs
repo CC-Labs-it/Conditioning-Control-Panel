@@ -1,3 +1,4 @@
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.UI;
 using Xunit;
@@ -62,4 +63,26 @@ public sealed class DashboardDepthAndMuteTests
         CardMutePixels.ToGrey(pixels);
         Assert.Equal(new byte[] { 76, 76, 76, 93, 150, 150, 150, 127, 29, 29, 29, 255, 44 }, pixels);
     }
+    [Theory]
+    [InlineData(false, MotionLevel.Full, PerformanceTier.Balanced, true)]
+    [InlineData(false, MotionLevel.Reduced, PerformanceTier.Balanced, true)]
+    [InlineData(true, MotionLevel.Full, PerformanceTier.Balanced, false)]
+    [InlineData(false, MotionLevel.Off, PerformanceTier.Balanced, false)]
+    [InlineData(false, MotionLevel.Full, PerformanceTier.Performance, false)]
+    public void TiltHonorsSelectionMotionAndPerformance(bool active, MotionLevel level, PerformanceTier tier, bool allowed)
+    {
+        Assert.Equal(allowed, DepthLaw.CoinTilts(active, level, tier));
+        Assert.Equal(DepthLaw.TiltDegrees, DashboardDepthLaw.TiltFor(2, -2));
+        Assert.Equal(-DepthLaw.TiltDegrees, DashboardDepthLaw.TiltFor(2, 2));
+        Assert.Equal(0, DashboardDepthLaw.TiltFor(0, 1));
+    }
+
+    [Theory]
+    [InlineData(2, 1, 0)]
+    [InlineData(2, -2, -3)]
+    [InlineData(0, 2, 3)]
+    [InlineData(1, 1, 1)]
+    public void ReleaseOvershootFollowsTravelAndStaysStillAtRest(double from, double to, double expected) =>
+        Assert.Equal(expected, DepthLaw.Overshoot(from, to));
+
 }

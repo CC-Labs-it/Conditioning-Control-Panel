@@ -90,6 +90,18 @@ public class CompositorEngine : IDisposable
         Wake();
     }
 
+    /// <summary>Re-sort after a layer's <see cref="IWpfLayer.ZIndex"/> moved (the pink filter's
+    /// under/over choice, #1546). The render tick reads the snapshot, swapped here in one write.</summary>
+    public void ResortLayers()
+    {
+        lock (_layerLock)
+        {
+            _layers.Sort((a, b) => a.ZIndex.CompareTo(b.ZIndex));
+            _layerSnapshot = _layers.ToArray();
+        }
+        Wake();
+    }
+
     /// <summary>
     /// Ensure the engine is ticking. Safe from any thread and cheap when already awake;
     /// called by layers whenever their activity or visible state changes.

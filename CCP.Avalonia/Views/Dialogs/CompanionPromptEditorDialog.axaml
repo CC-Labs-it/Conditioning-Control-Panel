@@ -16,6 +16,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         xmlns:models="clr-namespace:ConditioningControlPanel.Models;assembly=CCP.Core"
+        xmlns:companion="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls.Companion"
         x:Class="ConditioningControlPanel.Avalonia.Views.Dialogs.CompanionPromptEditorDialog"
         Title="{loc:Str dialog_customize_ai_companion}"
         Width="700" Height="750"
@@ -350,34 +351,8 @@
                         <TextBlock Theme="{StaticResource SectionDescription}"
                                    Text="Add URLs to hypno content that your companion knows about and can recommend. These links apply to ALL personalities, regardless of which preset is active."/>
 
-                        <!-- Links List -->
-                        <Border Background="{DynamicResource PanelBgBrush}" CornerRadius="4" Padding="8" Margin="0,0,0,8">
-                            <ListBox x:Name="LstKnowledgeLinks" Height="120"
-                                     Background="Transparent" BorderThickness="0"
-                                     Foreground="White" FontSize="11"
-                                     SelectionMode="Single">
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate x:DataType="models:KnowledgeBaseLink">
-                                        <StackPanel Margin="0,2">
-                                            <TextBlock Text="{Binding Title}" Foreground="{DynamicResource PinkBrush}" FontWeight="SemiBold"/>
-                                            <TextBlock Text="{Binding Url}" Foreground="#707070" FontSize="10"/>
-                                            <TextBlock Text="{Binding Description}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11"
-                                                       TextWrapping="Wrap" IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ListBox.ItemTemplate>
-                            </ListBox>
-                        </Border>
-
-                        <!-- Add/Remove Buttons -->
-                        <StackPanel Orientation="Horizontal">
-                            <Button x:Name="AddKnowledgeLink" Theme="{StaticResource ResetButton}" Padding="12,6">
-                                <TextBlock Text="{loc:Str btn_add_link}"/>
-                            </Button>
-                            <Button x:Name="RemoveKnowledgeLink" Theme="{StaticResource ResetButton}" Padding="12,6" Margin="8,0,0,0">
-                                <TextBlock Text="{loc:Str btn_remove_selected}"/>
-                            </Button>
-                        </StackPanel>
+                        <!-- Links list: the shared editor, also hosted on Companion > Links (WPF CompanionPromptEditorDialog.xaml:381) -->
+                        <companion:KnowledgeLinksEditor x:Name="KnowledgeLinks"/>
                     </StackPanel>
                 </Expander>
 

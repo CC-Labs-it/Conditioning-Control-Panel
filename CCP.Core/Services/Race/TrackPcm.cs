@@ -32,16 +32,19 @@ public static class TrackDecoder
 
     /// <summary>
     /// Decodes <paramref name="path"/> to mono 16 kHz float PCM. Progress is bytes decoded over the
-    /// reader's length, 0..1. Cancellation is checked between blocks and throws
-    /// <see cref="OperationCanceledException"/>.
+    /// reader's length, 0..1. The head checks cancellation while decoding; Core checks before
+    /// invoking it and before accepting its PCM, throwing <see cref="OperationCanceledException"/>.
     /// </summary>
     public static TrackPcm Decode(string path, IProgress<double>? progress, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
             throw new FileNotFoundException("Track file not found", path ?? "");
 
         var decode = DecodeProvider ?? throw new InvalidOperationException("this build cannot decode audio");
         var pcm = decode(path, progress, ct);
+        // A head may finish before its next cancellation poll; do not publish a cancelled decode.
+        ct.ThrowIfCancellationRequested();
         return new TrackPcm
         {
             Mono16k = pcm,

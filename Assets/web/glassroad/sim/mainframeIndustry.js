@@ -7,8 +7,9 @@ import { machineryBeatAt, beatCycle, machineryRearming } from '../track/machiner
 import { makeQuery } from '../track/query.js';
 
 import { trapStroke } from '../track/trapArrangement.js';
+import { HAZARD_KART } from './hitShapes.js';
 
-export const PRESS_BODY = Object.freeze({ height: 2.2, radius: .7, kartHeight: 1.6, repeatS: .8 });
+export const PRESS_BODY = Object.freeze({ height: 2.1, radius: HAZARD_KART.radiusM, kartHeight: 1.6, repeatS: .8 });
 
 export function industryZones(track) {
   if (track.id !== 'mainframe') return [];
@@ -63,7 +64,7 @@ function local(st, z) {
 /** The same solid head the renderer draws, with space for the kart's actual body. */
 export function pressOverlap(z, pose, p) {
   return Math.abs(p.x-z.x) < z.w/2+PRESS_BODY.radius && Math.abs(p.along) < z.len/2+PRESS_BODY.radius
-    && p.h >= -.6 && p.h + PRESS_BODY.kartHeight > pose.lift && p.h < pose.lift + PRESS_BODY.height;
+    && p.h >= -.6 && p.h + HAZARD_KART.heightM > pose.lift && p.h < pose.lift + PRESS_BODY.height;
 }
 
 export function createMainframeIndustry(track, events) {

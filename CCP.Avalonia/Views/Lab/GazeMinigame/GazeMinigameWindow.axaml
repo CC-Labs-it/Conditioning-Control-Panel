@@ -56,17 +56,22 @@
                     <Border x:Name="border" Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="4" Padding="{TemplateBinding Padding}">
+                            Padding="{TemplateBinding Padding}">
                         <ContentPresenter Content="{TemplateBinding Content}"
                                           ContentTemplate="{TemplateBinding ContentTemplate}"
                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                 </ControlTemplate>
             </Setter>
-            <!-- WPF's stock button chrome greys itself out when IsEnabled is false; the
-                 replacement template would not, and Start ships disabled. -->
+            <!-- WPF's stock button chrome (square corners) paints a disabled button its own light grey
+                 (#F4F4F4 fill, #ADB2B5 edge, #838383 text) whatever the style's Background; Start ships disabled. -->
+            <Style Selector="^:disabled">
+                <Setter Property="Foreground" Value="#838383"/>
+            </Style>
             <Style Selector="^:disabled /template/ Border#border">
-                <Setter Property="Opacity" Value="0.45"/>
+                <Setter Property="Background" Value="#F4F4F4"/>
+                <Setter Property="BorderBrush" Value="#ADB2B5"/>
+                <Setter Property="BorderThickness" Value="1"/>
             </Style>
         </ControlTheme>
 
@@ -80,12 +85,14 @@
             <Setter Property="BorderBrush" Value="#FF69B4"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <!-- WPF inherits the window's 12px and draws the stock square chrome. -->
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="Template">
                 <ControlTemplate TargetType="Button">
                     <Border Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="4" Padding="{TemplateBinding Padding}">
+                            Padding="{TemplateBinding Padding}">
                         <ContentPresenter Content="{TemplateBinding Content}"
                                           ContentTemplate="{TemplateBinding ContentTemplate}"
                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>

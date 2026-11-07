@@ -397,6 +397,7 @@ public sealed class FriendsApi : IFriendsApi
                     Platforms = online && fo["platforms"] is JArray pa
                         ? FriendPlatform.Normalise(pa.Select(Str))
                         : Array.Empty<string>(),
+                    Look = Services.PlayerLook.From(fo["cosmetics"]),
                 });
             }
 
@@ -433,7 +434,7 @@ public sealed class FriendsApi : IFriendsApi
         {
             if (r is not JObject ro || Str(ro["id"]) is not { Length: > 0 } rid) continue;
             list.Add(new FriendRequest(rid, Str(ro["name"]) ?? "", Str(ro["avatar"]), Str(ro["via"]),
-                ParseTime(ro["at"], DateTimeOffset.MinValue)));
+                ParseTime(ro["at"], DateTimeOffset.MinValue)) { Look = Services.PlayerLook.From(ro["cosmetics"]) });
         }
         return list;
     }
@@ -461,7 +462,7 @@ public sealed class FriendsApi : IFriendsApi
         if (at == DateTimeOffset.MinValue) return null;
 
         SendKind kind;
-        string? poke = null, destination = null, code = null, room = null;
+        string? poke = null, destination = null, code = null, room = null, track = null;
         WatchRef? watch = null;
         TimeSpan life;
         switch (Str(o["kind"]))
@@ -484,6 +485,7 @@ public sealed class FriendsApi : IFriendsApi
                 else if (code != null && !IsJoinCode(code)) return null;
                 // A race room the grammar does not admit is dropped: the invite stays a bare "come race".
                 if (destination == InviteDestination.Race && Str(o["room"]) is { } r && InviteDestination.IsRoomId(r)) room = r;
+                if (room != null && Str(o["track"]) is { } t && Lobby.RaceOpenApi.TrackName(t).Length > 0) track = t;
                 life = TimeSpan.FromSeconds(InviteDestination.LifetimeSeconds);
                 break;
             case "watch":
@@ -506,7 +508,7 @@ public sealed class FriendsApi : IFriendsApi
         }
         var expires = ParseTime(o["expires_at"], at + life);
         return new InboxItem(id, kind, from, Str(o["from_name"]) ?? "", Str(o["from_avatar"]), poke, destination, code, watch,
-            at, expires) { Room = room };
+            at, expires) { Room = room, Track = track };
     }
 
     internal static bool IsJoinCode(string s)

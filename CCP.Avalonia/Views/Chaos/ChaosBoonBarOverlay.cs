@@ -24,7 +24,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// <para>Not click-through, as in WPF (:110): hovering a tile shows its card. No click handlers,
     /// ShowActivated=false (WS_EX_NOACTIVATE), ShowInTaskbar=false (WS_EX_TOOLWINDOW).</para>
     /// <para>ponytail: WPF RaiseActive re-stacks it above a chaos mandatory video (ChaosWindowZ);
-    /// this head plays no chaos video yet, so Topmost alone is the whole contract here.</para>
+    /// the run host reasserts it during pinned runs; chaos video is not wired yet.</para>
     /// </summary>
     internal sealed class ChaosBoonBarOverlay : Window
     {

@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {loadTrack} from '../track/load.js';
 import {goonworksWorldPlan,goonworksBoxesIntersect,goonworksSegmentBlocked} from '../render/goonworksWorld.js';
 import {goonworksMediaLayout,goonworksSpiralLayout} from '../render/goonworksMedia.js';
-import {goonworksTubeShell,goonworksTubeSolids,goonworksPlatformGeometry} from '../render/goonworksGeometry.js';
+import {goonworksTubeShell,goonworksTubeSolids,goonworksPlatformGeometry,goonworksWallGeometry} from '../render/goonworksGeometry.js';
 import {spatialCandidates} from '../render/spatialCandidates.js';
 import {goonworksScreenVisibility} from '../render/goonworksVisibility.js';
 import {selectScrolllerSlots} from '../render/mediaSelection.js';
@@ -46,6 +46,28 @@ test('GOONWORKS does not dress the supported race corridor with scenery',()=>{
     if(r.motion){const a=r.motion.axis??1,b=(a+1)%3,c=(a+2)%3,reach=['gear','spiral','star','torus','sphere'].includes(r.shape)?Math.max(size[b],size[c]):Math.hypot(size[b],size[c]);size[b]=size[c]=reach;}
     for(const c of plan.corridor)if(goonworksBoxesIntersect({...r,size},c)){hits.push(r.id);break;}}
   assert.deepEqual(hits,[]);
+});
+
+test('hall walls join on their actual route frames without overlapping internal caps',()=>{
+  const rows=plan.rows.filter(r=>r.wallCorners);assert.ok(rows.length>80);
+  const pointKey=p=>p.map(v=>v.toFixed(6)).join(','),faceKey=vertices=>vertices.map(pointKey).sort().join('|');
+  const bands=new Map();for(const row of rows){const key=row.id+':'+row.material;if(!bands.has(key))bands.set(key,[]);bands.get(key).push(row);}
+  let joints=0;
+  for(const band of bands.values()){
+    const ends=new Map();
+    for(const row of band)for(const corners of[row.wallCorners.slice(0,4),row.wallCorners.slice(4)]){
+      const key=faceKey(corners);ends.set(key,(ends.get(key)||0)+1);
+    }
+    joints+=[...ends.values()].filter(n=>n===2).length;
+  }
+  assert.ok(joints>60,'the wall sections share actual corners through bends');
+  const geometry=goonworksWallGeometry(rows);assert.ok(geometry.indices.length<rows.length*36,'shared caps are removed');
+  const seen=new Set(),P=geometry.positions,N=geometry.normals,I=geometry.indices;
+  for(let i=0;i<I.length;i+=3){const key=faceKey(Array.from(I.slice(i,i+3),id=>Array.from(P.slice(id*3,id*3+3))));
+    assert.equal(seen.has(key),false,'opaque triangles cover each wall face once');seen.add(key);
+    const a=I[i]*3,b=I[i+1]*3,c=I[i+2]*3,x=[P[b]-P[a],P[b+1]-P[a+1],P[b+2]-P[a+2]],y=[P[c]-P[a],P[c+1]-P[a+1],P[c+2]-P[a+2]];
+    assert.ok((x[1]*y[2]-x[2]*y[1])*N[a]+(x[2]*y[0]-x[0]*y[2])*N[a+1]+(x[0]*y[1]-x[1]*y[0])*N[a+2]>0,'both triangles wind with their exterior normal');
+  }
 });
 
 test('rabbit wall proxies cover rendered opaque triangles while oval window centres remain open',()=>{
@@ -125,6 +147,9 @@ test('GOONWORKS opaque road and tube skins cull hidden faces and keep outward tr
 });
 test('GOONWORKS renderer prebuilds finite batches and has pause-safe platform feedback and disposal',()=>{
   const world=buildGoonworks(track);assert.ok(world.stats.parts>700);assert.equal(world.platforms.length,plan.platforms.length);
+  const walls=world.group.children.filter(o=>o.name.startsWith('goonworks-joined-wall-'));
+  assert.ok(walls.length>0&&walls.length<12,'wall colours remain shared batches');
+  for(const wall of walls){assert.equal(wall.material.side,FrontSide);assert.ok(wall.userData.screenPlacementSolids.length>0);}
   assert.equal(world.group.getObjectByName('goonworks-gear-gear-moving').material.side,FrontSide);
   for(const name of['goonworks-thick-ribbon','goonworks-rabbit-inner-shell','goonworks-rabbit-outer-shell'])assert.equal(world.group.getObjectByName(name).material.side,FrontSide,name);
   world.group.traverse(o=>{if(o.isInstancedMesh)assert.ok(o.instanceMatrix.array.every(Number.isFinite),o.name);});

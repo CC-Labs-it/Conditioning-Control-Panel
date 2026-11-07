@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Platform;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Fx;
@@ -16,16 +17,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 /// "Show me around" walks the real app through Core <see cref="S.WelcomeSteps"/>, ringing each named control with
 /// <see cref="FirstShowHighlight"/> while EMI stands beside it (<see cref="FirstShowLayout.GuideBody"/>). Head
 /// difference: WPF stretched the stage over the virtual desktop; an Avalonia window across monitors of different
-/// scale does not lay out, so the stage moves to the monitor the app window is on.</summary>
+/// scale does not lay out, so the stage follows the target monitor, or the app monitor when there is no target.</summary>
 internal sealed partial class FirstShowStageWindow
 {
     private readonly FirstShowHighlight _highlight = new();
     private bool _guiding, _waitForHover;
     private int _guideIndex = -1;
     private double _hoverTime, _targetWait, _highlightWait;
+    internal Func<Screen?>? GuideScreenOverride;
+    internal Func<PixelPoint, Screen?>? GuideScreenFromPointOverride;
+    internal Func<Control, Point, PixelPoint>? GuidePointToScreenOverride;
+    private PixelPoint GuidePointToScreen(Control target, Point point) => GuidePointToScreenOverride != null ? GuidePointToScreenOverride(target, point) : target.PointToScreen(point);
+    private Screen? GuideScreen()
+    {
+        if (_guideTarget is { IsEffectivelyVisible: true } target && target.Bounds.Width > 0 && target.Bounds.Height > 0)
+        {
+            var center = GuidePointToScreen(target, new Point(target.Bounds.Width / 2, target.Bounds.Height / 2));
+            var targetScreen = GuideScreenFromPointOverride != null ? GuideScreenFromPointOverride(center) : Screens?.ScreenFromPoint(center);
+            if (targetScreen != null) return targetScreen;
+        }
+        return GuideScreenOverride != null ? GuideScreenOverride() : _main == null ? null : Screens?.ScreenFromWindow(_main);
+    }
     private Control? _guideTarget;
     private FeatureCard? _previewCard;
     private string? _targetName;
+    internal Window GuideSpeechWindow => _speechWindow;
+    internal Point GuideBodyCenter => ToScreen(_x, _y);
     internal int GuideIndex => _guideIndex;
     internal Control? GuideTarget => _guideTarget;
     internal FeatureCard? PreviewCard => _previewCard;
@@ -40,22 +57,30 @@ internal sealed partial class FirstShowStageWindow
     private void BeginWelcome()
     {
         if (_main == null) { Close(); return; }
+        ConditioningControlPanel.Avalonia.Platform.X11Overlay.SetInputRects(this, Array.Empty<PixelRect>(), 0); InputRectCount = 0;
         _guiding = true; _ending = false; _logo.Opacity = 0;
         if (_effects != null) { _stage.Children.Remove(_effects); _effects.Dispose(); _effects = null; }
-        try
-        {
-            if (Screens?.ScreenFromWindow(_main) is { } screen && screen.Bounds != _screenPx)
-            {
-                _screenPx = screen.Bounds; _scale = screen.Scaling > 0 ? screen.Scaling : 1;
-                Position = _screenPx.Position; Width = _screenPx.Width / _scale; Height = _screenPx.Height / _scale;
-            }
-        }
-        catch (Exception ex) { Log.Debug(ex, "First show guide: could not follow the app window"); }
+        FollowGuideScreen();
         if (!_stage.Children.Contains(_highlight)) _stage.Children.Insert(0, _highlight);
         if (!_main.IsVisible) _main.Show();
         if (_main.WindowState == WindowState.Minimized) _main.WindowState = WindowState.Normal;
         _main.Activate();
         NextGuideStep();
+    }
+
+    // WPF Guide.cs :44-47 spans the desktop; this head uses one monitor at a time.
+    private bool FollowGuideScreen()
+    {
+        try
+        {
+            if (GuideScreen() is not { } screen) return false;
+            double scale = screen.Scaling > 0 ? screen.Scaling : 1;
+            if (screen.Bounds == _screenPx && scale == _scale) return false;
+            _screenPx = screen.Bounds; _scale = scale;
+            Position = _screenPx.Position; Width = _screenPx.Width / scale; Height = _screenPx.Height / scale;
+            return true;
+        }
+        catch (Exception ex) { Log.Debug(ex, "First show guide: could not follow the app window"); return false; }
     }
 
     private void NextGuideStep()
@@ -120,14 +145,15 @@ internal sealed partial class FirstShowStageWindow
                 if (_guideIndex == 0) AddButton(Text("next"), NextGuideStep);
             }
         }
+        bool changedScreen = FollowGuideScreen();
         var safe = SafeBounds();
         _highlight.IsVisible = true; _highlight.Target = null;
         _highlight.Width = Width; _highlight.Height = Height;
         _highlight.Viewport = new Rect(safe.Left, safe.Top, safe.Width, safe.Height);
         if (_guideTarget is { IsEffectivelyVisible: true } target && target.Bounds.Width > 0)
         {
-            var a = target.PointToScreen(new Point(0, 0));
-            var b = target.PointToScreen(new Point(target.Bounds.Width, target.Bounds.Height));
+            var a = GuidePointToScreen(target, new Point(0, 0));
+            var b = GuidePointToScreen(target, new Point(target.Bounds.Width, target.Bounds.Height));
             var rect = new Rect(new Point((a.X - Position.X) / _scale, (a.Y - Position.Y) / _scale),
                 new Point((b.X - Position.X) / _scale, (b.Y - Position.Y) / _scale)).Intersect(_highlight.Viewport);
             if (rect.Width > 0 && rect.Height > 0) _highlight.Target = rect;
@@ -141,7 +167,7 @@ internal sealed partial class FirstShowStageWindow
         }
         _highlight.InvalidateVisual();
         var placement = FirstShowLayout.GuideBody(safe, BodySize(), SpeechSize(), TargetRect);
-        double ease = (CoreSettings.Current?.MotionLevel ?? MotionLevel.Full) == MotionLevel.Off ? 1 : 1 - Math.Exp(-dt * 7);
+        double ease = changedScreen || (CoreSettings.Current?.MotionLevel ?? MotionLevel.Full) == MotionLevel.Off ? 1 : 1 - Math.Exp(-dt * 7);
         _x += (placement.Left + placement.Width / 2 - _x) * ease; _y += (placement.Top + placement.Height / 2 - _y) * ease;
     }
 

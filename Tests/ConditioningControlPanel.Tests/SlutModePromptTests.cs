@@ -200,13 +200,22 @@ public class SlutModePromptTests : IDisposable
         // a bite the guard blocked on the way out would be the old no-op in a new coat.
         var guard = new ModerationGuard();
         var validator = new PromptValidator();
-        foreach (var text in new[] { SlutModeBite.Block, PromptAssembler.ChatSpiceInstruction }.Concat(SlutModeBite.ExampleLines))
+        foreach (var text in new[] { SlutModeBite.Block, PromptAssembler.ChatSpiceInstruction })
         {
             var outcome = guard.CheckOutput(text);
             Assert.True(outcome.Allow, $"ModerationGuard blocked the bite ({outcome.Category}: {outcome.Note}): {text}");
             var v = validator.Validate(text);
             Assert.True(v.Clean, $"PromptValidator flagged the bite [{string.Join(", ", v.MatchedPatterns)}]: {text}");
         }
+    }
+
+    [Fact]
+    public void TheBite_ShowsTheModelNoReplyToRepeat()
+    {
+        // Players got the block's sample lines back word for word, whatever they had just said.
+        Assert.DoesNotContain("to copy", SlutModeBite.Block, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("\" / \"", SlutModeBite.Block, StringComparison.Ordinal);
+        Assert.Contains("what they just said", SlutModeBite.Block, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -10,8 +10,8 @@ const code = source.slice(start, source.indexOf('  // --- Q:', start));
 assert.ok(start > 0 && code.includes('onHostMessage('));
 
 function page(mode = 'local') {
-  let time = 0, timer, click, message, dragging = false, menu = false, over = false;
-  const listeners = [], transitions = [], clock = [], exits = [], events = [];
+  let time = 0, timer, click, dragging = false, menu = false, over = false;
+  const listeners = [], hostMessages = [], transitions = [], clock = [], exits = [], events = [];
   const window = { PBP: { game: {
     isWatch: mode === 'watch', isOver: () => over,
     current: mode === 'online' ? { offerDraw() {} } : {},
@@ -28,14 +28,15 @@ function page(mode = 'local') {
   const hostEscape = createHostEscape({ win: window, doc: document, now: () => time,
     later: fn => { timer = fn; return 1; }, cancel: () => { timer = null; }, makeEvent: event });
   vm.runInNewContext(code, { window, document, hostEscape, HOST_ESCAPE,
-    onHostMessage: fn => { message = fn; }, postToHost: m => exits.push(m.type),
+    onHostMessage: fn => hostMessages.push(fn), postToHost: m => exits.push(m.type),
     bus: { on() {}, emit: name => events.push(name) }, board: {},
     createPauseHush: () => ({ set: p => transitions.push(p), returning: () => false }),
     pictureChoice: { available: () => false }, presentation: () => ({}),
     drag: { isDragging: () => dragging, drop: () => { dragging = false; } },
+    showSlip: () => {},
   });
   return { window, card, transitions, clock, exits, events,
-    real: repeat => dispatchEvent(event(repeat)), kept: () => message({ type: HOST_ESCAPE }),
+    real: repeat => dispatchEvent(event(repeat)), kept: () => hostMessages.forEach(fn => fn({ type: HOST_ESCAPE })),
     flush() { const pending = timer; timer = null; pending?.(); },
     later() { time += 2500; }, drag() { dragging = true; },
     menu() { menu = true; }, finish() { over = true; },

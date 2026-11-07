@@ -235,7 +235,7 @@
              is left here is the neutralising work - Fluent's ListBoxItem otherwise brings its own
              padding, min-height and blue hover/selection tint into the roster. -->
         <ControlTheme x:Key="LbRowContainer" TargetType="ListBoxItem">
-            <Setter Property="Foreground" Value="{DynamicResource PinkBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource LeaderboardAccentBrush}"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Padding" Value="0"/>
@@ -253,12 +253,23 @@
                 </ControlTemplate>
             </Setter>
             <Style Selector="^:selected">
-                <Setter Property="Background" Value="{DynamicResource TransparentPink40Brush}"/>
+                <Setter Property="Background" Value="{DynamicResource LeaderboardTint40Brush}"/>
             </Style>
         </ControlTheme>
     </UserControl.Resources>
 
     <UserControl.Styles>
+        <Style Selector="Border.lbdepth">
+            <Setter Property="BorderBrush" Value="{DynamicResource DepthFloatRim}"/>
+        </Style>
+        <Style Selector="Border.lbdepth.me">
+            <Setter Property="Background" Value="{DynamicResource DepthPressedShade}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DepthPressedBevel}"/>
+            <Setter Property="RenderTransform"><TranslateTransform Y="1"/></Setter>
+        </Style>
+        <Style Selector="Rectangle#LbRowFloat.me">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
         <!-- == the WPF ItemContainerStyle DataTriggers, moved onto the row == -->
         <Style Selector="Border.lbrow">
             <Setter Property="Background" Value="Transparent"/>
@@ -269,13 +280,13 @@
             <Setter Property="Background" Value="#18FFD700"/>
         </Style>
         <Style Selector="Border.lbrow.me">
-            <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource LeaderboardTint20Brush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource LeaderboardAccentBrush}"/>
             <Setter Property="BorderThickness" Value="3,0,0,0"/>
         </Style>
         <!-- last, so hover wins over the OG wash exactly as the WPF trigger order did -->
         <Style Selector="Border.lbrow:pointerover">
-            <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
+            <Setter Property="Background" Value="{DynamicResource LeaderboardTint20Brush}"/>
         </Style>
 
         <!-- == rank delta arrow colour (DataTrigger on DeltaState) == -->
@@ -440,7 +451,7 @@
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
                                 <Border x:Name="AllTimeBorder" Background="{TemplateBinding Background}" CornerRadius="0,10,10,0"
-                                        Padding="{TemplateBinding Padding}" BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1">
+                                        Padding="{TemplateBinding Padding}" BorderBrush="{DynamicResource LeaderboardAccentBrush}" BorderThickness="1">
                                     <ContentPresenter Content="{TemplateBinding Content}"
                                                       ContentTemplate="{TemplateBinding ContentTemplate}"
                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -710,6 +721,8 @@
             </Border>
 
             <Grid Grid.Row="1">
+                <Border x:Name="LbWellFloor" CornerRadius="10" IsHitTestVisible="False"
+                        MaxWidth="{StaticResource LbBlockWidth}" Background="{DynamicResource DepthWellFloorBrush}"/>
                 <ListBox x:Name="LstLeaderboard" Background="Transparent" DoubleTapped="LstLeaderboard_DoubleTapped"
                          BorderThickness="0" Margin="0,1,0,2" Padding="0"
                          MaxWidth="{StaticResource LbBlockWidth}" HorizontalAlignment="Stretch"
@@ -723,8 +736,14 @@
                              Padding/Margin here are density-critical: they set the row pitch, and
                              the pitch is what decides how many rows survive above the you-bar. -->
                         <DataTemplate DataType="tabs:LeaderboardRow" x:DataType="tabs:LeaderboardRow">
+                            <Grid Margin="4,0,21,0">
+                            <Rectangle x:Name="LbRowFloat" Classes.me="{Binding IsCurrentUser}" Height="4"
+                                       VerticalAlignment="Bottom" Margin="10,0,10,-3" IsHitTestVisible="False"
+                                       Fill="{DynamicResource DepthFloatBand}"/>
+                            <Border x:Name="LbRowCard" Classes="lbdepth" Classes.me="{Binding IsCurrentUser}"
+                                    CornerRadius="9" BorderThickness="1">
                             <Border Classes="lbrow" Classes.og="{Binding IsSeason0Og}" Classes.me="{Binding IsCurrentUser}"
-                                    CornerRadius="9" Padding="10,3" Margin="4,0,21,0">
+                                    CornerRadius="9" Padding="9,2">
                                 <ToolTip.Tip>
                                     <StackPanel MaxWidth="300">
                                         <TextBlock Text="{Binding DisplayName}" FontWeight="Bold" FontSize="13"
@@ -893,6 +912,8 @@
                                     </StackPanel>
                                 </Grid>
                             </Border>
+                            </Border>
+                            </Grid>
                         </DataTemplate>
 
                         <!-- ============================= tier band ============================= -->
@@ -929,6 +950,11 @@
                         </DataTemplate>
                     </ListBox.DataTemplates>
                 </ListBox>
+                <Grid x:Name="LbWellBands" IsHitTestVisible="False" MaxWidth="{StaticResource LbBlockWidth}">
+                    <Rectangle x:Name="LbWellTop" Height="9" VerticalAlignment="Top" RadiusX="10" RadiusY="10" Fill="{DynamicResource DepthWellTop}"/>
+                    <Rectangle x:Name="LbWellLeft" Width="6" HorizontalAlignment="Left" Fill="{DynamicResource DepthWellLeft}"/>
+                    <Rectangle x:Name="LbWellFoot" Height="1" VerticalAlignment="Bottom" Margin="10,0" Fill="{DynamicResource DepthWellFoot}"/>
+                </Grid>
 
                 <!-- Sits just under the legend, NOT vertically centred: centred, it floated in
                      ~500px of void and read as a rendering accident rather than as the answer
@@ -942,8 +968,8 @@
 
         <!-- =========================== ROW 3 - sticky "you" =========================== -->
         <Border x:Name="YouBar" Grid.Row="3" Padding="0,7"
-                Background="{DynamicResource TransparentPink20Brush}"
-                BorderThickness="0,1,0,0" BorderBrush="{DynamicResource TransparentPink40Brush}">
+                Background="{DynamicResource LeaderboardTint20Brush}"
+                BorderThickness="0,1,0,0" BorderBrush="{DynamicResource LeaderboardTint40Brush}">
           <Border MaxWidth="{StaticResource LbBlockWidth}" HorizontalAlignment="Stretch"
                   Padding="14,0,31,0" Background="Transparent">
             <Grid>

@@ -72,6 +72,18 @@ public sealed class V2AuthServiceWireTests : IDisposable
         }
     }
 
+    [Theory]
+    [InlineData("{\"available\":false}", false)]
+    [InlineData("{\"available\":true}", true)]
+    [InlineData("{}", null)]
+    [InlineData("invalid", null)]
+    public async Task Name_precheck_escapes_name_and_tolerates_unavailable_server(string body, bool? expected)
+    {
+        _fake.Body = body;
+        Assert.Equal(expected, await Client().IsDisplayNameAvailableAsync("A & B"));
+        Assert.StartsWith("GET " + Url + "/v2/auth/check-name?name=A%20%26%20B", Assert.Single(_fake.Seen));
+    }
+
     [Fact]
     public async Task EveryRequestMatchesTheWpfFixture()
     {
@@ -217,6 +229,27 @@ public sealed class V2AuthServiceWireTests : IDisposable
         Assert.Equal(345, s.PlayerXP);
         V2AuthService.ApplyIdentity(s, new V2AuthService.V2User { UnifiedId = "u9" }, null);
         Assert.Equal("T2", s.AuthToken);   // no token in the response keeps the stored one
+    }
+
+    /// <summary>WPF ProfileSyncService.RecordEasterEggReadAsync (:4758): signed in sends the id with the token,
+    /// signed out an anonymous {}; the count comes back, any failure is -1.</summary>
+    [Fact]
+    public async Task EasterEggReadMatchesWpf()
+    {
+        var c = Client();
+        _fake.Body = "{\"count\":42}";
+        Assert.Equal(42, await c.RecordEasterEggReadAsync());
+        _settings.UnifiedId = null;
+        Assert.Equal(42, await c.RecordEasterEggReadAsync());
+        Assert.Equal(new[]
+        {
+            Post("/v2/easter-egg", "{\"unified_id\":\"u_abc123\"}", true),
+            Post("/v2/easter-egg", "{}", false),
+        }, _fake.Seen);
+        _fake.Status = HttpStatusCode.InternalServerError;
+        Assert.Equal(-1, await c.RecordEasterEggReadAsync());
+        _fake.Status = HttpStatusCode.OK; _fake.Throw = new HttpRequestException("down");
+        Assert.Equal(-1, await c.RecordEasterEggReadAsync());
     }
 
     private static string Post(string path, string body, bool auth) =>

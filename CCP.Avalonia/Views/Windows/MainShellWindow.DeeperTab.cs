@@ -22,20 +22,10 @@
 //
 // LIBRARY ACTIONS (open, play, delete, folder, demo, tutorial) are in MainShellWindow.DeeperHub.cs.
 // Import picker/drop and promotion are in MainShellWindow.DeeperImport.cs.
-// STILL OUT, and why:
-//   OpenInDeeperPlayer, OpenDeeperEditorFromPlayer, OpenInDeeperEditorForMedia,
-//   HandlePendingFileOpen (file-association entry points), OnDeeperLibraryChanged (no watcher),
-//   The browser half - OnDeeperBrowserBound/Unbound, RefreshBrowserWebcamButton,
-//   BtnWebcamTracking_Click, MaybePromptBrowserWebcamForEnhancement, OnBrowserEnhanceMatchChanged,
-//   ChkForceShowBambiCloud_Changed, ToggleEnhanceIfPossible_Changed. WebView2 plus WebcamTrackingState.
-//   BtnWebcamTracking_Click is also a REFUSAL and not just a wait: its portable half flips a caption,
-//   its unportable half opens or closes the camera, and the same judgement recorded for the two
-//   status pills in MainShellWindow.LabTab.cs holds - a control that reports tracking with no
-//   camera behind it is worse than one that does nothing.
-//   The rail pulse - StartDeeperTabPulse / StopDeeperTabPulse, a WPF storyboard on BtnDeeper.
-//   (Not out any more: the catalogue. The submit half is in MainShellWindow.DeeperSubmissions.cs
-//   (U3); the lookup -> toast -> picker -> download -> player chain is at the bottom of this file.)
-//   MaybePromptMandatoryVideoEnhancement (with its "Don't ask again" fold).
+// Shell entry points, import and watcher: MainShellWindow.DeeperImport.cs / DeeperHub.cs.
+// Tour: DeeperHub.cs. First-visit pulse: TabTransitions.cs.
+// Browser discovery/match and mandatory-video startup nudge remain unported.
+// WPF references: MainWindow.DeeperTab.cs:120,137,604-689,704-826.
 //
 // NOT BLOCKED, RESTORED: BtnDeeperNewEnhancement_Click. It used to be listed on the line above with
 // the other library relays and that was wrong - the only thing it takes from EnhancementLibrary is

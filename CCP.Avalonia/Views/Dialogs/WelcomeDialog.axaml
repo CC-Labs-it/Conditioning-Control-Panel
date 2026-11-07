@@ -99,7 +99,13 @@
                     FontWeight="Bold" FontSize="16" Padding="40,16"
                     BorderThickness="0" CornerRadius="8"
                     HorizontalAlignment="Center">
-                <fx:IconLabel Key="btn_let_s_begin"/>
+                <!-- WPF draws the label's 💜 white on the pink button. IconLabel would map it to the
+                     Heart glyph in PinkBrush (pink on pink), so the glyph is spelled out in white,
+                     as the header heart is, and the text is the key without its emoji. -->
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <fx:IconGlyph Kind="Heart" Variant="Filled" Size="16" Foreground="White" VerticalAlignment="Center"/>
+                    <TextBlock Text="{loc:StrBare btn_let_s_begin}" VerticalAlignment="Center"/>
+                </StackPanel>
             </Button>
         </Grid>
     </Border>

@@ -26,8 +26,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Seam: make the unshown window click-through and topmost at <c>bounds</c> (physical px). False = this platform cannot.</summary>
         internal static Func<Window, PixelRect, bool> Place = (w, b) =>
             X11Overlay.IsAvailable && X11Overlay.IsCompositing && X11Overlay.SetClickThrough(w, true) && X11Overlay.SetOverrideRedirect(w, b);
-        /// <summary>Seam: the cursor in physical desktop px (WPF GetCursorPos; X11 only here).</summary>
-        internal static Func<ScreenPoint?> Cursor = () => X11Pointer.Read() is { } r ? new ScreenPoint(r.At.X, r.At.Y) : null;
+        /// <summary>Seam: the cursor in physical desktop px (WPF GetCursorPos on Windows, XQueryPointer on X11).</summary>
+        internal static Func<ScreenPoint?> Cursor = () => OperatingSystem.IsWindows()
+            ? Win32Overlay.CursorPosition() is { } p ? new ScreenPoint(p.X, p.Y) : null
+            : X11Pointer.Read() is { } r ? new ScreenPoint(r.At.X, r.At.Y) : null;
+        internal static Func<TopLevel, bool> Raise = X11Overlay.Raise;
         internal static TimeProvider Time = TimeProvider.System;
         internal static ConditioningControlPanel.Avalonia.Controls.Fx.IFrameSource? Frames;
 
@@ -72,6 +75,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Stage = new PopStage(plan, plan.Particles);
             Stage.Paint(look.Text, look.Colour, look.Source);
             Content = Stage;
+            // WPF OnContentRendered: reassert above overlays mapped between creation and Show.
+            Opened += (_, _) => Raise(this);
         }
 
         /// <summary>WPF Show: pop a figure at <paramref name="origin"/> (physical px), stacked above

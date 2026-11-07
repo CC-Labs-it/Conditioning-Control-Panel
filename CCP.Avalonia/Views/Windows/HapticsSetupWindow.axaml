@@ -60,7 +60,7 @@
                                    FontSize="12" TextAlignment="Center" TextWrapping="Wrap"
                                    HorizontalAlignment="Center" MaxWidth="380" Margin="0,0,0,22"/>
 
-                        <Button x:Name="BtnSelectLovense" Width="330" Height="76" Margin="0,8"
+                        <Button x:Name="BtnSelectLovense" Width="330" Height="76" Margin="0,8" HorizontalAlignment="Center"
                                 Background="#2D2D4A" BorderBrush="{DynamicResource PinkBrush}" BorderThickness="2"
                                 Cursor="Hand" HorizontalContentAlignment="Left">
                             <StackPanel Margin="14,0">
@@ -71,7 +71,7 @@
                             </StackPanel>
                         </Button>
 
-                        <Button x:Name="BtnSelectButtplug" Width="330" Height="76" Margin="0,8"
+                        <Button x:Name="BtnSelectButtplug" Width="330" Height="76" Margin="0,8" HorizontalAlignment="Center"
                                 Background="#2D2D4A" BorderBrush="{DynamicResource SecondaryBrush}" BorderThickness="2"
                                 Cursor="Hand" HorizontalContentAlignment="Left">
                             <StackPanel Margin="14,0">
@@ -82,7 +82,7 @@
                             </StackPanel>
                         </Button>
 
-                        <Button x:Name="BtnSelectMock" Width="330" Height="76" Margin="0,8"
+                        <Button x:Name="BtnSelectMock" Width="330" Height="76" Margin="0,8" HorizontalAlignment="Center"
                                 Background="#2D2D4A" BorderBrush="#4A4A6A" BorderThickness="2"
                                 Cursor="Hand" HorizontalContentAlignment="Left">
                             <StackPanel Margin="14,0">

@@ -14,15 +14,9 @@ namespace ConditioningControlPanel
     /// contract - both calls are fire-and-forget on the WPF side too, where the services are
     /// reached through a null-conditional <c>App.Progression?.</c>.</para>
     ///
-    /// <para><b>Why <c>source</c> is a string.</b> <c>XPSource</c> is a plain enum with no head
-    /// dependencies, but it is declared inside
-    /// <c>ConditioningControlPanel/Services/Companion/CompanionService.cs</c>, a file that uses
-    /// <c>System.Windows.Threading</c> and <c>App.</c> and so cannot move. Declaring a second copy
-    /// here is exactly the drift this repo forbids, so the seam names the member and the head
-    /// parses it. The enum's own comment - members are APPENDED, never reordered - is what makes a
-    /// name-based parse stable.
-    /// ponytail: string until XPSource is extracted out of CompanionService.cs into Core; then
-    /// this parameter becomes the enum and the head's Enum.TryParse goes away.</para>
+    /// <para>The source names a shared <c>Services.XPSource</c> member. The enum now lives in Core.
+    /// ponytail: keep the string-based provider contract for existing callers; heads parse unknown
+    /// names as <c>Other</c> rather than dropping an award.</para>
     ///
     /// <para>Volatile for the same reason as <see cref="CoreMods"/>: a head seeds these on the
     /// startup thread while a view may award XP from a timer or background thread that never

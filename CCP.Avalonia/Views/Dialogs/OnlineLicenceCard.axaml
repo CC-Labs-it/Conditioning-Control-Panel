@@ -1,0 +1,73 @@
+<!-- PORTED from ConditioningControlPanel/Dialogs/OnlineLicenceCard.xaml.
+     Structure, order, spacing, sizes, colours and every x:Name / loc key preserved. Deviations, all forced:
+       ResizeMode="NoResize"        -> CanResize="False"
+       WindowStyle="None"           -> SystemDecorations="None"
+       Style="{StaticResource X}"   -> Theme="{StaticResource X}"
+       Border.LayoutTransform       -> a LayoutTransformControl around the stamp
+       Content="{loc:Str ...}"      -> a <TextBlock> child (trap 1: "_" is an access key)
+       IsDefault="True"             -> IsDefault="True" (same), Click wired in the constructor -->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+        x:Class="ConditioningControlPanel.Avalonia.Views.Dialogs.OnlineLicenceCard"
+        Title="{loc:Str online_official_title}"
+        Width="470" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        Background="#181830"
+        CanResize="False"
+        SystemDecorations="None"
+        ShowInTaskbar="False">
+
+    <!-- The licence card (owner, 2026-10-21): the one-time pop-up that says online media is going
+         official and why there is a daily share. Same gate as the Assets tab's note
+         (OnlineMeterRules.ShowOfficialNote); "Nice" marks both seen. Copy only, no motion. -->
+    <Border BorderBrush="#3A3A5C" BorderThickness="1">
+        <StackPanel Margin="24,20,24,18">
+            <DockPanel Margin="0,0,0,10">
+                <LayoutTransformControl DockPanel.Dock="Right" VerticalAlignment="Top" Margin="14,2,0,0">
+                    <LayoutTransformControl.LayoutTransform>
+                        <RotateTransform Angle="-3"/>
+                    </LayoutTransformControl.LayoutTransform>
+                    <Border BorderBrush="{DynamicResource PinkBrush}"
+                            BorderThickness="2" CornerRadius="4" Padding="7,2,7,1">
+                        <TextBlock Text="{loc:Str online_official_stamp}" FontSize="10" FontWeight="ExtraBold"
+                                   Foreground="{DynamicResource PinkBrush}"/>
+                    </Border>
+                </LayoutTransformControl>
+                <TextBlock Text="{loc:Str online_official_title}" FontSize="19" FontWeight="SemiBold"
+                           Foreground="#F0F0F5" TextWrapping="Wrap"/>
+            </DockPanel>
+
+            <TextBlock Text="{loc:Str online_official_body}" FontSize="13" Foreground="#CCCCE0" TextWrapping="Wrap"/>
+
+            <TextBlock Text="{loc:Str online_official_why_title}" Margin="0,16,0,5" FontSize="11.5" FontWeight="Bold"
+                       Foreground="{DynamicResource PinkBrush}"/>
+            <TextBlock Text="{loc:Str online_official_why}" FontSize="13" Foreground="#CCCCE0" TextWrapping="Wrap"/>
+
+            <TextBlock Text="{loc:Str online_official_flow_title}" Margin="0,16,0,5" FontSize="11.5" FontWeight="Bold"
+                       Foreground="{DynamicResource PinkBrush}"/>
+            <ItemsControl x:Name="FlowLines" x:FieldModifier="internal" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                        <Grid Margin="0,0,0,5" ColumnDefinitions="16,*">
+                            <Ellipse Width="6" Height="6" Fill="{DynamicResource PinkBrush}"
+                                     VerticalAlignment="Top" HorizontalAlignment="Left" Margin="1,6,0,0"/>
+                            <TextBlock Grid.Column="1" Text="{Binding}" FontSize="12.5" Foreground="#A7A7C1"
+                                       TextWrapping="Wrap"/>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Border Margin="0,10,0,0" BorderBrush="#2E2E4A" BorderThickness="0,1,0,0" Padding="0,10,0,0">
+                <TextBlock x:Name="TxtPlan" x:FieldModifier="internal" FontSize="12.5" Foreground="#E0B0FF" TextWrapping="Wrap"/>
+            </Border>
+
+            <Button x:Name="BtnNice" x:FieldModifier="internal" Theme="{StaticResource SmallPinkButton}"
+                    HorizontalAlignment="Right" Padding="22,7" FontSize="13" Margin="0,14,0,0"
+                    IsDefault="True">
+                <TextBlock Text="{loc:Str online_official_nice}"/>
+            </Button>
+        </StackPanel>
+    </Border>
+</Window>

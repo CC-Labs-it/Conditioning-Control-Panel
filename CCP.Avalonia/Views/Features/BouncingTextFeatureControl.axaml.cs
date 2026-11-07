@@ -58,6 +58,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             ChkAlwaysOnTop.IsCheckedChanged += ChkAlwaysOnTop_Changed;
             BtnEditPhrases.Click += BtnEditPhrases_Click;
 
+            // WPF ApplyFeatureArt: the hero strip and side plate, repainted on a mod switch.
+            Helpers.ModArt.BindFeaturePlates(this, "features/bouncing_text.png", HeroArt, SideArt);
+
             LoadFromSettings();
         }
 
@@ -399,7 +402,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                     Log.Warning(ex, "BouncingText: font enumeration failed, using the fallback row");
                     names = Array.Empty<string>();
                 }
-                if (names.Length == 0) names = new[] { FontFallback };
+                // WPF's default face is always offered: off Windows "Segoe UI" is not installed, but
+                // AppFonts maps it to the bundled Selawik, so the row previews and draws like WPF's
+                // default instead of the list opening on its first system family (C059 on Linux).
+                if (!names.Contains(FontFallback, StringComparer.OrdinalIgnoreCase))
+                    names = names.Append(FontFallback).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToArray();
 
                 foreach (var n in names)
                     CmbFont.Items.Add(new ComboBoxItem { Content = n, Tag = n, FontFamily = new FontFamily(n), FontSize = 14 });
