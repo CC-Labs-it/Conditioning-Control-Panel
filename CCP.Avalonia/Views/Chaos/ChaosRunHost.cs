@@ -136,6 +136,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static void BeginRun()
         {
             if (!_active || _state == null || _spawning) return;
+            // A countdown skip and a panic press arrive on separate hooks in no fixed order (WPF has the
+            // same race: ChaosOverlayWindow.xaml.cs:153 and MainWindow.xaml.cs:961 both BeginInvoke).
+            // With a panic already queued, start only after it has run: it usually ends the run, and
+            // then nothing (boons, HUD, StartToys) ever starts. Background runs after the panic's Default.
+            if (PanicWatchdog.PanicPending) { Dispatcher.UIThread.Post(BeginRun, DispatcherPriority.Background); return; }
             // WPF BeginRun :417-420: the run-pick ribbon, rebuilt live on every drafted pick.
             var picks = _state.RunPickTiles;
             _boonBar = ChaosBoonBarOverlay.ForRun();
