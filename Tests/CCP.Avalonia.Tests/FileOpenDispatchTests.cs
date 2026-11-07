@@ -31,6 +31,8 @@ public class FileOpenDispatchTests
                 .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        var oldProvider = CoreSettings.ServiceProvider;
+        var oldFault = MainShellWindow.MediaOpenFault;
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
         settings.Current.Welcomed = true;
@@ -51,11 +53,11 @@ public class FileOpenDispatchTests
         }
         finally
         {
-            MainShellWindow.MediaOpenFault = null;
+            MainShellWindow.MediaOpenFault = oldFault;
             foreach (var w in shell.OwnedWindows.ToList()) w.Close();
             shell.RequestExit();
             Dispatcher.UIThread.RunJobs();
-            CoreSettings.ServiceProvider = null;
+            CoreSettings.ServiceProvider = oldProvider;
         }
         return Task.CompletedTask;
     });
