@@ -36,6 +36,25 @@ public class GiggleRingTagTests
         Assert.Contains("GiggleRingTag(caller)", src);
     }
 
+    [Fact]
+    public void The_plain_Giggle_path_carries_its_caller_through_the_queue_too()
+    {
+        // The 1-in-5 preset giggle (AutonomyService comments and ~30 other callers) plays the same
+        // files; queued lines must keep the caller until they are shown.
+        var src = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "AvatarTube", "AvatarTubeWindow.Speech.cs"));
+        Assert.Contains("bool unprompted, string? caller)> _speechQueue", src);
+        Assert.Equal(2, CountOf(src, "SpeechSource.Preset, emotionLineId, mood, unprompted, who)"));
+        Assert.Contains("ShowSpeechBySource(nextText, source, nextEmotionLineId, nextMood, nextUnprompted, nextCaller)", src);
+        Assert.Contains("unprompted: unprompted, soundCaller: who);", src);
+    }
+
+    private static int CountOf(string s, string needle)
+    {
+        int n = 0, i = 0;
+        while ((i = s.IndexOf(needle, i, System.StringComparison.Ordinal)) >= 0) { n++; i += needle.Length; }
+        return n;
+    }
+
     private static string RepoRoot()
     {
         var dir = new DirectoryInfo(System.AppContext.BaseDirectory);
