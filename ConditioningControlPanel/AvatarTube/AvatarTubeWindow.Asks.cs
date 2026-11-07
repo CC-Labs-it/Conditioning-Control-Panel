@@ -18,8 +18,11 @@ namespace ConditioningControlPanel
         private string? _askQuestion;
         private bool _askHooked;
 
-        /// <summary>Says the card's question and puts its answers under it.</summary>
-        internal void ShowAskCard(AskCard card)
+        /// <summary>Says the card's question and puts its answers under it. An unprompted card (the
+        /// service's own 60 s pacing) obeys the idle-voice hold like any idle line: with the engine off
+        /// its bubble shows but its giggle stays quiet (ccp-bugs #1468; the "random audio while idle" of
+        /// #1569 #1573 #1575 #1576 was this giggle).</summary>
+        internal void ShowAskCard(AskCard card, bool unprompted = false)
         {
             if (!_askHooked)
             {
@@ -29,7 +32,7 @@ namespace ConditioningControlPanel
             _askCardId = card.Id;
             _askQuestion = card.Question;
             RenderAskButtons(card);
-            GigglePriority(card.Question, playSound: true, aiGenerated: false);
+            GigglePriority(card.Question, playSound: true, aiGenerated: false, unprompted: unprompted);
         }
 
         /// <summary>Any other line taking the bubble drops the buttons; the card lives on in the chat page.</summary>

@@ -122,7 +122,7 @@ internal sealed class CompanionAskService
         if (_cards.Count > 30) foreach (var stale in _cards.Values.OrderBy(c => c.CreatedUtc).Take(_cards.Count - 30).ToArray()) _cards.Remove(stale.Id);
         _planner.NoteShown(unprompted);
         AppendTurn(TurnKind.AssistantChat, card.Question, card.Id);
-        App.AvatarWindow?.RunOnAvatar(() => App.AvatarWindow?.ShowAskCard(card));
+        App.AvatarWindow?.RunOnAvatar(() => App.AvatarWindow?.ShowAskCard(card, unprompted));
         CardChanged?.Invoke(card);
     }
 
@@ -266,6 +266,10 @@ internal sealed class CompanionAskService
             if (App.BrowserMedia?.IsPlaying == true || App.BrowserMedia?.IsTakeover == true) return true;
             if (App.Lockdown?.IsActive == true) return true;
             if (App.Mantra?.IsActive == true) return true;
+            // A Deeper audio session and a running Takeover action own the user too (ccp-bugs #1569:
+            // ask cards fired over a Deeper session).
+            if (App.DeeperHost?.IsRunning == true) return true;
+            if (App.Autonomy?.IsActionInProgress == true) return true;
             if (App.RemoteControl?.ControllerConnected == true) return true;
             if (Application.Current?.Windows.OfType<Window>().Any(w => w.IsVisible && w is LockCardWindow) == true) return true;
             return false;
