@@ -27,7 +27,7 @@ internal sealed class LeashSnapCard : Border
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
     internal static Func<string, Task<byte[]>> FetchPhoto = url => Http.GetByteArrayAsync(url);
     private readonly Canvas _sparks = new() { IsHitTestVisible = false, ClipToBounds = false, Tag = "leash-snap-sparks" };
-    private readonly ScaleTransform _chainScale = new(1, 1), _impactScale = new(1, 1), _titleScale = new(1, 1);
+    private readonly ScaleTransform _chainScale = new(1, 1), _impactScale = new(1, 1), _titleScale = new(1, 1), _cardScale = new(1, 1);
     private readonly RotateTransform _tagRotation = new();
     private readonly TextBlock _title;
     private readonly Control _right;
@@ -44,7 +44,7 @@ internal sealed class LeashSnapCard : Border
         _amount = motion == MotionLevel.Off ? 0 : motion == MotionLevel.Reduced ? .5 : 1;
         _swing = motion == MotionLevel.Full && AmbientFxCanvas.Env.AllowAmbientLoops;
         Width = 380; Padding = new Thickness(18); Background = F.Foot; BorderBrush = F.Gold;
-        BorderThickness = new Thickness(1); CornerRadius = new CornerRadius(18); Tag = "leash-snap";
+        BorderThickness = new Thickness(1); CornerRadius = new CornerRadius(18); Tag = "leash-snap"; RenderTransform = _cardScale;
         var root = new Grid(); var body = new StackPanel(); root.Children.Add(body); root.Children.Add(_sparks); Child = root;
         var row = new Grid { Height = 84, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
         row.Children.Add(Avatar(holder));
@@ -124,7 +124,7 @@ internal sealed class LeashSnapCard : Border
     {
         LeashSound.Snap();
         if (_amount == 0) return;
-        _chainScale.ScaleX = 0; _title.Opacity = 0; _clock.Restart(); _timer.Start();
+        _title.Opacity = 0; Advance(0); _clock.Restart(); _timer.Start();
     }
     internal void Stop() { _timer.Stop(); _clock.Stop(); }
     // Testable clock step; same 340 ms house curve and 300 ms title delay as WPF.
@@ -132,6 +132,7 @@ internal sealed class LeashSnapCard : Border
     {
         if (_amount == 0) return;
         _chainScale.ScaleX = Ease(Math.Clamp(ms / 340, 0, 1));
+        _cardScale.ScaleX = _cardScale.ScaleY = 1 + .08 * _amount * (1 - Ease(Math.Clamp(ms / 340, 0, 1))); // WPF LeashSurfaces.cs:308-311 Thud 1.08
         if (ms >= 300) { _title.Opacity = 1; _titleScale.ScaleX = _titleScale.ScaleY = 1 + .5 * _amount * (1 - Ease(Math.Clamp((ms - 300) / 340, 0, 1))); }
         if (ms >= 340 && !_burst) Burst();
         if (_burst)
@@ -146,7 +147,7 @@ internal sealed class LeashSnapCard : Border
             }
         }
         if (_swing) _tagRotation.Angle = -8 * Math.Cos(ms * Math.PI / 1500);
-        if (!_swing && ms >= 1200) { _timer.Stop(); _clock.Stop(); }
+        if (ms >= 1200) { if (_swing) _timer.Interval = TimeSpan.FromMilliseconds(42); else { _timer.Stop(); _clock.Stop(); } } // WPF swing 24 fps
     }
     private void Burst()
     {

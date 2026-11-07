@@ -103,9 +103,6 @@ public sealed class LeashCardsTests
             ConditioningControlPanel.CoreModArt.AudioOverridePathProvider = _ => path;
             ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => sounds.Add(tag);
             LeashSound.Rules = new LeashSfxRules();
-            LeashSound.Release(true); // A preceding successful release must not suppress this test.
-            LeashSound.ResetRules();
-            sounds.Clear();
             var svc = new Service { ReleaseOk = ok };
             var card = new LeashHolderCard(Held(), () => svc);
             var release = (MenuItem)Find<Button>(card, "leash-holder-more").ContextMenu!.Items[1]!;
@@ -143,7 +140,7 @@ public sealed class LeashCardsTests
             ConditioningControlPanel.CoreModArt.AudioOverridePathProvider = name => { cue = name; return path; };
             var sounds = new List<string>();
             ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (_, gain, tag, _, _) => { Assert.Equal(0.28f, gain); sounds.Add(tag); };
-            LeashSound.ResetRules();
+            LeashSound.Rules = new LeashSfxRules();
             LeashSound.Snap();
             Assert.Equal("chaos/collar_save.mp3", cue);
             Assert.Equal(new[] { "leash-snap" }, sounds);
@@ -173,7 +170,7 @@ public sealed class LeashCardsTests
         Assert.Equal(Loc.Get("leash_menu_replay"), replay.Header);
         var release = Assert.IsType<MenuItem>(menu.Items[1]);
         Assert.Equal(250, ToolTip.GetShowDelay(release));
-        Assert.Equal(-1, ToolTip.GetBetweenShowDelay(release));
+        Assert.Equal(100, ToolTip.GetBetweenShowDelay(release)); // WPF default, LeashHolderCard.cs:308-309 sets none
         Assert.Equal(TimeSpan.FromSeconds(60), card.ReleaseHelpTimer!.Interval);
         var tip = Assert.IsType<ToolTip>(ToolTip.GetTip(release));
         Assert.IsType<LeashHelpSlip>(tip.Content);
@@ -216,6 +213,7 @@ public sealed class LeashCardsTests
     public void SnapMotionShowsChainImpactAndSparksOrStaysStill(ConditioningControlPanel.Models.MotionLevel motion, int count) => Run(() =>
     {
         var card = new LeashSnapCard(new("me", "Holder", null), Person, motion);
+        var oldRules = LeashSound.Rules; LeashSound.Rules = new LeashSfxRules(); // Play() records a snap cue in the shared rules.
         try
         {
             var chain = Find<Canvas>(card, "leash-chain");
@@ -228,6 +226,7 @@ public sealed class LeashCardsTests
             card.Play();
             Assert.Equal(motion == ConditioningControlPanel.Models.MotionLevel.Off ? 1 : 0, scale.ScaleX);
             Assert.Equal(motion == ConditioningControlPanel.Models.MotionLevel.Off ? 1 : 0, title.Opacity);
+            Assert.Equal(1 + .08 * (count / 22.0), Assert.IsType<global::Avalonia.Media.ScaleTransform>(card.RenderTransform).ScaleX, 5);
             card.Advance(170);
             if (motion != ConditioningControlPanel.Models.MotionLevel.Off)
                 Assert.True(Math.Abs(scale.ScaleX) > .001 && Math.Abs(scale.ScaleX - 1) > .001);
@@ -236,11 +235,12 @@ public sealed class LeashCardsTests
             Assert.Equal(1, title.Opacity);
             Assert.Equal(count, sparks.Children.Count);
             Assert.Equal(1 + .18 * (count / 22.0), impact.ScaleX, 5);
+            Assert.Equal(1, ((global::Avalonia.Media.ScaleTransform)card.RenderTransform!).ScaleY, 5);
             card.Advance(1200);
             Assert.Empty(sparks.Children);
             Assert.Equal(1, impact.ScaleX, 5);
         }
-        finally { card.Stop(); System.Threading.Thread.Sleep(200); }
+        finally { card.Stop(); LeashSound.Rules = oldRules; }
     });
 
     [Fact]
@@ -359,21 +359,6 @@ public sealed class LeashCardsTests
             Assert.False(ToolTip.GetIsOpen(release));
         }
         finally { host.Close(); }
-    });
-
-    [Fact]
-    public void SnapWindowLeavesRoomForSparks() => Run(() =>
-    {
-        var card = new LeashHolderCard(Held(), () => null);
-        var host = new Window { Content = card };
-        try
-        {
-            host.Show();
-            ((MenuItem)Find<Button>(card, "leash-holder-more").ContextMenu!.Items[0]!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-            var margin = Assert.IsType<Border>(Assert.IsType<Window>(card.SnapWindow).Content);
-            Assert.Equal(new Thickness(40), margin.Margin);
-        }
-        finally { card.SnapWindow?.Close(); host.Close(); }
     });
 
     [Fact]

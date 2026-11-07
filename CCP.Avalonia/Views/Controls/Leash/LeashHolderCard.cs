@@ -128,7 +128,6 @@ public sealed class LeashHolderCard : Border
             });
             ToolTip.SetPlacement(release, PlacementMode.Right);
             ToolTip.SetShowDelay(release, 250);
-            ToolTip.SetBetweenShowDelay(release, -1);
             var tipTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(60) };
             ReleaseHelpTimer = tipTimer;
             tipTimer.Tick += (_, _) => { tipTimer.Stop(); ToolTip.SetIsOpen(release, false); };

@@ -10,7 +10,6 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 internal static class LeashSound
 {
     internal static LeashSfxRules Rules { get; set; } = new();
-    internal static void ResetRules() => Rules = new();
 
     internal static void Tick(DateTime now) => Play(LeashCue.Tick, now, "chaos/countdown_tick.mp3", 0.10f, "leash-tick");
 
@@ -31,6 +30,6 @@ internal static class LeashSound
             if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
             CoreAudio.PlayOneShot(path, Math.Clamp(level / 100f * gain, 0f, 1f), tag);
         }
-        catch (Exception ex) { Serilog.Log.Debug("[Leash] tick failed: {E}", ex.Message); }
+        catch (Exception ex) { Serilog.Log.Debug("[Leash] {Tag} failed: {E}", tag, ex.Message); }
     }
 }
