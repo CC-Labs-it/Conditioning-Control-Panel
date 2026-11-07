@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Data;
@@ -28,7 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private readonly Dictionary<string, Border> _rowDims = new();
         private bool _menuBuilt;
 
-        internal int RowPopCount { get; private set; }
+        private readonly Dictionary<ToggleButton, System.Threading.CancellationTokenSource> _rowPops = new();
 
         internal IReadOnlyDictionary<string, ToggleButton> PriceRows => _priceToggles;
 
@@ -176,24 +177,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             PopPriceRow(row);
         }
 
-        // WPF ChasterTabView.Fx.cs:718-723, 899-910: both on and off pop.
+        // WPF ChasterTabView.Fx.cs:718-723, 899-910 (FxRow -> FxPop 1.06, PopMs 380 :47): both on and off pop,
+        // and a new pop replaces one still running, as WPF BeginAnimation does.
         private void PopPriceRow(ToggleButton row)
         {
             if (!AmbientFxCanvas.Env.AllowTransitions) return;
             row.RenderTransform ??= new ScaleTransform(1, 1);
             if (row.RenderTransform is not ScaleTransform) return;
+            if (_rowPops.Remove(row, out var old)) { old.Cancel(); old.Dispose(); }
+            var run = _rowPops[row] = new System.Threading.CancellationTokenSource();
             var pop = new Animation
             {
                 Duration = TimeSpan.FromMilliseconds(380),
+                Easing = new RowPopEasing(),
                 Children =
                 {
                     new KeyFrame { Cue = new Cue(0), Setters = { new Setter(ScaleTransform.ScaleXProperty, 1d), new Setter(ScaleTransform.ScaleYProperty, 1d) } },
-                    new KeyFrame { Cue = new Cue(0.35), Setters = { new Setter(ScaleTransform.ScaleXProperty, 1.06), new Setter(ScaleTransform.ScaleYProperty, 1.06) } },
-                    new KeyFrame { Cue = new Cue(1), Setters = { new Setter(ScaleTransform.ScaleXProperty, 1d), new Setter(ScaleTransform.ScaleYProperty, 1d) } },
+                    new KeyFrame { Cue = new Cue(1), Setters = { new Setter(ScaleTransform.ScaleXProperty, 1.06), new Setter(ScaleTransform.ScaleYProperty, 1.06) } },
                 },
             };
-            _ = pop.RunAsync(row);
-            RowPopCount++;
+            _ = pop.RunAsync(row, run.Token);
+        }
+
+        /// <summary>The share of the 1 -> 1.06 rise at time t: WPF's two eased key frames, QuadraticEase EaseOut up
+        /// to the peak at 35 %, then QuadraticEase EaseInOut back down (Fx.cs:905-908).</summary>
+        internal sealed class RowPopEasing : Easing
+        {
+            public override double Ease(double t)
+            {
+                if (t < 0.35) { var u = t / 0.35; return 1 - (1 - u) * (1 - u); }
+                var d = (t - 0.35) / 0.65;
+                return 1 - (d < 0.5 ? 2 * d * d : 1 - 2 * (1 - d) * (1 - d));
+            }
         }
 
         /// <summary>Red flashes with a 4 s ring to dodge them, or none at all (the default).</summary>

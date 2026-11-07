@@ -242,25 +242,40 @@ public sealed class ChasterMenuTests
     public Task RowClicksPopOnAndOffAndRespectMotionOff() => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, _, tab, w) =>
     {
         var settings = CoreSettings.Current;
-        settings.MotionLevel = MotionLevel.Full;
-        settings.GentleVisuals = false;
-        var row = tab.PriceRows["session"];
-        var day = settings.ChasterDayLimit;
-        var backlog = settings.ChasterBacklogLimit;
-        var count = tab.RowPopCount;
-        Click(w, row);
-        Assert.Contains("session", settings.ChasterPrices!);
-        Assert.IsType<ScaleTransform>(row.RenderTransform);
-        Assert.Equal(++count, tab.RowPopCount);
-        Click(w, row);
-        Assert.DoesNotContain("session", settings.ChasterPrices!);
-        Assert.Equal(++count, tab.RowPopCount);
-        settings.MotionLevel = MotionLevel.Off;
-        Click(w, row);
-        Assert.Contains("session", settings.ChasterPrices!);
-        Assert.Equal(count, tab.RowPopCount);
-        Assert.Equal(day, settings.ChasterDayLimit);
-        Assert.Equal(backlog, settings.ChasterBacklogLimit);
+        var (oldMotion, oldGentle) = (settings.MotionLevel, settings.GentleVisuals);
+        try
+        {
+            settings.MotionLevel = MotionLevel.Full;
+            settings.GentleVisuals = false;
+            var row = tab.PriceRows["session"];
+            var clock = new SharedDeeperThemeTests.StepClock();
+            row.SetValue(SharedDeeperThemeTests.StepClock.Property, clock.Instance);
+            double Scale() => row.RenderTransform?.Value.M11 ?? 1.0;
+            var day = settings.ChasterDayLimit;
+            var backlog = settings.ChasterBacklogLimit;
+            var t = 0.0;
+            // WPF Fx.cs:899-910, 380 ms: QuadraticEase EaseOut to 1.06 at 35 %, EaseInOut back (linear would read 1.0343 at 76 ms, 1.0369 at 228 ms).
+            void Pop(bool lit)
+            {
+                Click(w, row);
+                Assert.Equal(lit, settings.ChasterPrices!.Contains("session"));
+                clock.Step(t += 1000);
+                clock.Step(t += 76); Assert.Equal(1.04898, Scale(), 4);
+                clock.Step(t += 57); Assert.Equal(1.06, Scale(), 4);
+                clock.Step(t += 95); Assert.Equal(1.04225, Scale(), 4);
+                clock.Step(t += 200); Assert.Equal(1.0, Scale(), 4);
+            }
+            Pop(true);
+            Pop(false);
+            settings.MotionLevel = MotionLevel.Off;
+            Click(w, row);
+            Assert.Contains("session", settings.ChasterPrices!);
+            clock.Step(t += 1000); clock.Step(t += 133);
+            Assert.Equal(1.0, Scale(), 4);
+            Assert.Equal(day, settings.ChasterDayLimit);
+            Assert.Equal(backlog, settings.ChasterBacklogLimit);
+        }
+        finally { (settings.MotionLevel, settings.GentleVisuals) = (oldMotion, oldGentle); }
         await Task.CompletedTask;
     }));
 
