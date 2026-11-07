@@ -6,6 +6,7 @@ using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
 
@@ -13,102 +14,92 @@ namespace CCP.Avalonia.Tests;
 
 public class TakeoverEngineLifecycleTests
 {
+    /// <summary>Runs <paramref name="body"/> on a fresh shell and puts back every static seam and
+    /// setting the tests touch, so no later test inherits a fake provider or a hook to a closed shell.</summary>
+    private static Task WithShell(Action<MainShellWindow, AppSettings> body) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var (premium, freeToday, hook) = (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreEngine.StoppedHook);
+        var (bubStart, bubStop) = (CoreBubbles.StartAction, CoreBubbles.StopAction);
+        var (resume, panic, enabled, consent, bubbles) = (s.AutonomyResumeOnStartup, s.PanicKeyEnabled,
+            s.AutonomyModeEnabled, s.AutonomyConsentGiven, s.BubblesEnabled);
+        s.AutonomyResumeOnStartup = false; s.PanicKeyEnabled = false;
+        MainShellWindow? shell = null;
+        try
+        {
+            shell = new MainShellWindow(); shell.Show();
+            CoreEngine.StoppedHook = shell.OnEngineStopped;
+            body(shell, s);
+        }
+        finally
+        {
+            if (shell != null) { shell.Autonomy.Stop(); CoreEngine.Stop(); shell.RequestExit(); }
+            (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreEngine.StoppedHook) = (premium, freeToday, hook);
+            (CoreBubbles.StartAction, CoreBubbles.StopAction) = (bubStart, bubStop);
+            (s.AutonomyResumeOnStartup, s.PanicKeyEnabled, s.AutonomyModeEnabled, s.AutonomyConsentGiven, s.BubblesEnabled)
+                = (resume, panic, enabled, consent, bubbles);
+        }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(false, true, true)]
     [InlineData(true, false, true)]
     [InlineData(true, true, false)]
     [InlineData(true, true, true)]
-    public Task EngineStartAndStopRespectEligibility(bool enabled, bool consent, bool entitled) =>
-        AvaloniaTestDispatcher.RunAsync(() =>
+    public Task EngineStartAndStopRespectEligibility(bool enabled, bool consent, bool entitled) => WithShell((shell, s) =>
+    {
+        CoreEntitlement.HasPremiumProvider = () => entitled;
+        CoreEntitlement.IsFreeTodayProvider = _ => false;
+        (s.AutonomyModeEnabled, s.AutonomyConsentGiven) = (enabled, consent);
+        shell.StartEngine();
+        Assert.Equal(enabled && consent && entitled, shell.Autonomy.IsEnabled);
+        MainShellWindow.StopEngine();
+        Assert.Equal(enabled && consent && entitled, shell.Autonomy.IsEnabled);
+        if (shell.Autonomy.IsEnabled)
         {
-            if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
-            var s = CoreSettings.Current;
-            s.AutonomyResumeOnStartup = false;
-            s.PanicKeyEnabled = false;
-            var shell = new MainShellWindow();
-            shell.Show();
-            try
-            {
-                CoreEntitlement.HasPremiumProvider = () => entitled;
-                CoreEntitlement.IsFreeTodayProvider = _ => false;
-                (s.AutonomyModeEnabled, s.AutonomyConsentGiven) = (enabled, consent);
-                CoreEngine.StoppedHook = shell.OnEngineStopped;
-                shell.StartEngine();
-                Assert.Equal(enabled && consent && entitled, shell.Autonomy.IsEnabled);
-                MainShellWindow.StopEngine();
-                Assert.Equal(enabled && consent && entitled, shell.Autonomy.IsEnabled);
-                if (shell.Autonomy.IsEnabled)
-                {
-                    s.AutonomyConsentGiven = false;
-                    shell.StartEngine();
-                    MainShellWindow.StopEngine();
-                    Assert.False(shell.Autonomy.IsEnabled);
-                }
-            }
-            finally { shell.Autonomy.Stop(); CoreEngine.Stop(); shell.RequestExit(); }
-            return Task.CompletedTask;
-        });
+            s.AutonomyConsentGiven = false;
+            shell.StartEngine();
+            MainShellWindow.StopEngine();
+            Assert.False(shell.Autonomy.IsEnabled);
+        }
+    });
 
     [Theory]
     [InlineData(0)]
     [InlineData(1)]
     [InlineData(2)]
-    public Task StopDropsTakeoverWhenEligibilityIsLost(int lost) => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task StopDropsTakeoverWhenEligibilityIsLost(int lost) => WithShell((shell, s) =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
-        var s = CoreSettings.Current;
-        s.AutonomyResumeOnStartup = false; s.PanicKeyEnabled = false;
-        var shell = new MainShellWindow(); shell.Show();
-        try
-        {
-            bool entitled = true;
-            CoreEntitlement.HasPremiumProvider = () => entitled;
-            CoreEntitlement.IsFreeTodayProvider = _ => false;
-            s.AutonomyModeEnabled = s.AutonomyConsentGiven = true;
-            CoreEngine.StoppedHook = shell.OnEngineStopped;
-            shell.StartEngine(); Assert.True(shell.Autonomy.IsEnabled);
-            if (lost == 0) s.AutonomyModeEnabled = false;
-            if (lost == 1) s.AutonomyConsentGiven = false;
-            if (lost == 2) entitled = false;
-            MainShellWindow.StopEngine(); Assert.False(shell.Autonomy.IsEnabled);
-        }
-        finally { shell.Autonomy.Stop(); CoreEngine.Stop(); shell.RequestExit(); }
-        return Task.CompletedTask;
+        bool entitled = true;
+        CoreEntitlement.HasPremiumProvider = () => entitled;
+        CoreEntitlement.IsFreeTodayProvider = _ => false;
+        s.AutonomyModeEnabled = s.AutonomyConsentGiven = true;
+        shell.StartEngine(); Assert.True(shell.Autonomy.IsEnabled);
+        if (lost == 0) s.AutonomyModeEnabled = false;
+        if (lost == 1) s.AutonomyConsentGiven = false;
+        if (lost == 2) entitled = false;
+        MainShellWindow.StopEngine(); Assert.False(shell.Autonomy.IsEnabled);
     });
 
     [Fact]
-    public Task StopCancelsPulseEvenWhenTakeoverRemainsEnabled() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task StopCancelsPulseEvenWhenTakeoverRemainsEnabled() => WithShell((shell, s) =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
-        var s = CoreSettings.Current;
-        s.AutonomyResumeOnStartup = false; s.PanicKeyEnabled = false;
-        var shell = new MainShellWindow(); shell.Show();
-        try
-        {
-            CoreEntitlement.HasPremiumProvider = () => true;
-            s.AutonomyModeEnabled = s.AutonomyConsentGiven = true;
-            CoreEngine.StoppedHook = shell.OnEngineStopped;
-            var timers = new List<Action>(); shell.PulseTimer = (a, _) => timers.Add(a);
-            s.BubblesEnabled = false;
-            int starts = 0, stops = 0;
-            CoreBubbles.StartAction = () => starts++; CoreBubbles.StopAction = () => stops++;
-            shell.StartEngine();
-            shell.PerformAutonomy(AutonomyActionType.StartBubbles);
-            Assert.Equal(1, starts); Assert.Single(timers);
-            MainShellWindow.StopEngine();
-            Assert.True(shell.Autonomy.IsEnabled); Assert.Equal(2, stops);
-            timers[0](); Assert.Equal(2, stops);
-        }
-        finally { shell.Autonomy.Stop(); CoreEngine.Stop(); shell.RequestExit(); }
-        return Task.CompletedTask;
+        CoreEntitlement.HasPremiumProvider = () => true;
+        s.AutonomyModeEnabled = s.AutonomyConsentGiven = true;
+        var timers = new List<Action>(); shell.PulseTimer = (a, _) => timers.Add(a);
+        s.BubblesEnabled = false;
+        int starts = 0, stops = 0;
+        CoreBubbles.StartAction = () => starts++; CoreBubbles.StopAction = () => stops++;
+        shell.StartEngine();
+        shell.PerformAutonomy(AutonomyActionType.StartBubbles);
+        Assert.Equal(1, starts); Assert.Single(timers);
+        MainShellWindow.StopEngine();
+        Assert.True(shell.Autonomy.IsEnabled); Assert.Equal(2, stops);
+        timers[0](); Assert.Equal(2, stops);
     });
 }
