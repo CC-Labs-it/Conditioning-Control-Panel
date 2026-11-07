@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -59,6 +61,45 @@ public sealed class CoreEngineTests
             Assert.Equal(before + increment, s.TotalSessions);
         }
         finally { CoreEngine.Stop(); s.TotalSessions = before; }
+    }
+
+    // WPF MainWindow.StartStop.cs:449 / :592-601: EMI hears the start origin, then the whole minutes run.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Start_and_Stop_raise_EMI_moments_with_origin_and_minutes(bool systemInitiated)
+    {
+        var s = CoreSettings.Current;
+        var before = s.TotalSessions;
+        var clock = new DateTime(2026, 11, 5, 10, 0, 0, DateTimeKind.Utc);
+        var oldClock = CoreEngine.UtcNow;
+        var fired = new List<(string Id, IReadOnlyDictionary<string, object?> Ctx)>();
+        bool hookRanFirst = false;
+        CoreEngine.UtcNow = () => clock;
+        CoreEngine.StoppedHook = () => hookRanFirst = fired.Count == 1;
+        CoreEngine.MomentHook = (id, ctx) => fired.Add((id, ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.ToCtx(ctx)));
+        try
+        {
+            CoreEngine.Start(systemInitiated: systemInitiated);
+            Assert.Equal("engineStarted", Assert.Single(fired).Id);
+            Assert.Equal((object)systemInitiated, fired[0].Ctx["systemInitiated"]);
+
+            clock = clock.AddMinutes(7).AddSeconds(59);
+            CoreEngine.Stop();
+            Assert.True(hookRanFirst);   // after the head's teardown, as WPF fires after UpdateStartButton
+            Assert.Equal("engineStopped", fired[1].Id);
+            Assert.Equal((object)7, fired[1].Ctx["minutes"]);
+
+            CoreEngine.Stop();   // nothing running: zero, never the old run again
+            Assert.Equal("engineStopped", fired[2].Id);
+            Assert.Equal((object)0, fired[2].Ctx["minutes"]);
+        }
+        finally
+        {
+            CoreEngine.Stop();
+            CoreEngine.MomentHook = null; CoreEngine.StoppedHook = null; CoreEngine.UtcNow = oldClock;
+            s.TotalSessions = before;
+        }
     }
 
     [Fact]

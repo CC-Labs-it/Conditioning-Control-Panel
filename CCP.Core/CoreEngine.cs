@@ -29,6 +29,14 @@ namespace ConditioningControlPanel
         /// cards, the pink tint). Runs after every Stop, running or not.</summary>
         public static volatile Action? StoppedHook;
 
+        /// <summary>WPF StartStop.cs:449 and :597: the EMI moments "engineStarted" {systemInitiated}
+        /// and "engineStopped" {minutes}, raised after the head's own start and stop work. The head
+        /// routes them to its EMI desk; null on a head without one.</summary>
+        public static volatile Action<string, object>? MomentHook;
+
+        /// <summary>Test seam for the run clock behind <see cref="StartedUtc"/> and the stop minutes.</summary>
+        internal static Func<DateTime> UtcNow = () => DateTime.UtcNow;
+
         /// <summary>The head's pop-quiz scheduler (it owns the <see cref="IPopQuizHost"/>); null
         /// on a head with no pop-quiz window.</summary>
         public static volatile PopQuizScheduler? PopQuiz;
@@ -66,9 +74,17 @@ namespace ConditioningControlPanel
             }
 
             _running = true;
-            StartedUtc = DateTime.UtcNow;
+            StartedUtc = UtcNow();
             Log.Information("Engine started - Flash: {Flash}, Subliminal: {Sub}, LockCard: {Lock}, BouncingText: {Bt}",
                 s.FlashEnabled, s.SubliminalEnabled, s.LockCardEnabled, s.BouncingTextEnabled);
+            // WPF StartStop.cs:449: systemInitiated separates a lockdown's own restart from a press.
+            RaiseMoment("engineStarted", new { systemInitiated });
+        }
+
+        private static void RaiseMoment(string id, object ctx)
+        {
+            try { MomentHook?.Invoke(id, ctx); }
+            catch (Exception ex) { Log.Debug(ex, "Engine EMI moment {Moment} failed", id); }
         }
 
         /// <summary>WPF StopEngine: stop every driven service whether or not the engine ran (panic
@@ -90,9 +106,14 @@ namespace ConditioningControlPanel
                 PopQuiz?.Stop();   // closes an open quiz (WPF StartStop.cs:492)
                 CoreMindWipe.Stop();   // WPF StartStop.cs:489, also ends the loop
                 _running = false;
+                // WPF StartStop.cs:592-601: whole minutes run, zero when nothing ran; the stamp is
+                // cleared so a second stop cannot invent a duration.
+                var startedUtc = StartedUtc;
+                int ranMinutes = startedUtc == null ? 0 : Math.Max(0, (int)(UtcNow() - startedUtc.Value).TotalMinutes);
                 StartedUtc = null;
                 try { StoppedHook?.Invoke(); }
                 catch (Exception ex) { Log.Warning(ex, "Engine stop hook failed"); }
+                RaiseMoment("engineStopped", new { minutes = ranMinutes });
                 Log.Information("Engine stopped");
             }
             finally { _stopInProgress = false; }

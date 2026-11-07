@@ -955,6 +955,7 @@ namespace ConditioningControlPanel.Avalonia
                 // Dropped: WPF's EmiDesk "premiumTeaseSeen" fire - no EmiDesk service on this head.
                 var shell = (Views.Windows.MainShellWindow)desktop.MainWindow;
                 CoreEngine.StoppedHook = shell.OnEngineStopped;
+                Views.Windows.EmiDesk.EmiDeskService.HookEngine();
                 Sessions.Ticked += shell.OnSessionTick;
                 Sessions.SessionLog.LogReady += shell.OnSessionLogReady;
                 // WPF App.xaml.cs:529 (main fbe161de2): "See tiers" opens the vault gate card at the tier this door needs.
