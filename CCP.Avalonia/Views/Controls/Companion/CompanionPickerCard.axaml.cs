@@ -338,7 +338,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private async void BtnMorePersonality_Click(object? sender, RoutedEventArgs e)
         {
             if (_morePersonalityOptions == null || TopLevel.GetTopLevel(this) is not Window owner) return;
-            await _morePersonalityOptions(owner);
+            // async void: a throw from the studio would otherwise reach the dispatcher and end the app.
+            try { await _morePersonalityOptions(owner); }
+            catch (Exception ex) { Log.Warning(ex, "[CompanionPicker] personality options failed"); }
             if (!_previewing) Refresh();
         }
     }
