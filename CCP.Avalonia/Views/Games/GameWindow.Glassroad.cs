@@ -111,6 +111,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             }
             catch (Exception ex) { Log.Debug("Glassroad: init post failed: {E}", ex.Message); }
         }
+
+        /// <summary>The server's last effective tier, else the entitlement this head knows (display only: the
+        /// lobby decides every gate itself).</summary>
         private static int GlassroadTier()
         {
             try { return CoreSettings.Current.LastKnownEffectiveTier ?? (CoreEntitlement.HasLab ? 2 : CoreEntitlement.HasPremium ? 1 : 0); }
@@ -152,6 +155,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         return true;
                     case "exit":
                     case "menu-back":
+                        // The page's own Leave / the menu's Back link. Escape never sends these.
                         Close();
                         return true;
                 }
@@ -163,6 +167,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             }
             return false;
         }
+
+        /// <summary><c>net { id, method, path, body }</c> -&gt; <c>net-reply { id, status, body }</c>. A refusal or
+        /// failure answers status 0 (the page's "no answer"); no id goes unanswered.</summary>
         private void OnGlassroadNet(JObject o)
         {
             var id = (string?)o["id"] ?? "";
@@ -172,6 +179,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var body = b == null || b.Type == JTokenType.Null ? ""
                 : b.Type == JTokenType.String ? (string?)b ?? "" : b.ToString(Newtonsoft.Json.Formatting.None);
             if (method != "GET" && method != "POST") { ReplyGlassroadNet(id, 0, "forbidden_method"); return; }
+
             var baseUrl = GameWindow.PbpServerBase();
             if (string.IsNullOrEmpty(baseUrl)) { ReplyGlassroadNet(id, 0, ""); return; }   // a sandbox with no loopback
             // Signed first (the host names the caller), then the SIGNED path is judged on its built Uri.
@@ -183,6 +191,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 ReplyGlassroadNet(id, 0, "forbidden_path");
                 return;
             }
+
             var token = GameWindow.PbpAuthToken();
             var http = GameWindow.PbpHttpClient();
             GlassroadPending = Task.Run(async () =>
@@ -209,6 +218,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         }
         private void ReplyGlassroadNet(string id, int status, string body)
             { if (!_closing) Post(new { type = "net-reply", id, status, body }); }
+
+        /// <summary>One 5 s watchdog tick (WPF StartWatch): before ready, 45 s with no page message at all closes
+        /// it (the bridge beats every 2 s); after ready, silent past 20 s gets one ping, then the close.</summary>
         internal string CheckGlassroadWatch(DateTime nowUtc)
         {
             if (!_grOpen || _closing) return "idle";

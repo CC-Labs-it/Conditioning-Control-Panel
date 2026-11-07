@@ -47,6 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void OnX11PanicPress()
         {
             Serilog.Log.Information("Panic trigger: XInput2 key press");
+            if (!ConditioningControlPanel.Services.Race.RaceShellProtocol.Claim(false, Environment.TickCount64)) return;   // the race shell took it
             var s = CoreSettings.Current;
             if (!s.PanicKeyEnabled || CapturingPanicKey || LockdownActive || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey)
                 Dispatcher.UIThread.Post(() => HandlePanicKeyPress(DateTime.Now));

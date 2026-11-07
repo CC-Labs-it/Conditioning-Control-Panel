@@ -319,6 +319,30 @@ public sealed class LeashHoldTests
         Assert.Equal(2, presses);                       // the panic key never goes dead
     });
 
+    [Fact]
+    public void RaceShellEscape_HoldsUntilItsKeyUp_ThenTheProbeAfterTheShellDies() => WithPortalShell(() => true, (shell, clock) =>
+    {
+        using var p = LinuxRaceHostTests.StartCat();
+        var provider = ConditioningControlPanel.Avalonia.Views.Games.LinuxRaceHost.Shell;
+        using var host = new ConditioningControlPanel.Avalonia.Views.Games.LinuxRaceHost(p, _ => { }, () => false);
+        try
+        {
+            (CoreSettings.Current.PanicKey, ConditioningControlPanel.Avalonia.Views.Games.LinuxRaceHost.Shell) = ("Escape", () => shell);
+            void Press(int seq) { host.ReadFrame(new Newtonsoft.Json.Linq.JObject { ["type"] = "shell-escape", ["sequence"] = seq, ["displayBackend"] = "wayland" }); Dispatcher.UIThread.RunJobs(); }
+            Press(1);
+            X11PanicKey.PanicReleased?.Invoke(); Dispatcher.UIThread.RunJobs();   // XWayland's synthesized release is not this key's
+            for (int t = 250; t <= 2000; t += 250) { clock.Now += TimeSpan.FromMilliseconds(250); shell.LeashHoldClockTick(); }
+            Assert.True(LeashHoldRing.IsShown);
+            host.Receive(new Newtonsoft.Json.Linq.JObject { ["type"] = "shell-escape-up" });
+            Assert.False(LeashHoldRing.IsShown);
+            var exits = 0; host.Exited += () => exits++;   // the launcher's return-from-game signal, once
+            Press(2); host.Dispose(); host.Dispose(); Assert.Equal(1, exits);   // the shell dies with Escape down: the key probe carries the hold
+            for (int t = 250; t <= 5000; t += 250) { clock.Now += TimeSpan.FromMilliseconds(250); shell.LeashHoldClockTick(); }
+            Assert.NotNull(LeashCutConfirmWindow.Current);
+        }
+        finally { ConditioningControlPanel.Avalonia.Views.Games.LinuxRaceHost.Shell = provider; }
+    });
+
     /// <summary>Continues a running hold from 2 s to 4.75 s.</summary>
     private static void Hold2(MainShellWindow shell, Clock clock)
     {

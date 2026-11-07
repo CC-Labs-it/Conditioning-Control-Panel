@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -22,11 +21,10 @@ internal sealed class LinuxRaceHost : IDisposable
     private readonly DispatcherTimer _watch;
     private readonly object _writeLock = new();
     private Task _writes = Task.CompletedTask;
-    private int _closed;
-    private long _lastEscape;
-    private volatile string? _displayBackend;
-    private volatile bool _backendKnown;
+    private int _closed; private long _lastEscape; private bool _escapeHeld;
+    private volatile string? _displayBackend; private volatile bool _backendKnown;
     private readonly Func<bool> _x11Listening;
+    internal event Action? Exited;   // once, when the race ends: the launcher's return signal
     internal bool InFront { get; private set; }
     internal bool Ready => _session.Ready;
     internal static string EnginePath => Path.Combine(CorePaths.UserData, "engines", "electron-45.1.0", "electron");
@@ -37,23 +35,16 @@ internal sealed class LinuxRaceHost : IDisposable
         if (!OperatingSystem.IsLinux()) return false;
         if (Current is { } live) { live.Post(new { type = "focus" }); return true; }
         if (!File.Exists(enginePath) || !File.Exists(shellPath)) return false;
-        var start = new ProcessStartInfo("/usr/bin/setsid")
-        {
-            UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true,
-            RedirectStandardError = true, CreateNoWindow = true
-        };
+        var start = new ProcessStartInfo("/usr/bin/setsid") { UseShellExecute = false, RedirectStandardInput = true,
+            RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
         // setsid execs without forking: this child's pid is its process group, never CCP's group.
-        start.ArgumentList.Add(enginePath);
-        start.ArgumentList.Add("--ozone-platform=x11");
-        start.ArgumentList.Add(shellPath);
+        foreach (var arg in new[] { enginePath, "--ozone-platform=x11", shellPath }) start.ArgumentList.Add(arg);
         var process = new Process { StartInfo = start };
         try
         {
             if (!process.Start()) throw new IOException("Race shell did not start");
             Current = new LinuxRaceHost(process);
-            Current.Post(new { type = "launch", url = url.AbsoluteUri });
-            Current.StartReading();
-            return true;
+            Current.Post(new { type = "launch", url = url.AbsoluteUri }); Current.StartReading(); return true;
         }
         catch
         {
@@ -78,15 +69,10 @@ internal sealed class LinuxRaceHost : IDisposable
         {
             try
             {
-                var line = new System.Text.StringBuilder();
-                var buffer = new char[1];
+                var line = new System.Text.StringBuilder(); var buffer = new char[1];
                 while (await _process.StandardOutput.ReadAsync(buffer, 0, 1) != 0)
                 {
-                    if (buffer[0] == '\n')
-                    {
-                        var frame = RaceShellProtocol.Parse(line.ToString()); line.Clear();
-                        ReadFrame(frame);
-                    }
+                    if (buffer[0] == '\n') { var frame = RaceShellProtocol.Parse(line.ToString()); line.Clear(); ReadFrame(frame); }
                     else if (line.Length >= RaceShellProtocol.MaxLineLength) break;
                     else line.Append(buffer[0]);
                 }
@@ -109,14 +95,17 @@ internal sealed class LinuxRaceHost : IDisposable
             if (UnsupportedPanicKey) { Kill(); Dispatcher.UIThread.Post(Dispose); return; }
         }
         if (type != RaceShellProtocol.Escape) { Dispatcher.UIThread.Post(() => Receive(frame)); return; }
-        if (!RaceShellProtocol.AcceptEscape(ref _lastEscape, (long?)frame["sequence"] ?? 0,
-            _x11Listening() && CoreSettings.Current.PanicKey == "Escape", _displayBackend)) return;
+        if (!RaceShellProtocol.AcceptEscape(ref _lastEscape, (long?)frame["sequence"] ?? 0, _x11Listening()
+            && CoreSettings.Current.PanicKey == "Escape", (string?)frame["displayBackend"] ?? _displayBackend, Environment.TickCount64)) return;
         void Handle()
         {
             bool escapePanics = CoreSettings.Current.PanicKey == "Escape";
             // Killed meanwhile (watchdog): the race is gone, so the recovered UI still runs the full panic, not a pause.
             if (_closed != 0) { try { if (escapePanics) _panic(DateTime.Now); } finally { Dispose(); } return; }
-            InFront = true; if (escapePanics) _panic(DateTime.Now); else Pause();
+            InFront = true; if (!escapePanics) { Pause(); return; }
+            // WPF hold-to-cut rides the panic key (OnX11PanicPress): this shell owns it, so it reports the release.
+            _panic(DateTime.Now); Shell()?.OnRaceEscape(true); _escapeHeld = _closed == 0;
+            if (!_escapeHeld) Shell()?.OnRaceEscape(null);
         }
         if (CoreSettings.Current.PanicKey == "Escape" && CoreSettings.Current.PanicKeyEnabled && !MainShellWindow.LockdownActive
             && !MainShellWindow.CapturingPanicKey && !Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey)
@@ -134,6 +123,7 @@ internal sealed class LinuxRaceHost : IDisposable
                 _session.PostGlassroadInit(); break;
             case RaceShellProtocol.Focus: InFront = (bool?)frame["active"] == true; break;
             case RaceShellProtocol.Escape: ReadFrame(frame); break;
+            case RaceShellProtocol.EscapeUp: if (_escapeHeld) { _escapeHeld = false; Shell()?.OnRaceEscape(false); } break;
             case "boot-error": Dispose(); break;
             default: _session.HandleGlassroad(frame); break;
         }
@@ -143,29 +133,26 @@ internal sealed class LinuxRaceHost : IDisposable
     {
         if (Volatile.Read(ref _closed) != 0) return;
         var json = JObject.FromObject(frame);
-        if ((string?)json["type"] == "init")
-        {
-            json["caps"]!["forceRenderer"] = "webgl2";
-            json["caps"]!["scrolller"] = false;
-        }
+        if ((string?)json["type"] == "init") { json["caps"]!["forceRenderer"] = "webgl2"; json["caps"]!["scrolller"] = false; }
         lock (_writeLock) _writes = _writes.ContinueWith(_ =>
         {
             try { if (_closed == 0) { _process.StandardInput.WriteLine(json.ToString(Formatting.None)); _process.StandardInput.Flush(); } }
             catch { Kill(); Dispatcher.UIThread.Post(Dispose); }
         });
     }
-    [DllImport("libc", SetLastError = true)] private static extern int kill(int pid, int signal);
+    [System.Runtime.InteropServices.DllImport("libc", SetLastError = true)] private static extern int kill(int pid, int signal);
     internal void Kill()
     {
         if (Interlocked.Exchange(ref _closed, 1) != 0) return;
         // Exact child first, then its isolated group, including orphaned Chromium helpers.
-        kill(_pid, 9);
-        kill(-_pid, 9);
+        kill(_pid, 9); kill(-_pid, 9);
     }
     public void Dispose()
     {
         Kill(); _watch.Stop(); _session.Dispose();
         if (ReferenceEquals(Current, this)) Current = null;
         _process.Dispose();
+        if (_escapeHeld) { _escapeHeld = false; Shell()?.OnRaceEscape(null); }
+        Interlocked.Exchange(ref Exited, null)?.Invoke();
     }
 }

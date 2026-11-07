@@ -523,6 +523,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void LaunchGameWindow(string id)
         {
             var game = Games.GameWindow.Launch(id);
+            if (game == null && Games.GameWindow.ResolveDoor(id) == Games.GameWindow.GlassroadId && Games.LinuxRaceHost.Current is { } race)
+            {   // the Linux race shell is out of process: hide behind it, come back when it exits
+                AfterExitBeat(() => { if (Games.LinuxRaceHost.Current == race) Hide(); });
+                race.Exited += () => { try { if (Panel is not { IsVisible: true }) { Show(); Activate(); } } catch (Exception ex) { Log.Debug(ex, "[Launcher] return after race failed"); } };
+            }
             if (game == null) return;
             AfterExitBeat(() =>
             {
