@@ -77,6 +77,7 @@ namespace ConditioningControlPanel
             // Ctrl+K (right-click a row) until they get one.
             ("BtnPlayBackRoom", "game.backroom"), ("BtnPlayDtrh", "game.dtrh"),
             ("BtnPlayArcademy", "game.arcademy"), ("BtnPlayRacingThoughts", "game.race"),
+            ("BtnPlayRacingThoughtsClassic", "game.raceclassic"),
             // card.arcademy and card.backroom left with their cards (2026-09-18, the launcher
             // owns the games); a saved favourite with either id resolves to no entry and is skipped.
         };

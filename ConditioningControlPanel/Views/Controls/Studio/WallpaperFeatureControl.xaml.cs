@@ -107,6 +107,7 @@ namespace ConditioningControlPanel.Views.Controls.Studio
                 ChkWpRotate.IsChecked = s.CollageWallpaperRotate;
                 ChkWpRunWithCcp.IsChecked = s.CollageRunWithCcp;
                 ApplyIntervalToUi(s.CollageWallpaperIntervalSeconds);
+                CmbWpFit.SelectedIndex = (int)s.CollageWallpaperFit;
                 UpdateVisibility();
             }
             finally { _isLoading = false; }
@@ -156,6 +157,7 @@ namespace ConditioningControlPanel.Views.Controls.Studio
                 e.PropertyName == nameof(Models.AppSettings.CollageOwnImagePath) ||
                 e.PropertyName == nameof(Models.AppSettings.CollageWallpaperRotate) ||
                 e.PropertyName == nameof(Models.AppSettings.CollageWallpaperIntervalSeconds) ||
+                e.PropertyName == nameof(Models.AppSettings.CollageWallpaperFit) ||
                 e.PropertyName == nameof(Models.AppSettings.CollageRunWithCcp))
             {
                 Dispatcher.BeginInvoke(new Action(LoadFromSettings));
@@ -306,6 +308,20 @@ namespace ConditioningControlPanel.Views.Controls.Studio
             catch (Exception ex) { App.Logger?.Warning("[Wallpaper] run-with-CCP apply failed: {E}", ex.Message); }
         }
 
+        /// <summary>Fit (#1544). Applied by a restart while the wallpaper is up: the stop puts the user's own
+        /// fit back first, so the next start captures theirs and never ours.</summary>
+        private void CmbWpFit_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null || CmbWpFit.SelectedIndex < 0) return;
+            var fit = (Models.WallpaperFit)CmbWpFit.SelectedIndex;
+            if (fit == s.CollageWallpaperFit) return;
+            s.CollageWallpaperFit = fit;
+            App.Settings?.Save();
+            if (Services.WallpaperService.ShouldBeUp(s, App.IsEngineRunning)) ApplyWallpaperEngine();
+        }
+
         private void ChkWpRotate_Changed(object sender, RoutedEventArgs e)
         {
             if (_isLoading) return;
@@ -374,6 +390,8 @@ namespace ConditioningControlPanel.Views.Controls.Studio
             RowWpOwnImage.Visibility = own ? Visibility.Visible : Visibility.Collapsed;
             RowWpRotate.Visibility = !own ? Visibility.Visible : Visibility.Collapsed;
             RowWpInterval.Visibility = (!own && rotate) ? Visibility.Visible : Visibility.Collapsed;
+            // Dynamic draws each monitor at its own size, so a fit has nothing to do there.
+            RowWpFit.Visibility = _mode != Models.WallpaperMode.Dynamic ? Visibility.Visible : Visibility.Collapsed;
         }
 
         /// <summary>Apply an on/off or mode change. Outside a session nothing runs; the next session start

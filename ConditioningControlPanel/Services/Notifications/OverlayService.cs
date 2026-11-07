@@ -50,6 +50,17 @@ public class OverlayService : IDisposable
     internal static bool ShouldStopHeldOverlay(bool featureWantsIt, int timedHolds, bool sustainedHeld)
         => !featureWantsIt && timedHolds == 0 && !sustainedHeld;
 
+    /// <summary>
+    /// ccp-bugs #1555: a spiral decode that finishes after the engine stopped must not put the
+    /// spiral back up. The session end refreshed the overlays (spiral still on), the refresh began
+    /// an off-thread decode, Stop took the spiral down, and the decode then showed it on the
+    /// compositor layer with nothing left to clear it. The base feature counts only while the
+    /// service runs; a timed or sustained hold (bubble payload, Deeper band) still shows.
+    /// </summary>
+    internal static bool SpiralDecodeStillWanted(bool samePath, bool running, bool spiralEnabled,
+        int timedHolds, bool sustainedHeld)
+        => samePath && !ShouldStopHeldOverlay(running && spiralEnabled, timedHolds, sustainedHeld);
+
     // Deeper enhancement overlay bands are the ONE case where an overlay must sit ABOVE a playing
     // mandatory video: the pink/spiral tint IS the enhanced video's effect (pre-compositor it was a
     // fresh topmost window created per band, so it naturally drew over the just-created video window).
@@ -1607,8 +1618,8 @@ public class OverlayService : IDisposable
                     _spiralFramesCacheDelay = delay;
                     // The user may have turned the spiral off (or swapped assets) mid-decode.
                     var s = App.Settings.Current;
-                    bool stillWanted = _spiralPath == path
-                        && (s.SpiralEnabled || _timedSpiralHolds > 0 || _sustainedSpiralHeld);
+                    bool stillWanted = SpiralDecodeStillWanted(_spiralPath == path, _isRunning,
+                        s.SpiralEnabled, _timedSpiralHolds, _sustainedSpiralHeld);
                     if (stillWanted && UseCompositor)
                     {
                         // #1051: a Deeper band/effect that parked the ramp hold owns this overlay's

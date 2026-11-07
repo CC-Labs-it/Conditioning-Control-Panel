@@ -902,6 +902,8 @@ namespace ConditioningControlPanel
         {
             try
             {
+                // Switched off by the owner (2026-11-07): no "Media without the download" card.
+                if (!Services.Startup.PopupSwitches.RemoteMediaOffer) return;
                 var settings = Settings?.Current;
                 if (settings == null) return;
 
@@ -1358,7 +1360,15 @@ namespace ConditioningControlPanel
         /// startup-order accident can never silently mute the app.
         /// </summary>
         public static bool PerkNotificationsSuppressed
-            => Settings?.Current?.SuppressPerkNotifications == true;
+            => !Models.PerkEffectsRules.ShowsCards(Settings?.Current?.PerkEffects ?? Models.PerkEffectsMode.Full);
+
+        /// <summary>
+        /// False only when Perk effects is Off (owner, 2026-11-05): no Pink Rush screen wash, no
+        /// lucky gold glow, no lucky or Sparkle Boost sparkles. Same null-safe, read-at-raise-time
+        /// contract as <see cref="PerkNotificationsSuppressed"/>; payouts never read it.
+        /// </summary>
+        public static bool PerkEffectsShown
+            => Models.PerkEffectsRules.ShowsVisuals(Settings?.Current?.PerkEffects ?? Models.PerkEffectsMode.Full);
 
         /// <summary>
         /// Whether a conditioning session is currently running. Set by MainWindow.
@@ -2416,6 +2426,7 @@ namespace ConditioningControlPanel
             // the 100-line app-log tail, and a hard power reset can roll a buffered write back.
             // Its own file + WriteThrough per line survives both. See VideoDiag.
             Services.VideoDiag.Start(Dispatcher);
+            Services.Diagnostics.RenderFailureReport.WarmAdapters();
 
             splash?.SetProgress(0.1, "Initializing...");
 
@@ -6013,6 +6024,12 @@ namespace ConditioningControlPanel
                 // Log to main logger
                 Logger?.Error(ex, "UNHANDLED {Source} EXCEPTION: {Message}", source, ex.Message);
 
+                // A render-thread failure never names its window or device (ccp-bugs #1565 #1570 #1585):
+                // carry the GPU, monitors and visible windows so the next report can.
+                var renderBlock = Services.Diagnostics.UiThreadExit.IsRenderFailure(ex) && ex is not OutOfMemoryException
+                    ? Services.Diagnostics.RenderFailureReport.Build()
+                    : "";
+
                 // Also write to dedicated crash log with full details
                 var crashLogPath = Path.Combine(UserDataPath, "logs", "crash.log");
                 var crashInfo = $@"
@@ -6034,7 +6051,7 @@ Inner Exception: {(ex.InnerException != null ? ex.InnerException.Message : "None
 Application State:
 - IsRunning: {Current != null}
 - Dispatcher Shutdown: {(Current?.Dispatcher?.HasShutdownStarted ?? true)}
-================================================================================
+{renderBlock}================================================================================
 ";
                 // Redact BEFORE the text touches the disk. crash.log is the one file users open
                 // by hand and paste into Discord, and it carried the full "C:\Users\<name>" of

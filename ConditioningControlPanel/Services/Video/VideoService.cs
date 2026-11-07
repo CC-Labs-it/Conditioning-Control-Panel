@@ -5294,6 +5294,7 @@ namespace ConditioningControlPanel.Services
 
             // Load source
             mediaElement.Source = new Uri(path);
+            Audio.EngineOffAudioLog.Note("video-mediaelement", path);
 
             App.Logger.Debug("MediaElement video window on: {Screen}", screen.DeviceName);
             return (win, mediaElement);

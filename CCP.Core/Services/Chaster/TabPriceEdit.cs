@@ -23,7 +23,46 @@ namespace ConditioningControlPanel.Services.Chaster;
 public static class TabPriceEdit
 {
     public const int MinSeconds = 5;
-    public const int MaxSeconds = 60 * 60;
+
+    /// <summary>A whole day (owner, 2026-11-05, WhoWho372: "skipping a session adds at least a
+    /// day"). It was an hour. The day limit still decides what one day books.</summary>
+    public const int MaxSeconds = 24 * 60 * 60;
+
+    /// <summary>Past this, the page says the figure is a lot. The old ceiling.</summary>
+    public const int WarnOverSeconds = 60 * 60;
+
+    /// <summary>What the line under a row says about its figure: <c>Big</c> past an hour,
+    /// <c>OverDay</c> when a cost is bigger than the day limit in force, so one event books at
+    /// most the limit. An earn-back is never cut by the day limit (the floor holds it instead).</summary>
+    public readonly record struct Warning(bool Big, bool OverDay)
+    {
+        public bool Any => Big || OverDay;
+    }
+
+    /// <summary>The warning for a signed figure against the day limit in force.</summary>
+    public static Warning WarningFor(int seconds, int dailyLimitSeconds)
+    {
+        var magnitude = Math.Abs((long)seconds);
+        return new(magnitude > WarnOverSeconds, seconds > 0 && seconds > dailyLimitSeconds);
+    }
+
+    /// <summary>The warning's words, one sentence each on one line. Empty for no warning.
+    /// "{0}" in the day sentence is the day limit.</summary>
+    public static string WarningText(Warning warning, int dailyLimitSeconds, Func<string, string?> loc)
+    {
+        if (!warning.Any) return "";
+        var parts = new List<string>(2);
+        if (warning.Big) parts.Add(loc("chaster_price_warn_big") ?? "");
+        if (warning.OverDay)
+            parts.Add((loc("chaster_price_warn_day") ?? "").Replace("{0}", CircesTab.Format(dailyLimitSeconds, signed: false)));
+        return string.Join(" ", parts.Where(p => p.Length > 0));
+    }
+
+    /// <summary>The figure the row would book if the box's text were kept now: the typed one,
+    /// clamped and signed like a commit, the current one when the text does not read as a time,
+    /// and the default for empty text.</summary>
+    public static int Preview(string id, string? text, IReadOnlyDictionary<string, int>? overrides) =>
+        Parse(text) is { } seconds ? Effective(id, With(overrides, id, seconds)) : Effective(id, overrides);
 
     /// <summary>May this row's figure be set by the player at all: one fixed figure, never a
     /// way out, not a day-end verdict.</summary>

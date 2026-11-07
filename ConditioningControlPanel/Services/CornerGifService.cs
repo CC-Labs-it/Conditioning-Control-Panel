@@ -545,7 +545,10 @@ namespace ConditioningControlPanel.Services
             // assigning the resulting NaN/Infinity to Window.Width/Height throws deep inside WPF
             // layout - which, on the startup restore path, took the whole app down. Bail out loudly
             // instead of handing WPF non-finite geometry.
-            if (!CornerGifMedia.TryGetPixelSize(gifUri, out var gifWidth, out var gifHeight)
+            var uiClock = System.Diagnostics.Stopwatch.StartNew();
+            bool sizeRead = CornerGifMedia.TryGetPixelSize(gifUri, out var gifWidth, out var gifHeight);
+            long headerMs = uiClock.ElapsedMilliseconds;
+            if (!sizeRead
                 || gifWidth <= 0 || gifHeight <= 0)
             {
                 App.Logger?.Warning("CornerGifService: GIF has unreadable or degenerate size {W}x{H} ({Path}) - skipping overlay",
@@ -624,7 +627,8 @@ namespace ConditioningControlPanel.Services
             // saturated render thread blocks the UI thread inside WriteableBitmap.Lock (the
             // CWGXBitmapLockState::LockRead wedge in UiHangWatchdog's dump notes). #221 only made
             // the filter cheaper; the source stayed full size.
-            CornerGifMedia.Attach(imageElement, gifUri, windowWidth, windowHeight, dpiScale);
+            CornerGifMedia.Attach(imageElement, gifUri, windowWidth, windowHeight, dpiScale,
+                diagTag: $"CornerGifService: slot {index} frames");
 
             window.Content = imageElement;
             window.SourceInitialized += (s, e) => MakeWindowClickThrough(window);
@@ -633,6 +637,7 @@ namespace ConditioningControlPanel.Services
             // taskbar-less, click-through window that StopAll can never reach - the user has no
             // way to close it either (#709).
             _windows[index] = window;
+            long showMs = 0;
             try
             {
                 // Show() on a layered window realizes its render target synchronously; if the render
@@ -640,7 +645,9 @@ namespace ConditioningControlPanel.Services
                 using (VideoDiag.UiScope($"CornerGifService.ShowOne(slot {index}, layered Show)"))
                 using (HangContext.Scope($"cornerGif.show[{index}]"))
                 {
+                    uiClock.Restart();
                     window.Show();
+                    showMs = uiClock.ElapsedMilliseconds;
                 }
             }
             catch (Exception ex)
@@ -653,6 +660,11 @@ namespace ConditioningControlPanel.Services
 
             App.Logger?.Information("CornerGifService: overlay shown at {Position} ({Path}, {W}x{H}px, {Opacity}%)",
                 setting.Position, gifUri, (int)windowWidth, (int)windowHeight, setting.Opacity);
+            // ccp-bugs #1577: what "heavier" was, what the show cost the UI thread, which renderer.
+            long fileBytes = -1;
+            try { if (gifUri.IsFile) fileBytes = new System.IO.FileInfo(gifUri.LocalPath).Length; } catch { }
+            App.Logger?.Information("CornerGifService: slot {Index} {Facts}", index,
+                CornerGifMedia.DescribeSource(gifWidth, gifHeight, fileBytes, headerMs, showMs, App.CompositorEnabled));
         }
 
         // Startup-restore flag file, same mechanism as EngineCrashSentinel (armed while the risky

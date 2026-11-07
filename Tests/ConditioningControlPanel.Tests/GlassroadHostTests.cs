@@ -93,7 +93,7 @@ public class GlassroadHostTests
     }
 
     [Fact]
-    public void TheRaceDoor_OpensGlassroad_PrimeLocked_The2dRaceIsRetired()
+    public void TheRaceDoor_OpensGlassroad_PrimeLocked_NeverThe2dRace()
     {
         var catalogue = Read("Services", "Launcher", "LauncherCatalogue.cs");
         // The stack keeps main's G(...) entries as a host dictionary: ["race"] = (revealed, locked, launch, active, ...).
@@ -103,7 +103,7 @@ public class GlassroadHostTests
         Assert.Contains("GlassroadHostService.Launch()", entry);
         Assert.Contains("GlassroadHostService.IsActive", entry);
         Assert.Contains("!Glassroad.GlassroadHostService.PrimeAllowed", entry);   // padlock below Prime
-        Assert.DoesNotContain("CaucusHostService", entry);   // no 2D door
+        Assert.DoesNotContain("CaucusHostService", entry);   // no 2D door (that is raceclassic)
         Assert.DoesNotContain("revealed:", entry);           // always revealed (locked stays visible), no purchase
         Assert.DoesNotContain("CCP_GLASSROAD", catalogue);
         // The Play card reaches the same entry.

@@ -593,11 +593,12 @@ public static class CircesTab
 }
 
 /// <summary>The player's two limits, clamped to a range nobody can argue with: a day of
-/// 15:00 to 12 hours, a backlog of 1 to 48 hours and never under the day's own limit.</summary>
+/// 15:00 to 24 hours, a backlog of 1 to 48 hours and never under the day's own limit. The day
+/// went from 12 to 24 hours with the one-day price row (owner, 2026-11-05); defaults stay.</summary>
 public readonly record struct TabLimits(int DailySeconds, int BacklogSeconds)
 {
     public const int MinDailySeconds = 15 * 60;
-    public const int MaxDailySeconds = 12 * 60 * 60;
+    public const int MaxDailySeconds = 24 * 60 * 60;
     public const int MinBacklogSeconds = 60 * 60;
     public const int MaxBacklogSeconds = 48 * 60 * 60;
 
