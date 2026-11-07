@@ -142,8 +142,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 var elapsed = Environment.TickCount64 - start;
                 if (TryConnect(pipe + V2Suffix) is { } v2) { current = true; return v2; }
-                if (elapsed >= LegacyFallbackAfterMs && TryConnect(pipe) is { } legacy) { current = false; return legacy; }
-                if (elapsed >= ShowAckTimeoutMs) throw new TimeoutException("No single-instance listener");
+                if (elapsed >= LegacyFallbackAfterMs)
+                {
+                    if (TryConnect(pipe) is { } legacy) { current = false; return legacy; }
+                    // Neither pipe answers: a mutex holder without a listener. Go to the mutex wait, as WPF does (App.xaml.cs:2096-2099).
+                    throw new TimeoutException("No single-instance listener");
+                }
                 Thread.Sleep(25);
             }
         }

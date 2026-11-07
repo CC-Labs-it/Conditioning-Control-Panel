@@ -216,13 +216,8 @@ namespace ConditioningControlPanel.Avalonia
             var filePayload = Platform.FileOpenRequest.Encode(args);
             var (startAction, startPath) = Platform.FileOpenRequest.Parse(args);
             var surface = Services.Launcher.LauncherHandoff.Encode(args);
-            using var instance = Platform.SingleInstance.Claim(Platform.SingleInstance.SandboxSuffix(), payload =>
-            {
-                // Validate file requests when received, including when the file was removed after launch.
-                if (!Platform.FileOpenRequest.Decode(payload, out var action, out _) || action != null)
-                    return handoffs.Enqueue(payload);
-                return System.Threading.Tasks.Task.CompletedTask;
-            }, filePayload ?? surface, surface);
+            using var instance = Platform.SingleInstance.Claim(Platform.SingleInstance.SandboxSuffix(),
+                handoffs.Enqueue, filePayload ?? surface, surface);
             if (instance is null)
             {
                 Serilog.Log.Information("Another instance is running; asked it to show its window");
@@ -237,11 +232,10 @@ namespace ConditioningControlPanel.Avalonia
                 handoffs.Ready(payload =>
                     global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                     {
-                        if (Platform.FileOpenRequest.Decode(payload, out var action, out var path))
-                        {
-                            if (action != null && path != null) shell.OpenMediaRequest(action, path, restore: true);
-                        }
-                        else Views.Windows.LauncherWindow.RouteHandoff(shell, payload);
+                        // Validated on delivery, so a file removed after launch reads as a bare relaunch (WPF App.xaml.cs:167-168,2200-2205).
+                        var isFile = Platform.FileOpenRequest.Decode(payload, out var action, out var path);
+                        if (action != null && path != null) shell.OpenMediaRequest(action, path, restore: true);
+                        else Views.Windows.LauncherWindow.RouteHandoff(shell, isFile ? null : payload);
                     }).GetTask());
             };
 

@@ -122,7 +122,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (action == "edit")
                 {
                     var type = DeeperPreview.IsLocalVideoFile(path) ? Models.Deeper.MediaTypes.Video : Models.Deeper.MediaTypes.Audio;
-                    return OpenDeeperEditor(new Services.Deeper.EnhancementLibrary().CreateBlank(type, path), null);
+                    // CreateBlank's initializer inlined, as in DeeperTab: a library here would leak its watcher.
+                    return OpenDeeperEditor(new Models.Deeper.Enhancement { MediaType = type, MediaSource = path, Metadata = new() }, null);
                 }
             }
             catch (Exception ex)
