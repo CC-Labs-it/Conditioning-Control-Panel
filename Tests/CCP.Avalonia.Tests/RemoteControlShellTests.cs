@@ -180,6 +180,9 @@ public sealed class RemoteControlShellTests
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         service.Current.AvatarEnabled = true;
+        // A fresh settings file is a first run: the wizard opens on Show, and hiding the shell to the
+        // tray ends that dialog unaccepted, which really closes the shell (FirstRunWizard.Run abort).
+        service.Current.Welcomed = service.Current.HasAcceptedAgeVerification = true;
         var f = new FakeRelay();
         var relay = new RemoteRelay(() => "tok", () => "uid", "9.9.9", (_, _) => null, _ => { }, f) { AutoPoll = false };
         RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
