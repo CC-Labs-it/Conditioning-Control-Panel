@@ -64,6 +64,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     {
                         CoreEngine.Start();
                         if (CoreSettings.Current.AudioOnlySession) Platform.LayeredAudio.Instance?.Start(ignoreMasterToggle: true);
+                        Autonomy.Start();          // WPF Presets.cs:1618 BtnStart_Click -> StartEngine StartStop.cs:416-422
                     }
                     runner.Start(session);
                     Platform.ProgramEngineBridge.RaiseSessionChanged();   // the Programs session row (WPF OnSessionStarted)

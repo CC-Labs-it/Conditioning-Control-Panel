@@ -94,7 +94,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     parked.Resume();
                     parked.ReassertScheduleAfterEngineStart();
                 }
-                if (AutonomyScheduler.CanStart(CoreSettings.Current)) Autonomy.Start(); // WPF StartStop.cs:420
+                Autonomy.Start();                  // WPF StartStop.cs:416-422; refuses unless enabled + consent + entitled
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()
                 PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Start()
                 SpiralOverlay.Refresh(this);
@@ -117,10 +117,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void OnEngineStopped()
         {
             Platform.ProgramEngineBridge.RaiseSessionChanged();   // any session end repaints the Programs row
-            // WPF StartStop.cs:485: hand back anything a Takeover pulse borrowed before the overlays go;
+            // WPF StartStop.cs:526: hand back anything a Takeover pulse borrowed before the overlays go;
             // also retires the pulse timers so an old one cannot end the next run's bubbles.
             CancelAutonomyPulses();
-            if (!AutonomyScheduler.CanStart(CoreSettings.Current)) Autonomy.Stop(); // WPF StartStop.cs:547
+            if (!AutonomyScheduler.CanStart(CoreSettings.Current)) Autonomy.Stop(); // WPF StartStop.cs:538-545
             // WPF StartStop.cs:533-547: keep a separately enabled bed, and restore ducked audio.
             if (!CoreSettings.Current.AudioLayersEnabled) Platform.LayeredAudio.Instance?.Stop();
             Platform.LibVlcAudio.Instance?.ForceUnduck();

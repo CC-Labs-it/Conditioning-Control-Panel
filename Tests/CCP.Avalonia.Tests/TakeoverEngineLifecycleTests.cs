@@ -86,6 +86,33 @@ public class TakeoverEngineLifecycleTests
         MainShellWindow.StopEngine(); Assert.False(shell.Autonomy.IsEnabled);
     });
 
+    /// <summary>WPF Presets.cs:1618: a session from idle starts the engine through BtnStart_Click, so
+    /// StartEngine (StartStop.cs:416-422) also starts Takeover, e.g. after a panic stopped it.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task SessionFromIdleStartsTakeoverWhenEligible(bool entitled) => WithShell((shell, s) =>
+    {
+        CoreEntitlement.HasPremiumProvider = () => entitled;
+        CoreEntitlement.IsFreeTodayProvider = _ => false;
+        s.AutonomyModeEnabled = s.AutonomyConsentGiven = true;
+        var (oldRunner, oldProvider) = (global::ConditioningControlPanel.Avalonia.App.Sessions, CoreSession.IsSessionRunningProvider);
+        var runner = global::ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService());
+        try
+        {
+            Assert.False(shell.Autonomy.IsEnabled);
+            shell.StartSession(new Session { Id = "takeover_lifecycle", Name = "Takeover", DurationMinutes = 10 });
+            Assert.True(runner.IsRunning);
+            Assert.Equal(entitled, shell.Autonomy.IsEnabled);
+        }
+        finally
+        {
+            runner.Stop();
+            global::ConditioningControlPanel.Avalonia.App.Sessions = oldRunner;
+            CoreSession.IsSessionRunningProvider = oldProvider;
+        }
+    });
+
     [Fact]
     public Task StopCancelsPulseEvenWhenTakeoverRemainsEnabled() => WithShell((shell, s) =>
     {
