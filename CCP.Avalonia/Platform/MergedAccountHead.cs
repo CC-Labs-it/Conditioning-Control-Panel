@@ -29,9 +29,11 @@ internal static class MergedAccountHead
             catch (Exception ex) { Log.Debug("[MergedAccount] sync state reset failed: {Error}", ex.Message); }
         };
         MergedAccountRecovery.StampQuests = id => App.Quests?.StampOwner(id);
-        MergedAccountRecovery.Reauthenticate = ReauthenticateAsync;
+        // Core runs the swap on a pool task; both seams reach ApplyTierReading/TierRaised, which touch controls,
+        // so they run on the UI thread as LoginDialog and the startup Post do (WPF ProfileSync dispatches itself).
+        MergedAccountRecovery.Reauthenticate = () => Dispatcher.UIThread.InvokeAsync(ReauthenticateAsync);
         // WPF :23-28 LoadProfileAsync + StartHeartbeat; AccountSeed.LoadProfileAsync starts the heartbeat on success.
-        MergedAccountRecovery.ReloadProfile = () => AccountSeed.LoadProfileAsync();
+        MergedAccountRecovery.ReloadProfile = () => Dispatcher.UIThread.InvokeAsync(() => AccountSeed.LoadProfileAsync());
         MergedAccountRecovery.Finished = (canonical, reauthed) => Dispatcher.UIThread.Post(() =>
         {
             try { Shell()?.RefreshAccountUiAfterMergedSwap(); }
@@ -44,7 +46,7 @@ internal static class MergedAccountHead
     private static bool NeedsAuthToken() =>
         string.IsNullOrEmpty(CoreAccount.UnifiedUserId) || string.IsNullOrEmpty(CoreSettings.Current.AuthToken);
 
-    /// <summary>WPF App.ReauthenticateAfterMergedSwapAsync (App.xaml.cs:4615) over EnsureAuthTokenAsync (:4556):
+    /// <summary>WPF App.ReauthenticateAfterMergedSwapAsync (App.xaml.cs:4643) over EnsureAuthTokenAsync (:4584):
     /// each signed-in provider in turn, until one mints a token for the canonical.</summary>
     internal static async Task<bool> ReauthenticateAsync()
     {
@@ -68,9 +70,10 @@ internal static class MergedAccountHead
             var result = await authenticate(v2, accessToken);
             if (result.Success && result.User != null)
             {
-                // WPF V2AuthServiceHead.ApplyUserDataToSettings (:15-23), then App.UnifiedUserId.
+                // WPF V2AuthServiceHead.ApplyUserDataToSettings (:15-23), then App.UnifiedUserId; this head's login
+                // adopt keeps a pending descent migration's ledger (AccountSeed.ApplyLoginUserData, as LoginDialog).
                 var s = CoreSettings.Current;
-                ProfileAdopt.ApplyUserData(s, result.User, result.AuthToken, DateTime.UtcNow);
+                AccountSeed.ApplyLoginUserData(s, result.User, result.AuthToken, DateTime.UtcNow);
                 ConditioningControlPanel.Services.Invites.InviteRules.ApplyGrant(s, ConditioningControlPanel.Services.Invites.InviteRules.ParseUtc(result.User.InviteGrantUntilRaw), DateTime.UtcNow);
                 CoreSettings.Save();
                 CoreAccount.UnifiedUserId = result.User.UnifiedId;
@@ -88,6 +91,7 @@ internal static class MergedAccountHead
         Key = "merged-account-signin:" + canonical,
         Title = Loc.Get("account_merged_signin_title"),
         Summary = Loc.Get("account_merged_signin_summary"),
+        IconKey = "Link",   // WPF Glyph "🔗" (MergedAccountRecoveryHead.cs:65), as IconMap maps it
         Open = () => { if (Shell() is { } shell) _ = shell.OpenLoginAfterMergedSwap(); },
     });
 }

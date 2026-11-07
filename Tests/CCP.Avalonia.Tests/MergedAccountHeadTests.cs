@@ -55,6 +55,7 @@ public sealed class MergedAccountHeadTests
         var s = CoreSettings.Current;
         s.UnifiedId = CoreAccount.UnifiedUserId = "u_tombstone1";
         s.AuthToken = "tombstone-token";
+        (s.PlayerLevel, s.PendingDescentMigrationChoice) = (51, "restore");   // a pending migration owns its ledger
         var secrets = new Dictionary<string, string?>();
         if (discordSignedIn)
             secrets["discord_auth"] = JsonConvert.SerializeObject(new DiscordTokenData { AccessToken = "discord", ExpiresAt = DateTime.UtcNow.AddHours(1) });
@@ -81,8 +82,11 @@ public sealed class MergedAccountHeadTests
             Assert.Equal(discordSignedIn ? "canonical-token" : null, s.AuthToken);
             Assert.Equal(discordSignedIn ? 1 : 0, server.DiscordAuths);
             Assert.Equal(discordSignedIn ? 1 : 0, server.ProfileReads);   // ReloadProfile only after a re-auth
+            Assert.Equal(51, s.PlayerLevel);   // the re-auth adopt is this head's login adopt (AccountSeed.ApplyLoginUserData)
+            Assert.Equal(0, server.OffUiThreadCalls);   // re-auth and reload reach TierRaised, which touches controls
             var offer = StartupLadder.Inbox.Items.Where(i => i.Key == "merged-account-signin:" + Canonical).ToList();
             Assert.Equal(discordSignedIn ? 0 : 1, offer.Count);
+            Assert.All(offer, i => Assert.Equal("Link", i.IconKey));   // WPF Glyph 🔗
         }
         finally
         {
@@ -103,17 +107,18 @@ public sealed class MergedAccountHeadTests
 
     private sealed class Server : HttpMessageHandler
     {
-        public int DiscordAuths, ProfileReads;
+        public int DiscordAuths, ProfileReads, OffUiThreadCalls;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             var path = request.RequestUri!.AbsolutePath;
             (HttpStatusCode code, string body) answer = path switch
             {
                 "/v2/remote/start" => (HttpStatusCode.Conflict, "{\"error\":\"merged\",\"canonical_unified_id\":\"" + Canonical + "\"}"),
-                "/v2/auth/discord" => (HttpStatusCode.OK, "{\"success\":true,\"auth_token\":\"canonical-token\",\"user\":{\"unified_id\":\"" + Canonical + "\",\"display_name\":\"Bambi\"}}"),
+                "/v2/auth/discord" => (HttpStatusCode.OK, "{\"success\":true,\"auth_token\":\"canonical-token\",\"user\":{\"unified_id\":\"" + Canonical + "\",\"display_name\":\"Bambi\",\"level\":150,\"xp\":999999}}"),
                 _ => (HttpStatusCode.ServiceUnavailable, "{}"),
             };
             if (path == "/v2/auth/discord") Interlocked.Increment(ref DiscordAuths);
+            if (path != "/v2/remote/start" && !Dispatcher.UIThread.CheckAccess()) Interlocked.Increment(ref OffUiThreadCalls);
             if (path.StartsWith("/v2/user/profile", StringComparison.Ordinal)) Interlocked.Increment(ref ProfileReads);
             return Task.FromResult(new HttpResponseMessage(answer.code) { Content = new StringContent(answer.body) });
         }
