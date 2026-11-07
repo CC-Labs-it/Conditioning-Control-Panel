@@ -53,8 +53,9 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>WPF RemoteEndRule.LeavesLocalRun (RemoteControlService.cs:964, :1154): a leave or session end
         /// over the wearer's own run hands back only what the controller holds. Remote session verbs are not
-        /// ported, so a running engine is always the wearer's own.</summary>
-        internal static bool LeavesLocalRun(bool force) => !force && CoreEngine.IsRunning;
+        /// ported, so a running engine is always the wearer's own. Only a session end leaves it: a panic and a
+        /// leash cut keep the full teardown (RemoteEndRule.cs:26-27, EndSessionNow :344).</summary>
+        internal static bool LeavesLocalRun(bool force, bool leashCut = false) => !force && !leashCut && CoreEngine.IsRunning;
 
         /// <summary>WPF StopAllRemoteEffects (panic, session end; RemoteControlService.cs:980): pulses go and the
         /// runtime stops, then comes back when the wearer's own switch is on (#299). A controller leaving
@@ -141,11 +142,12 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>WPF StopAllRemoteEffects: everything a controller could start stops and the wearer's own
         /// values come back (RemoteWearer: their strict lock, panic on unless a running Lockdown holds it off).
-        /// Only <paramref name="force"/> (trigger_panic) takes the subject's own engine down (#878).</summary>
-        public static void StopEffects(bool force)
+        /// Only <paramref name="force"/> (trigger_panic) takes the subject's own engine down (#878).
+        /// <paramref name="leashCut"/> keeps the full teardown over a local run (WPF RemoteEndRule.cs:26-27).</summary>
+        public static void StopEffects(bool force, bool leashCut = false)
         {
             // A leave and the session end both arrive here unforced; RemoteRelay.Cleanup adds the session-end reset.
-            var localRun = LeavesLocalRun(force);
+            var localRun = LeavesLocalRun(force, leashCut);
             if (force) ResetAutonomy();
             else if (!localRun) try { CancelAutonomyPulses?.Invoke(); } catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] autonomy pulse cancel failed"); }
             if (force) Commands.AiCommandService.CancelAll();   // a remote panic cancels pending AI follow-ups too

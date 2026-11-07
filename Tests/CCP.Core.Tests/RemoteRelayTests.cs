@@ -125,6 +125,40 @@ public sealed class RemoteRelayTests
     // hand a stale snapshot to the next one.
     public RemoteRelayTests() => ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
 
+    // WPF RemoteEndRule.cs:26-27, EndSessionNow :344: a leash cut over the wearer's own run still cancels the
+    // pulses, closes every card (:1020) and stops autonomy, re-armed on the saved switch (:980-985).
+    [Fact]
+    public async Task Leash_cut_over_a_local_run_closes_cards_and_resets_autonomy()
+    {
+        var s = CoreSettings.Current;
+        var saved = (RemoteCommands.AutonomyCommand, RemoteCommands.CancelAutonomyPulses, CoreLockCard.CloseAllHandler,
+            s.AutonomyModeEnabled, s.StrictLockEnabled, s.PanicKeyEnabled, s.AudioOnlySession, s.TotalSessions);
+        var log = new List<string>();
+        try
+        {
+            RemoteCommands.AutonomyCommand = on => { log.Add(on ? "start" : "stop"); return true; };
+            RemoteCommands.CancelAutonomyPulses = () => log.Add("pulses");
+            CoreLockCard.CloseAllHandler = () => log.Add("close");
+            (s.AutonomyModeEnabled, s.AudioOnlySession) = (true, true);
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
+            await r.StartAsync("full");
+            CoreEngine.Start();
+            log.Clear();
+            r.EndSessionNow();
+            Assert.False(r.IsActive);
+            Assert.True(CoreEngine.IsRunning);   // the wearer's engine stays, as WPF
+            Assert.Equal(new[] { "pulses", "close", "pulses", "stop", "start" }, log);
+        }
+        finally
+        {
+            CoreEngine.Stop();
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            (RemoteCommands.AutonomyCommand, RemoteCommands.CancelAutonomyPulses, CoreLockCard.CloseAllHandler,
+                s.AutonomyModeEnabled, s.StrictLockEnabled, s.PanicKeyEnabled, s.AudioOnlySession, s.TotalSessions) = saved;
+        }
+    }
+
     private RemoteRelay Relay(FakeRelay f) => new(() => "tok", () => "uid-1", "9.9.9",
         (a, _) => { _ran.Add(a); return null; }, force => _stops.Add(force), f) { AutoPoll = false };
 
