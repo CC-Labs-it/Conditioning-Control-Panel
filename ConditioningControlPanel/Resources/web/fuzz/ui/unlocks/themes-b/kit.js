@@ -123,23 +123,41 @@ export function shopFlavour(ctx, lane, ms = 9000) {
 
 /* ---- pictures ---- */
 
-/** A picture tile. Null from the source, or the No Pictures route, leaves an empty frame. */
+/** Chastity's padlock and frame are visible only with a decoded picture. */
 export function tile(ctx, parent, css, niche) {
+  const needsPicture = niche === 'chastity';
   const el = ctx.el('div', css, null, parent);
   el.className = 'tb-tile';
-  const img = ctx.el('img', 'opacity:0;transition:opacity .4s ease-out;', null, el);
+  const img = ctx.el('img', needsPicture ? '' : 'transition:opacity .4s ease-out;', null, el);
   img.alt = '';
   const credit = ctx.el('span', '', null, el);
   credit.className = 'tb-credit';
+  let version = -1, request = 0;
+  function clear() {
+    img.removeAttribute('src');
+    img.style.opacity = 0;
+    credit.textContent = '';
+  }
   const t = {
     el,
     async fill() {
-      const r = ctx.pick('f3') === 'blind' ? null : await ctx.pictures.next({ niche });
-      if (!el.isConnected) return;
-      if (!r) { img.removeAttribute('src'); img.style.opacity = 0; credit.textContent = ''; return; }
-      img.onload = () => { img.style.opacity = 1; };
-      img.src = r.url;
-      credit.textContent = r.credit || '';
+      const ticket = ++request, revision = ctx.pictures.rewardRevision;
+      const current = () => ticket === request && revision === ctx.pictures.rewardRevision && el.isConnected;
+      if (needsPicture) el.hidden = true;
+      if (version !== revision) { version = revision; clear(); }
+      try {
+        const picture = ctx.pick('f3') === 'blind' ? null : await ctx.pictures.next({ niche, still: true, allowScrolller: true });
+        if (!current()) return;
+        if (!picture?.url) { clear(); return; }
+        img.src = picture.url;
+        await img.decode();
+        if (!current()) return;
+        credit.textContent = picture.credit || '';
+        img.style.opacity = 1;
+        if (needsPicture) el.hidden = !img.naturalWidth;
+      } catch {
+        if (current()) clear();
+      }
     },
   };
   t.fill();
@@ -177,7 +195,11 @@ export function gallery(ctx, { niche, mode = 'swap', decorate = null, parent = '
   }
   let n = 0;
   ctx.every(mode === 'scroll' ? 3500 : 6000, () => { if (mode !== 'scroll' || !roomy || ctx.gentle) live[n++ % live.length].fill(); });
-  ctx.on('pictures', () => live.forEach((o) => o.fill()));
+  const refresh = () => live.forEach((o) => o.fill());
+  ctx.on('pictures', refresh);
+  if (niche === 'chastity') ctx.on('fork', ({ fork, lane }) => {
+    if (fork === 'f3' && lane === 'blind') refresh();
+  });
   return { tiles: live, hide() { for (const o of live) o.el.style.display = 'none'; } };
 }
 

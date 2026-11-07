@@ -38,7 +38,7 @@ const families = {
   phone: 'd_scroll d_foryou:heart d_refresh:loop buzz:wave em_call:heart',
   meter: 'd_end lo_tease:lock slider go_edge:hand in_fever:bug dr_update:hex',
   book: 'b_story x_story:moon b_memory:question',
-  radio: 'b_radio',
+  radio: 'b_radio lofi_radio',
   ink: 'b_ink drain:wave ce_blur:bar',
   mascot: 'o_emi em_head em_jeal:heart em_mini:plus em_nap:moon em_play:play em_boss:crown',
   billboard: 'o_native o_out:star',

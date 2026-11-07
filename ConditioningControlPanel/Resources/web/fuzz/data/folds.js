@@ -12,7 +12,7 @@ const NEVER_LANES = new Set(['trunk', 'combo', 'exit', 'meta', 'after']);
 /** Rows that stay single wherever they are. Button skins: one tap shows one new button. Side hubs and toys: windows. */
 const SINGLE = new Set([
   'rounded', 'bubble', 'watch', 'heartbtn', 'mirror', 'spirbtn', 'bigbtn', 'tinybtn',
-  'gold', 'screen', 'levels', 'boxes', 'wheel', 'guide', 'panel', 'audio_mixer', 'asmr',
+  'gold', 'screen', 'levels', 'boxes', 'wheel', 'guide', 'panel', 'audio_mixer', 'asmr', 'lofi_radio',
   'toy_box', 'mini_breakout', 'mini_race', 'mini_slots', 'dispenser', 'dispenser_fast', 'dispenser_faster',
 ]);
 

@@ -1,1 +1,4 @@
 dev/shots/
+
+# Machine-local music pack for the shared preview.
+/assets/lofi/audio/

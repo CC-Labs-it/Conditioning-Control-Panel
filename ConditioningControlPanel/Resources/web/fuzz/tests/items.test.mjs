@@ -11,8 +11,8 @@ import { DESIGN, itemsSource } from '../dev/gen-items.mjs';
 const tree = fileURLToPath(new URL('..', import.meta.url));
 
 test('every unlock from the design is here, with a real parent', () => {
-  assert.equal(ITEMS.length, 295);
-  assert.equal(new Set(ITEMS.map((i) => i.id)).size, 295);
+  assert.equal(ITEMS.length, 296);
+  assert.equal(new Set(ITEMS.map((i) => i.id)).size, 296);
   for (const it of ITEMS) for (const q of it.req) assert.ok(BY_ID[q], `${it.id} needs ${q}`);
 });
 
