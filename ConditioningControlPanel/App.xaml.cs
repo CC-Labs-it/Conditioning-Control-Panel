@@ -288,6 +288,8 @@ namespace ConditioningControlPanel
         {
             try
             {
+                // Switched off by the owner (2026-11-07): no "Media without the download" card.
+                if (!Services.Startup.PopupSwitches.RemoteMediaOffer) return;
                 var settings = Settings?.Current;
                 if (settings == null) return;
 
