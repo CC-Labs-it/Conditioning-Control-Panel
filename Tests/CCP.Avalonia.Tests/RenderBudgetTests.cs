@@ -49,4 +49,34 @@ public sealed class RenderBudgetTests
         Assert.Equal(0, RenderBudget.ChooseAdapter(names, "amd"));    // unknown name: primary
         Assert.Equal(0, RenderBudget.ChooseAdapter(Array.Empty<string?>(), "1"));
     }
+
+    private static readonly RenderBudget.DxgiAdapter Warp = new("Microsoft Basic Render Driver", 0x1414, 0x8C, 2);
+    private static readonly RenderBudget.DxgiAdapter Rtx = new("NVIDIA GeForce RTX 5080", 0x10DE, 0x2C02, 0);
+
+    [Fact]
+    public void Warp_only_renders_in_software()
+    {
+        Assert.Equal(new[] { Win32RenderingMode.Software }, RenderBudget.ChooseRendering(new[] { Warp }, null));
+        // Either signal alone is enough: the WARP ids without the flag, or the software flag on another id.
+        Assert.Equal(new[] { Win32RenderingMode.Software },
+            RenderBudget.ChooseRendering(new[] { Warp with { Flags = 0 }, new RenderBudget.DxgiAdapter("x", 1, 2, 2) }, null));
+    }
+
+    [Fact]
+    public void A_real_gpu_keeps_the_default_even_beside_warp()
+    {
+        Assert.Null(RenderBudget.ChooseRendering(new[] { Rtx, Warp }, null));
+        Assert.Null(RenderBudget.ChooseRendering(new[] { Rtx }, null));
+        Assert.Null(RenderBudget.ChooseRendering(new[] { new RenderBudget.DxgiAdapter("Remote", 0x1414, 0x8D, 0) }, null));
+        Assert.Null(RenderBudget.ChooseRendering(Array.Empty<RenderBudget.DxgiAdapter>(), null));   // enumeration failed
+    }
+
+    [Fact]
+    public void The_env_override_wins_over_the_adapter_rule()
+    {
+        var angle = new[] { Win32RenderingMode.AngleEgl };
+        Assert.Same(angle, RenderBudget.ChooseRendering(new[] { Warp }, angle));
+        var soft = new[] { Win32RenderingMode.Software };
+        Assert.Same(soft, RenderBudget.ChooseRendering(new[] { Rtx }, soft));
+    }
 }

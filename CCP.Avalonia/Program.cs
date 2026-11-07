@@ -284,7 +284,8 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The Win32 presentation path. Avalonia's defaults (WinUI composition over ANGLE on
         /// the primary adapter) unless CCP_WIN32_COMPOSITION / CCP_WIN32_RENDERING / CCP_GPU_ADAPTER
         /// say otherwise (Platform/RenderBudget.cs); with CCP_GPU_ADAPTER set the adapter list is logged
-        /// once, so a log says which GPU drew the frames.</summary>
+        /// once, so a log says which GPU drew the frames. With CCP_WIN32_RENDERING unset and only the
+        /// Microsoft Basic Render Driver present, rendering is Software (RenderBudget.ChooseRendering).</summary>
         private static global::Avalonia.Win32PlatformOptions Win32Options()
         {
             var o = new global::Avalonia.Win32PlatformOptions();
@@ -307,7 +308,15 @@ namespace ConditioningControlPanel.Avalonia
                     "software" => global::Avalonia.Win32RenderingMode.Software,
                     _ => null,
                 });
-            if (rend != null) o.RenderingMode = rend;
+            // The override wins; else a machine whose only adapter is WARP (no GPU) renders in software,
+            // which beats ANGLE on WARP (Platform/RenderBudget.cs). Win32Options runs once, so this logs once.
+            var dxgi = rend == null && OperatingSystem.IsWindows()
+                ? Platform.DxgiAdapters.List() : new System.Collections.Generic.List<Platform.RenderBudget.DxgiAdapter>();
+            var modes = Platform.RenderBudget.ChooseRendering(dxgi, rend);
+            if (modes != null) o.RenderingMode = modes;
+            if (rend == null)
+                Serilog.Log.Information("Win32 rendering: {Mode} (DXGI adapters: {List})", modes == null ? "default" : "software, WARP only",
+                    dxgi.Count == 0 ? "none read" : string.Join(" | ", dxgi.Select(a => $"{a.Name} {a.VendorId:x4}:{a.DeviceId:x4} flags {a.Flags}")));
             if (comp != null || rend != null)
                 Serilog.Log.Information("Win32 presentation override: composition {C}, rendering {R}",
                     comp == null ? "default" : string.Join(",", comp), rend == null ? "default" : string.Join(",", rend));

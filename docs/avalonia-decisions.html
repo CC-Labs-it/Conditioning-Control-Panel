@@ -1738,5 +1738,12 @@ const m=document.getElementById('ledger-meta');const s=document.querySelector('.
 <li>Wallpaper: door hidden on this head (<code>SettingsPaletteIndex.WallpaperDoorAvailableProvider</code>).</li>
 <li>Prize Counter on Linux: a lane is owed, <code>prize-counter-linux</code>. It replaces the B3 reason in the sync 10 and 11 ledgers.</li>
 </ul>
+<h2 id="2026-11-04-software-rendering-on-warp">2026-11-04: Software rendering when the only adapter is WARP (routine; evidence perf-combined-20261104)</h2>
+<ul>
+<li>Problem: on a machine without a GPU driver (CI runners, VMs) Avalonia draws through ANGLE on the Microsoft Basic Render Driver; each frame costs ~20 ms to draw and lands 30-45 ms after the commit, so tab switches took 80-92 ms.</li>
+<li>Choice: <code>Program.Win32Options</code> lists the DXGI adapters (<code>Platform/DxgiAdapters.cs</code>, CreateDXGIFactory1/EnumAdapters1) before Avalonia starts. If every adapter is WARP (vendor 0x1414 device 0x8C, or the software flag), rendering is <code>Win32RenderingMode.Software</code>. <code>CCP_WIN32_RENDERING</code> always wins; an empty or failed enumeration keeps the default; any real GPU keeps the default. The pure rule is <code>RenderBudget.ChooseRendering</code> (tests in <code>RenderBudgetTests</code>). Linux and macOS are untouched.</li>
+<li>WPF: Microsoft documents render tier 0 as "no graphics hardware acceleration, all graphics features use software" (learn.microsoft.com, WPF "Graphics Rendering Tiers", <code>RenderCapability.Tier</code>), and WPF picks its tier itself with no app code. Not confirmed: that WPF actually lands on tier 0 on the Basic Render Driver. The runner does not log <code>RenderCapability.Tier</code>, so treat it as parity in intent only.</li>
+<li>Measured gain (software variant, one run): Programs 92 to 35 ms, AvailableSubjects 77 to 38, BlinkTrainer 75 to 35, all-tab median 81 to 57. Settings stays high (75 ms): its own tile draw is heavy (slice 3).</li>
+</ul>
 </body>
 </html>
