@@ -20,7 +20,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void OnVaultCardClicked(Control card, ExclusiveFeature feature, Action open)
         {
             var at = card.TranslatePoint(new Point(card.Bounds.Width / 2, card.Bounds.Height / 2), _ambientFx);
-            if (!IsVisible || !AmbientFxCanvas.Env.AllowParticles || card.Bounds.Width <= 0 ||
+            if (!IsVisible || !AmbientFxCanvas.Env.AllowFeedbackParticles || card.Bounds.Width <= 0 ||   // a click: kept on the CPU path (fix3 pop 1b)
                 _ambientFx.Bounds.Width <= 1 || _ambientFx.Bounds.Height <= 1 || at == null)
             {
                 open();

@@ -30,6 +30,7 @@
 // WM_DPICHANGED during an interactive move, which is a Win32-specific hazard.
 
 using System;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Serilog;
@@ -75,6 +76,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var h = Math.Max(200, Math.Min(_designMinHeight, maxHeightDip));
                 if (Math.Abs(MinHeight - h) > 0.5) MinHeight = h;
             }
+        }
+
+        /// <summary>
+        /// Before the first Show, once per launch (App.StartDesktop): the default size (StartupPlacement.ShellSize,
+        /// the owner's Linux scale), fitted to the work area and centred on it, as WPF
+        /// MainWindow.CenterOnPrimaryScreen does. The XAML says Manual at 0,0, which under WSLg's two
+        /// monitors (rdp-0 1680,0 / rdp-2 0,235) is on neither, so the fit pushed it to the left one's corner.
+        /// There is no saved main-window size to respect (neither head stores one); a resize later in the run
+        /// is never touched again. No screen to ask (headless): only the size is applied.
+        /// </summary>
+        internal void PlaceForFirstShow()
+        {
+            try
+            {
+                EnsureDesignFloorsCaptured();
+                (Width, Height) = Platform.StartupPlacement.ShellSize(Width, Height, MinWidth, MinHeight, OperatingSystem.IsLinux());
+                var screens = Screens?.All;
+                if (screens is null || screens.Count == 0) return;
+                var primary = -1;
+                for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
+                var pointer = OperatingSystem.IsWindows() ? Platform.Win32Overlay.CursorPosition()
+                    : OperatingSystem.IsLinux() ? Platform.X11Pointer.Read()?.At : null;
+                var at = Platform.StartupPlacement.PickForShell(screens.Select(s => s.Bounds).ToArray(), primary, pointer);
+                if (at < 0) return;
+                var screen = screens[at];
+                var wa = screen.WorkingArea;
+                var scale = screen.Scaling > 0 ? screen.Scaling : 1.0;
+                if (wa.Width <= 0 || wa.Height <= 0) return;
+                // WPF order: floors down first, else the uniform fit is vetoed on a small or 300% screen.
+                RelaxSizeFloorsTo(wa.Width / scale, wa.Height / scale);
+                var (w, h) = global::ConditioningControlPanel.Services.UI.WindowFitRule.Fit(Width, Height, wa.Width / scale, wa.Height / scale);
+                (Width, Height) = (Math.Max(w, MinWidth), Math.Max(h, MinHeight));
+                var centre = Platform.StartupPlacement.CenterIn(wa, Width, Height, scale);
+                // Top-left kept on the work area when a floor still overflows it: the title bar stays grabbable.
+                Position = new PixelPoint(Math.Max(wa.X, centre.X), Math.Max(wa.Y, centre.Y));
+                Platform.StartupPlacement.ReassertAfterMap(this, Position);
+                Log.Information("MainShellWindow first placement: {W:0}x{H:0} DIP at {Pos} on {Screen} (work area {WA}, {Scale:0.##}x)",
+                    Width, Height, Position, screen.DisplayName, wa, scale);
+            }
+            catch (Exception ex) { Log.Warning(ex, "MainShellWindow first placement failed; the work-area fit places it"); }
         }
 
         /// <summary>

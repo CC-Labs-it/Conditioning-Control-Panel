@@ -271,7 +271,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     }
                 }
                 busy |= StepDepth(dt);
-                if (Env.AllowTransitions) { busy = true; StepEdge(dt); }
+                // WPF Edge.cs:124 gates the breath on transitions only. On the CPU path it repaints the whole
+                // launcher 30 times a second (render thread pinned, lane perf): between flares and glints the
+                // edge holds at rest there (Env.SoftwareFloorHoldsIdleLoops).
+                if (Env.AllowTransitions && (!Env.SoftwareFloorHoldsIdleLoops || _edgeFlareT >= 0 || _glintT >= 0))
+                { busy = true; StepEdge(dt); }
                 if (_fade.On) { busy = true; RootGrid.Opacity = _fade.Step(dt); if (!_fade.On) FinishFade(); }
                 if (_glow.On) { busy = true; GlowLayer.Opacity = _glow.Step(dt); }
                 if (_shakeT >= 0) { busy = true; StepShake(dt); }
@@ -303,6 +307,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                      : EdgeGlowRest;
                 if (ms >= 900) { _edgeFlareT = -1; _edgeBreathT = 0; }
             }
+            else if (Env.SoftwareFloorHoldsIdleLoops) glow = EdgeGlowRest;   // held at rest on the CPU path
             else
             {
                 // StartEdgeBreath: 0.30..0.44, 3.2 s each way, sine in-out, auto-reverse.
@@ -636,7 +641,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                if (anchor == null || !Env.AllowParticles || !anchor.IsEffectivelyVisible || anchor.Bounds.Width <= 0) return;
+                if (anchor == null || !Env.AllowFeedbackParticles || !anchor.IsEffectivelyVisible || anchor.Bounds.Width <= 0) return;   // a press: kept on the CPU path (fix3 pop 1b)
                 if (anchor.TranslatePoint(new Point(anchor.Bounds.Width / 2, anchor.Bounds.Height / 2), BurstLayer) is not { } p) return;
                 if (p.X < 0 || p.Y < 0 || p.X > BurstLayer.Bounds.Width || p.Y > BurstLayer.Bounds.Height) return;
                 BurstLayer.Burst(p.X, p.Y, color, count);

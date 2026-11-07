@@ -153,11 +153,15 @@ public sealed class TubeChatParityTests
             thinkingFrame();
             Assert.Equal(question, speech.Text);   // the thinking ticker is dead
 
+            // The chips ride the bubble, which is its own window (WPF Speech.cs:1060): click them there.
             var chip = (Border)buttons.Children[0];
-            HeadlessInput.RenderLiveTree(tube);
-            var at = chip.TranslatePoint(new Point(chip.Bounds.Width / 2, chip.Bounds.Height / 2), tube)!.Value;
-            tube.MouseDown(at, MouseButton.Left);
-            tube.MouseUp(at, MouseButton.Left);
+            var bubbleWindow = tube.BubbleWindow!;
+            Assert.True(bubbleWindow.IsVisible);
+            Assert.Same(bubbleWindow, TopLevel.GetTopLevel(chip));
+            HeadlessInput.RenderLiveTree(bubbleWindow);
+            var at = chip.TranslatePoint(new Point(chip.Bounds.Width / 2, chip.Bounds.Height / 2), bubbleWindow)!.Value;
+            bubbleWindow.MouseDown(at, MouseButton.Left);
+            bubbleWindow.MouseUp(at, MouseButton.Left);
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(new[] { "s-one" }, started);
         }

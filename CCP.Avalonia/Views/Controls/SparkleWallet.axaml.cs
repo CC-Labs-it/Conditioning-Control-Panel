@@ -101,6 +101,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal bool InviteOpen => InvitePopup.IsOpen;
         internal bool HelpOpen => HelpPopup.IsOpen;
         internal bool RewardShowing => GainBadge.IsVisible;
+        internal bool RewardParticles => _particles;
         internal bool Waving => _wave.IsRunning;
         internal string GainLabel => GainText.Text ?? "";
 
@@ -119,8 +120,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _rewardShown = Math.Min(int.MaxValue, _rewardShown + amount);
             GainText.Text = Loc.GetF("sparkle_wallet_gain", _rewardShown.ToString("N0", CultureInfo.CurrentCulture));
             GainBadge.IsVisible = true;
-            _animate = AnimateInteractions;
-            _particles = _animate && AmbientFxCanvas.Env.AllowParticles;
+            // A real award is feedback: its rise and sparks follow the user's own tier, not the CPU path's floor (fix3 pop 1b).
+            _animate = AmbientFxCanvas.Env.AllowTransitions && AmbientFxCanvas.Env.FeedbackTier != PerformanceTier.Performance;
+            _particles = _animate && AmbientFxCanvas.Env.AllowFeedbackParticles;
             _riseFrom = _animate ? (AmbientFxCanvas.Env.Level == MotionLevel.Reduced ? 3 : 8) : 0;
             _reward.Stop(); // restart: the 1.6 s window and the cue begin again (WPF _gainTimer.Stop/Start)
             _reward.Start();

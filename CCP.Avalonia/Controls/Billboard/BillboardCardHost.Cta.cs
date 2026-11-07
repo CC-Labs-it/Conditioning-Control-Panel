@@ -62,7 +62,8 @@ internal sealed partial class BillboardCardHost
                 new GradientStop(Color.FromArgb(0, hue.R, hue.G, hue.B), 1) },
         };
         _ctaHovered = _ctaDown = _ctaReleasing = false;
-        _ctaLandAt = _ctaShineAt = landed && Env.AllowTransitions ? _ctaNow : double.NegativeInfinity;
+        // WPF Fx.cs:115 the flare and its shine start as the thud lands (begin + 55% of it).
+        _ctaLandAt = _ctaShineAt = landed && Env.AllowTransitions ? _ctaNow + CtaLandDelaySeconds : double.NegativeInfinity;
         _hoverAt = _pressAt = _travelAt = _ctaSweepAt = _ctaNow;
         _glowAt = double.NegativeInfinity;
         _ctaReleaseTravel = false; _travelTarget = 0;
@@ -79,7 +80,12 @@ internal sealed partial class BillboardCardHost
         {
             _fromTravel = _ctaTravel.Y; _travelAt = _ctaNow;
             _travelTarget = on ? -DepthLaw.HoverLiftPx : 0; _ctaReleaseTravel = false;
+            // WPF Fx.cs:211 Lift: the drop band lengthens under a lifted plank.
+            double drop = DepthLaw.ShadowFor(true, false, false, on);
+            _ctaDrop.Margin = new Thickness(0, drop, 0, -drop);
         }
+        // WPF Cta.cs:186-190 hover throws a few glints off the corner (particles gate inside).
+        if (on && Env.AllowTransitions) CtaGlints();
         if (on && Env.AllowTransitions) _ctaShineAt = _ctaNow;
         else { _ctaShineAt = double.NegativeInfinity; _ctaSweepAt = _ctaNow; }
         RefreshCtaFx(_ctaOnScreen);
@@ -91,6 +97,9 @@ internal sealed partial class BillboardCardHost
         _fromX = _ctaSquash.ScaleX; _fromY = _ctaSquash.ScaleY; _fromTravel = _ctaTravel.Y;
         _pressAt = _travelAt = _ctaNow; _ctaReleasing = _ctaReleaseTravel = !down; _ctaDown = down;
         _travelTarget = down ? DepthLaw.PressTravelPx : 0;
+        // WPF Fx.cs:214-226 PressDown/PressUp: pressed in, the drop goes and the bevel inverts.
+        _ctaDrop.IsVisible = !down;
+        _ctaFace.BorderBrush = Depth(down ? "DepthPressedBevel" : "DepthRaisedBevel");
         RefreshCtaFx(_ctaOnScreen);
     }
 
@@ -149,7 +158,8 @@ internal sealed partial class BillboardCardHost
         double glowElapsed = Math.Max(0, t - _glowAt);
         double idleTime = double.IsFinite(_glowAt) ? Math.Max(0, glowElapsed - 0.26) : t;
         double idle = Env.AllowAmbientLoops ? 0.32 + 0.30 * BeatLoop.Breath(idleTime, 1.6) : 0.32;
-        double land = Math.Clamp(1 - (t - _ctaLandAt) / (0.7 * speed), 0, 1);
+        // Before the flare begins the glow keeps its idle value (WPF BeginTime holds the base).
+        double land = t < _ctaLandAt ? 0 : Math.Clamp(1 - (t - _ctaLandAt) / (0.7 * speed), 0, 1);
         _ctaGlow.Opacity = _ctaHovered ? _fromGlow + (0.95 - _fromGlow) * Math.Clamp(glowElapsed / 0.16, 0, 1)
             : land > 0 ? idle + (0.95 - idle) * land
             : Env.AllowAmbientLoops && glowElapsed < 0.26 ? _fromGlow + (0.32 - _fromGlow) * (glowElapsed / 0.26) : idle;

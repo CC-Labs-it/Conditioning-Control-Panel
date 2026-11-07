@@ -33,7 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// theme particle colour, as WPF FireBurstAt(color: null)). False when refused.</summary>
         internal bool Fire(Control anchor, int count, bool rightEdge = false, Color? color = null)
         {
-            if (!Env.AllowParticles || !anchor.IsEffectivelyVisible || anchor.Bounds.Width <= 0 || anchor.Bounds.Height <= 0) return false;
+            if (!Env.AllowFeedbackParticles || !anchor.IsEffectivelyVisible || anchor.Bounds.Width <= 0 || anchor.Bounds.Height <= 0) return false;
             if (TopLevel.GetTopLevel(anchor) is not Window { IsVisible: true, IsActive: true } w || w.WindowState == WindowState.Minimized) return false;
             if (OverlayLayer.GetOverlayLayer(anchor) is not { } host) return false;
             var spot = new Point(rightEdge ? anchor.Bounds.Width : anchor.Bounds.Width / 2, anchor.Bounds.Height / 2);

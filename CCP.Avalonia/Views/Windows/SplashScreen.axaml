@@ -12,7 +12,8 @@
                                         code-behind (Avalonia generates no field for a named
                                         non-Control element)
        TranslateTransform x:Name + a Forever DoubleAnimation
-                                     -> a Style.Animations sweep on Border#Shimmer. The WPF sweep
+                                     -> a render-thread composition sweep of Border#Shimmer's
+                                        Translation (code-behind StartShimmer). The WPF sweep
                                         distance was Math.Max(200, ActualWidth-60); the window is
                                         a fixed 400 wide and cannot resize, so that is 340.
        RenderTransformOrigin Point 0,0.5 -> RelativePoint "0%,50%"
@@ -39,23 +40,6 @@
          one UI thread, so that trick is gone (see the code-behind). The window stays fully
          self-contained anyway - hardcoded colours, no resource lookups - because that costs
          nothing and keeps it renderable before App resources exist. -->
-
-    <Window.Styles>
-        <!-- ponytail: local copy of Windows/SplashScreen.xaml.cs:StartShimmer (a code-behind
-             DoubleAnimation there), hoist when a second view needs a sweep -->
-        <Style Selector="Border#Shimmer">
-            <Style.Animations>
-                <Animation Duration="0:0:1.6" IterationCount="Infinite">
-                    <KeyFrame Cue="0%">
-                        <Setter Property="TranslateTransform.X" Value="-90"/>
-                    </KeyFrame>
-                    <KeyFrame Cue="100%">
-                        <Setter Property="TranslateTransform.X" Value="340"/>
-                    </KeyFrame>
-                </Animation>
-            </Style.Animations>
-        </Style>
-    </Window.Styles>
 
     <Border Background="#FF121220" CornerRadius="15" BorderBrush="#FFFF69B4" BorderThickness="2">
         <Border.Effect>
@@ -92,9 +76,10 @@
                         </LinearGradientBrush>
                     </Border.Background>
                 </Border>
-                <!-- Shimmer sweep: a continuously-animated highlight band. On WPF it was proof the
-                     app had not hung while the main thread was busy; with one UI thread it stops
-                     when startup blocks, so it is decoration now. -->
+                <!-- Shimmer sweep: a continuously-animated highlight band, WPF's proof that the app
+                     had not hung while the main thread was busy. The sweep is a composition animation
+                     started from the code-behind (StartShimmer): it runs on the render thread, so it
+                     keeps moving while one startup step holds the single UI thread. -->
                 <Grid ClipToBounds="True">
                     <Border x:Name="Shimmer" Width="90" HorizontalAlignment="Left" CornerRadius="4">
                         <Border.Background>

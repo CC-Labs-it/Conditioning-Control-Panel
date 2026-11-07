@@ -50,6 +50,9 @@ public sealed class BillboardAppProvidersTests
         s.BillboardSnoozedUntil.Clear();
         s.DeeperRecentFiles?.Clear();
         BillboardCardHost.Time = new FrozenClock();
+        // The press delay (WPF PressActionDelayMs) is a dispatcher timer; headless never fires one.
+        var oldSchedule = BillboardCardHost.Schedule;
+        BillboardCardHost.Schedule = (_, run) => run();
         WaitingSignals.ResetForTests();
 
         // Today's board: three slots, one done. No Chaster service: the Locktober card stays silent.
@@ -119,6 +122,7 @@ public sealed class BillboardAppProvidersTests
         finally
         {
             shell.Close();
+            BillboardCardHost.Schedule = oldSchedule;
             WaitingSignals.ResetForTests();
             try { Directory.Delete(dir, recursive: true); } catch { }
         }

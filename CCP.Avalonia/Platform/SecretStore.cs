@@ -57,7 +57,9 @@ internal static class SecretStore
         if (value is null)
         {
             // Memory-only runs (sandbox, no Secret Service) wrote nothing to the OS store: the memory clear is the clear.
-            if (Sandboxed || NotRemembered) return;
+            // So does a run whose Secret Service never answered at all (owner WSLg log: a startup logout said
+            // "logout not complete" over a keyring that was never there): nothing was stored there this session.
+            if (Sandboxed || NotRemembered || Libsecret.Gate.NeverReached) return;
             Log.Warning("Could not clear {Name} from the secret store", name);
             ClearFailed = true;
             return;
@@ -84,7 +86,9 @@ internal static class SecretStore
 /// <summary>
 /// The Secret Service through libsecret's non-variadic *v_sync calls. No schema: items carry
 /// {application, name} attributes. Every failure (no library, no bus, no service, locked,
-/// dismissed prompt) reads as null / writes as false.
+/// dismissed prompt) reads as null / writes as false. A Secret Service that cannot be reached at all
+/// closes <see cref="Gate"/>: one warning, then no D-Bus call until its retry time (a keyring started
+/// later is picked up). A locked keyring or a dismissed prompt is the user's answer and retries at once.
 /// </summary>
 internal static class Libsecret
 {
@@ -99,11 +103,15 @@ internal static class Libsecret
     [DllImport(GLib)] private static extern int g_hash_table_insert(IntPtr table, IntPtr key, IntPtr value);
     [DllImport(GLib)] private static extern void g_hash_table_unref(IntPtr table);
     [DllImport(GLib)] private static extern void g_error_free(IntPtr error);
+    [DllImport(GLib)] private static extern IntPtr g_quark_to_string(uint quark);
+
+    /// <summary>This run's memory of an unreachable Secret Service (owner WSLg run: ~200 failed lookups in 10 s).</summary>
+    internal static SecretServiceGate Gate = new();   // settable for tests only
 
     internal static string? Lookup(string name) => Read(name).Value;
 
     /// <summary>Ok is false when the lookup failed (as opposed to finding nothing).</summary>
-    internal static (bool Ok, string? Value) Read(string name) => Call(name, "lookup", attrs =>
+    internal static (bool Ok, string? Value) Read(string name) => Gate.Closed ? (false, null) : Call(name, "lookup", attrs =>
     {
         var p = secret_password_lookupv_sync(IntPtr.Zero, attrs, IntPtr.Zero, out var err);
         if (!Check(err, "lookup", name)) return (false, null);
@@ -111,7 +119,7 @@ internal static class Libsecret
         try { return (true, Marshal.PtrToStringUTF8(p)); } finally { secret_password_free(p); }
     });
 
-    internal static bool Write(string name, string? value) => Call(name, "store", attrs =>
+    internal static bool Write(string name, string? value) => !Gate.Closed && Call(name, "store", attrs =>
     {
         IntPtr err;
         var ok = value is null
@@ -134,7 +142,8 @@ internal static class Libsecret
         }
         catch (Exception ex)
         {
-            Log.Warning("Secret {Op} for {Name} unavailable: {Error}", op, name, ex.Message);
+            // No libsecret / glib on this system: nothing will load it later in this run.
+            Gate.Down(op, name, ex.Message, permanent: ex is DllNotFoundException or EntryPointNotFoundException);
             return default;
         }
         finally
@@ -147,11 +156,28 @@ internal static class Libsecret
     // GError { GQuark domain; gint code; gchar *message; }
     private static bool Check(IntPtr err, string op, string name)
     {
-        if (err == IntPtr.Zero) return true;
-        Log.Warning("Secret {Op} for {Name} failed: {Error}", op, name, Marshal.PtrToStringUTF8(Marshal.ReadIntPtr(err, 8)));
+        if (err == IntPtr.Zero) { Gate.Up(); return true; }
+        var message = Marshal.PtrToStringUTF8(Marshal.ReadIntPtr(err, 8));
+        var domain = Marshal.PtrToStringUTF8(g_quark_to_string((uint)Marshal.ReadInt32(err, 0)));
+        var code = Marshal.ReadInt32(err, 4);
         g_error_free(err);
+        if (IsUnreachable(domain, code)) Gate.Down(op, name, message, permanent: false);
+        else { Gate.Answered(); Log.Warning("Secret {Op} for {Name} failed: {Error}", op, name, message); }
         return false;
     }
+
+    /// <summary>True when the error says the Secret Service cannot be reached (no bus, no service, no owner,
+    /// access refused): GDBus and GIO transport errors. libsecret's own domain (a locked collection, no such
+    /// object), a cancelled prompt and a service's own unregistered D-Bus error are answers from a running
+    /// service, so they never close the gate.</summary>
+    internal static bool IsUnreachable(string? domain, int code) => domain switch
+    {
+        "g-dbus-error-quark" => true,
+        "g-io-error-quark" => code is not (GIoErrorCancelled or GIoErrorDbusError),
+        _ => false,
+    };
+
+    private const int GIoErrorCancelled = 19, GIoErrorDbusError = 36;   // G_IO_ERROR_CANCELLED, G_IO_ERROR_DBUS_ERROR
 }
 
 /// <summary>
@@ -199,5 +225,83 @@ internal static class Dpapi
             return true;
         }
         catch (Exception ex) { Log.Warning(ex, "Failed to store {Name} secret", name); return false; }
+    }
+}
+
+/// <summary>
+/// Whether to ask the Secret Service at all right now. After a failure that says it cannot be reached
+/// the gate closes: one warning for the run, then every read and write answers "failed" without a
+/// D-Bus call until <see cref="RetryAfter"/> has passed. The first call after that tries for real;
+/// a success opens the gate (a keyring started later works), another failure re-closes it quietly.
+/// A missing libsecret closes it for good. Thread-safe: token refreshes run off the UI thread.
+/// </summary>
+internal sealed class SecretServiceGate
+{
+    internal static readonly TimeSpan RetryAfter = TimeSpan.FromSeconds(60);
+
+    private readonly object _lock = new();
+    private readonly Func<long> _nowMs;
+    private long _retryAtMs = -1;   // -1 = open
+    private bool _permanent, _warned, _answered;
+
+    internal SecretServiceGate(Func<long>? nowMs = null) => _nowMs = nowMs ?? (() => Environment.TickCount64);
+
+    /// <summary>Warnings written and failed attempts recorded so far (tests).</summary>
+    internal int Warnings { get; private set; }
+    internal int Failures { get; private set; }
+
+    /// <summary>True: skip the D-Bus call, the service was unreachable a moment ago.</summary>
+    internal bool Closed
+    {
+        get
+        {
+            lock (_lock) return _permanent || (_retryAtMs >= 0 && _nowMs() < _retryAtMs);
+        }
+    }
+
+    /// <summary>True when every attempt this run found no Secret Service: it never answered, not even with
+    /// an error of its own (a locked keyring). A clear that fails then has nothing of this session to remove.</summary>
+    internal bool NeverReached
+    {
+        get
+        {
+            lock (_lock) return Failures > 0 && !_answered;
+        }
+    }
+
+    /// <summary>The service answered with an error of its own (locked, dismissed): it is there.</summary>
+    internal void Answered()
+    {
+        lock (_lock) _answered = true;
+    }
+
+    internal void Down(string op, string name, string? error, bool permanent)
+    {
+        bool first;
+        lock (_lock)
+        {
+            Failures++;
+            first = !_warned;
+            if (first) { _warned = true; Warnings++; }
+            _permanent |= permanent;
+            _retryAtMs = _nowMs() + (long)RetryAfter.TotalMilliseconds;
+        }
+        if (first)
+            Log.Warning("Secret Service unavailable ({Op} for {Name}: {Error}); sign-ins are kept in memory for this run" +
+                        (permanent ? "" : ", retrying at most once a minute"), op, name, error);
+        else Log.Debug("Secret {Op} for {Name} still unavailable: {Error}", op, name, error);
+    }
+
+    internal void Up()
+    {
+        bool wasDown;
+        lock (_lock)
+        {
+            wasDown = _retryAtMs >= 0;
+            _retryAtMs = -1;
+            _answered = true;
+            _warned = false;   // a service that comes back and goes away again is worth one more line
+        }
+        if (wasDown) Log.Information("Secret Service reachable again");
     }
 }

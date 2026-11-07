@@ -54,6 +54,20 @@ namespace ConditioningControlPanel.Avalonia
                 return PerfBench.Run(args[pb + 1], pbt >= 0 && pbt + 1 < args.Length ? args[pbt + 1].Split(',') : null);
             }
 
+            // --fx-bench <out.json> [--fx-bench-size WxH] times one CPU-Skia frame of each Home effect,
+            // headless (FxBench.cs): the render cost a machine without a GPU pays, with no window shown.
+            var fb = Array.IndexOf(args, "--fx-bench");
+            if (fb >= 0)
+            {
+                if (fb + 1 >= args.Length)
+                {
+                    Console.Error.WriteLine("usage: --fx-bench <out.json> [--fx-bench-size WxH]");
+                    return 2;
+                }
+                var fbs = Array.IndexOf(args, "--fx-bench-size");
+                return FxBench.Run(args[fb + 1], fbs >= 0 && fbs + 1 < args.Length ? args[fbs + 1] : null);
+            }
+
             // --click-through <dir> dispatches REAL pointer clicks at real controls and saves a
             // frame per step. The only proof here that can see a button which draws but does not
             // take a click - which is what the nav doors were doing.
@@ -127,6 +141,12 @@ namespace ConditioningControlPanel.Avalonia
             // Run it inside a nested compositor - scripts/x11-overlay-probe.sh does that.
             if (Array.IndexOf(args, "--x11-probe") >= 0)
                 return X11OverlayProbe.Run();
+
+            // --tube-shape-probe [holdSeconds]: a real avatar tube beside a stand-in shell; reads the
+            // tube's input shape and WM_TRANSIENT_FOR back from the X server (TubeShapeProbe.cs).
+            var tsp = Array.IndexOf(args, "--tube-shape-probe");
+            if (tsp >= 0)
+                return TubeShapeProbe.Run(tsp + 1 < args.Length && int.TryParse(args[tsp + 1], out var hold) ? hold : 0);
 
             // Private native KWin regression: opens a real fullscreen video surface and watch.
             if (Array.IndexOf(args, "--wave-timer-check") >= 0)
@@ -252,7 +272,10 @@ namespace ConditioningControlPanel.Avalonia
                         (global::Avalonia.Application.Current?.ApplicationLifetime
                             as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.Shutdown());
                 });
+            // A cold WSLg / on-demand Xwayland first reports a 640x480 placeholder screen; Avalonia would keep it all run.
+            Platform.X11ScreenSettle.WaitForRealMonitors();
             App.SplashOnStartup = true;
+            Platform.SoftwareRender.Armed = true;   // a CPU-only Skia backend takes WPF's Performance-mode FX tier
             app.StartWithClassicDesktopLifetime(args);
             App.StartupFailure?.Throw();   // a failed startup crashes non-zero, as it did before the splash
             return 0;

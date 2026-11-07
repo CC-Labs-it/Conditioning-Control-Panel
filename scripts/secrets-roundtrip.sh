@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # libsecret acceptance for CCP.Avalonia/Platform/SecretStore.cs, in a throwaway container:
 #   1. round trip against a fresh gnome-keyring on the container's own session bus;
-#   2. no bus at all: reads null, nothing written under HOME / the profile.
+#   2. no bus at all: reads null, nothing written under HOME / the profile, one warning then no more D-Bus calls.
 # Never touches the host keyring: the container has no access to the host's D-Bus.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -16,5 +16,6 @@ docker run --rm -v "$PWD/Tests/CCP.Avalonia.Tests/bin/Release/net10.0:/t:ro" -w 
       ${run}LibsecretRoundTrip | tee /tmp/rt.txt; grep -q \"Total: 1, Errors: 0, Failed: 0, Skipped: 0\" /tmp/rt.txt'
     home=\$(mktemp -d)
     HOME=\$home CCP_SECRETS_NOBUS=1 DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent/bus \
-      ${run}NoBusReadsNullAndWritesNoFile | tee /tmp/nb.txt; grep -q 'Total: 1, Errors: 0, Failed: 0, Skipped: 0' /tmp/nb.txt
+      ${run}NoBusReadsNullAndWritesNoFile -method CCP.Avalonia.Tests.SecretStoreTests.AnUnreachableServiceWarnsOnceAndStopsAsking | tee /tmp/nb.txt
+    grep -q 'Total: 2, Errors: 0, Failed: 0, Skipped: 0' /tmp/nb.txt
     test -z \"\$(find \$home -type f)\" && echo 'no file under HOME'"

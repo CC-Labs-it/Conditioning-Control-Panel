@@ -295,7 +295,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var spot = new ExclusiveCardRow(ExclusiveFeature.All[0]);
             this.FindControl<TextBlock>("TxtSpotArtGlyph")!.Text = spot.Art == null ? spot.Feature.Emoji : "";
             var spotArt = this.FindControl<Image>("SpotArtImage")!;
-            var banner = ModArt.TryLoad(ArtName(spot.Feature.BannerArtResource), 1400);
+            var banner = ModArt.FirstOf(new[] { ArtName(spot.Feature.BannerArtResource) }, 1400);
             spotArt.Source = banner ?? spot.Art;
             // WPF ApplySpotlightArt: the Ken Burns zoom centres on a banner, on the focal point of card art.
             spotArt.RenderTransformOrigin = banner != null
@@ -332,13 +332,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             // WPF MainWindow.Exclusives.cs:1012-1015; MainWindow.xaml.cs:2761-2776:
             // themed variant first, but a third-party mod owns the base path.
-            foreach (var path in FavoritesRailArt.Candidates("features/vault.png",
-                FavoritesRailArt.ThemeSuffix(CoreMods.ActiveModId)))
-            {
-                if (ModArt.TryLoad(path, 480) is not { } art) continue;
-                ((ImageBrush)this.FindControl<Border>("VaultHero")!.Background!).Source = art;
-                break; // null preserves the last painted face
-            }
+            // null preserves the last painted face; FirstOf caches per active mod (RefreshVault repaints often).
+            if (ModArt.FirstOf(FavoritesRailArt.Candidates("features/vault.png",
+                    FavoritesRailArt.ThemeSuffix(CoreMods.ActiveModId)), 480) is { } hero)
+                ((ImageBrush)this.FindControl<Border>("VaultHero")!.Background!).Source = hero;
             for (int tier = 1; tier <= 2; tier++)
                 if (ModArt.TryLoadBuiltIn($"Patreon tier{tier}.png", 160) is { } art)
                     this.FindControl<Image>($"TierPlate{tier}Art")!.Source = art;
@@ -603,10 +600,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Feature = feature;
             State = feature.GateState();
             FreeToday = feature.IsFreeToday(State);
-            // WPF ExclusiveArtPath: Takeover forks its art under BambiSleep.
-            Art = ModArt.TryLoad(feature.Key == "bambitakeover" && CoreMods.ActiveModId == BuiltInMods.BambiSleepId
+            // WPF ExclusiveArtPath: Takeover forks its art under BambiSleep. FirstOf caches per active mod:
+            // every RefreshVault (startup, each tier or daily-free change) rebuilt every row and re-decoded
+            // every card, ~1 s of UI thread per repaint under CPU rendering (fix2/startup trace).
+            Art = ModArt.FirstOf(new[] { feature.Key == "bambitakeover" && CoreMods.ActiveModId == BuiltInMods.BambiSleepId
                 ? "features/bambi takeover.png"
-                : ExclusivesTabView.ArtName(feature.ArtResource), 700);
+                : ExclusivesTabView.ArtName(feature.ArtResource) }, 700);
         }
 
         public ExclusiveFeature Feature { get; }

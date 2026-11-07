@@ -61,8 +61,10 @@ public sealed class BillboardCtaTests
         CoreSettings.Current.MotionLevel = MotionLevel.Full; host.RefreshMotion();
         Assert.True(host.CtaLoopsRunning); Assert.Equal(-2, host.CtaPose.Travel);
         host.Advance(); host.StepCtaFx(5.3);
+        Assert.InRange(host.CtaGlowOpacity, 0.32, 0.62); // still breathing: WPF Fx.cs:115 the flare waits for the thud
+        host.StepCtaFx(5.3 + (280 + 340 * 0.55) / 1000);
         Assert.Equal(0.95, host.CtaGlowOpacity, 5); // landing flare
-        host.StepCtaFx(6.1);
+        host.StepCtaFx(6.1 + (280 + 340 * 0.55) / 1000); // the 0.7 s flare is over
         CoreSettings.Current.PerformanceMode = true; host.RefreshMotion();
         Assert.False(host.CtaLoopsRunning);
         CoreSettings.Current.PerformanceMode = false; host.RefreshMotion();

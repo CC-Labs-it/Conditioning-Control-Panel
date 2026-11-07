@@ -537,6 +537,23 @@ public sealed class LauncherFxTests
         }
     });
 
+    /// <summary>Owner decision 1b (fix3 pop): the play button's burst is the user's own action, so the CPU path's
+    /// lighter tier keeps it; the user's own Performance mode drops it, as WPF Fx.cs:316.</summary>
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void Play_BurstsOnTheCpuPath(bool userPerformance, bool present) => Run(MotionLevel.Full, (_, launcher, _) =>
+    {
+        try
+        {
+            Step(launcher, 0.4);
+            CpuTier.On(userPerformance);
+            Tile(launcher).GetVisualDescendants().OfType<Button>().First(b => !Equals(b.Tag, "tile-shortcut")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(present, launcher.BurstLayer.BurstCount > 0);
+        }
+        finally { CpuTier.Off(); }
+    });
+
     [Fact]
     public void Play_HoldsTheHideForTheBeat_ShakesDimsAndFades() => Run(MotionLevel.Full, (shell, launcher, cues) =>
     {
@@ -723,6 +740,27 @@ public sealed class LauncherFxTests
         Assert.Equal(0, glint.Opacity);
         Frames(launcher, 20);                             // 14.2 s: the idle glint passes (OnEdgeIdle, 14 s)
         Assert.True(glint.Opacity > 0.5, $"idle glint {glint.Opacity}");
+    });
+
+    /// <summary>Lane perf (WSLg on the CPU): the edge breath repainted the whole launcher every frame. On the
+    /// software-render floor the open flare and glint still play, then the edge holds at rest and the clock stops.</summary>
+    [Fact]
+    public void Edge_HoldsAtRestBetweenFlaresOnTheCpuPath() => Run(MotionLevel.Full, (_, launcher, _) =>
+    {
+        global::ConditioningControlPanel.Avalonia.Platform.SoftwareRender.ResetForTests();
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.Platform.SoftwareRender.Report(true);
+            var (glow, glint) = Reopen(launcher);
+            Frames(launcher, 7);
+            Assert.Equal(0.85, glow.Opacity, 2);              // the open flare still plays
+            Frames(launcher, 80);                             // 1.74 s: flare and glint are done
+            Assert.Equal(0.3, glow.Opacity, 2);
+            Assert.Equal(0, glint.Opacity);
+            Frames(launcher, 130);                            // no breath: still at rest
+            Assert.Equal(0.3, glow.Opacity, 2);
+        }
+        finally { global::ConditioningControlPanel.Avalonia.Platform.SoftwareRender.ResetForTests(); }
     });
 
     [Fact]

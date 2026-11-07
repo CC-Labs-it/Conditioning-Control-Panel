@@ -42,7 +42,8 @@ namespace ConditioningControlPanel.Avalonia.Helpers
     /// Nothing decodes inside a render or a tick, so a cache would buy nothing and would need
     /// invalidating on every mod switch. WPF's resolver keys one on (event skin, mod id, path)
     /// because it also serves per-frame bubble sprites; this head does not. Add one the first
-    /// time a caller loads inside a render or a tick. <c>Controls/TierBadge</c> keeps its own
+    /// time a caller loads inside a render or a tick. (A launch's first loads are prewarmed off the UI thread by
+    /// <see cref="StartupArt"/>, which hands each decode out once: not a cache.) <c>Controls/TierBadge</c> keeps its own
     /// three-bitmap cache and does NOT come through here on purpose - tier livery is commerce chrome that a mod must
     /// not be able to restyle, which is why the WPF badge also reaches past ModResourceResolver.</para>
     /// </summary>
@@ -61,19 +62,40 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             if (string.IsNullOrWhiteSpace(resourceName)) return null;
 
             var overridePath = CoreModArt.OverridePath(resourceName);
+            // A launch's first loads come decoded off the UI thread when the last launch listed them (StartupArt).
+            if (StartupArt.Take(new("o", resourceName, decodeWidth), overridePath, out var warm)) return warm;
+            return Load(resourceName, overridePath, decodeWidth);
+        }
+
+        private static Bitmap? Load(string resourceName, string? overridePath, int? decodeWidth)
+        {
             if (overridePath != null)
             {
                 try { if (File.Exists(overridePath)) { using var file = File.OpenRead(overridePath); return Decode(file, decodeWidth); } }
                 catch (Exception ex) { Log.Warning(ex, "[ModArt] mod override {Path} would not load", overridePath); }
             }
 
-            return TryLoadBuiltIn(resourceName, decodeWidth);
+            return LoadBuiltIn(resourceName, decodeWidth);
         }
+
+        /// <summary>The StartupArt prewarm's decode: exactly what <see cref="TryLoad"/> / <see cref="TryLoadBuiltIn"/>
+        /// would have done on the UI thread for this request and override.</summary>
+        internal static Bitmap? Prewarm(StartupArt.Request r, string? overridePath) =>
+            r.Kind == "b" ? LoadBuiltIn(r.Name, r.Width) : Load(r.Name, overridePath, r.Width);
+
+        /// <summary>The override path <see cref="TryLoad"/> would resolve for this request right now.</summary>
+        internal static string? PrewarmOverride(StartupArt.Request r) => r.Kind == "b" ? null : CoreModArt.OverridePath(r.Name);
 
         /// <summary>Compiled art only, for WPF surfaces that bind pack:// directly rather than use a mod resolver.</summary>
         internal static Bitmap? TryLoadBuiltIn(string? resourceName, int? decodeWidth = null)
         {
             if (string.IsNullOrWhiteSpace(resourceName)) return null;
+            if (StartupArt.Take(new("b", resourceName, decodeWidth), null, out var warm)) return warm;
+            return LoadBuiltIn(resourceName, decodeWidth);
+        }
+
+        private static Bitmap? LoadBuiltIn(string resourceName, int? decodeWidth)
+        {
             try
             {
                 var uri = new Uri($"avares://CCP.Avalonia/Resources/{resourceName}");
@@ -200,9 +222,16 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             return null;
         }
 
-        /// <summary>WPF's DecodePixelWidth: decode straight to the width a surface shows, never larger.</summary>
+        /// <summary>WPF's DecodePixelWidth: decode straight to the width a surface shows, never larger.
+        /// MediumQuality, not DecodeToWidth's HighQuality default (owner 11-06, startup decode cost under CPU
+        /// rendering). Measured on the shipped features/ and achievements/ art: a downscale comes out
+        /// pixel-identical or within 13/255 (PSNR 47.6 dB at worst); an upscale (art smaller than its width,
+        /// e.g. quests/ at 512) is about half the cost, worst PSNR 43 dB. LowQuality was 2.5-6x cheaper to
+        /// resize but visibly aliased (achievement icons at 128), so not that.</summary>
+        internal const BitmapInterpolationMode DecodeQuality = BitmapInterpolationMode.MediumQuality;
+
         private static Bitmap Decode(Stream stream, int? width)
-            => width is int w ? Bitmap.DecodeToWidth(stream, w) : new Bitmap(stream);
+            => width is int w ? Bitmap.DecodeToWidth(stream, w, DecodeQuality) : new Bitmap(stream);
 
         /// <summary>
         /// A feature card's hero strip and side plate, painted from one feature PNG the way the WPF

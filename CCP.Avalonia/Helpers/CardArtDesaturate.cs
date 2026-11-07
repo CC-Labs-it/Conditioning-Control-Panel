@@ -27,9 +27,10 @@ internal static class CardArtDesaturate
             double scale = Math.Min(1, 320.0 / Math.Max(sw, sh));
             int w = Math.Max(1, (int)Math.Round(sw * scale));
             int h = Math.Max(1, (int)Math.Round(sh * scale));
+            // Medium like ModArt.DecodeQuality (owner 11-06: startup decode cost).
             // Skia's ResizeBitmap only accepts immutable (decoded) bitmaps; a WriteableBitmap is resampled below instead.
             using var scaled = scale < 1 && bitmap is not WriteableBitmap
-                ? bitmap.CreateScaledBitmap(new PixelSize(w, h), BitmapInterpolationMode.HighQuality) : null;
+                ? bitmap.CreateScaledBitmap(new PixelSize(w, h), ModArt.DecodeQuality) : null;
             var src = scaled ?? bitmap;
             using var staging = new WriteableBitmap(src.PixelSize, new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Premul);
             using var frame = staging.Lock();
@@ -39,7 +40,7 @@ internal static class CardArtDesaturate
                 frame.Address, frame.RowBytes);
             using var small = new SKBitmap(w, h, SKColorType.Bgra8888, SKAlphaType.Premul);
             using (var canvas = new SKCanvas(small))
-            using (var paint = new SKPaint { FilterQuality = SKFilterQuality.High })
+            using (var paint = new SKPaint { FilterQuality = SKFilterQuality.Medium })
                 canvas.DrawBitmap(full, new SKRect(0, 0, w, h), paint);
             var bytes = small.Bytes;
             CardMutePixels.ToGrey(bytes);

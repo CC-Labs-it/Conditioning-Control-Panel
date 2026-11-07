@@ -258,7 +258,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             try
             {
-                if (!FavoritesDrawerFx.IsRunning) return;
+                // WPF asks IsRunning (the drawer's canvas is live). On the CPU path its ambient clock never starts, yet
+                // the click's burst is kept (fix3 pop 1b): the canvas still refuses it when paused or hidden.
+                if (!FavoritesDrawerFx.IsRunning && !AmbientFxCanvas.Env.SoftwareFloorHoldsIdleLoops) return;
                 var b = FavoritesDrawerHandle.Bounds;
                 var p = FavoritesDrawerHandle.TranslatePoint(new Point(b.Width / 2, b.Height / 2), FavoritesDrawerFx);
                 if (p is { } at) FavoritesDrawerFx.Burst(at.X, at.Y, null, count);

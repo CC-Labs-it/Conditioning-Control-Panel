@@ -74,6 +74,18 @@ internal static class X11Overlay
     [DllImport(LibX11)] private static extern int XSetInputFocus(IntPtr display, IntPtr window, int revertTo, nuint time);
     [DllImport(LibX11)] private static extern int XRaiseWindow(IntPtr display, IntPtr window);
     [DllImport(LibX11)] private static extern int XSendEvent(IntPtr display, IntPtr window, bool propagate, long mask, IntPtr sendEvent);
+    [DllImport(LibX11)] private static extern int XSetTransientForHint(IntPtr display, IntPtr window, IntPtr owner);
+    [DllImport(LibX11)] private static extern int XDeleteProperty(IntPtr display, IntPtr window, IntPtr property);
+    [DllImport(LibX11)] private static extern int XGetWindowProperty(IntPtr display, IntPtr window, IntPtr property, IntPtr longOffset, IntPtr longLength,
+        bool delete, IntPtr reqType, out IntPtr actualType, out int actualFormat, out IntPtr nItems, out IntPtr bytesAfter, out IntPtr prop);
+    [DllImport(LibX11)] private static extern int XFree(IntPtr data);
+    [DllImport(LibX11)] private static extern int XMapWindow(IntPtr display, IntPtr window);
+    [DllImport(LibX11)] private static extern int XUnmapWindow(IntPtr display, IntPtr window);
+    [DllImport(LibX11)] private static extern int XGetWindowProperty(IntPtr display, IntPtr window, IntPtr property,
+        long offset, long length, bool delete, IntPtr reqType, out IntPtr actualType, out int actualFormat,
+        out ulong nItems, out ulong bytesAfter, out IntPtr prop);
+    [DllImport(LibX11)] private static extern bool XTranslateCoordinates(IntPtr display, IntPtr src, IntPtr dest, int srcX, int srcY,
+        out int destX, out int destY, out IntPtr child);
 
     [DllImport(LibXfixes)] private static extern int XFixesQueryExtension(IntPtr display, out int eventBase, out int errorBase);
     [DllImport(LibXfixes)] private static extern IntPtr XFixesCreateRegion(IntPtr display, IntPtr rectangles, int count);
@@ -287,7 +299,233 @@ internal static class X11Overlay
         }
     }
 
+    /// <summary>X11 ownership, the form of Win32 GWL_HWNDPARENT that window managers keep: a
+    /// window with WM_TRANSIENT_FOR set is stacked directly above its owner, raised and lowered
+    /// with it, and goes behind other applications with it (ICCCM 4.1.2.6). Null clears it.
+    /// X11-only: false on Windows, headless and native Wayland, where nothing is changed.</summary>
+    internal static bool SetTransientFor(TopLevel window, TopLevel? owner)
+    {
+        if (!TryGetXid(window, out var xid)) return false;
+        var ownerXid = IntPtr.Zero;
+        if (owner != null && !TryGetXid(owner, out ownerXid)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            _xErrored = false;
+            if (ownerXid != IntPtr.Zero) XSetTransientForHint(_display, xid, ownerXid);
+            else XDeleteProperty(_display, xid, (IntPtr)68 /* XA_WM_TRANSIENT_FOR, X11/Xatom.h */);
+            XSync(_display, false);   // a different connection from Avalonia's: land before its XMapWindow
+            return !_xErrored;
+        }
+    }
+
+    /// <summary>Native ownership on either backend: WM_TRANSIENT_FOR on X11, GWL_HWNDPARENT on
+    /// Windows (<see cref="Win32Overlay.SetOwner"/>). Null clears it. For a window whose Windows
+    /// behaviour is meant to match WPF's raw-owner windows (the tube's speech bubble); the tube itself
+    /// keeps the X11-only <see cref="SetTransientFor"/>. False headless and before either has a handle.</summary>
+    internal static bool SetOwner(TopLevel window, TopLevel? owner)
+    {
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd))
+        {
+            var ownerHwnd = IntPtr.Zero;
+            if (owner != null && !TryGet(owner, OverlayBackend.Win32, out ownerHwnd)) return false;
+            return Win32Overlay.SetOwner(hwnd, ownerHwnd);
+        }
+        return SetTransientFor(window, owner);
+    }
+
+    /// <summary>The name the running EWMH window manager gives itself (<c>_NET_SUPPORTING_WM_CHECK</c> →
+    /// <c>_NET_WM_NAME</c>), e.g. "Weston WM" under WSLg, "Openbox", "Xfwm4". Null when there is no X
+    /// display or no EWMH manager yet; a found name is cached, a miss is asked again next time.</summary>
+    internal static string? WindowManagerName
+    {
+        get
+        {
+            if (OperatingSystem.IsWindows()) return null;
+            lock (Gate)
+            {
+                if (_wmName != null) return _wmName;
+                if (!EnsureDisplay()) return null;
+                var root = XDefaultRootWindow(_display);
+                var check = ReadLongs(root, XInternAtom(_display, "_NET_SUPPORTING_WM_CHECK", false), (IntPtr)33 /* XA_WINDOW */);
+                if (check.Length == 0 || check[0] == IntPtr.Zero) return null;
+                var name = ReadString(check[0], XInternAtom(_display, "_NET_WM_NAME", false), XInternAtom(_display, "UTF8_STRING", false));
+                return _wmName = string.IsNullOrEmpty(name) ? null : name;
+            }
+        }
+    }
+    private static string? _wmName;
+
+    /// <summary>Asks a Weston-family X window manager (WSLg's, plain Weston's) to draw NO shadow around
+    /// <paramref name="window"/>: appends <c>_KDE_NET_WM_WINDOW_TYPE_OVERRIDE</c> to its
+    /// <c>_NET_WM_WINDOW_TYPE</c>, keeping any type already there first.
+    ///
+    /// <para><b>Why.</b> Weston's xwm (xwayland/window-manager.c, weston_wm_window_draw_decoration)
+    /// reparents every managed window into a frame 32 px larger on each side and, for an
+    /// undecorated window, paints a blurred shadow tile across that frame. Under a per-pixel
+    /// transparent client the tile shows through: the dim "ghost" rectangle with a shadow around the
+    /// tube, EMI and every transparent card. The only per-window switch in that code is this KDE
+    /// type (read_properties sets <c>no_shadow</c> and the frame is then left fully transparent).
+    /// A bounding shape does not help: it clips the client, not the frame, and exposes more of the
+    /// tile (measured on WSLg 1.0.79, 11-06).</para>
+    ///
+    /// <para><b>Before <c>Show()</c>.</b> xwm reads the type when the window maps and draws the
+    /// frame then; set later, the shadow already painted stays. XSync so it lands before Avalonia's
+    /// XMapWindow on its own connection. Weston takes the FIRST atom as the window's type, and no
+    /// type and an unknown type behave the same there, so map, focus and transient handling are
+    /// unchanged. X11-only: false on Windows, headless and native Wayland.</para></summary>
+    internal static bool SetNoFrameShadow(TopLevel window)
+    {
+        if (!TryGetXid(window, out var xid)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            var typeAtom = XInternAtom(_display, "_NET_WM_WINDOW_TYPE", false);
+            var kde = XInternAtom(_display, "_KDE_NET_WM_WINDOW_TYPE_OVERRIDE", false);
+            _xErrored = false;
+            var types = WithAtom(ReadLongs(xid, typeAtom, (IntPtr)4 /* XA_ATOM */), kde);
+            if (types == null) return true;   // already there
+            XChangeProperty(_display, xid, typeAtom, (IntPtr)4, 32, 0 /* PropModeReplace */, types, types.Length);
+            XSync(_display, false);
+            return !_xErrored;
+        }
+    }
+
+    /// <summary>Where <paramref name="window"/>'s client area is on the root RIGHT NOW, asked of the server
+    /// (XTranslateCoordinates). Avalonia's cached Position only moves when the WM sends a ConfigureNotify,
+    /// which openbox and others do only when an interactive move ENDS. False when not X11.</summary>
+    internal static bool TryGetRootOrigin(TopLevel window, out PixelPoint origin)
+    {
+        origin = default;
+        if (!TryGetXid(window, out var xid)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            _xErrored = false;
+            if (!XTranslateCoordinates(_display, xid, XDefaultRootWindow(_display), 0, 0, out var x, out var y, out _) || _xErrored)
+                return false;
+            origin = new PixelPoint(x, y);
+            return true;
+        }
+    }
+
+    /// <summary>Read back from the server: <paramref name="window"/>'s <c>_NET_WM_WINDOW_TYPE</c> carries the
+    /// no-shadow type (probes). False when not X11.</summary>
+    internal static bool HasNoFrameShadowHint(TopLevel window)
+    {
+        if (!TryGetXid(window, out var xid)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            var kde = XInternAtom(_display, "_KDE_NET_WM_WINDOW_TYPE_OVERRIDE", false);
+            return Array.IndexOf(ReadLongs(xid, XInternAtom(_display, "_NET_WM_WINDOW_TYPE", false), (IntPtr)4), kde) >= 0;
+        }
+    }
+
+    /// <summary><paramref name="existing"/> with <paramref name="atom"/> appended, or null when it is
+    /// already in the list (nothing to write). Pure, so the merge is testable without a server.</summary>
+    internal static IntPtr[]? WithAtom(System.Collections.Generic.IReadOnlyList<IntPtr> existing, IntPtr atom)
+    {
+        foreach (var a in existing) if (a == atom) return null;
+        var list = new IntPtr[existing.Count + 1];
+        for (var i = 0; i < existing.Count; i++) list[i] = existing[i];
+        list[existing.Count] = atom;
+        return list;
+    }
+
+    /// <summary>A format-32 property as C longs (Xlib hands 32-bit items back in longs). Empty when
+    /// unset. Caller holds <see cref="Gate"/>.</summary>
+    private static IntPtr[] ReadLongs(IntPtr xid, IntPtr property, IntPtr type)
+    {
+        if (XGetWindowProperty(_display, xid, property, IntPtr.Zero, (IntPtr)64, false, type,
+                out _, out var format, out var n, out _, out var data) != 0) return Array.Empty<IntPtr>();
+        try
+        {
+            if (format != 32 || data == IntPtr.Zero) return Array.Empty<IntPtr>();
+            var items = new IntPtr[(int)n];
+            for (var i = 0; i < items.Length; i++) items[i] = Marshal.ReadIntPtr(data, i * IntPtr.Size);
+            return items;
+        }
+        finally { if (data != IntPtr.Zero) XFree(data); }
+    }
+
+    private static string? ReadString(IntPtr xid, IntPtr property, IntPtr type)
+    {
+        if (XGetWindowProperty(_display, xid, property, IntPtr.Zero, (IntPtr)256, false, type,
+                out _, out var format, out var n, out _, out var data) != 0) return null;
+        try { return format == 8 && data != IntPtr.Zero ? Marshal.PtrToStringUTF8(data, (int)n) : null; }
+        finally { if (data != IntPtr.Zero) XFree(data); }
+    }
+
     internal static Action<TopLevel>? RaiseRequestedForTests; // Headless call-order observation only.
+
+    /// <summary>Test seam: stands in for <see cref="WmCannotKeepAbove"/> (headless has no window manager).</summary>
+    internal static Func<bool>? WmCannotKeepAboveForTests;
+    /// <summary>Headless call-order observation of <see cref="Remap"/>.</summary>
+    internal static Action<TopLevel>? RemapRequestedForTests;
+    private static bool? _wmCannotKeepAbove;
+
+    /// <summary>
+    /// The running window manager publishes <c>_NET_SUPPORTED</c> WITHOUT <c>_NET_WM_STATE_ABOVE</c>,
+    /// so <c>Window.Topmost</c> holds nothing: any click on a normal window brings it over a "topmost"
+    /// one. That is WSLg's Weston (measured 11-06: MOVERESIZE, STATE with FULLSCREEN/MAXIMIZED only,
+    /// ACTIVE_WINDOW, FRAME_EXTENTS), where each X window is a Windows RAIL window whose z-order
+    /// Windows decides; there XRaiseWindow, _NET_RESTACK_WINDOW, _NET_ACTIVE_WINDOW and
+    /// WM_TRANSIENT_FOR all leave the Windows z-order alone and only a fresh map lands on top
+    /// (scratchpad showquiet/xprobe.py). False with no WM at all, on a WM that keeps the layer
+    /// (openbox, xfwm4, KWin, Mutter), on Windows and headless. Read once per process.
+    /// </summary>
+    internal static bool WmCannotKeepAbove
+    {
+        get
+        {
+            if (WmCannotKeepAboveForTests is { } seam) return seam();
+            if (OperatingSystem.IsWindows()) return false;
+            lock (Gate)
+            {
+                if (_wmCannotKeepAbove is bool known) return known;
+                if (!EnsureDisplay()) return false;   // not cached: no display yet is not an answer
+                var supported = XInternAtom(_display, "_NET_SUPPORTED", false);
+                var above = XInternAtom(_display, "_NET_WM_STATE_ABOVE", false);
+                bool listed = false, any = false;
+                if (XGetWindowProperty(_display, XDefaultRootWindow(_display), supported, 0L, 4096L, false, (IntPtr)4 /* XA_ATOM */,
+                        out _, out var format, out var n, out _, out var prop) == 0 && prop != IntPtr.Zero)
+                {
+                    try
+                    {
+                        any = format == 32 && n > 0;
+                        for (ulong i = 0; any && i < n && !listed; i++)
+                            listed = Marshal.ReadIntPtr(prop, (int)i * IntPtr.Size) == above;   // format-32 items are longs
+                    }
+                    finally { XFree(prop); }
+                }
+                _wmCannotKeepAbove = any && !listed;
+                if (_wmCannotKeepAbove == true)
+                    Log.Information("X11: the window manager does not keep windows above others (no _NET_WM_STATE_ABOVE); topmost windows are re-mapped to stay on top");
+                return _wmCannotKeepAbove.Value;
+            }
+        }
+    }
+
+    /// <summary>Unmap and map <paramref name="window"/> again, so it lands on top of the stack where
+    /// the window manager cannot keep a window above (<see cref="WmCannotKeepAbove"/>). The window's
+    /// attributes, override-redirect, input shape and properties survive; nothing is activated.
+    /// False on Windows, headless and native Wayland.</summary>
+    internal static bool Remap(TopLevel window)
+    {
+        RemapRequestedForTests?.Invoke(window);
+        if (!TryGetXid(window, out var xid)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            _xErrored = false;
+            XUnmapWindow(_display, xid);
+            XSync(_display, false);   // the unmap lands (and reaches the WM) before the new map
+            XMapWindow(_display, xid);
+            XFlush(_display);
+            return !_xErrored;
+        }
+    }
 
     /// <summary>Back on top of everything (WPF ReassertTopmost: SetWindowPos HWND_TOPMOST). An
     /// override-redirect window is outside the WM, so the plain XRaiseWindow is the one that holds.</summary>

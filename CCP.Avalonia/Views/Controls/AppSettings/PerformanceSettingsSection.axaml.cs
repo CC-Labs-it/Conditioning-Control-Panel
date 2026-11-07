@@ -102,6 +102,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 // than trusted so a settings file from a future build cannot throw here.
                 var index = (int)s.MotionLevel;
                 CmbMotionLevel.SelectedIndex = index >= 0 && index < CmbMotionLevel.ItemCount ? index : 0;
+                // Lighter effects: ordinal IS the item index (Auto=0, On=1, Off=2), clamped like the others.
+                var lighter = (int)s.LighterEffects;
+                CmbLighterEffects.SelectedIndex = lighter >= 0 && lighter < CmbLighterEffects.ItemCount ? lighter : 0;
                 // Back Room effects intensity: ordinal IS the item index (Calm=0, Normal=1, Full=2).
                 var fx = (int)s.BackRoomFxIntensity;
                 CmbBackRoomFxIntensity.SelectedIndex = fx >= 0 && fx < CmbBackRoomFxIntensity.ItemCount ? fx : 1;
@@ -203,6 +206,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             Log.Information("Motion level set to {Level}", level);
             CoreSettings.Save();
             // WPF stops the running ambient loops here (Reduced/Off) and re-arms them on Full.
+            global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        }
+
+        /// <summary>
+        /// Settings ▸ Performance ▸ Lighter effects (Avalonia only; lane perf). The tier, the marquee's beat,
+        /// the tube's bob and the launcher edge all re-read it through the motion gate, live.
+        /// </summary>
+        private void CmbLighterEffects_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+        {
+            if (_isLoading) return;
+            int i = CmbLighterEffects.SelectedIndex;
+            if (i < 0) return;
+            var mode = (LighterEffectsMode)i;
+            if (CoreSettings.Current.LighterEffects == mode) return;
+            CoreSettings.Current.LighterEffects = mode;
+            Log.Information("Lighter effects set to {Mode} (applied {Applied})", mode,
+                global::ConditioningControlPanel.Avalonia.Platform.SoftwareRender.FloorActive);
+            CoreSettings.Save();
             global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
         }
 

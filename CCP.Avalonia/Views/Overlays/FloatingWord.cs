@@ -104,6 +104,8 @@ internal sealed class FloatingWord : Window
     }
 
     internal bool IsDone { get; private set; }
+    /// <summary>Tests: how many sparks this word throws.</summary>
+    internal int SparkDots => _sparks.Count;
 
     /// <summary>The word's pose <paramref name="ms"/> after the throw: WPF's keyframes, verbatim.
     /// Full/Reduced: pop 0.6->1.15 (BackEase 0.6) and -6->2 deg and up from th/4 in the first 15%,
@@ -177,7 +179,7 @@ internal sealed class FloatingWord : Window
         if (owner == null || !owner.IsVisible || string.IsNullOrWhiteSpace(word)) return null;
         try
         {
-            var w = new FloatingWord(word, pink, small ? 22 : 34, AmbientFxCanvas.Env.Level, AmbientFxCanvas.Env.AllowParticles);
+            var w = new FloatingWord(word, pink, small ? 22 : 34, AmbientFxCanvas.Env.Level, AmbientFxCanvas.Env.AllowFeedbackParticles);   // a poke: kept on the CPU path (fix3 pop 1b)
             var k = owner.DesktopScaling > 0 ? owner.DesktopScaling : 1;
             var size = owner.ClientSize;
             w.WindowStartupLocation = WindowStartupLocation.Manual;

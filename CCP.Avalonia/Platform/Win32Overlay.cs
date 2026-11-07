@@ -168,6 +168,59 @@ internal static class Win32Overlay
         finally { if (region != IntPtr.Zero) DeleteObject(region); }
     }
 
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] private static extern IntPtr SetWindowLongPtr(IntPtr hwnd, int index, IntPtr value);
+    [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hwnd, uint command);
+    private const int GwlHwndParent = -8;
+    private const uint GwHwndPrev = 3;
+    private const uint WmWindowPosChanging = 0x0046;
+    private const uint SwpNoZOrder = 0x4, SwpShowWindow = 0x40, SwpNoOwnerZOrder = 0x200;
+
+    /// <summary>Native ownership, as WPF sets it on the speech bubble (Speech.cs:1093
+    /// SetWindowLongPtr GWL_HWNDPARENT): an owned window always sits above its owner, goes behind
+    /// other apps with it and is hidden with it when the owner minimises. Zero clears it.</summary>
+    internal static bool SetOwner(IntPtr hwnd, IntPtr owner)
+    {
+        if (!OperatingSystem.IsWindows()) return false;
+        SetWindowLongPtr(hwnd, GwlHwndParent, owner);
+        return true;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WindowPos
+    {
+        public IntPtr Hwnd, InsertAfter;
+        public int X, Y, Cx, Cy;
+        public uint Flags;
+    }
+
+    /// <summary>WPF BubbleWndProc (Speech.cs:1122-1137): a plain show puts the window on top of the
+    /// z-order and its whole owner chain with it, so the app jumps over whatever the player is in
+    /// (owner, 2026-10-02). Every show of <paramref name="window"/> is slotted directly above its
+    /// owner instead, alone and without activation.</summary>
+    internal static void KeepShowsAboveOwner(TopLevel window, Func<IntPtr> owner)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        IntPtr Hook(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (msg != WmWindowPosChanging || lParam == IntPtr.Zero) return IntPtr.Zero;
+            var ownerHwnd = owner();
+            if (ownerHwnd == IntPtr.Zero) return IntPtr.Zero;
+            try
+            {
+                var wp = Marshal.PtrToStructure<WindowPos>(lParam);
+                if ((wp.Flags & SwpShowWindow) == 0 || (wp.Flags & SwpNoZOrder) != 0) return IntPtr.Zero;
+                var above = GetWindow(ownerHwnd, GwHwndPrev);
+                if (above == hwnd) wp.Flags |= SwpNoZOrder;   // already right above its owner
+                else wp.InsertAfter = above;                  // Zero is HWND_TOP: the owner is the top window anyway
+                wp.Flags |= SwpNoOwnerZOrder | SwpNoActivate;
+                Marshal.StructureToPtr(wp, lParam, false);
+            }
+            catch { /* a bubble that pops the app forward beats a bubble that never shows */ }
+            return IntPtr.Zero;
+        }
+        Win32Properties.AddWndProcHookCallback(window, Hook);
+    }
+
     private static StrongBox<bool> Track(TopLevel window) => Wanted.GetValue(window, w =>
     {
         var box = new StrongBox<bool>();

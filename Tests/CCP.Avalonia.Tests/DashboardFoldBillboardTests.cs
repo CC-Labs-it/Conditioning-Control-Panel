@@ -50,6 +50,9 @@ public sealed class DashboardFoldBillboardTests
         MainShellWindow.BillboardOpenUrl = opened.Add;
         var clock = new SteppedClock();
         BillboardCardHost.Time = clock;
+        // The press delay (WPF PressActionDelayMs) is a dispatcher timer; headless never fires one.
+        var oldSchedule = BillboardCardHost.Schedule;
+        BillboardCardHost.Schedule = (_, run) => run();
         s.BillboardSnoozedUntil.Clear();
 
         var shell = new MainShellWindow();
@@ -150,6 +153,7 @@ public sealed class DashboardFoldBillboardTests
             Dispatcher.UIThread.RunJobs();
             MainShellWindow.BillboardOpenUrl = oldOpen;
             BillboardCardHost.Time = TimeProvider.System;
+            BillboardCardHost.Schedule = oldSchedule;
             s.BillboardSnoozedUntil.Clear();
             s.DashboardBrowserCollapsed = true;
             s.MotionLevel = MotionLevel.Full;
