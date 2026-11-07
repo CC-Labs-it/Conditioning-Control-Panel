@@ -22,6 +22,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
     /// <summary>Z8 · COMMUNITY: shared prompt engine, native pickers and WPF-equivalent rows.</summary>
     public partial class WorkshopCommunityCell : UserControl
     {
+        private static readonly System.Collections.Generic.HashSet<Window> Dialogs = new();
+        private static int _panicEpoch;
+        internal static int PanicEpoch => _panicEpoch;
+        internal static void StopForPanic()
+        {
+            _panicEpoch++;
+            foreach (var dialog in Dialogs.ToArray()) dialog.Close(false);
+        }
+
+        internal static async Task<bool> ShowPromptDialogAsync(Window? owner, Window dialog)
+        {
+            Dialogs.Add(dialog);
+            try { return await dialog.ShowDialogSafe<bool?>(owner) == true; }
+            finally { Dialogs.Remove(dialog); }
+        }
+
+        private static Task<bool> MessageAsync(Window owner, string title, string body) =>
+            ShowPromptDialogAsync(owner, new MessageDialog(title, body, false));
+
         // The existing Core service is shared with WPF; only presentation and native pickers live here.
         private CommunityPromptService? _service;
         internal CommunityPromptService Service { get => _service ??= CreateService(); set => _service = value; }
@@ -32,11 +51,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
         private CommunityPromptService CreateService()
         {
             var service = new CommunityPromptService();
-            service.ValidationAdvisory += (_, count) => global::Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
+            service.ValidationAdvisory += (_, count) =>
             {
-                if (Owner is { } owner)
-                    await MessageDialog.ShowAsync(owner, Loc.Get("community_prompt_warning_title"), Loc.GetF("community_prompt_warning_body", count));
-            });
+                var epoch = _panicEpoch;
+                global::Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
+                {
+                    if (epoch == _panicEpoch && Owner is { } owner)
+                        await MessageAsync(owner, Loc.Get("community_prompt_warning_title"), Loc.GetF("community_prompt_warning_body", count));
+                });
+            };
             return service;
         }
         public WorkshopCommunityCell()
@@ -111,7 +134,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             if (ExplicitContentGate.RequiresAcknowledgement(new PersonalityPreset { PromptSettings = prompt.PromptSettings }, settings.SlutModeEnabled)
                 && !ExplicitContentGate.IsAlreadyAcknowledged(settings.CompanionPrompt))
             {
-                if (Owner is not { } owner || !await new ExplicitContentAcknowledgementDialog().ShowDialogSafe<bool>(owner)) return;
+                if (Owner is not { } owner || !await ShowPromptDialogAsync(owner, new ExplicitContentAcknowledgementDialog())) return;
                 ExplicitContentGate.MarkAcknowledged(settings.CompanionPrompt);
                 CoreSettings.Save();
             }
@@ -130,7 +153,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
 
         private async Task TellAsync(string title, string body)
         {
-            if (Owner is { } owner) await MessageDialog.ShowAsync(owner, Loc.Get(title), body);
+            if (Owner is { } owner) await MessageAsync(owner, Loc.Get(title), body);
         }
 
         private Task BrowseAsync() => BrowseAsync(() => Owner, Service, RefreshInstalledPrompts);
@@ -140,11 +163,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
         {
             async Task TellAsync(string title, string body)
             {
-                if (ownerOf() is { } owner) await MessageDialog.ShowAsync(owner, Loc.Get(title), body);
+                if (ownerOf() is { } owner) await MessageAsync(owner, Loc.Get(title), body);
             }
             try
             {
+                var epoch = _panicEpoch;
                 var available = await service.GetAvailablePromptsAsync();
+                if (epoch != _panicEpoch) return;
                 if (available.Count == 0) { await TellAsync("title_community_prompts", Loc.Get("msg_no_community_prompts")); return; }
                 var choices = available.Where(p => !service.InstalledPromptIds.Contains(p.Id)).ToList();
                 if (choices.Count == 0) { await TellAsync("title_community_prompts", Loc.Get("msg_all_prompts_installed")); return; }
@@ -152,9 +177,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 foreach (var p in choices.Take(5)) body += $"• {p.Name} by {p.Author}\n  {p.Description}\n\n";
                 if (choices.Count > 5) body += Loc.GetF("label_and_more_prompts", choices.Count - 5);
                 body += Loc.Get("label_install_first_one");
-                if (ownerOf() is { } owner && await MessageDialog.ConfirmAsync(owner, Loc.Get("title_browse_community_prompts"), body, okText: Loc.Get("btn_install"), cancelText: Loc.Get("btn_cancel")))
+                if (ownerOf() is { } owner && await ShowPromptDialogAsync(owner, new MessageDialog(Loc.Get("title_browse_community_prompts"), body, true, okText: Loc.Get("btn_install"), cancelText: Loc.Get("btn_cancel"))))
                 {
                     var prompt = await service.InstallPromptAsync(choices[0].Id);
+                    if (epoch != _panicEpoch) return;
                     if (prompt != null) { await TellAsync("title_installed", Loc.GetF("msg_prompt_installed", prompt.Name)); installed(); }
                 }
             }

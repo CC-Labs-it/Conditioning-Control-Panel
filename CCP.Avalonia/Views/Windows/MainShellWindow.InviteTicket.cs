@@ -13,6 +13,7 @@ using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls.Invites;
 using ConditioningControlPanel.Services.Invites;
 using Serilog;
+using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -25,7 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The ticket's server read (tests swap the wire).</summary>
         internal Func<IInviteApi> InviteTicketApi { get; set; } = () => new InviteApi();
 
-        private InvitePanel? InvitesCard => Named<Tabs.ExclusivesTabView>("ExclusivesTab")?.FindControl<InvitePanel>("InvitesHost");
+        private InvitePanel? InvitesCard => AppSettingsPage?.SectionAccount.PlansView.FindControl<InvitePanel>("InvitesCard");
 
         /// <summary>WPF InitializeInviteTicket: one delayed read, then every 30 min and on account change;
         /// every read the invites card makes repaints the ticket too.</summary>
@@ -80,9 +81,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             // WPF MainWindow.InviteTicket.cs:99: the Tonight Board's Waiting card reads the same answer.
             try { Services.Billboard.Providers.WaitingSignals.NoteInvites(mine); } catch { }
+            PostInviteNews(mine);
             if (Named<Button>("BtnInviteTicket") is not { } ticket) return;
             ticket.IsVisible = _inviteTicketShown = InviteTicketRule.ShouldShow(mine);
             SyncInviteWobble();
+        }
+
+        private void PostInviteNews(InviteMine? mine)
+        {
+            try
+            {
+                var settings = CoreSettings.Current;
+                var news = InviteClaimNotice.Decide(mine, settings.UnifiedId, settings.InboxStamps, out bool changed);
+                if (changed) CoreSettings.Save();
+                foreach (var item in news)
+                {
+                    var name = item.Name ?? Loc.Get("invites_news_someone");
+                    bool subscribed = item.Kind == InviteNewsKind.Subscribed;
+                    var title = subscribed
+                        ? (item.Name == null ? Loc.Get("invites_news_subscribed_plain") : Loc.GetF("invites_news_subscribed", name))
+                        : Loc.GetF("invites_news_claimed", name);
+                    var body = Loc.Get(subscribed ? "invites_news_subscribed_body" : "invites_news_claimed_body");
+                    Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
+                    {
+                        Key = item.Key, Glyph = subscribed ? IconMap.InviteSubscribedKey : IconMap.InviteClaimedKey, Title = title, Summary = body,
+                        Open = () => Dialogs.InboxNoticeCard.Present(this, title, body,
+                            Loc.Get("invites_news_see"), OpenInvitesCard),
+                    });
+                }
+            }
+            catch (Exception ex) { Log.Debug("[Invites] news failed: {E}", ex.GetType().Name); }
         }
 
         /// <summary>The wobble runs only while the ticket is up AND the window is shown.</summary>
@@ -118,12 +146,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void BtnInviteTicket_Click(object? sender, RoutedEventArgs e) => OpenInvitesCard();
 
-        /// <summary>WPF OpenInvitesCard: the Premium tab, a forced read, and the card scrolled into view.
+        /// <summary>WPF MainWindow/MainWindow.InviteTicket.cs:200: Settings > Account, a forced read, and the card scrolled into view.
         /// Refused under Lockdown (no veil on this head yet).</summary>
         internal void OpenInvitesCard()
         {
             if (LockdownActive) return;
-            ShowTab("premium");
+            OpenAppSettingsSection("account");
+            var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            InvitesCardOpened = done.Task;
             DispatcherTimer.RunOnce(async () =>
             {
                 try
@@ -133,7 +163,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     card.BringIntoView();
                 }
                 catch (Exception ex) { Log.Debug("[Invites] open invites card failed: {E}", ex.GetType().Name); }
-            }, TimeSpan.FromMilliseconds(300));
+                finally { done.TrySetResult(); }
+            }, InvitesCardSettle);
         }
+
+        /// <summary>WPF's 300 ms settle before the forced read (tests shorten it).</summary>
+        internal TimeSpan InvitesCardSettle { get; set; } = TimeSpan.FromMilliseconds(300);
+
+        /// <summary>Completes when the last OpenInvitesCard has read and scrolled (tests await it).</summary>
+        internal Task InvitesCardOpened { get; private set; } = Task.CompletedTask;
     }
 }

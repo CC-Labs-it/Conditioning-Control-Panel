@@ -94,12 +94,39 @@ public sealed class StudioRackWireTests
         });
     }
 
+    [Fact]
+    public Task V2PillsRefreshOnGrantAndRevoke() => Run((shell, rack) =>
+    {
+        var previous = PrizeOwnership.IsGranted;
+        var user = CoreAccount.UnifiedUserId;
+        try
+        {
+            CoreAccount.UnifiedUserId = "rack-prizes";
+            PrizeOwnership.IsGranted = ConditioningControlPanel.Services.Prizes.PrizeGrants.IsGranted;
+            PrizeOwnership.ResetHeld();
+            PrizeOwnership.ApplySnapshot("rack-prizes", 1, new[] { PrizeOwnership.FlashPendulum, PrizeOwnership.BubbleRain });
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(rack.V2PillsFor("flash").Strip!.IsVisible);
+            Assert.True(rack.V2PillsFor("bubbles").Tile!.IsVisible);
+            PrizeOwnership.ApplySnapshot("rack-prizes", 2, System.Array.Empty<string>());
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(rack.V2PillsFor("flash").Strip!.IsVisible);
+            Assert.False(rack.V2PillsFor("bubbles").Tile!.IsVisible);
+        }
+        finally
+        {
+            PrizeOwnership.ResetHeld();
+            CoreAccount.UnifiedUserId = user;
+            PrizeOwnership.IsGranted = previous;
+            Dispatcher.UIThread.RunJobs();
+        }
+    });
+
     private static void RightClick(MainShellWindow shell, StudioTabView rack, string key)
     {
         var row = rack.GetVisualDescendants().OfType<RadioButton>().First(r => r.Tag as string == key);
         row.BringIntoView();                             // the lower rows sit below the fold
-        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-        Dispatcher.UIThread.RunJobs();
+        HeadlessFrame.Publish(shell);
         var at = row.TranslatePoint(new Point(row.Bounds.Width / 2, row.Bounds.Height / 2), shell)!.Value;
         Assert.Same(row, (shell.InputHitTest(at) as Visual)?.FindAncestorOfType<RadioButton>(includeSelf: true));
         shell.MouseDown(at, MouseButton.Right);
@@ -110,7 +137,7 @@ public sealed class StudioRackWireTests
     private static Task Run(Action<MainShellWindow, StudioTabView> body) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var shell = new MainShellWindow();
@@ -118,8 +145,7 @@ public sealed class StudioRackWireTests
         {
             shell.Show();
             shell.ShowTab("studio");
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-            Dispatcher.UIThread.RunJobs();
+            HeadlessFrame.Publish(shell);
             body(shell, shell.StudioRack!);
         }
         finally { shell.Close(); }

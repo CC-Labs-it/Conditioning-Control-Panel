@@ -36,11 +36,15 @@
 
         <Grid x:Name="ContentRoot">
             <!-- Each region owns a fixed socket/ring; only its face moves on press. -->
+            <!-- The art plates (HalfHost + its mute) keep a BitmapCache between tab shows; text and FX stay
+                 outside it. Code resets it for new artwork. RenderAtScale = FeatureCard.ArtCacheScale:
+                 the hover lift/pop must not upscale it. -->
             <Grid x:Name="HalfRegionA">
                 <Border x:Name="HalfSocketA" Background="#FF080811" CornerRadius="11" IsVisible="False"/>
                 <Grid x:Name="HalfFaceA" RenderTransformOrigin="50%,50%">
                     <Border x:Name="HalfHostA" CornerRadius="11"
                             RenderOptions.BitmapInterpolationMode="HighQuality">
+                        <Border.CacheMode><BitmapCache RenderAtScale="1.1"/></Border.CacheMode>
                         <Border x:Name="HalfMuteA" CornerRadius="11" Opacity="0" IsHitTestVisible="False"
                                 RenderOptions.BitmapInterpolationMode="HighQuality"/>
                     </Border>
@@ -71,6 +75,7 @@
                 <Grid x:Name="HalfFaceB" RenderTransformOrigin="50%,50%">
                     <Border x:Name="HalfHostB" CornerRadius="11"
                             RenderOptions.BitmapInterpolationMode="HighQuality">
+                        <Border.CacheMode><BitmapCache RenderAtScale="1.1"/></Border.CacheMode>
                         <Border x:Name="HalfMuteB" CornerRadius="11" Opacity="0" IsHitTestVisible="False"
                                 RenderOptions.BitmapInterpolationMode="HighQuality"/>
                     </Border>

@@ -24,6 +24,11 @@ public sealed class PanicSurfacesTests
             // Use the shipped bootstrap, including Inter and AppFonts: the first app setup
             // decides process-wide fonts, including the subliminal card closed by panic.
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .With(new global::Avalonia.Media.FontManagerOptions {
+                    DefaultFamilyName = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter,
+                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily> {
+                        ["Segoe UI"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                        ["Segoe UI Black"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter) } })
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
@@ -83,15 +88,33 @@ public sealed class PanicSurfacesTests
     /// ordering pairs below retain both lanes' safety contracts.</summary>
     private static readonly string[] SafetyCritical =
     {
+        "emergency-exit",
+        "companion-audio",
+        "audio-playlist",
+        "emi-ring",
+        "launcher-notes",
+        "launcher-friends",
+        "event-fx",
+        "perfect-week-bonus",
+        "brain-drain-audio",
+        "roster-personality",
         "intake",
         "leash-task",
+        "deeper-tutorial",
+        "workshop-trigger-editor",
+        "awareness-companion",
         "tour",
         "games",
-        "first-show",
+        "upgrade-intro",
+        "first-show", "quest-stamps", "quest-voice",
         "voice-capture",
+        "companion-conversation",
+        "mantra-chant",
         "ai-followups",
         "blink-trainer",
+        "shell-hero",
         "camera",
+        "help-tooltips",
         "chaster-hold",
         "chaos",
         "chaos-flash",
@@ -104,21 +127,32 @@ public sealed class PanicSurfacesTests
         "chaos-field-fx",
         "chaos-skia-fx",
         "chaos-intro",
+        "scrolller-web",
         "settings-palette",
+        "perfect-week-bonus",
         "keyword-triggers",
         "haptics",
+        "help-video",
         "intake",
-        "knock-cards",
+        "friend-notices", "knock-cards",
         "leash-task",
+        "workshop-trigger-editor",
         "lock-cards",
+        "companion-audio",
         "mantra",
-        "panic-quiet",
+        "quiz",
+        // Quiet is armed before this registry; PanicAftermathPortTests pins its single arm.
         "pink-rush",
         "possession",
+        "programs-fx",
+        "program-moments",
         "program-session",
         "remote-haptics",
         "takeover",
         "program-session",
+        "browser-media",
+        "deeper-player",
+        "scheduler",
         "engine",
         "flash",
         "pink-rush",
@@ -127,13 +161,21 @@ public sealed class PanicSurfacesTests
         "tube-speech",
         "lock-cards",
         "speak-cue",
+        "companion-knowledge-editor",
+        "companion-community",
         "companion-transcript",
         "possession",
+        "video-test-error",
+        "chaster-booked-pop",
         "attention-test",
+        "audio-duck",
         "descent-fuse",
+        "deeper-player-fullscreen",
         "deeper-editor-audio",
-        "knock-cards",
+        "discord-share-prompt",
+        "friend-notices", "knock-cards",
         "quick-recal",
+        "mod-creator-preview",
         "asset-preview",
         "camera",
     };
@@ -143,6 +185,9 @@ public sealed class PanicSurfacesTests
     /// carry an ordering constraint belong here; register anything else with one line in PanicSurfaces.</summary>
     private static readonly (string First, string Then, string Why)[] Before =
     {
+        ("companion-audio", "engine", "App.xaml.cs:1839 stops the Audio action before engine teardown"),
+        // WPF KillAllAudio (App.xaml.cs:1853) stops the audio player with a playlist; the panic tail runs it before StopEngine.
+        ("audio-playlist", "engine", "the player's own files stop before the engine teardown"),
         // Avalonia decision (PanicSurfaces.cs "intake" comment): say-it loops end before the capture abort reads as silence.
         ("intake", "voice-capture", "intake loops end before the mic abort"),
         // decisions "Panic <-> mic": capture and the command chain end before anything can react to them.
@@ -162,6 +207,9 @@ public sealed class PanicSurfacesTests
         ("remote-haptics", "engine", "toys to zero before the engine stop"),
         // WPF :1811 Autonomy.CancelActivePulses before StopEngine (:1827).
         ("takeover", "engine", "takeover pulses cancelled before the engine stop"),
+        // WPF :2045-2046 "web video" / "Deeper player" in the media block, before the tail's StopEngine (b9368d963).
+        ("browser-media", "engine", "page media paused before the engine stop"),
+        ("deeper-player", "engine", "Deeper player paused before the engine stop"),
         // WPF StopEngine -> MainWindow.StartStop.cs:505 App.SkillTree?.Stop(): the 3x ends with/after the engine.
         ("engine", "pink-rush", "pink rush ends after the engine"),
         // WPF :1963-1967: session corner GIF (engine-owned) first, standalone slots LAST as the final word.
@@ -213,8 +261,11 @@ public sealed class PanicSurfacesTests
     {
         "ai-followups>engine",
         "blink-trainer>engine",
+        "browser-media>engine",
         "chaos>engine",
         "corner-gif>tube-speech",
+        "deeper-player>engine",
+        "engine>audio-duck",
         "engine>corner-gif",
         "engine>lock-cards",
         "engine>pink-rush",
@@ -227,6 +278,7 @@ public sealed class PanicSurfacesTests
         "leash-task>lock-cards",
         "mantra>engine",
         "remote-haptics>engine",
+        "scheduler>engine",
         "takeover>engine",
         "voice-capture>ai-followups",
     };
@@ -257,7 +309,9 @@ public sealed class PanicSurfacesTests
         ["SettingsTabView"] = "the Home browser card's webcam pill: the 'camera' surface stops WebcamTracker",
         ["PlayTabView"] = "Focus Gaze switch's camera pre-warm: the 'camera' surface stops WebcamTracker, and GazeFocus follows it down",
         ["BlinkTrainerTabView"] = "camera: the 'camera' and 'blink-trainer' surfaces",
+        ["VideoThumbnail"] = "WPF MainWindow.Assets.cs:799-807,910-948: off-screen poster extraction, no sound or window; 5 s deadline, joined Stop and disposal (VideoThumbnailTests pins silence, no opened windows and cleanup)",
         ["LibVlcAudio"] = "the CoreAudio sink: Core services stop their clips on the 'engine' surface",
+        ["SharedOverlayHost"] = "subliminal leases: engine StopDesktopOverlays calls SubliminalOverlay.CloseAll; tested by SubliminalSolidHostTests",
         ["MandatoryVideoOverlay"] = "Core video sink: the 'engine' surface (CoreEngine.Stop) closes it",
         ["BubbleCountWindow"] = "Core bubble-count sink: the 'engine' surface closes it",
         ["BubbleCountHost"] = "Core bubble-count sink: the 'engine' surface closes it",
@@ -265,6 +319,7 @@ public sealed class PanicSurfacesTests
         ["Program"] = "--speech-check CLI diagnostic: no window, exits when done",
         ["WebHost"] = "a control, not a surface: the window hosting it registers",
         ["LayeredAudio"] = "WPF parity (#668: only stopped when the master switch is off)",
+        ["VlcPlaylistAudio"] = "the Deeper tab's audio player: the 'audio-playlist' surface (App.StopAudioPlaylist -> AudioPlaylistService.StopEmergency) mutes and stops it",
         ["DeeperLocalAudio"] = "the Deeper editor's transport: the 'deeper-editor-audio' surface pauses every open editor",
         ["BillboardCardHost"] = "the Home Tonight Board deck: no audio (WPF c0c67ff47), no window; its hold stops off screen",
         ["ScrolllerAwayHost"] = "no media, no visible window: OS lock / sleep hooks that only set ScrolllerPolicy.Away (WPF ScrolllerAwayWatcher)",
@@ -300,6 +355,17 @@ public sealed class PanicSurfacesTests
         Assert.True(missing.Count == 0, "Not in PanicSurfaces.All and not allowlisted: " + string.Join(", ", missing));
         var stale = Allowed.Keys.Where(t => !starters.Contains(t)).ToList();
         Assert.True(stale.Count == 0, "Stale allowlist entries: " + string.Join(", ", stale));
+    }
+
+    /// <summary>Owner rule (Linux beta 1) and WPF agree: panic never cancels an in-flight Sparkles place claim.
+    /// The claim settles on its own (same claimId, the server replays one receipt), so a panic on a finish screen
+    /// never drops a payout. Guards the "sparkles-claims" stop #3853 proposed (Nov 4 review).</summary>
+    [Fact]
+    public void PanicNeverCancelsSparklesPlaceClaims()
+    {
+        Assert.DoesNotContain(PanicSurfaces.All, s => s.Id.Contains("sparkles", StringComparison.OrdinalIgnoreCase));
+        var registry = Code(File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia/Views/Windows/PanicSurfaces.cs")));
+        Assert.DoesNotContain("Sparkles", registry);
     }
 
     private static string RepoRoot([CallerFilePath] string here = "") =>

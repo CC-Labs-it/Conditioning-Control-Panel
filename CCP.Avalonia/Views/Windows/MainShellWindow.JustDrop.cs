@@ -55,7 +55,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Warning(ex, "OnJustDropAvailabilityChanged failed"); }
         }
 
-        private void ApplyJustDropDoorVisibility() => RefreshTakeawayShelf();
+        private void ApplyJustDropDoorVisibility()
+        {
+            RefreshTakeawayShelf();
+            PageStrip?.Rebuild();
+        }
 
         /// <summary>WPF ShowTab("justdrop") -> JustDropHostService.LaunchShop. The window's gate
         /// (GameWindow.JustDropDoorOpen) refuses an unavailable door as a no-op; a live one is refocused.</summary>

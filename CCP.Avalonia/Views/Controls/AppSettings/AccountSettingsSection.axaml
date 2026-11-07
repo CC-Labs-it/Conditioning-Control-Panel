@@ -14,11 +14,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             xmlns:tabs="clr-namespace:ConditioningControlPanel.Avalonia.Views.Tabs"
              x:Class="ConditioningControlPanel.Avalonia.Views.Controls.AppSettings.AccountSettingsSection">
 
     <StackPanel>
 
-        <TextBlock Text="{loc:Str set2_section_account}" Theme="{StaticResource SectionHeader}"/>
+        <TextBlock Text="{loc:Str settings_section_plans}" Theme="{StaticResource SectionHeader}"/>
 
         <!-- Net-new: who you are, and which bar you clear. Painted by RefreshTierBadge(). -->
         <Border x:Name="AccountTierCard" CornerRadius="12" Padding="0" Margin="0,0,0,12"
@@ -59,6 +60,10 @@
                 </Grid>
             </Grid>
         </Border>
+
+        <!-- PLANS: the vault header with the tier plates and the link to the Premium page (WPF Views/Controls/AppSettings/AccountSettingsSection.xaml:103).
+             Its motion follows the lit section pill (AppSettingsTabView.CheckPill -> PlansActive). -->
+        <tabs:ExclusivesTabView x:Name="PlansView" PlansMode="True" Margin="0,0,0,12"/>
 
         <!-- Brand card: keeps Patreon red, takes the shared edge-bar pattern in that colour. -->
         <Border x:Name="PatreonLoginCard" CornerRadius="12" Padding="0" Margin="0,0,0,12"
@@ -295,15 +300,13 @@
                                TextWrapping="Wrap" Margin="0,2,0,12"/>
 
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                        <!-- Hidden until GDPR export is ported (needs ProfileSync's export call): a
-                             visible button that does nothing is worse than none. -->
-                        <Button x:Name="BtnExportData" IsVisible="False"
+                        <Button x:Name="BtnExportData"
                                 Background="#555" Foreground="White"
                                 BorderThickness="0" Padding="15,8" Margin="0,0,10,0"
                                 FontWeight="Bold" FontSize="12"
                                 Cursor="Hand"
                                 Click="BtnExportData_Click">
-                            <TextBlock Text="{loc:Str btn_export_my_data}"/>
+                            <TextBlock x:Name="TxtBtnExportData" Text="{loc:Str btn_export_my_data}"/>
                         </Button>
                         <Button x:Name="BtnPrivacyPolicy"
                                 Background="Transparent" Foreground="{DynamicResource TextMutedBrush}"

@@ -143,6 +143,66 @@ public sealed class KeywordTriggersPanelTests
     });
 
     [Fact]
+    public Task MasterAndKeyboardDenialSaysWhyLikeWpf() => Run((view, panel, s) =>
+    {
+        // WPF MainWindow.Awareness.cs:397-407: no access -> box bounces, MessageBox explains.
+        var told = new List<string>();
+        var oldDenied = CoreEntitlement.ShowDeniedHandler;
+        var toasts = 0;
+        CoreEntitlement.ShowDeniedHandler = _ => toasts++;
+        KeywordTriggersPanel.Inform = (owner, title, text) =>
+        {
+            Assert.Same(TopLevel.GetTopLevel(view), owner);
+            told.Add(title + "|" + text);
+            return Task.CompletedTask;
+        };
+        var master = view.FindControl<CheckBox>("ChkAwarenessMaster")!;
+        var keyboard = view.FindControl<CheckBox>("ChkAwarenessKeyboard")!;
+        var oldEnabled = s.KeywordTriggersEnabled;
+        try
+        {
+            s.KeywordTriggersEnabled = false;
+            view.SyncAwarenessTabUi();
+            var expected = Loc.Get("title_patreon_feature") + "|" + Loc.Get("msg_keyword_triggers_patreon_only");
+
+            master.IsChecked = true;
+            Assert.False(master.IsChecked == true);
+            Assert.False(s.KeywordTriggersEnabled);
+            Assert.Equal(expected, Assert.Single(told));
+
+            keyboard.IsChecked = true;                                // routes through the master (WPF :489)
+            Assert.False(master.IsChecked == true);
+            Assert.False(s.KeywordTriggersEnabled);
+            Assert.Equal(2, told.Count);
+            Assert.Equal(expected, told[1]);
+            Assert.Equal(0, toasts); // A toast cannot substitute for the WPF message box.
+
+            told.Clear();
+            CoreEntitlement.HasPremiumProvider = () => true;
+            master.IsChecked = true;
+            Assert.True(s.KeywordTriggersEnabled);
+            Assert.Empty(told);
+
+            // OFF must remain available after entitlement lapses.
+            CoreEntitlement.HasPremiumProvider = () => false;
+            master.IsChecked = false;
+            Assert.False(s.KeywordTriggersEnabled);
+            Assert.Empty(told);
+
+            CoreEntitlement.IsFreeTodayProvider = key => key == "awareness";
+            master.IsChecked = true;
+            Assert.True(master.IsChecked == true);
+            Assert.True(s.KeywordTriggersEnabled);
+            Assert.Empty(told);
+        }
+        finally
+        {
+            CoreEntitlement.ShowDeniedHandler = oldDenied;
+            s.KeywordTriggersEnabled = oldEnabled;
+        }
+    });
+
+    [Fact]
     public Task OcrCombosPersistAndOcrDetailNeedsAccess() => Run((view, panel, s) =>
     {
         var told = new List<string>();
@@ -178,6 +238,38 @@ public sealed class KeywordTriggersPanelTests
         Assert.False(s.ScreenOcrEnabled);
         Assert.False(detail.IsVisible);
     });
+    [Theory]
+    [InlineData(0, -1)]
+    [InlineData(120, 1)]
+    public Task WheelOverScrollableTriggerListMovesOuterViewport(double innerOffset, double delta) => Run((view, panel, s) =>
+    {
+        // Real user path: the panel inside the Awareness tab, wheel over its trigger list.
+        s.KeywordTriggers.AddRange(Enumerable.Range(0, 20).Select(i => new KeywordTrigger { Keyword = $"word {i}" }));
+        panel.SyncFromSettings();
+        var host = (Window)TopLevel.GetTopLevel(panel)!;
+        (host.Width, host.Height) = (900, 500);
+        Find<Expander>(panel, "KeywordTriggersExpander").IsExpanded = true;
+        Dispatcher.UIThread.RunJobs(); host.UpdateLayout();
+        var inner = Find<StackPanel>(panel, "KeywordTriggerListPanel").GetVisualAncestors().OfType<ScrollViewer>().First();
+        var outer = inner.GetVisualAncestors().OfType<ScrollViewer>().First();
+        Assert.Same(view.GetVisualDescendants().OfType<ScrollViewer>().First(v => panel.GetVisualAncestors().Contains(v)), outer);
+        Assert.True(inner.Extent.Height > inner.Viewport.Height + 120);
+        var max = outer.Extent.Height - outer.Viewport.Height;
+        var target = outer.Offset.Y + inner.TranslatePoint(default, outer)!.Value.Y - 100;
+        outer.Offset = new Vector(0, delta < 0 ? Math.Clamp(target, 0, max - 130) : Math.Clamp(target, 130, max));
+        inner.Offset = new Vector(0, innerOffset);
+        host.UpdateLayout();
+        var before = outer.Offset.Y;
+        Assert.InRange(before - delta * 120, 0, max);                 // room to move: the assert below is not vacuous
+        var point = inner.TranslatePoint(new Point(8, 20), host)!.Value;
+        Assert.InRange(point.Y, 0, host.Bounds.Height);
+        host.MouseWheel(point, new Vector(0, delta));
+        Dispatcher.UIThread.RunJobs(); host.UpdateLayout();
+        // WPF PreviewMouseWheel always redirects to the ancestor, even before the list's edge.
+        Assert.Equal(before - delta * 120, outer.Offset.Y, 1);
+        Assert.Equal(innerOffset, inner.Offset.Y, 1);
+    });
+
     [Theory]
     [InlineData(MotionLevel.Full)]
     [InlineData(MotionLevel.Reduced)]

@@ -30,6 +30,14 @@ namespace ConditioningControlPanel.Services.UI
             _ => fullMs,
         };
 
+        // WPF NavRailRules:233-249 and DepthRules:88, shared unchanged by both heads.
+        public static double Overshoot(double from, double to) =>
+            to == from ? to : to + System.Math.Sign(to - from) * ReleaseOvershootPx;
+        public static bool TiltAllowed(MotionLevel level, PerformanceTier tier) =>
+            level != MotionLevel.Off && tier != PerformanceTier.Performance;
+        public static bool CoinTilts(bool active, MotionLevel level, PerformanceTier tier) =>
+            !active && TiltAllowed(level, tier);
+
         /// <summary>A section shadow: deep ink pulled 28% toward the hue, at an alpha.</summary>
         public static uint ShadowColor(uint hue, double alpha = ShadowAlpha) =>
             NavStripPaint.WithAlpha(NavStripPaint.Mix(NeutralShadowInk, hue, ShadowHuePull), alpha);

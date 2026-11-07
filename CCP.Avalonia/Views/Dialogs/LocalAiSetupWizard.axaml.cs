@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
@@ -113,8 +114,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             _targetModel = ResolveStartingModel();
             _txtAdvancedModel.Text = _targetModel;
             UpdateConsentDiskNote();
+            UpdatePerfCard();
 
             Opened += async (_, _) => await StartDetectAsync();
+        }
+
+        // Native probing belongs to the head. Tests supply measurements without touching hardware.
+        internal static Func<(long ram, long vram)> ReadHardware = () =>
+            (Platform.LocalAiHardwareProbe.TotalRamBytes(), Platform.LocalAiHardwareProbe.LargestVramBytes());
+
+        private void UpdatePerfCard()
+        {
+            var found = this.FindControl<TextBlock>("TxtPerfFound")!;
+            try
+            {
+                var (ram, vram) = ReadHardware();
+                var fit = LocalAiHardwareRules.Judge(ram, vram);
+                Serilog.Log.Information("Local AI wizard: RAM {Ram} B, VRAM {Vram} B, fit {Fit}", ram, vram, fit);
+                if (fit == LocalAiHardwareRules.Fit.Below)
+                {
+                    var title = this.FindControl<TextBlock>("TxtPerfTitle")!;
+                    title.Text = Loc.Get("label_local_ai_perf_title_below");
+                    title.Foreground = (global::Avalonia.Media.IBrush)this.FindResource("PinkBrush")!;
+                }
+                found.Text = fit == LocalAiHardwareRules.Fit.Unknown
+                    ? Loc.Get("label_local_ai_perf_recommended")
+                    : Loc.GetF("label_local_ai_perf_found", LocalAiHardwareRules.FormatGb(ram), LocalAiHardwareRules.FormatGb(vram))
+                      + " " + Loc.Get("label_local_ai_perf_recommended");
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Debug("Local AI wizard: hardware read failed: {E}", ex.Message);
+                found.Text = Loc.Get("label_local_ai_perf_recommended");
+            }
         }
 
         private static string ResolveStartingModel()
@@ -461,8 +493,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 var prompt = CoreSettings.Current?.CompanionPrompt;
                 if (prompt != null)
                 {
-                    prompt.AiProvider = AiProviderType.Local;
-                    prompt.AiModel = _targetModel;
+                    // Detect, pull and smoke test all use the service default host.
+                    OllamaSetupService.ApplyVerifiedSetup(prompt, OllamaSetupService.DefaultHost, _targetModel);
                     CoreSettings.Save();
                 }
             }
