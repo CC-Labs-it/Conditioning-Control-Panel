@@ -14,6 +14,9 @@ namespace CCP.Avalonia.Tests;
 
 public class EmiTourVoiceTests
 {
+    // PanicKeyTests leaves EMI's five-minute panic tail behind; each test clears and restores it.
+    private static readonly FieldInfo HoldUntil = typeof(EmiLineEngine).GetField("_holdUntilUtc", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
     [Fact]
     public void TickIsDeterministicAndUsesTheWpfWave()
     {
@@ -33,8 +36,10 @@ public class EmiTourVoiceTests
         var field = typeof(EmiLineEngine).GetField("_heldBy", BindingFlags.Instance | BindingFlags.NonPublic)!;
         int plays = 0, stops = 0;
         float playedVolume = 0;
+        object? oldUntil = HoldUntil.GetValue(EmiLineEngine.Instance);
         try
         {
+            HoldUntil.SetValue(EmiLineEngine.Instance, DateTime.MinValue);
             PanicAftermath.EndQuiet();
             CoreSettings.Current.MasterVolume = 50;
             CoreAudio.IsOutputSuppressedProvider = () => false;
@@ -60,6 +65,7 @@ public class EmiTourVoiceTests
         finally
         {
             field.SetValue(EmiLineEngine.Instance, null);
+            HoldUntil.SetValue(EmiLineEngine.Instance, oldUntil);
             PanicAftermath.EndQuiet();
             CoreSettings.Current.MasterVolume = volume;
             CoreAudio.PlayStoppableProvider = play;
@@ -79,8 +85,10 @@ public class EmiTourVoiceTests
         var breaker = CoreAudio.IsOutputSuppressedProvider;
         var field = typeof(EmiLineEngine).GetField("_heldBy", BindingFlags.Instance | BindingFlags.NonPublic)!;
         int plays = 0;
+        object? oldUntil = HoldUntil.GetValue(EmiLineEngine.Instance);
         try
         {
+            HoldUntil.SetValue(EmiLineEngine.Instance, DateTime.MinValue);
             PanicAftermath.EndQuiet();
             CoreSettings.Current.MasterVolume = gate == "volume" ? 0 : 50;
             CoreAudio.IsOutputSuppressedProvider = () => gate == "breaker";
@@ -94,12 +102,71 @@ public class EmiTourVoiceTests
         finally
         {
             field.SetValue(EmiLineEngine.Instance, null);
+            HoldUntil.SetValue(EmiLineEngine.Instance, oldUntil);
             PanicAftermath.EndQuiet();
             CoreSettings.Current.MasterVolume = volume;
             CoreAudio.PlayStoppableProvider = play;
             CoreAudio.IsOutputSuppressedProvider = breaker;
         }
     }
+
+    /// <summary>WPF MainWindow.xaml.cs:1620: the panicPressed hold is armed before any rung, and START
+    /// (PanicAftermath.EndQuiet) never ends it, so typing ticks stay silent for the tail.</summary>
+    [Fact]
+    public Task PanicHoldOutlivesStartForEveryRung() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var engine = EmiLineEngine.Instance;
+        var until = HoldUntil;
+        object? oldUntil = until.GetValue(engine);
+        bool enabled = s.PanicKeyEnabled;
+        string key = s.PanicKey;
+        int volume = s.MasterVolume;
+        var play = CoreAudio.PlayStoppableProvider;
+        var breaker = CoreAudio.IsOutputSuppressedProvider;
+        int plays = 0;
+        var shell = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+        try
+        {
+            s.PanicKeyEnabled = true;
+            s.PanicKey = "F8";
+            s.MasterVolume = 50;
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { plays++; return () => { }; };
+            shell.Show();
+            using var tick = new EmiTypingTick();
+            foreach (bool card in new[] { false, true })
+            {
+                until.SetValue(engine, DateTime.MinValue);
+                PanicAftermath.EndQuiet();
+                Assert.True(tick.Tick());
+                if (card) global::ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.ShowOnAllMonitors("good girl", 1, strictMode: true);
+                shell.HandlePanicKeyPress(new DateTime(2026, 1, 1, 12, 0, card ? 10 : 0));
+                shell.StartEngineFromUser();
+                CoreEngine.Stop();
+                Assert.False(PanicAftermath.TriggersSilenced());
+                Assert.False(tick.Tick());
+            }
+            Assert.Equal(2, plays);
+        }
+        finally
+        {
+            CoreEngine.Stop();
+            global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.StopLockCards();
+            shell.Close();
+            until.SetValue(engine, oldUntil);
+            PanicAftermath.EndQuiet();
+            s.PanicKeyEnabled = enabled;
+            s.PanicKey = key;
+            s.MasterVolume = volume;
+            CoreAudio.PlayStoppableProvider = play;
+            CoreAudio.IsOutputSuppressedProvider = breaker;
+        }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public Task BubbleDotsTickAndCancellationCutsPlayback() => AvaloniaTestDispatcher.RunAsync(() =>
@@ -112,8 +179,10 @@ public class EmiTourVoiceTests
         var breaker = CoreAudio.IsOutputSuppressedProvider;
         int plays = 0, stops = 0;
         var desk = new EmiDeskWindow();
+        object? oldUntil = HoldUntil.GetValue(EmiLineEngine.Instance);
         try
         {
+            HoldUntil.SetValue(EmiLineEngine.Instance, DateTime.MinValue);
             PanicAftermath.EndQuiet();
             CoreSettings.Current.MasterVolume = 50;
             CoreAudio.IsOutputSuppressedProvider = () => false;
@@ -150,6 +219,7 @@ public class EmiTourVoiceTests
             CoreAudio.PlayStoppableProvider = play;
             CoreAudio.IsOutputSuppressedProvider = breaker;
             PanicAftermath.EndQuiet();
+            HoldUntil.SetValue(EmiLineEngine.Instance, oldUntil);
         }
         return Task.CompletedTask;
     });
