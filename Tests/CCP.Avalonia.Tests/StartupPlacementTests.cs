@@ -43,14 +43,26 @@ public sealed class StartupPlacementTests
         Assert.Equal(new PixelPoint(640, 652), StartupPlacement.CenterIn(Left, 400, 215, 0));   // unknown scale reads as 1
     }
 
-    /// <summary>Owner 11-06: on Linux the shell opened at 1661x1002 and filled the 1680x1050 monitor; it now opens
-    /// 20% smaller per axis. Windows keeps WPF's size. The XAML floors (1131x620) still hold.</summary>
+    /// <summary>Owner 11-06 took the Linux shell 20% smaller (1329x802); owner 11-07 took it 25% bigger again, which
+    /// is WPF's 1661x1002 on both. The XAML floors (1131x620) still hold.</summary>
     [Fact]
-    public void TheLinuxShellOpensAFifthSmallerAndWindowsKeepsWpfsSize()
+    public void TheLinuxShellOpensAtWpfsSizeAgain()
     {
-        Assert.Equal((1329d, 802d), StartupPlacement.ShellSize(1661, 1002, 1131, 620, linux: true));
+        Assert.Equal((1661d, 1002d), StartupPlacement.ShellSize(1661, 1002, 1131, 620, linux: true));
         Assert.Equal((1661d, 1002d), StartupPlacement.ShellSize(1661, 1002, 1131, 620, linux: false));
-        Assert.Equal((1131d, 620d), StartupPlacement.ShellSize(1200, 700, 1131, 620, linux: true));
+        Assert.Equal((1131d, 620d), StartupPlacement.ShellSize(1000, 600, 1131, 620, linux: true));
+    }
+
+    /// <summary>Owner 11-07: a cold WSLg start first reports Xwayland's 640x480 placeholder ("rdp-0 0,0 640x480")
+    /// for ~0.9 s; Avalonia kept it all run and the splash sat in a corner. Only that exact shape is waited out.</summary>
+    [Fact]
+    public void OnlyXwaylandsLone640x480PlaceholderIsWaitedOut()
+    {
+        Assert.True(X11ScreenSettle.IsPlaceholder(new[] { new PixelRect(0, 0, 640, 480) }));
+        Assert.False(X11ScreenSettle.IsPlaceholder(Wslg));
+        Assert.False(X11ScreenSettle.IsPlaceholder(new[] { Primary }));
+        Assert.False(X11ScreenSettle.IsPlaceholder(new[] { new PixelRect(0, 0, 640, 480), Left }));
+        Assert.False(X11ScreenSettle.IsPlaceholder(System.Array.Empty<PixelRect>()));
     }
 
     [Fact]

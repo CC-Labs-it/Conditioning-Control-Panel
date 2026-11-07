@@ -272,6 +272,8 @@ namespace ConditioningControlPanel.Avalonia
                         (global::Avalonia.Application.Current?.ApplicationLifetime
                             as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.Shutdown());
                 });
+            // A cold WSLg / on-demand Xwayland first reports a 640x480 placeholder screen; Avalonia would keep it all run.
+            Platform.X11ScreenSettle.WaitForRealMonitors();
             App.SplashOnStartup = true;
             Platform.SoftwareRender.Armed = true;   // a CPU-only Skia backend takes WPF's Performance-mode FX tier
             app.StartWithClassicDesktopLifetime(args);

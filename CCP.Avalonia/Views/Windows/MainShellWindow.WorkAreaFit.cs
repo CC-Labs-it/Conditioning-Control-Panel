@@ -79,8 +79,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>
-        /// Before the first Show, once per launch (App.StartDesktop): the default size (20% smaller on Linux,
-        /// StartupPlacement.ShellSize), fitted to the work area and centred on it, as WPF
+        /// Before the first Show, once per launch (App.StartDesktop): the default size (StartupPlacement.ShellSize,
+        /// the owner's Linux scale), fitted to the work area and centred on it, as WPF
         /// MainWindow.CenterOnPrimaryScreen does. The XAML says Manual at 0,0, which under WSLg's two
         /// monitors (rdp-0 1680,0 / rdp-2 0,235) is on neither, so the fit pushed it to the left one's corner.
         /// There is no saved main-window size to respect (neither head stores one); a resize later in the run

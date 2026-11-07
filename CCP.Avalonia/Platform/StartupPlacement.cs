@@ -33,9 +33,10 @@ internal static class StartupPlacement
     internal static int PickForShell(IReadOnlyList<PixelRect> bounds, int primary, PixelPoint? pointer) =>
         primary >= 0 && primary < bounds.Count ? primary : Pick(bounds, -1, pointer);
 
-    /// <summary>Owner 11-06: on Linux the main window first opens 20% smaller per axis than WPF's 1661 x 1002 DIP
-    /// (which filled a 1680 x 1050 monitor); Windows keeps WPF's size. Never under the XAML floors.</summary>
-    internal const double LinuxShellScale = 0.8;
+    /// <summary>The Linux main window's first size against WPF's 1661 x 1002 DIP. Owner 11-06 took it 20% smaller;
+    /// owner 11-07 took it 25% bigger again (it looked small beside the tube), which is WPF's size. A 1680 x 1050
+    /// monitor is still handled by the work-area fit. Never under the XAML floors.</summary>
+    internal const double LinuxShellScale = 0.8 * 1.25;
 
     internal static (double Width, double Height) ShellSize(double width, double height, double minWidth, double minHeight, bool linux) =>
         linux ? (Math.Max(minWidth, Math.Round(width * LinuxShellScale)), Math.Max(minHeight, Math.Round(height * LinuxShellScale)))
