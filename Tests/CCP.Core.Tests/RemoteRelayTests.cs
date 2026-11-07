@@ -17,13 +17,15 @@ namespace CCP.Core.Tests;
 public sealed class RemoteRelayTests
 {
     // WPF RemoteControlService.cs:1476/:1488 dispatch; :980 panic/session end stop and re-arm on the saved
-    // switch; :1159 a leave only cancels pulses; :1020/:1179 every card closes.
+    // switch; :1159 a leave only cancels pulses; :1020/:1179 every card closes; :964/:1154 over the wearer's own
+    // run neither touches autonomy nor the cards; :921 the status lists a running autonomy.
     [Fact]
     public async Task Remote_autonomy_and_lock_card_route_to_the_head_and_each_teardown_does_what_WPF_does()
     {
         var s = CoreSettings.Current;
         var saved = (RemoteCommands.AutonomyCommand, RemoteCommands.CancelAutonomyPulses, CoreLockCard.ShowHandler,
-            CoreLockCard.CloseAllHandler, s.AutonomyModeEnabled, s.StrictLockEnabled, s.PanicKeyEnabled);
+            CoreLockCard.CloseAllHandler, s.AutonomyModeEnabled, s.StrictLockEnabled, s.PanicKeyEnabled,
+            RemoteCommands.AutonomyRunning, s.AudioOnlySession, s.TotalSessions);
         var log = new List<string>();
         try
         {
@@ -57,20 +59,44 @@ public sealed class RemoteRelayTests
             var f = new FakeRelay();
             using var r = Relay(f);
             await r.StartAsync("full");
+            foreach (var on in new[] { true, false })
+            {
+                RemoteCommands.AutonomyRunning = () => on;
+                await r.PushStatusNowAsync();
+                var services = f.Seen.Last(x => x.Path == "/v2/remote/status").Body["active_services"]!.ToObject<string[]>()!;
+                Assert.Equal(on, services.Contains("autonomy"));
+            }
             log.Clear();
             f.Answer = _ => Json(HttpStatusCode.NotFound, "{}");
             await r.PollOnceAsync();   // the session ended
             Assert.False(r.IsActive);
             Assert.Equal(new[] { "pulses", "stop", "start" }, log);
 
-            RemoteCommands.AutonomyCommand = _ => false;
-            Assert.Equal(RemoteCommands.NotOnThisBuild, RemoteCommands.Execute("start_autonomy", null));
+            // The wearer's own run (WPF LeavesLocalRun): a leave and a session end leave autonomy and cards alone.
+            s.AudioOnlySession = true;
+            CoreEngine.Start();
+            log.Clear();
+            RemoteCommands.StopEffects(false);
+            var f2 = new FakeRelay();
+            using var r2 = Relay(f2);
+            await r2.StartAsync("full");
+            f2.Answer = _ => Json(HttpStatusCode.NotFound, "{}");
+            await r2.PollOnceAsync();
+            Assert.False(r2.IsActive);
+            Assert.Empty(log);
+            Assert.Null(RemoteCommands.Execute("trigger_panic", null));   // panic still tears it all down
+            Assert.Equal(new[] { "pulses", "stop", "start", "close" }, log);
+
+            RemoteCommands.AutonomyCommand = _ => false;   // the shell refused: switch, consent or entitlement
+            Assert.Equal(RemoteCommands.AutonomyOff, RemoteCommands.Execute("start_autonomy", null));
         }
         finally
         {
+            CoreEngine.Stop();
             ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
             (RemoteCommands.AutonomyCommand, RemoteCommands.CancelAutonomyPulses, CoreLockCard.ShowHandler,
-                CoreLockCard.CloseAllHandler, s.AutonomyModeEnabled, s.StrictLockEnabled, s.PanicKeyEnabled) = saved;
+                CoreLockCard.CloseAllHandler, s.AutonomyModeEnabled, s.StrictLockEnabled, s.PanicKeyEnabled,
+                RemoteCommands.AutonomyRunning, s.AudioOnlySession, s.TotalSessions) = saved;
         }
     }
 

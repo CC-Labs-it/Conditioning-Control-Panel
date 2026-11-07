@@ -14,6 +14,7 @@ namespace ConditioningControlPanel.Services
     public static class RemoteCommands
     {
         public const string NotOnThisBuild = "not on this build";
+        public const string AutonomyOff = "autonomy is off";
 
         /// <summary>The command log / notification label key per verb (WPF MainWindow.xaml.cs CommandLabels);
         /// anything else shows as the verb with spaces.</summary>
@@ -47,6 +48,13 @@ namespace ConditioningControlPanel.Services
         public static Func<bool, bool>? AutonomyCommand;
         /// <summary>WPF AutonomyService.CancelActivePulses.</summary>
         public static Action? CancelAutonomyPulses;
+        /// <summary>WPF App.Autonomy.IsEnabled, for the status's "autonomy" active service.</summary>
+        public static Func<bool>? AutonomyRunning;
+
+        /// <summary>WPF RemoteEndRule.LeavesLocalRun (RemoteControlService.cs:964, :1154): a leave or session end
+        /// over the wearer's own run hands back only what the controller holds. Remote session verbs are not
+        /// ported, so a running engine is always the wearer's own.</summary>
+        internal static bool LeavesLocalRun(bool force) => !force && CoreEngine.IsRunning;
 
         /// <summary>WPF StopAllRemoteEffects (panic, session end; RemoteControlService.cs:980): pulses go and the
         /// runtime stops, then comes back when the wearer's own switch is on (#299). A controller leaving
@@ -107,7 +115,8 @@ namespace ConditioningControlPanel.Services
                 case "stop_lock_card": LockCardScheduler.Instance.Stop(); return null;
                 case "start_autonomy":
                 case "stop_autonomy":
-                    return AutonomyCommand?.Invoke(action == "start_autonomy") == true ? null : NotOnThisBuild;
+                    if (AutonomyCommand == null) return NotOnThisBuild;
+                    return AutonomyCommand(action == "start_autonomy") ? null : AutonomyOff;   // switch, consent or entitlement refused
                 case "trigger_haptic":
                     if (CoreHaptics.Service?.IsConnected != true) return "no_device";   // WPF 7b22ece8c (ccp-bugs #1065): never a silent "ok"
                     _ = CoreHaptics.Service!.TriggerAsync("remote_control", 0.7, 2000); return null;
@@ -136,8 +145,9 @@ namespace ConditioningControlPanel.Services
         public static void StopEffects(bool force)
         {
             // A leave and the session end both arrive here unforced; RemoteRelay.Cleanup adds the session-end reset.
+            var localRun = LeavesLocalRun(force);
             if (force) ResetAutonomy();
-            else try { CancelAutonomyPulses?.Invoke(); } catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] autonomy pulse cancel failed"); }
+            else if (!localRun) try { CancelAutonomyPulses?.Invoke(); } catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] autonomy pulse cancel failed"); }
             if (force) Commands.AiCommandService.CancelAll();   // a remote panic cancels pending AI follow-ups too
             // A controller's panic is a way out like the key: Circe's Tab opens its safety hold (PanicChasterHold).
             if (force) Safety.PanicChasterHold.Open("remote panic");
@@ -153,7 +163,7 @@ namespace ConditioningControlPanel.Services
                 CoreFlash.Stop(); CoreSubliminal.Stop(); CoreBubbles.Stop(); CoreBouncingText.Stop();
                 CoreEngine.Video?.Stop(); CoreEngine.BubbleCount?.Stop(); LockCardScheduler.Instance.Stop();
             }
-            CoreLockCard.CloseAll();   // WPF LockCardWindow.ForceCloseAll (:1020, :1179), a card still posted included
+            if (!localRun) CoreLockCard.CloseAll();   // WPF LockCardWindow.ForceCloseAll (:1020, :1179), a card still posted included
             // WPF (main 4adc4c476, 2a712d9da): never a blanket strict-off. The strict lock goes back to the
             // wearer's own (a running Lockdown keeps the one it forced, its record corrected), the panic key
             // comes back on except while a running Lockdown holds it off; its own end restores it.

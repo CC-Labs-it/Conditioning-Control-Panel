@@ -197,7 +197,7 @@ namespace ConditioningControlPanel.Services
             void StopEffects()
             {
                 try { _stopEffects(false); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
-                RemoteCommands.ResetAutonomy();   // WPF StopAllRemoteEffects: the session end resets autonomy, a leave does not
+                if (!RemoteCommands.LeavesLocalRun(false)) RemoteCommands.ResetAutonomy();   // WPF StopAllRemoteEffects: the session end resets autonomy, a leave does not
                 Remote.RemoteWearer.Drop();
             }
             var (done, _) = CoreDispatch.Invoke(() => { StopEffects(); return 0; }, TimeSpan.FromSeconds(10));
@@ -477,6 +477,7 @@ namespace ConditioningControlPanel.Services
             if (s.StrictLockEnabled) list.Add("strict_lock");
             if (CoreHaptics.Service?.IsConnected == true) list.Add("haptics");   // WPF 7b22ece8c: trigger_haptic will land
             if (!s.PanicKeyEnabled) list.Add("no_panic");
+            if (RemoteCommands.AutonomyRunning?.Invoke() == true) list.Add("autonomy");
             if (CoreEngine.IsRunning) list.Add("session");
             if (CoreFlash.IsRunning) list.Add("flash_loop");
             if (CoreSubliminal.IsRunning) list.Add("subliminal_loop");

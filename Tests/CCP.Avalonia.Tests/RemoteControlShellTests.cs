@@ -48,8 +48,10 @@ public sealed class RemoteControlShellTests
             s.AutonomyModeEnabled = s.AutonomyConsentGiven = true;
             Assert.Null(RemoteCommands.Execute("start_autonomy", null));
             Assert.True(shell.Autonomy.IsEnabled);
+            Assert.True(RemoteCommands.AutonomyRunning?.Invoke());   // the status lists "autonomy"
             Assert.Null(RemoteCommands.Execute("stop_autonomy", null));
             Assert.False(shell.Autonomy.IsEnabled);
+            Assert.False(RemoteCommands.AutonomyRunning?.Invoke());
 
             Assert.True(shell.Autonomy.Start());   // the wearer's own run
             RemoteCommands.StopEffects(false);      // the controller left

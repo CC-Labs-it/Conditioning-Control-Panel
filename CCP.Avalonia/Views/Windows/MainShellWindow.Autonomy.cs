@@ -71,6 +71,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _autonomyHooked = true;
             RemoteCommands.AutonomyCommand = RemoteAutonomyCommand;
             RemoteCommands.CancelAutonomyPulses = CancelAutonomyPulses;
+            RemoteCommands.AutonomyRunning = AutonomyRunning;
             Autonomy.CanPerform = CanPerformAutonomy;
             // WPF CanTakeAction: never over a fullscreen interaction (InteractionQueue.IsBusy).
             Autonomy.IsBusy = () => CoreEngine.Video?.IsPlaying == true || LockCardWindow.IsAnyOpen()
@@ -92,6 +93,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             });
             Closed += (_, _) => { if (RemoteCommands.AutonomyCommand == RemoteAutonomyCommand) RemoteCommands.AutonomyCommand = null;
                 if (RemoteCommands.CancelAutonomyPulses == CancelAutonomyPulses) RemoteCommands.CancelAutonomyPulses = null;
+                if (RemoteCommands.AutonomyRunning == AutonomyRunning) RemoteCommands.AutonomyRunning = null;
                 CancelAutonomyPulses(); Autonomy.Stop(); TakeoverAnnouncerOverlay.CloseActive(); _takeoverQuestTick?.Stop(); StopVoiceInput(); };
             Opened += (_, _) => { ResumeAutonomyOnStartup(); RefreshVoiceInputModes(); };
         }
@@ -103,6 +105,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Autonomy.Stop();
             return true;
         }
+
+        private bool AutonomyRunning() => Autonomy.IsEnabled;
 
         private bool CanPerformAutonomy(AutonomyActionType a) => a switch
         {
