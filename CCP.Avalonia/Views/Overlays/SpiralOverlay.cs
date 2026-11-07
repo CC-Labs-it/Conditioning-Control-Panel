@@ -54,7 +54,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static bool IsShowing => Windows.Count > 0;
         internal static bool IsAnimating => _timer is { IsEnabled: true };
         internal static int FrameIndex => _index;
-        internal static TimeSpan FrameDelay => _delay;
         internal static IReadOnlyList<SpiralOverlayWindow> Shown => Windows;
 
         private static readonly SpiralPool Pool = new();
@@ -79,17 +78,54 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 ?? Path.Combine(AppContext.BaseDirectory, "Resources", "spiral.gif");
         }
 
+        // WPF ShowOverlaySustained: voice owns a runtime hold, never the saved feature flag.
+        // ponytail: retain the request through asynchronous decode; panic clears it even if no window opened.
+        internal static double? VoiceOpacity { get; private set; }
+        internal static void SetVoiceHold(Visual host, bool on)
+        {
+            VoiceOpacity = on ? Math.Clamp(CoreSettings.Current.SpiralOpacity / 100.0, 0, 1) : null;
+            Refresh(host);
+        }
+        // WPF Session/SessionEngine.cs:799,814: a later session tick overwrites the
+        // sustained opacity, while its visibility hold remains owned by the voice action.
+        internal static bool ApplySessionOpacity(double? percent)
+        {
+            if (VoiceOpacity == null || percent == null) return false;
+            var next = Math.Clamp(percent.Value / 100.0, 0, 1);
+            var changed = VoiceOpacity != next;
+            VoiceOpacity = next;
+            return changed;
+        }
+        internal static void Stop() { VoiceOpacity = null; CloseAll(); }
+
         /// <summary>The painted alpha: the slider through WPF's #722 curve. A ramping session's value
         /// holds it instead (WPF _rampSpiralOpacity; SetSustainedOverlayOpacity clamps to 0..1).</summary>
         internal static double PaintedOpacity => SpiralFrames.Paint(
-            Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
+            VoiceOpacity ?? Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
+
+        private static double? _pulseWeight;
+        private static double _pulseBase, _pulsePeak;
+        private static double PulseOpacity => _pulseWeight is { } k
+            ? Math.Clamp(_pulseBase + (_pulsePeak - _pulseBase) * k, 0, 1) : PaintedOpacity;
+
+        internal static void SetPulse(double? weight)
+        {
+            // WPF OverlayService.cs:659-660: ramp base, settings peak, both fixed for this pulse.
+            if (_pulseWeight == null && weight != null)
+            {
+                _pulseBase = PaintedOpacity;
+                _pulsePeak = Math.Min(SpiralFrames.Paint(CoreSettings.Current.SpiralOpacity / 100.0) * 2, 1);
+            }
+            _pulseWeight = weight;
+            foreach (var w in Windows) w.Spiral.Opacity = PulseOpacity;
+        }
 
         /// <summary>WPF RefreshOverlays' spiral half: show, hide, move or repaint to match the settings.</summary>
         public static void Refresh(Visual host)
         {
             Refreshes++;
             var s = CoreSettings.Current;
-            if (!s.SpiralEnabled || !ShouldShow()) { CloseAll(); return; }
+            if (VoiceOpacity == null && (!s.SpiralEnabled || !ShouldShow())) { CloseAll(); return; }
 
             var path = SourcePath();
             var video = IsVideo(path);
@@ -116,7 +152,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var primary = -1;
             for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
             var want = PinkFilterOverlay.ResolveScreenIndices(s.SpiralTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
-            var opacity = PaintedOpacity;
+            var opacity = PulseOpacity;
 
             if (Windows.Count > 0 && want.SequenceEqual(_shownOn))
             {
@@ -162,7 +198,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             if (_frames.Count > 1 && Windows.Count > 0)
             {
-                _timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = _delay };
+                _timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = FrameDelay };
                 _timer.Tick += (_, _) => Tick();
                 _timer.Start();
             }
@@ -170,9 +206,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>WPF GifFrameTimer_Tick: next frame on every window. Allocation-free.</summary>
+        internal static TimeSpan FrameDelay => TimeSpan.FromMilliseconds(
+            ConditioningControlPanel.Services.Safety.GentleVisuals.ScaleDelayMs(_delay.TotalMilliseconds));
+
         internal static void Tick()
         {
             if (_frames.Count == 0 || Windows.Count == 0) return;
+            if (_timer != null) _timer.Interval = FrameDelay;
             _index = (_index + 1) % _frames.Count;
             var frame = _frames[_index];
             for (var i = 0; i < Windows.Count; i++) Windows[i].Spiral.Source = frame;
@@ -181,11 +221,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF StopSpiral: the windows and the clock go; the decoded frames stay cached.</summary>
         public static void CloseAll()
         {
+            _pulseWeight = null;
             _sourcePath = null;
             _configuredPath = null;
             _randomizeAtStart = null;
             _repicked = false;
             CloseWindows();
+            QuestMinutes.Follow(false);   // WPF AchievementService.cs:250-253: actual deactivation resets the run.
         }
 
         private static void CloseWindows()
@@ -200,19 +242,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             Windows.Clear();
             _shownOn = Array.Empty<int>();
-            QuestMinutes.Follow(false);
+            // Rebuilding windows keeps the logical run and minute clock (WPF AchievementService.cs:203,246-253).
             // WPF OverlayService.cs:2094: the fullscreen spiral left, so a session may raise its corner GIF again.
             App.Sessions?.RefreshCornerGifPolicy();
         }
 
-        /// <summary>WPF AchievementService:276 - quest minutes while the spiral is on screen.</summary>
-        internal static readonly OverlayQuestMinutes QuestMinutes = new(m => App.Quests?.TrackSpiralMinutes(m));
+        /// <summary>WPF AchievementService:249-275 - achievement and quest minutes while the spiral is on
+        /// screen or rebuilding; deactivation restarts the continuous run (spiral_eyes).</summary>
+        internal static readonly OverlayQuestMinutes QuestMinutes = new(
+            m => { App.Achievements?.TrackSpiralMinutes(m); App.Quests?.TrackSpiralMinutes(m); },
+            () => App.Achievements?.ResetContinuousSpiral());
 
         /// <summary>Same gate as the pink tint (WPF RefreshOverlays returns early unless the engine runs):
         /// a running engine or session, not paused. Unseeded (renders, tests) means the card owns it.</summary>
         private static bool ShouldShow()
-            => App.Sessions?.IsPaused != true
-               && (CoreSession.IsEngineRunningProvider is null || CoreSession.IsEngineRunning || App.Sessions?.IsRunning == true);
+            => !RemoteCommands.OverlaysStopped && (RemoteCommands.OverlayRunning || (App.Sessions?.IsPaused != true
+               && (CoreSession.IsEngineRunningProvider is null || CoreSession.IsEngineRunning || App.Sessions?.IsRunning == true)));
 
         private static void BeginDecode(Visual host, string path)
         {
@@ -236,7 +281,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// pixels (the corner GIF decodes to the pixels its overlay occupies, WPF CornerGifMedia).</param>
         /// <param name="maxFrames">When &gt; 0, at most this many frames are kept, strided across the whole
         /// animation (the chaos wash keeps 40, WPF ChaosFlashOverlay.cs:222 after the #476 OOM).</param>
-        internal static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int fitLongSide = 0, int maxFrames = 0)
+        internal static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int fitLongSide = 0, int maxFrames = 0,
+            List<TimeSpan>? frameDurations = null)
         {
             var frames = new List<Bitmap>();
             try
@@ -262,24 +308,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var full = new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
                 using var canvas = new SKBitmap(full);
                 using var scaled = new SKBitmap(new SKImageInfo(plan.Width, plan.Height, SKColorType.Bgra8888, SKAlphaType.Premul));
-                for (var i = 0; i < count && frames.Count < plan.Frames; i++)
+                for (var i = 0; i < count && (frameDurations != null
+                    ? i < (long)plan.Frames * plan.Step : frames.Count < plan.Frames); i++)
                 {
                     // canvas holds frame i-1. Reuse it only when that is the frame i builds on; otherwise
                     // (restore-previous disposal) the codec decodes the required frame itself.
                     var required = i < info.Length ? info[i].RequiredFrame : -1;
                     var r = codec.GetPixels(full, canvas.GetPixels(), new SKCodecOptions(i, required == i - 1 ? i - 1 : -1));
                     if (r != SKCodecResult.Success && r != SKCodecResult.IncompleteInput) break;
+                    if (frameDurations != null)
+                    {
+                        // A sampled frame holds for the sum of the source frames it replaces.
+                        // Unlike ambient spirals, round GIFs keep long holds and unequal delays.
+                        if (i % plan.Step == 0) frameDurations.Add(TimeSpan.Zero);
+                        var ms = i < info.Length ? info[i].Duration : 100;
+                        frameDurations[^1] += TimeSpan.FromMilliseconds(ms > 0 ? ms : 100);
+                    }
                     if (i % plan.Step != 0) continue;
                     canvas.ScalePixels(scaled, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
                     frames.Add(new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, scaled.GetPixels(),
                         new PixelSize(plan.Width, plan.Height), new Vector(96, 96), scaled.RowBytes));
                 }
-                Log.Information("Spiral: decoded {Count} frames ({W}x{H}) from {Path}", frames.Count, plan.Width, plan.Height, path);
+                Log.Information("Spiral: decoded {Count} frames ({W}x{H}) from {Path}", frames.Count, plan.Width, plan.Height, CornerGifPlanner.LogWhere(path));
                 return (frames, TimeSpan.FromMilliseconds(plan.DelayMs));
             }
             catch (Exception ex)
             {
-                Log.Warning("Spiral: failed to decode {Path}: {E}", path, ex.Message);
+                Log.Warning("Spiral: failed to decode {Path}: {E}", CornerGifPlanner.LogWhere(path), ex.Message);
+                // A duration is recorded before its bitmap; drop it if that bitmap threw.
+                if (frameDurations?.Count > frames.Count)
+                    frameDurations.RemoveRange(frames.Count, frameDurations.Count - frames.Count);
                 return (frames, TimeSpan.FromMilliseconds(50));
             }
         }

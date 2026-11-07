@@ -131,7 +131,8 @@ public sealed class LocalProvidersTests
             OpenAiCompatibleService.ApiKeyUnprotect = null;
             listener.Stop();
             brain.Dispose();
-            memory.Dispose(); // Supplied stores are caller-owned; drain saves before removing the profile.
+            // Injected stores belong to this test. Drain the debounce writer before deleting its files.
+            memory.Dispose();
             strategy.Dispose();
             CoreSettings.ServiceProvider = null;
             Directory.Delete(dir, true);
