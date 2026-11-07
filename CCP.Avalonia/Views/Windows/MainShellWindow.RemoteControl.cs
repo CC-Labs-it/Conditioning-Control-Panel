@@ -6,7 +6,7 @@
 // button lock while a controller drives.
 // ponytail: still missing here - remote-driven session verbs (StartSessionFromRemote & co; Core
 // RemoteCommands refuses them "not on this build"), tray minimise/restore
-// for remote, full RemoteHud details and Easy, and controller browser video playback.
+// for remote and controller browser video playback.
 
 using System;
 using System.Linq;
@@ -34,8 +34,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Clock for the toast hold and the fade-out collapse; tests step it.</summary>
         internal static TimeProvider RemoteOverlayTime = TimeProvider.System;
         internal static readonly TimeSpan RemoteToastHold = TimeSpan.FromSeconds(2), RemoteOverlayFadeOut = TimeSpan.FromMilliseconds(200);
-        internal RemoteHudWindow? RemoteHud;
-        private bool _remoteControlClosed;
         private DispatcherTimer? _remoteOverlayTimer;
         private long? _remoteToastShownAt, _remoteOverlayHidingAt;
 
@@ -51,6 +49,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Overlays.SpiralOverlay.Refresh(this);
             };
             RemoteCommands.RefreshOverlays = refreshOverlays;
+            // WPF StopSessionFromRemote (MainWindow.RemoteControl.cs:1407): a forced remote stop ends the session.
+            Action stopSession = () =>
+            {
+                if (App.Sessions is not { IsRunning: true } runner) return;
+                runner.Stop(completed: false);
+                Platform.AccountSeed.Sync?.Nudge("session end");
+            };
+            RemoteCommands.StopSession = stopSession;
             var r = RemoteControlTabView.Relay.Value;
             EventHandler connected = (_, _) => Dispatcher.UIThread.Post(OnRemoteControllerChanged);
             EventHandler idle = (_, _) => Dispatcher.UIThread.Post(OnRemoteControllerIdleChanged);
@@ -68,8 +74,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 r.SessionEnded -= ended;
                 r.CommandReceived -= command;
                 _remoteOverlayTimer?.Stop();
-                DisposeRemoteHud();
                 if (RemoteCommands.RefreshOverlays == refreshOverlays) RemoteCommands.RefreshOverlays = null;
+                if (RemoteCommands.StopSession == stopSession) RemoteCommands.StopSession = null;
+                DisposeRemoteHud();   // WPF OnClosing: an unowned visible window would hold the app open
             };
             // WPF fades the overlay in 300 ms and the toast in 200 ms (out: 200 / 300 ms).
             if (Named<Border>("RemoteControlOverlay") is { } o)
@@ -81,22 +88,42 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF OnRemoteControllerChanged (:784).</summary>
         internal void OnRemoteControllerChanged()
         {
-            if (_remoteControlClosed) return;
+            if (_remoteControlClosed) return;   // a posted change after close must not open a new pill
             var connected = RemoteControllerConnected;
             UpdateStartButtonForRemoteControl(connected);
-            if (connected)
+            if (connected) { ShowRemoteControlOverlay(); NotifyRemoteControllerJoined(); EnsureRemoteHud(); }
+            else { HideRemoteControlOverlay(); RemoteHudPill?.Refresh(); }
+        }
+
+        /// <summary>WPF MainWindow.RemoteHud.cs: the subject's More / Easy / Stop pill.</summary>
+        internal RemoteHudWindow? RemoteHudPill { get; private set; }
+        private bool _remoteControlClosed;
+
+        private void EnsureRemoteHud()
+        {
+            try
             {
-                ShowRemoteControlOverlay(); NotifyRemoteControllerJoined();
-                // WPF EnsureRemoteHud: a HUD failure is logged, never thrown out of the controller handler.
-                try
-                {
-                    RemoteHud ??= new RemoteHudWindow(RemoteControlTabView.Relay.Value, StopFromRemoteHud,
-                        () => (Screens?.ScreenFromWindow(this) ?? Screens?.Primary) is { } sc ? (sc.WorkingArea, sc.Scaling) : null);
-                    RemoteHud.Refresh();
-                }
-                catch (Exception ex) { Serilog.Log.Warning(ex, "Remote HUD failed to show"); }
+                RemoteHudPill ??= new RemoteHudWindow(() => RemoteControlTabView.Relay.Value, StopFromRemoteHud, () => this);
+                RemoteHudPill.Refresh();
             }
-            else { HideRemoteControlOverlay(); RemoteHud?.Refresh(); }
+            catch (Exception ex) { Serilog.Log.Warning("RemoteHud: could not show: {E}", ex.Message); }
+        }
+
+        private void DisposeRemoteHud()
+        {
+            var hud = RemoteHudPill;
+            RemoteHudPill = null;
+            hud?.Dispose();
+        }
+
+        /// <summary>WPF StopFromRemoteHud: the local half is exactly what the panic key would do now (Core
+        /// VoicePanicReach), so Lockdown or panic off refuses it and a leash alone gets the leash-only stop. True when
+        /// the full panic ran: only then may the relay add its forced stop (RemoteRelay.SendSignalAsync actLocally).</summary>
+        internal bool StopFromRemoteHud()
+        {
+            var full = VoicePanicReach.PanicKeyRuns(LockdownActive, CoreSettings.Current.PanicKeyEnabled);
+            HandlePanicKeyPress(DateTime.Now, fromStopButton: true);
+            return full;
         }
 
         /// <summary>WPF OnRemoteControllerIdleChanged (:818): orange "may be idle", else the grey default.</summary>
@@ -112,30 +139,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF OnRemoteSessionEnded (:832), shell half; the tab unticks itself.</summary>
         internal void OnRemoteSessionEnded()
         {
+            DisposeRemoteHud();   // WPF OnRemoteSessionEnded
             HideRemoteControlOverlay();
-            DisposeRemoteHud();
             UpdateStartButtonForRemoteControl(false);
-        }
-
-        private void DisposeRemoteHud()
-        {
-            var hud = RemoteHud; RemoteHud = null; hud?.Dispose();
-        }
-
-        /// <summary>The HUD's local stop: the panic key's own reach (Core VoicePanicReach), so Lockdown or panic
-        /// off refuses it and a leash alone gets the leash-only stop. True when the full panic ran: only then may the
-        /// relay add its forced stop (RemoteRelay.SendSignalAsync actLocally).</summary>
-        internal bool StopFromRemoteHud()
-        {
-            var full = VoicePanicReach.PanicKeyRuns(LockdownActive, CoreSettings.Current.PanicKeyEnabled);
-            HandlePanicKeyPress(DateTime.Now, fromStopButton: true);
-            return full;
         }
 
         /// <summary>WPF OnRemoteCommandReceived (:1091): quiet verbs make no toast.</summary>
         internal void OnRemoteCommandReceived(string action)
         {
-            RemoteHud?.RecordAction(action);
+            RemoteHudPill?.NoteAction(action);
             if (RemoteCommands.Quiet.Contains(action)) return;
             ShowCommandNotification(action);
         }

@@ -2,155 +2,222 @@ using System;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.RemoteHud;
 using ConditioningControlPanel.Services;
-using ConditioningControlPanel.Services.Remote;
 
-namespace ConditioningControlPanel.Avalonia.Views.Windows;
-
-// WPF Windows/RemoteHud/RemoteHudWindow.cs:239,449. More and Stop first; Easy and controller name are part B.
-internal sealed class RemoteHudWindow : Window, IDisposable
+namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
-    private readonly RemoteRelay _relay;
-    private readonly Func<bool> _localStop;
-    private readonly Func<(PixelRect WorkingArea, double Scaling)?> _anchorScreen;
-    private readonly DispatcherTimer _timer;
-    // WPF palette (RemoteHudWindow.cs:56-61): ink pill, pink edge, white headline, muted subline.
-    private static readonly Color Ink = Color.FromRgb(0x1A, 0x1A, 0x2E), Pink = Color.FromRgb(0xFF, 0x69, 0xB4);
-    internal readonly TextBlock Detail = new() { Foreground = new SolidColorBrush(Color.FromRgb(0xB0, 0xA8, 0xC8)), FontSize = 11 };
-    private DateTimeOffset _connectedAt;
-    private DateTimeOffset? _lastStop;
-    private string? _lastAction, _confirm;
-    private DateTimeOffset _confirmUntil;
-    private bool _connected, _disposed;
-    internal TimeProvider Clock = TimeProvider.System;
-    internal Button MoreButton { get; }
-    internal Button StopButton { get; }
-
-    internal static readonly TimeSpan ConfirmFor = TimeSpan.FromMilliseconds(1600);   // WPF RemoteHudRules.cs:22
-
-    /// <param name="anchorScreen">Work area and scaling of the monitor the main window is on (WPF Place :345).</param>
-    /// <param name="localStop">The local half of Stop; true only when the panic key's full reach ran, which alone
-    /// lets the relay add its forced stop (Core VoicePanicReach: never more than the panic key).</param>
-    internal RemoteHudWindow(RemoteRelay relay, Func<bool> localStop, Func<(PixelRect WorkingArea, double Scaling)?> anchorScreen)
+    /// <summary>
+    /// PORTED from ConditioningControlPanel/Windows/RemoteHud/RemoteHudWindow.cs: the subject's own pill, top
+    /// centre of the monitor the main window is on, up while a controller holds the remote. Who has it, for how
+    /// long, what they did last, the Easy strength tag and three buttons back: More, Easy, Stop. Unowned,
+    /// topmost, never activated (WPF WS_EX_NOACTIVATE is ShowActivated=false + ShowInTaskbar=false).
+    /// ponytail: the press/bump/live-dot animations and the once-a-second Win32 topmost re-assert are not here.
+    /// </summary>
+    internal sealed class RemoteHudWindow : Window
     {
-        _relay = relay;
-        _localStop = localStop;
-        _anchorScreen = anchorScreen;
-        // WPF ShowActivated false (:98): showing the pill never pulls focus out of a game or a lock card.
-        ShowActivated = false;
-        WindowStartupLocation = WindowStartupLocation.Manual;
-        WindowDecorations = WindowDecorations.None;
-        ShowInTaskbar = false;
-        Topmost = true;
-        CanResize = false;
-        SizeToContent = SizeToContent.WidthAndHeight;
-        Background = Brushes.Transparent;
-        var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(10) };
-        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        text.Children.Add(new TextBlock { Text = Loc.Get("remote_hud_someone"), Foreground = Brushes.White, FontSize = 13, FontWeight = FontWeight.SemiBold });
-        text.Children.Add(Detail);
-        panel.Children.Add(text);
-        MoreButton = RoundButton(Color.FromRgb(0x4F, 0xE0, 0xB5), "remote_hud_more", "remote_hud_more_tip");
-        StopButton = RoundButton(Color.FromRgb(0xFF, 0x54, 0x68), "remote_hud_stop", "remote_hud_stop_tip");
-        MoreButton.Click += async (_, _) => await SignalAsync("more");
-        StopButton.Click += async (_, _) => await SignalAsync("stop");
-        panel.Children.Add(MoreButton);
-        panel.Children.Add(StopButton);
-        Content = new Border
-        {
-            Background = new SolidColorBrush(Color.FromArgb(0xEE, Ink.R, Ink.G, Ink.B)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x99, Pink.R, Pink.G, Pink.B)),
-            BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(26), Padding = new Thickness(8, 6), Child = panel,
-        };
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _timer.Tick += (_, _) => Refresh();
-        _timer.Start();
-        // WPF :213-214: re-centre when the detail line grows, and stop ticking once the window is gone
-        // (a window manager close would otherwise leave the tick calling Show on a closed window).
-        SizeChanged += (_, _) => { if (IsVisible) Place(); };
-        Closed += (_, _) => { _disposed = true; _timer.Stop(); };
-    }
+        private static readonly Color Mint = Color.FromRgb(0x4F, 0xE0, 0xB5), Amber = Color.FromRgb(0xFF, 0xC2, 0x4D),
+            Red = Color.FromRgb(0xFF, 0x54, 0x68), Pink = Color.FromRgb(0xFF, 0x69, 0xB4), Ink = Color.FromRgb(0x1A, 0x1A, 0x2E);
 
-    /// <summary>WPF MakeSignalButton (:398): a 40 px round, non-focusable button with its tooltip.</summary>
-    private static Button RoundButton(Color fill, string labelKey, string tipKey)
-    {
-        var b = new Button
-        {
-            Width = 40, Height = 40, CornerRadius = new CornerRadius(20), Padding = new Thickness(0), Focusable = false,
-            Background = new SolidColorBrush(fill), Foreground = new SolidColorBrush(Ink),
-            HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center,
-            Content = new TextBlock { Text = Loc.Get(labelKey), FontSize = 11, FontWeight = FontWeight.Bold },
-        };
-        ToolTip.SetTip(b, Loc.Get(tipKey));
-        return b;
-    }
+        private readonly Func<RemoteRelay?> _relay;
+        private readonly Func<bool> _onLocalStop;
+        private readonly Func<Window?> _anchor;
+        private readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromSeconds(1) };
+        private readonly Border _pill, _tag;
+        private readonly TextBlock _initial, _headline, _subline, _tagText;
+        private readonly StackPanel _expanded;
+        private bool _collapsed, _wasConnected, _disposed;
+        private DateTime _seenSinceUtc = DateTime.UtcNow, _confirmUntilUtc;
+        private DateTime? _lastStopUtc;
+        private string? _confirm, _lastAction;
 
-    internal void Refresh()
-    {
-        if (_disposed) return;
-        var connected = _relay.IsActive && _relay.ControllerConnected;
-        if (connected && !_connected) { _connectedAt = Clock.GetUtcNow(); _lastStop = null; _confirm = null; }   // WPF keeps the last action until the session ends
-        _connected = connected;
-        if (!connected) { if (IsVisible) Hide(); return; }
-        var now = Clock.GetUtcNow();
-        // WPF Paint (:295): a More/Stop confirmation holds until it expires, the clock waits.
-        if (_confirm != null && now < _confirmUntil) Detail.Text = _confirm;
-        else
+        /// <summary>Render proof (--render-all): no relay, the anonymous headline.</summary>
+        internal RemoteHudWindow() : this(() => null, () => false, () => null) { Paint(); }
+
+        /// <summary>Clock for elapsed time, the 1.6 s confirmation and the Stop debounce; tests step it.</summary>
+        internal TimeProvider Clock = TimeProvider.System;
+
+        /// <param name="onLocalStop">The local half of Stop; true only when the panic key's full reach ran, which
+        /// alone lets the relay add its forced stop (Core VoicePanicReach: never more than the panic key).</param>
+        public RemoteHudWindow(Func<RemoteRelay?> relay, Func<bool> onLocalStop, Func<Window?> anchor)
         {
-            _confirm = null;
-            var elapsed = now - _connectedAt;
-            if (elapsed < TimeSpan.Zero) elapsed = TimeSpan.Zero;
-            var seconds = (long)elapsed.TotalSeconds;
-            Detail.Text = seconds >= 3600 ? $"{seconds / 3600}:{seconds / 60 % 60:00}:{seconds % 60:00}" : $"{seconds / 60}:{seconds % 60:00}";
-            if (!string.IsNullOrEmpty(_lastAction)) Detail.Text += "  ·  " + Loc.GetF("remote_hud_last", _lastAction);
+            (_relay, _onLocalStop, _anchor) = (relay, onLocalStop, anchor);
+            WindowDecorations = WindowDecorations.None;
+            TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
+            Background = Brushes.Transparent;
+            Topmost = true;
+            ShowInTaskbar = false;
+            ShowActivated = false;
+            Focusable = false;
+            CanResize = false;
+            SizeToContent = SizeToContent.WidthAndHeight;
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Title = "CCP remote";
+
+            _initial = new TextBlock { FontSize = 14, FontWeight = FontWeight.Bold, Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var badge = new Border { Width = 30, Height = 30, CornerRadius = new CornerRadius(15), Child = _initial,
+                Background = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+                    GradientStops = { new GradientStop(Pink, 0), new GradientStop(Color.FromRgb(0xB0, 0x7C, 0xFF), 1) } } };
+            _headline = new TextBlock { FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = Brushes.White, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 260 };
+            _subline = new TextBlock { FontSize = 11, Foreground = new SolidColorBrush(Color.FromRgb(0xB0, 0xA8, 0xC8)),
+                TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 260, Margin = new Thickness(0, 1, 0, 0) };
+            var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0), Background = Brushes.Transparent, Children = { _headline, _subline } };
+            foreach (var fold in new Control[] { badge, words })
+            {
+                fold.Cursor = new Cursor(StandardCursorType.Hand);
+                ToolTip.SetTip(fold, Loc.Get("remote_hud_fold_tip"));
+                fold.PointerReleased += (_, e) => { e.Handled = true; ToggleCollapsed(); };
+            }
+            _tagText = new TextBlock { FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = new SolidColorBrush(Amber) };
+            _tag = new Border { Background = new SolidColorBrush(Color.FromArgb(0x33, Amber.R, Amber.G, Amber.B)), BorderBrush = new SolidColorBrush(Amber),
+                BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(9), Padding = new Thickness(8, 2), Margin = new Thickness(0, 0, 8, 0),
+                VerticalAlignment = VerticalAlignment.Center, IsVisible = false, Child = _tagText };
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children =
+            {
+                SignalButton("more", Mint, "remote_hud_more", "remote_hud_more_tip"),
+                SignalButton("easy", Amber, "remote_hud_easy", "remote_hud_easy_tip"),
+                SignalButton("stop", Red, "remote_hud_stop", "remote_hud_stop_tip"),
+            } };
+            _expanded = new StackPanel { Orientation = Orientation.Horizontal, Children = { words, _tag, buttons } };
+            _pill = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(0xEE, Ink.R, Ink.G, Ink.B)), BorderBrush = new SolidColorBrush(Color.FromArgb(0x99, Pink.R, Pink.G, Pink.B)),
+                BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(26), Padding = new Thickness(8, 6), Margin = new Thickness(12),
+                BoxShadow = new BoxShadows(new BoxShadow { Blur = 16, Color = Color.FromArgb(0x99, 0, 0, 0) }),
+                Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { badge, _expanded } },
+            };
+            Content = _pill;
+            SizeChanged += (_, _) => Place();
+            _tick.Tick += (_, _) => Refresh();
+            // WPF Closed += Teardown (:224): a window manager close ends the tick, so a late Refresh never shows it again.
+            Closed += (_, _) => { _disposed = true; _tick.Stop(); };
         }
-        if (!IsVisible) { Show(); Place(); }
-    }
 
-    /// <summary>WPF Place (:345): top centre of the work area, 10 DIP below its top edge.</summary>
-    private void Place()
-    {
-        if (_anchorScreen() is not { } screen) return;
-        var width = Bounds.Width > 0 ? Bounds.Width : 360;
-        var wa = screen.WorkingArea;
-        Position = new PixelPoint((int)(wa.X + (wa.Width - width * screen.Scaling) / 2), (int)(wa.Y + 10 * screen.Scaling));
-    }
+        internal string Headline => _headline.Text ?? "";
+        internal string Subline => _subline.Text ?? "";
+        internal string? StrengthTag => _tag.IsVisible ? _tagText.Text : null;
 
-    internal void RecordAction(string action)
-    {
-        _lastAction = RemoteActionLabels.For(action);
-        Refresh();
-    }
-
-    internal async Task SignalAsync(string kind)
-    {
-        if (_disposed || !_relay.IsActive || !_relay.ControllerConnected) return;
-        var stoppedHere = false;
-        if (kind == "stop")
+        /// <summary>WPF Refresh: re-reads the relay and shows, hides and repaints the pill. UI thread only.</summary>
+        public void Refresh()
         {
-            var now = Clock.GetUtcNow();
-            if (_lastStop is { } last && now >= last && now - last < TimeSpan.FromMilliseconds(2500)) return;
-            _lastStop = now;
-            try { stoppedHere = _localStop(); } catch (Exception ex) { Serilog.Log.Warning(ex, "Remote HUD local stop failed"); }
+            if (_disposed) return;
+            var r = _relay();
+            bool connected = RemoteHudRules.ShouldShow(r?.IsActive == true, r?.ControllerConnected == true);
+            if (r?.IsActive != true) _lastAction = null;   // WPF ResetV2SessionState clears LastActionLabel
+            if (connected && !_wasConnected) (_seenSinceUtc, _collapsed, _lastStopUtc, _confirm) = (Clock.GetUtcNow().UtcDateTime, false, null, null);
+            _wasConnected = connected;
+            if (!connected)
+            {
+                _tick.Stop();
+                if (IsVisible) Hide();
+                return;
+            }
+            Paint();
+            if (!IsVisible) { Show(); Place(); }
+            _tick.Start();
         }
-        // A refused local stop (Lockdown, panic off) still tells the controller, without the relay's forced stop.
-        var sent = await _relay.SendSignalAsync(kind, actLocally: stoppedHere);
-        if (_disposed) return;
-        _confirm = kind == "stop" && stoppedHere ? Loc.Get(sent ? "remote_hud_stopped" : "remote_hud_stopped_not_sent")
-            : sent ? Loc.GetF("remote_hud_sent", Loc.Get(kind == "stop" ? "remote_hud_stop" : "remote_hud_more")) : Loc.Get("remote_hud_not_sent");
-        _confirmUntil = Clock.GetUtcNow() + ConfirmFor;
-        Refresh();
-    }
 
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-        _timer.Stop();
-        Close();
+        /// <summary>WPF LastActionChanged: a command landed (RemoteRelay.CommandReceived).</summary>
+        public void NoteAction(string action)
+        {
+            _lastAction = Services.Remote.RemoteActionLabels.For(action);
+            Refresh();
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _tick.Stop();
+            try { Close(); } catch (Exception ex) { Serilog.Log.Debug("RemoteHud close failed: {E}", ex.Message); }
+        }
+
+        private void Paint()
+        {
+            var r = _relay();
+            var name = RemoteHudRules.DisplayName(r?.ControllerName);
+            _initial.Text = RemoteHudRules.InitialFrom(name);
+            _headline.Text = name != null ? Loc.GetF("remote_hud_has_remote", name) : Loc.Get("remote_hud_someone");
+            var now = Clock.GetUtcNow().UtcDateTime;
+            if (_confirm != null && now < _confirmUntilUtc) _subline.Text = _confirm;
+            else
+            {
+                _confirm = null;
+                var sub = RemoteHudRules.FormatElapsed(RemoteHudRules.Elapsed(r?.ControllerConnectedSinceUtc, _seenSinceUtc, now));
+                if (!string.IsNullOrWhiteSpace(_lastAction)) sub += "  ·  " + Loc.GetF("remote_hud_last", _lastAction);
+                _subline.Text = sub;
+            }
+            var tag = RemoteHudRules.StrengthFor(RemoteCommands.EasyFactor);
+            _tag.IsVisible = tag != RemoteHudRules.StrengthTag.None;
+            _tagText.Text = tag == RemoteHudRules.StrengthTag.Quarter ? Loc.Get("remote_hud_quarter") : Loc.Get("remote_hud_half");
+            _expanded.IsVisible = !_collapsed;
+            _pill.Padding = _collapsed ? new Thickness(5) : new Thickness(8, 6);
+        }
+
+        private void ToggleCollapsed()
+        {
+            _collapsed = !_collapsed;
+            Paint();
+        }
+
+        /// <summary>Top centre of the work area of the monitor the main window is on.</summary>
+        private void Place()
+        {
+            if (!IsVisible) return;
+            try
+            {
+                var screen = (_anchor() is { } a ? Screens.ScreenFromWindow(a) : null) ?? Screens.Primary;
+                if (screen == null) return;
+                var wa = screen.WorkingArea;
+                double w = Bounds.Width > 0 ? Bounds.Width : 360;
+                Position = new PixelPoint(wa.X + (int)((wa.Width - w * screen.Scaling) / 2), wa.Y + (int)((10 - _pill.Margin.Top) * screen.Scaling));
+            }
+            catch (Exception ex) { Serilog.Log.Debug("RemoteHud placement failed: {E}", ex.Message); }
+        }
+
+        private Button SignalButton(string kind, Color fill, string labelKey, string tipKey)
+        {
+            var b = new Button
+            {
+                Name = "BtnHud_" + kind, Width = 40, Height = 40, Margin = new Thickness(4, 0, 0, 0), Padding = new Thickness(0), Focusable = false,
+                CornerRadius = new CornerRadius(20), Background = new SolidColorBrush(fill), Foreground = new SolidColorBrush(Ink),
+                Cursor = new Cursor(StandardCursorType.Hand), HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center,
+                Content = new TextBlock { Text = Loc.Get(labelKey), FontSize = 11, FontWeight = FontWeight.Bold, Foreground = new SolidColorBrush(Ink) },
+            };
+            ToolTip.SetTip(b, Loc.Get(tipKey));
+            b.Click += async (_, _) => await OnSignalAsync(kind, labelKey);
+            return b;
+        }
+
+        /// <summary>WPF OnSignalAsync: Stop acts locally first (debounced so a double-click never quits the
+        /// app through the double-panic exit), then the signal; the pill confirms for 1.6 s.</summary>
+        internal async Task OnSignalAsync(string kind, string labelKey)
+        {
+            if (_disposed) return;
+            bool isStop = kind == "stop", stoppedHere = false;
+            if (isStop)
+            {
+                var now = Clock.GetUtcNow().UtcDateTime;
+                if (!RemoteHudRules.StopPressAccepted(_lastStopUtc, now)) return;
+                _lastStopUtc = now;
+                try { stoppedHere = _onLocalStop(); } catch (Exception ex) { Serilog.Log.Warning("RemoteHud: local stop failed: {E}", ex.Message); }
+            }
+            bool sent = false;
+            // A refused local stop (Lockdown, panic off) still tells the controller, without the relay's forced stop.
+            try { sent = _relay() is { } r && await r.SendSignalAsync(kind, actLocally: !isStop || stoppedHere); }
+            catch (Exception ex) { Serilog.Log.Debug("RemoteHud: signal {Kind} failed: {E}", kind, ex.Message); }
+            if (_disposed) return;
+            _confirm = isStop && stoppedHere
+                ? Loc.Get(sent ? "remote_hud_stopped" : "remote_hud_stopped_not_sent")
+                : sent ? Loc.GetF("remote_hud_sent", Loc.Get(labelKey)) : Loc.Get("remote_hud_not_sent");
+            _confirmUntilUtc = Clock.GetUtcNow().UtcDateTime + RemoteHudRules.ConfirmFor;
+            Refresh();
+        }
     }
 }

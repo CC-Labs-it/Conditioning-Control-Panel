@@ -42,78 +42,53 @@ public class RemoteHudTests
         public override DateTimeOffset GetUtcNow() => Now;
     }
 
-    [Fact]
-    public Task Hud_lifetime_signals_elapsed_and_stop_debounce() => AvaloniaTestDispatcher.RunAsync(async () =>
+    private static async Task<RemoteRelay> Connected(FakeRelay server, Action<bool> stopEffects)
     {
-        var server = new FakeRelay();
-        var stops = new List<string>();
-        using var relay = new RemoteRelay(() => "token", () => "uid", "1", (_, _) => null,
-            force => { if (force) stops.Add("relay"); }, server) { AutoPoll = false };
-        var clock = new Clock();
-        // A second monitor right of the first: WPF Place (:345) centres the pill on the main window's monitor.
-        var screen = (WorkingArea: new PixelRect(1920, 40, 2560, 1400), Scaling: 1.5);
-        using var hud = new RemoteHudWindow(relay, () => { stops.Add("panic"); return true; }, () => screen) { Clock = clock };
-        Assert.False(hud.ShowActivated);
-        hud.Refresh();
-        Assert.False(hud.IsVisible);
+        var relay = new RemoteRelay(() => "token", () => "uid", "1", (_, _) => null, stopEffects, server) { AutoPoll = false };
         await relay.StartAsync("light");
         server.Poll = "{\"controller_connected\":true}";
         await relay.PollOnceAsync();
-        hud.Refresh();
-        Assert.True(hud.IsVisible);
-        Assert.Equal(40 + 15, hud.Position.Y);
-        var width = hud.Bounds.Width > 0 ? hud.Bounds.Width : 360;
-        Assert.Equal((int)(1920 + (2560 - width * 1.5) / 2), hud.Position.X);
-        Assert.InRange(hud.Position.X, 1920, 1920 + 1280);
-        clock.Now = clock.Now.AddSeconds(65);
-        hud.RecordAction("show_spiral");
-        Assert.Contains("1:05", hud.Detail.Text);
-        Assert.Contains(Loc.GetF("remote_hud_last", "Spiral"), hud.Detail.Text);
-        hud.MoreButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        for (var i = 0; i < 200 && server.Signals.Count == 0; i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
-        Assert.Equal(new[] { "more" }, server.Signals);
-        await hud.SignalAsync("stop");
-        await hud.SignalAsync("stop");
-        Assert.Equal(new[] { "more", "stop" }, server.Signals);
-        Assert.Equal(new[] { "panic", "relay" }, stops);
-        // WPF RemoteHudRules.ConfirmFor: the confirmation outlives the 1 s tick until 1.6 s have passed.
-        Assert.Equal(Loc.Get("remote_hud_stopped"), hud.Detail.Text);
-        clock.Now = clock.Now.AddMilliseconds(1599);
-        hud.Refresh();
-        Assert.Equal(Loc.Get("remote_hud_stopped"), hud.Detail.Text);
-        clock.Now = clock.Now.AddMilliseconds(1);
-        hud.Refresh();
-        Assert.StartsWith("1:06", hud.Detail.Text);
-        clock.Now = clock.Now.AddMilliseconds(2500);
-        await hud.SignalAsync("stop");
-        Assert.Equal(3, server.Signals.Count);
-        server.Poll = "{\"controller_connected\":false}";
-        await relay.PollOnceAsync();
-        hud.Refresh();
-        Assert.False(hud.IsVisible);
-        server.Poll = "{\"controller_connected\":true}";
-        await relay.PollOnceAsync();
-        hud.Refresh();
-        Assert.True(hud.IsVisible);
-        // WPF keeps LastActionLabel across a reconnect (RemoteControlService.V2.cs:288 clears it at session end only).
-        Assert.Equal("0:00  ·  " + Loc.GetF("remote_hud_last", "Spiral"), hud.Detail.Text);
-        // A window manager close (WPF Closed += Teardown, :224) ends the tick; a late Refresh cannot Show a closed window.
-        hud.Close();
-        hud.Refresh();
-        Assert.False(hud.IsVisible);
-        await relay.StopAsync();
-        Dispatcher.UIThread.RunJobs();
-    });
+        return relay;
+    }
 
+    /// <summary>WPF RemoteHudRules.ConfirmFor and StopDebounce on the pill: a confirmation outlives the 1 s tick
+    /// until 1.6 s have passed, a second Stop inside 2.5 s is swallowed, and a window manager close (WPF
+    /// Closed += Teardown, :224) ends the tick so a late Refresh never shows a closed window.</summary>
     [Fact]
-    public Task Pill_has_the_wpf_tooltips() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task Confirmation_holds_stop_debounces_and_close_ends_the_tick() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        using var relay = new RemoteRelay(() => "token", () => "uid", "1", (_, _) => null, _ => { }, new FakeRelay()) { AutoPoll = false };
-        using var hud = new RemoteHudWindow(relay, () => true, () => null);
-        Assert.Equal(Loc.Get("remote_hud_more_tip"), ToolTip.GetTip(hud.MoreButton));
-        Assert.Equal(Loc.Get("remote_hud_stop_tip"), ToolTip.GetTip(hud.StopButton));
-        Assert.False(hud.StopButton.Focusable);
-        return Task.CompletedTask;
+        var server = new FakeRelay();
+        var stops = new List<string>();
+        using var relay = await Connected(server, force => { if (force) stops.Add("relay"); });
+        var clock = new Clock();
+        var hud = new RemoteHudWindow(() => relay, () => { stops.Add("panic"); return true; }, () => null) { Clock = clock };
+        try
+        {
+            Assert.False(hud.ShowActivated);
+            hud.Refresh();
+            Assert.True(hud.IsVisible);
+            await hud.OnSignalAsync("more", "remote_hud_more");
+            var sent = Loc.GetF("remote_hud_sent", Loc.Get("remote_hud_more"));
+            Assert.Equal(sent, hud.Subline);
+            clock.Now = clock.Now.AddMilliseconds(1599);
+            hud.Refresh();
+            Assert.Equal(sent, hud.Subline);
+            clock.Now = clock.Now.AddMilliseconds(1);
+            hud.Refresh();
+            Assert.NotEqual(sent, hud.Subline);
+            await hud.OnSignalAsync("stop", "remote_hud_stop");
+            clock.Now = clock.Now.AddMilliseconds(2499);
+            await hud.OnSignalAsync("stop", "remote_hud_stop");
+            Assert.Equal(new[] { "more", "stop" }, server.Signals);
+            Assert.Equal(new[] { "panic", "relay" }, stops);
+            clock.Now = clock.Now.AddMilliseconds(1);
+            await hud.OnSignalAsync("stop", "remote_hud_stop");
+            Assert.Equal(3, server.Signals.Count);
+            hud.Close();
+            hud.Refresh();
+            Assert.False(hud.IsVisible);
+        }
+        finally { hud.Dispose(); await relay.StopAsync(); Dispatcher.UIThread.RunJobs(); }
     });
 
     /// <summary>One HUD Stop click through the production wiring (shell.StopFromRemoteHud), on a fresh pill so
@@ -122,15 +97,12 @@ public class RemoteHudTests
     {
         var server = new FakeRelay();
         var forced = 0;
-        using var relay = new RemoteRelay(() => "token", () => "uid", "1", (_, _) => null,
-            force => { if (force) forced++; }, server) { AutoPoll = false };
-        await relay.StartAsync("light");
-        server.Poll = "{\"controller_connected\":true}";
-        await relay.PollOnceAsync();
-        using var hud = new RemoteHudWindow(relay, shell.StopFromRemoteHud, () => null);
+        using var relay = await Connected(server, force => { if (force) forced++; });
+        var hud = new RemoteHudWindow(() => relay, shell.StopFromRemoteHud, () => null);
         hud.Refresh();
-        await hud.SignalAsync("stop");
-        var detail = hud.Detail.Text;
+        await hud.OnSignalAsync("stop", "remote_hud_stop");
+        var detail = hud.Subline;
+        hud.Dispose();
         await relay.StopAsync();
         Dispatcher.UIThread.RunJobs();
         return (forced, server.Signals, detail);

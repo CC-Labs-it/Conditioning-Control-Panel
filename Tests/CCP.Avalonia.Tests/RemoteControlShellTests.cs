@@ -134,7 +134,7 @@ public sealed class RemoteControlShellTests
 
             // Overlay up with code + PIN; Start disabled, green, "REMOTE CONNECTED" (WPF StartStop.cs:992).
             Assert.True(overlay.IsVisible);
-            Assert.True(shell.RemoteHud!.IsVisible);
+            Assert.True(shell.RemoteHudPill!.IsVisible);
             Assert.False(shell.LeashBrowser!.IsVisible); // native browser must not paint over the remote card
             Assert.Equal(1, Target(overlay));
             Assert.Equal($"Session: A B C 1 2 3  PIN: {relay.ConnectPin}", shell.Named<TextBlock>("TxtOverlaySessionCode")!.Text);
@@ -195,7 +195,7 @@ public sealed class RemoteControlShellTests
             // A reconnect during the exit fade cancels the pending browser restoration.
             f.Poll = "{\"controller_connected\":false}";
             await relay.PollOnceAsync(); Dispatcher.UIThread.RunJobs();
-            Assert.False(shell.RemoteHud!.IsVisible);
+            Assert.False(shell.RemoteHudPill!.IsVisible);
             Assert.False(shell.LeashBrowser!.IsVisible);
             clock.Step(TimeSpan.FromMilliseconds(100));
             f.Poll = "{\"controller_connected\":true}";
@@ -211,7 +211,7 @@ public sealed class RemoteControlShellTests
             await WaitFor(() => !relay.IsActive);
             Dispatcher.UIThread.RunJobs();
             Assert.Contains("/v2/remote/stop", f.Paths);
-            Assert.Null(shell.RemoteHud);
+            Assert.Null(shell.RemoteHudPill);
             Assert.Equal(0, Target(overlay));
             Assert.True(overlay.IsVisible);   // still fading
             clock.Step(MainShellWindow.RemoteOverlayFadeOut);
@@ -235,11 +235,11 @@ public sealed class RemoteControlShellTests
             await relay.StartAsync("light");
             f.Poll = "{\"controller_connected\":true}";
             await relay.PollOnceAsync(); Dispatcher.UIThread.RunJobs();
-            Assert.NotNull(shell.RemoteHud);
+            Assert.NotNull(shell.RemoteHudPill);
             shell.Close();
-            Assert.Null(shell.RemoteHud);
+            Assert.Null(shell.RemoteHudPill);
             shell.OnRemoteControllerChanged();
-            Assert.Null(shell.RemoteHud);
+            Assert.Null(shell.RemoteHudPill);
         }
         finally
         {
@@ -248,6 +248,86 @@ public sealed class RemoteControlShellTests
             relay.Dispose();
             (RemoteControlTabView.Relay, MainShellWindow.RemoteOverlayTime, CoreSettings.ServiceProvider) = (oldRelay, oldTime, oldProvider);
             global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = oldSink;
+        }
+    });
+
+    // WPF Windows/RemoteHud/RemoteHudWindow.cs + RemoteControlService.V2.cs: the pill's More / Easy / Stop reach the
+    // relay, Easy halves the remote strength, Stop ends the running session (WPF StopSessionFromRemote).
+    [Fact]
+    public Task Hud_pill_sends_more_easy_and_stop_and_stop_ends_the_running_session() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var (oldRelay, oldProvider, oldSessions) = (RemoteControlTabView.Relay, CoreSettings.ServiceProvider, global::ConditioningControlPanel.Avalonia.App.Sessions);
+        var (oldSink, oldAttention) = (global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink, MainShellWindow.RemoteJoinAttention);
+        global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = (_, _) => { };
+        MainShellWindow.RemoteJoinAttention = _ => { };
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        // Panic key on: the HUD Stop may reach as far as the key (hard rule 6), so the relay's forced stop runs.
+        // The probe stands in for the panic surfaces, so only the relay's forced stop can end the session.
+        (service.Current.PanicKeyEnabled, service.Current.PanicKey) = (true, "F8");
+        var oldSurfaces = PanicSurfaces.All;
+        PanicSurfaces.All = new[] { new PanicSurfaces.Surface("probe", _ => { }) };
+        var f = new FakeRelay();
+        var relay = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
+        RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
+        var runner = new SessionRunner(new SessionLogService());
+        global::ConditioningControlPanel.Avalonia.App.Sessions = runner;
+        RemoteCommands.ResetEasy();
+        MainShellWindow? shell = null;
+        try
+        {
+            shell = new MainShellWindow();
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            await relay.StartAsync("light");
+            f.Poll = "{\"controller_connected\":true,\"controller_name\":\"Ana\"}";
+            await relay.PollOnceAsync();
+            Dispatcher.UIThread.RunJobs();
+            var hud = shell.RemoteHudPill!;
+            Assert.True(hud.IsVisible);
+            Assert.Equal(Loc.GetF("remote_hud_has_remote", "Ana"), hud.Headline);
+            Assert.Null(hud.StrengthTag);
+            int Emotes() { lock (f.Paths) return f.Paths.Count(x => x == "/v2/remote/emote"); }
+            async Task Press(string kind, string confirm)
+            {
+                var n = Emotes();
+                hud.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "BtnHud_" + kind).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await WaitFor(() => Emotes() == n + 1 && hud.Subline == confirm);
+            }
+
+            await Press("more", Loc.GetF("remote_hud_sent", Loc.Get("remote_hud_more")));
+            Assert.Equal(1.0, RemoteCommands.EasyFactor);
+            await Press("easy", Loc.GetF("remote_hud_sent", Loc.Get("remote_hud_easy")));
+            Assert.Equal(0.5, RemoteCommands.EasyFactor);
+            Assert.Equal(Loc.Get("remote_hud_half"), hud.StrengthTag);
+
+            runner.Start(new Session { DurationMinutes = 1 });
+            Assert.True(runner.IsRunning);
+            await Press("stop", Loc.Get("remote_hud_stopped"));
+            Assert.False(runner.IsRunning);   // WPF StopAllRemoteEffects -> StopSessionFromRemote
+            Assert.False(CoreEngine.IsRunning);
+
+            await relay.StopAsync();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(shell.RemoteHudPill);   // WPF OnRemoteSessionEnded disposes the pill
+            Assert.Equal(1.0, RemoteCommands.EasyFactor);
+        }
+        finally
+        {
+            shell?.Close();
+            relay.Dispose();
+            runner.Stop();
+            CoreEngine.Stop();
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            RemoteCommands.ResetEasy();
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            (RemoteControlTabView.Relay, CoreSettings.ServiceProvider, global::ConditioningControlPanel.Avalonia.App.Sessions) = (oldRelay, oldProvider, oldSessions);
+            (global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink, MainShellWindow.RemoteJoinAttention) = (oldSink, oldAttention);
+            PanicSurfaces.All = oldSurfaces;
         }
     });
 

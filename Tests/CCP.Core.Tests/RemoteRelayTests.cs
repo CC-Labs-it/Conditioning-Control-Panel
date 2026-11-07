@@ -74,6 +74,57 @@ public sealed class RemoteRelayTests
         Assert.Equal("stop", (string?)f.Seen.Last().Body["text"]);
     }
 
+    // WPF RemoteControlService.V2.cs:87 ApplyEasy: a showing spiral and a controller-set pink halve, the remote
+    // haptic replays at half, a later ask is eased, the floor is 0.25; session end hands the wearer's own back.
+    [Fact]
+    public void Easy_signal_eases_overlays_and_haptics_until_the_session_ends()
+    {
+        var old = (CoreSettings.ServiceProvider, RemoteCommands.RefreshOverlays, RemoteCommands.RemoteHaptics);
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        RemoteCommands.RefreshOverlays = () => { };
+        var levels = new List<double>();
+        RemoteCommands.RemoteHaptics = new ConditioningControlPanel.Services.Remote.CoreRemoteHapticDriver(() => RemoteCommands.EasyFactor, new PopQuizSchedulerTests.FakeClock())
+        { Sink = steps => { levels.Add(steps[0].Pulse.Intensity); return null; } };
+        RemoteCommands.ResetEasy();
+        try
+        {
+            var s = settings.Current;
+            (s.SpiralEnabled, s.SpiralOpacity, s.PinkFilterEnabled, s.PinkFilterOpacity) = (true, 60, false, 10);
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute,
+                _ => ConditioningControlPanel.Services.Remote.RemoteWearer.HandBackAllButStrict(), f) { AutoPoll = false };
+            r.StartAsync("full").Wait();
+            Poll(f, Cmd("1", "set_pink_opacity", "{\"value\":40}")); r.PollOnceAsync().Wait();
+            Poll(f, Cmd("2", "haptic_level", "{\"level\":80,\"ms\":3000}")); r.PollOnceAsync().Wait();
+            var full = levels.Last();
+            Assert.Equal(40, s.PinkFilterOpacity);
+
+            Assert.True(r.SendSignalAsync("easy").Result);
+            Assert.Equal("easy", (string?)f.Seen.Last().Body["text"]);
+            Assert.Equal(0.5, RemoteCommands.EasyFactor);
+            Assert.Equal((30, 20), (s.SpiralOpacity, s.PinkFilterOpacity));
+            Assert.Equal(full / 2, levels.Last(), 3);
+            r.SendSignalAsync("easy").Wait();
+            r.SendSignalAsync("easy").Wait();
+            Assert.Equal(0.25, RemoteCommands.EasyFactor);
+            Poll(f, Cmd("3", "set_spiral_opacity", "{\"value\":80}")); r.PollOnceAsync().Wait();
+            Assert.Equal(20, s.SpiralOpacity);
+
+            r.StopAsync().Wait();
+            Assert.Equal(1.0, RemoteCommands.EasyFactor);
+            Assert.Equal((60, 10), (s.SpiralOpacity, s.PinkFilterOpacity));
+        }
+        finally
+        {
+            RemoteCommands.RemoteHaptics.Stop();
+            RemoteCommands.ResetEasy();
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            RemoteCommands.StopOverlays(); RemoteCommands.ReleaseOverlayStop();
+            (CoreSettings.ServiceProvider, RemoteCommands.RefreshOverlays, RemoteCommands.RemoteHaptics) = old;
+        }
+    }
+
     [Fact]
     public async Task More_signal_posts_without_stopping_and_rejects_unknown_kinds()
     {
@@ -215,6 +266,7 @@ public sealed class RemoteRelayTests
     {
         var old = CoreSettings.ServiceProvider;
         var oldRefresh = RemoteCommands.RefreshOverlays;
+        var (oldStopSession, sessionStops) = (RemoteCommands.StopSession, 0);
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
         RemoteCommands.RefreshOverlays = () => { };
@@ -224,15 +276,19 @@ public sealed class RemoteRelayTests
             settings.Current.PinkFilterEnabled = true;
             ConditioningControlPanel.Services.Remote.RemoteWearer.Take();
             Assert.Null(RemoteCommands.Execute("set_pink_opacity", JObject.FromObject(new { value = 30 })));
+            RemoteCommands.StopSession = () => sessionStops++;
             RemoteCommands.StopEffects(force: false); // user unticks Remote Control mid-run (WPF LeavesLocalRun, #1405)
             Assert.False(RemoteCommands.OverlaysStopped);
             Assert.True(settings.Current.PinkFilterEnabled);
+            Assert.Equal(0, sessionStops);   // the subject's own session is not the remote's to end
             RemoteCommands.StopEffects(force: true); // trigger_panic takes the run and the remote switches down
             Assert.False(CoreEngine.IsRunning);
+            Assert.Equal(1, sessionStops);   // WPF StopSessionFromRemote
             Assert.True(settings.Current.PinkFilterEnabled); // base wearer restoration wins
         }
         finally
         {
+            RemoteCommands.StopSession = oldStopSession;
             ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
             CoreEngine.Stop(); RemoteCommands.ReleaseOverlayStop();
             RemoteCommands.RefreshOverlays = oldRefresh; CoreSettings.ServiceProvider = old;

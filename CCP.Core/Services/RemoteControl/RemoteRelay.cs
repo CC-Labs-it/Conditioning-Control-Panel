@@ -76,6 +76,9 @@ namespace ConditioningControlPanel.Services
         public string? Tier { get; private set; }
         public bool ControllerConnected { get; private set; }
         public bool ControllerIdle { get; private set; }
+        /// <summary>WPF RemoteControlService.V2: the controller's typed name and connect time, for the HUD.</summary>
+        public string? ControllerName { get; private set; }
+        public DateTime? ControllerConnectedSinceUtc { get; private set; }
         public bool LastStartFailedAuth { get; private set; }
         /// <summary>False when no relay is reachable by rule (a sandbox without a loopback override).</summary>
         public bool HasRelay => _baseUrl != null;
@@ -198,9 +201,11 @@ namespace ConditioningControlPanel.Services
             {
                 try { _stopEffects(false); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
                 Remote.RemoteWearer.Drop();
+                RemoteCommands.ResetEasy();   // WPF ResetV2SessionState
             }
             var (done, _) = CoreDispatch.Invoke(() => { StopEffects(); return 0; }, TimeSpan.FromSeconds(10));
             if (!done) CoreDispatch.Post(StopEffects);
+            (ControllerName, ControllerConnectedSinceUtc) = (null, null);
             if (ControllerConnected) { ControllerConnected = false; ControllerConnectedChanged?.Invoke(this, EventArgs.Empty); }
             SessionEnded?.Invoke(this, EventArgs.Empty);
         }
@@ -232,7 +237,8 @@ namespace ConditioningControlPanel.Services
                 _consecutiveFailures = 0;
                 _pollBackedOff = false;
                 var changed = ApplyControllerState(result["controller_connected"]?.Value<bool>() ?? false,
-                                                   result["controller_idle"]?.Value<bool>() ?? false);
+                                                   result["controller_idle"]?.Value<bool>() ?? false,
+                                                   Remote.RemoteControllerName.Sanitize(result["controller_name"]?.Type == JTokenType.String ? result["controller_name"]!.ToString() : null));
 
                 string? lastId = null, lastAction = null;
                 // Fetched before a panic or a leave: never runs after it, however late its dispatch lands.
@@ -259,7 +265,7 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>WPF's connect/idle block (RemoteControlService.cs:537-625). True when connected changed.</summary>
-        private bool ApplyControllerState(bool serverConnected, bool idle)
+        private bool ApplyControllerState(bool serverConnected, bool idle, string? name)
         {
             var connected = serverConnected;
             if (connected && _autoDisconnected)
@@ -269,10 +275,12 @@ namespace ConditioningControlPanel.Services
             }
             if (!serverConnected) _autoDisconnected = false;
 
+            ControllerName = connected ? name : null;   // WPF RemoteControlService.cs:565
             var changed = connected != ControllerConnected;
             if (changed)
             {
                 ControllerConnected = connected;
+                ControllerConnectedSinceUtc = connected ? Now() : null;
                 if (!connected) { ControllerLeft(); LastRepublish = RepublishDirectoryIfOptedInAsync(); }
                 ControllerConnectedChanged?.Invoke(this, EventArgs.Empty);
             }
@@ -285,7 +293,7 @@ namespace ConditioningControlPanel.Services
             if (ControllerConnected && idle && _idleSince is { } since && (Now() - since).TotalSeconds >= IdleAutoDisconnectSeconds)
             {
                 Log.Information("[RemoteControl] Controller idle for {Seconds:F0}s - auto-disconnecting", (Now() - since).TotalSeconds);
-                (_autoDisconnected, ControllerConnected, ControllerIdle) = (true, false, false);
+                (_autoDisconnected, ControllerConnected, ControllerIdle, ControllerName, ControllerConnectedSinceUtc) = (true, false, false, null, null);
                 ControllerLeft();
                 LastRepublish = RepublishDirectoryIfOptedInAsync();
                 ControllerConnectedChanged?.Invoke(this, EventArgs.Empty);
@@ -350,18 +358,19 @@ namespace ConditioningControlPanel.Services
             CommandReceived?.Invoke(this, action);
         }
 
-        /// <summary>Send the wearer's More or Stop signal (WPF RemoteControlService.V2.cs:45).
-        /// Stop tears down locally before the network request and bypasses emote debounce.
-        /// <paramref name="actLocally"/> false posts the Stop without the forced local stop: the caller's panic
-        /// reach refused it (Lockdown or panic off, Core VoicePanicReach), and no stop reaches past the panic key.</summary>
+        /// <summary>Send the wearer's More, Easy or Stop signal (WPF RemoteControlService.V2.cs:45).
+        /// Easy and Stop act locally before the network request; no emote debounce.
+        /// <paramref name="actLocally"/> false posts a Stop without the forced local stop: the caller's panic reach
+        /// refused it (Lockdown or panic off, Core VoicePanicReach), and no stop reaches past the panic key.</summary>
         public async Task<bool> SendSignalAsync(string kind, bool actLocally = true)
         {
             kind = (kind ?? "").Trim().ToLowerInvariant();
-            if (!IsActive || kind is not ("more" or "stop")) return false;
-            if (kind == "stop" && actLocally)
+            if (!IsActive || kind is not ("more" or "easy" or "stop")) return false;
+            Action? local = kind == "easy" ? RemoteCommands.ApplyEasy : kind == "stop" && actLocally ? () => _stopEffects(true) : null;
+            if (local != null)
             {
-                var (done, _) = CoreDispatch.Invoke(() => { _stopEffects(true); return 0; }, TimeSpan.FromSeconds(10));
-                if (!done) CoreDispatch.Post(() => _stopEffects(true));
+                var (done, _) = CoreDispatch.Invoke(() => { local(); return 0; }, TimeSpan.FromSeconds(10));
+                if (!done) CoreDispatch.Post(local);
             }
             var uid = _unifiedId();
             if (string.IsNullOrEmpty(uid)) return false;
