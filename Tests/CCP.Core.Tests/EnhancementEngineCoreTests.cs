@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel.Services.Deeper;
+using CCP.Testing;
 using Xunit;
 
 namespace CCP.Core.Tests;
@@ -154,6 +155,7 @@ public sealed class EnhancementEngineCoreTests
     [Fact]
     public void LoggingDispatcherRecordsADryRunLineAndSkipsRampUpdates()
     {
+        using var culture = new CultureScope();   // preview overlay text, formatted for the user's culture
         var log = new LoggingActionDispatcher();
         var ctx = new EnhancementDispatchContext(new Enhancement(), new FakeSource(), 3.25, null);
 
