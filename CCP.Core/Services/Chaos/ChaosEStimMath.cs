@@ -50,6 +50,15 @@ public static class ChaosEStimMath
         return StrikeOpacity * (1 - (elapsedMs - HotMs) / FadeMs);
     }
 
+    /// <summary>Gentle strike rises, holds at the peak, then fades on elapsed time.</summary>
+    public static double? GentleStrikeOpacityAt(double elapsedMs, int riseMs, int fadeMs)
+    {
+        if (elapsedMs < riseMs) return StrikeOpacity * Math.Max(0, elapsedMs) / riseMs;
+        if (elapsedMs < riseMs + HotMs) return StrikeOpacity;
+        if (elapsedMs >= riseMs + HotMs + fadeMs) return null;
+        return StrikeOpacity * (1 - (elapsedMs - riseMs - HotMs) / fadeMs);
+    }
+
     /// <summary>Which flicker the bolt shows (WPF StrikeTick re-jitters at 0, 40, 80 ms and stops
     /// once 120 is reached); the caller re-jitters when this changes. -1 once the bolt is frozen.</summary>
     public static int FlickerStep(double elapsedMs)

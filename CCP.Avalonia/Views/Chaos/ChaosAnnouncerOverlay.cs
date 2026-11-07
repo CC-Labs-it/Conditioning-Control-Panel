@@ -20,10 +20,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// in sequence; the envelope is <see cref="ChaosAnnounceTiming"/> (Core). Master-gated on
     /// <c>ChaosAnnouncerEnabled</c>. ONE window is created on first use and kept alive (hidden while idle),
     /// as WPF does; <see cref="CloseActive"/> drops the queue and closes it (run teardown and panic).
-    /// <para>ponytail: not here - the neon word-art banners (WPF <c>ChaosArt.Resolve("announce", key)</c>;
-    /// this head has no ChaosArt, so every line takes WPF's missing-art path: the outlined text), the
-    /// narrator line (<c>AnnounceNarrator</c> + CutShort; no ChaosNarrator on this head - the priority
-    /// rule itself is in the Core queue) and <c>RaiseActive</c> over a mandatory video.</para>
+    /// <para>ponytail: narrator/CutShort and mandatory-video re-stacking wait for their
+    /// Story narrator and video-orchestration callers on this head.</para>
     /// </summary>
     internal sealed class ChaosAnnouncerOverlay : Window
     {
@@ -170,20 +168,54 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private void Build(ChaosAnnouncement a, (double left, double top, double width) wa)
         {
             var (fill, stroke) = Palette(a.Kind);
-            var label = new OutlinedTextBlock
+            // WPF ChaosAnnouncerOverlay.cs:177-232: image, optional suffix, text fallback and shared pop.
+            var art = a.ArtKey != null ? ChaosEffectBannerOverlay.ResolveArt(a.ArtKey) : null;
+            Control content;
+            if (art != null)
             {
-                Text = a.Text.ToUpperInvariant(),
-                FontSize = FontSizeDip,
-                Fill = fill,
-                Stroke = stroke,
-                StrokeThickness = StrokeDip,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Top,
-            };
-            label.Build();
+                var panel = new StackPanel();
+                panel.Children.Add(new Image
+                {
+                    Source = art,
+                    Height = 120,
+                    Stretch = Stretch.Uniform,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                });
+                if (!string.IsNullOrWhiteSpace(a.SubText))
+                {
+                    var sub = new OutlinedTextBlock
+                    {
+                        Text = a.SubText.ToUpperInvariant(),
+                        FontSize = 26,
+                        Fill = fill,
+                        Stroke = stroke,
+                        StrokeThickness = 2.2,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        Margin = new Thickness(0, 2, 0, 0),
+                    };
+                    sub.Build();
+                    panel.Children.Add(sub);
+                }
+                content = panel;
+            }
+            else
+            {
+                var label = new OutlinedTextBlock
+                {
+                    Text = a.Text.ToUpperInvariant(),
+                    FontSize = FontSizeDip,
+                    Fill = fill,
+                    Stroke = stroke,
+                    StrokeThickness = StrokeDip,
+                };
+                label.Build();
+                content = label;
+            }
+            content.HorizontalAlignment = HorizontalAlignment.Center;
+            content.VerticalAlignment = VerticalAlignment.Top;
             _scale = new ScaleTransform(ChaosAnnounceTiming.PopFrom, ChaosAnnounceTiming.PopFrom);
-            label.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
-            label.RenderTransform = _scale;
+            content.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
+            content.RenderTransform = _scale;
 
             // Anchored just under the effect-banner strip, centred over the primary work area.
             var anchor = new Grid
@@ -194,7 +226,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 IsHitTestVisible = false,
             };
             if (!double.IsNaN(wa.width)) anchor.Width = wa.width;
-            anchor.Children.Add(label);
+            anchor.Children.Add(content);
             _host.Children.Clear();
             _host.Children.Add(anchor);
         }

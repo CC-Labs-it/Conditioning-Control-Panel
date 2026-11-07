@@ -549,6 +549,11 @@
                                 <Button Theme="{StaticResource CmpChipButtonStyle}" Command="{Binding SwitchCommand}">
                                     <fx:IconLabel Key="companion_hero_switch" Kind="ArrowSwap"/>
                                 </Button>
+                                <!-- WPF CompanionHeroCard.xaml:601-603 -->
+                                <Button Theme="{StaticResource CmpChipButtonStyle}" Command="{Binding OpenRainWardrobeCommand}"
+                                        IsVisible="{Binding IsRainWardrobeAvailable}">
+                                    <TextBlock Text="{loc:Str companion_hero_wardrobe}"/>
+                                </Button>
                                 <Button Theme="{StaticResource CmpChipButtonStyle}" Command="{Binding DetachCommand}">
                                     <TextBlock Text="{loc:Str companion_hero_detach}"/>
                                 </Button>

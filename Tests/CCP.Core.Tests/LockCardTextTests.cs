@@ -162,4 +162,13 @@ public class LockCardTextTests
     {
         Assert.Equal("SYSTEM OVERLOAD - SHUTDOWN".Length, LockCardText.TypedLength("SYSTEM OVERLOAD " + EmDash + " SHUTDOWN"));
     }
+    [Fact]
+    public void DroneLockCardCopyUsesPlainHyphens()
+    {
+        var mod = ConditioningControlPanel.Models.BuiltInMods.Dronification;
+        Assert.Equal("SYSTEM OVERLOAD - SHUTDOWN", mod.Triggers.CumAndCollapse);
+        Assert.Contains("SYSTEM OVERLOAD - SHUTDOWN", mod.SubliminalPool.Keys);
+        Assert.Contains("SYSTEM OVERLOAD - SHUTDOWN", mod.CustomTriggers);
+        Assert.Equal("SYSTEM OVERLOAD - SHUTDOWN", mod.TextReplacements["BAMBI CUM AND COLLAPSE"]);
+    }
 }

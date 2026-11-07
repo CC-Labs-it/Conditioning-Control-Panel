@@ -286,6 +286,7 @@ public partial class LauncherWindow
     /// <summary>Everything that was not pressed steps back. The next show brings it all forward.</summary>
     private void DimOthers(FrameworkElement keep)
     {
+        _tilesDimmed = true;
         foreach (var tile in _tiles)
             if (!ReferenceEquals(tile, keep)) Fade(tile, DimOthersTo);
         if (!ReferenceEquals(PanelCard, keep)) Fade(PanelCard, DimOthersTo);
