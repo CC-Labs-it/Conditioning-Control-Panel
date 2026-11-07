@@ -95,7 +95,7 @@ public sealed class LeashHolderTests
         finally { window.Close(); }
     });
     [Fact]
-    public void ReleaseRequiresConfirmationAndFailureStaysVisible() => Run((page, svc, held) =>
+    public void ReleaseRequiresConfirmationAndFailureIsReportedLikeWpf() => Run((page, svc, held) =>
     {
         var card = Assert.Single(page.HolderCards.Values);
         // Stub both outcome sinks: the real Notify queues a toast on the static App.Notifications, which the
@@ -113,10 +113,36 @@ public sealed class LeashHolderTests
         release.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
         LeashGateCardTests.Click(LeashCutConfirmWindow.Current!.YesButton);
         Assert.Equal("release", Assert.Single(svc.Calls).Op);
-        Assert.Equal(Loc.GetF("leash_release_failed", held.Who.Name), card.ResultText);
-        card.Render();
-        Assert.Equal(Loc.GetF("leash_release_failed", held.Who.Name), card.ResultText);
-        Assert.Single(notices);
+        // WPF LeashHolderCard.cs:323-336: a failed release is a Denied cue and a warning toast, nothing on the card.
+        Assert.Null(card.ResultText);
+        Assert.Equal((Loc.GetF("leash_release_failed", held.Who.Name), NotificationType.Warning), Assert.Single(notices));
+    });
+    [Fact]
+    public void PanicCutPromptAlwaysWinsOverTheReleaseConfirm() => Run((page, svc, held) =>
+    {
+        var card = Assert.Single(page.HolderCards.Values);
+        card.PlayCue = _ => { };
+        card.Notify = (_, _) => { };
+        var cut = 0;
+        try
+        {
+            card.ConfirmRelease();
+            var release = LeashCutConfirmWindow.Current!;
+            Assert.Equal("leash-release-confirm:yes", release.YesButton.Tag);
+            LeashCutConfirmWindow.Ask(held.Who.Name, () => cut++);
+            var prompt = LeashCutConfirmWindow.Current!;
+            Assert.NotSame(release, prompt);
+            Assert.False(release.IsVisible);
+            Assert.Equal("leash-cut-confirm:yes", prompt.YesButton.Tag);
+            // A release request while the cut prompt is up must not replace it.
+            card.ConfirmRelease();
+            Assert.Same(prompt, LeashCutConfirmWindow.Current);
+            LeashGateCardTests.Click(prompt.YesButton);
+            Assert.Equal(1, cut);
+            Assert.Empty(svc.Calls);
+            Assert.Null(LeashCutConfirmWindow.Current);
+        }
+        finally { LeashCutConfirmWindow.Current?.Close(); }
     });
     [Theory]
     [InlineData(false)]

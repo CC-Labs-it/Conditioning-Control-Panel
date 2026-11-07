@@ -24,11 +24,21 @@ internal sealed class LeashCutConfirmWindow : Window
     public static void Ask(string? holderName, Action onYes) => Show(
         Loc.Get("leash_cut_confirm_title"),
         string.IsNullOrWhiteSpace(holderName) ? Loc.Get("leash_cut_confirm_body_anon") : Loc.GetF("leash_cut_confirm_body", holderName!.Trim()),
-        Loc.Get("leash_cut_confirm_yes"), Loc.Get("leash_cut_confirm_no"), "leash-cut-confirm", onYes);
+        Loc.Get("leash_cut_confirm_yes"), Loc.Get("leash_cut_confirm_no"), CutTag, onYes);
 
+    private const string CutTag = "leash-cut-confirm";
+    private readonly string _tag;
+
+    /// <summary>One prompt at a time, but the panic-hold cut always wins: an open release confirm is
+    /// closed first, so its Yes (let the other person go) can never stand in for the user's own escape.</summary>
     internal static void Show(string title, string body, string yes, string no, string tag, Action onYes)
     {
-        if (_open != null) { try { _open.Activate(); } catch { } return; }
+        if (_open is { } open)
+        {
+            if (tag != CutTag || open._tag == CutTag) { try { open.Activate(); } catch { } return; }
+            _open = null;
+            try { open.Close(); } catch { }
+        }
         var w = new LeashCutConfirmWindow(title, body, yes, no, tag, onYes);
         _open = w;
         w.Closed += (_, _) => { if (_open == w) _open = null; };
@@ -42,6 +52,7 @@ internal sealed class LeashCutConfirmWindow : Window
 
     private LeashCutConfirmWindow(string titleText, string bodyText, string yesText, string noText, string tag, Action onYes)
     {
+        _tag = tag;
         WindowDecorations = WindowDecorations.None;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         Background = Brushes.Transparent;

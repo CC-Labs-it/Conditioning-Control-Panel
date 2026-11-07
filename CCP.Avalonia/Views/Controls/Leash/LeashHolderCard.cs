@@ -135,17 +135,11 @@ public sealed class LeashHolderCard : Border
     internal async Task<bool> ReleaseAsync()
     {
         bool ok = false;
-        try { if (_service() is { } s) ok = await s.ReleaseAsync(_held.Who.Id); } catch { }
+        try { if (_service() is { } s) ok = await s.ReleaseAsync(_held.Who.Id); }
+        catch (Exception ex) { Serilog.Log.Debug("[Leash] release failed: {E}", ex.Message); }
         try { PlayCue(ok ? LeashCue.Cut : LeashCue.Denied); } catch { }
         try { Notify(Loc.GetF(ok ? "leash_release_done" : "leash_release_failed", _held.Who.Name),
             ok ? NotificationType.Info : NotificationType.Warning); } catch { }
-        if (!ok)
-        {
-            _result = (Loc.GetF("leash_release_failed", _held.Who.Name), false);
-            _resultUntil = DateTimeOffset.MaxValue;
-            _resultTimer?.Dispose(); _resultTimer = null;
-            Render();
-        }
         return ok;
     }
     private void Figures()
@@ -319,7 +313,6 @@ public sealed class LeashHolderCard : Border
     private void ArmExpiry()
     {
         _resultTimer?.Dispose();
-        if (_resultUntil == DateTimeOffset.MaxValue) return;
         var remaining = _resultUntil - Clock.GetUtcNow();
         if (remaining <= TimeSpan.Zero) { ExpireResult(); return; }
         _resultTimer = Clock.CreateTimer(_ => Dispatcher.UIThread.Post(ExpireResult), null, remaining, Timeout.InfiniteTimeSpan);
