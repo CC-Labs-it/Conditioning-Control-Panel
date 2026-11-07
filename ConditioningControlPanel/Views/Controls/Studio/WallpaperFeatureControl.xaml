@@ -161,6 +161,30 @@
                                        VerticalAlignment="Center" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource PinkBrush}"/>
                         </Grid>
 
+                        <!-- Fit (#1544): Static and Own image only; Dynamic draws each monitor at its own size.
+                             Item order = WallpaperFit order. -->
+                        <Grid x:Name="RowWpFit" MinHeight="34" ToolTip="{loc:Str tooltip_wallpaper_fit}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{loc:Str setting_wallpaper_fit}" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"
+                                       Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                            <ComboBox Grid.Column="1" x:Name="CmbWpFit" x:FieldModifier="internal"
+                                      feat:SessionLock.Owned="True"
+                                      Style="{StaticResource DarkComboBoxStyle}" FontSize="11"
+                                      Width="150" MinHeight="28" VerticalAlignment="Center"
+                                      SelectionChanged="CmbWpFit_SelectionChanged">
+                                <ComboBoxItem Content="{loc:Str wallpaper_fit_windows}"/>
+                                <ComboBoxItem Content="{loc:Str wallpaper_fit_fill}"/>
+                                <ComboBoxItem Content="{loc:Str wallpaper_fit_fit}"/>
+                                <ComboBoxItem Content="{loc:Str wallpaper_fit_stretch}"/>
+                                <ComboBoxItem Content="{loc:Str wallpaper_fit_span}"/>
+                                <ComboBoxItem Content="{loc:Str wallpaper_fit_center}"/>
+                            </ComboBox>
+                        </Grid>
+
                         <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
 
                         <Grid>

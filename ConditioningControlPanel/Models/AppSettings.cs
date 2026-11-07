@@ -142,6 +142,19 @@ namespace ConditioningControlPanel.Models
         OwnImage
     }
 
+    /// <summary>How Studio > Wallpaper's Static and Own image pictures sit on each screen (#1544).
+    /// Windows = the user's own Windows fit, untouched (the behaviour before 7.2.3). Any other is written
+    /// with each picture, and the user's own fit comes back on stop, panic included.</summary>
+    public enum WallpaperFit
+    {
+        Windows,
+        Fill,
+        Fit,
+        Stretch,
+        Span,
+        Center
+    }
+
     /// <summary>
     /// Flashes v2 (Back Room prizes): how a compositor flash moves while it is up. Still is the
     /// base; DriftBounce and Pendulum are owned styles (Services/Prizes/PrizeGrants); Mix rolls
@@ -7531,6 +7544,32 @@ namespace ConditioningControlPanel.Models
         {
             get => _wallpaperOriginalPath;
             set { _wallpaperOriginalPath = value ?? ""; OnPropertyChanged(); }
+        }
+
+        private string _wallpaperOriginalStyle = "";
+        /// <summary>
+        /// The user's own WallpaperStyle|TileWallpaper, taken before Studio > Wallpaper writes a fit of
+        /// its own (<see cref="CollageWallpaperFit"/>), cleared with <see cref="WallpaperOriginalPath"/> once
+        /// it is back. Empty while CCP writes no fit. Not user-facing; local to this PC.
+        /// </summary>
+        [JsonProperty]
+        public string WallpaperOriginalStyle
+        {
+            get => _wallpaperOriginalStyle;
+            set { _wallpaperOriginalStyle = value ?? ""; OnPropertyChanged(); }
+        }
+
+        private WallpaperFit _collageWallpaperFit = WallpaperFit.Windows;
+        /// <summary>
+        /// Fit for Studio > Wallpaper's Static and Own image pictures (ccp-bugs #1544: stretched on a
+        /// vertical monitor). Windows (default) keeps the user's own fit, as before. Dynamic ignores it:
+        /// it draws one collage per monitor at that monitor's own size.
+        /// </summary>
+        [JsonProperty]
+        public WallpaperFit CollageWallpaperFit
+        {
+            get => _collageWallpaperFit;
+            set { _collageWallpaperFit = Enum.IsDefined(value) ? value : WallpaperFit.Windows; OnPropertyChanged(); }
         }
 
         private string _wallpaperSourceFolder = "";
