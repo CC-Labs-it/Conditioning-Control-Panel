@@ -197,7 +197,8 @@ public sealed class RemoteRelayTests
             else await r.StopAsync();
             Assert.True(CoreEngine.IsRunning);
             Assert.True(CoreFlash.IsRunning);
-            Assert.Equal(17, settings.Current.PinkFilterOpacity);
+            // WPF RemoteControlService.cs:1145-1150: with the opt-in off, a disconnect leaves the controller's visuals.
+            Assert.Equal(disconnect && !stopOnDisconnect ? 30 : 17, settings.Current.PinkFilterOpacity);
         }
         finally
         {
