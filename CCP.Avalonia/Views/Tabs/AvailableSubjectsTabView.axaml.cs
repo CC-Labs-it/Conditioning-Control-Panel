@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -25,6 +26,8 @@ public partial class AvailableSubjectsTabView : UserControl
     internal Func<LobbyGates> ReadGates = () => LobbyGates.From(Platform.FriendsHead.Identity() != null,
         TierGate.HasPremium, TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed);
     internal Func<LobbyPoll>? CreateLobby;
+    // Prime gate and the Linux race card live behind GameWindow.LaunchFriendRace (owner B2).
+    internal Action<string> OpenRace = room => GameWindow.LaunchFriendRace(room);
     private LobbyPoll? _lobby;
     private IDisposable? _lease;
     private LobbySnapshot _snapshot = LobbySnapshot.Empty;
@@ -63,7 +66,10 @@ public partial class AvailableSubjectsTabView : UserControl
         return new LobbyPoll(new Platform.FriendsHead.Timer(),
             () => Platform.FriendsHead.Identity() != null,
             () => Platform.FriendsHead.Service?.Snapshot.Friends ?? Array.Empty<Friend>(),
-            () => new PbpLobbyApi().FetchAsync(), () => GoonOpenTables.RefreshAsync(), () => remote.FetchAsync());
+            () => new PbpLobbyApi().FetchAsync(), () => GoonOpenTables.RefreshAsync(), () => remote.FetchAsync(),
+            () => LobbyWire.DefaultBaseUrl() is { } url
+                ? new RaceOpenApi(identity: LobbyWire.DefaultIdentity, baseUrl: url).FetchAsync()
+                : Task.FromResult(RaceOpenReply.Empty));
     }
 
     private void SyncWatch()
@@ -152,10 +158,24 @@ public partial class AvailableSubjectsTabView : UserControl
 
     private void BtnLobbyRow_Click(object? sender, RoutedEventArgs e)
     {
-        if (sender is not Control { DataContext: LobbyCardView card } || card.Row.Game != LobbyGame.Chess) return;
+        if (sender is not Control { DataContext: LobbyCardView card }) return;
+        if (card.Row.Game == LobbyGame.Race) { PressRaceRow(card.Row); return; }
+        if (card.Row.Game != LobbyGame.Chess) return;
         if (TopLevel.GetTopLevel(this) is not MainShellWindow shell) return;
         if (!ReadGates().CanJoin(LobbyGame.Chess)) { _ = shell.OpenUnifiedLoginDialog(); return; }
         GameWindow.OpenChessLobby(card.Row.CanWatch ? "spectate" : "join", card.Row.Key);
+    }
+
+    /// <summary>WPF MainWindow.Lobby.cs:254-257 and :283-287: sign-in first, then a malformed room id never leaves.</summary>
+    internal void PressRaceRow(LobbyRow row)
+    {
+        if (row.Game != LobbyGame.Race || !row.CanJoin) return;
+        if (!ReadGates().CanJoin(LobbyGame.Race))
+        {
+            if (TopLevel.GetTopLevel(this) is MainShellWindow shell) _ = shell.OpenUnifiedLoginDialog();
+            return;
+        }
+        if (RaceJoinLink.IsRoomId(row.Key)) OpenRace(row.Key!);
     }
 
     private void BtnBecomeASubject_Click(object? sender, RoutedEventArgs e)
@@ -182,7 +202,7 @@ public sealed class LobbyCardView
         ButtonOpacity = LobbyPageRules.ButtonOpacity(Locked);
     }
     public LobbyRow Row { get; }
-    public bool DoorAvailable => Row.Game == LobbyGame.Chess;
+    public bool DoorAvailable => Row.Game is LobbyGame.Chess or LobbyGame.Race;
     private static IBrush? Theme(string key) =>
         global::Avalonia.Application.Current?.TryFindResource(key, out var value) == true ? value as IBrush : null;
     public IBrush? CardRim => Theme("DepthFloatRim");

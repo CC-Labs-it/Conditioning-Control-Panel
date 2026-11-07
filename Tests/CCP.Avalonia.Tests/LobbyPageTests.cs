@@ -188,6 +188,40 @@ public sealed class LobbyPageTests
         finally { window.Close(); }
     });
     [Fact]
+    public void RaceRowsComeFromTheSharedPollAndJoinOnlyAValidRoomWhenSignedIn() => Run(() =>
+    {
+        var timer = new LobbyTimer();
+        var service = new LobbyPoll(timer, () => true, () => Array.Empty<Friend>(),
+            () => Task.FromResult(new PbpLobbyReply(new[] { new PbpOpenSeat("p_table", "Live", 300000, 0, 0) }, Array.Empty<PbpPlayingGame>(), true)),
+            () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((System.Collections.Generic.IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), true)),
+            () => Task.FromResult(new RaceOpenReply(new[] { new RaceOpenRoom("abcdefghijkl", "keep", "Host", 8, 2, 3, false, null, false) }, true)));
+        string? joined = null;
+        var page = new AvailableSubjectsTabView { CreateLobby = () => service, IsVisible = false, OpenRace = room => joined = room };
+        page.ReadGates = () => LobbyGates.From(true, false, false);
+        var window = new Window { Content = page };
+        window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            page.IsVisible = true;
+            var cards = Named<ItemsControl>(page, "AvailableSubjectsList").Items.Cast<LobbyCardView>().ToList();
+            Assert.Contains(cards, c => c.Row.Game == LobbyGame.Chess);
+            var race = Assert.Single(cards, c => c.Row.Game == LobbyGame.Race);
+            Assert.True(race.DoorAvailable);
+            Assert.Contains("The Keep", race.Line);
+            var button = new Button { DataContext = race };
+            typeof(AvailableSubjectsTabView).GetMethod("BtnLobbyRow_Click", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(page, new object[] { button, new RoutedEventArgs(Button.ClickEvent) });
+            Assert.Equal("abcdefghijkl", joined);
+            joined = null;
+            page.PressRaceRow(race.Row with { Key = "bad" });
+            page.ReadGates = () => LobbyGates.From(false, false, false);
+            page.PressRaceRow(race.Row);
+            Assert.Null(joined);
+        }
+        finally { window.Close(); }
+    });
+    [Fact]
     public void HostLocksFollowTheirOwnGates() => Run(() =>
     {
         var page = new AvailableSubjectsTabView();
