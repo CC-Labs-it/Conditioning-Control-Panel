@@ -1,27 +1,30 @@
-// WPF Controls/Leash/LeashSurfaces.cs:203-219 (ask and seen), :230-255 (replace/close), :287-310 (window and Escape).
-// ponytail: the accepted snap (LeashSnapCard), LeashFx thud/ask sound and the app-wide pop-up of a newly
-// arrived offer (LeashSurfaces.OnSnapshot/TryShowWaitingAsk) are wire-views-tab-leash-b-next; here the
-// offer row's Look opens it.
+// WPF Controls/Leash/LeashSurfaces.cs:203-219 (ask and seen), :222-255 (snap, replace/close), :287-310 (window and Escape).
+// ponytail: LeashFx ask sound and the app-wide pop-up of a newly arrived offer (LeashSurfaces.OnSnapshot/
+// TryShowWaitingAsk) are wire-views-tab-leash-b-next; here the offer row's Look and the holder menu's Replay open it.
 using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Leash;
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Leash;
-/// <summary>A borderless, see-through window holding one ask card over its owner. Escape is the
-/// card's own "later": the offer stays.</summary>
+/// <summary>WPF LeashOverlayWindow: a borderless, see-through window holding one leash card (an ask or a
+/// snap) over its owner. Escape is the card's own "later": an offer stays.</summary>
 public sealed class LeashAskWindow : Window
 {
-    /// <summary>The ask on screen, if any. One at a time: a second Look replaces it (WPF Open closes the overlay first).</summary>
+    /// <summary>The card on screen, if any. One at a time: a second ask or snap replaces it (WPF Open closes the overlay first).</summary>
     internal static LeashAskWindow? Current { get; private set; }
-    internal LeashAskCard Card { get; }
+    internal Control Body { get; }
+    internal LeashAskCard Card => (LeashAskCard)Body;
     // RenderProof: a sample ask.
     internal LeashAskWindow() : this(new LeashAskCard()) { }
-    private LeashAskWindow(LeashAskCard card)
+    private LeashAskWindow(LeashAskCard card) : this(card, card.Dismiss) { }
+    private LeashAskWindow(Control card, Action? onEscape)
     {
-        Card = card;
+        Body = card;
         WindowDecorations = WindowDecorations.None;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         Background = Brushes.Transparent;
@@ -35,7 +38,7 @@ public sealed class LeashAskWindow : Window
         {
             if (e.Key != Key.Escape) return;
             e.Handled = true;
-            card.Dismiss();
+            if (onEscape != null) onEscape(); else Close();
         };
     }
     /// <summary>WPF LeashSurfaces.ShowAsk: open the card, close it on an answer or a dismiss, and report
@@ -46,22 +49,38 @@ public sealed class LeashAskWindow : Window
         var w = new LeashAskWindow(new LeashAskCard(offer, service));
         w.Card.Answered += (_, _, _) => w.Close();
         w.Card.Dismissed += w.Close;
-        w.Closed += (_, _) => { if (ReferenceEquals(Current, w)) Current = null; };
-        try
-        {
-            if (owner is { IsVisible: true }) w.Show(owner);
-            else { w.WindowStartupLocation = WindowStartupLocation.CenterScreen; w.Show(); }
-            w.Activate();
-        }
-        catch (Exception ex)
-        {
-            Serilog.Log.Debug("[Leash] ask window failed: {E}", ex.Message);
-            return null;
-        }
-        Current = w;
+        if (!w.ShowOver(owner)) return null;
         try { service()?.NoteShown(offer.Id); }
         catch (Exception ex) { Serilog.Log.Debug("[Leash] ask seen note failed: {E}", ex.Message); }
         return w;
+    }
+    /// <summary>WPF LeashSurfaces.ShowSnap: the holder and leashed recap in the same overlay; Got it and Escape close it.</summary>
+    internal static LeashAskWindow? OpenSnap(LeashPerson holder, LeashPerson leashed, Window? owner)
+    {
+        CloseCurrent();
+        var card = new LeashSnapCard(holder, leashed, AmbientFxCanvas.Env.Level);
+        var w = new LeashAskWindow(card, null);
+        card.Closed += w.Close;
+        if (!w.ShowOver(owner)) return null;
+        Dispatcher.UIThread.Post(() => { if (ReferenceEquals(Current, w) && w.IsVisible) card.Play(); });
+        return w;
+    }
+    private bool ShowOver(Window? owner)
+    {
+        Closed += (_, _) => { if (ReferenceEquals(Current, this)) Current = null; };
+        try
+        {
+            if (owner is { IsVisible: true }) Show(owner);
+            else { WindowStartupLocation = WindowStartupLocation.CenterScreen; Show(); }
+            Activate();
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Debug("[Leash] overlay window failed: {E}", ex.Message);
+            return false;
+        }
+        Current = this;
+        return true;
     }
     internal static void CloseCurrent()
     {

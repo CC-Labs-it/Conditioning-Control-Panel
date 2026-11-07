@@ -100,7 +100,7 @@ internal sealed class LeashSnapCard : Border
     }
     private static Control Avatar(LeashPerson person)
     {
-        var host = (Grid)F.Avatar(person.Name, 68, null);
+        var host = (Grid)F.Avatar(person.Name, 68, null, person.Look);
         host.Tag = "leash-snap-avatar:" + person.Id;
         if (!string.IsNullOrEmpty(person.AvatarUrl)) _ = PaintPhoto(host, person.AvatarUrl);
         return host;

@@ -194,16 +194,24 @@ public sealed class LeashCardsTests
             var menu = more.ContextMenu!;
             Assert.True(menu.IsOpen);
             ((MenuItem)menu.Items[0]!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-            var snap = Assert.IsType<Window>(card.SnapWindow);
+            // WPF LeashSurfaces.cs:222-229: the snap lives in the one shared leash overlay.
+            var snap = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
             Assert.Contains(WindowTransparencyLevel.Transparent, snap.TransparencyLevelHint);
-            var margin = Assert.IsType<Border>(snap.Content);
+            Assert.Equal(Loc.Get("leash_title"), snap.Title);
+            var margin = Assert.IsType<Grid>(snap.Content);
             Assert.Equal(new Thickness(40), margin.Margin);
-            Assert.IsType<LeashSnapCard>(margin.Child);
+            Assert.Same(snap.Body, Assert.IsType<LeashSnapCard>(Assert.Single(margin.Children)));
             Assert.Equal(Loc.GetF("leash_snap_leashed", "Updated friend"), Find<TextBlock>(snap, "leash-snap-leashed").Text);
             Click(snap, "leash-snap-ok");
-            Assert.Null(card.SnapWindow);
+            Assert.Null(LeashAskWindow.Current);
+            Assert.False(snap.IsVisible);
+            ((MenuItem)menu.Items[0]!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            var again = LeashAskWindow.Current!;
+            again.RaiseEvent(new global::Avalonia.Input.KeyEventArgs { RoutedEvent = global::Avalonia.Input.InputElement.KeyDownEvent, Key = global::Avalonia.Input.Key.Escape });
+            Assert.Null(LeashAskWindow.Current);
+            Assert.False(again.IsVisible);
         }
-        finally { card.SnapWindow?.Close(); host.Close(); }
+        finally { LeashAskWindow.CloseCurrent(); host.Close(); }
     });
 
     [Theory]
@@ -330,15 +338,25 @@ public sealed class LeashCardsTests
         {
             host.Show();
             ((MenuItem)Find<Button>(first, "leash-holder-more").ContextMenu!.Items[0]!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-            var old = Assert.IsType<Window>(first.SnapWindow);
+            var old = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
             ((MenuItem)Find<Button>(second, "leash-holder-more").ContextMenu!.Items[0]!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-            var current = Assert.IsType<Window>(second.SnapWindow);
+            var current = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
             Assert.NotSame(old, current);
             Assert.False(old.IsVisible);
-            Assert.Same(current, first.SnapWindow);
             Assert.Equal(Loc.GetF("leash_snap_leashed", "Second"), Find<TextBlock>(current, "leash-snap-leashed").Text);
+            // WPF LeashSurfaces.Open closes whatever card is up: an ask and a snap never share the screen.
+            var at = DateTimeOffset.UtcNow;
+            var ask = LeashAskWindow.Open(new LeashOffer(Person, at, at.AddDays(7)), () => null, host)!;
+            Assert.False(current.IsVisible);
+            Assert.Same(ask, LeashAskWindow.Current);
+            ((MenuItem)Find<Button>(first, "leash-holder-more").ContextMenu!.Items[0]!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.False(ask.IsVisible);
+            var snap = LeashAskWindow.Current!;
+            Assert.IsType<LeashSnapCard>(snap.Body);
+            LeashAskWindow.CloseCurrent();
+            Assert.False(snap.IsVisible);
         }
-        finally { second.SnapWindow?.Close(); host.Close(); }
+        finally { LeashAskWindow.CloseCurrent(); host.Close(); }
     });
 
     [Fact]

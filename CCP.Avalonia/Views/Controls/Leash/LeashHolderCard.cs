@@ -82,8 +82,6 @@ public sealed class LeashHolderCard : Border
     private static readonly LeashTugThrottle TugThrottle = new();
     private string? _sheet, _result;
     private bool _resultGood;
-    private static Window? _snapWindow;
-    internal Window? SnapWindow => _snapWindow;
     internal DispatcherTimer? ReleaseHelpTimer { get; private set; }
     internal LeashHolderCard() : this(new HeldLeash(new("friend", "Friend", null), true, LeashIntensity.Standard,
         DateTimeOffset.UtcNow, 1, null, new DayReport("20261023", 30, 2, 3, 4, false, null, null, false, DateTimeOffset.UtcNow),
@@ -109,7 +107,7 @@ public sealed class LeashHolderCard : Border
         {
             // WPF LeashHolderCard.cs:264-318: holder menu and Let go help.
             var replay = new MenuItem { Header = Loc.Get("leash_menu_replay"), Tag = "leash-menu-replay" };
-            replay.Click += (_, _) => ShowSnap(_held.Who);
+            replay.Click += (_, _) => LeashAskWindow.OpenSnap(Me(), _held.Who, TopLevel.GetTopLevel(this) as Window);
             var release = new MenuItem { Tag = "leash-release" };
             var heading = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
             heading.Children.Add(LeashCardUi.Text(Loc.GetF("leash_menu_release", h.Who.Name)));
@@ -284,29 +282,9 @@ public sealed class LeashHolderCard : Border
         panel.Children.Add(go);
         return panel;
     }
-    // WPF LeashDrawerSection.cs:139 and LeashSurfaces.cs:222: replay the holder and leashed recap.
-    private void ShowSnap(LeashPerson friend)
-    {
-        var name = string.IsNullOrWhiteSpace(CoreAccount.DisplayName) ? Loc.Get("leash_you") : CoreAccount.DisplayName!.Trim();
-        _snapWindow?.Close();
-        var card = new LeashSnapCard(new LeashPerson("me", name, null), friend, AmbientFxCanvas.Env.Level);
-        var window = new Window { Title = Loc.Get("leash_snap_title"), Tag = "leash-snap-window",
-            SizeToContent = SizeToContent.WidthAndHeight, WindowDecorations = WindowDecorations.None, ShowInTaskbar = false,
-            CanResize = false, WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = Brushes.Transparent,
-            TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
-            Content = new Border { Margin = new Thickness(40), Child = card } };
-        card.Closed += window.Close;
-        window.KeyDown += (_, e) => { if (e.Key == global::Avalonia.Input.Key.Escape) { window.Close(); e.Handled = true; } };
-        _snapWindow = window;
-        window.Closed += (_, _) => { if (_snapWindow == window) _snapWindow = null; };
-        try
-        {
-            if (TopLevel.GetTopLevel(this) is Window owner) window.Show(owner);
-            else { window.WindowStartupLocation = WindowStartupLocation.CenterScreen; window.Show(); }
-            Dispatcher.UIThread.Post(() => { if (_snapWindow == window && window.IsVisible) card.Play(); });
-        }
-        catch (Exception ex) { _snapWindow = null; Serilog.Log.Debug("[Leash] snap failed: {E}", ex.Message); }
-    }
+    // WPF LeashDrawerSection.cs:139, :153-156: replay the holder (me) and leashed recap.
+    private static LeashPerson Me() =>
+        new("me", string.IsNullOrWhiteSpace(CoreAccount.DisplayName) ? Loc.Get("leash_you") : CoreAccount.DisplayName!.Trim(), null);
 
     private async Task Release(LeashPerson who)
     {
