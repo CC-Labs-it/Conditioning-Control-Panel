@@ -276,6 +276,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _trayRecheckStale = false;
             var endWatch = WatchInput(() => _trayRecheckStale = true);
             var state = await Task.Run(ProbeTrayItem);
+            await Task.Yield();   // a probe already done would otherwise run Close() inside this OnClosing
             endWatch();
             _trayRechecking = false;
             // Lockdown here is not a refused X but a fresh Close that would read as an escape attempt.
