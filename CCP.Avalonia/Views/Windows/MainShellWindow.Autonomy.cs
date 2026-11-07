@@ -90,7 +90,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _avatarTubeWindow?.GigglePriority(phrase, audio != null, aiGenerated: false, phraseAudioPath: audio);
             });
             Closed += (_, _) => { CancelAutonomyPulses(); Autonomy.Stop(); TakeoverAnnouncerOverlay.CloseActive(); _takeoverQuestTick?.Stop(); StopVoiceInput(); };
-            Opened += (_, _) => { ResumeAutonomyOnStartup(); RefreshVoiceInputModes(); };
+            OnceOpened(ResumeAutonomyOnStartup);
+            Opened += (_, _) => RefreshVoiceInputModes();
         }
 
         private bool CanPerformAutonomy(AutonomyActionType a) => a switch

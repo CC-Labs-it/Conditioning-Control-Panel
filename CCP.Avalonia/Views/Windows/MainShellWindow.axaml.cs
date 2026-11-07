@@ -164,7 +164,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Platform.KeywordTriggerHead.Sync(); // WPF MainWindow.xaml.cs:341: a saved-on switch arms at boot
             InitializeLeashHold(); // MainShellWindow.LeashHold.cs (WPF MainWindow.Leash.cs hold-to-cut)
             // WPF MainWindow.xaml.cs:3695: the tube is built on load when the companion is enabled.
-            Opened += (_, _) => { if (CoreSettings.Current.AvatarEnabled) InitializeAvatarTube(); };
+            Opened += (_, _) => { if (CoreSettings.Current.AvatarEnabled && _avatarTubeWindow == null) InitializeAvatarTube(); };
             Closed += (_, _) => _avatarTubeWindow?.Close();
             // WPF MainWindow.xaml.cs:674: catalogue downloads open in the player.
             App.CatalogueLookup.SetOpener(OpenCatalogueEnhancement);
@@ -178,9 +178,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Platform.X11PanicKey.PushToTalk = null;
             };
             // WPF MainWindow.xaml.cs:3531-3535: one forced share-status poll per launch.
-            Opened += (_, _) => PollCatalogueStatuses(force: true);
+            OnceOpened(() => PollCatalogueStatuses(force: true));
             // WPF MainWindow.xaml.cs:3837 (end of MainWindow_Loaded): MainShellWindow.PendingRegistration.cs.
-            Opened += (_, _) => ArmPendingRegistration();
+            OnceOpened(ArmPendingRegistration);
             Opened += (_, _) => WireOnlineMeterPill();   // MainShellWindow.OnlineMeter.cs (WPF WireOnlineMeter)
         }
 

@@ -146,6 +146,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
+        private bool _fitWatchWired;
+
         /// <summary>
         /// First point at which there is a platform window, so the first point at which we can ask
         /// which monitor we are on and what its scale is - the Avalonia twin of the WPF
@@ -162,6 +164,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // Screen change: dragged onto another monitor, or the topology itself changed.
                 // Either way the floors must fit THAT work area or they veto the resize.
                 _fitScreen = Screens?.ScreenFromWindow(this);
+                if (_fitWatchWired) return;   // Opened fires on every Show
+                _fitWatchWired = true;
                 // Wait until the move settles: fitting mid-drag fights the window manager and bounces
                 // the window between monitors, flashing thin lines.
                 var settle = new global::Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
