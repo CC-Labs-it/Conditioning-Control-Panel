@@ -62,8 +62,8 @@ public sealed class KeywordAudioRuntimeTests
         }
     });
 
-    [Fact] // WPF KeywordTriggerService.cs:712-739,842-862,913-943
-    public void OcrRequiresConsecutivePositionsKeepsThemThroughALapseAndClearsOnStopOrScopeLoss() => Run((engine, s, played) =>
+    [Fact] // WPF KeywordTriggerService.cs:193-200,712-739,842-862,913-943
+    public void OcrRequiresConsecutivePositionsKeepsThemThroughALapseAndStopAndClearsOnScopeLoss() => Run((engine, s, played) =>
     {
         var saved = (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessLoopProtectionEnabled);
         try
@@ -86,9 +86,10 @@ public sealed class KeywordAudioRuntimeTests
             engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 20);
             engine.CheckOcrWords(Array.Empty<ScreenOcrService.Word>(), "editor", false);
             Assert.True(engine.CheckOcrWords(words, "editor", false));
-            engine.Stop(); engine.Start();
-            Assert.True(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(2, fired);
             Assert.False(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(3, fired);
+            engine.Stop(); engine.Start();
+            engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 30);   // past every cooldown
+            Assert.False(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(3, fired);   // still guarded
             Assert.Equal("OCR", engine.GetRecentFires()[0].Source);
         }
         finally { (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessLoopProtectionEnabled) = saved; }
@@ -122,7 +123,7 @@ public sealed class KeywordAudioRuntimeTests
     [Fact] // WPF MainWindow.Awareness.cs:414-428,461-468, Patreon.cs:190; ScreenOcrService.cs:143-198
     public Task AwarenessSwitchesDriveTheOcrSourceIntoTheConsumer() => RunAsync(async (_, s, played) =>
     {
-        var saved = (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessIgnoreOwnUi, s.ScreenOcrIntervalMs);
+        var saved = (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessIgnoreOwnUi, s.ScreenOcrIntervalMs, s.AwarenessLoopProtectionEnabled);
         var realNow = KeywordTriggerHead.Engine.Now;
         var scans = 0;
         var clock = new DateTime(2026, 10, 14, 12, 0, 0);
@@ -134,6 +135,7 @@ public sealed class KeywordAudioRuntimeTests
             s.KeywordTriggersEnabled = false; s.ScreenOcrEnabled = false;
             s.OcrConfirmationScans = 1; s.OcrHighlightAll = true; s.AwarenessIgnoreOwnUi = true;
             s.ScreenOcrIntervalMs = 10000;   // the real timer must not tick between the manual ticks
+            s.AwarenessLoopProtectionEnabled = false;   // no echo mute: only the position guard keeps it quiet
             var view = new AwarenessTabView();
             var master = view.FindControl<CheckBox>("ChkAwarenessMaster")!;
             var ocr = view.FindControl<CheckBox>("ChkAwarenessOcr")!;
@@ -146,21 +148,22 @@ public sealed class KeywordAudioRuntimeTests
             CoreEntitlement.HasPremiumProvider = () => false;   // lapse: the screen is not even captured
             await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(1, scans);
             CoreEntitlement.HasPremiumProvider = () => true;
+            clock = clock.AddSeconds(10);   // past every cooldown
             await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(2, scans);
             Assert.Single(played);   // the fired position stays guarded while it is on screen
             master.IsChecked = false;
             await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(2, scans);
-            clock = clock.AddHours(1);   // past the echo mute of the first fire
+            clock = clock.AddSeconds(10);
             master.IsChecked = true;
             await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(3, scans);
             ocr.IsChecked = false;
             await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(3, scans);
-            Assert.Equal(2, played.Count(p => p.Path != "stopped"));   // the engine restart cleared the guard
+            Assert.Equal(1, played.Count(p => p.Path != "stopped"));   // the guard survived the restart (WPF :193-200)
         }
         finally
         {
             KeywordTriggerHead.OcrSource = null; KeywordTriggerHead.Engine.Now = realNow;
-            (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessIgnoreOwnUi, s.ScreenOcrIntervalMs) = saved;
+            (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessIgnoreOwnUi, s.ScreenOcrIntervalMs, s.AwarenessLoopProtectionEnabled) = saved;
         }
     });
 

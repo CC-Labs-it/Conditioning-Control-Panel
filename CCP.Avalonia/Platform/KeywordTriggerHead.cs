@@ -176,7 +176,7 @@ internal sealed class KeywordAudioRuntime
 {
     private readonly KeywordTextInput _input = new();
     private KeywordCooldowns _cooldowns = new();
-    internal void ResetCooldownsForTest() => _cooldowns = new();
+    internal void ResetCooldownsForTest() { _cooldowns = new(); ClearOcr(); }   // Stop keeps the OCR guards
     private CancellationTokenSource? _audio;
     private Action? _stop;
     private int _playGeneration;
@@ -185,7 +185,7 @@ internal sealed class KeywordAudioRuntime
     internal Func<int, CancellationToken, Task> Delay = Task.Delay;
     internal bool IsActive { get; private set; }
     internal void Start() { IsActive = true; _input.Clear(); }
-    internal void Stop() { IsActive = false; _input.Clear(); ClearOcr(); StopAudio(); }
+    internal void Stop() { IsActive = false; _input.Clear(); StopAudio(); }   // WPF :193-200 keeps the OCR guards
 
     private bool Accept(string? process, bool own)
     {
