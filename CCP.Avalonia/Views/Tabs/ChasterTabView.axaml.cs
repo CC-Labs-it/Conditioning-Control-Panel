@@ -127,7 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             AddedRow.IsVisible = linked;
             NumbersPanel.IsVisible = linked;
             MenuPanel.IsVisible = linked; // WPF: the menu and limits sit inside LinkedPanel (ChasterTabView.xaml:642)
-            if (linked) { RefreshNumbers(); RefreshPresets(); }
+            if (linked) { RefreshNumbers(animate: false); RefreshPresets(); } // WPF :220 snaps on show
             if (linked) RefreshAdded(); else HideLadder();
             SwitchPill.IsVisible = linked;
             PausePill.IsVisible = linked;

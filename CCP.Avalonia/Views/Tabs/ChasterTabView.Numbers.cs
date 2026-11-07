@@ -1,5 +1,5 @@
-// PORTED from ConditioningControlPanel/Views/Tabs/ChasterTabView.xaml.cs: RefreshNumbers (:205),
-// RefreshDay (:771), LayoutCap (:791), RefreshRun (:809), StatRun_Click + BuildBill (:816-826).
+// PORTED from ConditioningControlPanel/Views/Tabs/ChasterTabView.xaml.cs: RefreshNumbers (:223),
+// RefreshDay (:848), LayoutCap (:868), RefreshRun (:886), StatRun_Click + BuildBill (:893-903).
 // The tab's own receipt: the third number opens and closes the bill on paper under the numbers.
 // ponytail: FxBill's print-down (height grow/fade/settle, Fx.cs:810) and the cap bloom are not ported;
 // the receipt opens and closes at once, as WPF does under reduced motion.
@@ -26,7 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CapTrack.SizeChanged += (_, _) => LayoutCap(animate: false);
         }
 
-        internal void RefreshNumbers()
+        internal void RefreshNumbers(bool animate = true)
         {
             var chaster = ChasterHead.Service;
             if (chaster == null) return;
@@ -42,7 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtTodayCap.Text = "/ " + cap;
             TxtTodaySub.Text = Loc.GetF("chaster_stat_today_sub", cap);
             _capFraction = TabPageText.CapFraction(today, capSeconds);
-            LayoutCap();
+            LayoutCap(animate);
 
             var net = chaster.Bill().NetSeconds;
             TxtRun.Text = net == 0 ? CircesTab.Format(0, signed: false) : CircesTab.Format(net);

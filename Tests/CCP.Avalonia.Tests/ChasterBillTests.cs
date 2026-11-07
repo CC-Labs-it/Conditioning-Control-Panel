@@ -318,6 +318,9 @@ public sealed class ChasterBillTests
             track.Width = 300; Dispatcher.UIThread.RunJobs();
             Assert.Null(fill.Transitions);
             Assert.True(fill.Width > 0);
+            Assert.True(chaster.Note("attention").Booked);
+            tab.Refresh(); // WPF :220: showing the tab snaps the fill
+            Assert.Null(fill.Transitions);
             settings.MotionLevel = MotionLevel.Off;
             Assert.True(chaster.Note("attention").Booked);
             tab.RefreshNumbers();
