@@ -2179,7 +2179,8 @@ namespace ConditioningControlPanel.Services
                 // CornerGifMedia decodes ONCE, OFF the UI thread, downscaled to the pixels this
                 // overlay actually occupies and capped for frames and bytes - the same discipline
                 // #572 gave the fullscreen spiral (OverlayService.DecodeGifFrames).
-                CornerGifMedia.Attach(imageElement, gifUri, windowWidth, windowHeight, dpiScale);
+                CornerGifMedia.Attach(imageElement, gifUri, windowWidth, windowHeight, dpiScale,
+                    diagTag: "SessionEngine: corner GIF frames");
 
                 _cornerGifImage = imageElement;
                 _cornerGifWindow.Content = imageElement;
