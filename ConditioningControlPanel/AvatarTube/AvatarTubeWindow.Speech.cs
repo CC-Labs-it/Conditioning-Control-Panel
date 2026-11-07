@@ -323,9 +323,14 @@ namespace ConditioningControlPanel
             return windowMs > 0 && (DateTime.UtcNow - _lastAiBubbleUtc).TotalMilliseconds < windowMs;
         }
 
-        public void GigglePriority(string text, bool playSound = true, bool aiGenerated = true, string? phraseAudioPath = null, bool barkVoice = false, string? mood = null, bool unprompted = false)
+        public void GigglePriority(string text, bool playSound = true, bool aiGenerated = true, string? phraseAudioPath = null, bool barkVoice = false, string? mood = null, bool unprompted = false,
+            [System.Runtime.CompilerServices.CallerFilePath] string callerFile = "",
+            [System.Runtime.CompilerServices.CallerMemberName] string callerMember = "")
         {
             if (_isPlayingUninterruptibleClip) return; // an uninterruptible clip is speaking
+            // Random-sting hunt (ccp-bugs #1569 #1573 #1575 #1576): idle giggles with the engine off
+            // came from a caller that does not pass unprompted. Name it in the log and the sound ring.
+            var who = Services.Audio.RecentSounds.DuckCaller(callerFile, callerMember);
             string? emotionLineId = phraseAudioPath != null
                 ? System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath)
                 : null;
@@ -361,9 +366,10 @@ namespace ConditioningControlPanel
                 // to canned phrases when the AI is unavailable — those callers pass false.
                 ShowGiggle(text, playSound: playSound, source: SpeechSource.AI, aiGenerated: aiGenerated,
                     phraseAudioPath: phraseAudioPath, barkVoice: barkVoice, emotionLineId: emotionLineId, mood: mood,
-                    unprompted: unprompted);
+                    unprompted: unprompted, soundCaller: who);
 
-                App.Logger?.Debug("Priority speech, queue cleared (line={LineId}, {Chars} chars)", emotionLineId ?? "-", (text ?? "").Length);
+                App.Logger?.Debug("Priority speech, queue cleared (line={LineId}, {Chars} chars, from {Caller}, unprompted={Unprompted})",
+                    emotionLineId ?? "-", (text ?? "").Length, who, unprompted);
             });
         }
 
@@ -418,7 +424,7 @@ namespace ConditioningControlPanel
         /// <param name="playSound">Whether to play a giggle sound</param>
         /// <param name="source">The source of the speech (for delay calculation)</param>
         /// <param name="unprompted">An idle-timer line: no sound with the engine off unless opted in (#1468)</param>
-        private void ShowGiggle(string text, bool playSound = false, SpeechSource source = SpeechSource.Preset, string? phraseAudioPath = null, bool aiGenerated = false, bool bypassClipLock = false, bool barkVoice = false, string? emotionLineId = null, string? mood = null, bool unprompted = false)
+        private void ShowGiggle(string text, bool playSound = false, SpeechSource source = SpeechSource.Preset, string? phraseAudioPath = null, bool aiGenerated = false, bool bypassClipLock = false, bool barkVoice = false, string? emotionLineId = null, string? mood = null, bool unprompted = false, string? soundCaller = null)
         {
             // An uninterruptible recorded clip owns the bubble — only its own (bypassing) call may render.
             if (_isPlayingUninterruptibleClip && !bypassClipLock) return;
@@ -531,7 +537,7 @@ namespace ConditioningControlPanel
                     else if (playSound)
                     {
                         // Explicitly requested giggle sound (AI responses, etc.)
-                        PlayGiggleSound();
+                        PlayGiggleSound(soundCaller);
                     }
                     else if (source != SpeechSource.AI)
                     {
@@ -2633,7 +2639,11 @@ namespace ConditioningControlPanel
         /// <summary>
         /// Plays a random giggle sound (giggle1-4.mp3) for AI responses or preset phrases
         /// </summary>
-        private void PlayGiggleSound()
+        /// <summary>Ring tag for a giggle: "giggle (File.Member)" when the caller is known.</summary>
+        internal static string GiggleRingTag(string? caller)
+            => string.IsNullOrEmpty(caller) ? "giggle" : "giggle (" + caller + ")";
+
+        private void PlayGiggleSound(string? caller = null)
         {
             try
             {
@@ -2657,7 +2667,7 @@ namespace ConditioningControlPanel
                     // Mute egg / silenced audio (Fork F): MasterVolume == 0 means don't attempt audio.
                     if (masterVolume <= 0f) return;
 
-                    App.Audio?.PlayOneShot(gigglePath, volume, "giggle");
+                    App.Audio?.PlayOneShot(gigglePath, volume, GiggleRingTag(caller));
                 }
             }
             catch (Exception ex)
