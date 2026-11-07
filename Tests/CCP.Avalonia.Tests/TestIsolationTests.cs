@@ -1,7 +1,15 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using CCP.Avalonia.Testing;
 using System.IO;
 using System.Linq;
+using Avalonia.Headless;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel;
 using Xunit;
+using PanicAftermath = ConditioningControlPanel.Services.Safety.PanicAftermath;
+using static ConditioningControlPanel.Services.Safety.PanicAftermath;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
@@ -16,6 +24,15 @@ public class TestIsolationTests
         foreach (var family in new[] { "Segoe UI Black, Segoe UI", "Comic Sans MS, Segoe UI", "Consolas, Courier New" })
             Assert.NotNull(new global::Avalonia.Media.Typeface(family,
                 weight: global::Avalonia.Media.FontWeight.Black).GlyphTypeface);
+    });
+
+    [Fact]
+    public void TheHookRegistersTheHeadsFonts() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        Assert.NotNull(global::Avalonia.Application.Current);
+        var face = new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily(
+            global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter));
+        Assert.NotNull(face.GlyphTypeface);
     });
 
     /// <summary>The first test in a testhost decides the Avalonia platform for every later one. A setup
@@ -39,12 +56,48 @@ public class TestIsolationTests
         Assert.Empty(bad);
     }
 
+    [Theory]
+    [InlineData("fonts:Inter#Inter")]
+    [InlineData("Consolas, Courier New")]
+    [InlineData("Segoe UI")]
+    [InlineData("Segoe UI Black")]
+    public void SharedSetupResolvesUiFontsBeforeAnyTest(string family) =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+        {
+            Assert.NotNull(global::Avalonia.Application.Current);
+            foreach (var weight in new[] { global::Avalonia.Media.FontWeight.Normal, global::Avalonia.Media.FontWeight.Bold })
+                Assert.True(global::Avalonia.Media.FontManager.Current.TryGetGlyphTypeface(
+                    new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily(family), weight: weight), out _), family);
+        });
+
+    [Fact]
+    public void SharedPlatformLoadsBundledFontsBeforeAnyTestSetup()
+    {
+        Assert.NotNull(global::Avalonia.Application.Current);
+        Assert.Equal(new global::Avalonia.Media.FontFamily(
+                ConditioningControlPanel.Avalonia.Platform.AppFonts.Default).Name,
+            global::Avalonia.Media.FontManager.Current.DefaultFontFamily.Name);
+        foreach (var family in new[] { ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter,
+                     ConditioningControlPanel.Avalonia.Platform.AppFonts.UiSans,
+                     ConditioningControlPanel.Avalonia.Platform.AppFonts.Fredoka,
+                     ConditioningControlPanel.Avalonia.Platform.AppFonts.Mono })
+            Assert.NotNull(new global::Avalonia.Media.Typeface(family,
+                weight: global::Avalonia.Media.FontWeight.Bold).GlyphTypeface);
+    }
+
+    [Fact]
+    public void SharedSetupRegistersBundledFonts() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Default), global::Avalonia.Media.FontManager.Current.DefaultFontFamily);
+        Assert.Equal(new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Fredoka)).GlyphTypeface.FamilyName, new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily("Fredoka")).GlyphTypeface.FamilyName);
+    });
+
     [Fact]
     public void SharedPlatformUsesTheProductionFontConfiguration() =>
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
         {
             Assert.IsType<AvApp>(global::Avalonia.Application.Current);
-            Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+            Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Default),
                 global::Avalonia.Media.FontManager.Current.DefaultFontFamily);
             var face = new global::Avalonia.Media.Typeface(
                 new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
@@ -78,7 +131,7 @@ public class TestIsolationTests
         foreach (var (family, expected) in new[]
         {
             (ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter, "Inter"),
-            (ConditioningControlPanel.Avalonia.Platform.AppFonts.Fredoka, "Fredoka Light"),
+            (ConditioningControlPanel.Avalonia.Platform.AppFonts.Fredoka, "Fredoka"),   // static instances; Bold is Fredoka Bold, not the variable font's Light default
             (ConditioningControlPanel.Avalonia.Platform.AppFonts.Mono, "Noto Sans Mono"),
         })
         {
@@ -90,14 +143,102 @@ public class TestIsolationTests
     });
 
     [Fact]
+    public async System.Threading.Tasks.Task BundledFontsAreReadyBeforeAnyFixtureChoosesThePlatform()
+    {
+        await CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            // Model a fixture that only asks for Skia/headless. The shared hook must have
+            // already installed the production font collections and family mappings.
+            if (global::Avalonia.Application.Current is null)
+                global::Avalonia.AppBuilder.Configure<AvApp>()
+                    .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            foreach (var family in new[] { "fonts:Inter#Inter", "Fredoka" })
+            {
+                var typeface = new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily(family));
+                Assert.Contains(family.Contains("Inter") ? "Inter" : family, typeface.GlyphTypeface.FamilyName);
+            }
+            return System.Threading.Tasks.Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public void EveryTestStartsWithProductionFonts() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        Assert.IsType<AvApp>(global::Avalonia.Application.Current);
+        Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Default).Name, global::Avalonia.Media.FontManager.Current.DefaultFontFamily.Name);
+        var text = new global::Avalonia.Controls.TextBlock
+        {
+            Text = "[ eyes closed ]",
+            FontFamily = new global::Avalonia.Media.FontFamily("Consolas, Courier New"),
+            FontWeight = global::Avalonia.Media.FontWeight.Bold
+        };
+        text.Measure(new global::Avalonia.Size(400, 100));
+        Assert.True(text.DesiredSize.Width > 0);
+        Assert.True(text.DesiredSize.Height > 0);
+    });
+
+
+    [Theory]
+    [InlineData("fonts:Inter#Inter")]
+    [InlineData("Fredoka")]
+    public void SharedBootstrapRegistersFontsBeforeTheTestBody(string family) => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        Assert.NotNull(global::Avalonia.Application.Current);
+        Assert.True(global::Avalonia.Media.FontManager.Current.TryGetGlyphTypeface(new global::Avalonia.Media.Typeface(family), out var glyphs));
+        Assert.NotNull(glyphs);
+    });
+
+    /// <summary>The isolation hook supplies desktop fonts before any fixture, independent of test order.</summary>
+    [Fact]
+    public void TheHookProvidesDesktopFontsBeforeAnyFixture() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Assert.NotNull(Application.Current);
+        foreach (var (family, weight) in new[]
+        {
+            ("fonts:Inter#Inter", FontWeight.Normal),
+            ("Segoe UI Black, Segoe UI", FontWeight.Black),
+            ("Fredoka, Segoe UI", FontWeight.DemiBold),
+            ("Consolas, Courier New, monospace", FontWeight.Bold),
+        })
+        {
+            var text = new TextBlock { Text = "Ready 123", FontFamily = new FontFamily(family), FontWeight = weight };
+            text.Measure(Size.Infinity);
+            Assert.True(text.DesiredSize.Width > 0, family);
+            Assert.True(text.DesiredSize.Height > 0, family);
+        }
+    });
+
+    [Fact]
     public void TheFirstTestGetsTheApplicationsFontConfiguration() =>
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
         {
             Assert.NotNull(global::Avalonia.Application.Current);
-            Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+            Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Default),
                 global::Avalonia.Media.FontManager.Current.DefaultFontFamily);
             // Shell construction measures this label before any test can repair a missing font setup.
             Assert.NotNull(new ConditioningControlPanel.Avalonia.Controls.PremiumSpark());
+        });
+
+    [Fact]
+    public System.Threading.Tasks.Task EveryTestHostUsesTheProductionFontConfiguration() =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Assert.NotNull(global::Avalonia.Application.Current);
+            var fonts = global::Avalonia.Media.FontManager.Current;
+            Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Default).Name, fonts.DefaultFontFamily.Name);
+            Assert.True(fonts.TryGetGlyphTypeface(new global::Avalonia.Media.Typeface(
+                new global::Avalonia.Media.FontFamily("Fredoka")), out var display));
+            Assert.True(fonts.TryGetGlyphTypeface(new global::Avalonia.Media.Typeface(
+                new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Fredoka)), out var bundled));
+            Assert.Equal(bundled!.FamilyName, display!.FamilyName);
+            if (!System.OperatingSystem.IsWindows())
+            {
+                Assert.True(fonts.TryGetGlyphTypeface(new global::Avalonia.Media.Typeface(
+                    new global::Avalonia.Media.FontFamily("Consolas, Courier New")), out var mono));
+                Assert.Equal("Noto Sans Mono", mono!.FamilyName);
+            }
+            return System.Threading.Tasks.Task.CompletedTask;
         });
 
     [Fact]
@@ -105,16 +246,52 @@ public class TestIsolationTests
 
     [Theory]
     [InlineData(typeof(CoreSettings), nameof(CoreSettings.ServiceProvider))]
+    [InlineData(typeof(CoreEntitlement), nameof(CoreEntitlement.HasPremiumProvider))]
     [InlineData(typeof(CoreSecrets), nameof(CoreSecrets.RetrieveProvider))]
     [InlineData(typeof(CoreAccount), nameof(CoreAccount.UnifiedUserId))]
+    [InlineData(typeof(CoreAccount), nameof(CoreAccount.IsLoggedInProvider))]
+    [InlineData(typeof(CoreAccount), nameof(CoreAccount.HasPremiumAccessProvider))]
+    [InlineData(typeof(CoreTutorial), nameof(CoreTutorial.IsActiveProvider))]
+    [InlineData(typeof(CoreSession), nameof(CoreSession.IsSessionRunningProvider))]
+    [InlineData(typeof(ConditioningControlPanel.Services.TierGate), nameof(ConditioningControlPanel.Services.TierGate.ReconnectIsTheAnswerProvider))]
     [InlineData(typeof(CoreMods), nameof(CoreMods.MakeModAwareProvider))]
     [InlineData(typeof(AvApp), nameof(AvApp.Notifications))]
     [InlineData(typeof(AvApp), nameof(AvApp.Ai))]
     [InlineData(typeof(AvApp), nameof(AvApp.Brain))]
     [InlineData(typeof(ConditioningControlPanel.Services.LockdownService), nameof(ConditioningControlPanel.Services.LockdownService.Current))]
     [InlineData(typeof(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay), "PanicListenerLive")]
+    [InlineData(typeof(ConditioningControlPanel.Services.RemoteCommands), "OverlayRunning")]
+    [InlineData(typeof(ConditioningControlPanel.Services.RemoteCommands), "OverlaysStopped")]
     public void TheHookCoversEverySeamThatLeakedBefore(System.Type type, string member) =>
         Assert.Contains(ProcessStateSnapshot.Members.Value, m => m.DeclaringType == type && m.Name == member);
+
+    [Fact]
+    public void RestorePutsPanicQuietEngineHoldAndCountBack()
+    {
+        var original = ProcessStateSnapshot.Take();
+        try
+        {
+            PanicAftermath.EndQuiet();
+            var count = PanicAftermath.PanicCount;
+            var clear = ProcessStateSnapshot.Take();
+            PanicAftermath.ArmQuiet();
+            Assert.True(PanicAftermath.TriggersSilenced());
+            Assert.True(PanicAftermath.HoldsEngineRestart);
+            Assert.Equal(count + 1, PanicAftermath.PanicCount);
+            clear.Restore();
+            Assert.False(PanicAftermath.TriggersSilenced());
+            Assert.False(PanicAftermath.HoldsEngineRestart);
+            Assert.Equal(count, PanicAftermath.PanicCount);
+
+            PanicAftermath.ArmQuiet();
+            var armed = ProcessStateSnapshot.Take();
+            PanicAftermath.EndQuiet();
+            armed.Restore();
+            Assert.True(PanicAftermath.TriggersSilenced());
+            Assert.True(PanicAftermath.HoldsEngineRestart);
+        }
+        finally { original.Restore(); }
+    }
 
     [Fact]
     public void RestorePutsStaticsSettingsAndProfileFilesBack()
@@ -124,30 +301,82 @@ public class TestIsolationTests
         var hadFile = File.Exists(settingsFile);
         var before = hadFile ? File.ReadAllText(settingsFile) : null;
         var user = CoreAccount.UnifiedUserId;
+        var panic = (PanicCount, HoldsEngineRestart, TriggersSilenced());
         var provider = CoreSettings.ServiceProvider;
         var notifications = AvApp.Notifications;
+        var premium = CoreEntitlement.HasPremiumProvider;
         var chat = CoreSettings.Current.AiChatEnabled;
 
         var snapshot = ProcessStateSnapshot.Take();
         CoreAccount.UnifiedUserId = "leaked-user";
         AvApp.Notifications = new();
+        ArmQuiet();
         CoreSettings.Current.AiChatEnabled = !chat;
         CoreSettings.ServiceProvider = () => null;
+        CoreEntitlement.HasPremiumProvider = () => true;
         File.WriteAllText(settingsFile, "{\"leaked\":true}");
         File.WriteAllText(stray, "{}");
         var leaked = new ConditioningControlPanel.Services.SettingsService();
         leaked.Save();   // armed, as a test that ends inside the debounce leaves it
         snapshot.Restore();
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() => { using var state = new TestSettingsScope(); CoreEntitlement.HasPremiumProvider = () => true; });
 
+        Assert.Equal(panic, (PanicCount, HoldsEngineRestart, TriggersSilenced()));
         Assert.Equal(user, CoreAccount.UnifiedUserId);
         Assert.Same(provider, CoreSettings.ServiceProvider);
         Assert.Same(notifications, AvApp.Notifications);
+        Assert.Same(premium, CoreEntitlement.HasPremiumProvider);
         Assert.Equal(chat, CoreSettings.Current.AiChatEnabled);
         Assert.Equal(hadFile, File.Exists(settingsFile));
         if (hadFile) Assert.Equal(before, File.ReadAllText(settingsFile));
         Assert.False(File.Exists(stray));
         Assert.False(leaked.HasPendingSave);
     }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void SeenAppMethodsRestoreTheirInputsBeforeTheAssemblyHookRuns(int method) =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+        {
+            // Call the test bodies directly: the assembly hook cannot hide missing local cleanup.
+            var snapshot = ProcessStateSnapshot.Take();
+            try
+            {
+                var service = new ConditioningControlPanel.Services.SettingsService();
+                CoreSettings.ServiceProvider = () => service;
+                CoreEntitlement.HasPremiumProvider = () => false;
+                var provider = CoreSettings.ServiceProvider;
+                var premium = CoreEntitlement.HasPremiumProvider;
+                var settings = service.Current;
+                settings.KeywordTriggersEnabled = false;
+                settings.KeywordTriggerAppScope = ConditioningControlPanel.Models.AwarenessAppScope.ExceptListed;
+                settings.KeywordTriggerIgnoreOwnFocus = true;
+                settings.KeywordTriggerApps = new() { "cleanup_sentinel" };
+                var apps = settings.KeywordTriggerApps;
+                service.SaveImmediate();
+                var file = Path.Combine(TestUserDataProfile.Root, "settings.json");
+                var before = File.ReadAllBytes(file);
+                var tests = new AwarenessSeenAppsTests();
+                switch (method)
+                {
+                    case 0: tests.EverywhereSamplesEveryTwoSecondsWhileScopedInputAlwaysResolves(); break;
+                    case 1: tests.RunningSourceRemembersEightDistinctAppsBeforeScopeFilteringButNeverOwnOrUnknown(); break;
+                    case 2: tests.ChipAddsAndSavesWithoutRearmingKeyboardAndUsesLocalizedTooltip("en", "Add 'bg3_dx11' to the list"); break;
+                }
+                Assert.Same(provider, CoreSettings.ServiceProvider);
+                Assert.Same(premium, CoreEntitlement.HasPremiumProvider);
+                Assert.False(settings.KeywordTriggersEnabled); // JsonIgnore: JSON snapshots cannot restore this
+                Assert.Equal(ConditioningControlPanel.Models.AwarenessAppScope.ExceptListed, settings.KeywordTriggerAppScope);
+                Assert.True(settings.KeywordTriggerIgnoreOwnFocus);
+                Assert.Same(apps, settings.KeywordTriggerApps);
+                Assert.Equal(new[] { "cleanup_sentinel" }, settings.KeywordTriggerApps);
+                Assert.Equal(before, File.ReadAllBytes(file));
+                Assert.False(service.HasPendingSave);
+            }
+            finally { snapshot.Restore(); }
+        });
 
     /// <summary>A debounce that already FIRED is no longer armed. Its write used to land after Restore
     /// and became every later test's baseline (Welcomed, no age acceptance: an extra Age Verification

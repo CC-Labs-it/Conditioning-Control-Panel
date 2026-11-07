@@ -54,6 +54,30 @@ public sealed class DuckRecoveryTests : IDisposable
     }
 
     [Fact]
+    public void OwnProcessIsExcludedWhileAnotherStreamWithTheSameNameIsJournalled()
+    {
+        var sets = new List<string>();
+        var audio = new LibVlcAudio(args => args.StartsWith("-f json")
+            ? "[" + Stream(7, Environment.ProcessId, "spotify") + "," + Stream(8, SpotifyPid, "spotify") + "]"
+            : Record(sets, args), Journal);
+        try
+        {
+            audio.Duck(80);
+            audio.Drain();
+            var owed = Assert.Single(DuckRecovery.LoadPulse(Journal));
+            Assert.Equal(8, owed.Key);
+            Assert.Equal(SpotifyPid, owed.Value.Pid);
+            Assert.Equal(new[] { "65536", "65536" }, owed.Value.Volumes);
+            Assert.Equal(new[] { "set-sink-input-volume 8 13107 13107" }, sets);
+            audio.Unduck(-1);
+            audio.Drain();
+            Assert.Equal(new[] { "set-sink-input-volume 8 13107 13107", "set-sink-input-volume 8 65536 65536" }, sets);
+            Assert.False(File.Exists(Journal));
+        }
+        finally { audio.Shutdown(); }
+    }
+
+    [Fact]
     public void ARestoreThatCannotLandStaysJournalled()
     {
         var gone = false;
@@ -160,6 +184,55 @@ public sealed class DuckRecoveryTests : IDisposable
         audio.Drain();
         Assert.Equal("set-sink-input-volume 7 60000 60000", sets[0]);
         Assert.Equal(new[] { "12000", "12000" }, DuckRecovery.LoadPulse(Journal)[7].Volumes);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DrainWaitsForLaunchRecoveryEvenPastTheShutdownBudget(bool windows)
+    {
+        var release = new System.Threading.Tasks.TaskCompletionSource();
+        var sets = new List<string>();
+        Action drain;
+        if (windows)
+        {
+            var audio = new WindowsDucker(_ => 0, _ => "", null, () => false, 999, release.Task);
+            drain = () => audio.Drain();
+        }
+        else
+        {
+            DuckRecovery.SavePulse(Journal, new Dictionary<int, DuckRecovery.PulseStream>
+                { [7] = new(SpotifyPid, "spotify", new[] { "60000", "60000" }) });
+            var audio = new LibVlcAudio(args =>
+            {
+                if (!args.StartsWith("-f json")) return Record(sets, args);
+                release.Task.GetAwaiter().GetResult();
+                return "[" + Stream(7, SpotifyPid, "spotify", 12000) + "]";
+            }, Journal);
+            audio.RecoverDucks();
+            drain = () => audio.Drain();
+        }
+        using var started = new System.Threading.ManualResetEventSlim();
+        var drained = System.Threading.Tasks.Task.Factory.StartNew(() => { started.Set(); drain(); },
+            System.Threading.CancellationToken.None, System.Threading.Tasks.TaskCreationOptions.LongRunning,
+            System.Threading.Tasks.TaskScheduler.Default);
+        try
+        {
+            Assert.True(started.Wait(TimeSpan.FromSeconds(10)));
+            // The launch work is still held beyond the old 2 s timeout. Drain must not claim it finished.
+            Assert.False(drained.Wait(TimeSpan.FromSeconds(3)));
+        }
+        finally
+        {
+            release.TrySetResult();
+            drained.GetAwaiter().GetResult();
+            drain();
+        }
+        if (!windows)
+        {
+            Assert.Equal(new[] { "set-sink-input-volume 7 60000 60000" }, sets);
+            Assert.False(File.Exists(Journal));
+        }
     }
 
     [Fact]

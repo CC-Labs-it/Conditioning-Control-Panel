@@ -235,6 +235,23 @@ namespace ConditioningControlPanel.Avalonia.Platform
             catch { if (!owned) { media?.Dispose(); input.Dispose(); } throw; }
         }
 
+        // Preparation never starts playback. Brain Drain arbitrates Play with Stop under its gate,
+        // as WPF Services/LockCard/BrainDrainService.cs:377-388 does after decoder creation.
+        internal interface IPreparedVoice : MindWipePlayer.IVoice { bool Play(); }
+        internal IPreparedVoice? PrepareVoice(string path, Action onEnded) =>
+            string.IsNullOrWhiteSpace(path) || !File.Exists(path) ? null : NewVoice(path, onEnded);
+        // WPF AudioService.PlaySound: unlike a one-shot cue, a muted sound remains live for unmute.
+        internal MindWipePlayer.IVoice? PlaySound(string path, float volume,
+            Action<TimeSpan> started, Action finished)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return null;
+            var voice = NewVoice(path, finished);
+            voice.UsePreferredDevice = true;
+            voice.Started = ms => started(TimeSpan.FromMilliseconds(ms));
+            voice.Volume = volume;
+            return voice.Play() ? voice : null;
+        }
+
         private Voice NewVoice(string path, Action onEnded)
         {
             var media = new Media(_vlc, path, FromType.FromPath);
@@ -244,12 +261,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         internal static Action<MediaPlayer> RouteVoice = ApplyPreferredDevice;
 
-        private sealed class Voice(MediaPlayer player, Media media, Action onEnded) : MindWipePlayer.IVoice
+        private sealed class Voice(MediaPlayer player, Media media, Action onEnded) : IPreparedVoice
         {
             private int _vol, _done;
             /// <summary>Raised once with the clip length in ms (0 when unknown) when it starts playing.</summary>
             internal Action<long>? Started;
             internal volatile bool Failed;
+            internal bool UsePreferredDevice;
             public double Volume
             {
                 // Cubic like PlayOneShot; applied off libvlc's thread once the output exists.
@@ -421,11 +439,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             if (_win != null) { _win.Shutdown(); return; }
             lock (_duckLock) { if (_isDucked) ForceUnduck(); }
-            Drain();
+            Drain(2000); // Keep app exit bounded, as before.
             lock (_duckLock) { _retry?.Dispose(); _retry = null; }
         }
 
-        internal void Drain() => _duckWork.Wait(2000);
+        // A completion barrier by default; shutdown supplies its bounded exit budget.
+        internal void Drain(int ms = Timeout.Infinite) => _duckWork.Wait(ms);
 
         internal bool IsDucked { get { lock (_duckLock) return _isDucked; } }
 

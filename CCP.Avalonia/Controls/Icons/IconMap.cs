@@ -19,6 +19,11 @@ namespace ConditioningControlPanel.Avalonia.Controls
     public static class IconMap
     {
         public const string FriendRequest = "💌"; // WPF Services/Friends/FriendsLanding.cs:320,365: Inbox row data, rendered as Mail.
+        // Stable keys for the shared InboxItem string hint, resolved by IconGlyph in the flyout.
+        public const string InviteClaimedKey = "invite.claimed";
+        public const string InviteSubscribedKey = "invite.subscribed";
+
+        public const string PossessionRules = "🕶"; // WPF MainWindow.Lab.cs:1122: the warden's rules Inbox row, rendered as Glasses.
         private const IconVariant R = IconVariant.Regular, F = IconVariant.Filled;
         private static readonly Dictionary<string, IconEntry> ByGlyph = new();
         private static readonly Dictionary<char, IconKind> ByMdl2 = new();
@@ -62,6 +67,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             M(IconKind.Keyboard, R, null, "⌨", "📐"); M(IconKind.Window, R, null, "🪟"); M(IconKind.ArrowCircleUp, R, null, "⬆");
             M(IconKind.ArrowDown, R, null, "⬇", "↓");
 
+            M(IconKind.Bookmark, R, null, "🔖");
             // D2 media, files, data
             M(IconKind.Play, F, null, "▶");
             M(IconKind.Pause, F, null, "⏸");
@@ -101,13 +107,14 @@ namespace ConditioningControlPanel.Avalonia.Controls
             M(IconKind.Star, R, Gold, "☆");
             M(IconKind.Trophy, F, Gold, "🏆");
             M(IconKind.Crown, F, Gold, "👑");
-            M(IconKind.Gift, R, null, "🎁"); M(IconKind.TicketDiagonal, R, null, "🎟");
+            M(IconKind.Gift, R, null, "🎁"); M(IconKind.TicketDiagonal, R, null, "🎟", InviteClaimedKey);
             M(IconKind.Sparkle, F, null, "✨", "✦", "🎉", "🔮"); // Confetti missing -> listed fallback
             M(IconKind.Sparkle, R, null, "✧", "💫");
-            M(IconKind.Heart, F, Heart, "💗", "💖", "💕", "💞", "🩷", "💜", "♥", "❤");
+            M(IconKind.Heart, F, Heart, "💗", "💖", "💕", "💞", "🩷", "💜", "♥", "❤", InviteSubscribedKey);
             M(IconKind.HatGraduation, R, null, "🎓");
 
             M(IconKind.Mail, R, null, FriendRequest);
+            M(IconKind.Glasses, R, null, PossessionRules);
             // D4 feature brands, objects, nature, people (🎀 ☠ 💀 are per-site calls: unmapped)
             M(IconKind.Flash, R, null, "⚡"); M(IconKind.BubbleMultiple, R, null, "🫧"); M(IconKind.Chat, R, null, "💬");
             M(IconKind.Comment, R, null, "💭"); M(IconKind.BrainCircuit, R, null, "🧠"); M(IconKind.Drop, R, null, "💧");

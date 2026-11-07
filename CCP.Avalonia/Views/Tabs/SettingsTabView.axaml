@@ -59,6 +59,7 @@
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView">
 
   <UserControl.Resources>
+        <StreamGeometry x:Key="DiscordMarkGeometry">M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z</StreamGeometry>
     <!-- The Training Programs "Today" card. Padding lives on the content Grid, NOT here: the
          banner art and FX layers are part of the content and have to reach the card's edges. -->
     <ControlTheme x:Key="ProgramTodayCardStyle" TargetType="Button">
@@ -89,17 +90,34 @@
       <Setter Property="FontSize" Value="10"/>
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Margin" Value="2,1"/>
+      <!-- Polish wave 10 (WPF SettingsTabView.xaml:1253-1290): a raised pill (bevel + sheen)
+           that sits PRESSED IN (pressed bevel and shade, 1px down) while it is the site. -->
       <Setter Property="Template">
         <ControlTemplate>
-          <Border x:Name="border" Background="Transparent" CornerRadius="8" Padding="8,3">
-            <ContentPresenter Content="{TemplateBinding Content}"
-                              ContentTemplate="{TemplateBinding ContentTemplate}"
-                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          <Border x:Name="border" Background="Transparent" CornerRadius="8"
+                  BorderBrush="{DynamicResource DepthRaisedBevel}" BorderThickness="1">
+            <Border x:Name="face" CornerRadius="7" Padding="7,2" Background="{DynamicResource DepthRaisedSheen}">
+              <ContentPresenter Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
           </Border>
         </ControlTemplate>
       </Setter>
+      <Style Selector="^:pointerover /template/ Border#border">
+        <Setter Property="RenderTransform" Value="translateY(-1px)"/>
+      </Style>
       <Style Selector="^:checked /template/ Border#border">
         <Setter Property="Background" Value="{DynamicResource PinkBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource DepthPressedBevel}"/>
+        <Setter Property="RenderTransform" Value="translateY(1px)"/>
+      </Style>
+      <Style Selector="^:checked /template/ Border#face">
+        <Setter Property="Background" Value="{DynamicResource DepthPressedShade}"/>
+      </Style>
+      <Style Selector="^:pressed /template/ Border#border">
+        <Setter Property="BorderBrush" Value="{DynamicResource DepthPressedBevel}"/>
+        <Setter Property="RenderTransform" Value="translateY(2px)"/>
       </Style>
       <Style Selector="^:checked">
         <Setter Property="Foreground" Value="White"/>
@@ -193,27 +211,6 @@
       </Style>
       <Style Selector="^:pressed /template/ Border#sb">
         <Setter Property="Background" Value="#C04888"/>
-      </Style>
-    </ControlTheme>
-
-    <ControlTheme x:Key="DiscordJoinButton" TargetType="Button">
-      <Setter Property="Background" Value="#5865F2"/>
-      <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Padding" Value="14,0"/>
-      <Setter Property="Template">
-        <ControlTemplate>
-          <!-- WPF acd51fcf9: a 34 px pill on the bubble line. -->
-          <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="17" Height="34"
-                  Padding="{TemplateBinding Padding}" HorizontalAlignment="Stretch">
-            <ContentPresenter Content="{TemplateBinding Content}"
-                              ContentTemplate="{TemplateBinding ContentTemplate}"
-                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
-          </Border>
-        </ControlTemplate>
-      </Setter>
-      <Style Selector="^:pointerover /template/ Border#border">
-        <Setter Property="Background" Value="#6C75F2"/>
       </Style>
     </ControlTheme>
 
@@ -562,8 +559,7 @@
 
       <!-- The Title="" literals below are English design-time fallbacks only. At runtime
            MainWindow.ApplyModFeatureNames() overwrites every FX title with the mod-aware
-           localized name. Two tiles are runtime-owned outright: the ? box
-           (RefreshMysteryTile) and the tease tile (ApplyTeaseCard). -->
+           localized name. The ? box is runtime-owned (RefreshMysteryTile). -->
 
       <!-- Row 1: flash, the video pair, subliminals, bouncing text -->
       <features:FeatureCard Grid.Row="0" Grid.Column="0" x:Name="CardFlash" DashboardDepth="True" DimWhenInactive="True" Icon="/Resources/features/flash.png"
@@ -578,15 +574,22 @@
                             Title="Bouncing Text"
                             HelpSectionId="BouncingText"/>
 
-      <!-- Row 2: the TEASE tile (far left) + centre logo + spiral pair -->
-      <!-- THE TEASE TILE. Nameless on purpose: the art is blurred past recognition by
-           FeatureCard.TeaseTier, the title is "???", the rim is the teased feature's tier
-           livery and the click opens a cryptic teaser rather than a door. Nothing here may
-           name the feature. Title and TeaseTier are FIRST-FRAME values, not the authority:
-           MainWindow.TeaseCard.cs owns both and rewrites them on every mosaic repaint. -->
-      <features:FeatureCard Grid.Row="1" Grid.Column="0" x:Name="CardJustDrop"
-                            Title="???"
-                            TeaseTier="2"/>
+      <!-- Row 2: the Deeper editor (far left) + centre logo + spiral pair -->
+      <!-- THE DEEPER EDITOR TILE (WPF SettingsTabView.xaml:601-636). It replaced the retired
+           nameless tease tile. A DOOR, not a feature: no ToggleRequested handler (an editor has
+           no on/off), no DimWhenInactive, no price tag. The click is ShowTab("deeper") and
+           nothing else - navigate, never launch (WPF MainWindow.Presets.cs:1121). -->
+      <features:FeatureCard Grid.Row="1" Grid.Column="0" x:Name="CardDeeperEditor" DashboardDepth="True"
+                            Title="{loc:Str dash_deeper_editor_title}"
+                            Icon="/Resources/features/deeper_editor.png">
+        <ToolTip.Tip>
+          <StackPanel MaxWidth="280">
+            <TextBlock Text="{loc:Str dash_deeper_editor_blurb}" TextWrapping="Wrap"/>
+            <TextBlock Text="{loc:Str dash_deeper_editor_tip}" TextWrapping="Wrap"
+                       Opacity="0.7" Margin="0,4,0,0"/>
+          </StackPanel>
+        </ToolTip.Tip>
+      </features:FeatureCard>
 
       <!-- Centre logo, at 2x2. Doubles as the weekly Graded Intake pass card: when a free
            account has an unspent run waiting, MainWindow.RefreshIntakePassTile() flips this
@@ -615,12 +618,21 @@
                users ever see. The Ken Burns drift (scale 1.00 -> 1.04 over 40s) lives on THIS
                border and not on ImgLogo or on LogoFlipHost: both of those transforms are owned
                by other animations and would snap the drift back to 1.0. -->
-          <Border x:Name="LogoFaceLogo" CornerRadius="12" ClipToBounds="True"
-                  RenderTransformOrigin="50%,50%">
+          <Border x:Name="LogoFaceLogo" CornerRadius="12" ClipToBounds="True" Margin="24"
+                  RenderTransformOrigin="50%,50%"
+                  Background="{DynamicResource DepthWellFloorBrush}"
+                  BorderBrush="{DynamicResource DepthPressedBevel}" BorderThickness="1">
             <Border.RenderTransform>
               <ScaleTransform ScaleX="1" ScaleY="1"/>
             </Border.RenderTransform>
-            <Grid>
+            <Grid x:Name="LogoFaceClip">
+              <!-- The well shares this face's drift, flip and visibility, as in WPF. -->
+              <Border x:Name="LogoWellTop" Height="14" VerticalAlignment="Top"
+                      Background="{DynamicResource DepthWellTop}" IsHitTestVisible="False"/>
+              <Border x:Name="LogoWellLeft" Width="9" HorizontalAlignment="Left"
+                      Background="{DynamicResource DepthWellLeft}" IsHitTestVisible="False"/>
+              <Border Height="1" VerticalAlignment="Bottom"
+                      Background="{DynamicResource DepthWellFoot}" IsHitTestVisible="False"/>
               <fx:AnimatedLogoImage x:Name="ImgLogo"
                      HorizontalAlignment="Stretch" VerticalAlignment="Center"
                      RenderOptions.BitmapInterpolationMode="HighQuality"/>
@@ -657,7 +669,7 @@
                Every piece of copy here is state-dependent and is written by
                ApplyIntakePassFaceState(); the {loc:Str} values are the available-state
                defaults. -->
-          <Border x:Name="IntakePassFace"
+          <Border x:Name="IntakePassFace" Margin="24"
                   IsVisible="False"
                   Background="{DynamicResource ElevatedSurfaceBrush}"
                   BorderBrush="{DynamicResource GlassBorderBrush}"
@@ -670,9 +682,9 @@
             </Border.Effect>
             <Grid>
               <!-- LAYER 0: the per-niche card art (Resources/intake/pass_card_*.png). Painted
-                   as a background brush rather than an Image child because ClipToBounds ignores
-                   CornerRadius - a background brush is the only fill that follows the rounded
-                   corners. Collapsed until IntakeNiche.PassCardImage() returns a bitmap.
+                   as a background brush on an inner 11px Border so it follows the rounded corners
+                   inside the 1px stroke (the outer Border's ClipToBounds does honour its
+                   CornerRadius - DashboardShellGapTests proves it on LogoFaceLogo). Collapsed until IntakeNiche.PassCardImage() returns a bitmap.
                    ponytail: the PNGs ship here; what is missing is the writer - WPF's
                    MainWindow.UiUpdates.cs:1559 via IntakeNiche.PassCardImage(), neither ported. -->
               <Border x:Name="IntakePassArt" CornerRadius="11" IsVisible="False">
@@ -1026,7 +1038,8 @@
               <Button x:Name="HelpBtnBrowser" Theme="{StaticResource HelpButtonStyle}" Tag="Browser"/>
             </StackPanel>
             <!-- Site Toggle - inline -->
-            <Border Grid.Column="1" Background="{DynamicResource PanelAccentBrush}" CornerRadius="10" Padding="2" Margin="10,0,0,0" VerticalAlignment="Center">
+            <Border Grid.Column="1" Background="{DynamicResource PanelAccentBrush}" CornerRadius="10" Padding="1" Margin="10,0,0,0" VerticalAlignment="Center"
+                    BorderBrush="{DynamicResource DepthPressedBevel}" BorderThickness="1">
               <StackPanel Orientation="Horizontal">
                 <!-- #867: Click, not Checked. A RadioButton raises Checked only when it CHANGES,
                      so clicking the site you are already on did nothing - which is exactly what
@@ -1058,7 +1071,11 @@
                  lilac at 24% fill, a 70% border, 40% on hover - Tag carries the hover brush). -->
             <!-- The folded glow (lag fix, P82): a sibling BoxShadow layer whose Opacity breathes on the
                  30 fps beat, never a DropShadowEffect on the button (PaintFoldArrow). -->
-            <Panel Grid.Column="2" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="48,0,8,0">
+            <!-- WPF clips the pill to its star column when the header is narrow; without a clip it overflowed
+                 onto the status and webcam pills (parity VA). The clip sits on the COLUMN, not the pill's panel,
+                 so the fold glow still draws in the margins around the pill (GlowRenderProofTests). -->
+            <Panel Grid.Column="2" ClipToBounds="True">
+            <Panel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="48,0,8,0">
             <Border x:Name="FoldGlow" CornerRadius="13" IsVisible="False" IsHitTestVisible="False"/>
             <Button x:Name="BtnFoldBrowser" Theme="{StaticResource FoldArrowButton}"
                     MinWidth="120" Height="26" Padding="12,0"
@@ -1075,6 +1092,7 @@
                            FontSize="12" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
               </StackPanel>
             </Button>
+            </Panel>
             </Panel>
             <!-- Status indicator -->
             <TextBlock Grid.Column="3" x:Name="TxtBrowserStatus" Text="{loc:Str label_loading}"
@@ -1331,12 +1349,20 @@
       <!-- ============================================================ -->
       <!-- THE TONIGHT BOARD (WPF SettingsTabView.xaml:1807): the deck in the row the folded browser
            gives back. MainShellWindow.DashboardBillboard.cs drops a BillboardCardHost into
-           BillboardHostSlot. A sunken well; the WPF depth-law bands have no Avalonia brushes yet. -->
+           BillboardHostSlot. The well bands lie over the card rim, as in WPF. -->
       <Border x:Name="DashBillboard" Grid.Row="1" IsVisible="False" Margin="0,0,0,5"
               CornerRadius="12" ClipToBounds="True"
-              Background="{DynamicResource ElevatedSurfaceBrush}"
-              BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1">
-        <Grid x:Name="BillboardHostSlot" Margin="8,8,8,4"/>
+              Background="{DynamicResource DepthWellFloorBrush}"
+              BorderBrush="{DynamicResource DepthPressedBevel}" BorderThickness="1">
+        <Grid>
+          <Grid x:Name="BillboardHostSlot" Margin="8,8,8,4"/>
+          <Border Height="9" VerticalAlignment="Top"
+                  Background="{DynamicResource DepthWellTop}" IsHitTestVisible="False"/>
+          <Border Width="6" HorizontalAlignment="Left"
+                  Background="{DynamicResource DepthWellLeft}" IsHitTestVisible="False"/>
+          <Border Height="1" VerticalAlignment="Bottom"
+                  Background="{DynamicResource DepthWellFoot}" IsHitTestVisible="False"/>
+        </Grid>
       </Border>
 
       <!-- ============================================================ -->
@@ -1395,17 +1421,12 @@
                     VerticalAlignment="Center" Background="#40FFFFFF"
                     IsVisible="{Binding #LoggedInStatusPanel.IsVisible}"/>
 
-            <!-- Discord Join Button: the one labelled pill on the line. -->
+            <!-- WPF ca6c3bc4a: the same click/tooltip, now a round brand bubble. -->
             <Button x:Name="BtnDiscord"
-                    Theme="{StaticResource DiscordJoinButton}"
-                    ToolTip.Tip="{loc:Str tooltip_join_the_discord_community}" Cursor="Hand"
-                    VerticalAlignment="Center">
-              <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                <fx:IconGlyph Kind="Chat" Size="12" VerticalAlignment="Center" Foreground="White"/>
-                <TextBlock Text="{loc:Str label_join_discord}" Foreground="White" FontSize="11" FontWeight="Bold"
-                           VerticalAlignment="Center" Margin="6,0,0,0"/>
-              </StackPanel>
-            </Button>
+                    ToolTip.Tip="{loc:Str tooltip_join_the_discord_community}"
+                    fx:HoverBubbleBar.Mark="{StaticResource DiscordMarkGeometry}"
+                    fx:HoverBubbleBar.Fill="#5865F2"
+                    fx:HoverBubbleBar.LabelKeys="label_join_discord"/>
 
             <!-- Rich Presence as a status bubble: lit when on. Still the CheckBox the
                  account mirror writes (IsChecked), just dressed by the bar. -->

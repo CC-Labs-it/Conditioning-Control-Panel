@@ -20,22 +20,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs;
 /// <summary>WPF Services/Companion/PersonalityStudio.cs:15-205. Editing is detached until Save.</summary>
 internal static class PersonalityStudio
 {
+    // One draft rule for both heads: Core PersonalityStudioDraft (WPF PersonalityStudio.Draft delegates too).
     internal static PersonalityPreset Draft(PersonalityPreset source, CompanionPromptSettings? activeOverride = null)
-    {
-        var p = activeOverride ?? source.PromptSettings ?? new CompanionPromptSettings();
-        return new PersonalityPreset
-        {
-            Id = Guid.NewGuid().ToString("N"), Name = source.Name, Description = source.Description,
-            IsBuiltIn = false, RequiresExplicitAcknowledgement = source.RequiresExplicitAcknowledgement,
-            SampleLines = source.SampleLines?.ToList(),
-            PromptSettings = new CompanionPromptSettings
-            {
-                UseCustomPrompt = true, Personality = p.Personality, ExplicitReaction = p.ExplicitReaction,
-                SlutModePersonality = p.SlutModePersonality, KnowledgeBase = p.KnowledgeBase,
-                ContextReactions = p.ContextReactions, OutputRules = p.OutputRules
-            }
-        };
-    }
+        => PersonalityStudioDraft.Create(source, activeOverride);
 
     public static async Task ShowAsync(Window owner)
     {

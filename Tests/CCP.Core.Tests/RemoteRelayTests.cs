@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Models;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -46,6 +47,245 @@ public sealed class RemoteRelayTests
 
     private static void Poll(FakeRelay f, string json) =>
         f.Answer = path => path == "/v2/remote/poll" ? Json(HttpStatusCode.OK, json) : Json(HttpStatusCode.OK, "{}");
+
+    [Theory]
+    [InlineData("show_pink_filter", true, true)]
+    [InlineData("stop_pink_filter", true, false)]
+    [InlineData("show_spiral", false, true)]
+    [InlineData("stop_spiral", false, false)]
+    public void Overlay_commands_set_the_saved_switch(string verb, bool pink, bool enabled)
+    {
+        var old = CoreSettings.ServiceProvider;
+        var oldRefresh = RemoteCommands.RefreshOverlays;
+        RemoteCommands.RefreshOverlays = () => { };
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        try
+        {
+            settings.Current.PinkFilterEnabled = settings.Current.SpiralEnabled = !enabled;
+            Assert.Null(RemoteCommands.Execute(verb, null));
+            Assert.Equal(enabled, pink ? settings.Current.PinkFilterEnabled : settings.Current.SpiralEnabled);
+        }
+        finally { RemoteCommands.StopOverlays(); RemoteCommands.ReleaseOverlayStop(); RemoteCommands.RefreshOverlays = oldRefresh; CoreSettings.ServiceProvider = old; }
+    }
+
+    [Theory]
+    [InlineData("set_pink_opacity", -1, 0)]
+    [InlineData("set_pink_opacity", 90, 50)]
+    [InlineData("set_spiral_opacity", 190, 100)]
+    [InlineData("set_spiral_opacity", 42, 42)]
+    public void Overlay_opacity_uses_Wpf_bounds(string verb, int value, int expected)
+    {
+        var old = CoreSettings.ServiceProvider;
+        var oldRefresh = RemoteCommands.RefreshOverlays;
+        RemoteCommands.RefreshOverlays = () => { };
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        try
+        {
+            Assert.Null(RemoteCommands.Execute(verb, JObject.FromObject(new { value })));
+            Assert.Equal(expected, verb == "set_pink_opacity" ? settings.Current.PinkFilterOpacity : settings.Current.SpiralOpacity);
+        }
+        finally { RemoteCommands.StopOverlays(); RemoteCommands.ReleaseOverlayStop(); RemoteCommands.RefreshOverlays = oldRefresh; CoreSettings.ServiceProvider = old; }
+    }
+
+    [Fact]
+    public void Remote_mind_wipe_uses_local_clips_and_settings_and_stops_on_disconnect()
+    {
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldStart = CoreMindWipe.StartProvider;
+        var oldTrigger = CoreMindWipe.TriggerOnceProvider;
+        var oldStop = CoreMindWipe.StopProvider;
+        var oldCount = CoreMindWipe.ClipCountProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var started = new List<(double, double)>();
+        var triggered = 0; var stopped = 0; var clips = 0;
+        CoreMindWipe.StartProvider = (f, v) => started.Add((f, v));
+        CoreMindWipe.TriggerOnceProvider = () => triggered++;
+        CoreMindWipe.StopProvider = () => stopped++;
+        CoreMindWipe.ClipCountProvider = () => clips;
+        try
+        {
+            settings.Current.MindWipeFrequency = 9; settings.Current.MindWipeVolume = 37;
+            Assert.Null(RemoteCommands.Execute("trigger_mind_wipe", null));
+            Assert.Equal(0, triggered); // WPF: an empty pool is a no-op
+            clips = 1;
+            Assert.Null(RemoteCommands.Execute("trigger_mind_wipe", null));
+            Assert.Equal(1, triggered);
+            Assert.Null(RemoteCommands.Execute("start_mind_wipe", null));
+            Assert.Equal(new[] { (9.0, 0.37) }, started);
+            Assert.Null(RemoteCommands.Execute("stop_mind_wipe", null));
+            Assert.Equal(1, stopped);
+            RemoteCommands.StopEffects(force: false);
+            Assert.Equal(2, stopped);
+        }
+        finally
+        {
+            CoreMindWipe.StartProvider = oldStart; CoreMindWipe.TriggerOnceProvider = oldTrigger;
+            CoreMindWipe.StopProvider = oldStop; CoreMindWipe.ClipCountProvider = oldCount;
+            CoreSettings.ServiceProvider = oldSettings; RemoteCommands.ReleaseOverlayStop();
+        }
+    }
+
+    [Fact]
+    public void Overlay_commands_refresh_without_starting_engine_and_remote_cleanup_restores_switches()
+    {
+        var old = CoreSettings.ServiceProvider;
+        var oldRefresh = RemoteCommands.RefreshOverlays;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var states = new List<bool>();
+        var renderedPink = false;
+        RemoteCommands.RefreshOverlays = () => { states.Add(RemoteCommands.OverlayRunning); renderedPink = settings.Current.PinkFilterEnabled; };
+        try
+        {
+            Assert.False(CoreEngine.IsRunning);
+            settings.Current.PinkFilterEnabled = settings.Current.SpiralEnabled = false;
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Take();
+            settings.Current.PinkFilterOpacity = 17;
+            Assert.Null(RemoteCommands.Execute("set_pink_opacity", null));
+            Assert.Empty(states);
+            Assert.Equal(17, settings.Current.PinkFilterOpacity);
+            Assert.Null(RemoteCommands.Execute("set_pink_opacity", new JObject()));
+            Assert.Equal(25, settings.Current.PinkFilterOpacity);
+            Assert.Null(RemoteCommands.Execute("show_pink_filter", null));
+            Assert.False(CoreEngine.IsRunning);
+            CoreEngine.Stop(); // panic/Stop reaches remote-only overlays too
+            Assert.False(states[^1]);
+            Assert.True(RemoteCommands.OverlaysStopped);
+            Assert.True(settings.Current.PinkFilterEnabled);
+            Assert.Null(RemoteCommands.Execute("show_spiral", null));
+            Assert.True(states[^1]);
+            Assert.False(RemoteCommands.OverlaysStopped);
+            RemoteCommands.StopEffects(force: false); // opted-in disconnect, no local run
+            Assert.False(states[^1]);
+            Assert.False(settings.Current.SpiralEnabled || settings.Current.PinkFilterEnabled); // WPF wearer restoration
+            Assert.False(renderedPink);
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            RemoteCommands.StopOverlays(); RemoteCommands.ReleaseOverlayStop();
+            RemoteCommands.RefreshOverlays = oldRefresh; CoreSettings.ServiceProvider = old;
+        }
+    }
+
+    [Fact]
+    public void Remote_cleanup_over_a_local_run_and_panic_keep_wearer_values()
+    {
+        var old = CoreSettings.ServiceProvider;
+        var oldRefresh = RemoteCommands.RefreshOverlays;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        RemoteCommands.RefreshOverlays = () => { };
+        try
+        {
+            CoreEngine.Start();
+            settings.Current.PinkFilterEnabled = true;
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Take();
+            Assert.Null(RemoteCommands.Execute("set_pink_opacity", JObject.FromObject(new { value = 30 })));
+            RemoteCommands.StopEffects(force: false); // user unticks Remote Control mid-run (WPF LeavesLocalRun, #1405)
+            Assert.False(RemoteCommands.OverlaysStopped);
+            Assert.True(settings.Current.PinkFilterEnabled);
+            RemoteCommands.StopEffects(force: true); // trigger_panic takes the run and the remote switches down
+            Assert.False(CoreEngine.IsRunning);
+            Assert.True(settings.Current.PinkFilterEnabled); // base wearer restoration wins
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            CoreEngine.Stop(); RemoteCommands.ReleaseOverlayStop();
+            RemoteCommands.RefreshOverlays = oldRefresh; CoreSettings.ServiceProvider = old;
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Throwing_overlay_refresh_cannot_prevent_safety_handback(bool force, bool wearerStrict)
+    {
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldRefresh = RemoteCommands.RefreshOverlays;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        RemoteCommands.RefreshOverlays = () => { };
+        try
+        {
+            CoreEngine.Start();
+            var s = settings.Current;
+            s.StrictLockEnabled = wearerStrict;
+            s.PanicKeyEnabled = true;
+            s.PinkFilterEnabled = true;
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Take();
+            Assert.Null(RemoteCommands.Execute("enable_strict_lock", null));
+            Assert.Null(RemoteCommands.Execute("stop_pink_filter", null));
+            s.PanicKeyEnabled = false; // a stale disabled panic key must also follow the release rule
+            bool? strictAtRefresh = null, panicAtRefresh = null;
+            RemoteCommands.RefreshOverlays = () =>
+            {
+                if (!s.PinkFilterEnabled) return; // the earlier Stop pass has not restored visuals yet
+                strictAtRefresh = s.StrictLockEnabled;
+                panicAtRefresh = s.PanicKeyEnabled;
+                throw new InvalidOperationException("overlay window failed to show");
+            };
+            var error = Record.Exception(() => RemoteCommands.StopEffects(force));
+            Assert.Equal((bool?)wearerStrict, strictAtRefresh); // WPF safety release precedes refresh
+            Assert.Equal((bool?)true, panicAtRefresh);
+            Assert.Null(error);
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop(); // session-end cleanup
+            Assert.Equal(wearerStrict, s.StrictLockEnabled);
+            Assert.True(s.PanicKeyEnabled);
+        }
+        finally
+        {
+            RemoteCommands.RefreshOverlays = () => { };
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            CoreEngine.Stop(); RemoteCommands.ReleaseOverlayStop();
+            RemoteCommands.RefreshOverlays = oldRefresh;
+            CoreSettings.ServiceProvider = oldSettings;
+        }
+    }
+
+    [Fact]
+    public async Task Status_publishes_available_sessions_and_live_progress()
+    {
+        var f = new FakeRelay();
+        using var r = Relay(f);
+        var custom = new Session { Id = "custom-test", Name = "Custom test", Icon = "C", DurationMinutes = 3, Difficulty = SessionDifficulty.Hard, IsAvailable = true, Source = SessionSource.Custom, Phases = { new SessionPhase { Name = "First" } } };
+        var unavailable = new Session { Id = "unavailable-test", IsAvailable = false };
+        var runner = new SessionRunner(new SessionLogService());
+        r.SessionsProvider = () => Session.GetAllSessions().Concat(new[] { custom, unavailable });
+        r.SessionRunnerProvider = () => runner;
+        await r.StartAsync("light");
+        try
+        {
+            await r.PushStatusNowAsync();
+            var idle = f.Seen.Last(x => x.Path == "/v2/remote/status").Body;
+            var list = (JArray)idle["available_sessions"]!;
+            Assert.Contains(list, x => (string?)x["id"] == custom.Id && (string?)x["name"] == custom.GetModeAwareName() && (string?)x["icon"] == "C" && (int?)x["duration_minutes"] == 3 && (string?)x["difficulty"] == "Hard");
+            Assert.Contains(list, x => Session.GetAllSessions().Any(s => s.IsAvailable && s.Id == (string?)x["id"]));
+            Assert.DoesNotContain(list, x => (string?)x["id"] == unavailable.Id || Session.GetAllSessions().Any(s => !s.IsAvailable && s.Id == (string?)x["id"]));
+            Assert.Equal(JTokenType.Null, idle["session_info"]!.Type);
+            runner.Start(custom);
+            await r.PushStatusNowAsync();
+            var running = f.Seen.Last(x => x.Path == "/v2/remote/status").Body["session_info"]!;
+            Assert.Equal(custom.GetModeAwareName(), (string?)running["name"]);
+            Assert.Equal("C", (string?)running["icon"]);
+            Assert.Equal(180, (int?)running["total_seconds"]);
+            Assert.False((bool)running["is_paused"]!);
+            Assert.Equal(custom.GetModeAwarePhaseName(custom.Phases[0]), (string?)running["current_phase"]);
+            runner.Pause();
+            runner._pausedElapsed = TimeSpan.FromSeconds(17);
+            await r.PushStatusNowAsync();
+            var paused = f.Seen.Last(x => x.Path == "/v2/remote/status").Body["session_info"]!;
+            Assert.True((bool)paused["is_paused"]!);
+            Assert.Equal(17, (int?)paused["elapsed_seconds"]);
+        }
+        finally { runner.Stop(); CoreEngine.Stop(); CoreSession.IsSessionRunningProvider = null; }
+    }
 
     [Fact]
     public void A_sandbox_never_reaches_the_real_relay()
@@ -670,4 +910,27 @@ public sealed class RemoteRelayTests
         f.Answer = _ => Json((HttpStatusCode)429, "{\"retry_after_seconds\":7}");
         Assert.Equal((false, "rate_limited", (int?)7), await r.SendEmoteAsync("again", "", "custom"));
     }
+    [Fact]
+    public void Custom_subliminal_uses_the_silent_custom_surface_and_blank_input_is_a_noop()
+    {
+        var old = (CoreSubliminal.ShowProvider, CoreSubliminal.CustomShowProvider);
+        var spoken = new List<string>();
+        var custom = new List<string>();
+        CoreSubliminal.ShowProvider = spoken.Add;
+        CoreSubliminal.CustomShowProvider = custom.Add;
+        try
+        {
+            Assert.Null(RemoteCommands.Execute("trigger_custom_subliminal", new JObject { ["text"] = "<b>Relax</b>" }));
+            Assert.Equal(new[] { "<b>Relax</b>" }, custom);   // the head sanitizes before haptic/card
+            Assert.Empty(spoken);                          // never a linked whisper or 20 XP
+            Assert.Null(RemoteCommands.Execute("trigger_custom_subliminal", new JObject { ["text"] = "  " }));
+            Assert.Single(custom);
+            CoreSubliminal.CustomShowProvider = null;
+            Assert.Equal(RemoteCommands.NotOnThisBuild,
+                RemoteCommands.Execute("trigger_custom_subliminal", new JObject { ["text"] = "Relax" }));
+            Assert.Empty(spoken);                          // never fall back to an audible phrase
+        }
+        finally { (CoreSubliminal.ShowProvider, CoreSubliminal.CustomShowProvider) = old; }
+    }
+
 }

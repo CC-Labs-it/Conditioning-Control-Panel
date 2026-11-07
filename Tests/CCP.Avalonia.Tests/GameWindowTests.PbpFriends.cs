@@ -25,7 +25,8 @@ public sealed partial class GameWindowTests
         Assert.Empty(sent);
         answer.SetResult(true);
         Dispatcher.UIThread.RunJobs();
-        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:friend" }, sent.Select(o => (string?)o["type"]));
+        // WPF OnPageReady: the friend intent, then the wardrobe (owned + look).
+        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:friend", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
         w.Close();
         Assert.True(pending.IsCompletedSuccessfully);
         Assert.Null(pending.Result);
@@ -44,7 +45,7 @@ public sealed partial class GameWindowTests
         w.PbpOsAnimations = () => Task.FromResult(true);
         w.HandleMessage("{\"type\":\"ready\"}");
         Assert.True(sent.FindIndex(o => (string?)o["type"] == "pbp:friend") > sent.FindIndex(o => (string?)o["type"] == "pbp:identity"));
-        Assert.Equal("friend", (string?)sent.Last()["friendId"]);
+        Assert.Equal("friend", (string?)sent.Last(o => (string?)o["type"] == "pbp:friend")["friendId"]);
         w.HandleMessage("{\"type\":\"pbp:friend-challenge\",\"challengeId\":\"" + challenge + "\"}");
         Assert.True(pending.IsCompletedSuccessfully);
         Assert.Equal(challenge, pending.Result);
@@ -73,7 +74,7 @@ public sealed partial class GameWindowTests
         sent.Clear(); w.Posted += json => sent.Add(JObject.Parse(json));
         w.PbpOsAnimations = () => Task.FromResult(true);
         w.HandleMessage("{\"type\":\"ready\"}");
-        Assert.Equal("accept", (string?)sent.Last()["mode"]);
+        Assert.Equal("accept", (string?)sent.Last(o => (string?)o["type"] == "pbp:friend")["mode"]);
     });
 
 }

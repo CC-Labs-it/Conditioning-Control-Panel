@@ -16,6 +16,11 @@ namespace ConditioningControlPanel.Services
     /// </summary>
     public static class PatreonActiveRule
     {
+        /// <summary>Apply the typed profile without depending on a head's account service.</summary>
+        public static bool RestampProfile(AppSettings settings, V2AuthService.V2User user, DateTime nowUtc) =>
+            Restamp(settings, new PatreonActiveReading(user.PatreonIsActive,
+                Invites.InviteRules.ParseUtc(user.PatreonConfirmedAtRaw), user.PatreonTier), nowUtc);
+
         /// <summary>A confirmation older than this says nothing about today.</summary>
         public static readonly TimeSpan FreshFor = TimeSpan.FromHours(72);
 

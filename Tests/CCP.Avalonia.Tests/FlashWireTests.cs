@@ -86,13 +86,54 @@ public sealed class FlashWireTests
     private static Bitmap Picture() => new(AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/features/flash.png")));
 
     /// <summary>One flash through the real show path (lucky roll, glow, Spawn, pay), clickable.</summary>
-    private static FlashOverlayWindow ShowOne(int hydraGeneration = 0, bool ambient = false, TimeSpan? lifetime = null)
+    private static FlashOverlayWindow ShowOne(int hydraGeneration = 0, bool ambient = false, TimeSpan? lifetime = null, string path = "a.png")
     {
         var screen = new Window().Screens.All[0];
-        Assert.True(FlashOverlay.Show(Picture(), new PixelRect(100, 100, 400, 300), "a.png", screen, 1, TimeSpan.Zero,
+        Assert.True(FlashOverlay.Show(Picture(), new PixelRect(100, 100, 400, 300), path, screen, 1, TimeSpan.Zero,
             lifetime ?? TimeSpan.FromSeconds(6), clickable: true, ambient, hydraGeneration));
         return FlashOverlay.Active[^1].Window;
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task A_lowered_cap_skips_one_frame_but_platform_refusal_stops_the_burst(bool platformRefused) => OnUi((s, _, xp, _) =>
+    {
+        FlashOverlay.CloseAll(final: false);
+        s.HydraLimit = 20;
+        var prior = ShowOne();
+        var screen = prior.SpawnScreen!;
+        var rect = new PixelRect(100, 100, 400, 300);
+        var flashes = new List<(Bitmap, PixelRect, string, Screen)> {
+            (Picture(), rect, "b.png", screen), (Picture(), rect, "c.png", screen) };
+        var ticks = new List<Action>();
+        var schedule = FlashOverlay.After;
+        try
+        {
+            FlashOverlay.After = (tick, _) => ticks.Add(tick);
+            var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
+            var generation = (int)typeof(FlashOverlay).GetField("_generation", flags)!.GetValue(null)!;
+            var completed = 0;
+            typeof(FlashOverlay).GetMethod("Schedule", flags)!.Invoke(null, new object?[] {
+                flashes, 0, 100, generation, 1d, TimeSpan.Zero, TimeSpan.FromSeconds(6),
+                true, false, 0, (Action)(() => completed++), null });
+            Assert.Equal(2, ticks.Count);
+            s.HydraLimit = 1;
+            if (platformRefused)
+            {
+                prior.Close();
+                FlashOverlay.Present = (_, _, _) => false;
+            }
+            ticks[0]();
+            if (!platformRefused) { Assert.Single(FlashOverlay.Active); prior.Close(); }
+            FlashOverlay.Present = (_, _, _) => true;
+            ticks[1]();
+            Assert.Equal(platformRefused ? 0 : 1, FlashOverlay.Active.Count);
+            Assert.Equal(platformRefused ? 1 : 2, xp.Count);
+            Assert.Equal(1, completed);
+        }
+        finally { FlashOverlay.After = schedule; }
+    });
 
     [Fact]
     public Task A_shown_flash_pays_4_xp_and_ticks_the_flash_achievement_counter() => OnUi((s, _, xp, engine) =>
@@ -100,6 +141,33 @@ public sealed class FlashWireTests
         ShowOne();
         Assert.Equal(new[] { (4.0, "Flash") }, xp);   // no flash sound on this head: WPF's no-sound 4
         Assert.Equal(1, engine.Progress.TotalFlashImages);
+    });
+
+    // WPF FlashService.cs:2045-2059 and FlashLayer.cs:484.
+    [Fact]
+    public Task Scrolller_credit_follows_the_real_show_path_and_leaves_before_exit_fragments() => OnUi((_, _, _, _) =>
+    {
+        var flash = ShowOne(path: "ccp_temp_remote_picture.jpg");
+        var mark = Assert.IsType<ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditBadge>(flash.CreditMark);
+        Assert.Equal("via Scrolller", Assert.IsType<TextBlock>(mark.Child).Text);
+        Assert.Equal("via Scrolller", global::Avalonia.Automation.AutomationProperties.GetName(mark));
+        Assert.True(mark.Shown);
+        Assert.True(mark.IsVisible);
+        Assert.Equal(0.75, mark.Opacity);
+        Assert.False(mark.IsHitTestVisible);
+        Assert.False(mark.Focusable);
+        Assert.Equal(11, Assert.IsType<TextBlock>(mark.Child).FontSize);
+        Assert.Equal(global::Avalonia.Layout.HorizontalAlignment.Right, mark.HorizontalAlignment);
+        Assert.Equal(global::Avalonia.Layout.VerticalAlignment.Bottom, mark.VerticalAlignment);
+        Assert.Equal(new Thickness(0, 0, 6, 4), mark.Margin);
+        var root = Assert.IsType<Panel>(flash.Content);
+        var card = Assert.IsType<Panel>(Assert.Single(root.Children));
+        Assert.Contains(mark, card.Children);
+        Assert.Null(ShowOne(path: "local.jpg").CreditMark);
+        Assert.Null(ShowOne(path: "ccp_pack_picture.jpg").CreditMark);
+        Assert.NotNull(ShowOne(path: "https://images.scrolller.com/picture.jpg").CreditMark);
+        flash.BeginExit(FlashExit.Begin(FlashExitStyle.Glitch, MotionLevel.Full, 1));
+        Assert.False(mark.IsVisible);
     });
 
     [Fact]

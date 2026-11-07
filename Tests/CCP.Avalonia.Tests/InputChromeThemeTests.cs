@@ -37,6 +37,7 @@ public sealed class InputChromeThemeTests
         Assert.Same(Res("InputCheckBoxTheme"), wrap.Theme);
         Assert.Same(Res("ToggleStyle"), toggle.Theme); // keyed switches keep their own theme
         Assert.Equal(18, Part<Panel>(wrap, "DotHost").Bounds.Width);
+        Assert.False(wrap.ClipToBounds); // the checked glow falls outside the 18px box (a clip drew it square)
         Assert.True(wrap.Bounds.Height > 40, $"content did not wrap: {wrap.Bounds.Height}");
         Assert.Equal(18, empty.Bounds.Width);
         Assert.Equal(18, bare.Bounds.Width); // no content -> no 8px gap

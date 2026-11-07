@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -14,7 +15,8 @@ using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
-/// <summary>Keyboard/audio slice of WPF KeywordTriggerService. OCR and the other actions remain a follow-up.</summary>
+/// <summary>Keyboard slice of WPF KeywordTriggerService: audio, haptic, XP, Chaster and avatar comment actions.
+/// OCR and the visual actions remain a follow-up.</summary>
 internal static class KeywordTriggerHead
 {
     internal static KeywordAudioRuntime Engine { get; } = new();
@@ -37,12 +39,13 @@ internal static class KeywordTriggerHead
     }
 
     // The hook itself stays: on this head the panic key (Win32Input.Start at boot) owns it, the case WPF :426 keeps it for.
-    internal static void Stop() { DetachKeyboard(); Engine.Stop(); }
+    internal static void Stop() { DetachKeyboard(); Engine.Stop(); KeywordAvatarComment.CancelPending(); }
 
     /// <summary>WPF MainWindow.Awareness.cs:493: Keyboard off drops only the key source; the engine and a playing clip stay.</summary>
     internal static void DetachKeyboard()
     {
         Interlocked.Increment(ref _generation);
+        Engine.ClearInput();
         if (_subscribed) Win32PanicKey.KeyDown -= OnKey;
         _subscribed = false;
     }
@@ -65,7 +68,8 @@ internal static class KeywordTriggerHead
             var generation = Volatile.Read(ref _generation);
             var ch = special == null ? Translate(vk) : null;
             uint processId = 0;
-            var needsForeground = KeywordMatchRules.NeedsForeground(CoreSettings.Current);
+            // WPF KeywordTriggerService.cs:618-622: sample even in Everywhere mode, at most every 2 s.
+            var needsForeground = Engine.NeedsForeground(DateTime.UtcNow);
             if (needsForeground) GetWindowThreadProcessId(GetForegroundWindow(), out processId);
             Dispatcher.UIThread.Post(() =>
             {
@@ -114,24 +118,50 @@ internal static class KeywordTriggerHead
 
 internal sealed class KeywordAudioRuntime
 {
+    // WPF KeywordTriggerService.cs:489-521: session-only, newest first, eight distinct apps.
+    private readonly LinkedList<string> _seenApps = new();
+    private DateTime _lastSampleAt = DateTime.MinValue;
+    internal bool NeedsForeground(DateTime now)
+    {
+        if (KeywordMatchRules.NeedsForeground(CoreSettings.Current)) return true;
+        if ((now - _lastSampleAt).TotalSeconds < 2) return false;
+        _lastSampleAt = now;
+        return true;
+    }
+    internal string[] GetRecentForegroundApps() => _seenApps.ToArray();
+    private void RememberSeenApp(string? process, bool own)
+    {
+        if (own || string.IsNullOrWhiteSpace(process)) return;
+        var existing = _seenApps.FirstOrDefault(a => string.Equals(a, process, StringComparison.OrdinalIgnoreCase));
+        if (existing != null) _seenApps.Remove(existing);
+        _seenApps.AddFirst(existing ?? process);
+        while (_seenApps.Count > 8) _seenApps.RemoveLast();
+    }
+
     private readonly KeywordTextInput _input = new();
     private readonly KeywordCooldowns _cooldowns = new();
     private CancellationTokenSource? _audio;
     private Action? _stop;
+    private int _playGeneration;
     private long? _duckGeneration;
     internal Func<DateTime> Now = () => DateTime.Now;
     internal Func<int, CancellationToken, Task> Delay = Task.Delay;
+    // WPF KeywordTriggerService.cs:72,135,1196: record each accepted fire before notifying.
+    internal KeywordFireLog Fires { get; } = new();
+    internal event Action<KeywordTrigger>? TriggerFired;
     internal bool IsActive { get; private set; }
     // WPF KeywordTriggerService.cs:176-188: access gate, and Start must preserve a live buffer.
     internal static bool HasAccess => CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness");
     internal void Start() { if (IsActive || !HasAccess) return; IsActive = true; _input.Clear(); }
     internal void Stop() { IsActive = false; _input.Clear(); StopAudio(); }
+    internal void ClearInput() => _input.Clear();
 
     private bool Accept(string? process, bool own)
     {
         var s = CoreSettings.Current;
         if (!IsActive || !s.KeywordTriggersEnabled ||
             !HasAccess) return false;
+        RememberSeenApp(process, own);
         if (KeywordMatchRules.AppAllowed(s, process, own)) return true;
         _input.Clear(); // never join text typed on either side of a blocked app
         return false;
@@ -163,6 +193,8 @@ internal sealed class KeywordAudioRuntime
         {
             t.LastTriggeredAt = now;
             _cooldowns.Record(t, s, now.ToUniversalTime());
+            Fires.Record(t, "Keyboard", now);   // WPF KeywordTriggerService.cs:135,1191-1200 (pulse feed)
+            try { TriggerFired?.Invoke(t); } catch (Exception ex) { Log.Warning(ex, "Keyword fired handler failed"); }
         }
         // WPF KeywordTriggerService DispatchMergedAsync (b9368d963): matched and cooled down, but held during a panic's quiet.
         if (ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced())
@@ -170,34 +202,125 @@ internal sealed class KeywordAudioRuntime
             Log.Information("KeywordTriggers: held - a panic is still quiet");
             return;
         }
-        // WPF merge: preset first, and only the first enabled PlayAudio action wins.
-        var audio = fired.SelectMany(t => t.Actions ?? new()).OfType<PlayAudioAction>().FirstOrDefault(a => a.Enabled);
-        if (audio == null && fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0))
+        LastDispatch = DispatchAsync(fired);
+        // WPF KeywordTriggerService.cs:1272,1345,1363: all enabled actions for one trigger;
+        // :1283-1293: only the first enabled comment when multiple triggers merge.
+        var comments = fired.SelectMany(t => t.Actions ?? new()).OfType<AvatarCommentAction>().Where(a => a.Enabled);
+        if (fired.Count > 1) comments = comments.Take(1);
+        foreach (var comment in comments) _ = KeywordAvatarComment.DispatchAsync(comment, fired[0]);
+    }
+    internal Action QuestCredit = () => App.Quests?.TrackKeywordTrigger();
+    internal Action<string, double> Haptic = (keyword, intensity) => _ = CoreHaptics.Service?.TriggerKeywordPatternAsync(keyword, intensity);
+    internal Action<double> AddXp = amount => CoreProgression.AddXP(amount, "KeywordTrigger");
+    internal Func<int, int> ChasterBook = seconds => ChasterHead.Service?.NoteSeconds("watcher", seconds).AppliedSeconds ?? 0;
+    internal Func<string> ChasterCapPath = () => Path.Combine(CorePaths.UserData, "chaster_trigger_caps.json");
+    private KeywordTriggerChasterCap? _chasterCap;
+    // WPF GetRecentFires: the Awareness pulse feed reads the shared Core ring (KeywordFireLog).
+    internal IReadOnlyList<TriggerFireRecord> GetRecentFires() => Fires.Recent();
+    internal Task LastDispatch { get; private set; } = Task.CompletedTask;
+    private async Task DispatchAsync(List<KeywordTrigger> fired)
+    {
+        if (ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
+        foreach (var _ in fired)
+            try { QuestCredit(); } catch (Exception ex) { Log.Warning(ex, "Keyword quest credit failed"); }
+        var first = fired[0];
+        List<KeywordAction> actions;
+        if (fired.Count == 1 && (first.Actions == null || first.Actions.Count == 0))
         {
-            var t = fired[0];
-            audio = new PlayAudioAction { FilePath = t.AudioFilePath, Volume = t.AudioVolume,
-                PlayCount = t.AudioPlayCount, DelayBetweenMs = t.AudioDelayBetweenMs, DuckSystemAudio = t.DuckAudio };
+            actions = new();
+            if (first.VisualEffect == KeywordVisualEffect.HighlightOnly) return;
+            actions.Add(new PlayAudioAction { FilePath = first.AudioFilePath, Volume = first.AudioVolume,
+                PlayCount = first.AudioPlayCount, DelayBetweenMs = first.AudioDelayBetweenMs, DuckSystemAudio = first.DuckAudio });
+            if (first.HapticEnabled) actions.Add(new HapticAction { Intensity = first.HapticIntensity });
+            if (first.XPAward > 0) actions.Add(new AddXpAction { Amount = first.XPAward });
         }
-        if (audio != null) Play(audio);
+        else if (fired.Count == 1) actions = first.Actions!.Where(a => a is { Enabled: true }).ToList();
+        else
+        {
+            var seen = new HashSet<string>();   // WPF KeywordTriggerService.cs:1322: one slot per type, VisualEffect per effect
+            actions = fired.SelectMany(t => t.Actions ?? new()).Where(a => a is { Enabled: true } &&
+                seen.Add(a is VisualEffectAction ve ? $"VisualEffect:{ve.Effect}" : a.GetType().Name)).ToList();
+        }
+        var played = false;
+        foreach (var action in actions)
+        {
+            if (!IsActive || ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
+            try
+            {
+                switch (action)
+                {
+                    case PlayAudioAction audio when !played:
+                        played = true;
+                        if (!await PlayAsync(audio)) return;
+                        break;
+                    case HapticAction haptic: Haptic(first.Keyword, haptic.Intensity); break;
+                    case AddXpAction xp when xp.Amount > 0:
+                        AddXp(xp.Amount * (CoreSession.IsSessionRunning ? CoreSettings.Current.KeywordSessionMultiplier : 1));
+                        break;
+                    case ChasterAddTimeAction chaster: BookChaster(chaster, first); break;
+                }
+            }
+            catch (Exception ex) { Log.Warning(ex, "Keyword action {Action} failed", action.GetType().Name); }
+        }
     }
 
-    // ponytail: WPF FireDemoTrigger (KeywordTriggerService :394-424) checks HasAccess (#887) and fires a synthetic
-    // Highlight+AvatarComment trigger with no audio and no settings; both actions land with wire-shell-keyword-triggers-b.
-    internal void FireDemo(string keyword, string source) { }
+    private void BookChaster(ChasterAddTimeAction chaster, KeywordTrigger trigger)
+    {
+        var id = string.IsNullOrEmpty(trigger.Id) ? "keyword:" + (trigger.Keyword ?? "") : trigger.Id;
+        var now = Now();
+        var path = ChasterCapPath();
+        _chasterCap ??= KeywordTriggerChasterCap.Load(path);
+        var allowed = _chasterCap.Allowance(id, Math.Clamp(chaster.Minutes, 0, 60) * 60, now);
+        if (allowed <= 0) { Log.Information("Keyword Chaster time for '{Keyword}' is at its day cap", trigger.Keyword); return; }
+        var applied = ChasterBook(allowed);
+        if (applied <= 0) return;
+        _chasterCap.Record(id, applied, now);
+        _chasterCap.Save(path);
+    }
+    // WPF KeywordTriggerService.cs:393-432: gated synthetic fire, no saved trigger/audio lookup; the
+    // avatar comment dispatches (WPF DispatchResponseAsync). Null OCR words draw no highlight.
+    internal void FireDemo(string keyword, string source)
+    {
+        if (string.IsNullOrWhiteSpace(keyword)) return;
+        if (!(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return;
+        var demo = new KeywordTrigger
+        {
+            Id = "tutorial:demo", Keyword = keyword, MatchType = KeywordMatchType.PlainText, Enabled = true,
+            VisualEffect = KeywordVisualEffect.HighlightOnly,
+            Actions = new() { new HighlightAction { Enabled = true },
+                new AvatarCommentAction { Enabled = true, FallbackPhraseCategory = "PuppyPraise", RequireAiAvailable = false } },
+        };
+        try
+        {
+            var now = Now();
+            // WPF KeywordTriggerService.cs:139,426: demos bypass checks but still mute the word.
+            _cooldowns.Record(demo, CoreSettings.Current, now.ToUniversalTime());
+            Fires.Record(demo, source, now);
+            TriggerFired?.Invoke(demo);
+            _ = KeywordAvatarComment.DispatchAsync((AvatarCommentAction)demo.Actions[1], demo);
+        }
+        catch (Exception ex) { Log.Debug(ex, "FireDemo failed"); }
+    }
 
     internal void StopAudio()
     {
         _audio?.Cancel(); _audio?.Dispose(); _audio = null;
+        StopClip();
+    }
+    private void StopClip()
+    {
+        _playGeneration++;
         var stop = _stop; _stop = null;
         try { stop?.Invoke(); } catch (Exception ex) { Log.Warning(ex, "Keyword clip stop failed"); }
         if (_duckGeneration is { } generation) CoreAudio.Unduck(generation);
         _duckGeneration = null;
     }
 
-    private void Play(PlayAudioAction audio)
+    private async Task<bool> PlayAsync(PlayAudioAction audio)
     {
-        // WPF KeywordTriggerService.cs:1398,1841-1855: unsolicited audio requires an engine or session.
-        if ((!CoreSession.IsEngineRunning && !CoreSession.IsSessionRunning) || string.IsNullOrEmpty(audio.FilePath)) return;
+        // WPF KeywordTriggerService.cs:1398,1841-1855: unsolicited audio requires an engine or session;
+        // the other actions still run.
+        if ((!CoreSession.IsEngineRunning && !CoreSession.IsSessionRunning) || string.IsNullOrEmpty(audio.FilePath)) return true;
         var path = audio.FilePath;
         if (!Path.IsPathRooted(path))
         {
@@ -205,17 +328,15 @@ internal sealed class KeywordAudioRuntime
             var legacy = ContentLocator.Resolve(Path.Combine("Resources", "sub_audio", path));
             path = File.Exists(resource) ? resource : File.Exists(legacy) ? legacy : path;
         }
-        if (!File.Exists(path)) return;
-        StopAudio();
-        var cancellation = _audio = new CancellationTokenSource();
+        if (!File.Exists(path)) return true;
+        StopClip();
+        var cancellation = _audio ??= new CancellationTokenSource();
         var token = cancellation.Token;
         if (audio.DuckSystemAudio && CoreSettings.Current.AudioDuckingEnabled)
         {
             CoreAudio.Duck(CoreSettings.Current.DuckingLevel);
             _duckGeneration = CoreAudio.DuckGeneration;
         }
-        _ = Repeat();
-        async Task Repeat()
         {
             try
             {
@@ -225,20 +346,22 @@ internal sealed class KeywordAudioRuntime
                     if (i > 0 && audio.DelayBetweenMs > 0) await Delay(audio.DelayBetweenMs, token);
                     token.ThrowIfCancellationRequested();
                     // Old lane's stricter hold: also check after every repeat gap.
-                    if (!CoreSession.IsEngineRunning && !CoreSession.IsSessionRunning) { StopAudio(); return; }
+                    if (!CoreSession.IsEngineRunning && !CoreSession.IsSessionRunning) { StopAudio(); return false; }
                     _stop?.Invoke();
                     var last = i == count - 1;
+                    var generation = ++_playGeneration;
                     _stop = CoreAudio.PlayStoppable(path,
                         KeywordMatchRules.AudioVolume(audio.Volume, CoreSettings.Current.MasterVolume), "keyword-trigger",
                         onFinished: () => { if (last) Dispatcher.UIThread.Post(async () =>
                         {
-                            try { await Delay(500, token); if (!token.IsCancellationRequested) StopAudio(); }
+                            try { await Delay(500, token); if (!token.IsCancellationRequested && generation == _playGeneration) StopClip(); }
                             catch (OperationCanceledException) { }
                         }); });
                 }
             }
-            catch (OperationCanceledException) { }
-            catch (Exception ex) { Log.Warning(ex, "Keyword audio failed"); StopAudio(); }
+            catch (OperationCanceledException) { return false; }
+            catch (Exception ex) { Log.Warning(ex, "Keyword audio failed"); StopAudio(); return false; }
+            return true;
         }
     }
 }

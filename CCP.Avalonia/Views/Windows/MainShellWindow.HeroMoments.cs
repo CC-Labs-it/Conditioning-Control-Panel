@@ -192,7 +192,7 @@ public partial class MainShellWindow
         if (_heroClosed) return;
         FlashLevelUp();
         PopLevelChip();
-        CelebrateLevelUp();
+        CelebrateLevelUp(); // WPF EventFx.cs:249-262: right-edge 110-particle burst on the old fill, before repaint
         UpdateLevelDisplay();
         Platform.OsNotifications.Show(Loc.Get("toast_level_up_title"), Loc.GetF("toast_level_up_body", level));
         PlayHeroLevelSound();

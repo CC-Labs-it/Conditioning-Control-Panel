@@ -16,8 +16,7 @@
      in docs/avalonia-parity.html for the named follow-up lane.
      Controls.xaml keys are shared here, including the three Deeper button themes.
      Action/Secondary/Outline carry WPF's 80ms press / 150ms BackEase(0.3) release.
-     ponytail: SecondaryButton/PinkButton HudPlank depth and the ToggleStyle timing gaps below
-     remain wire-theme-controls-b. -->
+     SecondaryButton/PinkButton include opt-in HudPlank depth. ToggleStyle timing remains in PR #3396. -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
@@ -180,6 +179,22 @@
     <TransformOperationsTransition Property="{x:Static Visual.RenderTransformProperty}" Duration="0:0:0.08"/>
   </Transitions>
 
+  <!-- The default Button: Fluent's, but with WPF's content alignment. WPF's stock Button style sets
+       Horizontal/VerticalContentAlignment Center, so a fixed-Width button (InputDialog Cancel/OK,
+       KnowledgeLinkEditor Cancel/Add, New Enhancement Cancel) centres its label; Fluent leaves it
+       Stretch and the label sat at the left. WPF also leaves the button itself Stretch, so a fixed-Width
+       button centres in its slot (HapticsSetup cards) and an unsized one fills it (Chaos FALL IN);
+       Fluent pins it Left. Keyed as the type's own theme so `BasedOn {x:Type Button}`
+       sites inherit it too; the BasedOn here still resolves to Fluent's (this key is not added yet). -->
+  <ControlTheme x:Key="{x:Type Button}" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="VerticalAlignment" Value="Stretch"/>
+    <!-- Aero2's button border is square; Fluent rounds it 4px (ChatShortcutCapture Reset/Cancel). -->
+    <Setter Property="CornerRadius" Value="0"/>
+  </ControlTheme>
+
   <!-- Controls.xaml:36. The press-feedback Storyboards (scale 0.97 in, BackEase out) become a
        :pressed RenderTransform plus the direction-specific Transitions above.
        WPF's bare <ContentPresenter/> also has to name what it presents on Avalonia. -->
@@ -224,22 +239,43 @@
     <Setter Property="BorderThickness" Value="0"/>
     <Setter Property="Template">
       <ControlTemplate TargetType="Button">
-        <Border x:Name="border" CornerRadius="8" Padding="{TemplateBinding Padding}"
-                Background="{TemplateBinding Background}"
-                RenderTransformOrigin="50%,50%">
-          <ContentPresenter Content="{TemplateBinding Content}"
-                            ContentTemplate="{TemplateBinding ContentTemplate}"
-                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
-        </Border>
+        <Grid>
+          <Border x:Name="DepthDrop" VerticalAlignment="Bottom" Height="5" Margin="6,0,6,-5"
+                  CornerRadius="0,0,7,7" Background="{DynamicResource DepthDropBand}"
+                  IsHitTestVisible="False" IsVisible="False"/>
+          <Grid x:Name="DepthFace">
+            <Border x:Name="border" CornerRadius="8" Padding="{TemplateBinding Padding}"
+                    Background="{TemplateBinding Background}"
+                    RenderTransformOrigin="50%,50%">
+              <ContentPresenter Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <Border x:Name="DepthSheen" CornerRadius="8" Background="{DynamicResource DepthRaisedSheen}"
+                    IsHitTestVisible="False" IsVisible="False"/>
+            <Border x:Name="DepthBevel" CornerRadius="8" BorderThickness="1"
+                    BorderBrush="{DynamicResource DepthRaisedBevel}"
+                    IsHitTestVisible="False" IsVisible="False"/>
+          </Grid>
+        </Grid>
       </ControlTemplate>
     </Setter>
     <Style Selector="^:pointerover /template/ Border#border">
       <Setter Property="Background" Value="{DynamicResource PanelAccentHoverBrush}"/>
     </Style>
+    <Style Selector="^[(fx|HudPlank.Kind)=Plank] /template/ Border#DepthDrop">
+      <Setter Property="IsVisible" Value="True"/>
+    </Style>
+    <Style Selector="^[(fx|HudPlank.Kind)=Plank] /template/ Border#DepthSheen">
+      <Setter Property="IsVisible" Value="True"/>
+    </Style>
+    <Style Selector="^[(fx|HudPlank.Kind)=Plank] /template/ Border#DepthBevel">
+      <Setter Property="IsVisible" Value="True"/>
+    </Style>
     <Style Selector="^ /template/ Border#border">
       <Setter Property="Transitions" Value="{StaticResource PressReleaseTransitions}"/>
     </Style>
-    <Style Selector="^:pressed /template/ Border#border">
+    <Style Selector="^[(fx|HudPlank.Kind)=None]:pressed /template/ Border#border">
       <Setter Property="Transitions" Value="{StaticResource PressDownTransitions}"/>
       <Setter Property="RenderTransform" Value="scale(0.97)"/>
     </Style>
@@ -327,6 +363,11 @@
              the spark snaps back to its parked Opacity="0" - the same "cut it dead" intent the
              WPF comment states, minus the 80ms ramp. -->
   <ControlTheme x:Key="ToggleStyle" TargetType="CheckBox">
+    <!-- The spark grows to 36px around x = 33, past the 44x22 box. An Avalonia CheckBox clips
+         to its bounds, which cut WPF's soft round halo into a hard-edged square (measured in
+         the headless render); WPF never clips here. The halo also plays when a toggle loads
+         checked, as WPF's EnterActions do when the trigger is already true at template apply. -->
+    <Setter Property="ClipToBounds" Value="False"/>
     <Setter Property="Template">
       <ControlTemplate TargetType="CheckBox">
         <Grid x:Name="toggleRoot">
@@ -486,18 +527,58 @@
     <Setter Property="BorderThickness" Value="1.5"/>
     <Setter Property="Template">
       <ControlTemplate TargetType="Button">
-        <Border x:Name="border" Background="{TemplateBinding Background}"
-                BorderBrush="{TemplateBinding BorderBrush}"
-                BorderThickness="{TemplateBinding BorderThickness}"
-                CornerRadius="8" Padding="{TemplateBinding Padding}">
-          <ContentPresenter Content="{TemplateBinding Content}"
-                            ContentTemplate="{TemplateBinding ContentTemplate}"
-                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
-        </Border>
+        <Grid>
+          <Border x:Name="DepthDrop" VerticalAlignment="Bottom" Height="5" Margin="6,0,6,-5"
+                  CornerRadius="0,0,7,7" Background="{DynamicResource DepthDropBand}"
+                  IsHitTestVisible="False" IsVisible="False"/>
+          <Grid x:Name="DepthFace">
+            <Border x:Name="border" Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="8"/>
+            <Border x:Name="DepthSheen" CornerRadius="8" Background="{DynamicResource DepthRaisedSheen}"
+                    IsHitTestVisible="False" IsVisible="False"/>
+            <Border x:Name="DepthBevel" CornerRadius="8" BorderThickness="1"
+                    BorderBrush="{DynamicResource DepthRaisedBevel}"
+                    IsHitTestVisible="False" IsVisible="False"/>
+            <Border BorderThickness="{TemplateBinding BorderThickness}" BorderBrush="Transparent"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+          </Grid>
+        </Grid>
       </ControlTemplate>
     </Setter>
-    <Style Selector="^:pointerover /template/ Border#border">
+    <Style Selector="^:pointerover">
       <Setter Property="Background" Value="{DynamicResource DarkPinkBrush}"/>
+    </Style>
+    <Style Selector="^[(fx|HudPlank.Kind)=Plank] /template/ Border#DepthDrop">
+      <Setter Property="IsVisible" Value="True"/>
+    </Style>
+    <Style Selector="^[(fx|HudPlank.Kind)=Plank] /template/ Border#DepthSheen">
+      <Setter Property="IsVisible" Value="True"/>
+    </Style>
+    <Style Selector="^[(fx|HudPlank.Kind)=Plank] /template/ Border#DepthBevel">
+      <Setter Property="IsVisible" Value="True"/>
+    </Style>
+    <Style Selector="^[(fx|HudPlank.Kind)=Plank] /template/ Border#border">
+      <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+    <Style Selector="^[(fx|HudPlank.Kind)=Chunky] /template/ Border#DepthDrop">
+      <Setter Property="IsVisible" Value="True"/>
+    </Style>
+    <Style Selector="^[(fx|HudPlank.Kind)=Chunky] /template/ Border#DepthSheen">
+      <Setter Property="IsVisible" Value="True"/>
+      <Setter Property="Background" Value="{DynamicResource DepthPlankSheen}"/>
+    </Style>
+    <Style Selector="^[(fx|HudPlank.Kind)=Chunky] /template/ Border#DepthBevel">
+      <Setter Property="IsVisible" Value="True"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource DepthPlankBevel}"/>
+    </Style>
+    <Style Selector="^[(fx|HudPlank.Kind)=Chunky] /template/ Border#border">
+      <Setter Property="BorderThickness" Value="0"/>
     </Style>
   </ControlTheme>
 
@@ -607,6 +688,13 @@
     <Setter Property="DragDrop.AllowDrop" Value="True"/>
     <Setter Property="fx:InputFx.IsEnabled" Value="True"/>
     <Setter Property="fx:InputFx.GlowColor" Value="{DynamicResource PinkColor}"/>
+    <!-- WPF insets the text by Padding twice: Inputs.xaml:347 puts Margin="{TemplateBinding Padding}"
+         on PART_ContentHost, and the TextBox applies its Padding inside that host again. Fluent's
+         template applies it once (PART_InnerDockPanel), so every box was 2 x Padding shorter than
+         WPF's (KnowledgeLink 33 vs 49px, DisplayName 40 vs 60px). -->
+    <Style Selector="^ /template/ ScrollViewer#PART_ScrollViewer">
+      <Setter Property="Margin" Value="{Binding Padding, RelativeSource={RelativeSource TemplatedParent}}"/>
+    </Style>
     <Style Selector="^:pointerover">
       <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
     </Style>
@@ -635,6 +723,8 @@
        the three-state middle value, 140ms check-pop. A Grid, not a StackPanel, so wrapping content wraps.
        Keyed switches (ToggleStyle etc.) set Theme locally and never reach this. -->
   <ControlTheme x:Key="InputCheckBoxTheme" TargetType="CheckBox">
+    <!-- The checked dot's glow (WPF DropShadowEffect) falls outside the 18px box; clipped, it drew a square. -->
+    <Setter Property="ClipToBounds" Value="False"/>
     <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
     <Setter Property="Background" Value="{DynamicResource PanelAccentBrush}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource GlassBorderBrush}"/>
@@ -699,6 +789,61 @@
     <Style Selector="^:disabled">
       <Setter Property="Opacity" Value="0.45"/>
       <Setter Property="Cursor" Value="Arrow"/>
+    </Style>
+  </ControlTheme>
+
+  <!-- The default RadioButton. WPF has no house RadioButton chrome: every radio without a keyed
+       template (Workshop awareness intensity, Deeper sort/media type, perk picker, Goon test modes)
+       draws the stock Aero2 one - a 12px white circle, grey rim, dark dot, text 4px to the right.
+       Fluent's is a 20px circle, MinHeight 32 and a Windows-blue dot. Keyed here as the type's own
+       theme so `BasedOn {x:Type RadioButton}` call sites (CmpIntensityRadioStyle) inherit it, like
+       their WPF styles inherit Aero2. Colours are Aero2's RadioButton.* resources. -->
+  <ControlTheme x:Key="{x:Type RadioButton}" TargetType="RadioButton">
+    <Setter Property="Background" Value="#FFFFFFFF"/>
+    <Setter Property="BorderBrush" Value="#FF707070"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="Padding" Value="4,-1,0,0"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="HorizontalContentAlignment" Value="Left"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="RadioButton">
+        <Grid ColumnDefinitions="Auto,*" Background="Transparent">
+          <Border x:Name="radioButtonBorder" CornerRadius="100" Margin="1,1,2,1"
+                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                  Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}">
+            <Panel Margin="2">
+              <Ellipse x:Name="optionMark" Fill="#FF212121" MinWidth="6" MinHeight="6" Opacity="0"/>
+            </Panel>
+          </Border>
+          <ContentPresenter x:Name="PART_ContentPresenter" Grid.Column="1"
+                            Margin="{TemplateBinding Padding}" RecognizesAccessKey="True"
+                            Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border#radioButtonBorder">
+      <Setter Property="Background" Value="#FFF3F9FF"/>
+      <Setter Property="BorderBrush" Value="#FF5593FF"/>
+    </Style>
+    <Style Selector="^:pressed /template/ Border#radioButtonBorder">
+      <Setter Property="Background" Value="#FFD9ECFF"/>
+      <Setter Property="BorderBrush" Value="#FF3C77DD"/>
+    </Style>
+    <Style Selector="^:disabled /template/ Border#radioButtonBorder">
+      <Setter Property="Background" Value="#FFE6E6E6"/>
+      <Setter Property="BorderBrush" Value="#FFBCBCBC"/>
+    </Style>
+    <Style Selector="^:disabled /template/ Ellipse#optionMark">
+      <Setter Property="Fill" Value="#FF707070"/>
+    </Style>
+    <Style Selector="^:checked /template/ Ellipse#optionMark">
+      <Setter Property="Opacity" Value="1"/>
+    </Style>
+    <Style Selector="^:indeterminate /template/ Ellipse#optionMark">
+      <Setter Property="Opacity" Value="0.56"/>
     </Style>
   </ControlTheme>
 
@@ -896,57 +1041,238 @@
     <Style Selector="^:disabled /template/ Border#TrackBg"><Setter Property="Opacity" Value="0.1"/></Style>
   </ControlTheme>
 
-  <!-- MainWindow.xaml:1234. Restyles the Fluent ComboBox parts rather than replacing the
-       template: the popup, item presenter and toggle are a part contract worth keeping. Visual
-       contract kept: 8px radius, dark surface, pink border on hover/open, 24px min height. The
-       WPF ItemContainerStyle becomes a selector on the items. -->
-  <!-- The WPF ItemContainerStyle. A ControlTheme may not contain a descendant selector, so the
-       rows get their own theme, handed over through ItemContainerTheme. Declared first: a
-       same-dictionary StaticResource resolves at parse time. -->
-  <ControlTheme x:Key="DarkComboBoxItem" TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
+  <!-- Inputs.xaml:152-208, the implicit ComboBoxItem every WPF dropdown row wears (DarkComboBoxStyle
+       sets no ItemContainerStyle, so its rows are these too): r6 row, 5px accent dot on the
+       selected row, pink 20% hover / 40% selected. Own template: Fluent's item theme repaints its
+       presenter for every state. Declared first: a same-dictionary StaticResource resolves at parse time. -->
+  <ControlTheme x:Key="DarkComboBoxItem" TargetType="ComboBoxItem">
     <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
-    <Setter Property="Padding" Value="8,5"/>
-    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Padding" Value="8,6"/>
     <Setter Property="Cursor" Value="Hand"/>
-    <!-- Fluent's item theme sets Background/Foreground on the presenter for these states, so a
-         control-level setter is overridden; target the presenter as Fluent does. -->
-    <Style Selector="^:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
+    <Setter Property="FocusAdorner" Value="{x:Null}"/>
+    <Setter Property="HorizontalContentAlignment" Value="Left"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="ComboBoxItem">
+        <Border x:Name="Bd" CornerRadius="6" Margin="0,1"
+                Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+          <Grid ColumnDefinitions="5,*">
+            <Ellipse x:Name="SelDot" Width="5" Height="5" HorizontalAlignment="Left" VerticalAlignment="Center"
+                     Fill="{DynamicResource PinkBrush}" Opacity="0"/>
+            <ContentPresenter x:Name="PART_ContentPresenter" Grid.Column="1" Margin="7,0,0,0"
+                              Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+          </Grid>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover">
       <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
     </Style>
-    <Style Selector="^:selected /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource TransparentPink40Brush}"/>
+    <Style Selector="^:pointerover /template/ Border#Bd">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
+    </Style>
+    <Style Selector="^:selected">
       <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    </Style>
+    <Style Selector="^:selected /template/ Border#Bd">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink40Brush}"/>
+    </Style>
+    <Style Selector="^:selected /template/ Ellipse#SelDot">
+      <Setter Property="Opacity" Value="1"/>
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.45"/>
+      <Setter Property="Cursor" Value="Arrow"/>
     </Style>
   </ControlTheme>
 
-  <ControlTheme x:Key="DarkComboBoxStyle" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+  <!-- Inputs.xaml:42-150, the implicit ComboBox (applied app-wide in App.axaml; a local Theme wins):
+       r8 dark field, 22px arrow column holding a hand-drawn chevron, text in column 0 only so long
+       text stops at the arrow, 10,0 padding, MinHeight 28, accent border on hover and while open,
+       r10 elevated popup. The template is our own because Fluent's reserves a 32px glyph column and
+       its own 14px chrome; the parts kept are the ones ComboBox needs (PART_Popup + an ItemsPresenter).
+       No ToggleButton: Avalonia's ComboBox opens itself on click. HorizontalAlignment stays Stretch
+       like WPF (Fluent's theme sets Left, which collapsed unsized combos to a chevron stub). -->
+  <ControlTheme x:Key="InputComboBoxTheme" TargetType="ComboBox">
     <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
     <Setter Property="Background" Value="{DynamicResource SurfaceBgBrush}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource PanelAccentHoverBrush}"/>
     <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="FontSize" Value="11"/>
-    <Setter Property="MinHeight" Value="24"/>
     <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="MinHeight" Value="28"/>
+    <Setter Property="Padding" Value="10,0"/>
     <Setter Property="Cursor" Value="Hand"/>
-    <Setter Property="Padding" Value="8,2,2,2"/>
+    <Setter Property="FocusAdorner" Value="{x:Null}"/>
+    <Setter Property="HorizontalContentAlignment" Value="Left"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="MaxDropDownHeight" Value="504"/>
+    <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+    <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+    <Setter Property="PlaceholderForeground" Value="{DynamicResource TextMutedBrush}"/>
+    <Setter Property="ItemContainerTheme" Value="{StaticResource DarkComboBoxItem}"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="ComboBox">
+        <Grid ColumnDefinitions="*,Auto">
+          <Border x:Name="Background" Grid.ColumnSpan="2" CornerRadius="{TemplateBinding CornerRadius}"
+                  Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"/>
+          <Panel x:Name="ArrowHost" Grid.Column="1">
+            <Path x:Name="Arrow" HorizontalAlignment="Right" VerticalAlignment="Center"
+                  Stroke="{DynamicResource TextSecondaryBrush}" StrokeLineCap="Round" StrokeJoin="Round"/>
+          </Panel>
+          <TextBlock x:Name="PlaceholderTextBlock" Grid.Column="0" Margin="{TemplateBinding Padding}"
+                     Text="{TemplateBinding PlaceholderText}" Foreground="{TemplateBinding PlaceholderForeground}"
+                     HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                     VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                     IsVisible="{TemplateBinding SelectionBoxItem, Converter={x:Static ObjectConverters.IsNull}}"/>
+          <ContentPresenter x:Name="ContentPresenter" Grid.Column="0" IsHitTestVisible="False" ClipToBounds="True"
+                            Margin="{TemplateBinding Padding}"
+                            Content="{TemplateBinding SelectionBoxItem}"
+                            ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+          <Popup x:Name="PART_Popup" WindowManagerAddShadowHint="False"
+                 IsOpen="{TemplateBinding IsDropDownOpen, Mode=TwoWay}"
+                 MinWidth="{Binding Bounds.Width, RelativeSource={RelativeSource TemplatedParent}}"
+                 PlacementTarget="Background" IsLightDismissEnabled="True" InheritsTransform="True">
+            <Border x:Name="PopupBorder" Margin="0,4,0,0" CornerRadius="10" Padding="4"
+                    Background="{DynamicResource ElevatedSurfaceBrush}"
+                    BorderBrush="{DynamicResource TransparentPink20Brush}" BorderThickness="1">
+              <ScrollViewer MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                            HorizontalScrollBarVisibility="{TemplateBinding (ScrollViewer.HorizontalScrollBarVisibility)}"
+                            VerticalScrollBarVisibility="{TemplateBinding (ScrollViewer.VerticalScrollBarVisibility)}">
+                <ItemsPresenter x:Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}"/>
+              </ScrollViewer>
+            </Border>
+          </Popup>
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+    <!-- Arrow geometry lives in plain theme styles, not the template, so DarkComboBoxStyle can
+         restate it (a value written in the template outranks a non-trigger style). -->
+    <Style Selector="^ /template/ Panel#ArrowHost">
+      <Setter Property="Width" Value="22"/>
+    </Style>
+    <Style Selector="^ /template/ Path#Arrow">
+      <Setter Property="Margin" Value="0,0,9,0"/>
+      <Setter Property="Data" Value="M 0 0 L 4 4 L 8 0"/>
+      <Setter Property="StrokeThickness" Value="1.6"/>
+    </Style>
     <Style Selector="^:pointerover /template/ Border#Background">
       <Setter Property="BorderBrush" Value="{DynamicResource InputHoverBorderBrush}"/>
+    </Style>
+    <Style Selector="^:pointerover /template/ Path#Arrow">
+      <Setter Property="Stroke" Value="{DynamicResource PinkBrush}"/>
     </Style>
     <Style Selector="^:dropdownopen /template/ Border#Background">
       <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
     </Style>
+    <Style Selector="^:dropdownopen /template/ Path#Arrow">
+      <Setter Property="Stroke" Value="{DynamicResource PinkBrush}"/>
+    </Style>
     <Style Selector="^:disabled">
       <Setter Property="Opacity" Value="0.45"/>
+      <Setter Property="Cursor" Value="Arrow"/>
     </Style>
-    <Style Selector="^ /template/ Border#PopupBorder">
-      <Setter Property="Background" Value="{DynamicResource ElevatedSurfaceBrush}"/>
-      <Setter Property="BorderBrush" Value="{DynamicResource TransparentPink20Brush}"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="CornerRadius" Value="10"/>
-      <Setter Property="Padding" Value="4"/>
+  </ControlTheme>
+
+  <!-- MainWindow.xaml:1234, the COMPACT variant of the implicit ComboBox above for dense rows: 11px,
+       MinHeight 24, an 18px arrow column with a smaller chevron, text at 8,2,2,2 and a popup capped
+       at 240px. Same template; the old 32px Fluent glyph column cut "Default (follow multi-monitor)"
+       at Width 180 (Pink Filter, Spiral). Several code-behind sites resolve this key by name. -->
+  <ControlTheme x:Key="DarkComboBoxStyle" TargetType="ComboBox" BasedOn="{StaticResource InputComboBoxTheme}">
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="MinHeight" Value="24"/>
+    <Setter Property="Padding" Value="8,2,2,2"/>
+    <Setter Property="MaxDropDownHeight" Value="240"/>
+    <Style Selector="^ /template/ Panel#ArrowHost">
+      <Setter Property="Width" Value="18"/>
     </Style>
-    <Setter Property="ItemContainerTheme" Value="{StaticResource DarkComboBoxItem}"/>
+    <Style Selector="^ /template/ Path#Arrow">
+      <Setter Property="Margin" Value="0,0,7,0"/>
+      <Setter Property="Data" Value="M 0 0 L 3.5 3.5 L 7 0"/>
+      <Setter Property="StrokeThickness" Value="1.5"/>
+    </Style>
+  </ControlTheme>
+
+  <!-- The default Expander = WPF's stock Aero2 one, which every unstyled WPF Expander wears (webcam
+       Advanced, Gaze "Advanced settings", the prompt editor sections, Takeover, Personality Studio):
+       no card, a 19px white circle with a dark chevron left of the header text, content straight
+       below. Fluent drew a full-width bordered header bar with the chevron on the right (~60px a
+       row) and its chevron rotation caught mid-flight read as a broken corner. ExpandDirection Down
+       only, as in every WPF use. Colours are Aero2's Expander.* resources. -->
+  <ControlTheme x:Key="AeroExpanderHeader" TargetType="ToggleButton">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="FocusAdorner" Value="{x:Null}"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="ToggleButton">
+        <Border Padding="{TemplateBinding Padding}" Background="Transparent">
+          <Grid ColumnDefinitions="19,*" Background="Transparent">
+            <Ellipse x:Name="circle" Width="19" Height="19" HorizontalAlignment="Center" VerticalAlignment="Center"
+                     Fill="#FFFFFFFF" Stroke="#FF333333" StrokeThickness="1"/>
+            <Path x:Name="arrow" HorizontalAlignment="Center" VerticalAlignment="Center"
+                  Data="M 1,1.5 L 4.5,5 L 8,1.5" Stroke="#FF333333" StrokeThickness="2"/>
+            <ContentPresenter x:Name="PART_ContentPresenter" Grid.Column="1" Margin="4,0,0,0"
+                              HorizontalAlignment="Left" VerticalAlignment="Center"
+                              RecognizesAccessKey="True"
+                              Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"/>
+          </Grid>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:checked /template/ Path#arrow">
+      <Setter Property="Data" Value="M 1,4.5 L 4.5,1 L 8,4.5"/>
+    </Style>
+    <Style Selector="^:pointerover /template/ Ellipse#circle">
+      <Setter Property="Stroke" Value="#FF5593FF"/>
+      <Setter Property="Fill" Value="#FFF3F9FF"/>
+    </Style>
+    <Style Selector="^:pointerover /template/ Path#arrow">
+      <Setter Property="Stroke" Value="#FF000000"/>
+    </Style>
+    <Style Selector="^:pressed /template/ Ellipse#circle">
+      <Setter Property="Stroke" Value="#FF3C77DD"/>
+      <Setter Property="StrokeThickness" Value="1.5"/>
+      <Setter Property="Fill" Value="#FFD9ECFF"/>
+    </Style>
+    <Style Selector="^:disabled /template/ Ellipse#circle">
+      <Setter Property="Stroke" Value="#FFBCBCBC"/>
+      <Setter Property="Fill" Value="#FFE6E6E6"/>
+    </Style>
+    <Style Selector="^:disabled /template/ Path#arrow">
+      <Setter Property="Stroke" Value="#FF707070"/>
+    </Style>
+  </ControlTheme>
+
+  <ControlTheme x:Key="{x:Type Expander}" TargetType="Expander">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderBrush" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="Expander">
+        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3">
+          <DockPanel>
+            <ToggleButton x:Name="PART_toggle" DockPanel.Dock="Top" Margin="1" MinWidth="0" MinHeight="0"
+                          Theme="{StaticResource AeroExpanderHeader}"
+                          Padding="{TemplateBinding Padding}"
+                          Foreground="{TemplateBinding Foreground}"
+                          Content="{TemplateBinding Header}" ContentTemplate="{TemplateBinding HeaderTemplate}"
+                          IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}"/>
+            <ContentPresenter x:Name="PART_ContentPresenter" Margin="{TemplateBinding Padding}"
+                              IsVisible="{TemplateBinding IsExpanded}"
+                              Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+          </DockPanel>
+        </Border>
+      </ControlTemplate>
+    </Setter>
   </ControlTheme>
 
   <!-- MainWindow.xaml:1366. Gradient-border card with a left accent strip and a chevron that
@@ -994,9 +1320,11 @@
                 <ContentPresenter Grid.Column="2" Content="{TemplateBinding Header}"
                                   ContentTemplate="{TemplateBinding HeaderTemplate}"
                                   VerticalAlignment="Center"/>
-                <TextBlock x:Name="Chevron" Grid.Column="3" Text="&#x25B8;" Foreground="{DynamicResource PinkBrush}"
-                           FontSize="14" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,4,0"
-                           RenderTransformOrigin="50%,50%"/>
+                <!-- WPF draws "&#x25B8;" (14 Bold). Not every Linux face has U+25B8, and the fallback
+                     glyph came out about twice the size; the filled caret is the same small triangle. -->
+                <fx:IconGlyph x:Name="Chevron" Grid.Column="3" Kind="CaretRight" Variant="Filled" Size="8"
+                              Foreground="{DynamicResource PinkBrush}" VerticalAlignment="Center" Margin="8,0,4,0"
+                              RenderTransformOrigin="50%,50%"/>
               </Grid>
             </ToggleButton>
             <ContentPresenter x:Name="PART_ContentPresenter" Grid.Row="1" Margin="15,0,15,15"
@@ -1007,7 +1335,7 @@
         </Border>
       </ControlTemplate>
     </Setter>
-    <Style Selector="^:expanded /template/ TextBlock#Chevron">
+    <Style Selector="^:expanded /template/ fx|IconGlyph#Chevron">
       <Setter Property="RenderTransform" Value="rotate(90deg)"/>
     </Style>
   </ControlTheme>

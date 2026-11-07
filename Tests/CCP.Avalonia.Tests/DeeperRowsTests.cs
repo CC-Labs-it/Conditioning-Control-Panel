@@ -59,18 +59,21 @@ public sealed class DeeperRowsTests
 
     private sealed class FakeAudio : IDeeperLocalAudio
     {
-        public bool Playing, Disposed;
+        public bool Playing, Disposed, Rejects;
+        public int Volume { get; set; }
         public double DurationSeconds { get; set; } = 95;
         public double PositionSeconds { get; set; }
-        public void Play() => Playing = true;
+        public void Play() { if (Rejects) throw new InvalidOperationException("Audio transport could not start"); Playing = true; }
         public void Pause() => Playing = false;
         public event Action? Ended;
+        public event Action? Failed;
         public void End() { Playing = false; Ended?.Invoke(); }
+        public void Fail() { Playing = false; Failed?.Invoke(); }
         public void Dispose() => Disposed = true;
     }
 
     [Fact]
-    public Task EditorLocalAudioPlaysSeeksEndsAndStopsOnPanic() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task EditorLocalAudioPlaysSeeksEndsAndStopsOnPanic() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
         var dir = Directory.CreateTempSubdirectory("ccp-deeper-audio-").FullName;
@@ -83,6 +86,8 @@ public sealed class DeeperRowsTests
         try
         {
             editor.Show();
+            Dispatcher.UIThread.RunJobs();
+            await editor._waveformLoad!.WaitAsync(TimeSpan.FromSeconds(10));
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("1:35", editor.TxtTotalTime.Text);   // duration from the transport
 
@@ -109,6 +114,22 @@ public sealed class DeeperRowsTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(IconKind.Play, editor.PlayPauseGlyph.Kind);
             Assert.Equal("0:00", editor.TxtCurrentTime.Text);
+
+            // A start the transport rejects leaves the editor stopped, and the next press tries again.
+            fake.Rejects = true;
+            Click(editor.BtnPlayPause);
+            Assert.Equal(IconKind.Play, editor.PlayPauseGlyph.Kind);
+            fake.Rejects = false;
+            Click(editor.BtnPlayPause);
+            Assert.True(fake.Playing);
+            Assert.Equal(IconKind.Pause, editor.PlayPauseGlyph.Kind);
+
+            // A playback error after the start does the same.
+            fake.Fail();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(IconKind.Play, editor.PlayPauseGlyph.Kind);
+            Click(editor.BtnPlayPause);
+            Assert.True(fake.Playing);
         }
         finally
         {
@@ -117,17 +138,72 @@ public sealed class DeeperRowsTests
             Directory.Delete(dir, true);
         }
         Assert.True(fake.Disposed);
-        return Task.CompletedTask;
     });
+
+    /// <summary>Ledger #12 (WPF DeeperEditorWindow.xaml.cs:1196-1211): an audio clip's peaks come from
+    /// AudioWaveformCache and become the editor's waveform; a failed decode leaves the flat strip.</summary>
+    [Theory]
+    [InlineData(false, true, 95)]
+    [InlineData(true, true, 95)]
+    [InlineData(false, false, 0)]
+    [InlineData(false, true, 0)]
+    public Task EditorAudioClipDrawsTheCachedWaveformPeaks(bool decodeFails, bool playbackAvailable, double playbackDuration) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("ccp-deeper-wave-").FullName;
+        var path = Path.Combine(dir, "clip.mp3");
+        File.WriteAllBytes(path, new byte[16]);
+        var peaks = new[] { 0.1f, 0.9f, 0.4f };
+        string? decoded = null, decodedAtOpen = null;
+        var originalOpen = DeeperLocalAudio.Open;
+        var originalDecoder = AudioWaveformCache.Decoder;
+        DeeperLocalAudio.Open = _ =>
+        {
+            decodedAtOpen = decoded;
+            return Task.FromResult<IDeeperLocalAudio?>(playbackAvailable ? new FakeAudio { DurationSeconds = playbackDuration } : null);
+        };
+        AudioWaveformCache.Decoder = p => { decoded = p; if (decodeFails) throw new InvalidOperationException("decode failed"); return new AudioWaveformResult { Peaks = peaks, DurationSeconds = 95 }; };
+        var editor = new DeeperEditorWindow(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = path }, null);
+        try
+        {
+            editor.Show();
+            Dispatcher.UIThread.RunJobs();
+            var load = editor._waveformLoad;
+            Assert.NotNull(load);
+            await load!.WaitAsync(TimeSpan.FromSeconds(10));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(path, decodedAtOpen);
+            Assert.Equal(path, decoded);
+            var field = typeof(DeeperEditorWindow).GetField("_waveformPeaks", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            if (decodeFails) Assert.Null(field.GetValue(editor));
+            else Assert.Equal(peaks, (float[]?)field.GetValue(editor));
+            var audio = (FakeAudio?)typeof(DeeperEditorWindow).GetField("_localAudio", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(editor);
+            if (playbackAvailable) Assert.Equal(playbackDuration, audio!.DurationSeconds);
+            else Assert.Null(audio);
+            Assert.Equal(95d, (double)typeof(DeeperEditorWindow).GetField("_totalSeconds", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(editor)!);
+            Assert.Equal("1:35", editor.TxtTotalTime.Text);
+            if (!decodeFails) Assert.NotEmpty((System.Collections.IEnumerable)typeof(DeeperEditorWindow).GetField("_rulerVisuals", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(editor)!);
+        }
+        finally
+        {
+            editor.Close();
+            DeeperLocalAudio.Open = originalOpen;
+            AudioWaveformCache.Decoder = originalDecoder;
+            Directory.Delete(dir, true);
+        }
+    });
+
 
     /// <summary>MediaPlayer as the transport sees it: Playing fires on every start AND resume.</summary>
     private sealed class FakeEngine : DeeperLocalAudio.IEngine
     {
         public LibVLCSharp.Shared.VLCState State { get; set; } = LibVLCSharp.Shared.VLCState.NothingSpecial;
+        public int Volume { get; set; }
         public long Time { get; set; }
         public long Length => 6000;
         public int Stops;
-        public void Play() => State = LibVLCSharp.Shared.VLCState.Opening;
+        public bool Starts = true;
+        public bool Play() { Volume = 100; State = LibVLCSharp.Shared.VLCState.Opening; return Starts; }
         public void SetPause(bool pause) => State = pause ? LibVLCSharp.Shared.VLCState.Paused : LibVLCSharp.Shared.VLCState.Playing;
         public void Stop() { Stops++; State = LibVLCSharp.Shared.VLCState.Stopped; }
     }
@@ -137,6 +213,11 @@ public sealed class DeeperRowsTests
     {
         var e = new FakeEngine();
         var t = new DeeperLocalAudio.Transport(e, 12000, () => { });
+        e.State = LibVLCSharp.Shared.VLCState.Playing; t.Volume = 135; Assert.Equal(100, e.Volume);
+        t.Volume = -1; Assert.Equal(0, e.Volume);
+        foreach (var (linear, native) in new[] { (25, 63), (50, 79), (75, 91), (80, 93) })
+        { t.Volume = linear; Assert.Equal(native, e.Volume); Assert.Equal(linear, t.Volume); }
+        e.State = LibVLCSharp.Shared.VLCState.NothingSpecial;
         Assert.Equal(12, t.DurationSeconds);              // header estimate until playing
 
         // Seek before playback: taken by the first Playing, never again.
@@ -144,12 +225,15 @@ public sealed class DeeperRowsTests
         t.Play();
         e.State = LibVLCSharp.Shared.VLCState.Playing;
         t.OnPlaying();
+        Assert.Equal(93, e.Volume);
         Assert.Equal(3000, e.Time);
         Assert.Equal(6, t.DurationSeconds);               // exact length once playing
         e.Time = 4000;
         t.Pause();
         t.Play();
+        e.Volume = 100; // The new output on resume also loses the earlier native level.
         t.OnPlaying();
+        Assert.Equal(93, e.Volume);
         Assert.Equal(4000, e.Time);
 
         // Seek while playing, play on, pause, resume: resume must not jump back to the seek.
@@ -167,6 +251,8 @@ public sealed class DeeperRowsTests
         Assert.Equal(LibVLCSharp.Shared.VLCState.Opening, e.State);
         t.Pause();
         Assert.Equal(LibVLCSharp.Shared.VLCState.Stopped, e.State);
+        e.Starts = false; Assert.Throws<InvalidOperationException>(t.Play);
+        var failed = false; t.Failed += () => failed = true; t.OnError(); Assert.True(failed);
     }
 
     [Fact]
