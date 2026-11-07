@@ -93,11 +93,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// the session at 1.000 throughout, each player reading its own value. 0 is DirectSound's floor
         /// (silence) and LibVLC's cubic scale is kept, so the linear gain mapping (<see cref="VlcVolume"/>)
         /// still lands WPF's sample-gain levels. ",any" falls back to the default output if DirectSound
-        /// cannot open. A caller's own --aout (tests: dummy) wins. Linux: pulse is per stream already.
+        /// cannot open. A caller's own --aout (tests: dummy) wins. Linux names its outputs: "any" can land on vlc-plugin-pipewire
+        /// (3-7.fc44), which dereferences an uninitialized stream when volume is set before the output starts.
         /// </summary>
         internal static string[] WithOutput(string[] options, bool windows) =>
-            windows && !options.Any(o => o.StartsWith("--aout", StringComparison.Ordinal))
-                ? options.Prepend("--aout=directsound,any").ToArray() : options;
+            options.Any(o => o.StartsWith("--aout", StringComparison.Ordinal)) ? options
+                : options.Prepend(windows ? "--aout=directsound,any" : "--aout=pulse,alsa,jack,none").ToArray();
 
         /// <summary>WPF's linear sample gain (0-1) as LibVLC's cubic 0-100 volume: 0.5 lands at about -6 dB.</summary>
         internal static int VlcVolume(float gain) => (int)Math.Round(Math.Cbrt(Math.Clamp(gain, 0f, 1f)) * 100);
