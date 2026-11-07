@@ -103,6 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The global panic listener can stop the game right now (as MandatoryVideoOverlay). Tests swap it.</summary>
         internal static Func<bool> PanicListenerLive = () => PanicListeners.Live;
         internal static VlcFrameSink? Sink => _sink;
+        internal static MediaPlayer? Player => _player;
 
         // Multi-monitor support - static shared state
         private static readonly object _cleanupLock = new();
@@ -418,7 +419,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             player.EndReached += (_, _) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) OnVideoEnded(); });
             player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) OnVideoEnded(); });
             _media = new Media(vlc, _videoPath, FromType.FromPath);
-            player.Play(_media);
+            // WPF 7.2.2 a0b6d5779 (#1549): the primary video names itself in the recent-sounds ring;
+            // running = engine or session (WPF EngineOffAudioLog.cs:29), a paused session is not engine-off.
+            if (player.Play(_media)) Services.Audio.RecentSounds.Shared.Note("bubblecount-video", _videoPath, CoreEngine.IsRunning || CoreSession.IsSessionRunning, false, DateTime.Now);
             return true;
         }
 
