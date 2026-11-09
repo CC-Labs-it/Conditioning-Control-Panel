@@ -298,47 +298,47 @@ namespace ConditioningControlPanel.Services
 
                             // Zip Slip guard: an entry or pack name holding ".." (or a rooted path)
                             // must never write outside the asset folder.
-                            // The check stays inline on Path.GetFullPath results (CodeQL only
-                            // recognises that shape); IsInsideFolder is the same rule for tests.
+                            // Each write is guarded by a StartsWith on the Path.GetFullPath result it
+                            // then uses (the shape CodeQL recognises); IsInsideFolder is the same rule
+                            // for tests.
                             var rootFull = Path.TrimEndingDirectorySeparator(Path.GetFullPath(baseDestFolder)) + Path.DirectorySeparatorChar;
-                            destFolder = Path.GetFullPath(destFolder);
-                            if (!(Path.TrimEndingDirectorySeparator(destFolder) + Path.DirectorySeparatorChar)
-                                    .StartsWith(rootFull, StringComparison.OrdinalIgnoreCase))
-                            {
-                                App.Logger?.Warning("Skipped ZIP entry outside the asset folder: {Entry}", entry.FullName);
-                                result.Skipped++;
-                                current++;
-                                progress?.Report(new ImportProgress(current, total, entry.Name));
-                                continue;
-                            }
-
-                            Directory.CreateDirectory(destFolder);
-
-                            var fileName = Path.GetFileName(entry.Name);
-                            var destPath = GetUniqueDestPath(destFolder, fileName, entry.Length);
-                            if (destPath == null)
-                            {
-                                result.Skipped++; // the same file is already there (#1515)
-                            }
-                            else if (!Path.GetFullPath(destPath).StartsWith(rootFull, StringComparison.OrdinalIgnoreCase))
+                            var destFolderFull = Path.GetFullPath(destFolder);
+                            if (!destFolderFull.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase))
                             {
                                 App.Logger?.Warning("Skipped ZIP entry outside the asset folder: {Entry}", entry.FullName);
                                 result.Skipped++;
                             }
                             else
                             {
-                                // Extract to destination
-                                entry.ExtractToFile(Path.GetFullPath(destPath), overwrite: false);
+                                Directory.CreateDirectory(destFolderFull);
 
-                                if (IsVideo(ext))
+                                var fileName = Path.GetFileName(entry.Name);
+                                var destPath = GetUniqueDestPath(destFolderFull, fileName, entry.Length);
+                                var destFull = destPath == null ? null : Path.GetFullPath(destPath);
+                                if (destFull == null)
                                 {
-                                    result.VideosImported++;
-                                    App.Logger?.Debug("Extracted video from ZIP: {Pack}/{File}", packName, fileName);
+                                    result.Skipped++; // the same file is already there (#1515)
                                 }
-                                else if (IsImage(ext))
+                                else if (!destFull.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase))
                                 {
-                                    result.ImagesImported++;
-                                    App.Logger?.Debug("Extracted image from ZIP: {Pack}/{File}", packName, fileName);
+                                    App.Logger?.Warning("Skipped ZIP entry outside the asset folder: {Entry}", entry.FullName);
+                                    result.Skipped++;
+                                }
+                                else
+                                {
+                                    // Extract to destination
+                                    entry.ExtractToFile(destFull, overwrite: false);
+
+                                    if (IsVideo(ext))
+                                    {
+                                        result.VideosImported++;
+                                        App.Logger?.Debug("Extracted video from ZIP: {Pack}/{File}", packName, fileName);
+                                    }
+                                    else if (IsImage(ext))
+                                    {
+                                        result.ImagesImported++;
+                                        App.Logger?.Debug("Extracted image from ZIP: {Pack}/{File}", packName, fileName);
+                                    }
                                 }
                             }
                         }
