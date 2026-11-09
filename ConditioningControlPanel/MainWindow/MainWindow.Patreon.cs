@@ -786,6 +786,7 @@ namespace ConditioningControlPanel
             // Show cloud settings backup section if user has a cloud identity
             AppSettingsTab.CloudSettingsBackupSection.Visibility = hasUnifiedId ? Visibility.Visible : Visibility.Collapsed;
             AppSettingsTab.DataPrivacySection.Visibility = hasUnifiedId ? Visibility.Visible : Visibility.Collapsed;
+            AppSettingsTab.SectionData.RefreshDeleteAccountRow();
             if (hasUnifiedId)
             {
                 _ = UpdateBackupStatus();
