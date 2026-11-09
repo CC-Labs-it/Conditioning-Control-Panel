@@ -204,19 +204,19 @@ const WHAT_OVERRIDE = {
  * Per-second pay (fps) stays each row's own. Other lanes: keep your overrides out of this table. */
 const INTAKE_STAGES = {
   melt: {
-    qstage: 1, total: 25000, fold: ['swap', 'flee', 'nag', 'crowd', 'pbubble'],
+    qstage: 1, total: 45000, fold: ['swap', 'flee', 'nag', 'crowd', 'pbubble'],
     name: 'Softer Answers',
     what: 'Questions come about once a minute, and every answer pays a bonus. Wrong answers start to melt, swap places and run.',
     line: 'Easier to agree with.',
   },
   slider: {
-    qstage: 2, total: 230000, fold: ['shrink', 'fadeno', 'magnet', 'late', 'holdno', 'dragno', 'stackno', 'robot'],
+    qstage: 2, total: 450000, fold: ['shrink', 'fadeno', 'magnet', 'late', 'holdno', 'dragno', 'stackno', 'robot'],
     name: 'Leaning Answers',
     what: 'Questions come about every 45 seconds, and the answer bonus grows. The card leans, pulls and hides the other answers.',
     line: 'It tilts your way.',
   },
   grid: {
-    qstage: 3, total: 1300000, fold: ['ttype', 'regen', 'onlyyes', 'hijack'],
+    qstage: 3, total: 1600000, fold: ['ttype', 'regen', 'onlyyes', 'hijack'],
     name: 'Nothing But Yes',
     what: 'Questions come about every 35 seconds, with the biggest answer bonus. Picture checks, wobbly text, then every answer is yes.',
     line: 'One answer, four ways.',
