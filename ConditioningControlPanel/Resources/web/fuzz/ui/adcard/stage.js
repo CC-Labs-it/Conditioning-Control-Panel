@@ -45,13 +45,17 @@ export const CUES = Object.freeze({
 const LOG = [];
 /** Plays one cue. Every call is logged (time, name, file, gain) on window.__adcardCues for the dev drives. */
 export function cue(ctx, name) {
+  playCardCue(ctx.audio, ctx.world?.ownerDocument, name);
+}
+
+export function playCardCue(audio, doc, name, options = {}) {
   const c = CUES[name];
   if (!c) return;
   try {
-    const win = ctx.world?.ownerDocument?.defaultView;
+    const win = doc?.defaultView;
     if (win) { (win.__adcardCues ||= LOG).push({ t: Math.round(win.performance.now()), name, file: c[0], gain: c[1] }); }
   } catch { /* the log is a dev aid only */ }
-  ctx.audio?.play?.(c[0], { bus: 'sfx', gain: c[1] });
+  audio?.play?.(c[0], { ...options, bus: 'sfx', gain: c[1] });
 }
 
 /** Map a card beat (card.js onBeat) to its cue. */

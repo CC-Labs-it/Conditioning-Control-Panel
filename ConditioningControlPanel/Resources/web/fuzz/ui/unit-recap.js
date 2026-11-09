@@ -2,10 +2,11 @@
 import { ENDINGS } from '../data/content/endings.js';
 import { iconFor } from './icons.js';
 import { mountRunPoster } from './adcard/recap.js';
+import { beatCue, playCardCue } from './adcard/stage.js';
 
 const STAT_ICONS = { Time: 'tr_skin', Unlocks: 'lo_key', 'Endings seen': 'z_ends' };
 
-export function openUnitRecap({ cards, doc, slot, stats, buttons, line, run, life, name }) {
+export function openUnitRecap({ cards, doc, slot, stats, buttons, line, run, life, name, audio }) {
   function make(tag, cls, text) {
     const el = doc.createElement(tag);
     if (cls) el.className = cls;
@@ -46,9 +47,21 @@ export function openUnitRecap({ cards, doc, slot, stats, buttons, line, run, lif
   const poster = make('aside', 'unit-poster');
   poster.setAttribute('aria-label', 'Run poster');
   layout.append(report, poster);
-  let unmount;
+  const source = 'dr_end';
+  const controller = new AbortController();
+  let unmount, wasQuiet;
+  function leave() {
+    if (controller.signal.aborted) return;
+    controller.abort();
+    unmount?.();
+    if (wasQuiet !== undefined) {
+      audio.setQuiet(wasQuiet);
+      audio.solo(null);
+    }
+  }
   cards.open({
-    node: layout, className: 'credits unit-recap', clear: true, guard: false, buttons,
+    node: layout, className: 'credits unit-recap', clear: true, guard: false,
+    buttons: buttons.map(b => ({ ...b, onPress() { leave(); b.onPress?.(); } })),
     onOpen(backdrop) {
       backdrop.classList.add('ur-backdrop');
       const card = backdrop.querySelector('.unit-recap');
@@ -58,8 +71,18 @@ export function openUnitRecap({ cards, doc, slot, stats, buttons, line, run, lif
       actions.firstElementChild.prepend(iconFor(doc, { id: 'sparkle' }));
       history.append(actions);
       if (!card.closest('[inert]')) card.focus({ preventScroll: true });
-      unmount = mountRunPoster({ doc, host: poster, run, life, name });
+      // The ending has silenced the run. Open only its own mixer channel for the poster's arrival.
+      const onBeat = (beat, i) => {
+        if (!audio || controller.signal.aborted || card.closest('[inert]') || doc.hidden) return;
+        if (wasQuiet === undefined) {
+          wasQuiet = audio.quiet;
+          audio.solo(id => id === source);
+          audio.setQuiet(false);
+        }
+        playCardCue(audio, doc, beatCue(beat, i), { source, sourceLabel: ENDINGS.dr_end.title, signal: controller.signal });
+      };
+      unmount = mountRunPoster({ doc, host: poster, run, life, name, onBeat });
     },
-    onClose() { unmount?.(); },
+    onClose: leave,
   });
 }

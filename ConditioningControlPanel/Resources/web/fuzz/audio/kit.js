@@ -269,6 +269,7 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
     },
     get volume() { return masterVolume; },
     /** A run mood may keep the page silent for a while. */
+    get quiet() { return quiet; },
     setQuiet(v) { quiet = !!v; applyLevel(); },
     /** An unlock may silence the page for a few seconds (ctx.audio.muteFor). */
     setBlank(v) { blank = !!v; applyLevel(); },

@@ -478,7 +478,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     const keep = hooks.keepPlaying && hooks.canKeepPlaying?.() ? [{ label: 'Keep playing', keepOpen: true, onPress: hooks.keepPlaying }] : [];
     const buttons = [...renew, ...keep, { label: 'New run', keepOpen: true, onPress: hooks.newRun }];
     if (id === 'dr_end') {
-      openUnitRecap({ cards, doc, slot, stats, buttons, line: it.line, run, life, name: init.identity?.displayName || '' });
+      openUnitRecap({ cards, doc, slot, stats, buttons, line: it.line, run, life, audio, name: init.identity?.displayName || '' });
       return;
     }
     const node = doc.createElement('div'), dl = doc.createElement('dl');
