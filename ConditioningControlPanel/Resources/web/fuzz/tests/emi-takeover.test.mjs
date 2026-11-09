@@ -206,7 +206,7 @@ test('the error card says it is the game, keeps the count real, and never claims
 });
 
 test('the ending module keeps its hard rules in the source', () => {
-  const src = readFileSync(new URL('../ui/unlocks/themes-b/emi-takeover.js', import.meta.url), 'utf8');
+  const src = ['emi-takeover.js', 'emi-swarm.js', 'emi-kit.js'].map((f) => readFileSync(new URL(`../ui/unlocks/themes-b/${f}`, import.meta.url), 'utf8')).join('\n');
   assert.ok(!/speechSynthesis|SpeechSynthesisUtterance/.test(src), 'no synthetic speech');
   assert.ok(!/drawImage|getImageData|texImage2D/.test(src), 'pictures never go through a canvas');
   assert.match(src, /referrerPolicy = 'strict-origin'/);
