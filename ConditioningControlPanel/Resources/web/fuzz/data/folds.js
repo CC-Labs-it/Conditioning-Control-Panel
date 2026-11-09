@@ -17,11 +17,16 @@ const SINGLE = new Set([
   'toy_box', 'toy', 'mini_breakout', 'mini_race', 'mini_deep', 'mini_slots', 'dispenser', 'dispenser_fast', 'dispenser_faster',
 ]);
 
-const foldable = (it) => it && it.group === 'run' && it.kind === 'item' && !it.grow && it.cost > 0
+const plain = (it) => it && it.group === 'run' && it.kind === 'item' && !it.grow && it.cost > 0
   && !NEVER_LANES.has(it.lane) && !SINGLE.has(it.id) && it.req.length === 1 && !it.any;
 
 export function buildFolds(items = ITEMS, size = CONFIG.FOLD_SIZE) {
   const by = Object.fromEntries(items.map((i) => [i.id, i]));
+  /* Explicit bundles (dev/gen-items.mjs INTAKE_STAGES, the three question stages): a row with `fold` brings exactly
+   * those rows, and none of them folds any other way. */
+  const fixed = Object.fromEntries(items.filter((i) => Array.isArray(i.fold)).map((i) => [i.id, i.fold.filter((r) => by[r])]));
+  const pinned = new Set(Object.entries(fixed).flatMap(([l, r]) => [l, ...r]));
+  const foldable = (it) => plain(it) && !pinned.has(it.id);
   const kids = {};
   // A separately sold optional child doesn't split its parent's existing bundle.
   for (const it of items) {
@@ -35,6 +40,11 @@ export function buildFolds(items = ITEMS, size = CONFIG.FOLD_SIZE) {
   };
   const lead = {}, of = {};
   if (size < 2) return { FOLD: lead, LEAD_OF: of };
+  for (const [l, riders] of Object.entries(fixed)) {
+    if (!riders.length) continue;
+    lead[l] = Object.freeze(riders);
+    for (const r of riders) of[r] = l;
+  }
   for (const head of items) {
     if (!foldable(head) || linked(head)) continue;
     const chain = [head.id];

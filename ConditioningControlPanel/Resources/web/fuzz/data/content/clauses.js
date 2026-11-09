@@ -847,7 +847,7 @@ export const CLAUSES = Object.freeze({
   "The intended answer pays more, silly answers a bit. I can feel which is intended before I read."
  ],
  "melt": [
-  "I accept that wrong answers melt off the card when pressed. Not an option."
+  "I accept questions every minute, and answers that go soft until agreeing is the easy part."
  ],
  "swap": [
   "I accept that answers trade places when my pointer gets close. Other one."
@@ -865,7 +865,7 @@ export const CLAUSES = Object.freeze({
   "I accept that answers float up as bubbles, and that I pop one to choose. Quickly."
  ],
  "slider": [
-  "I accept a slider that picks between four answers and leans toward the top one."
+  "I accept a card that leans toward yes, more often, and I agree to lean with it."
  ],
  "shrink": [
   "I accept that the right answer grows while the wrong ones shrink. No pressure."
@@ -894,7 +894,7 @@ export const CLAUSES = Object.freeze({
   "Proving I am not a robot by staying very still is exactly what a robot would do."
  ],
  "grid": [
-  "I accept a fake picture check asking me to select all the spirals. All of them."
+  "I accept that every answer is now yes, and that I stopped checking which one I pressed."
  ],
  "ttype": [
   "I accept copying out wobbly text that turns out to say something rude. Case sensitive."

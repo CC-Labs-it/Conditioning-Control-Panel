@@ -193,6 +193,16 @@ export const FAKE_CALL = Object.freeze({
     'Do not hang up. You always hang up.',
   ],
   afterHangUp: ['Rude.', 'I will remember that.', 'Call me.'],
+  /* Pick up (owner 2026-11-10): picking up starts a short boost, manual taps x3 (em_call in emi-unlocks.js). */
+  pickUp: 'Pick up',
+  pickedUp: [
+    'You picked up. I did not plan this far.',
+    'Hi. Tap for me. Three times as hard.',
+    'I knew you would answer. I practised being casual.',
+    'Quick, tap while I am watching. It counts triple.',
+    'Okay, this is awkward. Tap. No, more than that.',
+  ],
+  boost: 'EMI is watching: taps pay x3 for {n} seconds.',
 });
 
 /* inbox Fake Inbox: toasts in a corner, no replies possible. */

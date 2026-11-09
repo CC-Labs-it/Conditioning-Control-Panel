@@ -10,6 +10,10 @@ import { FONT, cardUp, h, pick, picker, slot } from './kit.js';
 import { frameRect } from '../../perf.js';
 
 const CALL_MS = 5000;
+/* Owner 2026-11-10: EMI's rows pay something you can see. Seconds of per-second pay, through ctx.pay (the side budget). */
+const CALL_BOOST = 3, CALL_BOOST_MS = 20000;   // Pick up: manual taps x3 for 20 s, a timed buff like Golden Frenzy
+const PET_PAY_S = 8, PET_COOLDOWN_MS = 60000;   // reaching glee on the pet ladder, once a minute at most
+const JEAL_PAY_S = 15;                          // saying hello while she blocks the shop
 
 const HAT_EMOJI = { top: '🎩', party: '🎉', duck: '🦆', globe: '🔮' };
 const mmss = (ms) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
@@ -55,7 +59,7 @@ export const EMI_UNLOCKS = {
   em_pet: {
     mount(ctx) {
       const e = getEmi(ctx);
-      let n = 0, lastPet = -1e9, sulk = false;
+      let n = 0, lastPet = -1e9, sulk = false, lastPaid = -1e9;
       const hint = h('button', 'order:-1;', EMI_PET.button, e.controls);
       hint.className = 'xe-b';
       hint.type = 'button';
@@ -70,6 +74,11 @@ export const EMI_UNLOCKS = {
         e.say(pick(ctx, stage.lines), 2200);
         e.lastTouch = now;
         ctx.float(x, y - 14, n >= 5 ? '💢' : n === 4 ? '💧' : '💗', 'font-size:22px;');
+        /* Glee is the top of the ladder: it pays a little, once a minute, so petting cannot be farmed. */
+        if (stage.mood === 'glee' && now - lastPaid >= PET_COOLDOWN_MS) {
+          lastPaid = now;
+          ctx.pay(ctx.rates().fps * PET_PAY_S, 'em_pet', { x, y });
+        }
         if (n >= 5) {
           ctx.audio.play('assets/audio/sfx/thud.mp3', { bus: 'sfx', gain: 0.7 });
           if (!ctx.gentle) ctx.anim(e.el, [{ translate: '-5px 0' }, { translate: '5px 0' }, { translate: '-4px 0' }, { translate: '0 0' }], { duration: 400 });
@@ -142,7 +151,13 @@ export const EMI_UNLOCKS = {
         e.lastTouch = ctx.state.clock;
         label.hidden = true;
       };
-      const t = onEmiTap(ctx, e, () => { if (e.blocking) standDown(); });
+      const t = onEmiTap(ctx, e, (ev) => {
+        if (!e.blocking) return;
+        standDown();
+        const r = e.el.getBoundingClientRect();
+        ctx.pay(ctx.rates().fps * JEAL_PAY_S, 'em_jeal', { x: ev?.clientX ?? r.left + r.width / 2, y: ev?.clientY ?? r.top });
+        ctx.audio.play('assets/audio/pop/Pop2.mp3', { bus: 'sfx', gain: 0.5 });
+      });
       let warned = false;
       ctx.every(500, () => {
         if (e.held || e.asking || e.blocking || e.napping || cardUp()) return;
@@ -260,13 +275,16 @@ export const EMI_UNLOCKS = {
     },
   },
 
-  /* A call from EMI fills the screen. It is plainly EMI, it has one button, and it gives up by itself after a few seconds:
-   * ignoring it costs nothing and never holds the page. */
+  /* A call from EMI fills the screen. It is plainly EMI, it has two buttons, and it gives up by itself after a few seconds:
+   * ignoring it or hanging up costs nothing and never holds the page. Picking up starts a 20 s boost: manual taps x3. */
   em_call: {
     mount(ctx) {
       getEmi(ctx);
       const lineOf = picker(ctx, FAKE_CALL.lines);
       const hung = picker(ctx, FAKE_CALL.afterHangUp);
+      const answered = picker(ctx, FAKE_CALL.pickedUp);
+      let now = 0, boostUntil = 0;
+      ctx.mod({ timed: true, click: (v, s, t) => (t < boostUntil ? v * CALL_BOOST : v) });
       const host = ctx.el('div', 'position:absolute;inset:0;z-index:20;display:none;', null, 'over');
       const panel = h('div', `position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px 16px;background:#1b1626;color:#fff;font:600 17px/1.25 ${FONT};text-align:center;pointer-events:auto;`, null, host);
       const who = h('div', 'font-size:24px;', FAKE_CALL.caller, panel);
@@ -277,9 +295,12 @@ export const EMI_UNLOCKS = {
       pic.alt = 'EMI';
       drawFace(ring, 'glee');
       const words = h('div', 'min-height:46px;max-width:420px;font-weight:500;', '', panel);
-      const end = h('button', `min-width:150px;min-height:58px;border-radius:29px;background:#e23b4a;color:#fff;border:0;font:700 18px ${FONT};touch-action:manipulation;`, FAKE_CALL.hangUp, panel);
+      const keys = h('div', 'display:flex;flex-wrap:wrap;gap:14px;justify-content:center;', null, panel);
+      const take = h('button', `min-width:150px;min-height:58px;border-radius:29px;background:#1f9d55;color:#fff;border:0;font:700 18px ${FONT};touch-action:manipulation;`, FAKE_CALL.pickUp, keys);
+      take.type = 'button';
+      const end = h('button', `min-width:150px;min-height:58px;border-radius:29px;background:#e23b4a;color:#fff;border:0;font:700 18px ${FONT};touch-action:manipulation;`, FAKE_CALL.hangUp, keys);
       end.type = 'button';
-      let cancels = [], up = false, pulse = null;
+      let cancels = [], up = false, pulse = null, picked = false;
       const close = (rude) => {
         if (!up) return;
         up = false;
@@ -293,6 +314,8 @@ export const EMI_UNLOCKS = {
       const ringNow = () => {
         if (up || cardUp()) return false;
         up = true;
+        picked = false;
+        take.disabled = end.disabled = false;
         host.style.display = 'block';
         who.textContent = FAKE_CALL.caller;
         words.textContent = lineOf();
@@ -302,11 +325,22 @@ export const EMI_UNLOCKS = {
         cancels = [ctx.every(3200, () => { words.textContent = lineOf(); }), ctx.after(CALL_MS, () => close(false))];
         return true;
       };
-      end.addEventListener('click', () => close(true));
+      end.addEventListener('click', () => { if (!picked) close(true); });
+      take.addEventListener('click', () => {
+        if (!up || picked || ctx.paused) return;
+        picked = true;
+        take.disabled = end.disabled = true;
+        for (const c of cancels) c();
+        boostUntil = Math.max(boostUntil, now) + CALL_BOOST_MS;
+        words.textContent = answered();
+        ctx.audio.play('assets/audio/sfx/golden_pop.mp3', { bus: 'sfx', gain: 0.6 });
+        ctx.toast(FAKE_CALL.boost.replace('{n}', String(CALL_BOOST_MS / 1000)));
+        cancels = [ctx.after(1600, () => close(false))];
+      });
       ctx.after(ctx.store.get('rang') ? 90000 : 1500, ringNow);
       ctx.store.set('rang', 1);
       ctx.every(170000, ringNow);
-      return { ringNow, off() { close(false); } };
+      return { ringNow, tick(dt, t) { now = t; }, off() { close(false); } };
     },
   },
 

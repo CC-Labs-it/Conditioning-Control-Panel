@@ -10,6 +10,7 @@ import { FONT, cardUp, h, pick } from './kit.js';
 import { getEmi } from './emi.js';
 import { attachQuestion, createQuizReactions } from './quiz-mascot.js';
 import { TRICK_FNS } from './tricks.js';
+import { STAGE_RETRY_MS, quizStage, stageBonus, stageGap } from './quiz-stages.js';
 
 const CSS = `
 .xq-dock{left:var(--question-x,0px)!important;top:var(--question-y,0px)!important;max-height:none!important;transform:scale(var(--question-scale,1));transform-origin:0 0;}
@@ -237,7 +238,12 @@ function createQuiz(ctx) {
         mascot.answer(right, result.complete);
         ctx.store.set('lesson', lesson);
         const bonus = result.complete ? quizPay(ctx.rates(), false) * 3 : 0;
-        const credited = ctx.pay(amount + bonus, 'quiz', { x, y });
+        /* The stage bonus (quiz-stages.js): every answer, right or wrong, in the same payment, popped on its own. */
+        const stage = quizStage(ctx.has), extra = stageBonus(ctx.rates(), stage);
+        const asked = amount + bonus + extra;
+        const credited = ctx.pay(asked, 'quiz', { x, y });
+        const stagePaid = asked > 0 ? credited * (extra / asked) : 0;
+        if (stagePaid > 0 && !ctx.gentle && !ctx.reduced) ctx.float(x, y - 26, C.stagePop.replace('{n}', ctx.fmt(stagePaid)), 'color:var(--stamp);font-weight:700;');
         ctx.audio.play(right ? 'assets/audio/sfx/chime1.mp3' : 'assets/audio/sfx/ui_click.mp3', { bus: 'sfx', gain: 0.18 });
         for (const c of o.cancels) c();
         o.cancels.length = 0;
@@ -246,6 +252,7 @@ function createQuiz(ctx) {
         card.classList.add('xq-done');
         text.textContent = `${pick(ctx, right ? C.right : C.wrong)} +${ctx.fmt(credited)} ${ctx.brand.currencyPlural}`;
         lessonLabel.textContent = result.complete ? 'Lesson complete. Bonus included.' : `Lesson ${lesson}/3`;
+        if (stagePaid > 0) lessonLabel.textContent += ' ' + C.stageNote.replace('{s}', String(stage)).replace('{n}', ctx.fmt(stagePaid));
         text.classList.add('said');
         b?.classList.add(right ? 'ok' : 'bad');
         if (!right) o.buttons.get(t.yes)?.classList.add('ok');
@@ -274,13 +281,21 @@ function createQuiz(ctx) {
     return o;
   }
 
-  /* The clock: nothing pops over a card or while one is up. A late one waits for the next round. */
-  function maybeAsk() {
-    if (open || cardUp()) return;
-    ask();
-  }
+  /* The clock: nothing pops over a card or while one is up. Before the first stage a late one waits for the next round;
+   * from stage 1 it tries again a few seconds later, so the faster pace holds (quiz-stages.js). */
+  const nextGap = () => stageGap(quizStage(ctx.has), ctx.rng()) ?? EVERY_MS + ctx.rng() * EVERY_JITTER;
   let stop = null;
-  const schedule = (ms) => { stop?.(); dueAt = ctx.state.clock + ms; stop = ctx.after(ms, () => { maybeAsk(); schedule(EVERY_MS + ctx.rng() * EVERY_JITTER); }); };
+  const schedule = (ms) => {
+    stop?.();
+    dueAt = ctx.state.clock + ms;
+    stop = ctx.after(ms, () => {
+      if (!open && !cardUp()) ask();
+      else if (quizStage(ctx.has)) { schedule(STAGE_RETRY_MS); return; }
+      schedule(nextGap());
+    });
+  };
+  /* A new stage takes effect at once: a wait longer than its gap is cut short. */
+  const retime = () => { const g = nextGap(); if (dueAt - ctx.state.clock > g) schedule(g); };
   schedule(FIRST_MS);
   const drawIdle = () => {
     const s = Math.max(0, Math.ceil((dueAt - ctx.state.clock) / 1000));
@@ -293,10 +308,12 @@ function createQuiz(ctx) {
   ctx.cleanup(() => spot.dock?.setReady(false));
   ctx.every(1000, drawIdle);
 
-  return { ask, close, get open() { return open; } };
+  return { ask, close, retime, get open() { return open; } };
 }
 
 let quiz = null;
+/* A stage brings several trick rows at once and each wants to show itself: only the first in a moment asks. */
+let lastShow = -1e9;
 
 export const QUIZ_UNLOCKS = {
   quiz: {
@@ -313,7 +330,11 @@ for (const [trick, def] of Object.entries(TRICKS)) {
   if (def.unlock === 'quiz') continue;
   QUIZ_UNLOCKS[def.unlock] = {
     mount(ctx) {
-      if (!ctx.store.get('shown')) { ctx.store.set('shown', 1); ctx.after(650, () => quiz?.ask(trick)); }
+      if (!ctx.store.get('shown')) {
+        ctx.store.set('shown', 1);
+        if (Math.abs(ctx.state.clock - lastShow) > 1500) { lastShow = ctx.state.clock; ctx.after(650, () => quiz?.ask(trick)); }
+      }
+      if (ctx.item?.qstage) quiz?.retime();
       return {};
     },
   };
