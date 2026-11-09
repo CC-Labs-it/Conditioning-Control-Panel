@@ -147,7 +147,9 @@ export const runMinutes = (p) => (p.core ? T_RUN[T_RUN.length - 1] : T_RUN[Math.
  * SPEED_K: how much of each lane's factor reaches a staying player's whole income. AHEAD: the share of boost speed left
  * unpriced, so the reference sky runs slightly ahead of T_RUN early and lands near 45 minutes at Depth 10. */
 const SPEED_K = Object.freeze({ idle: 0.5, active: 0.6, hands: 0.15, side: 0.11 });
-const AHEAD = 0.12;
+/* 2026-11-10: 0.12 -> 0.15. The felt Journey ranks (sim/journey-effects.js) moved income toward taps and banks; 0.15 puts
+ * the Depth 1-10 runs back where they were (dev/prestige-measure.mjs). */
+const AHEAD = 0.15;
 const BEHIND = 0.15;
 export function boostSpeed(p) {
   if (!p || !Object.keys(p.own || {}).length) return 1;

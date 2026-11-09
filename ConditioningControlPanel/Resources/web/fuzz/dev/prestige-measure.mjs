@@ -17,7 +17,7 @@
 import { pathToFileURL } from 'node:url';
 import { writeFileSync } from 'node:fs';
 import { allRoutes } from '../sim/route.js';
-import { createJourney } from '../sim/journey.js';
+import { createJourney, EXTRAS } from '../sim/journey.js';
 import { takeActivity, journeyChapter } from '../sim/journey-effects.js';
 import { FORKS } from '../data/items.js';
 import * as E from '../sim/economy.js';
@@ -56,7 +56,7 @@ export function measureRun(picks, p, { taps = 4, share = .125, option = 0, catch
   let last = 0, nextClaim = 60, wordT = 0, countT = 0, caught = 0;
   while (!s.ended && s.clock < 12 * 3600e3) {
     const shelf = shop.shop(8);
-    const items = [shelf.goal, ...shelf.rows].filter(it => it && (it.kind !== 'end' || it.id === 'drop'));
+    const items = [shelf.goal, ...shelf.rows].filter(it => it && (it.kind !== 'end' || it.id === 'drop') && !EXTRAS.includes(it.id));
     const ready = items.filter(it => (it.kind === 'fork' ? s.total : s.fuzz) + 1e-8 >= shop.price(it.id)).sort((a, b) => Number(b.kind === 'fork') - Number(a.kind === 'fork') || shop.price(a.id) - shop.price(b.id));
     const it = ready[0];
     if (it) {
