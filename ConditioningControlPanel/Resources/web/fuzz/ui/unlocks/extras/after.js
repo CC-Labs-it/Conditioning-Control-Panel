@@ -104,15 +104,7 @@ export const AFTER_UNLOCKS = {
   z_map: {
     mount(ctx) {
       const t = tabs(ctx);
-      /* Go Outside closes politely, and only because you pressed. */
-      if (endedId(ctx) === 'outside') {
-        const out = button(C.closeTab, t.top);
-        out.addEventListener('click', () => {
-          if (ctx.hosted) { ctx.host('exit', { reason: 'back' }); return; }
-          window.close();
-          ctx.after(250, () => { out.textContent = C.closeTabHard; out.disabled = true; });
-        });
-      }
+      /* Go Outside has no way out (owner 2026-11-09): no close button. */
       const node = t.add(C.tabs.map);
       h('div', '', AFTER_RUN.map.title, node).className = 'xa-h';
       const old = new Set(ctx.life.routes.flatMap((r) => r.route));

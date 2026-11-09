@@ -418,7 +418,7 @@ export const CLAUSES = Object.freeze({
   "The count up stops where it stops. Wake Up still works whenever I want it."
  ],
  "outside": [
-  "I accept that this ends the run right now, pays nothing, and closes the tab politely.",
+  "I accept that this ends the run right now, pays nothing, and takes me outside.",
   "It is nice out. I would not know. This is the only unlock that fixes that."
  ],
  "onemore": [

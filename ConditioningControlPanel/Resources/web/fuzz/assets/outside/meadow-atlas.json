@@ -1,0 +1,109 @@
+{
+  "tile": 16,
+  "size": [
+    128,
+    128
+  ],
+  "tiles": {
+    "dirt": [
+      0,
+      0
+    ],
+    "grass_top": [
+      1,
+      0
+    ],
+    "grass_side": [
+      2,
+      0
+    ],
+    "log_side": [
+      3,
+      0
+    ],
+    "log_top": [
+      4,
+      0
+    ],
+    "leaves": [
+      5,
+      0
+    ],
+    "leaves_cut": [
+      6,
+      0
+    ],
+    "flower_a": [
+      7,
+      0
+    ],
+    "flower_b": [
+      0,
+      1
+    ],
+    "flower_c": [
+      1,
+      1
+    ],
+    "tall_grass": [
+      2,
+      1
+    ],
+    "cloud": [
+      3,
+      1
+    ],
+    "cloud_under": [
+      4,
+      1
+    ],
+    "sun": [
+      5,
+      1
+    ],
+    "cow_body": [
+      6,
+      1
+    ],
+    "cow_body_top": [
+      7,
+      1
+    ],
+    "cow_body_end": [
+      0,
+      2
+    ],
+    "cow_head": [
+      1,
+      2
+    ],
+    "cow_head_side": [
+      2,
+      2
+    ],
+    "cow_head_top": [
+      3,
+      2
+    ],
+    "cow_ear": [
+      4,
+      2
+    ],
+    "cow_leg": [
+      5,
+      2
+    ],
+    "cow_tail": [
+      6,
+      2
+    ]
+  },
+  "alpha": [
+    "leaves_cut",
+    "flower_a",
+    "flower_b",
+    "flower_c",
+    "tall_grass",
+    "cow_tail"
+  ]
+}

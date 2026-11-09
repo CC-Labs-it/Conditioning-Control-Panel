@@ -120,12 +120,14 @@ export const ENDINGS = Object.freeze({
     'Contagious: you have the link',
   ], 'Contained. Sort of. Please wash your hands of this.', { link: link('Infection Control, a mod in CCP') }),
 
-  outside: e('outside', 'Go Outside', 'You left. No reward. The grass has not been told about the {cur}.', [
-    'Sun: unpaid',
-    'Tree: as itself',
-    'Weather: no upgrades available',
-    'Everything you bought: still in there, without you',
-  ], 'It is nice out. You would know. Close this whenever you are ready.', { closesTab: true }),
+  /* Copy = the PROPOSED column of handoff-1109/TC-GO-OUTSIDE-ENDING-BRIEF.md (owner to approve). The tab stays open. */
+  outside: e('outside', 'Go Outside', 'You went outside. It looked lovely on the monitor.', [
+    'Sun: 16 by 16 pixels',
+    'Grass: rendered',
+    'Cows: placeholder',
+    'Fresh air: not supported',
+    'You: still here',
+  ], 'There is no outside. There is a very nice screensaver.'),
 
   onemore: e('onemore', 'One More', 'You could have stopped. There were several good places.', [
     'The credits were going to go here',

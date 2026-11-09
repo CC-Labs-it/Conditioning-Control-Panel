@@ -682,20 +682,26 @@ Object.assign(DEMOS, {
   }),
 
   /* ---------- exit ---------- */
-  outside: (k) => extrasLoop(k, 5400, (s) => {
-    k.page('#bfe6ff');
-    k.add(0, 116, 'width:240px;height:34px;background:#7cc66b;');
-    k.add(190, 12, 'font:30px/1 "Segoe UI Emoji",sans-serif;', '☀️');
-    k.add(40, 66, 'font:56px/1 "Segoe UI Emoji",sans-serif;', '🌳');
-    const w = k.add(6, 6, 'width:228px;height:138px;background:#d4d0c8;border:1px solid #333;z-index:5;');
-    extrasTxt(k, 0, 18, 228, '88,240 ' + CUR + '', 'font-size:17px;color:#111;', w);
-    k.add(0, 0, 'width:223px;height:13px;padding-left:5px;background:#333;color:#fff;font:600 8px/13px ' + extrasFont + ';', '' + CUR + '', w);
-    w.appendChild(k.btn({ x: 69, y: 62, w: 90, h: 28, label: 'Go Outside' }));
-    const f = k.finger(200, 130);
-    s.at(500, () => f.tap(120, 82, () => {
-      k.anim(w, [{ transform: 'none', opacity: 1 }, { transform: 'scale(.05)', opacity: 0 }], 900, { easing: 'ease-in' });
-      s.at(900, () => { w.remove(); f.el.remove(); k.word(90, 50, 'Bye.', 3000, 'color:#124;font-size:24px;'); });
-    }));
+  /* Go Outside (2026-11-09): white, the sunny meadow still, then it shrinks into a monitor in a dim room. A still, never a
+   * live scene. A missing meadow.jpg leaves the sky colour. */
+  outside: (k) => extrasLoop(k, 6400, (s) => {
+    k.page('#fff');
+    const room = k.add(0, 0, 'width:240px;height:150px;background:#15131c;opacity:0;');
+    k.add(10, 104, 'width:220px;height:7px;background:#3a3446;border-radius:3px;', null, room);
+    k.add(56, 96, 'width:88px;height:8px;background:#2c2836;border-radius:2px;', null, room);
+    k.add(160, 52, 'width:22px;height:22px;border-radius:50%;background:#2a2533;', null, room);
+    k.add(152, 72, 'width:38px;height:34px;background:#2a2533;border-radius:16px 16px 4px 4px;', null, room);
+    k.add(10, 6, 'width:180px;height:140px;background:radial-gradient(closest-side,rgba(150,215,255,.32),transparent);', null, room);
+    const m = k.add(0, 0, 'width:240px;height:150px;background:#8fd0ff url(assets/outside/meadow.jpg) center/cover;transform-origin:0 0;z-index:2;');
+    const bez = k.add(62, 38, 'width:76px;height:58px;box-sizing:border-box;border:6px solid #3b3746;border-radius:8px;z-index:3;opacity:0;');
+    k.anim(m, [{ opacity: 0 }, { opacity: 1 }], 600);
+    s.at(1800, () => {
+      k.anim(m, [{ transform: 'none' }, { transform: 'translate(68px,44px) scale(.2667,.3067)' }], 1600, { easing: 'cubic-bezier(.45,0,.2,1)' });
+      k.anim(room, [{ opacity: 0 }, { opacity: 1 }], 1300);
+      k.anim(bez, [{ opacity: 0 }, { opacity: 1 }], 1300);
+    });
+    s.at(3900, () => k.anim(m, [{ filter: 'none' }, { filter: 'brightness(.45)' }, { filter: 'none' }], 380));
+    s.at(4200, () => k.word(0, 118, 'There is no outside.', 2000, 'width:240px;text-align:center;color:#e8e4f0;font-size:14px;'));
   }),
   onemore: (k) => extrasLoop(k, 5800, (s) => {
     k.page('dark');
