@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readPlatform, offerable, whyNot, offeredWindow, DEVICE_ROWS, devicePlatform } from '../ui/platform.js';
 import { BY_ID, ITEMS } from '../data/items.js';
+import { FOLD, LEAD_OF } from '../data/folds.js';
+import * as Save from '../sim/save.js';
 import * as E from '../sim/economy.js';
 import { worldStates, layoutWorld } from '../ui/guide-world-model.js';
 
@@ -11,18 +13,47 @@ const android = { navigator: { userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel
 const iphone = { navigator: { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Safari/604.1' }, matchMedia: media(false) };
 
 test('only rows with a device need are platform-bound, and they are the ones the brief names', () => {
-  assert.deepEqual([...DEVICE_ROWS].sort(), ['buzz', 'dualwield']);
-  assert.equal(BY_ID.buzz.device, 'buzz');
+  assert.deepEqual([...DEVICE_ROWS].sort(), ['buzz', 'dualwield', 'toy']);
+  assert.equal(BY_ID.buzz.device, 'toys');
+  assert.equal(BY_ID.toy.device, 'toys');
   assert.equal(BY_ID.dualwield.device, 'mouse');
 });
 
-test('Phone Buzz: Android browsers only, or a host that says it can buzz', () => {
-  assert.equal(readPlatform(desktop).buzz, false, 'desktop Chrome has navigator.vibrate and no motor');
-  assert.equal(readPlatform(iphone).buzz, false);
-  assert.equal(readPlatform(android).buzz, true);
-  assert.equal(readPlatform(desktop, { haptics: true }).buzz, true);
-  assert.equal(offerable('buzz', readPlatform(desktop)), false);
-  assert.equal(offerable('buzz', readPlatform(android)), true);
+test('Toy Link and Phone Buzz: only when the host said a toy is connected at run start (CCP desktop app)', () => {
+  for (const win of [desktop, android, iphone]) {
+    assert.equal(readPlatform(win).toys, false, 'the web and phones never offer them, Android web included');
+    for (const id of ['toy', 'buzz']) assert.equal(offerable(id, readPlatform(win)), false, id);
+  }
+  /* Only the boolean true counts: the old haptics cap, a toy support flag or a truthy string offer nothing. */
+  for (const caps of [{ haptics: true }, { toys: true }, { toysConnected: 'yes' }, { toysConnected: 1 }, { toysConnected: false }]) {
+    assert.equal(readPlatform(desktop, caps).toys, false, JSON.stringify(caps));
+  }
+  const app = readPlatform(desktop, { toys: true, toysConnected: true });
+  assert.equal(app.toys, true);
+  for (const id of ['toy', 'buzz']) assert.equal(offerable(id, app), true, id);
+  assert.equal(whyNot('toy', readPlatform(android)), 'Connect a toy in the CCP desktop app before you start.');
+  assert.equal(whyNot('buzz', readPlatform(desktop)), 'Connect a toy in the CCP desktop app before you start.');
+  assert.equal(whyNot('buzz', app), '');
+});
+
+test('no device row rides in a bundle or leads one: buying another row never hands it over', () => {
+  for (const id of DEVICE_ROWS) {
+    assert.equal(LEAD_OF[id], undefined, `${id} is a rider`);
+    assert.equal(FOLD[id], undefined, `${id} leads a bundle`);
+  }
+});
+
+test('Friend Remote is cut: no row, nothing requires it, and an old save that owns it still loads', () => {
+  assert.equal(BY_ID.remote, undefined);
+  for (const it of ITEMS) {
+    assert.ok(!it.req.includes('remote'), `${it.id} requires remote`);
+    assert.ok(!(it.any || []).includes('remote'), `${it.id} needs remote`);
+  }
+  const raw = JSON.stringify({ v: 2, run: { owned: { stray: 1, toy: 1, remote: 1 }, order: ['start', 'stray', 'toy', 'remote'] } });
+  const { run } = Save.parse(raw);
+  assert.equal(run.owned.remote, undefined, 'the cut row is dropped');
+  assert.equal(run.owned.toy, 1, 'an owned toy row stays owned');
+  assert.equal(run.owned.stray, 1);
 });
 
 test('Double Wielding needs a mouse: hidden on a touch-only phone, offered on a desktop', () => {
@@ -34,7 +65,7 @@ test('Double Wielding needs a mouse: hidden on a touch-only phone, offered on a 
 });
 
 test('every other row is offered everywhere; copy is plain', () => {
-  for (const it of ITEMS) if (!it.device) assert.equal(offerable(it, { buzz: false, mouse: false }), true, it.id);
+  for (const it of ITEMS) if (!it.device) assert.equal(offerable(it, { toys: false, mouse: false }), true, it.id);
   for (const id of DEVICE_ROWS) assert.doesNotMatch(whyNot(id, {}), /[–—!]/);
 });
 
@@ -73,7 +104,7 @@ test('the map marks device rows off with their reason, and an owned one stays ow
   s.total = 1e6;
   const W = layoutWorld();
   if (!W.nodes.some((n) => n.id === 'buzz')) return;   // the layout leaves it out: nothing to mark
-  const can = (it) => offerable(it, { buzz: false, mouse: true });
+  const can = (it) => offerable(it, { toys: false, mouse: true });
   let v = worldStates(s, W, { canOffer: can });
   assert.equal(v.states.buzz, 'off');
   assert.equal(v.device.buzz, true);

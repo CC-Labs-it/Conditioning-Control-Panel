@@ -11,8 +11,8 @@ import { DESIGN, itemsSource } from '../dev/gen-items.mjs';
 const tree = fileURLToPath(new URL('..', import.meta.url));
 
 test('every unlock from the design is here, with a real parent', () => {
-  assert.equal(ITEMS.length, 295);  // + dualwield (owner 2026-11-08)
-  assert.equal(new Set(ITEMS.map((i) => i.id)).size, 295);
+  assert.equal(ITEMS.length, 294);  // + dualwield (owner 2026-11-08), - remote (Friend Remote cut, owner 2026-11-10)
+  assert.equal(new Set(ITEMS.map((i) => i.id)).size, 294);
   assert.equal(BY_ID.tr_breath, undefined);
   assert.deepEqual(BY_ID.tr_feed.req, ['tr_still']);
   for (const it of ITEMS) for (const q of it.req) assert.ok(BY_ID[q], `${it.id} needs ${q}`);

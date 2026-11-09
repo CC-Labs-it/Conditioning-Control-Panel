@@ -1,8 +1,9 @@
 /* ui/platform.js - rows that only work on some devices (owner 2026-11-09). An item with `device` in data/items.js
  * (set in dev/gen-items.mjs DEVICE) is never offered where it cannot work: not in the shop, not as "on offer" on the
  * Guide map. A save that already owns one keeps it; this only decides what is offered.
- *   buzz:  Phone Buzz. Needs navigator.vibrate on a phone that has a motor: Android browsers. Desktop Chrome has the
- *          function and no motor, iOS has neither. A host that says caps.haptics can buzz for the page.
+ *   toys:  Toy Link and Phone Buzz (owner 2026-11-10). Offered only when the host's init says a toy is connected at run
+ *          start: caps.toysConnected === true. Only the CCP desktop app will ever send it (its host is wired later), so
+ *          the web and phones never offer either row, Android web included. The player connects the toy first.
  *   mouse: Double Wielding. The right mouse button: needs a fine pointer (mouse, trackpad). A touch-only phone has none.
  * Pure rules (`offerable`) plus one cached reading of the device (`devicePlatform`), so tests need no page. */
 
@@ -10,19 +11,19 @@ import { BY_ID } from '../data/items.js';
 
 /** Why a row is not offered here, for the map card. Plain words. */
 export const DEVICE_WHY = Object.freeze({
-  buzz: 'Not on this device: it needs a phone that can buzz.',
+  toys: 'Connect a toy in the CCP desktop app before you start.',
   mouse: 'Not on this device: it needs a mouse.',
 });
 
-/** What this device can do: { buzz, mouse }. Read from a window (and the host's caps); missing APIs count as no. */
+/** What this device can do: { toys, mouse }. Read from a window (and the host's caps); missing APIs count as no.
+ *  `toys` needs the boolean true: 'yes', 1 or a missing key offer nothing. Caps arrive once, in init, so this is the
+ *  reading at run start. */
 export function readPlatform(win, caps = {}) {
-  const nav = win?.navigator || {};
-  const ua = String(nav.userAgent || '');
   const mm = (q) => { try { return !!win?.matchMedia?.(q)?.matches; } catch { return false; } };
-  const buzz = caps?.haptics === true || (typeof nav.vibrate === 'function' && /Android/i.test(ua));
+  const toys = caps?.toysConnected === true;
   /* No matchMedia at all (an old or odd browser): assume a mouse rather than hide a row that may work. */
   const mouse = typeof win?.matchMedia !== 'function' || mm('(any-pointer: fine)');
-  return { buzz, mouse };
+  return { toys, mouse };
 }
 
 /** True when this row can work on a device with these abilities. Rows without `device` always can. */

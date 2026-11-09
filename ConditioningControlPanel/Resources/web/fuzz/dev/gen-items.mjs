@@ -35,9 +35,11 @@ const REQ_OVERRIDE = {
 /* The main path in the order it is walked: E.goal takes the first unowned row, so ITEMS keeps this order. */
 const TRUNK_ORDER = ['start', 'stray', 'fpsv', 'f1', 'softw', 'ticker', 'f5', 'f3', 'depth', 'f2', 'banner', 'f4', 'glossy', 'taste2', 'overlay', 'takeover', 'wallpaper', 'tunnel', 'drop'];
 /* Rows that only work on some devices (owner 2026-11-09). ui/platform.js decides; a save that owns one keeps it.
- * buzz: something that can vibrate (an Android browser, or a host with haptics). mouse: a pointer with a right button. */
-const DEVICE = { buzz: 'buzz', dualwield: 'mouse' };
-const DROPPED = new Set(['heart', 'tr_breath', 'watch', 'heartbtn', 'mirror', 'spirbtn', 'si_bow', 'si_ward', 'si_set']);
+ * toys: the host said a toy is connected at run start (caps.toysConnected, only the CCP desktop app; owner 2026-11-10).
+ * mouse: a pointer with a right button. */
+const DEVICE = { buzz: 'toys', toy: 'toys', dualwield: 'mouse' };
+/* remote: Friend Remote is cut (owner 2026-11-10); nothing requires it, and a save that owns it loads without it. */
+const DROPPED = new Set(['heart', 'tr_breath', 'watch', 'heartbtn', 'mirror', 'spirbtn', 'si_bow', 'si_ward', 'si_set', 'remote']);
 /* Dropped before the theme rows are re-priced, so the rows left behind them close the gap (owner 2026-11-07). */
 /* The dropped button looks paid per tap: the look rows left carry that pay, so tapping runs keep their pace. */
 const CLICK_AFTER_DROP = { paint: 6, corner: 22, bigbtn: 67, tinybtn: 100 };
@@ -178,6 +180,10 @@ const WHAT_OVERRIDE = {
   d_scroll: 'Swipe through a picture feed. Every swipe counts as a tap, it pays every second, and its bar drags it anywhere.',
   /* Copy the design source promises and the game does not do, or no longer does. */
   remote: 'Preset buttons that poke your own run. No friend is on the other end.',
+  /* TOYS lane (owner 2026-11-10): both toy rows are offered only with a toy connected in the CCP desktop app; Big grows in place. */
+  buzz: 'Your connected toy buzzes on lucky taps.',
+  toy: 'A toy you connected in the CCP desktop app follows how fast you earn.',
+  bigbtn: 'The button grows to fill its whole spot. Nothing else on the page moves.',
   z_shuffle: 'A little board of side unlocks that shuffles itself on the credits.',
   tr_head: 'Trance pictures join the page, general hypnosis first.',
   bi_head: 'Bimbo pictures join the page, and CCP ads now mention the Bambi mod.',

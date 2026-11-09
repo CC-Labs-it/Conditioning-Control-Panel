@@ -960,7 +960,7 @@ export const CLAUSES = Object.freeze({
   "I will not leave a box unopened to see what happens. Nothing happens. It leaves."
  ],
  "buzz": [
-  "I accept my phone vibrating on lucky taps. On the web, Android only."
+  "I accept my connected toy buzzing on lucky taps."
  ],
  "inbox": [
   "I accept fake direct messages popping up in a corner as small notices."

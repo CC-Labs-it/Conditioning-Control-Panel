@@ -77,7 +77,7 @@ const families = {
   dispenser: 'dispenser dispenser_fast:fast dispenser_faster:plus',
   envelope: 'inbox',
   words: 'triggers',
-  remote: 'remote toy:heart panel:sliders',
+  remote: 'toy:heart panel:sliders',
   cloud: 'x_nothing',
   infinity: 'onemore',
   dice: 'm_lucky',

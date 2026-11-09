@@ -49,6 +49,7 @@ caps: {
   sparkles: bool,              // host prices the Drop
   words: { bank: 'circe' | 'host', urls?: { [slug]: url } },  // a mod may hand another recorded bank; never TTS
   toys: bool,
+  toysConnected: bool,         // true only from the CCP desktop app with a toy connected at run start: offers Toy Link + Phone Buzz (ui/platform.js)
 }
 mod: 'default' | 'bambi' | 'sissy' | 'locked' | 'drone'
 ```
