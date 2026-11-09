@@ -338,10 +338,15 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
   }
   function setSuspended(v, reason) {
     const next = !!v;
+    const previousReason = suspendReason;
     // Only a host focus suspend still pays away time; any other reason (panic, arcade) wins over it until released.
     if (!next) suspendReason = null;
     else if (!suspended || reason !== 'focus') suspendReason = reason || 'host';
-    if (next === suspended) return;
+    if (next === suspended) {
+      // A host can issue panic while focus already holds the clock. Active endings must still abort.
+      if (next && reason === 'panic' && previousReason !== 'panic') emit('suspend', { on: true, reason });
+      return;
+    }
     if (!paused) ui.holdWorld?.(next);
     suspended = next;
     audio?.hold(paused || suspended);  // first: panic never waits on a listener

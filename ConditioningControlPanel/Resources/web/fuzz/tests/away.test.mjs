@@ -131,9 +131,13 @@ test('the engine pays away time only when the player could be playing', () => {
   g.setSuspended(true, 'panic');
   assert.equal(g.away(10000), 0, 'panic: nothing accrues');
   g.setSuspended(false, 'panic');
+  const events = [];
+  g.subscribe('suspend', e => events.push(e));
   g.setSuspended(true, 'focus');
   near(g.away(10000), 100, 'a host focus suspend is away, not a stop');
   g.setSuspended(true, 'panic');
+  g.setSuspended(true, 'panic');
+  assert.deepEqual(events, [{ on: true, reason: 'focus' }, { on: true, reason: 'panic' }], 'the ending hears a panic that supersedes a focus hold exactly once');
   assert.equal(g.away(10000), 0, 'panic during a focus suspend wins');
   g.setSuspended(false);
   near(g.run.fuzz, 200);
