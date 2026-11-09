@@ -308,7 +308,7 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
       const ids = new Set([...sourceNodes].map((r) => r.source).filter((id) => typeof id === 'string' && !skip.has(id)));
       for (const id of ids) this.muffle(id, on);
     },
-    muffle(source, on, { hz = 600, cut = 0.7 } = {}) {
+    muffle(source, on, { hz = 600, cut = 0.7, fadeOutMs = 0 } = {}) {
       if (!armed || typeof source !== 'string') return;
       const had = muffles.get(source);
       if (!!on === !!had) return;
@@ -317,6 +317,10 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
         const f = ctx.createBiquadFilter();
         f.type = 'lowpass'; f.frequency.value = hz; f.Q.value = 0.9;
         const g = ctx.createGain(); g.gain.value = cut;
+        if (fadeOutMs > 0) {
+          g.gain.setValueAtTime(cut, ctx.currentTime);
+          g.gain.linearRampToValueAtTime(0, ctx.currentTime + fadeOutMs / 1000);
+        }
         f.connect(g).connect(master);
         m = { f, g };
         muffles.set(source, m);

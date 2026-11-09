@@ -220,10 +220,10 @@ export function makeContext(engine, scope) {
       mixer: audio?.mixer,
       play: (path, opts) => audio?.play(path, soundOptions(opts)),
       /* Underwater: everything the unlock `ownerId` plays goes through a lowpass and a small cut (on) or back (off). */
-      muffle: (ownerId, on) => {
+      muffle: (ownerId, on, options) => {
         /* The registry (noteSound) knows the real source ids an owner streamed or played under; the static map is the fallback. */
         const ids = new Set([(AUDIO_SOURCES[ownerId] || [ownerId])[0], ...(soundOwners.get(ownerId) || [])]);
-        for (const id of ids) audio?.muffle?.(id, on);
+        for (const id of ids) audio?.muffle?.(id, on, options);
       },
       /* Underwater for the whole page except this unlock's own sound and the voices (the Bimbodoll bubble past the counter). */
       muffleOthers: (on) => audio?.muffleOthers?.([source, 'voices'], on),
