@@ -7243,6 +7243,8 @@
   "launcher_media_footnote": "백룸에도 적용됩니다.",
   "launcher_media_done": "완료",
   "launcher_media_tooltip": "미디어와 사운드",
+  "launcher_update_ready": "업데이트 준비됨",
+  "launcher_update_tooltip": "{0} 버전이 나왔어요. 앱 안의 업데이트를 엽니다.",
   "launcher_sound_mute": "런처 음소거",
   "launcher_sound_unmute": "런처 음소거 해제",
   "launcher_media_button": "미디어",

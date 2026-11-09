@@ -7755,6 +7755,8 @@
   "launcher_media_footnote": "后台房间也会跟随此设置。",
   "launcher_media_done": "完成",
   "launcher_media_tooltip": "媒体与声音",
+  "launcher_update_ready": "有更新",
+  "launcher_update_tooltip": "{0} 版已发布。打开应用内更新。",
   "launcher_sound_mute": "启动器静音",
   "launcher_sound_unmute": "取消启动器静音",
   "launcher_media_button": "媒体",

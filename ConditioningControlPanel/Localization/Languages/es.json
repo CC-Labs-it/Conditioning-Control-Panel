@@ -7243,6 +7243,8 @@
   "launcher_media_footnote": "El Back Room también lo sigue.",
   "launcher_media_done": "Listo",
   "launcher_media_tooltip": "Medios y sonido",
+  "launcher_update_ready": "Actualización lista",
+  "launcher_update_tooltip": "Ya salió la versión {0}. Abre el actualizador de la app.",
   "launcher_sound_mute": "Silenciar el lanzador",
   "launcher_sound_unmute": "Activar el sonido del lanzador",
   "launcher_media_button": "Medios",

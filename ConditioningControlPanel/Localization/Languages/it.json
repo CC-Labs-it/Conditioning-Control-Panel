@@ -7607,6 +7607,8 @@
   "launcher_media_footnote": "Vale anche per la Back Room.",
   "launcher_media_done": "Fatto",
   "launcher_media_tooltip": "Media e suono",
+  "launcher_update_ready": "Aggiornamento pronto",
+  "launcher_update_tooltip": "È uscita la versione {0}. Apre l'aggiornamento nell'app.",
   "launcher_sound_mute": "Silenzia il launcher",
   "launcher_sound_unmute": "Riattiva l'audio del launcher",
   "launcher_media_button": "Media",

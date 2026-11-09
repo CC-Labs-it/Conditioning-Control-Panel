@@ -388,6 +388,23 @@
                     </Grid>
 
                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- "Update ready" (ccp-bugs #1580): lit once the background check finds a newer
+                             build. Opens the SAME in-app update dialog the panel's ladder shows, never a
+                             browser. Hidden under Lockdown (an install exits the app). LauncherWindow.UpdateChip.cs -->
+                        <Button x:Name="UpdateChip" Style="{StaticResource LauncherBarPill}" Visibility="Collapsed"
+                                AutomationProperties.Name="{loc:Str launcher_update_ready}"
+                                Click="UpdateChip_Click" PreviewMouseLeftButtonDown="Press_Down" PreviewMouseLeftButtonUp="Press_Up"
+                                Padding="10,0,13,0" Margin="0,0,6,0" RenderTransformOrigin="0.5,0.5">
+                            <Button.RenderTransform>
+                                <ScaleTransform x:Name="UpdateChipScale"/>
+                            </Button.RenderTransform>
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="M5,0 L10,5.5 L6.6,5.5 L6.6,12 L3.4,12 L3.4,5.5 L0,5.5 Z"
+                                      Width="10" Height="12" Stretch="Fill" Fill="{DynamicResource PanelAccentBrush}"
+                                      VerticalAlignment="Center"/>
+                                <TextBlock Text="{loc:Str launcher_update_ready}" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
                         <!-- signed out: a sign-in pill where the chip would be -->
                         <Button x:Name="SignInPill" Content="{loc:Str launcher_sign_in}" Style="{StaticResource LauncherSignInPill}"
                                 Margin="0,0,6,0" Visibility="Collapsed" Click="SignIn_Click"/>

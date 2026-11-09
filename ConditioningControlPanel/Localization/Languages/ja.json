@@ -7243,6 +7243,8 @@
   "launcher_media_footnote": "バックルームにも反映されます。",
   "launcher_media_done": "完了",
   "launcher_media_tooltip": "メディアとサウンド",
+  "launcher_update_ready": "アップデートあり",
+  "launcher_update_tooltip": "バージョン {0} が出ました。アプリ内のアップデーターを開きます。",
   "launcher_sound_mute": "ランチャーをミュート",
   "launcher_sound_unmute": "ランチャーのミュートを解除",
   "launcher_media_button": "メディア",
