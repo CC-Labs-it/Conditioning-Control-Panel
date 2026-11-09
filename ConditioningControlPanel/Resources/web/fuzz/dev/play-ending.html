@@ -34,7 +34,17 @@ const note = document.getElementById('note');
 if (!end || end.kind !== 'end') { note.textContent = `No ending item "${endId}".`; throw new Error(note.textContent); }
 const basics = ['colour', 'font', 'sound', 'rounded', 'softw', 'a_rain', 'v_frame', 'wheel', 'quiz', 'toy_box', 'mini_breakout', 'mini_slots', 'word_comet'];
 const extra = (qs.get('buy') || '').split(',').map((s) => s.trim()).filter(Boolean);
-const buy = [...new Set([...end.req, ...basics, ...extra])]; // the theme chain first: a side item that needs the theme fork would otherwise pick its first option
+/* ?from=go_tx: land one row before that item instead, with the rows from it up to the ending left to buy by hand.
+   The wallet covers all of them, so the player buys each one when they choose. */
+const fromId = qs.get('from');
+const from = fromId ? BY_ID[fromId] : null;
+if (fromId && !from) { note.textContent = `No item "${fromId}".`; throw new Error(note.textContent); }
+const held = new Set();
+if (from) {
+  for (let id = endId; id && id !== fromId; id = BY_ID[id].req.find((r) => BY_ID[r]?.lane === end.lane)) held.add(id);
+  held.add(fromId);
+}
+const buy = [...new Set([...(from ? from.req : end.req), ...basics, ...extra])]; // the theme chain first: a side item that needs the theme fork would otherwise pick its first option
 const frame = document.getElementById('game');
 const pass = ['pictures', 'lite'].filter((k) => qs.get(k)).map((k) => `&${k}=${encodeURIComponent(qs.get(k))}`).join('');
 frame.src = `../index.html?buy=${buy.join(',')}${pass}`;
@@ -46,9 +56,9 @@ frame.addEventListener('load', () => {
     const run = fuzz.state;
     /* Buy out everything else that is open (riders open more rows, so loop), so the ending is the only tile left in the
        shop window beside Endless Mode. The trunk fork row stays as the goal; forks and endings are never granted here. */
-    let guard = 240;
+    let guard = from ? 0 : 240;   // ?from keeps the page calm: only the path to that row is granted
     for (;;) {
-      const next = guard-- > 0 && E.openItems(run).find((i) => i.kind !== 'end' && i.kind !== 'fork' && i.id !== 'taste2');   // Second Theme asks a question of its own: leave it as the goal row
+      const next = guard-- > 0 && E.openItems(run).find((i) => i.kind !== 'end' && i.kind !== 'fork' && i.id !== 'taste2' && !held.has(i.id));   // Second Theme asks a question of its own: leave it as the goal row
       if (!next) break;
       if (!E.has(run, next.id)) { fuzz.grant(next.id); continue; }
       // A repeat row (another copy, a rank) stays open while owned: grant refuses those, so buy it with the dev wallet.
@@ -68,7 +78,40 @@ frame.addEventListener('load', () => {
     /* EMI Takeover: the chain (go_tx, go_will, go_corp, go_hive) came with go_end's req. Hand her the four tiles she
        buys herself and a small crowd, so the take starts from a HIVE MIND swarm. ?emi=0 leaves her as the grant left her. */
     const swarm = frame.contentWindow.__emiSwarm;
-    if (endId === 'go_end' && swarm?.dev && qs.get('emi') !== '0') { swarm.dev.tiles(4); swarm.dev.crowd(qs.get('lite') ? 5 : 11); }
+    if (!from && endId === 'go_end' && swarm?.dev && qs.get('emi') !== '0') { swarm.dev.tiles(4); swarm.dev.crowd(qs.get('lite') ? 5 : 11); }
+    if (from) {
+      const want = Math.round([...held].reduce((sum, id) => sum + E.price(run, id), 0) * 1.1);
+      if (run.fuzz < want) fuzz.add(want - run.fuzz);
+      /* The row may sit behind cheaper shop tiles: one button buys the next step of the chain, in order. */
+      const steps = [...held].reverse();
+      const bar = document.createElement('div');
+      bar.style.cssText = 'position:fixed;left:50%;top:8px;transform:translateX(-50%);z-index:10;display:flex;gap:8px;align-items:center;background:#fff;border:2px solid #ff2f9a;border-radius:10px;padding:6px 10px;box-shadow:0 4px 18px rgba(0,0,0,.35);font:600 14px Segoe UI,sans-serif;color:#301c33';
+      const label = document.createElement('span');
+      const next = document.createElement('button');
+      next.style.cssText = 'padding:6px 12px;min-height:36px;font:inherit;cursor:pointer;background:#ff2f9a;color:#fff;border:0;border-radius:6px';
+      bar.append(label, next);
+      document.body.appendChild(bar);
+      let k = 0;
+      const draw = () => {
+        while (k < steps.length && E.has(run, steps[k])) k += 1;
+        if (k >= steps.length) { bar.remove(); return; }
+        label.textContent = `Step ${k + 1} of ${steps.length}`;
+        next.textContent = `Buy: ${BY_ID[steps[k]].name}`;
+      };
+      next.addEventListener('click', () => {
+        fuzz.engine.audio.arm();
+        const id = steps[k], p = E.price(run, id);
+        if (run.fuzz < p) fuzz.add(p - run.fuzz + 1);
+        fuzz.buy(id);
+        frame.focus();
+        draw();
+      });
+      draw();
+      note.innerHTML = `Sound on. Press <b>Buy: ${from.name}</b> at the top to start, then each next step when you want it. The pink tiles in the shop still work as normal. Wake Up still works the whole time.`;
+      setTimeout(() => note.classList.add('gone'), 14000);
+      frame.focus();
+      return;
+    }
     const want = Math.round(E.price(run, endId) * 1.05);
     if (run.fuzz < want) fuzz.add(want - run.fuzz);
     if (endId === 'dr_end') {
