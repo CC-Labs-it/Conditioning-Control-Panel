@@ -1,0 +1,90 @@
+/* ui/adcard/card.css - the Living Ad card ("Spiral poster", owner-approved 2026-11-09). Every rule is scoped under .adc:
+ * the game uses .bar, .row, .layer, .pair, .hl elsewhere. Sizes are container units of the card's own box (.adc-box). */
+@font-face { font-family: AdcRound; src: url("../../assets/fonts/fredoka-latin.woff2") format("woff2"); font-weight: 300 700; font-display: block; }
+@font-face { font-family: AdcBlock; src: url("../../assets/fonts/bungee-latin.woff2") format("woff2"); font-weight: 400; font-display: block; }
+@font-face { font-family: AdcMono; src: url("../../assets/fonts/courier-prime-700-latin.woff2") format("woff2"); font-weight: 700; font-display: block; }
+
+.adc-box { width: 100%; container-type: inline-size; }
+.adc { --display: AdcRound, "Segoe UI", system-ui, sans-serif; --block: AdcBlock, Impact, sans-serif; --mono: AdcMono, "Courier New", monospace;
+  --track: #fff; position: relative; aspect-ratio: 4 / 5; width: 100%; overflow: hidden; color: var(--ink); background: var(--paper);
+  font-family: var(--display); border-radius: 2.4cqw; isolation: isolate; text-align: left; line-height: normal; letter-spacing: normal; }
+.adc *, .adc *::before, .adc *::after { box-sizing: border-box; }
+.adc canvas.sp { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; }
+.adc .inner { position: absolute; inset: 0; z-index: 1; padding: 4cqw 5cqw 4cqw; display: grid; grid-template-rows: auto 43cqw auto 1fr auto; gap: 1.6cqw; }
+.adc .a { color: var(--A); }
+.adc .b { color: var(--B); }
+.adc .hl { background: linear-gradient(transparent 55%, var(--hlc) 55%, var(--hlc) 92%, transparent 92%); padding: 0 .3cqw; white-space: nowrap; }
+.adc .ac-top { display: flex; justify-content: space-between; align-items: center; gap: 2cqw; }
+.adc .logo { display: block; height: auto; width: 82cqw; aspect-ratio: 900 / 244; margin: -1.4cqw 0 -4cqw -1.5cqw; position: relative; z-index: 2; }
+.adc .hero { position: relative; }
+.adc .hmeta { position: absolute; left: 0; top: 5.5cqw; display: grid; justify-items: start; gap: 1.4cqw; z-index: 3; }
+.adc .pair { display: inline-flex; border-radius: 99px; overflow: hidden; font: 700 2.7cqw/1 var(--display); letter-spacing: .08em; text-transform: uppercase; border: .5cqw solid var(--ink); }
+.adc .pair span { padding: 1.1cqw 2.2cqw .9cqw; color: #fff; background: var(--B); }
+.adc .pair span:first-child { background: var(--A); }
+.adc .pair i { display: block; width: 3.4cqw; background: linear-gradient(90deg, var(--A), var(--B)); }
+.adc .serial { font: 700 2.3cqw/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: #fff; background: var(--ink); padding: 1cqw 1.6cqw .8cqw; border-radius: 1cqw; }
+.adc .pic { position: absolute; right: -3cqw; top: 0; height: 100%; display: block; }
+.adc .pic img.base { display: block; width: 100%; height: 100%; position: relative; z-index: 1; }
+.adc .pic .layerframe { position: absolute; z-index: 0; display: block; pointer-events: none; transform-origin: 50% 50%; }
+.adc .pic .layerclip { position: absolute; z-index: 0; overflow: hidden; pointer-events: none; top: 0; height: 100%; }
+.adc .pic img.ac-layer { display: block; width: 100%; height: 100%; pointer-events: none; }
+.adc .pic .orbit, .adc .pic .drip { z-index: 2; }
+.adc .orbit { position: absolute; pointer-events: none; }
+.adc .orbit .ring { position: absolute; inset: 0; }
+.adc .orbit .slot { position: absolute; transform: translate(-50%, -50%); }
+.adc .orbit .slot b, .adc .orbit .slot i, .adc .orbit .slot img { display: block; width: 100%; }
+.adc .drip { position: absolute; border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%; background: radial-gradient(circle at 38% 62%, #ffffff 0 22%, #cfe9ff 40%, #8fc6f0 100%);
+  border: .2cqw solid #3b2b45; transform-origin: 50% 0; opacity: 0; pointer-events: none; }
+.adc .terms { position: absolute; left: -1cqw; bottom: 12cqw; transform: rotate(-7deg); background: var(--ink); color: #fff; padding: 1.6cqw 2.6cqw 1.4cqw; border-radius: 1.4cqw;
+  display: grid; justify-items: start; box-shadow: 1cqw 1cqw 0 var(--A); z-index: 3; }
+.adc .terms .n { font: 700 7cqw/1 var(--display); }
+.adc .terms .n small { font-size: 3cqw; font-weight: 600; margin-left: 1cqw; }
+.adc .vib { display: inline-block; font: 400 6.2cqw/1 var(--block); color: var(--hot); text-shadow: .45cqw .3cqw 0 var(--A), -.45cqw -.3cqw 0 var(--B); }
+.adc .label { background: #fff; border: .6cqw solid var(--ink); border-radius: 1.6cqw; padding: 1.6cqw 2.8cqw 1.8cqw; transform: rotate(-1deg); box-shadow: 1cqw 1cqw 0 var(--B); }
+.adc h3 { margin: 0; font: 700 5.6cqw/1.12 var(--display); text-wrap: balance; color: var(--ink); }
+.adc .ac-sub { margin: 1cqw 0 0; font: 500 3.1cqw/1.25 var(--display); opacity: .85; }
+.adc .stats { background: rgba(255, 255, 255, .9); border: .6cqw solid var(--ink); border-radius: 1.6cqw; padding: 1.6cqw 2.8cqw; display: grid;
+  grid-template-columns: 1fr 1fr; gap: 1.8cqw 3.4cqw; align-content: center; }
+.adc.tight .stats { gap: 1.1cqw 3.4cqw; padding: 1.2cqw 2.8cqw; }
+.adc.tight .label { padding: 1.3cqw 2.8cqw 1.4cqw; }
+.adc .stat { min-width: 0; }
+.adc .stat .ac-row { display: flex; justify-content: space-between; align-items: baseline; gap: 2cqw; }
+.adc .stat .lab { font: 600 2.9cqw/1.1 var(--display); }
+.adc .stat .num { font: 700 3.5cqw/1 var(--display); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.adc .barwrap { position: relative; }
+.adc .ac-bar { position: relative; height: 2.9cqw; margin-top: .9cqw; border-radius: 3cqw .9cqw 2.6cqw 1.1cqw / 1.1cqw 2.6cqw .9cqw 3cqw; overflow: hidden;
+  background: var(--track); border: .45cqw solid var(--ink); transform-origin: center; }
+.adc .ac-bar i { position: absolute; inset: 0 auto 0 0; width: var(--w); transform-origin: left center; background: linear-gradient(90deg, var(--A), var(--M), var(--B)); }
+.adc .ac-bar i::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(-55deg, rgba(255, 255, 255, .28) 0 .7cqw, transparent .7cqw 1.6cqw); }
+.adc .ac-bar i .shine { position: absolute; top: 0; bottom: 0; left: 0; width: 34%; background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.85), rgba(255,255,255,0)); opacity: 0; }
+.adc .llamas { display: flex; flex-wrap: nowrap; gap: var(--lg, 1.4cqw); margin-top: .6cqw; }
+.adc .llamas span { font: var(--ls, 3.8cqw)/1 "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; display: inline-block; }
+.adc .llamas.herd span { position: relative; }
+.adc .llamas.herd span:nth-child(odd) { top: -.7cqw; z-index: 1; }
+.adc .llamas.herd span:nth-child(even) { top: .2cqw; }
+.adc .ac-foot { display: flex; justify-content: space-between; align-items: center; gap: 3cqw; background: var(--ink); color: #fff; margin: 0 -5cqw -4cqw; padding: 1.3cqw 5cqw; }
+.adc .links { display: grid; gap: .5cqw; font: 600 2.7cqw/1.15 var(--display); min-width: 0; }
+.adc .links span b { color: var(--hot); }
+.adc .qr { width: 11cqw; flex: none; background: #fff; padding: .8cqw; border-radius: .9cqw; }
+.adc .qr svg { display: block; width: 100%; height: auto; }
+@media (prefers-reduced-motion: no-preference) {
+  .adc .bob { animation: adc-bob 3.6s ease-in-out infinite; animation-composition: add; }
+}
+@keyframes adc-bob { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-1.2%) rotate(.6deg); } }
+.adc .vib.buzz { animation: adc-buzz 70ms steps(1) infinite; }
+@keyframes adc-buzz { 0% { transform: translate(.18cqw, -.12cqw) rotate(-.4deg); } 25% { transform: translate(-.2cqw, .14cqw) rotate(.35deg); }
+  50% { transform: translate(.14cqw, .18cqw) rotate(-.2deg); } 75% { transform: translate(-.14cqw, -.18cqw) rotate(.45deg); } }
+
+/* the ending sheet around the card */
+.adc-sheet { display: grid; justify-items: center; gap: 12px; width: min(100%, 520px); margin: 0 auto; }
+.adc-sheet h2 { margin: 0; font: 700 22px/1.2 var(--adc-ui, inherit); text-align: center; }
+.adc-sheet p { margin: 0; opacity: .85; text-align: center; }
+.adc-sheet .adc-box { width: min(100%, 440px, calc((100vh - 260px) * .8)); }
+.adc-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.adc-row button { font: 600 14px/1 inherit; padding: 9px 14px; border-radius: 10px; border: 2px solid currentColor; background: transparent; color: inherit; cursor: pointer; }
+.adc-row button.go { background: #fff; color: #111; border-color: #fff; }
+.adc-row button:disabled { opacity: .5; cursor: progress; }
+.adc-row button:focus-visible { outline: 3px solid #ff69b4; outline-offset: 2px; }
+.adc-status { min-height: 1.3em; font-size: 14px; }
+.adc-prog { width: min(100%, 320px); height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .2); overflow: hidden; }
+.adc-prog i { display: block; height: 100%; width: 0; background: #ff69b4; }

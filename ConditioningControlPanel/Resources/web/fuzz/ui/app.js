@@ -24,6 +24,7 @@ import { bindDockVolume } from './dock-volume.js';
 import { createPurchaseFeel } from './purchase-feel.js';
 import { windowPreferences } from './preferences.js';
 import { openClause, clauseLines, skipsCard } from './clause.js';
+import { tally } from './adcard/model.js';
 import { ridersOf } from '../data/folds.js';
 import { handFor, copyHandFor } from './hands.js';
 import { createTapWindow, emiBell } from '../sim/tap-rate.js';
@@ -324,6 +325,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
           if (engine.paused || engine.suspended) return;
           purchaseFeel?.prepare(it, row);
           if (!engine.buy(id).ok) { purchaseFeel?.clear(); shop.denied(id); }
+          else tally(engine.run, 'terms', clauseLines(id, riders).length);   // the Living Ad card's terms ACCEPTED
         },
         onDecline: (line) => { settle(); say(line); },
       });

@@ -180,6 +180,7 @@ export function openIntro({ doc = document, life, skip = false, hosted = false, 
     $('optout').addEventListener('change', (e) => {
       e.target.checked = false;
       llamas = Math.min(llamas + 1, LLAMA_WORDS.length - 1);
+      life.llamas = Math.max(Number(life.llamas) || 3, llamas);   // the Living Ad card shows the herd
       const word = LLAMA_WORDS[llamas];
       for (const n of terms.querySelectorAll('.lln')) n.textContent = `${word} (${llamas})`;
       const line = EGG_LINES.opt[0].replace('{llamas}', word);
