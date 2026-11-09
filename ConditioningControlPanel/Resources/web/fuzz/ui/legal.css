@@ -78,11 +78,23 @@
 
 /* The pictures card */
 .tc .src { display: grid; gap: 8px; }
+.tc .src [data-pick=none] { border:0; background:transparent; padding:4px 0; text-align:center; }
+.tc .src [data-pick=none] b { font-size:12px; text-decoration:underline; }
+.tc .src [data-pick=none] small { display:none; }
+.tc .src button:disabled { color:var(--tc-mute); cursor:default; }
 .tc .src button { display: block; width: 100%; padding: 9px 11px; text-align: left; background: var(--tc-paper); border: 1px solid var(--tc-edge); cursor: pointer; }
 .tc .src button:hover { border-color: var(--tc-ink); }
 .tc .src b { display: block; font-size: 14px; }
 .tc .src small { display: block; margin-top: 2px; font-size: 12.5px; line-height: 1.3; color: var(--tc-mute); }
+/* Standalone only: what a free account and Prime add, small print on the same paper. */
+.tc .perks { margin-top: 8px; padding: 6px 10px; border: 1px dashed var(--tc-edge); background: var(--tc-paper); }
+.tc .perks p { margin: 0; font-size: 11.5px; line-height: 1.35; color: var(--tc-mute); }
+.tc .perks p + p { margin-top: 3px; }
 .tc .tc-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+/* Folders (owner 2026-11-08): a small line under the choices, and the whole card takes a drop. */
+.tc .folder-row { margin: -2px 0 2px 12px; font-size: 12.5px; color: var(--tc-mute); }
+.tc .src .folder-row button { display: inline; width: auto; padding: 0; background: none; border: 0; color: var(--tc-ink); font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
+.tc .win.dropping { outline: 3px dashed var(--tc-ink); outline-offset: -8px; }
 
 @media (max-width: 480px) {
   .tc h1 { font-size: 22px; }

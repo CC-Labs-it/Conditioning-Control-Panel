@@ -3,6 +3,8 @@
 
 import { THEMES } from '../../../data/content/themes.js';
 import { THEME_PAGES } from '../../palette.js';
+import { setRich } from '../../rich-text.js';
+import { frameRect } from '../../perf.js';
 
 export const pick = (ctx, list) => list[Math.floor(ctx.rng() * list.length)];
 export const docOf = (ctx) => ctx.button.el.ownerDocument;
@@ -88,7 +90,7 @@ export function moment(ctx, css, frames, ms, text = null) {
 
 /** Theme words on the button, only while nothing else has written on it. */
 export function buttonWords(ctx, lane, ms = 7000) {
-  const words = THEMES[lane].buttonWords, btn = ctx.button.el;
+  const words = THEMES[lane].buttonWords, btn = ctx.button.el.querySelector('#btn-label') || ctx.button.el;
   const original = btn.textContent;
   let mine = original;
   ctx.every(ms, () => {
@@ -113,11 +115,11 @@ export function shopFlavour(ctx, lane, ms = 9000) {
     if (!rows.length) return;
     const row = pick(ctx, rows), small = row.querySelector('small');
     if (!small) return;
-    const old = small.textContent;
+    const old = small.innerHTML;
     row.dataset.tbFlavour = '1';
-    small.textContent = ctx.brand.text(pick(ctx, lines));
+    setRich(small, pick(ctx, lines));
     delete small.dataset.tbx;
-    ctx.after(5000, () => { delete row.dataset.tbFlavour; if (small.isConnected) { small.textContent = old; delete small.dataset.tbx; } });
+    ctx.after(5000, () => { delete row.dataset.tbFlavour; if (small.isConnected) { small.innerHTML = old; delete small.dataset.tbx; } });
   });
 }
 
@@ -221,7 +223,7 @@ export function ring(ctx, color) {
 }
 
 export function buttonCentre(ctx) {
-  const r = ctx.button.el.getBoundingClientRect();
+  const r = frameRect(ctx.button.el);
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 }
 

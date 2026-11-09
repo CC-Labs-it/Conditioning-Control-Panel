@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Terms &amp; Conditioning</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="ui/button-wardrobe.css">
   <link rel="stylesheet" href="ui/legal.css">
+  <link rel="stylesheet" href="ui/rich-text.css">
+  <link rel="stylesheet" href="ui/prestige-sky.css">
 </head>
 <body>
   <div id="world">
@@ -18,7 +21,7 @@
         <div id="counter" aria-live="off"><span id="count">0</span> <span id="cur"></span></div>
         <div id="l-meters"></div>
         <p id="phrase" hidden>Click here to Accept the Terms and Conditioning</p>
-        <div id="btn-zone"><div id="btn-wrap"><button id="btn" type="button">Click</button><span id="btn-lock" hidden></span></div></div>
+        <div id="btn-zone"><div id="btn-wrap"><button id="btn" type="button"><span id="btn-label">Click</span></button><span id="btn-lock" hidden></span></div></div>
       </main>
       <div id="l-banner"></div>
       <section id="shop" aria-label="Shop" hidden>
@@ -26,7 +29,6 @@
         <div id="rows"></div>
         <div id="more" hidden></div>
       </section>
-      <nav id="dock-strip" aria-label="Side panels" hidden></nav>
     </div>
     <div id="l-floaters" class="layer"></div>
     <div id="l-side"><div class="rail left"></div><div class="rail right"></div></div>
@@ -36,6 +38,7 @@
     <div id="l-ending" class="layer"></div>
   </div>
 
+  <nav id="dock-strip" aria-label="Features" hidden></nav>
   <div id="cards"></div>
 
   <div id="pause" class="backdrop" hidden>
@@ -53,11 +56,42 @@
         <button id="leave" type="button" hidden>Leave</button>
       </div>
       <textarea id="save-box" rows="3" hidden spellcheck="false" aria-label="Save"></textarea>
+      <p class="made-by">A game by CC Labs <span aria-hidden="true">·</span>
+        <button type="button" data-credit="https://cclabs.app/">cclabs.app</button> <span aria-hidden="true">·</span>
+        <button type="button" data-credit="https://discord.gg/YxVAMt4qaZ">Discord</button> <span aria-hidden="true">·</span>
+        <button type="button" data-credit="https://cclabs.app/ccp.html">Get the desktop app</button></p>
     </div>
   </div>
 
-  <button id="wake" type="button">Wake Up</button>
+  <div id="game-controls">
+    <div id="audio-controls" role="group" aria-label="Sound controls">
+      <button id="audio-mute" type="button" aria-label="Mute game audio" aria-pressed="false"></button>
+      <button id="audio-toggle" type="button" aria-label="Audio mixer" title="Audio mixer" aria-controls="audio-mixer" aria-expanded="false">
+        <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="m2 4 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <section id="audio-mixer" class="audio-mixer" aria-labelledby="audio-heading" hidden>
+        <h2 id="audio-heading"><img src="assets/clipart/mixer.webp" alt="" width="26" height="26">Audio mixer</h2>
+        <div class="mix-master">
+          <label for="game-volume">Game volume</label>
+          <output for="game-volume" id="game-volume-value">100%</output>
+          <input id="game-volume" class="mix-slider" type="range" min="0" max="100" value="100">
+        </div>
+        <p class="mix-empty">Individual sounds appear here as you unlock them.</p>
+        <div id="audio-sources"></div>
+      </section>
+    </div>
+    <button id="wake" type="button">Wake Up</button>
+  </div>
+  <template id="mix-channel">
+    <div class="mix-row">
+      <label class="mix-name"></label>
+      <output class="mix-value"></output>
+      <button class="mix-mute" type="button"></button>
+      <input class="mix-slider" type="range" min="0" max="100" step="1">
+    </div>
+  </template>
 
+  <script type="importmap">{"imports":{"three":"../vendor/three/three.module.min.js","three/addons/":"../vendor/three/addons/"}}</script>
   <script type="module" src="main.js"></script>
 </body>
 </html>

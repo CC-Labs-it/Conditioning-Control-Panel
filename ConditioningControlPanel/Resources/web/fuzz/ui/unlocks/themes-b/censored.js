@@ -5,9 +5,11 @@ import { THEMES } from '../../../data/content/themes.js';
 import { FAKE_PAYWALL } from '../../../data/content/fakes.js';
 import { ENDINGS } from '../../../data/content/endings.js';
 import { mountPodcast } from '../podcast-player.js';
+import { setRich } from '../../rich-text.js';
 import { COPY } from './copy.js';
+import { themeScreens } from '../themes-a/theme-screens.js';
 import { buttonCentre, docOf, endingStage, endingWords, fresh, gallery, pick, ring, rowsOf, sfx } from './kit.js';
-import { THEME_TASTES } from '../theme-skins.js';
+import { REDACTED_GAP_MS, redactedPay } from '../../../sim/prestige-endings.js';  // prestige hook (Renewal Sky): Redacted ending
 
 const R = THEMES.censored.rules;
 const RED = '#c2261f';
@@ -41,6 +43,29 @@ function barTile(ctx) {
   };
 }
 
+/* Redacted ending (ce_end, Renewal Sky): a tap on a censor bar pays what scratching a spot pays, once per bar per
+ * REDACTED_GAP_MS. The bars still never take the press: the listener only watches (capture, passive), so whatever sits
+ * under the bar gets the tap as before. Shop words (.tb-word) are not bars: a tap there is a buy. */
+function redactedTaps(ctx) {
+  if (!redactedPay(ctx.prestige, { click: 1 })) return undefined;  // prestige hook: not lit, nothing listens
+  const doc = docOf(ctx), win = doc.defaultView, last = new WeakMap();
+  const onDown = (ev) => {
+    if (!ev.isTrusted || ctx.paused || ctx.state.ended || doc.body.classList.contains('tb-peek')) return;
+    const now = ctx.state.clock;
+    for (const bar of doc.querySelectorAll('.tb-bar-on')) {
+      const r = bar.getBoundingClientRect();
+      if (!r.width || ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) continue;
+      if (now - (last.get(bar) ?? -Infinity) < REDACTED_GAP_MS) return;
+      last.set(bar, now);
+      ctx.pay(redactedPay(ctx.prestige, ctx.rates()), 'redacted', { x: ev.clientX, y: ev.clientY });
+      sfx(ctx, 'chip_pop', 0.35);
+      return;
+    }
+  };
+  win.addEventListener('pointerdown', onDown, { capture: true, passive: true });
+  return () => win.removeEventListener('pointerdown', onDown, { capture: true });
+}
+
 /** Bars and blur answer one body class, so Peek has a single switch. */
 const PEEK_CSS = `body.tb-peek .tb-bar-on{opacity:.08;}
   .tb-bar-on{transition:opacity .25s ease-out;}
@@ -52,17 +77,16 @@ export default {
   ce_head: {
     mount(ctx) {
       ctx.css(PEEK_CSS);
-      const g = gallery(ctx, { niche: 'censored', mode: 'swap', decorate: barTile(ctx) });
-      if (ctx.has('ce_feed')) g.hide();
-      ctx.on('buy', (e) => { if (e.item.id === 'ce_feed') g.hide(); });
-      return {};
+      /* The first pictures: three screens behind bars (owner 2026-11-08). The side columns wait for Censored Pictures. */
+      const bars = barTile(ctx);
+      themeScreens(ctx, { niches: ['censored'], frame: 'border:2px solid #141414;border-radius:0;', decorate: (me) => bars({ el: me.body }) });
+      return { off: redactedTaps(ctx) };
     },
   },
 
-  /* The button is a bar. A tap shows a sliver of what is under it. */
+  /* Reveal the next censored post. */
   ce_bar: {
     mount(ctx) {
-      ctx.css(THEME_TASTES.censored.css);
       ctx.button.skin('censorbar');
       if (fresh(ctx)) ring(ctx, RED);
       return {};
@@ -85,7 +109,7 @@ export default {
       const root = docOf(ctx).documentElement.style;
       ctx.css('.tb-tile img{filter:blur(var(--tb-blur,0));}#btn{filter:none;}');
       const edge = ctx.el('div', 'position:absolute;inset:0;background:radial-gradient(ellipse at 50% 32%,transparent 42%,rgba(239,236,228,.85) 92%);opacity:0;', null, 'wash');
-      ctx.every(9000, () => { label.textContent = ctx.brand.text(pick(ctx, R.blur)); });
+      ctx.every(9000, () => { setRich(label, pick(ctx, R.blur)); });
       ctx.on('peek', ({ on }) => { held = on; });
       const paint = () => {
         lvl = ctx.gentle ? 0.6 : (1 - Math.cos(t * Math.PI / 4)) / 2;

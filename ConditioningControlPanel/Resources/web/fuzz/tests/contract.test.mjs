@@ -246,9 +246,13 @@ test('the ending layer is in the page, above the end fade', () => {
   assert.ok(z(/#l-ending \{ z-index: (\d+)/) > z(/\.endfade \{[^}]*z-index: (\d+)/));
 });
 
-test('a link is cclabs.app or nothing', () => {
-  for (const good of ['https://cclabs.app', 'https://cclabs.app/', 'https://cclabs.app/ccp.html?x=1#y', 'HTTPS://CCLABS.APP/a']) assert.ok(allowedLink(good), good);
-  for (const bad of ['http://cclabs.app', 'https://app.cclabs.app', 'https://cclabs.app.example.com', 'https://cclabs.app@example.com', 'https://x:y@cclabs.app', 'https://cclabs.app:8443', 'javascript:alert(1)', 'data:text/html,x', '//cclabs.app', '/a', '', null, undefined, 'https://example.com/https://cclabs.app']) assert.equal(allowedLink(bad), null, String(bad));
+test('a link is cclabs.app, www, app, the one Discord invite, or nothing', () => {
+  for (const good of ['https://cclabs.app', 'https://cclabs.app/', 'https://cclabs.app/ccp.html?x=1#y', 'HTTPS://CCLABS.APP/a',
+    'https://www.cclabs.app/', 'https://app.cclabs.app', 'https://app.cclabs.app/tc', 'https://discord.gg/YxVAMt4qaZ']) assert.ok(allowedLink(good), good);
+  for (const bad of ['http://cclabs.app', 'http://app.cclabs.app', 'https://tc.cclabs.app', 'https://evil.cclabs.app', 'https://cclabs.app.example.com', 'https://app.cclabs.app.example.com',
+    'https://cclabs.app@example.com', 'https://x:y@cclabs.app', 'https://cclabs.app:8443', 'https://app.cclabs.app:444/', 'javascript:alert(1)', 'data:text/html,x', '//cclabs.app', '/a', '', null, undefined,
+    'https://example.com/https://cclabs.app', 'https://discord.gg/other', 'https://discord.gg/YxVAMt4qaZ/x', 'https://discord.gg/YxVAMt4qaZ?x=1', 'http://discord.gg/YxVAMt4qaZ',
+    'https://discord.gg.example.com/YxVAMt4qaZ', 'https://discord.com/invite/YxVAMt4qaZ']) assert.equal(allowedLink(bad), null, String(bad));
 });
 
 test('ctx.openLink opens only inside a press; hosted goes down the wire, unhosted is a new tab', () => {
@@ -422,7 +426,7 @@ test('a single fork handler and a plain row pass through untouched', () => {
 });
 
 test('the registry merges independent group files, no id claimed twice, every id real', () => {
-  assert.deepEqual(Object.keys(GROUPS).sort(), ['arcade', 'audioMixer', 'basics', 'edges', 'extras', 'meta', 'routes', 'spiral', 'themes-a', 'themes-b']);
+  assert.deepEqual(Object.keys(GROUPS).sort(), ['arcade', 'basics', 'edges', 'extras', 'meta', 'routes', 'spiral', 'themes-a', 'themes-b']);
   const seen = new Set();
   for (const [name, group] of Object.entries(GROUPS)) {
     for (const [id, entry] of Object.entries(group)) {

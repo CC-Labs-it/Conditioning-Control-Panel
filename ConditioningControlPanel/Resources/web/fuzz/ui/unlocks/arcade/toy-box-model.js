@@ -1,5 +1,5 @@
 export const PIECES = Object.freeze(['pawn', 'rook', 'knight', 'bishop', 'queen', 'king']);
-export const BOX_WINDOW = 5.5;
+export const BOX_WINDOW = 9.5;
 export const BOX_FLIP = 1.1;
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, Number.isFinite(n) ? n : lo));
 const shuffle = (values, rng) => {

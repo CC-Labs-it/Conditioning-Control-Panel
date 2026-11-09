@@ -8,7 +8,6 @@ export const COPY = Object.freeze({
     handsOff: 'hands off',
     deeper: 'deeper',
     middle: 'middle',
-    breathPay: (n) => `+${n}`,
   },
   bimbo: {
     moment: 'Hi.',
@@ -27,12 +26,9 @@ export const COPY = Object.freeze({
   },
   sissy: {
     moment: 'Shoulders back.',
-    wardrobe: 'Wardrobe',
-    wardrobeShort: 'Dress',
-    wardrobeDone: 'That will do',
     houseRules: 'House Rules',
-    matchCount: (n) => `${n} of 5 match`,
-    matchDone: (set) => `${set} set. Pay goes up.`,
+    postureHead: 'Posture check',
+    postureHold: 'Hold still',
     testBoost: 'Pass. Taps pay more.',
     testPass: 'Pass. Taps pay more for a while.',
     testFail: 'We will say no more about it.',

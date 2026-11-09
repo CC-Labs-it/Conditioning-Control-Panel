@@ -4,7 +4,7 @@
  * switched off; it never takes the game down. Unlock authors read ENGINE.md, not this file.
  * ==========================================================================*/
 
-import { BY_ID, ITEMS } from '../data/items.js';
+import { BY_ID, ITEMS, FORKS } from '../data/items.js';
 import { CONFIG } from '../data/config.js';
 import { brandText } from '../data/brand.js';
 import * as E from '../sim/economy.js';
@@ -13,22 +13,76 @@ import { noteSeen, recordEnding, ENDING_IDS } from '../sim/save.js';
 import { familyOf, liveOn, panelGroups, parentOf, switchable } from '../sim/switches.js';
 import { makeContext } from './context.js';
 import { createPictures } from './pictures.js';
-import { createAds } from './ads.js';
+import { paletteOf } from './palette.js';
+import { createAds, subscriberPlan } from './ads.js';
 
 const MAX_UNLOCK_ERRORS = 3;
 const ENDING_SCOPE = '__ending';
 
-export function createEngine({ run, life, ui, audio, registry, host = {}, rng = Math.random, save = () => {}, env = {} }) {
+import { createJourney } from '../sim/journey.js';
+import { takeActivity, journeyChapter } from '../sim/journey-effects.js';
+import * as P from '../sim/prestige.js';
+import * as PE from '../sim/prestige-endings.js';   // ending-star perks that are behaviour (Endings lane)
+import { LANE_BY_ID } from '../data/prestige.js';
+import { PRESTIGE_REGISTRY } from './unlocks/prestige/index.js';
+
+/* ---- Renewal Sky: what a fresh run starts with (sim/prestige.js runStamp). Applied once, at the first second. ---- */
+const ownFree = (run, id) => {
+  if (!BY_ID[id] || run.owned[id]) return;
+  run.owned[id] = 1;
+  if (!run.order.includes(id)) run.order.push(id);
+};
+function stampRun(run, p) {
+  const st = P.runStamp(p);
+  run.prestige = st;
+  run.pace *= st.pay;
+  const before = run.order.length;
+  for (const id of st.keep) ownFree(run, id);
+  if (st.wheel) ownFree(run, 'wheel');
+  if (PE.startsAsBubble(p)) ownFree(run, PE.BUBBLE_ROW);   // Bimbodoll ending (bi_end): the button starts as a bubble
+  if (run.order.length !== before) E.recalc(run);
+  return st;
+}
+/** Skip Ahead (head_9): every purchase of chapter 1 is bought for the player, forks as last run picked them. Journey only. */
+function skipChapter(run, journey, st, last) {
+  for (let n = 0; n < 80 && !run.ended && journeyChapter(run) < 1; n += 1) {
+    const it = journey.shop(8).goal;
+    if (!it || it.kind === 'end') break;
+    const cost = journey.price(it.id, null);
+    run.fuzz += cost; run.total += cost; st.gift += cost;
+    const res = it.kind === 'fork'
+      ? journey.choose(it.id, st.prepick[it.id] || last?.route?.[it.id] || Object.keys(FORKS[it.id].opts)[0], null)
+      : journey.buy(it.id, it.options?.[0]?.[0], null);
+    if (!res.ok) { run.fuzz -= cost; run.total -= cost; st.gift -= cost; break; }
+  }
+}
+
+export function createEngine({ run, life, ui, audio, registry, prestigeRegistry = PRESTIGE_REGISTRY, host = {}, rng = Math.random, save = () => {}, env = {} }) {
+  if (!env.journey) delete run.store.journey;
+  if (life && typeof life === 'object' && !life.prestige) life.prestige = P.createPrestige();
+  const prestigeOf = () => life?.prestige || P.createPrestige();
+  /* A brand new run (nothing played, nothing bought) takes the stamp; a saved run keeps the one it started with, and a run
+   * from before prestige existed plays as Depth 0. */
+  const freshRun = !run.prestige && !run.clock && run.buys === 0 && !run.ended;
+  const stamp = freshRun ? stampRun(run, prestigeOf()) : run.prestige || null;
+  const journey = env.journey ? createJourney(run) : null;
+  if (freshRun && stamp) {
+    if (stamp.skip && journey) skipChapter(run, journey, stamp, prestigeOf().last);
+    if (stamp.start) { run.fuzz += stamp.start; run.total += stamp.start; stamp.gift += stamp.start; }
+  }
   const scopes = new Map();          // unlock id -> scope
   const mods = [];                   // live modifiers, in mount order
   const listeners = new Map();       // event -> Set of {fn, scope}
   let paused = false, suspended = false, stopped = !!run.ended, now = run.clock;
-  let endingBegun = false, creditsUp = false, real = run.clock;
+  let endingBegun = false, creditsUp = false, real = run.clock, suspendReason = null;
   const speeds = new Set();
   const guards = new Set();
   const refusals = new Map();        // row id + count -> times refused
-  const ads = createAds();
-  const pictures = createPictures({ source: env.pictureSource, onChange: (source) => { emit('pictures', { source }); save(); } });
+  const ads = createAds({ noCcp: () => subscriberPlan(env.caps) });
+  const pictures = createPictures({ source: env.pictureSource, scrolller: env.hosted ? env.caps?.scrolller : null,
+    send: host.send, niches: () => paletteOf(run).themes, onAdded: source => emit('pictures-added', { source }),
+    onProgress: () => emit('pictures-progress'), onMeter: () => emit('picture-meter'),
+    onChange: (source) => { emit('pictures', { source }); save(); } });
 
   /* ---- scopes ---- */
   function newScope(item) {
@@ -83,7 +137,41 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
   const mountAll = (restored = false) => {
     if (run.mood) mount(run.mood, restored);
     for (const id of [...run.order]) if (liveOn(run.off, id)) mount(id, restored);
+    mountPrestige(restored);
   };
+
+  /* ---- Renewal Sky entries (ui/unlocks/prestige/): mounted at run start when the lane has a star, or always (`always`).
+   * Same ctx, timers, pause and panic as any unlock; ctx.pstore is the lane's bag in the life save. ---- */
+  function mountEntry(item, entry, lane, restored) {
+    if (scopes.has(item.id)) unmount(item.id);
+    const scope = newScope(item);
+    scope.restored = restored;
+    scope.lane = lane;
+    scopes.set(item.id, scope);
+    scope.ctx = makeContext(api, scope);
+    scope.mounting = true;
+    scope.ret = guard(scope, () => entry.mount(scope.ctx)) || {};
+    scope.mounting = false;
+  }
+  const prestigeItem = (id, name) => ({ id, name, group: 'prestige', lane: 'prestige', kind: 'prestige', req: [], cost: 0 });
+  /* Ending-star perks that are plain numbers, and the run's price scale outside the Journey plan (which scales its own). */
+  const corePerks = {
+    mount(ctx) {
+      const p = prestigeOf();
+      if (P.lit(p, 'si_end')) ctx.mod({ price: (v, s, now, it) => (it?.lane === 'look' ? v * 0.5 : v) });
+      const scale = stamp?.price || 1;
+      if (!journey && scale !== 1) ctx.mod({ price: (v) => v * scale });
+    },
+  };
+  function mountPrestige(restored = false) {
+    if (stopped) return;
+    const p = prestigeOf();
+    if (P.lit(p, 'si_end') || (!journey && (stamp?.price || 1) !== 1)) mountEntry(prestigeItem('prestige_core', 'Renewal Sky'), corePerks, null, restored);
+    for (const [lane, entry] of Object.entries(prestigeRegistry)) {
+      if (!entry?.mount || !(entry.always || P.level(p, lane) > 0)) continue;
+      mountEntry(prestigeItem(`prestige_${lane}`, LANE_BY_ID[lane]?.name || lane), entry, lane, restored);
+    }
+  }
   const unmountAll = () => { for (const id of [...scopes.keys()]) unmount(id); };
 
   /* ---- the Control Panel: a row switched off is not mounted, now or on the next load. Its own pay stays in the sim. ---- */
@@ -186,6 +274,16 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
     for (const scope of [...scopes.values()]) runScope(scope, scaled);
   }
 
+  /** Time away with the page open (tab hidden, window minimised, frame off screen, a host focus suspend). Only the
+   *  per-second pay accrues (E.away): no unlock runs, no timer or timed buff moves. Pause, panic and the end pay nothing. */
+  function away(ms) {
+    if (paused || stopped || run.ended || (suspended && suspendReason !== 'focus')) return 0;
+    let gain = E.away(run, mods, ms);
+    if (gain > 0 && P.lit(prestigeOf(), 'outside')) gain += E.lump(run, gain * 0.25, 'fps');   // Go Outside: away pay +25%
+    if (gain > 0) emit('away', { gain, ms });
+    return gain;
+  }
+
   /* ---- ctx.speed: every hold multiplies the unlocks' clock, capped, restored when released ---- */
   function speedFactor() {
     let f = 1;
@@ -227,6 +325,9 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
   }
   function setSuspended(v, reason) {
     const next = !!v;
+    // Only a host focus suspend still pays away time; any other reason (panic, arcade) wins over it until released.
+    if (!next) suspendReason = null;
+    else if (!suspended || reason !== 'focus') suspendReason = reason || 'host';
     if (next === suspended) return;
     if (!paused) ui.holdWorld?.(next);
     suspended = next;
@@ -234,19 +335,24 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
     emit('suspend', { on: suspended, reason });
   }
   /* ---- verbs ---- */
-  function tap({ x, y, auto = false } = {}) {
+  /* via: 'hand' = a trusted manual press on #btn (the only kind tap-rate achievements and the EMI curve read), 'right' = the
+   * Double Wielding right hand, 'copy' = a bouncing copy, 'key' = the keyboard, '' = anything else. t = its event time. */
+  function tap({ x, y, auto = false, via = '', mult = 1, t } = {}) {
     if (paused || suspended || stopped || ui.buttonLocked?.()) return 0;
     audio?.arm();
-    const gain = E.tap(run, mods, now);
+    const gain = E.tap(run, mods, now, auto, mult);
     ui.pressed?.();
-    emit('tap', { gain, x, y, auto });
+    emit('tap', { gain, x, y, auto, via: auto ? '' : via, mult: auto ? 1 : mult, t });
     ui.draw?.();
     return gain;
   }
 
-  function pay(amount, source = 'lump', at = null) {
+  function pay(amount, source = 'lump', at = null, owner = source) {
     if (stopped) return 0;
-    const got = E.sideLump(run, amount * run.pace * (source === 'ad' ? adClickFactor(run) : 1), source);
+    const bank = journey ? takeActivity(run, owner) : 0;
+    const extra = bank ? E.lump(run,bank,'activity_rank') : 0;
+    const adF = source === 'ad' ? adClickFactor(run) * (P.lit(prestigeOf(), 'o_out') ? 2 : 1) : 1;   // Living Ad: ads pay double
+    const got = extra + E.sideLump(run, amount * run.pace * adF, source);
     ui.paid?.(got, at);
     ui.draw?.();
     return got;
@@ -282,9 +388,9 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
     return off;
   }
 
-  function wallHit({ x, y, corner = false } = {}) {
+  function wallHit({ x, y, corner = false } = {}, owner = 'stray') {
     if (paused || suspended || stopped) return 0;
-    const gain = E.wallHit(run, mods, now);
+    const gain = E.wallHit(run, mods, now, owner, corner);
     emit('wall', { gain, x, y, corner });
     return gain;
   }
@@ -305,13 +411,14 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
       if (liveOn(run.off, r.id)) mount(r.id);
       emit('switch', { id: r.id, on: true });
     }
+    PE.tickerHeadStart(run, prestigeOf());   // Unit Complete ending (dr_end): Scrolling Thoughts arrives at Rank 2 (Journey)
     syncQuiet();
     save();
     ui.bought?.(item, res);
     ui.draw?.(true);
   }
 
-  function buy(id) {
+  function buy(id, option) {
     if (stopped) return { ok: false, reason: 'ended' };
     const refused = refusal(id);
     if (refused) {
@@ -319,7 +426,12 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
       if (typeof refused.refuse === 'string') ui.toast?.(brandText(refused.refuse));
       return { ok: false, reason: 'guarded', line: refused.refuse };
     }
-    const res = E.buy(run, id, mods);
+    /* Free Sample / Free Trial (head_2, head_5): the run's first purchases cost nothing. The bank is handed the price for
+     * the buy and keeps nothing if it fails. */
+    const gift = freeBuy(id) ? rawPrice(id) : 0;
+    if (gift) run.fuzz += gift;
+    const res = journey ? journey.buy(id, option, mods) : E.buy(run, id, mods);
+    if (gift) { if (res.ok) stamp.free -= 1; else run.fuzz -= gift; }
     if (!res.ok) { ui.denied?.(id, res); return res; }
     afterGain(id, res);
     if (run.ended) end(id);
@@ -328,7 +440,7 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
   }
 
   function choose(forkId, lane) {
-    const res = E.choose(run, forkId, lane, mods);
+    const res = journey ? journey.choose(forkId, lane, mods) : E.choose(run, forkId, lane, mods);
     if (!res.ok) return res;
     emit('fork', { fork: forkId, lane });
     afterGain(forkId, { item: res.item, count: 1, cost: 0 });
@@ -341,7 +453,10 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
     if (endingBegun) return;
     endingBegun = true;
     stopped = true;
-    audio?.stopStreams?.();
+    /* take(ctx) -> Promise: an optional phase BEFORE the fade, while the page is still mounted (and frozen: `stopped`
+     * stops every unlock's frames). Streams keep playing until it resolves. Capped on the game clock. */
+    const take = !restored && registry[id]?.take;
+    if (!take) audio?.stopStreams?.();
     emit('ending', { id });
     if (!restored) {
       recordEnding(life, run, id);
@@ -350,8 +465,17 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
         total: Math.round(run.total), minutes: Math.round(run.clock / 60000), items: run.order.length,
         ending: id, route: E.routeOf(run), dayUtc: new Date().toISOString().slice(0, 10),
       });
+      if (take) {
+        const scope = newScope(BY_ID[id]);
+        scopes.set(ENDING_SCOPE, scope);
+        scope.ctx = makeContext(api, scope);
+        try {
+          await Promise.race([take(scope.ctx), new Promise((r) => scope.timers.add({ at: now + CONFIG.ENDING_TAKE_MAX_MS, fn: r }))]);
+        } catch (e) { console.error(e); }
+        audio?.stopStreams?.();
+      }
       audio?.setQuiet(true);
-      await ui.ending?.(id);
+      await ui.ending?.(id, { colour: registry[id]?.fadeColour });
     }
     unmountAll();
     const show = !restored && registry[id]?.ending;
@@ -385,6 +509,17 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
     return added;
   }
 
+  function rawPrice(id) { return journey ? journey.price(id, mods) : E.price(run, id, mods, now); }
+  function freeBuy(id) {
+    if (!(stamp?.free > 0) || stopped) return false;
+    const it = journey ? journey.item(id) : BY_ID[id];
+    return !!it && it.kind !== 'fork' && it.kind !== 'end';
+  }
+  const prestigeView = P.prestigeView(prestigeOf, () => run.prestige || null);
+
+  // The feed follows the run's themes: Pick a Theme, a Second Theme, or one of them switched off.
+  for (const event of ['fork', 'taste2', 'switch']) subscribe(event, () => pictures.refreshNiches());
+
   const api = {
     get run() { return run; }, life, ui, audio, mods, host, rng, env, scopes, pictures, ads,
     get now() { return now; },
@@ -394,12 +529,22 @@ export function createEngine({ run, life, ui, audio, registry, host = {}, rng = 
     switches: { isOn, set: setOn, waitingOn: (id) => (run.off[parentOf(id)] ? parentOf(id) : null), groups: () => panelGroups(run, (id) => !!registry[id]?.mount) },
     get paused() { return paused; },
     get suspended() { return suspended; },
+    get suspendReason() { return suspendReason; },
     get stopped() { return stopped; },
-    mount, unmount, mountAll, unmountAll, emit, subscribe, step,
+    mount, unmount, mountAll, unmountAll, emit, subscribe, step, away,
+    awayCap: () => E.awayCap(run, mods),
     setPaused, setSuspended, tap, pay, spend, addGuard, wallHit, buy, choose, end, grant, syncQuiet, save,
     rates: () => E.rates(run, mods, now),
-    price: (id) => E.price(run, id, mods, now),
-    shop: (size) => E.shopWindow(run, mods, size),
+    item: (id) => journey ? journey.item(id) : BY_ID[id],
+    funds: (id) => journey && FORKS[id] ? run.total : run.fuzz,
+    price: (id) => freeBuy(id) ? 0 : rawPrice(id),
+    /* Renewal Sky. prestige: the read-only view ctx.prestige shows; pstore(lane): that lane's bag in the life save;
+     * renew(): finish + New run bookkeeping (sim/prestige.js renew), saved at once. */
+    prestige: prestigeView,
+    pstore: (lane) => { const p = prestigeOf(); return (p.store[lane] ||= {}); },
+    renew() { const r = P.renew(life, run); save(); return r; },
+    get freeBuys() { return stamp?.free || 0; },
+    shop: (size) => journey ? journey.shop(size) : E.shopWindow(run, mods, size, env.featuredShop),
     endingsTotal: ENDING_IDS.length,
   };
   return api;

@@ -73,7 +73,7 @@ export const MOOD_UNLOCKS = {
     ctx.sayRate(0.5);
     if (ctx.gentle) return;
     const band = ctx.el('div', 'position:absolute;left:0;right:0;top:0;height:60px;opacity:0;background:repeating-linear-gradient(0deg,rgba(0,0,0,.09) 0 1px,transparent 1px 3px);', null, 'wash');
-    const roll = () => { ctx.anim(band, [{ transform: 'translateY(-60px)', opacity: 0.8 }, { transform: `translateY(${ctx.bounds().h}px)`, opacity: 0.8 }], { duration: 3600, easing: 'linear' }); };
+    const roll = () => { if (ctx.gentle) return; ctx.anim(band, [{ transform: 'translateY(-60px)', opacity: 0.6 }, { transform: `translateY(${ctx.bounds().h}px)`, opacity: 0.6 }], { duration: 3600, easing: 'linear' }); };
     ctx.after(1200, roll);
     ctx.every(19000, roll);
   }),

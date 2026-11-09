@@ -20,17 +20,34 @@ export function adPool(theme) {
   return pools.get(theme);
 }
 
-export function createAds() {
+/* Ad accident check (owner 2026-11-09): from the second real CCP ad press of a run on, a small card asks before a tab
+ * opens. The press has paid already, whatever the answer. The per-run tab cap still holds: past it nothing opens or asks. */
+export const AD_ASK_FROM = 2;
+export const AD_ASK = Object.freeze({ title: 'Open the ad in a new tab?', open: 'Open', stay: 'Stay here' });
+
+/** One real ad press against the run's tab record { n: tabs opened, clicks: presses so far }. Counts the press and
+ *  answers 'open' (open now), 'ask' (show the card first) or 'none' (the cap is spent). */
+export function adLinkStep(used, cap) {
+  used.clicks = (used.clicks || 0) + 1;
+  if ((used.n || 0) >= cap) return 'none';
+  return used.clicks >= AD_ASK_FROM ? 'ask' : 'open';
+}
+
+/** Basic and Prime players never see a CCP card (owner 2026-11-08): the host says the plan in init caps.plan. */
+export const subscriberPlan = (caps) => caps?.plan === 'basic' || caps?.plan === 'prime';
+
+export function createAds({ noCcp = () => false } = {}) {
   let i = 0;
   const holders = new Set();
   return {
-    get jokesOff() { return holders.size > 0; },
+    // A subscriber has no real cards to fall back on, so the jokes stay whatever holds them off.
+    get jokesOff() { return holders.size > 0 && !noCcp(); },
     /** Each holder switches jokes off until it says otherwise or goes away. */
     hold(owner, on) { if (on) holders.add(owner); else holders.delete(owner); },
     /** A kind with no match falls back to any kind, but real-only never falls back to a joke. */
     next({ kind, theme, ccpOnly = false } = {}) {
       const pool = adPool(theme);
-      const allowed = ccpOnly || holders.size ? pool.filter((a) => a.ccp) : pool;
+      const allowed = noCcp() ? pool.filter((a) => !a.ccp) : ccpOnly || holders.size ? pool.filter((a) => a.ccp) : pool;
       const list = kind ? allowed.filter((a) => a.kind === kind) : allowed;
       const from = list.length ? list : allowed;
       return from[i++ % from.length];

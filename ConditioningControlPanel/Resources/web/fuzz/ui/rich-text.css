@@ -1,0 +1,23 @@
+/* ui/rich-text.css - the copy markups drawn by ui/rich-text.js. Keywords are bold in the picked theme's accent, mixed
+ * toward the page's ink so they read on light and dark pages; before a pick they are the game's pink. */
+
+.kw { font-weight: 800; color: #c2337f; }
+:where(body.niched) .kw { color: color-mix(in srgb, var(--mix) 68%, var(--ink)); }
+
+/* Diegetic colours: the words name a colour, so they wear it. Light swatches get a dark halo, black a light one. */
+.kw-c { font-weight: 800; }
+.kw-c[data-c="pink"] { color: #e0338a; }
+.kw-c[data-c="green"] { color: #1d9a3c; }
+.kw-c[data-c="blue"] { color: #2a62e0; }
+.kw-c[data-c="purple"] { color: #7b3fe0; }
+.kw-c[data-c="red"] { color: #d01b2b; }
+.kw-c[data-c="gold"] { color: #e0aa12; text-shadow: 0 0 1px #3a2a00, 0 0 1px #3a2a00; }
+.kw-c[data-c="black"] { color: #111; text-shadow: 0 0 1px #fff9, 0 0 2px #fff9; }
+.kw-c[data-c="white"] { color: #fff; text-shadow: 0 0 1px #000, 0 0 1px #000, 0 0 2px #0008; }
+.kw-c[data-c="silver"] { color: #c3c8d0; text-shadow: 0 0 1px #222, 0 0 1px #222; }
+
+/* A toast sits on the accent itself: keywords keep the toast's ink and stand out by weight and an underline. */
+:where(body.niched) .toast .kw { color: inherit; text-decoration: underline 2px; text-underline-offset: 2px; }
+body:not(.niched) .toast .kw { color: #ff8cc6; }
+/* The ticker already runs in the accent: keywords there only get heavier. */
+:where(body.niched) #l-ticker .kw { color: inherit; }

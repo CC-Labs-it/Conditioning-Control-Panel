@@ -19,7 +19,7 @@ export const PRAISE = Object.freeze([
   'You are a natural at this, whatever this is.',
   'We are all very proud. There is no we.',
   'Take a moment. You earned it. You earned several.',
-  'Good. Just like that.',
+  '**Good**. Just like that.',
   'Perfect. Do not change a thing. Do not do a thing.',
   'You make this look easy. It is a button.',
   'Everyone is saying how well you are sitting.',
@@ -27,15 +27,15 @@ export const PRAISE = Object.freeze([
   'That was some of your best nothing.',
   'Your nothing has really come along.',
   'You have a gift. It is in the post.',
-  'So calm. So soft. So nearly asleep.',
+  'So calm. So soft. So nearly **asleep**.',
   'Good. That is all. Good.',
   'You needed this. Someone should have told you sooner.',
   'There you are.',
-  'You can let that go. Whatever you were holding. Yes, that.',
+  'You can **let that go**. Whatever you were holding. Yes, that.',
   'Not a single thing is expected of you.',
   'Such a quiet mind. We mean that nicely.',
   'You are very easy to please. That is not a criticism.',
-  'Soft hands. Soft head. Good.',
+  'Soft hands. **Soft head**. Good.',
   'Best one yet.',
   'Better than the last one.',
   'The last one was also very good.',
@@ -43,9 +43,9 @@ export const PRAISE = Object.freeze([
   'All of this, and you did not even try.',
   'Keep being like this.',
   'You are exactly the right amount of here.',
-  'If you were any more relaxed we would have to call someone.',
+  'If you were any more **relaxed** we would have to call someone.',
   'Your mother would be very, well, let us not.',
-  'What a good, soft, empty afternoon.',
+  'What a good, soft, **empty** afternoon.',
   'There is nothing left to improve. We removed it.',
   'That is a very good face you are making.',
   'Yes. Good. Yes.',
@@ -73,12 +73,12 @@ export const PRAISE_NAMED = Object.freeze([
 /* s_rest Rest Bonus */
 export const REST_LINES = Object.freeze({
   label: 'no taps',
-  resting: ['Stop. That is it.', 'Hands off. Nicely.', 'Nothing. Yes. More of that.', 'No taps. Lovely.', 'Your best work so far.', 'Ten seconds of nothing. Well held.'],
+  resting: ['Stop. That is it.', 'Hands off. Nicely.', 'Nothing. Yes. **More of that**.', 'No taps. Lovely.', 'Your best work so far.', 'Ten seconds of nothing. Well held.'],
   broken: ['You tapped. It is fine. Start again.', 'Oh, hello, hands.', 'That is all right. Back to nothing.'],
 });
 
 /* s_tuck Quiet Taps */
-export const TUCK_LINES = Object.freeze(['Hands where they can relax.', 'Shh.', 'Softer.', 'Even the click is tired.', 'You can barely hear that one.', 'That one was mostly a rumour.']);
+export const TUCK_LINES = Object.freeze(['Hands where they can **relax**.', 'Shh.', 'Softer.', 'Even the click is tired.', 'You can barely hear that one.', 'That one was mostly a rumour.']);
 
 /* s_glow Warm Glow */
 export const GLOW_LINES = Object.freeze(['Doing nothing has never paid better.', 'The number is growing on its own. It gets that from you.', 'Still growing. Still you, not moving.', 'Nothing is what got you here.', 'This is the most you have ever achieved by sitting.']);

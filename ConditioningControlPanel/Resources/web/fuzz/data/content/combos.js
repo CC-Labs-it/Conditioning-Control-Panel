@@ -9,7 +9,7 @@
 
 export const COMBO_LINES = Object.freeze({
   /* Soft Focus: Watch + Rest */
-  x_dream: ['Nothing has edges.', 'Is that the button or a memory of one.', 'It is all going to be fine, and also a bit blurry.', 'Slower. Softer. Everything is a cushion now.'],
+  x_dream: ['Nothing has edges.', 'Is that the button or a memory of one.', 'It is all going to be fine, and also a bit blurry.', '**Slower**. **Softer**. Everything is a cushion now.'],
   /* Watching Words: Watch + Tap */
   x_front: ['Eyes up here.', 'I saw that.', 'Looking at the word. The word is looking back.', 'You blinked first.', 'Keep your hands where the word can see them.'],
   /* Counting Voice: Listen + Tap. Captions only until recorded. */
@@ -21,7 +21,7 @@ export const COMBO_LINES = Object.freeze({
   /* Nothing at All: No Pictures + Censored */
   x_nothing: ['Peak.', 'An empty frame with a bar over it. You paid for this.', 'They have censored the nothing. Good. It was getting out of hand.', 'Whatever was under there, there was not.'],
   /* Refusal Bonus: Tap + Chastity */
-  x_later: ['Ask again in an hour.', 'Refused, at twice the usual rate.', 'No pays better than yes. You will come to like that.', 'Thank you for asking. No.'],
+  x_later: ['Ask again in an hour.', 'Refused, at twice the usual rate.', 'No pays better than yes. You will **come to like** that.', 'Thank you for asking. No.'],
   /* Podcast Cohost: Listen + Bimbo. Pairs; first voice, then second voice. */
   x_listener: [['So true.', 'What did she say.'], ['Exactly.', 'Exactly what.'], ['Great point.', 'Was it a point.'], ['Say more.', 'I forgot it.'], ['Wow.', 'I know, wow.']],
   /* Task Bonus: Tap + Drone */
@@ -29,7 +29,7 @@ export const COMBO_LINES = Object.freeze({
   /* Endless Streak: Swipe Feed + Goon */
   x_fourhr: ['You blinked at some point.', 'The streak does not drop. Nor do you, apparently.', 'Still counting. It has stopped telling you what.', 'This streak is older than your dinner.'],
   /* Gold Rules: Fewer Ads + Sissy */
-  x_manners: ['We do not run here.', 'Elbows off the {cur}.', 'Please. Thank you. On gold paper.', 'Gloves at all times in the shop.', 'The gold is for the rules. The rules are for you.'],
+  x_manners: ['We do not run here.', 'Elbows off the {cur}.', 'Please. Thank you. On [[gold:gold]] paper.', 'Gloves at all times in the shop.', 'The [[gold:gold]] is for the rules. The rules are for you.'],
   /* Viral Ads: More Ads + Infection */
   x_viral: ['Share this', 'Buy now', 'You next', 'Tell a pal', 'Click', 'You did not see this from us.'],
 });
@@ -47,10 +47,10 @@ export const SLEEP_STORY = Object.freeze([
   'You sat down, and sitting down went very well.',
   'You lay down, and that went even better.',
   'All the things you had to do came to the door, and knocked, and left.',
-  'The house got quieter. The quiet got softer.',
+  'The house got quieter. The quiet got **softer**.',
   'Your hands went first. They had worked so hard.',
   'Then your shoulders. Nobody had told them they could.',
-  'And you, in the middle, a long way down, doing nothing, doing it so well.',
+  'And you, in the middle, a long way **down**, doing nothing, doing it so well.',
   'And then the story went on for a while without you.',
   'It was not much of a story, and you were not there for the end.',
   'That was the end.',
@@ -65,10 +65,10 @@ export const AUDIO_DRAMA = Object.freeze({
     'A door opens. Nobody comes in. You feel better about that than you should.',
     'Somebody is breathing. You check. It is you.',
     'A voice says: did you bring it. You did not. You nod anyway.',
-    'A voice says: good. Then nothing, for a long while.',
+    'A voice says: **good**. Then nothing, for a long while.',
     'Something is placed on the table. It sounds expensive.',
     'You reach out for it. You cannot find your arm. It is fine, it is resting.',
-    'The voice comes closer and says your name. Then a different name. You answer to both.',
+    'The voice comes closer and says your name. Then a different name. You **answer to both**.',
     'A click.',
     'Next time, on this programme: there is no next time.',
   ],
@@ -82,22 +82,22 @@ export const INDUCTION = Object.freeze([
   'Take a breath in, slowly, all the way.',
   'And let it go, as if it was somebody else who needed it.',
   'Another one. This one is all yours.',
-  'Let your shoulders drop. They have been holding up something that is not there.',
+  'Let your shoulders **drop**. They have been holding up something that is not there.',
   'Let your jaw go. Your tongue can sit wherever it likes.',
   'Your hands can go on tapping without you. They know the way.',
-  'Notice how heavy your arms are getting. Or do not. They will get there.',
+  'Notice how **heavy** your arms are getting. Or do not. They will get there.',
   'There is nothing you need to work out here.',
   'If a thought comes, let it finish without you.',
   'In a moment I will count down from five.',
   'Each number takes you a little further from the day you were having.',
-  'Five. Heavier, and it is no trouble at all.',
-  'Four. Softer. The room is getting further off.',
+  'Five. **Heavier**, and it is no trouble at all.',
+  'Four. **Softer**. The room is getting further off.',
   'Three. Everything that needed doing can wait.',
   'Two. Nearly nothing. Nearly no one.',
-  'One. Good.',
+  'One. **Good**.',
   'Stay there. There is no hurry to be anywhere else.',
   'It is quiet in here, and it pays well.',
-  'Every time you hear a tap, you go a little deeper.',
+  'Every time you hear a tap, you go a little **deeper**.',
   'Every time you hear a tap, it is you. How convenient.',
   'You are doing this very well. There was never a way to do it badly.',
   'Stay as long as you like. A little longer than that.',

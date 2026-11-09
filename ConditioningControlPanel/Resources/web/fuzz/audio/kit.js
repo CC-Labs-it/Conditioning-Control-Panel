@@ -7,12 +7,14 @@
 import { createCueBudget } from './repetition.js';
 import { createMixer } from './mixer.js';
 
-export const BUS = Object.freeze({ sfx: 0.3, ambient: 0.2, voice: 0.5, podcast: 0.5 });
+/* Owner 2026-11-08: every sound effect and the hums lower (sfx 0.3 -> 0.18, ambient 0.2 -> 0.12); lo-fi radio and podcasts half. */
+export const BUS = Object.freeze({ sfx: 0.18, ambient: 0.12, voice: 0.5, podcast: 0.25 });
 export const PLUCKS = Array.from({ length: 18 }, (_, i) => `assets/audio/pluck/wood_${String(i).padStart(2, '0')}.wav`);
 
 export function createKit({ makeMedia = () => new Audio(), now = () => performance.now() } = {}) {
   let ctx = null, master = null, armed = false;
-  let muted = false, quiet = false, held = false, blank = false;
+  let muted = false, quiet = false, held = false, blank = false, rule = false;
+  let masterVolume = 1;
   const buffers = new Map();
   const loops = new Set();
   const streams = new Set();
@@ -45,14 +47,20 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
     cueBudget.reset();
   }
 
+  function decode(url) {
+    return fetch(url).then((r) => (r.ok ? r.arrayBuffer() : null)).then((b) => (b ? ctx.decodeAudioData(b) : null));
+  }
+
+  /* An .ogg (Opus) that this browser cannot decode (older Safari) falls back to the .wav beside it. */
   function load(url) {
     if (!buffers.has(url)) {
-      buffers.set(url, fetch(url).then((r) => (r.ok ? r.arrayBuffer() : null)).then((b) => (b ? ctx.decodeAudioData(b) : null)).catch(() => null));
+      const wav = url.endsWith('.ogg') ? url.slice(0, -4) + '.wav' : null;
+      buffers.set(url, decode(url).catch(() => null).then((buf) => (buf || !wav ? buf : decode(wav))).catch(() => null));
     }
     return buffers.get(url);
   }
 
-  const level = () => (muted || quiet || held || blank ? 0 : 1);
+  const level = () => (muted || quiet || held || blank || rule ? 0 : masterVolume);
   function applyLevel(fadeMs = 200) {
     if (!level()) clearShots();
     for (const s of streams) syncStream(s);
@@ -65,13 +73,17 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
    * and its pause itself, in the same call that changes the state, so panic never waits on an unlock. Hands on `el` are
    * put back: a volume or muted change is reverted, a play during a hold is paused. `muted` beside `volume` because iOS
    * ignores volume on media elements. */
+  /* muffle(source, on): one shared lowpass + small cut per source, switched in and out of its routes (the Bimbodoll
+   * ending swallows an object and its sound goes underwater). Off = the plain route to master, as before. */
+  const muffles = new Map();
+  const outFor = (source) => muffles.get(source)?.f || master;
   function toMaster(node, pan, source) {
     const g = ctx.createGain();
     g.gain.value = sourceLevel(source);
     node.connect(g);
     const p = Number.isFinite(pan) && pan !== 0 && ctx.createStereoPanner ? ctx.createStereoPanner() : null;
-    if (p) { p.pan.value = Math.max(-1, Math.min(1, pan)); g.connect(p).connect(master); } else g.connect(master);
-    const route = { source, g, disconnect() { sourceNodes.delete(route); g.disconnect?.(); p?.disconnect?.(); } };
+    if (p) { p.pan.value = Math.max(-1, Math.min(1, pan)); g.connect(p).connect(outFor(source)); } else g.connect(outFor(source));
+    const route = { source, g, tail: p || g, disconnect() { sourceNodes.delete(route); g.disconnect?.(); p?.disconnect?.(); } };
     sourceNodes.add(route);
     return route;
   }
@@ -93,7 +105,7 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
   function syncStream(s) {
     const envelope = Math.min(1, Math.max(0, (BUS[s.bus] ?? BUS.sfx) * s.gain * s.fade));
     if (s.routed) s.g.gain.value = envelope;
-    s.expected = s.routed ? 1 : Math.min(1, envelope * sourceLevel(s.source));
+    s.expected = s.routed ? 1 : Math.min(1, envelope * sourceLevel(s.source) * masterVolume);
     if (s.el.volume !== s.expected) s.el.volume = s.expected;
     const silent = level() === 0 || sourceLevel(s.source) === 0;
     if (s.el.muted !== silent) s.el.muted = silent;
@@ -115,12 +127,14 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
   }
 
   /** Returns {el, play(), pause(), setGain(v), stop(ms), playing}. Starts on the first gesture unless autoplay is false. */
-  function stream(url, { bus = 'podcast', gain = 1, loop: looped = false, autoplay = true, pan = 0, source, sourceLabel } = {}) {
+  /* preload 'metadata' (2026-11-08): 'auto' pulled whole podcast episodes and radio tracks at once (4 MB a minute). A play()
+   * still fetches as it goes; pass preload: 'auto' for a short clip that must start with no wait. */
+  function stream(url, { bus = 'podcast', gain = 1, loop: looped = false, autoplay = true, pan = 0, preload = 'metadata', source, sourceLabel } = {}) {
     source = registerSource(bus, source, sourceLabel);
     const el = makeMedia();
     const s = { el, bus, gain, source, pan: Number.isFinite(pan) ? pan : 0, routed: false, routeTried: false, fade: 1, expected: 0, wanted: !!autoplay, dead: false, fadeTimer: 0 };
     el.crossOrigin = 'anonymous';  // the graph hears nothing from a cross-origin file without it
-    el.preload = 'auto';
+    el.preload = preload === 'auto' || preload === 'none' ? preload : 'metadata';
     el.loop = !!looped;
     el.addEventListener('play', () => { if (held || s.dead) el.pause(); else s.wanted = true; });
     el.addEventListener('pause', () => { if (!held && !s.dead && el.paused) s.wanted = false; });
@@ -178,14 +192,14 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
     return armed;
   }
 
-  async function play(url, { bus = 'sfx', gain = 1, rate = 1, pan = 0, fadeInMs = 0, fadeOutMs = 0, source, sourceLabel } = {}) {
+  async function play(url, { bus = 'sfx', gain = 1, rate = 1, pan = 0, fadeInMs = 0, fadeOutMs = 0, source, sourceLabel, signal } = {}) {
     source = registerSource(bus, source, sourceLabel);
-    if (!armed || !url || !level() || !sourceLevel(source)) return;
+    if (!armed || !url || !level() || !sourceLevel(source) || signal?.aborted) return;
     const issued = generation, requestedAt = now();
     const ticket = bus === 'sfx' ? cueBudget.request(url, requestedAt) : null;
     if (bus === 'sfx' && !ticket) return;
     const buf = await load(url);
-    if (!buf || !armed || !level() || !sourceLevel(source) || issued !== generation || now() - requestedAt > (bus === 'sfx' ? 250 : 1500)) return;
+    if (!buf || !armed || !level() || !sourceLevel(source) || signal?.aborted || issued !== generation || now() - requestedAt > (bus === 'sfx' ? 250 : 1500)) return;
     const release = bus === 'sfx' ? cueBudget.start(ticket, now()) : () => {};
     if (!release) return;
     const src = ctx.createBufferSource();
@@ -207,8 +221,14 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
     }
     src.connect(g);
     const route = toMaster(g, pan, source);
-    const shot = { src, done() { if (!shots.delete(shot)) return; release(); src.disconnect?.(); g.disconnect?.(); route.disconnect(); } };
+    const stop = () => { try { src.stop(); } catch { /* already ended */ } shot.done(); };
+    const shot = { src, done() {
+      if (!shots.delete(shot)) return;
+      signal?.removeEventListener('abort',stop);
+      release(); src.disconnect?.(); g.disconnect?.(); route.disconnect();
+    } };
     shots.add(shot);
+    signal?.addEventListener('abort',stop,{once:true});
     src.onended = shot.done;
     try { src.start(); } catch { shot.done(); }
   }
@@ -238,10 +258,18 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
     stopStreams() { clearShots(); for (const s of [...streams]) killStream(s); },
     /** The player's own switch. */
     setMuted(v) { muted = !!v; applyLevel(); },
+    setVolume(v) {
+      if (!Number.isFinite(v)) return;
+      masterVolume = Math.min(1, Math.max(0, v));
+      applyLevel(45);
+    },
+    get volume() { return masterVolume; },
     /** A run mood may keep the page silent for a while. */
     setQuiet(v) { quiet = !!v; applyLevel(); },
     /** An unlock may silence the page for a few seconds (ctx.audio.muteFor). */
     setBlank(v) { blank = !!v; applyLevel(); },
+    /** Fine Print's Silent rule: the whole run stays silent until the rule's unlock lets go. */
+    setRule(v) { rule = !!v; applyLevel(); },
     /** Pause, panic, the end: everything stops now and stays stopped until released. */
     hold(v) {
       held = !!v;
@@ -256,5 +284,40 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
     },
     get armed() { return armed; },
     get muted() { return muted; },
+    /** A live input for synthesised sound (an ending's tone, a convolver tail): { ac, node, stop() }, routed like a
+     *  play() on its bus and source, so mute, pause, panic and the sliders all reach it. Null before the first gesture. */
+    input({ bus = 'sfx', gain = 1, source, sourceLabel } = {}) {
+      if (!armed) return null;
+      source = registerSource(bus, source, sourceLabel);
+      const node = ctx.createGain();
+      node.gain.value = (BUS[bus] ?? BUS.sfx) * gain;
+      const route = toMaster(node, 0, source);
+      return { ac: ctx, node, stop() { node.disconnect?.(); route.disconnect(); } };
+    },
+    /** Every source with a live route except the named ones goes underwater (on) or comes back (off). */
+    muffleOthers(except = [], on = true) {
+      const skip = new Set(except);
+      const ids = new Set([...sourceNodes].map((r) => r.source).filter((id) => typeof id === 'string' && !skip.has(id)));
+      for (const id of ids) this.muffle(id, on);
+    },
+    muffle(source, on, { hz = 600, cut = 0.7 } = {}) {
+      if (!armed || typeof source !== 'string') return;
+      const had = muffles.get(source);
+      if (!!on === !!had) return;
+      let m = had;
+      if (on) {
+        const f = ctx.createBiquadFilter();
+        f.type = 'lowpass'; f.frequency.value = hz; f.Q.value = 0.9;
+        const g = ctx.createGain(); g.gain.value = cut;
+        f.connect(g).connect(master);
+        m = { f, g };
+        muffles.set(source, m);
+      } else muffles.delete(source);
+      for (const r of sourceNodes) {
+        if (r.source !== source) continue;
+        try { r.tail.disconnect(); r.tail.connect(on ? m.f : master); } catch { /* a route already gone */ }
+      }
+      if (!on) { m.f.disconnect?.(); m.g.disconnect?.(); }
+    },
   };
 }

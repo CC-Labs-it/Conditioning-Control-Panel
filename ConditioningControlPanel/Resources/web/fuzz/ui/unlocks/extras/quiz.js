@@ -7,13 +7,22 @@ import { QUESTIONS, TRICKS, quizPay } from '../../../data/content/questions.js';
 import { QUIZ_THEMES, lessonAnswer, takeThemedQuestion } from '../../../data/content/themed-questions.js';
 import { QUIZ_COPY as C } from './copy.js';
 import { FONT, cardUp, h, pick } from './kit.js';
+import { getEmi } from './emi.js';
+import { attachQuestion, createQuizReactions } from './quiz-mascot.js';
 import { TRICK_FNS } from './tricks.js';
 
 const CSS = `
-.xq{position:absolute;z-index:5;box-sizing:border-box;background:color-mix(in srgb,var(--niche) 10%,#fff);color:#111;border:2px solid color-mix(in srgb,var(--niche) 70%,#000);border-radius:5px;box-shadow:3px 4px 0 rgba(0,0,0,.28);font:600 15px/1.2 ${FONT};pointer-events:auto;user-select:none;-webkit-user-select:none;overflow:hidden;}
+.xq-dock{left:var(--question-x,0px)!important;top:var(--question-y,0px)!important;max-height:none!important;transform:scale(var(--question-scale,1));transform-origin:0 0;}
+.xq-dock>.dk-b{overflow:clip;pointer-events:none;}
+.xq-shell{box-sizing:border-box;width:100%;overflow:clip;pointer-events:none;}
+.xq-stack{min-width:0;}
+.xq-dock .xq,.xq-dock .xq-idle{pointer-events:auto;}
+.xq-dock .xq{transform-origin:var(--question-origin,left center);}
+
+.xq{position:absolute;z-index:5;box-sizing:border-box;background:color-mix(in srgb,var(--niche) 10%,#fff);color:#111;border:1px solid color-mix(in srgb,var(--niche) 55%,#000);border-radius:8px;box-shadow:0 3px 10px rgba(0,0,0,.18);font:600 15px/1.2 ${FONT};pointer-events:auto;user-select:none;-webkit-user-select:none;overflow:hidden;transform-origin:left 54px;}
 .xq-t{position:relative;height:24px;padding-left:8px;background:linear-gradient(90deg,var(--niche),var(--niche-2));color:var(--niche-ink);font:600 13px/24px ${FONT};}
 .xq-tb{position:absolute;left:0;bottom:0;width:100%;height:3px;background:var(--niche-soft);transform-origin:0 50%;}
-.xq-q{padding:9px 10px 8px;font-size:17px;line-height:1.2;text-align:center;}
+.xq-q{padding:7px 9px 6px;font-size:16px;line-height:1.2;text-align:center;}
 .xq-q.said{font-weight:700;}
 .xq-lesson{padding:0 8px 6px;text-align:center;font-size:11px;color:#555;font-variant-numeric:tabular-nums;}
 .xq-compact .xq-q{font-size:15px;line-height:1.25;}
@@ -24,8 +33,8 @@ const CSS = `
 .xq-a.ok,.xq-bub.ok{background:#1f9d55;color:#fff;border:2px solid #14663a;opacity:1 !important;}
 .xq-a.bad,.xq-bub.bad{background:#a3232b;color:#fff;border:2px solid #6b1219;opacity:1 !important;}
 .xq-done button,.xq-done .xq-stick{pointer-events:none;}
-.xq-idle{min-height:22px;padding:0 28px;display:grid;place-items:center;font-size:12px;color:var(--ink-soft);font-variant-numeric:tabular-nums;}
-@media(max-width:1099px){.xq-idle{min-height:30px;padding:0 38px;}}
+.xq-idle{width:fit-content;margin:0;white-space:nowrap;padding:4px 8px;border-radius:6px;background:color-mix(in srgb,var(--panel) 88%,transparent);font-size:11px;color:var(--ink-soft);font-variant-numeric:tabular-nums;}
+.xq-idle[hidden]{display:none;}
 .xq-note{position:absolute;font:600 12px ${FONT};color:#555;text-align:center;pointer-events:none;}
 .xq-bar{position:absolute;height:6px;background:#eee;border:1px solid #999;box-sizing:border-box;overflow:hidden;pointer-events:none;}
 .xq-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--niche),var(--niche-2));transform-origin:0 50%;transform:scaleX(0);}
@@ -55,12 +64,18 @@ const FIRST_MS = 26000, EVERY_MS = 48000, EVERY_JITTER = 18000, GIVE_UP_MS = 300
 
 function createQuiz(ctx) {
   ctx.css(CSS);
-  /* The whole lesson lives in its window, so dragging, minimizing and stacking apply to its answers too. */
-  const spot = ctx.dock({ edge: 'left', order: -1, min: false, pin: true, title: C.title, icon: ctx.item.emoji });
-  const idle = ctx.el('div', '', '', spot);
+  const emi = getEmi(ctx);
+  const spot = ctx.dock({ anchor:emi, order:-1, min:false, title:C.title, icon:ctx.item.emoji, width:284 });
+  spot.dock.root.classList.add('xq-dock');
+  const shell = ctx.el('div', '', null, spot); shell.className = 'xq-shell'; shell.dataset.dockSurface = '';
+  const mascot = createQuizReactions(ctx, emi);
+  const stack = ctx.el('div', '', null, shell); stack.className = 'xq-stack';
+  const idle = ctx.el('div', '', '', stack);
   idle.className = 'xq-idle';
-  const host = ctx.el('div', 'position:relative;margin-top:5px;', null, spot);
-  let open = null, lastId = null, dueAt = 0;
+  idle.dataset.dockSurface = '';
+  const host = ctx.el('div', 'position:relative;', null, stack);
+  const align = attachQuestion(ctx, emi, spot, idle);
+  let open = null, exiting = null, lastId = null, dueAt = 0;
   let lesson = lessonAnswer(ctx.store.get('lesson'), false).progress;
 
   const liveRow = (id) => ctx.has(id) && ctx.switches.isOn(id);
@@ -89,28 +104,54 @@ function createQuiz(ctx) {
     return q;
   }
 
-  const cardWidth = () => Math.max(160, host.clientWidth || spot.parentElement.offsetWidth - 14);
+  const cardWidth = () => Math.max(160, Math.min(ctx.bounds().w - 16, host.clientWidth || parseFloat(spot.parentElement.style.width) || 288));
 
-  function close(paid) {
+  function discardExit() {
+    if (!exiting) return;
+    const previous = exiting;
+    exiting = null;
+    previous.animation.cancel();
+    previous.card.remove();
+  }
+
+  function close() {
     const o = open;
     if (!o) return;
     open = null;
+    mascot.idle();
+    spot.dock?.setReady(false);
     for (const c of o.cancels) c();
     for (const a of o.anims) { try { a.cancel(); } catch { /* gone */ } }
+    o.card.inert = true;
     o.card.style.pointerEvents = 'none';
-    const pop = paid && !ctx.gentle;
-    const a = ctx.anim(o.card, pop ? [{ transform: 'none', opacity: 1 }, { transform: 'scale(1.06)', opacity: 0 }] : [{ opacity: 1 }, { opacity: 0 }], { duration: pop ? 170 : ctx.gentle ? 1200 : 320, easing: 'ease-out' });
-    a.onfinish = () => o.card.remove();
-    a.oncancel = () => o.card.remove();
+    const calm = ctx.gentle || ctx.reduced;
+    const frames = calm ? [{ opacity: 1 }, { opacity: 0 }] : [
+      { opacity: 1, transform: 'none' },
+      { opacity: 0, transform: 'translateX(-4px) scale(.88,.95)' },
+    ];
+    const animation = ctx.anim(o.card, frames, { duration: calm ? 260 : 155, easing: 'ease-in', fill: 'both' });
+    const outgoing = { card: o.card, animation };
+    exiting = outgoing;
+    const finish = () => {
+      o.card.remove();
+      if (exiting !== outgoing) return;
+      exiting = null;
+      if (open || !idle.isConnected) return;
+      idle.hidden = false;
+      align();
+      ctx.anim(idle, [{ opacity: 0 }, { opacity: 1 }], { duration: calm ? 260 : 130, easing: 'ease-out' });
+    };
+    animation.finished.then(finish, finish);
   }
 
   /** Ask now. The new one replaces whatever was up. */
   function ask(trick = chooseTrick()) {
     if (ctx.paused) return null;
-    if (open) close(false);
+    if (open) close();
+    discardExit();
     const q = chooseQuestion(trick);
     const W = cardWidth();
-    // Keep an active trick intact during resizing; the window scrolls until the next question fits its new width.
+    // The whole quiz scales with its dock; keep the active trick in its original coordinates.
     const card = h('div', `position:relative;width:${W}px;`, null, host);
     card.className = W < 240 ? 'xq xq-compact' : 'xq';
     card.dataset.quizTheme = ctx.pick('f5') || '';
@@ -123,18 +164,23 @@ function createQuiz(ctx) {
     const themeName = QUIZ_THEMES[ctx.pick('f5')];
     const title = h('div', '', themeName ? `${themeName} quiz` : C.title, card);
     title.className = 'xq-t';
+    title.dataset.dockSurface = '';
     const tb = h('div', '', null, title);
     tb.className = 'xq-tb';
     const text = h('div', '', ctx.brand.text(q.text), card);
     text.className = 'xq-q';
+    text.dataset.dockSurface = '';
     const lessonLabel = h('div', '', `Lesson ${lesson}/3`, card);
     lessonLabel.className = 'xq-lesson';
     const zone = h('div', '', null, card);
     zone.className = 'xq-z';
+    zone.dataset.dockInteractive = '';
     const zw = W - 18;
 
     const o = { card, cancels: [], anims: [], trick, done: false, buttons: new Map(), melted: 0 };
     open = o;
+    mascot.ask();
+    idle.hidden = true; spot.dock?.setReady(true, 'Question ready');
     const live = () => open === o && !o.done && !ctx.paused;
 
     /* What a trick gets. Everything it starts goes in o, so it stops when the card goes. */
@@ -181,12 +227,14 @@ function createQuiz(ctx) {
       answer(ans, b, mult = 1) {
         if (!live()) return;
         o.done = true;
+        spot.dock?.setReady(false);
         const right = tone(ans) !== 'no';
         const r = (b || card).getBoundingClientRect();
         const x = r.left + r.width / 2, y = r.top;
         const amount = quizPay(ctx.rates(), right) * mult * Math.max(0.4, 1 - o.melted * 0.2);
         const result = lessonAnswer(lesson, right);
         lesson = result.progress;
+        mascot.answer(right, result.complete);
         ctx.store.set('lesson', lesson);
         const bonus = result.complete ? quizPay(ctx.rates(), false) * 3 : 0;
         const credited = ctx.pay(amount + bonus, 'quiz', { x, y });
@@ -201,8 +249,8 @@ function createQuiz(ctx) {
         text.classList.add('said');
         b?.classList.add(right ? 'ok' : 'bad');
         if (!right) o.buttons.get(t.yes)?.classList.add('ok');
-        if (right && !ctx.gentle) ctx.anim(card, [{ transform: 'none' }, { transform: 'scale(1.04)', offset: 0.35 }, { transform: 'none' }], { duration: 240, easing: 'ease-out' });
-        ctx.after(result.complete ? 1400 : 1100, () => { if (open === o) close(true); });
+        if (right && !ctx.gentle && !ctx.reduced) ctx.anim(card, [{ transform: 'none' }, { transform: 'scale(1.025)', offset: 0.35 }, { transform: 'none' }], { duration: 240, easing: 'ease-out' });
+        ctx.after(result.complete ? 1400 : 1100, () => { if (open === o) close(); });
       },
       pop() { if (!ctx.paused) ctx.audio.play(POP, { bus: 'sfx', gain: 0.08 }); },
       deny() { if (!ctx.paused) ctx.audio.play('assets/audio/sfx/ui_denied.mp3', { bus: 'sfx', gain: 0.12 }); },
@@ -211,11 +259,18 @@ function createQuiz(ctx) {
 
     const giveUpMs = (TRICK_FNS[trick]?.extraMs || 0) + GIVE_UP_MS;
     (TRICK_FNS[trick]?.draw || TRICK_FNS.none.draw)(t);
+    align();
 
     t.anim(tb, [{ transform: 'scaleX(1)' }, { transform: 'scaleX(0)' }], { duration: giveUpMs, easing: 'linear', fill: 'forwards' });
-    ctx.anim(card, ctx.gentle ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, translate: '0 12px' }, { opacity: 1, translate: '0 0' }], { duration: ctx.gentle ? 1200 : 240, easing: 'ease-out' });
+    const calm = ctx.gentle || ctx.reduced;
+    const entrance = calm ? [{ opacity: 0 }, { opacity: 1 }] : [
+      { opacity: 0, transform: 'translateX(-4px) scale(.86,.94)' },
+      { opacity: 1, transform: 'scale(1.012,1.008)', offset: .72 },
+      { opacity: 1, transform: 'none' },
+    ];
+    t.anim(card, entrance, { duration: calm ? 260 : 215, easing: 'cubic-bezier(.2,.75,.25,1)' });
     ctx.audio.play('assets/audio/sfx/chip_pop.mp3', { bus: 'sfx', gain: 0.08 });
-    t.after(giveUpMs, () => { ctx.toast(pick(ctx, C.giveUp)); close(false); });
+    t.after(giveUpMs, () => { ctx.toast(pick(ctx, C.giveUp)); close(); });
     return o;
   }
 
@@ -229,12 +284,16 @@ function createQuiz(ctx) {
   schedule(FIRST_MS);
   const drawIdle = () => {
     const s = Math.max(0, Math.ceil((dueAt - ctx.state.clock) / 1000));
-    idle.textContent = `Lesson ${lesson}/3 | ${open ? C.idleNow : C.idleNext.replace('{n}', String(s))}`;
+    idle.hidden = !!open || !!exiting;
+    idle.textContent = C.idleNext.replace('{n}', String(s));
+    align();
   };
   drawIdle();
+  spot.dock?.setReady(false);
+  ctx.cleanup(() => spot.dock?.setReady(false));
   ctx.every(1000, drawIdle);
 
-  return { ask, close: () => close(false), get open() { return open; } };
+  return { ask, close, get open() { return open; } };
 }
 
 let quiz = null;

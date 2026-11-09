@@ -4,6 +4,7 @@
 import { SPONSORED_THOUGHTS, NATIVE_LINES, EMI_AD_READS, ENDINGS } from '../../../data/content/index.js';
 import { nextAd, pressAd, panel, deck, railsRoom, burst, ring, claim, release, fill } from './kit.js';
 import { ROUTE_COPY } from './copy.js';
+import { sellAllJoke, SELL_ALL_AD } from '../../sell-all.js';
 
 const FONT = 'Arial,Helvetica,sans-serif';
 const CHIP = `font:700 10px ${FONT};background:#f0c24b;color:#000;padding:0 4px;border-radius:2px;flex:none;`;
@@ -22,6 +23,7 @@ export function adCard(ctx, parent, rec, css = '') {
   cta.addEventListener('click', () => {
     const r = cta.getBoundingClientRect(), at = { x: r.left, y: r.top };
     if (pressAd(ctx, rec, at)) return;
+    if (rec.id === SELL_ALL_AD && sellAllJoke(ctx)) return;   // display only: the wallet never changes
     ctx.float(at.x, at.y - 6, NOPE[Math.floor(ctx.rng() * NOPE.length)], `font:12px ${FONT};`);
   });
   return card;
@@ -218,13 +220,13 @@ export default {
     mount(ctx) {
       const next = deck(NATIVE_LINES, ctx), touched = new Map();
       ctx.css('.routes-native{background:#fffbe4 !important}.routes-native,.routes-native b,.routes-native small,.routes-native i{color:#222 !important}');
-      const undo = () => { for (const [el, text] of touched) { el.textContent = text; el.closest('.row')?.classList.remove('routes-native'); } touched.clear(); };
+      const undo = () => { for (const [el, html] of touched) { el.innerHTML = html; el.closest('.row')?.classList.remove('routes-native'); } touched.clear(); };
       const turn = () => {
         undo();
         const rows = [...ctx.parts.shop.querySelectorAll('#rows .row small')];
         if (!rows.length) return;
         const el = rows[Math.floor(ctx.rng() * rows.length)];
-        touched.set(el, el.textContent);
+        touched.set(el, el.innerHTML);
         el.textContent = `${ctx.brand.text(next())} (${AD})`;
         el.closest('.row')?.classList.add('routes-native');
         ctx.anim(el, [{ opacity: 0 }, { opacity: 1 }], { duration: 350 });

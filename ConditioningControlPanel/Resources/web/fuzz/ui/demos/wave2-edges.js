@@ -2,24 +2,6 @@
 import { DEMOS } from './kit.js';
 import './extras.js';   // its preview of the question card is replaced here, so it has to load first
 
-const BAR = 'background:#7b5cff;transform-origin:50% 100%;';
-
-/* ASMR: the page in the middle, and a player at the edge with its bars standing still. Off air for now. */
-DEMOS.asmr = (k) => {
-  k.page('grey');
-  k.add(30, 40, 'width:90px;height:34px;background:#d4d0c8;border:2px outset #fff;display:grid;place-items:center;font:13px "Times New Roman",serif;', 'Click');
-  k.add(30, 90, 'width:90px;height:44px;background:#e4e1da;border:1px solid #8a867d;');
-  const box = k.add(144, 28, 'width:88px;height:94px;background:#e4e1da;border:1px solid #8a867d;border-top:2px solid #7b5cff;');
-  k.add(5, 4, 'font:600 9px sans-serif;color:#444;', '🎧 ASMR', box);
-  k.add(5, 18, 'width:18px;height:18px;border-radius:50%;background:#7b5cff;', null, box);
-  k.add(27, 17, 'font:700 10px sans-serif;', 'Closer', box);
-  k.add(27, 29, 'font:8px sans-serif;color:#444;border:1px solid #8a867d;padding:0 2px;', 'Off air', box);
-  const bars = [];
-  for (let i = 0; i < 10; i++) bars.push(k.add(6 + i * 8, 48, `width:6px;height:30px;${BAR}transform:scaleY(.08);`, null, box));
-  void bars;
-  for (let i = 0; i < 10; i++) k.add(6 + i * 8, 84, 'width:7px;height:3px;background:#7b5cff;opacity:.25;', null, box);
-};
-
 /* Pop-Up Question: same spot every time, four answers, one of them pays. */
 DEMOS.quiz = (k) => {
   k.page('grey');

@@ -54,7 +54,7 @@ export const Demo = (() => {
       },
       /* Page background: 'grey' start of the game, 'pink' after Colour, 'dark' once the spiral is in, or any css colour. */
       page(kind) {
-        const m = { grey: '#d4d0c8', pink: '#ffdcee', dark: '#17132c', white: '#fff' };
+        const m = { grey: '#d4d0c8', pink: '#ffa8d5', dark: '#17132c', white: '#fff' };
         stage.style.background = m[kind] || kind;
         stage.style.color = (kind === 'dark') ? '#f0f0f5' : '#111';
       },
@@ -179,10 +179,11 @@ export const Demo = (() => {
         let x = o.x != null ? o.x : el.offsetLeft, y = o.y != null ? o.y : el.offsetTop;
         let vx = o.vx != null ? o.vx : 70, vy = o.vy != null ? o.vy : 46;
         const maxW = o.w != null ? o.w : W, maxH = o.h != null ? o.h : H;
-        let on = true;
+        let on = true, ew = 0, eh = 0, seen = 0;
         k.frame((dt) => {
           if (!on) return;
-          const ew = el.offsetWidth, eh = el.offsetHeight;
+          // Size is re-read every 15th frame: a read every frame forced a layout of the whole page under the demo.
+          if (seen++ % 15 === 0) { ew = el.offsetWidth; eh = el.offsetHeight; }
           x += vx * dt; y += vy * dt;
           let hx = false, hy = false;
           if (x < 0) { x = 0; vx = -vx; hx = true; } else if (x + ew > maxW) { x = maxW - ew; vx = -vx; hx = true; }

@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import { clips } from '../assets/clipart/clips.js';
 import { ITEMS } from '../data/items.js';
 import { ICON_CATALOG } from '../ui/icon-catalog.js';
 import { ART, BADGE_NAMES, iconMarkup } from '../ui/icon-art.js';
@@ -14,7 +16,19 @@ test('every unlock, fork, theme and ending has intentional clip art, with no sta
   assert.ok(new Set(Object.values(ICON_CATALOG).map((a) => a.shape)).size > 50);
 });
 
-test('art is self-contained vector geometry safe to repeat in shop, guide and purchase flight', () => {
+test('the plain set ships a rest image and a playable sheet for every catalogue shape', () => {
+  const shapes = [...new Set([...Object.values(ICON_CATALOG).map(art => art.shape), 'mixer'])].sort();  // also used in the permanent audio controls
+  assert.deepEqual(Object.keys(clips).sort(), shapes);
+  for (const shape of shapes) {
+    const clip = clips[shape];
+    assert.ok(clip.frames > 1 && clip.ms > 0 && clip.w >= 128 && clip.h >= 128, shape);
+    for (const suffix of ['.webp', '.motion.webp']) {
+      assert.ok(existsSync(new URL('../assets/clipart/' + shape + suffix, import.meta.url)), shape + suffix);
+    }
+  }
+});
+
+test('the vector source is self-contained and safe to repeat in shop, guide and purchase flight', () => {
   for (const art of Object.values(ICON_CATALOG)) for (const glossy of [false, true]) {
     const svg = iconMarkup(art, glossy);
     assert.doesNotMatch(svg, /<(?:script|foreignObject|image|text)|\b(?:href|id|on\w+)=|url\(|gradient|filter/i);

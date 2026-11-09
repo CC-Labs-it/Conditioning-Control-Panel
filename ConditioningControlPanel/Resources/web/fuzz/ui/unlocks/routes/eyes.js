@@ -2,9 +2,35 @@
 
 import { BOUNCE_WORDS, BIG_WORDS, EDGE_WORDS, STILL_WORDS, STARE_LINES } from '../../../data/content/index.js';
 import { DARK, darkCss, mountSpiral, spiral, deck, burst, ring, flash, bar, claim, release, docOf, btnCentre, setLine, dropLine, meterRow } from './kit.js';
+import { bindBounce, FACE_CSS } from '../../bouncing-art.js';
 import { ROUTE_COPY } from './copy.js';
+import { mountCountUp } from '../../../sim/prestige-endings.js';  // prestige hook (Renewal Sky): Count Up ending, spirals pay more
 
 const COLOURS = ['#ff69b4', '#7bd0ff', '#ffd24d', '#9dff9d', '#d9a6ff'];
+
+/* Owner 2026-11-07: the bouncing words sing like mini Breakout. Every wall bounce plays the Breakout brick one step higher
+ * on a major pentatonic, shared by all bouncing words so they climb one melody together; a corner resolves it with the
+ * Breakout clear and starts the climb again. Quiet, and never two notes in the same 90 ms. */
+const BOUNCE_STEPS = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
+const bounceSong = { step: 0, last: -1e9 };
+function bounceNote(ctx, x, corner) {
+  const audio = ctx.audio;
+  if (!audio?.play) return;
+  audio.mixer?.register?.('bounce_words', 'Bouncing words');
+  const now = ctx.now ?? performance.now();
+  if (!corner && now - bounceSong.last < 90) return;
+  bounceSong.last = now;
+  const pan = Math.max(-0.8, Math.min(0.8, (x / Math.max(1, ctx.bounds().w) - 0.5) * 1.4));
+  const source = { source: 'bounce_words', sourceLabel: 'Bouncing words' };
+  if (corner) {
+    audio.play('assets/audio/breakout/clear.ogg', { bus: 'sfx', gain: 0.4, pan, ...source });
+    bounceSong.step = 0;
+    return;
+  }
+  const semis = BOUNCE_STEPS[bounceSong.step % BOUNCE_STEPS.length];
+  bounceSong.step += 1;
+  audio.play('assets/audio/breakout/brick.ogg', { bus: 'sfx', gain: 0.28, rate: 2 ** (semis / 12), pan, ...source });
+}
 
 /** The DVD logo's colour change, in the run's colours once a theme is picked. */
 const wordColour = (ctx, c) => {
@@ -14,18 +40,16 @@ const wordColour = (ctx, c) => {
 
 /** A word on the old DVD path: a triangle wave on each axis, so true corners really happen, about every 24 s. */
 function dvdWord(ctx, startText, { crossX = 8, crossY = 6, phase = 0, size = 1 } = {}) {
-  const px = Math.round(Math.max(20, Math.min(46, ctx.bounds().w * 0.05)) * size);
-  const el = ctx.el('div', `position:absolute;left:0;top:0;font-weight:700;font-size:${px}px;line-height:1;white-space:nowrap;color:${wordColour(ctx, 0)};will-change:transform;font-family:Arial,Helvetica,sans-serif;text-shadow:0 0 5px #000,0 1px 2px #000;`, startText);
-  const nextWord = deck(BOUNCE_WORDS, ctx);
-  let w = 0, h = 0, seen = null;
-  const measure = () => { w = el.offsetWidth; h = el.offsetHeight; seen = ctx.bounds(); };
-  measure();
+  const el = ctx.el('div',`position:absolute;left:0;top:0;color:${wordColour(ctx,0)};will-change:transform;`);
+  const art = bindBounce(ctx,el,{index:Math.floor(phase),word:startText,scale:size});
+  const nextWord = deck(BOUNCE_WORDS,ctx);
+  art.sync();
   let t = phase, fx = null, fy = null, c = 0;
   const tri = (u) => { const m = u % 2; return m < 1 ? m : 2 - m; };
   return {
     el,
     step(dt) {
-      if (seen !== ctx.bounds()) measure();
+      const {w,h} = art.sync();
       const slow = ctx.gentle ? 0.5 : 1;
       t += dt * slow;
       const b = ctx.bounds(), ux = t / crossX, uy = t / crossY;
@@ -39,14 +63,14 @@ function dvdWord(ctx, startText, { crossX = 8, crossY = 6, phase = 0, size = 1 }
       c = (c + 1) % COLOURS.length;
       el.style.color = wordColour(ctx, c);
       const gain = ctx.wallHit({ x: x + w / 2, y: y + h / 2, corner });
+      bounceNote(ctx, x + w / 2, corner);
       if (corner) {
         const r = ctx.rates(), big = Math.max(r.wall * 25, r.fps * 2);
         ctx.pay(big, 'corner', { x: x + w / 2, y: y + h / 2 });
         burst(ctx, x + w / 2, y + h / 2, 'var(--accent)', 18, 110);
         ctx.audio.play('assets/audio/sfx/golden_pop.mp3', { bus: 'sfx', gain: 0.6 });
         ctx.toast(ROUTE_COPY.corner);
-        el.textContent = nextWord();
-        measure();
+        art.setWord(nextWord());
       } else if (gain) {
         ctx.float(x + w / 2, y > b.h / 2 ? y - 14 : y + h + 8, `+${ctx.fmt(gain)}`, `color:${wordColour(ctx, c)};font-weight:700;`);
       }
@@ -62,6 +86,7 @@ export default {
       darkCss(ctx);
       const sp = mountSpiral(ctx, { opacity: 0.55, fadeMs: 1600 });
       sp.speedMul = 0.8;
+      mountCountUp(ctx);  // prestige hook: Count Up ending (tr_end)
       ctx.on('tap', () => { sp.kick = Math.min(1.2, sp.kick + 0.14); });
       return { off() { sp.dispose(); } };
     },
@@ -70,6 +95,7 @@ export default {
   /* Faster Spiral: speed comes in five steps, up and back down, and a little meter shows which one you are on. */
   e_speed: {
     mount(ctx) {
+      mountCountUp(ctx);  // prestige hook: Count Up ending (tr_end)
       const sp = spiral();
       const row = ctx.el('div', 'display:flex;align-items:flex-end;gap:3px;height:20px;', null, meterRow(ctx));
       const bars = [0, 1, 2, 3, 4].map((i) => ctx.el('div', `width:9px;height:${6 + i * 3}px;background:rgba(255,255,255,.25);border-radius:1px;transition:background .3s;`, null, row));
@@ -94,12 +120,14 @@ export default {
   /* Bouncing Word: the DVD logo, except it is a word. Walls pay a little, a true corner pays a lot. */
   e_bounce: {
     mount(ctx) {
+      ctx.css(FACE_CSS);
       const w = dvdWord(ctx, 'DROP', { crossX: 8, crossY: 6, phase: 1.3 });
       return { tick: (dt) => w.step(dt) };
     },
   },
   e_words: {
     mount(ctx) {
+      ctx.css(FACE_CSS);
       const a = dvdWord(ctx, 'SINK', { crossX: 9, crossY: 7.2, phase: 3.1, size: 0.85 });
       const b = dvdWord(ctx, 'SOFT', { crossX: 7, crossY: 10.5, phase: 6.7, size: 0.85 });
       return { tick: (dt) => { a.step(dt); b.step(dt); } };

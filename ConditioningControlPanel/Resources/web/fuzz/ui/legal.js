@@ -3,6 +3,7 @@
  * so Tab walks the window and then reaches Wake Up, which is never covered. */
 
 import { BRAND, brandText } from '../data/brand.js';
+import { richText } from './rich-text.js';
 import { X_LINES, INTRO } from '../data/content/terms.js';
 
 const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
@@ -15,7 +16,7 @@ export const expandHtml = (s) => String(s)
 export function createLegal({ doc, gentle = () => false, above = false, xLines = X_LINES }) {
   const veil = doc.createElement('div');
   veil.className = above ? 'tc above' : 'tc';
-  doc.body.insertBefore(veil, doc.getElementById('wake'));
+  doc.body.insertBefore(veil, doc.getElementById('game-controls'));
   veil.addEventListener('keydown', () => veil.classList.add('kb'));
   const world = doc.getElementById('world');
   const worldWas = world?.inert;
@@ -57,7 +58,7 @@ export function createLegal({ doc, gentle = () => false, above = false, xLines =
       win.setAttribute('aria-modal', 'true');
       win.setAttribute('aria-labelledby', 'tc-head');
       win.innerHTML = `<div class="tbar"><span>${esc(brandText(title))}</span><button class="fakex" type="button" aria-label="${esc(INTRO.xLabel)}">X</button></div>`
-        + `<div class="body"><h1 id="tc-head">${esc(brandText(head))}</h1>${body}</div>`;
+        + `<div class="body"><h1 id="tc-head">${richText(head)}</h1>${body}</div>`;
       veil.replaceChildren(win, toastEl, wakeEl);
       toastEl.hidden = true;
       win.querySelector('.fakex').addEventListener('click', () => {

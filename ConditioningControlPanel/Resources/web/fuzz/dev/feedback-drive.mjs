@@ -82,7 +82,7 @@ try {
         const { BY_ID } = await import('/fuzz/data/items.js');
         const sheet = document.createElement('div');
         sheet.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#f1e8d8;color:#211e28;display:grid;grid-template-columns:repeat(8,1fr);gap:12px;padding:24px;align-content:start;font:13px system-ui;--hue-a:#d68b68;--hue-b:#90a6a0;';
-        for (const id of ['stray','f5','softw','confetti','font','sound','colour','bubble','v_frame','a_rain','levels','gold','watch','heartbtn','a_phones','asmr','tr_pod','guide','panel','wallpaper','sp_shapes','boxes','em_head','drop']) {
+        for (const id of ['stray','f5','softw','confetti','font','sound','colour','bubble','v_frame','a_rain','levels','gold','a_phones','lofi_radio','tr_pod','guide','panel','wallpaper','sp_shapes','boxes','em_head','drop']) {
           const tile = document.createElement('div');
           tile.style.cssText = 'display:grid;justify-items:center;gap:7px;padding:12px;background:#fffaf0;border:2px solid #352a28;border-radius:8px;';
           const icon = iconFor(document, BY_ID[id]); icon.style.width = '64px'; icon.style.height = '64px';

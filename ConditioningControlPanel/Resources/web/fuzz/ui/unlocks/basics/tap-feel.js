@@ -1,5 +1,6 @@
 /* Earned button feedback. One spring per button, bounded sparks, no game RNG or extra payouts. */
 import { btnCenter, spawn } from './fx.js';
+import { LITE } from '../../perf.js';
 
 const springs = new WeakMap();
 const sparks = new WeakMap();
@@ -48,7 +49,7 @@ export function contactSparks(ctx, event = {}, hero = false) {
   if (!hero && now - state.last < 100) return;
   state.last = now;
   const c = Number.isFinite(event.x) && Number.isFinite(event.y) ? event : btnCenter(ctx);
-  const count = Math.min(hero ? (event.auto ? 7 : 18) : 4, 32 - state.live);
+  const count = Math.min(hero ? (event.auto ? 7 : LITE ? 10 : 18) : LITE ? 3 : 4, (LITE ? 16 : 32) - state.live);
   const phase = ++state.serial * 2.39996;
   for (let i = 0; i < count; i++) {
     const angle = phase + i * Math.PI * 2 / count;

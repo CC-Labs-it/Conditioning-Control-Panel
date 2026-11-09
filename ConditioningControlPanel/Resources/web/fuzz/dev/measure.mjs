@@ -27,7 +27,9 @@ const require = createRequire('C:/wt-fe/e2e/');
 const { firefox } = require(process.env.PW_DIR || 'playwright');
 const FF = process.env.FF_EXE || 'C:/Users/Admin/AppData/Local/ms-playwright/firefox-1538/firefox/firefox.exe';
 const driver = readFileSync(fileURLToPath(new URL('./measure-page.js', import.meta.url)), 'utf8');
-const url = `http://localhost:${PORT}/fuzz/index.html?fresh=1`;
+// --journey 1 plays the long preview (?preview=journey), the run the owner plays; its prices are calibrated in sim/journey.js.
+const JOURNEY = arg('journey', '') === '1';
+const url = `http://localhost:${PORT}/fuzz/index.html?fresh=1${JOURNEY ? '&preview=journey&slot=measure' : ''}`;
 
 const m = (s) => (s == null ? '  -  ' : (s / 60).toFixed(1).padStart(5));
 const browser = await firefox.launch({ headless: true, executablePath: FF, firefoxUserPrefs: { 'media.volume_scale': '0.0' } });
@@ -86,8 +88,8 @@ for (const profile of profiles) {
 
 const first = (r, ids) => { const v = ids.map((i) => r.at[i]).filter((x) => x != null); return v.length ? Math.min(...v) : null; };
 const THEME_FIRST = (id) => /^(tr|bi|dr|si|go|lo|ce|in)_/.test(id) && !id.endsWith('_head') && !id.endsWith('_pod');
-console.log('\nroute                                     prof    drop  first-alt  gap  f1   f5   f3  scrn  row2  pod  2nd  sCol sShp asmr guid pnl lumps mods');
+console.log('\nroute                                     prof    drop  first-alt  gap  f1   f5   f3  scrn  row2  pod  2nd  sCol sShp lofi guid pnl lumps mods');
 for (const r of all) {
   const alts = Object.entries(r.endings).filter(([k]) => k !== 'drop' && k !== 'onemore').map(([, v]) => v).filter((v) => v != null);
-  console.log(`${r.route.padEnd(41)} ${r.profile.padEnd(6)} ${m(r.t)} ${m(alts.length ? Math.min(...alts) : null)}  ${String(r.longest.gap).padStart(4)} ${m(r.forks.f1)} ${m(r.forks.f5)} ${m(r.forks.f3)} ${m(first(r, ['v_frame', 'd_scroll', 'b_frame']))} ${m(first(r, Object.keys(r.at).filter(THEME_FIRST)))} ${m(r.pod)} ${m(r.at.taste2)} ${m(r.at.sp_colors)} ${m(r.at.sp_shapes)} ${m(r.at.asmr)} ${m(r.at.guide)} ${m(r.at.panel)} ${String(r.lumpShare).padStart(4)}% ${String(r.modShare).padStart(4)}%`);
+  console.log(`${r.route.padEnd(41)} ${r.profile.padEnd(6)} ${m(r.t)} ${m(alts.length ? Math.min(...alts) : null)}  ${String(r.longest.gap).padStart(4)} ${m(r.forks.f1)} ${m(r.forks.f5)} ${m(r.forks.f3)} ${m(first(r, ['v_frame', 'd_scroll', 'b_frame']))} ${m(first(r, Object.keys(r.at).filter(THEME_FIRST)))} ${m(r.pod)} ${m(r.at.taste2)} ${m(r.at.sp_colors)} ${m(r.at.sp_shapes)} ${m(r.at.lofi_radio)} ${m(r.at.guide)} ${m(r.at.panel)} ${String(r.lumpShare).padStart(4)}% ${String(r.modShare).padStart(4)}%`);
 }

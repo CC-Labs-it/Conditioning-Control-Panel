@@ -7,7 +7,6 @@ import { createLife } from '../sim/save.js';
 import { COLLECT_MAX_SECONDS, bankOf, collect, levelSeconds, xpNeed } from '../sim/levels.js';
 import { CONFIG } from '../data/config.js';
 import { cleanOff, familyOf, liveOn, panelGroups, parentOf, switchable } from '../sim/switches.js';
-import { edgesOf, layoutGuide, marksOf, NODE_H, NODE_W, reachable } from '../ui/guide-map.js';
 
 /* ---- levels ---- */
 test('xp past a full bar banks whole levels and the bar keeps filling', () => {
@@ -111,61 +110,23 @@ test('a family hangs off its parent: children wait while it is off, and keep the
   assert.equal(liveOn({ em_head: 1 }, 'stray'), true);
 });
 
-/* ---- the map ---- */
-test('every row has a place on the map and none overlap', () => {
-  const { pos, width, height } = layoutGuide();
-  assert.equal(Object.keys(pos).length, ITEMS.length);
-  const list = Object.entries(pos);
-  for (const [id, p] of list) {
-    assert.ok(Number.isFinite(p.x) && Number.isFinite(p.y), id);
-    assert.ok(p.x >= 0 && p.y >= 0 && p.x + NODE_W <= width && p.y + NODE_H <= height, `${id} is off the map`);
+test('Questions follows EMI in the shop and old question owners keep their lesson and its host', () => {
+  const run = E.createRun();
+  E.grant(run, 'f2');
+  assert.deepEqual(BY_ID.quiz.req, ['em_head']);
+  for (const oldOrder of [['quiz'], ['quiz', 'em_head'], ['em_head', 'quiz']]) {
+    const legacy = JSON.parse(serialize(run, createLife()));
+    Object.assign(legacy.run.owned, Object.fromEntries(oldOrder.map(id => [id, 1])));
+    legacy.run.order.push(...oldOrder);
+    legacy.run.store.quiz = { lesson:2 };
+    const restored = parse(JSON.stringify(legacy)).run;
+    assert.equal(restored.owned.em_head, 1);
+    assert.equal(restored.order.filter(id => id === 'em_head').length, 1);
+    assert.ok(restored.order.indexOf('em_head') < restored.order.indexOf('quiz'));
+    assert.equal(restored.store.quiz.lesson, 2);
+    assert.deepEqual(parse(serialize(restored, createLife())).run.order, restored.order);
   }
-  for (let i = 0; i < list.length; i++) {
-    for (let j = i + 1; j < list.length; j++) {
-      const [a, A] = list[i], [b, B] = list[j];
-      assert.ok(Math.abs(A.x - B.x) >= NODE_W || Math.abs(A.y - B.y) >= NODE_H, `${a} sits on ${b}`);
-    }
-  }
-});
-
-test('the map runs left to right: a row never sits left of a parent it cost more than', () => {
-  const { pos } = layoutGuide();
-  for (const it of ITEMS) {
-    if (it.group !== 'run') continue;
-    for (const q of it.req) if (it.cost > BY_ID[q].cost) assert.ok(pos[it.id].x > pos[q].x, `${it.id} / ${q}`);
-  }
-});
-
-test('every line joins two rows that exist', () => {
-  const { pos } = layoutGuide();
-  const edges = edgesOf();
-  assert.ok(edges.length > ITEMS.length / 2);
-  for (const e of edges) assert.ok(pos[e.a] && pos[e.b], `${e.a} -> ${e.b}`);
-  assert.ok(edges.some((e) => e.cls === 'any'), 'Spiral Colours has an any line');
-});
-
-test('marks: yours, on offer, later, and the routes not picked', () => {
-  const s = E.createRun();
-  let m = marksOf(s);
-  assert.equal(m.start, 'owned');
-  assert.equal(m.stray, 'offer');
-  assert.equal(m.drop, 'later');
-  E.grant(s, 'f1');
-  s.picks.f1 = 'eyes';
-  E.recalc(s);
-  m = marksOf(s);
-  assert.equal(m.f1, 'owned');
-  const eyes = ITEMS.find((it) => it.lane === 'eyes');
-  const ears = ITEMS.find((it) => it.lane === 'ears');
-  assert.notEqual(m[eyes.id], 'shut');
-  assert.equal(m[ears.id], 'shut');
-  assert.ok(!reachable(s).has(ears.id));
-});
-
-test('a stacking row you own and can buy again reads as on offer, and marks never throw on a read-only view', () => {
-  const s = E.createRun();
-  E.grant(s, 'stray');
-  assert.equal(marksOf(s).stray, 'offer');
-  const view = new Proxy(s, { set: () => false });
-  assert.doesNotThrow(() => marksOf(view));
+  assert.equal(parentOf('quiz'), 'em_head');
+  assert.equal(liveOn({em_head:1}, 'quiz'), false);
+  assert.deepEqual(familyOf('quiz'), ['quiz']);
 });

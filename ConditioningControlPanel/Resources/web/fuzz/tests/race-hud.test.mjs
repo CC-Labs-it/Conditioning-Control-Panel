@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { restoreRace, advanceRace, takeRaceBonus, raceCanPlay, RACE_BONUS_MS } from '../ui/unlocks/arcade/race-model.js';
 
 test('race bonus waits for active time, persists ready state and pays only once', () => {
@@ -28,8 +29,19 @@ test('footage stops for every hold, hidden tab, invisible dock and reduced motio
   assert.equal(raceCanPlay({ ...flags, visible: false }), false);
 });
 
-test('the race ships an actual local video and its static poster', () => {
-  for (const file of ['threshold-loop.mp4', 'threshold-poster.jpg']) assert.ok(existsSync(new URL(`../assets/race/${file}`, import.meta.url)));
+test('each circuit ships a distinct MP4 capture and JPEG poster', () => {
+  const digests = new Set();
+  for (const id of ['threshold', 'mainframe', 'boudoir', 'keep', 'goonworks']) {
+    const clip = readFileSync(new URL(`../assets/race/${id}-loop.mp4`, import.meta.url));
+    const poster = readFileSync(new URL(`../assets/race/${id}-poster.jpg`, import.meta.url));
+    assert.equal(clip.toString('ascii', 4, 8), 'ftyp', id+' is an MP4');
+    assert.equal(poster.readUInt16BE(0), 0xffd8, id+' has a JPEG poster');
+    for (const asset of [clip, poster]) digests.add(createHash('sha256').update(asset).digest('hex'));
+  }
+  assert.equal(digests.size, 10, 'each circuit has its own footage and poster');
+});
+
+test('race playback is local, muted and releases the decoder', () => {
   const source = readFileSync(new URL('../ui/unlocks/arcade/race.js', import.meta.url), 'utf8');
   assert.match(source, /video\.muted = true/);
   assert.match(source, /video\.pause\(\)/);

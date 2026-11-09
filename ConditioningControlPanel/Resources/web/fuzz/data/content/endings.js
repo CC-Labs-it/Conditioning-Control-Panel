@@ -16,7 +16,7 @@ const link = (label) => ({ label, url: CCP_URL });
 const e = (id, title, result, credits, closing, more) => ({ id, title, result, credits, closing, ...(more || {}) });
 
 export const ENDINGS = Object.freeze({
-  drop: e('drop', 'Drop', 'Everything went quiet and you let it.', [
+  drop: e('drop', 'Drop', 'Everything went **quiet** and you let it.', [
     '{game}',
     'Made by CC Labs',
     'Button: a button',
@@ -41,7 +41,7 @@ export const ENDINGS = Object.freeze({
     'Thank you',
     'Thank you for staying',
     'Thank you for not finding the cancel link',
-    'Gold leaf: applied to the font',
+    '[[gold:Gold]] leaf: applied to the font',
     'Support: EMI, on line one, unhelpfully',
   ], 'Your lifetime starts now. It is shorter than you think.', { link: link('The real membership. It has Basic and Prime.') }),
 
@@ -52,20 +52,24 @@ export const ENDINGS = Object.freeze({
     'Two and a half: in progress',
     'Two and three quarters: scheduled',
     'Nearly',
-  ], 'You will wake on three. Nobody has said when three is.', {
+  ], 'You will **wake** on three. Nobody has said when three is.', {
     count: ['One', 'Two', 'Two and a half', 'Two and three quarters', 'Nearly', 'Very nearly', 'Two and seven eighths'],
     link: link('More of this, without the counting, in CCP'),
   }),
 
-  bi_end: e('bi_end', 'Empty Smile', 'Pink screen. Big smile. Nobody is keeping score, least of all you.', [
+  bi_end: e('bi_end', 'Bimbodoll', 'One [[pink:pink]] bubble. It takes everything, then pops.', [
     'Starring: um',
     'Written by: someone with lots of words',
     'Thinking: cut for time',
     'Gloss: all of it',
     'Number: a lot',
-  ], 'Who is keeping score. Not you. So pretty, though.', { link: link('The Bambi mod, in CCP. Press the pink one.') }),
+  ], 'Good girl. Nothing left to accept.', {
+    link: link('The Bambi mod, in CCP. Press the pink one.'),
+    flash: ['GOOD GIRL BAMBI', 'SEE YOU SOON :3'],
+    card: 'I accept that there is nothing left to accept.',
+  }),
 
-  dr_end: e('dr_end', 'Unit Complete', 'Shop: off. Counter: off. Name: off. Input: off. Unit: complete.', [
+  dr_end: e('dr_end', 'Unit Complete', 'Shop: off. Counter: off. Name: off. Input: off. Unit: **complete**.', [
     'Unit performed adequately',
     'Hive: notified',
     'Unit 7: still ahead',
@@ -76,7 +80,7 @@ export const ENDINGS = Object.freeze({
     link: link('Drone mode, in CCP'),
   }),
 
-  si_end: e('si_end', 'The Debut', 'Curtain up, one spotlight, one slow bow. Everyone is looking. Good.', [
+  si_end: e('si_end', 'The Debut', 'Curtain up, one spotlight, one slow bow. Everyone is looking. **Good**.', [
     'Wardrobe: the button',
     'Posture: under protest',
     'Napkin: folded',
@@ -98,7 +102,7 @@ export const ENDINGS = Object.freeze({
     'Timer: still counting',
     'Keyholder: smiling, offshore',
     'The fish: unlocked nothing',
-  ], 'Nice throw. It was a pretend key. The feeling you just had was not.', { link: link('Real timers, real keys: Chaster and the Locked mod, in CCP') }),
+  ], 'Nice throw. It was a pretend key. The **feeling** you just had was not.', { link: link('Real timers, real keys: Chaster and the Locked mod, in CCP') }),
 
   ce_end: e('ce_end', 'Redacted', 'Your result is ████████. Congratulations on your ██████.', [
     '█████████ by ███ ███',
@@ -108,7 +112,7 @@ export const ENDINGS = Object.freeze({
     'Thanks: ██████',
   ], '██████. You almost saw it. That was the good part.', { link: link('█████ in ███. That is CCP.') }),
 
-  in_end: e('in_end', 'Flatline', 'All pink. The line on the monitor stopped being a line and started turning.', [
+  in_end: e('in_end', 'Flatline', 'All [[pink:pink]]. The line on the monitor stopped being a line and started **turning**.', [
     'Patient zero: you',
     'Ward: all of it',
     'Antivirus: resting, did its best',

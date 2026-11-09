@@ -33,13 +33,13 @@ export function playRoute(picks, { taps = 4, mood = null, mods = null, maxS = 72
     const rate = E.rates(s, mods, t * 1000);
     const strays = E.count(s, 'stray');
     E.tick(s, dt * 1000, mods);
-    E.earn(s, (rate.click * taps + strays * rate.walls * rate.wall) * dt, 'route');
+    E.earn(s, (rate.manualClick * taps + strays * rate.walls * rate.bounce) * dt, 'route');
     if (side) E.lump(s, Math.max(0, s.side.budget - s.side.paid), 'side'), s.side.paid = s.side.budget;
     t += dt;
     if (firstAlt === null && ends.some((e) => e.req.every((q) => E.has(s, q)) && s.fuzz >= E.price(s, e.id, mods))) firstAlt = t;
     if (E.has(s, 'stray') && strays < 12) {
       const c = E.price(s, 'stray', mods);
-      if (s.fuzz >= c && c / Math.max(0.01, rate.walls * rate.wall) < CONFIG.STRAY_PAYBACK_S) E.buy(s, 'stray', mods);
+      if (s.fuzz >= c && c / Math.max(0.01, rate.walls * rate.bounce) < CONFIG.STRAY_PAYBACK_S) E.buy(s, 'stray', mods);
     } else if (!E.has(s, 'stray') && s.fuzz >= E.price(s, 'stray', mods)) E.buy(s, 'stray', mods);
     for (let i = 0; i < pending.length; i++) {
       const { r, cost } = pending[i];

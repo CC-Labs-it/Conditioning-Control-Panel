@@ -1,34 +1,76 @@
+import { openButtonShop, buttonShopCss, buttonShopReady, grandfatherFaces, shopDoor, SIZE_ITEMS } from '../../button-shop.js';
+import { mountGameWave } from '../../live-wave.js';
+import { mountCursorTrail } from './cursor-trail.js';
+import { FACE_CSS, grandfatherCopies } from '../../bouncing-art.js';
+import { freshParts, takeToasts, toastLine, SHOP_NEW_CSS } from '../../shop-gates.js';
 /* ui/unlocks/basics/look.js - the look lane: what the player buys in the first ten minutes. Every entry lands visibly
  * within a second of the press. Button skins keep a rectangle to press, so any skin stays completable. */
 
 import { TAB_TITLES } from '../../../data/content/index.js';
 import { whole } from '../../../sim/format.js';
 import { buttonImpulse, contactSparks } from './tap-feel.js';
-import { baseCss, gentleEndsLoops, burst, btnCenter, chip, docOf, fresh, play, pop, PALETTES, setPalette, sfx, spawn, squish, tools } from './fx.js';
+import { baseCss, burst, btnCenter, chip, docOf, fresh, play, pop, PALETTES, setPalette, sfx, spawn, squish, tools } from './fx.js';
 
 /* ---- button wardrobe: latest skin wins, the chip goes back to any owned one ---- */
-const SKIN_OF = Object.freeze({ rounded: 'round', bubble: 'bubble', watch: 'watch', heartbtn: 'heart', mirror: 'mirror', spirbtn: 'spiral', bigbtn: 'big', tinybtn: 'tiny' });
-const SKIN_LABEL = Object.freeze({ round: 'Round', bubble: 'Bubble', watch: 'Watch', heart: 'Heart', mirror: 'Mirror', spiral: 'Spiral', big: 'Big', tiny: 'Tiny' });
+import { SKIN_ITEMS, SKIN_NAMES, wardrobeSkins } from '../../button-faces.js';
 
 function wardrobe(ctx) {
-  let foreign = null;
   const el = ctx.button.el;
-  const owned = () => Object.keys(SKIN_OF).filter((id) => ctx.has(id) && ctx.switches.isOn(id)).map((id) => SKIN_OF[id]);
-  const label = () => { b.textContent = `Button: ${SKIN_LABEL[el.dataset.skin] || 'Theme'}`; };
-  const b = chip(ctx, '', () => {
-    const cur = el.dataset.skin;
-    if (cur && !SKIN_LABEL[cur]) foreign = cur;
-    const list = foreign ? [...owned(), foreign] : owned();
-    const next = list[(list.indexOf(cur) + 1) % list.length];
-    ctx.store.set('choice', next);
-    ctx.button.skin(next);
-    label();
-    squish(ctx, el);
-    bumpZone(ctx);
+  const showcase = el.ownerDocument.documentElement.hasAttribute('data-combined-preview');
+  const options = () => wardrobeSkins(ctx.state,showcase).map(s => [s,SKIN_NAMES[s]]);
+  ctx.css(buttonShopCss);
+  ctx.css(FACE_CSS);
+  /* Human Check was free before the shop sold it: a save wearing it keeps it. */
+  const kept = grandfatherFaces({ choice: ctx.store.get('choice'), faces: ctx.store.get('faces') });
+  if (kept) ctx.store.set('faces', kept);
+  /* Bouncing-copy looks were free before they were sold (owner 2026-11-08): a save that picked one keeps it. */
+  const keptCopies = grandfatherCopies({ bouncer: ctx.store.get('bouncer'), emiPose: ctx.store.get('emiPose'), copySize: ctx.store.get('copySize'), copyOwned: ctx.store.get('copyOwned') });
+  if (keptCopies) ctx.store.set('copyOwned', keptCopies);
+  /* Big and Tiny were style choices before they became sizes: an old choice moves to the size pick. */
+  if (ctx.store.get('choice') === 'big' || ctx.store.get('choice') === 'tiny') { ctx.store.set('size', ctx.store.get('choice')); ctx.store.set('choice', null); }
+  /* A size row bought from the shop wears its size once; the Size switch in the shop changes it after. */
+  ctx.on('button-size', ({ size, bought }) => { if (bought) ctx.store.set('size', size); });
+  let dialog = null;
+  function open(tab = 'Styles') {
+    if (dialog && !dialog.closed) return;
+    dialog = openButtonShop(ctx,{
+      tab, skinOptions:options,
+      chooseSkin(id) {
+        ctx.store.set('choice',id);
+        ctx.emit('wardrobe-equipped',{skin:id});
+        squish(ctx,el); bumpZone(ctx);
+      },
+      onClose() { dialog = null; },
+    });
+  }
+  /* Owner 2026-11-07: the two shops are two icon doors, a button and a cursor, with a dot when something there is affordable. */
+  ctx.css(SHOP_NEW_CSS);
+  const b = shopDoor(ctx,'button',() => { open(); label(); });
+  ctx.on('open-button-shop',({tab} = {}) => open(['Wave','Bouncing copies'].includes(tab) ? tab : 'Styles'));
+  const c = shopDoor(ctx,'cursor',() => { ctx.emit('open-cursor-shop'); label(); });
+  for (const door of [b, c]) { const t = ctx.el('span', '', 'NEW', door); t.className = 'fz-door-new'; t.setAttribute('aria-hidden', 'true'); }
+  const doc = el.ownerDocument;
+  /* Owner 2026-11-08: a shop part that just opened lights its door NEW (apart from the red ready dot) and says so once. */
+  const seen = () => { let r = ctx.store.get('shopSeen'); if (!r) { r = {}; ctx.store.set('shopSeen', r); } return r; };
+  const news = (door, shop) => {
+    const fresh = door.hidden ? [] : freshParts(ctx.state, shop, seen());
+    door.toggleAttribute('data-new', fresh.length > 0);
+    door.setAttribute('aria-label', (shop === 'cursor' ? 'Cursor Shop' : 'Button Shop') + (fresh.length ? ', something new inside' : ''));
+    if (!fresh.length) return;
+    const told = takeToasts(ctx.state, shop, seen());
+    /* After the buy's own line has had its moment. */
+    if (told.length) ctx.after(3000, () => ctx.toast(toastLine(shop, told)));
+  };
+  const label = () => {
+    b.toggleAttribute('data-ready', buttonShopReady(ctx, options().map(([s]) => s)));
+    c.hidden = !(ctx.has('cursor') || ctx.has('trail'));
+    c.toggleAttribute('data-ready', doc.documentElement.dataset.cursorShopReady === '1');
+    news(b, 'button'); news(c, 'cursor');
+  };
+  ctx.on('buy', ({item,also = []}) => {
+    /* A new look row takes the button; a size row only resizes it and leaves the chosen style on. */
+    if ([item,...also].some(it => SKIN_ITEMS[it.id] && !SIZE_ITEMS[it.id])) ctx.store.set('choice',null);
   });
-  const chosen = ctx.store.get('choice');
-  if (chosen && (!SKIN_LABEL[chosen] || owned().includes(chosen))) ctx.after(40, () => { ctx.button.skin(chosen); label(); bumpZone(ctx); });
-  ctx.on('buy', ({ item }) => { if (SKIN_OF[item.id]) { ctx.store.set('choice', null); ctx.after(30, label); } });
   ctx.every(1000, label);
   label();
 }
@@ -67,7 +109,7 @@ export default {
     mount(ctx) {
       wear(ctx, 'round', '#btn[data-skin=round] { border-radius: 16px; }');
       ctx.on('tap', ({ auto }) => {
-        if (!auto && ctx.button.el.dataset.skin !== 'heart') buttonImpulse(ctx);
+        if (!auto) buttonImpulse(ctx);
       });
       return {};
     },
@@ -77,12 +119,13 @@ export default {
   title: {
     mount(ctx) {
       const doc = docOf(ctx), was = doc.title;
-      const link = doc.querySelector('link[rel="icon"]');
       const icon = ctx.el('link', '', null, doc.head);
       icon.rel = 'icon';
       icon.href = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" rx="2" fill="#1d7a45"/><path d="M4 4l8 8M12 4l-8 8" stroke="#fff" stroke-width="2"/></svg>');
       let i = ctx.store.get('i') || 0;
-      const set = () => { doc.title = TAB_TITLES[i % TAB_TITLES.length]; ctx.store.set('i', i); };
+      /* Inside the site (app.cclabs.app/tc) this page is a frame, so its own title and icon never reach the browser
+         tab: the host is asked to wear them (CONTRACT `tab`; icon is a name from the host's fixed set, never a URL). */
+      const set = () => { doc.title = TAB_TITLES[i % TAB_TITLES.length]; ctx.store.set('i', i); if (ctx.hosted) ctx.host('tab', { title: doc.title, icon: 'sheet' }); };
       set();
       ctx.every(60000, () => { i += 1; set(); });
       if (fresh(ctx)) {
@@ -92,7 +135,8 @@ export default {
         tab.append(sq, TAB_TITLES[0]);
         play(ctx, tab, [{ transform: 'translateY(-44px)' }, { transform: 'translateY(0)', offset: 0.12 }, { transform: 'translateY(0)', offset: 0.82 }, { transform: 'translateY(-44px)' }], { duration: 2200, easing: 'ease-in-out' });
       }
-      return { off() { doc.title = was; if (link) link.remove(); } };
+      // Off: the page's own title and icon come back (the disguise link goes, the original favicon stays).
+      return { off() { doc.title = was; icon.remove(); if (ctx.hosted) ctx.host('tab', { title: null, icon: null }); } };
     },
   },
 
@@ -155,6 +199,12 @@ body { transition: background-color .6s, color .6s; }
         const clock = ctx.state.clock;
         if (clock - lastPop > (corner ? 450 : 1100)) { lastPop = clock; sfx(ctx, pops[Math.floor(clock / 1100) % pops.length], corner ? .16 : .1); }
       });
+      /* Two copies touching after a spiral (ui/unlocks/basics.js): a small ring of bits and the plain wall pop, same cooldown. */
+      ctx.on('stray:bump', ({ x, y }) => {
+        burst(ctx, x, y, { n: 6, reach: 40, size: 6, from: 0, to: Math.PI * 2 });
+        const clock = ctx.state.clock;
+        if (clock - lastPop > 1100) { lastPop = clock; sfx(ctx, pops[Math.floor(clock / 1100) % pops.length], .1); }
+      });
       if (fresh(ctx)) { const { w, h } = ctx.bounds(); blast(0, h * 0.4, 12); blast(w, h * 0.6, 12); blast(w * 0.5, 0, 12); }
       return {};
     },
@@ -164,12 +214,18 @@ body { transition: background-color .6s, color .6s; }
   font: {
     mount(ctx) {
       const doc = docOf(ctx);
-      ctx.css(`@font-face { font-family: "Fredoka"; src: url("assets/fonts/fredoka-latin.woff2") format("woff2"); font-weight: 300 700; font-display: swap; }`);
+      let mounted = true;
       const swap = () => {
-        ctx.vars({ '--font': '"Fredoka", "Segoe UI", system-ui, sans-serif', '--shop-font': '"Fredoka", "Segoe UI", system-ui, sans-serif' });
+        if (!mounted) return;
+        doc.documentElement.setAttribute('data-bubble-type', '');
         if (fresh(ctx)) for (const part of [ctx.parts.shop, ctx.parts.stage]) ctx.anim(part, [{ opacity: 0.2 }, { opacity: 1 }], { duration: 400 });
       };
-      if (doc.fonts?.load) doc.fonts.load('16px "Fredoka"').then(swap, swap); else swap();
+      ctx.cleanup(() => {
+        mounted = false;
+        doc.documentElement.removeAttribute('data-bubble-type');
+      });
+      if (doc.fonts?.load) doc.fonts.load('700 16px ShopRound').then(swap, swap);
+      else swap();
       return {};
     },
   },
@@ -200,17 +256,14 @@ body { transition: background-color .6s, color .6s; }
   /* Bubble Button: the button and its copies. A bubble pops when pressed. The wardrobe chip lives here: swap back any time. */
   bubble: {
     mount(ctx) {
-      wear(ctx, 'bubble', `
-#btn[data-skin=bubble] { width: 84px; height: 84px; border-radius: 50%; color: transparent; border: 1.5px solid rgba(120,170,220,.9); box-shadow: inset 0 -6px 14px rgba(120,190,255,.35); background: radial-gradient(circle at 32% 28%, #fff 0 9%, rgba(255,255,255,.4) 16%, rgba(190,225,255,.5) 55%, rgba(120,190,255,.8)); }
-#btn[data-skin=bubble].down { border-style: solid; box-shadow: inset 0 -6px 14px rgba(120,190,255,.35); }
-#world:has(#btn[data-skin=bubble]) [data-stray] { border-radius: 50%; width: 26px !important; height: 26px !important; border: 1.5px solid rgba(120,170,220,.9) !important; background: radial-gradient(circle at 32% 28%, #fff 0 12%, rgba(190,225,255,.5) 50%, rgba(120,190,255,.8)) !important; }
-`);
+      wear(ctx, 'bubble');
       wardrobe(ctx);
+      ctx.frame(mountGameWave(ctx,true));
       ctx.on('tap', ({ x, y, auto }) => {
         if (ctx.button.el.dataset.skin !== 'bubble') return;
         if (!auto) sfx(ctx, `pop/Pop${['', '2', '3'][Math.floor(ctx.state.clock / 300) % 3]}.mp3`, .16);
         const c = x == null ? btnCenter(ctx) : { x, y };
-        burst(ctx, c.x, c.y, { color: 'rgba(120,190,255,.9)', n: 6, reach: 40, size: 5 });
+        burst(ctx, c.x, c.y, { color: 'url("assets/img/bubble.png") center/139% no-repeat', n: 12, reach: 52, size: 8 });
       });
       return {};
     },
@@ -219,14 +272,12 @@ body { transition: background-color .6s, color .6s; }
   /* Pink Cursor: a pink arrow, and a ring wherever anyone presses, finger or mouse. */
   cursor: {
     mount(ctx) {
-      const arrow = encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="33" viewBox="0 0 12 17"><path d="M0 0v14l3.5-3 2.4 5.5 2.5-1-2.5-5.4h5z" fill="#ff4fa8" stroke="#fff" stroke-width=".8"/></svg>');
-      ctx.css(`html, body, button, .row, #btn { cursor: url("data:image/svg+xml,${arrow}") 1 1, auto !important; }`);
       const win = docOf(ctx).defaultView;
       const ring = (x, y) => {
         const d = spawn(ctx, `width:44px;height:44px;margin:-22px 0 0 -22px;box-sizing:border-box;border:3px solid var(--accent);border-radius:50%;left:${x}px;top:${y}px;`);
         play(ctx, d, [{ transform: 'scale(.3)', opacity: 1 }, { transform: 'scale(1.1)', opacity: 0 }], { duration: ctx.gentle ? 400 : 480, easing: 'ease-out' });
       };
-      const onDown = (e) => { if (!ctx.paused) ring(e.clientX, e.clientY); };
+      const onDown = (e) => { if (!ctx.paused && ctx.state.store.cursorKit?.rings !== false) ring(e.clientX, e.clientY); };
       win.addEventListener('pointerdown', onDown, true);
       if (fresh(ctx)) { const c = btnCenter(ctx); ring(c.x, c.y); ctx.after(180, () => ring(c.x, c.y)); }
       return { off() { win.removeEventListener('pointerdown', onDown, true); } };
@@ -240,42 +291,52 @@ body { transition: background-color .6s, color .6s; }
       ctx.css(`
 #count { display: none; }
 body.gentle #count { display: inline; }
-body.gentle #fz-roll { display: none; }
-#fz-roll { display: inline-flex; vertical-align: top; height: 1.1em; overflow: hidden; white-space: nowrap; }
-#fz-roll > span { flex: none; display: block; height: 1.1em; line-height: 1.1; }
-#fz-roll .d { height: 11em; transition: transform .45s cubic-bezier(.2,.8,.3,1); }
-#fz-roll .d > span { display: block; height: 1.1em; }
+body.tb-hidecount #count:not([hidden]) { display: inline-block; }
+body.gentle #fz-roll, body.tb-hidecount #fz-roll, #counter:has(#count[hidden]) #fz-roll { display:none; }
+#fz-roll { display:inline-flex; align-items:baseline; white-space:nowrap; }
+#fz-roll > .d { display:inline-block; min-width:.62em; text-align:center; }
 `);
       const counter = ctx.parts.counter;
       const roll = ctx.el('span', '', null, counter);
       roll.id = 'fz-roll';
       counter.insertBefore(roll, counter.querySelector('#count'));
-      const digits = [];
+      const columns = [];
       let shown = '';
-      const STACK = Array.from({ length: 10 }, (_, i) => `<span>${i}</span>`).join('');
       const draw = () => {
         const text = whole(ctx.state.fuzz);
         if (text === shown) return;
-        shown = text;
-        while (digits.length > text.length) digits.shift().el.remove();
-        while (digits.length < text.length) {
-          const e = doc.createElement('span');
-          roll.insertBefore(e, roll.firstChild);
-          digits.unshift({ el: e, ch: null });
+        const resized = text.length !== shown.length;
+        const time = doc.defaultView.performance.now();
+        if (resized) {
+          for (const column of columns) column.motion?.cancel();
+          columns.length = 0;
+          const fragment = doc.createDocumentFragment();
+          for (let i = 0; i < text.length; i++) {
+            const el = doc.createElement('span');
+            fragment.appendChild(el);
+            columns.push({ el, changedAt: time, motion: null });
+          }
+          roll.replaceChildren(fragment);
         }
-        text.split('').forEach((ch, i) => {
-          const d = digits[i];
-          if (d.ch === ch) return;
-          const was = d.ch;
-          d.ch = ch;
-          // A digit changing faster than it can roll just changes: only the slow digits get the odometer.
-          const t = docOf(ctx).defaultView.performance.now();
-          d.el.style.transition = t - (d.t || 0) < 300 ? 'none' : '';
-          d.t = t;
-          if (ch === ',') { d.el.className = 'c'; d.el.textContent = ','; d.el.style.transform = ''; return; }
-          if (d.el.className !== 'd' || was === ',') { d.el.className = 'd'; d.el.innerHTML = STACK; }
-          d.el.style.transform = `translateY(${-1.1 * Number(ch)}em)`;
-        });
+        for (let i = 0; i < text.length; i++) {
+          const ch = text[i], previous = shown[i];
+          if (!resized && ch === previous) continue;
+          const column = columns[i];
+          column.motion?.cancel();
+          column.motion = null;
+          const isDigit = ch >= '0' && ch <= '9';
+          column.el.className = isDigit ? 'd' : 'c';
+          // One live glyph per place. Only a steady, adjacent lower digit rolls in.
+          column.el.textContent = ch;
+          if (i > 0 && !resized && isDigit && Math.abs(Number(ch) - Number(previous)) === 1 &&
+              time - column.changedAt >= 180 && !ctx.gentle && !ctx.reduced) {
+            const dy = ch > previous ? '.18em' : '-.18em';
+            column.motion = ctx.anim(column.el, [{ transform: `translateY(${dy})` }, { transform: 'translateY(0)' }],
+              { duration: 125, easing: 'ease-out' });
+          }
+          column.changedAt = time;
+        }
+        shown = text;
       };
       draw();
       ctx.every(70, draw);
@@ -283,42 +344,10 @@ body.gentle #fz-roll { display: none; }
     },
   },
 
-  /* Cursor Trail: a small pool of soft dots, so the trail costs the same however fast the hand moves. */
-  trail: {
-    mount(ctx) {
-      const win = docOf(ctx).defaultView;
-      const pool = Array.from({ length: 14 }, () => ctx.el('div', 'position:absolute;left:0;top:0;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:rgba(240,60,150,.45);opacity:0;pointer-events:none;will-change:transform,opacity;', null, 'over'));
-      let i = 0, last = 0;
-      const drop = (x, y) => {
-        if (ctx.gentle || ctx.paused) return;
-        const d = pool[i++ % pool.length];
-        ctx.anim(d, [{ transform: `translate(${x}px,${y}px) scale(1)`, opacity: 0.9 }, { transform: `translate(${x}px,${y}px) scale(.3)`, opacity: 0 }], { duration: 700, easing: 'linear' });
-      };
-      const onMove = (e) => { const t = win.performance.now(); if (t - last < 35) return; last = t; drop(e.clientX, e.clientY); };
-      win.addEventListener('pointermove', onMove);
-      if (fresh(ctx)) {
-        const c = btnCenter(ctx);
-        for (let k = 0; k < 14; k++) ctx.after(k * 45, () => { const a = k / 14 * Math.PI * 2; drop(c.x + Math.cos(a) * 90, c.y + Math.sin(a) * 40); });
-      }
-      return { off() { win.removeEventListener('pointermove', onMove); } };
-    },
-  },
-
-  /* Pocket Watch: swings on `rotate` from a pivot above it, so the pressed state and the swap still work. Slow enough to catch. */
-  watch: {
-    mount(ctx) {
-      wear(ctx, 'watch', `
-@keyframes fz-swing { from { rotate: -16deg; } to { rotate: 16deg; } }
-#btn[data-skin=watch] { width: 84px; height: 84px; border-radius: 50%; border: 4px solid #b8902a; color: #5a4310; font-weight: 700; font-size: 16px; box-shadow: 0 3px 8px rgba(70,40,0,.4); background: radial-gradient(circle at 35% 30%, #fff7d8, #f0cf70); transform-origin: 50% -30px; animation: fz-swing 1.5s ease-in-out infinite alternate; }
-#btn[data-skin=watch].down { border-style: solid; }
-#btn[data-skin=watch]::before { content: ""; position: absolute; left: 50%; bottom: 100%; width: 3px; height: 34px; margin-left: -1.5px; pointer-events: none; background: repeating-linear-gradient(#8a6d1f 0 4px, #d9b94f 4px 8px); }
-body.gentle #btn[data-skin=watch] { animation: none; }
-`);
-      gentleEndsLoops(ctx);
-      ctx.every(1500, () => { if (ctx.button.el.dataset.skin === 'watch' && !ctx.gentle) sfx(ctx, 'sfx/tally_tick.mp3', 0.12); });
-      return {};
-    },
-  },
+  /* Fine dust and small sparkles share one bounded canvas pool. */
+  trail: { mount: mountCursorTrail },
+  starburst: { mount: mountCursorTrail },
+  word_comet: { mount: mountCursorTrail },
 
   /* Page Colour: four pots. Buying it moves off pink at once, so the pots explain themselves. */
   paint: {

@@ -1,15 +1,71 @@
 {
-  "title": "Racing Thoughts - Threshold",
+  "title": "Racing Thoughts",
   "kind": "recorded-gameplay",
-  "captureDate": "2026-10-28",
-  "source": "glassroad-threshold-3min-share.mp4",
-  "sourceCapture": { "track": "threshold", "seed": 7, "camera": "chase", "renderer": "webgpu", "pilot": true },
-  "sourceStartSeconds": 25,
-  "durationSeconds": 28,
-  "width": 480,
-  "height": 270,
-  "fps": 24,
+  "camera": "chase",
+  "renderer": "webgpu",
+  "pilot": true,
+  "pictures": "Scrolller swimsuit stills on the track screens",
+  "width": 384,
+  "height": 216,
+  "fps": 20,
+  "durationPerTrackSeconds": 14,
   "audio": false,
-  "file": "threshold-loop.mp4",
-  "poster": "threshold-poster.jpg"
+  "tracks": [
+    {
+      "track": "threshold",
+      "name": "Threshold",
+      "file": "threshold-loop.mp4",
+      "poster": "threshold-poster.jpg",
+      "captureDate": "2026-10-28",
+      "source": "glassroad-threshold-3min-share.mp4",
+      "sourceStartSeconds": 20,
+      "seed": 7
+    },
+    {
+      "track": "mainframe",
+      "name": "Mainframe",
+      "file": "mainframe-loop.mp4",
+      "poster": "mainframe-poster.jpg",
+      "captureDate": "2026-10-28",
+      "source": "glassroad-mainframe-3min-share.mp4",
+      "sourceStartSeconds": 20,
+      "seed": 7
+    },
+    {
+      "track": "keep",
+      "name": "The Keep",
+      "file": "keep-loop.mp4",
+      "poster": "keep-poster.jpg",
+      "captureDate": "2026-11-07",
+      "source": "headless real-time race",
+      "sourceStartSeconds": 14.01,
+      "seed": 23,
+      "startMeters": 389.2,
+      "endMeters": 861.8
+    },
+    {
+      "track": "boudoir",
+      "name": "Boudoir",
+      "file": "boudoir-loop.mp4",
+      "poster": "boudoir-poster.jpg",
+      "captureDate": "2026-11-07",
+      "source": "headless real-time race",
+      "sourceStartSeconds": 13.01,
+      "seed": 23,
+      "startMeters": 389.7,
+      "endMeters": 884.6
+    },
+    {
+      "track": "goonworks",
+      "name": "GOONWORKS",
+      "file": "goonworks-loop.mp4",
+      "poster": "goonworks-poster.jpg",
+      "captureDate": "2026-11-07",
+      "source": "headless real-time race",
+      "sourceStartSeconds": 11.01,
+      "seed": 23,
+      "startMeters": 333.7,
+      "endMeters": 863.1
+    }
+  ]
 }

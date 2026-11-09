@@ -43,6 +43,24 @@ test('stacking rows get dearer and stop at their max', () => {
   assert.equal(E.rates(s).wall, 2, 'a stack pays through bounces, not through its row number');
 });
 
+test('bounces and manual Round Corners taps add a share of base passive income', () => {
+  const s = E.createRun({ pace: 2 });
+  E.grant(s, 'ticker');
+  const passive = s.base.fps;
+  assert.ok(passive > 0);
+  const mods = [{ fps: v => v * 2 }];
+  const before = E.rates(s, mods);
+  assert.equal(E.tap(s, mods), before.click * 2);
+  E.grant(s, 'rounded');
+  const rate = E.rates(s, mods);
+  assert.equal(E.tap(s, mods), (rate.click + passive * 0.005) * 2);
+  assert.equal(E.tap(s, mods, s.clock, true), rate.click * 2);
+  assert.equal(E.wallHit(s, mods), (rate.wall + passive * 0.01) * 2);
+  assert.equal(E.wallHit(s, mods, s.clock, 'e_bounce'), rate.wall * 2);
+  assert.equal(E.tap(s, [{ click: () => 0 }]), 0);
+  assert.equal(E.wallHit(s, [{ wall: () => 0 }]), 0);
+});
+
 test('a fork costs nothing, needs its price reached, and locks the other lanes', () => {
   const s = rich(E.createRun(), 200);
   E.buy(s, 'stray'); E.buy(s, 'fpsv');

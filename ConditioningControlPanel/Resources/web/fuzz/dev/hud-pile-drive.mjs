@@ -14,34 +14,11 @@ const browser = await firefox.launch({ headless: true, executablePath: process.e
 async function expose(page, id, phone) {
   const root = page.locator(id === 'quiz' ? '.dk[data-fz-owner="quiz"] .dk-b' : `[data-arcade="${id}"]`);
   const chip = page.locator(`.dk-chip[data-fz-owner="${id}"]`);
-  const needsFocus = await page.evaluate(id => {
-    const el = document.querySelector(`.dk[data-fz-owner="${id}"]`);
-    return el.classList.contains('min') || +el.style.zIndex < Math.max(...[...document.querySelectorAll('.dk')].map(w => +w.style.zIndex));
-  }, id);
-  if (needsFocus) { await chip.scrollIntoViewIfNeeded(); if (phone) await chip.tap(); else await chip.click(); }
   const dock = page.locator(`.dk[data-fz-owner="${id}"]`);
-  let point;
-  for (let attempt = 0; attempt < 40; attempt++) {
-    point = await page.evaluate((id) => {
-      const target = document.querySelector(`.dk[data-fz-owner="${id}"]`), head = target.querySelector('.dk-t'), r = head.getBoundingClientRect();
-      for (let y = r.top + 8; y < r.bottom - 3; y += 8) for (let x = r.left + 10; x < r.right - 38; x += 16) {
-        const hit = document.elementFromPoint(x, y);
-        if (head.contains(hit) && !hit.closest('button')) return { x, y, target: true };
-      }
-      for (const other of [...document.querySelectorAll('.dk:not(.min)')].reverse()) {
-        if (other === target) continue;
-        const b = other.querySelector('.dk-f'), s = b.getBoundingClientRect(), x = s.x + s.width / 2, y = s.y + s.height / 2;
-        if (document.elementFromPoint(x, y) === b) return { x, y, target: false };
-      }
-      return null;
-    }, id);
-    assert.ok(point, `${id}: no reachable title or covering-window control`);
-    if (point.target) break;
-    if (phone) await page.touchscreen.tap(point.x, point.y); else await page.mouse.click(point.x, point.y);
-  }
-  assert.ok(point?.target, `${id}: could not expose title`);
-  await page.mouse.move(point.x, point.y); await page.mouse.down(); await page.mouse.up();
-  if (await dock.evaluate((el) => el.classList.contains('min'))) await dock.locator('.dk-f').click();
+  await chip.scrollIntoViewIfNeeded();
+  const press = () => phone ? chip.tap() : chip.click();
+  if (!await dock.evaluate(el => el.classList.contains('min'))) await press();
+  await press();
   await root.waitFor({ state: 'visible' });
   return root;
 }
@@ -75,9 +52,11 @@ async function pressMovingControl(page, control) {
   await control.scrollIntoViewIfNeeded();
   const point = await control.evaluate(el => {
     const r = el.getBoundingClientRect(), x = r.x + r.width / 2, y = r.y + r.height / 2;
-    return { x, y, reachable: el.contains(document.elementFromPoint(x, y)) };
+    const hit = document.elementFromPoint(x, y);
+    return { x, y, reachable: el.contains(hit), control: el.outerHTML.slice(0, 180), hit: hit?.outerHTML.slice(0, 180) };
   });
-  assert.ok(point.reachable, 'moving control must remain hit-testable');
+  if (!point.reachable) await page.screenshot({ path: `${out}/unreachable-control.png` });
+  assert.ok(point.reachable, `moving control must remain hit-testable: ${JSON.stringify(point)}`);
   await page.mouse.click(point.x, point.y);
 }
 async function crowdedHud(page) {
@@ -100,22 +79,9 @@ async function crowdedHud(page) {
   await clearCards(page, cardErrors, 'crowded HUD'); assert.deepEqual(cardErrors, []);
   await page.evaluate(() => window.fuzz.engine.scopes.get('quiz')?.ret.close());
   await page.waitForTimeout(400);
-  await page.evaluate(() => {
-    // Reproduce two permitted player placements. Keep the real screens and their
-    // dimensions; automatic rescue must not move this layout fixture mid-check.
-    const screens = [...document.querySelectorAll('.scr')].filter(el => el.getBoundingClientRect().width > 0).slice(0, 2);
-    const css = document.createElement('style');
-    css.textContent = screens.map((el, i) => {
-      el.dataset.hudCorner = String(i);
-      const r = el.getBoundingClientRect(), x = i ? innerWidth - r.width - 8 : 8, y = innerHeight - r.height - 8;
-      return `[data-hud-corner="${i}"]{transform:translate3d(${x}px,${y}px,0)!important}`;
-    }).join('\n');
-    document.head.appendChild(css);
-    document.dispatchEvent(new Event('fz-screens'));
-  });
   await page.waitForTimeout(120);
   const fixture = await page.evaluate(() => {
-    const screens = [...document.querySelectorAll('.scr')].map(el => el.getBoundingClientRect()).filter(r => r.width > 0 && r.height > 0);
+    const screens = [...document.querySelectorAll('.scr')];
     const windows = [...document.querySelectorAll('.dk:not(.min)')].map(el => el.getBoundingClientRect());
     let overlaps = 0;
     for (let i = 0; i < windows.length; i++) for (let j = i + 1; j < windows.length; j++) {
@@ -125,21 +91,20 @@ async function crowdedHud(page) {
     return { docks: document.querySelectorAll('.dk').length, screens: screens.length, overlaps, autoFolded: document.querySelectorAll('.dk.auto').length };
   });
   assert.ok(fixture.docks >= 12 && fixture.screens >= 2, `route is not crowded: ${JSON.stringify(fixture)}`);
-  assert.ok(fixture.overlaps > 0, `fixture has no overlapping windows: ${JSON.stringify(fixture)}`);
   assert.equal(fixture.autoFolded, 0);
   const played = [];
   for (const id of ['mini_slots', 'mini_race', 'dispenser', 'toy_box']) {
     await page.evaluate(() => window.fuzz.engine.scopes.get('quiz')?.ret.close());
-    const dock = page.locator(`.dk[data-fz-owner="${id}"]`), head = dock.locator('.dk-t');
+    const dock = page.locator(`.dk[data-fz-owner="${id}"]`), tab = page.locator(`.dk-chip[data-fz-owner="${id}"]`);
     const body = dock.locator('.dk-b'), root = await expose(page, id, false);
     const otherMin = await page.evaluate(id => [...document.querySelectorAll('.dk')].filter(el => el.dataset.fzOwner !== id).map(el => [el.dataset.fzOwner, el.classList.contains('min')]), id);
-    const from = await head.boundingBox(), beforePosition = await dock.boundingBox();
-    const grab = { x: from.x + 20, y: from.y + from.height / 2 };
-    await page.mouse.move(grab.x, grab.y); await page.mouse.down();
-    await page.mouse.move(grab.x + 70 - beforePosition.x, grab.y + 80 - beforePosition.y, { steps: 10 }); await page.mouse.up();
+    const beforePosition = await dock.boundingBox();
+    const direction = beforePosition.x > 500 ? 'Left' : 'Right';
+    await tab.press(`Control+Shift+Arrow${direction}`);
+    await tab.press(`Control+Shift+Arrow${direction}`);
     const moved = await dock.boundingBox();
     const position = await dock.evaluate(el => ({ x: el.style.left, y: el.style.top }));
-    assert.ok(Math.hypot(moved.x - beforePosition.x, moved.y - beforePosition.y) > 12, `${id}: title drag did not move the window`);
+    assert.ok(Math.hypot(moved.x - beforePosition.x, moved.y - beforePosition.y) > 12, `${id}: tab keyboard move did not move the object`);
     // Picture changes must preserve player positions and must never auto-fold another window.
     await page.evaluate(() => document.dispatchEvent(new Event('fz-screens')));
     await page.waitForTimeout(250);
@@ -167,9 +132,9 @@ async function crowdedHud(page) {
       assert.equal((await page.evaluate(() => window.fuzz.state.store.toy_box.box.pieces)).length, 4);
     }
     assert.equal(await body.isVisible(), true, `${id}: interaction hid the window`);
-    // The explicit minimize button is the only fold gesture; restoring keeps the position.
-    await pressMovingControl(page, dock.locator('.dk-f')); assert.equal(await body.isVisible(), false);
-    await pressMovingControl(page, dock.locator('.dk-f')); assert.equal(await body.isVisible(), true);
+    // Only the feature tab hides/restores the object; restoring keeps the position.
+    await tab.scrollIntoViewIfNeeded(); await tab.click(); assert.equal(await body.isVisible(), false);
+    await tab.click(); assert.equal(await body.isVisible(), true);
     assert.deepEqual(await dock.evaluate(el => ({ x: el.style.left, y: el.style.top })), position, `${id}: restore moved the window`);
     played.push({ id, clicked: true, moved: { x: moved.x, y: moved.y }, preservedOthers: otherMin.length });
     await page.screenshot({ path: `${out}/desktop-crowded-${id}.png` });

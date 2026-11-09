@@ -2,15 +2,17 @@
  * line above the dock strip, and a raw element maker for things that come and go often (ctx.el keeps a reference to
  * everything it makes until the unlock dies). Nothing here runs at import time. */
 
+import { setRich } from '../../rich-text.js';
+
 let dock = null;
 
-export const FONT = '"Barlow", "Segoe UI", system-ui, sans-serif';
+export const FONT = 'var(--game-bubble-font, "Barlow", "Segoe UI", system-ui, sans-serif)';
 
 /** A plain element that ctx does not track. Its parent must be something ctx made, or it must be removed by hand. */
 export function h(tag, css, text, parent) {
   const e = document.createElement(tag);
   if (css) e.style.cssText = css;
-  if (text != null) e.textContent = text;
+  if (text != null) setRich(e, text);
   if (parent) parent.appendChild(e);
   return e;
 }
@@ -54,7 +56,11 @@ export const roomy = () => true;
 /** A place for a small widget: ctx.dock, centred in its slot. */
 export function slot(ctx, css = '') {
   const base = 'pointer-events:auto;flex:none;box-sizing:border-box;margin:0 auto;';
-  return { el: ctx.el('div', base + css, null, ctx.dock()), wide: true };
+  const fixed = /(?:^|;)\s*width:\s*(\d+(?:\.\d+)?)px/.exec(css);
+  const host = ctx.dock({ width: fixed ? Number(fixed[1]) : undefined });
+  const el = ctx.el('div', base + css, null, host);
+  el.dataset.dockSurface = '';
+  return { el, wide: true };
 }
 
 /** One caption row per unlock. Silent audio shows here, so Sleep Story and friends still make sense. */
@@ -69,7 +75,7 @@ export function captions(ctx, icon = '') {
       /* One line at a time on a narrow page: three stacked lines would sit on the shop. */
       if (ctx.bounds().w < 1100) for (const other of row.parentElement.children) if (other !== row) other.style.display = 'none';
       row.style.display = 'block';
-      row.textContent = ctx.brand.text(icon ? `${icon} ${text}` : text);
+      setRich(row, icon ? `${icon} ${text}` : text);
       ctx.anim(row, [{ opacity: 0 }, { opacity: 1 }], { duration: 350, easing: 'ease-out' });
       hide = ctx.after(ms, () => {
         ctx.anim(row, [{ opacity: 1 }, { opacity: 0 }], { duration: 350 }).onfinish = () => { row.style.display = 'none'; };

@@ -2,6 +2,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as B from '../bridge.js';
 
+test('buffered setting notifications apply in arrival order, including a final revocation', () => {
+  B._dispatch({type:'setting', key:'media.remoteConsent', value:true});
+  B._dispatch({type:'setting', key:'media.remoteConsent', value:false});
+  const values = [];
+  const off = B.on('setting', frame => values.push(frame.value));
+  assert.deepEqual(values,[true,false]);
+  off();
+});
+
 test('unhosted: boot resolves at once with the default caps and sends are no-ops', () => {
   assert.equal(B.isHosted, false);
   let init = null;

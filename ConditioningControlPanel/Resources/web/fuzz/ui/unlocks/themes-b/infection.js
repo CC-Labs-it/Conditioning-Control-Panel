@@ -2,12 +2,15 @@
  * pays, and scratching one pays now and makes two more. Spots never sit on the button. */
 
 import { THEMES } from '../../../data/content/themes.js';
+import { setRich } from '../../rich-text.js';
 import { FAKE_ANTIVIRUS } from '../../../data/content/fakes.js';
 import { ENDINGS } from '../../../data/content/endings.js';
 import { createSpiral } from '../../../fx/spiral.js';
 import { mountPodcast } from '../podcast-player.js';
 import { COPY } from './copy.js';
+import { themeScreens } from '../themes-a/theme-screens.js';
 import { buttonCentre, docOf, endingStage, endingWords, fresh, gallery, gutter, moment, motion, pick, rowsOf, sfx, slot, wide } from './kit.js';
+import { flatlineSpread } from '../../../sim/prestige-endings.js';  // prestige hook (Renewal Sky): Flatline ending, Infection spreads faster
 
 const R = THEMES.infection.rules;
 const PINK = '#ff2f92';
@@ -74,7 +77,9 @@ export default {
     mount(ctx) {
       const f = spotField(ctx);
       f.spawn();
-      ctx.every(14000, () => { if (f.spots.size < 3) f.spawn(); });
+      /* The first pictures: three screens (owner 2026-11-08). The tinted, warping wall waits for Infected Pictures. */
+      themeScreens(ctx, { niches: ['infection'], frame: `border:2px solid ${PINK};border-radius:12px;` });
+      ctx.every(14000 * flatlineSpread(ctx.prestige), () => { if (f.spots.size < 3) f.spawn(); });  // prestige hook: Flatline (in_end)
       return {};
     },
   },
@@ -84,7 +89,8 @@ export default {
     mount(ctx) {
       if (ctx.store.get('start') === undefined) ctx.store.set('start', ctx.state.clock);
       let scratched = ctx.store.get('sc') || 0;
-      const cover = () => Math.min(1, (ctx.state.clock - ctx.store.get('start')) / 720000 + scratched * 0.004);
+      const fullMs = 720000 * flatlineSpread(ctx.prestige);  // prestige hook: Flatline (in_end), coverage fills sooner
+      const cover = () => Math.min(1, (ctx.state.clock - ctx.store.get('start')) / fullMs + scratched * 0.004);
       const base = ctx.item.fps;
       ctx.mod({ fps: (v) => v + base * 6 * cover() });
       const b = ctx.bounds(), size = Math.hypot(b.w, b.h) * 1.15;
@@ -94,12 +100,12 @@ export default {
         const c = cover();
         blob.style.transform = `scale(${(0.02 + c * 0.98).toFixed(3)})`;
         const stage = R.stages[Math.min(R.stages.length - 1, Math.floor(c * R.stages.length))];
-        line.textContent = COPY.infection.coverage(Math.round(c * 100), stage, ctx.fmt(base * 6 * c));
+        setRich(line, COPY.infection.coverage(Math.round(c * 100), stage, ctx.fmt(base * 6 * c)));
       };
       draw();
       ctx.every(1000, draw);
       ctx.on('in:scratch', () => { scratched += 1; ctx.store.set('sc', scratched); });
-      ctx.every(16000, () => ctx.emit('in:spawn', { n: 1 }));
+      ctx.every(16000 * flatlineSpread(ctx.prestige), () => ctx.emit('in:spawn', { n: 1 }));  // prestige hook: Flatline (in_end)
       return {};
     },
   },
@@ -109,7 +115,7 @@ export default {
     mount(ctx) {
       ctx.css('.tb-dot{position:absolute !important;width:13px;height:13px;border-radius:50%;background:' + SPOT_BG + ';pointer-events:none;}');
       const doc = docOf(ctx);
-      ctx.every(3200, () => {
+      ctx.every(3200 * flatlineSpread(ctx.prestige), () => {  // prestige hook: Flatline (in_end)
         const rows = rowsOf(ctx);
         if (rows.length < 2) return;
         const a = pick(ctx, rows), b = pick(ctx, rows);

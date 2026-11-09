@@ -5,6 +5,7 @@
 
 import { BY_ID, FORKS } from '../data/items.js';
 import { brandText } from '../data/brand.js';
+import { setRich } from './rich-text.js';
 import { CONFIG } from '../data/config.js';
 import { whole, fmt } from '../sim/format.js';
 import { iconFor } from './icons.js';
@@ -12,6 +13,9 @@ import { createTip } from './shop-tip.js';
 import { hueClass } from './palette.js';
 import { goalState } from './purchase-feel.js';
 import { ridersFor } from '../sim/economy.js';
+import { SHOP_READY_CSS, hop, nextNudge, readyStep, NUDGE_GAP_MS } from './shop-ready.js';
+import { offerBadge, paintBadges, repeatBadgeCss } from './repeat-badge.js';
+import { devicePlatform, offeredWindow } from './platform.js';
 
 const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
 
@@ -22,16 +26,55 @@ const payText = (list) => { const f = sum(list, 'fps'), c = sum(list, 'click'), 
 /* These two open a card that already explains them, so a finger goes straight there. */
 const opensCard = (it) => it.kind === 'fork' || it.kind === 'end';
 
-const TILE_GAP = 6;   // TILE_MIN and the goal's width follow styles.css
+const cursorSamples = {
+  trail: 'trails/trail-1.webp',
+  starburst: 'trails/starburst-1.webp',
+  word_comet: 'trails/word_comet-1.webp',
+  cursor: 'cursors/cursor.png',
+  hijack: 'cursors/hijack.png',
+};
+
+function tileArt(doc, item) {
+  const sample = cursorSamples[item.id];
+  if (!sample) {
+    // The wrap holds a repeat sticker (ui/repeat-badge.js) at the icon's bottom right; the icon itself is unchanged.
+    const wrap = doc.createElement('span');
+    wrap.className = 'rep-ico';
+    wrap.appendChild(iconFor(doc, item));
+    return wrap;
+  }
+  const img = doc.createElement('img');
+  img.className = 'ico shop-sample';
+  img.alt = '';
+  img.draggable = false;
+  img.src = 'assets/shop/' + sample;
+  return img;
+}
+
+const TILE_GAP = 12;   // TILE_MIN and the goal's width follow styles.css
+
+/** The live shop, for the Guide map's Buy button (ui/guide-map.js): what the shop offers right now, and the same press a
+ *  tile makes (terms card, guards, price check, purchase feel all live behind it in ui/app.js press()). Null before a shop. */
+export let shopDoor = null;
 
 export function createShop({ doc, engine, onPress, onReady = () => {} }) {
   const box = doc.getElementById('shop'), goalEl = doc.getElementById('goal'), rowsEl = doc.getElementById('rows'), moreEl = doc.getElementById('more');
   const rows = new Map();
-  let goalRow = null, size = 6;
+  let goalRow = null, size = 6, lastHop = -Infinity;
+  if (!doc.getElementById('shop-ready-css')) {
+    const st = doc.createElement('style'); st.id = 'shop-ready-css'; st.textContent = SHOP_READY_CSS; doc.head.appendChild(st);
+  }
+  repeatBadgeCss(doc);
+  const now = () => doc.defaultView.performance.now();
+  /* Rows this device cannot use (ui/platform.js) never get a tile; the next rows move up. */
+  const platform = devicePlatform(doc.defaultView, () => engine.env?.caps || {});
+  const offered = (n) => offeredWindow((k) => engine.shop(k), n, platform.canOffer);
+  /* Hops wait for a still page: not under Gentle or reduced motion (body.gentle covers both), a pause, or a hidden tab. */
+  const moving = () => !doc.body.classList.contains('gentle') && !engine.paused && !engine.stopped && !engine.suspended && doc.visibilityState !== 'hidden';
 
   const tip = createTip({
     doc,
-    buyLabel: (r) => (engine.run.fuzz < engine.price(r.item.id) ? `${whole(engine.price(r.item.id) - engine.run.fuzz)} short` : 'Buy'),
+    buyLabel: (r) => (engine.funds(r.item.id) < engine.price(r.item.id) ? `${whole(engine.price(r.item.id) - engine.funds(r.item.id))} short` : 'Buy'),
     onBuy: (r) => { onPress(r.item.id, r.el); tip.hide(); },
   });
 
@@ -47,8 +90,10 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     const name = doc.createElement('b');
     name.textContent = brandText(item.name);
     const what = doc.createElement('small');
-    what.textContent = brandText(item.kind === 'fork' ? FORKS[item.id].ask : item.what);
-    body.append(name, what);
+    setRich(what, item.kind === 'fork' ? FORKS[item.id].ask : item.what);
+    const rep = doc.createElement('em');
+    rep.className = 'rep';
+    body.append(name, rep, what);
     const riders = ridersFor(engine.run, item.id).map((id) => BY_ID[id]);
     if (riders.length) {
       const also = doc.createElement('em');
@@ -61,16 +106,17 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     cost.className = 'cost';
     const costNum = doc.createElement('span');
     const pay = doc.createElement('i');
-    pay.textContent = payText([item, ...riders]);
+    pay.textContent = item.options ? 'Specialty' : item.rank ? 'Rank ' + (item.rank+1) : payText([item, ...riders]);
     cost.append(costNum, pay);
     const bar = doc.createElement('span');
     bar.className = 'bar';
     bar.setAttribute('aria-hidden', 'true');
     el.appendChild(bar);
     if (tag) el.appendChild(tag);
-    el.append(iconFor(doc, item), body, cost);
+    const art = tileArt(doc, item);
+    el.append(art, body, cost);
     el.setAttribute('aria-label', name.textContent);
-    const r = { el, costNum, tag, bar: el.querySelector('.bar'), item };
+    const r = { el, costNum, tag, bar: el.querySelector('.bar'), item, art: art.classList.contains('rep-ico') ? art : null, rep };
     let pointer = '';
     el.addEventListener('pointerdown', (e) => { pointer = e.pointerType; });
     el.addEventListener('pointerenter', (e) => { if (e.pointerType !== 'touch') tip.show(r, false); });
@@ -91,16 +137,27 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
   function paint(r, isGoal) {
     const run = engine.run, it = r.item;
     const p = engine.price(it.id);
-    const short = run.fuzz < p;
+    const funds = engine.funds(it.id);
+    const short = funds < p;
     r.el.classList.toggle('short', short);
+    const badge = offerBadge(it, run);
+    paintBadges(r.art, badge);
+    setText(r.rep, badge ? badge.label : '');
     const fork = it.kind === 'fork';
     setText(r.costNum, fork ? (short ? `at ${whole(p)}` : 'Choose') : whole(p));
-    const fill = `scaleY(${Math.max(0, Math.min(1, run.fuzz / Math.max(1, p))).toFixed(3)})`;
+    const fill = `scaleY(${Math.max(0, Math.min(1, funds / Math.max(1, p))).toFixed(3)})`;
     if (r.fill !== fill) { r.fill = fill; r.bar.style.transform = fill; }
+    const step = readyStep(r.buyable, !short);
+    r.buyable = !short;
+    r.el.classList.toggle('buyable', !short);
+    if (step === 'jump') {
+      r.nextHop = nextNudge(now());
+      if (moving()) { hop(r.el, 'jump'); lastHop = now(); }
+    } else if (step === 'arm') r.nextHop = nextNudge(now());
     if (isGoal) {
       setText(r.tag, fork ? 'Your choice' : it.kind === 'end' ? 'The end' : short ? 'Next' : 'Ready');
       r.el.classList.toggle('ready', !short);
-      r.el.classList.toggle('near', short && run.fuzz / Math.max(1, p) >= .75);
+      r.el.classList.toggle('near', short && funds / Math.max(1, p) >= .75);
       const state = goalState(r.affordable, !short, r.announced);
       r.affordable = state.affordable;
       r.announced = state.announced;
@@ -113,7 +170,7 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     if (run.ended) { tip.hide(); box.hidden = true; return; }
     if (!run.taps && !run.total && run.buys === 0) { box.hidden = true; return; }
     box.hidden = false;
-    const win = engine.shop(size);
+    const win = offered(size);
 
     if (goalRow?.item !== win.goal) { goalRow?.el.remove(); goalRow = null; }
     if (win.goal && !goalRow) { goalRow = makeRow(win.goal, true); goalEl.appendChild(goalRow.el); }
@@ -127,9 +184,26 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
       if (rowsEl.children[i] !== r.el) rowsEl.insertBefore(r.el, rowsEl.children[i] || null);
       paint(r, false);
     });
+    nudge();
     if (moreEl.hidden !== !win.more) moreEl.hidden = !win.more;
     if (win.more) setText(moreEl, `${win.more} more waiting behind these`);
     tip.refresh();
+  }
+
+  /** Buyable tiles that stay unbought hop again every 6 to 8 seconds, at most one tile per NUDGE_GAP_MS. */
+  function nudge() {
+    const colour = (engine.run.owned.colour && engine.switches.isOn('colour')) || engine.run.picks?.f5;
+    box.classList.toggle('shop-grey', !colour);
+    if (!moving()) return;
+    const t = now();
+    if (t - lastHop < NUDGE_GAP_MS) return;
+    for (const r of [goalRow, ...rows.values()]) {
+      if (!r?.buyable || !(t >= r.nextHop) || r.el.matches(':active')) continue;
+      hop(r.el, 'nudge');
+      lastHop = t;
+      r.nextHop = nextNudge(t);
+      return;
+    }
   }
 
   /** How many tiles fit, from the window alone: the shop may still be hidden. Called on resize. */
@@ -138,12 +212,12 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     const room = Math.min(760, w - 32) - (wide ? 118 : 96) - TILE_GAP;
     const cols = Math.max(1, Math.floor((room + TILE_GAP) / ((wide ? 84 : 68) + TILE_GAP)));
     const tile = (room - (cols - 1) * TILE_GAP) / cols;
-    const avail = box.parentElement.clientHeight - box.offsetTop - 28;
+    const avail = box.parentElement.clientHeight - box.offsetTop - 44;   // the shop starts 16px higher with 16px more top padding, room for a hop (ui/shop-ready.js)
     size = Math.max(CONFIG.SHOP_MIN, Math.min(6, Math.floor(avail / (tile + TILE_GAP)) * cols));
   }
 
   function denied(id) {
-    const r = rows.get(id) || (goalRow?.item === BY_ID[id] ? goalRow : null);
+    const r = rows.get(id) || (goalRow?.item.id === id ? goalRow : null);
     if (!r) return;
     r.el.classList.remove('no');
     void r.el.offsetWidth;
@@ -151,6 +225,16 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
   }
 
   function flush() { tip.hide(); goalRow?.el.remove(); goalRow = null; for (const r of rows.values()) r.el.remove(); rows.clear(); }
+
+  shopDoor = {
+    /** True when the shop would sell this row right now: open, on a tile or waiting behind them, and usable here. */
+    offers(id) { if (engine.run.ended) return false; const w = offered(999); return w.goal?.id === id || w.rows.some((it) => it.id === id); },
+    price: (id) => engine.price(id),
+    funds: (id) => engine.funds(id),
+    platform,
+    /** The press a tile makes. `el` is where the purchase flies from. */
+    press(id, el) { tip.hide(); onPress(id, el); },
+  };
 
   return { draw, fit, denied, flush, closeTip: tip.hide, get size() { return size; } };
 }

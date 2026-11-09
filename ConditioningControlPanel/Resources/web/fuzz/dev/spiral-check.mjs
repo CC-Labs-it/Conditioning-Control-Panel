@@ -122,13 +122,13 @@ for (const [w, h] of [[1280, 800], [390, 800]]) {
   await ctx.close();
 
   /* what the pile costs with neither unlock: the number to beat */
-  ({ ctx, page } = await open(w, h, 'e_spiral,overlay,spirbtn'));
+  ({ ctx, page } = await open(w, h, 'e_spiral,overlay'));
   report.push({ at: `${w} overlay + button, no unlocks`, ...(await measure(page, 6)) });
   await page.screenshot({ path: join(out, `${tag}-${w}-5-pile-still.png`) });
   await ctx.close();
 
   /* the whole pile of spirals together: page, overlay, button */
-  ({ ctx, page } = await open(w, h, 'e_spiral,sp_colors,sp_shapes,overlay,spirbtn'));
+  ({ ctx, page } = await open(w, h, 'e_spiral,sp_colors,sp_shapes,overlay'));
   report.push({ at: `${w} sp_shapes + overlay + button`, ...(await measure(page, 10)) });
   await page.screenshot({ path: join(out, `${tag}-${w}-5-pile.png`) });
   for (let i = 0; i < 6; i++) {

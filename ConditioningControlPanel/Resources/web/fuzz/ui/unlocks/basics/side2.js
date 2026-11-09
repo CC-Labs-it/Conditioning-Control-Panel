@@ -4,6 +4,8 @@
 import { APP_ONLY, DRIFT_LINES, FALLING_WORDS, LISTENING_TEST, OPINIONS, REMOTE } from '../../../data/content/index.js';
 import { LISTEN_NAME, REMOTE_SOLO } from './copy.js';
 import { burst, btnCenter, chip, docOf, fresh, play, pop, setPalette, sfx, spawn, squish } from './fx.js';
+import { markPopPicture } from '../../pop-picture.js';
+import { LITE } from '../../perf.js';
 
 const pick = (ctx, list) => list[Math.floor(ctx.rng() * list.length)];
 const worth = (ctx, seconds) => { const r = ctx.rates(); return Math.max(r.fps, r.click * 2, 2) * seconds; };
@@ -12,9 +14,16 @@ export default {
   /* Flash Picture: a soft fade, never a flash. It ignores the pointer, so play carries on underneath. */
   flash: {
     mount(ctx) {
+      let active = null;
+      const clear = () => { active?.remove(); active = null; };
+      ctx.on('pictures', clear);
+      ctx.cleanup(clear);
       const show = async () => {
-        const pic = await ctx.pictures.next({ niche: 'picture' });
-        const f = spawn(ctx, `inset:0;display:grid;place-items:center;background:rgba(0,0,0,.35);`);
+        const revision = ctx.pictures.rewardRevision;
+        const pic = await ctx.pictures.next({ niche: 'picture', still: true, allowScrolller: true });
+        if (revision !== ctx.pictures.rewardRevision || ctx.paused) return;
+        const f = markPopPicture(spawn(ctx, `inset:0;display:grid;place-items:center;background:rgba(0,0,0,.35);`));
+        active = f;
         if (pic) {
           const img = docOf(ctx).createElement('img');
           img.src = pic.url;
@@ -26,7 +35,9 @@ export default {
           const box = spawn(ctx, 'position:static;width:min(60vw,320px);height:min(60vh,420px);display:grid;place-items:center;padding:12px;text-align:center;border:2px dashed #fff;color:#fff;font-style:italic;', pick(ctx, DRIFT_LINES), f);
           box.style.position = 'relative';
         }
-        play(ctx, f, [{ opacity: 0 }, { opacity: 0.92, offset: 0.3 }, { opacity: 0.92, offset: 0.55 }, { opacity: 0 }], { duration: 2000, easing: 'ease-in-out' });
+        /* The picture itself sits at 80% (styles.css [data-pop-picture] img), so its plateau is 0.8 and the fade still starts at 0. */
+        const peak = pic ? 1 : 0.92;
+        play(ctx, f, [{ opacity: 0 }, { opacity: peak, offset: 0.3 }, { opacity: peak, offset: 0.55 }, { opacity: 0 }], { duration: 2000, easing: 'ease-in-out' });
       };
       if (fresh(ctx)) ctx.after(400, show);
       ctx.every(28000, show);
@@ -38,7 +49,9 @@ export default {
   drain: {
     mount(ctx) {
       const blur = () => {
-        const v = spawn(ctx, 'inset:0;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);');
+        // A full-screen backdrop blur costs by radius times device pixels: phones blur half as far (ui/perf.js).
+        const px = LITE ? 3 : 6;
+        const v = spawn(ctx, `inset:0;-webkit-backdrop-filter:blur(${px}px);backdrop-filter:blur(${px}px);`);
         play(ctx, v, [{ opacity: 0 }, { opacity: 1, offset: 0.45 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }], { duration: 6000, easing: 'ease-in-out' });
         ctx.say(pick(ctx, DRIFT_LINES));
       };

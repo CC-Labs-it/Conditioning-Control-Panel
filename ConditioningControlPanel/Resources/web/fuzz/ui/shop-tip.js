@@ -3,8 +3,9 @@
  * world and the shop, under the cards and Wake Up. A mouse only looks through it; on a touch screen it holds the Buy button. */
 
 import { _loadDemos } from './fork.js';
+import { makeFace, SKIN_ITEMS } from './button-faces.js';
 
-const NOT_COPIED = new Set(['in', 'out', 'no', 'ready', 'peek', 'short']);
+const NOT_COPIED = new Set(['in', 'out', 'no', 'ready', 'peek', 'short', 'buyable']);
 const MARGIN = 8;
 
 const gone = (node) => {
@@ -26,7 +27,7 @@ export function createTip({ doc, buyLabel, onBuy }) {
   el.append(demo, words, buy);
   doc.body.appendChild(el);
 
-  let cur = null, touch = false, stop = null, token = 0, stamp = '';
+  let cur = null, touch = false, stop = null, token = 0, stamp = '', goneAt = -1e9, goneKey = '';
 
   function place() {
     const b = cur.el.getBoundingClientRect(), win = doc.defaultView;
@@ -41,13 +42,17 @@ export function createTip({ doc, buyLabel, onBuy }) {
 
   function sync() {
     const src = cur.el;
-    const parts = ['.tag', 'b', 'small', '.also', '.cost'].map((sel) => src.querySelector(sel));
-    const [tag, name, what, also, cost] = parts;
-    const next = [src.className, ...parts.map((p) => (p ? `${gone(p)}:${p.innerHTML}` : '')), buyLabel(cur)].join('|');
+    const parts = ['.tag', 'b', '.rep', 'small', '.also', '.cost'].map((sel) => src.querySelector(sel));
+    const [tag, name, rep, what, also, cost] = parts;
+    // The shop redraws this several times a second. Computed visibility (a style pass per part) is re-read at most
+    // twice a second; class, hidden and text changes are seen at once.
+    const t = doc.defaultView.performance.now();
+    if (t - goneAt > 500) { goneAt = t; goneKey = parts.map((p) => (p && gone(p) ? 1 : 0)).join(''); }
+    const next = [src.className, doc.body.className, goneKey, ...parts.map((p) => (p ? `${p.hidden}${p.className}:${p.innerHTML}` : '')), buyLabel(cur)].join('|');
     if (next === stamp) return;
     stamp = next;
     el.className = `row tip${touch ? ' touch' : ''}${src.classList.contains('short') ? ' tip-short' : ''} ${[...src.classList].filter((c) => c !== 'row' && !NOT_COPIED.has(c)).join(' ')}`;
-    words.replaceChildren(...[tag, name, what, also, cost].filter((p) => p && !gone(p)).map((p) => p.cloneNode(true)));
+    words.replaceChildren(...[tag, name, rep, what, also, cost].filter((p) => p && !gone(p)).map((p) => p.cloneNode(true)));
     buy.hidden = !touch;
     buy.textContent = buyLabel(cur);
     buy.disabled = src.classList.contains('short');
@@ -57,14 +62,33 @@ export function createTip({ doc, buyLabel, onBuy }) {
   function startDemo(id) {
     stop?.();
     stop = null;
-    /* Previews are not checked against the 3 Hz rule, so Gentle goes without them. */
-    demo.hidden = doc.body.classList.contains('gentle');
-    if (demo.hidden) return;
+    const art = makeFace(doc,SKIN_ITEMS[id]);
+    demo.classList.toggle('wardrobe-tip', Boolean(art));
+    if (art) {
+      demo.classList.remove('sample-still');
+      demo.hidden = false;
+      demo.replaceChildren(art);
+      return;
+    }
+    const still = cur.el.querySelector('.shop-sample');
+    demo.classList.toggle('sample-still', Boolean(still));
+    if (still) {
+      const image = still.cloneNode();
+      image.className = '';
+      demo.replaceChildren(image);
+    }
+    // Gentle can show the same still as the tile without playing the demo.
+    const gentle = doc.body.classList.contains('gentle');
+    demo.hidden = gentle && !still;
+    if (gentle) return;
     const mine = ++token;
     _loadDemos().then((Demo) => {
       if (mine !== token || !cur) return;
-      if (!Demo.has(id)) { demo.hidden = true; place(); return; }
+      if (!Demo.has(id)) { demo.hidden = !still; place(); return; }
+      demo.classList.remove('sample-still');
+      demo.replaceChildren();
       stop = Demo.play(demo, id);
+      place();
     }).catch((e) => console.error('demos failed', e));
   }
 
@@ -89,12 +113,15 @@ export function createTip({ doc, buyLabel, onBuy }) {
     cur.el.classList.remove('peek');
     cur = null;
     stamp = '';
+    goneAt = -1e9;
     el.hidden = true;
   }
 
   buy.addEventListener('click', () => { if (cur) onBuy(cur); });
+  /* A press anywhere but the card and its own tile closes it, a finger's or a mouse's (a card opened by keyboard focus too).
+   * A press on another tile closes this one; that tile's own click (or hover) opens its card. */
   doc.addEventListener('pointerdown', (e) => {
-    if (cur && touch && !el.contains(e.target) && !e.target.closest?.('#rows .row, #goal .row')) hide();
+    if (cur && !el.contains(e.target) && !cur.el.contains(e.target)) hide();
   }, true);
 
   return {

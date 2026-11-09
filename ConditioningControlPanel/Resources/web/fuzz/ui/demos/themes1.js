@@ -86,17 +86,6 @@ Object.assign(DEMOS, {
     k.every(5200, () => f.tapEl(b, () => { k.press(b); t0 = now; k.after(300, () => f.to(216, 44)); }), true);
   },
 
-  tr_breath: (k) => {
-    const p = themes1Set(k, 'tr'), c = themes1Count(k, p, { v: 320, y: 4 });
-    k.add(70, 28, 'width:100px;height:100px;box-sizing:border-box;border-radius:50%;border:1.5px dashed ' + p.a);
-    const ring = k.add(70, 28, 'width:100px;height:100px;border-radius:50%;background:radial-gradient(circle,rgba(143,208,255,.1),rgba(143,208,255,.5))');
-    k.anim(ring, [{ transform: 'scale(.45)' }, { transform: 'scale(1)' }, { transform: 'scale(.45)' }], 4000, { iterations: Infinity });
-    const b = k.btn({ w: 50, h: 24, x: 95, y: 66, label: 'Tap' }), f = k.finger(205, 110);
-    k.every(4000, () => {
-      k.word(0, 130, 'in', 1900, themes1Mid(p, 12)); k.after(2000, () => k.word(0, 130, 'out', 1900, themes1Mid(p, 12)));
-      k.after(1650, () => f.tapEl(b, () => { k.press(b); c.add(260); k.float(120, 34, 'x4 +260', 'color:' + p.a + ';font-size:15px'); k.after(400, () => f.to(205, 110)); }));
-    });
-  },
   tr_feed: (k) => {
     const p = themes1Set(k, 'tr');
     k.add(0, 6, themes1Mid(p, 12, 'opacity:.8'), 'Trance Feed');
@@ -271,14 +260,28 @@ Object.assign(DEMOS, {
     });
   },
 
+  /* Bimbodoll: a little bubble swallows three blocks and pops, a 3 s loop. */
   bi_end: (k) => {
-    k.page('#ff9fd0');
-    const face = k.add(80, 22, 'width:80px;height:70px');
-    ['14px', '56px'].forEach((x) => k.add(0, 10, 'left:' + x + ';width:9px;height:9px;border-radius:50%;background:#fff', null, face));
-    k.add(8, 26, 'width:64px;height:32px;box-sizing:border-box;border:5px solid #fff;border-top:0;border-radius:0 0 64px 64px', null, face);
-    k.anim(face, [{ transform: 'scale(1)' }, { transform: 'scale(1.06)' }, { transform: 'scale(1)' }], 3600, { iterations: Infinity });
-    k.every(1300, () => k.word(14 + Math.random() * 210, 8 + Math.random() * 90, '♡', 2000, 'color:#fff;font-size:15px'));
-    k.ad(60, 114, 120, 20, 'Bambi mod', true);
+    k.page('#ffa8d5');
+    const cx = k.W / 2, cy = k.H / 2;
+    const blocks = [[26, 22, '#fff'], [k.W - 64, 30, '#8a0f5c'], [cx - 22, k.H - 34, '#ffe36e']].map(([x, y, c]) => {
+      const e = k.add(x, y, 'width:38px;height:22px;border-radius:4px;background:' + c + ';box-shadow:0 2px 0 rgba(0,0,0,.25)');
+      return { e, x: x + 19, y: y + 11, d: Math.hypot(x + 19 - cx, y + 11 - cy) - 12 };
+    });
+    const bub = k.add(0, 0, 'width:20px;height:20px;border-radius:50%;background:radial-gradient(circle at 34% 28%,rgba(255,255,255,.8) 0 8%,rgba(255,255,255,0) 20%),radial-gradient(circle,rgba(255,168,213,.15) 0 60%,rgba(255,140,205,.4) 86%,rgba(255,240,250,.85) 97%,rgba(255,255,255,0) 100%)');
+    k.frame((dt, s) => {
+      const t = s % 3, POP = 2.3, rMax = Math.hypot(cx, cy) + 6;
+      const r = t < POP ? 10 + (rMax - 10) * Math.pow(t / POP, 1.6) : rMax * (1 + (t - POP) * 0.6);
+      bub.style.width = bub.style.height = (2 * r) + 'px';
+      bub.style.left = (cx - r) + 'px'; bub.style.top = (cy - r) + 'px';
+      bub.style.opacity = t < POP ? 1 : Math.max(0, 1 - (t - POP) / 0.25);
+      for (const b of blocks) {
+        const u = t >= POP ? 1 : Math.min(1, Math.max(0, (r - b.d) / 40));
+        const e = 1 - Math.pow(1 - u, 3);
+        b.e.style.transform = 'translate(' + ((cx - b.x) * e * 0.85) + 'px,' + ((cy - b.y) * e * 0.85) + 'px) scale(' + (1 - 0.82 * e) + ')';
+        b.e.style.opacity = t >= POP ? 0 : 1;
+      }
+    });
   },
 
   /* ---------- DRONE: black, green mono text, chrome ---------- */
@@ -410,48 +413,12 @@ Object.assign(DEMOS, {
     themes1Rate(k, p, '+130/s', 94, 128);
   }),
 
-  si_bow: (k) => {
-    const p = themes1Set(k, 'si'), c = themes1Count(k, p, { v: 470, y: 6 });
-    const b = k.btn({ w: 110, h: 84, y: 42, label: '🎀', css: 'font-size:66px;line-height:1;background:transparent;border:0' });
-    const f = k.finger(205, 130);
-    k.every(1000, () => f.tapEl(b, () => { k.press(b); c.add(47); k.float(120, 40, '+47', 'color:' + p.a + ';font-size:14px'); k.anim(b, [{ rotate: '0deg' }, { rotate: '-7deg' }, { rotate: '6deg' }, { rotate: '0deg' }], 420); }));
-  },
-
   si_feed: (k) => {
     const p = themes1Set(k, 'si'), names = ['lace', 'bows', 'pearls', 'frills', 'gloves', 'satin'];
     const ovals = [18, 86, 154].map((x, i) => { const e = k.pic(x, 22, 62, 84, names[i], p.tile); e.style.cssText += 'border-radius:50%;place-items:center;font-size:10px;padding:0;outline:2px dotted ' + p.a + ';outline-offset:3px;'; return e; });
     let i = 0;
     k.every(1100, () => { const e = ovals[i++ % 3]; e.textContent = k.pick(names); k.anim(e, [{ opacity: 0 }, { opacity: 1 }], 500); }, true);
     themes1Rate(k, p, '+260/s', 94, 124);
-  },
-
-  si_ward: (k) => {
-    const p = themes1Set(k, 'si');
-    const looks = ['repeating-linear-gradient(90deg,#f7c6d9 0 7px,#fff 7px 14px)', 'radial-gradient(#c96a8c 2.5px,transparent 3px) 0 0/12px 12px,#fff', 'linear-gradient(135deg,#f0a8c2,#fff2f6 45%,#e18aab)', 'repeating-conic-gradient(#d9c4ee 0 25%,#fff 0 50%) 0 0/14px 14px', 'radial-gradient(circle at 50% 0,#fff 6px,transparent 6.5px) 0 0/14px 10px,#e9a9c0'];
-    const b = k.btn({ w: 120, h: 56, y: 16, skin: 'round', label: 'Click', css: 'border:2px solid ' + p.a + ';color:#000;font-weight:600;text-shadow:0 0 3px #fff,0 0 3px #fff;transition:transform .1s' });
-    const slots = looks.map((bg, i) => k.add(22 + i * 41, 88, 'width:32px;height:32px;box-sizing:border-box;border-radius:6px;border:2px solid #fff;box-shadow:0 0 0 1px ' + p.a + ';background:' + bg));
-    const f = k.finger(205, 138);
-    let i = 0;
-    const wear = (n) => { b.style.background = looks[n]; slots.forEach((s, j) => { s.style.boxShadow = '0 0 0 ' + (j === n ? 3 : 1) + 'px ' + p.a; }); };
-    wear(0);
-    k.every(1250, () => { i = (i + 1) % 5; const n = i; f.tapEl(slots[n], () => { wear(n); k.press(b); }); });
-  },
-
-  si_set: (k) => {
-    const p = themes1Set(k, 'si');
-    const icons = ['👒', '🎀', '🧤'], off = ['#bcd7ee', '#f2c5d2', '#cfe8c8'], on = '#f2c5d2';
-    const slots = icons.map((e, i) => k.add(36 + i * 60, 22, 'width:48px;height:48px;display:grid;place-items:center;font-size:28px;border-radius:8px;transition:background .3s;border:2px solid ' + p.a, e));
-    const rate = themes1Rate(k, p, '+410/s', 92, 84);
-    rate.style.fontSize = '13px';
-    const f = k.finger(205, 130);
-    k.every(5200, () => {
-      slots.forEach((s, i) => { s.style.background = off[i]; s.style.borderColor = p.a; }); rate.textContent = '+410/s'; rate.style.background = p.a; f.to(205, 130);
-      k.after(100, () => f.tapEl(slots[0], () => { slots[0].style.background = on; }));
-      k.after(1000, () => f.tapEl(slots[2], () => {
-        slots[2].style.background = on; slots.forEach((s) => { s.style.borderColor = '#d9a521'; });
-        rate.textContent = 'x2 +820/s'; rate.style.background = '#d9a521'; k.word(0, 112, 'It matches', 2400, themes1Mid(p, 14)); k.after(400, () => f.to(205, 130));
-      }));
-    });
   },
 
   si_curtsy: (k) => {

@@ -2,6 +2,8 @@
  * glossy icons, spiral overlay, page tilt, the fake desktop, the warp and the Drop. */
 
 import { moan } from '../moan.js';
+import { critMult } from '../prestige/boosts.js';  // prestige hook (Renewal Sky, boosts lane)
+import { mountCountUp } from '../../../sim/prestige-endings.js';  // prestige hook (Renewal Sky): Count Up ending, spirals pay more
 import { ACHIEVEMENTS, DROP_WORDS, FAKE_DESKTOP, LUCKY_WORDS, THEMES, THEME_IDS, thoughtsFor } from '../../../data/content/index.js';
 import { FORKS } from '../../../data/items.js';
 import { SECOND_THEME } from './copy.js';
@@ -10,6 +12,10 @@ import { burst, btnCenter, chip, docOf, fresh, play, pop, sfx, spawn, spiralCanv
 import { THEME_TASTES } from '../theme-skins.js';
 import { buttonImpulse, contactSparks } from './tap-feel.js';
 import { setIconSet } from '../../icons.js';
+import { mediaSlot, themeLists, themeNiche } from '../../screens.js';
+import { createTunnelGL, cssRgb, mixRgb } from './warp-tunnel.js';
+import { BURST_HOLD_MS, burstTiers, createTapWindow } from '../../../sim/tap-rate.js';
+import { sellAllJoke, SELL_ALL_AD } from '../../sell-all.js';
 
 /* A fork lands like a stamp: the choice crosses the middle of the screen. */
 const stampFork = {
@@ -60,7 +66,7 @@ export default {
       };
       ctx.on('tap', ({ x, y, auto }) => {
         dry += 1;
-        if (ctx.rng() > 0.04 && dry < 40) return;
+        if (ctx.rng() > 0.04 * critMult(ctx.prestige) && dry < 40) return;  // prestige hook: Crit Chance (active_3)
         dry = 0;
         const c = btnCenter(ctx);
         const at = x == null ? c : { x, y };
@@ -81,7 +87,7 @@ export default {
   /* Scrolling Thoughts: a strip at the top that never stops losing its place. */
   ticker: {
     mount(ctx) {
-      ctx.css(`#l-ticker { left: 0; right: 96px; top: 10px; height: 24px; line-height: 24px; background: var(--panel); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); -webkit-mask-image: linear-gradient(to right, transparent 0, #000 12%); mask-image: linear-gradient(to right, transparent 0, #000 12%); }`);
+      ctx.css(`#l-ticker { left: 0; right: var(--controls-clearance); top: 10px; height: 24px; line-height: 24px; background: var(--panel); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); -webkit-mask-image: linear-gradient(to right, transparent 0, #000 12%, #000 88%, transparent 100%); mask-image: linear-gradient(to right, transparent 0, #000 12%, #000 88%, transparent 100%); }`);
       let n = ctx.store.get('n') || 0;
       const next = () => {
         const st = ctx.state;
@@ -146,6 +152,13 @@ export default {
       ctx.on('ad', (d) => { note('adclick'); if (d?.ccp) note('ccpclick'); });
       ctx.on('answer', () => note('answers'));
       ctx.on('refused', () => note('refusals'));
+      /* Hidden speed tiers: only trusted manual presses on #btn (via 'hand'); auto, copies, keyboard and the right hand never count. */
+      const speed = createTapWindow(BURST_HOLD_MS);
+      ctx.on('tap', ({ via, t }) => {
+        if (via !== 'hand' || !Number.isFinite(t)) return;
+        speed.push(t);
+        for (const tier of burstTiers(speed, t)) if (!tally[`tapburst${tier}`]) note(`tapburst${tier}`);
+      });
       let idle = 0, lastTaps = ctx.state.taps;
       const check = () => {
         const st = ctx.state;
@@ -200,7 +213,8 @@ export default {
           sfx(ctx, 'sfx/dling.mp3', 0.5);
         }
         ctx.emit('ad', { ccp: !!ad.ccp, id: ad.id });
-        if (ad.url) ctx.openLink(ad.url);
+        if (ad.id === SELL_ALL_AD) sellAllJoke(ctx);   // display only: the wallet never changes
+        if (ad.url) ctx.openAdLink(ad.url);
       });
       show();
       ctx.every(13000, show);
@@ -228,27 +242,26 @@ export default {
       let frame = null;
       const wearIt = (id) => {
         const t = THEME_TASTES[id];
-        if (!t) return;
-        ctx.css(t.css);
+        if (!t?.skin) return;
+        if (t.css) ctx.css(t.css);
         ctx.button.skin(t.skin);
       };
-      const showPicture = async (id) => {
-        if (!frame) return;
+      let visible = false;
+      const showPicture = id => {
+        if (!frame || !visible || ctx.paused || frame.box.ownerDocument.hidden || frame.busy) return;
         const niches = THEME_TASTES[id]?.niches || [id];
-        const pic = await ctx.pictures.next({ niche: niches[Math.floor(ctx.rng() * niches.length)] });
-        if (!frame) return;
-        frame.img.style.display = pic ? 'block' : 'none';
-        frame.empty.style.display = pic ? 'none' : 'grid';
-        if (pic) { frame.img.src = pic.url; ctx.anim(frame.img, [{ opacity: 0 }, { opacity: 1 }], { duration: 500 }); }
-        frame.credit.textContent = pic?.credit || '';
+        frame.next(niches[Math.floor(ctx.rng() * niches.length)]);
       };
       const buildFrame = (id) => {
-        const box = ctx.el('div', 'position:relative;width:100%;max-width:190px;height:150px;margin:0 auto;border:2px dashed var(--line);background:var(--panel);overflow:hidden;', null, ctx.dock({ edge: 'left', title: THEMES[id].label }));
-        const img = ctx.el('img', 'display:none;width:100%;height:100%;object-fit:cover;', null, box);
-        img.alt = '';
-        const credit = ctx.el('span', 'position:absolute;right:3px;bottom:2px;font-size:10px;color:#fff;text-shadow:0 1px 2px #000;', '', box);
-        const empty = ctx.el('div', 'position:absolute;inset:0;display:grid;place-items:center;padding:10px;text-align:center;font-size:13px;line-height:1.25;color:var(--ink-soft);', SECOND_THEME.empty, box);
-        frame = { box, img, credit, empty };
+        const dock = ctx.dock({ edge: 'left', title: THEMES[id].label, width: 190,
+          onMin(hidden) {
+            visible = !hidden;
+            frame?.sync();
+            if (!frame?.media) showPicture(id);
+          } });
+        visible = dock.dock?.visible !== false;
+        const box = ctx.el('div', 'position:relative;width:100%;max-width:190px;height:150px;margin:0 auto;border:2px dashed var(--line);background:var(--panel);overflow:hidden;', null, dock);
+        frame = mediaSlot(ctx, box, { kind: 'mixed', visible: () => visible });
         showPicture(id);
       };
       let ask = null;
@@ -277,7 +290,7 @@ export default {
         if (fresh(ctx)) openCard();
       }
       ctx.every(14000, () => { const id = ctx.store.get('theme'); if (id) showPicture(id); });
-      ctx.on('pictures', () => { const id = ctx.store.get('theme'); if (id) showPicture(id); });
+      ctx.on('pictures', () => { frame?.clear(); const id = ctx.store.get('theme'); if (id) showPicture(id); });
       ctx.on('lucky', () => {
         const id = ctx.store.get('theme');
         const list = id ? THEMES[id]?.buttonWords || [] : [];
@@ -289,11 +302,14 @@ export default {
     },
   },
 
-  /* Spiral Overlay: faint, over everything, ignores the pointer. One still frame of the Loom, turned by the compositor. */
+  /* Spiral Overlay: faint, ignores the pointer. One still frame of the Loom, turned by the compositor. Owner 2026-11-08:
+   * pictures stay in front of the spiral, so it sits in the wash layer (over the backdrop, under the picture screens,
+   * the stage and the shop), never in the top layer. */
   overlay: {
     mount(ctx) {
-      const sp = spiralCanvas(ctx, 'position:absolute;left:50%;top:50%;width:150vmax;height:150vmax;margin:-75vmax 0 0 -75vmax;opacity:0;pointer-events:none;', 'over', { px: 640, turnMs: 18000 });
+      const sp = spiralCanvas(ctx, 'position:absolute;left:50%;top:50%;width:150vmax;height:150vmax;margin:-75vmax 0 0 -75vmax;opacity:0;pointer-events:none;', 'wash', { px: 640, turnMs: 18000 });
       ctx.anim(sp.el, [{ opacity: 0 }, { opacity: 0.16 }], { duration: fresh(ctx) ? 1200 : 1, fill: 'forwards', easing: 'ease-in' });
+      mountCountUp(ctx);  // prestige hook: Count Up ending (tr_end)
       return { off: sp.off };
     },
   },
@@ -305,6 +321,12 @@ export default {
       const start = fresh(ctx) ? 0 : 1;
       // 84 steps of about 0.05 degrees: the eye cannot tell, and the whole page only recomposites a dozen times a second.
       const a = ctx.anim(ctx.world, [{ transform: 'rotate(-2.2deg)', easing: 'ease-in-out' }, { transform: 'rotate(2.2deg)' }], { duration: 7000, iterations: Infinity, direction: 'alternate', easing: 'steps(84, jump-none)', delay: start });
+      /* What the lean uncovers: the page itself (owner 2026-11-09, "extend the background": the old spiral-and-pictures wedge read
+       * as a slice of something behind the page). The world stops clipping and carries an oversized copy of the body background,
+       * so the backdrop turns with the page and still covers every corner of the viewport at the full lean (2.2 degrees needs
+       * about 2% of the width; 10vmax is a wide margin). Layers keep their own clipping, so nothing inside them spills out. */
+      ctx.css('#world{overflow:visible;background:inherit}');
+      ctx.el('div', 'position:absolute;inset:-10vmax;z-index:-1;pointer-events:none;background:inherit;', null, ctx.world);
       ctx.every(1000, () => { if (ctx.gentle) a.cancel(); });
       return {};
     },
@@ -341,38 +363,95 @@ export default {
     },
   },
 
-  /* Warp Tunnel: frames keep falling away behind the page, toward a point behind the shop, and two of them carry a frozen
-   * snapshot of the counter and the button. The snapshot is only those two: a copy of the live meters was half of all the
-   * nodes in a late run and sat right under the real ones. Decoration, no input. Gentle: no warp at all. */
+  /* Warp Tunnel (owner 2026-11-08: the old bordered frames "read as just rectangles moving in"): a real tunnel behind the
+   * page, one shader (warp-tunnel.js). Helical ribbons in the theme colours, rings rushing past, the far end open on the
+   * button so the player falls toward it, and the desktop or spiral behind shows through the hole. Every manual press sends
+   * a bright ring out of the far end and pushes the fall faster; about every 14 s the fall surges and the page dips inward.
+   * The player's pictures fly past on the walls (DOM, so Scrolller works on the web). Decoration, no input, no pay.
+   * Gentle or reduced motion: one still frame of the tunnel, no rings, no pictures, no dip. */
   tunnel: {
     mount(ctx) {
-      const COPIES = 3, SNAPSHOTS = 2, LOOP = 6000;
+      const doc = docOf(ctx);
       const hole = ctx.el('div', 'position:absolute;inset:0;overflow:hidden;', null, 'back');
-      const frames = [];
-      for (let i = 0; i < COPIES; i++) {
-        const f = ctx.el('div', 'position:absolute;inset:0;border:3px solid var(--stamp);overflow:hidden;will-change:transform,opacity;transform-origin:50% 74%;', null, hole);
-        frames.push(f);
-        if (!ctx.gentle) {
-          ctx.anim(f, [{ transform: 'scale(.92)', opacity: 0 }, { transform: 'scale(.66)', opacity: 0.6, offset: 0.2 }, { transform: 'scale(.4)', opacity: 0.7, offset: 0.4 }, { transform: 'scale(.22)', opacity: 0.8, offset: 0.6 }, { transform: 'scale(.1)', opacity: 0.8, offset: 0.8 }, { transform: 'scale(.04)', opacity: 0 }], { duration: LOOP, iterations: Infinity, easing: 'linear', delay: -i * (LOOP / COPIES) });
-        } else {
-          f.style.transform = `scale(${0.8 - i * 0.16})`;
-        }
-      }
-      const refresh = () => {
-        const copy = ctx.parts.stage.cloneNode(false);
-        copy.removeAttribute('id');
-        const snap = (el) => { const c = el.cloneNode(true); c.removeAttribute('id'); c.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id')); copy.appendChild(c); };
-        snap(ctx.parts.counter);
-        snap(ctx.button.el);
-        copy.style.cssText = 'position:absolute;left:50%;top:40%;width:360px;max-width:100%;transform:translateX(-50%);opacity:.45;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:8px;';
-        for (const f of frames.slice(0, SNAPSHOTS)) f.replaceChildren(copy.cloneNode(true));
+      const cv = ctx.el('canvas', 'position:absolute;inset:0;width:100%;height:100%;opacity:0;transition:opacity 1.6s ease-in;', null, hole);
+      const gl = createTunnelGL(cv);
+      const still = () => ctx.gentle || ctx.reduced;
+      let paint = null;
+      const colours = () => {
+        const v = (n) => doc.defaultView.getComputedStyle(doc.documentElement).getPropertyValue(n).trim();
+        const a = cssRgb(doc, v('--accent') || v('--niche') || '#ff69b4');
+        const b = cssRgb(doc, v('--niche') || '#7b5cff');
+        // light tiles = the accent lifted toward white, dark tiles = the niche well down, the far end near black
+        paint = { a: mixRgb(a, [1, 1, 1], 0.18), b: mixRgb(b, [0, 0, 0], 0.62), d: mixRgb(b, [0, 0, 0], 0.9) };
       };
-      refresh();
-      ctx.every(30000, refresh);
-      // Gentle can be switched on mid-run: the copies stop where they are.
-      ctx.every(1000, () => { if (ctx.gentle) for (const f of frames) for (const a of f.getAnimations()) a.pause(); });
-      if (fresh(ctx) && !ctx.gentle) ctx.anim(ctx.parts.shop, [{ transform: 'scale(1.06)', opacity: 0.6 }, { transform: 'none', opacity: 1 }], { duration: 800, easing: 'ease-out' });
-      return {};
+      colours();
+      ctx.on('buy', colours);
+      ctx.every(3000, colours);   // a theme pick or a Second Theme repaints the page; the tunnel follows within seconds
+      const size = () => {
+        const { w, h } = ctx.bounds();
+        const k = Math.min(0.6 * (doc.defaultView.devicePixelRatio || 1), 1280 / Math.max(1, w));   // half-ish resolution: soft walls, cheap
+        const W = Math.max(64, Math.round(w * k)), H = Math.max(64, Math.round(h * k));
+        if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+      };
+      size();
+      const st = { t: 0, spin: 0, speed: 0.5, surge: 0, cx: 0.5, cy: 0.45, rings: [] };
+      const aim = () => {
+        const { w, h } = ctx.bounds();
+        const c = btnCenter(ctx);
+        return [Math.min(0.85, Math.max(0.15, c.x / w)), Math.min(0.8, Math.max(0.2, c.y / h))];
+      };
+      [st.cx, st.cy] = aim();
+      const draw = () => gl?.draw({ ...st, ...paint, alpha: 1, rings: st.rings.map((r) => r.z) });
+      if (gl) {
+        ctx.after(30, () => { cv.style.opacity = '1'; });
+        ctx.frame((dt) => {
+          size();
+          if (still()) { st.rings.length = 0; draw(); return; }
+          const [ax, ay] = aim();
+          st.cx += (ax - st.cx) * Math.min(1, dt * 2);
+          st.cy += (ay - st.cy) * Math.min(1, dt * 2);
+          st.surge = Math.max(0, st.surge - dt * 0.9);
+          st.speed += (0.5 - st.speed) * Math.min(1, dt * 0.8);
+          st.t += dt * (st.speed + st.surge * 1.6);
+          st.spin += dt * 0.012;
+          // a ring leaves the far end (big depth) and rushes out toward the screen edge (small depth)
+          for (const r of st.rings) r.z -= dt * r.z * 1.7;
+          st.rings = st.rings.filter((r) => r.z > 0.25);
+          draw();
+        });
+      }
+      ctx.on('tap', ({ auto }) => {
+        if (auto || still() || !gl) return;
+        st.speed = Math.min(1.6, st.speed + 0.12);
+        if (st.rings.length < 4) st.rings.push({ z: 9 });
+      });
+      ctx.every(14000, () => {
+        if (still() || !gl) return;
+        st.surge = 1;
+        ctx.anim(ctx.world, [{ scale: '1' }, { scale: '.988', offset: 0.35 }, { scale: '1' }], { duration: 1400, easing: 'ease-in-out' });
+      });
+      // The player's pictures pass on the walls: born small at the far end, out past the edge.
+      ctx.every(4200, async () => {
+        if (still() || !gl) return;
+        const pic = await ctx.pictures.next({ niche: themeNiche(themeLists(ctx), 'pretty', ctx.rng), still: true, allowScrolller: true });
+        if (!pic || !hole.isConnected) return;
+        const { w, h } = ctx.bounds();
+        const ox = st.cx * w, oy = st.cy * h, ang = Math.random() * Math.PI * 2, far = Math.hypot(w, h) * 0.62;
+        const card = ctx.el('div', `position:absolute;left:${ox - 70}px;top:${oy - 50}px;width:140px;height:100px;border-radius:10px;background:center/cover no-repeat;box-shadow:0 0 24px color-mix(in srgb,var(--niche) 60%,transparent);opacity:0;pointer-events:none;`, null, hole);
+        card.style.backgroundImage = `url("${pic.url}")`;
+        const dx = Math.cos(ang) * far, dy = Math.sin(ang) * far, tilt = (Math.random() - 0.5) * 30;
+        const a = ctx.anim(card, [
+          { transform: `translate(0,0) scale(.06) rotate(${tilt}deg)`, opacity: 0 },
+          { transform: `translate(${dx * 0.12}px,${dy * 0.12}px) scale(.3) rotate(${tilt}deg)`, opacity: 0.85, offset: 0.4 },
+          { transform: `translate(${dx}px,${dy}px) scale(2.6) rotate(${tilt * 1.6}deg)`, opacity: 0.9 },
+        ], { duration: 3200, easing: 'cubic-bezier(.55,0,.9,.6)' });
+        a.finished.then(() => card.remove(), () => card.remove());
+      });
+      if (fresh(ctx) && !still()) {
+        st.surge = 1.4;
+        ctx.anim(ctx.parts.shop, [{ transform: 'scale(1.06)', opacity: 0.6 }, { transform: 'none', opacity: 1 }], { duration: 800, easing: 'ease-out' });
+      }
+      return { off() { gl?.dispose(); } };
     },
   },
 

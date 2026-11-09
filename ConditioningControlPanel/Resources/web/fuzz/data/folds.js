@@ -11,9 +11,10 @@ import { CONFIG } from './config.js';
 const NEVER_LANES = new Set(['trunk', 'combo', 'exit', 'meta', 'after']);
 /** Rows that stay single wherever they are. Button skins: one tap shows one new button. Side hubs and toys: windows. */
 const SINGLE = new Set([
-  'rounded', 'bubble', 'watch', 'heartbtn', 'mirror', 'spirbtn', 'bigbtn', 'tinybtn',
-  'gold', 'screen', 'levels', 'boxes', 'wheel', 'guide', 'panel', 'audio_mixer', 'asmr', 'lofi_radio',
-  'toy_box', 'mini_breakout', 'mini_race', 'mini_slots', 'dispenser', 'dispenser_fast', 'dispenser_faster',
+  'rounded', 'bubble', 'bigbtn', 'tinybtn',
+  'gold', 'screen', 'levels', 'boxes', 'wheel', 'guide', 'panel', 'lofi_radio',
+  'starburst', 'word_comet', 'score_heat', 'dualwield', 'em_head', 'quiz', 'd_autoscroll',
+  'toy_box', 'toy', 'mini_breakout', 'mini_race', 'mini_deep', 'mini_slots', 'dispenser', 'dispenser_fast', 'dispenser_faster',
 ]);
 
 const foldable = (it) => it && it.group === 'run' && it.kind === 'item' && !it.grow && it.cost > 0
@@ -22,7 +23,11 @@ const foldable = (it) => it && it.group === 'run' && it.kind === 'item' && !it.g
 export function buildFolds(items = ITEMS, size = CONFIG.FOLD_SIZE) {
   const by = Object.fromEntries(items.map((i) => [i.id, i]));
   const kids = {};
-  for (const it of items) for (const q of it.req) if (by[q] && by[q].lane === it.lane) (kids[q] ??= []).push(it.id);
+  // A separately sold optional child doesn't split its parent's existing bundle.
+  for (const it of items) {
+    if (SINGLE.has(it.id)) continue;
+    for (const q of it.req) if (by[q] && by[q].lane === it.lane) (kids[q] ??= []).push(it.id);
+  }
   /* x links to its parent when the parent is foldable in the same lane and x is that parent's only child there. */
   const linked = (it) => {
     const p = by[it.req[0]];

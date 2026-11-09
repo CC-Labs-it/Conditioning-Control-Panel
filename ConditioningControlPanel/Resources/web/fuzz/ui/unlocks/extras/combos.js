@@ -8,6 +8,8 @@ import { drawSpiral, normalizeParams } from '../../../../arcademy/engine/loom/lo
 import { COMBO_COPY as C } from './copy.js';
 import { FONT, captions, cardUp, dockTop, h, pick, picker, roomy, slot } from './kit.js';
 import { sfx } from '../basics/fx.js';
+import { setRich } from '../../rich-text.js';
+import { frameRect } from '../../perf.js';
 
 const discoveries = new WeakMap();
 
@@ -97,7 +99,7 @@ export const COMBO_UNLOCKS = {
     }
     h('span', '', 'K', word);
     const look = (x, y) => {
-      const wr = word.getBoundingClientRect();
+      const wr = frameRect(word);
       const dx = x - (wr.left + wr.width / 2), dy = y - (wr.top + wr.height / 2);
       const d = Math.max(1, Math.hypot(dx, dy)), m = eyeSize * 0.26;
       for (const p of pupils) p.style.transform = `translate(${(dx / d) * m}px,${(dy / d) * m}px)`;
@@ -129,7 +131,7 @@ export const COMBO_UNLOCKS = {
       const t = ctx.state.clock;
       if (t - lastShown < 180) return;
       lastShown = t;
-      const b = ctx.button.el.getBoundingClientRect();
+      const b = frameRect(ctx.button.el);
       ctx.float(b.left + b.width / 2, b.top - 6, word, `font:800 26px ${FONT};color:#a3232b;`);
     });
   }),
@@ -309,7 +311,7 @@ export const COMBO_UNLOCKS = {
     h('div', 'font-weight:700;', `🎀 ${C.gold}`, el);
     const rule = h('div', 'margin-top:3px;', '', el);
     const line = picker(ctx, COMBO_LINES.x_manners);
-    const next = () => { rule.textContent = ctx.brand.text(line()); ctx.anim(rule, [{ opacity: 0 }, { opacity: 1 }], { duration: 400 }); };
+    const next = () => { setRich(rule, line()); ctx.anim(rule, [{ opacity: 0 }, { opacity: 1 }], { duration: 400 }); };
     next();
     ctx.every(11000, next);
     el.addEventListener('click', next);
@@ -376,7 +378,7 @@ export const COMBO_UNLOCKS = {
     const live = new Set();
     const AW = 92, AH = 30;
     const free = (x, y) => {
-      const b = ctx.button.el.getBoundingClientRect();
+      const b = frameRect(ctx.button.el);
       if (x + AW > b.left - 8 && x < b.right + 8 && y + AH > b.top - 8 && y < b.bottom + 8) return false;
       /* Never over the shop rows: they stay pressable, however viral this gets. */
       const shop = ctx.parts.shop;
@@ -439,7 +441,7 @@ export const COMBO_UNLOCKS = {
     const cap = h('div', `padding:2px 4px;font:600 ${wideNow ? 14 : 12}px/1.1 ${FONT};color:#222;text-align:center;`, '', el);
     let i = ctx.store.get('at') || 0;
     const next = () => {
-      cap.textContent = LAZY_CAPTIONS[i % LAZY_CAPTIONS.length];
+      setRich(cap, LAZY_CAPTIONS[i % LAZY_CAPTIONS.length]);
       i += 1;
       ctx.store.set('at', i);
       ctx.anim(cap, [{ opacity: 0 }, { opacity: 1 }], { duration: 280 });

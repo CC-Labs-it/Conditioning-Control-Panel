@@ -221,10 +221,11 @@
             const rows = [...win.rows, win.goal].filter(Boolean).map((it) => ({ it, c: e.price(it.id) })).sort((a, b) => a.c - b.c);
             for (const { it, c } of rows) {
               if (it.kind === 'end' && it.id !== 'drop') continue;
-              if (c > s.fuzz) break;
-              const res = it.kind === 'fork' ? f.pick(it.id, P.picks[it.id]) : f.buy(it.id);
+              /* A Journey fork is earned on total income, like the shop's own press (engine.funds), not paid from the wallet. */
+              if (c > (e.funds ? e.funds(it.id) : s.fuzz)) { if (it.kind === 'fork') continue; break; }
+              const res = it.kind === 'fork' ? f.pick(it.id, P.picks[it.id]) : f.buy(it.id, it.options?.[0]?.[0]);
               if (res.ok) {
-                P.gaps.push({ gap: t - P.lastBuy, at: t, next: it.id });
+                P.gaps.push({ gap: t - P.lastBuy, at: t, next: it.id, c: it.kind === 'fork' ? 0 : c });
                 P.lastBuy = t;
                 if (it.kind === 'fork') P.forks[it.id] = t;
                 break;
@@ -292,6 +293,7 @@
         forks: P.forks, endings: P.endings, pressed: P.pressed, hud: { ...P.hud }, hudBlocked: { ...P.hudBlocked }, pictureChoices: P.pictureChoices || 0,
         pod: P.gaps.find((g) => g.next.endsWith('_pod'))?.at ?? null,
         at: Object.fromEntries(P.gaps.map((g) => [g.next, Math.round(g.at)])),
+        gaps: P.gaps.map((g) => ({ id: g.next, at: Math.round(g.at * 10) / 10, gap: Math.round(g.gap * 10) / 10, c: Math.round(g.c || 0) })),
         qAsked: P.qAsked || 0, qRight: P.qRight || 0, lumps: P.lumps, sideLog: P.sideLog, side: { ...s.side }, panelDone: P.panelDone || null,
       };
     },

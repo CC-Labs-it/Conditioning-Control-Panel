@@ -2,6 +2,7 @@
  * in index.html and sits above this queue. */
 
 import { brandText } from '../data/brand.js';
+import { setRich } from './rich-text.js';
 
 const GUARD_MS = 350;
 
@@ -17,7 +18,7 @@ export function createCards(doc, host) {
     card.setAttribute('role', 'dialog');
     card.setAttribute('aria-modal', 'true');
     if (spec.title) { const h = doc.createElement('h2'); h.textContent = brandText(spec.title); card.appendChild(h); }
-    if (spec.body) { const p = doc.createElement('p'); p.textContent = brandText(spec.body); card.appendChild(p); }
+    if (spec.body) { const p = doc.createElement('p'); setRich(p, spec.body); card.appendChild(p); }
     if (spec.node) card.appendChild(spec.node);
     const buttons = spec.buttons?.length ? spec.buttons : (spec.ms ? [] : [{ label: 'Close' }]);
     if (buttons.length) {

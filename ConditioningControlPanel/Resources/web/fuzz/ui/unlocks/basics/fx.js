@@ -6,6 +6,7 @@ import { brandText } from '../../../data/brand.js';
 import { THEME_PAGES } from '../../palette.js';
 import { drawSpiral, normalizeParams } from '../../../../arcademy/engine/loom/loomSpiral.js';
 import { spiralBus } from '../../../fx/spiral-bus.js';
+import { frameRect, LITE } from '../../perf.js';
 
 export const docOf = (ctx) => ctx.button.el.ownerDocument;
 
@@ -59,12 +60,13 @@ export function play(ctx, e, frames, opts) {
 }
 
 export function btnCenter(ctx) {
-  const r = ctx.button.el.getBoundingClientRect();
+  const r = frameRect(ctx.button.el);
   return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height };
 }
 
 let live = 0;
-const MAX_LIVE = 70;
+/* Every particle is a short-lived GPU layer: a phone pays for each one it has to allocate (ui/perf.js LITE). */
+const MAX_LIVE = LITE ? 32 : 70;
 
 /** Particles from a point. from/to: the angle range in radians. Gentle gets one soft fading dot instead. */
 export function burst(ctx, x, y, { color = 'var(--stamp)', n = 10, reach = 46, size = 7, from = 0, to = Math.PI * 2, round = true, ms = 620 } = {}) {
@@ -73,7 +75,7 @@ export function burst(ctx, x, y, { color = 'var(--stamp)', n = 10, reach = 46, s
     play(ctx, d, [{ opacity: 0 }, { opacity: 0.35 }, { opacity: 0 }], { duration: 500 });
     return;
   }
-  const count = Math.min(n, MAX_LIVE - live);
+  const count = Math.min(LITE ? Math.ceil(n * 0.5) : n, MAX_LIVE - live);
   for (let i = 0; i < count; i++) {
     const a = from + ((to - from) * (i + ctx.rng())) / count;
     const dist = reach * (0.6 + ctx.rng() * 0.6);
@@ -142,7 +144,7 @@ const pal = (page, ink, soft, faint, btn, btnInk, btnEdge, panel, panelShort, li
 });
 
 export const PALETTES = Object.freeze({
-  pink: pal('#ffdcee', '#2a0f22', '#6d3a56', '#8e5f78', '#ff69b4', '#fff', '#d4488f', '#fff5fa', '#f8d3e5', '#d994b9', '#ffb3d9', '#c2186b', '#ffffff'),
+  pink: pal('#ffa8d5', '#2a0f22', '#6d3a56', '#8e5f78', '#ff69b4', '#fff', '#d4488f', '#fff5fa', '#f8d3e5', '#d994b9', '#ffb3d9', '#c2186b', '#ffffff'),
   violet: pal('#dccfff', '#1d1238', '#4c3d78', '#6e5f9a', '#7b5cff', '#fff', '#5a3fd0', '#f6f2ff', '#cfc1f5', '#9a87d8', '#b7a4f8', '#5a2bd0', '#ffffff'),
   teal: pal('#c4f0ea', '#08302b', '#2c5f58', '#4e7f78', '#16a596', '#fff', '#0d7f73', '#effbf9', '#b2e4dd', '#74bfb4', '#8edcd0', '#0a7a6d', '#ffffff'),
   black: pal('#111016', '#f0f0f5', '#b8b5c4', '#8a8796', '#2c2935', '#fff', '#000', '#1d1b24', '#16141b', '#45414f', '#3a3644', '#ff9ccf', '#34303e'),

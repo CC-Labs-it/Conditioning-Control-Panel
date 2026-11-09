@@ -9,8 +9,15 @@ import { CONFIG } from '../data/config.js';
 import { createRun, recalc } from './economy.js';
 import { MOODS } from './moods.js';
 import { cleanOff } from './switches.js';
+import { setupJourney } from './journey-effects.js';
+import { createPrestige, parsePrestige, parseStamp } from './prestige.js';
 
-export const SAVE_KEY = 'fuzz.save.v2';
+// The playable preview has its own persistent slot, including both save import paths.
+const params = new URLSearchParams(globalThis.location?.search);
+export const JOURNEY_PREVIEW = params.get('preview') === 'journey';
+export const PLAYER_PREVIEW = JOURNEY_PREVIEW || params.get('preview') === 'player';
+const slot = /^[a-z0-9_-]{1,40}$/i.test(params.get('slot') || '') ? params.get('slot') : 'default';
+export const SAVE_KEY = JOURNEY_PREVIEW ? 'fuzz.preview.journey.v1.' + slot : PLAYER_PREVIEW ? 'fuzz.preview.player.save.v2' : 'fuzz.save.v2';
 export const SAVE_VERSION = 2;
 export const SAVE_EVERY_MS = 5000;
 
@@ -34,6 +41,7 @@ export function createLife() {
     bestMs: 0,
     perk: null,        // a Look the next run starts owning
     store: {},         // ctx.store for After lane entries
+    prestige: createPrestige(),  // Renewal Sky: depth, Stardust, stars (sim/prestige.js)
   };
 }
 
@@ -59,7 +67,11 @@ export function serialize(run, life, extras = {}) {
 
 function parseRun(src) {
   if (!src || typeof src !== 'object') return null;
-  const s = createRun({ pace: num(src.pace, 1, CONFIG.MAX_PACE), seed: num(src.seed, 0, 2 ** 32), mood: MOODS[src.mood] ? src.mood : null });
+  const stamp = parseStamp(src.prestige);
+  const s = createRun({ seed: num(src.seed, 0, 2 ** 32), mood: MOODS[src.mood] ? src.mood : null });
+  /* pace already carries the run's prestige pay multiplier, so it is read back as saved, not multiplied again. */
+  s.pace = num(src.pace, 1, CONFIG.MAX_PACE * (stamp?.pay || 1));
+  if (stamp) s.prestige = stamp;
   s.clock = num(src.clock);
   s.fuzz = num(src.fuzz);
   s.total = Math.max(s.fuzz, num(src.total));
@@ -75,6 +87,12 @@ function parseRun(src) {
   }
   const order = Array.isArray(src.order) ? src.order.filter((id) => typeof id === 'string' && s.owned[id]) : [];
   s.order = [...new Set(['start', ...order, ...Object.keys(s.owned)])];
+  // Old runs could buy Questions before EMI. Mount its host first even if EMI was bought later.
+  if (s.owned.quiz && (!s.owned.em_head || s.order.indexOf('em_head') > s.order.indexOf('quiz'))) {
+    s.owned.em_head = 1;
+    s.order = s.order.filter(id => id !== 'em_head');
+    s.order.splice(s.order.indexOf('quiz'), 0, 'em_head');
+  }
   for (const [f, lane] of Object.entries(obj(src.picks))) if (FORKS[f]?.opts[lane] && s.owned[f]) s.picks[f] = lane;
   for (const [k, v] of Object.entries(obj(src.sources))) s.sources[k] = num(v);
   for (const [k, v] of Object.entries(obj(src.spent))) s.spent[k] = num(v);
@@ -85,6 +103,7 @@ function parseRun(src) {
   s.endless = !!src.endless && !!s.owned.onemore;
   s.ended = src.ended && s.owned[src.ended.id] && BY_ID[src.ended.id]?.kind === 'end' ? { id: src.ended.id, at: num(src.ended.at) } : null;
   recalc(s);
+  if (s.store.journey) setupJourney(s);
   return s;
 }
 
@@ -107,6 +126,7 @@ function parseLife(src) {
   life.bestMs = num(src.bestMs);
   life.perk = BY_ID[src.perk]?.lane === 'look' ? src.perk : null;
   life.store = stores(src.store);
+  life.prestige = parsePrestige(src.prestige);
   return life;
 }
 

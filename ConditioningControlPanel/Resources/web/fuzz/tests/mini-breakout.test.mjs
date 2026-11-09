@@ -66,3 +66,53 @@ test('save and restore keep the next physics step identical', () => {
   assert.deepEqual(stepBreakout(s, .03), stepBreakout(restored, .03));
   assert.deepEqual(snapshot(s), snapshot(restored));
 });
+
+function strike(s, brick) {
+  s.ball = { x:brick.x + brick.w/2, y:brick.y+brick.h+4, vx:0, vy:-118, r:3.6 };
+  return stepBreakout(s,.025);
+}
+
+test('each board carries a small, bounded selection and old saves restore the original remaining bricks', () => {
+  for (let board=0;board<21;board++) {
+    const s=createBreakout({board});
+    assert.deepEqual(s.bricks.map(b=>b.drop).filter(Boolean).sort(),['fireball','shield']);
+    assert.equal(s.bricks.filter(b=>b.hp===2).length,2);
+    assert.equal(s.bricks.filter(b=>b.photo).length,1);
+    const alive=s.bricks.map((b,i)=>i%2===0);
+    assert.deepEqual(createBreakout({board,alive}).bricks.map(b=>b.alive),alive);
+  }
+});
+
+test('reinforced bricks keep their first hit through a reload and break on the second', () => {
+  const s=createBreakout(), index=s.bricks.findIndex(b=>b.armor===2 && b.row===3);
+  assert.ok(strike(s,s.bricks[index]).some(e=>e.type==='damage'));
+  const reloaded=createBreakout(snapshot(s));
+  assert.equal(reloaded.bricks[index].hp,1);
+  assert.ok(strike(reloaded,reloaded.bricks[index]).some(e=>e.type==='brick'));
+  assert.equal(reloaded.bricks[index].alive,false);
+});
+
+test('a Fireball drop can be collected, saved in flight, and pierces armor only once per passage', () => {
+  let s=createBreakout();
+  assert.ok(strike(s,s.bricks.find(b=>b.drop==='fireball')).some(e=>e.type==='drop' && e.kind==='fireball'));
+  s=createBreakout(snapshot(s)); assert.equal(s.drops.length,1);
+  Object.assign(s.drops[0],{x:s.paddle,y:167});
+  assert.ok(stepBreakout(s,.08,{manual:true,x:s.paddle}).some(e=>e.type==='catch'));
+  assert.ok(s.fireball>7.8 && !s.drops.length);
+  const index=s.bricks.findIndex(b=>b.armor===2 && b.row===3);
+  assert.ok(strike(s,s.bricks[index]).some(e=>e.type==='damage'));
+  assert.ok(s.ball.vy<0);
+  s=createBreakout(snapshot(s));
+  assert.ok(!stepBreakout(s,.035).some(e=>e.type==='brick'));
+  assert.equal(s.bricks[index].hp,1);
+});
+
+test('the shield catches one miss, then a second miss serves a new ball', () => {
+  const s=createBreakout(), x=s.paddle;
+  s.drops=[{kind:'shield',x,y:167}];
+  assert.ok(stepBreakout(s,.08,{manual:true,x}).some(e=>e.type==='catch'));
+  const miss=()=>{s.ball={x:14,y:185,vx:0,vy:118,r:3.6}; return stepBreakout(s,.15,{manual:true,x});};
+  assert.ok(miss().some(e=>e.type==='save'));
+  assert.ok(s.ball.vy<0 && s.shield===0);
+  assert.ok(miss().some(e=>e.type==='miss'));
+});

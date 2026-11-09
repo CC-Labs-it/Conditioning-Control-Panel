@@ -3,11 +3,12 @@
 
 import { THEMES, ENDINGS, FAKE_UPDATE } from '../../../data/content/index.js';
 import { mountPodcast } from '../podcast-player.js';
-import { bag, geo, sheet, done, frame, refillOnChange, sideFrames, shopWords, pick, railPanel, gentleSwitch } from './kit.js';
+import { bag, geo, sheet, done, frame, refillOnChange, shopWords, pick, railPanel, gentleSwitch } from './kit.js';
+import { themeScreens } from './theme-screens.js';
 import { endingShow } from './endings.js';
 import { COPY } from './copy.js';
-import { THEME_TASTES } from '../theme-skins.js';
 import { THEME_PAGES } from '../../palette.js';
+import { setRich } from '../../rich-text.js';
 
 const R = THEMES.drone.rules;
 const NICHES = ['shiny', 'chrome', 'visor', 'gloss', 'mirror', 'latex'];
@@ -56,7 +57,8 @@ export const START = { theme: 'drone', vars: VARS, css: CSS, moment };
 export default {
   dr_head: {
     mount(ctx) {
-      sideFrames(ctx, ['shiny', 'chrome', 'visor', 'mirror'], 'border-radius:2px;outline:1px solid #46535a;');
+      /* The first pictures: three screens, not a wall (owner 2026-11-08). The tile wall waits for Drone Pictures. */
+      themeScreens(ctx, { niches: ['shiny', 'chrome', 'visor', 'mirror'], frame: 'border:1px solid #46535a;border-radius:2px;' });
       /* A taste of the signature before Task Queue is bought: now and then an order, and a tap on it pays. */
       const tag = ctx.el('div', `position:absolute;left:0;top:0;padding:4px 10px;background:#3dff8e;color:#070b09;font:700 14px ${MONO};white-space:nowrap;opacity:0;`, COPY.drone.order, 'floaters');
       let up = false;
@@ -122,7 +124,9 @@ export default {
       ctx.css(`#counter{text-shadow:0 0 8px rgba(61,255,142,.45);}
 .row{border-style:solid;}
 .row b::before{content:'> ';}`);
-      ctx.el('div', 'position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 2px,transparent 2px 4px);', null, 'over');
+      /* Faint phosphor lines on the page itself, under the shop, the button and the screens (owner 2026-11-08: the old dark
+       * lines over everything at .22 striped the whole game). Still, so Gentle has nothing to hold. */
+      ctx.el('div', 'position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(61,255,142,.045) 0 1px,transparent 1px 3px);', null, 'wash');
       if (first) {
         const s = sheet(ctx, `background:#070b09;color:#3dff8e;font:600 18px/1.5 ${MONO};padding:18% 12%;white-space:pre-line;`, R.boot.join('\n'));
         if (ctx.gentle) done(ctx.anim(s, [{ opacity: 1 }, { opacity: 0 }], { duration: 900 }), s);
@@ -157,11 +161,10 @@ export default {
     },
   },
 
-  /* Hexagon Button */
+  /* Firmware Download */
   dr_hex: {
     mount(ctx) {
       ctx.button.skin('dr-hex');
-      ctx.css(THEME_TASTES.drone.css);
       return {};
     },
   },
@@ -244,7 +247,7 @@ export default {
     },
   },
 
-  dr_pod: { mount: (ctx) => mountPodcast(ctx, { theme: 'drone', show: 'True Drone', accent: '#3dff8e' }) },
+  dr_pod: { mount: (ctx) => mountPodcast(ctx, { theme: 'drone', show: 'Unit Hour', accent: '#3dff8e' }) },
 
   /* Hive Feed: fake units report in, yours gets a rank, and rank pays once. Rail on a wide page, one line on a phone. */
   dr_hive: {
@@ -260,7 +263,7 @@ export default {
       let i = Math.floor(ctx.rng() * R.hive.length);
       const push = () => {
         const line = R.hive[i++ % R.hive.length];
-        if (!wide) { log.textContent = line; return; }
+        if (!wide) { setRich(log, line); return; }
         if (log.children.length > 9) log.firstChild.remove();
         const e = ctx.el('div', 'padding:1px 0;', line, log);
         if (!ctx.gentle) ctx.anim(e, [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], 200);

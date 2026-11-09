@@ -38,6 +38,8 @@ export const ART = Object.freeze({
   confetti: () => p('M8 58 20 23 43 46Z', A) + line('M17 35 31 50M37 9 41 17M51 27 58 24M16 8 13 15') + p('M32 23 40 21 38 29Z', B) + r(48, 8, 8, 8, C, 1),
   bubbles: () => c(27, 36, 22, B) + c(48, 14, 10, C) + c(53, 51, 7, A) + line('M15 32Q16 24 23 23M43 12 46 9'),
   cursor: () => p('M13 5 53 35 36 37 45 54 35 59 27 41 14 54Z', C),
+  /* Double Wielding: the cursor twice, the left one mirrored, tips meeting at the top. Flat vector, so no shadow to flip. */
+  cursors: () => `<g transform="translate(38 12) scale(-.66 .66)">${p('M13 5 53 35 36 37 45 54 35 59 27 41 14 54Z', B)}</g><g transform="translate(26 12) scale(.66)">${p('M13 5 53 35 36 37 45 54 35 59 27 41 14 54Z', C)}</g>`,
   clock: () => r(25, 3, 14, 9, C) + c(32, 36, 23, A) + c(32, 36, 17, C) + line('M32 22V36L43 41'),
   moon: () => p('M42 5C22 3 7 15 7 33 7 55 34 65 52 49 26 52 14 21 42 5Z', C) + star(48, 20, .36, B),
   heart: () => heart(),
@@ -60,7 +62,6 @@ export const ART = Object.freeze({
   card: () => r(5, 13, 54, 38, B, 5) + r(7, 22, 50, 8, D, 0) + r(13, 37, 12, 6, C, 1) + line('M35 40H49'),
   headset: () => p('M10 38V26C10-3 55-3 55 27V40H47V26C47 7 18 7 18 26V40Z', B) + r(7, 29, 14, 20, A, 5) + r(45, 29, 14, 20, A, 5) + line('M51 49Q50 58 37 56') + r(27, 52, 12, 8, C, 3),
   bin: () => p('M15 19H50L46 57H19Z', B) + r(9, 12, 48, 8, A, 2) + r(24, 5, 19, 7, C, 2) + line('M26 28V47M38 28V47'),
-  ring: () => c(32, 32, 24, B) + c(32, 32, 13, C) + line('M24 10 28 18M10 33H18M44 45 50 51'),
   sunrise: () => c(32, 35, 16, C) + p('M3 42H61V57H3Z', B) + line('M7 42H57M32 4V12M8 15 15 21M56 15 49 21M13 49H30M37 49H51'),
   lipstick: () => p('M23 26V11L39 4V26Z', A) + r(18, 25, 27, 13, C, 1) + r(16, 38, 31, 21, B, 2) + line('M21 43V53'),
   gallery: () => r(4, 9, 24, 20, A, 2) + r(36, 6, 24, 21, C, 2) + r(7, 38, 23, 21, B, 2) + r(38, 36, 21, 21, A, 2),
@@ -97,6 +98,7 @@ export const ART = Object.freeze({
 });
 
 const BADGES = {
+  flame: 'M48 59C39 58 35 51 39 43C41 47 44 47 44 43C44 39 49 35 51 31C50 39 58 41 56 48C59 47 60 44 60 42C66 51 61 61 50 60Z',
   plus: 'M45 50H57M51 44V56', minus: 'M45 50H57', check: 'M45 50 49 54 57 45',
   arrow: 'M44 50H57M52 44 58 50 52 56', down: 'M51 43V56M45 50 51 56 57 50',
   pause: 'M47 44V56M55 44V56', play: 'M47 43 57 50 47 57Z', fast: 'M44 44 50 50 44 56M51 44 57 50 51 56',
@@ -123,9 +125,19 @@ const BADGES = {
 };
 export const BADGE_NAMES = Object.freeze(Object.keys(BADGES));
 
+export function badgeMarkup(badge) {
+  if (badge === 'flame') {
+    const outer = p(BADGES.flame, 'var(--niche-2,#bb9cff)');
+    const inner = p('M48 57C43 54 45 51 48 46C48 50 51 49 51 42C52 47 58 50 54 55Q52 58 48 57Z', 'var(--niche,#91e5e3)', 'stroke="none"');
+    const core = p('M49 56Q47 53 51 50Q51 52 53 53Q53 56 49 56Z', C, 'stroke="none"');
+    return `<g stroke="${D}" stroke-width="2.2" stroke-linejoin="round">${outer}${inner}${core}</g>`;
+  }
+  return badge ? `<g stroke="${D}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${c(51, 50, 12, C)}${p(BADGES[badge], 'none')}</g>` : '';
+}
+
 export function iconMarkup({ shape, badge = '' }, glossy = false) {
   if (!ART[shape] || (badge && !BADGES[badge])) throw new Error(`Unknown icon artwork: ${shape}/${badge}`);
-  const stamp = badge ? `<g stroke-width="2.2">${c(51, 50, 12, C)}${p(BADGES[badge], 'none')}</g>` : '';
+  const stamp = badgeMarkup(badge);
   const polish = glossy ? `<g stroke="#fffaf0" stroke-width="3.5" fill="none" opacity=".95"><path d="M18 22 24 16M18 30 32 16"/></g><g stroke="${D}" stroke-width="1.5">${star(51, 12, .29, C)}</g>` : '';
   return `<g stroke="${D}" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">${ART[shape]()}${stamp}${polish}</g>`;
 }

@@ -101,7 +101,7 @@ Object.assign(DEMOS, {
     const c = k.counter({ v: 300, y: 14 });
     k.btn({ y: 46 });
     k.add(0, 96, 'width:240px;height:30px;background:#fff;border-top:1px solid #888;border-bottom:1px solid #888;');
-    const clip = k.add(0, 96, 'width:240px;height:30px;overflow:hidden;mask-image:linear-gradient(to right,transparent 12%,#000 62%);');
+    const clip = k.add(0, 96, 'width:240px;height:30px;overflow:hidden;mask-image:linear-gradient(to right,transparent 0,#000 12%,#000 88%,transparent 100%);');
     const t = k.add(0, 6, 'white-space:nowrap;font:500 15px ' + basicsFont + ';', 'thoughts, going... where was i... what was the...', clip);
     k.anim(t, [{ transform: 'translateX(240px)' }, { transform: 'translateX(-340px)' }], 8500, { iterations: Infinity, easing: 'linear' });
     k.every(1000, () => { c.add(5); k.float(172, 16, '+5', 'color:#a3232b'); }, true);
@@ -137,13 +137,6 @@ Object.assign(DEMOS, {
     }
   }),
 
-  heart: (k) => {
-    const c = k.counter({ v: 2500, y: 16 });
-    const h = k.add(70, 34, 'width:100px;', basicsHeart(100, '#e8518a'));
-    k.anim(h, [{ transform: 'scale(.82)', opacity: .35 }, { transform: 'scale(1.08)', opacity: .9, offset: .18 }, { transform: 'scale(.92)', opacity: .5, offset: .36 }, { transform: 'scale(1.02)', opacity: .75, offset: .5 }, { transform: 'scale(.82)', opacity: .35 }], 1700, { iterations: Infinity });
-    k.btn({ y: 72 });
-    k.every(1000, () => c.add(23));
-  },
   f3: (k) => basicsSplit(k, ['Slideshow', 'Swipe Feed', 'No Pictures'], (i, p, w) => {
     const place = (e) => { p.appendChild(e); return e; };
     if (i === 0) {
@@ -319,7 +312,7 @@ Object.assign(DEMOS, {
   },
 
   colour: (k) => {
-    const fill = k.add(0, 0, 'width:240px;height:150px;background:#ffdcee;clip-path:circle(0 at 120px 77px);transition:clip-path .9s ease-out;');
+    const fill = k.add(0, 0, 'width:240px;height:150px;background:#ffa8d5;clip-path:circle(0 at 120px 77px);transition:clip-path .9s ease-out;');
     const c = k.counter({ v: 60 });
     const b = k.btn({});
     let on = false;
@@ -429,20 +422,8 @@ Object.assign(DEMOS, {
     });
   },
 
-  watch: (k) => {
-    k.page('pink');
-    const c = k.counter({ v: 4000, y: 8, css: 'text-align:left;padding-left:8px;font-size:13px;' });
-    const pivot = k.add(120, -2, 'width:0;height:0;');
-    k.add(-1, 0, 'width:2px;height:66px;background:repeating-linear-gradient(#8a6d1f 0 4px,#d9b94f 4px 8px);', '', pivot);
-    const b = k.btn({ w: 60, h: 60, x: -30, y: 64, label: 'Click', css: 'border:4px solid #b8902a;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff7d8,#f0cf70);font:600 12px ' + basicsFont + ';' });
-    pivot.appendChild(b);
-    k.anim(pivot, [{ transform: 'rotate(-28deg)' }, { transform: 'rotate(28deg)' }], 1500, { iterations: Infinity, direction: 'alternate' });
-    k.finger(120, 96);
-    k.after(750, () => k.every(1500, () => { k.press(b); c.add(8); k.float(158, 92, '+8', 'color:#a3232b;font-size:16px'); }));
-  },
-
   paint: (k) => {
-    const pots = [['#ffdcee', '#ff69b4', '#111'], ['#dccfff', '#7b5cff', '#111'], ['#c4f0ea', '#16a596', '#111'], ['#15131a', '#000', '#f0f0f5']];
+    const pots = [['#ffa8d5', '#ff69b4', '#111'], ['#dccfff', '#7b5cff', '#111'], ['#c4f0ea', '#16a596', '#111'], ['#15131a', '#000', '#f0f0f5']];
     k.el.style.transition = 'background .5s,color .5s';
     k.counter({ v: 5000, y: 16 });
     k.btn({ y: 48 });
@@ -485,44 +466,6 @@ Object.assign(DEMOS, {
         if (hit) { basicsBurst(k, x ? 236 : 4, 4, '#f0c24b', 14, 44); c.add(10); k.word(x ? 170 : 34, 18, 'x10', 900, 'color:#f0c24b;font-size:24px;'); } else { c.add(1); k.float(x + 13, y - 2, '+1', 'color:#ff9ccf'); }
       });
     });
-  },
-
-  heartbtn: (k) => {
-    k.page('pink');
-    const c = k.counter({ v: 20000, y: 10 });
-    const h = k.add(80, 44, 'width:80px;height:72px;');
-    const inner = k.add(0, 0, 'width:80px;', basicsHeart(80, '#e8306f'), h);
-    k.anim(inner, [{ transform: 'scale(1)' }, { transform: 'scale(1.1)', offset: .15 }, { transform: 'scale(1)', offset: .3 }, { transform: 'scale(1.06)', offset: .45 }, { transform: 'scale(1)', offset: .6 }, { transform: 'scale(1)' }], 1500, { iterations: Infinity });
-    const f = k.finger();
-    k.every(1100, () => f.tapEl(h, () => {
-      k.anim(h, [{ transform: 'scale(1.2,.72)' }, { transform: 'scale(.92,1.1)', offset: .5 }, { transform: 'scale(1,1)' }], 300, { easing: 'ease-out' });
-      c.add(28); k.float(168, 54, '+28', 'color:#a3232b;font-size:15px');
-    }));
-  },
-
-  mirror: (k) => {
-    k.page('dark');
-    const c = k.counter({ v: 30000, y: 12 });
-    const style = 'background:linear-gradient(160deg,#fff,#b8c4d4 45%,#7d8ca0 55%,#e6edf5);border:1px solid #fff;border-radius:5px;color:#123;font:600 14px ' + basicsFont + ';overflow:hidden;';
-    const refl = k.btn({ w: 90, h: 34, x: 75, y: 84, css: style + 'transform:scaleY(-1);opacity:.28;mask-image:linear-gradient(to top,#000,transparent 85%);' });
-    k.add(40, 82, 'width:160px;height:1px;background:rgba(255,255,255,.4);');
-    const b = k.btn({ w: 90, h: 34, x: 75, y: 47, css: style });
-    const sheen = k.add(-30, -4, 'width:18px;height:44px;background:rgba(255,255,255,.75);transform:skewX(-20deg);', '', b);
-    k.anim(sheen, [{ left: '-30px' }, { left: '110px' }], 1800, { iterations: Infinity });
-    basicsTap(k, b, 1200, () => { c.add(38); k.float(178, 50, '+38', 'color:#ff9ccf;font-size:15px'); });
-  },
-
-  spirbtn: (k) => {
-    k.page('pink');
-    const c = k.counter({ v: 60000, y: 6, css: 'font-size:14px;' });
-    const s = k.spiral({ x: 120, y: 84, r: 44, speed: .7, color: '#ff4fa8', color2: '#6a3cff', css: 'border-radius:50%;background:#fff;box-shadow:0 0 0 2px #fff,0 2px 6px rgba(0,0,0,.4);' });
-    let turn = 0;
-    const f = k.finger();
-    k.every(1400, () => f.tapEl(s, () => {
-      turn -= 360;
-      k.anim(s, [{ transform: 'rotate(' + (turn + 360) + 'deg)' }, { transform: 'rotate(' + turn + 'deg)' }], 800, { easing: 'ease-out' });
-      c.add(65); k.float(180, 54, '+65', 'color:#a3232b;font-size:15px');
-    }));
   },
 
   bigbtn: (k) => {

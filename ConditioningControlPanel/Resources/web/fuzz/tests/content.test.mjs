@@ -213,7 +213,10 @@ test('the writing does not assume a gender of the player', () => {
     LISTENING_TEST, OPINIONS, STILL_WORDS, STARE_LINES, GOLDEN, SCREEN_TIME, LEVELS, WHEEL, BOXES, FEED_LINES, ACHIEVEMENTS,
     combos, SLEEP_STORY, AUDIO_DRAMA, INDUCTION, MOODS, AFTER_RUN,
   });
-  none(rows,/\b(girl|girls|boy|boys|princess|lady|ladies|gentleman|sir|madam|miss|mister|woman|women|wife|husband)\b/i);
+  /* The Bimbodoll ending's "GOOD GIRL BAMBI" flash and "Good girl." closing are the owner's own words (2026-11-08,
+   * handoff-1108/TC-BIMBODOLL-ENDING-BRIEF.md): the Bambi theme's sign-off, named exception. */
+  const owned = new Set(['.ENDINGS.bi_end.closing', '.ENDINGS.bi_end.flash[0]']);
+  none(rows.filter((r) => !owned.has(r.path)),/\b(girl|girls|boy|boys|princess|lady|ladies|gentleman|sir|madam|miss|mister|woman|women|wife|husband)\b/i);
   none(rows.filter((r) => !/EMI|Circe/.test(r.text)), /\b(she|her|hers|he|him|his)\b/i);
 });
 
@@ -292,7 +295,7 @@ test('Listening Test and Voice Reactions only ever use recorded clips', () => {
 test('side toys: words, achievements and the honest app-only lines', () => {
   for (const bank of [LUCKY_WORDS, BOUNCE_WORDS, BIG_WORDS, EDGE_WORDS, STILL_WORDS]) assert.ok(bank.length >= 8);
   assert.ok(STARE_LINES.start.length && PHONES_PROMPT.ask && TAB_TITLES[0] === 'Quarterly Report.xlsx');
-  assert.deepEqual(GOLDEN.prizes.map((p) => p.key), ['lump', 'frenzy', 'free']);
+  assert.deepEqual(GOLDEN.prizes.map((p) => p.key), ['lump', 'frenzy', 'free', 'deep']);
   assert.ok(SCREEN_TIME.tips.length && LEVELS.up.length && WHEEL.results.length && BOXES.opened.length && DRIFT_LINES.length && FEED_LINES.endNear.length);
   assert.deepEqual(FALLING_WORDS.map((w) => w.word), ['FOCUS', 'BLANK', 'DEEPER']);
   assert.ok(APP_ONLY.sparkle.tag === 'app only' && APP_ONLY.toy.tag === 'app only');

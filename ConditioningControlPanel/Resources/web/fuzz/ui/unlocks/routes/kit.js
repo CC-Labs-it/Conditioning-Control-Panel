@@ -3,7 +3,8 @@
  * in the free space beside the button when there are none (phones, narrow windows). */
 
 import { createSpiral } from '../../../fx/spiral.js';
-import { dockIsRail, railWidth } from '../../dock.js';
+import { dockIsRail } from '../../dock.js';
+import { frameRect, LITE } from '../../perf.js';
 
 export const docOf = (ctx) => ctx.layer('over').ownerDocument;
 export const fill = (s, map) => String(s).replace(/\{(\w+)\}/g, (m, k) => (k in map ? map[k] : m));
@@ -19,10 +20,11 @@ export function deck(list, ctx) {
 }
 
 export const rectOf = (el) => el.getBoundingClientRect();
-export function btnCentre(ctx) { const r = rectOf(ctx.button.el); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height, top: r.top, bottom: r.bottom, left: r.left, right: r.right }; }
+/* Aiming reads go through the per-frame cache (ui/perf.js): many effects aim at the button in the same frame. */
+export function btnCentre(ctx) { const r = frameRect(ctx.button.el); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height, top: r.top, bottom: r.bottom, left: r.left, right: r.right }; }
 /** The zone the button sits in: where the free space beside it ends. */
-export function zoneRect(ctx) { return rectOf(ctx.parts.buttonWrap.parentElement); }
-export function counterRect(ctx) { return rectOf(ctx.parts.counter); }
+export function zoneRect(ctx) { return frameRect(ctx.parts.buttonWrap.parentElement); }
+export function counterRect(ctx) { return frameRect(ctx.parts.counter); }
 
 /** A ring that opens and fades. Fades only, so it is fine under Gentle. */
 export function ring(ctx, x, y, size, color = 'var(--accent-2)', ms = 800, parent = 'floaters') {
@@ -35,6 +37,7 @@ export function ring(ctx, x, y, size, color = 'var(--accent-2)', ms = 800, paren
 /** A party sized to the event. Off under Gentle. */
 export function burst(ctx, x, y, color = 'var(--accent)', n = 12, dist = 70) {
   if (ctx.gentle) return;
+  if (LITE) n = Math.ceil(n / 2);   // phones: half the dots (ui/perf.js)
   for (let i = 0; i < n; i++) {
     const a = (i / n) * 6.283, d = ctx.el('div', `position:absolute;left:${x}px;top:${y}px;width:6px;height:6px;border-radius:50%;background:${color};`, null, 'over');
     ctx.anim(d, [{ transform: 'translate(0,0)', opacity: 1 }, { transform: `translate(${Math.cos(a) * dist}px,${Math.sin(a) * dist}px)`, opacity: 0 }], { duration: 650, easing: 'ease-out' });
@@ -78,33 +81,11 @@ const prune = () => { for (const s of ['left', 'right']) stacks[s] = stacks[s].f
 
 function layout(ctx) {
   prune();
-  const { w } = ctx.bounds();
-  if (railsRoom(ctx)) {
-    docOf(ctx).documentElement.style.setProperty('--routes-mid', '100%');
-    const inner = railWidth(w) - 26;   // the rail's padding, the slot's border and padding
-    for (const s of ['left', 'right']) {
-      for (const p of stacks[s]) {
-        p.slot ||= p.ctx.dock({ edge: s, chip: false });
-        if (p.el.parentElement !== p.slot) p.slot.appendChild(p.el);
-        p.el.style.cssText = `${p.css};position:relative;left:auto;right:auto;top:auto;width:100%;height:${p.height}px;`;
-        p.place?.({ w: inner, h: p.height, rail: true });
-      }
-    }
-    return;
-  }
-  const zone = zoneRect(ctx), btn = rectOf(ctx.button.el);
-  const flankW = Math.max(60, Math.min(240, (w - btn.width) / 2 - 16));
-  const metersBottom = rectOf(ctx.layer('meters')).bottom;
-  const top = Math.max(counterRect(ctx).bottom, Math.min(metersBottom, zone.bottom - 80)) + 2, bottom = zone.bottom - 4;
-  docOf(ctx).documentElement.style.setProperty('--routes-mid', stacks.left.length || stacks.right.length ? `${w - 2 * (flankW + 10)}px` : '100%');
-  for (const s of ['left', 'right']) {
-    const list = stacks[s], gap = 4;
-    const each = Math.max(40, (bottom - top - gap * (list.length - 1)) / Math.max(1, list.length));
-    list.forEach((p, i) => {
-      if (p.el.parentElement !== ctx.layer('floaters')) ctx.layer('floaters').appendChild(p.el);
-      p.el.style.cssText = `${p.css};position:absolute;${s}:6px;top:${top + i * (each + gap)}px;width:${flankW}px;height:${each}px;`;
-      p.place?.({ w: flankW, h: each, rail: false });
-    });
+  for (const side of ['left', 'right']) for (const p of stacks[side]) {
+    p.slot ||= p.ctx.dock({ edge: side, width: 220 });
+    if (p.el.parentElement !== p.slot) p.slot.appendChild(p.el);
+    p.el.style.cssText = `${p.css};position:relative;left:auto;right:auto;top:auto;width:100%;height:${p.height}px;`;
+    p.place?.({ w: p.slot.clientWidth || 220, h: p.height, rail: true });
   }
 }
 
@@ -127,7 +108,6 @@ export function panel(ctx, { side = '', height = 170, css = '', place = null } =
   const el = ctx.el('div', css);
   baseCss(ctx);
   stacks[s].push({ el, side: s, height, css, place, ctx });
-  if (s === 'right') ctx.on('routes:corner', ({ on }) => el.classList.toggle('routes-cornered', on && !railsRoom(ctx)));
   layout(ctx);
   let seen = ctx.bounds(), zoneBottom = zoneRect(ctx).bottom;
   ctx.every(700, () => {
@@ -210,7 +190,7 @@ export const spiral = () => spiralNow;
 
 /* ---- ads: one look, one rule. Only a real card links out, on the player's own press, paying once per ad ---- */
 export const nextAd = (ctx, kind, opts = {}) => ctx.ads.next({ kind, ...opts });
-/** A press on a real ad: pays once for this ad and opens it. Call it directly in the click handler, or ctx.openLink refuses. */
+/** A press on a real ad: pays once for this ad and opens it (tabs capped per run). Call it directly in the click handler, or the link refuses. */
 export function pressAd(ctx, rec, at) {
   if (!rec?.ccp || !rec.url) return false;
   let paid = ctx.store.get('paidAds') || [];
@@ -221,6 +201,6 @@ export function pressAd(ctx, rec, at) {
     ctx.pay(Math.max(r.fps, r.click) * ctx.config.AD_CLICK_PAYS_SECONDS, 'ad', at);
   }
   ctx.emit('ad', { id: rec.id });
-  ctx.openLink(rec.url);
+  ctx.openAdLink(rec.url);   // at most AD_TABS_PER_RUN tabs a run; past it the press still pays
   return true;
 }

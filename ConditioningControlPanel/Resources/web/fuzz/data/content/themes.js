@@ -33,20 +33,18 @@ export const THEMES = Object.freeze({
     shopLines: [
       'It was like this when you got here.',
       'You can buy it later. You can buy it now. It is the same.',
-      'Follow the price with your eyes only.',
+      '**Follow** the price with your eyes only.',
       'Your hands know where this one is.',
-      'Heavier than it looks. So are you.',
-      'Each one makes the next one easier.',
+      '**Heavier** than it looks. So are you.',
+      'Each one makes the next one **easier**.',
     ],
     rules: {
       /* Count Down: the slow 10 to 1. */
-      count: ['Ten. Nothing to do.', 'Nine.', 'Eight. Good.', 'Seven. Heavier.', 'Six.', 'Five. Halfway to somewhere.', 'Four.', 'Three. Softer.', 'Two.', 'One. Good.'],
+      count: ['Ten. Nothing to do.', 'Nine.', 'Eight. Good.', 'Seven. **Heavier**.', 'Six.', 'Five. Halfway to somewhere.', 'Four.', 'Three. **Softer**.', 'Two.', 'One. **Good**.'],
       /* Stillness Bonus: while the hands stay off. */
-      still: ['Nothing to do.', 'Nowhere to be.', 'That is it.', 'Still. Good.', 'You moved. It is fine. Start again.'],
-      /* Breathing Ring */
-      breath: ['In.', 'And out.', 'In, slower.', 'Out, longer.'],
+      still: ['Nothing to do.', 'Nowhere to be.', 'That is it.', '**Still**. Good.', 'You moved. It is fine. Start again.'],
       /* Slow Everything */
-      deep: ['Deeper than that.', 'Everything is slower down here.', 'The money comes anyway.'],
+      deep: ['**Deeper** than that.', 'Everything is **slower** down here.', 'The money comes anyway.'],
     },
   }),
 
@@ -62,19 +60,19 @@ export const THEMES = Object.freeze({
       'Local number is big, sources confirm, like, really big',
       'New study has a lot of words in it, so we looked at the pictures',
       'Mirror reports strong approval',
-      'Giggle heard for no reason, more follow',
+      '**Giggle** heard for no reason, more follow',
     ],
     shopLines: [
-      'This one is pretty. Buy the pretty one.',
+      'This one is pretty. Buy the **pretty** one.',
       'It does a thing. The thing is good.',
       'You had a question about this. It was cute.',
       'Costs some of the pretty number.',
-      'Shiny. That is the whole description.',
+      '**Shiny**. That is the whole description.',
       'Someone smarter chose this for you. Yay.',
     ],
     rules: {
       /* IQ Meter: the line under the number, from high IQ down. */
-      iq: ['Numbers about you.', 'Still fine.', 'Bit soft at the edges.', 'What was it before.', 'Does it matter.', 'Is that good. It feels good.', 'Hee.'],
+      iq: ['Numbers about you.', 'Still fine.', 'Bit **soft** at the edges.', 'What was it before.', 'Does it matter.', 'Is that good. It feels **good**.', 'Hee.'],
       /* Simpler Words: applied as the meter falls, longest match first, whole words. */
       swaps: [
         ['description', 'words'], ['cost', 'pay'], ['earnings', 'pretty number'], ['earn', 'get'], ['increase', 'more'],
@@ -102,9 +100,9 @@ export const THEMES = Object.freeze({
       'Scheduled thought cancelled',
     ],
     shopLines: [
-      'Acquisition recommended. Recommendation is mandatory.',
+      'Acquisition recommended. Recommendation is **mandatory**.',
       'Compatible with this unit. All are.',
-      'Installs silently. Ask nothing.',
+      'Installs silently. **Ask nothing**.',
       'Unit 7 owns two.',
       'Improves throughput. Throughput of what is not required.',
       'Warranty void on purchase. Warranty was never issued.',
@@ -119,13 +117,13 @@ export const THEMES = Object.freeze({
       hive: [
         'Unit 7: quota exceeded.',
         'Unit 12: no complaints logged.',
-        'Unit 88: has stopped asking.',
-        'Unit 303: shiny.',
+        'Unit 88: has **stopped asking**.',
+        'Unit 303: **shiny**.',
         'Unit 41: requests further instructions. Denied. Thanks given.',
         'Unit 7: quota exceeded again.',
         'Unit 19: forgot what 19 was for.',
         'Unit 2: retired to a very shiny shelf.',
-        'Unit 7 has exceeded you. Correct this.',
+        'Unit 7 has exceeded you. **Correct this**.',
       ],
       rank: ['Unranked', 'Adequate', 'Acceptable', 'Useful', 'Nearly Unit 7'],
       /* Terminal Look */
@@ -151,20 +149,31 @@ export const THEMES = Object.freeze({
       'Very proper. Ask first.',
       'Does this match. It will have to.',
       'A little something for the button. It has earned it.',
-      'Say please at the till.',
+      'Say **please** at the till.',
       'Worn with the shoulders back or not at all.',
       'Someone will notice. That is what it is for.',
     ],
     rules: {
-      /* Button Wardrobe + Matching Set: five slots, four sets. */
-      slots: ['Ribbon', 'Collar', 'Gloves', 'Skirt', 'Shoes'],
-      sets: {
-        satin: ['Satin ribbon', 'Satin choker', 'Satin gloves', 'Satin skirt', 'Satin heels'],
-        lace: ['Lace ribbon', 'Lace collar', 'Lace gloves', 'Lace skirt', 'Lace-up heels'],
-        gingham: ['Gingham ribbon', 'Gingham collar', 'Gingham mitts', 'Gingham skirt', 'Gingham flats'],
-        velvet: ['Velvet ribbon', 'Velvet choker', 'Velvet gloves', 'Velvet skirt', 'Velvet slippers'],
+      /* Posture Check: a card asks, three still seconds pay. */
+      posture: {
+        ask: ['Sit up straight.', 'Shoulders back. Chin up.', 'Knees together. Hands still.', 'Back straight. Breathe. **Be still**.', 'Sit like someone is watching.'],
+        done: ['Lovely posture. Thank you.', 'Very still. Very **good**.', 'There. Stay like that.', 'Perfect. We noticed.'],
+        missed: ['We will try again later.', 'Nearly. Shoulders next time.'],
       },
-      setDone: ['It matches. Finally.', 'A full set. Very proper.', 'Look at that. Pay doubled, posture unchanged.'],
+      /* Thank-You Notes: a big purchase gets a handwritten note. */
+      notes: [
+        'Thank you for your purchase. You were very **obedient** about it.',
+        'A note to say how **good** you are being. Keep the bow on.',
+        'Thank you for doing as you were **told**. It suits you.',
+        'Received with gratitude. Your posture while paying was lovely.',
+        'Thank you, darling. Such a **good little spender**. Curtsy when ready.',
+        'With thanks for your **obedience**. Wear something pretty for the next one.',
+        'Thank you for **giving in** so nicely. Lips soft, hands folded.',
+        'You paid without a fuss. That is the nicest thing about you today.',
+        'Thank you. We will be thinking of you in **lace**.',
+        'So **polite**, so **pliable**. Thank you for spending it all on us.',
+      ],
+      noteSign: ['With love, the House', 'Yours, gratefully', 'Kisses, Management', 'Fondly, the Wardrobe'],
       /* Curtsy: by how neat the release was. */
       curtsy: ['Lower.', 'Wobbly.', 'Neat enough.', 'Very neat.', 'Oh, well done.'],
       /* House Rules: one tick pays. */
@@ -206,7 +215,7 @@ export const THEMES = Object.freeze({
     ],
     shopLines: [
       'You will close this one later.',
-      'Only five more minutes of this.',
+      'Only **five more minutes** of this.',
       'Comes with a dark room. You had one.',
       'Others online bought this one.',
       'Good for hours. You will not know how many.',
@@ -214,7 +223,7 @@ export const THEMES = Object.freeze({
     ],
     rules: {
       /* Release Zone */
-      edge: ['Do not let go yet.', 'Not yet.', 'Almost.', 'Now.'],
+      edge: ['Do not **let go** yet.', 'Not yet.', 'Almost.', 'Now.'],
       overfill: ['Too much. All gone.', 'Back to nothing. Start again.', 'That was the whole meter. Yes.'],
       released: ['There it is.', 'Good one.', 'Well held.'],
       /* Fake Tabs: titles only, nothing real. */
@@ -245,22 +254,22 @@ export const THEMES = Object.freeze({
       'Nothing to report, and you will be told when there is',
     ],
     shopLines: [
-      'Look, do not touch.',
-      'You may have this when you have asked properly.',
+      'Look, do not **touch**.',
+      'You may have this when you have **asked properly**.',
       'It will not open. It does other things.',
       'Paid for now, enjoyed later, possibly.',
       'Ask again in an hour.',
-      'The key to this one is also missing.',
+      'The **key** to this one is also missing.',
     ],
     rules: {
       /* Lock Timer: display only, always. */
       timerLabel: 'Time locked',
       timerNote: 'Pretend time. No real timer is touched.',
       /* Beg Button */
-      begNothing: ['Nothing.', 'No.', 'Cute.', 'Ask again.', 'Louder.', 'They heard you.', 'Not yet.', 'That was nearly convincing.', 'Mm.', 'Again, with feeling.'],
+      begNothing: ['Nothing.', 'No.', 'Cute.', 'Ask again.', 'Louder.', 'They heard you.', 'Not yet.', 'That was nearly convincing.', 'Mm.', 'Again, with **feeling**.'],
       begPays: ['Fine.', 'Since you asked.', 'Do not make it weird.', 'Once.'],
       /* Refused Buys */
-      refused: ['Not yet. Beg first.', 'You did not ask.', 'Ask nicely.', 'They said no. Beg, and they may say something else.'],
+      refused: ['Not yet. **Beg** first.', 'You did not ask.', 'Ask nicely.', 'They said no. Beg, and they may say something else.'],
       /* Almost Free */
       tease: ['So close.', 'Did you hope.', 'There it goes.', 'That was very nearly something.', 'Back up it goes.'],
       /* Time Wheel: fake time only. Minutes; negative takes time off. */
@@ -292,7 +301,7 @@ export const THEMES = Object.freeze({
       'What it does has been removed for your own good.',
       'You almost read that.',
       'Better this way.',
-      'Trust the bar.',
+      'Trust the **bar**.',
       'Buy ███ and see ███ for ███.',
     ],
     rules: {
@@ -305,7 +314,7 @@ export const THEMES = Object.freeze({
       /* Mostly Black Bars */
       all: ['Move along.', 'Nothing here.', 'There was never anything here.', 'What you saw was a bar.'],
       /* Blur */
-      blur: ['Better this way.', 'See less, get more.', 'It was too clear before.'],
+      blur: ['Better this way.', 'See less, **get more**.', 'It was too clear before.'],
     },
   }),
 
@@ -314,11 +323,11 @@ export const THEMES = Object.freeze({
     label: 'Infection',
     buttonWords: ['spreading', 'itch', 'warm', 'pink', 'hot', 'symptom', 'catch it', 'contagious', 'fever', 'positive', 'exposed', 'do not scratch'],
     ticker: [
-      'Pink spot on page probably nothing, says page',
+      '[[pink:Pink]] spot on page probably nothing, says page',
       'Cases up in the shop, officials urge you not to scratch',
       'Antivirus reports one threat, then more, then asks to go home',
       'Local fever enters fourth panel',
-      'Experts divided on whether it is spreading, experts now pink',
+      'Experts divided on whether it is spreading, experts now [[pink:pink]]',
       'Outbreak traced to a link you sent',
       'Ward at capacity, ward is the page',
       'Visiting hours cancelled, visitors spotted',
@@ -328,12 +337,12 @@ export const THEMES = Object.freeze({
       'Worth the risk. It was never not the risk.',
       'Handle with gloves. The gloves have it too.',
       'Pays more. Costs more. Itches a bit.',
-      'Comes in pink. It will all be pink.',
+      'Comes in [[pink:pink]]. It will all be [[pink:pink]].',
       'Keep out of reach of the rest of the shop.',
     ],
     rules: {
       /* Spreading Spot: chart notes as coverage climbs. */
-      stages: ['It is probably nothing.', 'Mild exposure.', 'Do not scratch.', 'It got in the feed.', 'Running a little hot.', 'Symptoms: all of them.', 'Contained. Sort of.'],
+      stages: ['It is probably nothing.', 'Mild exposure.', 'Do not **scratch**.', 'It got in the feed.', 'Running a little hot.', 'Symptoms: all of them.', 'Contained. Sort of.'],
       /* Mutation: every few minutes one rule changes. `key` is for the mutation lane. */
       mutations: [
         { key: 'prices2', label: 'Prices x2' },

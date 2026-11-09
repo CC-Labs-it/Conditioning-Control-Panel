@@ -7,13 +7,17 @@
 import { ITEMS, BY_ID, FORKS, FORK_OF_LANE } from '../data/items.js';
 import { CONFIG } from '../data/config.js';
 import { moodOf } from './moods.js';
+import { accrueActivities } from './journey-effects.js';
 import { ridersOf } from '../data/folds.js';
+import { EMI_LIFT } from './tap-rate.js';
 
 export const WALL_BASE = 1;
 
-export function createRun({ pace = 1, mood = null, seed = 1, perk = null } = {}) {
+/** prestige: a Renewal Sky run stamp (sim/prestige.js runStamp). Its pay multiplier rides on pace, which every income path
+ *  already carries; its price scale and minutes are read by the Journey plan. null = a run that plays as Depth 0. */
+export function createRun({ pace = 1, mood = null, seed = 1, perk = null, prestige = null } = {}) {
   const s = {
-    pace: Math.max(1, Math.min(CONFIG.MAX_PACE, pace)),
+    pace: Math.max(1, Math.min(CONFIG.MAX_PACE, pace)) * (prestige?.pay > 0 ? prestige.pay : 1),
     seed,
     mood,
     clock: 0,          // ms played: stops on pause, suspend and end
@@ -34,6 +38,7 @@ export function createRun({ pace = 1, mood = null, seed = 1, perk = null } = {})
     ended: null,       // {id, at}
     base: { fps: 0, click: 1, wall: WALL_BASE },
   };
+  if (prestige) s.prestige = prestige;
   if (perk && BY_ID[perk] && BY_ID[perk].lane === 'look') { s.owned[perk] = 1; s.order.push(perk); }
   recalc(s);
   return s;
@@ -80,10 +85,32 @@ const soft = (value, base, knee) => {
 /** Everything that decides income right now. walls = hits per second per bouncing button. */
 export function rates(s, mods = null, now = s.clock) {
   const mood = moodOf(s);
+  let bounceShare = CONFIG.BOUNCE_PASSIVE_SHARE, tapShare = CONFIG.ROUND_TAP_PASSIVE_SHARE, passiveBonus = 0;
+  const journey = s.store.journey;
+  if (journey) {
+    const { ranks, specs } = journey;
+    bounceShare += .001 * (ranks.stray || 0);
+    tapShare += .0005 * (ranks.rounded || 0);
+    if (specs.spec_rebounds === 'steady') bounceShare += .002;
+    if (specs.spec_mix === 'bounce') bounceShare += .002;
+    if (specs.spec_mix === 'tap') tapShare += .002;
+    const passiveRanks = (ranks.ticker || 0) + (ranks.e_spiral || 0) + (ranks.a_hum || 0);
+    passiveBonus = s.base.fps * .0025 * passiveRanks;
+  }
+  if (journey) { tapShare += CONFIG.JOURNEY_TAP_SHARE; for (const id of CONFIG.TAP_SHARE_LOOKS) if (has(s, id)) tapShare += CONFIG.TAP_SHARE_PER_LOOK; }
+  /* Timed buffs fold after the knee, so they multiply in full (see CONFIG.MOD_FPS_KNEE). So do `post` mods: the
+   * player's own permanent Renewal Sky multipliers (ui/unlocks/prestige/boosts.js), which awayRate keeps. */
+  const steady = mods && mods.some((m) => m.timed || m.post) ? mods.filter((m) => !m.timed && !m.post) : mods;
+  const timed = steady === mods ? null : mods.filter((m) => m.timed || m.post);
+  const fps = Math.max(0, fold('fps', soft(fold('fps', s.base.fps, s, steady, now), s.base.fps, CONFIG.MOD_FPS_KNEE), s, timed, now));
+  const click = Math.max(0, fold('click', soft(fold('click', s.base.click, s, steady, now), s.base.click, CONFIG.MOD_CLICK_KNEE), s, timed, now));
+  const wall = Math.max(0, fold('wall', s.base.wall, s, mods, now));
+  /* A click buff also multiplies the share of passive pay a manual tap carries. */
+  const clickBuff = timed ? fold('click', 1, s, timed, now) : 1;
   return {
-    fps: Math.max(0, soft(fold('fps', s.base.fps, s, mods, now), s.base.fps, CONFIG.MOD_FPS_KNEE)),
-    click: Math.max(0, soft(fold('click', s.base.click, s, mods, now), s.base.click, CONFIG.MOD_CLICK_KNEE)),
-    wall: Math.max(0, fold('wall', s.base.wall, s, mods, now)),
+    fps: fps + passiveBonus, click, wall,
+    manualClick: click + (click > 0 && has(s, 'rounded') ? s.base.fps * tapShare * clickBuff : 0),
+    bounce: wall + (wall > 0 && has(s, 'stray') ? s.base.fps * bounceShare : 0),
     walls: Math.max(0, fold('walls', CONFIG.WALLS_PER_STRAY * (mood?.walls || 1), s, mods, now)),
   };
 }
@@ -104,6 +131,10 @@ export const ridersFor = (s, id) => ridersOf(id).filter((r) => !has(s, r) && BY_
 function unitPrice(s, it, mods, now) {
   let v = it.cost * CONFIG.PRICE_SCALE;
   if (it.grow) v *= Math.pow(it.grow.ratio, count(s, it.id));
+  return adjustPrice(s, it, v, mods, now);
+}
+
+export function adjustPrice(s, it, v, mods, now = s.clock) {
   const mp = moodOf(s)?.price;
   if (mp) v = mp(v, it);
   v = fold('price', v, s, mods, now, it);
@@ -139,9 +170,10 @@ export function goal(s) {
 export const revealed = (s, cost) => cost <= Math.max(8, s.total * 1.5);
 
 /** The rolling window: the goal plus the next few by price. */
-export function shopWindow(s, mods = null, size = 6) {
+export function shopWindow(s, mods = null, size = 6, featured = []) {
   const g = goal(s);
   const rest = openItems(s, mods).filter((it) => it !== g && revealed(s, price(s, it.id, mods)));
+  if (featured.length) rest.sort((a, b) => Number(featured.includes(b.id)) - Number(featured.includes(a.id)));
   const cap = Math.min(size, moodOf(s)?.window ?? size);
   return { goal: g, rows: rest.slice(0, cap), more: Math.max(0, rest.length - cap) };
 }
@@ -165,16 +197,24 @@ export function earn(s, amount, source = 'earn') {
  *  in CONFIG.SIDE_WEIGHT counts as more of itself on both sides of that sum: it keeps a bigger part of its ask, and takes it
  *  even when the rest of the budget has just gone. Its part can never be more than all the budget there is, so the others
  *  fall to the floor for a moment and the sum still holds. */
-export function sideLump(s, amount, source = 'lump') {
+export function quoteSideLump(s, amount, source = 'lump') {
   const ask = Number.isFinite(amount) ? Math.max(0, amount) : 0;
-  if (CONFIG.FULL_PRIZE_SOURCES.includes(source)) return credit(s, ask, source);
+  if (CONFIG.FULL_PRIZE_SOURCES.includes(source)) return ask;
   const g = s.side;
   const w = CONFIG.SIDE_WEIGHT[source] || 1;
-  g.asked += ask * w;
-  const fair = g.asked > 0 ? ask * Math.min(1, w * g.budget / g.asked) : 0;
+  const requested = g.asked + ask * w;
+  const fair = requested > 0 ? ask * Math.min(1, w * g.budget / requested) : 0;
   const paid = w > 1 ? fair : Math.min(fair, Math.max(g.budget - g.paid, ask * CONFIG.SIDE_FLOOR));
-  const got = Math.max(paid, ask * CONFIG.SIDE_FLOOR);
-  g.paid += got;
+  return Math.max(paid, ask * CONFIG.SIDE_FLOOR);
+}
+
+export function sideLump(s, amount, source = 'lump') {
+  const got = quoteSideLump(s, amount, source);
+  if (!CONFIG.FULL_PRIZE_SOURCES.includes(source)) {
+    const ask = Number.isFinite(amount) ? Math.max(0, amount) : 0;
+    s.side.asked += ask * (CONFIG.SIDE_WEIGHT[source] || 1);
+    s.side.paid += got;
+  }
   return credit(s, got, source);
 }
 
@@ -186,30 +226,57 @@ export function spend(s, amount, reason = 'spent') {
   return took;
 }
 
-export function tap(s, mods = null, now = s.clock) {
+export function tap(s, mods = null, now = s.clock, auto = false, mult = 1) {
   s.taps += 1;
-  return earn(s, rates(s, mods, now).click * s.pace, 'tap');
+  const rate = rates(s, mods, now);
+  /* mult: the EMI button's bell curve (sim/tap-rate.js). Manual presses only, never under the base, capped at its peak. */
+  const bell = auto ? 1 : Math.min(1 + EMI_LIFT, Math.max(1, Number.isFinite(mult) ? mult : 1));
+  return earn(s, (auto ? rate.click : rate.manualClick) * s.pace * bell, 'tap');
 }
 
-export function wallHit(s, mods = null, now = s.clock) {
+export function wallHit(s, mods = null, now = s.clock, owner = 'stray', corner = false) {
   s.walls += 1;
-  return earn(s, rates(s, mods, now).wall * s.pace, 'wall');
+  const rate = rates(s, mods, now);
+  const jackpot = corner && owner === 'stray' && rate.wall > 0 && s.store.journey?.specs?.spec_rebounds === 'corner' ? s.base.fps * .2 : 0;
+  return earn(s, ((owner === 'stray' ? rate.bounce : rate.wall) + jackpot) * s.pace, 'wall');
 }
 
 /** Advance the game clock and pay the per-second income. */
 export function tick(s, dtMs, mods = null) {
   if (s.ended) return 0;
   s.clock += dtMs;
+  if (s.store.journey) accrueActivities(s, dtMs / 1000);
   return earn(s, rates(s, mods, s.clock).fps * s.pace * (dtMs / 1000), 'fps');
 }
 
+/** Per-second pay for time away with the page open. Timed buffs never count, and neither does a bonus that runs out on
+ *  the run clock (a graded review, a paid paywall): the rate is the lower of now and the same run AWAY_CAP_MS later, so a
+ *  bonus that grows while nobody touches anything stays where it was. */
+export function awayRate(s, mods = null) {
+  if (s.ended) return 0;
+  const steady = mods ? mods.filter((m) => !m.timed) : mods;
+  const later = { ...s, clock: s.clock + CONFIG.AWAY_CAP_MS };
+  return Math.max(0, Math.min(rates(s, steady, s.clock).fps, rates(later, steady, later.clock).fps));
+}
+
+/** Pays ms of away time at awayRate. Away is not play: the run clock, the activity banks and the side money budget stay
+ *  where they are, so nothing timed burns down and no prize pays bigger for it. Counted with the per-second pay. */
+/** One absence pays at most this: AWAY_CAP_MS, raised by an `awayCap` mod (Night Shift). */
+export const awayCap = (s, mods) => fold('awayCap', CONFIG.AWAY_CAP_MS, s, mods);
+
+export function away(s, mods, ms) {
+  const t = Number.isFinite(ms) ? Math.min(awayCap(s, mods), Math.max(0, ms)) : 0;
+  if (!t || s.ended) return 0;
+  return lump(s, fold('away', awayRate(s, mods), s, mods, s.clock) * s.pace * (t / 1000), 'fps');
+}
+
 /** A plain buy. A fork answers {reason:'fork'}: take it with choose(). */
-export function buy(s, id, mods = null) {
+export function buy(s, id, mods = null, fixedCost) {
   const it = BY_ID[id];
   if (!it) return { ok: false, reason: 'unknown' };
   if (!isOpen(s, it)) return { ok: false, reason: 'closed' };
   if (it.kind === 'fork') return { ok: false, reason: 'fork' };
-  const cost = price(s, id, mods);
+  const cost = fixedCost ?? price(s, id, mods);
   if (s.fuzz < cost) return { ok: false, reason: 'short', cost };
   s.fuzz -= cost;
   const riders = ridersFor(s, id);
@@ -223,11 +290,11 @@ export function buy(s, id, mods = null) {
 }
 
 /** A fork costs nothing to take; it only needs its cost reached. The lanes not picked stay locked this run. */
-export function choose(s, forkId, lane, mods = null) {
+export function choose(s, forkId, lane, mods = null, threshold, funds = s.fuzz) {
   const it = BY_ID[forkId], f = FORKS[forkId];
   if (!it || !f || !f.opts[lane]) return { ok: false, reason: 'unknown' };
   if (!isOpen(s, it)) return { ok: false, reason: 'closed' };
-  if (s.fuzz < price(s, forkId, mods)) return { ok: false, reason: 'short' };
+  if (funds < (threshold ?? price(s, forkId, mods))) return { ok: false, reason: 'short' };
   s.picks[forkId] = lane;
   add(s, forkId);
   return { ok: true, item: it, lane };

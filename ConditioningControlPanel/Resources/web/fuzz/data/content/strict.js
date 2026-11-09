@@ -22,7 +22,7 @@ export const DENIED_LINES = Object.freeze({
 /* t_count Tap Countdown: tap {n} before it hits zero. */
 export const COUNT_LINES = Object.freeze({
   start: ['Tap {n}. Go.', '{n} taps. Now.', 'You have until zero. {n}.'],
-  won: ['Enough.', 'In time. Barely.', 'Good. You may stop. You will not.'],
+  won: ['Enough.', 'In time. Barely.', 'Good. You may stop. You **will not**.'],
   lost: ['Time. It cost you nothing. Think about that.', 'Zero. Nothing happens. It is very disappointed.', 'Out of time. Again when you are ready. Now.'],
 });
 
@@ -36,7 +36,7 @@ export const BEAT_LINES = Object.freeze({
 /* t_still Hands-Off Test */
 export const STILL_TEST = Object.freeze({
   words: ['DO NOT', 'HANDS OFF', 'NOT NOW', 'LEAVE IT', 'DO NOT EVEN'],
-  passed: ['Passed.', 'Fine. You can be told.', 'Well, look who has hands and is not using them.', 'Good. That was the whole test.'],
+  passed: ['Passed.', 'Fine. You can **be told**.', 'Well, look who has hands and is not using them.', 'Good. That was the whole test.'],
   failed: ['You tapped. It costs nothing. You should know that.', 'We said do not. You did.', 'It was five seconds.'],
 });
 
@@ -60,7 +60,7 @@ export const PHRASES = Object.freeze([
 
 export const PHRASE_LINES = Object.freeze({
   prompt: 'Type this. Exactly this.',
-  right: ['Again. With feeling.', 'Good. You can read.', 'Very convincing.', 'Did you mean it. It does not matter.'],
+  right: ['Again. With **feeling**.', 'Good. You can read.', 'Very convincing.', 'Did you mean it. It **does not matter**.'],
   wrong: ['That is not what it says.', 'Spelling is a kindness. Again.', 'Close. Close does not pay.'],
 });
 

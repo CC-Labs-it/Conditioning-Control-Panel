@@ -51,9 +51,9 @@ export const CAPTIONS = Object.freeze([
 /* b_story Short Story: three short lines, a new story each minute. */
 const s = (id, a, b, c) => Object.freeze({ id, lines: Object.freeze([a, b, c]) });
 export const STORIES = Object.freeze([
-  s('st_dark', 'It was dark.', 'It was blank.', 'It was nice.'),
+  s('st_dark', 'It was dark.', 'It was **blank**.', 'It was nice.'),
   s('st_door', 'A door.', 'Nobody there.', 'Lovely door.'),
-  s('st_stairs', 'There were stairs.', 'You went down them.', 'There were more.'),
+  s('st_stairs', 'There were stairs.', 'You went **down** them.', 'There were more.'),
   s('st_room', 'A warm room.', 'Someone left the light low.', 'Someone was you.'),
   s('st_voice', 'Somebody said your name.', 'You almost turned round.', 'It was not your name now.'),
   s('st_bed', 'The bed was made.', 'Then it was not.', 'Nobody will say how.'),
@@ -69,7 +69,7 @@ export const STORIES = Object.freeze([
   s('st_phone', 'The phone rang once.', 'You let it.', 'It rang you back, softly.'),
   s('st_rain', 'It started to rain.', 'You had nowhere to be.', 'The rain did.'),
   s('st_end', 'In the end, it was fine.', 'In the middle, it was better.', 'You missed the start.'),
-  s('st_pink', 'The walls were pink.', 'They had been white.', 'You approve of this.'),
+  s('st_pink', 'The walls were [[pink:pink]].', 'They had been [[white:white]].', 'You approve of this.'),
   s('st_sleep', 'You closed your eyes.', 'The story kept going.', 'This is that bit.'),
   s('st_map', 'You had a map.', 'It showed one room.', 'You were in it, doing well.'),
   s('st_sorry', 'Someone said sorry.', 'You had already forgotten.', 'They said it again anyway.'),
@@ -127,17 +127,17 @@ export const INK_REPLIES = Object.freeze(['Interesting.', 'Hm.', 'Most people sa
 
 /* b_memory False Memory: two beats about a picture that never existed. */
 export const FALSE_MEMORIES = Object.freeze([
-  Object.freeze(['The blue one.', 'You liked it.']),
+  Object.freeze(['The [[blue:blue]] one.', 'You liked it.']),
   Object.freeze(['By the lake.', 'You smiled.']),
   Object.freeze(['The one with the stairs.', 'You looked for a long time.']),
-  Object.freeze(['Remember the red door.', 'You said it was your favourite.']),
+  Object.freeze(['Remember the [[red:red]] door.', 'You said it was your favourite.']),
   Object.freeze(['The one from before.', 'You went quiet at that one.']),
   Object.freeze(['The hallway.', 'You asked to see it again.']),
   Object.freeze(['That warm one.', 'You do not remember. We do.']),
   Object.freeze(['The window at night.', 'You stayed on it for ages.']),
   Object.freeze(['The one you saved.', 'There was no save button.']),
   Object.freeze(['The second one.', 'You preferred it to the first.']),
-  Object.freeze(['The pink room.', 'You knew the way there.']),
+  Object.freeze(['The [[pink:pink]] room.', 'You knew the way there.']),
   Object.freeze(['Yesterday, the velvet one.', 'You were not here yesterday.']),
   Object.freeze(['The one you told nobody about.', 'Good.']),
   Object.freeze(['The close-up.', 'You leaned in.']),
@@ -151,9 +151,9 @@ export const LAZY_CAPTIONS = Object.freeze([
   'A lovely, um.',
   'Pretty.',
   'Or something.',
-  'Is it blue?',
+  'Is it [[blue:blue]]?',
   'Idk.',
-  'Blue is pretty.',
+  '[[blue:Blue]] is pretty.',
   'Who took this.',
   'Is this one a horse.',
   'Nice horse.',

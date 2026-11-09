@@ -1,4 +1,5 @@
 // The game owns movement, scaling, audio routing and the lifetime of this object.
+import { mountVolumeSlider } from './volume-slider.js';
 const assets = new URL('../../assets/lofi/', import.meta.url);
 
 export function mountLofi(ctx) {
@@ -22,6 +23,9 @@ export function mountLofi(ctx) {
       onIntent: playing => ctx.store.set('playing', playing),
       openStream: url => ctx.audio.stream(url, { bus: 'podcast', autoplay: false }),
     });
+    /* Owner 2026-11-08: a quiet volume line under the controls, the same level as the HUD mixer's Lo-fi Radio row. */
+    const pill = host.querySelector('.fm-pill');
+    if (pill) mountVolumeSlider(ctx, pill, { label: 'Radio volume', ink: 'var(--fm-ink)', ring: '#fffaf0' });
   }).catch(() => {
     if (!removed) ctx.toast('Lo-fi Radio could not load.');
   });

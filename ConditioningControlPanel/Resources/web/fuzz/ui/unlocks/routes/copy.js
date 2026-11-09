@@ -20,6 +20,7 @@ export const ROUTE_COPY = Object.freeze({
   /* Slideshow and Swipe Feed */
   gif: 'GIF', muted: 'muted',
   wakeStill: 'Wake Up still works, top right.',
+  feedLoading: '{n} ready · Loading more',
   feedOpen: 'Press the feed to open it.',
   feedPress: 'press to open', feedSwipe: 'swipe up', feedBack: 'Back to the button',
   /* Screens */

@@ -1,0 +1,11 @@
+export const trailCollection=[
+ {id:'aurora',name:'Aurora Ribbon',colors:['#8df3d5','#ad9bff'],levels:['Silk','Double Helix','Polar Veil'],notes:['Luminous silk sheds wisps of stardust as it turns.','Two filaments twist around a spine of light.','A pleated curtain unfurls and sheds a shower of light.']},
+ {id:'circuit',name:'Neon Circuit',colors:['#4ddfff','#ff779e'],levels:['Trace','Twin Rail','Signal Rush'],notes:['Live traces sprout copper branches and throw hot sparks.','Parallel rails connect through alternating contact pads.','Packets chase each other through pulsing junctions.']},
+ {id:'ink',name:'Ink Bloom',colors:['#bd95ff','#ff8ebe'],levels:['Wet Nib','Capillary','Marbled Ink'],notes:['A wet nib leaves pigment pools and fine spray.','Ink branches into capillaries that bead at the tips.','Marbled pools feather outward in two colors.']},
+ {id:'atlas',name:'Star Atlas',colors:['#ffd486','#96cfff'],levels:['Pinpricks','Constellation','Celestial Map'],notes:['A scatter of pinpoint stars marks your path.','Fine lines connect neighboring stars.','Triangular star charts and compass rings appear along the route.']},
+ {id:'fireflies',name:'Firefly Swarm',colors:['#d8ff81','#ffca73'],levels:['Glowbug','Wingbeats','Lantern Swarm'],notes:['Small lights drift free of the path.','Pairs of fireflies flutter on opposite sides.','A loose swarm circles the pointer as it settles.']},
+ {id:'ripples',name:'Ripple Glass',colors:['#8deaff','#acb8ff'],levels:['Water Rings','Double Echo','Prism Lenses'],notes:['Circular wavefronts carry beads of spray along their rims.','Each impact sends a second ring through the first.','Prismatic rims split into colored bands and orbiting glints.']},
+ {id:'phoenix',name:'Phoenix Ash',colors:['#ffad55','#ff557b'],levels:['Ember Quill','Fire Feathers','Phoenix Wake'],notes:['Windblown embers spill from a glowing quill.','Barbed feathers fan out of the flame.','Twin wings unfurl in the wake and dissolve into ash.']},
+ {id:'glasswing',name:'Glasswing',colors:['#70eade','#ec94fb'],levels:['Wing Dust','Butterfly Flight','Migration'],notes:['Iridescent scales scatter under a fluttering glasswing.','Pairs of butterflies lift from the trail on different wingbeats.','A flock circles the path, leaving ribbons of pollen.']},
+];
+export const stagePrices=[3000,9000,18000];

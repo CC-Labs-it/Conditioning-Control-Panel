@@ -8,10 +8,11 @@ import { BY_ID, ITEMS, LANES } from '../data/items.js';
  * EMI herself, the hum. They cannot come and go alone, so a switch in a family remounts the family, and with the parent off
  * its children wait. Their own switches keep what the player chose. */
 const laneFamily = (lane) => ITEMS.filter((it) => it.lane === lane && it.kind === 'item').map((it) => it.id);
-const FAMILIES = [laneFamily('scroll'), laneFamily('blind'), laneFamily('emi'), ['a_hum', 'a_phones', 'a_bin']];
+const FAMILIES = [laneFamily('scroll'), laneFamily('blind'), [...laneFamily('emi'), 'quiz'], ['a_hum', 'a_phones', 'a_bin']];
 const FAMILY_OF = new Map(FAMILIES.flatMap((f) => f.map((id) => [id, f])));
 
-export const familyOf = (id) => FAMILY_OF.get(id) || null;
+// These controls detach independently. Switching their parent still remounts the whole family.
+export const familyOf = (id) => id === 'quiz' || id === 'd_autoscroll' ? [id] : FAMILY_OF.get(id) || null;
 export const parentOf = (id) => { const f = FAMILY_OF.get(id); return f && f[0] !== id ? f[0] : null; };
 /** Should this row be mounted? Its own switch is on and its family's parent is too. */
 export const liveOn = (off, id) => !off[id] && !off[parentOf(id)];

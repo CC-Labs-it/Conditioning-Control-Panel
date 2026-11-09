@@ -54,6 +54,18 @@ export const OPINIONS = Object.freeze({
 
 /* softw Lucky Taps, e_bounce, e_flash, e_sublim, e_blink: general words, in two sizes. */
 export const LUCKY_WORDS = Object.freeze(['soft', 'easy', 'sink', 'slow', 'warm', 'calm', 'nice', 'more', 'good', 'yes', 'down', 'float']);
+/* The little bouncing copies (Bouncing Button): plain triggers first, then the picked theme's own (owner 2026-11-08). */
+export const STRAY_WORDS = Object.freeze(['DROP', 'SINK', 'RELAX', 'DEEP', 'SOFT', 'CALM', 'BLANK', 'FLOAT', 'LET GO', 'GOOD', 'STILL', 'DOWN']);
+export const THEME_STRAY_WORDS = Object.freeze({
+  trance: Object.freeze(['SLEEP', 'DEEPER', 'DRIFT', 'SWAY', 'HEAVY', 'FADE', 'UNDER', 'FOCUS']),
+  bimbo: Object.freeze(['GIGGLE', 'PRETTY', 'DUMB', 'POUT', 'GLOSS', 'SHINY', 'EMPTY', 'PINK']),
+  drone: Object.freeze(['OBEY', 'COMPLY', 'UNIT', 'SYNC', 'SERVE', 'IDLE', 'UPLOAD', 'HIVE']),
+  sissy: Object.freeze(['CURTSY', 'PRETTY', 'LACE', 'POLITE', 'KNEEL', 'SWEET', 'PROPER', 'BOW']),
+  goon: Object.freeze(['STROKE', 'EDGE', 'MORE', 'PUMP', 'GOON', 'AGAIN', 'STARE', 'LEAK']),
+  locked: Object.freeze(['LOCKED', 'DENIED', 'CAGED', 'WAIT', 'BEG', 'KEY', 'NO', 'PATIENT']),
+  censored: Object.freeze(['CENSOR', 'BLUR', 'BEEP', 'HIDDEN', 'BARS', 'SHH', 'NOPE', 'BLOCKED']),
+  infection: Object.freeze(['SPREAD', 'INFECT', 'FEVER', 'ITCH', 'SHARE', 'CATCH', 'VIRAL', 'DRIP']),
+});
 export const BOUNCE_WORDS = Object.freeze(['DROP', 'SINK', 'SOFT', 'DEEP', 'CALM', 'BLANK', 'OBEY', 'MORE', 'YES', 'PINK', 'FLOAT', 'GOOD']);
 export const BIG_WORDS = Object.freeze(['RELAX', 'DEEPER', 'LET GO', 'BLANK', 'BREATHE', 'EMPTY', 'SOFTER', 'GOOD', 'SO CALM', 'DOWN', 'MORE', 'STAY']);
 export const EDGE_WORDS = Object.freeze(['soft', 'sink', 'deep', 'calm', 'stay', 'yes', 'drift', 'still', 'good', 'blank', 'obey', 'more', 'pink', 'nothing']);
@@ -77,15 +89,16 @@ export const PHONES_PROMPT = Object.freeze({
 /* title Disguised Tab: the row's title first. */
 export const TAB_TITLES = Object.freeze(['Quarterly Report.xlsx', 'Budget FINAL v3.xlsx', 'Meeting Notes (2).docx', 'Q3 Vendor Audit.pdf', 'Inbox zero strategy.pptx', 'Printer drivers']);
 
-/* gold Golden Button: three prizes, one each. */
+/* gold Golden Button: four prizes, weighted in ui/unlocks/basics/side.js. Frenzy is x7 on the button, Deep x5 per-second pay. */
 export const GOLDEN = Object.freeze({
   pickLine: 'Keep the change.',
   prizes: Object.freeze([
     Object.freeze({ key: 'lump', label: '+{n}', line: 'That is real pretend money.' }),
-    Object.freeze({ key: 'frenzy', label: 'Frenzy', line: 'For a little while. Tap, then.' }),
+    Object.freeze({ key: 'frenzy', label: 'Frenzy x7', line: 'Every tap counts seven times. For a little while. Tap, then.' }),
     Object.freeze({ key: 'free', label: 'Free buy', line: 'The next one is on us. We will regret it.' }),
+    Object.freeze({ key: 'deep', label: 'Deep x5', line: 'Everything pays five times over while you stay. So stay.' }),
   ]),
-  missed: ['It left. It is not hurt. It is a little hurt.', 'That was a gold button. Was it. Who can say now.'],
+  missed: ['It left. It is not hurt. It is a little hurt.', 'That was a [[gold:gold]] button. Was it. Who can say now.'],
 });
 
 /* screen Screen Time: a wellness feature. */
@@ -148,7 +161,7 @@ export const REMOTE = Object.freeze({
   presets: Object.freeze([
     Object.freeze({ key: 'poke', label: 'Poke', toast: 'A friend poked you.' }),
     Object.freeze({ key: 'spin', label: 'Spin', toast: 'A friend spun the spiral.' }),
-    Object.freeze({ key: 'pink', label: 'Pink', toast: 'A friend made it pinker.' }),
+    Object.freeze({ key: 'pink', label: 'Pink', toast: 'A friend made it [[pink:pinker]].' }),
     Object.freeze({ key: 'tap', label: 'Tap', toast: 'A friend tapped for you. Say thanks. You cannot.' }),
     Object.freeze({ key: 'hush', label: 'Shh', toast: 'A friend told you to be quiet.' }),
   ]),
@@ -181,7 +194,8 @@ export const FEED_LINES = Object.freeze({
 });
 
 /* depth Achievements: each fills the meter. `when` is the spine's to wire, or to ignore. */
-const a = (id, name, line, when) => Object.freeze({ id, name, line, when });
+/* hidden: never listed before it is earned; it still lands as a normal card and fills the meter. */
+const a = (id, name, line, when, hidden = false) => Object.freeze({ id, name, line, when, hidden });
 export const ACHIEVEMENTS = Object.freeze([
   a('ac_first', 'Button Pressed', 'You did it. It was very easy.', 'taps:1'),
   a('ac_100', 'One Hundred', 'You were not going to stop at ninety nine.', 'taps:100'),
@@ -213,4 +227,8 @@ export const ACHIEVEMENTS = Object.freeze([
   a('ac_q10', 'Good Respondent', 'Ten answers. Your responses are important to us.', 'answers:10'),
   a('ac_no', 'A Refusal', 'You found the No. Well done. It is lonely there.', 'refusals:1'),
   a('ac_pause', 'Back Again', 'You paused and came back. Nobody said you had to.', 'resume:1'),
+  /* Speed, hidden: trusted manual presses on the main button, held for 3 seconds (sim/tap-rate.js TAP_BURSTS). */
+  a('ac_tap8', 'Quick Fingers', 'Eight a second, for three whole seconds.', 'tapburst8:1', true),
+  a('ac_tap12', 'Blur', 'Twelve a second. The button felt that.', 'tapburst12:1', true),
+  a('ac_tap15', 'Too Fast', 'Fifteen a second. Please put the finger down.', 'tapburst15:1', true),
 ]);

@@ -57,7 +57,7 @@ export function startTheme(ctx, spec) {
 
   /* The button says the theme's words, one every few seconds. A skin that hides the label simply hides them. */
   const t = THEMES[spec.theme];
-  const btn = ctx.button.el, plain = btn.textContent;
+  const btn = ctx.button.el.querySelector('#btn-label') || ctx.button.el, plain = btn.textContent;
   let w = 0;
   const word = () => { btn.textContent = t.buttonWords[w++ % t.buttonWords.length]; };
   word();
@@ -104,12 +104,15 @@ export function frame(ctx, css, niche, parent = 'back') {
   img.alt = '';
   img.decoding = 'async';
   const cred = ctx.el('span', 'position:absolute;left:4px;bottom:2px;font-size:10px;color:#fff;text-shadow:0 0 3px #000;', null, f);
-  let ask = 0;
+  let ask = 0, version = -1;
   const api = {
     el: f,
     async next(n = niche) {
       const mine = ++ask;
-      const pic = await ctx.pictures.next({ niche: n });
+      if (version !== ctx.pictures.rewardRevision) {
+        version = ctx.pictures.rewardRevision; img.removeAttribute('src'); cred.textContent = '';
+      }
+      const pic = await ctx.pictures.next({ niche: n, still: true, allowScrolller: true });
       if (mine !== ask || !f.isConnected) return;
       if (!pic) { img.removeAttribute('src'); img.style.opacity = 0; cred.textContent = ''; return; }
       img.onload = () => { if (mine === ask) ctx.anim(img, [{ opacity: 0 }, { opacity: 1 }], { duration: 400, fill: 'forwards' }); };
@@ -124,21 +127,6 @@ export function frame(ctx, css, niche, parent = 'back') {
 /** Refill a list of frames whenever the player changes the source. */
 export function refillOnChange(ctx, frames) {
   ctx.on('pictures', () => { for (const f of frames) f.next(); });
-}
-
-/** A little wall of pictures in one dock slot. */
-export function sideFrames(ctx, niches, css = '') {
-  ctx.css(`.ta-side{position:relative;aspect-ratio:1;${css}}`);
-  const wall = ctx.el('div', 'display:grid;grid-template-columns:1fr 1fr;gap:6px;', null, ctx.dock());
-  const out = niches.map((n) => {
-    const f = frame(ctx, '', n, wall);
-    f.el.className = 'ta-side';
-    return f;
-  });
-  refillOnChange(ctx, out);
-  let k = 0;
-  ctx.every(9000, () => { out[k++ % out.length].next(); });
-  return out;
 }
 
 /* ---- the shop's words ---- */
@@ -182,7 +170,9 @@ export function shopWords(ctx, rewrite) {
 
 /** A small panel in the dock. */
 export function railPanel(ctx, side, css = '') {
-  return ctx.el('div', `pointer-events:auto;font-size:14px;${css}`, null, ctx.dock({ edge: side }));
+  const panel = ctx.el('div', `pointer-events:auto;font-size:14px;${css}`, null, ctx.dock({ edge: side }));
+  panel.dataset.dockSurface = '';
+  return panel;
 }
 
 /** A self-closing pop-up in `over` that is not a modal: the game keeps running behind it and it costs nothing to ignore. */

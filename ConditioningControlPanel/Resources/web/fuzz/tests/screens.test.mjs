@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clampSpot, defaultSpot, fromShare, GRIP, screenSize, shopContent, themeNiche, toShare } from '../ui/screens.js';
+import { clampSpot, defaultSpot, fromShare, GRIP, holdMedia, screenSize, shopContent, themeNiche, toShare } from '../ui/screens.js';
 import { createPictures, ownKind } from '../ui/pictures.js';
 import { BY_ID, ITEMS } from '../data/items.js';
 
@@ -121,7 +121,8 @@ test('a plain caller never gets a gif: nothing can stop one in a css background 
   const p = createPictures({ source: 'own' });
   p.addOwn([new Blob(['g'], { type: 'image/gif' })]);
   assert.equal(await p.next(), null);
-  assert.equal((await p.next({ kind: 'picture' })).kind, 'gif', 'a screen asks by kind, and stills it itself');
+  assert.equal(await p.next({ kind: 'picture' }), null);
+  assert.equal((await p.next({ kind: 'mixed' })).kind, 'gif');
 });
 
 test('Swipe Feed earns per second too, and every row has words', () => {
@@ -129,4 +130,28 @@ test('Swipe Feed earns per second too, and every row has words', () => {
   assert.ok(BY_ID.d_scroll.click > 0);
   assert.deepEqual(ITEMS.filter((i) => !i.what && i.kind === 'item').map((i) => i.id), []);
   assert.equal(BY_ID.d_scroll.name, 'Swipe Feed');
+});
+
+test('a feed video starts once while play is pending and stops for hidden, paused and motion-off views', async () => {
+  const ctx = {state:{}, paused:false, gentle:false, reduced:false};
+  let plays = 0, pauses = 0, finish;
+  const movie = {
+    tagName:'VIDEO', paused:true, ownerDocument:{hidden:false},
+    play() { plays++; return new Promise(resolve => { finish = resolve; }); },
+    pause() { pauses++; this.paused = true; },
+  };
+  holdMedia(ctx,movie); holdMedia(ctx,movie);
+  assert.equal(plays,1);
+  holdMedia(ctx,movie,false); assert.equal(pauses,1);
+  finish(); await new Promise(resolve=>setImmediate(resolve));
+  for (const key of ['paused','gentle','reduced']) {
+    ctx[key] = true; movie.paused = false;
+    holdMedia(ctx,movie); assert.equal(movie.paused,true);
+    ctx[key] = false;
+  }
+  movie.ownerDocument.hidden = true; movie.paused = false;
+  holdMedia(ctx,movie); assert.equal(movie.paused,true); assert.equal(plays,1);
+  movie.ownerDocument.hidden = false;
+  holdMedia(ctx,movie); assert.equal(plays,2);
+  finish();
 });

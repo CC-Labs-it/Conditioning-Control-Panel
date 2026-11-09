@@ -35,7 +35,7 @@ test('only a matching unplaced piece fits and completion occurs once', () => {
   assert.equal(fitPiece(restoreBox(b), b.pieces[0], b.pieces[0]).complete, false);
 });
 
-test('starts closed, waits 15 to 30 active seconds, then offers exactly 5.5 seconds', () => {
+test('starts closed, waits 15 to 30 active seconds, then offers exactly 9.5 seconds', () => {
   assert.equal(boxInterval(() => 0), 15); assert.equal(boxInterval(() => 1), 30);
   let b = createToyBox(() => 0);
   assert.equal(b.phase, 'closed'); assert.equal(b.pieces.length, 0);
@@ -44,7 +44,9 @@ test('starts closed, waits 15 to 30 active seconds, then offers exactly 5.5 seco
   const opened = advanceBox(b, .1 + 1e-9, () => 0); b = opened.box;
   assert.equal(opened.opened, true); assert.equal(b.phase, 'play');
   assert.ok(Math.abs(b.windowLeft - BOX_WINDOW) < 1e-7);
-  b = advanceBox(b, 5.5, () => 0).box;
+  b = advanceBox(b, 9.4, () => 0).box;
+  assert.equal(fitPiece(b, b.pieces[0], b.pieces[0]).fitted, true);
+  b = advanceBox(b, .1, () => 0).box;
   assert.equal(b.phase, 'closing'); assert.equal(b.outcome, 'miss');
   assert.equal(b.completed, 0);
   assert.equal(fitPiece(b, 'pawn', 'pawn').fitted, false);
@@ -53,10 +55,10 @@ test('starts closed, waits 15 to 30 active seconds, then offers exactly 5.5 seco
 test('timeout discards the partial box and waits the remainder of the opening interval', () => {
   let b = dealBox(0, () => 0);
   b = fitPiece(b, b.pieces[0], b.pieces[0]).box;
-  b = advanceBox(b, 5.5, () => 0).box;
+  b = advanceBox(b, 9.5, () => 0).box;
   assert.deepEqual(b.placed, []); assert.deepEqual(b.pieces, []);
-  assert.equal(b.nextIn, 9.5);
-  b = advanceBox(b, 9.4, () => .9).box;
+  assert.equal(b.nextIn, 5.5);
+  b = advanceBox(b, 5.4, () => .9).box;
   assert.equal(b.phase, 'closed'); assert.equal(b.completed, 0);
   b = advanceBox(b, .1 + 1e-9, () => .9).box;
   assert.equal(b.phase, 'play'); assert.equal(b.pieces.length, 2); assert.deepEqual(b.placed, []);

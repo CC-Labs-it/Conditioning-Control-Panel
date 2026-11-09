@@ -7,6 +7,7 @@ import { BY_ID } from '../../../data/items.js';
 import { EMI_COPY } from './copy.js';
 import { drawFace, getEmi, onEmiTap } from './emi.js';
 import { FONT, cardUp, h, pick, picker, slot } from './kit.js';
+import { frameRect } from '../../perf.js';
 
 const CALL_MS = 5000;
 
@@ -126,7 +127,7 @@ export const EMI_UNLOCKS = {
     mount(ctx) {
       const e = getEmi(ctx);
       const IGNORE_MS = 60000, WARN_MS = 40000;
-      const label = h('div', e.wide ? 'bottom:calc(100% + 34px);' : 'top:calc(100% + 34px);', '', e.el);
+      const label = h('div', '', '', e.el);
       label.className = 'xe-t';
       label.hidden = true;
       const warn = picker(ctx, EMI_JEALOUS.warning), block = picker(ctx, EMI_JEALOUS.blocking);
@@ -144,7 +145,7 @@ export const EMI_UNLOCKS = {
       const t = onEmiTap(ctx, e, () => { if (e.blocking) standDown(); });
       let warned = false;
       ctx.every(500, () => {
-        if (e.blocking || e.napping || cardUp()) return;
+        if (e.held || e.asking || e.blocking || e.napping || cardUp()) return;
         const gone = ctx.state.clock - e.lastTouch;
         label.hidden = gone < WARN_MS;
         if (!label.hidden) label.textContent = EMI_JEALOUS.timer.replace('{n}', mmss(gone));
@@ -184,7 +185,7 @@ export const EMI_UNLOCKS = {
       let turn = 0;
       ctx.every(3400, () => {
         const m = minis[turn++ % minis.length];
-        const b = ctx.button.el.getBoundingClientRect();
+        const b = frameRect(ctx.button.el);
         m.tx = b.left + ctx.rng() * (b.width - size);
         m.ty = b.top + b.height - size + 6;
         m.state = 'run';
@@ -224,7 +225,7 @@ export const EMI_UNLOCKS = {
       let wake = null, snore = null;
       const stop = () => { e.napping = false; e.controls.style.display = ''; snore?.(); wake?.(); snore = wake = null; };
       const lie = () => {
-        if (e.napping || e.blocking || cardUp()) return;
+        if (e.held || e.asking || e.napping || e.blocking || cardUp()) return;
         const c = ctx.parts.counter?.querySelector('#count')?.getBoundingClientRect();
         if (!c) return;
         e.napping = true;

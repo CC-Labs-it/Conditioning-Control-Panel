@@ -5,11 +5,13 @@ import { moan } from '../moan.js';
 import { BY_ID } from '../../../data/items.js';
 import { THEMES, ENDINGS } from '../../../data/content/index.js';
 import { mountPodcast } from '../podcast-player.js';
-import { bag, geo, counterEl, sheet, done, frame, sideFrames, shopWords, pick, gentleSwitch } from './kit.js';
+import { bag, geo, counterEl, sheet, done, frame, shopWords, pick, gentleSwitch } from './kit.js';
+import { themeScreens } from './theme-screens.js';
 import { endingShow } from './endings.js';
+import { bimbodollTake, bimbodollAborted } from './bimbodoll.js';
 import { COPY } from './copy.js';
-import { THEME_TASTES } from '../theme-skins.js';
 import { THEME_PAGES } from '../../palette.js';
+import { setRich } from '../../rich-text.js';
 
 const R = THEMES.bimbo.rules;
 const NICHES = ['pink', 'heels', 'gloss', 'curls', 'lashes'];
@@ -91,7 +93,8 @@ export const START = { theme: 'bimbo', vars: VARS, css: CSS, moment };
 export default {
   bi_head: {
     mount(ctx) {
-      sideFrames(ctx, ['pink', 'heels', 'gloss', 'lashes'], 'border-radius:18px;border:3px solid #fff;box-shadow:0 2px 0 #ff8ac2;');
+      /* The first pictures: three screens, not a wall (owner 2026-11-08). Falling pictures wait for Bimbo Pictures. */
+      themeScreens(ctx, { niches: ['pink', 'heels', 'gloss', 'lashes'], frame: 'border:3px solid #fff;border-radius:18px;box-shadow:0 2px 0 #ff8ac2;' });
       return {};
     },
   },
@@ -115,7 +118,7 @@ export default {
         shown = iq;
         b.iq = iq;
         num.textContent = iq === 0 ? 'IQ' : `IQ ${iq}`;
-        note.textContent = R.iq[Math.min(R.iq.length - 1, Math.floor((100 - iq) / (100 / (R.iq.length - 1))))];
+        setRich(note, R.iq[Math.min(R.iq.length - 1, Math.floor((100 - iq) / (100 / (R.iq.length - 1))))]);
         fill.style.transform = `scaleX(${(iq / 100).toFixed(2)})`;
         b.onIq?.forEach((f) => f(iq));
         if (was > iq) {
@@ -170,7 +173,6 @@ export default {
   bi_lips: {
     mount(ctx) {
       ctx.button.skin('bi-lips');
-      ctx.css(THEME_TASTES.bimbo.css);
       let n = 0;
       ctx.on('tap', (e) => {
         const g = bag(ctx).lipsAt || (bag(ctx).lipsAt = geo(ctx));
@@ -189,7 +191,7 @@ export default {
       const lines = THEMES.bimbo.shopLines;
       const handle = shopWords(ctx, (text, node) => {
         const iq = b.iq ?? 100, upTo = Math.ceil(((100 - iq) / 60) * R.swaps.length);
-        if (iq <= 34 && node.tagName === 'SMALL') return lines[Math.abs([...text].reduce((h, c) => h * 31 + c.charCodeAt(0) | 0, 7)) % lines.length];
+        if (iq <= 34 && node.tagName === 'SMALL') return ctx.brand.text(lines[Math.abs([...text].reduce((h, c) => h * 31 + c.charCodeAt(0) | 0, 7)) % lines.length]);
         return swap(text, upTo);
       });
       const refresh = () => {
@@ -296,8 +298,12 @@ export default {
     },
   },
 
+  /* Bimbodoll: the bubble swallows the page (take, before the fade, ./bimbodoll.js), a black fade, then the card. Panic
+   * during the take ends it at once: no pop, no card. */
   bi_end: {
     mount() { return {}; },
-    ending(ctx) { return endingShow(ctx, ENDINGS.bi_end, 'bimbo'); },
+    fadeColour: '#000',
+    take(ctx) { return bimbodollTake(ctx); },
+    ending(ctx) { return bimbodollAborted() ? Promise.resolve() : endingShow(ctx, ENDINGS.bi_end, 'bimbo'); },
   },
 };

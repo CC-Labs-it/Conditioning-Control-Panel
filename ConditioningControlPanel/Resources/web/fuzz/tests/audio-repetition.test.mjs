@@ -59,7 +59,7 @@ function fixture() {
 }
 
 test('SFX has a quieter default without changing speech or podcast levels', () => {
-  assert.deepEqual(BUS, { sfx: .3, ambient: .2, voice: .5, podcast: .5 });
+  assert.deepEqual(BUS, { sfx: .18, ambient: .12, voice: .5, podcast: .25 });   // owner 2026-11-08: sfx + hums lower, lo-fi + podcast half
 });
 
 test('a pending sample stays discarded after a rapid pause and resume', async () => {
@@ -97,7 +97,7 @@ test('completed short cues disconnect and release their shared slot', async () =
   const f = fixture();
   const pending = f.kit.play('ui_click.mp3', { gain: .18 });
   f.loads.shift()(); await pending;
-  assert.equal(f.gains[1].gain.value, .3 * .18 * .75);
+  assert.equal(f.gains[1].gain.value, BUS.sfx * .18 * .75);
   f.sources[0].onended();
   assert.equal(f.sources[0].disconnected, true);
   f.at(200); await f.kit.play('ui_click.mp3');

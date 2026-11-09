@@ -1,6 +1,7 @@
 /* A collected bank becomes a short ascending phrase, then one receipt lands at the counter.
  * Payment already happened. This show never owns money and can be interrupted freely. */
 import { docOf, sfx } from './fx.js';
+import { frameRect } from '../../perf.js';
 
 export function collectionBeats(levels) {
   const count = Math.min(6, Math.max(1, Math.floor(Number.isFinite(levels) ? levels : 1)));
@@ -67,7 +68,7 @@ export function createCollectionFeel(ctx) {
     });
     after(beats.at(-1).at + 220, () => {
       if (!receipt || ctx.gentle || ctx.reduced) return;
-      const r = ctx.parts.counter.getBoundingClientRect();
+      const r = frameRect(ctx.parts.counter);
       const tx = r.left + r.width / 2, ty = r.top + r.height / 2;
       animate(receipt, [{ transform: `translate(${x}px,${y}px) translate(-50%,-50%)`, opacity: 1 }, { transform: `translate(${tx}px,${ty}px) translate(-50%,-50%) scale(.65)`, opacity: 0 }], { duration: 420, easing: 'cubic-bezier(.5,0,.8,.4)' }, true);
       after(420, () => {

@@ -48,8 +48,26 @@ async function signContract(page) {
   await page.check('#read');
   await page.click('#accept');
 }
+/** "Choose your pictures" opens before the contract on a real load: take the no-pictures option, as a player would. */
+async function passPictures(page) {
+  const first = await page.waitForSelector('.tc [data-pick=none], .tc #terms, .tc #age');
+  if (await first.getAttribute('data-pick') !== 'none') return;
+  await page.waitForTimeout(400);   // the card's own guard against a stray first press
+  await page.click('.tc [data-pick=none]');
+  await page.waitForSelector('.tc [data-pick=none]', { state: 'detached' });
+}
+/** The terms card (ui/clause.js) a hand-made buy now asks first: tick whatever it asks, then accept. */
+async function acceptTerms(page) {
+  const card = await page.waitForSelector('.tc.clause [data-accept]', { timeout: 3000 }).catch(() => null);
+  if (!card) return;
+  await page.waitForTimeout(400);
+  for (const box of await page.$$('.tc.clause input[data-clause]')) await box.check();
+  await page.click('.tc.clause [data-accept]');
+  await page.waitForSelector('.tc.clause', { state: 'detached' });
+}
 /** The short window every later load asks. */
 async function acceptUpdate(page) {
+  await passPictures(page);
   await page.waitForSelector('.tc #age');
   await page.check('#age');
   await page.click('#accept');
@@ -60,6 +78,7 @@ const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } })
 const page = await ctx.newPage();
 watch(page);
 await page.goto(base, { waitUntil: 'load' });
+await passPictures(page);
 await page.waitForSelector('.tc #terms');
 await page.screenshot({ path: join(shots, 'a0-contract.png') });
 await signContract(page);
@@ -69,6 +88,7 @@ for (let i = 0; i < 12; i++) await page.click('#btn');
 await page.waitForTimeout(250);
 await page.screenshot({ path: join(shots, 'a2-tapped.png') });
 await page.click('#goal .row');   // Bouncing Button
+await acceptTerms(page);
 await page.waitForTimeout(600);
 await page.screenshot({ path: join(shots, 'a3-stray.png') });
 const strays = await page.locator('[data-stray]').count();
@@ -204,7 +224,7 @@ const seen = await page.evaluate(() => window.fuzz.life.endings);
 if (!seen.drop && !played.ended) errors.push('the ending was not recorded');
 
 /* ---- New run keeps the lifetime ---- */
-await page.click('.credits button.primary');
+await page.click('.credits button:has-text("New run")');   // Renew is the primary button since the Renewal Sky (2026-11-09)
 await page.waitForFunction(() => window.fuzz && window.fuzz.state.clock < 5000 && !window.fuzz.state.ended);
 const life = await page.evaluate(() => ({ runs: window.fuzz.life.runs, endings: window.fuzz.life.endings, age: window.fuzz.life.age }));
 if (life.runs !== 1 || !life.age) errors.push(`the lifetime did not survive New run: ${JSON.stringify(life)}`);

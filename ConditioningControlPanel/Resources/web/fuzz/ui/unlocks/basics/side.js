@@ -1,77 +1,134 @@
 /* ui/unlocks/basics/side.js - Side Toys part one: Golden Button, Screen Time, Levels, Mystery Boxes, Prize Wheel, Phone Buzz,
  * Fake Inbox, Fake Live Chat. Anything tappable lands in `over` with at least a 44 px target and always leaves by itself. */
 
-import { APP_ONLY, BOXES, FAKE_CHAT, FAKE_INBOX, GOLDEN, LEVELS, SCREEN_TIME, WHEEL } from '../../../data/content/index.js';
+import { APP_ONLY, BOXES, FAKE_CHAT, FAKE_INBOX, GOLDEN, LEVELS, SCREEN_TIME } from '../../../data/content/index.js';
 import { baseCss, burst, btnCenter, chip, docOf, fresh, pop, sfx, squish } from './fx.js';
 import { XP_PER_SECOND, XP_PER_TAP, bankOf, collect, xpNeed } from '../../../sim/levels.js';
+import { mountPrizeWheel } from './prize-wheel.js';
+import { journeyChapter } from '../../../sim/journey-effects.js';
 import { createCollectionFeel } from './collect-feel.js';
+import { createGoldFx } from './gold-fx.js';
+import { createBoxFx } from './box-fx.js';
+import { CONFIG } from '../../../data/config.js';
+import { autopilotShare, boxHoldMs, frenzyMult, goldGapMult, goldStay, prizeMult } from '../prestige/boosts.js';  // prestige hooks (Renewal Sky, boosts lane)
+import { sunriseStay } from '../../../sim/prestige-endings.js';  // prestige hook (Renewal Sky, ending stars)
 
 const pick = (ctx, list) => list[Math.floor(ctx.rng() * list.length)];
+
+/* Golden Button prizes (owner 2026-11-07): a lump that scales with the run, Frenzy (x7 on the button), Deep (x5 per-second
+ * pay) or a free next buy. The two buffs are timed: they skip the multiplier knees and multiply with any other buff. */
+const GOLD_FRENZY = 7, GOLD_FRENZY_MS = 20000, GOLD_DEEP = 5, GOLD_DEEP_MS = 40000;
+const GOLD_WEIGHT = { lump: 35, frenzy: 35, deep: 20, free: 10 };
 
 /** A reward worth a look at any point of the run: seconds of income, with a floor from what taps pay. */
 const worth = (ctx, seconds) => { const r = ctx.rates(); return Math.max(r.fps, r.click * 2, 2) * seconds; };
 
 export default {
-  /* Golden Button: drifts past now and then. One of three prizes. */
+  /* Golden Button: drifts past every 2 to 5 minutes, only for a player who pressed something in the last minute (owner
+   * 2026-11-07: staying pays). One of four weighted prizes. The look and feel live in gold-fx.js. */
   gold: {
     mount(ctx) {
-      let frenzyUntil = 0, free = !!ctx.store.get('free'), now = 0, g = null, gx = 0, gy = 0, nextAt = fresh(ctx) ? 2500 : 25000;
-      ctx.mod({ click: (v, s, t) => (t < frenzyUntil ? v * 7 : v) });
+      let frenzyUntil = 0, deepUntil = 0, free = !!ctx.store.get('free'), now = 0, g = null, path = null, gy = 0, gt = 0, wait = 0, nextAt = fresh(ctx) ? 2500 : 25000;
+      let lastPress = 0;
+      const doc = docOf(ctx);
+      const fx = createGoldFx(ctx, { frenzy: GOLD_FRENZY, deep: GOLD_DEEP });
+      const present = () => { lastPress = now; };
+      doc.addEventListener('pointerdown', present, true);
+      doc.addEventListener('keydown', present, true);
+      ctx.cleanup(() => { doc.removeEventListener('pointerdown', present, true); doc.removeEventListener('keydown', present, true); });
+      const here = () => now - lastPress < CONFIG.GOLD_PRESENT_S * 1000;
+      const gap = () => (CONFIG.GOLD_MIN_S + ctx.rng() * (CONFIG.GOLD_MAX_S - CONFIG.GOLD_MIN_S)) * 1000 * goldGapMult(ctx.prestige);  // prestige hook: Golden Habit (active_4)
+      ctx.mod({ timed: true, click: (v, s, t) => (t < frenzyUntil ? v * GOLD_FRENZY : v) });
+      ctx.mod({ timed: true, fps: (v, s, t) => (t < deepUntil ? v * GOLD_DEEP : v) });
       ctx.mod({ price: (v, s, t, item) => (free && item.kind === 'item' ? 0 : v) });
-      const bar = ctx.el('div', 'order:3;height:6px;width:150px;margin-top:3px;background:#e7b416;transform-origin:0 50%;display:none;', null, ctx.layer('meters'));
       ctx.on('buy', ({ item }) => { if (free && item.kind === 'item') { free = false; ctx.store.set('free', false); } });
+      ctx.on('tap', ({ x, y, auto }) => { if (!auto && now < frenzyUntil && Number.isFinite(x)) fx.tapSpark(x, y, GOLD_FRENZY, now); });
 
       const prize = (x, y) => {
-        const key = pick(ctx, GOLDEN.prizes).key;
-        const p = GOLDEN.prizes.find((q) => q.key === key);
+        const chapter = ctx.state.store.journey ? journeyChapter(ctx.state) : null;
+        const couponUsed = chapter !== null && (free || ctx.store.get('couponChapter') === chapter);
+        const pool = couponUsed ? GOLDEN.prizes.filter(p => p.key !== 'free') : GOLDEN.prizes;
+        let roll = ctx.rng() * pool.reduce((a, q) => a + (GOLD_WEIGHT[q.key] || 1), 0), p = pool[0];
+        for (const q of pool) { roll -= GOLD_WEIGHT[q.key] || 1; if (roll <= 0) { p = q; break; } }
+        const key = p.key;
+        let text = p.label;
         if (key === 'lump') {
-          const n = ctx.pay(worth(ctx, 45), 'golden', { x, y });
-          pop(ctx, x, y - 30, p.label.replace('{n}', ctx.fmt(n)), { color: '#b8860b', size: 34, ms: 1500 });
+          const n = ctx.pay(Math.min(worth(ctx, 600), ctx.state.fuzz * 0.15 + worth(ctx, 45)), 'golden', { x, y });
+          text = p.label.replace('{n}', ctx.fmt(n));
         } else if (key === 'frenzy') {
-          frenzyUntil = now + 12000;
-          pop(ctx, x, y - 30, p.label, { color: '#b8860b', size: 44, ms: 1500 });
-          bar.style.display = 'block';
+          frenzyUntil = Math.max(frenzyUntil, now) + GOLD_FRENZY_MS * frenzyMult(ctx.prestige);  // prestige hook: Frenzy Fingers (active_10)
+        } else if (key === 'deep') {
+          deepUntil = Math.max(deepUntil, now) + GOLD_DEEP_MS;
         } else {
           free = true;
           ctx.store.set('free', true);
-          pop(ctx, x, y - 30, p.label, { color: '#b8860b', size: 34, ms: 1500 });
+          if (chapter !== null) ctx.store.set('couponChapter', chapter);
+          text = 'Paid in full';
         }
+        fx.reveal(x, y, key, text, () => { if (key === 'free') fx.ticket(x, y); });
         ctx.say(p.line);
       };
 
       const launch = () => {
         const { w, h } = ctx.bounds();
-        gx = -70; gy = 90 + ctx.rng() * (h * 0.45);
-        g = ctx.el('button', 'position:absolute;left:0;top:0;width:76px;height:44px;border:1px solid #8a6500;border-radius:22px;pointer-events:auto;touch-action:manipulation;background:linear-gradient(135deg,#fff3b0,#e7b416 55%,#b8860b);box-shadow:0 2px 10px rgba(180,130,0,.65);will-change:transform;', null, 'over');
-        g.type = 'button';
-        g.setAttribute('aria-label', 'Golden Button');
+        gy = 90 + ctx.rng() * (h * 0.42); gt = 0; wait = 1;
+        path = fx.route(w, h, gy);
+        fx.glint(path);
+        g = fx.makeButton();
+        g.style.opacity = '0';
+        g.style.transform = `translate(${path.start.x}px,${path.start.y}px)`;
         const me = g;
-        const end = () => { if (g === me) g = null; me.remove(); };
         me.addEventListener('pointerdown', (e) => {
           e.preventDefault();
-          if (g !== me) return;
+          if (g !== me || wait > 0) return;
           const r = me.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
-          end();
+          g = null;
+          nextAt = gap();
+          fx.catchHit(me, x, y);
+          ctx.after(260, () => me.remove());
           burst(ctx, x, y, { color: '#e7b416', n: 22, reach: 110, size: 8, ms: 800 });
           sfx(ctx, 'sfx/golden_pop.mp3', 0.7);
           ctx.emit('golden', { x, y });
           prize(x, y);
         });
-        me.fzEnd = () => { end(); ctx.say(pick(ctx, GOLDEN.missed)); };
-        me.fzW = w;
       };
+      /* Dev door (window.fuzz exists only where the debug door is on): launch now, or start a buff, to judge the feel. */
+      const view = doc.defaultView;
+      if (view?.fuzz) {
+        view.fuzz.gold = { launch: () => { if (!g) launch(); }, buff: (key, ms) => { if (key === 'frenzy') frenzyUntil = now + (ms || GOLD_FRENZY_MS); if (key === 'deep') deepUntil = now + (ms || GOLD_DEEP_MS); } };
+        ctx.cleanup(() => { if (view.fuzz) delete view.fuzz.gold; });
+      }
+      /* Ghost Run Replay (ui/unlocks/prestige/ghost.js, star ghost_10): a Golden Button the ghost caught comes round now, if none is up. */
+      ctx.on('ghost-gold', () => { if (!g && !ctx.state.ended) launch(); });
 
       return {
         tick(dt, t) {
           now = t;
-          if (nextAt > 0) { nextAt -= dt * 1000; if (nextAt <= 0 && !g) launch(); }
+          if (nextAt > 0) { nextAt -= dt * 1000; if (nextAt <= 0 && !g && here()) launch(); }
           if (g) {
-            gx += dt * (ctx.gentle ? 45 : 85);
-            g.style.transform = `translate(${gx}px,${gy}px)`;
-            if (gx > g.fzW + 10) { g.fzEnd(); nextAt = 30000 + ctx.rng() * 35000; }
-          } else if (nextAt <= 0) nextAt = 30000 + ctx.rng() * 35000;
-          if (now < frenzyUntil) bar.style.transform = `scaleX(${((frenzyUntil - now) / 12000).toFixed(3)})`;
-          else if (bar.style.display === 'block') bar.style.display = 'none';
+            if (wait > 0) {
+              wait -= dt;
+              if (wait <= 0) ctx.anim(g, [{ opacity: 0 }, { opacity: 1 }], { duration: ctx.gentle || ctx.reduced ? 900 : 300, fill: 'forwards' });
+            } else {
+              /* The star falls, rises or crosses (gold-fx.js picks the path); it ends on screen. */
+              gt += dt / (goldStay(ctx.prestige) * sunriseStay(ctx.prestige));  // prestige hooks: Long Gold (active_9), Sunrise ending (go_end)
+              const p = path.at(gt);
+              fx.place(g, p.x, p.y, gt, p.left);
+              fx.motes(p.x, p.y, now, path.trail);
+              if (p.done) {
+                /* Missed: it winks at the edge and goes up in a puff. */
+                fx.miss(g, p.x, p.y);
+                g = null;
+                ctx.say(pick(ctx, GOLDEN.missed));
+                nextAt = gap();
+              }
+            }
+          } else if (nextAt <= 0) {
+            /* Away: no gold. Look again every few seconds until the player is back. */
+            if (here()) launch(); else nextAt = 5000;
+          }
+          const deepLeft = Math.max(0, deepUntil - now);
+          fx.frame(now, { frenzyLeft: Math.max(0, frenzyUntil - now), frenzyMs: GOLD_FRENZY_MS * frenzyMult(ctx.prestige), deepLeft, deepMs: GOLD_DEEP_MS, perSecond: deepLeft > 0 ? ctx.rates().fps : 0, fmt: ctx.fmt });
         },
       };
     },
@@ -107,7 +164,10 @@ export default {
         draw();
         return { draw, tip };
       };
-      const card = build(ctx.dock({ edge: 'left' }));
+      const host = ctx.dock({ edge: 'left', width: 230 });
+      const paper = ctx.el('div', 'padding:7px;background:var(--panel);color:var(--ink);border-radius:6px;', null, host);
+      paper.dataset.dockSurface = '';
+      const card = build(paper);
       ctx.every(2000, () => card.draw());
       ctx.every(20000, () => { card.tip.textContent = pick(ctx, SCREEN_TIME.tips); });
       return {};
@@ -165,31 +225,38 @@ export default {
     },
   },
 
-  /* Mystery Boxes: fall in, wait six seconds, leave. Sparkle hooks in through the `box` event. */
+  /* Mystery Boxes: fall in, wait six seconds, leave. Sparkle hooks in through the `box` event. The look and feel live in
+   * box-fx.js (owner 2026-11-08): a crayon gift box that lands, idles, counts down on its paper tag, pops or poofs. */
   boxes: {
     mount(ctx) {
       let live = 0;
+      const fx = createBoxFx(ctx);
       const drop = () => {
         if (live >= 3) return;
         const { w, h } = ctx.bounds();
         const x = 20 + ctx.rng() * (w - 110), y = 80 + ctx.rng() * (h * 0.5);
         live += 1;
-        const box = ctx.el('button', `position:absolute;left:${x}px;top:${y}px;width:68px;height:62px;padding:0;border:1px solid var(--accent-deep);border-radius:4px;background:linear-gradient(90deg,var(--accent) 42%,#ffe08a 42% 58%,var(--accent-2) 58%);color:var(--niche-ink);font-size:11px;font-weight:700;pointer-events:auto;touch-action:manipulation;`, pick(ctx, BOXES.labels), 'over');
-        box.type = 'button';
-        const bar = ctx.el('i', 'position:absolute;left:0;right:0;bottom:-6px;height:4px;background:var(--stamp);transform-origin:0 50%;', null, box);
-        if (!ctx.gentle) ctx.anim(box, [{ transform: 'translateY(-240px)', opacity: 0 }, { transform: 'none', opacity: 1, offset: 0.6 }, { transform: 'translateY(-9px)', offset: 0.8 }, { transform: 'none' }], { duration: 520, easing: 'ease-in' });
-        ctx.anim(bar, [{ transform: 'scaleX(1)' }, { transform: 'scaleX(0)' }], { duration: 6000, easing: 'linear', fill: 'forwards' });
+        const box = fx.make(x, y, pick(ctx, BOXES.labels));
+        const landMs = box.arrive();
+        const life = 6000 + boxHoldMs(ctx.prestige);  // prestige hook: Hold On (luck_8)
+        box.countdown(life);
+        box.idle(landMs, life);
         let gone = false;
-        const leave = () => { gone = true; live -= 1; box.remove(); };
-        const stop = ctx.after(6000, () => { if (gone) return; leave(); ctx.say(pick(ctx, BOXES.expired)); });
-        box.addEventListener('pointerdown', (e) => {
+        if (!(ctx.gentle || ctx.reduced)) ctx.after(landMs, () => { if (!gone) sfx(ctx, 'sfx/thud.mp3', 0.15); });
+        const leave = () => { gone = true; live -= 1; };
+        const stop = ctx.after(life, () => {
+          if (gone) return; leave(); box.expire(); ctx.say(pick(ctx, BOXES.expired));
+          if (autopilotShare(ctx.prestige)) ctx.pay(worth(ctx, 12) * prizeMult(ctx.prestige) * autopilotShare(ctx.prestige), 'boxes', box.center);  // prestige hook: Autopilot (idle_6)
+        });
+        box.el.addEventListener('pointerdown', (e) => {
           e.preventDefault();
           if (gone) return;
-          const cx = x + 34, cy = y + 30;
+          const { x: cx, y: cy } = box.center;
           stop();
           leave();
-          ctx.pay(worth(ctx, 12), 'boxes', { x: cx, y: cy });
-          burst(ctx, cx, cy, { color: 'var(--accent)', n: 16, reach: 80 });
+          const mouth = box.open();
+          ctx.pay(worth(ctx, 12) * prizeMult(ctx.prestige), 'boxes', mouth);  // prestige hook: Lucky/Charm (luck_1/3/6/9)
+          burst(ctx, mouth.x, mouth.y, { color: 'var(--accent)', n: 16, reach: 80 });
           sfx(ctx, 'sfx/chain_pop.mp3', 0.6);
           ctx.say(pick(ctx, BOXES.opened));
           ctx.emit('box', { x: cx, y: cy });
@@ -201,66 +268,7 @@ export default {
     },
   },
 
-  /* Prize Wheel: free every 90 s, paid only in the game's money. A chip counts down; the wheel opens on a card. */
-  wheel: {
-    mount(ctx) {
-      const WAIT = 90;
-      const labels = ['A bit', 'Some', 'More', 'Most', 'Some', 'A bit'], mult = [0.5, 1, 2, 4, 1, 0.5];
-      const stops = ['#ff9ccf', '#c9b6ff', '#ffe08a', '#ff69b4', '#9ee6dd', '#d9d4c8'];
-      let wait = fresh(ctx) ? 0 : (ctx.store.get('wait') ?? 0);
-      const c = chip(ctx, '', () => { if (wait <= 0) open(); else ctx.toast(WHEEL.wait.replace('{n}', String(Math.ceil(wait)))); });
-      const draw = () => { c.textContent = wait > 0 ? `${WHEEL.spin} ${Math.ceil(wait)} s` : WHEEL.spin; c.style.fontWeight = wait > 0 ? '' : '700'; };
-      const open = () => {
-        const node = docOf(ctx).createElement('div');
-        node.style.cssText = 'position:relative;display:grid;place-items:center;height:230px;';
-        const grad = stops.map((s, i) => `${s} ${i * 60}deg ${(i + 1) * 60}deg`).join(',');
-        const w = docOf(ctx).createElement('div');
-        w.style.cssText = `position:relative;width:200px;height:200px;border:3px solid #333;border-radius:50%;background:conic-gradient(${grad});`;
-        labels.forEach((t, i) => {
-          const a = (i * 60 + 30) * Math.PI / 180, l = docOf(ctx).createElement('span');
-          l.textContent = t;
-          l.style.cssText = `position:absolute;left:${100 + Math.sin(a) * 68 - 20}px;top:${100 - Math.cos(a) * 68 - 10}px;width:40px;text-align:center;font-weight:700;font-size:14px;color:#111;`;
-          w.appendChild(l);
-        });
-        const tick = docOf(ctx).createElement('i');
-        tick.style.cssText = 'position:absolute;left:50%;top:4px;margin-left:-8px;border:8px solid transparent;border-top:16px solid #111;z-index:2;';
-        node.append(w, tick);
-        const i = Math.floor(ctx.rng() * 6);
-        const spun = { done: false };
-        const m = ctx.modal({
-          title: WHEEL.spin,
-          body: WHEEL.note,
-          node,
-          buttons: [{
-            label: WHEEL.spin,
-            keepOpen: true,
-            onPress: () => {
-              if (spun.done) return;
-              spun.done = true;
-              wait = WAIT;
-              ctx.store.set('wait', wait);
-              draw();
-              const end = 1080 - (i * 60 + 30);
-              const land = () => {
-                const n = worth(ctx, 30) * mult[i];
-                ctx.pay(n, 'wheel', btnCenter(ctx));
-                ctx.say(pick(ctx, WHEEL.results));
-                sfx(ctx, mult[i] >= 2 ? 'sfx/pb_fanfare.mp3' : 'sfx/rank_settle.mp3', 0.5);
-                ctx.after(900, () => m.close());
-              };
-              if (ctx.gentle) { w.style.transform = `rotate(${end}deg)`; ctx.after(400, land); return; }
-              const a = w.animate([{ transform: 'rotate(0)' }, { transform: `rotate(${end}deg)` }], { duration: 2200, easing: 'cubic-bezier(.15,.7,.2,1)', fill: 'forwards' });
-              a.finished?.then(land, () => {});
-            },
-          }, { label: 'Close' }],
-        });
-      };
-      ctx.every(1000, () => { if (wait > 0) { wait -= 1; ctx.store.set('wait', wait); draw(); } });
-      draw();
-      if (fresh(ctx)) squish(ctx, c, 1.3);
-      return {};
-    },
-  },
+  wheel: { mount: mountPrizeWheel },
 
   /* Phone Buzz: a real buzz on lucky taps where the browser can, and the same shake on screen everywhere. */
   buzz: {
@@ -282,21 +290,14 @@ export default {
     },
   },
 
-  /* Fake Inbox: notices from nobody. One at a time on a phone, two in a slot of their own on a desktop. They close by themselves or on a tap. */
+  /* Fake Inbox: notices from nobody, in one tab-controlled tray. They close by themselves or on a tap. */
   inbox: {
     mount(ctx) {
-      let shown = 0, n = ctx.store.get('n') || 0, tray = null;
-      /* A wide page keeps them in the rail, so they never lie over the other panels. A phone has no room to spare: they stay on top. */
-      const inRail = () => ctx.bounds().w >= 1100;
-      const railTray = () => {
-        if (!tray) {
-          ctx.css(".fz-inbox:empty::before{content:'Nothing new.';font-size:12px;color:var(--ink-faint);}");
-          tray = ctx.el('div', 'display:flex;flex-direction:column;gap:3px;min-height:128px;', null, ctx.dock({ edge: 'right', chip: false }));
-          tray.className = 'fz-inbox';
-        }
-        return tray;
-      };
-      if (inRail()) railTray();
+      let shown = 0, n = ctx.store.get('n') || 0;
+      const host = ctx.dock({ edge: 'right', width: 230 });
+      ctx.css(".fz-inbox:empty::before{content:'Nothing new.';font-size:12px;color:var(--ink-soft);}");
+      const tray = ctx.el('div', 'display:flex;flex-direction:column;gap:3px;padding:5px;background:var(--panel);border-radius:6px;', null, host);
+      tray.className = 'fz-inbox'; tray.dataset.dockSurface = '';
       const post = () => {
         const { w } = ctx.bounds();
         const cap = w < 760 ? 1 : 2;
@@ -305,9 +306,9 @@ export default {
         n += 1;
         ctx.store.set('n', n);
         shown += 1;
-        const width = Math.min(230, w - 130);
-        const spot = inRail() ? 'position:relative;display:block;flex:none;width:100%;' : `position:absolute;top:${52 + (shown - 1) * 66}px;right:8px;width:${width}px;`;
-        const box = ctx.el('button', `${spot}min-height:44px;padding:5px 8px;text-align:left;background:#fff;color:#111;border:1px solid #333;border-left:5px solid var(--niche);border-radius:4px;box-shadow:0 2px 6px rgba(0,0,0,.3);font-size:12px;line-height:1.15;pointer-events:auto;touch-action:manipulation;`, null, inRail() ? railTray() : 'over');
+        host.dock?.setReady(true, 'New message');
+        const spot = 'position:relative;display:block;flex:none;width:100%;';
+        const box = ctx.el('button', `${spot}min-height:44px;padding:5px 8px;text-align:left;background:#fff;color:#111;border:1px solid #333;border-left:5px solid var(--niche);border-radius:4px;box-shadow:0 2px 6px rgba(0,0,0,.3);font-size:12px;line-height:1.15;pointer-events:auto;touch-action:manipulation;`, null, tray);
         box.type = 'button';
         ctx.el('b', 'display:block;font-size:13px;', m.from, box);
         ctx.el('span', '', m.text, box);
@@ -317,7 +318,7 @@ export default {
         const close = () => {
           if (gone) return;
           gone = true;
-          shown -= 1;
+          shown -= 1; host.dock?.setReady(shown > 0, 'New message');
           const a = ctx.anim(box, [{ opacity: 1 }, { opacity: 0 }], { duration: 250 });
           a.onfinish = a.oncancel = () => box.remove();
         };
@@ -333,7 +334,7 @@ export default {
   /* Fake Live Chat: preset lines from nobody, reacting to what happens. A rail on a desktop, a two line strip on a phone. */
   fakechat: {
     mount(ctx) {
-      const css = 'display:flex;flex-direction:column;justify-content:flex-end;gap:3px;height:170px;padding:6px;background:#17132c;color:#fff;border-radius:4px;overflow:hidden;font:500 12px/1.2 "Segoe UI",system-ui,sans-serif;';
+      const css = 'display:flex;flex-direction:column;justify-content:flex-end;gap:3px;max-height:150px;padding:6px;background:#17132c;color:#fff;border-radius:4px;overflow:hidden;font:500 12px/1.2 var(--game-bubble-font,"Segoe UI",system-ui,sans-serif);';
       const box = ctx.el('div', css, null, ctx.dock({ edge: 'right' }));
       const COLS = ['#ff9ccf', '#8fd4ff', '#ffe08a', '#a6f0b0'];
       const cap = 12;

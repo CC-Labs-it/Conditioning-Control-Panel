@@ -3,17 +3,20 @@
  * ENGINE.md); tests/contract.test.mjs checks every member exists. Everything made through ctx dies with the scope.
  * ==========================================================================*/
 
-import { BRAND, brandText } from '../data/brand.js';
+import { BRAND, brandText, brandTokens } from '../data/brand.js';
+import { setRich } from './rich-text.js';
 import { BY_ID } from '../data/items.js';
 import { CONFIG } from '../data/config.js';
 import { clipUrl } from '../data/words.js';
 import { fmt, money } from '../sim/format.js';
 import * as E from '../sim/economy.js';
-import { allowedLink } from './links.js';
+import { openAllowedLink } from './links.js';
+import { AD_ASK, adLinkStep } from './ads.js';
 import { paletteOf } from './palette.js';
 import { slotOrder } from './dock.js';
 import { incomeFeel } from './income-feel.js';
 import { iconFor } from './icons.js';
+import { noteSound, soundOwners } from './dock-volume.js';
 
 /** A deep read-only view: unlocks read the state and change it only through the verbs. */
 const views = new WeakMap();
@@ -42,7 +45,8 @@ export function makeContext(engine, scope) {
   const item = scope.item;
   const after = item.group === 'after';
   const [source, sourceLabel] = AUDIO_SOURCES[item.id] || [item.id, brandText(item.name)];
-  const soundOptions = opts => ({ source, sourceLabel, ...opts });
+  /* What an unlock plays is noted under its id, so its bottom tab can show that volume (ui/dock-volume.js). */
+  const soundOptions = opts => { const o = { source, sourceLabel, ...opts }; noteSound(item.id, o.source); return o; };
   const bag = () => { const owner = after ? engine.life : engine.run; return (owner.store[item.id] ||= {}); };
 
   const addEl = (el) => {
@@ -59,6 +63,8 @@ export function makeContext(engine, scope) {
     get life() { return readOnly(engine.life); },
     has: (id) => E.has(engine.run, id),
     pick: (f) => E.pick(engine.run, f),
+    /* Ends the run now on ending `id` (Fine Print Speedrun), the same path as the dev door's end. Once only. */
+    endRun(id = 'drop') { const r = engine.run; if (engine.stopped || r.ended) return; E.grant(r, id); r.ended = { id, at: r.clock }; engine.end(id); },
     fmt,
     rng: engine.rng,
     brand: brandObj,
@@ -66,14 +72,16 @@ export function makeContext(engine, scope) {
     layer: (name, side) => ui.layer(name, side),
     /* The run's colours: { a, b, soft, ink, spiral: [c1, c2], themes }. Event 'palette' fires when they change. */
     palette: () => paletteOf(engine.run),
-    /* A movable widget window. Layout stays in this run's store, including the preview's in-memory run. */
+    /* A movable object. Its bottom tab owns visibility; layout preferences survive new runs. */
     dock(opts = {}) {
       scope.docks = (scope.docks || 0) + 1;
       const key = `_dock${scope.docks}`;
       const layoutKey = `${item.id}:${key}`;
-      const saved = ui.getWindowLayout?.(layoutKey, bag()[key]) || bag()[key] || {};
+      const legacy = bag()[key] || opts.layout || {};
+      const saved = ui.getWindowLayout?.(layoutKey, legacy) || legacy;
       const bought = engine.run.order.indexOf(item.id);
       const s = ui.dock.add({
+        anchor: opts.anchor,
         edge: saved.edge || opts.edge,
         title: brandText(opts.title ?? item.name),
         icon: opts.icon ?? item.emoji ?? '',
@@ -84,7 +92,9 @@ export function makeContext(engine, scope) {
         pin: !!opts.pin,
         keep: !!opts.keep,
         width: opts.width,
+        reserveHeight: opts.reserveHeight,
         min: typeof saved.min === 'boolean' ? saved.min : opts.min,
+        onMin: opts.onMin,
         layout: saved,
         onLayout(value) { bag()[key] = { ...bag()[key], ...value }; ui.saveWindowLayout?.(layoutKey, value); opts.onLayout?.(value); },
       });
@@ -100,7 +110,10 @@ export function makeContext(engine, scope) {
       bag()[key] = { ...saved, ...s.layout() };
       s.root.dataset.fzOwner = item.id;
       if (s.chip) s.chip.dataset.fzOwner = item.id;
-      incomeFeel(ctx, () => ui.dock.isRail() ? s.root : s.chip);
+      incomeFeel(ctx, () => s.body.dock?.visible ? s.root : s.chip);
+      ctx.on('pause', s.cancelMove);
+      ctx.on('suspend', s.cancelMove);
+      ctx.on('ending', s.cancelMove);
       scope.cleanups.add(s.remove);
       return s.body;
     },
@@ -112,7 +125,7 @@ export function makeContext(engine, scope) {
       const e = ui.doc.createElement(tag);
       e.dataset.fzOwner = item.id;
       if (cssText) e.style.cssText = cssText;
-      if (text != null) e.textContent = brandText(text);
+      if (text != null) setRich(e, text);
       const host_ = typeof parent === 'string' ? ui.layer(parent) : (parent || ui.layer('floaters'));
       host_.appendChild(e);
       return addEl(e);
@@ -159,10 +172,10 @@ export function makeContext(engine, scope) {
     cleanup(fn) { scope.cleanups.add(fn); },
     emit: (event, data) => engine.emit(event, data),
 
-    pay: (amount, source = item.id, at = null) => engine.pay(amount, source, at),
+    pay: (amount, source = item.id, at = null) => engine.pay(amount, source, at, item.id),
     spend: (amount, reason = item.id) => engine.spend(amount, reason),
     guardBuy: (fn) => engine.addGuard(fn, scope),
-    wallHit: (at) => engine.wallHit(at),
+    wallHit: (at) => engine.wallHit(at, item.id),
     rates: () => engine.rates(),
     mod(m) {
       // A modifier always sees the same clock as ctx.frame and ctx.every, whatever the sim is passing.
@@ -174,15 +187,15 @@ export function makeContext(engine, scope) {
 
     get button() { return ui.buttonFor(scope); },
 
-    say: (text) => ui.say(brandText(text)),
+    say: (text) => ui.say(brandTokens(text)),
     sayRate(rate) {
       const off = ui.holdSayRate?.(rate) || (() => {});
       const release = () => { off(); scope.cleanups.delete(release); };
       scope.cleanups.add(release);
       return release;
     },
-    toast: (text) => ui.toast(brandText(text)),
-    float: (x, y, text, css) => ui.float(x, y, brandText(text), css),
+    toast: (text) => ui.toast(brandTokens(text)),
+    float: (x, y, text, css) => ui.float(x, y, brandTokens(text), css),
     /* A card nobody answers lets go of the page. It waits while the player is at it; left alone it takes its last button,
      * the way out, unless the spec says the choice must not be made for them (noDefault). A card with `ms` runs its own time. */
     modal(spec) {
@@ -206,6 +219,18 @@ export function makeContext(engine, scope) {
     audio: {
       mixer: audio?.mixer,
       play: (path, opts) => audio?.play(path, soundOptions(opts)),
+      /* Underwater: everything the unlock `ownerId` plays goes through a lowpass and a small cut (on) or back (off). */
+      muffle: (ownerId, on) => {
+        /* The registry (noteSound) knows the real source ids an owner streamed or played under; the static map is the fallback. */
+        const ids = new Set([(AUDIO_SOURCES[ownerId] || [ownerId])[0], ...(soundOwners.get(ownerId) || [])]);
+        for (const id of ids) audio?.muffle?.(id, on);
+      },
+      /* Underwater for the whole page except this unlock's own sound and the voices (the Bimbodoll bubble past the counter). */
+      muffleOthers: (on) => audio?.muffleOthers?.([source, 'voices'], on),
+      /* A live input on this unlock's source for synthesised sound: { ac, node, stop() } or null before the first gesture. */
+      input: (opts) => audio?.input?.(soundOptions(opts)) || null,
+      /* Fine Print Silent: the page stays silent while `on`, and lets go when the unlock does. */
+      silence: (on) => { audio?.setRule?.(!!on); if (on) scope.cleanups.add(() => audio?.setRule?.(false)); },
       /* Silence everything for a moment, capped. Wall clock on purpose: it must always end, also across a pause. */
       muteFor(ms) {
         audio?.setBlank?.(true);
@@ -256,20 +281,43 @@ export function makeContext(engine, scope) {
     get reduced() { return ui.reduced(); },
     host: (type, fields) => host.send?.(type, fields),
     openLink(url) {
-      const href = allowedLink(url);
-      if (!href || !ui.inPress?.()) return false;
-      if (host.isHosted) host.send?.('open-url', { url: href });
-      else ui.win.open(href, '_blank', 'noopener');
-      return true;
+      return openAllowedLink(url, { inPress: () => !!ui.inPress?.(), hosted: !!host.isHosted, send: (t, f) => host.send?.(t, f), win: ui.win });
+    },
+    /** A real ad's link: opens a tab only while the run has opened fewer than AD_TABS_PER_RUN. False = nothing opened. */
+    openAdLink(url) {
+      const used = (engine.run.store.adtabs ||= { n: 0 });
+      const step = adLinkStep(used, CONFIG.AD_TABS_PER_RUN);
+      if (step === 'none') return false;
+      const open = () => {
+        if (used.n >= CONFIG.AD_TABS_PER_RUN) return false;
+        const ok = openAllowedLink(url, { inPress: () => !!ui.inPress?.(), hosted: !!host.isHosted, send: (t, f) => host.send?.(t, f), win: ui.win });
+        if (ok) used.n += 1;
+        return ok;
+      };
+      if (step === 'open') return open();
+      /* Second press on: ask first. Only a real press may ask, and Open is a real press of its own (ui/app.js inPress). */
+      if (!ui.inPress?.() || !ui.modal) return false;
+      ui.modal({ title: AD_ASK.title, front: true, buttons: [{ label: AD_ASK.open, onPress: open }, { label: AD_ASK.stay }] });
+      return false;
     },
     get hosted() { return !!host.isHosted; },
     get caps() { return engine.env.caps || {}; },
 
     store: {
+      getLayout: (key) => ui.getWindowLayout?.(key) || {},
+      setLayout: (key, point) => ui.saveWindowLayout?.(key, point),
       get: (k) => bag()[k],
       set: (k, v) => { bag()[k] = v; },
     },
     config: CONFIG,
+    /* Renewal Sky, read only: { depth, dust, next, run, level(lane), has(starId), lit(endingId) } (sim/prestige.js). */
+    get prestige() { return engine.prestige; },
+    /* A prestige lane's own bag in the life save (survives New run); null for every other unlock. */
+    get pstore() { return scope.lane ? engine.pstore(scope.lane) : null; },
+    /* The shop door, prestige lanes only (Sleepwalk buys, Interest reads the goal row); null for every other unlock. */
+    get shop() { return scope.lane ? (n) => engine.shop(n) : null; },
+    get price() { return scope.lane ? (id) => engine.price(id) : null; },
+    get buy() { return scope.lane ? (id) => engine.buy(id) : null; },
     /** Keep one owned Look for the next run (z_perk), or null for none. Refuses anything that is not a Look the player has owned. */
     setPerk(id) {
       if (id === null) engine.life.perk = null;
@@ -289,5 +337,7 @@ export const CTX_MEMBERS = Object.freeze([
   'say', 'toast', 'modal', 'audio', 'voice', 'pictures', 'ads', 'gentle', 'reduced', 'host', 'hosted', 'caps', 'store',
   // additions the unlock lanes will want, documented in ENGINE.md
   'life', 'world', 'bounds', 'css', 'vars', 'emit', 'wallHit', 'rates', 'float', 'config',
-  'speed', 'parts', 'openLink', 'spend', 'guardBuy', 'setPerk', 'sayRate', 'paused', 'palette', 'dock', 'restored', 'switches', 'cleanup',
+  'speed', 'parts', 'openLink', 'openAdLink', 'spend', 'guardBuy', 'setPerk', 'sayRate', 'paused', 'palette', 'dock', 'restored', 'switches', 'cleanup',
+  // Renewal Sky (2026-11-09, handoff-1109/TC-PRESTIGE-WIRE-BRIEF.md)
+  'prestige', 'pstore', 'endRun', 'shop', 'price', 'buy',
 ]);

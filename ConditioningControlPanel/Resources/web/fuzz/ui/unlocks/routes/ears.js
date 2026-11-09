@@ -5,57 +5,20 @@ import { EDGE_WORDS, PHONES_PROMPT } from '../../../data/content/index.js';
 import { MANTRA } from '../../../data/words.js';
 import { DARK, darkCss, mountSpiral, spiral, deck, ring, flash, bar, panel, btnCentre, meterRow, setLine, burst, railsRoom, ink, freeSpot, fill } from './kit.js';
 import { ROUTE_COPY } from './copy.js';
+import { mountGameWave } from '../../live-wave.js';
 import { mountMetronome } from './metronome.js';
+import { mountCountUp } from '../../../sim/prestige-endings.js';  // prestige hook (Renewal Sky): Count Up ending, spirals pay more
 
-const LOOP = (name) => `assets/audio/ambient/${name}.wav`;
+const LOOP = (name) => `assets/audio/ambient/${name}.ogg`;
 const binauralOn = (ctx) => ctx.has('a_bin') && ctx.switches.isOn('a_bin');
 const say = (slug) => slug.replace(/-/g, ' ');
-
-/* One wide wave behind the button. The Low Hum draws it, Headphones widen it, Binaural Hum splits it. */
-const hum = { left: null, right: null, amp: 0, wide: 1, split: false };
-
-function drawHum(ctx) {
-  const c = ctx.el('canvas', 'position:absolute;left:0;width:100%;height:150px;z-index:2;', null, 'back');
-  const place = () => { const b = btnCentre(ctx); c.style.top = `${b.y - 75}px`; };
-  place();
-  c.width = 480; c.height = 150;
-  const g = c.getContext('2d');
-  let t = 0, spent = 0, seen = ctx.bounds();
-  const line = (from, to, freq, speed, colour, amp) => {
-    g.beginPath();
-    for (let x = from; x <= to; x += 6) {
-      const edge = Math.min(1, Math.min(x - from, to - x) / 50);
-      g.lineTo(x, 75 + Math.sin(x * freq - t * speed) * amp * 60 * edge);
-    }
-    g.strokeStyle = colour; g.lineWidth = 2.5; g.stroke();
-  };
-  return (dt) => {
-    spent += dt;
-    if (spent < 1 / 24) return;
-    t += ctx.gentle ? spent * 0.25 : spent;
-    spent = 0;
-    if (seen !== ctx.bounds()) { seen = ctx.bounds(); place(); }
-    hum.amp = (0.5 - 0.5 * Math.cos(t * 0.8)) * 0.8 + 0.2;
-    g.clearRect(0, 0, 480, 150);
-    const a = hum.amp * hum.wide;
-    if (hum.split) {
-      const p = ctx.palette(), themed = p.themes.length > 0;
-      line(0, 215, 0.05, 3.1, themed ? p.a : '#ff69b4', a);
-      line(265, 480, 0.042, -2.6, themed ? p.b : '#2f8fd0', a);
-    } else {
-      line(0, 480, 0.03, 1.6, ctx.palette().themes.length ? ctx.palette().a : '#7b5cff', a);
-    }
-  };
-}
 
 export default {
   /* Low Hum: fades in under the game, as a wave behind the button. */
   a_hum: {
     mount(ctx) {
-      if (!binauralOn(ctx)) ctx.audio.loop(LOOP('hum'), { bus: 'ambient', gain: 0.8, fadeMs: 2500 });
-      hum.wide = 1; hum.split = false;
-      const draw = drawHum(ctx);
-      return { tick: draw };
+      if (!binauralOn(ctx)) ctx.audio.loop(LOOP('hum'), { bus: 'ambient', gain: 0.4, fadeMs: 2500 });  // owner 2026-11-07: half the old 0.8
+      return { tick: mountGameWave(ctx) };
     },
   },
 
@@ -69,8 +32,7 @@ export default {
       ctx.el('div', 'position:absolute;left:3px;top:0;width:22px;height:22px;border:3px solid var(--ink);border-bottom-color:transparent;border-radius:50%;box-sizing:border-box;clip-path:inset(0 0 45% 0);', null, icon);
       [0, 21].forEach((x) => ctx.el('div', `position:absolute;left:${x}px;top:9px;width:7px;height:11px;border-radius:3px;background:var(--ink);`, null, icon));
       const landed = () => {
-        hum.wide = ctx.store.get('on') === false ? 1.1 : 1.6;
-        if (ctx.store.get('on') !== false && !binauralOn(ctx)) { ctx.audio.loop(LOOP('hum'), { bus: 'ambient', gain: 0.4, pan: -0.8 }); ctx.audio.loop(LOOP('hum'), { bus: 'ambient', gain: 0.4, pan: 0.8 }); }
+        if (ctx.store.get('on') !== false && !binauralOn(ctx)) { ctx.audio.loop(LOOP('hum'), { bus: 'ambient', gain: 0.2, pan: -0.8 }); ctx.audio.loop(LOOP('hum'), { bus: 'ambient', gain: 0.2, pan: 0.8 }); }
         if (!ctx.gentle) ctx.anim(icon, [{ transform: 'translateY(-60px)' }, { transform: 'translateY(0)' }], { duration: 500, easing: 'ease-in' });
       };
       if (ctx.store.get('on') !== undefined) { landed(); return {}; }
@@ -112,7 +74,7 @@ export default {
       let open = 0;
       const speak = () => {
         const slug = clips();
-        ctx.voice(slug, { gain: 0.9 });
+        ctx.voice(slug, { gain: 0.36 });   // owner 2026-11-08: "super loud", 60% lower than the old 0.9
         open = ctx.state.clock + 1500;
         setLine(ctx, say(slug), 'font-size:21px;font-weight:700;color:var(--ink);', 1700);
         const b = btnCentre(ctx);
@@ -133,9 +95,8 @@ export default {
   /* Binaural Hum: the wave splits in two, one colour each side, with a dot sitting between them. */
   a_bin: {
     mount(ctx) {
-      hum.split = true;
-      ctx.audio.loop(LOOP('hum-left'), { bus: 'ambient', gain: 0.5, pan: -1 });
-      ctx.audio.loop(LOOP('hum-right'), { bus: 'ambient', gain: 0.5, pan: 1 });
+      ctx.audio.loop(LOOP('hum-left'), { bus: 'ambient', gain: 0.3, pan: -1 });  // owner 2026-11-08: binaural lower
+      ctx.audio.loop(LOOP('hum-right'), { bus: 'ambient', gain: 0.3, pan: 1 });
       const b = btnCentre(ctx);
       const tag = (side, text, colour) => ctx.el('div', `position:absolute;${side}:12px;top:${b.y - 96}px;font:600 13px Arial,Helvetica,sans-serif;color:${colour};z-index:3;`, text, 'back').className = 'routes-lbl';
       tag('left', ROUTE_COPY.left, 'var(--accent)');
@@ -143,7 +104,7 @@ export default {
       const dot = ctx.el('div', `position:absolute;left:50%;top:${b.y - 7}px;margin-left:-98px;width:14px;height:14px;border-radius:50%;background:#ffd24d;z-index:3;`, null, 'back');
       const dot2 = ctx.el('div', `position:absolute;left:50%;top:${b.y - 7}px;margin-left:84px;width:14px;height:14px;border-radius:50%;background:#ffd24d;z-index:3;`, null, 'back');
       for (const d of [dot, dot2]) ctx.anim(d, ctx.gentle ? [{ opacity: 0.5 }, { opacity: 1 }] : [{ transform: 'scale(.6)' }, { transform: 'scale(1.5)' }], { duration: 900, iterations: Infinity, direction: 'alternate' });
-      return { off() { hum.split = false; } };
+      return {};
     },
   },
 
@@ -191,6 +152,7 @@ export default {
     mount(ctx) {
       const sp = mountSpiral(ctx, { opacity: 0.5, fadeMs: 5000 });
       sp.speedMul = 0.7;
+      mountCountUp(ctx);  // prestige hook: Count Up ending (tr_end)
       sp.el.style.zIndex = '0';
       ctx.after(2600, () => setLine(ctx, ROUTE_COPY.finally, 'font-size:22px;font-weight:700;color:#fff;text-shadow:0 1px 3px #000;', 2400));
       ctx.on('tap', () => { sp.kick = Math.min(0.8, sp.kick + 0.08); });

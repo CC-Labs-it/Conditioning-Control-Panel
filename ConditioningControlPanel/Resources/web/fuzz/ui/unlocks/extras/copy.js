@@ -28,7 +28,7 @@ export const QUIZ_COPY = Object.freeze({
   alsoYes: ['Also yes', 'Yes, reluctantly', 'Yes, but quieter', 'Very yes'],
   right: ['That is what we wanted.', 'Correct.', 'Good answer.', 'See, that was easy.', 'We knew you would.'],
   wrong: ['Noted.', 'Interesting.', 'We will work on that.', 'Not that one.', 'Close enough for a little.'],
-  idleNext: 'Next one in {n} s',
+  idleNext: 'Next question in: {n}s',
   idleNow: 'Answer it.',
 });
 

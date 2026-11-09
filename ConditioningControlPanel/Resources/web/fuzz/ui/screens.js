@@ -1,18 +1,15 @@
-/* ui/screens.js - a screen is a framed panel that shows pictures, gifs or clips, pays over time, and goes where the player
- * drags it, by mouse or finger. It lives in its own layer under the button, the shop and Wake Up, so no screen can ever make
- * those unpressable. Its spot is kept in the save as a share of the free room, so a resize or another window keeps it in the
- * same corner. The pay itself is the row's own per-second number in the sim: a screen only shows it.
- * Top half: pure helpers (tests/screens.test.mjs). Bottom half: the DOM. Nothing touches the DOM at import time. */
+/* Media objects share the dock's movement, visibility, tabs and saved layouts.
+ * Legacy position helpers remain exported for old save conversion and layout tooling.
+ * Media and gameplay use the same pause/suspend lifecycle as other features. */
 
 import { THEME_TASTES } from './unlocks/theme-skins.js';
+import { createPlayer, mediaReady, releasePlayer } from './media-cache.js';
 import { ROUTE_COPY as C } from './unlocks/routes/copy.js';
-import { incomeFeel } from './income-feel.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 /** How much of a screen must stand clear of the shop, so there is always something to grab. */
 export const GRIP = 44;
 const PAD = 8, TOP = 44;
-const DRAG_FROM = 5;
 
 /** Spot <-> share of the free room. */
 export const toShare = ({ x, y, w, h }, { W, H }) => ({ fx: W > w ? x / (W - w) : 0, fy: H > h ? y / (H - h) : 0 });
@@ -67,18 +64,12 @@ export function themeNiche(lists, base, roll) {
 
 /* ---------------- the DOM ---------------- */
 const CSS = `
-.scr{position:absolute;left:0;top:0;pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;will-change:transform}
-.scr.held{cursor:grabbing}
-.scr.handle{cursor:default}
-.scr-in{position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden;background:var(--panel);border:3px solid var(--niche);border-image:linear-gradient(135deg,var(--niche),var(--niche-2)) 1;box-shadow:2px 2px 0 rgba(0,0,0,.35);transition:box-shadow .12s ease-out,transform .12s ease-out}
-.scr.held .scr-in{box-shadow:5px 7px 0 rgba(0,0,0,.28);transform:scale(1.03)}
-body.gentle .scr.held .scr-in{transform:none}
-.scr-grip{position:relative;flex:none;height:24px;display:flex;align-items:center;justify-content:center;background:linear-gradient(90deg,var(--niche),var(--niche-2));cursor:grab;touch-action:none}
-.scr-grip::before{content:"";width:34px;height:8px;border-top:2px solid var(--niche-ink);border-bottom:2px solid var(--niche-ink);opacity:.7}
-.scr.held .scr-grip{cursor:grabbing}
+.scr{position:relative;width:100%;pointer-events:auto;user-select:none;-webkit-user-select:none;cursor:grab;touch-action:none}
+.scr[hidden]{display:none}
+.scr-in{position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden;background:transparent;border:0;border-radius:5px}
+.scr.handle .scr-in{padding:6px;background:var(--panel);border-radius:10px}
 .scr-body{position:relative;flex:1 1 0;min-height:0;overflow:hidden}
-.scr-tag{flex:none;height:15px;text-align:center;font:700 11px/15px Arial,Helvetica,sans-serif;background:linear-gradient(90deg,var(--niche),var(--niche-2));color:var(--niche-ink);pointer-events:none;font-variant-numeric:tabular-nums}
-.scr-grip .scr-tag{position:absolute;right:4px;top:4px;background:none}
+.scr-tag{flex:none;min-height:18px;text-align:center;font:600 11px/18px Arial,Helvetica,sans-serif;color:var(--ink);background:var(--panel);font-variant-numeric:tabular-nums;cursor:grab;touch-action:none}
 #counter,#l-meters{text-shadow:0 0 3px var(--page),0 0 6px var(--page)}
 .scr-slot{position:absolute;inset:0;overflow:hidden;pointer-events:none}
 .scr-slot>img,.scr-slot>video,.scr-slot>canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;-webkit-user-drag:none}
@@ -91,7 +82,6 @@ body.gentle .scr.held .scr-in{transform:none}
 `;
 
 const live = new Set();
-let zTop = 1;
 /** Every screen on the page, for rows that decorate them (Favourites). */
 export const liveScreens = () => [...live].filter((s) => s.el.isConnected);
 
@@ -147,11 +137,16 @@ function addFiles(ctx) {
 export function testCard(ctx, parent, kind = 'picture') {
   const card = ctx.el('div', '', null, parent);
   card.className = 'scr-card';
-  const line = ctx.el('b', '', kind === 'gif' ? C.screenNoGif : kind === 'clip' ? C.screenNoClip : C.screenNone, card);
-  void line;
-  const b = ctx.el('button', '', C.screenAdd, card);
+  const remote = ctx.pictures.source === 'scrolller';
+  const label = remote ? 'Waiting for Scrolller media.' : kind === 'gif' ? C.screenNoGif : kind === 'clip' ? C.screenNoClip : C.screenNone;
+  ctx.el('b', '', label, card);
+  const local = ctx.pictures.source === 'own';
+  const b = ctx.el('button', '', local ? C.screenAdd : 'Choose pictures', card);
   b.type = 'button';
-  b.addEventListener('click', (e) => { e.stopPropagation(); addFiles(ctx); });
+  b.addEventListener('click', e => {
+    e.stopPropagation();
+    if (local) addFiles(ctx); else ctx.emit('choose-pictures');
+  });
   return card;
 }
 
@@ -159,54 +154,42 @@ export function testCard(ctx, parent, kind = 'picture') {
  *  Muted, always: a clip here never makes a sound. */
 export function mediaEl(ctx, parent, pic) {
   const doc = parent.ownerDocument;
-  if (pic.kind === 'clip') {
-    const v = doc.createElement('video');
-    v.muted = true;
-    v.defaultMuted = true;
-    v.setAttribute('muted', '');
-    v.loop = true;
-    v.playsInline = true;
-    v.setAttribute('playsinline', '');
-    v.disablePictureInPicture = true;
-    v.preload = 'auto';
-    v.src = pic.url;
-    v.dataset.kind = pic.kind;
-    parent.appendChild(v);
-    return v;
-  }
-  const i = doc.createElement('img');
-  i.alt = '';
-  i.draggable = false;
-  i.decoding = 'async';
-  i.src = pic.url;
-  i.dataset.kind = pic.kind;
-  parent.appendChild(i);
-  return i;
+  const node = ctx.pictures?.takePlayer?.(pic,doc) || createPlayer(doc,pic);
+  parent.appendChild(node);
+  return node;
 }
 
 /** Gone for good: a clip lets go of its decoder at once. */
 export function dropMedia(m) {
   if (!m) return;
   m.__still?.remove();
-  if (m.tagName === 'VIDEO') { m.pause(); m.removeAttribute('src'); m.load(); }
-  m.remove();
+  m.__still = null;
+  releasePlayer(m);
 }
+
+const starting = new WeakSet();
 
 /** Play only when nothing holds it: pause, suspend and Gentle all stop a clip. A gif can't be paused, so a still covers it. */
 export function holdMedia(ctx, m, wanted = true) {
   if (!m) return;
-  const stop = ctx.paused || ctx.gentle || !wanted;
+  const stop = ctx.paused || ctx.gentle || ctx.reduced || ctx.state.ended || m.ownerDocument.hidden || !wanted;
   if (m.tagName === 'VIDEO') {
-    if (stop) m.pause();
-    else m.play?.()?.catch?.(() => {});
+    if (stop) {
+      if (!m.paused || starting.has(m)) m.pause();
+    } else if (m.paused && !starting.has(m)) {
+      starting.add(m);
+      m.play().catch(() => {}).finally(() => starting.delete(m));
+    }
     return;
   }
   if (m.dataset.kind !== 'gif') return;
   if (!stop) { m.style.visibility = ''; m.__still?.remove(); m.__still = null; return; }
-  if (m.__still || !m.naturalWidth) return;
+  if (m.__still) return;
+  if (!m.naturalWidth) { m.style.visibility = 'hidden'; return; }
   const c = m.ownerDocument.createElement('canvas');
-  c.width = Math.min(640, m.naturalWidth);
-  c.height = Math.round(c.width * (m.naturalHeight / m.naturalWidth));
+  const scale = Math.min(1, 640 / Math.max(m.naturalWidth, m.naturalHeight));
+  c.width = Math.max(1, Math.round(m.naturalWidth * scale));
+  c.height = Math.max(1, Math.round(m.naturalHeight * scale));
   c.getContext('2d').drawImage(m, 0, 0, c.width, c.height);
   c.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;';
   m.after(c);
@@ -214,278 +197,195 @@ export function holdMedia(ctx, m, wanted = true) {
   m.style.visibility = 'hidden';
 }
 
-/** A box that crossfades between media of one kind. A null answer shows the test card, or nothing with card:false. */
-export function mediaSlot(ctx, parent, { kind = 'picture', card = true } = {}) {
+/** Browser visibility changes even while the game's own clock is stopped. */
+export function watchMedia(ctx, doc, sync) {
+  doc.addEventListener('visibilitychange', sync);
+  ctx.cleanup(() => doc.removeEventListener('visibilitychange', sync));
+  for (const event of ['pause', 'resume', 'suspend', 'ending']) ctx.on(event, sync);
+  // Browser-paused videos and a live motion preference change both need a fresh playback check.
+  ctx.every(500, sync);
+}
+
+/** A box that crossfades between media of one kind. A null answer shows the test card, or nothing with card:false.
+ *  stillFallback: a motion slot (gif/clip) shows a still when the source has no motion, and asks for motion again next time. */
+export function mediaSlot(ctx, parent, { kind = 'picture', card = true, visible = () => true, stillFallback = false } = {}) {
+  ensureCss(ctx);
   const box = ctx.el('div', '', null, parent);
   box.className = 'scr-slot';
   const credit = ctx.el('div', '', '', box);
   credit.className = 'scr-credit';
-  let top = null, topUrl = null, ask = 0, cardEl = null;
+  let top = null, topUrl = null, ask = 0, cardEl = null, requesting = false, shownAt = 0;
+  let requested = false, lastNiche, appended = false;
+  const retired = new Set(), loading = new Set();
 
   const showCard = () => {
     dropMedia(top);
     top = null;
     topUrl = null;
     credit.textContent = '';
-    if (!cardEl && card) cardEl = testCard(ctx, parent, kind);
+    if (!cardEl && card) cardEl = testCard(ctx, parent, stillFallback ? 'picture' : kind);
   };
-  const sync = () => holdMedia(ctx, top);
+  let reported = null;
+  const sync = () => {
+    const shown = visible();
+    holdMedia(ctx, top, shown);
+    if (top && top !== reported && shown && !ctx.paused && !ctx.state.ended && !box.ownerDocument.hidden) {
+      reported = top;
+      ctx.pictures.noteView?.();
+    }
+  };
   const slot = {
     box,
     get media() { return top; },
+    get busy() { return requesting || loading.size > 0; },
+    /** When the media on show came up (Date.now()), 0 for none. */
+    get shownAt() { return top ? shownAt : 0; },
     /** Show the next one. Same file as now: nothing to do, so a lone clip keeps playing. */
     async next(niche, tries = 2) {
       const mine = ++ask;
-      const pic = await ctx.pictures.next({ niche, kind });
+      requested = true;
+      lastNiche = niche;
+      appended = false;
+      requesting = true;
+      let pic = await ctx.pictures.next({ niche, kind, previousUrl: topUrl, allowScrolller: true });
+      if (!pic && (kind === 'picture' || stillFallback)) pic = await ctx.pictures.next({ niche, still: true, allowScrolller: true });
       if (mine !== ask || !box.isConnected) return;
-      if (!pic) { showCard(); return; }
+      requesting = false;
+      if (!pic) {
+        if (appended && visible() && !ctx.paused && !box.ownerDocument.hidden) return slot.next(niche);
+        showCard(); return;
+      }
       if (pic.url === topUrl) return;
       const m = mediaEl(ctx, box, pic);
+      m.style.opacity = '0';
+      loading.add(m);
       box.insertBefore(m, credit);
+      let cancelTimeout;
       const ready = () => {
+        cancelTimeout?.();
+        if (!loading.has(m)) return;
+        loading.delete(m);
         if (mine !== ask || !box.isConnected) { dropMedia(m); return; }
         cardEl?.remove();
         cardEl = null;
         credit.textContent = pic.credit || '';
-        ctx.anim(m, [{ opacity: 0 }, { opacity: 1 }], { duration: 450 });
+        m.style.opacity = '';
+        // Gentle visuals: a slower plain fade (only ever longer, never a flash).
+        const fadeMs = ctx.gentle ? 1200 : 450;
+        ctx.anim(m, [{ opacity: 0 }, { opacity: 1 }], { duration: fadeMs });
         const old = top;
         top = m;
         topUrl = pic.url;
-        holdMedia(ctx, m);
-        if (old) { old.pause?.(); ctx.after(470, () => dropMedia(old)); }
+        shownAt = Date.now();
+        sync();
+        if (old) {
+          holdMedia(ctx, old, false);
+          retired.add(old);
+          ctx.after(fadeMs + 20, () => { if (retired.delete(old)) dropMedia(old); });
+        }
       };
       const bad = () => {
+        cancelTimeout?.();
+        if (!loading.has(m)) return;
+        loading.delete(m);
         dropMedia(m);
         if (mine !== ask) return;
-        if (tries > 0) slot.next(niche, tries - 1);
+        if ((tries > 0 || appended) && visible() && !ctx.paused && !box.ownerDocument.hidden) slot.next(niche, Math.max(0, tries - 1));
         else if (!top) showCard();
       };
       m.addEventListener(m.tagName === 'VIDEO' ? 'loadeddata' : 'load', ready, { once: true });
       m.addEventListener('error', bad, { once: true });
+      cancelTimeout = ctx.after(12000, bad);
+      if (mediaReady(m)) ready();
     },
-    clear() { ask += 1; dropMedia(top); top = null; topUrl = null; cardEl?.remove(); cardEl = null; credit.textContent = ''; },
+    clear() {
+      ask++;
+      requesting = requested = appended = false;
+      for (const media of [...loading, ...retired]) dropMedia(media);
+      loading.clear(); retired.clear();
+      dropMedia(top); top = null; reported = null; topUrl = null; cardEl?.remove(); cardEl = null; credit.textContent = '';
+    },
     sync,
   };
-  ctx.on('pause', sync);
-  ctx.on('resume', sync);
-  ctx.on('suspend', sync);
-  /* Gentle can change from the host with no pause around it. */
-  let wasGentle = ctx.gentle;
-  ctx.every(1000, () => { if (ctx.gentle !== wasGentle) { wasGentle = ctx.gentle; sync(); } });
+  watchMedia(ctx, box.ownerDocument, sync);
+  ctx.on('pictures-added', () => {
+    if (top || !requested || !visible() || ctx.paused || ctx.state.ended || box.ownerDocument.hidden) return;
+    if (slot.busy) appended = true;
+    else slot.next(lastNiche);
+  });
+  ctx.cleanup(slot.clear);
   return slot;
 }
 
-/** A draggable screen.
- *  kind: 'picture' | 'gif' | 'clip' draws media; null leaves an empty body for the caller.
- *  ratio: height / width. wide: takes more room on a narrow window. handle: only the grip strip drags (the body has gestures).
- *  niche: base niche, or a function answering one. every / first: ms between changes, first change. card: false for no test card.
- *  place(size): hears every new size. hint: says it can be dragged, once. key: a store key, for an unlock with two screens. */
-export function screen(ctx, { kind = null, ratio = 1.1, wide = false, scale = 1, handle = false, niche = 'pretty', every = 0, first = 0, card = true, css = '', place = null, hint = false, key = 'spot', pays = true } = {}) {
+/** A tab-controlled media object. handle reserves the feed's interior for its own gestures.
+ * Old fractional positions migrate once into the shared layout preferences. */
+export function screen(ctx, { kind = null, ratio = 1.1, wide = false, scale = 1, handle = false, niche = 'pretty', every = 0, first = 0, card = true, css = '', place = null, hint = false, key = 'spot', pays = true, edge = undefined, title = undefined, stillFallback = false, open = false } = {}) {
   ensureCss(ctx);
-  const el = ctx.el('div', '', null, 'screens');
-  if (pays) incomeFeel(ctx, () => el);
+  const width = Math.round(Math.min(wide ? 300 : 220, Math.max(140, ctx.bounds().w - 24)) * scale);
+  const size = { w: width, h: Math.round(width * ratio) };
+  const old = ctx.store.get(key);
+  const legacy = old && Number.isFinite(old.fx) && Number.isFinite(old.fy)
+    ? fromShare(old, size, { W: ctx.bounds().w, H: ctx.bounds().h }) : {};
+  let syncVisibility = () => {};
+  // edge: the side a fresh object prefers; a saved layout always wins. title: its tab (default: the row's name).
+  // open: show it at once on a phone too when there is free room (no room: a NEW tab); a saved layout still wins.
+  const host = ctx.dock({ width, layout: legacy, edge, title, ...(open ? { min: false } : {}), onMin: () => syncVisibility() });
+  const el = ctx.el('div', '', null, host);
   el.className = handle ? 'scr handle' : 'scr';
-  const inner = ctx.el('div', css, null, el);
-  inner.className = 'scr-in';
-  const grip = handle ? ctx.el('div', '', null, inner) : null;
-  if (grip) { grip.className = 'scr-grip'; grip.setAttribute('aria-label', C.screenDrag); }
-  const body = ctx.el('div', '', null, inner);
-  body.className = 'scr-body';
-
-  const size = { w: 0, h: 0 };
-  let spot = { x: 0, y: 0 };
-  let freshSpot = false;
-  const apply = () => { el.style.transform = `translate3d(${Math.round(spot.x)}px,${Math.round(spot.y)}px,0)`; };
-  const resize = (r) => {
-    const s = screenSize(r, { ratio, wide, scale });
-    if (s.w !== size.w || s.h !== size.h) {
-      size.w = s.w; size.h = s.h;
-      el.style.width = `${s.w}px`;
-      el.style.height = `${s.h}px`;
-      el.classList.toggle('scr-small', s.w < 150);
-      place?.({ ...size, rail: r.railW >= 170 });
-    }
-  };
-  const settle = (r) => { spot = clampSpot({ ...spot, ...size }, r); apply(); };
-  const remember = (r) => ctx.store.set(key, toShare({ ...spot, ...size }, r));
-
+  el.dataset.dockSurface = '';
+  const inner = ctx.el('div', css, null, el); inner.className = 'scr-in';
+  const body = ctx.el('div', '', null, inner); body.className = 'scr-body';
+  // A feed owns swipes inside its screen. Its physical bezel remains a move surface.
+  if (handle) body.dataset.dockInteractive = '';
+  const waiting = ctx.el('div', 'padding:6px 8px;background:var(--panel);color:var(--ink);border-radius:6px;font:12px var(--font);', 'Next clip soon.', host);
+  waiting.hidden = true;
+  let available = true;
   const me = {
-    el, body, inner, size, grip,
-    get visible() { return el.style.display !== 'none'; },
-    show(on = true) { if (!on) drop(); el.style.display = on ? '' : 'none'; el.ownerDocument.dispatchEvent(new Event('fz-screens')); },
+    el, body, inner, size, grip: null,
+    get visible() { return available && host.dock?.visible !== false; },
+    openDock() { host.dock?.setVisible(true); },
+    show(on = true) {
+      available = on; el.hidden = !on; waiting.hidden = on;
+      syncVisibility();
+    },
+    frame() { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: size.w, h: size.h }; },
   };
-
-  /* First spot: what the save says, or a free place that then goes in the save. */
-  {
-    const r = room(ctx);
-    resize(r);
-    const saved = ctx.store.get(key);
-    const placed = liveScreens().map((s) => s.frame());
-    freshSpot = !(saved && Number.isFinite(saved.fx) && Number.isFinite(saved.fy));
-    spot = freshSpot ? defaultSpot({ ...r, top: r.railW >= 170 ? TOP : r.flankTop }, size, placed) : fromShare(saved, size, r);
-    settle(r);
-  }
-  me.frame = () => ({ ...spot, ...size });
+  const resize = () => {
+    const w = host.clientWidth || width;
+    const h = Math.round(Math.min(w * ratio, Math.max(100, ctx.bounds().h - 130)));
+    if (size.w === w && size.h === h && el.style.height) return;
+    size.w = w; size.h = h; el.style.height = `${h}px`;
+    el.classList.toggle('scr-small', w < 150);
+    place?.({ ...size, rail: ctx.bounds().w >= 1100 });
+  };
+  resize(); ctx.after(0, resize);
+  ctx.every(500, resize);
   live.add(me);
-  ctx.cleanup(() => { live.delete(me); me.slot?.clear(); });   // a clip lets go of its decoder, and nothing keeps the old frame alive
-
-  /* The whole frame drags, or only the grip. On a small frame the test card's button is most of it, and a finger is fat, so
-   * a drag may start on that button too: if it never moves, the press stays the button's. A heart or a fake close (they
-   * stop the event themselves) stay theirs. */
-  let drag = null;
-  // ui.draw runs after mounting. Resolve an unsaved default against its real tile
-  // height on the next game frame, then save it. Never relocate a player-set spot.
-  ctx.after(0, () => {
-    if (!freshSpot || drag) return;
-    freshSpot = false;
-    const r = room(ctx);
-    resize(r);
-    const placed = liveScreens().filter((s) => s !== me).map((s) => s.frame());
-    spot = defaultSpot({ ...r, top: r.railW >= 170 ? TOP : r.flankTop }, size, placed);
-    settle(r);
-    remember(r);
-    tellDock();
-  });
-  const from = handle ? grip : el;
-  const lift = (on) => { el.classList.toggle('held', on); el.parentElement?.classList.toggle('lifted', on); };
-  /* Can it still be grabbed where it landed? Under the counter, the button or a dock panel may leave nothing to press. */
-  const reachable = () => {
-    const doc = el.ownerDocument;
-    const hold = handle ? 24 : size.h;
-    for (let i = 0; i < 5; i++) {
-      for (let j = 0; j < 5; j++) {
-        const x = spot.x + (size.w * (i * 2 + 1)) / 10, y = spot.y + (hold * (j * 2 + 1)) / 10;
-        const hit = doc.elementFromPoint(x, y);
-        if (hit && from.contains(hit)) return true;
-      }
-    }
-    return false;
-  };
-  const tellDock = () => el.ownerDocument.dispatchEvent(new Event('fz-screens'));
-  /* The dock grew over it, or the shop did. It walks to the nearest place with something showing, and stays there. */
-  const rescue = (r) => {
-    const doc = el.ownerDocument;
-    const clearAt = (p) => {
-      const hit = doc.elementFromPoint(p.x + size.w / 2, p.y + (handle ? 12 : size.h / 2));
-      return !hit || hit.closest('.scr') === el || !hit.closest('.dk,#shop,#btn,#dock-strip,.xq,.scr');
-    };
-    const spots = [];
-    for (let y = Math.max(0, r.H - size.h - PAD); y >= TOP; y -= Math.max(40, size.h / 2)) {
-      for (let x = PAD; x <= r.W - size.w - PAD; x += Math.max(40, size.w / 2)) spots.push({ x, y });
-    }
-    spots.sort((a, b) => Math.hypot(a.x - spot.x, a.y - spot.y) - Math.hypot(b.x - spot.x, b.y - spot.y));
-    const to = spots.find(clearAt);
-    if (!to) return;
-    spot = to;
-    settle(r);
-    remember(r);
-    tellDock();
-  };
-  const drop = (keep = true) => {
-    if (!drag) return;
-    const d = drag;
-    drag = null;
-    try { from.releasePointerCapture(d.id); } catch { /* gone */ }
-    lift(false);
-    if (!d.moved) return;
-    const r = room(ctx);
-    if (keep) {
-      settle(r);
-      if (!reachable()) { spot = d.start; settle(r); }   // nothing to grab it by there: it goes back
-      remember(r);
-      tellDock();
-    }
-    if (!ctx.gentle) ctx.anim(inner, [{ transform: 'scale(1.03)' }, { transform: 'scale(.985)' }, { transform: 'none' }], { duration: 180, easing: 'ease-out' });
-  };
-  from.addEventListener('pointerdown', (e) => {
-    if (e.button > 0 || ctx.paused) return;
-    if (freshSpot) { freshSpot = false; remember(room(ctx)); }
-    const onButton = !!e.target.closest?.('button,a,input');
-    if (!onButton) e.preventDefault();
-    drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, ox: spot.x, oy: spot.y, start: { ...spot }, moved: false, r: room(ctx) };
-    if (!onButton) { try { from.setPointerCapture(e.pointerId); } catch { /* fine */ } }
-    el.style.zIndex = String(++zTop);   // the one in hand comes to the front
-  });
-  from.addEventListener('pointermove', (e) => {
-    if (!drag || e.pointerId !== drag.id) return;
-    const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
-    if (!drag.moved) {
-      if (Math.hypot(dx, dy) < DRAG_FROM) return;
-      drag.moved = true;
-      lift(true);
-      try { from.setPointerCapture(e.pointerId); } catch { /* fine */ }
-    }
-    spot = { x: clamp(drag.ox + dx, 0, Math.max(0, drag.r.W - size.w)), y: clamp(drag.oy + dy, 0, Math.max(0, drag.r.H - size.h)) };
-    apply();
-  });
-  from.addEventListener('pointerup', (e) => { if (drag && e.pointerId === drag.id) drop(); });
-  from.addEventListener('pointercancel', (e) => { if (drag && e.pointerId === drag.id) drop(); });
-  from.addEventListener('dragstart', (e) => e.preventDefault());
-  ctx.on('pause', () => drop());
-  ctx.on('suspend', ({ on }) => { if (on) drop(); });
-
-  tellDock();
-  /* Buried twice running, with no card up to explain it: move. */
-  let buried = 0;
-  ctx.every(2500, () => {
-    if (drag || !me.visible || el.ownerDocument.querySelector('#cards .backdrop')) { buried = 0; return; }
-    const on = el.ownerDocument.elementFromPoint(spot.x + size.w / 2, spot.y + size.h / 2);
-    buried = reachable() || !on?.closest('.dk,#shop') ? 0 : buried + 1;
-    if (buried >= 2) { buried = 0; rescue(room(ctx)); }
-  });
-
-  /* A resize keeps the spot's share of the free room. */
-  let seen = ctx.bounds();
-  let shopUp = !!ctx.parts.shop?.getBoundingClientRect().width;
-  ctx.every(500, () => {
-    const b = ctx.bounds();
-    if (!shopUp && !drag && ctx.parts.shop?.getBoundingClientRect().width) {
-      shopUp = true;
-      const r = room(ctx);
-      resize(r);
-      settle(r);
-    }
-    if ((b.w === seen.w && b.h === seen.h) || drag) return;
-    const share = toShare({ ...spot, ...size }, { W: seen.w, H: seen.h });
-    seen = b;
-    const r = room(ctx);
-    resize(r);
-    spot = fromShare(share, size, r);
-    settle(r);
-  });
-
-  /* What it pays, on the frame and rising from it now and then. The money itself is the row's fps in the sim. */
+  ctx.cleanup(() => live.delete(me));
   const fps = pays ? ctx.item?.fps || 0 : 0;
   if (fps) {
-    const tag = ctx.el('div', '', C.screenPay.replace('{n}', ctx.fmt(fps * (ctx.state.pace || 1))), grip || inner);
-    tag.className = 'scr-tag';
-    ctx.every(4000, () => {
-      if (!me.visible) return;
-      ctx.float(spot.x + size.w / 2, spot.y + 6, `+${ctx.fmt(fps * (ctx.state.pace || 1) * 4)}`, 'font-weight:700;color:var(--ink);text-shadow:0 0 3px var(--page);');
-    });
+    const tag = ctx.el('div', '', C.screenPay.replace('{n}', ctx.fmt(fps * (ctx.state.pace || 1))), inner);
+    tag.className = 'scr-tag'; tag.dataset.dockSurface = '';
   }
-
-  if (!ctx.gentle) ctx.anim(inner, [{ transform: 'translateY(-14px) scale(.9)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 320, easing: 'cubic-bezier(.2,1.4,.5,1)' });
-  if (hint) {
-    const h = ctx.el('div', 'position:absolute;left:0;right:0;top:4px;z-index:4;text-align:center;font:700 12px Arial,Helvetica,sans-serif;color:var(--niche-ink);pointer-events:none;', C.screenDrag, body);
-    h.classList.add('scr-hint');
-    h.style.textShadow = '0 0 3px var(--niche-soft),0 0 3px var(--niche-soft)';
-    ctx.anim(h, [{ opacity: 0 }, { opacity: 1, offset: 0.1 }, { opacity: 1, offset: 0.8 }, { opacity: 0 }], { duration: 3600, fill: 'both' });
-    ctx.after(3700, () => h.remove());
-  }
-
-  /* The media, and the theme's niches first. */
   if (kind) {
-    const slot = mediaSlot(ctx, body, { kind, card });
+    const slot = mediaSlot(ctx, body, { kind, card, visible: () => me.visible, stillFallback });
     me.slot = slot;
-    const pickNiche = () => {
-      const base = typeof niche === 'function' ? niche() : niche;
-      return themeNiche(themeLists(ctx), base, ctx.rng);
+    const pickNiche = () => themeNiche(themeLists(ctx), typeof niche === 'function' ? niche() : niche, ctx.rng);
+    me.next = () => {
+      if (!slot.busy && me.visible && !el.ownerDocument.hidden && !ctx.paused && !ctx.state.ended) return slot.next(pickNiche());
     };
-    me.next = () => slot.next(pickNiche());
     if (first >= 0 && every >= 0) ctx.after(first, me.next);
     if (every > 0) ctx.every(every, () => { if (me.visible) me.next(); });
-    ctx.on('pictures', () => { if (me.visible) { slot.clear(); me.next(); } });
+    ctx.on('pictures', () => { slot.clear(); if (me.visible) me.next(); });
+    const refill = () => { if (available && !slot.media) me.next(); };
+    ctx.on('resume', refill);
+    ctx.on('suspend', ({ on }) => { if (!on) refill(); });
+    el.ownerDocument.addEventListener('visibilitychange', refill);
+    ctx.cleanup(() => el.ownerDocument.removeEventListener('visibilitychange', refill));
+    syncVisibility = () => {
+      slot.sync();
+      refill();
+    };
   }
   return me;
 }

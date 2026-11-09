@@ -3,9 +3,21 @@ import assert from 'node:assert/strict';
 import { BY_ID, ITEMS } from '../data/items.js';
 import { FOLD, LEAD_OF, buildFolds } from '../data/folds.js';
 import * as E from '../sim/economy.js';
-import { overLimit, defaultWindowWidth, railWidth } from '../ui/dock.js';
 
 const rich = (s, n = 1e9) => { E.lump(s, n, 'test'); return s; };
+
+test('Auto-Scroll is an optional purchase after Swipe Feed and preserves its existing bundle', () => {
+  const s = rich(E.createRun());
+  const upgrade = BY_ID.d_autoscroll;
+  assert.equal(E.isOpen(s, upgrade), false);
+  assert.deepEqual(FOLD.d_scroll, ['d_like', 'd_clips']);
+  E.grant(s, 'd_scroll');
+  assert.equal(E.has(s, 'd_autoscroll'), false);
+  assert.equal(E.isOpen(s, upgrade), true);
+  assert.equal(E.price(s, 'd_autoscroll'), 6000);
+  assert.equal(E.buy(s, 'd_autoscroll').ok, true);
+  assert.equal(E.isOpen(s, upgrade), false);
+});
 
 test('bundles fold plain lane stretches and never touch forks, endings, skins or toys', () => {
   assert.ok(Object.keys(FOLD).length >= 40, 'a run has about half the purchases');
@@ -14,7 +26,7 @@ test('bundles fold plain lane stretches and never touch forks, endings, skins or
     assert.ok(group.every((it) => it.kind === 'item' && !it.grow && it.lane === group[0].lane), lead);
     riders.forEach((id, i) => assert.equal(BY_ID[id].req[0], i ? riders[i - 1] : lead, `${id} follows its bundle`));
   }
-  for (const id of ['rounded', 'heartbtn', 'toy_box', 'mini_slots', 'f1', 'drop', 'stray']) assert.equal(!!(FOLD[id] || LEAD_OF[id]), false, id);
+  for (const id of ['rounded', 'bigbtn', 'toy_box', 'mini_slots', 'f1', 'drop', 'stray']) assert.equal(!!(FOLD[id] || LEAD_OF[id]), false, id);
   assert.deepEqual(buildFolds(ITEMS, 1).FOLD, {});
 });
 
@@ -44,14 +56,14 @@ test('an old save that owns a lead without its riders sells each rider on its ow
   assert.equal(E.buy(s, first).ok, true);
 });
 
-test('twelve windows stay open; the one used longest ago goes first, pinned ones last', () => {
-  const w = (z, more = {}) => ({ z, min: false, door: false, ...more });
-  const slots = Array.from({ length: 12 }, (_, i) => w(i + 1));
-  assert.deepEqual(overLimit(slots, 12), []);
-  const fresh = w(50);
-  const pinned = slots[0]; pinned.pin = true;
-  assert.deepEqual(overLimit([...slots, fresh], 12, fresh), [slots[1]]);
-  assert.deepEqual(overLimit([...slots, w(60, { min: true }), w(61, { door: true })], 12), []);
-  assert.ok(defaultWindowWidth(1920) < railWidth(1920) - 12, 'fresh windows are smaller than their rail');
-  assert.ok(defaultWindowWidth(1100) >= 180);
+test('Starburst and Word Comet each require their own shop purchase', () => {
+  const { createRun, grant, buy, isOpen } = E;
+  const run = createRun();
+  run.fuzz = run.total = 100000;
+  grant(run, 'trail');
+  assert.equal(isOpen(run, BY_ID.starburst), true);
+  assert.equal(isOpen(run, BY_ID.word_comet), false);
+  assert.equal(buy(run, 'starburst').ok, true);
+  assert.equal(isOpen(run, BY_ID.word_comet), true);
+  assert.equal(buy(run, 'word_comet').ok, true);
 });

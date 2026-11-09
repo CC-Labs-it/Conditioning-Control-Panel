@@ -4,8 +4,8 @@ import { THEMES } from '../../../data/content/themes.js';
 import { ENDINGS } from '../../../data/content/endings.js';
 import { mountPodcast } from '../podcast-player.js';
 import { COPY } from './copy.js';
+import { themeScreens } from '../themes-a/theme-screens.js';
 import { buttonCentre, docOf, endingStage, endingWords, fresh, gallery, moment, motion, pick, ring, sfx, slot, tile } from './kit.js';
-import { THEME_TASTES } from '../theme-skins.js';
 
 const R = THEMES.goon.rules;
 const HOT = '#f2a33c';
@@ -21,9 +21,8 @@ export const goonPick = {
 export default {
   go_head: {
     mount(ctx) {
-      const g = gallery(ctx, { niche: 'goon', mode: 'swap' });
-      if (ctx.has('go_feed')) g.hide();
-      ctx.on('buy', (e) => { if (e.item.id === 'go_feed') g.hide(); });
+      /* The first pictures: three screens (owner 2026-11-08). The side columns wait for Goon Pictures. */
+      themeScreens(ctx, { niches: ['goon'], frame: 'border:2px solid #333;border-radius:4px;box-shadow:0 0 16px rgba(242,163,60,.3);' });
       return {};
     },
   },
@@ -171,19 +170,7 @@ export default {
     },
   },
 
-  /* Rubbed shiny in the middle. Every tap wears it more, and the label goes first. */
-  go_worn: {
-    mount(ctx) {
-      ctx.css(THEME_TASTES.goon.css);
-      ctx.button.skin('worn');
-      const btn = ctx.button.el;
-      let taps = ctx.store.get('t') || 0;
-      const draw = () => btn.style.setProperty('--worn', Math.min(1, 0.15 + taps / 500).toFixed(3));
-      draw();
-      ctx.on('tap', () => { taps += 1; if (taps % 8 === 0) { ctx.store.set('t', taps); draw(); } });
-      return { off() { btn.style.removeProperty('--worn'); } };
-    },
-  },
+  go_worn: { mount(ctx) { ctx.button.skin('worn'); } },
 
   /* Curtains shut. The page sinks, and one lit screen stays behind the counter. */
   go_cave: {

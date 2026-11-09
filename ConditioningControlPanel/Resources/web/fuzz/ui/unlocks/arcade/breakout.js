@@ -1,28 +1,35 @@
-import { createBreakout, stepBreakout, snapshot, WIDTH, HEIGHT, PADDLE_Y, PADDLE_W } from './breakout-core/game.js';
+import { createBreakout, stepBreakout, snapshot, WIDTH, HEIGHT, PADDLE_Y, PADDLE_W, SHIELD_Y } from './breakout-core/game.js';
 import { squashScale } from './breakout-core/contact.js';
-import { sfx } from '../basics/fx.js';
+import { bubbleInk } from './canvas-lettering.js';
+import { breakoutAudio, createBrickPhoto, drawDrop, drawSpecialBrick } from './breakout-core/presentation.js';
 
 export function mountBreakout(ctx) {
-  const host = ctx.dock({ title: 'Mini Breakout', icon: '▰' });
+  const host = ctx.dock({ title: 'Mini Breakout', icon: '▰', width: 232 });
+  host.dock?.setReady(false);
   const root = ctx.el('div', 'width:100%;max-width:280px;margin:auto;pointer-events:auto;', null, host);
+  root.dataset.dockSurface = '';
   root.dataset.arcade = 'mini_breakout';
   const header = ctx.el('div', 'display:grid;grid-template-columns:auto auto;align-items:center;gap:2px 6px;flex:1;min-width:0;font-size:10px;line-height:1.2;color:var(--ink);', null, root);
   const board = ctx.el('span', 'font-weight:700;', '', header);
   const mode = ctx.el('span', 'opacity:.7;', '', header);
   const canvas = ctx.el('canvas', 'display:block;width:100%;aspect-ratio:280/196;border:1px solid var(--niche);border-radius:9px;background:#15151e;touch-action:pan-y;', null, root);
+  canvas.dataset.dockInteractive = '';
   canvas.width = WIDTH * 2; canvas.height = HEIGHT * 2; canvas.tabIndex = 0;
-  canvas.setAttribute('aria-label', 'Mini Breakout. Hover to play, or use the Take control button and arrow keys.');
+  canvas.setAttribute('aria-label', 'Mini Breakout. Hover to play, or take control with arrow keys. Catch flames to pierce bricks and shields to save a missed ball. Riveted bricks take two hits.');
   const footer = ctx.el('div', 'display:flex;align-items:center;justify-content:space-between;gap:5px;margin-top:3px;', null, root);
   footer.appendChild(header);
-  const receipt = ctx.el('span', 'grid-column:1/-1;font-size:11px;line-height:1.2;color:var(--niche-text);', 'Clears pay. Playing pays more.', header);
+  const credit = ctx.el('small','grid-column:1/-1;font:11px system-ui;color:var(--ink);','',header);
+  credit.hidden=true;
+  const receipt = ctx.el('span', 'grid-column:1/-1;font-size:11px;line-height:1.2;color:var(--niche-text);', '', header);
   const toggle = ctx.el('button', 'flex:none;min-height:44px;padding:4px 7px;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:var(--ink);font:inherit;font-size:11px;', 'Take control', footer);
   toggle.type = 'button';
-  const g = canvas.getContext('2d'), sim = createBreakout(ctx.store.get('game'));
+  const g = canvas.getContext('2d'), sim = createBreakout(ctx.store.get('game'), ctx.state.store.journey?.specs?.spec_breakout);
+  const doc=canvas.ownerDocument, audio=breakoutAudio(ctx), pictures=createBrickPhoto(ctx,canvas,credit);
   const particles = [], trail = [];
-  let hovered = false, touchControl = false, aim = sim.paddle, visible = true, lastPaint = ctx.state.clock, squash = 0, glow = 0, dead = false;
+  let hovered = false, touchControl = false, aim = sim.paddle, visible = true, lastPaint = ctx.state.clock, squash = 0, glow = 0, dead = false, ending=false;
   let colours = ['#f48db8', '#bb9cf5', '#89dce4', '#9de7c5'];
   const calm = () => ctx.gentle || ctx.reduced;
-  const manual = () => !calm() && (hovered || touchControl);
+  const manual = () => host.dock?.visible !== false && !calm() && (hovered || touchControl);
   const save = () => ctx.store.set('game', snapshot(sim));
   const palette = () => { const p = ctx.palette(); if (p.themes.length) colours = [p.a, p.b, p.a, p.b]; };
   palette(); ctx.on('palette', palette);
@@ -62,7 +69,6 @@ export function mountBreakout(ctx) {
     const rates = ctx.rates(), amount = ctx.pay(Math.max(2, rates.fps, rates.click * 2) * event.seconds, 'mini_breakout');
     receipt.textContent = `+${ctx.fmt(amount)} ${ctx.brand.currencyPlural}${event.manual ? ' · played' : ''}`;
     burst(WIDTH / 2, 75, sim.board % 4, 40); glow = .8;
-    sfx(ctx, 'sfx/rank_settle.mp3', .18);
   }
   function draw() {
     g.setTransform(2, 0, 0, 2, 0, 0); g.clearRect(0, 0, WIDTH, HEIGHT);
@@ -73,12 +79,21 @@ export function mountBreakout(ctx) {
       g.fillStyle = colours[b.row % 4]; g.fillRect(b.x, b.y, b.w, b.h);
       g.fillStyle = '#ffffff55'; g.fillRect(b.x + 1, b.y + 1, b.w - 2, 2);
       g.fillStyle = '#00000035'; g.fillRect(b.x, b.y + b.h - 2, b.w, 2);
+      drawSpecialBrick(g,b);
+      if (b.photo) pictures.draw(g,b);
     }
     if (!calm()) {
       trail.forEach((p, i) => { g.fillStyle = colours[sim.board % 4]; g.globalAlpha = i / trail.length * .22; g.beginPath(); g.arc(p.x, p.y, 2.5 * i / trail.length, 0, Math.PI * 2); g.fill(); });
       for (const p of particles) { g.globalAlpha = p.life / .65; g.fillStyle = colours[p.row % 4]; g.fillRect(p.x, p.y, 3, 3); }
     }
     g.globalAlpha = 1;
+    if (sim.shield > 0) {
+      g.fillStyle='#173f50'; g.fillRect(0,SHIELD_Y-2,WIDTH,5);
+      g.strokeStyle='#80eff0'; g.lineWidth=1; g.beginPath(); g.moveTo(0,SHIELD_Y);
+      for(let x=0;x<WIDTH;x+=12){g.lineTo(x+4,SHIELD_Y-1.5);g.lineTo(x+8,SHIELD_Y+1);g.lineTo(x+12,SHIELD_Y);}
+      g.stroke();
+    }
+    for (const drop of sim.drops) drawDrop(g,drop);
     const px = calm() ? WIDTH / 2 : sim.paddle;
     g.fillStyle = '#ffffff24'; g.fillRect(px - PADDLE_W / 2 - 3, PADDLE_Y - 2, PADDLE_W + 6, 9);
     g.fillStyle = colours[0]; g.fillRect(px - PADDLE_W / 2, PADDLE_Y - 4, PADDLE_W, 6);
@@ -86,24 +101,69 @@ export function mountBreakout(ctx) {
     if (!sim.wait) {
       const b = sim.ball, shape = calm() ? { along: 1, across: 1 } : squashScale(squash);
       g.save(); g.translate(calm() ? WIDTH / 2 : b.x, calm() ? 150 : b.y); g.scale(shape.across, shape.along);
-      g.fillStyle = '#ffffff'; g.beginPath(); g.arc(0, 0, b.r, 0, Math.PI * 2); g.fill(); g.restore();
+      if (sim.fireball) {
+        g.rotate(Math.atan2(b.vy,b.vx));
+        g.fillStyle='#ff8a42'; g.beginPath(); g.moveTo(-12,-1); g.lineTo(-8,-4);
+        g.lineTo(0,-4.5); g.quadraticCurveTo(8,0,0,4.5); g.lineTo(-6,4); g.closePath(); g.fill();
+      }
+      g.fillStyle = sim.fireball ? '#fff4b3' : '#ffffff'; g.beginPath(); g.arc(0, 0, b.r, 0, Math.PI * 2); g.fill(); g.restore();
     } else {
-      g.fillStyle = colours[0]; g.font = '700 19px system-ui'; g.textAlign = 'center'; g.fillText('Board cleared', WIDTH / 2, 106);
+      const ink = bubbleInk(canvas);
+      g.save();
+      g.font = '700 19px ' + (ink?.font || 'system-ui');
+      g.textAlign = 'center';
+      if (ink) {
+        g.lineJoin = 'round';
+        g.strokeStyle = ink.edge;
+        g.lineWidth = 2.5;
+        g.strokeText('Board cleared', WIDTH / 2, 106);
+      }
+      g.fillStyle = ink?.fill || colours[0];
+      g.fillText('Board cleared', WIDTH / 2, 106);
+      g.restore();
     }
     if (glow > 0 && !calm()) { g.globalAlpha = glow * .12; g.fillStyle = colours[0]; g.fillRect(0, 0, WIDTH, HEIGHT); g.globalAlpha = 1; }
-    board.textContent = `Board ${sim.board + (sim.wait ? 0 : 1)}`;
+    const buffs=[];
+    if (sim.fireball) buffs.push(`Fireball ${Math.ceil(sim.fireball)}s`);
+    if (sim.shield) buffs.push(`Shield ${Math.ceil(sim.shield)}s`);
+    board.textContent = [`Board ${sim.board + (sim.wait ? 0 : 1)}`, ...buffs].join(' · ');
   }
-  ctx.every(400, () => { visible = !!canvas.getClientRects().length; controls(); });
+  const onScreen=()=>visible && host.dock?.visible !== false && !doc.hidden && !ctx.paused && !ending && !dead;
+  function measure() {
+    const r=canvas.getBoundingClientRect();
+    visible=r.width>0 && r.height>0 && r.bottom>0 && r.right>0 && r.left<doc.defaultView.innerWidth && r.top<doc.defaultView.innerHeight;
+    audio.audible(onScreen());
+    if (!onScreen() && pictures.effects.active) pictures.effects.clear();
+  }
+  const observer=doc.defaultView.IntersectionObserver ? new doc.defaultView.IntersectionObserver(measure) : null;
+  observer?.observe(canvas);
+  doc.addEventListener('visibilitychange',measure);
+  ctx.on('ending',()=>{ending=true;measure();});
+  ctx.on('pause',measure); ctx.on('suspend',measure); ctx.on('resume',measure);
+  ctx.on('pictures',draw);
+  ctx.every(400, () => { measure(); controls(); });
   ctx.every(1000, save);
   ctx.on('pause', save); ctx.on('suspend', save);
   ctx.frame((dt) => {
-    if (dead || ctx.paused) return;
-    const events = stepBreakout(sim, dt, { manual: manual(), x: aim });
+    if (dead || ctx.paused || ending) return;
+    const shown=onScreen();
+    audio.audible(shown);
+    if (shown && !sim.wait && sim.bricks.some(b=>b.alive && b.photo)) pictures.prepare(sim.board);
+    const events = stepBreakout(sim, dt, { manual: manual(), x: aim, specialty: ctx.state.store.journey?.specs?.spec_breakout });
     for (const e of events) {
-      if (e.type === 'brick') { burst(e.x, e.y, e.row); squash = 1; }
+      if (shown) audio.cue(e);
+      if (e.type === 'brick' || e.type === 'damage') { burst(e.x, e.y, e.row,e.type==='damage'?3:8); squash = 1; }
+      if (e.type === 'brick' && e.photo) {
+        credit.hidden=true;
+        if (shown) pictures.hit(e);
+      }
+      if (e.type === 'catch' || e.type === 'save') burst(e.x,e.y,e.kind==='fireball'?0:2,12);
       if (e.type === 'paddle') squash = 1;
       if (e.type === 'clear') pay(e);
-      if (['brick', 'miss', 'deal'].includes(e.type)) save();
+      if (['brick', 'damage', 'catch', 'save', 'miss', 'deal'].includes(e.type)) save();
+    }
+    if (pictures.effects.active) {
+      if (shown && !calm()) pictures.effects.draw(); else pictures.effects.clear();
     }
     squash = Math.max(0, squash - dt * 10); glow = Math.max(0, glow - dt);
     for (const p of particles) { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 90 * dt; }
@@ -115,7 +175,7 @@ export function mountBreakout(ctx) {
     else { trail.push({ x: sim.ball.x, y: sim.ball.y }); if (trail.length > 8) trail.shift(); }
     if (visible) draw();
   });
-  controls(); draw();
-  ctx.cleanup(() => { dead = true; save(); particles.length = trail.length = 0; });
+  controls(); measure(); draw();
+  ctx.cleanup(() => { dead = true; observer?.disconnect(); doc.removeEventListener('visibilitychange',measure); save(); particles.length = trail.length = 0; });
   return {};
 }

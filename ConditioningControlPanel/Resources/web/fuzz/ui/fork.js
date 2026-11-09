@@ -3,13 +3,16 @@
 
 import { FORKS, ITEMS } from '../data/items.js';
 import { brandText } from '../data/brand.js';
+import { setRich } from './rich-text.js';
 import { hueClass } from './palette.js';
 
 let demos = null;
 function loadDemos() {
   demos ||= (async () => {
     const { Demo } = await import('./demos/kit.js');
-    await Promise.all([import('./demos/basics.js'), import('./demos/routes.js'), import('./demos/themes1.js'), import('./demos/themes2.js'), import('./demos/extras.js'), import('./demos/wave2-spiral.js'), import('./demos/wave2-edges.js'), import('./demos/wave2-meta.js')]);
+    await Promise.all([import('./demos/basics.js'), import('./demos/routes.js'), import('./demos/themes1.js'), import('./demos/themes2.js'), import('./demos/extras.js'), import('./demos/wave2-spiral.js'), import('./demos/wave2-edges.js'), import('./demos/wave2-meta.js'), import('./demos/score-heat.js'), import('./demos/deep-end.js'), import('./demos/sissy-late.js'), import('./demos/double-wield.js'), import('./demos/warp-tunnel.js')]);
+    const {registerTrailDemos} = await import('./demos/trail-upgrades.js');
+    registerTrailDemos();
     return Demo;
   })();
   return demos;
@@ -21,7 +24,8 @@ function demoIdFor(Demo, lane) {
   return row ? row.id : null;
 }
 
-export function openFork(doc, cards, forkId, onPick) {
+/** `pre`: the lane a Renewal Sky star remembered from last run (Already Picked, Pre-signed): marked and focused, still the player's press. */
+export function openFork(doc, cards, forkId, onPick, pre = null) {
   const fork = FORKS[forkId];
   const stops = [];
   const list = doc.createElement('div');
@@ -40,8 +44,16 @@ export function openFork(doc, cards, forkId, onPick) {
     const name = doc.createElement('b');
     name.textContent = brandText(opt.name);
     const what = doc.createElement('small');
-    what.textContent = brandText(opt.what);
+    setRich(what, opt.what);
     b.append(demo, name, what);
+    if (lane === pre) {
+      const tag = doc.createElement('small');
+      tag.className = 'opt-pre';
+      tag.textContent = 'Picked last run';
+      tag.style.cssText = 'display:inline-block;margin-top:4px;padding:1px 6px;border-radius:6px;background:#fff3c4;color:#3b2a10;font-weight:600;';
+      b.append(tag);
+      b.classList.add('pre');
+    }
     b.addEventListener('click', () => { handle.close(); onPick(lane); });
     list.appendChild(b);
     return { lane, demo };

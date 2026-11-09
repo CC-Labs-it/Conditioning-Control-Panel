@@ -113,6 +113,18 @@ test('running loops keep their fade and one source never alters another', async 
   assert.equal(sourceGain.disconnected, true);
 });
 
+test('closing a cabinet cancels its in-flight and already playing cues independently', async () => {
+  const f = fixture(), first = new AbortController(), second = new AbortController();
+  const pending = f.kit.play('wall.wav',{signal:first.signal});
+  first.abort(); await pending;
+  assert.equal(f.sources.length,0);
+  await f.kit.play('paddle.wav',{signal:second.signal});
+  await f.kit.play('other.wav');
+  second.abort();
+  assert.equal(f.sources[0].stopped,true);
+  assert.equal(f.sources[1].stopped,undefined);
+});
+
 test('routed media has one bus gain and one source gain; mute also reaches the element', () => {
   const f = fixture();
   f.kit.mixer.restore({ rain: { volume: .4, muted: false } });
@@ -144,10 +156,26 @@ test('native fallback multiplies source volume once and keeps per-source mute du
   const el = f.elements[0];
   f.kit.mixer.setVolume('rain', .5);
   assert.equal(el.volume, BUS.ambient * .5 * .5);
+  f.kit.setVolume(.4);
+  assert.equal(el.volume, BUS.ambient * .5 * .5 * .4);
   f.kit.mixer.setMuted('rain', true);
   f.kit.hold(true); f.kit.hold(false);
   assert.equal(el.muted, true);
   assert.equal(el.paused, false);
   f.kit.mixer.setMuted('rain', false);
   assert.equal(el.muted, false);
+});
+
+test('master volume set before first gesture survives mute, pause and resume', () => {
+  const f = fixture({ arm: false });
+  f.kit.setVolume(.36);
+  f.kit.setMuted(true);
+  f.kit.arm();
+  const master = f.gains[0].gain;
+  assert.equal(master.value, 0);
+  f.kit.hold(true);
+  f.kit.setMuted(false);
+  assert.equal(master.value, 0);
+  f.kit.hold(false);
+  assert.equal(master.value, .36);
 });

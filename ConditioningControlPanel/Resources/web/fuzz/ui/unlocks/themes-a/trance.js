@@ -1,22 +1,17 @@
-/* Trance: night blue, everything slow. The signature: this theme pays you to stop. Hands off and the rate climbs; a tap
- * at the top of the breath is the one tap that does not break it. Spec: ui/demos/themes1.js. */
-
 import { THEMES, ENDINGS } from '../../../data/content/index.js';
 import { createSpiral } from '../../../fx/spiral.js';
 import { mountPodcast } from '../podcast-player.js';
-import { bag, geo, counterEl, sheet, done, frame, sideFrames, gentleSwitch } from './kit.js';
+import { bag, geo, counterEl, sheet, done, frame, gentleSwitch } from './kit.js';
+import { mountTranceGallery } from './trance-gallery.js';
+import { themeScreens } from './theme-screens.js';
 import { endingShow } from './endings.js';
 import { COPY } from './copy.js';
-import { THEME_TASTES } from '../theme-skins.js';
+import { pendulumCenter } from '../../button-faces.js';
 import { THEME_PAGES } from '../../palette.js';
+import { setRich } from '../../rich-text.js';
 
 const R = THEMES.trance.rules;
 const NICHES = ['spirals', 'soft voices', 'pendulum', 'eyes closed'];
-const BREATH_MS = 8000;
-const BREATH_OPEN = [0.38, 0.62];       // the top of the breath, as a share of one cycle
-const breathAt = (now) => ((now % BREATH_MS) + BREATH_MS) % BREATH_MS / BREATH_MS;
-const isOpen = (now) => { const p = breathAt(now); return p >= BREATH_OPEN[0] && p <= BREATH_OPEN[1]; };
-const SWING_MS = 3900;
 
 const VARS = {
   ...THEME_PAGES.trance,
@@ -66,7 +61,8 @@ export default {
         ctx.frame((dt) => sp.step(dt));
         ctx.every(500, () => sp.setStill(ctx.gentle));
       }
-      sideFrames(ctx, ['spirals', 'soft voices', 'hypnosis', 'pendulum'], 'border-radius:12px;opacity:.85;');
+      /* The first pictures: three screens (owner 2026-11-08). The photo wall and the belt wait for Trance Pictures. */
+      themeScreens(ctx, { niches: NICHES, frame: 'border:2px solid color-mix(in srgb,var(--niche) 55%,transparent);border-radius:14px;' });
       return { off() { sp?.dispose(); } };
     },
   },
@@ -88,7 +84,6 @@ export default {
       const num = ctx.el('span', 'min-width:2em;color:var(--stamp);font-variant-numeric:tabular-nums;', '', box);
       ctx.on('tap', (e) => {
         if (e.auto) return;
-        if (ctx.has('tr_breath') && b.breathOpenNow?.()) return;   // the one tap that does not count as moving
         const had = stillFor(ctx.state.clock);
         last = ctx.state.clock;
         if (had > 8) murmur(ctx, R.still[4]);
@@ -108,48 +103,11 @@ export default {
     },
   },
 
-  /* Breathing Ring: tap at the top of the breath for a much bigger tap. */
-  tr_breath: {
-    mount(ctx) {
-      const b = bag(ctx);
-      let clock = 0;
-      b.breathOpenNow = () => isOpen(clock);
-      ctx.mod({ click: (v, s, now) => (isOpen(now) ? v * 4 : v) });
-      const size = () => (ctx.bounds().w < 760 ? 148 : 170);
-      let g = geo(ctx), D = size();
-      const wrap = ctx.el('div', `position:absolute;left:0;top:0;width:${D}px;height:${D}px;`, null, 'floaters');
-      const rim = ctx.el('div', 'position:absolute;inset:0;border-radius:50%;box-sizing:border-box;border:2px dashed #8fd0ff;opacity:.55;', null, wrap);
-      const ring = ctx.el('div', 'position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle,rgba(143,208,255,.05),rgba(143,208,255,.42));will-change:transform;', null, wrap);
-      const place = () => { g = geo(ctx); D = size(); wrap.style.width = wrap.style.height = `${D}px`; wrap.style.transform = `translate(${g.cx - D / 2}px,${g.cy - D / 2}px)`; };
-      place();
-      ctx.every(1000, place);
-      const word = ctx.el('div', `position:absolute;left:0;right:0;top:-2px;text-align:center;font-size:13px;color:var(--ink-soft);`, null, wrap);
-      let shownOpen = false, shownWord = -1;
-      ctx.frame((dt, now) => {
-        clock = now;
-        const p = breathAt(now);
-        const up = p < 0.5 ? p * 2 : (1 - p) * 2;                     // 0 at empty, 1 at the top
-        const eased = up * up * (3 - 2 * up);
-        if (ctx.gentle) ring.style.opacity = (0.2 + eased * 0.8).toFixed(2);
-        else { ring.style.opacity = 1; ring.style.transform = `scale(${(0.45 + eased * 0.55).toFixed(3)})`; }
-        const open = isOpen(now);
-        if (open !== shownOpen) { shownOpen = open; rim.style.opacity = open ? 1 : 0.55; rim.style.borderStyle = open ? 'solid' : 'dashed'; }
-        const w = p < 0.38 ? 0 : p <= 0.62 ? 2 : 1;
-        if (w !== shownWord) { shownWord = w; word.textContent = w === 2 ? R.breath[2] : w === 0 ? R.breath[0] : R.breath[1]; }
-      });
-      ctx.on('tap', (e) => {
-        if (!isOpen(clock) || e.auto) return;
-        ctx.float(g.cx, g.cy - g.bh, COPY.trance.breathPay(ctx.fmt(e.gain)), 'color:#8fd0ff;font-size:20px;');
-        ctx.audio.play('assets/audio/sfx/chime1.mp3', { bus: 'sfx', gain: 0.5 });
-        if (!ctx.gentle) ctx.anim(rim, [{ transform: 'scale(1)' }, { transform: 'scale(1.08)' }, { transform: 'scale(1)' }], 360);
-      });
-      return { off() { b.breathOpenNow = null; } };
-    },
-  },
-
   /* Trance Pictures: a slow belt of pictures behind the counter. */
   tr_feed: {
     mount(ctx) {
+      /* The photo wall (was on Trance Theme until 2026-11-08): it now arrives with the rest of the trance pictures. */
+      mountTranceGallery(ctx);
       const W = () => (ctx.bounds().w >= 760 ? 190 : 120);
       const belt = [];
       const spawn = (lead = 0) => {
@@ -185,21 +143,12 @@ export default {
     mount(ctx) {
       const b = ctx.button;
       b.skin('tr-pendulum');
-      ctx.css(THEME_TASTES.trance.css);
-      const mid = (now) => Math.abs(Math.sin((now / SWING_MS) * Math.PI * 2)) < 0.26;
-      ctx.mod({ click: (v, s, now) => (!ctx.gentle && mid(now) ? v * 2 : v) });
-      const el = b.el;
-      let clock = 0;
-      ctx.frame((dt, now) => { clock = now; if (!ctx.gentle) el.style.rotate = `${(Math.sin((now / SWING_MS) * Math.PI * 2) * 15).toFixed(2)}deg`; else el.style.rotate = ''; });
-      ctx.on('tap', (e) => {
-        if (e.auto || ctx.gentle || !mid(clock)) return;
-        ctx.float(e.x ?? ctx.bounds().w / 2, (e.y ?? 150) - 26, COPY.trance.middle, 'color:#b79cff;');
-      });
-      return { off() { el.style.rotate = ''; } };
+      ctx.mod({click:(v,s,now) => !ctx.gentle && pendulumCenter(now) ? v * 2 : v});
+      return {};
     },
   },
 
-  tr_pod: { mount: (ctx) => mountPodcast(ctx, { theme: 'trance', show: 'True Trance', accent: '#8fd0ff' }) },
+  tr_pod: { mount: (ctx) => mountPodcast(ctx, { theme: 'trance', show: 'Going Under with...', accent: '#8fd0ff' }) },
 
   /* Count Down: every few minutes, a slow ten to one that pays at the end. */
   tr_count: {
@@ -216,7 +165,7 @@ export default {
         let n = 10;
         const show = () => {
           big.textContent = n;
-          line.textContent = R.count[10 - n];
+          setRich(line, R.count[10 - n]);
           ctx.anim(big, [{ opacity: 0 }, { opacity: 0.42, offset: 0.25 }, { opacity: 0.3 }], { duration: STEP, fill: 'forwards' });
           pips.forEach((p, i) => { p.style.opacity = i <= 10 - n ? 1 : 0.2; });
           ctx.audio.play('assets/audio/sfx/count_tick.mp3', { bus: 'sfx', gain: 0.5 });
@@ -264,19 +213,19 @@ export default {
     },
   },
 
-  /* Slow Everything: effects drag while earnings rise. A tap that is not on the breath lifts you back a little. */
+  /* Slow Everything: effects drag while earnings rise. A manual tap lifts you back a little. */
   tr_deep: {
     mount(ctx) {
       const b = bag(ctx);
       let depth = ctx.store.get('depth') || 0, lineAt = 0, li = 0;
       ctx.mod({ fps: (v) => v * (1 + depth) });
-      ctx.on('tap', (e) => { if (!e.auto && !b.breathOpenNow?.()) depth = Math.max(0, depth - 0.08); });
+      ctx.on('tap', (e) => { if (!e.auto) depth = Math.max(0, depth - 0.08); });
       const box = ctx.el('span', 'display:flex;align-items:center;gap:6px;', null, b.meterRow || ctx.layer('meters'));
       ctx.el('span', '', COPY.trance.deeper, box);
       const track = ctx.el('span', 'position:relative;width:clamp(48px,12vw,110px);height:8px;border-radius:4px;background:rgba(255,255,255,.14);overflow:hidden;', null, box);
       const fill = ctx.el('span', 'position:absolute;inset:0;background:#b79cff;transform-origin:0 50%;', null, track);
       const pct = ctx.el('span', 'min-width:2em;color:var(--stamp);font-variant-numeric:tabular-nums;', null, box);
-      /* A hold multiplies, so each step lets go of the last. Down to 0.4: slow, and the breath still comes round. */
+      /* A hold multiplies, so each step lets go of the last. The slowest speed is 0.4. */
       let release = ctx.speed(1 - 0.6 * depth);
       ctx.every(600, () => {
         ctx.store.set('depth', depth);

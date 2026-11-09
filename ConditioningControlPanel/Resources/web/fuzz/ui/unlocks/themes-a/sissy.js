@@ -1,26 +1,17 @@
-/* Sissy: rose paper, serif, good manners. The signature: you look after the button, and it is judged. Dress it, match it,
- * hold it down and let go at the right moment, tick the rules, answer the mirror, pass the test. */
+/* Sissy: rose paper, serif, good manners. The signature: you look after the button, and it is judged. Hold it down and let go at the right moment, tick the rules, answer the mirror, pass the test. */
 
 import { THEMES, ENDINGS } from '../../../data/content/index.js';
 import { mountPodcast } from '../podcast-player.js';
-import { bag, geo, sheet, done, frame, refillOnChange, sideFrames, pick, pop, railPanel } from './kit.js';
+import { bag, geo, sheet, done, frame, refillOnChange, pick, pop, railPanel } from './kit.js';
+import { setRich } from '../../rich-text.js';
+import { themeScreens } from './theme-screens.js';
 import { endingShow } from './endings.js';
 import { COPY } from './copy.js';
-import { THEME_TASTES } from '../theme-skins.js';
 import { THEME_PAGES } from '../../palette.js';
 
 const R = THEMES.sissy.rules;
 const NICHES = ['lace', 'bows', 'pearls', 'frills', 'gloves', 'satin'];
-const SETS = Object.keys(R.sets);
 const GOLD = '#d9a521';
-/* One look per fabric, used for every piece of that set. */
-const LOOK = {
-  satin: 'linear-gradient(135deg,#f0a8c2,#fff2f6 45%,#e18aab)',
-  lace: 'radial-gradient(#c96a8c 2.5px,transparent 3px) 0 0/10px 10px,#fff',
-  gingham: 'repeating-conic-gradient(#e7b6c8 0 25%,#fff 0 50%) 0 0/12px 12px',
-  velvet: 'linear-gradient(135deg,#8d1830,#c24562 50%,#6d0f24)',
-};
-const LABEL_INK = { satin: '#7a2f4b', lace: '#7a2f4b', gingham: '#7a2f4b', velvet: '#fff' };
 
 const VARS = {
   ...THEME_PAGES.sissy,
@@ -50,19 +41,6 @@ function moment(ctx) {
   l.parentElement.appendChild(title);
 }
 
-/** What the button is wearing. Each piece is plain css hung off the wrap; the wrap keeps the taps. */
-function dressUp(ctx) {
-  const wrap = ctx.parts.buttonWrap;
-  const piece = (css) => ctx.el('div', `position:absolute;pointer-events:none;box-sizing:border-box;${css}`, null, wrap);
-  return [
-    /* ribbon */ piece('left:50%;top:-20px;width:60px;height:26px;margin-left:-30px;z-index:2;clip-path:polygon(0 0,50% 40%,100% 0,100% 100%,50% 60%,0 100%);border:0;'),
-    /* collar */ piece('left:12%;right:12%;top:0;height:12px;border-radius:0 0 10px 10px;z-index:2;'),
-    /* gloves */ piece('left:-18px;right:-18px;top:30%;height:16px;border-radius:8px;z-index:-1;'),
-    /* skirt  */ piece('left:-6px;right:-6px;bottom:-14px;height:18px;z-index:-1;clip-path:polygon(10% 0,90% 0,100% 100%,0 100%);'),
-    /* shoes  */ piece('left:50%;bottom:-22px;width:60px;height:9px;margin-left:-30px;border-radius:5px;z-index:-1;'),
-  ];
-}
-
 export const START = { theme: 'sissy', vars: VARS, css: CSS, moment };
 
 export default {
@@ -70,7 +48,8 @@ export default {
     mount(ctx) {
       /* A lace edge round the whole page. */
       ctx.el('div', 'position:absolute;inset:4px;border:2px dotted #e7b6c8;border-radius:10px;', null, 'wash');
-      sideFrames(ctx, ['lace', 'bows', 'pearls', 'satin'], 'border-radius:50%;outline:2px dotted #c96a8c;outline-offset:3px;');
+      /* The first pictures: three screens, not a wall (owner 2026-11-08). The cameo row waits for Sissy Pictures. */
+      themeScreens(ctx, { niches: ['lace', 'bows', 'pearls', 'satin'], frame: 'border:2px dotted #c96a8c;border-radius:16px;' });
       /* A taste of the signature before House Rules is bought: one small manner beside the button, and it pays. */
       const manner = ctx.el('button', 'position:absolute;left:0;top:0;width:84px;min-height:48px;padding:2px 4px;background:#fff;border:1px solid var(--line);border-radius:4px;color:var(--ink);font:12px/1.1 Georgia,serif;pointer-events:auto;cursor:pointer;opacity:0;visibility:hidden;', null, 'floaters');
       manner.type = 'button';
@@ -99,19 +78,6 @@ export default {
     },
   },
 
-  /* Bow Button */
-  si_bow: {
-    mount(ctx) {
-      ctx.button.skin('si-bow');
-      ctx.css(THEME_TASTES.sissy.css);
-      ctx.on('tap', () => {
-        if (ctx.gentle || ctx.has('si_ward')) return;
-        ctx.anim(ctx.button.el, [{ rotate: '0deg' }, { rotate: '-7deg' }, { rotate: '6deg' }, { rotate: '0deg' }], 340);
-      });
-      return {};
-    },
-  },
-
   /* Sissy Pictures: oval cameos with a dotted edge, changing one at a time. */
   si_feed: {
     mount(ctx) {
@@ -134,118 +100,6 @@ export default {
       let i = 0;
       ctx.every(2400, () => { list[i++ % list.length].next(pick(ctx, NICHES)); });
       return {};
-    },
-  },
-
-  /* Button Wardrobe: five slots, four fabrics. Tap a slot to change it; the button wears it at once. */
-  si_ward: {
-    mount(ctx) {
-      const b = bag(ctx);
-      ctx.button.skin('si-dressed');
-      ctx.css(`#btn[data-skin=si-dressed]{width:128px;height:56px;font-size:15px;color:var(--si-ink,#7a2f4b);border:2px solid #c96a8c;border-radius:12px;background:var(--si-body,#fff);text-shadow:0 0 3px rgba(255,255,255,.7);}
-#btn-zone{min-height:112px;}`);
-      const worn = ctx.store.get('worn') || (() => {
-        /* Start mixed: a matching set has to be earned. */
-        const w = R.slots.map((_, i) => SETS[(i + Math.floor(ctx.rng() * 4)) % 4]);
-        if (new Set(w).size === 1) w[0] = SETS[(SETS.indexOf(w[0]) + 1) % 4];
-        return w;
-      })();
-      ctx.store.set('worn', worn);
-      const pieces = dressUp(ctx);
-      const tiles = [];
-      const root = ctx.world.ownerDocument.documentElement.style;
-      const paint = () => {
-        pieces.forEach((p, i) => { p.style.background = LOOK[worn[i]]; });
-        root.setProperty('--si-body', LOOK[worn[3]]);
-        root.setProperty('--si-ink', LABEL_INK[worn[3]]);
-        tiles.forEach((t, i) => {
-          t.swatch.style.background = LOOK[worn[i]];
-          t.name.textContent = R.sets[worn[i]][i];
-        });
-        b.onWorn?.forEach((f) => f(worn));
-      };
-      const change = (i) => {
-        worn[i] = SETS[(SETS.indexOf(worn[i]) + 1) % 4];
-        ctx.store.set('worn', worn);
-        paint();
-        ctx.audio.play('assets/audio/sfx/ui_equip.mp3', { bus: 'sfx', gain: 0.6 });
-        if (!ctx.gentle) ctx.anim(pieces[i], [{ transform: 'scale(1.3)' }, { transform: 'scale(1)' }], 200);
-      };
-      const tile = (i, parent, css) => {
-        const t = ctx.el('button', `display:flex;align-items:center;gap:8px;width:100%;min-height:44px;padding:4px;background:transparent;border:1px solid var(--line);border-radius:6px;color:var(--ink);text-align:left;cursor:pointer;pointer-events:auto;font-size:13px;line-height:1.1;${css}`, null, parent);
-        t.type = 'button';
-        const swatch = ctx.el('span', 'flex:none;width:30px;height:30px;border-radius:5px;border:1px solid var(--line);', null, t);
-        const col = ctx.el('span', 'min-width:0;', null, t);
-        ctx.el('span', 'display:block;font-size:11px;color:var(--ink-soft);', R.slots[i], col);
-        const name = ctx.el('span', 'display:block;', null, col);
-        t.addEventListener('click', () => change(i));
-        tiles[i] = { swatch, name };
-      };
-      const g = geo(ctx);
-      let chip = null;
-      if (g.wide) {
-        const panel = railPanel(ctx, 'left', 'display:flex;flex-direction:column;gap:4px;border-radius:8px;');
-        ctx.el('div', 'font-style:italic;', COPY.sissy.wardrobe, panel);
-        b.wardPanel = panel;
-        R.slots.forEach((_, i) => tile(i, panel));
-      } else {
-        /* A phone has no rail: one chip beside the button opens the same five slots. */
-        chip = ctx.el('button', `position:absolute;left:8px;top:${g.cy - 22}px;width:56px;height:44px;padding:0;background:var(--panel);border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:12px;pointer-events:auto;cursor:pointer;`, COPY.sissy.wardrobeShort, 'floaters');
-        chip.type = 'button';
-        ctx.every(1500, () => { chip.style.top = `${geo(ctx).cy - 22}px`; });
-        chip.addEventListener('click', () => {
-          tiles.length = 0;
-          const node = ctx.world.ownerDocument.createElement('div');
-          node.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
-          R.slots.forEach((_, i) => tile(i, node));
-          paint();
-          ctx.modal({ title: COPY.sissy.wardrobe, node, buttons: [{ label: COPY.sissy.wardrobeDone }] });
-        });
-      }
-      paint();
-      return { off() { root.removeProperty('--si-body'); root.removeProperty('--si-ink'); b.wardPanel = null; } };
-    },
-  },
-
-  /* Matching Set: all five the same doubles its pay. The first of each fabric also pays a lump. */
-  si_set: {
-    mount(ctx) {
-      const b = bag(ctx);
-      let on = false;
-      ctx.mod({ click: (v) => (on ? v * 2 : v), fps: (v) => (on ? v + ctx.item.fps : v) });
-      const line = ctx.el('div', `position:relative;display:flex;gap:6px;align-items:center;justify-content:center;height:20px;font-size:13px;color:var(--ink-soft);font-style:italic;`, null, 'meters');
-      const paint = (worn) => {
-        const counts = {};
-        for (const s of worn) counts[s] = (counts[s] || 0) + 1;
-        const [top, n] = Object.entries(counts).sort((a, c) => c[1] - a[1])[0];
-        const was = on;
-        on = n === 5;
-        line.textContent = on ? COPY.sissy.matchDone(`${top[0].toUpperCase()}${top.slice(1)}`) : COPY.sissy.matchCount(n);
-        line.style.color = on ? GOLD : '';
-        line.style.fontWeight = on ? 700 : '';
-        if (on && !was) {
-          ctx.toast(pick(ctx, R.setDone));
-          ctx.audio.play('assets/audio/sfx/unlock_card.mp3', { bus: 'sfx', gain: 0.7 });
-          const g = geo(ctx);
-          const done_ = ctx.store.get('sets') || [];
-          if (!done_.includes(top)) {
-            ctx.store.set('sets', [...done_, top]);
-            ctx.pay(ctx.rates().fps * 20, 'si_set', { x: g.cx, y: g.cy });
-          }
-          if (!ctx.gentle) {
-            for (let i = 0; i < 10; i++) {
-              const s = ctx.el('div', `position:absolute;left:${g.cx}px;top:${g.cy}px;color:${GOLD};font-size:${14 + ctx.rng() * 12}px;`, '✦', 'over');
-              const a = ctx.rng() * Math.PI * 2, d = 50 + ctx.rng() * 90;
-              done(ctx.anim(s, [{ transform: 'translate(0,0)', opacity: 1 }, { transform: `translate(${Math.cos(a) * d}px,${Math.sin(a) * d}px)`, opacity: 0 }], { duration: 650, easing: 'ease-out' }), s);
-            }
-          }
-        }
-      };
-      b.onWorn = b.onWorn || new Set();
-      b.onWorn.add(paint);
-      const w = ctx.state.store?.si_ward?.worn;
-      if (w) paint([...w]);
-      return { off() { b.onWorn?.delete(paint); } };
     },
   },
 
@@ -302,58 +156,130 @@ export default {
   /* House Rules: four small manners, each tick pays. Then a rest, then four more. */
   si_rules: {
     mount(ctx) {
-      const g = geo(ctx);
       let i = Math.floor(ctx.rng() * R.rules.length);
-      const nextRule = () => R.rules[i++ % R.rules.length];
-      const pay = (el) => {
-        const r = el.getBoundingClientRect();
-        ctx.pay(ctx.rates().fps * 2, 'si_rules', { x: r.left + r.width / 2, y: r.top });
-        ctx.audio.play('assets/audio/sfx/tally_tick.mp3', { bus: 'sfx', gain: 0.6 });
-      };
-      if (g.wide) {
-        const panel = railPanel(ctx, 'right', 'background:#fff;border-radius:2px;box-shadow:2px 2px 0 #f2c5d2;display:flex;flex-direction:column;gap:2px;');
-        ctx.el('div', 'font-style:italic;margin-bottom:2px;', COPY.sissy.houseRules, panel);
-        const fill = () => {
-          for (let n = 0; n < 4; n++) {
-            const rule = ctx.el('button', 'display:flex;align-items:center;gap:8px;width:100%;min-height:36px;padding:2px;background:transparent;border:0;color:var(--ink);text-align:left;font-size:14px;cursor:pointer;', null, panel);
-            rule.type = 'button';
-            const box = ctx.el('span', 'flex:none;width:18px;height:18px;border:1.5px solid #c96a8c;text-align:center;line-height:15px;font-weight:700;color:#c96a8c;', null, rule);
-            ctx.el('span', '', nextRule(), rule);
-            rule.addEventListener('click', () => {
-              if (box.textContent) return;
-              box.textContent = '✓';
-              rule.style.opacity = 0.6;
-              pay(rule);
-              if (panel.querySelectorAll('button').length && [...panel.querySelectorAll('button span:first-child')].every((s) => s.textContent)) {
-                ctx.say(pick(ctx, R.ruleDone));
-                ctx.after(1000, () => { for (const b of [...panel.querySelectorAll('button')]) b.remove(); ctx.after(40000, fill); });
-              }
+      const panel = railPanel(ctx, 'right', 'background:#fff;color:#562a40;border-radius:6px;padding:7px;display:flex;flex-direction:column;gap:2px;');
+      const dock = panel.parentElement.dock;
+      ctx.el('div', 'font-style:italic;margin-bottom:2px;', COPY.sissy.houseRules, panel);
+      const sequential = ctx.bounds().w < 1100;
+      let remaining = 0;
+      const fill = () => {
+        remaining = 4; dock?.setReady(true, 'Rules ready');
+        for (let n = 0; n < 4; n++) {
+          const rule = ctx.el('button', 'display:flex;align-items:center;gap:7px;width:100%;min-height:36px;padding:2px;background:transparent;border:0;color:inherit;text-align:left;font-size:13px;cursor:pointer;', null, panel);
+          rule.type = 'button'; rule.disabled = sequential && n > 0;
+          if (rule.disabled) rule.style.opacity = '.4';
+          const box = ctx.el('span', 'flex:none;width:18px;height:18px;border:1.5px solid #c96a8c;text-align:center;line-height:15px;font-weight:700;color:#c96a8c;', '', rule);
+          ctx.el('span', '', R.rules[i++ % R.rules.length], rule);
+          rule.addEventListener('click', () => {
+            if (ctx.paused || rule.disabled) return;
+            rule.disabled = true; box.textContent = '✓'; rule.style.opacity = '.6';
+            remaining -= 1; dock?.setReady(!sequential && remaining > 0, 'Rules ready');
+            if (sequential && remaining) ctx.after(8100, () => {
+              const next = panel.querySelectorAll('button')[n + 1];
+              if (next) { next.disabled = false; next.style.opacity = '1'; dock?.setReady(true, 'Rule ready'); }
             });
-          }
-        };
-        fill();
-      } else {
-        /* A phone gets one rule at a time, right of the button. */
-        const chip = ctx.el('button', `position:absolute;right:8px;top:${g.cy - 26}px;width:76px;min-height:52px;padding:2px 4px;background:#fff;border:1px solid var(--line);border-radius:4px;color:var(--ink);font-size:12px;line-height:1.1;pointer-events:auto;cursor:pointer;`, null, 'floaters');
-        chip.type = 'button';
-        const show = () => { chip.dataset.on = 1; chip.hidden = false; chip.textContent = `☐ ${nextRule()}`; };
-        show();
-        ctx.every(1500, () => { chip.style.top = `${geo(ctx).cy - 26}px`; });
-        let n = 0;
-        chip.addEventListener('click', () => {
-          if (!chip.dataset.on) return;
-          chip.dataset.on = '';
-          chip.textContent = `☑ ${pick(ctx, R.ruleDone)}`;
-          pay(chip);
-          n += 1;
-          ctx.after(1100, () => { chip.hidden = true; ctx.after(n % 4 === 0 ? 40000 : 7000, show); });
-        });
-      }
+            const r = rule.getBoundingClientRect();
+            ctx.pay(ctx.rates().fps * 2, 'si_rules', { x: r.left + r.width / 2, y: r.top });
+            ctx.audio.play('assets/audio/sfx/tally_tick.mp3', { bus: 'sfx', gain: 0.6 });
+            if (!remaining) {
+              ctx.say(pick(ctx, R.ruleDone));
+              ctx.after(sequential ? 41100 : 41000, () => { for (const b of [...panel.querySelectorAll('button')]) b.remove(); fill(); });
+            }
+          });
+        }
+      };
+      fill();
       return {};
     },
   },
 
-  si_pod: { mount: (ctx) => mountPodcast(ctx, { theme: 'sissy', show: 'True Sissy', accent: '#c96a8c' }) },
+  si_pod: { mount: (ctx) => mountPodcast(ctx, { theme: 'sissy', show: 'Manners Hour', accent: '#c96a8c' }) },
+
+  /* Order Tracking: the button becomes a courier card (ui/button-face-art.js 'si-parcel'); each tap moves the parcel a step. */
+  si_track: {
+    mount(ctx) {
+      ctx.button.skin('si-parcel');
+      return {};
+    },
+  },
+
+  /* Posture Check: now and then a card asks you to sit up straight. Three still seconds (no pointer, no tap) pay. It waits
+   * its turn behind the other sissy cards, sits below the button, never covers Wake Up, and stops while paused. */
+  si_posture: {
+    mount(ctx) {
+      const doc = ctx.world.ownerDocument;
+      const b_ = bag(ctx);
+      const HOLD = 3, OPEN_MS = 14000;
+      let card = null, still = 0, lastX = null, lastY = null;
+      const fidget = () => { if (card) still = 0; };
+      const onMove = (e) => {
+        if (lastX != null && Math.hypot(e.clientX - lastX, e.clientY - lastY) < 4) return;
+        lastX = e.clientX; lastY = e.clientY; fidget();
+      };
+      doc.addEventListener('pointermove', onMove, true);
+      doc.addEventListener('pointerdown', fidget, true);
+      doc.addEventListener('keydown', fidget, true);
+      const schedule = () => ctx.after(60000 + ctx.rng() * 60000, show);
+      function show() {
+        if (b_.popBusy || ctx.paused) { ctx.after(9000, show); return; }
+        b_.popBusy = true;
+        still = 0;
+        const p = pop(ctx, `width:min(250px,84vw);padding:11px 13px;background:#fff;border:1px solid #c96a8c;border-radius:8px;text-align:center;font-family:Georgia,serif;color:#7a2f4b;top:${geo(ctx).stageBottom + 8}px;box-shadow:3px 3px 0 #f2c5d2;`, OPEN_MS, () => {
+          b_.popBusy = false; card = null; schedule();
+        });
+        ctx.el('div', 'font:700 11px/1 Consolas,monospace;letter-spacing:1px;color:#b5587b;margin-bottom:6px;', COPY.sissy.postureHead.toUpperCase(), p.el);
+        ctx.el('div', 'font:italic 17px/1.2 Georgia,serif;margin-bottom:9px;', pick(ctx, R.posture.ask), p.el);
+        const track = ctx.el('div', 'height:8px;border-radius:4px;background:#f2c5d2;overflow:hidden;', null, p.el);
+        const bar = ctx.el('div', 'height:100%;width:100%;background:#c96a8c;transform-origin:0 50%;transform:scaleX(0);', null, track);
+        const hint = ctx.el('div', 'font:600 12px/1 Georgia,serif;margin-top:6px;color:#9a6a80;', COPY.sissy.postureHold, p.el);
+        card = { p, bar, hint, done: false };
+        const at = () => { const r = p.el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top }; };
+        const stopFrame = ctx.frame((dt) => {
+          if (!card || card.done || ctx.paused) return;
+          still = Math.min(HOLD, still + dt);
+          bar.style.transform = `scaleX(${(still / HOLD).toFixed(3)})`;
+          if (still < HOLD) return;
+          card.done = true;
+          ctx.pay(ctx.rates().fps * 10, 'si_posture', at());
+          setRich(hint, pick(ctx, R.posture.done));
+          hint.style.color = GOLD;
+          ctx.audio.play('assets/audio/sfx/chime3.mp3', { bus: 'sfx', gain: 0.45 });
+          ctx.after(1400, () => p.close());
+        });
+        ctx.after(OPEN_MS - 1600, () => { if (card && !card.done && card.p === p) hint.textContent = pick(ctx, R.posture.missed); });
+        ctx.after(OPEN_MS + 50, stopFrame);
+      }
+      ctx.on('pause', fidget);
+      ctx.after(20000, show);
+      return { off() { doc.removeEventListener('pointermove', onMove, true); doc.removeEventListener('pointerdown', fidget, true); doc.removeEventListener('keydown', fidget, true); } };
+    },
+  },
+
+  /* Thank-You Notes: a purchase that took a real bite of the bank (5% or more) gets a small handwritten note for four seconds.
+   * It floats on the right below Wake Up, takes no clicks, and comes at most once every 20 seconds. */
+  si_notes: {
+    mount(ctx) {
+      let last = -Infinity, i = Math.floor(ctx.rng() * R.notes.length);
+      ctx.on('buy', ({ item, cost }) => {
+        if (!cost || item?.id === 'si_notes') return;
+        const bank = ctx.state.fuzz + cost;
+        if (cost < bank * 0.05 || ctx.state.clock - last < 20000) return;
+        last = ctx.state.clock;
+        const tilt = (ctx.rng() * 6 - 3).toFixed(1);
+        /* A phone has no free right side: the note sits low, over the empty page under the shop. */
+        const spot = ctx.bounds().w < 600 ? 'left:50%;bottom:76px;translate:-50% 0;' : 'right:16px;top:clamp(64px,18%,160px);';
+        const note = ctx.el('div', `position:absolute;${spot}width:min(230px,70vw);padding:12px 14px 10px;box-sizing:border-box;pointer-events:none;background:#fffdf7 linear-gradient(#fffdf7 0 26px,#f6d9e4 26px 27px) 0 6px/100% 27px;border:1px solid #e3c2cf;border-radius:3px;box-shadow:2px 3px 0 #f2c5d2,0 6px 14px #5a2a4022;color:#5a2440;font:italic 16px/27px "Segoe Print","Bradley Hand","Comic Sans MS",cursive;rotate:${tilt}deg;`, null, 'over');
+        ctx.el('div', '', R.notes[i++ % R.notes.length], note);
+        ctx.el('div', 'text-align:right;font-size:13px;color:#b5587b;', pick(ctx, R.noteSign), note);
+        const show = ctx.gentle
+          ? [{ opacity: 0 }, { opacity: 1, offset: 0.12 }, { opacity: 1, offset: 0.85 }, { opacity: 0 }]
+          : [{ opacity: 0, transform: 'translate(40px,-12px) scale(.9)' }, { opacity: 1, transform: 'none', offset: 0.1 }, { opacity: 1, transform: 'translateY(-4px)', offset: 0.85 }, { opacity: 0, transform: 'translateY(-14px)' }];
+        done(ctx.anim(note, show, { duration: 4000, easing: 'ease-out', fill: 'forwards' }), note);
+        ctx.audio.play('assets/audio/sfx/chip_pop.mp3', { bus: 'sfx', gain: 0.3 });
+      });
+      return {};
+    },
+  },
 
   /* Mirror Check: it asks how it looks. Every answer pays, and it leaves on its own if you ignore it. */
   si_mirror: {

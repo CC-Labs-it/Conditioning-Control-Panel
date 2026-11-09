@@ -5,13 +5,19 @@
 import { FEED_LINES } from '../../../data/content/index.js';
 import { deck, burst, ring, railsRoom, fill } from './kit.js';
 import { ROUTE_COPY } from './copy.js';
-import { screen, mediaEl, dropMedia, holdMedia, testCard, themeLists, themeNiche } from '../../screens.js';
+import { screen, mediaEl, dropMedia, holdMedia, watchMedia, testCard, themeLists, themeNiche } from '../../screens.js';
+import { mountAutoScroll } from './auto-scroll.js';
 
 /* The one feed. d_scroll builds it; the later rows hang off it. Module state is reset when d_scroll goes. */
 let feed = null;
 const hooks = { swipe: [], doubleTap: [], pull: [], tile: [] };
 
 const KINDS = ['pretty', 'close'];
+
+const isReady = tile => {
+  const media = tile?.media;
+  return media?.tagName === 'VIDEO' ? media.readyState >= 2 : !!(media?.complete && media.naturalWidth);
+};
 
 function makeFeed(ctx) {
   const scr = screen(ctx, { handle: true, ratio: 1.75, hint: !ctx.store.get('spot') });
@@ -21,32 +27,66 @@ function makeFeed(ctx) {
   const hud = ctx.el('div', 'position:absolute;inset:0;pointer-events:none;z-index:5;', null, root);
   const hint = ctx.el('div', 'position:absolute;left:0;right:0;bottom:12px;text-align:center;font:700 13px Arial,Helvetica,sans-serif;color:#fff;text-shadow:0 1px 3px #000;', ROUTE_COPY.feedSwipe, hud);
   hint.className = 'routes-hint';
+  const footer = scr.inner.querySelector('.scr-tag');
+  const progress = ctx.el('small', '', null, footer);
+  progress.className = 'routes-load';
+  const showProgress = () => {
+    const ready = ctx.pictures.loadingCount;
+    progress.hidden = !ready;
+    progress.textContent = ready ? ROUTE_COPY.feedLoading.replace('{n}', String(ready)) : '';
+  };
+  for (const event of ['pictures', 'pictures-added', 'pictures-progress']) ctx.on(event, showProgress);
+  showProgress();
+  ctx.css('.scr-tag .routes-load{margin-left:6px;font:10px system-ui}.routes-full .routes-load{position:absolute;left:7px;bottom:7px;background:#15151bda;color:#fff;padding:2px 5px;border-radius:4px;font:11px system-ui}');
 
-  const f = { scr, root, shell, col, hud, tiles: [], index: 0, h: 0, swipes: 0, fullscreen: false, sheetClose: null };
+  const f = { scr, root, shell, col, hud, footer, tiles: [], index: 0, h: 0, swipes: 0, fullscreen: false, sheetClose: null };
   ctx.css('.routes-small .scr-card{justify-content:flex-start;padding-top:6px}.routes-small .scr-card b{display:none}.routes-small .routes-big{display:none !important}.routes-full .routes-fy{top:48px !important;right:8px}.routes-full .routes-endbox{bottom:72px !important}.routes-full .routes-hint{bottom:auto !important;top:58%}');
   const sizeMode = () => { root.classList.toggle('routes-small', !railsRoom(ctx) && !f.fullscreen); hint.textContent = (!railsRoom(ctx) && !f.fullscreen) ? ROUTE_COPY.feedPress : ROUTE_COPY.feedSwipe; };
   sizeMode();
   f.sizeMode = sizeMode;
 
-  async function fillTile(t) {
-    const kind = hooks.pick ? hooks.pick() : KINDS[0];
-    t.kind = kind;
-    t.clip = hooks.clip ? hooks.clip() : false;
-    t.seenAt = 0;
-    t.liked = false;
-    const wanted = t.clip ? 'clip' : 'picture';
-    const pic = await ctx.pictures.next({ niche: themeNiche(themeLists(ctx), kind, ctx.rng), kind: wanted });
-    if (!t.el.isConnected) return;
+  const visible = () => (f.fullscreen || scr.visible) && !ctx.paused && !ctx.state.ended && !root.ownerDocument.hidden;
+  let down = null, pendingManual = null;
+  const nextTile = () => f.tiles.find(t => t.n === f.index + 1);
+  function clearTile(t) {
+    t.request = null;
+    t.url = null;
     dropMedia(t.media);
     t.media = null;
+    t.reported = false;
     t.card?.remove();
     t.card = null;
+    t.credit.textContent = '';
+    t.deco.textContent = '';
+    t.bar = null;
+  }
+  async function fillTile(t, tries = 2) {
+    if (!visible() || t.n < f.index || t.n > f.index + 1 || t.request) return;
+    const ticket = {};
+    t.request = ticket;
+    const wanted = t.clip ? 'clip' : 'mixed';
+    const previousUrl = f.tiles.find(tile => tile.n === t.n - 1)?.url;
+    const options = { niche: themeNiche(themeLists(ctx), t.kind, ctx.rng), allowScrolller: true, previousUrl };
+    let pic = await ctx.pictures.next({ ...options, kind: wanted });
+    if (t.clip && !pic) pic = await ctx.pictures.next({ ...options, kind: 'mixed' });
+    if (t.request !== ticket || !t.el.isConnected) return;
+    t.request = null;
+    if (!visible() || t.n < f.index || t.n > f.index + 1) return;
     if (pic) {
-      t.media = mediaEl(ctx, t.el, pic);
-      t.el.insertBefore(t.media, t.credit);
-      t.media.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;';
-      if (t.media.tagName === 'IMG') t.media.draggable = false;
-      t.media.addEventListener(t.media.tagName === 'IMG' ? 'load' : 'loadeddata', () => syncClips(), { once: true });   // a gif can only be stilled once it has loaded
+      if (t.clip && pic.kind === 'picture') t.clip = false;
+      const media = mediaEl(ctx, t.el, pic);
+      t.url = pic.url;
+      t.media = media;
+      t.el.insertBefore(media, t.credit);
+      media.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;';
+      media.addEventListener(media.tagName === 'IMG' ? 'load' : 'loadeddata', syncClips, { once: true });
+      media.addEventListener('error', () => {
+        if (t.media !== media) return;
+        clearTile(t);
+        if (tries > 0) fillTile(t, tries - 1);
+        else t.card = testCard(ctx, t.el, wanted);
+      }, { once: true });
+      syncClips();
     } else {
       t.card = testCard(ctx, t.el, wanted);
     }
@@ -56,18 +96,38 @@ function makeFeed(ctx) {
     for (const fn of hooks.tile) fn(t);
   }
   /* One clip plays at a time, the one on show. Wake Up, a suspend and Gentle stop it. */
-  function syncClips() { for (const t of f.tiles) holdMedia(ctx, t.media, t.n === f.index); }
-  ctx.on('pause', syncClips);
-  ctx.on('resume', syncClips);
-  ctx.on('suspend', syncClips);
-  ctx.on('pictures', () => { for (const t of f.tiles) fillTile(t); });
+  function syncClips() {
+    const on = visible();
+    const current = f.tiles.find(t => t.n === f.index);
+    if (!on) pendingManual = null;
+    if (on && current && !current.reported && isReady(current)) {
+      current.reported = true;
+      ctx.pictures.noteView?.();
+    }
+    for (const t of f.tiles) {
+      holdMedia(ctx, t.media, on && t === current);
+      // Keep one incoming tile ready for the swipe. Let its neighbour claim a source first.
+      if (on && !t.media && !t.card && (t === current || (t.n === f.index + 1 && (current?.url || current?.card)))) fillTile(t);
+    }
+    if (pendingManual && !down && isReady(nextTile())) {
+      const { at } = pendingManual;
+      pendingManual = null;
+      advance(at, true);
+    }
+  }
+  watchMedia(ctx, root.ownerDocument, syncClips);
+  ctx.on('pictures', () => { pendingManual = null; for (const t of f.tiles) clearTile(t); syncClips(); });
+  ctx.on('pictures-added', () => {
+    for (const t of f.tiles) if (t.card) clearTile(t);
+    syncClips();
+  });
   function addTile() {
     const el = ctx.el('div', `position:absolute;left:3px;right:3px;border-radius:9px;overflow:hidden;background:#222;`, null, col);
     const credit = ctx.el('div', 'position:absolute;right:4px;bottom:2px;font:10px Arial,Helvetica,sans-serif;color:#fff;text-shadow:0 1px 2px #000;', '', el);
     const deco = ctx.el('div', 'position:absolute;inset:0;pointer-events:none;', null, el);
-    const t = { el, credit, deco, n: f.tiles.length ? f.tiles[f.tiles.length - 1].n + 1 : 0 };
+    const t = { el, credit, deco, n: f.tiles.length ? f.tiles[f.tiles.length - 1].n + 1 : 0,
+      kind: hooks.pick ? hooks.pick() : KINDS[0], clip: hooks.clip ? hooks.clip() : false, liked: false, seenAt: 0 };
     f.tiles.push(t);
-    fillTile(t);
     if (f.tiles.length > 5) { const gone = f.tiles.shift(); dropMedia(gone.media); gone.el.remove(); }
     return t;
   }
@@ -83,20 +143,24 @@ function makeFeed(ctx) {
   ctx.cleanup(() => { for (const t of f.tiles) { dropMedia(t.media); t.media = null; } });
   addTile(); addTile();
   ctx.after(30, place);
-  let wasGentle = ctx.gentle;
   ctx.every(900, () => {
     if (root.clientHeight !== f.h) { place(); f.sizeMode?.(); }
-    if (ctx.gentle !== wasGentle) { wasGentle = ctx.gentle; syncClips(); }
   });
 
-  function swipe(at) {
+  function advance(at, manual) {
     const was = f.current();
     if (was) for (const fn of hooks.leave || []) fn(was);
+    col.style.transition = ctx.gentle || ctx.reduced ? 'none' : 'transform .28s ease-out';
     f.index += 1;
+    f.current().autoReached = !manual;
+    if (!manual && f.current().bar) f.current().bar.hidden = true;
     addTile();
     place();
     if (railsRoom(ctx) || f.fullscreen) hint.style.opacity = '0';
+    f.auto?.restart();
+    if (!manual) return;
     f.swipes += 1;
+    if (ctx.state.store.journey?.banks?.d_scroll) ctx.pay(0, 'swipe', at);
     const gain = ctx.button.press();
     const r = root.getBoundingClientRect();
     const p = at || { x: r.left + r.width / 2, y: r.top + r.height * 0.3 };
@@ -104,12 +168,33 @@ function makeFeed(ctx) {
     ctx.audio.play('assets/audio/sfx/chip_pop.mp3', { bus: 'sfx', gain: 0.3 });
     for (const fn of hooks.swipe) fn(p);
   }
+  function swipe(at) {
+    if (!visible()) return;
+    f.auto?.restart();
+    const current = f.current();
+    // With a playable post on screen, keep it there until the prefetched
+    // neighbor has a decoded frame. Multiple wheel notches reserve one swipe.
+    const next = nextTile();
+    if (current?.media && !isReady(next)) {
+      pendingManual = { at };
+      if (next?.card) clearTile(next);
+      place();
+      return;
+    }
+    pendingManual = null;
+    advance(at, true);
+  }
   f.swipe = swipe;
+  f.autoCanCount = () => visible() && !down && !pendingManual && isReady(f.current());
+  f.advanceAuto = () => {
+    if (f.autoCanCount() && isReady(nextTile())) advance(null, false);
+  };
 
   /* gestures: drag up = swipe, drag down = pull, two quick presses = like, wheel = swipe. The bar above the feed moves it. */
-  let down = null, lastTapAt = 0;
+  let lastTapAt = 0;
   root.addEventListener('pointerdown', (e) => {
     if (ctx.paused) return;
+    f.auto?.restart();
     /* A swipe may start on the test card's button; left still, the press stays the button's. */
     const onButton = !!e.target.closest?.('button');
     down = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId, onButton };
@@ -126,7 +211,7 @@ function makeFeed(ctx) {
     if (!down) return;
     const dy = e.clientY - down.y, dx = e.clientX - down.x, d = down;
     down = null;
-    col.style.transition = 'transform .28s ease-out';
+    col.style.transition = ctx.gentle || ctx.reduced ? 'none' : 'transform .28s ease-out';
     if (dy < -28) { swipe({ x: e.clientX, y: e.clientY }); return; }
     place();
     if (dy > 46) { for (const fn of hooks.pull) fn({ x: e.clientX, y: e.clientY }); return; }
@@ -139,7 +224,7 @@ function makeFeed(ctx) {
     }
   };
   root.addEventListener('pointerup', up);
-  root.addEventListener('pointercancel', () => { down = null; col.style.transition = 'transform .28s ease-out'; place(); });
+  root.addEventListener('pointercancel', () => { down = null; col.style.transition = ctx.gentle || ctx.reduced ? 'none' : 'transform .28s ease-out'; place(); });
   let wheelAt = 0;
   root.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -159,6 +244,8 @@ function makeFeed(ctx) {
     back.style.display = count.style.display = 'block';
     hint.style.opacity = '1';
     root.classList.add('routes-full');
+    hud.appendChild(progress);
+    if (f.auto) hud.appendChild(f.auto.button);
     sizeMode();
     ctx.after(40, place);
   }
@@ -168,9 +255,23 @@ function makeFeed(ctx) {
     shell.appendChild(root);
     back.style.display = count.style.display = 'none';
     root.classList.remove('routes-full');
+    footer.appendChild(progress);
+    if (f.auto) footer.appendChild(f.auto.button);
     sizeMode();
     ctx.after(40, place);
   }
+  const visibility = event => {
+    if (event.detail?.root !== scr.el.closest('.dk')) return;
+    if (!scr.visible) {
+      down = null;
+      for (const fn of hooks.drag || []) fn(0);
+      if (f.fullscreen) close();
+    }
+    syncClips();
+  };
+  const doc = root.ownerDocument;
+  doc.addEventListener('fz-dock-move', visibility);
+  ctx.cleanup(() => doc.removeEventListener('fz-dock-move', visibility));
   ctx.every(200, () => { if (f.fullscreen) count.textContent = ctx.fmt(ctx.state.fuzz); });
   f.open = open;
   return f;
@@ -187,9 +288,11 @@ export default {
       feed = makeFeed(ctx);
       if (!ctx.gentle) ctx.anim(feed.shell, [{ transform: 'translateY(30px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 300, easing: 'ease-out' });
       if (!railsRoom(ctx)) ctx.toast(ROUTE_COPY.feedOpen);
-      return { off() { feed = null; resetHooks(); } };
+      return { show: feed.scr.openDock, off() { feed = null; resetHooks(); } };
     },
   },
+
+  d_autoscroll: { mount(ctx) { return mountAutoScroll(ctx, feed); } },
 
   /* Double-Tap Like: two quick presses on a picture, once a picture. A heart and a lump. */
   d_like: {
@@ -210,7 +313,7 @@ export default {
     },
   },
 
-  /* Video Clips: one tile in three is a muted clip with a bar, and staying for the bar pays. Real clips come later; the picture pans. */
+  /* Video Clips adds a watch bonus to one tile in three, on top of the feed's ordinary media mix. */
   d_clips: {
     mount(ctx) {
       hooks.clip = () => ctx.rng() < 0.34;
@@ -223,7 +326,7 @@ export default {
       return {
         tick(dt) {
           const t = feed?.current();
-          if (!t?.clip || !t.bar || t.watched) return;
+          if (!t?.clip || !t.bar || t.watched || t.autoReached || (!feed.fullscreen && !feed.scr.visible) || feed.root.ownerDocument.hidden) return;
           t.watch += dt;
           t.bar.style.transform = `scaleX(${Math.min(1, t.watch / 3)})`;
           if (t.watch >= 3) {
@@ -254,7 +357,7 @@ export default {
         tick(dt) {
           sat += dt;
           const t = feed?.current();
-          if (!t) return;
+          if (!t || t.autoReached) return;
           if (sat >= 1.4 && !t.lingered) {
             t.lingered = true;
             weights[t.kind] += 1;

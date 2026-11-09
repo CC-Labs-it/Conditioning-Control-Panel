@@ -6,6 +6,8 @@ import { IMAGINE, CAPTIONS, STORIES, RADIO_LINES, FILL_BLANKS, INK_ANSWERS, INK_
 import { panel, deck, flash, tone, ring, btnCentre, fill, docOf } from './kit.js';
 import { ROUTE_COPY } from './copy.js';
 import { screen } from '../../screens.js';
+import { addFrameCollection } from '../../frame-rank.js';
+import { setRich } from '../../rich-text.js';
 
 const hall = { frame: null };
 const PAPER = '#fbf7ea';
@@ -21,6 +23,7 @@ export default {
       tone(ctx, { '--page': '#ece8dd', '--panel': '#f6f3ea', '--panel-short': '#ddd8ca', '--line': '#a79f8c', '--fill': '#cfc7b2', '--btn': '#e4dfd0' });
       const scr = screen(ctx, { ratio: 1.15, hint: !ctx.store.get('spot'), css: 'background:#fbf8ef;' });
       const size = scr.size, el = scr.body;
+      addFrameCollection(ctx, el);
       const hole = ctx.el('div', 'position:absolute;inset:6px;border:2px dashed #b5ad98;', null, el);
       void hole;
       hall.frame = { el, size };
@@ -43,7 +46,7 @@ export default {
       const f = hall.frame;
       const plate = ctx.el('div', `position:absolute;left:6px;right:6px;bottom:6px;max-height:48%;overflow:hidden;min-height:22px;padding:2px 4px;background:rgba(251,247,234,.92);border-top:1px solid #b5ad98;color:#3a3226;text-align:center;font:italic 14px/1.2 ${SERIF};`, '', f?.el);
       const show = () => {
-        plate.textContent = next();
+        setRich(plate, next());
         plate.style.fontSize = `${f && f.size.h < 130 ? 11 : 14}px`;
         ctx.anim(plate, [{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
       };
@@ -64,7 +67,7 @@ export default {
       const lines = [0, 1, 2].map(() => ctx.el('div', `opacity:0;color:#3a3226;text-align:center;margin:3px 0;transition:opacity 1s;font:italic 16px/1.2 ${SERIF};`, '', el));
       const tell = () => {
         const s = next();
-        lines.forEach((l, i) => { l.style.opacity = '0'; ctx.after(600, () => { l.textContent = s.lines[i]; }); ctx.after(800 + i * 1300, () => { l.style.opacity = '1'; }); });
+        lines.forEach((l, i) => { l.style.opacity = '0'; ctx.after(600, () => { setRich(l, s.lines[i]); }); ctx.after(800 + i * 1300, () => { l.style.opacity = '1'; }); });
         // Three lines must fit whatever box the phone left: measured once a story, never per frame.
         ctx.after(620, () => { let px = 20; do { lines.forEach((l) => { l.style.fontSize = `${px}px`; }); px -= 1; } while (px >= 10 && el.scrollHeight > el.clientHeight); });
       };
@@ -78,13 +81,13 @@ export default {
   b_radio: {
     mount(ctx) {
       const next = deck(RADIO_LINES, ctx);
-      ctx.audio.loop('assets/audio/ambient/radio.wav', { bus: 'ambient', gain: 0.5 });
+      ctx.audio.loop('assets/audio/ambient/radio.ogg', { bus: 'ambient', gain: 0.5 });
       const host = ctx.el('div', 'height:130px;background:#6b4a2b;border-radius:6px;box-sizing:border-box;padding:8px;', null, ctx.dock({ edge: 'left' }));
       const dial = ctx.el('div', 'position:relative;height:18px;background:#f3e6c0;border:1px solid #3a2815;box-sizing:border-box;overflow:hidden;', null, host);
       const needle = ctx.el('div', 'position:absolute;top:0;left:2px;width:2px;height:100%;background:#b3121d;', null, dial);
       if (!ctx.gentle) ctx.anim(needle, [{ left: '2%' }, { left: '96%' }], { duration: 3200, iterations: Infinity, direction: 'alternate', easing: 'ease-in-out' });
       const text = ctx.el('div', `margin-top:8px;color:#f3e6c0;font:italic 14px/1.25 ${SERIF};min-height:60px;`, '', host);
-      const say = () => { const line = next(); text.textContent = line; ctx.anim(text, [{ opacity: 0 }, { opacity: 1 }, { opacity: 1, offset: 0.85 }, { opacity: 0.2 }], { duration: 3100 }); };
+      const say = () => { const line = next(); setRich(text, line); ctx.anim(text, [{ opacity: 0 }, { opacity: 1 }, { opacity: 1, offset: 0.85 }, { opacity: 0.2 }], { duration: 3100 }); };
       say();
       ctx.every(3200, say);
       return {};

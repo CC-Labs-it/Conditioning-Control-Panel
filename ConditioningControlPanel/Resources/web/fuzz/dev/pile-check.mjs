@@ -130,21 +130,28 @@ export async function checkStops(page, errors, where) {
   if (await page.evaluate(() => window.fuzz.engine.paused || window.fuzz.engine.suspended)) errors.push(`${where}: could not resume after a suspend`);
 }
 
-/** Nobody answers anything. The button and the goal row may not stay blocked for long. Game clock x4 by ctx.speed. */
+/** Unanswered transient tricks must expire. Player-owned objects may overlap, with a reachable tab to tuck them. */
 export async function checkIgnored(page, errors, where, seconds = 20, maxMs = 8000) {
   const res = await page.evaluate(async ({ seconds }) => {
     const f = window.fuzz, btn = document.getElementById('btn');
     const release = window.__scope.ctx.speed(4);
     const hit = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); if (!r.width) return null; const n = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !n || n === el || el.contains(n) ? null : n; };
     const name = (n) => { const lay = n.closest('.layer,#cards,#shop,#stage'); let box = n; while (box.parentElement && box.parentElement !== lay) box = box.parentElement; return `${lay?.id || '?'}: ${(box.innerText || box.className || box.tagName).replace(/\s+/g, ' ').slice(0, 44)}`; };
-    const long = {};
+    const long = {}, recoverableDocks = new Set();
     const cur = { btn: null, goal: null };
     const t0 = performance.now();
     let maxOver = 0, cards = {};
     while (performance.now() - t0 < seconds * 1000) {
       const now = performance.now();
       for (const [k, el] of [['btn', btn], ['goal', document.querySelector('#goal .row')]]) {
-        const b = hit(el);
+        let b = hit(el);
+        const dock = b?.closest('.dk'), chip = dock?.querySelector('.dk-b')?.dock?.chip;
+        if (chip && !chip.disabled && chip.offsetWidth && !chip.closest('[hidden]')) {
+          // Horizontally overflowed tabs remain reachable by scrolling the strip. The object-desktop
+          // browser drive proves that real tab presses hide their objects on desktop and touch.
+          const strip = chip.closest('#dock-strip'), r = strip?.getBoundingClientRect();
+          if (r?.height && r.bottom <= innerHeight + 1) { recoverableDocks.add(dock.dataset.fzOwner); b = null; }
+        }
         if (b) { const id = name(b); if (!cur[k] || cur[k].id !== id) cur[k] = { id, at: now }; long[`${k} | ${id}`] = Math.max(long[`${k} | ${id}`] || 0, Math.round((now - cur[k].at) * 4)); } else cur[k] = null;
       }
       const c = document.querySelector('#cards .backdrop h2');
@@ -153,7 +160,7 @@ export async function checkIgnored(page, errors, where, seconds = 20, maxMs = 80
       await new Promise((r) => setTimeout(r, 250));
     }
     release();
-    return { long, maxOver, cards, clock: f.state.clock };
+    return { long, maxOver, cards, recoverableDocks: [...recoverableDocks], clock: f.state.clock };
   }, { seconds });
   for (const [k, ms] of Object.entries(res.long)) if (ms > (k.includes('cards:') ? 18000 : maxMs)) errors.push(`${where}: ${k} held for ${Math.round(ms / 1000)} s of game time`);
   if (res.maxOver > 40) errors.push(`${where}: ${res.maxOver} buttons piled up in the over layer with nobody pressing`);

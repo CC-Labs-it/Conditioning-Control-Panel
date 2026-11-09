@@ -6,8 +6,8 @@ import { FAKE_KEYHOLDER } from '../../../data/content/fakes.js';
 import { ENDINGS } from '../../../data/content/endings.js';
 import { mountPodcast } from '../podcast-player.js';
 import { COPY } from './copy.js';
+import { themeScreens, hasPicture } from '../themes-a/theme-screens.js';
 import { buttonCentre, docOf, endingStage, endingWords, fresh, gallery, gutter, pick, ring, rowsOf, sfx, wide } from './kit.js';
-import { THEME_TASTES } from '../theme-skins.js';
 
 const R = THEMES.locked.rules;
 const BRASS = '#e3b341', STEEL = '#9fb3c6', BAD = '#ff7a6e', GOOD = '#7fe0a8';
@@ -54,7 +54,7 @@ function lockTile(ctx) {
   };
 }
 
-function wheelNode(ctx) {
+function wheelNode(ctx, ready = () => {}) {
   const doc = docOf(ctx), size = 188;
   const node = doc.createElement('div');
   node.style.cssText = `display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--ink);font:13px var(--font);`;
@@ -69,6 +69,7 @@ function wheelNode(ctx) {
   });
   const hold = doc.createElement('div');
   hold.style.cssText = 'position:relative;padding-top:10px;';
+  hold.dataset.dockSurface = '';
   const peg = doc.createElement('div');
   peg.style.cssText = 'position:absolute;left:50%;top:0;margin-left:-8px;width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:14px solid #fff;z-index:1;filter:drop-shadow(0 0 1px #000);';
   hold.append(peg, face);
@@ -84,9 +85,10 @@ function wheelNode(ctx) {
   node.append(hold, label, spin, note);
   let rot = 0, busy = false;
   const COOL = 12000;
+  ready(true);
   spin.addEventListener('click', () => {
-    if (busy) return;
-    busy = true;
+    if (ctx.paused || busy) return;
+    busy = true; ready(false);
     spin.disabled = true;
     const i = Math.floor(ctx.rng() * R.wheel.length), seg = R.wheel[i];
     const next = rot - (rot % 360) + 1440 - (i * 45 + 22.5);
@@ -98,7 +100,7 @@ function wheelNode(ctx) {
       const r = spin.getBoundingClientRect();
       ctx.pay(ctx.rates().fps * (seg.minutes > 0 ? 8 : 3), 'wheel', { x: r.left + r.width / 2, y: r.top });
       sfx(ctx, seg.minutes > 0 ? 'thud' : 'chime1', 0.7);
-      ctx.after(COOL, () => { busy = false; spin.disabled = false; });
+      ctx.after(COOL, () => { busy = false; spin.disabled = false; ready(true); });
     });
   });
   return node;
@@ -107,9 +109,22 @@ function wheelNode(ctx) {
 export default {
   lo_head: {
     mount(ctx) {
-      const g = gallery(ctx, { niche: 'chastity', mode: 'swap', decorate: lockTile(ctx) });
-      if (ctx.has('lo_feed')) g.hide();
-      ctx.on('buy', (e) => { if (e.item.id === 'lo_feed') g.hide(); });
+      /* The first pictures: three screens (owner 2026-11-08). The side columns wait for Chastity Pictures. Like every chastity
+       * tile, the brass edge and the padlock show only over a decoded picture. */
+      themeScreens(ctx, {
+        niches: ['chastity'],
+        decorate(me) {
+          const lock = padlock(ctx, me.body, 20, BRASS, 'position:absolute;right:6px;top:6px;z-index:3;');
+          const sync = () => {
+            const on = hasPicture(me);
+            lock.hidden = !on;
+            me.inner.style.outline = on ? `2px solid ${BRASS}` : '';
+            me.inner.style.outlineOffset = '-2px';
+          };
+          sync();
+          ctx.every(500, sync);
+        },
+      });
       return {};
     },
   },
@@ -238,23 +253,7 @@ export default {
     },
   },
 
-  /* A padlock for a button. It rocks when tapped. It will not open. */
-  lo_pad: {
-    mount(ctx) {
-      ctx.css(THEME_TASTES.locked.css);
-      ctx.button.skin('padlock');
-      const btn = ctx.button.el;
-      let up = 0;
-      ctx.on('tap', () => {
-        if (ctx.gentle) return;
-        btn.style.setProperty('--shackle', '-5px');
-        clearTimeout(up);
-        up = setTimeout(() => btn.style.removeProperty('--shackle'), 110);
-        ctx.anim(btn, [{ transform: 'rotate(0)' }, { transform: 'rotate(-4deg)' }, { transform: 'rotate(3deg)' }, { transform: 'rotate(0)' }], 240);
-      });
-      return { off() { clearTimeout(up); btn.style.removeProperty('--shackle'); } };
-    },
-  },
+  lo_pad: { mount(ctx) { ctx.button.skin('padlock'); } },
 
   /* Some buys get a NO stamp. One beg lifts it; twenty seconds lift it anyway. The engine lets a row through after 3 refusals. */
   lo_refuse: {
@@ -325,25 +324,13 @@ export default {
     },
   },
 
-  lo_pod: { mount(ctx) { return mountPodcast(ctx, { theme: 'locked', show: 'The Keyholder Report' }); } },
+  lo_pod: { mount(ctx) { return mountPodcast(ctx, { theme: 'chastity', show: 'The Keyholder Report' }); } },
 
-  /* The wheel. It moves pretend time and pays either way. On a phone it opens from a chip. */
+  /* The wheel moves pretend time and pays either way. Its tab shows when another spin is ready. */
   lo_wheel: {
     mount(ctx) {
-      if (wide(ctx)) {
-        const card = ctx.el('div', 'pointer-events:auto;', null, ctx.dock());
-        card.className = 'tb-card';
-        card.appendChild(wheelNode(ctx));
-        return {};
-      }
-      const wrap = ctx.parts.buttonWrap;
-      const chip = ctx.el('button', 'position:absolute;left:calc(100% + 12px);top:50%;width:68px;height:46px;margin-top:-23px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:23px;font:700 14px var(--font);touch-action:manipulation;pointer-events:auto;', COPY.locked.wheel, wrap);
-      chip.type = 'button';
-      const node = wheelNode(ctx);
-      // The card keeps its plain grey on every theme, so the wheel's words go dark inside it.
-      node.style.color = '#000';
-      node.querySelector('button').style.color = '#000';
-      chip.addEventListener('click', () => ctx.modal({ title: ctx.item.name, node, buttons: [{ label: 'Close' }] }));
+      const host = ctx.dock({ width: 210 });
+      host.appendChild(wheelNode(ctx, on => host.dock?.setReady(on, 'Spin ready')));
       return {};
     },
   },

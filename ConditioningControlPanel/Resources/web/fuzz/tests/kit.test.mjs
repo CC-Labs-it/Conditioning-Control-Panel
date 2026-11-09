@@ -36,7 +36,7 @@ test('a stream waits for the first gesture, then plays at its bus level', () => 
   kit.arm();
   assert.equal(s.playing, true);
   assert.equal(made[0].volume, BUS.podcast * 0.5);
-  assert.equal(made[0].preload, 'auto');
+  assert.equal(made[0].preload, 'metadata', 'streams never pull a whole episode ahead');
 });
 
 test('hold pauses in the same call, with nothing else running, and release brings it back', () => {

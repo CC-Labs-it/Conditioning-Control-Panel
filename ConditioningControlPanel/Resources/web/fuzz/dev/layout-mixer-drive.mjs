@@ -9,17 +9,11 @@ mkdirSync(out, { recursive: true });
 const errors = [], checks = [];
 const browser = await firefox.launch({ headless: true, executablePath: 'C:/Users/Admin/AppData/Local/ms-playwright/firefox-1538/firefox/firefox.exe', firefoxUserPrefs: { 'media.volume_scale': '0.0' } });
 async function front(page, id) {
-  const need = await page.evaluate(id => {
-    const el = document.querySelector(`.dk[data-fz-owner="${id}"]`);
-    return el.classList.contains('min') || +el.style.zIndex < Math.max(...[...document.querySelectorAll('.dk')].map(e => +e.style.zIndex));
-  }, id);
-  if (need) await page.locator(`.dk-chip[data-fz-owner="${id}"]`).click();
-  return page.locator(`.dk[data-fz-owner="${id}"]`);
-}
-async function drag(page, handle, dx, dy) {
-  const r = await handle.boundingBox();
-  await page.mouse.move(r.x + r.width / 2, r.y + r.height / 2); await page.mouse.down();
-  await page.mouse.move(r.x + r.width / 2 + dx, r.y + r.height / 2 + dy, { steps: 8 }); await page.mouse.up();
+  const object = page.locator(`.dk[data-fz-owner="${id}"]`), tab = page.locator(`.dk-chip[data-fz-owner="${id}"]`);
+  await tab.scrollIntoViewIfNeeded();
+  if (!await object.evaluate(el => el.classList.contains('min'))) await tab.click();
+  await tab.click();
+  return object;
 }
 const layout = (page, id) => page.evaluate(id => structuredClone(window.fuzz.state.store[id]._dock1), id);
 async function step(page, ms) { await page.evaluate(ms => { while (ms > 0) { const dt = Math.min(ms, 100); window.fuzz.engine.step(dt); ms -= dt; } }, ms); }
@@ -36,41 +30,33 @@ try {
     const page = await context.newPage(); page.setDefaultTimeout(6000);
     page.on('pageerror', e => errors.push(`${phone ? 'phone' : 'desktop'}: ${e.message}`));
     await page.goto(`${base}?preview=toys`);
-    await page.waitForFunction(() => window.fuzz?.engine.scopes.has('audio_mixer'));
+    await page.waitForFunction(() => window.fuzz?.engine.scopes.has('toy_box'));
     await page.waitForTimeout(2600);
     await page.evaluate(() => localStorage.setItem('fuzz.save.v2', 'untouched normal save'));
     const box = await front(page, 'toy_box');
-    const header = await box.locator('.dk-t').boundingBox();
-    assert.ok(header.width <= 40 && header.height <= 34, 'expanded chrome should be just a grip');
-    assert.equal(await box.locator('.dk-n').isVisible(), false);
-    const before = await box.boundingBox();
-    await drag(page, box.locator('.dk-t'), phone ? -2 : 340 - before.x, 90 - before.y);
+    assert.equal(await box.locator('.dk-t,.dk-f,.dk-resize').count(), 0, 'objects have no window controls');
+    const tab = page.locator('.dk-chip[data-fz-owner="toy_box"]');
+    await tab.press('Control+Shift+ArrowRight');
     const moved = await layout(page, 'toy_box');
-    await drag(page, box.locator('.dk-resize-corner'), phone ? -40 : 60, 70);
-    const sized = await layout(page, 'toy_box');
-    assert.ok(sized.w > 180 && sized.h >= 100 && Number.isFinite(sized.h));
-    await box.locator('.dk-f').click(); assert.equal(await box.locator('.dk-b').isVisible(), false);
+    assert.equal(moved.h, null, 'the body fits its content');
+    await tab.click(); assert.equal(await box.locator('.dk-b').isVisible(), false);
     await front(page, 'toy_box');
-    assert.equal((await layout(page, 'toy_box')).h, sized.h);
-    await box.locator('.dk-resize-right').focus(); await page.keyboard.press('Shift+ArrowLeft');
-    const resized = await layout(page, 'toy_box'); assert.ok(resized.w < sized.w); assert.equal(resized.h, sized.h);
     await page.reload(); await page.waitForFunction(() => window.fuzz?.engine.scopes.has('toy_box')); await page.waitForTimeout(2300);
     const restored = await layout(page, 'toy_box');
-    assert.deepEqual({x:restored.x,y:restored.y,w:restored.w,h:restored.h}, {x:resized.x,y:resized.y,w:resized.w,h:resized.h});
+    assert.deepEqual({x:restored.x,y:restored.y,w:restored.w,h:restored.h}, {x:moved.x,y:moved.y,w:moved.w,h:moved.h});
     await front(page, 'toy_box'); await step(page, await page.evaluate(() => window.fuzz.state.store.toy_box.box.nextIn * 1000));
     await page.waitForFunction(() => window.fuzz.state.store.toy_box.box.phase === 'play');
     const pieces = await page.evaluate(() => [...window.fuzz.state.store.toy_box.box.pieces]);
     for (const piece of pieces) { await page.locator(`[data-toy-piece=${piece}]`).click(); await page.locator(`[data-toy-slot=${piece}]`).click(); }
     assert.equal(await page.evaluate(() => window.fuzz.state.store.toy_box.box.completed), 1);
     const quiz = await front(page, 'quiz');
-    const qr = await quiz.boundingBox(); await drag(page, quiz.locator('.dk-t'), 20 - qr.x, 90 - qr.y);
     await page.evaluate(() => window.fuzz.engine.scopes.get('quiz').ret.ask('none'));
-    await quiz.locator('.dk-resize-right').focus();
-    for (let i = 0; i < 4; i++) await page.keyboard.press('Shift+ArrowLeft');
-    const answer = quiz.locator('.xq:not(.xq-done) .xq-a').nth(1);
+    const question = quiz.locator('.xq:not(.xq-done)').last();
+    assert.ok((await question.boundingBox()).width <= (await quiz.boundingBox()).width + 1);
+    const answer = question.locator('.xq-a').nth(1);
     await answer.click(); assert.equal(await quiz.locator('.xq-done').count(), 1);
-    const mixer = await front(page, 'audio_mixer');
-    const mr = await mixer.boundingBox(); await drag(page, mixer.locator('.dk-t'), phone ? -mr.x + 12 : 690 - mr.x, 90 - mr.y);
+    await page.getByRole('button', {name:'Audio mixer', exact:true}).click();
+    const mixer = page.locator('#audio-mixer');
     const rain = mixer.locator('[data-audio-source=a_rain]');
     await rain.locator('input').fill('25');
     await page.waitForFunction(() => window.__audio.sources.some(s => s.loop && s.buffer?.duration > 23));
@@ -87,12 +73,12 @@ try {
     assert.ok(await page.evaluate(() => { const n=window.__audio.next, s=window.__audio.sources.find(s => s.loop && s.buffer?.duration>23); return n.get(n.get(s)).gain.value < .002; }));
     assert.equal(await page.evaluate(() => window.fuzz.engine.audio.mixer.sources().find(s => s.id === 'binaural').volume), 1);
     await page.screenshot({ path: `${out}/${phone ? 'phone' : 'desktop'}.png` });
-    await page.reload(); await page.waitForFunction(() => window.fuzz?.engine.scopes.has('audio_mixer'));
+    await page.reload(); await page.waitForFunction(() => window.fuzz?.engine.scopes.has('toy_box'));
     const pref = await page.evaluate(() => window.fuzz.engine.audio.mixer.sources().find(s => s.id === 'a_rain'));
     assert.equal(pref.volume, .25); assert.equal(pref.muted, true);
     assert.equal(await page.evaluate(() => window.fuzz.state.store.mini_slots.machine.coins), 3);
     assert.equal(await page.evaluate(() => localStorage.getItem('fuzz.save.v2')), 'untouched normal save');
-    checks.push({ phone, moved, sized, restored, levels, pref, boxCompleted: true, normalSaveUntouched: true });
+    checks.push({ phone, moved, restored, levels, pref, boxCompleted: true, normalSaveUntouched: true });
     await context.close();
   }
 } finally { await browser.close(); }

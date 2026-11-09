@@ -14,6 +14,7 @@
 import { createFieldRenderer, projectToV1 } from '../../arcademy/engine/loom/loomField.js';
 import { drawSpiral } from '../../arcademy/engine/loom/loomSpiral.js';
 import { createMorphClock, driftPair, groundOf, isHex, mixHex, morphFrame, smooth } from './spiral-patterns.js';
+import { LITE } from '../ui/perf.js';
 
 export const FADE_S = 3;
 const WARM_AFTER_S = 2;
@@ -237,14 +238,17 @@ export function createBus() {
     };
     function paint() {
       const size0 = lad[Math.min(rung, lad.length - 1)];
-      const hasField = !!getField(size0);
+      /* A see-through site on the field reads every pixel back off the GPU to knock the black out: a stall a phone feels on
+       * every repaint. Phones paint those with the Loom's 2D renderer instead, see-through by itself (ui/perf.js LITE). */
+      const noField = seeThrough && LITE;
+      const hasField = !noField && !!getField(size0);
       const size = hasField ? size0 : Math.min(size0, FALLBACK_MAX);
       if (canvas.width !== size) canvas.width = canvas.height = size;
       const pair = colours();
       const ground = seeThrough ? '#000000' : isHex(opts.ground) ? opts.ground : groundOf(pair[0]);
       const frame = morphFrame(clock.from, clock.to, clock.t, pair, ground, { gentle: gentleNow || reducedNow });
       const t0 = performance.now();
-      const gl = paintLoom(g, frame, phase, size, size, { lightGround, cover: false, seeThrough });
+      const gl = paintLoom(g, frame, phase, size, size, { lightGround, cover: false, seeThrough, noField });
       if (seeThrough && gl) knockOut(g, size, size);
       const ms = performance.now() - t0;
       const st = me.stats;

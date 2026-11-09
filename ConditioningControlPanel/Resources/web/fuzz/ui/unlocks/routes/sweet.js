@@ -12,7 +12,7 @@ function restClock(ctx) {
   ctx.on('tap', ({ auto }) => { if (!auto) last = ctx.state.clock; });
   return { get seconds() { return (ctx.state.clock - last) / 1000; }, reset() { last = ctx.state.clock; } };
 }
-const fitsLine = (ctx) => (s) => s.length <= (ctx.bounds().w < 760 ? 40 : 90);
+const fitsLine = (ctx) => (s) => ctx.brand.text(s).length <= (ctx.bounds().w < 760 ? 40 : 90);
 
 export default {
   /* Praise: soft words. More often while you rest. */
@@ -197,8 +197,9 @@ export default {
           ctx.store.set('left', Date.now());
           oldTitle = doc.title;
           doc.title = titles();
+          if (ctx.hosted) ctx.host('tab', { title: doc.title });   // the site's tab wears it (CONTRACT `tab`)
         } else {
-          if (oldTitle !== null) { doc.title = oldTitle; oldTitle = null; }
+          if (oldTitle !== null) { doc.title = oldTitle; oldTitle = null; if (ctx.hosted) ctx.host('tab', { title: doc.title }); }
           const left = ctx.store.get('left');
           ctx.store.set('left', 0);
           if (left) wake(Date.now() - left);
@@ -211,7 +212,7 @@ export default {
       return {
         off() {
           doc.removeEventListener('visibilitychange', onVis);
-          if (oldTitle !== null) doc.title = oldTitle;
+          if (oldTitle !== null) { doc.title = oldTitle; if (ctx.hosted) ctx.host('tab', { title: doc.title }); }
         },
       };
     },

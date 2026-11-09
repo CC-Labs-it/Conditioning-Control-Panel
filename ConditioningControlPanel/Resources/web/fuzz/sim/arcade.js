@@ -1,9 +1,10 @@
+import { PRIZES, rollPrize } from './dispenser-rewards.js';
 // Small saved machines. Callers supply elapsed active time and the game's RNG.
 const clamp = (n, max, fallback = 0) => Number.isFinite(n) ? Math.max(0, Math.min(max, n)) : fallback;
 export const COIN_MS = 45000;
 export const SPIN_MS = 2200;
 export const CATCH_MS = 2500;
-export const DROP_MS = 700;
+export const DROP_MS = 3900;
 
 export function slotState(saved) {
   const s = saved && typeof saved === 'object' ? saved : {};
@@ -57,14 +58,16 @@ export function finishSpin(s) {
 export function dispenserState(saved) {
   const s = saved && typeof saved === 'object' ? saved : {};
   return {
+    prize: Object.hasOwn(PRIZES, s.prize) ? s.prize : 'red',
     phase: ['ready', 'drop', 'catch', 'dissolve', 'cooldown'].includes(s.phase) ? s.phase : 'ready',
     left: clamp(s.left, 30000), cooldown: clamp(s.cooldown, 30000),
     caught: Math.floor(clamp(s.caught, 1e6)), missed: Math.floor(clamp(s.missed, 1e6)),
   };
 }
 
-export function dispense(s, cooldown = 30000) {
+export function dispense(s, cooldown = 30000, rng = Math.random) {
   if (s.phase !== 'ready') return false;
+  s.prize = rollPrize(rng);
   s.phase = 'drop'; s.left = DROP_MS; s.cooldown = clamp(cooldown, 30000);
   return true;
 }
