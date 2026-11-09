@@ -298,7 +298,12 @@ namespace ConditioningControlPanel.Services
 
                             // Zip Slip guard: an entry or pack name holding ".." (or a rooted path)
                             // must never write outside the asset folder.
-                            if (!IsInsideFolder(baseDestFolder, destFolder))
+                            // The check stays inline on Path.GetFullPath results (CodeQL only
+                            // recognises that shape); IsInsideFolder is the same rule for tests.
+                            var rootFull = Path.TrimEndingDirectorySeparator(Path.GetFullPath(baseDestFolder)) + Path.DirectorySeparatorChar;
+                            destFolder = Path.GetFullPath(destFolder);
+                            if (!(Path.TrimEndingDirectorySeparator(destFolder) + Path.DirectorySeparatorChar)
+                                    .StartsWith(rootFull, StringComparison.OrdinalIgnoreCase))
                             {
                                 App.Logger?.Warning("Skipped ZIP entry outside the asset folder: {Entry}", entry.FullName);
                                 result.Skipped++;
@@ -315,10 +320,15 @@ namespace ConditioningControlPanel.Services
                             {
                                 result.Skipped++; // the same file is already there (#1515)
                             }
+                            else if (!Path.GetFullPath(destPath).StartsWith(rootFull, StringComparison.OrdinalIgnoreCase))
+                            {
+                                App.Logger?.Warning("Skipped ZIP entry outside the asset folder: {Entry}", entry.FullName);
+                                result.Skipped++;
+                            }
                             else
                             {
                                 // Extract to destination
-                                entry.ExtractToFile(destPath, overwrite: false);
+                                entry.ExtractToFile(Path.GetFullPath(destPath), overwrite: false);
 
                                 if (IsVideo(ext))
                                 {
