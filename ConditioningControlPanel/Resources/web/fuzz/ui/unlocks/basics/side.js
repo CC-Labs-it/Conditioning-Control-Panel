@@ -65,6 +65,7 @@ export default {
           if (chapter !== null) ctx.store.set('couponChapter', chapter);
           text = 'Paid in full';
         }
+        ctx.emit('golden-caught', { key });   // the Living Ad card counts these
         fx.reveal(x, y, key, text, () => { if (key === 'free') fx.ticket(x, y); });
         ctx.say(p.line);
       };

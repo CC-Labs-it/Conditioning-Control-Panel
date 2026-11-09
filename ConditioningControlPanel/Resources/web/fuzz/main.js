@@ -119,7 +119,7 @@ function start(init) {
   engine = createEngine({
     run, life, ui, audio, registry: REGISTRY, save: persist,
     host: { send: bridge.send, isHosted: bridge.isHosted },
-    env: { journey: JOURNEY_PREVIEW, featuredShop: [...(feedPreview ? ['d_autoscroll'] : []), ...(trailPreview ? ['starburst', 'word_comet'] : [])], caps: init.caps || {}, mod: init.mod || 'default', hosted: bridge.isHosted, pictureSource: pictureDoor || 'none' },
+    env: { journey: JOURNEY_PREVIEW, featuredShop: [...(feedPreview ? ['d_autoscroll'] : []), ...(trailPreview ? ['starburst', 'word_comet'] : [])], caps: init.caps || {}, identity: typeof init.identity?.displayName === 'string' && init.identity.displayName.trim() ? { displayName: init.identity.displayName.trim().slice(0, 40) } : null, mod: init.mod || 'default', hosted: bridge.isHosted, pictureSource: pictureDoor || 'none' },
   });
   engine.subscribe('wave-equipped', persist);
   engine.subscribe('wardrobe-equipped',persist);

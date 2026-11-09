@@ -26,7 +26,8 @@ ticker: {
 mounted and hears the new count; any other re-buy remounts. Your code throwing 3 times switches the unlock off; the game
 carries on. An ending row may also export `ending(ctx) -> Promise`: its show between the fade and the credits, up to 90 s.
 It may also export `take(ctx) -> Promise`: a phase BEFORE the fade, with the page still mounted but frozen and streams still
-playing (stopped when it resolves), capped at `ENDING_TAKE_MAX_MS` game time; `fadeColour` sets that row's end fade (Bimbodoll).
+playing (stopped when it resolves), capped at `ENDING_TAKE_MAX_MS` game time; `fadeColour` sets that row's end fade (Bimbodoll), `fadeMs` its length (at most the
+usual 1600 ms; the Living Ad take leaves its own stage over the page, so its fade is short).
 
 ## Testing it
 
@@ -59,6 +60,7 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 - `ctx.paused`: true during a pause or a suspend. Timers and frames stop by themselves; only your own window or document listeners need to ask.
 - `ctx.gentle`, `ctx.reduced`: live. Gentle: nothing above 3 Hz, flashes become fades of 250 ms or more, spiral still, no sway, no warp. If an effect cannot be gentle, leave it off.
 - `ctx.hosted`, `ctx.caps`, `ctx.host(type, fields)`: the app wire, see `CONTRACT.md`.
+- `ctx.identity`: `{displayName}` when the host signed the player in (`init.identity`, web /tc), else null. Only the Living Ad card prints it.
 - `ctx.openLink(url)`: the one way to open a real page. Only `https://cclabs.app` and its paths, and only called directly inside the player's own press on your element or card button: not after an `await` or `ctx.after`, not from a tap on the game button. Answers whether it opened. Never `window.open` or an `<a>` of your own.
 - `ctx.openAdLink(url)`: the same rule for a real CCP ad, and at most `CONFIG.AD_TABS_PER_RUN` (2) tabs a run (owner 2026-11-08: more was annoying); past the cap it opens nothing and answers false, and the press still pays. Basic and Prime players (host `init.caps.plan`) never get a real card from `ctx.ads.next`.
 

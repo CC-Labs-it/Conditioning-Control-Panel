@@ -34,6 +34,7 @@ export function createLife() {
     age: false,        // said yes to the age box at least once (it is asked again on every load)
     contract: false,   // signed the long contract; later visits get the short update window
     updates: 0,        // update windows accepted: picks the next llama line
+    llamas: 3,         // llamas sheltered by the contract (3, plus one per opt-out, up to 12): the Living Ad card
     runs: 0,           // runs finished
     endings: {},       // ending id -> times seen
     seen: {},          // unlock id -> 1, ever owned
@@ -113,6 +114,7 @@ function parseLife(src) {
   life.age = !!src.age;
   life.contract = !!src.contract;
   life.updates = Math.floor(num(src.updates));
+  life.llamas = Math.floor(num(src.llamas ?? 3, 3, 12));
   life.runs = Math.floor(num(src.runs));
   for (const [id, n] of Object.entries(obj(src.endings))) if (ENDING_IDS.includes(id)) life.endings[id] = Math.floor(num(n, 0, 1e6));
   for (const id of Object.keys(obj(src.seen))) if (BY_ID[id]) life.seen[id] = 1;
