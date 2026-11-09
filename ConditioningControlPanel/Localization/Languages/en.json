@@ -7990,6 +7990,8 @@
   "launcher_media_footnote": "The Back Room follows this too.",
   "launcher_media_done": "Done",
   "launcher_media_tooltip": "Media and sound",
+  "launcher_update_ready": "Update ready",
+  "launcher_update_tooltip": "Version {0} is out. Opens the in-app updater.",
   "launcher_sound_mute": "Mute the launcher",
   "launcher_sound_unmute": "Unmute the launcher",
   "launcher_media_button": "Media",

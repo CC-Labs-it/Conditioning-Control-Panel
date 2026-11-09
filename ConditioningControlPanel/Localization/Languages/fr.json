@@ -7234,6 +7234,8 @@
   "launcher_media_footnote": "Le Back Room suit aussi ce réglage.",
   "launcher_media_done": "Terminé",
   "launcher_media_tooltip": "Médias et son",
+  "launcher_update_ready": "Mise à jour prête",
+  "launcher_update_tooltip": "La version {0} est sortie. Ouvre la mise à jour dans l'app.",
   "launcher_sound_mute": "Couper le son du lanceur",
   "launcher_sound_unmute": "Rétablir le son du lanceur",
   "launcher_media_button": "Médias",
