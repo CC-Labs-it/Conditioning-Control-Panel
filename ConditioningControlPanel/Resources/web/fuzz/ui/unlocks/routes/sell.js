@@ -6,6 +6,7 @@ import { nextAd, pressAd, panel, deck, railsRoom, claim, release, fill } from '.
 import { ROUTE_COPY } from './copy.js';
 import { sellAllJoke, SELL_ALL_AD } from '../../sell-all.js';
 import { livingAdEnding, LIVING_AD_SHOW_MAX_MS } from '../../adcard/ending.js';
+import { livingAdTake } from '../../adcard/stage.js';
 
 const FONT = 'Arial,Helvetica,sans-serif';
 const CHIP = `font:700 10px ${FONT};background:#f0c24b;color:#000;padding:0 4px;border-radius:2px;flex:none;`;
@@ -273,6 +274,8 @@ export default {
   o_out: {
     mount() { return {}; },
     showMaxMs: LIVING_AD_SHOW_MAX_MS,
+    fadeMs: 120,   // the take leaves its paper stage over the page: the fade underneath is never seen
+    take(ctx) { return livingAdTake(ctx); },
     ending(ctx) { return livingAdEnding(ctx); },
   },
 };

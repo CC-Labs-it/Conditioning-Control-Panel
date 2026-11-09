@@ -26,7 +26,8 @@ ticker: {
 mounted and hears the new count; any other re-buy remounts. Your code throwing 3 times switches the unlock off; the game
 carries on. An ending row may also export `ending(ctx) -> Promise`: its show between the fade and the credits, up to 90 s.
 It may also export `take(ctx) -> Promise`: a phase BEFORE the fade, with the page still mounted but frozen and streams still
-playing (stopped when it resolves), capped at `ENDING_TAKE_MAX_MS` game time; `fadeColour` sets that row's end fade (Bimbodoll).
+playing (stopped when it resolves), capped at `ENDING_TAKE_MAX_MS` game time; `fadeColour` sets that row's end fade (Bimbodoll), `fadeMs` its length (at most the
+usual 1600 ms; the Living Ad take leaves its own stage over the page, so its fade is short).
 
 ## Testing it
 

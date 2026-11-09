@@ -55,6 +55,8 @@ frame.addEventListener('load', () => {
       fuzz.buy(next.id);
       if (E.count(run, next.id) === before) break;
     }
+    /* Living Ad: a dev run tallies nothing, so the card would read "0 terms ACCEPTED"; give it plausible numbers */
+    if (endId === 'o_out') { const t = ((run.store ||= {}).adcard ||= {}); t.pics ||= 420; t.golden ||= 12; t.terms ||= 160; }
     const want = Math.round(E.price(run, endId) * 1.05);
     if (run.fuzz < want) fuzz.add(want - run.fuzz);
     const style = frame.contentDocument.createElement('style');

@@ -146,11 +146,13 @@ function fitCard(card) {
 
 /**
  * Builds the card inside `box` (a .adc-box) and returns its controller:
- *   play()          rebuild and run the timeline live
- *   build(paused)   a fresh timeline, paused at 0 when asked (exports scrub it)
+ *   play({quiet})   rebuild and run the timeline live; beats go to onBeat unless quiet (after an export)
+ *   build(paused)   a fresh timeline, paused at 0 when asked (exports scrub it); a paused timeline has no beats
+ * onBeat(name, i): the build-in's hits, for the ending's sounds (the card itself stays silent): logo, pic, label, terms,
+ * accepted, stat (i = row), llamas, foot. Only on a live timeline, never under reduced motion, never late by 400 ms or more.
  *   destroy()       stops everything
  */
-export function createAdCard({ doc, box, model, reduced = false }) {
+export function createAdCard({ doc, box, model, reduced = false, onBeat = null }) {
   const win = doc.defaultView;
   const card = doc.createElement('article');
   card.className = 'adc';
@@ -214,12 +216,18 @@ export function createAdCard({ doc, box, model, reduced = false }) {
     });
   }
 
-  function build(paused) {
+  function build(paused, quiet = false) {
     if (tl) tl.anims.forEach((a) => a.cancel());
     card.querySelectorAll('.bob').forEach((el) => el.classList.remove('bob'));
     card.querySelectorAll('.vib').forEach((el) => { el.classList.remove('buzz'); el.style.transform = ''; });
-    const s = { start: win.performance.now(), anims: [], counts: [], vibs: [], bob: [], end: 0, tail: 0, paused, hover: 0 };
+    const s = { start: win.performance.now(), anims: [], counts: [], vibs: [], bob: [], beats: [], end: 0, tail: 0, paused, hover: 0 };
     tl = s;
+    const beat = (n, t, i = 0) => s.beats.push({ n, t, i });
+    for (const [n, sel] of [['logo', '.logo'], ['pic', '.pic'], ['label', '.label'], ['terms', '.terms'], ['foot', '.ac-foot']]) {
+      const el = card.querySelector(sel);
+      if (el?.dataset.t) beat(n, +el.dataset.t + (n === 'terms' ? 200 : 0));   // the terms stamp hits at 60% of its slam
+    }
+    card.querySelectorAll('[data-vib]').forEach((el) => beat('accepted', +el.dataset.vib + 250));   // inside the buzz, after the stamp
     A(s, card, [{ opacity: 0, transform: 'translateY(2%) scale(.97)' }, { opacity: 1, transform: 'none' }], { duration: 400 });
     card.querySelectorAll('[data-in]').forEach((el) => {
       const kind = el.dataset.in, t = +el.dataset.t || 0;
@@ -247,6 +255,7 @@ export function createAdCard({ doc, box, model, reduced = false }) {
       }
       if (num) {
         s.counts.push({ el: num, to: +num.dataset.n, start: f0, dur: 1500 });
+        if (fill) beat('stat', f0 + 1520, i);
         const c = win.getComputedStyle(num).color, accent = C.A;
         A(s, num, [{ transform: 'scale(1)', color: c }, { transform: 'scale(1.4)', color: accent, offset: 0.35 }, { transform: 'scale(1)', color: c }], { duration: 460, delay: f0 + 1520, fill: 'none', easing: 'ease-out' });
       }
@@ -256,12 +265,17 @@ export function createAdCard({ doc, box, model, reduced = false }) {
         A(s, sp, [{ opacity: 0, transform: 'translateY(80%) scale(.3) rotate(-30deg)' }, { opacity: 1, transform: 'translateY(-30%) scale(1.3) rotate(10deg)', offset: 0.6 }, { transform: 'none' }], { duration: 440, delay: d + 200 + j * st, easing: 'ease-out' });
         A(s, sp, [{ transform: 'none' }, { transform: 'translateY(-35%) rotate(-8deg)', offset: 0.4 }, { transform: 'none' }], { duration: 380, delay: d + Math.max(1200, w0) + j * st2, fill: 'none', easing: 'ease-in-out' });
       });
-      if (nl) s.end = Math.max(s.end, d + Math.max(1700, w0 + nl * st2 + 400));
+      if (nl) { s.end = Math.max(s.end, d + Math.max(1700, w0 + nl * st2 + 400)); beat('llamas', d + 200 + Math.floor(nl / 2) * st); }
     });
     s.bob.push(card.querySelector('.pic'));
     s.end = Math.max(s.end, 4800) + 300;
     if (!reduced) idle(s);
     if (paused) s.anims.forEach((a) => { a.pause(); a.currentTime = 0; });
+    /* the footer's chime is the finale: after the last bar has popped, never on top of it */
+    const foot = s.beats.find((b) => b.n === 'foot'), last = Math.max(0, ...s.beats.filter((b) => b.n === 'stat' || b.n === 'llamas').map((b) => b.t));
+    if (foot) foot.t = Math.max(foot.t, last + 650);
+    if (paused || quiet || reduced || !onBeat) s.beats.length = 0;
+    s.beats.sort((a, b) => a.t - b.t);
     return s;
   }
 
@@ -282,17 +296,21 @@ export function createAdCard({ doc, box, model, reduced = false }) {
     if (!tl || tl.paused) return;
     const t = now - tl.start;
     sideAt(tl, t, true);
+    while (tl.beats.length && tl.beats[0].t <= t) {
+      const b = tl.beats.shift();
+      if (t - b.t < 400) { try { onBeat(b.n, b.i); } catch (e) { console.error(e); } }
+    }
     if (now - lastSpiral > 33) { lastSpiral = now; drawSpiral(spiral.cv, spiral.spec, reduced ? 0 : (t + 20000) / 1000 * 0.25); }
   }
 
-  function play() {
+  function play({ quiet = false } = {}) {
     if (reduced) {
       const s = build(true);
       s.anims.forEach((a) => a.finish());
       s.paused = false; s.start = win.performance.now() - s.end - 1;
       return s;
     }
-    return build(false);
+    return build(false, quiet);
   }
 
   card.addEventListener('pointerenter', () => { if (tl && !reduced) tl.hover = win.performance.now() + 600; });

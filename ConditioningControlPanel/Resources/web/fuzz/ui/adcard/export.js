@@ -57,7 +57,7 @@ async function frames(ad, fps, width, progress, stop) {
       out.push(await snap(ad, s, Math.min(END, 250 + f * 1000 / fps), width));
       progress(f + 1, total * 2, fill(ADCARD_COPY.working, { i: f + 1, n: total }));
     }
-  } finally { ad.play(); }
+  } finally { ad.play({ quiet: true }); }
   return out;
 }
 
@@ -118,7 +118,7 @@ async function png(ad) {
   try {
     const c = await snap(ad, s, s.end, 1080);
     return await new Promise((r) => c.toBlob(r, 'image/png'));
-  } finally { ad.play(); }
+  } finally { ad.play({ quiet: true }); }
 }
 
 /** Hands a file to the player: the share sheet where the device has one for files (phones), else a download. */

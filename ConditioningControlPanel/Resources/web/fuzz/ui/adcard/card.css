@@ -75,16 +75,4 @@
 @keyframes adc-buzz { 0% { transform: translate(.18cqw, -.12cqw) rotate(-.4deg); } 25% { transform: translate(-.2cqw, .14cqw) rotate(.35deg); }
   50% { transform: translate(.14cqw, .18cqw) rotate(-.2deg); } 75% { transform: translate(-.14cqw, -.18cqw) rotate(.45deg); } }
 
-/* the ending sheet around the card */
-.adc-sheet { display: grid; justify-items: center; gap: 12px; width: min(100%, 520px); margin: 0 auto; }
-.adc-sheet h2 { margin: 0; font: 700 22px/1.2 var(--adc-ui, inherit); text-align: center; }
-.adc-sheet p { margin: 0; opacity: .85; text-align: center; }
-.adc-sheet .adc-box { width: min(100%, 440px, calc((100vh - 260px) * .8)); }
-.adc-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-.adc-row button { font: 600 14px/1 inherit; padding: 9px 14px; border-radius: 10px; border: 2px solid currentColor; background: transparent; color: inherit; cursor: pointer; }
-.adc-row button.go { background: #fff; color: #111; border-color: #fff; }
-.adc-row button:disabled { opacity: .5; cursor: progress; }
-.adc-row button:focus-visible { outline: 3px solid #ff69b4; outline-offset: 2px; }
-.adc-status { min-height: 1.3em; font-size: 14px; }
-.adc-prog { width: min(100%, 320px); height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .2); overflow: hidden; }
-.adc-prog i { display: block; height: 100%; width: 0; background: #ff69b4; }
+/* the ending sheet around the card lives in ui/adcard/stage.css */

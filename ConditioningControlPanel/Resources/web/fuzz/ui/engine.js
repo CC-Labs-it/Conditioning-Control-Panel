@@ -488,7 +488,7 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
         audio?.stopStreams?.();
       }
       audio?.setQuiet(true);
-      await ui.ending?.(id, { colour: registry[id]?.fadeColour });
+      await ui.ending?.(id, { colour: registry[id]?.fadeColour, ms: registry[id]?.fadeMs });
     }
     unmountAll();
     const show = !restored && registry[id]?.ending;

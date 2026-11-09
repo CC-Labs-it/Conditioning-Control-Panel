@@ -441,18 +441,20 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   }
 
   /* ---- ending ---- */
-  function endingFade(_id, { colour } = {}) {
+  function endingFade(_id, { colour, ms } = {}) {
     purchaseFeel?.clear();
     dock.cancelMove();
     doc.body.dataset.tcEnding = 'true';
+    /* registry `fadeMs`: a take that already covers the page (Living Ad) shortens the fade nobody sees */
+    const dur = Number.isFinite(ms) && ms >= 0 ? Math.min(1600, ms) : 1600;
     return new Promise((res) => {
       const f = doc.createElement('div');
       f.className = 'endfade';
       if (colour) f.style.background = colour;   // an ending row's own fade colour (registry `fadeColour`)
       el.world.appendChild(f);
-      const a = f.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 1600, easing: 'ease-in', fill: 'forwards' });
+      const a = f.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur, easing: 'ease-in', fill: 'forwards' });
       a.onfinish = () => res();
-      setTimeout(res, 2000);
+      setTimeout(res, dur + 400);
     });
   }
 
