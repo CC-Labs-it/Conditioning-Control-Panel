@@ -320,8 +320,9 @@ export function createPrizeWheelView(ctx, host, sectors) {
   const spinButton = doc.createElement('button');
   spinButton.className = 'tc-wheel-spin';
   spinButton.type = 'button';
-  spinButton.setAttribute('aria-description', sectors.map(s =>
+  const describe = () => spinButton.setAttribute('aria-description', sectors.map(s =>
     [s.label,s.trigger].filter(Boolean).join(' ') + ' at ' + s.weight + '%').join(', '));
+  describe();
   const baseLabel = doc.createElement('small');
   baseLabel.className = 'tc-wheel-base';
   stage.append(title, result, spinButton);
@@ -368,6 +369,13 @@ export function createPrizeWheelView(ctx, host, sectors) {
       if (fieldFrame === next) return false;
       fieldFrame = next;
       return true;
+    },
+    /** The Journey Big Wedge rank swaps the face between spins (never mid-spin: the landing was planned on the old one). */
+    setSectors(next) {
+      if (!next || next === sectors) return;
+      sectors = next;
+      describe();
+      setPose(pose, true);
     },
     setPictures(mapping) {
       pictures = new Map(mapping);

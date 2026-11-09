@@ -1,4 +1,5 @@
-import { slotState, slotStep, beginSpin, finishSpin, COIN_MS } from '../../../sim/arcade.js';
+import { finishSpin } from '../../../sim/arcade.js';
+import { restoreSlot, slotStepRanked, beginSpinHeld, toggleHold, slotRank, coinCap, coinMs, canHold } from './slot-upgrades.js';  // Journey ranks: Hold, Fourth Coin
 import { sfx } from '../basics/fx.js';
 import { slotEffects } from './slot-effects.js';
 import { loadReelMedia } from './slot-reel-media.js';
@@ -45,14 +46,15 @@ export function mountSlots(ctx) {
   const bottom=add('div','mini-slot-bottom'),wallet=add('div','',null,bottom),coins=add('div','mini-slot-coins',null,wallet),next=add('div','mini-slot-next',null,wallet);
   const spin=add('button','mini-slot-spin','Spin',bottom);spin.type='button';
   root.title='Two wins in every six spins. Coins refill every 45 seconds. Drag the casing to move.';
-  const s=slotState(ctx.store.get('machine'));ctx.store.set('machine',s);
+  const s=restoreSlot(ctx.store.get('machine'));ctx.store.set('machine',s);
+  const rank=()=>slotRank(ctx.state);  // read live: a rank can be bought while the machine is open
   let clock=ctx.state.clock,rolling=false,calm=ctx.gentle||ctx.reduced;
   // Trigger Words Everywhere (trig_7): the second word reel shows one of the player's words, a new one each pull.
   // Display only: the reel is painted on the cabinet canvas, so the word is not catchable there.
   const mine=wordsForEverywhere(ctx);let mineAt=Math.floor(ctx.rng()*Math.max(1,mine.length));
   const reelWord=n=>n===1&&mine.length?mine[mineAt%mine.length].toUpperCase():words[n%4];
   const winWord=i=>i===SUB1&&mine.length?mine[mineAt%mine.length].toUpperCase():words[i%4];
-  const auto=autopilot(ctx,{dueMs:COIN_MS});  // prestige hook: Autopilot (idle_6), a coin that could not land in a full tray
+  const auto=autopilot(ctx,{dueMs:coinMs(rank())});  // prestige hook: Autopilot (idle_6), a coin that could not land in a full tray
   const doc=root.ownerDocument;
   const canShow=()=>alive&&visible&&!doc.hidden&&!ctx.paused&&!ctx.state.ended;
   function media(){
@@ -63,18 +65,23 @@ export function mountSlots(ctx) {
   function draw(){
     root.dataset.spinning=String(!!s.pending);
     dock.dock?.setReady(s.coins>0&&!s.pending,`${s.coins} coins ready`);
-    coins.textContent='●'.repeat(s.coins)+'○'.repeat(3-s.coins);coins.setAttribute('aria-label',`${s.coins} of 3 coins`);
-    next.textContent=s.coins===3?'Tray full':`Next coin ${Math.ceil((COIN_MS-s.elapsed)/1000)}s`;
+    const r=rank(),cap=coinCap(r);
+    coins.textContent='●'.repeat(s.coins)+'○'.repeat(Math.max(0,cap-s.coins));coins.setAttribute('aria-label',`${s.coins} of ${cap} coins`);
+    next.textContent=s.coins>=cap?'Tray full':`Next coin ${Math.ceil((coinMs(r)-s.elapsed)/1000)}s`;
+    const tip=`Two wins in every six spins. Coins refill every ${coinMs(r)/1000} seconds.${canHold(r)?' Tap a freeze button to hold that reel for the next spin.':''} Drag the casing to move.`;
+    if(root.title!==tip)root.title=tip;
     spin.disabled=!ready||!!s.pending||!s.coins||ctx.paused;spin.textContent=s.pending?'Spinning':'Spin';
     if(ready)result.textContent=s.result;
   }
   function startVisual(){
     if(!scene||!s.pending)return;
     rolling=true;scene.setLook({gif:media,word:reelWord});scene.answer();
-    scene.spin(stops(s.pending.reels));
+    scene.spin(stops(s.pending.reels),Number.isInteger(s.pending.held)?s.pending.held:null);scene.setHold?.(null);
   }
-  function pull(){if(!ready||ctx.paused||!beginSpin(s,ctx.rng))return;auto.reset();mineAt++;rotateSpiralDeal();effects.clear();root.dataset.win='false';startVisual();draw();}
+  function pull(){if(!ready||ctx.paused||!beginSpinHeld(s,ctx.rng,rank()))return;auto.reset();mineAt++;rotateSpiralDeal();effects.clear();root.dataset.win='false';startVisual();draw();}
   spin.addEventListener('click',pull);
+  // Hold (rank 1): the cabinet's own freeze buttons. Tap one between spins to keep that reel for the next coin.
+  function freeze(i){if(!ready||ctx.paused||!toggleHold(s,i,rank()))return;scene?.setHold?.(s.hold);sfx(ctx,'sfx/thud.mp3',.14);draw();}
   const refresh=()=>{scene?.setLook({gif:media,word:reelWord});if(!s.pending)scene?.setStops(stops(s.last));};
   function holdArt(){
     pending?.abort();pending=null;
@@ -113,8 +120,8 @@ export function mountSlots(ctx) {
   ctx.on('pause',()=>{holdArt();scene?.cancelPull();draw();});ctx.on('resume',()=>{syncArt();draw();});ctx.on('suspend',stopEffects);ctx.on('ending',stopEffects);
   doc.addEventListener('visibilitychange',syncArt);
   ctx.frame(()=>{
-    const now=ctx.state.clock,step=Math.max(0,now-clock);slotStep(s,step);clock=now;
-    if(auto.step(step,s.coins===3&&!s.pending)){  // prestige hook: Autopilot (idle_6)
+    const now=ctx.state.clock,step=Math.max(0,now-clock);slotStepRanked(s,step,rank());clock=now;
+    if(auto.step(step,s.coins>=coinCap(rank())&&!s.pending)){  // prestige hook: Autopilot (idle_6)
       const rates=ctx.rates(),b=canvas.getBoundingClientRect();
       const got=ctx.pay(Math.max(rates.fps*SLOT_MEAN.fps,rates.click*SLOT_MEAN.click)*auto.share,'mini_slots',{x:b.left+b.width/2,y:b.top+b.height/2});
       s.result=`Autopilot +${ctx.fmt(got)} ${ctx.brand.currency}`;
@@ -126,6 +133,8 @@ export function mountSlots(ctx) {
       rolling=false;scene?.settle();scene?.setStops(stops(s.last));scene?.reveal(completed.win);root.dataset.win=String(completed.win);
       if(completed.win){
         const rates=ctx.rates(),b=canvas.getBoundingClientRect();
+        // The win collects the Journey activity bank too: ctx.pay takes the 'mini_slots' bank (ui/engine.js pay -> takeActivity).
+        // A miss pays nothing, so the bank waits for the next win.
         const got=ctx.pay(Math.max(rates.fps*(completed.big?90:45),rates.click*(completed.big?160:80)),'mini_slots',{x:b.left+b.width/2,y:b.top+b.height/2});
         s.result=`${completed.big?'Spiral sweep':'Lovely little win'} +${ctx.fmt(got)} ${ctx.brand.currency}`;
         sfx(ctx,'sfx/chime1.mp3',.22);
@@ -151,10 +160,10 @@ export function mountSlots(ctx) {
   });
   const observer=new ResizeObserver(()=>scene?.resize());observer.observe(canvas);
   import('../../../../backroom/stations/slot/scene.js').then(({ createScene }) => createScene({canvas,reduced:false,stillFx:()=>ctx.gentle||ctx.reduced,now:()=>ctx.state.clock,paused:()=>ctx.paused||!visible||!root.getClientRects().length,
-    frameWhole:true,caseDraggable:true,onControl:()=>dock.dock?.cancelMove(),handleStyle:0,variant:'rose',onReturn:()=>{},canPull:()=>ready&&!ctx.paused&&!s.pending&&s.coins>0,onLever:pull,onFreeze:()=>{},onReelStop:()=>{}})).then(async loaded=>{
+    frameWhole:true,caseDraggable:true,onControl:()=>dock.dock?.cancelMove(),handleStyle:0,variant:'rose',onReturn:()=>{},canPull:()=>ready&&!ctx.paused&&!s.pending&&s.coins>0,onLever:pull,onFreeze:freeze,onReelStop:()=>{}})).then(async loaded=>{
     if(!alive){loaded.dispose();return;}
     scene=loaded;if(scene.missing.length)throw Error('Missing cabinet parts');
-    rotateSpiralDeal();scene.setStrips([reelStrip(0),reelStrip(1),reelStrip(2)]);refresh();await scene.rise();
+    rotateSpiralDeal();scene.setStrips([reelStrip(0),reelStrip(1),reelStrip(2)]);refresh();scene.setHold?.(canHold(rank())?s.hold:null);await scene.rise();
     if(!alive)return;ready=true;root.dataset.cabinetReady='true';root.dataset.knight=String(scene.debug().customHandle);if(s.pending)startVisual();draw();
   }).catch(err=>{if(alive){result.textContent='Cabinet could not load. Reload to try again.';console.error('[mini-slot]',err);}});
   loadPicture();draw();
