@@ -41,6 +41,75 @@ public class SessionSettingsJournalTests
     }
 
     [Fact]
+    public void Every_setting_the_engine_writes_anywhere_is_restored()
+    {
+        // The deferred starts (pink filter at minute 14, spiral, bubbles, Brain Drain) write
+        // straight into App.Settings.Current outside ApplySessionSettings; they are session values too.
+        var engine = Read("Services", "Session", "SessionEngine.cs");
+        var rest = engine.Replace(Member(engine, "private void RestoreSettings()"), "");
+        var written = Regex.Matches(rest, @"(?:App\.Settings\.Current|\bcurrent)\.(\w+) = [^=]").Select(m => m.Groups[1].Value).ToHashSet();
+        written.ExceptWith(new[] { "SubliminalPool", "BouncingTextPool", "LockCardPhrases" });
+        Assert.Contains("PinkFilterEnabled", written);
+        Assert.Empty(written.Except(SessionSettingsJournal.Fields));
+    }
+
+    [Fact]
+    public void A_backup_taken_mid_session_carries_the_users_own_values()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ccp-journal-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            // The ramp started first (base 20), the session second (snapshot 50 = the ramped value).
+            SessionSettingsJournal.WriteRamp(dir, SessionSettingsJournal.BuildRamp(new Dictionary<string, double> { ["FlashOpacity"] = 20 }, atTicks: 100));
+            SessionSettingsJournal.Write(dir, SessionSettingsJournal.Build(
+                new AppSettings { CorruptionMode = false, AudioDuckingEnabled = false, PinkFilterOpacity = 8, FlashOpacity = 50 },
+                "mod-a", new Dictionary<string, bool> { ["mine"] = true }, null, null, atTicks: 200));
+
+            var live = new AppSettings { CorruptionMode = true, AudioDuckingEnabled = true, PinkFilterOpacity = 30, FlashOpacity = 90 };
+            var backup = Newtonsoft.Json.Linq.JObject.Parse(Newtonsoft.Json.JsonConvert.SerializeObject(live));
+            backup["ActiveModId"] = "mod-a";
+            backup.Remove(nameof(AppSettings.DuckingLevel)); // an excluded key stays out
+
+            Assert.True(SessionSettingsJournal.OverlayOnBackup(backup, dir) > 0);
+            var restored = backup.ToObject<AppSettings>()!;
+            Assert.False(restored.CorruptionMode);
+            Assert.False(restored.AudioDuckingEnabled);
+            Assert.Equal(8, restored.PinkFilterOpacity);
+            Assert.Equal(20, restored.FlashOpacity);
+            Assert.Equal(new[] { "mine" }, ((Newtonsoft.Json.Linq.JObject)backup[nameof(AppSettings.SubliminalPool)]!).Properties().Select(p => p.Name));
+            Assert.Null(backup.Property(nameof(AppSettings.DuckingLevel)));
+            Assert.Equal(2, Directory.GetFiles(dir).Length); // the running session still owns them
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void A_backup_with_no_journal_is_untouched()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ccp-journal-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var backup = Newtonsoft.Json.Linq.JObject.Parse(Newtonsoft.Json.JsonConvert.SerializeObject(new AppSettings { CorruptionMode = true }));
+            var before = backup.ToString();
+            Assert.Equal(0, SessionSettingsJournal.OverlayOnBackup(backup, dir));
+            Assert.Equal(before, backup.ToString());
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void The_cloud_backup_lays_the_journal_over_what_it_sends()
+    {
+        var backup = Member(Read("Services", "Settings", "ProfileSyncService.cs"), "public async Task<bool> BackupSettingsAsync(");
+        var strip = backup.IndexOf("if (IsExcludedFromBackup(key)) obj.Remove(key);", StringComparison.Ordinal);
+        var overlay = backup.IndexOf("SessionSettingsJournal.OverlayOnBackup(obj, App.UserDataPath);", StringComparison.Ordinal);
+        var encode = backup.IndexOf("SettingsBackupBudget.Encode(obj)", StringComparison.Ordinal);
+        Assert.True(strip > 0 && overlay > strip && encode > overlay);
+    }
+
+    [Fact]
     public void A_journal_round_trips_the_users_values()
     {
         var mine = new AppSettings { AudioDuckingEnabled = false, CorruptionMode = false, FlashOpacity = 30, PinkFilterOpacity = 10, SubAudioVolume = 20, SubliminalDuration = 3 };
