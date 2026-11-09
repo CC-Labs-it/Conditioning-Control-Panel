@@ -91,7 +91,12 @@ namespace ConditioningControlPanel.Services
             }
 
             var fileName = Path.GetFileName(filePath);
-            var destPath = GetUniqueDestPath(destFolder, fileName);
+            var destPath = GetUniqueDestPath(destFolder, fileName, new FileInfo(filePath).Length);
+            if (destPath == null)
+            {
+                result.Skipped++; // the same file is already there (#1515)
+                return;
+            }
 
             try
             {
@@ -203,7 +208,12 @@ namespace ConditioningControlPanel.Services
             Directory.CreateDirectory(destFolder);
 
             var fileName = Path.GetFileName(filePath);
-            var destPath = GetUniqueDestPath(destFolder, fileName);
+            var destPath = GetUniqueDestPath(destFolder, fileName, new FileInfo(filePath).Length);
+            if (destPath == null)
+            {
+                result.Skipped++; // the same file is already there (#1515)
+                return;
+            }
 
             try
             {
@@ -289,20 +299,26 @@ namespace ConditioningControlPanel.Services
                             Directory.CreateDirectory(destFolder);
 
                             var fileName = Path.GetFileName(entry.Name);
-                            var destPath = GetUniqueDestPath(destFolder, fileName);
-
-                            // Extract to destination
-                            entry.ExtractToFile(destPath, overwrite: false);
-
-                            if (IsVideo(ext))
+                            var destPath = GetUniqueDestPath(destFolder, fileName, entry.Length);
+                            if (destPath == null)
                             {
-                                result.VideosImported++;
-                                App.Logger?.Debug("Extracted video from ZIP: {Pack}/{File}", packName, fileName);
+                                result.Skipped++; // the same file is already there (#1515)
                             }
-                            else if (IsImage(ext))
+                            else
                             {
-                                result.ImagesImported++;
-                                App.Logger?.Debug("Extracted image from ZIP: {Pack}/{File}", packName, fileName);
+                                // Extract to destination
+                                entry.ExtractToFile(destPath, overwrite: false);
+
+                                if (IsVideo(ext))
+                                {
+                                    result.VideosImported++;
+                                    App.Logger?.Debug("Extracted video from ZIP: {Pack}/{File}", packName, fileName);
+                                }
+                                else if (IsImage(ext))
+                                {
+                                    result.ImagesImported++;
+                                    App.Logger?.Debug("Extracted image from ZIP: {Pack}/{File}", packName, fileName);
+                                }
                             }
                         }
                     }
@@ -376,27 +392,33 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
-        /// Gets a unique destination path, adding a number suffix if file exists.
+        /// Gets a unique destination path, adding a number suffix if the name is taken. Returns
+        /// null when the file is already there: the name, or one of its numbered copies from an
+        /// earlier import, holds a file of the same byte size (ccp-bugs #1515, importing a pack
+        /// twice made name_1 copies of every file). A same-named file of another size still gets
+        /// the next free number.
         /// </summary>
-        private static string GetUniqueDestPath(string folder, string fileName)
+        internal static string? GetUniqueDestPath(string folder, string fileName, long sourceLength)
         {
             var destPath = Path.Combine(folder, fileName);
-
-            if (!File.Exists(destPath))
-                return destPath;
-
-            // File exists, generate unique name
             var nameWithoutExt = Path.GetFileNameWithoutExtension(fileName);
             var ext = Path.GetExtension(fileName);
             var counter = 1;
 
             while (File.Exists(destPath))
             {
+                if (SameSize(destPath, sourceLength)) return null;
                 destPath = Path.Combine(folder, $"{nameWithoutExt}_{counter}{ext}");
                 counter++;
             }
 
             return destPath;
+        }
+
+        private static bool SameSize(string path, long length)
+        {
+            try { return new FileInfo(path).Length == length; }
+            catch (Exception) { return false; } // unreadable: treat as different, keep both
         }
 
         private static string? GetDestinationFolder(string extension)
