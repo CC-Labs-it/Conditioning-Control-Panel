@@ -1,0 +1,243 @@
+/* ui/recap/recap.css - the end-of-run card ("comic page", owner 2026-11-09, mockup artifact SzGXu9tb9BgViHRC5AfF2r).
+ * Every class carries the rr- prefix and every rule sits under #cards .rr: the game stylesheet owns .card, .card button,
+ * .panel, .chip, .bubble and friends. Colours come from the run's theme as --rr-* tokens set on the root. */
+@font-face { font-family: RrRound; src: url("../../assets/fonts/fredoka-latin.woff2") format("woff2"); font-weight: 300 700; font-display: swap; }
+@font-face { font-family: RrBlock; src: url("../../assets/fonts/bungee-latin.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: RrMono; src: url("../../assets/fonts/courier-prime-700-latin.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+
+.backdrop.rr-backdrop { display: block; overflow-y: auto; overflow-x: hidden; padding: max(56px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(28px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  background-color: #0c1114; background-image: linear-gradient(#ffffff08 1px, transparent 1px), linear-gradient(90deg, #ffffff08 1px, transparent 1px); background-size: 28px 28px; }
+#cards .card.rr-card { width: 100%; max-width: 1240px; max-height: none; margin: 0 auto; padding: 0; overflow: visible; background: none; border: 0; box-shadow: none; color: inherit; font: inherit; }
+
+#cards .rr { --display: RrBlock, Impact, "Arial Black", sans-serif; --body: RrRound, "Segoe UI", system-ui, sans-serif; --mono: RrMono, "Courier New", monospace;
+  --cut: 7px 12px 8px 13px / 12px 7px 13px 8px; --paper: #fff; --gold: #ffd23f; --stamp: #e8384f; --pink: #ff5fae;
+  position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 500px); gap: 26px; padding: 22px 24px 22px 22px;
+  color: var(--rr-ink); font: 500 15px/1.35 var(--body); text-align: left;
+  background-color: var(--rr-soft); border: 4px solid var(--rr-ink); border-radius: var(--cut); box-shadow: 10px 10px 0 var(--rr-deep);
+  background-image: radial-gradient(color-mix(in srgb, var(--rr-ink) 14%, transparent) 1.1px, transparent 1.6px); background-size: 8px 8px; }
+#cards .rr *, #cards .rr *::before, #cards .rr *::after { box-sizing: border-box; }
+#cards .rr button { font: inherit; color: inherit; min-height: 0; padding: 0; margin: 0; background: none; border: 0; box-shadow: none; text-align: inherit; cursor: pointer; touch-action: manipulation; -webkit-text-stroke: 0; text-shadow: none; }
+#cards .rr button:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+#cards .rr img { max-width: 100%; }
+#cards .rr .rr-clip { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; user-select: none; }
+#cards .rr svg.rr-icon { display: block; width: 100%; height: 100%; pointer-events: none; }
+#cards .rr .rr-col { display: grid; gap: 14px; align-content: start; min-width: 0; }
+
+#cards .rr .rr-panel { position: relative; background: var(--paper); border: 3px solid var(--rr-ink); border-radius: var(--cut); padding: 14px 16px; min-width: 0; }
+#cards .rr .rr-cap { position: absolute; top: -13px; left: 14px; z-index: 1; background: var(--rr-ink); color: #fff; font: 700 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; padding: 5px 9px 4px; border-radius: 4px; transform: rotate(-1.5deg); }
+
+/* poster column */
+#cards .rr .rr-poster { position: relative; align-self: start; padding: 6px 4px 0; min-width: 0; }
+#cards .rr .rr-pshadow { position: absolute; left: 13px; top: 15px; right: -5px; aspect-ratio: 4 / 5; background: var(--rr-ink); border-radius: 12px; transform: rotate(-1.2deg); }
+#cards .rr .rr-tilt { position: relative; transform: rotate(-1.2deg); transition: transform .45s cubic-bezier(.2,1.5,.4,1); }
+#cards .rr .rr-tilt.live { transition: transform .08s linear; }
+#cards .rr .rr-frame { position: relative; border: 3px solid var(--rr-ink); border-radius: 12px; overflow: hidden; background: #fff; }
+#cards .rr .rr-frame .adc { border-radius: 0; }
+#cards .rr .rr-glare { position: absolute; inset: 0; border-radius: 12px; pointer-events: none; opacity: 0; transition: opacity .3s; mix-blend-mode: soft-light;
+  background: radial-gradient(circle at var(--gx, 30%) var(--gy, 20%), rgba(255,255,255,.34), rgba(255,255,255,0) 42%); }
+#cards .rr .rr-tilt.live .rr-glare { opacity: 1; }
+#cards .rr .rr-hero { aspect-ratio: 4 / 5; display: grid; place-items: center; background: var(--rr-a);
+  background-image: repeating-conic-gradient(from 0deg at 50% 46%, color-mix(in srgb, #fff 30%, transparent) 0 9deg, transparent 9deg 20deg); }
+#cards .rr .rr-hero .rr-heroicon { width: 54%; aspect-ratio: 1; background: #fff; border: 4px solid var(--rr-ink); border-radius: 50%; padding: 9%; box-shadow: 6px 6px 0 var(--rr-ink); }
+#cards .rr .rr-pocket { display: flex; gap: 34px; justify-content: center; margin-top: 22px; position: relative; z-index: 2; }
+#cards .rr .rr-sticker { position: relative; width: 62px; height: 62px; border-radius: 50%; background: #fff; border: 3px solid var(--rr-ink); box-shadow: 3px 3px 0 var(--rr-ink); display: grid; place-items: center; padding: 9px; }
+#cards .rr .rr-sticker:nth-child(1) { transform: rotate(-6deg); }
+#cards .rr .rr-sticker:nth-child(2) { transform: rotate(5deg); }
+#cards .rr .rr-sticker .rr-lbl { position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%); font: 700 11px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--rr-ink); white-space: nowrap; }
+#cards .rr .rr-pop { position: absolute; z-index: 5; left: 50%; transform: translateX(-50%); top: calc(100% + 28px); width: min(300px, 92vw); background: #fff; border: 3px solid var(--rr-ink); border-radius: 12px; padding: 12px; box-shadow: 5px 5px 0 var(--rr-ink); }
+#cards .rr .rr-pop .rr-row { display: flex; gap: 8px; flex-wrap: wrap; }
+#cards .rr .rr-pop textarea { width: 100%; margin-top: 8px; font: 12px/1.2 var(--mono); border: 2px solid var(--rr-ink); border-radius: 6px; padding: 6px; color: var(--rr-ink); background: #fff; }
+#cards .rr .rr-note { font: 600 13px/1.3 var(--body); margin-top: 6px; }
+#cards .rr .rr-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--rr-soft); border: 2.5px solid var(--rr-ink); border-radius: 99px; padding: 3px 12px 3px 4px; font: 700 13px var(--body); min-height: 40px; }
+#cards .rr .rr-chip .rr-ic { width: 30px; height: 30px; }
+#cards .rr .rr-credit { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 4px 10px; margin: 34px auto 0; color: var(--rr-ink); }
+#cards .rr .rr-credit .rr-by { font: 600 16px/1 var(--body); }
+#cards .rr .rr-credit .rr-lab { font: 400 30px/1 var(--display); text-shadow: 3px 2px 0 var(--rr-a); letter-spacing: .02em; }
+#cards .rr .rr-credit .rr-url { font: 700 15px/1 var(--mono); text-decoration: underline wavy var(--rr-deep); text-underline-offset: 5px; }
+
+/* splash */
+#cards .rr .rr-splash { padding: 18px 18px 16px; overflow: hidden; }
+#cards .rr .rr-splash::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-conic-gradient(from 0deg at 92% 18%, color-mix(in srgb, var(--rr-a) 18%, transparent) 0 6deg, transparent 6deg 14deg); }
+#cards .rr .rr-kind { position: relative; display: inline-flex; align-items: center; gap: 7px; background: var(--rr-a); color: var(--rr-on-a); border: 2.5px solid var(--rr-ink); border-radius: 99px; font: 700 12px/1 var(--body); letter-spacing: .1em; text-transform: uppercase; padding: 5px 11px 4px 5px; }
+#cards .rr .rr-kind .rr-ic { width: 22px; height: 22px; background: #fff; border-radius: 50%; border: 2px solid var(--rr-ink); padding: 1px; }
+#cards .rr .rr-title { position: relative; margin: 10px 0 8px; font: 400 clamp(32px, 5.4vw, 62px)/.95 var(--display); color: var(--rr-ink); text-wrap: balance; text-shadow: 4px 3px 0 var(--rr-a), -3px -2px 0 var(--rr-b); letter-spacing: .01em; }
+#cards .rr .rr-srow { position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; }
+#cards .rr .rr-line { flex: 1 1 260px; margin: 0; font: 600 17px/1.5 var(--body); max-width: 46ch; color: var(--rr-ink); }
+#cards .rr .rr-line .rr-off { display: inline-block; color: #fff; background: var(--stamp); border: 2px solid var(--rr-ink); border-radius: 4px; padding: 0 5px; font-size: .86em; line-height: 1.25; transform: rotate(-2deg); }
+#cards .rr .rr-line .rr-hl, #cards .rr .rr-line .kw { font-weight: 700; background: linear-gradient(transparent 52%, var(--rr-a) 52%, var(--rr-a) 94%, transparent 94%) no-repeat; padding: 0 2px; }
+#cards .rr .rr-stamps { display: flex; gap: 10px; align-items: center; flex: none; padding-bottom: 2px; }
+#cards .rr .rr-stamp { display: flex; align-items: center; gap: 6px; font: 700 20px/1 var(--mono); color: var(--rr-ink); border: 3px double var(--rr-ink); border-radius: 6px; padding: 4px 9px 4px 5px; background: rgba(255,255,255,.88); transform: rotate(3deg); font-variant-numeric: tabular-nums; }
+#cards .rr .rr-stamp:nth-child(2) { transform: rotate(-2deg); }
+#cards .rr .rr-stamp .rr-ic { width: 28px; height: 28px; }
+
+/* road */
+#cards .rr .rr-road { padding: 18px 12px 12px; }
+#cards .rr .rr-strip { display: flex; align-items: flex-start; justify-content: space-between; gap: 2px; }
+#cards .rr .rr-step { flex: 1 1 0; min-width: 0; display: grid; justify-items: center; gap: 6px; }
+#cards .rr .rr-fr { width: 100%; max-width: 92px; aspect-ratio: 1; border: 3px solid var(--rr-ink); border-radius: 8px 11px 7px 12px / 11px 7px 12px 8px; background: var(--rr-soft); padding: 9px; box-shadow: 4px 4px 0 var(--rr-deep); }
+#cards .rr .rr-step.theme .rr-fr { background: var(--rr-a); }
+#cards .rr .rr-word { font: 700 15px/1.1 var(--body); text-align: center; color: var(--rr-ink); }
+#cards .rr .rr-step.theme .rr-word { color: var(--rr-deep); }
+#cards .rr .rr-arrow { flex: 0 0 22px; align-self: flex-start; margin-top: clamp(22px, 3.6vw, 38px); }
+#cards .rr .rr-arrow svg { width: 22px; height: 18px; display: block; overflow: visible; }
+#cards .rr .rr-arrow path { fill: none; stroke: var(--rr-ink); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+#cards .rr .rr-alts { display: none; gap: 5px; justify-items: center; width: 100%; }
+#cards .rr .rr-road.flipped .rr-alts { display: grid; }
+#cards .rr .rr-alt { width: 62%; max-width: 54px; aspect-ratio: 1; border: 2.5px dashed var(--rr-b); border-radius: 7px; padding: 6px; background: #fff; position: relative; display: grid; place-items: center; margin: 2px 0 12px; }
+#cards .rr .rr-alt .rr-clip { opacity: .45; filter: grayscale(1); }
+#cards .rr .rr-alt .rr-q { font: 400 20px/1 var(--display); color: var(--rr-b); }
+#cards .rr .rr-alt .rr-nm { position: absolute; left: 50%; bottom: -3px; transform: translate(-50%, 100%); font: 600 11px/1 var(--body); color: #5d6a70; white-space: nowrap; }
+#cards .rr .rr-tally { height: 16px; display: none; }
+#cards .rr .rr-road.flipped .rr-tally { display: block; }
+#cards .rr .rr-tally path { stroke: var(--rr-ink); stroke-width: 2.4; stroke-linecap: round; fill: none; }
+#cards .rr .rr-peel { position: absolute; right: -3px; top: -3px; width: 58px; height: 58px; }
+#cards .rr .rr-peel::before { content: ""; position: absolute; inset: 0; background: linear-gradient(225deg, var(--rr-soft) 0 48%, var(--rr-ink) 48% 52%, #fff 52%); border-top-right-radius: 10px; clip-path: polygon(0 0, 100% 0, 100% 100%); }
+#cards .rr .rr-peel .rr-ic { position: absolute; right: 4px; top: 3px; width: 30px; height: 30px; z-index: 1; }
+#cards .rr .rr-peeltag { position: absolute; right: 52px; top: 8px; font: 700 11px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--rr-deep); white-space: nowrap; pointer-events: none; }
+
+/* endings + seen */
+#cards .rr .rr-coll { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 18px; align-items: center; padding-top: 18px; }
+#cards .rr .rr-big { font: 400 34px/1 var(--display); color: var(--rr-ink); font-variant-numeric: tabular-nums; }
+#cards .rr .rr-big span { color: var(--rr-b); font-size: 22px; }
+#cards .rr .rr-ends { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 4px; margin-top: 8px; max-width: 470px; }
+#cards .rr .rr-endcard { position: relative; width: 100%; aspect-ratio: 3 / 4; border: 2.5px solid var(--rr-ink); border-radius: 5px; padding: 3px; display: grid; place-items: center;
+  background: var(--pink); background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.35) 0 3px, transparent 3px 7px); }
+#cards .rr .rr-endcard .rr-q { font: 400 15px/1 var(--display); color: #fff; text-shadow: 1px 1px 0 var(--rr-ink); }
+#cards .rr .rr-endcard.got { background: #fff; }
+#cards .rr .rr-endcard.now { box-shadow: 0 0 0 3px var(--rr-a); }
+#cards .rr .rr-bubble { position: relative; margin-top: 12px; background: #fff; border: 3px solid var(--rr-ink); border-radius: 16px 18px 14px 20px; padding: 9px 12px; font: 600 14px/1.3 var(--body); min-height: 44px; color: var(--rr-ink); }
+#cards .rr .rr-bubble::before { content: ""; position: absolute; left: var(--tail, 22px); top: -14px; width: 18px; height: 14px; background: var(--rr-ink); clip-path: polygon(30% 100%, 100% 100%, 0 0); }
+#cards .rr .rr-bubble::after { content: ""; position: absolute; left: calc(var(--tail, 22px) + 4px); top: -8px; width: 12px; height: 9px; background: #fff; clip-path: polygon(30% 100%, 100% 100%, 0 0); }
+#cards .rr .rr-bubble b { color: var(--rr-deep); }
+#cards .rr .rr-seen { width: 170px; }
+#cards .rr .rr-meter { position: relative; height: 22px; margin-top: 6px; border: 3px solid var(--rr-ink); border-radius: 14px 5px 12px 6px / 6px 12px 5px 14px; overflow: hidden; background: #fff; }
+#cards .rr .rr-meter i { position: absolute; inset: 0 auto 0 0; width: var(--w, 0%); transform-origin: left; background: var(--rr-a); border-right: 3px solid var(--rr-ink);
+  background-image: repeating-linear-gradient(-55deg, rgba(255,255,255,.35) 0 5px, transparent 5px 11px); }
+#cards .rr .rr-tiny { font: 600 13px/1.25 var(--body); margin-top: 6px; color: color-mix(in srgb, var(--rr-ink) 78%, #fff); }
+
+/* next run */
+#cards .rr .rr-next { background: var(--rr-ink); color: #fff; padding: 20px 16px 16px; box-shadow: 6px 6px 0 var(--gold); }
+#cards .rr .rr-next .rr-cap { background: var(--gold); color: var(--rr-ink); }
+#cards .rr .rr-nextrow { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: stretch; }
+#cards .rr .rr-renew { position: relative; display: grid; grid-template-columns: 92px auto; align-items: center; gap: 6px 10px; background: var(--gold); color: var(--rr-ink);
+  border: 3px solid #fff; border-radius: 14px 18px 12px 20px / 18px 12px 20px 14px; padding: 10px 18px 10px 8px; box-shadow: 5px 5px 0 var(--rr-a); }
+#cards .rr .rr-renew .rr-star { width: 92px; height: 92px; grid-row: span 2; }
+#cards .rr .rr-renew .rr-star svg { width: 100%; height: 100%; display: block; }
+#cards .rr .rr-renew .rr-plus { font: 400 50px/.9 var(--display); }
+#cards .rr .rr-renew .rr-what { font: 700 15px/1.1 var(--body); }
+#cards .rr .rr-renew .rr-what b { display: block; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; opacity: .7; }
+#cards .rr .rr-twinkle { position: absolute; width: 26px; height: 26px; pointer-events: none; opacity: 0; }
+#cards .rr .rr-twinkle svg { width: 100%; height: 100%; display: block; }
+#cards .rr .rr-twinkle.t1 { right: -10px; top: -12px; }
+#cards .rr .rr-twinkle.t2 { right: 34%; bottom: -12px; width: 20px; height: 20px; }
+#cards .rr .rr-side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-content: start; }
+#cards .rr .rr-tool { position: relative; display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 8px; align-items: center; background: #fff; color: var(--rr-ink);
+  border: 3px solid #fff; border-radius: 10px 13px 9px 14px / 13px 9px 14px 10px; padding: 7px 10px 7px 7px; min-height: 64px; box-shadow: 3px 3px 0 var(--rr-b); }
+#cards .rr .rr-tool[aria-expanded=true] { background: var(--rr-soft); box-shadow: inset 3px 3px 0 rgba(0,0,0,.2); }
+#cards .rr .rr-tool .rr-ic { width: 48px; height: 48px; }
+#cards .rr .rr-tool .rr-t { display: block; font: 700 15px/1.05 var(--body); }
+#cards .rr .rr-tool .rr-s { display: block; font: 600 12px/1.15 var(--body); color: #4c5b53; margin-top: 2px; }
+#cards .rr .rr-slot { width: 48px; height: 48px; border: 3px dashed var(--rr-b); border-radius: 9px; display: grid; place-items: center; padding: 4px; }
+#cards .rr .rr-slot.full { border-style: solid; border-color: var(--rr-deep); background: var(--rr-soft); }
+#cards .rr .rr-slot .rr-plusmark { font: 400 22px/1 var(--display); color: var(--rr-b); }
+#cards .rr .rr-freetag { position: absolute; right: -9px; top: -11px; background: var(--stamp); color: #fff; font: 700 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: 4px 6px 3px; border: 2px solid var(--rr-ink); border-radius: 4px; transform: rotate(8deg); }
+#cards .rr .rr-ticket { border-style: dashed; }
+#cards .rr .rr-dots { display: flex; gap: 3px; margin-top: 4px; }
+#cards .rr .rr-dot { width: 24px; height: 24px; border-radius: 5px; border: 2px solid var(--rr-ink); background: #fff; padding: 1px; }
+#cards .rr .rr-dot .rr-clip { opacity: .35; filter: grayscale(1); }
+#cards .rr .rr-dot.lit { background: var(--rr-a); }
+#cards .rr .rr-dot.lit .rr-clip { opacity: 1; filter: none; }
+#cards .rr .rr-restart { grid-column: span 2; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+#cards .rr .rr-newrun { display: inline-flex; align-items: center; gap: 8px; border: 3px solid #fff; color: #fff; border-radius: 99px; padding: 4px 16px 4px 5px; min-height: 48px; font: 700 15px/1 var(--body); }
+#cards .rr .rr-newrun .rr-ic { width: 38px; height: 38px; }
+#cards .rr .rr-newrun.inf { border-style: dashed; }
+#cards .rr .rr-deck { display: flex; align-items: center; gap: 8px; font: 700 11px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: #9aa8b0; }
+#cards .rr .rr-deck .rr-tiles { position: relative; width: 104px; height: 30px; }
+#cards .rr .rr-deck .rr-tile { position: absolute; top: 0; width: 30px; height: 30px; background: #fff; border: 2px solid #fff; border-radius: 6px; padding: 2px; transition: left .6s cubic-bezier(.5,-0.4,.4,1.4); }
+#cards .rr .rr-drawer { grid-column: 1 / -1; background: #fff; color: var(--rr-ink); border: 3px solid #fff; border-radius: 12px; padding: 12px; position: relative; }
+#cards .rr .rr-drawer::before { content: ""; position: absolute; top: -13px; left: var(--tail, 60px); width: 20px; height: 12px; background: #fff; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+#cards .rr .rr-dhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; font: 700 15px/1.2 var(--body); }
+#cards .rr .rr-x { width: 32px; height: 32px; border: 2.5px solid var(--rr-ink); border-radius: 50%; background: #fff; font: 400 14px/1 var(--display); text-align: center; }
+#cards .rr .rr-looks { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 8px; max-height: 260px; overflow-y: auto; padding: 4px; }
+#cards .rr .rr-look { display: grid; justify-items: center; gap: 4px; background: #fff; border: 2.5px solid var(--rr-ink); border-radius: 9px; padding: 7px 3px 6px; font: 600 11px/1.1 var(--body); text-align: center; min-height: 82px; }
+#cards .rr .rr-look .rr-ic { width: 42px; height: 42px; }
+#cards .rr .rr-look[aria-pressed=true] { background: var(--rr-a); }
+#cards .rr .rr-route5 { display: flex; gap: 6px; flex-wrap: wrap; }
+#cards .rr .rr-r5 { display: grid; justify-items: center; gap: 3px; width: 64px; font: 700 12px/1.1 var(--body); text-align: center; }
+#cards .rr .rr-r5 .rr-f { width: 52px; height: 52px; border: 2.5px solid var(--rr-ink); border-radius: 8px; padding: 5px; background: #fff; }
+#cards .rr .rr-r5.match .rr-f { background: var(--rr-a); }
+#cards .rr .rr-board { margin-top: 10px; display: grid; gap: 4px; max-width: 260px; }
+#cards .rr .rr-board div { display: flex; justify-content: space-between; background: var(--rr-a); color: var(--rr-on-a); border: 2px solid var(--rr-ink); border-radius: 5px; padding: 3px 8px; font: 700 13px var(--mono); }
+#cards .rr .rr-go { margin-top: 10px; display: inline-flex; align-items: center; gap: 8px; background: var(--rr-ink); color: #fff; border-radius: 99px; padding: 5px 16px 5px 6px; font: 700 14px var(--body); min-height: 44px; }
+#cards .rr .rr-go .rr-ic { width: 32px; height: 32px; background: #fff; border-radius: 50%; padding: 2px; }
+#cards .rr .rr-dnote { font: 600 13px/1.3 var(--body); margin-top: 8px; color: #4c5b53; }
+#cards .rr-skip { position: fixed; z-index: 3; left: max(14px, env(safe-area-inset-left)); top: max(14px, env(safe-area-inset-top)); background: #fff; color: #111; border: 3px solid #111; border-radius: 99px; padding: 4px 16px; font: 700 14px RrRound, "Segoe UI", sans-serif; min-height: 36px; box-shadow: 3px 3px 0 #111; cursor: pointer; }
+#cards .rr-fx { position: absolute; left: 0; top: 0; width: 100%; height: 0; pointer-events: none; z-index: 4; overflow: visible; }
+#cards .rr-fx .rr-puff { position: absolute; width: var(--s); height: var(--s); margin: calc(var(--s) / -2) 0 0 calc(var(--s) / -2); border-radius: 50%; background: #fff; border: 2px solid var(--rr-ink, #111); }
+#cards .rr-fx .rr-puff.g { background: var(--rr-soft, #eee); }
+#cards .rr-fx .rr-zip { position: absolute; height: 3px; border-radius: 2px; background: var(--rr-ink, #111); transform-origin: 0 50%; }
+#cards .rr-fx .rr-spark { position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px; }
+#cards .rr-fx .rr-spark svg { width: 100%; height: 100%; display: block; }
+.rr-flyer { position: fixed; z-index: 120; pointer-events: none; }
+.rr-toast { position: fixed; z-index: 130; left: 50%; bottom: max(26px, env(safe-area-inset-bottom)); transform: translateX(-50%) rotate(-1.5deg); background: #ffd23f; color: #111; border: 3px solid #111; border-radius: 8px; padding: 8px 16px; font: 700 15px RrRound, "Segoe UI", sans-serif; box-shadow: 4px 4px 0 #111; max-width: min(90vw, 520px); }
+
+/* hover: a small tilt and zoom on everything that presses; presses squash */
+#cards .rr .rr-fr, #cards .rr .rr-endcard, #cards .rr .rr-tool, #cards .rr .rr-sticker, #cards .rr .rr-newrun, #cards .rr .rr-look, #cards .rr .rr-chip, #cards .rr .rr-stamp, #cards .rr .rr-kind,
+#cards .rr .rr-r5 .rr-f, #cards .rr .rr-peel .rr-ic, #cards .rr .rr-go, #cards .rr .rr-renew, #cards .rr .rr-credit { transition: transform .2s cubic-bezier(.2,1.5,.4,1), box-shadow .2s; }
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  #cards .rr .rr-step:hover .rr-fr { transform: rotate(-3deg) scale(1.08); }
+  #cards .rr .rr-step:nth-child(4n+3):hover .rr-fr { transform: rotate(3deg) scale(1.08); }
+  #cards .rr .rr-tool:hover { transform: rotate(-1.4deg) scale(1.035) translate(-1px, -2px); }
+  #cards .rr .rr-ticket:hover { transform: rotate(1.4deg) scale(1.035) translate(-1px, -2px); }
+  #cards .rr .rr-renew:hover { transform: rotate(-1.5deg) scale(1.045); }
+  #cards .rr .rr-newrun:hover { transform: rotate(-2.5deg) scale(1.06); background: rgba(255,255,255,.08); }
+  #cards .rr .rr-newrun.inf:hover { transform: rotate(2.5deg) scale(1.06); }
+  #cards .rr .rr-sticker:hover { transform: rotate(-8deg) scale(1.12) translate(-1px, -2px); box-shadow: 5px 6px 0 var(--rr-ink); }
+  #cards .rr .rr-sticker:nth-child(2):hover { transform: rotate(9deg) scale(1.12) translate(-1px, -2px); }
+  #cards .rr .rr-look:hover { transform: rotate(-3deg) scale(1.09); background: var(--rr-soft); }
+  #cards .rr .rr-look:nth-child(even):hover { transform: rotate(3deg) scale(1.09); }
+  #cards .rr .rr-stamp:hover { transform: rotate(-7deg) scale(1.12); }
+  #cards .rr .rr-kind:hover { transform: rotate(-3deg) scale(1.06); }
+  #cards .rr .rr-endcard:hover { transform: translateY(-4px) rotate(-5deg) scale(1.14); z-index: 1; }
+  #cards .rr .rr-endcard:nth-child(even):hover { transform: translateY(-4px) rotate(5deg) scale(1.14); }
+  #cards .rr .rr-peel:hover .rr-ic { transform: rotate(-14deg) scale(1.2); }
+  #cards .rr .rr-chip:hover, #cards .rr .rr-go:hover { transform: rotate(-2deg) scale(1.06); }
+  #cards .rr .rr-r5:hover .rr-f { transform: rotate(-4deg) scale(1.1); }
+  #cards .rr .rr-credit:hover { transform: rotate(-1.5deg) scale(1.05); }
+  #cards .rr .rr-credit:hover .rr-lab { text-shadow: 3px 2px 0 var(--gold); }
+}
+#cards .rr .rr-tool:active, #cards .rr .rr-look:active, #cards .rr .rr-endcard:active, #cards .rr .rr-sticker:active { transform: scale(.92); }
+#cards .rr .rr-renew:active { transform: scale(.93) rotate(1deg); }
+#cards .rr .rr-newrun:active { transform: scale(.92); }
+
+/* idle life once settled: one breath per screen (Renew), its twinkles, the free tag's nudge */
+@media (prefers-reduced-motion: no-preference) {
+  #cards .rr.settled:not(.calm) .rr-renew { animation: rr-breathe 3.2s ease-in-out infinite; }
+  #cards .rr.settled:not(.calm) .rr-renew:hover, #cards .rr.settled .rr-renew:active { animation: none; }
+  #cards .rr.settled:not(.calm) .rr-twinkle { animation: rr-tw 2.4s ease-in-out infinite; }
+  #cards .rr.settled:not(.calm) .rr-twinkle.t2 { animation-delay: 1.2s; }
+  #cards .rr.settled:not(.calm) .rr-freetag { animation: rr-nudge 5s ease-in-out infinite; }
+}
+@keyframes rr-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.035); } }
+@keyframes rr-tw { 0%, 100% { opacity: 0; transform: scale(.5) rotate(0); } 45%, 55% { opacity: 1; transform: scale(1) rotate(20deg); } }
+@keyframes rr-nudge { 0%, 86%, 100% { transform: rotate(8deg); } 90% { transform: rotate(-6deg) scale(1.1); } 94% { transform: rotate(12deg); } }
+
+/* one column: the decision straight after the title, the poster last */
+@media (max-width: 880px) {
+  #cards .rr { grid-template-columns: minmax(0, 1fr); padding: 12px; gap: 14px; box-shadow: 6px 6px 0 var(--rr-deep); }
+  #cards .rr .rr-col { display: contents; }
+  #cards .rr .rr-splash { order: 1; } #cards .rr .rr-next { order: 2; } #cards .rr .rr-road { order: 3; } #cards .rr .rr-coll { order: 4; }
+  #cards .rr .rr-poster { order: 5; width: min(86%, 440px); justify-self: center; margin: 4px 0 10px; }
+}
+@media (max-width: 560px) {
+  #cards .rr .rr-coll, #cards .rr .rr-nextrow, #cards .rr .rr-side { grid-template-columns: minmax(0, 1fr); }
+  #cards .rr .rr-seen { width: 100%; }
+  #cards .rr .rr-restart { grid-column: auto; }
+  #cards .rr .rr-ends { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  #cards .rr .rr-word { font-size: 12px; }
+  #cards .rr .rr-arrow { flex-basis: 10px; }
+  #cards .rr .rr-arrow svg { width: 10px; }
+  #cards .rr .rr-fr { padding: 5px; }
+  #cards .rr .rr-title { font-size: 36px; }
+}
