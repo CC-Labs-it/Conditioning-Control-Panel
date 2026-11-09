@@ -8,6 +8,7 @@ import { FORKS, ITEMS, BY_ID } from '../../../data/items.js';
 import { parse, serialize, SAVE_KEY } from '../../../sim/save.js';
 import { AFTER_COPY as C } from './copy.js';
 import { h, pick } from './kit.js';
+import { iconFor } from '../../icons.js';
 
 const LINK = 'https://cclabs.app';
 const EMOJI_FONT = '"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
@@ -56,17 +57,44 @@ function tabs(ctx) {
   bar.setAttribute('role', 'tablist');
   const panel = h('div', '', null, root);
   const all = [];
+  const unit = !!slot.closest('.unit-recap');
   const show = (t) => {
-    for (const x of all) { x.btn.setAttribute('aria-selected', String(x === t)); x.node.hidden = x !== t; }
+    for (const x of all) {
+      x.btn.setAttribute('aria-selected', String(x === t));
+      x.node.hidden = x !== t;
+      if (unit) x.btn.tabIndex = x === t ? 0 : -1;
+    }
     t.onShow?.();
   };
+  if (unit) {
+    bar.setAttribute('aria-label', 'Run details');
+    bar.addEventListener('keydown', (e) => {
+      const i = all.findIndex((t) => t.btn === e.target);
+      if (i < 0) return;
+      const last = all.length - 1;
+      const next = { ArrowRight: (i + 1) % all.length, ArrowLeft: (i + last) % all.length, Home: 0, End: last }[e.key];
+      if (next == null) return;
+      e.preventDefault();
+      show(all[next]);
+      all[next].btn.focus();
+    });
+  }
   board = {
     slot, root, top,
-    add(label, onShow) {
+    add(item, label, onShow) {
       const btn = h('button', '', label, bar);
       btn.type = 'button';
       btn.setAttribute('role', 'tab');
       const node = h('div', '', null, panel);
+      if (unit) {
+        btn.prepend(iconFor(slot.ownerDocument, item));
+        btn.id = 'unit-tab-' + item.id;
+        node.id = 'unit-panel-' + item.id;
+        btn.setAttribute('aria-controls', node.id);
+        node.setAttribute('role', 'tabpanel');
+        node.setAttribute('aria-labelledby', btn.id);
+        btn.tabIndex = all.length ? -1 : 0;
+      }
       const t = { btn, node, onShow };
       all.push(t);
       btn.addEventListener('click', () => show(t));
@@ -105,7 +133,8 @@ export const AFTER_UNLOCKS = {
     mount(ctx) {
       const t = tabs(ctx);
       /* Go Outside has no way out (owner 2026-11-09): no close button. */
-      const node = t.add(C.tabs.map);
+      const node = t.add(ctx.item, C.tabs.map);
+      node.className = 'xa-map';
       h('div', '', AFTER_RUN.map.title, node).className = 'xa-h';
       const old = new Set(ctx.life.routes.flatMap((r) => r.route));
       const lit = [];
@@ -135,7 +164,7 @@ export const AFTER_UNLOCKS = {
   /* A card per ending, hidden until reached. Press one you have seen to read it again. */
   z_ends: {
     mount(ctx) {
-      const node = tabs(ctx).add(C.tabs.ends);
+      const node = tabs(ctx).add(ctx.item, C.tabs.ends);
       const ids = Object.keys(ENDINGS);
       const got = ids.filter((id) => ctx.life.endings[id]);
       h('div', '', fill(AFTER_RUN.ends.title, { n: got.length }), node).className = 'xa-h';
@@ -159,7 +188,7 @@ export const AFTER_UNLOCKS = {
   /* What you tend to pick, from this player's own runs. Real percentages need a server; nothing here is made up. */
   z_pct: {
     mount(ctx) {
-      const node = tabs(ctx).add(C.tabs.pct);
+      const node = tabs(ctx).add(ctx.item, C.tabs.pct);
       const runs = ctx.life.routes;
       for (const [f, fork] of Object.entries(FORKS)) {
         const mine = ctx.state.picks[f];
@@ -187,7 +216,7 @@ export const AFTER_UNLOCKS = {
   /* A card with your route and ending. The only thing that leaves is what you press Share on. */
   z_share: {
     mount(ctx) {
-      const node = tabs(ctx).add(C.tabs.share);
+      const node = tabs(ctx).add(ctx.item, C.tabs.share);
       const S = AFTER_RUN.share;
       const route = routeNames(ctx).join(', ') || BY_ID.start.name;
       const id = endedId(ctx);
@@ -222,13 +251,13 @@ export const AFTER_UNLOCKS = {
       const now = Object.keys(ctx.life.seen).length + onCard + Object.keys(moods).length;
       const prev = Math.min(now, ctx.store.get('prev') ?? 0);
       ctx.store.set('prev', now);
-      const seenLine = pick(ctx, AFTER_RUN.seen.lines);
+      const seenLine = fill(pick(ctx, AFTER_RUN.seen.lines), { total });
       const label = h('div', 'font-weight:700;font-variant-numeric:tabular-nums;', '', top);
       const dots = h('div', '', null, top);
       dots.className = 'xa-dots';
       const list = Array.from({ length: 96 }, () => h('i', '', null, dots));
       const paint = (n) => {
-        label.textContent = `${fill(AFTER_RUN.seen.label, { n: ctx.fmt(n) }).replace('283', String(total))}. ${seenLine}`;
+        label.textContent = `${fill(AFTER_RUN.seen.label, { n: ctx.fmt(n), total })}. ${seenLine}`;
         const on = Math.round((n / total) * list.length);
         list.forEach((d, i) => d.classList.toggle('on', i < on));
       };
@@ -244,7 +273,7 @@ export const AFTER_UNLOCKS = {
   /* Keep one Look you have owned; the next run starts with it. */
   z_perk: {
     mount(ctx) {
-      const node = tabs(ctx).add(C.tabs.perk);
+      const node = tabs(ctx).add(ctx.item, C.tabs.perk);
       h('div', '', AFTER_RUN.perk.title, node).className = 'xa-h';
       const looks = ITEMS.filter((i) => i.lane === 'look' && ctx.life.seen[i.id]);
       if (!looks.length) { h('div', '', C.perkNone, node).className = 'xa-note'; return {}; }
@@ -273,7 +302,7 @@ export const AFTER_UNLOCKS = {
   /* One route for the date, the same on every copy of the game. A target: the engine has no way to force picks. */
   z_daily: {
     mount(ctx) {
-      const node = tabs(ctx).add(C.tabs.daily);
+      const node = tabs(ctx).add(ctx.item, C.tabs.daily);
       const D = AFTER_RUN.daily;
       const day = today();
       const route = Object.entries(FORKS).map(([f, fork]) => {
@@ -316,7 +345,7 @@ export const AFTER_UNLOCKS = {
   /* The side unlocks come in a different order each run after the first. The sim does it; this shows it happening. */
   z_shuffle: {
     mount(ctx) {
-      const node = tabs(ctx).add(C.tabs.shuffle, () => { paint?.(); });
+      const node = tabs(ctx).add(ctx.item, C.tabs.shuffle, () => { paint?.(); });
       const S = AFTER_RUN.shuffle;
       h('div', '', fill(S.label, { n: ctx.life.runs + 1 }), node).className = 'xa-h';
       const side = ITEMS.filter((i) => i.lane === 'side').slice(0, 6);
@@ -336,7 +365,7 @@ export const AFTER_UNLOCKS = {
   /* Your run as text. Copy on press; paste into the box and load it. */
   z_save: {
     mount(ctx) {
-      const node = tabs(ctx).add(C.tabs.save);
+      const node = tabs(ctx).add(ctx.item, C.tabs.save);
       const S = AFTER_RUN.save;
       h('div', '', S.title, node).className = 'xa-h';
       const row = h('div', 'display:flex;flex-wrap:wrap;gap:6px;', null, node);

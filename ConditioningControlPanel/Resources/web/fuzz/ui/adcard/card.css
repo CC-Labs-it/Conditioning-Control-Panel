@@ -67,6 +67,8 @@
 .adc .links span b { color: var(--hot); }
 .adc .qr { width: 11cqw; flex: none; background: #fff; padding: .8cqw; border-radius: .9cqw; }
 .adc .qr svg { display: block; width: 100%; height: auto; }
+.adc.adc-recap .inner { grid-template-rows: auto 41cqw auto 1fr auto; gap: 1.3cqw; }
+.adc.adc-recap .terms { bottom: 7cqw; }
 @media (prefers-reduced-motion: no-preference) {
   .adc .bob { animation: adc-bob 3.6s ease-in-out infinite; animation-composition: add; }
 }

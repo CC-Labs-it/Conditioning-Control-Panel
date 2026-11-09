@@ -25,8 +25,11 @@ export function livingAdEnding(ctx) {
     const make = (tag, cls, text) => { const e = doc.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
     const wrap = make('div', 'adc-sheet');
     for (const [k, v] of Object.entries({ A: look.A, ink: look.ink })) wrap.style.setProperty('--st-' + k, v);
-    const h = make('h2', 'adc-title');
-    h.append(make('span', 'adst-ink', ADCARD_COPY.title));
+    const h = ctx.item.id === 'o_out' ? make('h2', 'adc-title') : null;
+    if (h) {
+      h.append(make('span', 'adst-ink', ADCARD_COPY.title));
+      wrap.append(h);
+    }
     const p = make('p', 'adc-lede', ADCARD_COPY.lede);
     const mat = make('div', 'adc-mat');
     const box = make('div', 'adc-box');
@@ -35,7 +38,7 @@ export function livingAdEnding(ctx) {
     const status = make('div', 'adc-status'); status.setAttribute('role', 'status');
     const prog = make('div', 'adc-prog'); prog.hidden = true;
     const bar = doc.createElement('i'); prog.append(bar);
-    wrap.append(h, p, mat, row, prog, status);
+    wrap.append(p, mat, row, prog, status);
     wrap.style.visibility = 'hidden';   // until the fonts and both sheets are in
     sheet.append(wrap);
 
@@ -103,8 +106,10 @@ export function livingAdEnding(ctx) {
       /* 0.08 s the title stamps down, 0.38 s the lede strip, 0.42 s the printer works and the poster rises out of the
        * slot, 1.12 s it lands and the card builds in on it, then the slot drops away, the buttons pop up in turn and the
        * stars and stickers settle in around the poster. */
-      ctx.anim(h, STAMP_IN, { duration: 340, delay: 80, easing: 'ease-in', fill: 'backwards' });
-      ctx.after(290, () => cue(ctx, 'title'));
+      if (h) {
+        ctx.anim(h, STAMP_IN, { duration: 340, delay: 80, easing: 'ease-in', fill: 'backwards' });
+        ctx.after(290, () => cue(ctx, 'title'));
+      }
       ctx.anim(p, [{ opacity: 0, transform: 'translateY(-10px) rotate(-3deg)' }, { opacity: 1, transform: 'none' }], { duration: 360, delay: 380, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' });
       [420, 545].forEach((t) => ctx.after(t, () => cue(ctx, 'printer')));
       const H = win.innerHeight, slotTop = H - (stage.slot.offsetHeight || 52);

@@ -144,28 +144,38 @@ function fitCard(card) {
   if (over()) card.classList.add('tight');
 }
 
-/**
- * Builds the card inside `box` (a .adc-box) and returns its controller:
- *   play({quiet})   rebuild and run the timeline live; beats go to onBeat unless quiet (after an export)
- *   build(paused)   a fresh timeline, paused at 0 when asked (exports scrub it); a paused timeline has no beats
- * onBeat(name, i): the build-in's hits, for the ending's sounds (the card itself stays silent): logo, pic, label, terms,
- * accepted, stat (i = row), llamas, foot. Only on a live timeline, never under reduced motion, never late by 400 ms or more.
- *   destroy()       stops everything
- */
-export function createAdCard({ doc, box, model, reduced = false, onBeat = null }) {
+/** One timeline for the live reveal and the exported poster. build(true) lets an export scrub it. */
+export function createAdCard({ doc, box, model, label = ADCARD_COPY.cardLabel, reduced = false, onBeat = null }) {
   const win = doc.defaultView;
   const card = doc.createElement('article');
   card.className = 'adc';
-  card.setAttribute('aria-label', ADCARD_COPY.cardLabel);
+  card.setAttribute('aria-label', label);
   const C = model.colours;
   for (const [k, v] of Object.entries({ A: C.A, B: C.B, M: C.M, hot: C.hot, ink: C.ink, paper: C.paper, hlc: C.hlc })) card.style.setProperty('--' + k, v);
   card.innerHTML = cardHtml(model);
   box.replaceChildren(card);
   livePortrait(doc, card.querySelector('.pic'), model.first);
-  const spiral = { cv: card.querySelector('canvas.sp'), spec: { cols: C.spiral, base: C.paper } };
-  fitCard(card);
+  const canvas = card.querySelector('canvas.sp'), spec = { cols: C.spiral, base: C.paper };
+  let tl = null, raf = 0, dead = false, lastSpiral = 0, phase = 0, heldAt = null;
+  const heldAnimations = new Set();
+  function drawSpiralAt(t) {
+    phase = reduced ? 0 : (t + 20000) / 1000 * 0.25;
+    drawSpiral(canvas, spec, phase);
+  }
+  const refit = () => { fitCard(card); drawSpiral(canvas, spec, phase); };
+  refit();
 
-  let tl = null, raf = 0, dead = false, lastSpiral = 0;
+  // A late font or a narrower column can wrap the headline and push the footer out.
+  let lastWidth = card.offsetWidth;
+  const ro = win.ResizeObserver ? new win.ResizeObserver(() => {
+    if (card.offsetWidth === lastWidth) return;
+    lastWidth = card.offsetWidth;
+    refit();
+  }) : null;
+  ro?.observe(card);
+  if (!ro) win.addEventListener('resize', refit);
+  doc.fonts?.addEventListener?.('loadingdone', refit);
+  doc.fonts?.ready?.then(() => { if (!dead) refit(); });
 
   function A(s, el, frames, o) {
     const opts = { fill: 'backwards', easing: EASE, ...o };
@@ -201,7 +211,7 @@ export function createAdCard({ doc, box, model, reduced = false, onBeat = null }
       { transform: 'translateY(6%) scale(1.12,.88)', offset: 0.27, easing: 'ease-out' }, { transform: 'none', offset: 0.34 }, { transform: 'none' },
     ], 2300 + ((j * 7) % 5) * 380, { delay: E - 300 + j * 140 }));
     /* Ken Burns: background, portrait and the stats panel push in slowly, out of step */
-    loop(spiral.cv, [{ transform: 'scale(1) translate(0,0)' }, { transform: 'scale(1.09) translate(-1.6%,1%)', offset: 0.5 }, { transform: 'scale(1) translate(0,0)' }], 18000, { easing: 'ease-in-out', delay: E - 2500 });
+    loop(canvas, [{ transform: 'scale(1) translate(0,0)' }, { transform: 'scale(1.09) translate(-1.6%,1%)', offset: 0.5 }, { transform: 'scale(1) translate(0,0)' }], 18000, { easing: 'ease-in-out', delay: E - 2500 });
     loop(card.querySelector('.pic'), [{ transform: 'scale(1) translate(0,0)' }, { transform: 'scale(1.045) translate(-1.2%,-.8%)', offset: 0.5 }, { transform: 'scale(1) translate(0,0)' }], 13000, { easing: 'ease-in-out', delay: E - 1200 });
     loop(card.querySelector('.stats'), [{ transform: 'scale(1) translate(0,0)' }, { transform: 'scale(1.03) translate(.7%,-.5%)', offset: 0.5 }, { transform: 'scale(1) translate(0,0)' }], 9000, { easing: 'ease-in-out', delay: E + 200 });
     card.querySelectorAll('.ac-bar i').forEach((fill, i) => {
@@ -218,9 +228,10 @@ export function createAdCard({ doc, box, model, reduced = false, onBeat = null }
 
   function build(paused, quiet = false) {
     if (tl) tl.anims.forEach((a) => a.cancel());
+    heldAnimations.clear();
     card.querySelectorAll('.bob').forEach((el) => el.classList.remove('bob'));
     card.querySelectorAll('.vib').forEach((el) => { el.classList.remove('buzz'); el.style.transform = ''; });
-    const s = { start: win.performance.now(), anims: [], counts: [], vibs: [], bob: [], beats: [], end: 0, tail: 0, paused, hover: 0 };
+    const s = { start: heldAt ?? win.performance.now(), anims: [], counts: [], vibs: [], bob: [], beats: [], end: 0, tail: 0, paused, hover: 0 };
     tl = s;
     const beat = (n, t, i = 0) => s.beats.push({ n, t, i });
     for (const [n, sel] of [['logo', '.logo'], ['pic', '.pic'], ['label', '.label'], ['terms', '.terms'], ['foot', '.ac-foot']]) {
@@ -276,6 +287,11 @@ export function createAdCard({ doc, box, model, reduced = false, onBeat = null }
     if (foot) foot.t = Math.max(foot.t, last + 650);
     if (paused || quiet || reduced || !onBeat) s.beats.length = 0;
     s.beats.sort((a, b) => a.t - b.t);
+    if (!paused) {
+      sideAt(s, 0, true);
+      if (heldAt !== null) hold(true);
+      scheduleFrame();
+    }
     return s;
   }
 
@@ -284,60 +300,75 @@ export function createAdCard({ doc, box, model, reduced = false, onBeat = null }
     const fmt = (n) => whole(n);
     s.counts.forEach((c) => { const k = Math.max(0, Math.min(1, (t - c.start) / c.dur)); c.el.textContent = fmt(c.to * (1 - Math.pow(1 - k, 3))); });
     s.vibs.forEach((v) => {
-      const on = !reduced && ((t >= v.start && t < v.start + v.dur) || (live && win.performance.now() < s.hover));
+      const on = !reduced && ((t >= v.start && t < v.start + v.dur) || (live && t < s.hover));
       if (live) { v.el.classList.toggle('buzz', on); v.el.style.transform = ''; } else v.el.style.transform = on ? JITTER[Math.floor((t - v.start) / 70) % 4] : '';
     });
     if (live) s.bob.forEach((el) => el?.classList.toggle('bob', !reduced && t > s.end));
   }
 
+  function scheduleFrame() {
+    if (!raf && !dead && !reduced && !tl?.paused && heldAt === null) raf = win.requestAnimationFrame(frame);
+  }
   function frame(now) {
-    if (dead) return;
-    raf = win.requestAnimationFrame(frame);
-    if (!tl || tl.paused) return;
-    const t = now - tl.start;
+    raf = 0;
+    if (dead || !tl || tl.paused || reduced || heldAt !== null) return;
+    const t = Math.max(0, now - tl.start);
     sideAt(tl, t, true);
     while (tl.beats.length && tl.beats[0].t <= t) {
       const b = tl.beats.shift();
       if (t - b.t < 400) { try { onBeat(b.n, b.i); } catch (e) { console.error(e); } }
     }
-    if (now - lastSpiral > 33) { lastSpiral = now; drawSpiral(spiral.cv, spiral.spec, reduced ? 0 : (t + 20000) / 1000 * 0.25); }
+    if (now - lastSpiral > 33) { lastSpiral = now; drawSpiralAt(t); }
+    scheduleFrame();
   }
 
+  // The canvas, counters and cues use active time. Freeze the browser's tracks at the same point.
+  function hold(on) {
+    const now = win.performance.now();
+    if (on) {
+      heldAt ??= now;
+      win.cancelAnimationFrame(raf); raf = 0;
+      for (const a of card.getAnimations({ subtree: true })) {
+        if (a.playState !== 'running') continue;
+        heldAnimations.add(a); a.pause();
+      }
+    } else if (heldAt !== null) {
+      if (tl) tl.start += now - heldAt;
+      heldAt = null;
+      for (const a of heldAnimations) if (a.playState === 'paused') a.play();
+      heldAnimations.clear();
+      scheduleFrame();
+    }
+  }
   function play({ quiet = false } = {}) {
     if (reduced) {
       const s = build(true);
       s.anims.forEach((a) => a.finish());
-      s.paused = false; s.start = win.performance.now() - s.end - 1;
+      sideAt(s, s.end + 1, true);
+      drawSpiralAt(0);
       return s;
     }
     return build(false, quiet);
   }
 
-  card.addEventListener('pointerenter', () => { if (tl && !reduced) tl.hover = win.performance.now() + 600; });
-  /* Refit when the card changes size or a font face lands (a weight that loads after the first fit re-wraps the head
-   * line and pushes the footer out). Fitting restores the same size, so the observer does not loop. */
-  let lastW = card.offsetWidth;
-  const onResize = () => fitCard(card);
-  const ro = win.ResizeObserver ? new win.ResizeObserver(() => { if (card.offsetWidth !== lastW) { lastW = card.offsetWidth; onResize(); } }) : null;
-  ro?.observe(card);
-  if (!ro) win.addEventListener('resize', onResize);
-  doc.fonts?.addEventListener?.('loadingdone', onResize);
-  doc.fonts?.ready?.then(() => { if (!dead) onResize(); });
-  raf = win.requestAnimationFrame(frame);
+  card.addEventListener('pointerenter', () => { if (tl && !reduced && heldAt === null) tl.hover = win.performance.now() - tl.start + 600; });
 
   return {
     card,
     play,
+    hold,
+    setReduced(on) { if (reduced !== on) { reduced = on; play(); } },
     build,
     sideAt,
-    drawSpiralAt: (t) => drawSpiral(spiral.cv, spiral.spec, reduced ? 0 : (t + 20000) / 1000 * 0.25),
+    drawSpiralAt,
     get timeline() { return tl; },
     destroy() {
       dead = true;
       win.cancelAnimationFrame(raf);
       ro?.disconnect();
-      win.removeEventListener('resize', onResize);
-      doc.fonts?.removeEventListener?.('loadingdone', onResize);
+      win.removeEventListener('resize', refit);
+      doc.fonts?.removeEventListener?.('loadingdone', refit);
+      heldAnimations.clear();
       tl?.anims.forEach((a) => a.cancel());
     },
   };
