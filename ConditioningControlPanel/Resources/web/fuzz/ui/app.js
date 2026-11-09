@@ -11,7 +11,7 @@ import { whole, clock } from '../sim/format.js';
 import { SAVE_EVERY_MS } from '../sim/save.js';
 import { bindButtonFace, wardrobeSkins } from './button-faces.js';
 import { createCards } from './cards.js';
-import { openUnitRecap } from './unit-recap.js';
+import { openRunRecap } from './recap/recap.js';
 import { bindCursorShop } from './cursor-shop.js';
 import { createShop } from './shop.js';
 import { bindAudioControls } from './audio-controls.js';
@@ -69,7 +69,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
 
   /* ---- layers ---- */
   function layer(name, side) {
-    if (name === 'credits') return $('l-credits') || el.fx;
+    if (name === 'credits') return creditsRoot || $('l-credits') || el.fx;
     if (name === 'side') {
       const rails = $('l-side').children;
       if (side === 'left') return rails[0];
@@ -459,37 +459,20 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     });
   }
 
+  let creditsRoot = null;
   function credits(id, { hooks }) {
     dock.cancelMove();
     doc.body.dataset.tcEnding = 'true';
-    const it = BY_ID[id], run = engine.run, life = engine.life;
-    const stats = {
-      Route: hooks.routeNames(run) || 'None taken',
-      Time: clock(run.clock),
-      Unlocks: String(run.order.length - 1),
-      'Endings seen': `${Object.keys(life.endings).length} of ${engine.endingsTotal}`,
-    };
-    const slot = doc.createElement('div');
-    slot.id = 'l-credits';
-    /* Renew (prestige, ui/prestige-sky.js): the run turns into Stardust and the Sky opens. New run stays beside it. */
-    const renewDust = hooks.renewDust?.();
-    const renew = hooks.renew ? [{ label: Number.isFinite(renewDust) ? `Renew: +${whole(renewDust)} ${hooks.renewCurrency || 'Stardust'}` : 'Renew', keepOpen: true, onPress: hooks.renew }] : [];
-    /* Endless ending star (onemore, sim/prestige-endings.js): Keep playing carries this same run on, at full pay. */
-    const keep = hooks.keepPlaying && hooks.canKeepPlaying?.() ? [{ label: 'Keep playing', keepOpen: true, onPress: hooks.keepPlaying }] : [];
-    const buttons = [...renew, ...keep, { label: 'New run', keepOpen: true, onPress: hooks.newRun }];
-    if (id === 'dr_end') {
-      openUnitRecap({ cards, doc, slot, stats, buttons, line: it.line, run, life, audio, name: init.identity?.displayName || '' });
-      return;
-    }
-    const node = doc.createElement('div'), dl = doc.createElement('dl');
-    for (const [label, value] of Object.entries(stats)) {
-      const dt = doc.createElement('dt'), dd = doc.createElement('dd');
-      dt.textContent = label;
-      dd.textContent = value;
-      dl.append(dt, dd);
-    }
-    node.append(dl, slot);
-    cards.open({ title: it.name, body: it.line, node, className: 'credits', clear: true, guard: false, buttons });
+    const run = engine.run, life = engine.life;
+    /* The end-of-run card (ui/recap/recap.js, owner 2026-11-09): every ending, no tab bar. The after-run unlocks fill it
+     * through ctx.layer('credits'), which answers this root even while the card waits in the queue. */
+    creditsRoot = openRunRecap({
+      cards, doc, id, run, life, hooks, audio,
+      name: init.identity?.displayName || '',
+      stats: { time: clock(run.clock), unlocks: Math.max(0, run.order.length - 1) },
+      openLink: (url) => openAllowedLink(url, { inPress, hosted: !!engine.host?.isHosted, send: (t, f) => engine.host?.send?.(t, f), win }),
+      gentle: () => gentle(),
+    });
   }
 
   /* ---- the loop ---- */
