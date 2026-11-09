@@ -180,15 +180,14 @@ async function bimbo(ctx, end) {
   await outro(ctx, s, end, 'color:#ffa8d5;');
 }
 
-/* ---- Unit Complete: the terminal goes off a line at a time. ---- */
+/* Unit Complete finishes typing during the take. Hand over to its link and credits on the same black screen. */
 async function drone(ctx, end) {
-  const s = stage(ctx, 'background:#070b09;color:#3dff8e;font-family:Consolas,"Courier New",monospace;');
-  const box = ctx.el('div', 'position:absolute;left:50%;top:18%;transform:translateX(-50%);width:min(84vw,420px);font-size:clamp(17px,3.6vw,24px);line-height:1.6;', null, s);
-  const lines = end.lines.map((t) => ctx.el('div', 'transition:opacity .5s;opacity:0;', `> ${t}`, box));
-  for (let i = 0; i < lines.length; i++) { lines[i].style.opacity = 1; ctx.audio.play('assets/audio/sfx/tally_tick.mp3', { bus: 'sfx', gain: 0.5 }); await wait(ctx, 750); }
-  for (let i = 0; i < lines.length - 1; i++) { lines[i].style.opacity = 0.08; ctx.audio.play('assets/audio/sfx/thud.mp3', { bus: 'sfx', gain: 0.25 }); await wait(ctx, 520); }
-  await wait(ctx, 800);
-  await outro(ctx, s, end, 'color:#3dff8e;');
+  ctx.css('#cards{display:none!important}');
+  const s = stage(ctx, 'background:#000;color:#65eaa1;font-family:Consolas,"Courier New",monospace;');
+  let cancel;
+  const panic = new Promise(resolve => { cancel = resolve; });
+  ctx.on('suspend', ({ on, reason }) => { if (on && reason === 'panic') { s.remove(); cancel(); } });
+  await Promise.race([outro(ctx, s, end, ''), panic]);
 }
 
 /* ---- The Debut: curtains, one light, one slow bow. ---- */
