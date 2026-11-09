@@ -85,7 +85,7 @@ export function llamaLayout(n) {
 const clampInt = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.floor(Number.isFinite(v) ? v : lo)));
 
 /** Everything the card shows. run = the engine's run, life = the lifetime save, name = the host's display name or ''. */
-export function cardModel({ run, life = {}, name = '', adNumber = null }) {
+export function cardModel({ run, life = {}, name = '', adNumber = null, serialLabel = ADCARD_COPY.ad }) {
   const first = THEME_IDS.includes(run?.picks?.f5) ? run.picks.f5 : 'bimbo';
   const second = secondTheme(run);
   const tally = run?.store?.adcard || {};
@@ -109,7 +109,7 @@ export function cardModel({ run, life = {}, name = '', adNumber = null }) {
     first, second,
     labels: [ADCARD_COPY.themes[first], ...(second ? [ADCARD_COPY.themes[second]] : [])],
     colours: cardColours(first, second),
-    serial: fill(ADCARD_COPY.ad, { n: adText }),
+    serial: fill(serialLabel, { n: adText }),
     head: fillLine(head, vals),
     sub: fillLine(sub, vals),
     terms,

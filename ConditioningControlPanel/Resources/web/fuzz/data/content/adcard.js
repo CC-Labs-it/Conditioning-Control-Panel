@@ -70,6 +70,7 @@ export const ADCARD_COPY = Object.freeze({
   moreUrl: 'cclabs.app',
   logoAlt: 'Terms & Conditioning',
   cardLabel: 'Your Living Ad',
+  posterLabel: 'Your run poster',
   printed: 'PRINTED',
   title: 'You became an ad.',
   lede: 'Here is yours. Save it, share it, or keep it to yourself.',

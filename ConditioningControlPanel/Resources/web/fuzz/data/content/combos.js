@@ -133,7 +133,7 @@ export const AFTER_RUN = Object.freeze({
   /* z_share Share Card */
   share: { diagnosis: 'Diagnosis: {route}', ending: 'Ending: {ending}', minutes: '{min} minutes', play: 'Play {game}', button: 'Share', copied: 'Copied' },
   /* z_seen Seen Counter */
-  seen: { label: '{n} of 283', lines: ['Keep going. Or do not.', 'There is more. There is always more. There are 283.', 'You have seen more of this than anyone needs to.'] },
+  seen: { label: '{n} of {total}', lines: ['Keep going. Or do not.', 'There is more. There is always more. There are {total}.', 'You have seen more of this than anyone needs to.'] },
   /* z_perk Keep One Look */
   perk: { title: 'Keep one Look for next run', line: 'For the road.', button: 'Keep it' },
   /* z_daily Daily Route */

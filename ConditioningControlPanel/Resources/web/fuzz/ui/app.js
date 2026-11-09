@@ -11,6 +11,7 @@ import { whole, clock } from '../sim/format.js';
 import { SAVE_EVERY_MS } from '../sim/save.js';
 import { bindButtonFace, wardrobeSkins } from './button-faces.js';
 import { createCards } from './cards.js';
+import { openUnitRecap } from './unit-recap.js';
 import { bindCursorShop } from './cursor-shop.js';
 import { createShop } from './shop.js';
 import { bindAudioControls } from './audio-controls.js';
@@ -462,23 +463,33 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     dock.cancelMove();
     doc.body.dataset.tcEnding = 'true';
     const it = BY_ID[id], run = engine.run, life = engine.life;
-    const node = doc.createElement('div');
-    const dl = doc.createElement('dl');
-    const add = (k, v) => { const a = doc.createElement('dt'), b = doc.createElement('dd'); a.textContent = k; b.textContent = v; dl.append(a, b); };
-    add('Route', hooks.routeNames(run) || 'None taken');
-    add('Time', clock(run.clock));
-    add('Unlocks', String(run.order.length - 1));
-    add('Endings seen', `${Object.keys(life.endings).length} of ${engine.endingsTotal}`);
-    node.appendChild(dl);
+    const stats = {
+      Route: hooks.routeNames(run) || 'None taken',
+      Time: clock(run.clock),
+      Unlocks: String(run.order.length - 1),
+      'Endings seen': `${Object.keys(life.endings).length} of ${engine.endingsTotal}`,
+    };
     const slot = doc.createElement('div');
     slot.id = 'l-credits';
-    node.appendChild(slot);
     /* Renew (prestige, ui/prestige-sky.js): the run turns into Stardust and the Sky opens. New run stays beside it. */
     const renewDust = hooks.renewDust?.();
     const renew = hooks.renew ? [{ label: Number.isFinite(renewDust) ? `Renew: +${whole(renewDust)} ${hooks.renewCurrency || 'Stardust'}` : 'Renew', keepOpen: true, onPress: hooks.renew }] : [];
     /* Endless ending star (onemore, sim/prestige-endings.js): Keep playing carries this same run on, at full pay. */
     const keep = hooks.keepPlaying && hooks.canKeepPlaying?.() ? [{ label: 'Keep playing', keepOpen: true, onPress: hooks.keepPlaying }] : [];
-    cards.open({ title: it.name, body: it.line, node, className: 'credits', clear: true, guard: false, buttons: [...renew, ...keep, { label: 'New run', keepOpen: true, onPress: hooks.newRun }] });
+    const buttons = [...renew, ...keep, { label: 'New run', keepOpen: true, onPress: hooks.newRun }];
+    if (id === 'dr_end') {
+      openUnitRecap({ cards, doc, slot, stats, buttons, line: it.line, run, life, name: init.identity?.displayName || '' });
+      return;
+    }
+    const node = doc.createElement('div'), dl = doc.createElement('dl');
+    for (const [label, value] of Object.entries(stats)) {
+      const dt = doc.createElement('dt'), dd = doc.createElement('dd');
+      dt.textContent = label;
+      dd.textContent = value;
+      dl.append(dt, dd);
+    }
+    node.append(dl, slot);
+    cards.open({ title: it.name, body: it.line, node, className: 'credits', clear: true, guard: false, buttons });
   }
 
   /* ---- the loop ---- */

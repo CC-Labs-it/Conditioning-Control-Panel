@@ -67,10 +67,17 @@
 .adc .links span b { color: var(--hot); }
 .adc .qr { width: 11cqw; flex: none; background: #fff; padding: .8cqw; border-radius: .9cqw; }
 .adc .qr svg { display: block; width: 100%; height: auto; }
+.adc.adc-recap .inner { grid-template-rows: auto 41cqw auto 1fr auto; gap: 1.3cqw; }
+.adc.adc-recap .terms { bottom: 7cqw; }
 @media (prefers-reduced-motion: no-preference) {
   .adc .bob { animation: adc-bob 3.6s ease-in-out infinite; animation-composition: add; }
 }
 @keyframes adc-bob { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-1.2%) rotate(.6deg); } }
+@media (prefers-reduced-motion: no-preference) {
+  .adc-recap:not(.gentle *) .ac-layer { animation: adc-turn var(--adc-period) linear infinite; }
+  .adc-recap:is([inert] *) .ac-layer { animation-play-state: paused; }
+}
+@keyframes adc-turn { to { transform: rotate(var(--adc-turn)); } }
 .adc .vib.buzz { animation: adc-buzz 70ms steps(1) infinite; }
 @keyframes adc-buzz { 0% { transform: translate(.18cqw, -.12cqw) rotate(-.4deg); } 25% { transform: translate(-.2cqw, .14cqw) rotate(.35deg); }
   50% { transform: translate(.14cqw, .18cqw) rotate(-.2deg); } 75% { transform: translate(-.14cqw, -.18cqw) rotate(.45deg); } }

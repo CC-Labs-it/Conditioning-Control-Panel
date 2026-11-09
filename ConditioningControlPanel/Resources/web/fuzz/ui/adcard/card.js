@@ -144,6 +144,44 @@ function fitCard(card) {
   if (over()) card.classList.add('tight');
 }
 
+/** The finished poster face, shared by the Ad reveal and the Drone recap. */
+export function createCardFace({ doc, box, model, label = ADCARD_COPY.cardLabel }) {
+  const win = doc.defaultView;
+  const card = doc.createElement('article');
+  card.className = 'adc';
+  card.setAttribute('aria-label', label);
+  const C = model.colours;
+  for (const [k, v] of Object.entries({ A: C.A, B: C.B, M: C.M, hot: C.hot, ink: C.ink, paper: C.paper, hlc: C.hlc })) card.style.setProperty('--' + k, v);
+  card.innerHTML = cardHtml(model);
+  box.replaceChildren(card);
+  livePortrait(doc, card.querySelector('.pic'), model.first);
+  const canvas = card.querySelector('canvas.sp'), spec = { cols: C.spiral, base: C.paper };
+  const paint = (phase) => drawSpiral(canvas, spec, phase);
+  const refit = () => { fitCard(card); paint(0); };
+  refit();
+
+  // A late font or a narrower column can wrap the headline and push the footer out.
+  let dead = false, lastWidth = card.offsetWidth;
+  const ro = win.ResizeObserver ? new win.ResizeObserver(() => {
+    if (card.offsetWidth === lastWidth) return;
+    lastWidth = card.offsetWidth;
+    refit();
+  }) : null;
+  ro?.observe(card);
+  if (!ro) win.addEventListener('resize', refit);
+  doc.fonts?.addEventListener?.('loadingdone', refit);
+  doc.fonts?.ready?.then(() => { if (!dead) refit(); });
+  return {
+    card, canvas, paint,
+    destroy() {
+      dead = true;
+      ro?.disconnect();
+      win.removeEventListener('resize', refit);
+      doc.fonts?.removeEventListener?.('loadingdone', refit);
+    },
+  };
+}
+
 /**
  * Builds the card inside `box` (a .adc-box) and returns its controller:
  *   play({quiet})   rebuild and run the timeline live; beats go to onBeat unless quiet (after an export)
@@ -154,16 +192,9 @@ function fitCard(card) {
  */
 export function createAdCard({ doc, box, model, reduced = false, onBeat = null }) {
   const win = doc.defaultView;
-  const card = doc.createElement('article');
-  card.className = 'adc';
-  card.setAttribute('aria-label', ADCARD_COPY.cardLabel);
+  const face = createCardFace({ doc, box, model });
+  const { card, canvas, paint } = face;
   const C = model.colours;
-  for (const [k, v] of Object.entries({ A: C.A, B: C.B, M: C.M, hot: C.hot, ink: C.ink, paper: C.paper, hlc: C.hlc })) card.style.setProperty('--' + k, v);
-  card.innerHTML = cardHtml(model);
-  box.replaceChildren(card);
-  livePortrait(doc, card.querySelector('.pic'), model.first);
-  const spiral = { cv: card.querySelector('canvas.sp'), spec: { cols: C.spiral, base: C.paper } };
-  fitCard(card);
 
   let tl = null, raf = 0, dead = false, lastSpiral = 0;
 
@@ -201,7 +232,7 @@ export function createAdCard({ doc, box, model, reduced = false, onBeat = null }
       { transform: 'translateY(6%) scale(1.12,.88)', offset: 0.27, easing: 'ease-out' }, { transform: 'none', offset: 0.34 }, { transform: 'none' },
     ], 2300 + ((j * 7) % 5) * 380, { delay: E - 300 + j * 140 }));
     /* Ken Burns: background, portrait and the stats panel push in slowly, out of step */
-    loop(spiral.cv, [{ transform: 'scale(1) translate(0,0)' }, { transform: 'scale(1.09) translate(-1.6%,1%)', offset: 0.5 }, { transform: 'scale(1) translate(0,0)' }], 18000, { easing: 'ease-in-out', delay: E - 2500 });
+    loop(canvas, [{ transform: 'scale(1) translate(0,0)' }, { transform: 'scale(1.09) translate(-1.6%,1%)', offset: 0.5 }, { transform: 'scale(1) translate(0,0)' }], 18000, { easing: 'ease-in-out', delay: E - 2500 });
     loop(card.querySelector('.pic'), [{ transform: 'scale(1) translate(0,0)' }, { transform: 'scale(1.045) translate(-1.2%,-.8%)', offset: 0.5 }, { transform: 'scale(1) translate(0,0)' }], 13000, { easing: 'ease-in-out', delay: E - 1200 });
     loop(card.querySelector('.stats'), [{ transform: 'scale(1) translate(0,0)' }, { transform: 'scale(1.03) translate(.7%,-.5%)', offset: 0.5 }, { transform: 'scale(1) translate(0,0)' }], 9000, { easing: 'ease-in-out', delay: E + 200 });
     card.querySelectorAll('.ac-bar i').forEach((fill, i) => {
@@ -300,7 +331,7 @@ export function createAdCard({ doc, box, model, reduced = false, onBeat = null }
       const b = tl.beats.shift();
       if (t - b.t < 400) { try { onBeat(b.n, b.i); } catch (e) { console.error(e); } }
     }
-    if (now - lastSpiral > 33) { lastSpiral = now; drawSpiral(spiral.cv, spiral.spec, reduced ? 0 : (t + 20000) / 1000 * 0.25); }
+    if (now - lastSpiral > 33) { lastSpiral = now; paint(reduced ? 0 : (t + 20000) / 1000 * 0.25); }
   }
 
   function play({ quiet = false } = {}) {
@@ -314,15 +345,6 @@ export function createAdCard({ doc, box, model, reduced = false, onBeat = null }
   }
 
   card.addEventListener('pointerenter', () => { if (tl && !reduced) tl.hover = win.performance.now() + 600; });
-  /* Refit when the card changes size or a font face lands (a weight that loads after the first fit re-wraps the head
-   * line and pushes the footer out). Fitting restores the same size, so the observer does not loop. */
-  let lastW = card.offsetWidth;
-  const onResize = () => fitCard(card);
-  const ro = win.ResizeObserver ? new win.ResizeObserver(() => { if (card.offsetWidth !== lastW) { lastW = card.offsetWidth; onResize(); } }) : null;
-  ro?.observe(card);
-  if (!ro) win.addEventListener('resize', onResize);
-  doc.fonts?.addEventListener?.('loadingdone', onResize);
-  doc.fonts?.ready?.then(() => { if (!dead) onResize(); });
   raf = win.requestAnimationFrame(frame);
 
   return {
@@ -330,14 +352,12 @@ export function createAdCard({ doc, box, model, reduced = false, onBeat = null }
     play,
     build,
     sideAt,
-    drawSpiralAt: (t) => drawSpiral(spiral.cv, spiral.spec, reduced ? 0 : (t + 20000) / 1000 * 0.25),
+    drawSpiralAt: (t) => paint(reduced ? 0 : (t + 20000) / 1000 * 0.25),
     get timeline() { return tl; },
     destroy() {
       dead = true;
       win.cancelAnimationFrame(raf);
-      ro?.disconnect();
-      win.removeEventListener('resize', onResize);
-      doc.fonts?.removeEventListener?.('loadingdone', onResize);
+      face.destroy();
       tl?.anims.forEach((a) => a.cancel());
     },
   };
