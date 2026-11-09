@@ -396,13 +396,67 @@ Object.assign(DEMOS, {
 
   dr_end: (k) => {
     const p = themes1Set(k, 'dr');
-    const lines = ['shop: off', 'counter: off', 'name: off', 'input: off', 'unit complete'].map((t, i) => k.add(36, 16 + i * 18, 'font:600 13px ' + p.font + ';transition:opacity .5s', '&gt; ' + t));
-    const ad = k.ad(60, 116, 120, 20, 'Drone mode', true);
-    ad.style.transition = 'opacity .6s';
-    k.every(6400, () => {
-      lines.forEach((l) => { l.style.opacity = 1; }); ad.style.opacity = 0;
-      lines.forEach((l, i) => k.after(500 + i * 600, () => { l.style.opacity = i === 4 ? 1 : .08; }));
-      k.after(3000, () => { ad.style.opacity = 1; lines[4].style.opacity = .08; });
+    const tiles = themes1Shop(k, p, 114, 42, 103, ['shop', 'counter']);
+    const plate = 'width:103px;height:18px;box-sizing:border-box;border-radius:3px;text-align:center;font:700 12px/16px ' + p.font;
+    const ghost = k.add(114, 86, plate + ';border:1px solid #51846e;color:#94c6a8;background:#14291e', 'UNIT 4017');
+    const name = k.add(114, 86, plate + ';border:1px solid #e6f7ed;color:#15221b;background:linear-gradient(110deg,#e2f4ec,#9aa9a5,#e8f1ed)', 'UNIT 4017');
+    const beam = k.add(49, 74, 'height:2px;transform-origin:0 50%;pointer-events:none;background:linear-gradient(#57ff9d,#e8fff4,#55ffa0);box-shadow:0 0 3px 1px #34ec8b');
+    const line = k.add(114, 42, 'width:103px;height:1px;background:linear-gradient(90deg,#57ff9d44,#baffd8,#57ff9d44);box-shadow:0 0 3px #57ff9d');
+    k.add(30, 55, 'width:36px;height:36px;border-radius:50%;border:2px solid #62736e;background:radial-gradient(circle at 45% 42%,#fff6bd,#ff301b 14%,#800c0c 35%,#200c10 47%,#363c3b 55%,#080d10 71%);box-shadow:0 0 9px #9b2420');
+    const flecks = Array.from({ length: 12 }, (_, i) =>
+      k.add(0, 0, 'width:2px;height:' + (2 + i % 3) + 'px;background:' + (i % 3 ? '#57ff9d' : '#daffe9') + ';opacity:0'));
+    const staticBand = k.add(32, 85, 'width:176px;height:9px;pointer-events:none;opacity:0;background:repeating-linear-gradient(110deg,#60d99b 0 2px,transparent 2px 6px,#c4f9d5 6px 7px,transparent 7px 13px);clip-path:polygon(3% 10%,82% 10%,82% 32%,7% 32%,7% 55%,98% 55%,98% 74%,24% 74%,24% 95%,3% 95%)');
+    const veil = k.add(0, 0, 'width:240px;height:150px;pointer-events:none;background:#000;opacity:0');
+    const status = k.add(18, 119, 'font:12px ' + p.font, '&gt; scanning');
+    const durations = [1.36, 1.12, 1.03, 1.27], starts = [0.28, 1.78, 3.36, 4.53];
+    const clamp = x => Math.max(0, Math.min(1, x));
+    const motion = matchMedia('(prefers-reduced-motion:reduce)');
+    k.frame((dt, seconds) => {
+      const soft = document.body.classList.contains('gentle') || motion.matches;
+      const t = seconds % 7.1;
+      const shot = t >= starts[3] ? 3 : t >= starts[2] ? 2 : t >= starts[1] ? 1 : 0;
+      const progress = (t - starts[shot]) / durations[shot];
+      const active = progress >= 0 && progress < 1;
+      const clear = clamp((progress - 0.28) / 0.72);
+      const sweep = progress < 0.28 ? clamp(progress / 0.28) : 1 - clear;
+      const first = clamp((t - starts[2]) / durations[2]), second = clamp((t - starts[3]) / durations[3]);
+      const across = shot === 3 ? 1 - second : first;
+      const tx = shot < 2 ? 165 : 114 + 103 * across;
+      const ty = shot < 2 ? 42 + 22 * shot + 18 * sweep : 95;
+      for (const [i,tile] of tiles.entries()) {
+        tile.style.opacity = i < shot || (i === shot && progress >= 1) ? 0 : i === shot && soft ? 1 - clear : 1;
+        tile.style.clipPath = i === shot && !soft ? 'inset(0 0 ' + clear * 100 + '% 0)' : '';
+      }
+      name.style.opacity = soft ? 1 - first : 1;
+      ghost.style.opacity = soft ? 1 - second : 1;
+      name.style.clipPath = soft ? '' : 'inset(0 0 0 ' + first * 100 + '%)';
+      ghost.style.clipPath = soft ? '' : 'inset(0 ' + second * 100 + '% 0 0)';
+      beam.style.opacity = line.style.opacity = active && !soft ? 1 : 0;
+      const dx = tx - 49, dy = ty - 74;
+      beam.style.width = Math.hypot(dx, dy) + 'px';
+      beam.style.transform = 'rotate(' + Math.atan2(dy, dx) + 'rad)';
+      line.style.top = (shot < 2 ? ty : 86) + 'px';
+      line.style.left = (shot < 2 ? 114 : tx) + 'px';
+      line.style.width = shot < 2 ? '103px' : '1px';
+      line.style.height = shot < 2 ? '1px' : '18px';
+      for (const [j,f] of flecks.entries()) {
+        const at = shot < 2 ? 0.30 + (j % 4) * 0.16 : (j + 0.5) / flecks.length;
+        const age = (t - starts[shot] - durations[shot] * at) / 0.44;
+        f.style.opacity = !soft && age > 0 && age < 1 ? 1 - age : 0;
+        if (age <= 0 || age >= 1) continue;
+        const offset = shot < 2 ? j * 29 % 99 : (shot === 3 ? 1 - at : at) * 99;
+        const x = 116 + offset + (j % 3 - 1) * 8 * age;
+        const row = shot < 2 ? 42 + 22 * shot + 18 * (1 - (j % 4) / 4) : 91 + j % 9;
+        f.style.transform = 'translate(' + x + 'px,' + (row - (12 + j % 9) * age) + 'px) rotate(' + (j * 48 + age * 140) + 'deg)';
+      }
+      const afterCut = t - starts[3] - durations[3];
+      const tracking = clamp(afterCut / 0.19);
+      staticBand.style.opacity = soft ? 0 : 0.5 * Math.sin(Math.PI * tracking);
+      staticBand.style.transform = 'translateX(' + (12 * tracking - 6) + 'px)';
+      const dim = clamp((afterCut - (soft ? 0 : 0.19)) / 0.55);
+      veil.style.opacity = dim;
+      status.textContent = dim === 1 ? '> unit complete' : '> scanning';
+      status.style.opacity = dim === 1 ? 1 : 1 - dim;
     });
   },
 

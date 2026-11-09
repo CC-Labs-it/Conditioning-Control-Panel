@@ -644,7 +644,7 @@ export const CLAUSES = Object.freeze({
   "I accept a fake update bar that freezes the shop a few seconds, then pays."
  ],
  "dr_end": [
-  "This ends the run one green line at a time, then a real Drone mode link.",
+  "I accept that this ends the run one scan at a time, then a real Drone mode link.",
   "No further input is required. I am still waiting for the next instruction with my whole body, quietly."
  ],
  "si_head": [

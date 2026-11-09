@@ -13,6 +13,7 @@
     max-width:min(92vw,560px); z-index:9; transition:opacity .6s }
   #note.gone { opacity:0; pointer-events:none }
   #note b { color:#9a2a74 }
+  #note button { padding:8px 14px; min-height:44px; font:inherit; font-weight:600; cursor:pointer }
 </style>
 </head>
 <body>
@@ -55,10 +56,27 @@ frame.addEventListener('load', () => {
       fuzz.buy(next.id);
       if (E.count(run, next.id) === before) break;
     }
-    /* Living Ad: a dev run tallies nothing, so the card would read "0 terms ACCEPTED"; give it plausible numbers */
-    if (endId === 'o_out') { const t = ((run.store ||= {}).adcard ||= {}); t.pics ||= 420; t.golden ||= 12; t.terms ||= 160; }
+    /* The preview grants the upgrades. Give each poster preview a set of sample tallies. */
+    if (['o_out', 'dr_end'].includes(endId)) {
+      const tally = ((run.store ||= {}).adcard ||= {});
+      tally.pics ||= 420;
+      tally.golden ||= 12;
+      tally.terms ||= 160;
+    }
     const want = Math.round(E.price(run, endId) * 1.05);
     if (run.fuzz < want) fuzz.add(want - run.fuzz);
+    if (endId === 'dr_end') {
+      // A crowded ending preview can put a toy or a setup card over its shop tile.
+      const play = document.createElement('button');
+      play.textContent = 'Play Unit Complete';
+      note.replaceChildren(play);
+      play.addEventListener('click', () => {
+        fuzz.engine.audio.arm();
+        if (fuzz.buy(endId).ok) { note.remove(); frame.focus(); }
+      });
+      fuzz.engine.subscribe('ending', () => note.remove());
+      return;
+    }
     const style = frame.contentDocument.createElement('style');
     style.textContent = `#shop [data-id="${endId}"]{outline:4px solid #fff;outline-offset:2px;box-shadow:0 0 0 9px #ff2f9a,0 0 40px #ff2f9a;animation:pe-pulse 1s ease-in-out infinite alternate}
       @keyframes pe-pulse{from{transform:scale(1)}to{transform:scale(1.08)}}`;

@@ -6,6 +6,7 @@ import { mountPodcast } from '../podcast-player.js';
 import { bag, geo, sheet, done, frame, refillOnChange, shopWords, pick, railPanel, gentleSwitch } from './kit.js';
 import { themeScreens } from './theme-screens.js';
 import { endingShow } from './endings.js';
+import { unitCompleteAborted, unitCompleteTake } from './unit-complete.js';
 import { COPY } from './copy.js';
 import { THEME_PAGES } from '../../palette.js';
 import { setRich } from '../../rich-text.js';
@@ -326,6 +327,9 @@ export default {
 
   dr_end: {
     mount() { return {}; },
-    ending(ctx) { return endingShow(ctx, ENDINGS.dr_end, 'drone'); },
+    take: unitCompleteTake,
+    fadeColour: '#000',
+    fadeMs: 180,
+    ending(ctx) { return unitCompleteAborted() ? Promise.resolve() : endingShow(ctx, ENDINGS.dr_end, 'drone'); },
   },
 };
