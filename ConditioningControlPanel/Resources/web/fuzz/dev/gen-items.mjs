@@ -31,6 +31,8 @@ const REQ_OVERRIDE = {
   /* Owner 2026-11-09: Phone Buzz is never offered where nothing can buzz (ui/platform.js), so Fake Inbox opens beside it
    * instead of behind it; otherwise a desktop run could never reach the inbox chain. */
   inbox: ['levels'],
+  /* Owner 2026-11-10: Mini Slots come earlier (about minute 11), right after the pictures; the Dispenser still follows it. */
+  mini_slots: ['f3'],
 };
 /* The main path in the order it is walked: E.goal takes the first unowned row, so ITEMS keeps this order. */
 const TRUNK_ORDER = ['start', 'stray', 'fpsv', 'f1', 'softw', 'ticker', 'f5', 'f3', 'depth', 'f2', 'banner', 'f4', 'glossy', 'taste2', 'overlay', 'takeover', 'wallpaper', 'tunnel', 'drop'];

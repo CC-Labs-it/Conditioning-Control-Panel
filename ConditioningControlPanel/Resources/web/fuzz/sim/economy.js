@@ -7,7 +7,7 @@
 import { ITEMS, BY_ID, FORKS, FORK_OF_LANE } from '../data/items.js';
 import { CONFIG } from '../data/config.js';
 import { moodOf } from './moods.js';
-import { accrueActivities } from './journey-effects.js';
+import { accrueActivities, trunkBoost, RANK_BOUNCE, RANK_TAP, RANK_PASSIVE } from './journey-effects.js';
 import { ridersOf } from '../data/folds.js';
 import { EMI_LIFT } from './tap-rate.js';
 
@@ -89,13 +89,13 @@ export function rates(s, mods = null, now = s.clock) {
   const journey = s.store.journey;
   if (journey) {
     const { ranks, specs } = journey;
-    bounceShare += .001 * (ranks.stray || 0);
-    tapShare += .0005 * (ranks.rounded || 0);
+    bounceShare += RANK_BOUNCE * (ranks.stray || 0);
+    tapShare += RANK_TAP * (ranks.rounded || 0);
     if (specs.spec_rebounds === 'steady') bounceShare += .002;
     if (specs.spec_mix === 'bounce') bounceShare += .002;
     if (specs.spec_mix === 'tap') tapShare += .002;
     const passiveRanks = (ranks.ticker || 0) + (ranks.e_spiral || 0) + (ranks.a_hum || 0);
-    passiveBonus = s.base.fps * .0025 * passiveRanks;
+    passiveBonus = s.base.fps * RANK_PASSIVE * passiveRanks;
   }
   if (journey) { tapShare += CONFIG.JOURNEY_TAP_SHARE; for (const id of CONFIG.TAP_SHARE_LOOKS) if (has(s, id)) tapShare += CONFIG.TAP_SHARE_PER_LOOK; }
   /* Timed buffs fold after the knee, so they multiply in full (see CONFIG.MOD_FPS_KNEE). So do `post` mods: the
@@ -105,12 +105,17 @@ export function rates(s, mods = null, now = s.clock) {
   const fps = Math.max(0, fold('fps', soft(fold('fps', s.base.fps, s, steady, now), s.base.fps, CONFIG.MOD_FPS_KNEE), s, timed, now));
   const click = Math.max(0, fold('click', soft(fold('click', s.base.click, s, steady, now), s.base.click, CONFIG.MOD_CLICK_KNEE), s, timed, now));
   const wall = Math.max(0, fold('wall', s.base.wall, s, mods, now));
-  /* A click buff also multiplies the share of passive pay a manual tap carries. */
+  /* A click buff also multiplies the share of passive pay a manual tap carries; so do per-second and wall buffs the rank
+   * bonuses (a rank pays in seconds of base pay, so a Renewal Sky multiplier must reach it too). */
   const clickBuff = timed ? fold('click', 1, s, timed, now) : 1;
+  const fpsBuff = timed && passiveBonus ? fold('fps', 1, s, timed, now) : 1;
+  const wallBuff = timed ? fold('wall', 1, s, timed, now) : 1;
+  /* The late trunk shows multiply every income path after everything else (sim/journey-effects.js trunkBoost). */
+  const boost = trunkBoost(s);
   return {
-    fps: fps + passiveBonus, click, wall,
-    manualClick: click + (click > 0 && has(s, 'rounded') ? s.base.fps * tapShare * clickBuff : 0),
-    bounce: wall + (wall > 0 && has(s, 'stray') ? s.base.fps * bounceShare : 0),
+    fps: (fps + passiveBonus * fpsBuff) * boost, click: click * boost, wall: wall * boost,
+    manualClick: (click + (click > 0 && has(s, 'rounded') ? s.base.fps * tapShare * clickBuff : 0)) * boost,
+    bounce: (wall + (wall > 0 && has(s, 'stray') ? s.base.fps * bounceShare * wallBuff : 0)) * boost,
     walls: Math.max(0, fold('walls', CONFIG.WALLS_PER_STRAY * (mood?.walls || 1), s, mods, now)),
   };
 }
@@ -245,7 +250,8 @@ export function wallHit(s, mods = null, now = s.clock, owner = 'stray', corner =
 export function tick(s, dtMs, mods = null) {
   if (s.ended) return 0;
   s.clock += dtMs;
-  if (s.store.journey) accrueActivities(s, dtMs / 1000);
+  /* The collect banks grow with the player's permanent multipliers (`post` mods: the Renewal Sky), never a short buff. */
+  if (s.store.journey) accrueActivities(s, dtMs / 1000, mods ? fold('fps', 1, s, mods.filter((m) => m.post), s.clock) : 1);
   return earn(s, rates(s, mods, s.clock).fps * s.pace * (dtMs / 1000), 'fps');
 }
 
