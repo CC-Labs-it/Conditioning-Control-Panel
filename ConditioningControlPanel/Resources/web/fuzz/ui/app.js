@@ -554,6 +554,15 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       refreshCursorShop = bindCursorShop(engine,ui);
       purchaseFeel = createPurchaseFeel({ doc, engine, gentle, reduced, dock });
       shop = createShop({ doc, engine, onPress: press, onReady: (row) => purchaseFeel.ready(row) });
+      /* EMI Takeover (owner 2026-11-09): HIVE MIND is the one row EMI may buy herself when the player waited too long
+       * (ui/unlocks/themes-b/emi-swarm.js). Free for the player, no terms card; nothing else can be bought this way. */
+      doc.addEventListener('fuzz:emi-buys-hive', () => {
+        const run = engine.run;
+        if (engine.paused || engine.suspended || engine.stopped || run.owned.go_hive || !run.owned.go_corp) return;
+        const gift = engine.price('go_hive');
+        run.fuzz += gift;
+        if (!engine.buy('go_hive').ok) run.fuzz = Math.max(0, run.fuzz - gift);
+      });
       ui.credits = (id) => credits(id, { hooks });
       el.cur.textContent = BRAND.currencyPlural;
       wireButton();

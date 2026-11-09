@@ -9,93 +9,130 @@ import { EMI_BARKS } from '../data/content/emi-takeover.js';
 const has = (...ids) => (id) => ids.includes(id);
 
 test('the four rows sit between Fake Online Count and the goon ending, which keeps its id', () => {
+  assert.deepEqual(T.CHAIN, ['go_tx', 'go_will', 'go_corp', 'go_hive']);
   const chain = ['go_pals', ...T.CHAIN, 'go_end'];
   for (let i = 1; i < chain.length; i++) {
     assert.deepEqual(BY_ID[chain[i]].req, [chain[i - 1]], chain[i]);
     assert.ok(BY_ID[chain[i]].cost > BY_ID[chain[i - 1]].cost, chain[i]);
   }
+  assert.deepEqual(chain.slice(1).map((id) => BY_ID[id].cost), [780000, 930000, 1120000, 1350000, 1700000]);
+  assert.equal(BY_ID.go_tx.name, 'Transmission');
+  assert.equal(BY_ID.go_corp.name, 'Founded Startup');
+  assert.equal(BY_ID.go_auto, undefined);
+  assert.equal(BY_ID.go_copy, undefined);
   assert.equal(BY_ID.go_end.kind, 'end');
   assert.equal(BY_ID.go_end.name, 'Ending: EMI Takeover');
   assert.match(BY_ID.go_end.what, /pretend to crash/);
   for (const id of T.CHAIN) assert.equal(BY_ID[id].lane, 'goon');
 });
 
-test('the stage follows the rows owned, in order', () => {
+test('the stage follows the rows owned, in order; Self Replication is hers, not a row', () => {
   assert.equal(T.stageOf(has()), 'none');
-  assert.equal(T.stageOf(has('go_auto')), 'auto');
-  assert.equal(T.stageOf(has('go_auto', 'go_will', 'go_copy')), 'copy');
-  assert.equal(T.stageOf(has('go_auto', 'go_copy')), 'auto', 'a row with its parent missing does not count');
+  assert.equal(T.stageOf(has('go_tx')), 'tx');
+  assert.equal(T.stageOf(has('go_tx', 'go_will', 'go_corp')), 'corp');
+  assert.equal(T.stageOf(has('go_tx', 'go_corp')), 'tx', 'a row with its parent missing (or switched off) holds the story');
   assert.equal(T.stageOf(has(...T.CHAIN)), 'hive');
-  assert.equal(T.poolOf('hive', ['h_tx']), 'shopping_transmission');
-  assert.equal(T.poolOf('hive', ['h_tx', 'h_amp', 'h_uni']), 'shopping_unified');
+  assert.equal(T.phaseOf('corp', ['h_amp', 'h_oc']), 'corp');
+  assert.equal(T.phaseOf('corp', ['h_amp', 'h_oc', 'h_loud', 'h_rep']), 'rep');
+  assert.equal(T.phaseOf('hive', ['h_amp']), 'corp', 'HIVE MIND bought early waits for her Self Replication');
+  assert.equal(T.phaseOf('hive', ['h_amp', 'h_oc', 'h_loud', 'h_rep']), 'hive');
+  assert.equal(T.phaseOf('will', ['h_rep']), 'will');
+  assert.deepEqual(['tx', 'will', 'rep', 'hive'].map((p) => T.poolOf(p)), ['transmission', 'free_will', 'replication', 'hive_mind']);
+  assert.equal(T.poolOf('corp', []), 'startup');
+  assert.equal(T.poolOf('corp', ['h_amp']), 'shopping');
   assert.equal(T.poolOf('none'), null);
+  for (const p of ['tx', 'will', 'corp', 'rep', 'hive']) assert.ok(EMI_BARKS.solo[T.poolOf(p, [])], p);
+  assert.ok(EMI_BARKS.solo.shopping);
 });
 
-test('before HIVE MIND only the player\'s presses make copies: 12 presses each, one per 4 s, never past the cap', () => {
-  const cap = T.copyCap('copy', [], false);
-  let pop = T.newPop(1), made = 0;
-  for (let s = 0; s < 600; s++) { const r = T.popStep(pop, { now: s, stage: 'copy', cap }); pop = r.pop; made += r.made; }
-  assert.equal(made, 0, 'ten idle minutes make nobody');
-  for (let i = 0; i < 11; i++) pop = T.popPress(pop, { stage: 'copy' });
-  assert.equal(T.popStep(pop, { now: 700, stage: 'copy', cap }).made, 0);
-  pop = T.popPress(pop, { stage: 'copy' });
-  let r = T.popStep(pop, { now: 700, stage: 'copy', cap });
-  assert.equal(r.made, 1);
-  assert.equal(r.self, false);
-  pop = r.pop;
-  for (let i = 0; i < 200; i++) pop = T.popPress(pop, { stage: 'copy' });
-  assert.equal(T.popStep(pop, { now: 702, stage: 'copy', cap }).made, 0, 'inside the 4 s gap');
-  let now = 704;
-  for (let i = 0; i < 40; i++, now += 4) {
-    for (let k = 0; k < 20; k++) pop = T.popPress(pop, { stage: 'copy' });
-    r = T.popStep(pop, { now, stage: 'copy', cap }); pop = r.pop;
+test('her tiles: Amplifier, Overclock, Louder Opinions, then Self Replication, about 30-45 s apart, on her own budget', () => {
+  assert.deepEqual(T.HER_TILES.map((t) => t.name), ['Amplifier', 'Overclock', 'Louder Opinions', 'Self Replication']);
+  /* play it out on the game clock: one second steps, she buys the moment she may */
+  let bag = { budget: 0, bought: [] }, last = -Infinity;
+  const at = [];
+  for (let s = 0; s < 400 && bag.bought.length < 4; s++) {
+    bag.budget = T.budgetStep(bag.budget, 1, { phase: 'corp' });
+    const tile = T.canBuy({ phase: 'corp', budget: bag.budget, bought: bag.bought, sinceBuyS: s - last });
+    if (tile) { bag = T.buyTile(bag, tile); last = s; at.push(s); }
   }
-  assert.equal(pop.copies, cap);
-});
-
-test('after HIVE MIND copies also come on their own, and presses count faster', () => {
-  const cap = T.copyCap('hive', [], false);
-  let pop = T.newPop(2), made = 0, selfMade = 0;
-  for (let s = 0; s <= 60; s++) { const r = T.popStep(pop, { now: s, stage: 'hive', cap }); pop = r.pop; made += r.made; selfMade += r.self ? 1 : 0; }
-  assert.ok(made >= 3 && made === selfMade, `${made} on their own in a minute`);
-  assert.ok(pop.copies <= cap);
-  let p2 = T.newPop(1);
-  for (let i = 0; i < T.POP.PRESSES_HIVE; i++) p2 = T.popPress(p2, { stage: 'hive' });
-  p2 = { ...p2, selfAt: 9999 };
-  assert.equal(T.popStep(p2, { now: 10, stage: 'hive', cap }).made, 1);
-  assert.equal(T.popPress(T.newPop(), { stage: 'will' }).meter, 0, 'no meter before Self Copying');
-});
-
-test('caps: a phone carries about half, and her tiles raise them', () => {
-  assert.equal(T.copyCap('will'), 0);
-  assert.deepEqual([T.copyCap('copy'), T.copyCap('hive'), T.copyCap('hive', ['h_tx', 'h_amp']), T.copyCap('hive', ['h_tx', 'h_amp', 'h_uni'])], [6, 8, 12, 16]);
-  assert.deepEqual([T.copyCap('copy', [], true), T.copyCap('hive', [], true), T.copyCap('hive', ['h_amp'], true), T.copyCap('hive', ['h_amp', 'h_uni'], true)], [3, 4, 6, 8]);
-});
-
-test('her tiles: three, in order, bought with her tips only after HIVE MIND, never two close together', () => {
-  assert.deepEqual(T.HER_TILES.map((t) => t.name), ['Transmission', 'Amplifier', 'Unified Transmission']);
-  const rich = { tips: 999, bought: [], sinceBuyS: 999, sinceHiveS: 999 };
-  assert.equal(T.canBuy({ ...rich, stage: 'copy' }), null);
-  assert.equal(T.canBuy({ ...rich, stage: 'hive', tips: 59 }), null);
-  assert.equal(T.canBuy({ ...rich, stage: 'hive', sinceHiveS: 5 }), null);
-  assert.equal(T.canBuy({ ...rich, stage: 'hive' }).id, 'h_tx');
-  let bag = T.buyTile({ tips: 100, bought: [] }, T.HER_TILES[0]);
-  assert.deepEqual(bag, { tips: 40, bought: ['h_tx'] });
-  assert.equal(T.canBuy({ ...rich, ...bag, tips: 999, stage: 'hive', sinceBuyS: 10 }), null, 'the gap between her buys');
-  assert.equal(T.canBuy({ ...rich, ...bag, tips: 999, stage: 'hive' }).id, 'h_amp');
-  assert.deepEqual(T.buyTile(bag, T.HER_TILES[1]), bag, 'not enough tips: nothing changes');
-  assert.equal(T.nextTile(['h_tx', 'h_amp', 'h_uni']), null);
+  assert.equal(at.length, 4);
+  for (let i = 1; i < at.length; i++) assert.ok(at[i] - at[i - 1] >= 30 && at[i] - at[i - 1] <= 46, `gap ${at[i] - at[i - 1]} s`);
+  assert.ok(at[0] >= 25 && at[0] <= 45, `first buy at ${at[0]} s`);
+  assert.equal(T.budgetStep(5, 10, { phase: 'will' }), 5, 'no budget before Founded Startup');
+  assert.equal(T.budgetStep(5, 10, { phase: 'rep' }), 5, 'nothing left to buy');
+  assert.equal(T.canBuy({ phase: 'will', budget: 999, bought: [], sinceBuyS: 999 }), null);
+  assert.equal(T.canBuy({ phase: 'corp', budget: 999, bought: ['h_amp'], sinceBuyS: 10 }), null, 'the gap between her buys');
+  assert.equal(T.canBuy({ phase: 'corp', budget: 999, bought: ['h_amp'], sinceBuyS: 10, hurry: true }).id, 'h_oc', 'HIVE MIND already bought: she hurries');
+  assert.deepEqual(T.buyTile({ budget: 10, bought: [] }, T.HER_TILES[0]), { budget: 10, bought: [] }, 'not enough budget: nothing changes');
+  assert.equal(T.nextTile(T.HER_TILES.map((t) => t.id)), null);
   assert.equal(T.buyTile.length, 2, 'the bank is not an argument: her shopping never spends the player\'s money');
 });
 
+test('her tiles do visible things: bigger, a little faster (screens still under 3 a second), more comments', () => {
+  const none = T.effectsOf([]), all = T.effectsOf(['h_amp', 'h_oc', 'h_loud']);
+  assert.equal(none.size, 1);
+  assert.ok(all.size > 1.2);
+  assert.ok(all.speed > 1 && all.speed < 1.6);
+  assert.ok(all.picS[0] < none.picS[0] && all.picS[0] >= 1, 'pictures change a little faster, never fast');
+  assert.deepEqual(none.picS, [2, 3], 'Transmission: 2-3 s a picture, 2-3 s her face');
+  assert.ok(all.barkS[1] < none.barkS[1] && all.coolS < none.coolS);
+});
+
+test('Self Replication: only trusted clicks, a 0.4 s cooldown, about half convert an object, capped 30 / 12', () => {
+  let seed = 3;
+  const rng = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  assert.equal(T.repPress({ now: 1, lastAt: 0.8, count: 2, objects: 5, rng }), null, 'inside the cooldown');
+  assert.equal(T.repPress({ now: 10, count: 30, objects: 5, rng }), null, 'desktop cap');
+  assert.equal(T.repPress({ now: 10, count: 12, lite: true, objects: 5, rng }), null, 'phone cap');
+  assert.ok(T.repPress({ now: 10, count: 11, lite: true, objects: 5, rng }));
+  assert.equal(T.repPress({ now: 10, count: 2, objects: 0, rng: () => 0 }), 'split', 'nothing to take: she splits');
+  let convert = 0;
+  for (let i = 0; i < 400; i++) if (T.repPress({ now: i, count: 2, objects: 3, rng }) === 'convert') convert += 1;
+  assert.ok(convert > 160 && convert < 240, `${convert} of 400 converted`);
+});
+
+test('HIVE MIND: forced 150 s after Self Replication, and only then', () => {
+  assert.ok(!T.mustForceHive({ phase: 'rep', ownsHive: false, sinceRepS: 149 }));
+  assert.ok(T.mustForceHive({ phase: 'rep', ownsHive: false, sinceRepS: 150 }));
+  assert.ok(!T.mustForceHive({ phase: 'rep', ownsHive: true, sinceRepS: 999 }));
+  assert.ok(!T.mustForceHive({ phase: 'corp', ownsHive: false, sinceRepS: 999 }), 'never before Self Replication is hers');
+});
+
+test('HIVE MIND patterns: every pattern changes a screen at most twice a wave, well under 3 a second', () => {
+  let prev = null;
+  for (let i = 0; i < 50; i++) { const p = T.nextPattern(prev); assert.ok(T.PATTERNS.includes(p)); assert.notEqual(p, prev); prev = p; }
+  for (const pattern of T.PATTERNS) {
+    for (const period of [T.HIVE.PERIOD_S, T.HIVE.PERIOD_S_FAST]) {
+      for (const where of [{ x01: 0.1, d01: 0, i: 0, n: 9, side: 0 }, { x01: 0.9, d01: 0.7, i: 7, n: 9, side: 1 }]) {
+        let last = null, lastAt = -Infinity, minGap = Infinity, lit = 0;
+        for (let t = 0; t < 30; t += 0.01) {
+          const on = T.patternLit(pattern, { t, period, ...where });
+          if (on) lit += 1;
+          if (last !== null && on !== last) { minGap = Math.min(minGap, t - lastAt); lastAt = t; }   // the first change has no gap before it
+          last = on;
+        }
+        assert.ok(minGap > 0.4, `${pattern} ${period}: fastest change ${minGap.toFixed(2)} s`);
+        assert.ok(lit > 0, `${pattern} lights the screen`);
+      }
+    }
+  }
+  /* coordinated: a sweep reaches the left before the right, a ripple the first EMI before the far ones */
+  const firstOn = (pattern, where) => { for (let t = 0.01; t < 6; t += 0.01) if (T.patternLit(pattern, { t, ...where }) && !T.patternLit(pattern, { t: t - 0.01, ...where })) return t; return Infinity; };
+  assert.ok(firstOn('sweep', { x01: 0.2 }) < firstOn('sweep', { x01: 0.7 }));
+  assert.ok(firstOn('ripple', { d01: 0.1 }) < firstOn('ripple', { d01: 0.6 }));
+  assert.notEqual(T.patternLit('halves', { t: 0.3, side: 0 }), T.patternLit('halves', { t: 0.3, side: 1 }));
+  assert.ok(T.HIVE.MIN_GAP_S >= 0.334);
+});
+
 test('a saved bag comes back sane', () => {
-  assert.deepEqual(T.cleanBag(null), { copies: 0, meter: 0, tips: 0, bought: [], clicked: 0, self: 0 });
-  const bag = T.cleanBag({ copies: 99, meter: -3, tips: 12.7, bought: ['h_amp', 'h_tx', 'nope'], clicked: 4 });
-  assert.equal(bag.copies, 16);
-  assert.equal(bag.meter, 0);
-  assert.equal(bag.tips, 12);
-  assert.deepEqual(bag.bought, ['h_tx', 'h_amp']);
-  assert.deepEqual(T.cleanBag({ bought: ['h_uni'] }).bought, [], 'a tile without the ones before it is dropped');
+  assert.deepEqual(T.cleanBag(null), { copies: 0, budget: 0, bought: [], sinceRep: 0, clicked: 0, took: 0 });
+  const bag = T.cleanBag({ copies: 99, budget: 12.5, bought: ['h_oc', 'h_amp', 'nope'], sinceRep: 9999, clicked: 4 });
+  assert.equal(bag.copies, T.REP.CAP - 1);
+  assert.equal(bag.budget, 12.5);
+  assert.equal(bag.sinceRep, T.HIVE.FORCE_S);
+  assert.deepEqual(bag.bought, ['h_amp', 'h_oc']);
+  assert.deepEqual(T.cleanBag({ bought: ['h_rep'] }).bought, [], 'a tile without the ones before it is dropped');
+  assert.deepEqual(T.cleanBag({ budget: -3 }).budget, 0);
 });
 
 test('barks: at most 2 bubbles and 3 a 10 s, no line twice inside six minutes, silence when the pool is dry', () => {
@@ -123,8 +160,25 @@ test('the bark bank is EMI: lowercase, no exclamation marks, no dashes, never ab
     assert.ok(!/\b(she|her)\b.*\byou\b.*\bshe\b/.test(l), l);
     assert.ok(!/wake up|can't leave|cannot leave|can't stop pressing/.test(l), l);
     assert.ok(l.split(' ').length <= 12, l);
+    assert.ok(!/\btips?\b/.test(l), `no tips economy any more: ${l}`);
   }
-  for (const pool of Object.keys(EMI_BARKS.solo)) assert.ok(EMI_BARKS.solo[pool].length >= 8 && EMI_BARKS.pairs[pool].length >= 4, pool);
+  for (const pool of ['transmission', 'free_will', 'startup', 'shopping', 'replication', 'hive_mind']) assert.ok(EMI_BARKS.solo[pool].length >= 8 && EMI_BARKS.pairs[pool].length >= 4, pool);
+  for (const r of ['copy_made', 'object_taken', 'emi_buys_tile', 'hive_forced']) assert.ok(EMI_BARKS.reactions[r].length >= 2, r);
+});
+
+test('the run-up keeps its hard rules in the source', () => {
+  const src = readFileSync(new URL('../ui/unlocks/themes-b/emi-swarm.js', import.meta.url), 'utf8');
+  assert.ok(!/ctx\.button\.press\(/.test(src), 'she never taps the button any more');
+  assert.match(src, /ev\?\.via !== 'hand' && ev\?\.via !== 'right'/, 'only the player\'s own presses make EMIs');
+  for (const line of src.split(/\r?\n/)) {
+    if (/scaleY/.test(line)) assert.match(line, /\.bar\.style/, `no stretch or squash on her: ${line.trim()}`);
+    if (/scaleX/.test(line)) assert.ok(!/scaleX\((?!-1\))/.test(line), `a flip is the only scaleX: ${line.trim()}`);
+  }
+  assert.ok(!/pointermove|mousemove|clientX/.test(src), 'no EMI follows the cursor');
+  assert.match(src, /removeAttribute\('data-et-gone'\)/, 'every hidden object comes back on cleanup');
+  assert.match(src, /sizes: \(\) =>/, 'the ending reads sizes()');
+  const app = readFileSync(new URL('../ui/app.js', import.meta.url), 'utf8');
+  assert.match(app, /fuzz:emi-buys-hive[\s\S]{0,400}engine\.buy\('go_hive'\)/, 'the forced buy can only buy HIVE MIND');
 });
 
 const SCREENS = [
@@ -156,53 +210,10 @@ test('the grid fills the screen, leaves Wake Up\'s corner empty, and its lit cel
   assert.equal(T.dropMask(false)[0], '11110011110001110011110');
 });
 
-test('the fill: every cell once, each new EMI beside one already there', () => {
-  let seed = 7;
-  const rng = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-  for (const s of SCREENS) {
-    const g = T.dropGrid(s);
-    const { order, from } = T.fillOrder(g, [{ x: s.w / 2, y: s.h / 2 }, { x: 40, y: s.h - 40 }], rng);
-    assert.equal(order.length, g.cells.length);
-    assert.equal(new Set(order).size, g.cells.length);
-    const seen = new Set();
-    let roots = 0;
-    for (const i of order) {
-      const p = from.get(i);
-      if (p < 0) roots += 1;
-      else {
-        assert.ok(seen.has(p), 'the source is already on screen');
-        const a = g.cells[i], b = g.cells[p];
-        assert.equal(Math.abs(a.c - b.c) + Math.abs(a.r - b.r), 1);
-      }
-      seen.add(i);
-    }
-    assert.ok(roots >= 2 && roots <= 4, `${s.name}: ${roots} starting points`);
-  }
-});
-
-test('the fill takes about 24 s untouched, and hammering never gets it under 10 s', () => {
-  assert.ok(Math.abs(T.fillTime(0) - T.TAKE.FILL_S) < 0.1);
-  assert.ok(T.fillTime(3) < T.fillTime(0));
-  assert.ok(T.fillTime(30) >= T.TAKE.FILL_MIN_S - 0.05);
-  assert.equal(T.fillCount(0, 400), 1);
-  assert.equal(T.fillCount(T.TAKE.FILL_S, 400), 400);
-  let last = 0;
-  for (let t = 0; t <= T.TAKE.FILL_S; t += 0.25) { const n = T.fillCount(t, 400); assert.ok(n >= last); last = n; }
-});
-
 test('no screen changes 3 times a second, and the whole take fits the engine cap', () => {
   for (const lite of [false, true]) for (let i = 0; i <= 100; i++) assert.ok(T.flickerGap(() => i / 100, lite) > 334);
   assert.ok(T.takeMaxS() * 1000 < CONFIG.ENDING_TAKE_MAX_MS - 20000, `${T.takeMaxS()} s`);
   assert.ok(T.TAKE.DROP_S >= 3, 'DROP holds a few seconds');
-});
-
-test('the error card says it is the game, keeps the count real, and never claims Wake Up fails', () => {
-  const lines = T.errorLines(406);
-  assert.ok(lines.some((l) => /This is the game/.test(l)));
-  assert.ok(lines.some((l) => /emi {2}x 406/.test(l)));
-  assert.ok(lines.some((l) => /Wake Up still works/.test(l)));
-  assert.ok(!lines.some((l) => /\b(she|her)\b/i.test(l)));
-  assert.match(lines.at(-1), /\.\.\.$/);
 });
 
 test('the ending module keeps its hard rules in the source', () => {
@@ -214,5 +225,5 @@ test('the ending module keeps its hard rules in the source', () => {
   assert.ok(!/getElementById\('wake'\)|#wake\b/.test(src), 'Wake Up is never touched');
   assert.ok(!/setTimeout|setInterval|requestAnimationFrame/.test(src), 'game clock only');
   const goon = readFileSync(new URL('../ui/unlocks/themes-b/goon.js', import.meta.url), 'utf8');
-  assert.match(goon, /emiTakeoverAborted\(\)\) return Promise\.resolve\(\)/);
+  assert.ok(!/COPY\.goon\.later|endingStage\(/.test(goon), 'no sunrise card after the take (owner 2026-11-09)');
 });

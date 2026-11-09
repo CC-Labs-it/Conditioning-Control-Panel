@@ -7,12 +7,12 @@ import { createAdCard, loadCardCss } from './card.js';
 
 const GIF_HOLD_MS = 2500;
 
-export function mountRunPoster({ doc, host, run, life, name, onBeat, autoplay = true, loop = false }) {
+export function mountRunPoster({ doc, host, run, life, name, onBeat, autoplay = true, loop = false, unit = true }) {
   const box = doc.createElement('div');
   box.className = 'adc-box';
   box.style.aspectRatio = '4 / 5';
   host.append(box);
-  const model = cardModel({ run, life, name, adNumber: run.store?.dr_serial?.serial, serialLabel: ADCARD_COPY.unit });
+  const model = unit ? cardModel({ run, life, name, adNumber: run.store?.dr_serial?.serial, serialLabel: ADCARD_COPY.unit }) : cardModel({ run, life, name });
   const win = doc.defaultView, cards = host.closest('#cards');
   const motion = win.matchMedia('(prefers-reduced-motion: reduce)');
   const reduced = () => doc.body.classList.contains('gentle') || motion.matches;

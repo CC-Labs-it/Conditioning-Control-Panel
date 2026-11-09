@@ -40,7 +40,7 @@ const families = {
   book: 'b_story x_story:moon b_memory:question',
   radio: 'b_radio lofi_radio',
   ink: 'b_ink drain:wave ce_blur:bar',
-  mascot: 'o_emi em_head em_jeal:heart em_mini:plus em_nap:moon em_play:play em_boss:crown go_auto:arrow go_will:star go_copy:plus go_hive:hex',
+  mascot: 'o_emi em_head em_jeal:heart em_mini:plus em_nap:moon em_play:play em_boss:crown go_tx:play go_will:star go_corp:coin go_hive:hex',
   billboard: 'o_native o_out:star',
   crown: 'p_gold p_life:loop',
   card: 'p_renew:loop ce_wall:lock',

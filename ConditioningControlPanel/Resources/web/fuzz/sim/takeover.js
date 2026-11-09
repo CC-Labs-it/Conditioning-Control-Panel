@@ -1,113 +1,160 @@
-/* sim/takeover.js - EMI Takeover (goon lane, owner 2026-11-09), the pure part. No DOM.
+/* sim/takeover.js - EMI Takeover (goon lane, owner 2026-11-09, v3 brief handoff-1109/TC-EMI-TAKEOVER-V3-BRIEF.md),
+ * the pure part of the run-up. No DOM. The ending's rules live in sim/takeover-end.js (re-exported at the bottom).
  *
- * The run-up: the player buys go_auto, go_will, go_copy, go_hive. After Self Copying the player's own manual taps make
- * the copies; after HIVE MIND copies also appear on their own and EMI buys her own three tiles with her tips. Tips are
- * her own count: nothing is ever taken from the bank.
- * The ending (go_end take): the screen fills with EMIs on a grid, their screens flicker pictures, the grid spells DROP
- * with EMI screens as pixels, then the error card. Timings live in TAKE. */
+ * The player buys go_tx (one EMI, her screen alternates pictures and her face), go_will (she walks, stops, comments,
+ * hops), go_corp (she gets her own budget and buys her own tiles: Amplifier, Overclock, Louder Opinions, then Self
+ * Replication), go_hive (the EMIs run the transmission in patterns). After Self Replication each of the player's own
+ * manual clicks turns a page object into an EMI or splits one off. If HIVE MIND is still unbought FORCE_S after
+ * Self Replication, EMI buys it herself (free). Her budget is her own number: nothing is ever taken from the bank. */
 
-export const CHAIN = Object.freeze(['go_auto', 'go_will', 'go_copy', 'go_hive']);
+export const CHAIN = Object.freeze(['go_tx', 'go_will', 'go_corp', 'go_hive']);
 
-/** The tiles EMI buys herself, in order. Prices are in her tips. */
-export const HER_TILES = Object.freeze([
-  Object.freeze({ id: 'h_tx', name: 'Transmission', price: 60, what: 'EMI screens show pictures.' }),
-  Object.freeze({ id: 'h_amp', name: 'Amplifier', price: 130, what: 'Every EMI gets bigger.' }),
-  Object.freeze({ id: 'h_uni', name: 'Unified Transmission', price: 220, what: 'Every EMI screen shows the same picture.' }),
-]);
-const TILE_IDS = HER_TILES.map((t) => t.id);
-
-/** How far the story is, from the rows owned. */
+/** How far the player's rows go, in order (a row switched off holds the story there). */
 export function stageOf(has) {
   let stage = 'none';
-  for (const [id, name] of [['go_auto', 'auto'], ['go_will', 'will'], ['go_copy', 'copy'], ['go_hive', 'hive']]) {
+  for (const [id, name] of [['go_tx', 'tx'], ['go_will', 'will'], ['go_corp', 'corp'], ['go_hive', 'hive']]) {
     if (!has(id)) break;
     stage = name;
   }
   return stage;
 }
 
-/** The bark pool for the moment: the stage, or her last purchase. */
-export function poolOf(stage, bought = []) {
-  if (stage === 'none') return null;
-  if (stage !== 'hive') return { auto: 'autonomy', will: 'free_will', copy: 'self_copying' }[stage];
-  if (bought.includes('h_uni')) return 'shopping_unified';
-  if (bought.includes('h_amp')) return 'shopping_amplifier';
-  if (bought.includes('h_tx')) return 'shopping_transmission';
-  return 'hive_mind';
+/** The tiles EMI buys herself, in order, with her budget. Self Replication is hers, never a player row. */
+export const HER_TILES = Object.freeze([
+  Object.freeze({ id: 'h_amp', name: 'Amplifier', price: 30, what: 'She gets bigger.' }),
+  Object.freeze({ id: 'h_oc', name: 'Overclock', price: 38, what: 'She walks a little faster and her pictures change a little faster.' }),
+  Object.freeze({ id: 'h_loud', name: 'Louder Opinions', price: 42, what: 'She comments more often.' }),
+  Object.freeze({ id: 'h_rep', name: 'Self Replication', price: 45, what: 'Your own clicks make more of her.' }),
+]);
+const TILE_IDS = HER_TILES.map((t) => t.id);
+
+/** The story moment, from the rows owned and her own tiles. HIVE MIND bought before Self Replication waits for it. */
+export function phaseOf(stage, bought = []) {
+  if (stage === 'none' || stage === 'tx' || stage === 'will') return stage;
+  const rep = bought.includes('h_rep');
+  if (stage === 'hive' && rep) return 'hive';
+  return rep ? 'rep' : 'corp';
 }
 
-/* ---- population: copies beside the main EMI ---- */
+/** The bark pool for the moment. */
+export function poolOf(phase, bought = []) {
+  if (phase === 'none') return null;
+  if (phase === 'corp') return bought.length ? 'shopping' : 'startup';
+  return { tx: 'transmission', will: 'free_will', rep: 'replication', hive: 'hive_mind' }[phase] || null;
+}
 
-export const POP = Object.freeze({
-  PRESSES: 12,          // manual taps per copy before HIVE MIND
-  PRESSES_HIVE: 8,      // and after it
-  SPLIT_GAP_S: 4,       // at most one copy per this long
-  SELF_S: 15,           // after HIVE MIND one copy on its own per this long
-  SELF_S_LITE: 25,
+/* ---- her budget and her tiles ---- */
+
+export const BUDGET = Object.freeze({
+  PER_S: 1,          // her budget grows this much a second on the game clock, from Founded Startup on
+  HURRY: 4,          // HIVE MIND already bought: she shops faster so the story catches up
+  BUY_GAP_S: 30,     // never two of her buys closer than this
 });
 
-/** The most copies (the main EMI not counted) on the page. Phones get about half. */
-export function copyCap(stage, bought = [], lite = false) {
-  if (stage !== 'copy' && stage !== 'hive') return 0;
-  let cap = lite ? 3 : 6;
-  if (stage === 'hive') cap = lite ? 4 : 8;
-  if (bought.includes('h_amp')) cap = lite ? 6 : 12;
-  if (bought.includes('h_uni')) cap = lite ? 8 : 16;
-  return cap;
-}
+/** Her budget after `dt` seconds. */
+export const budgetStep = (budget, dt, { phase, hurry = false }) =>
+  (phase === 'corp' ? budget + dt * BUDGET.PER_S * (hurry ? BUDGET.HURRY : 1) : budget);
 
-export const newPop = (copies = 0, meter = 0) => ({ copies, meter, lastSplit: -Infinity, selfAt: null });
-
-/** One trusted manual tap on the button. Auto taps, EMI's own taps and bouncing-copy presses never come here. */
-export function popPress(p, { stage }) {
-  if (stage !== 'copy' && stage !== 'hive') return p;
-  const need = stage === 'hive' ? POP.PRESSES_HIVE : POP.PRESSES;
-  /* Presses made while the page is full or inside the gap are kept, up to one copy banked. */
-  return { ...p, meter: Math.min(need * 2, p.meter + 1) };
-}
-
-/** Time passing (seconds on the game clock). Answers the next state and how many copies to make now (0 or 1). */
-export function popStep(p, { now, stage, cap, lite = false }) {
-  if (stage !== 'copy' && stage !== 'hive') return { pop: p, made: 0, self: false };
-  const need = stage === 'hive' ? POP.PRESSES_HIVE : POP.PRESSES;
-  let { copies, meter, lastSplit, selfAt } = p;
-  if (stage === 'hive' && selfAt == null) selfAt = now + 3;   // the first one nobody clicked for comes quickly
-  const room = copies < cap && now - lastSplit >= POP.SPLIT_GAP_S;
-  if (room && meter >= need) return { pop: { copies: copies + 1, meter: meter - need, lastSplit: now, selfAt }, made: 1, self: false };
-  if (room && stage === 'hive' && now >= selfAt) {
-    return { pop: { copies: copies + 1, meter, lastSplit: now, selfAt: now + (lite ? POP.SELF_S_LITE : POP.SELF_S) }, made: 1, self: true };
-  }
-  return { pop: { copies, meter, lastSplit, selfAt }, made: 0, self: false };
-}
-
-/* ---- her tips and her tiles ---- */
-
-export const TIPS = Object.freeze({ PER_S: 1, PER_TAP: 1, BUY_GAP_S: 40, FIRST_BUY_S: 25 });
-
-/** The tile she is saving for, or null when she owns all three. */
+/** The tile she is saving for, or null when she owns all four. */
 export const nextTile = (bought = []) => HER_TILES.find((t) => !bought.includes(t.id)) || null;
 
-/** May she buy now? Only after HIVE MIND, with the tips, and never two tiles close together. */
-export function canBuy({ stage, tips, bought = [], sinceBuyS, sinceHiveS }) {
+/** May she buy now? Only while she is a startup, with the budget, and never two tiles close together. */
+export function canBuy({ phase, budget, bought = [], sinceBuyS, hurry = false }) {
   const tile = nextTile(bought);
-  if (!tile || stage !== 'hive') return null;
-  if (tips < tile.price) return null;
-  if (sinceHiveS < TIPS.FIRST_BUY_S || sinceBuyS < TIPS.BUY_GAP_S) return null;
+  if (!tile || phase !== 'corp') return null;
+  if (budget < tile.price) return null;
+  if (sinceBuyS < BUDGET.BUY_GAP_S / (hurry ? BUDGET.HURRY : 1)) return null;
   return tile;
 }
 
-/** Her purchase: tips go down by the price, the tile is hers. The bank is not an argument on purpose. */
-export function buyTile({ tips, bought = [] }, tile) {
-  if (!tile || bought.includes(tile.id) || tips < tile.price) return { tips, bought };
-  return { tips: tips - tile.price, bought: [...bought, tile.id] };
+/** Her purchase: her budget goes down by the price, the tile is hers. The bank is not an argument on purpose. */
+export function buyTile({ budget, bought = [] }, tile) {
+  if (!tile || bought.includes(tile.id) || budget < tile.price) return { budget, bought };
+  return { budget: budget - tile.price, bought: [...bought, tile.id] };
 }
+
+/** What her tiles do to the swarm. */
+export function effectsOf(bought = []) {
+  return {
+    size: bought.includes('h_amp') ? 1.35 : 1,
+    speed: bought.includes('h_oc') ? 1.35 : 1,
+    picS: bought.includes('h_oc') ? [1.6, 2.3] : [2, 3],      // each screen holds a picture or her face this long
+    barkS: bought.includes('h_loud') ? [6, 12] : [12, 24],     // seconds between her comments
+    coolS: bought.includes('h_loud') ? 12 : 25,                // one EMI after speaking
+  };
+}
+
+/* ---- Self Replication: the player's own clicks ---- */
+
+export const REP = Object.freeze({
+  COOL_S: 0.4,       // at most one new EMI per this long
+  CAP: 30,           // EMIs on the page, the first one included
+  CAP_LITE: 12,
+  CONVERT: 0.5,      // the share of new EMIs that take a page object's place
+});
+
+export const repCap = (lite = false) => (lite ? REP.CAP_LITE : REP.CAP);
+
+/** One trusted manual click while Self Replication is hers. Answers what happens: null, 'convert' or 'split'.
+ *  `objects` = how many page objects could become an EMI right now. */
+export function repPress({ now, lastAt = -Infinity, count, lite = false, objects = 0, rng = Math.random }) {
+  if (now - lastAt < REP.COOL_S || count >= repCap(lite)) return null;
+  return objects > 0 && rng() < REP.CONVERT ? 'convert' : 'split';
+}
+
+/* ---- HIVE MIND: forced, then patterns ---- */
+
+export const HIVE = Object.freeze({
+  FORCE_S: 150,           // Self Replication hers this long and HIVE MIND still unbought: she buys it
+  ROTATE_S: [8, 12],      // one pattern holds this long
+  PERIOD_S: 2.4,          // one wave of the pattern
+  PERIOD_S_FAST: 2,       // with Overclock
+  MIN_GAP_S: 0.4,         // no screen changes faster than this, pattern switches included
+});
+
+export const mustForceHive = ({ phase, ownsHive, sinceRepS }) => phase === 'rep' && !ownsHive && sinceRepS >= HIVE.FORCE_S;
+
+export const PATTERNS = Object.freeze(['sweep', 'ripple', 'halves', 'all', 'chase']);
+
+/** The next pattern, never the same one twice in a row. */
+export function nextPattern(prev, rng = Math.random) {
+  const pool = PATTERNS.filter((p) => p !== prev);
+  return pool[Math.floor(rng() * pool.length)];
+}
+
+/** Does this EMI's screen show the picture now (true) or her face (false)? Each screen is lit for one stretch of
+ *  every period, so it changes twice a period at most. `x01` = left to right on the page, `d01` = distance from the
+ *  first EMI, `i`/`n` = her place in the line, `side` = 0 or 1 (which half of the page). */
+export function patternLit(pattern, { t, period = HIVE.PERIOD_S, x01 = 0, d01 = 0, i = 0, n = 1, side = 0 }) {
+  const frac = (v) => v - Math.floor(v);
+  const w = t / period;
+  switch (pattern) {
+    case 'sweep': return frac(w - x01 * 0.7) < 0.45;
+    case 'ripple': return frac(w - d01 * 0.8) < 0.4;
+    case 'halves': return frac(w + side * 0.5) < 0.5;
+    case 'chase': return frac(w * 0.5 - i / Math.max(1, n)) < 0.25;
+    default: return frac(w) < 0.55;   // all at once
+  }
+}
+
+/** Which picture of the pool a lit screen shows: one per wave, the same on every screen. */
+export const patternPic = (t, period = HIVE.PERIOD_S) => Math.floor(t / period);
+
+/* ---- the saved bag ---- */
 
 /** What the saved bag may hold: sane numbers, known tiles, in order. */
 export function cleanBag(raw) {
   const src = raw && typeof raw === 'object' ? raw : {};
-  const num = (v) => (Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
+  const num = (v) => (Number.isFinite(v) && v > 0 ? v : 0);
   const bought = TILE_IDS.filter((id, i) => Array.isArray(src.bought) && TILE_IDS.slice(0, i + 1).every((x) => src.bought.includes(x)));
-  return { copies: Math.min(16, num(src.copies)), meter: Math.min(24, num(src.meter)), tips: num(src.tips), bought, clicked: num(src.clicked), self: num(src.self) };
+  return {
+    copies: Math.min(REP.CAP - 1, Math.floor(num(src.copies))),
+    budget: Math.min(1000, num(src.budget)),
+    bought,
+    sinceRep: Math.min(HIVE.FORCE_S, num(src.sinceRep)),
+    clicked: Math.floor(num(src.clicked)),
+    took: Math.floor(num(src.took)),
+  };
 }
 
 /* ---- barks: text bubbles, never speech ---- */

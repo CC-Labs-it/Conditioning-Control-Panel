@@ -1,23 +1,24 @@
-// dev/emi-takeover-drive.mjs - drives EMI Takeover in muted headless Chrome (audio is NOT heard here).
-//   run-up   index.html?buy=go_hive: real clicks on the button make copies, she walks to her tile and buys it
-//   ending   dev/play-ending.html?end=go_end: buy the tile, press "Let her", click during the fill, then watch the
-//            phases: full screen, flicker, DROP, the error card (big EMI in its first frame), the face, the ending card
-//   panic    a panic suspend during the fill ends the show with no error card
-//   reduced  the same ending under prefers-reduced-motion (fades only)
-// Wake Up is hit-tested at every poll. Shots land in dev/shots/emi-takeover-*.png.
-// Env: FUZZ_BASE (default http://127.0.0.1:8853/fuzz/), CHROME_EXE, PW_DIR, W, H, TOUCH=1, ONLY=runup|ending|panic|reduced.
+// dev/emi-takeover-drive.mjs - drives the EMI Takeover run-up (v3 brief handoff-1109/TC-EMI-TAKEOVER-V3-BRIEF.md) in
+// muted headless Chrome (audio is NOT heard here). The go_end take has its own drive: dev/emi-takeover-end-drive.mjs.
+//   tx       Transmission: one EMI stays put, her screen alternates a picture and her face (2-3 s each)
+//   will     FREE WILL: she walks in short steps, stops, hops; never follows the cursor
+//   corp     Founded Startup: her budget fills her guest tile, she walks to it and buys it (Amplifier: bigger)
+//   rep      Self Replication: the player's own clicks turn page objects into EMIs or split one off; cap holds
+//   hive     HIVE MIND: forced by EMI 150 s after Self Replication (time handed over by the dev door), free for the
+//            player; screens run in patterns
+// Wake Up is hit-tested at every step. Shots land in $SHOTS (default dev/shots/).
+// Env: FUZZ_BASE (default http://127.0.0.1:8861/fuzz/), CHROME_EXE, PW_DIR, W, H, TOUCH=1, SHOTS.
 import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const require = createRequire('C:/wt-fe/e2e/');
 const { chromium } = require(process.env.PW_DIR || 'playwright');
-const base = process.env.FUZZ_BASE || 'http://127.0.0.1:8853/fuzz/';
+const base = process.env.FUZZ_BASE || 'http://127.0.0.1:8861/fuzz/';
 const W = Number(process.env.W || 1280), H = Number(process.env.H || 800);
 const touch = !!process.env.TOUCH;
 const tag = `${W}x${H}`;
-const only = process.env.ONLY || '';
-const shots = fileURLToPath(new URL('./shots/', import.meta.url));
+const shots = (process.env.SHOTS || fileURLToPath(new URL('./shots/', import.meta.url))).replace(/\\/g, '/').replace(/\/?$/, '/');
 mkdirSync(shots, { recursive: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const browser = await chromium.launch({
@@ -28,193 +29,185 @@ const browser = await chromium.launch({
 let failed = 0;
 const errors = [];
 const check = (name, ok, info = '') => { if (!ok) failed += 1; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${info ? ' - ' + info : ''}`); };
-async function open(url, opts = {}) {
-  const context = await browser.newContext({ viewport: { width: W, height: H }, hasTouch: touch, isMobile: touch, ...opts });
-  const page = await context.newPage();
-  page.on('pageerror', (e) => errors.push(String(e)));
-  page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource|ERR_|navigator\.vibrate/.test(m.text())) errors.push(m.text()); });
-  await page.goto(url, { waitUntil: 'load' });
-  return { context, page };
-}
-const shot = (page, name) => page.screenshot({ path: `${shots}emi-takeover-${name}-${tag}.png` });
-const wakeOk = (frame) => frame.evaluate(() => {
+const context = await browser.newContext({ viewport: { width: W, height: H }, hasTouch: touch, isMobile: touch });
+const page = await context.newPage();
+page.on('pageerror', (e) => errors.push(String(e)));
+page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource|ERR_|navigator\.vibrate/.test(m.text())) errors.push(m.text()); });
+const shot = (name, clip) => page.screenshot({ path: `${shots}emi-${name}-${tag}.png`, ...(clip ? { clip } : {}) });
+/** A close-up around the first EMI (and her bubble). */
+const near = async (pad = 150) => {
+  const m = (await state()).main;
+  const x = Math.max(0, m.x - pad), y = Math.max(0, m.y - pad);
+  return { x, y, width: Math.min(W - x, m.size + pad * 2), height: Math.min(H - y, m.size + pad * 2) };
+};
+const state = () => page.evaluate(() => window.__emiSwarm.state());
+const wakeOk = () => page.evaluate(() => {
   const r = document.getElementById('wake')?.getBoundingClientRect();
   return !!r && r.width > 0 && document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)?.id === 'wake';
 });
-const press = (page, x, y) => (touch ? page.touchscreen.tap(x, y) : page.mouse.click(x, y));
-
-/* ---------- run-up ---------- */
-async function runup() {
-  const { context, page } = await open(`${base}index.html?buy=go_hive&pictures=online${touch ? '&lite=1' : ''}`);
-  await page.waitForFunction(() => window.__emiSwarm, null, { timeout: 20000 });
-  await wait(2500);
-  let s = await page.evaluate(() => window.__emiSwarm.state());
-  check('run-up: HIVE MIND stage, the first copy is there', s.stage === 'hive' && s.copies >= 1, JSON.stringify(s));
-  const before = s.copies;
-  const b = await page.evaluate(() => { const r = document.getElementById('btn').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
-  let wake = true;
-  for (let i = 0; i < 44; i++) { await press(page, b.x, b.y); await wait(260); if (i % 8 === 0) wake = wake && await wakeOk(page); }
-  s = await page.evaluate(() => window.__emiSwarm.state());
-  check('run-up: the player\'s clicks made copies', s.copies > before, `${before} -> ${s.copies}`);
-  await shot(page, 'copies');
-  await page.evaluate(() => window.__emiSwarm.tip(500));
-  let walked = false, bought = false, maxBub = 0;
-  for (let i = 0; i < 260 && !bought; i++) {
-    s = await page.evaluate(() => window.__emiSwarm.state());
-    maxBub = Math.max(maxBub, s.bubbles);
-    if (s.shopping && !walked) { walked = true; await wait(700); await shot(page, 'buying'); }
-    bought = s.bought.includes('h_tx');
-    wake = wake && await wakeOk(page);
-    await wait(200);
+const mainScreen = () => page.evaluate(() => {
+  const s = document.querySelector('#l-over .et-box .et-emi .et-s');
+  return s?.dataset.pic ? 'pic' : 'face';
+});
+let wake = true;
+const closeCards = () => page.evaluate(() => {
+  for (let i = 0; i < 6; i++) {
+    const b = [...document.querySelectorAll('#cards button')].filter((x) => x.offsetParent && /^(close|later|no|not yet|ok|okay|skip|got it)$/i.test(x.textContent.trim()));
+    if (!b.length) break;
+    b.at(-1).click();
   }
-  check('run-up: she walked to her tile and bought Transmission', walked && bought, JSON.stringify(s));
-  await wait(600);
-  await shot(page, 'bought');
-  const money = await page.evaluate(() => ({ spent: window.fuzz.state.spent, guest: !!document.querySelector('#rows .et-guest') }));
-  check('run-up: her buy took nothing from the bank', !Object.keys(money.spent || {}).some((k) => /emi|tip|h_/.test(k)), JSON.stringify(money));
-  await wait(9000);
-  s = await page.evaluate(() => window.__emiSwarm.state());
-  check('run-up: screens show pictures after Transmission', s.pics >= 1, `${s.pics} screens`);
-  const imgs = await page.evaluate(() => [...document.querySelectorAll('.et-p')].every((i) => i.referrerPolicy === 'strict-origin' && !i.closest('canvas')));
-  check('run-up: pictures are DOM <img> with referrerPolicy strict-origin', imgs);
-  await shot(page, 'transmission');
-  check('run-up: never more than 2 bubbles', maxBub <= 2, `max ${maxBub}`);
-  check('run-up: Wake Up stayed on top', wake && await wakeOk(page));
-  await context.close();
+});
+
+/* go_head brings three picture screens; a metronome and a toy give her more to take later */
+await page.goto(`${base}index.html?buy=go_tx,a_tick,toy_box&pictures=online${touch ? '&lite=1' : ''}`, { waitUntil: 'load' });
+await page.waitForFunction(() => window.__emiSwarm, null, { timeout: 20000 });
+await page.evaluate(() => window.fuzz.engine.audio.arm?.());
+await wait(1500);
+await closeCards();
+
+/* ---------- Transmission ---------- */
+let s = await state();
+check('tx: the Transmission stage, one EMI', s.phase === 'tx' && s.count === 1, JSON.stringify(s));
+const start = { x: s.main.x, y: s.main.y };
+const seenModes = new Set();
+let pic = false, face = false;
+for (let i = 0; i < 40 && !(pic && face); i++) {
+  const m = await mainScreen();
+  seenModes.add(m);
+  if (m === 'pic' && !pic) { pic = true; await shot('tx-picture', await near()); }
+  if (m === 'face' && !face && i > 3) { face = true; await shot('tx-face', await near()); }
+  wake = wake && await wakeOk();
+  await wait(300);
 }
+s = await state();
+check('tx: her screen alternates a picture and her face', seenModes.has('pic') && seenModes.has('face'), [...seenModes].join(','));
+check('tx: she stays put', Math.hypot(s.main.x - start.x, s.main.y - start.y) < 1, `${start.x.toFixed(0)},${start.y.toFixed(0)} -> ${s.main.x.toFixed(0)},${s.main.y.toFixed(0)}`);
+const imgs = await page.evaluate(() => [...document.querySelectorAll('.et-p')].every((i) => i.referrerPolicy === 'strict-origin' && !i.closest('canvas')));
+check('tx: pictures are DOM <img> with referrerPolicy strict-origin', imgs);
+await shot('tx-page');
 
-/* ---------- the ending ---------- */
-async function ending({ reduced = false } = {}) {
-  const name = reduced ? 'reduced' : 'ending';
-  const { context, page } = await open(`${base}dev/play-ending.html?end=go_end&pictures=online${touch ? '&lite=1' : ''}`, reduced ? { reducedMotion: 'reduce' } : {});
-  await page.waitForFunction(() => document.getElementById('game')?.contentWindow?.fuzz && /glowing/.test(document.getElementById('note')?.textContent || ''), null, { timeout: 40000 });
-  const frame = page.frames().find((f) => /index\.html/.test(f.url()));
-  await wait(1500);
-  await page.evaluate(() => document.getElementById('note')?.remove());
-  await frame.evaluate(() => window.fuzz.engine.audio.arm?.());
-  /* the real path: the shop tile, then "Let her" */
-  const yes = frame.locator('#cards button', { hasText: 'Let her' });
-  for (let tries = 0; tries < 8 && !(await yes.count()); tries++) {
-    /* the play door lands a crowded page: close whatever card is up first (a quiz, a remote, a pop-up) */
-    for (let i = 0; i < 6; i++) {
-      const closed = await frame.evaluate(() => {
-        const b = [...document.querySelectorAll('#cards button')].filter((x) => x.offsetParent && /^(close|later|no|not yet|ok|okay|skip)$/i.test(x.textContent.trim()));
-        if (b.length) b.at(-1).click();
-        return b.length > 0;
-      });
-      if (!closed) break;
-      await wait(350);
+/* ---------- FREE WILL ---------- */
+await page.evaluate(() => window.fuzz.grant('go_will'));
+await closeCards();
+let moved = 0, jumped = false, walkShot = false, last = (await state()).main, flips = new Set();
+/* park the mouse on the page: she must not come to it */
+await page.mouse.move(W * 0.5, H * 0.5);
+for (let i = 0; i < 160 && !(jumped && walkShot && moved > 120); i++) {
+  s = await state();
+  moved += Math.hypot(s.main.x - last.x, s.main.y - last.y);
+  flips.add(s.main.dir);
+  last = s.main;
+  if (s.main.state === 'walk' && !walkShot && moved > 20) { walkShot = true; await shot('will-walk', await near()); }
+  if (s.main.jumping && !jumped) { jumped = true; await wait(130); await shot('will-jump', await near()); }
+  wake = wake && await wakeOk();
+  await wait(200);
+}
+check('will: she walks on her own', moved > 60, `${moved.toFixed(0)} px`);
+check('will: she hops now and then', jumped);
+const leaning = await page.evaluate(() => [...document.querySelectorAll('.et-emi')].map((e) => e.style.transform).filter((tr) => /scale(?!X\(-1\))|scaleY|rotate|skew|matrix/.test(tr)));
+check('will: no stretch, squash or tilt on her, only a flip', leaning.length === 0, leaning.slice(0, 3).join(' | '));
+
+/* ---------- Founded Startup ---------- */
+await page.evaluate(() => window.fuzz.grant('go_corp'));
+await closeCards();
+const bankBefore = await page.evaluate(() => window.fuzz.state.spent);
+await page.evaluate(() => window.__emiSwarm.dev.budget(31));
+const size0 = (await state()).main.size;
+let walkedToTile = false, bought = false;
+for (let i = 0; i < 120 && !bought; i++) {
+  s = await state();
+  if (s.shopping && !walkedToTile) { walkedToTile = true; await wait(600); await shot('corp-buying'); }
+  bought = s.bought.includes('h_amp');
+  wake = wake && await wakeOk();
+  await wait(150);
+}
+await wait(500);
+await shot('corp-bought');
+s = await state();
+check('corp: she walked to her guest tile and bought Amplifier', walkedToTile && bought, JSON.stringify(s.bought));
+check('corp: Amplifier made her bigger', s.main.size > size0, `${size0} -> ${s.main.size}`);
+const spent = await page.evaluate(() => window.fuzz.state.spent);
+check('corp: her buy took nothing from the bank', JSON.stringify(spent) === JSON.stringify(bankBefore), JSON.stringify(spent));
+const guestText = await page.evaluate(() => document.querySelector('#rows .et-guest')?.textContent || '');
+check('corp: her guest tile is in the shop', /Amplifier|Overclock/.test(guestText), guestText);
+
+/* ---------- Self Replication ---------- */
+await page.evaluate(() => window.__emiSwarm.dev.tiles(4));
+await wait(400);
+s = await state();
+check('rep: Self Replication is hers', s.phase === 'rep', s.phase);
+const btn = await page.evaluate(() => { const r = document.getElementById('btn').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+const before = s.count;
+let convertShot = false;
+for (let i = 0; i < 26; i++) {
+  if (touch) await page.touchscreen.tap(btn.x, btn.y); else await page.mouse.click(btn.x, btn.y);
+  await wait(460);
+  s = await state();
+  if (s.gone >= 1 && !convertShot) { convertShot = true; await wait(200); await shot('rep-converted'); }
+  if (i % 6 === 0) wake = wake && await wakeOk();
+}
+s = await state();
+check('rep: the player\'s clicks made EMIs', s.count > before + 5, `${before} -> ${s.count}`);
+check('rep: some page objects became EMIs', s.gone >= 1, `${s.gone} taken`);
+await page.evaluate(() => window.fuzz.engine.tap({ auto: true }));
+const autoCount = (await state()).count;
+for (let i = 0; i < 5; i++) { await page.evaluate(() => window.fuzz.engine.tap({ auto: true })); await wait(450); }
+check('rep: auto taps make nobody', (await state()).count === autoCount);
+await shot('rep-crowd');
+
+/* ---------- HIVE MIND, forced ---------- */
+const fuzzBefore = await page.evaluate(() => window.fuzz.state.fuzz);
+await page.evaluate(() => window.__emiSwarm.dev.sinceRep(149));
+await page.waitForFunction(() => window.fuzz.state.owned.go_hive > 0, null, { timeout: 8000 }).catch(() => {});
+s = await state();
+const fuzzAfter = await page.evaluate(() => window.fuzz.state.fuzz);
+check('hive: EMI bought HIVE MIND herself', s.phase === 'hive', s.phase);
+check('hive: it was free for the player', fuzzAfter >= fuzzBefore - 1, `${Math.round(fuzzBefore)} -> ${Math.round(fuzzAfter)}`);
+const toast = await page.evaluate(() => document.getElementById('l-toast')?.textContent || '');
+check('hive: a toast says she did', /HIVE MIND/.test(toast), toast);
+const patterns = new Set();
+let litMax = 0;
+for (let i = 0; i < 90 && patterns.size < 3; i++) {
+  s = await state();
+  if (s.pattern && !patterns.has(s.pattern)) { patterns.add(s.pattern); await wait(900); await shot(`hive-${s.pattern}`); }
+  litMax = Math.max(litMax, s.pics);
+  wake = wake && await wakeOk();
+  await wait(300);
+}
+check('hive: patterns rotate', patterns.size >= 2, [...patterns].join(','));
+check('hive: screens light together', litMax >= 3, `${litMax} lit at once`);
+
+/* every screen change under 3 a second, measured on the page */
+const gaps = await page.evaluate(async () => {
+  const last = new WeakMap(), out = [];
+  const mo = new MutationObserver((list) => {
+    for (const m of list) {
+      const el = m.target.closest?.('.et-s');
+      if (!el || (m.attributeName === 'src' && !m.target.classList.contains('et-p'))) continue;
+      const now = performance.now(), was = last.get(el);
+      if (was && now - was > 5) out.push(now - was);
+      last.set(el, now);
     }
-    await frame.evaluate(() => document.querySelector('#shop [data-id="go_end"]')?.click());
-    await wait(700);
-  }
-  await yes.waitFor({ timeout: 8000 });
-  if (!reduced) await shot(page, 'let-her');
-  await yes.click();
-  await frame.waitForFunction(() => window.__emiTakeoverProbe, null, { timeout: 8000 });
-  /* in the page: the error card's first frame (is the big EMI there, whole, loaded?) and how fast screens change */
-  await frame.evaluate(() => {
-    const out = (window.__etWatch = { first: null, gaps: [], cells: 0 });
-    const root = document.getElementById('l-ending');
-    new MutationObserver(() => {
-      const card = root.querySelector('.et-err');
-      if (card && !out.first) {
-        const big = card.previousElementSibling, img = big?.querySelector('.et-b'), r = big?.getBoundingClientRect(), cs = big && getComputedStyle(big);
-        out.first = { big: !!big?.classList.contains('et-emi'), loaded: !!img?.complete && img.naturalWidth > 0, opacity: cs?.opacity, anims: big?.getAnimations().length,
-          w: r?.width, h: r?.height, ratio: r ? r.width / r.height : 0, logo: !!card.querySelector('.eh img'), text: card.textContent.slice(0, 40), face: big?.querySelector('.et-f')?.getAttribute('src')?.length > 100 };
-      }
-    }).observe(root, { childList: true, subtree: true });
-    const last = new WeakMap();
-    new MutationObserver((list) => {
-      for (const m of list) {
-        if (m.attributeName === 'src' && !m.target.classList.contains('et-p')) continue;   // a face change is not a picture change
-        const el = m.target.closest?.('.et-s');
-        if (!el) continue;
-        const now = performance.now(), was = last.get(el);
-        if (was && now - was > 5) out.gaps.push(now - was);
-        if (!was) out.cells += 1;
-        last.set(el, now);
-      }
-    }).observe(root, { attributes: true, subtree: true, attributeFilter: ['src', 'data-off'] });
   });
-  const seen = {};
-  const info = { wake: true, bubblesLate: 0, maxBub: 0, fillS: 0, cells: 0 };
-  const t0 = Date.now();
-  let p = null, clicksLeft = reduced ? 0 : 14, last = '';
-  while (Date.now() - t0 < 120000) {
-    p = await frame.evaluate(() => window.__emiTakeoverProbe?.() || null).catch(() => null);
-    if (!p) break;
-    info.wake = info.wake && await wakeOk(frame);
-    info.maxBub = Math.max(info.maxBub, p.bubbles);
-    info.cells = p.cells;
-    if (['flicker', 'resolve', 'drop', 'error', 'face', 'close', 'gentle'].includes(p.phase)) info.bubblesLate += p.bubbles;
-    if (p.phase !== last) { console.log(`   ${((Date.now() - t0) / 1000).toFixed(1)} s  ${p.phase}  filled ${p.filled}/${p.cells}`); last = p.phase; }
-    const once = async (key, cond, delay = 0) => { if (!seen[key] && cond) { seen[key] = p; if (delay) await wait(delay); await shot(page, `${name}-${key}`); } };
-    if (p.phase === 'fill' && clicksLeft > 0 && p.t > 3) {
-      const x = W * (0.15 + Math.random() * 0.7), y = H * (0.3 + Math.random() * 0.6);
-      await press(page, x, y); clicksLeft -= 1;
-    }
-    await once('fill', p.phase === 'fill' && p.filled > p.cells * 0.3);
-    if (p.phase === 'settle' && !info.fillS) info.fillS = p.t;
-    await once('full', p.phase === 'settle', 900);
-    await once('flicker', p.phase === 'flicker', 1500);
-    await once('gentle', p.phase === 'gentle', 1500);
-    await once('drop', p.phase === 'drop', 1200);
-    await once('error', p.phase === 'error');
-    if (seen.error && !seen.error2 && p.phase === 'error' && p.t - seen.error.t > 3.2) { seen.error2 = p; await shot(page, `${name}-error-typed`); }
-    await once('face', p.phase === 'face', 250);
-    await wait(p.phase === 'drop' || p.phase === 'error' ? 40 : 120);
-  }
-  const watch = await frame.evaluate(() => window.__etWatch);
-  const minGap = watch.gaps.length ? Math.min(...watch.gaps) : Infinity;
-  check(`${name}: the screen filled`, !!seen.full, `${info.cells} EMIs in ${info.fillS.toFixed(1)} s, grid ${seen.full?.cols}x${seen.full?.rows}${seen.full?.stacked ? ' stacked' : ''}`);
-  if (!reduced) check(`${name}: clicks made EMIs during the fill`, (seen.full?.clicks || 0) > 0, `${seen.full?.clicks} clicks counted`);
-  check(`${name}: DROP formed: every letter screen lit with one picture, the rest dark`, !!seen.drop && seen.drop.lit === seen.drop.wantLit && seen.drop.dark === seen.drop.cells - seen.drop.wantLit && seen.drop.readable, JSON.stringify(seen.drop && { lit: seen.drop.lit, want: seen.drop.wantLit, dark: seen.drop.dark, cells: seen.drop.cells }));
-  if (!reduced) check(`${name}: no screen changed 3 times a second`, minGap >= 334, `fastest change ${Math.round(minGap)} ms over ${watch.gaps.length} changes`);
-  else check(`${name}: no flicker phase under reduced motion`, !seen.flicker && !!seen.gentle);
-  const f = watch.first;
-  check(`${name}: the error card's first frame has the big EMI, loaded, undistorted, and the logo`, !!f && f.big && f.loaded && f.logo && Math.abs(f.ratio - 859 / 869) < 0.01 && (reduced || (f.opacity === '1' && f.anims === 0)), JSON.stringify(f));
-  check(`${name}: the uncanny face showed`, seen.face?.face === 'uncanny');
-  check(`${name}: no bubble from the pictures on`, info.bubblesLate === 0, `max ${info.maxBub} during the fill`);
-  check(`${name}: at most 3 bubbles at once`, info.maxBub <= 3);
-  check(`${name}: Wake Up stayed on top the whole take`, info.wake);
-  /* after the dark: the goon ending card, then the credits with the recap */
-  let card = false, credits = false;
-  for (let i = 0; i < 300; i++) {
-    const st = await frame.evaluate(() => ({ ending: document.getElementById('l-ending')?.innerText || '', credits: !!document.querySelector('#l-credits *, .credits, [data-rr]'), title: /TAKEOVER/i.test(document.getElementById('l-ending')?.innerText || '') }));
-    if (!card && st.ending.trim().length > 20 && !/ERROR SYS/.test(st.ending)) { card = true; check(`${name}: no takeover title screen`, !st.title); await wait(2600); await shot(page, `${name}-card`); await press(page, W / 2, H * 0.3); }
-    if (card && st.credits) { credits = true; await wait(4500); await shot(page, `${name}-recap`); break; }
-    await wait(200);
-  }
-  check(`${name}: the normal ending card came after the dark`, card);
-  check(`${name}: then the credits and the run recap`, credits);
-  check(`${name}: Wake Up still on top at the end`, await wakeOk(frame));
-  await context.close();
-}
+  mo.observe(document.getElementById('l-over'), { attributes: true, subtree: true, attributeFilter: ['data-pic', 'src'] });
+  await new Promise((r) => setTimeout(r, 12000));
+  mo.disconnect();
+  return out;
+});
+const minGap = gaps.length ? Math.min(...gaps) : Infinity;
+check('hive: no screen changed 3 times a second', minGap >= 334, `fastest ${Math.round(minGap)} ms over ${gaps.length} changes`);
+check('Wake Up stayed on top', wake && await wakeOk());
 
-/* ---------- panic ---------- */
-async function panic() {
-  const { context, page } = await open(`${base}index.html?buy=go_hive&pictures=online`);
-  await page.waitForFunction(() => window.__emiSwarm, null, { timeout: 20000 });
-  await wait(1500);
-  await page.evaluate(() => { window.fuzz.end('go_end'); });
-  await page.waitForFunction(() => window.__emiTakeoverProbe, null, { timeout: 8000 });
-  await wait(3000);
-  await page.evaluate(() => window.fuzz.engine.setSuspended(true, 'panic'));
-  await wait(600);
-  const gone = await page.evaluate(() => !window.__emiTakeoverProbe);
-  await page.evaluate(() => window.fuzz.engine.setSuspended(false, 'panic'));
-  await wait(5000);
-  const after = await page.evaluate(() => ({ err: !!document.querySelector('.et-err'), text: document.getElementById('l-ending')?.innerText || '' }));
-  check('panic: the take ended at once', gone);
-  check('panic: no error card and no ending show', !after.err && !/ERROR SYS/.test(after.text), after.text.slice(0, 60));
-  await context.close();
-}
+/* switching Transmission off puts every taken object back */
+await page.evaluate(() => window.fuzz.engine.switches.set('go_tx', false));
+await wait(500);
+const back = await page.evaluate(() => ({ hidden: document.querySelectorAll('[data-et-gone]').length, emis: document.querySelectorAll('.et-emi').length, swarm: !!window.__emiSwarm }));
+check('switch off: every taken object is back, no EMI left', back.hidden === 0 && back.emis === 0 && !back.swarm, JSON.stringify(back));
+await page.evaluate(() => window.fuzz.engine.switches.set('go_tx', true));
+await wait(800);
+s = await page.evaluate(() => window.__emiSwarm?.state());
+check('switch on: the story resumes where it was', s?.phase === 'hive' && s.count > 1, JSON.stringify(s && { phase: s.phase, count: s.count }));
 
-if (!only || only === 'runup') await runup();
-if (!only || only === 'ending') await ending();
-if (!only || only === 'panic') await panic();
-if (!only || only === 'reduced') await ending({ reduced: true });
 check('no page errors', errors.length === 0, errors.slice(0, 6).join(' | '));
 await browser.close();
 console.log(failed ? `${failed} FAILED` : 'all ok');

@@ -203,8 +203,8 @@ export function openRunRecap({ cards, doc, id, run, life, hooks, audio, name = '
   const frame = h('div', 'rr-frame', null, tilt);
   h('i', 'rr-glare', null, tilt).setAttribute('aria-hidden', 'true');
   let poster = null;
-  if (id === 'dr_end') {
-    poster = mountRunPoster({ doc, host: frame, run, life, name, autoplay: false, loop: true, onBeat: (beat, i) => {
+  if (id === 'dr_end' || id === 'go_end') {
+    poster = mountRunPoster({ doc, host: frame, run, life, name, autoplay: false, loop: true, unit: id === 'dr_end', onBeat: (beat, i) => {
       if (controller.signal.aborted || root.closest('[inert]') || doc.hidden) return;
       openChannel();
       playCardCue(audio, doc, beatCue(beat, i), { source: SOURCE, sourceLabel: title, signal: controller.signal });
