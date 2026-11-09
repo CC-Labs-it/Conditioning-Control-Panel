@@ -5,6 +5,7 @@ import { ENDINGS } from '../../../data/content/endings.js';
 import { mountPodcast } from '../podcast-player.js';
 import { COPY } from './copy.js';
 import { themeScreens } from '../themes-a/theme-screens.js';
+import takeover, { emiTakeoverTake, emiTakeoverAborted } from './emi-takeover.js';
 import { buttonCentre, docOf, endingStage, endingWords, fresh, gallery, moment, motion, pick, ring, sfx, slot, tile } from './kit.js';
 
 const R = THEMES.goon.rules;
@@ -244,10 +245,17 @@ export default {
     },
   },
 
-  /* Sunrise through the curtain. Four hours later. */
+  ...takeover,
+
+  /* EMI Takeover (./emi-takeover.js): the take fills the screen with her and ends in the dark. Then the card this
+   * ending always had: sunrise through the curtain, four hours later. Panic during the take skips both. */
   go_end: {
     mount() { return {}; },
+    fadeColour: '#000',
+    fadeMs: 200,
+    take(ctx) { return emiTakeoverTake(ctx); },
     ending(ctx) {
+      if (emiTakeoverAborted()) return Promise.resolve();
       const data = ENDINGS.go_end;
       return endingStage(ctx, 'background:#16110d;color:#f7e6cf;--font:"Segoe UI",system-ui,sans-serif;', 16000, (root) => {
         const b = ctx.bounds(), w = Math.min(420, b.w - 48), h = Math.round(w * 0.6);

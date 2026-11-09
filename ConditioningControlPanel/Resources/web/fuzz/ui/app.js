@@ -300,7 +300,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       return;
     }
     if (it.kind === 'end' && id !== 'onemore') {
-      cards.open({ title: it.name, body: `${it.what} ${it.line}`, front: true, buttons: [{ label: 'Yes', onPress: () => engine.buy(id) }, { label: 'Not yet' }] });
+      cards.open({ title: it.name, body: `${it.what} ${it.line}`, front: true, buttons: [{ label: id === 'go_end' ? 'Let her' : 'Yes', onPress: () => engine.buy(id) }, { label: 'Not yet' }] });
       return;
     }
     /* The terms card (ui/clause.js): accept first, then the purchase lands exactly as before. */

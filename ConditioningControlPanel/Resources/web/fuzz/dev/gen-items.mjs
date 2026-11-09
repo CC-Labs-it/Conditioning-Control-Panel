@@ -31,6 +31,8 @@ const REQ_OVERRIDE = {
   /* Owner 2026-11-09: Phone Buzz is never offered where nothing can buzz (ui/platform.js), so Fake Inbox opens beside it
    * instead of behind it; otherwise a desktop run could never reach the inbox chain. */
   inbox: ['levels'],
+  /* Owner 2026-11-09, EMI Takeover: the goon ending sits behind the four EMI rows (LATE_ROWS). */
+  go_end: ['go_hive'],
 };
 /* The main path in the order it is walked: E.goal takes the first unowned row, so ITEMS keeps this order. */
 const TRUNK_ORDER = ['start', 'stray', 'fpsv', 'f1', 'softw', 'ticker', 'f5', 'f3', 'depth', 'f2', 'banner', 'f4', 'glossy', 'taste2', 'overlay', 'takeover', 'wallpaper', 'tunnel', 'drop'];
@@ -49,6 +51,12 @@ const LATE_ROWS = [
   { after: 'si_rules', id: 'si_track', emoji: '📦', name: 'Order Tracking', what: 'The button becomes a parcel tracker for one frilly uniform. Every tap moves it one step closer to your door.', line: 'Signed for, by you.', cost: 85000, lane: 'sissy', req: ['si_rules'], pay: 'c', click: 80 },
   { after: 'si_track', id: 'si_posture', emoji: '🪑', name: 'Posture Check', what: 'Now and then a card asks you to sit up straight. Hold still for three seconds and it pays.', line: 'Shoulders back. Stay.', cost: 110000, lane: 'sissy', req: ['si_track'], pay: 'f', fps: 366 },
   { after: 'si_posture', id: 'si_notes', emoji: '💌', name: 'Thank-You Notes', what: 'A big purchase brings a small handwritten note thanking you for being so good.', line: 'With gratitude, and a little lace.', cost: 300000, lane: 'sissy', req: ['si_posture'], pay: 'f', fps: 566 },
+  /* Owner 2026-11-09, EMI Takeover: four rows between Fake Online Count and the goon ending. EMI gets up, wants things,
+   * copies herself on the player's clicks, then the copies agree and she shops for herself (ui/unlocks/themes-b/emi-takeover.js). */
+  { after: 'go_pals', id: 'go_auto', emoji: '🚶', name: 'Give EMI Autonomy', what: 'EMI gets up and wanders the page on her own. She taps the button for you every few seconds.', line: 'Nobody dragged her. She checked.', cost: 780000, lane: 'goon', req: ['go_pals'], pay: 'c', click: 300 },
+  { after: 'go_auto', id: 'go_will', emoji: '💭', name: 'Give EMI FREE WILL', what: 'EMI starts wanting things. She keeps her own tips and eyes the shop.', line: 'It feels like wanting snacks.', cost: 930000, lane: 'goon', req: ['go_auto'], pay: 'f', fps: 1700 },
+  { after: 'go_will', id: 'go_copy', emoji: '👯', name: 'Self Copying', what: 'Your own taps make more of her. Every dozen taps, one more EMI.', line: 'You clicked. Now there are two.', cost: 1120000, lane: 'goon', req: ['go_will'], pay: 'c', click: 380 },
+  { after: 'go_copy', id: 'go_hive', emoji: '🐝', name: 'HIVE MIND', what: 'The EMIs agree with each other. They copy on their own now, and she buys her own tiles.', line: 'They voted. You were a yes.', cost: 1350000, lane: 'goon', req: ['go_copy'], pay: 'f', fps: 2100 },
 ];
 function addLate(rows) {
   const out = [...rows];
@@ -141,7 +149,10 @@ const BUTTON_NAMES = {
   bi_lips:'Bambi Cloud Button', dr_hex:'Firmware Download', tr_skin:'Fortune 8-Ball', go_worn:'Still Watching',
   lo_pad:'Keyholder Support', ce_bar:'Redacted Button',
 };
+/* Owner 2026-11-09: the goon ending is the EMI Takeover. The id go_end stays (prestige, PINNED_ENDS). */
+const NAME_OVERRIDE = { go_end: 'Ending: EMI Takeover' };
 const WHAT_OVERRIDE = {
+  go_end: 'Ends the run: you let EMI press this one. The page will pretend to crash. It is fine, and Wake Up stays yours.',
   bi_lips:'Sign in with Bambi Cloud. The button already knows your name.',
   dr_hex:'Tap to download drone firmware. Tap again to install the user.',
   tr_skin:'A fortune ball swings on its chain. Tap on center for a reading and extra click income.',
@@ -204,7 +215,7 @@ export function buildItems() {
   const items = rows.map((r) => {
     const c = copy.items[r.id] || r;   // the design rows carry old names too: copy.json wins, and only the rows it does not know speak for themselves
     if (!c) throw new Error(`copy.json has no ${r.id}`);
-    const it = { id: r.id, emoji: r.emoji, name: BUTTON_NAMES[r.id] || (r.id === 'trail' ? 'Stardust' : cur(c.name)), what: cur(WHAT_OVERRIDE[r.id] || c.what), line: cur(r.line), cost: r.cost, lane: r.lane, req: REQ_OVERRIDE[r.id] || r.req, pay: r.pay };
+    const it = { id: r.id, emoji: r.emoji, name: NAME_OVERRIDE[r.id] || BUTTON_NAMES[r.id] || (r.id === 'trail' ? 'Stardust' : cur(c.name)), what: cur(WHAT_OVERRIDE[r.id] || c.what), line: cur(r.line), cost: r.cost, lane: r.lane, req: REQ_OVERRIDE[r.id] || r.req, pay: r.pay };
     const fps = r.fps || EXTRA_PAY[r.id]?.fps;
     if (fps) it.fps = planPay(fps, r.lane, r.cost);
     if (r.click) it.click = planPay(r.click, r.lane, r.cost);

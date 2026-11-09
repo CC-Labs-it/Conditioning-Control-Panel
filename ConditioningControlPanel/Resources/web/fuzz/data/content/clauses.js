@@ -721,6 +721,18 @@ export const CLAUSES = Object.freeze({
  "go_pals": [
   "I accept a fake counter of others online, all of them nodding along."
  ],
+ "go_auto": [
+  "I accept that she moves on her own now, and that watching her do it is easier than doing it myself."
+ ],
+ "go_will": [
+  "I give her free will, freely, and I notice how nice it feels to have less of mine."
+ ],
+ "go_copy": [
+  "I accept that my own clicks make more of her. I will stop counting when it gets soft."
+ ],
+ "go_hive": [
+  "I accept that they talk about me, agree about me, and that I am happy to be agreed on."
+ ],
  "go_end": [
   "This run ends with a drawn sunrise through a curtain, then a real link to Goon.",
   "The real sunrise may be out there too. I will not be able to tell which I earned."

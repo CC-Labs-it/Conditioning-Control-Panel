@@ -23,6 +23,7 @@
 /* Dev launcher: lands a filled run one shop buy away from an ending (local 8817 host only, dev doors).
    ?end=bi_end (default)    the ending item; its chain is granted and the wallet topped up to afford it
    ?buy=a,b,c               extra items on top of the basics
+   ?pictures=online         passed on to the game (placeholder art), like ?lite
    The game runs standalone in a same-origin frame (8817 is not a web host origin), so audio and the page are the real thing. */
 import { BY_ID } from '../data/items.js';
 import * as E from '../sim/economy.js';
@@ -35,7 +36,8 @@ const basics = ['colour', 'font', 'sound', 'rounded', 'softw', 'a_rain', 'v_fram
 const extra = (qs.get('buy') || '').split(',').map((s) => s.trim()).filter(Boolean);
 const buy = [...new Set([...end.req, ...basics, ...extra])]; // the theme chain first: a side item that needs the theme fork would otherwise pick its first option
 const frame = document.getElementById('game');
-frame.src = `../index.html?buy=${buy.join(',')}`;
+const pass = ['pictures', 'lite'].filter((k) => qs.get(k)).map((k) => `&${k}=${encodeURIComponent(qs.get(k))}`).join('');
+frame.src = `../index.html?buy=${buy.join(',')}${pass}`;
 frame.addEventListener('load', () => {
   const t0 = performance.now();
   const tick = () => {
@@ -81,7 +83,7 @@ frame.addEventListener('load', () => {
     style.textContent = `#shop [data-id="${endId}"]{outline:4px solid #fff;outline-offset:2px;box-shadow:0 0 0 9px #ff2f9a,0 0 40px #ff2f9a;animation:pe-pulse 1s ease-in-out infinite alternate}
       @keyframes pe-pulse{from{transform:scale(1)}to{transform:scale(1.08)}}`;
     frame.contentDocument.head.appendChild(style);
-    note.innerHTML = `Sound on. The glowing shop tile is <b>${end.name}</b>: buy it, press Yes. Wake Up still works the whole time.`;
+    note.innerHTML = `Sound on. The glowing shop tile is <b>${end.name}</b>: buy it, press ${endId === 'go_end' ? 'Let her' : 'Yes'}. Wake Up still works the whole time.`;
     setTimeout(() => note.classList.add('gone'), 14000);
     frame.focus();
   };
