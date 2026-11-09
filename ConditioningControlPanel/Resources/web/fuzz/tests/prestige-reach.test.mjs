@@ -109,7 +109,7 @@ test('hooks are wired and marked in the toy files', () => {
   const slots = read('../ui/unlocks/arcade/slots.js');
   assert.match(slots, /wordsForEverywhere\(ctx\)/);
   assert.match(slots, /word:reelWord/);
-  assert.match(slots, /auto\.step\(step,s\.coins===3&&!s\.pending\)/);
+  assert.match(slots, /auto\.step\(step,s\.coins>=coinCap\(rank\(\)\)&&!s\.pending\)/);  // a full tray: 3 coins, 4 with Fourth Coin
   for (const f of ['../ui/unlocks/arcade/dispenser.js', '../ui/unlocks/arcade/race.js'])
     assert.match(read(f), /prestige hook: Autopilot \(idle_6\)/, f);
   const pod = read('../ui/unlocks/podcast-player.js');

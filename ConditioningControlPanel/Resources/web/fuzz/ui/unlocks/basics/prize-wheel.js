@@ -1,4 +1,4 @@
-import { SECTORS, SPIN_MS, WHEEL_WAIT, restoreWheelSpin, rollWheel, wheelAngle, wheelBase, wheelRequest, wheelTravel } from '../../../sim/prize-wheel.js';
+import { SECTORS, SPIN_MS, WHEEL_WAIT, earnsRespin, restoreWheelSpin, rollWheel, sectorsFor, wheelAngle, wheelBase, wheelRank, wheelRequest, wheelTravel } from '../../../sim/prize-wheel.js';
 import { createPrizeWheelView } from './prize-wheel-view.js';
 import { prizeMult, wheelDraw } from '../prestige/boosts.js';  // prestige hooks (Renewal Sky, boosts lane)
 import { createWheelMedia } from './prize-wheel-media.js';
@@ -12,7 +12,10 @@ export function mountPrizeWheel(ctx) {
   let gesture;
   const dock = ctx.dock({ width: 272, onMin: hidden => { if (hidden) gesture?.cancel(); } });
   const hostDocument = dock.ownerDocument;
-  const view = createPrizeWheelView(ctx, dock, SECTORS);
+  /* Journey ranks, read live (a rank can be bought while the wheel is open): 1 Respin, 2 Big Wedge. */
+  const face = () => sectorsFor(wheelRank(ctx.state) >= 2);
+  const sectorsOf = spinRound => sectorsFor(spinRound?.big === true);
+  const view = createPrizeWheelView(ctx, dock, face());
   const media = createWheelMedia(ctx, dock, view);
   const { spinButton, result, baseLabel } = view;
   let round = restoreWheelSpin(ctx.store.get('spin'));
@@ -35,7 +38,7 @@ export function mountPrizeWheel(ctx) {
     view.grip.toggleAttribute('data-ready', !round && seconds === 0);
     spinButton.textContent = round ? 'Spinning…' : seconds > 0 ? `Spin in ${seconds}s` : 'Spin';
     dock.dock?.setReady(!spinButton.disabled, 'Free spin ready');
-    if (!round) available = wheelBase(ctx.state, ctx.rates());
+    if (!round) { view.setSectors(face()); available = wheelBase(ctx.state, ctx.rates()); }
     const caption = '1× = ' + ctx.brand.money(round?.base ?? available);
     if (baseLabel.textContent !== caption) baseLabel.textContent = caption;
     previousWait = seconds;
@@ -56,12 +59,19 @@ export function mountPrizeWheel(ctx) {
   }
 
   function finish() {
-    const { id, end, base } = round;
-    const sector = SECTORS.find(s => s.id === id);
+    const done = round, { id, end, base } = done;
+    const sector = sectorsOf(done).find(s => s.id === id);
     round = null;
     ctx.store.set('spin', null);
     angle = wheelAngle(end);
     ctx.store.set('angle', angle);
+    if (earnsRespin(done, wheelRank(ctx.state))) {
+      // Respin: Nothing hands the spin straight back. The cooldown already runs, any activity bank waits for the respin.
+      result.textContent = 'Respin';
+      sfx(ctx, 'sfx/rank_settle.mp3', 0.4);
+      spin(undefined, true);
+      return;
+    }
     let amount = 0;
     if (sector.mult > 0 || ctx.state.store.journey?.banks?.wheel) {
       const anchor = dock.dock?.visible === false ? dock.dock.chip : spinButton;
@@ -82,7 +92,7 @@ export function mountPrizeWheel(ctx) {
     const r = (dock.dock?.visible === false ? dock.dock.chip : spinButton)?.getBoundingClientRect();
     const at = r ? { x: r.left + r.width / 2, y: r.top } : null;
     const base = wheelBase(ctx.state, ctx.rates());
-    const amount = ctx.pay(wheelRequest(ctx.state, base * wheelMean(SECTORS)) * prizeMult(ctx.prestige) * auto.share, 'wheel', at);
+    const amount = ctx.pay(wheelRequest(ctx.state, base * wheelMean(face())) * prizeMult(ctx.prestige) * auto.share, 'wheel', at);
     wait = WHEEL_WAIT;
     ctx.store.set('wait', wait);
     ctx.store.set('receipt', { id: 'auto', amount });
@@ -90,13 +100,15 @@ export function mountPrizeWheel(ctx) {
     controls();
   }
 
-  function spin(omega) {
-    if (ctx.paused || wait > 0 || round || holding) return;
+  function spin(omega, respin = false) {
+    if (ctx.paused || (wait > 0 && !respin) || round || holding) return;
     auto.reset();
+    const sectors = face();
+    view.setSectors(sectors);
     // Lock the amount the player saw before drawing their outcome.
-    const plan = rollWheel(wheelDraw(ctx.prestige, ctx.rng, ctx.store), angle, omega);  // prestige hook: Second Spin, No Nothing, Jackpot (luck_4/7/10)
-    round = { ...plan, base: available, elapsed: 0, duration: ctx.gentle || ctx.reduced ? 400 : (plan.duration ?? SPIN_MS) };
-    wait = WHEEL_WAIT;
+    const plan = rollWheel(wheelDraw(ctx.prestige, ctx.rng, ctx.store, sectors), angle, omega, sectors);  // prestige hook: Second Spin, No Nothing, Jackpot (luck_4/7/10)
+    round = { ...plan, base: available, elapsed: 0, duration: ctx.gentle || ctx.reduced ? 400 : (plan.duration ?? SPIN_MS), ...(respin ? { respin: true } : {}) };
+    if (!respin) wait = WHEEL_WAIT;
     ctx.store.set('spin', round);
     ctx.store.set('wait', wait);
     controls();
