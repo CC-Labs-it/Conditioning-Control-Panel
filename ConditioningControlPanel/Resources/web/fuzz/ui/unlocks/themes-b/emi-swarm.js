@@ -5,19 +5,26 @@
  * go_tx      one EMI stays put; her screen shows a picture, then her face, then another picture (2-3 s each)
  * go_will    she walks in short steps, stops, comments, hops now and then; never follows the cursor
  * go_corp    her own budget grows on the game clock; she walks to her guest tile in the shop and buys it
- *            (Amplifier, Overclock, Louder Opinions, then Self Replication)
- * Self Rep.  each of the player's own manual clicks turns a page object into an EMI or splits one off
- * go_hive    the screens run in patterns while everyone keeps wandering; bought by EMI herself if the player waits */
+ *            (Amplifier, Overclock, Louder Opinions, Self Replication, then Override)
+ * Self Rep.  each of the player's own manual clicks splits an EMI off a nearby one
+ * Override   about half of those clicks turn a page object (and its bottom tab) into an EMI: a bzzz and a shake first
+ * go_hive    the screens run in patterns while everyone keeps wandering; bought by EMI herself if the player waits
+ *            (150 s after Override) */
 
 import { EMI_BARKS } from '../../../data/content/emi-takeover.js';
 import { LITE, frameRect } from '../../perf.js';
 import { shopDoor } from '../../shop.js';
 import * as T from '../../../sim/takeover.js';
-import { art, SWAY, IDLE_FACES, rand, any, CSS, pose, sprites, bakeFaces, sprite, controlsRect, morePictures, tilesOf, bubble, placeBubble } from './emi-kit.js';
+import { art, SWAY, IDLE_FACES, rand, any, CSS, pose, sprites, bakeFaces, sprite, controlsRect, morePictures, tilesOf, bubble, placeBubble, deskHandoff } from './emi-kit.js';
+import { liveEmi } from '../extras/emi.js';
+import { iconFor } from '../../icons.js';
+import { BY_ID } from '../../../data/items.js';
 
 const SWARM_CSS = `
 [data-et-gone]{visibility:hidden !important;}
 .et-box .et-credit{z-index:4;}
+[data-et-buzz]{pointer-events:none;}
+.et-emi .et-h{position:absolute;left:0;right:0;bottom:79%;text-align:center;line-height:1;font-family:"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif;pointer-events:none;}
 `;
 const STEP_HZ = 2.4;      // step bob: bumps a second while she walks
 const BOB_PX = 3;
@@ -45,7 +52,13 @@ function mountSwarm(ctx) {
   const box = ctx.el('div', 'z-index:3;', null, 'over');
   box.className = 'et-box';
   const base = ctx.bounds().w < 760 ? 44 : 64;
-  const sizeOf = (main) => Math.round(base * (main ? 1.3 : 1) * fx().size);
+  /* The EMI the player already has (the desk EMI, ui/unlocks/extras/emi.js) IS the main EMI: the main sprite takes her
+   * spot, her size and her hat, and she is borrowed (hidden, quiet) until this scope ends. No desk EMI: a new one. */
+  let desk = liveEmi();
+  const hand = deskHandoff(desk);
+  if (!hand) desk = null;
+  let deskSize = hand?.size || 0;
+  const sizeOf = (main) => Math.round((main && deskSize ? deskSize : base * (main ? 1.3 : 1)) * fx().size);
   /* measured now and then, never in the frame loop */
   const stripOf = () => doc.getElementById('dock-strip')?.offsetHeight || 0;
   let walls = controlsRect(doc), strip = stripOf();
@@ -77,7 +90,7 @@ function mountSwarm(ctx) {
   let t = 0;
   function add(main, at = null) {
     const size = sizeOf(main);
-    const s = sprite(doc, size, size >= 80);
+    const s = sprite(doc, size, size >= 80 || (main && !!desk));
     box.appendChild(s.el);
     const spot = at ? { x: clampX(at.x, size), y: clampY(at.y, size) } : freeSpot(size, main);
     const e = Object.assign(s, {
@@ -92,8 +105,41 @@ function mountSwarm(ctx) {
     return e;
   }
   const popIn = (e) => ctx.anim(e.el, calm() || LITE ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1 }], { duration: calm() ? 400 : 260 });
-  const main = add(true);
-  if (!ctx.restored) popIn(main);
+  const main = add(true, hand);
+  /* her hat (em_hat) rides on the main sprite, sized as on the desk */
+  const hat = doc.createElement('div');
+  hat.className = 'et-h';
+  main.el.appendChild(hat);
+  const fitHat = () => { hat.style.fontSize = `${Math.round(main.size * 0.42)}px`; };
+  fitHat();
+  const resize = (e, s) => {
+    const d = (s - e.size) / 2;
+    e.size = s; e.x = clampX(e.x - d, s); e.y = clampY(e.y - d, s); e.tx = e.x; e.ty = e.y;
+    e.el.style.width = e.el.style.height = `${s}px`;
+    if (e === main) fitHat();
+  };
+  /** Keep the desk EMI borrowed while this scope lives. She can turn up after the swarm (rows mount in catalog order on
+   *  a reload): in the first second the main sprite moves to her spot and size; later she is only hidden. */
+  function borrowDesk() {
+    const d = liveEmi();
+    if (d && d !== desk) {
+      const h = deskHandoff(d);
+      if (!h) return;
+      desk = d;
+      if (t <= 1) {
+        deskSize = h.size;
+        resize(main, sizeOf(true));
+        main.x = main.tx = clampX(h.x, main.size); main.y = main.ty = clampY(h.y, main.size);
+        main.state = 'stand'; main.until = t + rand(0.5, 3);
+      }
+    }
+    if (!desk?.el.isConnected) return;
+    if (!desk.borrowed) desk.borrow(true);
+    const want = desk.hat?.textContent || '';
+    if (hat.textContent !== want) hat.textContent = want;
+  }
+  borrowDesk();
+  if (!ctx.restored && !desk) popIn(main);
   /* the one credit line, under the first EMI, outside her (she flips; the words do not) */
   const credit = doc.createElement('span');
   credit.className = 'et-credit'; credit.textContent = 'via Scrolller'; credit.hidden = true;
@@ -179,7 +225,7 @@ function mountSwarm(ctx) {
   /* -- her tiles: one guest tile in the shop, filled by her budget. She walks to it and it is hers. -- */
   let guest = null, shopping = null, lastBuy = -Infinity, stamped = 0;
   function drawGuest() {
-    const tile = phase() === 'corp' ? T.nextTile(bag.bought) : null;
+    const tile = T.isShopping(phase(), bag.bought) ? T.nextTile(bag.bought) : null;
     if (stamped && t < stamped) return;
     stamped = 0;
     if (!tile) { if (guest) { shopDoor?.guest(null); guest = null; } return; }
@@ -217,15 +263,17 @@ function mountSwarm(ctx) {
     ctx.audio.play('assets/audio/sfx/ui_unlock.mp3', { bus: 'sfx', gain: 0.3 });
     if (!main.pic) { main.setFace('^_^'); main.faceAt = t + 2; }
     main.coolUntil = 0;
-    say(main, any(EMI_BARKS.reactions.emi_buys_tile), { react: true });
+    say(main, any(EMI_BARKS.reactions[tile.id === 'h_over' ? 'override_bought' : 'emi_buys_tile']), { react: true });
     if (tile.id === 'h_amp') {
-      for (const e of emis) { const s = sizeOf(e.main), d = (s - e.size) / 2; e.size = s; e.x = clampX(e.x - d, s); e.y = clampY(e.y - d, s); e.tx = e.x; e.ty = e.y; e.el.style.width = e.el.style.height = `${s}px`; }
+      for (const e of emis) resize(e, sizeOf(e.main));
     }
     if (tile.id === 'h_loud') barkAt = Math.min(barkAt, t + 4);
   }
 
-  /* -- Self Replication: the player's own clicks -- */
+  /* -- Self Replication (she splits) and Override (things on the page become her): the player's own clicks -- */
   const gone = new Set();
+  const tabs = new Set();       // dock bodies whose bottom tab reads EMI while their object is hers
+  const buzzing = new Set();    // objects shaking right now, about to be hers
   let lastRep = -Infinity;
   /** Page objects that may become an EMI: dock objects and picture screens, floater toys. Never the button, the
    *  counter, the shop, the dock strip or Wake Up's controls, and nothing that fills the page. */
@@ -233,13 +281,84 @@ function mountSwarm(ctx) {
     const b = ctx.bounds();
     const btn = ctx.button.el, counter = ctx.parts.counter;
     return [...doc.querySelectorAll('section.dk:not(.door), #l-floaters > *, #l-screens > *')].filter((el) => {
-      if (el.classList.contains('et-box') || el.hasAttribute('data-et-gone') || el.closest('#shop, #game-controls, #dock-strip, #cards, #page')) return false;
+      if (el.classList.contains('et-box') || el.hasAttribute('data-et-gone') || el.hasAttribute('data-et-buzz') || el.closest('#shop, #game-controls, #dock-strip, #cards, #page')) return false;
       if (el.contains(btn) || (counter && el.contains(counter))) return false;
       const r = el.getBoundingClientRect();
       if (r.width < 24 || r.height < 24 || r.right < 0 || r.bottom < 0 || r.left > b.w || r.top > b.h) return false;
       if (r.width * r.height > b.w * b.h * 0.4) return false;
       const cs = doc.defaultView.getComputedStyle(el);
       return cs.visibility !== 'hidden' && cs.display !== 'none' && Number(cs.opacity) > 0.05;
+    });
+  }
+  /* the bzzz: a short, quiet, low electric buzz, synthesised (no sfx in the box fits); never two at once */
+  let io = null, buzzAt = -Infinity;
+  function bzzz() {
+    if (!T.buzzRoom({ now: t, lastAt: buzzAt })) return;
+    io ||= ctx.audio.input?.({ bus: 'sfx', gain: 0.55 }) || null;
+    if (!io) return;
+    buzzAt = t;
+    const ac = io.ac, t0 = ac.currentTime, dur = 0.25;
+    const env = ac.createGain();
+    env.gain.setValueAtTime(0.0001, t0);
+    env.gain.exponentialRampToValueAtTime(0.32, t0 + 0.015);
+    env.gain.setValueAtTime(0.32, t0 + dur * 0.55);
+    env.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    const lp = ac.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 1100; lp.Q.value = 2;
+    const hum = ac.createOscillator(), edge = ac.createOscillator();
+    const f0 = rand(92, 104);
+    hum.type = 'sawtooth'; hum.frequency.setValueAtTime(f0, t0); hum.frequency.linearRampToValueAtTime(f0 * 0.84, t0 + dur);
+    edge.type = 'square'; edge.frequency.setValueAtTime(f0 * 2.01, t0); edge.frequency.linearRampToValueAtTime(f0 * 1.69, t0 + dur);
+    const edgeGain = ac.createGain(); edgeGain.gain.value = 0.25;
+    /* the crackle: a fast tremolo on the whole buzz */
+    const trem = ac.createGain(), lfo = ac.createOscillator(), depth = ac.createGain();
+    trem.gain.value = 0.6; lfo.type = 'square'; lfo.frequency.value = 34; depth.gain.value = 0.4;
+    lfo.connect(depth).connect(trem.gain);
+    hum.connect(lp); edge.connect(edgeGain).connect(lp);
+    lp.connect(trem).connect(env).connect(io.node);
+    for (const o of [hum, edge, lfo]) { o.start(t0); o.stop(t0 + dur + 0.02); }
+    hum.onended = () => { for (const n of [hum, edge, edgeGain, lfo, depth, trem, lp, env]) n.disconnect(); };
+  }
+  /** A small fast jitter (a few px, a touch of rotation, never a stretch), added on top of the element's own motion. */
+  function shake(el, ms) {
+    if (calm()) return null;
+    const frames = [];
+    for (let i = 0; i <= 12; i++) {
+      const k = i === 0 || i === 12 ? 0 : 1 - i / 16;
+      frames.push({ translate: `${(rand(-3, 3) * k).toFixed(1)}px ${(rand(-2, 2) * k).toFixed(1)}px`, rotate: `${(rand(-1.6, 1.6) * k).toFixed(2)}deg` });
+    }
+    return ctx.anim(el, frames, { duration: ms, composite: 'add', easing: 'linear' });
+  }
+  /** The dock body behind a page object, if it is a dock object. */
+  const dockOf = (el) => (el.matches('section.dk') ? el : el.closest('section.dk'))?.querySelector(':scope > .dk-b')?.dock || null;
+  let emiIcon = null;
+  const iconNode = () => {
+    try { return (emiIcon ||= iconFor(doc, BY_ID.em_head)).cloneNode(true); } catch {
+      const i = doc.createElement('img'); i.src = art('body-idle'); i.alt = ''; i.style.cssText = 'width:20px;height:20px;image-rendering:pixelated;';
+      return i;
+    }
+  };
+  /** Override: the nearest EMI looks, the object (and its tab) buzz and shake, then an EMI stands where it was. */
+  function override(el) {
+    const r0 = el.getBoundingClientRect();
+    const cx = r0.left + r0.width / 2, cy = r0.top + r0.height / 2;
+    const dist = (e) => Math.hypot(e.x + e.size / 2 - cx, e.y + e.size / 2 - cy);
+    const near = emis.reduce((best, e) => (dist(e) < dist(best) ? e : best), main);
+    if (!near.pic) { near.setFace('o_o'); near.faceAt = t + 1.2; }
+    if (Math.abs(cx - (near.x + near.size / 2)) > 4) near.dir = cx > near.x + near.size / 2 ? 1 : -1;
+    el.setAttribute('data-et-buzz', '');
+    buzzing.add(el);
+    const dock = dockOf(el), chip = dock?.chip;
+    if (dock && chip) { tabs.add(dock); dock.disguise({ title: 'EMI', icon: iconNode() }); }
+    bzzz();
+    const ms = calm() ? 200 : T.REP.BUZZ_MS;
+    const a = shake(el, ms), b = chip ? shake(chip, ms) : null;
+    const fade = calm() ? ctx.anim(el, [{ opacity: 1 }, { opacity: 0 }], { duration: ms, fill: 'forwards' }) : null;
+    ctx.after(ms, () => {
+      buzzing.delete(el);
+      el.removeAttribute('data-et-buzz');
+      if (el.isConnected) convert(el);
+      for (const x of [a, b, fade]) x?.cancel();   // after it is hidden, so it never flashes back
     });
   }
   function convert(el) {
@@ -272,12 +391,14 @@ function mountSwarm(ctx) {
     if (ev?.auto || (ev?.via !== 'hand' && ev?.via !== 'right')) return;   // only the player's own presses
     const ph = phase();
     if ((ph !== 'rep' && ph !== 'hive') || quiet()) return;
-    if (t - lastRep < T.REP.COOL_S || emis.length >= T.repCap(LITE)) return;
-    const objs = objects();
-    const act = T.repPress({ now: t, lastAt: lastRep, count: emis.length, lite: LITE, objects: objs.length });
+    const count = emis.length + buzzing.size;
+    if (t - lastRep < T.REP.COOL_S || count >= T.repCap(LITE)) return;
+    const over = fx().override;
+    const objs = over ? objects() : [];
+    const act = T.repPress({ now: t, lastAt: lastRep, count, lite: LITE, objects: objs.length, override: over });
     if (!act) return;
     lastRep = t;
-    if (act === 'convert') convert(any(objs)); else split();
+    if (act === 'convert') override(any(objs)); else split();
   });
 
   /* -- HIVE MIND: she buys it herself when the player waits too long -- */
@@ -332,20 +453,21 @@ function mountSwarm(ctx) {
   ctx.frame((dt) => {
     t += dt;
     const ph = phase(), moving = ph !== 'none' && ph !== 'tx';
-    const hurry = stage() === 'hive' && ph === 'corp';
-    bag.budget = T.budgetStep(bag.budget, dt, { phase: ph, hurry });
-    if (ph === 'rep') bag.sinceRep = Math.min(T.HIVE.FORCE_S, bag.sinceRep + dt);
+    const hurry = stage() === 'hive' && T.isShopping(ph, bag.bought);
+    bag.budget = T.budgetStep(bag.budget, dt, { phase: ph, bought: bag.bought, hurry });
+    if (T.hiveClockRuns({ phase: ph, bought: bag.bought, ownsHive: ctx.has('go_hive') })) bag.sinceOver = Math.min(T.HIVE.FORCE_S, bag.sinceOver + dt);
 
     slow += dt;
     if (slow >= 0.25) {
       slow = 0;
+      borrowDesk();
       drawGuest();
       screens();
-      if (ph === 'corp' && !shopping && !stamped && !quiet()) {
+      if (T.isShopping(ph, bag.bought) && !shopping && !stamped && !quiet()) {
         const tile = T.canBuy({ phase: ph, budget: bag.budget, bought: bag.bought, sinceBuyS: t - lastBuy, hurry });
         if (tile && guest?.tile === tile) { shopping = { tile, since: t }; main.jumpT = -1; }
       }
-      if (T.mustForceHive({ phase: ph, ownsHive: ctx.has('go_hive'), sinceRepS: bag.sinceRep })) force();
+      if (T.mustForceHive({ phase: ph, bought: bag.bought, ownsHive: ctx.has('go_hive'), sinceOverS: bag.sinceOver })) force();
       if (moving && barkAt === Infinity) nextBark();
       if (t >= barkAt) { nextBark(); bark(); }
     }
@@ -376,6 +498,7 @@ function mountSwarm(ctx) {
       e.el.style.transform = `translate(${e.x.toFixed(1)}px,${(e.y - lift).toFixed(1)}px)${flip ? ' scaleX(-1)' : ''}`;
       const want = flip ? 'scaleX(-1)' : '';
       if (e.scr.style.transform !== want) e.scr.style.transform = want;   // the screen reads the right way round
+      if (e === main && hat.style.transform !== want) hat.style.transform = want;   // and so does her hat
     }
     if (!credit.hidden) credit.style.transform = `translate(${(main.x + main.size / 2).toFixed(1)}px,${(main.y + main.size).toFixed(1)}px) translateX(-50%)`;
     for (let i = bubs.length - 1; i >= 0; i--) {
@@ -391,20 +514,20 @@ function mountSwarm(ctx) {
     points: () => emis.map((e) => ({ x: e.x + e.size / 2, y: e.y + e.size / 2 })),
     /** Each EMI's size in px, in the same order as points(). */
     sizes: () => emis.map((e) => e.size),
-    hide() { box.hidden = true; box.style.display = 'none'; shopDoor?.guest(null); guest = null; },
+    hide() { box.hidden = true; box.style.display = 'none'; shopDoor?.guest(null); guest = null; borrowDesk(); },
     count: () => emis.length,
     /** A sibling row just arrived: one line from its pool, soon. */
     arrive() { barkAt = Math.min(barkAt, t + 1.2); },
     state: () => ({
       stage: stage(), phase: phase(), budget: Math.floor(bag.budget), bought: [...bag.bought], count: emis.length, copies: emis.length - 1,
-      bubbles: bubs.length, shopping: !!shopping, pattern: phase() === 'hive' ? pattern : null, gone: gone.size, sinceRep: Math.floor(bag.sinceRep),
-      main: { x: main.x, y: main.y, size: main.size, state: main.state, jumping: main.jumpT >= 0, dir: main.dir }, pics: emis.filter((e) => e.pic).length,
+      bubbles: bubs.length, shopping: !!shopping, pattern: phase() === 'hive' ? pattern : null, gone: gone.size, tabs: tabs.size, buzzing: buzzing.size, sinceOver: Math.floor(bag.sinceOver),
+      main: { x: main.x, y: main.y, size: main.size, state: main.state, jumping: main.jumpT >= 0, dir: main.dir, desk: !!desk?.borrowed, hat: hat.textContent }, pics: emis.filter((e) => e.pic).length,
     }),
-    /** Dev drives and the play door only: hand her budget, her first `n` tiles, or time since Self Replication. */
+    /** Dev drives and the play door only: hand her budget, her first `n` tiles, or time since Override. */
     dev: {
       budget(n) { bag.budget += Math.max(0, Number(n) || 0); },
-      tiles(n) { bag.bought = T.HER_TILES.slice(0, Math.max(0, Math.min(T.HER_TILES.length, n))).map((x) => x.id); for (const e of emis) { e.size = sizeOf(e.main); e.el.style.width = e.el.style.height = `${e.size}px`; } save(); },
-      sinceRep(s) { bag.sinceRep = Math.min(T.HIVE.FORCE_S, Math.max(0, Number(s) || 0)); },
+      tiles(n) { bag.bought = T.HER_TILES.slice(0, Math.max(0, Math.min(T.HER_TILES.length, n))).map((x) => x.id); for (const e of emis) resize(e, sizeOf(e.main)); save(); },
+      sinceOver(s) { bag.sinceOver = Math.min(T.HIVE.FORCE_S, Math.max(0, Number(s) || 0)); },
       crowd(n) { for (let i = 0; i < n && emis.length < T.repCap(LITE); i++) add(false); bag.copies = emis.length - 1; save(); },
     },
   };
@@ -416,7 +539,13 @@ function mountSwarm(ctx) {
     shopDoor?.guest(null);
     for (const el of gone) el.removeAttribute('data-et-gone');
     gone.clear();
+    for (const el of buzzing) el.removeAttribute('data-et-buzz');
+    buzzing.clear();
+    for (const d of tabs) d.undisguise?.();   // every tab reads its own name again
+    tabs.clear();
+    io?.stop();
     for (const e of emis) sprites.delete(e);
+    if (desk?.el.isConnected) desk.borrow(false);   // back where she stood, as she was
   });
   return {};
 }

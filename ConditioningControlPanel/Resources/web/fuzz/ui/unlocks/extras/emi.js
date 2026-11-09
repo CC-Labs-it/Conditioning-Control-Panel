@@ -40,6 +40,8 @@ ${FACE_CSS}
 .xe-t{--emi-gap:34px;}
 .xe-b{min-height:30px;padding:2px 8px;background:#fff;color:#111;border:1px solid #333;border-radius:5px;font:600 13px ${FONT};touch-action:manipulation;white-space:nowrap;}
 .xe-t{position:absolute;left:0;font:600 12px ${FONT};color:var(--ink-soft);white-space:nowrap;pointer-events:none;}
+.xe[data-borrowed]{pointer-events:none;cursor:auto;}
+.xe[data-borrowed]>:is(.xe-sprite,.xe-c,.xe-s,.xe-t){visibility:hidden!important;pointer-events:none!important;}
 `;
 
 let emi = null;
@@ -134,7 +136,21 @@ export function getEmi(ctx) {
       setPose(POSE[m] || 'body');
     },
     get currentMood() { return mood; },
+    /* The EMI Takeover borrows her: its main sprite stands where she stood and she is hidden (the sprite, her buttons
+     * and bubbles; a question card anchored to her stays). While borrowed she says nothing and takes no grab or tap;
+     * the lane features check `borrowed` and stand down. Released, she is back where she was. */
+    borrowed: false,
+    borrow(on) {
+      on = !!on;
+      if (self.borrowed === on) return;
+      self.borrowed = on;
+      el.toggleAttribute('data-borrowed', on);
+      if (on) { cancel(); bubbleOff?.(); bubble?.remove(); bubble = null; return; }
+      self.lastTouch = ctxs.state.clock;
+      place();
+    },
     say(text, ms = 3000) {
+      if (self.borrowed) return;
       bubbleOff?.();
       bubble?.remove();
       bubble = h('div', '', ctxs.brand.text(text), el);
@@ -173,7 +189,7 @@ export function getEmi(ctx) {
     place();
   };
   el.addEventListener('pointerdown', ev => {
-    if (ctxs.paused || grab || ev.button !== 0 || !ev.isPrimary || ev.target.closest('button,input,textarea,select,a,.xe-c,[data-dock-interactive]')) return;
+    if (ctxs.paused || grab || self.borrowed || ev.button !== 0 || !ev.isPrimary || ev.target.closest('button,input,textarea,select,a,.xe-c,[data-dock-interactive]')) return;
     ev.preventDefault();
     const transform = new DOMMatrixReadOnly(getComputedStyle(el).transform);
     const world = new DOMMatrixReadOnly(getComputedStyle(ctx.world).transform);
@@ -238,6 +254,9 @@ export function getEmi(ctx) {
   emi = self;
   return self;
 }
+
+/** The EMI on the page, or null. Never brings her (her elements belong to the scope that did). */
+export const liveEmi = () => (emi?.el.isConnected ? emi : null);
 
 /** Register a tap handler that dies with this unlock. */
 export function onEmiTap(ctx, e, fn) {

@@ -1,14 +1,15 @@
 /* sim/takeover-end.js - EMI Takeover ending (go_end take), the pure part. No DOM. Re-exported by sim/takeover.js.
  *
- * The take (owner notes 2026-11-09, handoff-1109/TC-EMI-TAKEOVER-V3-BRIEF.md):
- *   fill   the front grid arrives row after row like pixels, its screens flashing pictures; behind it EMIs of
- *          different sizes pile in from where the swarm stood until no page shows through
- *   shut   every screen goes dark at once
- *   drop   pictures only on the grid pixels of DROP
- *   error  error sound, a small system dialog with the logo, a short shake
- *   frozen everything stops, sound too
- *   giant  a giant EMI pops up, blinks, then the cheeky face on body-smug
- *   close  the eyelid shuts to black (Gentle: a plain fade) */
+ * The take (owner notes 2026-11-09 + 2026-11-10, handoff-1109/TC-EMI-TAKEOVER-V3-BRIEF.md):
+ *   fill    the front grid arrives row after row like pixels, its screens flashing pictures; behind it EMIs of
+ *           different sizes pile in from where the swarm stood until no page shows through
+ *   shut    every screen goes dark at once
+ *   drop    pictures only on the grid pixels of DROP
+ *   error   error sound, a small system dialog with the logo, a short shake
+ *   waiting everything frozen and silent but a quiet eerie drone; the dialog's OK is live and the take waits for it
+ *           (on its own after WAIT_MAX_S)
+ *   giant   OK: a hard shake and a sting, the giant EMI is there at once (jumpscare), blinks, then the cheeky face
+ *   close   the eyelid shuts to black (Gentle: a plain fade) */
 
 export const TAKE = Object.freeze({
   BACK_S: 13,            // the back pile is complete here
@@ -18,44 +19,54 @@ export const TAKE = Object.freeze({
   SHUT_S: 1.0,           // every screen dark
   DROP_S: 3,             // DROP holds
   SHAKE_S: 0.3,          // the error shake (none under Gentle)
-  FROZEN_S: 1.5,         // the frozen frame
-  POP_S: 0.3,            // the giant EMI pops up
+  WAIT_MIN_S: 0.5,       // OK takes a press only after this: a click meant for DROP never skips the wait
+  WAIT_MAX_S: 45,        // nobody pressed OK: go on alone
+  JUMP_SHAKE_S: 0.4,     // the hard shake on OK (none under Gentle)
+  POP_S: 0.3,            // she lands (a frame slightly too big, then settles; Gentle: a 300 ms fade)
   BLINK_S: 2.5,          // idle with two or three blinks
   BLINK_LEN_S: 0.13,
   CHEEKY_S: 1.5,         // ^_~ on body-smug
   CLOSE_S: 0.3,          // eyelid shut
   DARK_S: 0.7,
   GENTLE_CLOSE_S: 1.2,
+  DRONE_GAIN: 0.16,      // the eerie drone under the wait (Gentle: half)
+  STING_GAIN: 0.9,       // the jumpscare sting (Gentle: half)
   FLICKER_MS: [380, 680],        // a front screen changes this often: under 3 times a second
   FLICKER_MS_LITE: [520, 900],
   BACK_FLICKER_MS: [700, 1300],  // the back pile, slower
 });
 
-/** Seconds from the start of the take to the start of each phase. */
-export function phaseStarts({ calm = false } = {}) {
+/** Clamp a wait (seconds from the freeze to OK) to what the take allows. */
+export const clampWait = (s) => Math.min(TAKE.WAIT_MAX_S, Math.max(TAKE.WAIT_MIN_S, Number.isFinite(s) ? s : TAKE.WAIT_MAX_S));
+
+/** Seconds from the start of the take to the start of each phase. `waitS`: freeze to OK (the longest by default). */
+export function phaseStarts({ calm = false, waitS = TAKE.WAIT_MAX_S } = {}) {
   const shut = TAKE.FILL_S + TAKE.FULL_S;
   const drop = shut + TAKE.SHUT_S;
   const error = drop + TAKE.DROP_S;
-  const frozen = error + (calm ? 0 : TAKE.SHAKE_S);
-  const giant = frozen + TAKE.FROZEN_S;
+  const waiting = error + (calm ? 0 : TAKE.SHAKE_S);
+  const giant = waiting + clampWait(waitS);
   const cheeky = giant + TAKE.POP_S + TAKE.BLINK_S;
   const close = cheeky + TAKE.CHEEKY_S;
   const end = close + (calm ? TAKE.GENTLE_CLOSE_S : TAKE.CLOSE_S) + TAKE.DARK_S;
-  return { fill: 0, shut, drop, error, frozen, giant, cheeky, close, end };
+  return { fill: 0, shut, drop, error, waiting, giant, cheeky, close, end };
 }
 
 /** The phase at take time t. */
 export function phaseAt(t, opts) {
   const p = phaseStarts(opts);
-  const order = ['end', 'close', 'cheeky', 'giant', 'frozen', 'error', 'drop', 'shut'];
+  const order = ['end', 'close', 'cheeky', 'giant', 'waiting', 'error', 'drop', 'shut'];
   for (const k of order) if (t >= p[k]) return k;
   return 'fill';
 }
 
-/** The longest the take can run, seconds. Must stay under CONFIG.ENDING_TAKE_MAX_MS. */
+/** Can a press on OK end the wait `sinceS` seconds after the freeze? */
+export const okTakes = (sinceS) => sinceS >= TAKE.WAIT_MIN_S;
+
+/** The longest the take can run (nobody pressed OK), seconds. Must stay under CONFIG.ENDING_TAKE_MAX_MS. */
 export const takeMaxS = () => Math.max(phaseStarts({ calm: false }).end, phaseStarts({ calm: true }).end);
 
-/** When the giant EMI blinks, seconds after she popped up: two or three, never in the first 0.4 s or the last 0.3 s. */
+/** When the giant EMI blinks, seconds after she appeared: two or three, never in the first 0.4 s or the last 0.3 s. */
 export function blinkTimes(rng = Math.random) {
   const n = rng() < 0.5 ? 2 : 3;
   const lo = TAKE.POP_S + 0.4, hi = TAKE.POP_S + TAKE.BLINK_S - 0.3 - TAKE.BLINK_LEN_S;
@@ -168,4 +179,5 @@ export const errorDialog = () => ({
   title: 'emi.exe',
   lines: ['This page was taken over by EMI.', 'Nothing on your device is broken. This is the game.'],
   button: 'OK',
+  close: 'Close',
 });

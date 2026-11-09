@@ -26,7 +26,9 @@ test('the four rows sit between Fake Online Count and the goon ending, which kee
   for (const id of T.CHAIN) assert.equal(BY_ID[id].lane, 'goon');
 });
 
-test('the stage follows the rows owned, in order; Self Replication is hers, not a row', () => {
+const ALL = ['h_amp', 'h_oc', 'h_loud', 'h_rep', 'h_over'];
+
+test('the stage follows the rows owned, in order; Self Replication and Override are hers, not rows', () => {
   assert.equal(T.stageOf(has()), 'none');
   assert.equal(T.stageOf(has('go_tx')), 'tx');
   assert.equal(T.stageOf(has('go_tx', 'go_will', 'go_corp')), 'corp');
@@ -35,7 +37,9 @@ test('the stage follows the rows owned, in order; Self Replication is hers, not 
   assert.equal(T.phaseOf('corp', ['h_amp', 'h_oc']), 'corp');
   assert.equal(T.phaseOf('corp', ['h_amp', 'h_oc', 'h_loud', 'h_rep']), 'rep');
   assert.equal(T.phaseOf('hive', ['h_amp']), 'corp', 'HIVE MIND bought early waits for her Self Replication');
-  assert.equal(T.phaseOf('hive', ['h_amp', 'h_oc', 'h_loud', 'h_rep']), 'hive');
+  assert.equal(T.phaseOf('hive', ['h_amp', 'h_oc', 'h_loud', 'h_rep']), 'rep', 'HIVE MIND bought early also waits for Override');
+  assert.equal(T.phaseOf('corp', ALL), 'rep');
+  assert.equal(T.phaseOf('hive', ALL), 'hive');
   assert.equal(T.phaseOf('will', ['h_rep']), 'will');
   assert.deepEqual(['tx', 'will', 'rep', 'hive'].map((p) => T.poolOf(p)), ['transmission', 'free_will', 'replication', 'hive_mind']);
   assert.equal(T.poolOf('corp', []), 'startup');
@@ -45,21 +49,27 @@ test('the stage follows the rows owned, in order; Self Replication is hers, not 
   assert.ok(EMI_BARKS.solo.shopping);
 });
 
-test('her tiles: Amplifier, Overclock, Louder Opinions, then Self Replication, about 30-45 s apart, on her own budget', () => {
-  assert.deepEqual(T.HER_TILES.map((t) => t.name), ['Amplifier', 'Overclock', 'Louder Opinions', 'Self Replication']);
-  /* play it out on the game clock: one second steps, she buys the moment she may */
+test('her tiles: Amplifier, Overclock, Louder Opinions, Self Replication, then Override, about 30-45 s apart, on her own budget', () => {
+  assert.deepEqual(T.HER_TILES.map((t) => t.name), ['Amplifier', 'Overclock', 'Louder Opinions', 'Self Replication', 'Override']);
+  assert.deepEqual(T.HER_TILES.map((t) => t.id), ALL);
+  /* play it out on the game clock: one second steps, she buys the moment she may; after Self Replication the phase
+   * is 'rep' and she keeps shopping for Override */
   let bag = { budget: 0, bought: [] }, last = -Infinity;
   const at = [];
-  for (let s = 0; s < 400 && bag.bought.length < 4; s++) {
-    bag.budget = T.budgetStep(bag.budget, 1, { phase: 'corp' });
-    const tile = T.canBuy({ phase: 'corp', budget: bag.budget, bought: bag.bought, sinceBuyS: s - last });
+  for (let s = 0; s < 500 && bag.bought.length < 5; s++) {
+    const phase = T.phaseOf('corp', bag.bought);
+    bag.budget = T.budgetStep(bag.budget, 1, { phase, bought: bag.bought });
+    const tile = T.canBuy({ phase, budget: bag.budget, bought: bag.bought, sinceBuyS: s - last });
     if (tile) { bag = T.buyTile(bag, tile); last = s; at.push(s); }
   }
-  assert.equal(at.length, 4);
+  assert.equal(at.length, 5);
+  assert.ok(T.isShopping('rep', ['h_amp', 'h_oc', 'h_loud', 'h_rep']), 'Self Replication runs while she saves for Override');
+  assert.ok(!T.isShopping('rep', ALL) && !T.isShopping('hive', ALL) && !T.isShopping('will', []));
   for (let i = 1; i < at.length; i++) assert.ok(at[i] - at[i - 1] >= 30 && at[i] - at[i - 1] <= 46, `gap ${at[i] - at[i - 1]} s`);
   assert.ok(at[0] >= 25 && at[0] <= 45, `first buy at ${at[0]} s`);
   assert.equal(T.budgetStep(5, 10, { phase: 'will' }), 5, 'no budget before Founded Startup');
-  assert.equal(T.budgetStep(5, 10, { phase: 'rep' }), 5, 'nothing left to buy');
+  assert.equal(T.budgetStep(5, 10, { phase: 'rep', bought: ALL }), 5, 'nothing left to buy');
+  assert.equal(T.budgetStep(5, 10, { phase: 'rep', bought: ALL.slice(0, 4) }), 15, 'saving for Override');
   assert.equal(T.canBuy({ phase: 'will', budget: 999, bought: [], sinceBuyS: 999 }), null);
   assert.equal(T.canBuy({ phase: 'corp', budget: 999, bought: ['h_amp'], sinceBuyS: 10 }), null, 'the gap between her buys');
   assert.equal(T.canBuy({ phase: 'corp', budget: 999, bought: ['h_amp'], sinceBuyS: 10, hurry: true }).id, 'h_oc', 'HIVE MIND already bought: she hurries');
@@ -76,26 +86,41 @@ test('her tiles do visible things: bigger, a little faster (screens still under 
   assert.ok(all.picS[0] < none.picS[0] && all.picS[0] >= 1, 'pictures change a little faster, never fast');
   assert.deepEqual(none.picS, [2, 3], 'Transmission: 2-3 s a picture, 2-3 s her face');
   assert.ok(all.barkS[1] < none.barkS[1] && all.coolS < none.coolS);
+  assert.equal(T.effectsOf(ALL.slice(0, 4)).override, false);
+  assert.equal(T.effectsOf(ALL).override, true);
 });
 
-test('Self Replication: only trusted clicks, a 0.4 s cooldown, about half convert an object, capped 30 / 12', () => {
+test('Self Replication only splits; with Override about half the clicks convert an object; 0.4 s cooldown, capped 30 / 12', () => {
   let seed = 3;
   const rng = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-  assert.equal(T.repPress({ now: 1, lastAt: 0.8, count: 2, objects: 5, rng }), null, 'inside the cooldown');
-  assert.equal(T.repPress({ now: 10, count: 30, objects: 5, rng }), null, 'desktop cap');
-  assert.equal(T.repPress({ now: 10, count: 12, lite: true, objects: 5, rng }), null, 'phone cap');
-  assert.ok(T.repPress({ now: 10, count: 11, lite: true, objects: 5, rng }));
-  assert.equal(T.repPress({ now: 10, count: 2, objects: 0, rng: () => 0 }), 'split', 'nothing to take: she splits');
+  const over = true;
+  assert.equal(T.repPress({ now: 1, lastAt: 0.8, count: 2, objects: 5, override: over, rng }), null, 'inside the cooldown');
+  assert.equal(T.repPress({ now: 10, count: 30, objects: 5, override: over, rng }), null, 'desktop cap');
+  assert.equal(T.repPress({ now: 10, count: 12, lite: true, objects: 5, override: over, rng }), null, 'phone cap');
+  assert.ok(T.repPress({ now: 10, count: 11, lite: true, objects: 5, override: over, rng }));
+  assert.equal(T.repPress({ now: 10, count: 2, objects: 0, override: over, rng: () => 0 }), 'split', 'nothing to take: she splits');
+  for (let i = 0; i < 200; i++) assert.equal(T.repPress({ now: i, count: 2, objects: 3, rng }), 'split', 'no Override: never a conversion');
   let convert = 0;
-  for (let i = 0; i < 400; i++) if (T.repPress({ now: i, count: 2, objects: 3, rng }) === 'convert') convert += 1;
+  for (let i = 0; i < 400; i++) if (T.repPress({ now: i, count: 2, objects: 3, override: over, rng }) === 'convert') convert += 1;
   assert.ok(convert > 160 && convert < 240, `${convert} of 400 converted`);
 });
 
-test('HIVE MIND: forced 150 s after Self Replication, and only then', () => {
-  assert.ok(!T.mustForceHive({ phase: 'rep', ownsHive: false, sinceRepS: 149 }));
-  assert.ok(T.mustForceHive({ phase: 'rep', ownsHive: false, sinceRepS: 150 }));
-  assert.ok(!T.mustForceHive({ phase: 'rep', ownsHive: true, sinceRepS: 999 }));
-  assert.ok(!T.mustForceHive({ phase: 'corp', ownsHive: false, sinceRepS: 999 }), 'never before Self Replication is hers');
+test('Override: the buzz shakes about 400 ms; the bzzz never stacks', () => {
+  assert.ok(T.REP.BUZZ_MS >= 300 && T.REP.BUZZ_MS <= 500);
+  assert.ok(T.buzzRoom({ now: 5 }));
+  assert.ok(!T.buzzRoom({ now: 5.3, lastAt: 5 }), 'rapid clicks: one bzzz');
+  assert.ok(T.buzzRoom({ now: 5 + T.REP.SOUND_GAP_S + 0.01, lastAt: 5 }));
+  assert.ok(T.REP.SOUND_GAP_S > 0.25, 'longer than the bzzz itself: never two at once');
+});
+
+test('HIVE MIND: forced 150 s after Override, and only then', () => {
+  assert.ok(!T.mustForceHive({ phase: 'rep', bought: ALL, ownsHive: false, sinceOverS: 149 }));
+  assert.ok(T.mustForceHive({ phase: 'rep', bought: ALL, ownsHive: false, sinceOverS: 150 }));
+  assert.ok(!T.mustForceHive({ phase: 'rep', bought: ALL, ownsHive: true, sinceOverS: 999 }));
+  assert.ok(!T.mustForceHive({ phase: 'rep', bought: ALL.slice(0, 4), ownsHive: false, sinceOverS: 999 }), 'Self Replication alone starts no clock');
+  assert.ok(!T.hiveClockRuns({ phase: 'rep', bought: ALL.slice(0, 4), ownsHive: false }));
+  assert.ok(T.hiveClockRuns({ phase: 'rep', bought: ALL, ownsHive: false }));
+  assert.ok(!T.mustForceHive({ phase: 'corp', bought: [], ownsHive: false, sinceOverS: 999 }), 'never before Override is hers');
 });
 
 test('HIVE MIND patterns: every pattern changes a screen at most twice a wave, well under 3 a second', () => {
@@ -125,11 +150,13 @@ test('HIVE MIND patterns: every pattern changes a screen at most twice a wave, w
 });
 
 test('a saved bag comes back sane', () => {
-  assert.deepEqual(T.cleanBag(null), { copies: 0, budget: 0, bought: [], sinceRep: 0, clicked: 0, took: 0 });
-  const bag = T.cleanBag({ copies: 99, budget: 12.5, bought: ['h_oc', 'h_amp', 'nope'], sinceRep: 9999, clicked: 4 });
+  assert.deepEqual(T.cleanBag(null), { copies: 0, budget: 0, bought: [], sinceOver: 0, clicked: 0, took: 0 });
+  const bag = T.cleanBag({ copies: 99, budget: 12.5, bought: ['h_oc', 'h_amp', 'nope'], sinceOver: 9999, clicked: 4 });
   assert.equal(bag.copies, T.REP.CAP - 1);
   assert.equal(bag.budget, 12.5);
-  assert.equal(bag.sinceRep, T.HIVE.FORCE_S);
+  assert.equal(bag.sinceOver, T.HIVE.FORCE_S);
+  assert.deepEqual(T.cleanBag({ bought: ALL }).bought, ALL);
+  assert.deepEqual(T.cleanBag({ bought: ['h_amp', 'h_over'] }).bought, ['h_amp'], 'Override without Self Replication is dropped');
   assert.deepEqual(bag.bought, ['h_amp', 'h_oc']);
   assert.deepEqual(T.cleanBag({ bought: ['h_rep'] }).bought, [], 'a tile without the ones before it is dropped');
   assert.deepEqual(T.cleanBag({ budget: -3 }).budget, 0);
@@ -163,7 +190,7 @@ test('the bark bank is EMI: lowercase, no exclamation marks, no dashes, never ab
     assert.ok(!/\btips?\b/.test(l), `no tips economy any more: ${l}`);
   }
   for (const pool of ['transmission', 'free_will', 'startup', 'shopping', 'replication', 'hive_mind']) assert.ok(EMI_BARKS.solo[pool].length >= 8 && EMI_BARKS.pairs[pool].length >= 4, pool);
-  for (const r of ['copy_made', 'object_taken', 'emi_buys_tile', 'hive_forced']) assert.ok(EMI_BARKS.reactions[r].length >= 2, r);
+  for (const r of ['copy_made', 'object_taken', 'emi_buys_tile', 'override_bought', 'hive_forced']) assert.ok(EMI_BARKS.reactions[r].length >= 2, r);
 });
 
 test('the run-up keeps its hard rules in the source', () => {

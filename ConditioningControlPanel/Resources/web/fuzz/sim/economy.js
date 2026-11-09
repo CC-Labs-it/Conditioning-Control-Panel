@@ -144,11 +144,37 @@ export function adjustPrice(s, it, v, mods, now = s.clock) {
 const laneOpen = (s, it) => { const f = FORK_OF_LANE[it.lane]; return !f || s.picks[f] === it.lane; };
 const canHaveMore = (s, it) => (it.grow ? count(s, it.id) < it.grow.max : !has(s, it.id));
 
-/** On offer ignoring price: right lane for the picks made, parents owned, not already owned. */
-export function isOpen(s, it) {
+/** Parents owned, right lane, not owned yet: the plain rule, before the one-ending rule below. */
+function reached(s, it) {
   if (it.group !== 'run' || it.id === 'start' || s.ended) return false;
   if (!laneOpen(s, it) || !canHaveMore(s, it)) return false;
   return it.req.every((q) => has(s, q)) && (!it.any || it.any.some((q) => has(s, q)));
+}
+
+/* ONE ENDING A RUN (owner 2026-11-10: "only 1 ending should pop up and only at the end of the run"; pick = the first ending
+ * chain finished; Endless Mode removed from the shop). The ending held for this run is the one whose chain the player
+ * finished first (its parent bought earliest), Drop when no other chain finished. It is offered only once the main path is
+ * done (Drop's parents owned) and no other ending is ever offered. Derived from the purchase order, so nothing is saved. */
+const OFF_SHELF = new Set(['onemore']);
+/** Endings on the main path itself (Drop; Go Outside hangs off Spiral Overlay) are not a chain the player builds: Drop is
+ *  the fallback, Go Outside is not offered under this rule (open owner call). */
+const MAIN_PATH_LANES = new Set(['trunk', 'exit']);
+export const mainPathDone = (s) => BY_ID.drop.req.every((q) => has(s, q));
+export function heldEnding(s) {
+  let best = null, at = Infinity;
+  for (const it of ITEMS) {
+    if (it.kind !== 'end' || MAIN_PATH_LANES.has(it.lane) || OFF_SHELF.has(it.id) || !reached(s, it)) continue;
+    const i = Math.max(...it.req.map((q) => s.order.indexOf(q)));
+    if (i < at) { at = i; best = it.id; }
+  }
+  return best || 'drop';
+}
+
+/** On offer ignoring price: right lane for the picks made, parents owned, not already owned; an ending only as above. */
+export function isOpen(s, it) {
+  if (!reached(s, it)) return false;
+  if (it.kind !== 'end') return true;
+  return !OFF_SHELF.has(it.id) && mainPathDone(s) && heldEnding(s) === it.id;
 }
 
 /** Shuffled Shop: from the second run on (a mood means not the first), open side rows sort by a price scaled per run. */

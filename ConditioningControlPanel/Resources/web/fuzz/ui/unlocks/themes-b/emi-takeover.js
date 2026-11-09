@@ -7,8 +7,11 @@
  *   shut   every screen dark at once, about 1 s
  *   drop   pictures only on the grid pixels of DROP (DR over OP on a portrait phone)
  *   error  error sound, a small system dialog with the game logo, a short shake (none under Gentle)
- *   frozen every animation and sound stops
- *   giant  a giant EMI (the shipped idle sprite scaled whole) pops up, blinks, then ^_~ on body-smug
+ *   waiting every animation and the page's sound stop; a quiet synthesised drone swells underneath; the dialog's OK
+ *          (or its x, or Enter/Space) is live and focused, and the take waits for it (on its own after 45 s)
+ *   giant  on OK the drone cuts, a hard shake and a sting, and a giant EMI (the shipped idle sprite scaled whole) is
+ *          there in the same frame, slightly too big then settled; she blinks, then ^_~ on body-smug
+ *          (owner 2026-11-10; Gentle: no shakes, a 300 ms fade, the sting and drone at half)
  *   close  the eyelid shuts to black (Gentle: a plain fade). Then the engine goes straight to the recap.
  *
  * No bubbles, nothing follows or gathers round the pointer. Pictures are DOM <img> from ctx.pictures, never a canvas.
@@ -24,12 +27,14 @@ const TAKE_CSS = `
 .et-dlg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(340px,calc(100% - 32px));background:#ece9e2;color:#111;border:1px solid #2a2a2a;box-shadow:3px 4px 0 rgba(0,0,0,.45);font:13px/1.35 "Segoe UI",system-ui,sans-serif;z-index:6;}
 .et-dlg .tb{display:flex;align-items:center;gap:8px;padding:4px 8px;background:#2a1f3d;color:#fff;font-weight:700;}
 .et-dlg .tb span{flex:1;}
-.et-dlg .tb i{font-style:normal;opacity:.8;}
+.et-dlg button{font:inherit;color:inherit;cursor:pointer;pointer-events:auto;}
+.et-dlg .x{background:none;border:0;padding:0 4px;color:#fff;opacity:.8;}
 .et-dlg .bd{display:flex;gap:12px;align-items:center;padding:12px 14px 6px;}
 .et-dlg .bd img{position:static;width:72px;height:auto;flex:none;}
 .et-dlg .bd p{margin:0 0 4px;}
 .et-dlg .ft{display:flex;justify-content:flex-end;padding:4px 12px 10px;}
-.et-dlg .ft b{min-width:64px;text-align:center;padding:3px 10px;border:1px solid #555;background:#f7f6f2;font-weight:400;}
+.et-dlg .ok{min-width:72px;padding:4px 12px;border:1px solid #555;background:#f7f6f2;}
+.et-dlg .ok:focus-visible,.et-dlg .ok:focus{outline:2px dotted #2a1f3d;outline-offset:-5px;}
 `;
 
 let aborted = false;
@@ -64,7 +69,7 @@ export function emiTakeoverTake(ctx) {
 
   return new Promise((resolve) => {
     let done = false;
-    const finish = () => { if (done) return; done = true; delete view.__emiTakeoverProbe; resolve(); };
+    const finish = () => { if (done) return; done = true; drone?.stop(); delete view.__emiTakeoverProbe; resolve(); };
     ctx.on('suspend', (s) => { if (s?.on && s.reason === 'panic') { aborted = true; finish(); } });
 
     const root = ctx.el('div', 'position:absolute;inset:0;overflow:hidden;pointer-events:auto;background:rgba(22,17,13,0);', null, 'ending');
@@ -113,7 +118,9 @@ export function emiTakeoverTake(ctx) {
     };
     const every = (fn) => { for (const s of cells) if (s) fn(s); for (const s of backs) if (s) fn(s); };
 
-    let t = 0, phase = 'fill', big = null, dlg = null, err = null, blinks = [], frozen = false, shook = false;
+    let t = 0, phase = 'fill', big = null, dlg = null, err = null, blinks = [], frozen = false, shook = false, jolted = false;
+    /* dev door: the drive can shorten the wait to prove the take goes on alone (always inside the take's own cap) */
+    const waitMaxS = T.clampWait(Number(view.__emiTakeoverWaitS) || T.TAKE.WAIT_MAX_S);
     const seedN = pile.filter((p) => p.seed).length;
 
     function shut() {
@@ -134,20 +141,32 @@ export function emiTakeoverTake(ctx) {
       });
       showCredit(true);
     }
+    let okAt = null, okBy = '';
+    /** The player pressed OK (or the x, or Enter/Space on it): the wait ends on the next frame. */
+    const pressOk = (by) => {
+      if (okAt != null || phase !== 'waiting' || ctx.paused || !T.okTakes(t - at.waiting)) return;
+      okAt = t; okBy = by;
+    };
     function error() {
       err = ctx.audio.play('assets/audio/sfx/ui_denied.mp3', { bus: 'sfx', gain: 0.8 });
       const d = T.errorDialog();
       dlg = doc.createElement('div');
       dlg.className = 'et-dlg';
       dlg.setAttribute('role', 'alertdialog');
-      dlg.innerHTML = '<div class="tb"><span></span><i>x</i></div><div class="bd"><img alt=""><div></div></div><div class="ft"><b></b></div>';
+      dlg.setAttribute('aria-label', d.title);
+      dlg.innerHTML = '<div class="tb"><span></span><button type="button" class="x">x</button></div><div class="bd"><img alt=""><div></div></div><div class="ft"><button type="button" class="ok"></button></div>';
       dlg.querySelector('.tb span').textContent = d.title;
       const logo = dlg.querySelector('.bd img');
       logo.src = 'assets/adcard/logo.webp';
       logo.alt = ctx.brand.game;
       const text = dlg.querySelector('.bd div');
       for (const line of d.lines) { const p = doc.createElement('p'); p.textContent = line; text.appendChild(p); }
-      dlg.querySelector('.ft b').textContent = d.button;
+      const ok = dlg.querySelector('.ok'), x = dlg.querySelector('.x');
+      ok.textContent = d.button;
+      x.setAttribute('aria-label', d.close);
+      /* a native button: Enter and Space on it click it */
+      ok.addEventListener('click', (ev) => { if (ev.isTrusted) pressOk('ok'); });
+      x.addEventListener('click', (ev) => { if (ev.isTrusted) pressOk('x'); });
       root.appendChild(dlg);
       if (calm) ctx.anim(dlg, [{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
       else {
@@ -157,15 +176,83 @@ export function emiTakeoverTake(ctx) {
         shook = true;
       }
     }
+
+    /* the eerie drone under the wait: two detuned low hums and a faint fifth through a lowpass, a slow swell.
+     * Synthesised through the kit on this take's own source, so solo keeps it; never a voice. */
+    let drone = null;
+    function startDrone() {
+      const io = ctx.audio.input?.({ bus: 'sfx', gain: 1 });
+      if (!io) return;
+      const ac = io.ac, t0 = ac.currentTime;
+      const level = T.TAKE.DRONE_GAIN * (calm ? 0.5 : 1);
+      const out = ac.createGain(), lp = ac.createBiquadFilter(), swell = ac.createGain(), lfo = ac.createOscillator(), depth = ac.createGain();
+      out.gain.setValueAtTime(0.0001, t0);
+      out.gain.linearRampToValueAtTime(level, t0 + 2.5);
+      lp.type = 'lowpass'; lp.frequency.value = 420; lp.Q.value = 0.7;
+      swell.gain.value = 0.7; lfo.frequency.value = 0.07; depth.gain.value = 0.3;
+      lfo.connect(depth); depth.connect(swell.gain);
+      const oscs = [[55, 'triangle', 0.5], [55.7, 'sine', 0.45], [82.6, 'sine', 0.16], [110.9, 'sine', 0.06]].map(([f, type, g]) => {
+        const o = ac.createOscillator(), og = ac.createGain();
+        o.type = type; o.frequency.value = f; og.gain.value = g;
+        o.connect(og); og.connect(lp);
+        return o;
+      });
+      lp.connect(swell); swell.connect(out); out.connect(io.node);
+      for (const o of [...oscs, lfo]) o.start(t0);
+      let dead = false;
+      drone = {
+        stop() {
+          if (dead) return;
+          dead = true;
+          const n = ac.currentTime;
+          out.gain.cancelScheduledValues(n); out.gain.setValueAtTime(out.gain.value, n); out.gain.linearRampToValueAtTime(0.0001, n + 0.04);
+          for (const o of [...oscs, lfo]) { try { o.stop(n + 0.06); } catch { /* already stopped */ } }
+          ctx.after(150, () => io.stop());
+        },
+      };
+      ctx.cleanup(() => drone?.stop());
+    }
+
+    /* the sting: a short sharp hit, a thud under a noise crack and a dissonant stab, on the normal sfx bus */
+    function sting() {
+      const g = T.TAKE.STING_GAIN * (calm ? 0.5 : 1);
+      ctx.audio.play('assets/audio/sfx/thud.mp3', { bus: 'sfx', gain: g });
+      const io = ctx.audio.input?.({ bus: 'sfx', gain: g });
+      if (!io) return;
+      const ac = io.ac, n = ac.currentTime;
+      const out = ac.createGain();
+      out.gain.setValueAtTime(0.0001, n); out.gain.linearRampToValueAtTime(0.55, n + 0.006); out.gain.setTargetAtTime(0.0001, n + 0.02, 0.16);
+      out.connect(io.node);
+      const nb = ac.createBuffer(1, Math.floor(ac.sampleRate * 0.3), ac.sampleRate), nd = nb.getChannelData(0);
+      for (let i = 0; i < nd.length; i++) nd[i] = (Math.random() * 2 - 1) * (1 - i / nd.length);
+      const noise = ac.createBufferSource(), hp = ac.createBiquadFilter(), ng = ac.createGain();
+      noise.buffer = nb; hp.type = 'highpass'; hp.frequency.value = 1400; ng.gain.value = 0.5;
+      noise.connect(hp); hp.connect(ng); ng.connect(out);
+      const stab = [[220, 'sawtooth'], [233.1, 'sawtooth'], [311.1, 'square']].map(([f, type]) => {
+        const o = ac.createOscillator(), lp = ac.createBiquadFilter(), og = ac.createGain();
+        o.type = type; o.frequency.setValueAtTime(f, n); o.frequency.exponentialRampToValueAtTime(f * 0.94, n + 0.5);
+        lp.type = 'lowpass'; lp.frequency.value = 2400; og.gain.value = 0.22;
+        o.connect(lp); lp.connect(og); og.connect(out);
+        return o;
+      });
+      for (const s of [noise, ...stab]) { s.start(n); s.stop(n + 0.7); }
+      ctx.after(1200, () => io.stop());
+    }
+
     function freeze() {
-      /* no motion anywhere, sound included */
+      /* no motion anywhere and the page silent; the dialog's OK is live and takes the focus */
       frozen = true;
       ctx.audio.solo(true);
       err?.stop?.(0);
       for (const a of root.getAnimations({ subtree: true })) { if (a.effect?.target === root && a.effect.getKeyframes?.().some((k) => k.backgroundColor)) { a.finish(); continue; } a.pause(); }
+      startDrone();
+      dlg?.querySelector('.ok')?.focus({ preventScroll: true });
     }
     function giant() {
-      /* the shipped idle sprite scaled as a whole (never stretched): the full body when it fits */
+      /* OK: the drone cuts, a hard shake, and she is there in the same frame (the shipped idle sprite, scaled whole) */
+      drone?.stop();
+      for (const b of dlg?.querySelectorAll('button') || []) b.disabled = true;
+      sting();
       const bh = Math.min(Hfull * 0.96, W * 1.05), bw = bh * 859 / 869;
       const top = Math.max(0, (Hfull - bh) * 0.5);
       big = sprite(doc, bh, true);
@@ -174,9 +261,14 @@ export function emiTakeoverTake(ctx) {
       big.el.style.zIndex = '8';
       big.setFace('0_0');
       root.appendChild(big.el);
-      if (calm) ctx.anim(big.el, [{ opacity: 0 }, { opacity: 1 }], { duration: 400 });
-      else ctx.anim(big.el, [{ opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1.04, offset: 0.7 }, { opacity: 1, scale: 1 }], { duration: T.TAKE.POP_S * 1000, easing: 'ease-out' });
-      blinks = T.blinkTimes().map((b) => ({ on: at.giant + b, off: at.giant + b + (calm ? 0.3 : T.TAKE.BLINK_LEN_S) }));
+      if (calm) ctx.anim(big.el, [{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
+      else {
+        /* no fade, no flash: one frame slightly too big, then she settles */
+        ctx.anim(big.el, [{ scale: 1.12 }, { scale: 0.98, offset: 0.55 }, { scale: 1 }], { duration: 220, easing: 'ease-out' });
+        ctx.anim(root, [{ transform: 'none' }, { transform: 'translate(-16px,7px)' }, { transform: 'translate(14px,-9px)' }, { transform: 'translate(-11px,-5px)' }, { transform: 'translate(9px,6px)' }, { transform: 'translate(-5px,2px)' }, { transform: 'translate(3px,-1px)' }, { transform: 'none' }], { duration: T.TAKE.JUMP_SHAKE_S * 1000 });
+        jolted = true;
+      }
+      blinks = T.blinkTimes().map((b) => ({ on: beats.giant + b, off: beats.giant + b + (calm ? 0.3 : T.TAKE.BLINK_LEN_S) }));
     }
     function cheeky() {
       big.setPose('body-smug');
@@ -195,10 +287,14 @@ export function emiTakeoverTake(ctx) {
       phase, t, calm, front: N, frontIn: gridIn, back: B, backIn, seeds: seedN, stacked: grid.stacked, cols: grid.cols, rows: grid.rows,
       readable: grid.readable, pool: pool.length, bubbles: 0,
       lit: cells.filter((c) => c?.lit && c.pic && !c.scr.dataset.off).length, wantLit: grid.cells.filter((c) => c.lit).length,
-      dark: [...cells, ...backs].filter((c) => c && c.scr.dataset.off).length, frozen, shook, dialog: !!dlg?.isConnected,
+      dark: [...cells, ...backs].filter((c) => c && c.scr.dataset.off).length, frozen, shook, jolted, dialog: !!dlg?.isConnected,
+      waiting: phase === 'waiting', waitedS: okAt != null ? okAt - at.waiting : phase === 'waiting' ? t - at.waiting : null, okBy,
+      waitMaxS, drone: !!drone, focused: doc.activeElement === dlg?.querySelector('.ok'),
       big: !!big?.el.isConnected, face: big?.face || '', pose: big?.poseName || '', credit: !credit.hidden,
     });
 
+    /* the beats after OK, set when it is pressed (or the wait runs out) */
+    let beats = null;
     const enter = (name, fn) => { if (phase !== name) { phase = name; fn?.(); } };
     ctx.frame((dt) => {
       if (done) return;
@@ -218,15 +314,19 @@ export function emiTakeoverTake(ctx) {
         while (gridIn < N) putFront(gridIn++);
         enter('shut', shut);
       } else if (t < at.error) enter('drop', drop);
-      else if (t < at.frozen) enter('error', error);
-      else if (t < at.giant) { if (phase === 'drop') enter('error', error); enter('frozen', freeze); }
-      else if (t < at.cheeky) {
-        if (!frozen) { if (!dlg) error(); freeze(); }
+      else if (t < at.waiting) enter('error', error);
+      else if (!beats) {
+        if (!dlg) error();
+        enter('waiting', freeze);
+        if (okAt == null && t - at.waiting >= waitMaxS) { okAt = t; okBy = 'timeout'; }
+        if (okAt != null) beats = T.phaseStarts({ calm, waitS: okAt - at.waiting });
+        if (beats) beats = { ...beats, giant: okAt, cheeky: okAt + (beats.cheeky - beats.giant), close: okAt + (beats.close - beats.giant), end: okAt + (beats.end - beats.giant) };
+      } else if (t < beats.cheeky) {
         enter('giant', giant);
         const b = blinks.find((x) => t >= x.on && t < x.off);
         big.setFace(b ? '-_-' : '0_0');
-      } else if (t < at.close) { if (!big) giant(); enter('cheeky', cheeky); }
-      else if (t < at.end) enter('close', close);
+      } else if (t < beats.close) { if (!big) giant(); enter('cheeky', cheeky); }
+      else if (t < beats.end) enter('close', close);
       else finish();
     });
   });

@@ -83,22 +83,37 @@ test('the back pile piles in: the swarm at once, then slow first and fast last, 
   assert.ok(half > T.TAKE.BACK_S * 0.5, `slow first: half the pile at ${half.toFixed(1)} s`);
 });
 
-test('the beats come in the brief\'s order and lengths, and the take fits the engine cap', () => {
-  for (const calm of [false, true]) {
-    const p = T.phaseStarts({ calm });
-    const order = ['fill', 'shut', 'drop', 'error', 'frozen', 'giant', 'cheeky', 'close', 'end'];
+test('the beats come in the owner order and lengths, the wait holds for OK up to 45 s, and the take fits the engine cap', () => {
+  for (const calm of [false, true]) for (const waitS of [0.8, 6, T.TAKE.WAIT_MAX_S]) {
+    const p = T.phaseStarts({ calm, waitS });
+    const order = ['fill', 'shut', 'drop', 'error', 'waiting', 'giant', 'cheeky', 'close', 'end'];
     for (let i = 1; i < order.length; i++) assert.ok(p[order[i]] >= p[order[i - 1]], `${order[i]} after ${order[i - 1]}`);
     assert.ok(Math.abs(p.drop - p.shut - 1) < 0.25, 'shut about 1 s');
     assert.ok(Math.abs(p.error - p.drop - 3) < 0.5, 'DROP about 3 s');
-    assert.ok(Math.abs(p.giant - p.frozen - 1.5) < 0.3, 'frozen about 1.5 s');
-    assert.ok(Math.abs(p.cheeky - p.giant - 2.6) < 0.5, 'idle blinks about 2.5 s');
+    assert.ok(Math.abs(p.giant - p.waiting - waitS) < 1e-9, 'she comes when OK is pressed');
+    assert.ok(Math.abs(p.cheeky - p.giant - 2.8) < 0.5, 'idle blinks about 2.5 s');
     assert.ok(Math.abs(p.close - p.cheeky - 1.5) < 0.3, 'cheeky about 1.5 s');
-    assert.equal(T.phaseAt(p.drop + 0.01, { calm }), 'drop');
-    assert.equal(T.phaseAt(p.end + 1, { calm }), 'end');
+    assert.equal(T.phaseAt(p.drop + 0.01, { calm, waitS }), 'drop');
+    assert.equal(T.phaseAt(p.waiting + 0.01, { calm, waitS }), 'waiting');
+    assert.equal(T.phaseAt(p.end + 1, { calm, waitS }), 'end');
   }
-  assert.equal(T.phaseStarts({ calm: true }).frozen, T.phaseStarts({ calm: true }).error, 'no shake under Gentle');
-  assert.ok(Math.abs(T.TAKE.SHAKE_S - 0.3) < 0.05, 'a 300 ms shake');
+  assert.equal(T.phaseStarts({ calm: true }).waiting, T.phaseStarts({ calm: true }).error, 'no shake under Gentle');
+  assert.ok(Math.abs(T.TAKE.SHAKE_S - 0.3) < 0.05, 'a 300 ms error shake');
+  assert.ok(T.TAKE.JUMP_SHAKE_S > T.TAKE.SHAKE_S && Math.abs(T.TAKE.JUMP_SHAKE_S - 0.4) < 0.05, 'the jumpscare shake is harder, about 400 ms');
+  /* the wait: never skipped by a click meant for DROP, never past 45 s */
+  assert.equal(T.okTakes(0.1), false);
+  assert.equal(T.okTakes(T.TAKE.WAIT_MIN_S), true);
+  assert.ok(T.TAKE.WAIT_MIN_S <= 0.6);
+  assert.equal(T.TAKE.WAIT_MAX_S, 45);
+  assert.equal(T.clampWait(999), T.TAKE.WAIT_MAX_S);
+  assert.equal(T.clampWait(0), T.TAKE.WAIT_MIN_S);
+  assert.equal(T.clampWait(NaN), T.TAKE.WAIT_MAX_S);
+  /* the longest take counts the whole wait, with a margin under the engine cap */
+  assert.ok(T.takeMaxS() >= T.phaseStarts().waiting + T.TAKE.WAIT_MAX_S);
   assert.ok(T.takeMaxS() * 1000 < CONFIG.ENDING_TAKE_MAX_MS - 20000, `${T.takeMaxS()} s`);
+  /* sound under the wait stays quiet; the sting is loud-ish but under the bus */
+  assert.ok(T.TAKE.DRONE_GAIN > 0 && T.TAKE.DRONE_GAIN <= 0.25);
+  assert.ok(T.TAKE.STING_GAIN > T.TAKE.DRONE_GAIN && T.TAKE.STING_GAIN <= 1);
 });
 
 test('no screen flashes 3 times a second, and the giant EMI blinks two or three times inside her idle', () => {
@@ -134,6 +149,12 @@ test('the take keeps its hard rules in the source', () => {
   assert.match(take, /body-smug/);
   assert.match(take, /'\^_~'/);
   assert.ok(!/boop|pointerdown|bubble\(|placeBubble|EMI_BARKS/.test(take), 'no click-to-spawn, no bubbles in the ending');
+  assert.match(take, /<button type="button" class="ok">/, 'OK is a real button: Enter and Space work');
+  assert.match(take, /ev\.isTrusted\) pressOk/, 'only a real press ends the wait');
+  assert.match(take, /audio\.input\?\.\(/, 'drone and sting are synthesised through the kit');
+  assert.match(take, /drone\?\.stop\(\)/, 'the drone cuts on OK and on panic');
+  assert.match(take, /ctx\.anim\(big\.el, \[\{ scale: 1\.12 \}/, 'the jumpscare: there at once, slightly too big, no fade');
+  assert.ok(!/background:\s*#fff[^;]*;[^']*inset:0|inset:0;[^']*background:\s*#fff/.test(take), 'no full-screen white flash');
   assert.match(src('emi-kit.js'), /referrerPolicy = 'strict-origin'/);
   const goon = src('goon.js');
   const block = goon.slice(goon.indexOf('go_end: {'));

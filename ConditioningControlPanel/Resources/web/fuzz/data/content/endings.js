@@ -90,11 +90,11 @@ export const ENDINGS = Object.freeze({
 
   go_end: e('go_end', 'Taken Over', 'The page answers to EMI now. There are more of her than there were of you.', [
     'Transmission: always on',
-    'Free will: hers',
+    'Free will: given to EMI',
     'Startup: funded by your clicks',
     'Copies: all of them',
     'Your input: no longer required',
-  ], 'You let her press this one. She is still pressing it.', { link: link('Goon, the game, in CCP') }),
+  ], 'You let EMI press this one. EMI is still pressing it.', { link: link('Goon, the game, in CCP') }),
 
   lo_end: e('lo_end', 'Lost Key', 'The key goes up, comes down, and makes a very small splash a long way out.', [
     'Throw: nice',

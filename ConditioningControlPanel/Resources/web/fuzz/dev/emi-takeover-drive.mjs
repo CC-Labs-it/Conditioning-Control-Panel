@@ -3,8 +3,10 @@
 //   tx       Transmission: one EMI stays put, her screen alternates a picture and her face (2-3 s each)
 //   will     FREE WILL: she walks in short steps, stops, hops; never follows the cursor
 //   corp     Founded Startup: her budget fills her guest tile, she walks to it and buys it (Amplifier: bigger)
-//   rep      Self Replication: the player's own clicks turn page objects into EMIs or split one off; cap holds
-//   hive     HIVE MIND: forced by EMI 150 s after Self Replication (time handed over by the dev door), free for the
+//   rep      Self Replication: the player's own clicks only split EMIs off; nothing on the page is taken
+//   override Override: about half the clicks make a page object (and its bottom tab, which reads EMI) buzz and shake,
+//            then an EMI stands in its spot; cap holds
+//   hive     HIVE MIND: forced by EMI 150 s after Override (time handed over by the dev door), free for the
 //            player; screens run in patterns
 // Wake Up is hit-tested at every step. Shots land in $SHOTS (default dev/shots/).
 // Env: FUZZ_BASE (default http://127.0.0.1:8861/fuzz/), CHROME_EXE, PW_DIR, W, H, TOUCH=1, SHOTS.
@@ -137,18 +139,33 @@ await wait(400);
 s = await state();
 check('rep: Self Replication is hers', s.phase === 'rep', s.phase);
 const btn = await page.evaluate(() => { const r = document.getElementById('btn').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+const press = () => (touch ? page.touchscreen.tap(btn.x, btn.y) : page.mouse.click(btn.x, btn.y));
 const before = s.count;
-let convertShot = false;
-for (let i = 0; i < 26; i++) {
-  if (touch) await page.touchscreen.tap(btn.x, btn.y); else await page.mouse.click(btn.x, btn.y);
-  await wait(460);
+for (let i = 0; i < 8; i++) { await press(); await wait(460); }
+s = await state();
+check('rep: the player\'s clicks made EMIs', s.count > before + 4, `${before} -> ${s.count}`);
+check('rep: Self Replication only multiplies, nothing on the page is taken', s.gone === 0 && s.buzzing === 0, `${s.gone} taken`);
+
+/* ---------- Override ---------- */
+await page.evaluate(() => window.__emiSwarm.dev.tiles(5));
+await wait(400);
+s = await state();
+check('override: Override is hers, the forced-HIVE clock starts at 0', s.bought.includes('h_over') && s.sinceOver <= 1, JSON.stringify({ bought: s.bought, sinceOver: s.sinceOver }));
+let buzzShot = false, convertShot = false;
+for (let i = 0; i < 18; i++) {
+  await press();
+  await wait(120);
   s = await state();
-  if (s.gone >= 1 && !convertShot) { convertShot = true; await wait(200); await shot('rep-converted'); }
+  if (s.buzzing && !buzzShot) { buzzShot = true; await shot('override-buzzing'); }
+  await wait(340);
+  s = await state();
+  if (s.gone >= 1 && !convertShot) { convertShot = true; await wait(200); await shot('override-converted'); }
   if (i % 6 === 0) wake = wake && await wakeOk();
 }
 s = await state();
-check('rep: the player\'s clicks made EMIs', s.count > before + 5, `${before} -> ${s.count}`);
-check('rep: some page objects became EMIs', s.gone >= 1, `${s.gone} taken`);
+check('override: page objects became EMIs after a buzz', s.gone >= 1 && buzzShot, `${s.gone} taken, buzz seen ${buzzShot}`);
+const disguised = await page.evaluate(() => [...document.querySelectorAll('#dock-strip .dk-chip[data-disguised]')].map((c) => c.querySelector('.dk-label')?.textContent));
+check('override: a converted object\'s tab reads EMI', s.tabs === 0 || (disguised.length === s.tabs && disguised.every((t) => t === 'EMI')), JSON.stringify({ tabs: s.tabs, disguised }));
 await page.evaluate(() => window.fuzz.engine.tap({ auto: true }));
 const autoCount = (await state()).count;
 for (let i = 0; i < 5; i++) { await page.evaluate(() => window.fuzz.engine.tap({ auto: true })); await wait(450); }
@@ -157,7 +174,7 @@ await shot('rep-crowd');
 
 /* ---------- HIVE MIND, forced ---------- */
 const fuzzBefore = await page.evaluate(() => window.fuzz.state.fuzz);
-await page.evaluate(() => window.__emiSwarm.dev.sinceRep(149));
+await page.evaluate(() => window.__emiSwarm.dev.sinceOver(149));
 await page.waitForFunction(() => window.fuzz.state.owned.go_hive > 0, null, { timeout: 8000 }).catch(() => {});
 s = await state();
 const fuzzAfter = await page.evaluate(() => window.fuzz.state.fuzz);
@@ -201,8 +218,8 @@ check('Wake Up stayed on top', wake && await wakeOk());
 /* switching Transmission off puts every taken object back */
 await page.evaluate(() => window.fuzz.engine.switches.set('go_tx', false));
 await wait(500);
-const back = await page.evaluate(() => ({ hidden: document.querySelectorAll('[data-et-gone]').length, emis: document.querySelectorAll('.et-emi').length, swarm: !!window.__emiSwarm }));
-check('switch off: every taken object is back, no EMI left', back.hidden === 0 && back.emis === 0 && !back.swarm, JSON.stringify(back));
+const back = await page.evaluate(() => ({ hidden: document.querySelectorAll('[data-et-gone], [data-et-buzz]').length, tabs: document.querySelectorAll('.dk-chip[data-disguised]').length, emis: document.querySelectorAll('.et-emi').length, swarm: !!window.__emiSwarm }));
+check('switch off: every taken object and tab is back, no EMI left', back.hidden === 0 && back.tabs === 0 && back.emis === 0 && !back.swarm, JSON.stringify(back));
 await page.evaluate(() => window.fuzz.engine.switches.set('go_tx', true));
 await wait(800);
 s = await page.evaluate(() => window.__emiSwarm?.state());

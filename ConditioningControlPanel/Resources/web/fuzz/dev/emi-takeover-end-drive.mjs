@@ -3,7 +3,9 @@
 //   fill (grid arriving, back pile), full, shut, DROP, error dialog, frozen, giant EMI (a blink), cheeky face, black,
 //   then the credits with the run recap and its poster.
 // Wake Up is hit-tested at every poll. Run your own `node dev/serve.mjs 8862` first.
-// Env: FUZZ_BASE (default http://127.0.0.1:8862/fuzz/), CHROME_EXE, PW_DIR, W, H, TOUCH=1, REDUCED=1, SHOTS (dir).
+// The wait: the drive checks the take holds on the dialog, then presses OK (mouse, or Enter on the focused OK with
+// TOUCH=1). AUTO=1 sets the dev wait to 3 s and never presses: the take must go on alone.
+// Env: FUZZ_BASE (default http://127.0.0.1:8862/fuzz/), CHROME_EXE, PW_DIR, W, H, TOUCH=1, REDUCED=1, AUTO=1, SHOTS (dir).
 import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -12,8 +14,8 @@ const require = createRequire('C:/wt-fe/e2e/');
 const { chromium } = require(process.env.PW_DIR || 'playwright');
 const base = process.env.FUZZ_BASE || 'http://127.0.0.1:8862/fuzz/';
 const W = Number(process.env.W || 1440), H = Number(process.env.H || 900);
-const touch = !!process.env.TOUCH, reduced = !!process.env.REDUCED;
-const tag = `${W}x${H}${reduced ? '-reduced' : ''}`;
+const touch = !!process.env.TOUCH, reduced = !!process.env.REDUCED, auto = !!process.env.AUTO;
+const tag = `${W}x${H}${reduced ? '-reduced' : ''}${auto ? '-auto' : ''}`;
 const shots = process.env.SHOTS || fileURLToPath(new URL('./shots/', import.meta.url));
 mkdirSync(shots, { recursive: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -39,11 +41,12 @@ const wakeOk = () => page.evaluate(() => {
 });
 const swarm = await page.evaluate(() => document.querySelectorAll('.et-emi').length);
 await page.evaluate(() => window.fuzz.engine.audio?.arm?.());
+if (auto) await page.evaluate(() => { window.__emiTakeoverWaitS = 3; });
 await page.evaluate(() => window.fuzz.end('go_end'));
 await page.waitForFunction(() => window.__emiTakeoverProbe, null, { timeout: 8000 });
 
 const seen = {};
-let wake = true, p = null, last = '', frozenAnims = null, blinkShot = false, pageShows = null;
+let wake = true, p = null, last = '', frozenAnims = null, blinkShot = false, pageShows = null, waitInfo = null, jump = null;
 const t0 = Date.now();
 while (Date.now() - t0 < 90000) {
   p = await page.evaluate(() => window.__emiTakeoverProbe?.() || null).catch(() => null);
@@ -72,17 +75,31 @@ while (Date.now() - t0 < 90000) {
   }
   await once('shut', p.phase === 'shut');
   await once('drop', p.phase === 'drop' && p.lit > 0);
-  await once('error', p.phase === 'error' || (p.phase === 'frozen' && !seen.error));
-  if (p.phase === 'frozen' && !frozenAnims) {
-    await wait(300);
+  await once('error', p.phase === 'error' || (p.phase === 'waiting' && !seen.error));
+  if (p.phase === 'waiting' && !waitInfo) {
+    /* the wait: frozen, quiet, OK focused; it holds while nobody presses */
+    await wait(1200);
     frozenAnims = await page.evaluate(() => {
       const root = document.getElementById('l-ending');
       const a = root.getAnimations({ subtree: true });
       return { running: a.filter((x) => x.playState === 'running').length, all: a.length };
     });
-    await shot('frozen');
+    await shot('waiting');
+    await wait(auto ? 300 : 1800);
+    const q = await page.evaluate(() => window.__emiTakeoverProbe?.());
+    waitInfo = { ...q, heldS: q ? q.waitedS : 0 };
+    if (!auto) {
+      if (touch) { await page.evaluate(() => document.querySelector('.et-dlg .ok')?.focus()); await page.keyboard.press('Enter'); }
+      else { const r = await page.evaluate(() => { const b = document.querySelector('.et-dlg .ok').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; }); await page.mouse.click(r.x, r.y); }
+    }
   }
-  if (p.phase === 'giant' && !seen.giant) { seen.giant = p; await wait(350); await shot('giant'); }
+  if (p.phase === 'giant' && !seen.giant) {
+    seen.giant = p;
+    jump = await page.evaluate(() => { const e = [...document.querySelectorAll('#l-ending .et-emi')].at(-1); const r = e.getBoundingClientRect(); return { opacity: getComputedStyle(e).opacity, w: r.width, h: r.height }; });
+    await shot('jump');
+    await wait(400);
+    await shot('giant');
+  }
   if (p.phase === 'giant' && p.face === '-_-' && !blinkShot) { blinkShot = true; seen.blink = p; await shot('blink'); }
   await once('cheeky', p.phase === 'cheeky');
   if (p.phase === 'close' && !seen.close) { seen.close = p; await wait(Math.round(reduced ? 900 : 450)); await shot('black'); }
@@ -94,8 +111,11 @@ check('the swarm became the first back-layer EMIs', (seen.full?.seeds || 0) > 0,
 check('no page shows through at the full screen: every point hits the take and an EMI body', !!pageShows && pageShows.bad === 0 && pageShows.emi === pageShows.n, JSON.stringify(pageShows));
 check('shut: every screen dark at once', !!seen.shut, JSON.stringify(seen.shut && { dark: seen.shut.dark, front: seen.shut.front, back: seen.shut.back }));
 check('DROP: every lit pixel shows a picture', !!seen.drop && seen.drop.lit === seen.drop.wantLit && seen.drop.readable, JSON.stringify(seen.drop && { lit: seen.drop.lit, want: seen.drop.wantLit }));
-check('the error dialog came with the logo', !!seen.error && seen.error.dialog && await page.evaluate(() => true));
-check('frozen: no animation running', !!frozenAnims && frozenAnims.running === 0, JSON.stringify(frozenAnims));
+check('the error dialog came with the logo', !!seen.error && seen.error.dialog);
+check('waiting: frozen, nothing running', !!frozenAnims && frozenAnims.running === 0, JSON.stringify(frozenAnims));
+check('waiting: OK focused, drone on, the take holds', !!waitInfo && waitInfo.phase === 'waiting' && waitInfo.focused && waitInfo.drone && waitInfo.heldS > (auto ? 1 : 2.5), JSON.stringify(waitInfo && { phase: waitInfo.phase, focused: waitInfo.focused, drone: waitInfo.drone, held: waitInfo.heldS?.toFixed(1) }));
+check(auto ? 'nobody pressed: the take went on alone at the dev wait' : `OK pressed (${touch ? 'Enter' : 'mouse'}) ended the wait`, !!seen.giant && seen.giant.okBy === (auto ? 'timeout' : 'ok'), JSON.stringify(seen.giant && { by: seen.giant.okBy, waited: seen.giant.waitedS?.toFixed(1) }));
+check(reduced ? 'Gentle: she fades in, no shake' : 'jumpscare: she is there at once, no fade, with the hard shake', !!jump && (reduced ? !seen.giant.jolted : jump.opacity === '1' && seen.giant.jolted), JSON.stringify(jump));
 check('giant EMI, idle face then a blink', !!seen.giant && seen.giant.big, `blink caught: ${blinkShot}`);
 check('cheeky face on body-smug', seen.cheeky?.face === '^_~' && seen.cheeky?.pose === 'body-smug', JSON.stringify(seen.cheeky && { face: seen.cheeky.face, pose: seen.cheeky.pose }));
 check('Wake Up stayed on top the whole take', wake);

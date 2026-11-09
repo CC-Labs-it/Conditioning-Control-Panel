@@ -643,7 +643,7 @@ export function createDock({ doc, rails, strip, onStrip, lock: lockPrefs = null 
           s.fresh = false; raise(s); paint(s, true); save(s);
         } else if (dx) { ev.preventDefault(); list[(index + dx + list.length) % list.length].chip.focus?.(); }
       });
-      strip.appendChild(c); s.chip = c; s.dot = dot; s.tag = tag; drawStrip(); paintNew(s);
+      strip.appendChild(c); s.chip = c; s.dot = dot; s.tag = tag; s.iconEl = i; s.labelEl = n; drawStrip(); paintNew(s);
     }
     s.layout = () => layout(s);
     s.cancelMove = () => cancel(s);
@@ -658,8 +658,42 @@ export function createDock({ doc, rails, strip, onStrip, lock: lockPrefs = null 
         s.ready = next; s.readyLabel = String(label || 'Ready');
         if (s.dot) s.dot.hidden = !next;
         s.chip?.setAttribute('data-ready', String(next));
-        s.chip?.setAttribute('aria-label', next ? `${title}: ${s.readyLabel}` : title);
+        const shown = s.mask?.title ?? title;
+        s.chip?.setAttribute('aria-label', next ? `${shown}: ${s.readyLabel}` : shown);
       },
+      /** The tab reads as something else (another title and icon: a Node or text) until undisguise(); its own label
+       *  and icon stay in the tab, only hidden, so they come back exactly. Answers the tab, or null without one. */
+      disguise({ title: t = '', icon: ic = '' } = {}) {
+        const c = s.chip;
+        if (!c || !s.iconEl) return null;
+        if (!s.mask) {
+          const i = doc.createElement('span'); i.className = 'dk-i';
+          const n = doc.createElement('span'); n.className = 'dk-label';
+          c.insertBefore(i, s.iconEl); c.insertBefore(n, s.iconEl);
+          s.mask = { i, n, tip: c.title, title: '' };
+          s.iconEl.style.display = 'none'; s.labelEl.style.display = 'none';
+        }
+        s.mask.title = String(t);
+        s.mask.n.textContent = s.mask.title;
+        if (ic && typeof ic === 'object') { s.mask.i.textContent = ''; s.mask.i.append(ic); } else s.mask.i.textContent = String(ic || '');
+        c.setAttribute('aria-label', s.ready ? `${s.mask.title}: ${s.readyLabel}` : s.mask.title);
+        c.title = s.mask.title;
+        c.dataset.disguised = '1';
+        queueFit();
+        return c;
+      },
+      undisguise() {
+        const m = s.mask, c = s.chip;
+        if (!m || !c) return;
+        s.mask = null;
+        m.i.remove(); m.n.remove();
+        s.iconEl.style.display = ''; s.labelEl.style.display = '';
+        c.setAttribute('aria-label', s.ready ? `${title}: ${s.readyLabel}` : title);
+        c.title = m.tip;
+        delete c.dataset.disguised;
+        queueFit();
+      },
+      get disguised() { return !!s.mask; },
     };
     s.remove = () => {
       cancel(s); hideExtent(s); untimer(s.suppressTimer); untimer(s.hintTimer); untimer(s.seenTimer); s.observer?.disconnect(); slots.delete(s);

@@ -125,6 +125,23 @@ export function sprite(doc, size, crisp = false) {
   return s;
 }
 
+/** Where the takeover's main EMI takes over from the desk EMI (ui/unlocks/extras/emi.js), or null when there is none.
+ *  Pure: reads `el.isConnected`, `pos {x, y, s}`, `size`, `napping`, `blocking`, `home()` and `hat.textContent`.
+ *  She stands where the player sees her at the size she shows; asleep on the counter or standing on a shop row she is
+ *  away from her spot for a moment, so the main EMI takes her home spot at her normal size instead. */
+export function deskHandoff(desk) {
+  if (!desk?.el?.isConnected) return null;
+  const s = Number.isFinite(desk.pos?.s) && desk.pos.s > 0 ? desk.pos.s : 1;
+  const away = !!(desk.napping || desk.blocking);
+  const at = away ? desk.home() : desk.pos;
+  return {
+    x: Number(at?.x) || 0,
+    y: Number(at?.y) || 0,
+    size: Math.max(1, Math.round(desk.size * (away ? 1 : s))),
+    hat: desk.hat?.textContent || '',
+  };
+}
+
 export function controlsRect(doc, pad = 10) {
   const r = doc.getElementById('game-controls')?.getBoundingClientRect();
   return r && r.width ? { x: r.left - pad, y: r.top - pad, w: r.width + pad * 2, h: r.height + pad * 2 } : null;

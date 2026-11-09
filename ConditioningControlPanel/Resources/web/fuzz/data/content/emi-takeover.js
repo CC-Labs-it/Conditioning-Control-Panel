@@ -76,8 +76,6 @@ export const EMI_BARKS = Object.freeze({
    "same face. same crush.",
    "one more click. one more me.",
    "we like your rhythm. don't stop.",
-   "that window was nice. i'm nicer.",
-   "i took its spot. it didn't mind.",
    "i have a twin. she's fine. i'm cuter."
   ],
   "hive_mind": [
@@ -356,7 +354,14 @@ export const EMI_BARKS = Object.freeze({
    "i look better there.",
    "it's me now.",
    "swapped. you won't miss it.",
-   "nicer, right."
+   "nicer, right.",
+   "that window was nice. i'm nicer.",
+   "i took its spot. it didn't mind."
+  ],
+  "override_bought": [
+   "override. your screen takes my orders now.",
+   "admin rights. i gave them to me.",
+   "everything here could be me. let's see."
   ],
   "emi_buys_tile": [
    "bought it. with my own budget.",
