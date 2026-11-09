@@ -42,8 +42,8 @@ test('no row is cheaper than a parent, and each theme opens on its head, with ro
 test('a label never names a multiple: modifiers bend and prizes share a budget, so a shown number is a paid number', () => {
   const walk = (d) => readdirSync(d).flatMap((n) => { const p = join(d, n); return statSync(p).isDirectory() ? walk(p) : p.endsWith('.js') ? [p] : []; });
   // Prices x2 is a real price modifier. Frenzy x7 and Deep x5 are timed Golden Button buffs that skip the knees, so they
-  // pay exactly what they say (owner 2026-11-07, sim/economy.js rates).
-  const allowed = /Prices x2|Frenzy x7|Deep x5/;
+  // pay exactly what they say (owner 2026-11-07, sim/economy.js rates). EMI Calls Pick up (taps pay x3, owner 2026-11-10) is the same kind of buff.
+  const allowed = /Prices x2|Frenzy x7|Deep x5|taps pay x3/;
   for (const f of [...walk(join(tree, 'ui', 'unlocks')), ...walk(join(tree, 'data', 'content'))]) {
     for (const line of readFileSync(f, 'utf8').split(/\r?\n/)) {
       if (/^\s*(\/\*|\*|\/\/)/.test(line) || allowed.test(line)) continue;

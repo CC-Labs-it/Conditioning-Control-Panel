@@ -188,6 +188,46 @@ const WHAT_OVERRIDE = {
   ce_head: 'Pictures join the page, hidden behind bars.',
 };
 
+/* ---- INTAKE lane (owner 2026-11-10, late game wave): the question tricks sell as three stages. ----
+ * Each stage is one purchase: its lead (renamed) brings the rows listed in `fold` (data/folds.js reads the field), and
+ * `qstage` tells the quiz how often to ask and how big the per-answer bonus is (ui/unlocks/extras/quiz-stages.js).
+ * `total` is the stage's price before CONFIG.PRICE_SCALE: its rows' design costs are scaled to it, keeping their order,
+ * so on the 4-tap reference stage 1 lands about minute 22-25, stage 2 about 31-35, stage 3 about 46-49.
+ * Per-second pay (fps) stays each row's own. Other lanes: keep your overrides out of this table. */
+const INTAKE_STAGES = {
+  melt: {
+    qstage: 1, total: 25000, fold: ['swap', 'flee', 'nag', 'crowd', 'pbubble'],
+    name: 'Softer Answers',
+    what: 'Questions come about once a minute, and every answer pays a bonus. Wrong answers start to melt, swap places and run.',
+    line: 'Easier to agree with.',
+  },
+  slider: {
+    qstage: 2, total: 230000, fold: ['shrink', 'fadeno', 'magnet', 'late', 'holdno', 'dragno', 'stackno', 'robot'],
+    name: 'Leaning Answers',
+    what: 'Questions come about every 45 seconds, and the answer bonus grows. The card leans, pulls and hides the other answers.',
+    line: 'It tilts your way.',
+  },
+  grid: {
+    qstage: 3, total: 1300000, fold: ['ttype', 'regen', 'onlyyes', 'hijack'],
+    name: 'Nothing But Yes',
+    what: 'Questions come about every 35 seconds, with the biggest answer bonus. Picture checks, wobbly text, then every answer is yes.',
+    line: 'One answer, four ways.',
+  },
+};
+function intakeStages(items) {
+  const by = new Map(items.map((it) => [it.id, it]));
+  for (const [lead, st] of Object.entries(INTAKE_STAGES)) {
+    const rows = [lead, ...st.fold].map((id) => by.get(id));
+    if (rows.some((r) => !r)) throw new Error('INTAKE_STAGES names a missing row under ' + lead);
+    const sum = rows.reduce((t, r) => t + r.cost, 0);
+    /* Never cheaper than the row before it (tests/items.test.mjs), so a stage costs at least its rows at the parent price. */
+    let floor = by.get(rows[0].req[0])?.cost || 0;
+    for (const r of rows) { r.cost = Math.max(floor, Math.round((r.cost * st.total) / sum / 100) * 100); floor = r.cost; r.qstage = st.qstage; }
+    Object.assign(by.get(lead), { name: st.name, what: st.what, line: st.line, fold: st.fold });
+  }
+  return items;
+}
+
 /* Trunk rows walk in TRUNK_ORDER, in the slots trunk rows already hold; every other row stays where it is. */
 function walkOrder(rows) {
   const byId = new Map(rows.map((r) => [r.id, r]));
@@ -221,6 +261,7 @@ export function buildItems() {
     if (DEVICE[r.id]) it.device = DEVICE[r.id];
     return it;
   });
+  intakeStages(items);
   const outLanes = lanes.map((l) => {
     const c = copy.lanes[l.id] || {};
     const o = { id: l.id, name: cur(c.name || l.name), what: cur(c.what || l.note || '') };
