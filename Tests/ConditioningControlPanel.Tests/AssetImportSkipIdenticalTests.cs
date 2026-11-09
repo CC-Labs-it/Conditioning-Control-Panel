@@ -58,4 +58,14 @@ public sealed class AssetImportSkipIdenticalTests : IDisposable
         var result = new ImportResult { Skipped = 3 };
         Assert.Equal("No new files imported (3 already existed)", result.GetSummary());
     }
+
+    [Theory]
+    [InlineData("pack", true)]
+    [InlineData("pack/sub", true)]
+    [InlineData("../outside", false)]
+    [InlineData("pack/../../outside", false)]
+    public void A_zip_entry_never_writes_outside_the_asset_folder(string relative, bool inside)
+    {
+        Assert.Equal(inside, AssetImportService.IsInsideFolder(_dir, Path.Combine(_dir, relative)));
+    }
 }

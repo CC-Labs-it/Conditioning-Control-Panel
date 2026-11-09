@@ -296,6 +296,17 @@ namespace ConditioningControlPanel.Services
                                 ? Path.Combine(baseDestFolder, packName)
                                 : Path.Combine(baseDestFolder, packName, entryDir);
 
+                            // Zip Slip guard: an entry or pack name holding ".." (or a rooted path)
+                            // must never write outside the asset folder.
+                            if (!IsInsideFolder(baseDestFolder, destFolder))
+                            {
+                                App.Logger?.Warning("Skipped ZIP entry outside the asset folder: {Entry}", entry.FullName);
+                                result.Skipped++;
+                                current++;
+                                progress?.Report(new ImportProgress(current, total, entry.Name));
+                                continue;
+                            }
+
                             Directory.CreateDirectory(destFolder);
 
                             var fileName = Path.GetFileName(entry.Name);
@@ -348,6 +359,16 @@ namespace ConditioningControlPanel.Services
                 result.Errors.Add($"Invalid or corrupted ZIP file: {Path.GetFileName(zipPath)}");
                 App.Logger?.Warning("Invalid ZIP file: {Path}", zipPath);
             }
+        }
+
+        /// <summary>
+        /// True when <paramref name="candidate"/> resolves to <paramref name="root"/> or a folder below it.
+        /// </summary>
+        internal static bool IsInsideFolder(string root, string candidate)
+        {
+            var rootFull = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar;
+            var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(candidate)) + Path.DirectorySeparatorChar;
+            return full.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
