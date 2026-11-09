@@ -15,6 +15,7 @@ import { makeContext } from './context.js';
 import { createPictures } from './pictures.js';
 import { paletteOf } from './palette.js';
 import { createAds, subscriberPlan } from './ads.js';
+import { tally } from './adcard/model.js';
 
 const MAX_UNLOCK_ERRORS = 3;
 const ENDING_SCOPE = '__ending';
@@ -83,6 +84,18 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     send: host.send, niches: () => paletteOf(run).themes, onAdded: source => emit('pictures-added', { source }),
     onProgress: () => emit('pictures-progress'), onMeter: () => emit('picture-meter'),
     onChange: (source) => { emit('pictures', { source }); save(); } });
+  /* The Living Ad card counts what was dealt to the screens: a picture, gif or clip from the player's feed (not the
+   * sample drawings shown with no feed). */
+  const dealt = (row) => !!row && typeof row.url === 'string' && !row.url.startsWith('data:');
+  for (const name of ['next', 'rewardBatch', 'stillsForDisplay']) {
+    const real = pictures[name];
+    if (typeof real !== 'function') continue;
+    pictures[name] = (...args) => {
+      const out = real.apply(pictures, args);
+      const count = (v) => { const n = (Array.isArray(v) ? v : [v]).filter(dealt).length; if (n) tally(run, 'pics', n); return v; };
+      return out && typeof out.then === 'function' ? out.then(count) : count(out);
+    };
+  }
 
   /* ---- scopes ---- */
   function newScope(item) {
@@ -475,7 +488,7 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
         audio?.stopStreams?.();
       }
       audio?.setQuiet(true);
-      await ui.ending?.(id, { colour: registry[id]?.fadeColour });
+      await ui.ending?.(id, { colour: registry[id]?.fadeColour, ms: registry[id]?.fadeMs });
     }
     unmountAll();
     const show = !restored && registry[id]?.ending;
@@ -485,7 +498,8 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
       scopes.set(ENDING_SCOPE, scope);
       scope.ctx = makeContext(api, scope);
       try {
-        await Promise.race([registry[id].ending(scope.ctx), new Promise((r) => setTimeout(r, CONFIG.ENDING_SHOW_MAX_MS))]);
+        /* showMaxMs: an ending the player works in (the Living Ad card saves files) may hold the screen longer */
+        await Promise.race([registry[id].ending(scope.ctx), new Promise((r) => setTimeout(r, registry[id].showMaxMs || CONFIG.ENDING_SHOW_MAX_MS))]);
       } catch (e) { console.error(e); }
       unmount(ENDING_SCOPE);
       audio?.setQuiet(true);
@@ -547,5 +561,6 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     shop: (size) => journey ? journey.shop(size) : E.shopWindow(run, mods, size, env.featuredShop),
     endingsTotal: ENDING_IDS.length,
   };
+  subscribe('golden-caught', () => tally(run, 'golden'));   // the Living Ad card's Golden Buttons
   return api;
 }

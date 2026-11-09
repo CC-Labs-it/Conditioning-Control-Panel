@@ -307,6 +307,8 @@ export function makeContext(engine, scope) {
     },
     get hosted() { return !!host.isHosted; },
     get caps() { return engine.env.caps || {}; },
+    /** {displayName} when the host signed the player in (web /tc), else null. Never an id or a token. */
+    get identity() { return engine.env.identity || null; },
 
     store: {
       getLayout: (key) => ui.getWindowLayout?.(key) || {},
@@ -345,4 +347,6 @@ export const CTX_MEMBERS = Object.freeze([
   'speed', 'parts', 'openLink', 'openAdLink', 'spend', 'guardBuy', 'setPerk', 'sayRate', 'paused', 'palette', 'dock', 'restored', 'switches', 'cleanup',
   // Renewal Sky (2026-11-09, handoff-1109/TC-PRESTIGE-WIRE-BRIEF.md)
   'prestige', 'pstore', 'endRun', 'shop', 'price', 'buy',
+  // Living Ad card (2026-11-09)
+  'identity',
 ]);

@@ -1,10 +1,12 @@
 /* More Ads: you sold the page, and it pays. Ads pile up everywhere, the money follows them, and the jokes get closer to the
  * real thing until the last row turns the whole screen into one. Only a real card ever links out, on the player's own press. */
 
-import { SPONSORED_THOUGHTS, NATIVE_LINES, EMI_AD_READS, ENDINGS } from '../../../data/content/index.js';
-import { nextAd, pressAd, panel, deck, railsRoom, burst, ring, claim, release, fill } from './kit.js';
+import { SPONSORED_THOUGHTS, NATIVE_LINES, EMI_AD_READS } from '../../../data/content/index.js';
+import { nextAd, pressAd, panel, deck, railsRoom, claim, release, fill } from './kit.js';
 import { ROUTE_COPY } from './copy.js';
 import { sellAllJoke, SELL_ALL_AD } from '../../sell-all.js';
+import { livingAdEnding, LIVING_AD_SHOW_MAX_MS } from '../../adcard/ending.js';
+import { livingAdTake } from '../../adcard/stage.js';
 
 const FONT = 'Arial,Helvetica,sans-serif';
 const CHIP = `font:700 10px ${FONT};background:#f0c24b;color:#000;padding:0 4px;border-radius:2px;flex:none;`;
@@ -267,27 +269,13 @@ export default {
     },
   },
 
-  /* Ending: Living Ad. The last ad grows to fill the screen, with your score as the price. */
+  /* Ending: Living Ad. The run prints itself as a shareable ad card (owner 2026-11-09, ui/adcard/): the first theme's
+   * living portrait, both themes' colours, a taunt, terms ACCEPTED and the run's numbers. Save, copy, then the credits. */
   o_out: {
     mount() { return {}; },
-    ending(ctx) {
-      const e = ENDINGS.o_out, score = ctx.fmt(ctx.state.total);
-      return endingCard(ctx, {
-        build(sheet, finish) {
-          sheet.style.background = '#2a0f22';
-          sheet.style.color = '#fff';
-          ctx.anim(sheet, ctx.gentle ? [{ opacity: 0 }, { opacity: 1 }] : [{ clipPath: 'inset(84% 30% 8% 30%)' }, { clipPath: 'inset(0 0 0 0)' }], { duration: 1200, easing: 'ease-in-out', fill: 'both' });
-          ctx.el('span', `${CHIP}font-size:14px;padding:2px 8px;`, AD, sheet);
-          ctx.el('div', `font:800 min(22vw,120px)/1 ${FONT};color:#ff69b4;`, 'CCP', sheet);
-          ctx.el('div', 'font-size:18px;max-width:520px;', e.result, sheet);
-          ctx.el('div', 'font-size:14px;opacity:.8;margin-top:8px;', e.priceLabel, sheet);
-          ctx.el('div', `font:700 min(9vw,36px) ${FONT};`, fill(e.price, { score }), sheet);
-          const row = ctx.el('div', 'display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:12px;', null, sheet);
-          endButton(ctx, row, e.link.label, 'background:#ff69b4;color:#2a0f22;', () => ctx.openLink(e.link.url));
-          endButton(ctx, row, ROUTE_COPY.next, 'background:#fff;color:#111;', finish);
-          ctx.after(1300, () => { burst(ctx, ctx.bounds().w / 2, ctx.bounds().h * 0.3, '#ff69b4', 20, 160); ring(ctx, ctx.bounds().w / 2, ctx.bounds().h * 0.3, 300, '#ff69b4', 800); });
-        },
-      });
-    },
+    showMaxMs: LIVING_AD_SHOW_MAX_MS,
+    fadeMs: 120,   // the take leaves its paper stage over the page: the fade underneath is never seen
+    take(ctx) { return livingAdTake(ctx); },
+    ending(ctx) { return livingAdEnding(ctx); },
   },
 };
