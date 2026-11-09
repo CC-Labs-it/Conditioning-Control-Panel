@@ -1,6 +1,7 @@
 /* Five local Racing Thoughts captures with a separate bonus button. The video never
  * owns money or a game clock, and no remote media or account is involved. */
-import { restoreRace, advanceRace, takeRaceBonus, raceCanPlay } from './race-model.js';
+import { restoreRace, advanceRace, takeRaceBonus, raceCanPlay, raceTimerRate, raceSecondsLeft, nextCourse, RACE_BONUS_MS } from './race-model.js';
+import { gameRank } from './game-rank.js';
 import { sfx } from '../basics/fx.js';
 import { autopilot } from './autopilot.js';  // prestige hook: Autopilot (idle_6)
 
@@ -37,6 +38,9 @@ export function mountRace(ctx) {
     .rs-name{position:absolute;left:6px;right:6px;top:12%;text-align:center;font:900 19px/1.05 Arial,sans-serif;color:#fff;letter-spacing:.02em;text-shadow:0 2px 0 #000b,0 0 10px var(--rs)}
     html[data-bubble-type] .rs-name{font-family:var(--game-bubble-font)}
     .mini-race-sketch:not([data-run]) *{animation-play-state:paused}
+    .mini-race-pick{display:flex;align-items:center;justify-content:center;gap:6px;font-size:11px}
+    .mini-race-pick[hidden]{display:none}
+    .mini-race-pick select{min-height:28px;max-width:150px;padding:2px 4px;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:var(--ink);font:inherit}
   `);
   const dock = ctx.dock({ title: 'Racing Thoughts', width: 248 });
   const root = ctx.el('div', '', null, dock);
@@ -61,6 +65,16 @@ export function mountRace(ctx) {
   const collect = ctx.el('button', '', '', film);
   collect.type = 'button';
   collect.className = 'mini-race-collect';
+  // Pick the Course (rank 1): a small picker under the film. The chosen course plays next and keeps playing.
+  const pickRow = ctx.el('label', '', null, root);
+  pickRow.className = 'mini-race-pick';
+  pickRow.hidden = true;
+  ctx.el('span', '', 'Next course', pickRow);
+  const pickSelect = ctx.el('select', '', null, pickRow);
+  pickSelect.dataset.dockInteractive = '';
+  const inOrder = ctx.el('option', '', 'In order', pickSelect);
+  inOrder.value = '';
+  for (const id of RACE_COURSES) { const o = ctx.el('option', '', courseTitles[id], pickSelect); o.value = id; }
   const receipt = ctx.el('div', '', '', root);
   receipt.className = 'mini-race-receipt';
   receipt.setAttribute('aria-live', 'polite');
@@ -69,6 +83,20 @@ export function mountRace(ctx) {
   const persist = () => ctx.store.set('race', { ...model });
   const retryAfter = new Map();
   let courseIndex = Math.max(0,RACE_COURSES.indexOf(ctx.store.get('course')));
+  // Journey upgrades, read live: rank 1 Pick the Course, rank 2 Nitro.
+  const rank = () => gameRank(ctx.state, 'mini_race');
+  const rate = () => raceTimerRate(rank());
+  const picked = () => {
+    if (rank() < 1) return null;
+    const i = RACE_COURSES.indexOf(ctx.store.get('pick'));
+    return i >= 0 ? i : null;
+  };
+  pickSelect.value = RACE_COURSES.includes(ctx.store.get('pick')) ? ctx.store.get('pick') : '';
+  pickSelect.addEventListener('change', () => { ctx.store.set('pick', pickSelect.value || null); });
+  function paintPicker() {
+    const on = rank() >= 1;
+    if (pickRow.hidden === on) pickRow.hidden = !on;
+  }
   let video = null, dead = false, ended = false, visible = false;
   let pendingPlay = false, hasFrame = false, needsNext = false;
   let lastTime = 0, furthestTime = 0, stalledAt = ctx.state.clock, recoveries = 0;
@@ -159,17 +187,13 @@ export function mountRace(ctx) {
       return;
     }
     if (needsNext || video.ended) {
-      let next = -1;
-      for (let n=1;n<=RACE_COURSES.length;n++) {
-        const i=(courseIndex+n)%RACE_COURSES.length;
-        if ((retryAfter.get(i)||0)<=ctx.state.clock) { next=i;break; }
-      }
+      const next = nextCourse(courseIndex, picked(), RACE_COURSES.length, (i) => (retryAfter.get(i)||0) > ctx.state.clock);
       if (next<0) {
         // Every clip failed (the web build ships none): the drawn road keeps racing instead.
         video.pause();
         if (!sketchMode) { sketchMode = true; showSince = ctx.state.clock; }
         else if (ctx.state.clock-showSince >= SKETCH_LAP_MS) {
-          showIndex = (showIndex+1)%RACE_COURSES.length; showSince = ctx.state.clock; paintSketch();
+          showIndex = picked() ?? (showIndex+1)%RACE_COURSES.length; showSince = ctx.state.clock; paintSketch();
         }
         return;
       }
@@ -214,9 +238,11 @@ export function mountRace(ctx) {
   ctx.on('ending', () => { ended = true; sync(); });
   ctx.on('buy', sync); // An ending purchase stops footage before the ending fade.
   ctx.every(500, measure); // Covers display:none trays and collapsed dock bodies too.
+  ctx.every(500, paintPicker);
+  paintPicker();
   ctx.frame(() => {
     const now = ctx.state.clock, step = Math.max(0, now - lastClock);
-    if (!doc.hidden) advanceRace(model, step);
+    if (!doc.hidden) advanceRace(model, step * rate());   // Nitro fills the reward timer 30% faster
     lastClock = now;
     if (auto.step(doc.hidden ? 0 : step, model.leftMs === 0) && takeRaceBonus(model)) {  // prestige hook: Autopilot (idle_6), half an untaken bonus
       persist();
@@ -224,7 +250,7 @@ export function mountRace(ctx) {
       receipt.textContent = `Autopilot +${ctx.fmt(ctx.pay(Math.max(20, rates.fps * 12 + rates.click * 20) * auto.share, 'mini_race'))} ${ctx.brand.currencyPlural}`;
     }
     if (wasGentle !== ctx.gentle) { wasGentle = ctx.gentle; sync(); }
-    const seconds = Math.ceil(model.leftMs / 1000);
+    const seconds = raceSecondsLeft(model, rate());
     dock.dock?.setReady(model.leftMs === 0, 'Race bonus ready');
     if (seconds === lastSecond) return;
     lastSecond = seconds;
@@ -234,7 +260,7 @@ export function mountRace(ctx) {
   });
   dock.dock?.setReady(model.leftMs === 0, 'Race bonus ready');
   collect.disabled = model.leftMs > 0;
-  collect.textContent = model.leftMs ? `Bonus in ${Math.ceil(model.leftMs / 1000)}s` : 'Collect bonus';
+  collect.textContent = model.leftMs ? `Bonus in ${raceSecondsLeft(model, rate())}s` : 'Collect bonus';
   const auto = autopilot(ctx, { dueMs: 35000 });  // prestige hook: Autopilot (idle_6), RACE_BONUS_MS left untaken
   collect.addEventListener('click', () => {
     if (dead || ended || ctx.paused || !takeRaceBonus(model)) return;
@@ -242,7 +268,7 @@ export function mountRace(ctx) {
     dock.dock?.setReady(false);
     persist(); // Consume readiness before crediting: a second click cannot pay again.
     collect.disabled = true;
-    collect.textContent = 'Bonus in 35s';
+    collect.textContent = `Bonus in ${raceSecondsLeft({ leftMs: RACE_BONUS_MS }, rate())}s`;
     const r = collect.getBoundingClientRect(), rates = ctx.rates();
     const got = ctx.pay(Math.max(20, rates.fps * 12 + rates.click * 20), 'mini_race', { x: r.left + r.width / 2, y: r.top });
     receipt.textContent = `+${ctx.fmt(got)} ${ctx.brand.currencyPlural}`;

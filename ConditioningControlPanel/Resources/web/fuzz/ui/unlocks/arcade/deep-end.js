@@ -7,11 +7,13 @@
  * resurfaces: the depth is paid, fresh water, the clock runs on. Input: swipe or drag on the board, or arrows / WASD while it
  * has focus. Escape is never used here. Pays inside the side budget (source mini_deep). Rules: ./deep-end/board.js. */
 
-import { createBoard, restoreBoard, snapshot, slide, spawn, deal, canMove, deepest, DEPTHS, TIER_MAX } from './deep-end/board.js';
+import { createBoard, restoreBoard, snapshot, slide, spawn, deal, canMove, deepest, growBoard, sizeFor, chainUnits, DEPTHS, TIER_MAX } from './deep-end/board.js';
+import { gameRank } from './game-rank.js';
 import { slotEffects } from './slot-effects.js';
 import { sfx } from '../basics/fx.js';
 
-const N = 4, BOARD = 212, GAP = 5, CELL = (BOARD - GAP * (N + 1)) / N;
+// The board keeps its 212 px; Bigger Board (rank 1) fits five smaller cells in it.
+const BOARD = 212, GAP = 5, cellFor = (n) => (BOARD - GAP * (n + 1)) / n;
 const MOVE_MS = 120, SWIPE_PX = 18, GRAB_MAX = 6;
 const EFFECT_GAP_MS = 20000;   // one page-wide effect at most every 20 s of play
 const EFFECT_FROM = 5;         // Drifting: the first depth that reaches past the board
@@ -27,8 +29,8 @@ const CSS = `
   background:color-mix(in srgb,var(--niche,#d9a) 18%,#1a1630);box-shadow:inset 0 2px 0 #0003,0 0 0 2px #0000;transition:box-shadow .2s}
 .mde-board:focus-visible{box-shadow:inset 0 2px 0 #0003,0 0 0 2px var(--niche,#d9a)}
 .mde-board.held{cursor:grabbing}
-.mde-cell{position:absolute;width:${CELL}px;height:${CELL}px;border-radius:7px;background:#ffffff14}
-.mde-tile{position:absolute;left:0;top:0;width:${CELL}px;height:${CELL}px;border-radius:7px;overflow:hidden;
+.mde-cell{position:absolute;width:var(--cell);height:var(--cell);border-radius:7px;background:#ffffff14}
+.mde-tile{position:absolute;left:0;top:0;width:var(--cell);height:var(--cell);border-radius:7px;overflow:hidden;
   transition:transform ${MOVE_MS}ms ease-out,opacity .2s;will-change:transform;
   background:color-mix(in oklab,var(--niche,#e38ab5) 22%,var(--dc,#7aa));box-shadow:0 2px 0 #0004}
 .mde-tile .mde-face{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none}
@@ -41,12 +43,13 @@ const CSS = `
 .mde-word{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;font:900 26px/1 var(--font,system-ui);letter-spacing:.12em;color:#fff;text-shadow:0 0 12px var(--niche,#e38ab5),0 2px 3px #000a;opacity:0}
 .mde-line{min-height:15px;margin:4px 2px 0;font-size:11px;text-align:center;opacity:.85}
 .mde-credit{position:absolute;right:8px;top:4px;padding:1px 4px;background:#211a32;color:#fff;font:10px system-ui;pointer-events:none}
+.mde-board.n5 .mde-name{font-size:7px}.mde-board.n5 .mde-num{font-size:13px}
 .mini-deep.calm .mde-tile{transition:opacity .3s}
 .mini-deep.calm .mde-tile.deep .mde-face,.mini-deep.still .mde-tile.deep .mde-face{animation:none}
 .mini-deep.still .mde-tile{transition:none}
 `;
 
-const pos = (i) => GAP + i * (CELL + GAP);
+
 /* The water: shallow aqua, through blue and violet, to near black at Blackout. */
 const depthColour = (tier) => `hsl(${188 + (tier - 1) * 9} ${58 - (tier - 1) * 2}% ${74 - (tier - 1) * 6.4}%)`;
 const pad2 = (n) => String(Math.max(0, Math.min(17, n))).padStart(2, '0');
@@ -72,10 +75,6 @@ export function mountDeepEnd(ctx) {
   board.dataset.dockInteractive = '';
   board.setAttribute('role', 'application');
   board.setAttribute('aria-label', 'The Deep End board. Swipe, or use the arrow keys. Equal tiles sink together.');
-  for (let i = 0; i < N * N; i++) {
-    const cell = add('div', 'mde-cell', null, board);
-    cell.style.transform = `translate(${pos(i % N)}px,${pos(Math.floor(i / N))}px)`;
-  }
   const word = add('div', 'mde-word', '', board);
   const line = add('p', 'mde-line', 'Swipe. Equal tiles sink together.', root);
   line.setAttribute('aria-live', 'polite');
@@ -85,7 +84,36 @@ export function mountDeepEnd(ctx) {
 
   const effects = slotEffects(ctx);
   const saved = ctx.store.get('deep') || {};
-  const b = restoreBoard(saved.board, N);
+  const rank = () => gameRank(ctx.state, 'mini_deep');   // Journey upgrades, read live: 1 Bigger Board, 2 Chains
+  const b = restoreBoard(saved.board, saved.board?.n === 5 ? 5 : 4);
+  growBoard(b, sizeFor(rank()));
+  let cell = cellFor(b.n);
+  const pos = (i) => GAP + i * (cell + GAP);
+  /* The empty cells under the tiles, for the board's current size. */
+  function buildCells() {
+    cell = cellFor(b.n);
+    board.style.setProperty('--cell', cell + 'px');
+    board.classList.toggle('n5', b.n === 5);
+    for (const el of [...board.querySelectorAll('.mde-cell')]) el.remove();
+    for (let i = 0; i < b.n * b.n; i++) {
+      const el = doc.createElement('div');
+      el.className = 'mde-cell';
+      el.style.transform = `translate(${pos(i % b.n)}px,${pos(Math.floor(i / b.n))}px)`;
+      board.insertBefore(el, board.firstChild);
+    }
+  }
+  buildCells();
+  /* Bigger Board bought mid-dive: the board grows at once, every tile keeps its place. */
+  function resize() {
+    const want = sizeFor(rank());
+    if (want <= b.n || resurfacing) return false;
+    growBoard(b, want);
+    buildCells();
+    drawAll();
+    persist();
+    say('The water widens. Five by five.');
+    return true;
+  }
   let best = Number(saved.best) || 0, score = Number(saved.score) || 0, dive = Number(saved.dive) || 1;
   let diveBest = Number(saved.diveBest) || 0;
   if (!b.tiles.length) { deal(b, ctx.rng); diveBest = deepest(b); }
@@ -197,7 +225,7 @@ export function mountDeepEnd(ctx) {
       const top = Math.max(...merged.map((m) => m.tier));
       score += merged.reduce((s, m) => s + 2 ** m.tier, 0);
       sfx(ctx, `pluck/wood_${pad2(15 - top)}.wav`, .07);   // deeper sinks lower
-      if (merged.length >= 3) chain(merged.length, top);
+      if (chainUnits(merged.length, rank() >= 2)) chain(merged.length, top);
     }
     const deep = deepest(b);
     if (deep > diveBest) { diveBest = deep; newDepth(deep); }
@@ -212,7 +240,9 @@ export function mountDeepEnd(ctx) {
   }
   function chain(count, top) {
     const rates = ctx.rates();
-    ctx.pay(Math.max(rates.fps * 2 * count, rates.click * 3 * count), 'mini_deep', boardPoint());
+    // Chains (rank 2) pay each extra match 1.5x the one before; without it, one unit a match from three matches.
+    const units = chainUnits(count, rank() >= 2);
+    ctx.pay(Math.max(rates.fps * 2, rates.click * 3) * units, 'mini_deep', boardPoint());
     flashWord(CHAIN_WORDS[(count + top) % CHAIN_WORDS.length]);
   }
   function flashWord(text) {
@@ -267,6 +297,7 @@ export function mountDeepEnd(ctx) {
       for (const el of views.values()) el.remove();
       views.clear();
       dive += 1; diveBest = 0;
+      if (b.n !== sizeFor(rank())) { b.n = sizeFor(rank()); buildCells(); }
       deal(b, ctx.rng);
       diveBest = deepest(b);
       dealFaces();
@@ -329,6 +360,7 @@ export function mountDeepEnd(ctx) {
   let wasCalm = calm();
   ctx.frame(() => {
     if (wasCalm !== calm()) { wasCalm = calm(); effects.clear(); drawHead(); }
+    if (ctx.state.clock >= lockedUntil) resize();
     if (queued && ctx.state.clock >= lockedUntil && !busy()) { const q = queued; queued = null; move(q); }
     effects.draw();
   });
