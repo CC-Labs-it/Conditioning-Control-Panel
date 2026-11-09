@@ -1,19 +1,22 @@
-/* ui/unlocks/extras/outside-show.js - the Go Outside ending show (handoff-1109/TC-GO-OUTSIDE-ENDING-BRIEF.md and
- * TC-GO-OUTSIDE-LANES.md, lane S). It runs as the ending row's ending(ctx), after the white fade.
+/* ui/unlocks/extras/outside-show.js - the Go Outside ending show (handoff-1109/TC-GO-OUTSIDE-ENDING-BRIEF.md, round 2 in
+ * TC-GO-OUTSIDE-OFFICE.md, lane S2). It runs as the ending row's ending(ctx), after the white fade.
  *
  *   1. The white fade clears onto a LIVE blocky meadow (lane W's createMeadow, ./outside-meadow.js). The player can look
  *      around and walk for LIVE_MS. A small paper note says how.
- *   2. The controls are cut and the camera settles (lockControls + autopilot). Then the pull back: the meadow canvas
- *      shrinks into the CRT screen of the player's own lo-fi desk drawing (assets/outside/room-<niche>.webp, the screen
- *      punched out). It sits behind the drawing and is mapped onto the hole's quad (assets/outside/screens.json) with a
- *      CSS matrix3d homography.
- *   3. The hold: a dim room lit by the screen, a static crackle every 3-7 s, the end card low on the screen. No way out.
+ *   2. The controls are cut and the camera settles (lockControls + autopilot). Then the pull back: a rendered clip
+ *      (assets/outside/office-pull.mp4) whose frame 0 is the monitor's screen, pulling back to an after-hours cubicle.
+ *      The live meadow canvas stays mapped onto the screen quad of the frame on show (office-track.json, CSS matrix3d),
+ *      so the meadow keeps playing on that monitor. Both are cover-fitted the same way; a tall phone eases out to keep
+ *      the whole screen in view.
+ *   3. The hold: office-hold.jpg (the clip's last frame) with the canvas on the last quad, a static crackle every 3-7 s
+ *      (the screen dips, the whole image flickers faintly), the end card low over the dark office. No way out.
  *
+ * Sound: every other page sound is off for the whole show (ctx.audio.solo); only its birds, bed, room tone and crackle play.
  * Input: during the live part a press belongs to the meadow, never a skip. The Skip button or Enter jumps to the hold
  * (never past it). Escape stays the game's pause; a panic suspend ends the show at once. Gentle / reduced motion: no live
- * scene, no zoom, no dip: meadow.jpg cross-fades to the room with the still in the screen.
- * Missing pieces never break it: createMeadow rejects -> a canvas painting meadow.jpg -> a flat painted sky; no room
- * drawing or screens.json -> a plain dark crayon room. Every sound is synthesised here except the optional lo-fi bed. */
+ * scene, no zoom, no flicker: meadow.jpg cross-fades to office-hold.jpg with the still in the screen.
+ * Missing pieces never break it: createMeadow rejects -> a canvas painting meadow.jpg -> a flat painted sky; the clip
+ * fails -> a cross-fade to the hold still; no track -> a centred 16:9 screen; no still -> a plain dark crayon room. */
 
 import { FONT, h } from './kit.js';
 import { LITE } from '../../perf.js';
@@ -22,14 +25,16 @@ export const ASSETS = Object.freeze({
   atlas: 'assets/outside/meadow-atlas.png',
   atlasJson: 'assets/outside/meadow-atlas.json',
   still: 'assets/outside/meadow.jpg',
-  screens: 'assets/outside/screens.json',
-  room: (niche) => `assets/outside/room-${niche}.webp`,
+  video: 'assets/outside/office-pull.mp4',
+  hold: 'assets/outside/office-hold.jpg',
+  track: 'assets/outside/office-track.json',
   /* The lo-fi radio's own tracks (CC Labs owned). Machine-local in some builds: missing = birds alone. */
   beds: ['assets/lofi/audio/breathe-in.mp3', 'assets/lofi/audio/idle-cycle.mp3', 'assets/lofi/audio/dose.mp3'],
 });
 
+/** The clip's frame (and the hold still's), and the plain fallback room's. */
+export const FRAME = Object.freeze([1280, 720]);
 export const ROOM_SIZE = Object.freeze([1200, 896]);
-export const NICHES = Object.freeze(['sissy', 'bimbo', 'goon', 'chastity', 'drone', 'trance', 'infection', 'censored']);
 export const SKY = '#9fd3f5';
 
 /* Beat lengths in game milliseconds from the start of the show (the white fade before it is the engine's). */
@@ -37,18 +42,20 @@ export const BEATS = Object.freeze({
   veilMs: 1200,        // the white clears onto the meadow
   liveMs: 6500,        // controls on
   settleMs: 900,       // controls cut, camera eases to the calm view
-  pullMs: 4000,        // the pull back into the monitor
+  pullMs: 5000,        // the planned pull back (the clip's own length decides; the track's frame count plans it)
+  pullCapMs: 4000,     // a stalled clip: the hold starts anyway this long after its planned end
+  videoWaitMs: 1500,   // the clip not ready at the pull: wait this long (the meadow goes on), then the cross-fade
   cardLeadMs: 900,     // hold -> first card line
   lineGapMs: 900,      // between card lines
   tailMs: 6500,        // the last line stays this long, then the credits
   stillMs: 3600,       // reduced: the meadow still holds this long
-  fadeMs: 1600,        // reduced: the cross-fade to the room
+  fadeMs: 1600,        // reduced and fallback: the cross-fade to the hold
   hintInMs: 2000,
   crackleMinMs: 3000,
   crackleMaxMs: 7000,
 });
 export const MEADOW_WAIT_MS = 3500;   // createMeadow slower than this -> the stub; a late scene is stopped unused
-export const ROOM_WAIT_MS = 3000;     // the drawing or screens.json slower than this -> the plain room
+export const LOAD_WAIT_MS = 3000;     // the track or the hold still slower than this -> the fallbacks
 
 /** The card lines after a hold that starts at `holdAt`: result, credits, closing, then the show ends. */
 export function holdBeats(holdAt, credits = 0) {
@@ -60,7 +67,7 @@ export function holdBeats(holdAt, credits = 0) {
 }
 
 /** The whole plan. Reduced: no live part, no settle, the "pull" is a cross-fade. */
-export function outsideTimeline({ reduced = false, credits = 0 } = {}) {
+export function outsideTimeline({ reduced = false, credits = 0, pullMs = BEATS.pullMs } = {}) {
   if (reduced) {
     const pullAt = BEATS.veilMs + BEATS.stillMs;
     const holdAt = pullAt + BEATS.fadeMs;
@@ -69,14 +76,18 @@ export function outsideTimeline({ reduced = false, credits = 0 } = {}) {
   const liveAt = Math.round(BEATS.veilMs / 2);
   const lockAt = liveAt + BEATS.liveMs;
   const pullAt = lockAt + BEATS.settleMs;
-  const holdAt = pullAt + BEATS.pullMs;
+  const holdAt = pullAt + Math.max(1, pullMs);
   return { reduced: false, liveAt, lockAt, pullAt, pullEnd: holdAt, ...holdBeats(holdAt, credits) };
 }
+
+const creditsOf = (tl) => tl.lines.filter((l) => l.kind === 'credit').length;
+/** The hold starts now (the clip ended early or late): the card is planned from here. */
+export const holdFrom = (tl, t) => ({ ...tl, pullEnd: t, ...holdBeats(t, creditsOf(tl)) });
 
 /** A skip at time t: everything before the hold is dropped and the hold starts now. A skip at or after the hold changes nothing. */
 export function skipTo(tl, t) {
   if (t >= tl.holdAt) return tl;
-  return { ...tl, lockAt: tl.lockAt == null ? null : Math.min(tl.lockAt, t), pullAt: t, pullEnd: t, skipped: true, ...holdBeats(t, tl.lines.filter((l) => l.kind === 'credit').length) };
+  return { ...holdFrom(tl, t), lockAt: tl.lockAt == null ? null : Math.min(tl.lockAt, t), pullAt: Math.min(tl.pullAt, t), skipped: true };
 }
 
 /** Which phase a moment is in. */
@@ -91,21 +102,71 @@ export function phaseAt(tl, t) {
 
 /* ---- maths (pure) ---- */
 
-/** The theme's drawing: Locked draws as chastity, no theme is trance. */
-export function nicheFor(pick) {
-  const n = pick === 'locked' ? 'chastity' : pick;
-  return NICHES.includes(n) ? n : 'trance';
-}
-
 const goodQuad = (q) => Array.isArray(q) && q.length === 4 && q.every((p) => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite));
+const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+const lerp = (a, b, t) => a + (b - a) * t;
 
-/** { niche, quad } from screens.json for this niche, else trance's, else null (the plain room). */
-export function roomChoice(screens, niche) {
-  const all = screens && screens.screens;
-  if (!all || typeof all !== 'object') return null;
-  for (const n of [niche, 'trance']) if (goodQuad(all[n]?.quad)) return { niche: n, quad: all[n].quad.map(([x, y]) => [x, y]) };
-  return null;
+/** office-track.json checked: { fps, size, frames } or null. */
+export function readTrack(json) {
+  if (!json || json.version !== 1 || !(json.fps > 0) || !Array.isArray(json.frames) || json.frames.length < 2) return null;
+  const size = Array.isArray(json.size) && json.size.length === 2 && json.size.every((v) => v > 0) ? json.size : FRAME;
+  if (!json.frames.every(goodQuad)) return null;
+  return { fps: json.fps, size: [size[0], size[1]], frames: json.frames.map((q) => q.map(([x, y]) => [x, y])) };
 }
+
+/** No track: a straight eased zoom-out of the 16:9 frame onto a centred screen, the last half second still. */
+export function fallbackTrack({ frames = 150, fps = 30, hold = 15, end = 0.42, size = FRAME } = {}) {
+  const [w, hh] = size;
+  const out = [];
+  for (let i = 0; i < frames; i++) {
+    const z = lerp(1, end, ease(clamp01(i / Math.max(1, frames - 1 - hold))));
+    const x0 = (w * (1 - z)) / 2, y0 = (hh * (1 - z)) / 2;
+    out.push([[x0, y0], [w - x0, y0], [w - x0, hh - y0], [x0, hh - y0]]);
+  }
+  return { fps, size: [w, hh], frames: out, fallback: true };
+}
+
+/** The frame on show at `seconds` into the clip (a frame shows from i/fps until the next one). */
+export function frameAt(track, seconds) {
+  const n = track.frames.length;
+  return Math.max(0, Math.min(n - 1, Math.floor((Number.isFinite(seconds) ? seconds : 0) * track.fps + 1e-3)));
+}
+export const trackMs = (track) => Math.round((track.frames.length / track.fps) * 1000);
+
+/** The picture covers the view, centred: { s, ox, oy } maps picture pixels to the view. */
+export function coverFit(vw, vh, size = FRAME) {
+  const [w, hh] = size, s = Math.max(vw / w, vh / hh);
+  return { s, ox: (vw - w * s) / 2, oy: (vh - hh * s) / 2 };
+}
+
+/** The hold's fit: the cover fit when the whole screen (with a margin) shows in it, else the picture shrinks just enough
+ *  (never below contain) and centres on the screen, edge to edge where it can. A tall phone gets dark above and below. */
+export function holdFit(vw, vh, quad, size = FRAME) {
+  const c = coverFit(vw, vh, size), [w, hh] = size;
+  const m = Math.max(12, Math.min(vw, vh) * 0.04);
+  const inside = (f) => quad.every(([x, y]) => {
+    const X = f.ox + x * f.s, Y = f.oy + y * f.s;
+    return X >= m - 1e-6 && X <= vw - m + 1e-6 && Y >= m - 1e-6 && Y <= vh - m + 1e-6;
+  });
+  if (inside(c)) return c;
+  const xs = quad.map((p) => p[0]), ys = quad.map((p) => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const s = Math.max(Math.min(vw / w, vh / hh), Math.min(c.s, (vw - 2 * m) / Math.max(1, x1 - x0), (vh - 2 * m) / Math.max(1, y1 - y0)));
+  const place = (v, len, mid) => (len >= v ? Math.min(0, Math.max(v - len, v / 2 - mid * s)) : (v - len) / 2);
+  return { s, ox: place(vw, w * s, (x0 + x1) / 2), oy: place(vh, hh * s, (y0 + y1) / 2) };
+}
+
+/** The quad pushed out by `px` view pixels from its middle: the live canvas overlaps the rendered screen's edge, so no
+ *  sub-pixel seam of the screen under it shows round the picture. */
+export function grow(quad, px) {
+  const cx = quad.reduce((t, p) => t + p[0], 0) / 4, cy = quad.reduce((t, p) => t + p[1], 0) / 4;
+  return quad.map(([x, y]) => { const d = Math.hypot(x - cx, y - cy) || 1; return [x + ((x - cx) / d) * px, y + ((y - cy) / d) * px]; });
+}
+export const OVERSCAN_PX = 1.5, MOTION_CAP_PX = 6;
+
+export const fitAt = (a, b, p) => ({ s: lerp(a.s, b.s, p), ox: lerp(a.ox, b.ox, p), oy: lerp(a.oy, b.oy, p) });
+export const mapQuad = (quad, f) => quad.map(([x, y]) => [f.ox + x * f.s, f.oy + y * f.s]);
 
 /** CSS matrix3d (column major, transform-origin 0 0) that maps a w x h box onto the quad tl, tr, br, bl. */
 export function homography(w, h, quad) {
@@ -133,45 +194,18 @@ export function applyMatrix(m, x, y) {
 }
 export const matrixCss = (m) => `matrix3d(${m.map((v) => +v.toFixed(9)).join(',')})`;
 
-/** The drawing covers the view (on a tall phone, a little less, with dark above and below), centred on its screen. */
-export function roomFit(vw, vh, quad, size = ROOM_SIZE) {
-  const [iw, ih] = size;
-  const portrait = vh > vw * 1.2;
-  const s = Math.max(vw / iw, (vh / ih) * (portrait ? 0.72 : 1));
-  const cx = quad.reduce((t, p) => t + p[0], 0) / 4, cy = quad.reduce((t, p) => t + p[1], 0) / 4;
-  const clamp = (v, lo, hi) => (lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v)));
-  /* A tall phone looks halfway between the screen and the middle of the drawing, so more of the person shows, while the
-   * whole screen stays at least 12 px inside the view. */
-  const xs = quad.map((p) => p[0]);
-  const fx = portrait ? (cx + iw / 2) / 2 : cx;
-  const ox = clamp(clamp(vw / 2 - fx * s, 12 - Math.min(...xs) * s, vw - 12 - Math.max(...xs) * s), vw - iw * s, 0);
-  const oy = clamp(vh / 2 - cy * s, vh - ih * s, 0);
-  return { s, ox, oy, quad: quad.map(([x, y]) => [ox + x * s, oy + y * s]) };
-}
-
-const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
-const clamp01 = (v) => Math.max(0, Math.min(1, v));
-const lerp = (a, b, t) => a + (b - a) * t;
-const centre = (q) => [q.reduce((t, p) => t + p[0], 0) / 4, q.reduce((t, p) => t + p[1], 0) / 4];
-
-/** The zoom the room starts at: its screen (roughly) fills the view. */
-export function startZoom(vw, vh, quad) {
-  const xs = quad.map((p) => p[0]), ys = quad.map((p) => p[1]);
-  const qw = Math.max(1, Math.max(...xs) - Math.min(...xs)), qh = Math.max(1, Math.max(...ys) - Math.min(...ys));
-  return Math.max(vw / qw, vh / qh) * 1.08;
-}
-
-/** One frame of the pull back at progress p (0..1): the room's zoom about the screen centre, where the canvas corners sit,
- *  and how far the room has faded up. p = 0: canvas = the view. p = 1: canvas = the hole exactly, zoom 1. */
-export function pullFrame(p, vw, vh, quad, z0 = startZoom(vw, vh, quad)) {
-  p = clamp01(p);
-  const z = lerp(z0, 1, ease(p));
-  const [qx, qy] = centre(quad);
-  const zoomed = quad.map(([x, y]) => [qx + (x - qx) * z, qy + (y - qy) * z]);
-  const view = [[0, 0], [vw, 0], [vw, vh], [0, vh]];
-  const w = ease(clamp01(p / 0.62));
-  const corners = view.map(([x, y], i) => [lerp(x, zoomed[i][0], w), lerp(y, zoomed[i][1], w)]);
-  return { z, centre: [qx, qy], corners, room: ease(clamp01(p / 0.55)) };
+/** One frame of the pull: the fit eases from cover to the hold's fit over the clip, the canvas sits on that frame's quad
+ *  mapped through it, the glass fades up over the first half. Frame 0: the canvas is the cover rectangle of the view. */
+export function pullLayout(track, i, vw, vh) {
+  const n = track.frames.length, last = track.frames[n - 1];
+  const p = clamp01(i / Math.max(1, n - 1));
+  const fit = fitAt(coverFit(vw, vh, track.size), holdFit(vw, vh, last, track.size), ease(p));
+  const at = Math.max(0, Math.min(n - 1, i)), quad = mapQuad(track.frames[at], fit);
+  /* How far a corner moves to the next frame, in view px: the overscan grows by it while the camera moves, so a frame the
+   * compositor shows a beat apart from its quad never opens a gap onto the rendered screen. Capped; 0 in the hold. */
+  const next = mapQuad(track.frames[Math.min(n - 1, at + 1)], fit);
+  const motion = Math.min(MOTION_CAP_PX, Math.max(...quad.map((q, k) => Math.hypot(next[k][0] - q[0], next[k][1] - q[1]))));
+  return { fit, quad, glass: ease(clamp01(p / 0.5)), p, motion };
 }
 
 /** Milliseconds to the next crackle, 3 to 7 s. */
@@ -226,7 +260,7 @@ export function stubMeadow(doc, host, { still = null, frame = null } = {}) {
   const win = doc.defaultView;
   const onMove = (e) => { if (!locked) lookTo = (e.clientX / Math.max(1, win.innerWidth) - 0.5) * 2; };
   const size = () => {
-    const r = canvas.getBoundingClientRect();
+    const r = { width: canvas.clientWidth, height: canvas.clientHeight };   // the layout box: the transform shrinks the rect
     const dpr = Math.min(win.devicePixelRatio || 1, 1.5);
     canvas.width = Math.max(2, Math.round((r.width || win.innerWidth) * dpr));
     canvas.height = Math.max(2, Math.round((r.height || win.innerHeight) * dpr));
@@ -398,99 +432,144 @@ async function findBed(urls) {
   return null;
 }
 
+
 /* ---- the show ---- */
 
+async function fetchJson(url) {
+  try { const r = await fetch(url); return r.ok ? await r.json() : null; } catch { return null; }
+}
+const within = (p, ms, fallback = null) => Promise.race([Promise.resolve(p).catch(() => fallback), new Promise((r) => setTimeout(() => r(fallback), ms))]);
+
 /** The ending show. Resolves when the card has stood a while, or at once on a panic suspend. */
-export function outsideShow(ctx, E, { createMeadow: create = null } = {}) {
+export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSETS } = {}) {
   return new Promise((done) => {
+    /* Owner 2026-11-09: nothing else plays underneath, from the first frame of the show to its end. The ending scope's
+     * cleanup lets go (run end, panic). Only sources this unlock owns pass: birds, bed, room tone, static. */
+    ctx.audio.solo?.(true);
     const doc = ctx.layer('ending').ownerDocument || document;
     const win = doc.defaultView;
     const reduced = !!(ctx.gentle || ctx.reduced);
     const touch = !!win.matchMedia?.('(pointer: coarse)').matches;
-    const tlBase = outsideTimeline({ reduced, credits: E.credits.length });
-    let tl = tlBase, t = 0, over = false, phase = 'veil';
+    let tl = outsideTimeline({ reduced, credits: E.credits.length }), t = 0, over = false, phase = 'veil';
     let vw = win.innerWidth, vh = win.innerHeight;
 
     const root = ctx.el('div', `position:absolute;inset:0;overflow:hidden;overflow:clip;background:#0c0b12;pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;`, null, 'ending');
     root.dataset.outside = 'show';
-    /* overflow clip, not hidden: the room is laid out at 1200 x 896 before its transform, and a focus or tap could scroll a
-     * hidden overflow sideways (seen at 390 px). */
+    /* overflow clip, not hidden: the canvas box and the clip are wider than a phone, and a tap could scroll hidden overflow. */
     const stage = h('div', `position:absolute;left:0;top:0;width:${vw}px;height:${vh}px;overflow:hidden;overflow:clip;`, null, root);
-    const meadowHost = h('div', 'position:absolute;inset:0;', null, stage);
+    /* The office: the clip, then the hold still (or the plain room), in picture pixels under one cover transform. */
+    const media = h('div', 'position:absolute;left:0;top:0;transform-origin:0 0;opacity:0;pointer-events:none;', null, stage);
+    const edge = h('div', 'position:absolute;inset:0;opacity:0;pointer-events:none;box-shadow:inset 0 0 70px 34px #0c0b12;z-index:2;', null, media);
+    const meadowHost = h('div', 'position:absolute;left:0;top:0;pointer-events:none;', null, stage);
     /* The glass over the screen: a sheen and a vignette. No scanlines: shrunk by the homography they alias into rings. */
-    const screenFx = h('div', `position:absolute;left:0;top:0;width:${vw}px;height:${vh}px;transform-origin:0 0;pointer-events:none;opacity:0;background:linear-gradient(160deg,rgba(255,255,255,.10),transparent 38%),radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.45));`, null, stage);
+    const screenFx = h('div', `position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:none;opacity:0;background:linear-gradient(160deg,rgba(255,255,255,.08),transparent 38%),radial-gradient(ellipse at center,transparent 58%,rgba(0,0,0,.38));`, null, stage);
     const dip = h('div', 'position:absolute;inset:0;background:#05060a;opacity:0;', null, screenFx);
-    const roomWrap = h('div', 'position:absolute;left:0;top:0;transform-origin:0 0;opacity:0;pointer-events:none;', null, stage);
+    const flick = h('div', 'position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;', null, stage);
     const veil = h('div', 'position:absolute;inset:0;background:#fff;pointer-events:none;', null, root);
-    const card = h('div', `position:absolute;left:0;right:0;bottom:7%;padding:0 22px;text-align:center;color:#ece6f2;font:600 17px/1.35 ${FONT};text-shadow:0 2px 10px rgba(0,0,0,.85);pointer-events:none;`, null, root);
+    const card = h('div', `position:absolute;left:0;right:0;bottom:7%;padding:0 22px;text-align:center;color:#ece6f2;font:600 17px/1.35 ${FONT};text-shadow:0 2px 10px rgba(0,0,0,.85);pointer-events:none;z-index:3;`, null, root);
+
+    /* The canvas box: the cover rectangle of a 16:9 frame (frame 0 of the clip is the screen), so the live meadow is
+     * already the screen's picture and nothing changes size when the pull starts. */
+    let box = { w: FRAME[0], h: FRAME[1] };
+    const sizeBox = () => {
+      const c = coverFit(vw, vh, FRAME);
+      box = { w: FRAME[0] * c.s, h: FRAME[1] * c.s };
+      for (const e of [stage]) { e.style.width = vw + 'px'; e.style.height = vh + 'px'; }
+      for (const e of [meadowHost, screenFx]) { e.style.width = box.w + 'px'; e.style.height = box.h + 'px'; }
+    };
+    sizeBox();
+
+    /* ---- loads: the track, the hold still, the clip ---- */
+    let track = fallbackTrack(), holdImg = null, video = null, videoBad = reduced, videoEnded = false;
+    const trackReady = within(fetchJson(assets.track), LOAD_WAIT_MS).then((j) => { const tr = readTrack(j); if (tr) track = tr; root.dataset.track = tr ? 'office' : 'fallback'; });
+    const holdReady = within(loadImage(doc, assets.hold), LOAD_WAIT_MS).then((img) => { holdImg = img; });
+    if (!reduced) {
+      video = doc.createElement('video');
+      video.muted = true; video.defaultMuted = true; video.playsInline = true; video.preload = 'auto';
+      video.disablePictureInPicture = true; video.setAttribute('playsinline', ''); video.setAttribute('muted', '');
+      video.style.cssText = `position:absolute;left:0;top:0;width:${FRAME[0]}px;height:${FRAME[1]}px;display:block;`;
+      video.dataset.outside = 'clip';
+      video.addEventListener('error', () => { videoBad = true; });
+      video.addEventListener('ended', () => { videoEnded = true; });
+      video.src = assets.video;
+      media.appendChild(video);
+    }
 
     /* ---- the meadow ---- */
-    let meadow = null, still = null, stillImg = null;
-    const stillReady = loadImage(doc, ASSETS.still).then((img) => (stillImg = img));
+    let meadow = null, stillImg = null, stillPic = null;
+    const stillReady = loadImage(doc, assets.still).then((img) => (stillImg = img));
     const meadowReady = reduced ? stillReady.then(() => null) : (async () => {
       let make = create;
       if (!make) { try { make = (await import('./outside-meadow.js')).createMeadow; } catch { make = null; } }
       if (typeof make !== 'function') return null;
-      const pending = Promise.resolve().then(() => make(meadowHost, { atlasUrl: ASSETS.atlas, atlasJsonUrl: ASSETS.atlasJson, reduced, lite: LITE || touch, frame: ctx.frame }));
+      const pending = Promise.resolve().then(() => make(meadowHost, { atlasUrl: assets.atlas, atlasJsonUrl: assets.atlasJson, reduced, lite: LITE || touch, frame: ctx.frame }));
       const late = await Promise.race([pending.catch(() => null), new Promise((r) => setTimeout(() => r('late'), MEADOW_WAIT_MS))]);
       if (late === 'late') { pending.then((m) => m?.stop?.(), () => {}); return null; }
       return late;
     })().catch(() => null);
 
+    /* Individual properties: the meadow's own touch-action and pixelated look stay. */
     const placeCanvas = (c) => {
       if (!c) return;
-      c.style.cssText = `position:absolute;left:0;top:0;width:${vw}px;height:${vh}px;transform-origin:0 0;display:block;`;
+      Object.assign(c.style, { position: 'absolute', left: '0', top: '0', width: box.w + 'px', height: box.h + 'px', transformOrigin: '0 0', display: 'block', pointerEvents: 'auto' });
+      if (c.tagName === 'IMG') c.style.objectFit = 'cover';
     };
+    const screenEl = () => meadow?.canvas || stillPic;
 
-    /* ---- the room ---- */
-    const niche = nicheFor(ctx.pick?.('f5'));
-    let room = null;   // { el, quad (source px), fit }
-    const roomLoad = (async () => {
-      let screens = null;
-      try { const r = await fetch(ASSETS.screens); if (r.ok) screens = await r.json(); } catch { screens = null; }
-      const choice = roomChoice(screens, niche);
-      const img = choice ? await loadImage(doc, ASSETS.room(choice.niche)) : null;
-      if (img) { img.style.cssText = 'position:absolute;left:0;top:0;display:block;'; img.width = ROOM_SIZE[0]; img.height = ROOM_SIZE[1]; img.dataset.room = choice.niche; return { el: img, quad: choice.quad }; }
-      return null;
-    })();
-    const plain = () => { const p = plainRoom(doc); p.el.style.cssText = 'position:absolute;left:0;top:0;display:block;'; p.el.dataset.room = 'plain'; return p; };
-    const roomReady = Promise.race([roomLoad.catch(() => null), new Promise((r) => setTimeout(() => r(null), ROOM_WAIT_MS))])
-      .then((r) => (room = r || plain()));
-
-    const buildRoom = () => {
-      if (!room || roomWrap.childElementCount) return;
-      const [W, H] = ROOM_SIZE;
-      roomWrap.style.width = W + 'px'; roomWrap.style.height = H + 'px';
-      room.el.style.filter = 'brightness(.36) saturate(.75) contrast(1.05)';
-      roomWrap.appendChild(room.el);
-      const [cx, cy] = centre(room.quad);
-      /* The screen's light on the room, and the dark it fades into. */
-      h('div', `position:absolute;left:0;top:0;width:${W}px;height:${H}px;background:radial-gradient(circle at ${cx}px ${cy}px,rgba(150,205,255,.22),rgba(150,205,255,.08) 28%,transparent 52%);mix-blend-mode:screen;`, null, roomWrap).dataset.glow = '1';
-      h('div', `position:absolute;left:0;top:0;width:${W}px;height:${H}px;box-shadow:inset 0 0 120px 60px #0c0b12;`, null, roomWrap);
+    /* ---- layout ---- */
+    let scene = null;   // the hold: { el, size, quad (picture px) }
+    const putMedia = (fit, size) => {
+      media.style.width = size[0] + 'px'; media.style.height = size[1] + 'px';
+      media.style.transform = `translate(${fit.ox}px,${fit.oy}px) scale(${fit.s})`;
+      const cover = coverFit(vw, vh, size).s;
+      edge.style.opacity = String(clamp01((cover - fit.s) / (cover * 0.12)));
     };
-    const fitNow = () => (room ? roomFit(vw, vh, room.quad) : null);
-
-    /* One layout of the room and the screen at pull progress p. */
-    const layout = (p) => {
-      buildRoom();
-      const fit = fitNow();
-      const canvas = meadow?.canvas || stillPic;
-      if (!fit) return;
-      const f = pullFrame(reduced ? 1 : p, vw, vh, fit.quad);
-      const [qx, qy] = f.centre;
-      roomWrap.style.transform = `translate(${qx}px,${qy}px) scale(${f.z}) translate(${-qx}px,${-qy}px) translate(${fit.ox}px,${fit.oy}px) scale(${fit.s})`;
-      if (!reduced) roomWrap.style.opacity = String(f.room);
-      const m = matrixCss(homography(vw, vh, f.corners));
-      if (canvas) canvas.style.transform = m;
+    const putScreen = (quad, glass, extra = 0) => {
+      const m = matrixCss(homography(box.w, box.h, grow(quad, OVERSCAN_PX + extra)));
+      const c = screenEl();
+      if (c) c.style.transform = m;
       screenFx.style.transform = m;
-      screenFx.style.opacity = String(reduced ? 1 : f.room);
+      if (glass != null) screenFx.style.opacity = String(glass);
+    };
+    /* Before the pull: the canvas is the screen of frame 0. */
+    const layoutLive = () => { const f = coverFit(vw, vh, FRAME); putMedia(f, FRAME); putScreen(mapQuad(track.frames[0], f), 0); };
+    let vidFrame = 0;
+    const layoutPull = () => { const l = pullLayout(track, vidFrame, vw, vh); putMedia(l.fit, track.size); putScreen(l.quad, l.glass, l.motion); };
+    const layoutHold = () => {
+      if (!scene) return;
+      const f = holdFit(vw, vh, scene.quad, scene.size);
+      putMedia(f, scene.size); putScreen(mapQuad(scene.quad, f), 1);
+    };
+    const relayout = () => (phase === 'hold' || mode === 'fade' ? layoutHold() : phase === 'pull' && mode === 'video' ? layoutPull() : layoutLive());
+
+    /* The hold's picture: the still, else the clip's own last frame, else the plain room. */
+    const lastQuad = () => track.frames[track.frames.length - 1];
+    const buildScene = (useClip) => {
+      if (scene) return scene;
+      if (holdImg) {
+        holdImg.style.cssText = `position:absolute;left:0;top:0;width:${track.size[0]}px;height:${track.size[1]}px;display:block;`;
+        holdImg.dataset.outside = 'hold';
+        media.insertBefore(holdImg, edge);
+        scene = { el: holdImg, size: track.size, quad: lastQuad(), kind: 'office' };
+      } else if (useClip && video && !videoBad && video.readyState >= 2) {
+        scene = { el: video, size: track.size, quad: lastQuad(), kind: 'clip' };
+      } else {
+        const p = plainRoom(doc);
+        p.el.style.cssText = 'position:absolute;left:0;top:0;display:block;';
+        p.el.dataset.outside = 'plain';
+        media.insertBefore(p.el, edge);
+        scene = { el: p.el, size: ROOM_SIZE, quad: p.quad, kind: 'plain' };
+      }
+      if (scene.el !== video && video) video.style.visibility = 'hidden';
+      root.dataset.scene = scene.kind;
+      return scene;
     };
 
     /* ---- sound ---- */
     const birdsIo = ctx.audio.input?.({ bus: 'ambient', gain: 1.5, sourceLabel: 'Birds' });
     const birds = birdsIo ? startBirds(birdsIo) : null;
     let bed = null, tone = null, staticIo = null;
-    findBed(ASSETS.beds).then((url) => {
+    findBed(assets.beds).then((url) => {
       if (!url || over) return;
       bed = ctx.audio.stream(url, { bus: 'ambient', gain: 0.45, loop: true, autoplay: true, source: 'outside-bed', sourceLabel: 'Music' });
     });
@@ -510,7 +589,7 @@ export function outsideShow(ctx, E, { createMeadow: create = null } = {}) {
 
     /* ---- input ---- */
     const hint = h('div', `position:absolute;left:50%;bottom:12%;transform:translateX(-50%) rotate(-1.5deg);padding:7px 14px;background:#fffdf4;color:#2b2530;border-radius:3px;box-shadow:0 3px 12px rgba(0,0,0,.25);font:600 15px/1.2 ${FONT};opacity:0;pointer-events:none;white-space:nowrap;`, touch ? 'Drag to look. Hold to walk.' : 'Look around. Walk.', root);
-    const skipBtn = h('button', `position:absolute;left:14px;top:14px;padding:6px 14px;border:0;border-radius:3px;background:#fffdf4;color:#2b2530;box-shadow:0 2px 8px rgba(0,0,0,.25);font:600 14px ${FONT};cursor:pointer;pointer-events:auto;opacity:.85;`, 'Skip', root);
+    const skipBtn = h('button', `position:absolute;left:14px;top:14px;padding:6px 14px;border:0;border-radius:3px;background:#fffdf4;color:#2b2530;box-shadow:0 2px 8px rgba(0,0,0,.25);font:600 14px ${FONT};cursor:pointer;pointer-events:auto;opacity:.85;z-index:4;`, 'Skip', root);
     skipBtn.type = 'button';
     skipBtn.dataset.outside = 'skip';
     skipBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -525,16 +604,35 @@ export function outsideShow(ctx, E, { createMeadow: create = null } = {}) {
     root.addEventListener('click', () => { if (phase === 'hold' && t >= tl.closingAt) finish(); });
     const onResize = () => {
       vw = win.innerWidth; vh = win.innerHeight;
-      for (const e of [stage, screenFx]) { e.style.width = vw + 'px'; e.style.height = vh + 'px'; }
+      sizeBox();
       placeCanvas(meadow?.canvas); placeCanvas(stillPic);
       meadow?.resize?.();
-      if (phase === 'pull' || phase === 'hold') layout(phase === 'hold' ? 1 : pullP());
+      relayout();
     };
     win.addEventListener('resize', onResize);
 
-    let stillPic = null;   // reduced and fallback: the meadow as a picture (img or painted canvas) mapped like the canvas
+    /* The clip follows the game's pause and a host suspend; it never runs on its own. */
+    const clipPlay = () => {
+      if (!video || over || mode !== 'video' || phase !== 'pull' || ctx.paused) return;
+      try { video.play()?.catch?.(() => { if (!ctx.paused && phase === 'pull') videoBad = true; }); } catch { videoBad = true; }
+    };
+    const clipPause = () => { try { video?.pause(); } catch { /* gone */ } };
+    ctx.on('pause', clipPause);
+    ctx.on('resume', clipPlay);
+    ctx.on('suspend', (s) => (s?.on ? clipPause() : clipPlay()));
+
+    /* The frame on show: requestVideoFrameCallback hands the presented frame's own time; else currentTime per frame. */
+    const rvfc = !!video && typeof video.requestVideoFrameCallback === 'function';
+    const onVideoFrame = (_now, meta) => {
+      if (over || !video) return;
+      vidFrame = frameAt(track, meta?.mediaTime ?? video.currentTime);
+      if (phase === 'pull' && mode === 'video') layoutPull();
+      video.requestVideoFrameCallback(onVideoFrame);
+    };
+    if (rvfc) video.requestVideoFrameCallback(onVideoFrame);
+
     const showStill = () => {
-      if (stillImg) { stillPic = stillImg; stillImg.style.objectFit = 'cover'; meadowHost.appendChild(stillImg); }
+      if (stillImg) { stillPic = stillImg; meadowHost.appendChild(stillImg); }
       else {
         const c = doc.createElement('canvas'); c.width = 640; c.height = 360; paintSky(c.getContext('2d'), 640, 360);
         stillPic = c; meadowHost.appendChild(c);
@@ -544,8 +642,7 @@ export function outsideShow(ctx, E, { createMeadow: create = null } = {}) {
     };
 
     /* ---- beats ---- */
-    const pullP = () => clamp01((t - tl.pullAt) / Math.max(1, tl.pullEnd - tl.pullAt));
-    let nextCrackle = Infinity, started = false, locked = false;
+    let nextCrackle = Infinity, started = false, locked = false, mode = null, pullStart = 0;
 
     const lock = () => {
       if (locked) return;
@@ -553,14 +650,37 @@ export function outsideShow(ctx, E, { createMeadow: create = null } = {}) {
       meadow?.lockControls?.();
       ctx.anim(hint, [{ opacity: +getComputedStyle(hint).opacity || 0 }, { opacity: 0 }], { duration: 400, fill: 'forwards' });
     };
-    const enterHold = () => {
+    /* The pull, once: the clip if it can play, else a cross-fade into the hold (reduced, or a clip that failed). */
+    const startPull = () => {
+      phase = 'pull';
+      pullStart = t;
+      lock();
+      meadow?.autopilot?.(true);
+      toTinny(BEATS.pullMs);
+      media.style.opacity = '1';
+      if (!reduced && video && !videoBad && video.readyState >= 2) {
+        mode = 'video';
+        root.dataset.pull = 'clip';
+        vidFrame = 0;
+        layoutPull();
+        clipPlay();
+        return;
+      }
+      mode = 'fade';
+      root.dataset.pull = 'fade';
+      startFade();
+    };
+    const enterHold = (fromSkip = false) => {
+      if (phase === 'hold') return;
       phase = 'hold';
       lock();
-      buildRoom();
-      layout(1);
-      roomWrap.style.opacity = '1';
-      if (reduced) { meadowHost.style.opacity = '1'; }
       meadow?.autopilot?.(true);
+      if (fromSkip && video && !holdImg && !videoBad && Number.isFinite(video.duration)) { try { video.currentTime = Math.max(0, video.duration - 0.02); } catch { /* fine */ } }
+      clipPause();
+      buildScene(!reduced && mode === 'video' || fromSkip);
+      media.style.opacity = '1';
+      layoutHold();
+      if (reduced || mode === 'fade') meadowHost.style.opacity = '1';
       skipBtn.remove();
       veil.style.display = 'none';
       toTinny(reduced ? 1500 : 600);
@@ -581,13 +701,14 @@ export function outsideShow(ctx, E, { createMeadow: create = null } = {}) {
       if (over || phase === 'hold' || !ready) return;
       tl = skipTo(tl, t);
       root.dataset.skipped = '1';
-      enterHold();
+      enterHold(true);
     }
 
     const begin = () => {
       started = true;
       if (reduced || !meadow) showStill();
-      if (meadow) { placeCanvas(meadow.canvas); meadow.start?.(); }
+      if (meadow) { placeCanvas(meadow.canvas); meadow.resize?.(); meadow.start?.(); }
+      layoutLive();
       if (!reduced && meadow) ctx.anim(hint, [{ opacity: 0 }, { opacity: 1 }], { duration: BEATS.hintInMs, fill: 'forwards', easing: 'ease-out' });
       ctx.anim(veil, [{ opacity: 1 }, { opacity: 0 }], { duration: BEATS.veilMs, easing: 'ease-in-out', fill: 'forwards' });
       birdsTick();
@@ -595,13 +716,14 @@ export function outsideShow(ctx, E, { createMeadow: create = null } = {}) {
     const birdsTick = () => birds?.tick();
     ctx.every(220, birdsTick);
 
-    /* The meadow (or its stand-in) must be there before the veil clears: the show clock waits for it, capped. */
+    /* The meadow (or its stand-in) and the track must be there before the veil clears: the show clock waits, capped. */
     let ready = false;
-    Promise.all([meadowReady, stillReady, roomReady]).then(([m]) => {
+    Promise.all([meadowReady, stillReady, trackReady, holdReady]).then(([m]) => {
       if (over) { m?.stop?.(); return; }
       meadow = m;
       if (!reduced && !meadow) { meadow = stubMeadow(doc, meadowHost, { still: stillImg, frame: ctx.frame }); }
       root.dataset.meadow = reduced ? 'still' : (m ? 'live' : 'stub');
+      if (!reduced) tl = outsideTimeline({ reduced, credits: E.credits.length, pullMs: trackMs(track) });
       ready = true;
       if (!started) begin();
     });
@@ -609,44 +731,66 @@ export function outsideShow(ctx, E, { createMeadow: create = null } = {}) {
     ctx.frame((sec) => {
       if (over || !ready) return;
       t += sec * 1000;
-      const next = phaseAt(tl, t);
-      if (phase === 'hold' || next === 'hold' || next === 'done') {
-        if (phase !== 'hold') enterHold();
+      if (phase === 'hold') {
         if (t >= nextCrackle) {
           const ms = crackle(staticIo);
           if (!reduced && ms) {
-            ctx.anim(dip, [{ opacity: 0 }, { opacity: 0.55, offset: 0.25 }, { opacity: 0.1, offset: 0.6 }, { opacity: 0 }], { duration: Math.max(160, ms), easing: 'linear' });
-            const glow = roomWrap.querySelector('[data-glow]');
-            if (glow) ctx.anim(glow, [{ opacity: 1 }, { opacity: 0.35, offset: 0.3 }, { opacity: 1 }], { duration: Math.max(160, ms) });
+            const d = Math.max(160, ms);
+            ctx.anim(dip, [{ opacity: 0 }, { opacity: 0.55, offset: 0.25 }, { opacity: 0.1, offset: 0.6 }, { opacity: 0 }], { duration: d, easing: 'linear' });
+            ctx.anim(flick, [{ opacity: 0 }, { opacity: 0.1, offset: 0.2 }, { opacity: 0.02, offset: 0.45 }, { opacity: 0.07, offset: 0.6 }, { opacity: 0 }], { duration: d, easing: 'linear' });
           }
           nextCrackle = t + crackleGap();
         }
-        if (next === 'done') finish();
+        if (t >= tl.finishAt) finish();
         return;
       }
-      if (next === 'settle' || next === 'pull') lock();
-      if (next === 'pull') {
-        if (phase !== 'pull') { phase = 'pull'; meadow?.autopilot?.(true); buildRoom(); toTinny(BEATS.pullMs); if (reduced) startFade(); }
-        if (!reduced) layout(pullP());
+      if (phase === 'pull') {
+        if (mode === 'video') {
+          if (!rvfc) { vidFrame = frameAt(track, video.currentTime); layoutPull(); }
+          /* The clip decides when the hold starts: its end, or a stall past the cap, or a failure (the hold still). */
+          if (videoEnded || videoBad || t >= pullStart + trackMs(track) + BEATS.pullCapMs) { tl = holdFrom(tl, t); enterHold(); }
+        } else if (t >= pullStart + BEATS.fadeMs) { tl = holdFrom(tl, t); enterHold(); }
+        return;
+      }
+      const next = phaseAt(tl, t);
+      if (next === 'settle' || next === 'pull' || next === 'hold' || next === 'done') lock();
+      if (next === 'pull' || next === 'hold' || next === 'done') {
+        /* The clip still loading: the meadow goes on a little longer, then the cross-fade. */
+        const waiting = !reduced && video && !videoBad && video.readyState < 2 && t < tl.pullAt + BEATS.videoWaitMs;
+        if (!waiting) startPull();
         return;
       }
       phase = next;
     });
 
-    /* Reduced: no zoom. The room (still in the screen) fades in over the full-view still. */
+    /* Reduced and a failed clip: no zoom. The hold (the meadow in its screen) fades in under the full-view meadow. */
     function startFade() {
-      buildRoom();
-      layout(1);
-      const big = stillPic?.cloneNode?.(true);
-      if (big) { big.style.transform = 'none'; big.dataset.meadow = 'cover'; root.insertBefore(big, veil); ctx.anim(big, [{ opacity: 1 }, { opacity: 0 }], { duration: BEATS.fadeMs, fill: 'forwards' }); }
-      if (big && stillPic instanceof win.HTMLCanvasElement) big.getContext('2d').drawImage(stillPic, 0, 0);
-      ctx.anim(roomWrap, [{ opacity: 0 }, { opacity: 1 }], { duration: BEATS.fadeMs, fill: 'forwards' });
+      const big = doc.createElement('img');
+      const src = reduced ? stillPic : null;
+      let url = null;
+      if (src instanceof win.HTMLImageElement) url = src.src;
+      else if (src instanceof win.HTMLCanvasElement) { try { url = src.toDataURL(); } catch { url = null; } }
+      else if (meadow?.still) { try { url = meadow.still(); } catch { url = null; } }
+      buildScene(false);
+      media.style.opacity = '0';
+      layoutHold();
+      if (url) {
+        big.src = url;
+        big.dataset.meadow = 'cover';
+        const f = coverFit(vw, vh, FRAME);
+        big.style.cssText = `position:absolute;left:${f.ox}px;top:${f.oy}px;width:${box.w}px;height:${box.h}px;object-fit:cover;pointer-events:none;`;
+        root.insertBefore(big, veil);
+        ctx.anim(big, [{ opacity: 1 }, { opacity: 0 }], { duration: BEATS.fadeMs, fill: 'forwards' });
+      }
+      ctx.anim(media, [{ opacity: 0 }, { opacity: 1 }], { duration: BEATS.fadeMs, fill: 'forwards' });
+      ctx.anim(screenFx, [{ opacity: 0 }, { opacity: 1 }], { duration: BEATS.fadeMs, fill: 'forwards' });
     }
 
     function finish() {
       if (over) return;
       over = true;
       stopSound(500);
+      clipPause();
       done();
     }
     ctx.on('suspend', (s) => { if (s?.on && s.reason === 'panic') { root.dataset.aborted = '1'; stopSound(0); finish(); } });
@@ -656,11 +800,15 @@ export function outsideShow(ctx, E, { createMeadow: create = null } = {}) {
       win.removeEventListener('resize', onResize);
       if (bed) ctx.audio.muffle('outside-bed', false);
       stopSound(0);
+      if (video) { try { video.pause(); video.removeAttribute('src'); video.load(); } catch { /* gone */ } }
       meadow?.stop?.();
       meadowReady.then((m) => { if (m && m !== meadow) m.stop?.(); });
       root.remove();
     });
-    /* Test hooks: the phase and the live timeline. */
-    root.__outside = { get phase() { return phase; }, get t() { return t; }, get timeline() { return tl; }, skip, roomReady };
+    /* Test hooks: the phase, the live timeline, the pull mode and the frame on show. */
+    root.__outside = {
+      get phase() { return phase; }, get t() { return t; }, get timeline() { return tl; }, get mode() { return mode; },
+      get frame() { return vidFrame; }, get track() { return track; }, skip, ready: () => ready,
+    };
   });
 }

@@ -231,6 +231,11 @@ export function makeContext(engine, scope) {
       input: (opts) => audio?.input?.(soundOptions(opts)) || null,
       /* Fine Print Silent: the page stays silent while `on`, and lets go when the unlock does. */
       silence: (on) => { audio?.setRule?.(!!on); if (on) scope.cleanups.add(() => audio?.setRule?.(false)); },
+      /* Only this unlock's own sources are heard while `on` (an ending show), also ones it starts later; lets go with the unlock. */
+      solo: (on) => {
+        audio?.solo?.(on ? (id) => id === source || !!soundOwners.get(item.id)?.has(id) : null);
+        if (on) scope.cleanups.add(() => audio?.solo?.(null));
+      },
       /* Silence everything for a moment, capped. Wall clock on purpose: it must always end, also across a pause. */
       muteFor(ms) {
         audio?.setBlank?.(true);

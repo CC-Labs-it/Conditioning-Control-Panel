@@ -5,6 +5,8 @@ const CUR = BRAND.currency;
 /* Demos for the trouble, emi, combo, exit, meta and after lanes. Helpers are prefixed extras so files can be concatenated. */
 const extrasFont = '"Barlow", "Segoe UI", system-ui, sans-serif';
 /* Restarting scene. s.at and s.rep die with the scene, so nothing from an old pass touches the new one. */
+/* Go Outside: the monitor screen in office-hold.jpg, 1280 x 720 px (the bounding box of office-track.json's last quad). */
+const OUTSIDE_SCREEN = [548.6, 228.458, 790.53, 365.253];
 const extrasLoop = (k, ms, fn) => {
   let run = 0;
   k.every(ms, () => {
@@ -682,26 +684,22 @@ Object.assign(DEMOS, {
   }),
 
   /* ---------- exit ---------- */
-  /* Go Outside (2026-11-09): white, the sunny meadow still, then it shrinks into a monitor in a dim room. A still, never a
-   * live scene. A missing meadow.jpg leaves the sky colour. */
+  /* Go Outside (2026-11-09, round 2): white, the sunny meadow still, then it shrinks into the office monitor of
+   * office-hold.jpg (the clip's last frame). Stills only, never a live scene or the clip. A missing still leaves the colour. */
   outside: (k) => extrasLoop(k, 6400, (s) => {
     k.page('#fff');
-    const room = k.add(0, 0, 'width:240px;height:150px;background:#15131c;opacity:0;');
-    k.add(10, 104, 'width:220px;height:7px;background:#3a3446;border-radius:3px;', null, room);
-    k.add(56, 96, 'width:88px;height:8px;background:#2c2836;border-radius:2px;', null, room);
-    k.add(160, 52, 'width:22px;height:22px;border-radius:50%;background:#2a2533;', null, room);
-    k.add(152, 72, 'width:38px;height:34px;background:#2a2533;border-radius:16px 16px 4px 4px;', null, room);
-    k.add(10, 6, 'width:180px;height:140px;background:radial-gradient(closest-side,rgba(150,215,255,.32),transparent);', null, room);
-    const m = k.add(0, 0, 'width:240px;height:150px;background:#8fd0ff url(assets/outside/meadow.jpg) center/cover;transform-origin:0 0;z-index:2;');
-    const bez = k.add(62, 38, 'width:76px;height:58px;box-sizing:border-box;border:6px solid #3b3746;border-radius:8px;z-index:3;opacity:0;');
+    /* The hold still covers the 240 x 150 box the way the show covers a view; the screen is its last track quad's box. */
+    const [W, H] = [1280, 720], sc = Math.max(240 / W, 150 / H), ox = (240 - W * sc) / 2;
+    const [x0, y0, x1, y1] = OUTSIDE_SCREEN;
+    const room = k.add(0, 0, 'width:240px;height:150px;background:#0c0b12 url(assets/outside/office-hold.jpg) center/cover;opacity:0;');
+    const m = k.add(ox, 0, `width:${W * sc}px;height:${H * sc}px;background:#8fd0ff url(assets/outside/meadow.jpg) center/cover;transform-origin:0 0;z-index:2;`);
     k.anim(m, [{ opacity: 0 }, { opacity: 1 }], 600);
     s.at(1800, () => {
-      k.anim(m, [{ transform: 'none' }, { transform: 'translate(68px,44px) scale(.2667,.3067)' }], 1600, { easing: 'cubic-bezier(.45,0,.2,1)' });
+      k.anim(m, [{ transform: 'none' }, { transform: `translate(${x0 * sc}px,${y0 * sc}px) scale(${(x1 - x0) / W},${(y1 - y0) / H})` }], 1600, { easing: 'cubic-bezier(.45,0,.2,1)' });
       k.anim(room, [{ opacity: 0 }, { opacity: 1 }], 1300);
-      k.anim(bez, [{ opacity: 0 }, { opacity: 1 }], 1300);
     });
     s.at(3900, () => k.anim(m, [{ filter: 'none' }, { filter: 'brightness(.45)' }, { filter: 'none' }], 380));
-    s.at(4200, () => k.word(0, 118, 'There is no outside.', 2000, 'width:240px;text-align:center;color:#e8e4f0;font-size:14px;'));
+    s.at(4200, () => k.word(0, 122, 'There is no outside.', 2000, 'width:240px;text-align:center;color:#e8e4f0;font-size:14px;text-shadow:0 1px 6px #000;'));
   }),
   onemore: (k) => extrasLoop(k, 5800, (s) => {
     k.page('dark');

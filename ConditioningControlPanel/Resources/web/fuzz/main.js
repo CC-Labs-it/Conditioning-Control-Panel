@@ -30,7 +30,7 @@ const qs = new URLSearchParams(location.search);
 /* Dev doors (jumps, granted items, cheat wallets, the age-gate skip they carry) open only on a local preview.
    On any public host the params are ignored, so a shared link can never skip the contract. */
 if (!['127.0.0.1', 'localhost'].includes(location.hostname)) {
-  for (const key of ['fresh', 'buy', 'pace', 'mood', 'theme', 'focus', 'waveStudy', 'shop', 'wallet', 'equip', 'style', 'icons']) qs.delete(key);
+  for (const key of ['fresh', 'buy', 'pace', 'mood', 'theme', 'focus', 'waveStudy', 'shop', 'wallet', 'equip', 'style', 'icons', 'sky']) qs.delete(key);
   if (['combined', 'toys', 'waves'].includes(qs.get('preview'))) qs.delete('preview');
 }
 const combinedPreview = qs.get('preview') === 'combined';
@@ -58,7 +58,9 @@ const buyArg = buttonPreview ? ['colour','bubble','stray','e_bounce','tr_skin'] 
   ? ['colour', 'font', 'sound', 'rounded', 'softw', 'a_rain', feedPreview ? 'd_scroll' : 'v_frame', ...(equipWave ? ['bubble'] : []), 'wheel', 'quiz', 'toy_box', ...(equipHeat ? ['score_heat'] : []), 'mini_breakout', 'mini_race', 'mini_slots', 'dispenser_faster', ...(trailPreview ? [qs.get('equip') === 'comet' ? 'word_comet' : 'trail', 'taste2'] : [])]
   : waveOnly ? ['bubble', 'a_hum'] : (qs.get('buy') || '').split(',').map((s) => s.trim()).filter(Boolean);
 const moodArg = qs.get('mood');
-const fresh = qs.has('fresh') || buyArg.length > 0;
+/* ?sky=demo (local only): opens the Renewal Sky three renewals in, to look at it. Saves nothing. */
+const skyDemo = qs.get('sky') === 'demo';
+const fresh = qs.has('fresh') || buyArg.length > 0 || skyDemo;
 const devDoor = fresh || paceArg > 0 || !!moodArg;
 
 /** Fresh mode keeps nothing: a dev jump never touches the real save. */
@@ -339,6 +341,18 @@ function start(init) {
     });
   }
   if (skyVisit) reopenSky();
+  else if (skyDemo) {
+    const P = prestigeNow();
+    const p = P.createPrestige();
+    p.depth = 4; p.dust = 1400;
+    for (const id of ['pay_1', 'pay_2', 'pay_3', 'head_1', 'head_2', 'idle_1', 'idle_2', 'active_1', 'active_2', 'trig_1', 'trig_2', 'luck_1', 'ghost_1', 'ghost_2', 'fine_1', 'fine_2']) p.own[id] = 1;
+    p.lit = { drop: 1, bi_end: 1 };
+    p.last = { route: {}, toys: ['wheel', 'toy_box'], ms: 5_400_000 };
+    life.prestige = p;
+    leaving = true;
+    openSky({ doc: document, win: window, life, P, audio, gentle: ui.gentle, visit: { caught: 0 },
+      frozen: () => engine.paused || engine.suspended, save: () => {}, start: () => location.reload() });
+  }
   else if (pictureDoor) beginIntro();
   else {
     ui.setWakeGate(() => pictureCard?.wake());

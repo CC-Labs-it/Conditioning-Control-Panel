@@ -21,8 +21,9 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
   const shots = new Set(), cueBudget = createCueBudget();
   const mixer = createMixer(), sourceNodes = new Set(), sourceLevels = new Map();
   let generation = 0;
+  let solo = null;   // solo(keep): while set, a source it does not keep is silent (an ending show's own sounds only)
 
-  const sourceLevel = (id) => sourceLevels.get(id) ?? 1;
+  const sourceLevel = (id) => (solo && !solo(id) ? 0 : sourceLevels.get(id) ?? 1);
   function registerSource(bus, source, sourceLabel) {
     const id = typeof source === 'string' && source.length && source.length <= 128 ? source : bus === 'voice' ? 'voices' : bus;
     const label = sourceLabel || ({ sfx: 'Effects', ambient: 'Ambient', voices: 'Voices', podcast: 'Podcast' }[id]);
@@ -32,6 +33,9 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
   mixer.subscribe((sources) => {
     sourceLevels.clear();
     for (const s of sources) sourceLevels.set(s.id, s.muted ? 0 : s.volume);
+    applySources();
+  });
+  function applySources() {
     for (const route of sourceNodes) {
       const v = sourceLevel(route.source), param = route.g.gain;
       param.cancelScheduledValues(ctx.currentTime);
@@ -39,7 +43,7 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
       else param.setTargetAtTime(v, ctx.currentTime, .015);
     }
     for (const s of streams) syncStream(s);
-  });
+  }
 
   function clearShots() {
     generation++;
@@ -294,6 +298,10 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
       const route = toMaster(node, 0, source);
       return { ac: ctx, node, stop() { node.disconnect?.(); route.disconnect(); } };
     },
+    /** solo(keep): only sources `keep(id)` answers true for are heard, those already playing and those started later;
+     *  solo(null) lets go. The levels behind it (mixer, mute, hold) are untouched. heard(id): a source's level now. */
+    solo(keep) { solo = typeof keep === 'function' ? keep : null; if (armed) applySources(); else for (const s of streams) syncStream(s); },
+    heard: (id) => sourceLevel(id),
     /** Every source with a live route except the named ones goes underwater (on) or comes back (off). */
     muffleOthers(except = [], on = true) {
       const skip = new Set(except);
