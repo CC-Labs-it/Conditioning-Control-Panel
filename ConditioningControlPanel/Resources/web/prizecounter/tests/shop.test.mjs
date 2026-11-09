@@ -155,6 +155,7 @@ test('every refusal maps to a card state', async () => {
     signed_out: { face: 'buy', retry: true, noteKey: 'shop_note_signed_out' },
     owned: { face: 'owned', action: 'wear' },
     needs_prime: { face: 'prime', action: 'prime' },
+    discord_required: { face: 'discord', action: null, reasonKey: 'shop_link_discord', noteKey: null },
     not_in_stock: { face: 'gone', action: null },
     unavailable: { face: 'soon', action: null },
     insufficient: { face: 'short', action: null },
@@ -175,6 +176,35 @@ test('every refusal maps to a card state', async () => {
       assert.notEqual(r.buys()[1].idem, r.buys()[0].idem, `${reason}: a fresh card mints a fresh idem`);
     }
   }
+});
+
+test('a row the server marks needs discord shows Link Discord first, with no buy, like the Back Room counter', async () => {
+  const sample = body([{ id: 'backroom', shelves: [{ rows: [row('high_roller', { priceSp: 40, needs: 'discord' }), row('flashes_v2')] }] }]);
+  const st = readState(sample);
+  assert.equal(st.tabs[0].shelves[0].rows[0].needs, 'discord');
+  assert.equal(readState(body([{ id: 'backroom', shelves: [{ rows: [row('x', { needs: 'other' })] }] }])).tabs[0].shelves[0].rows[0].needs, null);
+  const { shop, buys } = rig(sample);
+  await loadFocused(shop);
+  shop.intent({ type: 'pick', bay: 0, slot: 0 });
+  const card = shop.card();
+  assert.deepEqual([card.face, card.action, card.reasonKey], ['discord', null, 'shop_link_discord']);
+  assert.deepEqual(shop.intent({ type: 'select' }), {}, 'select on the card buys nothing');
+  assert.equal(await shop.confirm(), null);
+  assert.equal(buys().length, 0);
+});
+
+test('discord_required keeps the card on Link Discord first and a reopened card says the same', async () => {
+  const r = rig();
+  await loadFocused(r.shop);
+  r.shop.intent({ type: 'select' });
+  const id = r.shop.card().itemId;
+  r.server.fail('discord_required');
+  const { card } = await r.shop.confirm();
+  assert.equal(card.face, 'discord');
+  assert.notEqual(card.noteKey, 'shop_note_try_again');
+  r.shop.intent({ type: 'back' });
+  r.shop.intent({ type: 'select' });
+  assert.deepEqual([r.shop.card().itemId, r.shop.card().face], [id, 'discord']);
 });
 
 test('insufficient adopts the server balance; a reprice reopens the card at the new price', async () => {
