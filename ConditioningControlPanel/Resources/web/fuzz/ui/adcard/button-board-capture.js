@@ -234,7 +234,7 @@ export function captureButtonBoard(ctx,mediaMembers) {
   for (const el of doc.querySelectorAll('#l-over > *,#l-floaters > *,#l-fx > *,#cards > *')) {
     const owner = el.dataset.fzOwner || '';
     if (el.matches('.xe')) add(el,'emi');
-    else add(el,/^(?:o_popup|o_second|o_banner|banner|ads?|billboard|sponsor)$/.test(owner) || /^AD(?:\b|[A-Z])/.test(el.textContent.trim()) ? 'ad' : 'object');
+    else add(el,/^(?:o_popup|o_second|o_banner|o_emi|banner|ads?|billboard|sponsor)$/.test(owner) || /^AD(?:\b|[A-Z])/.test(el.textContent.trim()) ? 'ad' : 'object');
   }
   group('#dock-strip .dk-chip','tab');
   let active = false, disposed = false;
