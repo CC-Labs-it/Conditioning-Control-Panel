@@ -75,20 +75,21 @@ export default {
     },
   },
 
-  /* Video Ads: three small muted clips. One of the three is real, and it moves around. */
+  /* Three illustrated slots rotate; the real CCP feature moves between them. */
   o_video: {
     mount(ctx) {
       const wide = railsRoom(ctx);
       const host = wide
         ? panel(ctx, { side: 'right', height: 300, css: 'display:flex;flex-direction:column;gap:4px;pointer-events:auto;' })
         : ctx.el('div', 'display:flex;gap:4px;width:100%;margin-bottom:4px;', null, 'banner');
-      const TINTS = ['#7a5a2f', '#2f6f8f', '#6a3d7a'];
       const tiles = [0, 1, 2].map((i) => {
-        const t = ctx.el('button', `position:relative;flex:1 1 0;min-width:0;min-height:62px;padding:0;overflow:hidden;background:${TINTS[i]};border:1px solid #000;color:#fff;font:700 12px/1.1 ${FONT};pointer-events:auto;touch-action:manipulation;`, null, host);
+        const t = ctx.el('button', `position:relative;display:flex;flex-direction:column;flex:1 1 0;min-width:0;min-height:${wide ? 62 : 88}px;padding:0;overflow:hidden;background:#f9efd9;border:1px solid #332d38;color:#fff;font:700 12px/1.1 ${FONT};pointer-events:auto;touch-action:manipulation;`, null, host);
         t.type = 'button';
-        ctx.el('span', `position:absolute;left:3px;top:3px;${CHIP}`, AD, t);
-        const name = ctx.el('span', 'position:absolute;left:4px;right:4px;bottom:9px;text-align:center;text-shadow:0 1px 2px #000;', '', t);
-        ctx.el('span', 'position:absolute;left:50%;top:26%;margin-left:-8px;width:0;height:0;border-left:16px solid rgba(255,255,255,.75);border-top:10px solid transparent;border-bottom:10px solid transparent;', null, t);
+        const art = ctx.el('img', 'display:block;flex:1 1 0;width:100%;height:0;min-height:0;object-fit:contain;', null, t);
+        art.alt = '';
+        art.draggable = false;
+        const chip = ctx.el('span', `position:absolute;left:3px;top:3px;${CHIP}`, AD, t);
+        const name = ctx.el('span', 'display:block;box-sizing:border-box;width:100%;padding:2px 3px 5px;background:#302936;text-align:center;text-wrap:balance;', '', t);
         const prog = ctx.el('span', 'position:absolute;left:0;right:0;bottom:0;height:4px;background:var(--accent);transform-origin:0 50%;', null, t);
         ctx.anim(prog, [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }], { duration: 2400 + i * 700, iterations: Infinity, easing: 'linear' });
         const rec = { now: null };
@@ -96,16 +97,18 @@ export default {
           const r = t.getBoundingClientRect();
           if (!pressAd(ctx, rec.now, { x: r.left, y: r.top })) ctx.float(r.left + 10, r.top, NOPE[0], `font:12px ${FONT};`);
         });
-        return { t, name, rec };
+        return { t, art, chip, name, rec };
       });
       let real = 0;
       const turn = () => {
         real = (real + 1) % 3;
         tiles.forEach((x, i) => {
-          let rec = nextAd(ctx, 'banner');
-          for (let n = 0; n < 40 && !!rec.ccp !== (i === real); n++) rec = nextAd(ctx, 'banner');
+          const rec = nextAd(ctx, 'banner', { illustrated: true, ccpOnly: i === real });
           x.rec.now = rec;
-          x.name.textContent = ctx.brand.text(rec.cta ? (rec.ccp ? ROUTE_COPY.realBrand : rec.headline) : '');
+          x.art.src = rec.illustration;
+          x.chip.textContent = rec.ccp ? `${ROUTE_COPY.realBrand} ${AD}` : AD;
+          x.name.textContent = ctx.brand.text(rec.caption);
+          x.t.title = ctx.brand.text(`${rec.headline} ${rec.sub}`);
           x.t.style.outline = rec.ccp ? '2px solid #ff69b4' : '';
         });
       };

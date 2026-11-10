@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { existsSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { ADS } from '../data/ads.js';
 import { CCP_THEME_ADS } from '../data/content/ads.js';
@@ -78,4 +79,40 @@ test('jokesOff binds every slot in every lane and ends with its holder', () => {
   t.engine.unmount('rounded');
   assert.equal(t.a.ads.jokesAreOff, false);
   assert.deepEqual(t.heard, [true, false]);
+});
+
+test('all eight illustrated campaigns deal their three files before repeating', () => {
+  const ads = createAds();
+  for (const [ccpOnly, count] of [[false, 6], [true, 2]]) {
+    const options = { illustrated: true, kind: 'banner', ccpOnly };
+    const seen = new Set();
+    for (let round = 0; round < 3; round++) {
+      const cards = draw(ads, count, options);
+      assert.equal(new Set(cards.map(ad => ad.id)).size, count);
+      for (const ad of cards) {
+        assert.equal(ad.ccp, ccpOnly);
+        assert.equal(!!ad.url, ccpOnly);
+        assert.ok(ad.caption);
+        assert.ok(existsSync(new URL('../' + ad.illustration, import.meta.url)), ad.illustration);
+        seen.add(ad.illustration);
+      }
+    }
+    assert.equal(seen.size, count * 3);
+    assert.ok(seen.has(ads.next(options).illustration));
+  }
+});
+
+test('illustrated slots respect plan changes and Joke Ads Gone, independently of banner rotation', () => {
+  let subscriber = false;
+  const ads = createAds({ noCcp: () => subscriber });
+  const banners = createAds();
+  const options = { illustrated: true };
+  ads.hold('premium', true);
+  assert.ok(draw(ads, 3, options).every(ad => ad.ccp));
+  subscriber = true;
+  assert.ok(draw(ads, 3, { ...options, ccpOnly: true }).every(ad => !ad.ccp));
+  subscriber = false;
+  ads.hold('premium', false);
+  assert.ok(draw(ads, 3, options).every(ad => !ad.ccp));
+  assert.equal(ads.next({kind: 'banner'}).id, banners.next({kind: 'banner'}).id);
 });

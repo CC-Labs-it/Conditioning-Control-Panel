@@ -1,7 +1,7 @@
 /* ui/ads.js - the next ad record for every slot in every lane, so one switch binds them all. Rotates through data/ads.js,
  * with the picked theme's CCP cards mixed in. Jokes off (Joke Ads Gone) leaves only real CCP cards. */
 import { ADS } from '../data/ads.js';
-import { CCP_THEME_ADS } from '../data/content/ads.js';
+import { CCP_ADS, CCP_THEME_ADS, JOKE_ADS } from '../data/content/ads.js';
 
 const pools = new Map();
 
@@ -36,16 +36,40 @@ export function adLinkStep(used, cap) {
 /** Basic and Prime players never see a CCP card (owner 2026-11-08): the host says the plan in init caps.plan. */
 export const subscriberPlan = (caps) => caps?.plan === 'basic' || caps?.plan === 'prime';
 
+// Empty captions use the original ad headline. These campaigns each have three drawings.
+const illustratedCaptions = {
+  j_apol: '', j_regret: '', j_goose: '', j_stairs: '', j_soup: '', j_lamp: 'A lamp with opinions',
+  c_emi: 'EMI on your desktop', c_bubbles: 'Pop desktop bubbles',
+};
+
+function illustratedRotation(records, ccp) {
+  const campaigns = records.filter(ad => Object.hasOwn(illustratedCaptions, ad.id))
+    .map(ad => ({ ad, order: Math.random(), take: 1 + Math.floor(Math.random() * 3) }))
+    .sort((a, b) => a.order - b.order);
+  let index = 0;
+  return () => {
+    const campaign = campaigns[index];
+    const { ad, take } = campaign;
+    index = (index + 1) % campaigns.length;
+    campaign.take = take % 3 + 1;
+    return { ...ad, ccp, caption: illustratedCaptions[ad.id] || ad.headline,
+      illustration: `assets/classifieds/${ad.id}-${take}.webp` };
+  };
+}
+
 export function createAds({ noCcp = () => false } = {}) {
   let i = 0;
   const holders = new Set();
+  const jokePicture = illustratedRotation(JOKE_ADS, false);
+  const ccpPicture = illustratedRotation(CCP_ADS, true);
   return {
     // A subscriber has no real cards to fall back on, so the jokes stay whatever holds them off.
     get jokesOff() { return holders.size > 0 && !noCcp(); },
     /** Each holder switches jokes off until it says otherwise or goes away. */
     hold(owner, on) { if (on) holders.add(owner); else holders.delete(owner); },
     /** A kind with no match falls back to any kind, but real-only never falls back to a joke. */
-    next({ kind, theme, ccpOnly = false } = {}) {
+    next({ kind, theme, ccpOnly = false, illustrated = false } = {}) {
+      if (illustrated) return !noCcp() && (ccpOnly || holders.size) ? ccpPicture() : jokePicture();
       const pool = adPool(theme);
       const allowed = noCcp() ? pool.filter((a) => !a.ccp) : ccpOnly || holders.size ? pool.filter((a) => a.ccp) : pool;
       const list = kind ? allowed.filter((a) => a.kind === kind) : allowed;

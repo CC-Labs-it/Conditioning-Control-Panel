@@ -25,6 +25,8 @@ import { IDLE_FACES, rand, any, CSS, bakeFaces, sprite, controlsRect, hivePictur
 
 const TAKE_CSS = `
 .et-front,.et-back{position:absolute;inset:0;pointer-events:none;}
+.et-drop-pixel{z-index:1;}
+.et-drop-pixel .et-s[data-pic]{box-shadow:0 0 0 1px rgba(255,232,249,.66),0 0 var(--et-drop-glow) rgba(255,147,216,.85);}
 .et-dlg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(340px,calc(100% - 32px));background:#ece9e2;color:#111;border:1px solid #2a2a2a;box-shadow:3px 4px 0 rgba(0,0,0,.45);font:13px/1.35 "Segoe UI",system-ui,sans-serif;z-index:6;}
 .et-dlg .tb{display:flex;align-items:center;gap:8px;padding:4px 8px;background:#2a1f3d;color:#fff;font-weight:700;}
 .et-dlg .tb span{flex:1;}
@@ -150,10 +152,18 @@ export function emiTakeoverTake(ctx, releaseWorld) {
       /* every lit pixel of the word shows a picture; the rest stay dark, and step back so the word reads */
       const dim = (el) => { if (calm) ctx.anim(el, [{ opacity: 1 }, { opacity: 0.35 }], { duration: 500, fill: 'forwards' }); else el.style.opacity = '.35'; };
       dim(back);
+      const midCol = grid.c0 + (grid.wordC - 1) / 2, midRow = grid.r0 + (grid.wordR - 1) / 2;
+      const insetPerCell = size * 0.06;
+      front.style.setProperty('--et-drop-glow', `${size * 0.15}px`);
       grid.cells.forEach((c, i) => {
         const s = cells[i];
         if (s && !c.lit) dim(s.el);
         if (!s || !c.lit) return;
+        // Tighten the lettering about its own centre as the screens switch on.
+        const x = c.x + (midCol - c.c) * insetPerCell;
+        const y = c.y + (midRow - c.r) * insetPerCell;
+        s.el.style.transform = `translate(${x.toFixed(1)}px,${y.toFixed(1)}px) scale(1.1)`;
+        s.el.classList.add('et-drop-pixel');
         s.dark(false);
         s.show(pic(i));
         if (calm) ctx.anim(s.scr, [{ opacity: 0 }, { opacity: 1 }], { duration: 500 });
