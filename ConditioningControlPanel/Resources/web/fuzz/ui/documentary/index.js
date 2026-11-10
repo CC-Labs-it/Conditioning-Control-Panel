@@ -5,6 +5,7 @@ import { createMedia } from './media.js';
 import { createStage } from './stage.js';
 import { createDocumentaryNarration } from './narration.js';
 import { createDocumentaryMusic } from './music.js';
+import { createMuseumArrival } from './arrival.js';
 
 export const DOCUMENTARY_SHOW_MAX_MS = 4 * 3600e3;
 export const MANIFEST_URL = new URL('../../assets/documentary/exhibits.json', import.meta.url);
@@ -14,6 +15,7 @@ export function createTabTunnel(ctx, parent, opts = {}) {
   validateManifest(opts.manifest);
   const doc = parent.ownerDocument;
   const win = doc.defaultView;
+  const arrival = opts.arrival || createMuseumArrival(ctx, parent);
   const root = doc.createElement('div');
   root.className = 'td-root';
   root.setAttribute('aria-label', 'Museum railway');
@@ -80,7 +82,7 @@ export function createTabTunnel(ctx, parent, opts = {}) {
     });
   } catch (error) {
     scene?.ready.catch(() => {});
-    scene?.dispose(); media.dispose(); root.remove();
+    scene?.dispose(); media.dispose(); root.remove(); arrival.dispose();
     throw error;
   }
   const captions = doc.createElement('p');
@@ -145,7 +147,7 @@ export function createTabTunnel(ctx, parent, opts = {}) {
   }
   const interactive = target => target?.closest?.('button,a,input,textarea,select,[contenteditable=true],[role=button]');
   function pump(event) {
-    if (disposed || ctx.paused || doc.hidden || interactive(event.target)) return;
+    if (!started || disposed || ctx.paused || doc.hidden || interactive(event.target)) return;
     if (event.repeat || event.ctrlKey || event.altKey || event.metaKey || ![' ', 'Enter'].includes(event.key)) return;
     event.preventDefault();
     ride.pump();
@@ -179,6 +181,7 @@ export function createTabTunnel(ctx, parent, opts = {}) {
   function dispose() {
     if (disposed) return;
     disposed = true;
+    arrival.dispose();
     frameOff?.(); frameOff = null;
     for (const cancel of jobs.values()) cancel();
     jobs.clear(); floorRelease?.();
@@ -193,7 +196,12 @@ export function createTabTunnel(ctx, parent, opts = {}) {
   }
   ctx.cleanup(dispose);
   // The caller gets one synchronous opportunity to attach the audio lane before ready fires.
-  const ready = Promise.all([scene.ready, stylesReady]).then(start);
+  const ready = Promise.all([scene.ready, stylesReady]).then(async () => {
+    if (disposed) return;
+    scene.resize(); ride.step(0); scene.draw(ride.state); frameCount++;
+    await arrival.reveal(root);
+    start();
+  });
   ready.catch(error => { console.error(error); dispose(); });
   const api = Object.freeze({
     state: ride.state, captions, beat, dispose, ready,
@@ -239,10 +247,12 @@ export function createTabTunnel(ctx, parent, opts = {}) {
 /** Registry ending(ctx) entry point. New run resolves into the engine's ordinary recap. */
 export async function tabDocumentary(ctx, opts = {}) {
   ctx.audio.solo(true);
+  const endingLayer = ctx.layer('ending');
+  const arrival = createMuseumArrival(ctx, endingLayer);
   const abort = new AbortController();
   let tunnel, resolveDone;
   const done = new Promise(resolve => { resolveDone = resolve; });
-  const finish = () => { abort.abort(); tunnel?.dispose(); resolveDone(); };
+  const finish = () => { abort.abort(); arrival.dispose(); tunnel?.dispose(); resolveDone(); };
   const off = ctx.on('suspend', event => { if (event?.on && event.reason === 'panic') finish(); });
   ctx.cleanup(finish);
   try {
@@ -251,7 +261,7 @@ export async function tabDocumentary(ctx, opts = {}) {
       return response.json();
     });
     if (abort.signal.aborted) return;
-    tunnel = createTabTunnel(ctx, ctx.layer('ending'), { ...opts, manifest, onDispose: resolveDone });
+    tunnel = createTabTunnel(ctx, endingLayer, { ...opts, manifest, arrival, onDispose: resolveDone });
     opts.connect?.(tunnel);
     await done;
   } catch (error) {

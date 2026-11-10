@@ -88,10 +88,19 @@ export function createDocumentaryNarration(ctx, tunnel, options = {}) {
         runBeat({ id: cue.beat });
       }
     }
-    const slide = reached.filter(cue => cue.slot).at(-1);
-    if (complete || !slide || job.lastProjection === slide.key) return;
-    if (job.lastProjector && job.lastProjector !== slide.projector) projector(job.lastProjector, false);
+    const slide = reached.filter(cue => cue.slot || typeof cue.visible === 'boolean').at(-1) ||
+      { key: 'initial', projector: job.ride.projector, visible: true };
+    if (complete || job.lastProjection === slide.key) return;
+    const previousProjector = job.lastProjector;
+    if (previousProjector && previousProjector !== slide.projector) projector(previousProjector, false);
     job.lastProjector = slide.projector; job.lastProjection = slide.key;
+    if (slide.visible === false) {
+      if (job.projectionVisible !== false || previousProjector !== slide.projector) projector(slide.projector, false);
+      job.projectionVisible = false;
+      return;
+    }
+    job.projectionVisible = true;
+    if (slide.key === 'initial') { projector(slide.projector, true); return; }
     tunnel.beat('projector.show', { id: slide.projector, slot: slide.slot, title: slide.title, line: '', timing: subtitleTiming(job.id) });
   }
   function setSubtitles(value) {
@@ -131,7 +140,7 @@ export function createDocumentaryNarration(ctx, tunnel, options = {}) {
   function showRideProjector(job) {
     if (!job?.ride || job.projectorStarted || isPaused()) return;
     job.projectorStarted = true;
-    projector(job.ride.projector, true);
+    paintProjection(job);
   }
   function sourceFor(id) {
     const url = new URL(`${id}.mp3`, options.voiceRoot || VOICE_ROOT).href;
@@ -220,7 +229,7 @@ export function createDocumentaryNarration(ctx, tunnel, options = {}) {
   function startJob(job) {
     if (disposed) { job.release?.(); return; }
     active = { ...job, beatIndex: 0, missing: false, elapsed: 0, since: null, listeners: [], fadeStart: 0, gain: 0,
-      projections: projectionTimeline(job.id, options.subtitleData), projectionBeats: new Set(), lastProjector: job.ride?.projector || null, lastProjection: null };
+      projections: projectionTimeline(job.id, options.subtitleData), projectionBeats: new Set(), lastProjector: job.ride?.projector || null, lastProjection: null, projectionVisible: false };
     const current = active;
     caption();
     status('loading');
@@ -278,7 +287,8 @@ export function createDocumentaryNarration(ctx, tunnel, options = {}) {
       times.push(...active.projections.map(cue => cue.at * duration()));
       if (subtitles) times.push(...subtitleBoundaries(active.id, duration(), options.subtitleData));
       const next = Math.min(clips[active.id].duration, ...times.filter(time => time > at + 0.001));
-      wakeTimer = setTimer(() => { wakeTimer = null; advance(); }, Math.max(1, (next - at) * 1000));
+      // Cross the boundary instead of landing just below it after floating-point conversion.
+      wakeTimer = setTimer(() => { wakeTimer = null; advance(); }, Math.max(1, (next - at) * 1000) + 1);
     } else if (stageStarted !== null && !finishing && stageIndex < stageSchedule.length) {
       wakeTimer = setTimer(() => { wakeTimer = null; dispatch(); }, Math.max(1, (stageSchedule[stageIndex].at - elapsed()) * 1000));
     }

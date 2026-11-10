@@ -105,7 +105,6 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
   stageControlsAnchor.hidden = true;
   const replay = element(doc, 'div', 'td-plane td-projector-face td-replay', domCamera);
   replay.hidden = true; replay.style.padding = '0';
-  const loading = element(doc, 'p', 'td-loading', root, 'Opening the gallery');
   const surfaces = [], art = new Map(), animated = new Set(), geometries = new Set();
   const artLoads = new Set(), storyImageStatus = new Map();
   const projectors = [];
@@ -622,10 +621,10 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
     buildExhibits();
     await Promise.all([pack.ready, props.ready, preloadStoryArt()]);
     if (disposed) return;
-    readyState = true; loading.remove();
+    readyState = true;
     for(const [id,data] of pendingProjectorBeats.splice(0)) projectorBeat(id,data);
     resize();
-  }).catch(error => { loading.textContent = 'The gallery could not open'; throw error; });
+  });
 
   function releaseSurface(surface) { for (const release of surface.mounts) release(); surface.mounts.length = 0; }
   function resize() {

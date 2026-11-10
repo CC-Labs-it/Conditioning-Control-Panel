@@ -4,6 +4,7 @@ import { createAds } from '../ui/ads.js';
 import { createKit } from '../audio/kit.js';
 import { createPreviewFeed } from './tab-doc-feed.js';
 import { previewPictureSource, rememberPreviewPictureSource } from './tab-doc-source.js';
+import { createMuseumArrival } from '../ui/documentary/arrival.js';
 
 const query = new URLSearchParams(location.search);
 const events = new Map(), frames = new Set(), timers = new Set(), cleanups = new Set(), animations = new Set();
@@ -116,7 +117,24 @@ document.addEventListener('keydown', event => {
 document.addEventListener('visibilitychange', () => {
   last = performance.now(); pictures.setGameplayActive(!paused && !document.hidden && !ended); schedule();
 });
-const manifest = await fetch(MANIFEST_URL).then(response => response.json());
+const loadAbort = new AbortController();
+const arrival = createMuseumArrival(ctx, $('l-ending'));
+const panic = () => { emit('suspend', { on: true, reason: 'panic' }); $('pause').hidden = true; };
+$('panic').onclick = $('stop').onclick = panic;
+ctx.cleanup(ctx.on('suspend', event => {
+  if(event?.on&&event.reason==='panic') { loadAbort.abort();arrival.dispose();$('finished').hidden=false; }
+}));
+window.__tabDocLoading = { panic };
+addEventListener('pagehide', () => { loadAbort.abort();for (const cleanup of cleanups) cleanup();for (const animation of animations) animation.cancel();feed.dispose();audio.stopStreams();pictures.clearOwn(); });
+const manifest = await fetch(MANIFEST_URL,{signal:loadAbort.signal}).then(response => {
+  if(!response.ok) throw new Error('Museum manifest unavailable');
+  return response.json();
+}).catch(error => {
+  arrival.dispose();$('finished').hidden=false;
+  if(error.name!=='AbortError') $('finished').querySelector('h1').textContent='The museum could not open';
+  return null;
+});
+if(manifest&&!loadAbort.signal.aborted) {
 const requestedStart = query.get('at') || 'booth';
 const narratedPreview = query.get('voice') === '1' || (!manual && query.get('test') !== '1' && query.get('voice') !== '0');
 // Chapter doors enter on the approach so the narration has room to travel.
@@ -124,7 +142,7 @@ const chapterDoors = { lever:102, floorboard:291, wakeup:370, '92':102, '268':29
 const startAt = narratedPreview && Object.hasOwn(chapterDoors, requestedStart) ? chapterDoors[requestedStart] :
   /^\d+(?:\.\d+)?$/.test(requestedStart) ? Number(requestedStart) : requestedStart;
 const tunnel = createTabTunnel(ctx, $('l-ending'), {
-  manifest, at: startAt, lite: query.get('lite') === '1' || innerWidth < 600,
+  manifest, arrival, at: startAt, lite: query.get('lite') === '1' || innerWidth < 600,
   narration: narratedPreview,
   music: query.get('music') === '1' || (!manual && query.get('test') !== '1' && query.get('music') !== '0'),
   hours: query.get('hours'), now: () => performance.now() + simulatedWall,
@@ -167,8 +185,6 @@ $('mute').onclick = () => {
   $('mute').textContent = audio.muted ? 'Sound off' : 'Sound on';
 };
 $('unlock').onclick = () => { tunnel.beat('booth.stamp'); tunnel.beat('booth.unlock'); $('preview').open = false; };
-const panic = () => { emit('suspend', { on: true, reason: 'panic' }); $('pause').hidden = true; };
-$('panic').onclick = $('stop').onclick = panic;
 window.__tabDoc = {
   tunnel, ctx, emit, pause, panic,
   step(seconds) { manual = true; if (raf !== null) cancelAnimationFrame(raf); raf = null; advance(seconds); },
@@ -177,4 +193,4 @@ window.__tabDoc = {
     pictures:{source:pictures.source,preferred:preferredSource,...feed.debug()} }; },
 };
 if(preferredSource==='scrolller') void connectGallery(false);
-addEventListener('pagehide', () => { for (const cleanup of cleanups) cleanup(); for (const animation of animations) animation.cancel(); feed.dispose(); audio.stopStreams(); pictures.clearOwn(); });
+}

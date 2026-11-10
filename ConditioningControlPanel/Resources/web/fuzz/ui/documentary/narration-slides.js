@@ -14,8 +14,9 @@ const SLIDES = {
     { phrase: 'The mantis shrimp strikes', projector: 'reflex', slot: 'reflex-shrimp', title: 'The mantis shrimp' },
     { phrase: "moves quite as fast as the Subject's", projector: 'reflex', slot: 'subject-habitat', title: 'The Subject' },
     { phrase: 'on hearing a floorboard creak', projector: 'reflex', slot: 'floorboard-warning', title: 'A floorboard creak', beat: 'floor.creak' },
+    { phrase: 'in the hallway: forty-one tabs', projector: 'reflex', visible: false },
     { phrase: 'gone in under a third of a second', beat: 'floor.snap' },
-    { phrase: 'and replaced, seamlessly, with a spreadsheet', projector: 'reflex', slot: 'subject-spreadsheet', title: 'A perfectly ordinary spreadsheet' },
+    { phrase: 'and replaced, seamlessly, with a spreadsheet', projector: 'reflex', slot: 'subject-spreadsheet', title: 'A perfectly ordinary spreadsheet', visible: false },
     { phrase: 'Again, in slow motion', projector: 'reflex', slot: 'subject-spreadsheet', title: 'Again, in slow motion', beat: 'floor.replay' },
     { phrase: 'Magnificent.', beat: 'floor.freeze' },
   ],
@@ -30,6 +31,6 @@ export function projectionTimeline(id, subtitles = NARRATION_SUBTITLES) {
   const cues = subtitles[id] || [];
   return (SLIDES[id] || []).flatMap((rule, index) => {
     const cue = cues.find(([, , text]) => normalize(text).includes(normalize(rule.phrase)));
-    return cue ? [{ ...rule, at: cue[0], key: `${id}:${index}` }] : [];
+    return cue ? [{ ...rule, visible: rule.visible ?? (rule.slot ? true : undefined), at: cue[0], key: `${id}:${index}` }] : [];
   }).sort((a, b) => a.at - b.at);
 }

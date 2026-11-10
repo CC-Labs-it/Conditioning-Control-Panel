@@ -321,8 +321,8 @@ test('replacing a queued hover reaction does not consume its quota', async () =>
 test('slideshow order follows the same subtitle cue boundaries at actual media duration', async () => {
   const h = harness({ at: 291 }); await h.narration.ready;
   const recording = h.streams[0]; recording.el.duration = 80;
-  const slides = projectionTimeline('r3').filter(cue => cue.slot);
-  assert.deepEqual(slides.map(cue => cue.slot), ['reflex-cheetah', 'reflex-shrimp', 'subject-habitat', 'floorboard-warning', 'subject-spreadsheet', 'subject-spreadsheet']);
+  const slides = projectionTimeline('r3').filter(cue => cue.slot && cue.visible);
+  assert.deepEqual(slides.map(cue => cue.slot), ['reflex-cheetah', 'reflex-shrimp', 'subject-habitat', 'floorboard-warning', 'subject-spreadsheet']);
   assert.ok(slides.every(cue => cue.projector === 'reflex'), 'slow motion stays on the same physical projector');
   let previous;
   for (const slide of slides) {
@@ -336,8 +336,60 @@ test('slideshow order follows the same subtitle cue boundaries at actual media d
     previous = slide.slot;
   }
   assert.equal(h.holds.size, 0);
-  assert.equal(h.beats.some(beat => beat.id === 'projector.hide'), false, 'the narration never retracts between comparison and slow motion');
+  assert.equal(h.beats.filter(beat => beat.id === 'projector.hide' && beat.data.id === 'reflex').length, 1, 'the same screen retracts between comparison and slow motion');
   recording.end(); assert.equal(h.holds.size, 0); h.narration.dispose();
+});
+
+test('the reflex screen retracts for the tab-wall explanation and returns only for the aligned replay phrase', async () => {
+  const h = harness({ at: 291 }); await h.narration.ready;
+  const recording = h.streams[0], timeline = projectionTimeline('r3');
+  const hide = timeline.find(cue => cue.visible === false && !cue.slot);
+  assert.ok(Math.abs(hide.at * NARRATION_CLIPS.r3.duration - 20.08) < 1e-6);
+  const projection = () => h.beats.filter(beat => beat.id === 'projector.show' || beat.id === 'projector.hide').at(-1);
+  recording.time(18.09); assert.equal(projection().data.slot, 'floorboard-warning');
+  recording.time(20.079); assert.equal(projection().id, 'projector.show');
+  recording.time(20.081); assert.deepEqual([projection().id, projection().data.id], ['projector.hide', 'reflex']);
+  const shown = h.beats.filter(beat => beat.id === 'projector.show').length;
+  for (const time of [26.09, 28.57, 33.039]) {
+    recording.time(time);
+    assert.equal(projection().id, 'projector.hide');
+    assert.equal(h.beats.filter(beat => beat.id === 'projector.show').length, shown);
+    assert.equal(recording.el.paused, false);
+  }
+  assert.ok(h.beats.some(beat => beat.id === 'floor.snap'));
+  recording.time(33.041);
+  assert.deepEqual([projection().id, projection().data.id, projection().data.slot], ['projector.show', 'reflex', 'subject-spreadsheet']);
+  recording.time(36.001); assert.ok(h.beats.some(beat => beat.id === 'floor.freeze'));
+  assert.equal(projection().id, 'projector.show');
+  assert.equal(h.holds.size, 0); assert.equal(h.maxConcurrent, 1);
+  h.narration.dispose();
+});
+
+test('seeks reconstruct projection visibility and Wake resume cannot reopen the hidden explanation', async () => {
+  const h = harness({ at: 291 }); await h.narration.ready;
+  const recording = h.streams[0];
+  const projection = () => h.beats.filter(beat => beat.id === 'projector.show' || beat.id === 'projector.hide').at(-1);
+  recording.time(34); assert.equal(projection().data.slot, 'subject-spreadsheet');
+  recording.time(25); assert.equal(projection().id, 'projector.hide');
+  h.pause(true); h.pause(false); assert.equal(projection().id, 'projector.hide');
+  recording.time(19); assert.deepEqual([projection().id, projection().data.slot], ['projector.show', 'floorboard-warning']);
+  recording.time(29); assert.equal(projection().id, 'projector.hide');
+  recording.time(0); assert.deepEqual([projection().id, projection().data.id], ['projector.show', 'reflex']);
+  recording.time(25); assert.equal(projection().id, 'projector.hide');
+  recording.time(34); assert.deepEqual([projection().id, projection().data.id], ['projector.show', 'reflex']);
+  assert.equal(recording.el.currentTime, 34, 'visual changes never seek the voice');
+  h.narration.dispose();
+});
+
+test('finite missing-audio timing follows the same hidden and replay boundaries', async () => {
+  const h = harness({ at: 291 }); await h.narration.ready; h.streams[0].error();
+  const projection = () => h.beats.filter(beat => beat.id === 'projector.show' || beat.id === 'projector.hide').at(-1);
+  h.tick(20100); assert.equal(projection().id, 'projector.hide');
+  h.pause(true); h.tick(60000); h.pause(false); assert.equal(projection().id, 'projector.hide');
+  h.tick(12930); assert.equal(projection().id, 'projector.hide');
+  h.tick(20); assert.deepEqual([projection().id, projection().data.id], ['projector.show', 'reflex']);
+  assert.equal(h.concurrent, 0);
+  h.narration.dispose(); assert.equal(h.timers.size, 0);
 });
 
 test('adjusting a subtitle boundary moves the matching slide without an independent timing edit', async () => {
