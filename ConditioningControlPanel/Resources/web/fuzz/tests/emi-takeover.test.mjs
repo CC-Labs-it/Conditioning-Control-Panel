@@ -28,18 +28,24 @@ test('the four rows sit between Fake Online Count and the goon ending, which kee
 
 const ALL = ['h_amp', 'h_oc', 'h_loud', 'h_rep', 'h_over'];
 
-test('paying for the final shop rows cannot skip shopping, a manual copy, or the first hive pattern', () => {
+test('Hive Mind waits for EMI to shop, and the takeover itself is never a purchase', () => {
   const run = { owned: { go_tx: 1, go_will: 1, go_corp: 1 }, store: { go_tx: { bag: { bought: [] } } } };
   assert.match(T.purchaseHint(run, 'go_hive'), /Amplifier/);
   run.store.go_tx.bag.bought = ALL.slice(0, 4);
-  assert.match(T.purchaseHint(run, 'go_end'), /Override/);
+  assert.match(T.purchaseHint(run, 'go_hive'), /Override/);
   run.store.go_tx.bag.bought = ALL;
   assert.equal(T.purchaseHint(run, 'go_hive'), '');
-  assert.match(T.purchaseHint(run, 'go_end'), /main button/);
-  run.store.go_tx.bag.clicked = 1;
-  assert.match(T.purchaseHint(run, 'go_end'), /sync/);
-  run.store.go_tx.uiBeat = 4;
-  assert.equal(T.purchaseHint(run, 'go_end'), '');
+  assert.match(T.purchaseHint(run, 'go_end'), /Keep clicking/);
+});
+
+test('only a player-grown crowd with the whole interface converted starts DROP', () => {
+  for (const lite of [true, false]) {
+    const ready = { count: T.hiveCrowd(lite), lite, presses: 4, objects: 0, buzzing: 0, uiTaken: true };
+    assert.ok(T.readyToFill(ready));
+    for (const missing of [{ count: ready.count - 1 }, { presses: 3 }, { objects: 1 }, { buzzing: 1 }, { uiTaken: false }]) {
+      assert.equal(T.readyToFill({ ...ready, ...missing }), false);
+    }
+  }
 });
 
 test('the stage follows the rows owned, in order; Self Replication and Override are hers, not rows', () => {

@@ -70,7 +70,7 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
   const now = () => doc.defaultView.performance.now();
   /* Rows this device cannot use (ui/platform.js) never get a tile; the next rows move up. */
   const platform = devicePlatform(doc.defaultView, () => engine.env?.caps || {});
-  const offered = (n) => offeredWindow((k) => engine.shop(k), n, platform.canOffer);
+  const offered = (n) => offeredWindow((k) => engine.shop(k), n, it => it.id !== 'go_end' && platform.canOffer(it));
   /* Hops wait for a still page: not under Gentle or reduced motion (body.gentle covers both), a pause, or a hidden tab. */
   const moving = () => !doc.body.classList.contains('gentle') && !engine.paused && !engine.stopped && !engine.suspended && doc.visibilityState !== 'hidden';
 

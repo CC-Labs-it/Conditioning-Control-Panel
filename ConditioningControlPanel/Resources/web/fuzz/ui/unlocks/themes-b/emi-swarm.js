@@ -11,10 +11,11 @@
  * go_hive    the screens run in patterns while everyone keeps wandering; bought by EMI herself if the player waits
  *            (150 s after Override) */
 
-import { EMI_BARKS, EMI_UPGRADE_LINES } from '../../../data/content/emi-takeover.js';
+import { dragLine, EMI_BARKS, EMI_UPGRADE_LINES } from '../../../data/content/emi-takeover.js';
 import { LITE, frameRect } from '../../perf.js';
 import { shopDoor } from '../../shop.js';
 import * as T from '../../../sim/takeover.js';
+import { heldEnding } from '../../../sim/economy.js';
 import { SWAY, IDLE_FACES, rand, any, CSS, pose, sprites, bakeFaces, sprite, controlsRect, morePictures, tilesOf, bubble, placeBubble, deskHandoff } from './emi-kit.js';
 import { bindCopyPets } from './emi-pets.js';
 import { createUiTakeover, UI_TAKEOVER_CSS } from './emi-ui-takeover.js';
@@ -28,7 +29,9 @@ const SWARM_CSS = `
 [data-et-gone]{visibility:hidden !important;}
 .et-box .et-credit{z-index:4;}
 .et-box .et-main{pointer-events:auto;touch-action:none;user-select:none;cursor:grab;}
-.et-main[data-held]{cursor:grabbing;}
+.et-box .et-emi{touch-action:none;user-select:none;}
+.et-box .et-emi:not(.et-main)::before{content:"";position:absolute;inset:22% 18% 21% 17%;pointer-events:auto;cursor:grab;}
+.et-box .et-emi[data-held],.et-box .et-emi[data-held]::before{cursor:grabbing;}
 .et-purse{position:absolute;left:64%;top:64%;width:32%;height:32%;pointer-events:none;}
 .et-purse>img{inset:0;width:100%;height:100%;object-fit:contain;}
 .et-purse>span{position:absolute;right:-5px;bottom:-4px;padding:0 3px;border:1px solid #512b38;border-radius:5px;background:#ffe39b;color:#342032;font:700 10px/1.1 var(--font);}
@@ -112,7 +115,7 @@ function mountSwarm(ctx) {
       faceAt: t + rand(1, 4), poseAt: 0, sway: emis.length, coolUntil: 0,
       mode: 'face', modeUntil: t + rand(0.6, 2.5), lastScreen: -Infinity,
     });
-    if (!main) s.el.dataset.etPet = '';
+    if (!main) { s.el.dataset.etPet = ''; s.el.title = 'Drag or pat EMI'; }
     emis.push(e);
     return e;
   }
@@ -121,7 +124,8 @@ function mountSwarm(ctx) {
   const resting = ctx.store.getLayout(layoutKey);
   const savedSpot = Number.isFinite(resting.x) && Number.isFinite(resting.y) ? resting : null;
   const main = add(true, hand || savedSpot);
-  main.el.title = 'Drag EMI';
+  main.el.classList.add('et-main');
+  main.el.title = 'Drag or pat EMI';
   /* her hat (em_hat) rides on the main sprite, sized as on the desk */
   const hat = doc.createElement('div');
   hat.className = 'et-h';
@@ -197,6 +201,7 @@ function mountSwarm(ctx) {
       const cx = main.x + main.size / 2, cy = main.y + main.size / 2, diag = Math.hypot(b.w, b.h) || 1;
       const tt = t - hiveT0;
       emis.forEach((e, i) => {
+        if (grab.dragging(e) || t < e.dragFaceUntil) return;
         const ex = e.x + e.size / 2, ey = e.y + e.size / 2;
         const lit = T.patternLit(pattern, { t: tt, period, x01: ex / (b.w || 1), d01: Math.hypot(ex - cx, ey - cy) / diag, i, n: emis.length, side: ex < b.w / 2 ? 0 : 1 });
         if (lit === !!e.pic || t - e.lastScreen < T.HIVE.MIN_GAP_S) return;
@@ -206,7 +211,7 @@ function mountSwarm(ctx) {
     } else {
       hiveT0 = null;
       for (const e of emis) {
-        if (t < e.modeUntil || t - e.lastScreen < T.HIVE.MIN_GAP_S) continue;
+        if (grab.dragging(e) || t < e.dragFaceUntil || t < e.modeUntil || t - e.lastScreen < T.HIVE.MIN_GAP_S) continue;
         e.mode = e.mode === 'face' ? 'pic' : 'face';
         e.modeUntil = t + rand(...fx().picS);
         e.show(e.mode === 'pic' ? picFor(Math.floor(rand(0, 64))) : null);
@@ -221,7 +226,7 @@ function mountSwarm(ctx) {
   let barkAt = Infinity;
   const quiet = () => !!doc.querySelector('#cards .backdrop, #cards .tc');   // a card is up: no bubbles, no copies, no shopping
   const milestones = ctx.restored ? [] : ['go_tx'];
-  let nextMilestone = 0;
+  let nextMilestone = 0, rideBubble = null;
   function say(e, text, { react = false, milestone = false } = {}) {
     if (!text || quiet()) return false;
     if (milestone) {
@@ -258,7 +263,7 @@ function mountSwarm(ctx) {
     if (line) say(speaker, line);
   }
   function celebrate() {
-    if (!milestones.length || t < nextMilestone || quiet() || grab.held) return;
+    if (!milestones.length || t < nextMilestone || quiet() || grab.holds(main)) return;
     const id = milestones.shift(), line = EMI_UPGRADE_LINES[id];
     say(main, line, { react: true, milestone: true });
     main.show(null); main.setFace('^_^'); main.faceAt = t + 1.5;
@@ -269,17 +274,35 @@ function mountSwarm(ctx) {
   }
   ctx.on('switch', () => { if (phase() !== 'hive') uiTakeover.update(0, false); });
   const pets = bindCopyPets(ctx, () => !box.hidden && !quiet());
-  const grab = bindEmiGrab(ctx, main, {
-    place(x, y) {
-      main.x = main.tx = clampX(x, main.size); main.y = main.ty = clampY(y, main.size);
-      if (inWalls(main.x, main.y, main.size)) main.y = main.ty = clampY(walls.y + walls.h, main.size);
-      main.state = 'stand'; main.until = t + 1.5; main.jumpT = -1;
+  const grab = bindEmiGrab(ctx, box, {
+    pick: el => emis.find(e => e.el === el),
+    lift(e) {
+      const free = on('go_will');
+      e.lastRide = dragLine(free, e.lastRide);
+      e.show(null); e.setFace(free ? '>_<' : 'o_o');
+      e.setPose(free ? 'body-smug' : 'body-pet');
+      rideBubble?.el.remove();
+      rideBubble = bubble(ctx, box, e.lastRide);
+      rideBubble.e = e; rideBubble.until = t + 2.5;
+      e.dragFaceUntil = t + 1.4;
     },
-    drop() {
+    place(e, x, y) {
+      e.x = e.tx = clampX(x, e.size); e.y = e.ty = clampY(y, e.size);
+      if (inWalls(e.x, e.y, e.size)) e.y = e.ty = clampY(walls.y + walls.h, e.size);
+      e.state = 'stand'; e.until = t + 1.5; e.jumpT = -1;
+    },
+    drop(e) {
+      e.dragFaceUntil = t + 1;
+      if (e !== main) return;
       if (desk?.el.isConnected) desk.shift(main.x - desk.pos.x, main.y - desk.pos.y);
       else ctx.store.setLayout(layoutKey, { x: main.x, y: main.y });
     },
-    pet(event) {
+    pet(e, event) {
+      if (e !== main) {
+        pets.pet(e.el); e.show(null); e.setFace('^_^');
+        e.modeUntil = e.faceAt = t + 1.4; e.dragFaceUntil = 0;
+        return;
+      }
       let spoke = false;
       desk?.petAt(event, text => { spoke = say(main, text, { react: true }); });
       if (!spoke && t >= nextMilestone) pets.pet(main.el);
@@ -348,7 +371,14 @@ function mountSwarm(ctx) {
   const gone = new Set();
   const tabs = new Set();       // dock bodies whose bottom tab reads EMI while their object is hers
   const buzzing = new Set();    // objects shaking right now, about to be hers
-  let lastRep = -Infinity;
+  let lastRep = -Infinity, hiveTargets = null, filling = false;
+  let hivePresses = Number(ctx.store.get('hivePresses')) || 0;
+  function remainingTargets() {
+    const visible = objects();
+    // Furniture present when Hive Mind woke belongs to this wave. Ambient toys can respawn forever.
+    if (!hiveTargets) hiveTargets = new Set(visible);
+    return visible.filter(el => hiveTargets.has(el) || el.matches('section.dk'));
+  }
   /** Page objects that may become an EMI: dock objects and picture screens, floater toys. Never the button, the
    *  counter, the shop, the dock strip or Wake Up's controls, and nothing that fills the page. */
   function objects() {
@@ -435,7 +465,10 @@ function mountSwarm(ctx) {
     el.setAttribute('data-et-gone', '');
     gone.add(el);
     const size = sizeOf(false);
-    const e = add(false, { x: r.left + r.width / 2 - size / 2, y: r.top + r.height / 2 - size / 2 });
+    const spot = { x: clampX(r.left + r.width / 2 - size / 2, size), y: clampY(r.top + r.height / 2 - size / 2, size) };
+    // A full walking crowd can still convert every remaining object.
+    const e = emis.length < T.repCap(LITE) ? add(false, spot) : any(emis.filter(e => !e.main && !grab.holds(e)));
+    Object.assign(e, spot, { tx: spot.x, ty: spot.y, state: 'stand' });
     e.until = t + rand(1, 2.5);
     popIn(e);
     bag.took += 1;
@@ -461,9 +494,17 @@ function mountSwarm(ctx) {
     const ph = phase();
     if ((ph !== 'rep' && ph !== 'hive') || quiet()) return;
     const count = emis.length + buzzing.size;
-    if (t - lastRep < T.REP.COOL_S || count >= T.repCap(LITE)) return;
+    if (t - lastRep < T.REP.COOL_S) return;
+    const hive = ph === 'hive';
     const over = fx().override;
-    const objs = over ? objects() : [];
+    const objs = hive ? remainingTargets() : over ? objects() : [];
+    if (hive) {
+      ctx.store.set('hivePresses', ++hivePresses);
+      lastRep = t;
+      if (objs.length && (count >= T.hiveCrowd(LITE) || Math.random() < T.REP.CONVERT)) override(any(objs));
+      else if (count < T.repCap(LITE)) split();
+      return;
+    }
     const act = T.repPress({ now: t, lastAt: lastRep, count, lite: LITE, objects: objs.length, override: over });
     if (!act) return;
     lastRep = t;
@@ -527,6 +568,19 @@ function mountSwarm(ctx) {
     slow += dt;
     if (slow >= 0.25) {
       uiTakeover.update(slow, ph === 'hive');
+      if (ph === 'hive' && !filling && !quiet()) {
+        if (!hiveTargets) remainingTargets();
+        const ready = T.readyToFill({
+          count: emis.length, lite: LITE, presses: hivePresses, uiTaken: uiTakeover.covered,
+          objects: uiTakeover.covered ? remainingTargets().length : hiveTargets.size, buzzing: buzzing.size,
+        });
+        if (ready && !grab.active && heldEnding(ctx.state) === 'go_end') {
+          filling = true;
+          save();
+          ctx.endRun('go_end');
+          return;
+        }
+      }
       slow = 0;
       borrowDesk();
       drawGuest();
@@ -544,7 +598,7 @@ function mountSwarm(ctx) {
 
     const b = ctx.bounds();
     for (const e of emis) {
-      if (moving && !(e === main && grab.held)) walk(e, dt);
+      if (moving && !grab.holds(e)) walk(e, dt);
       let lift = 0;
       if (e.jumpT >= 0) {
         const p = (t - e.jumpT) / JUMP_S;
@@ -554,12 +608,13 @@ function mountSwarm(ctx) {
       if (inWalls(e.x, e.y, e.size)) { e.y = walls.y + walls.h; e.ty = Math.max(e.ty, e.y); }
       e.x = Math.max(0, Math.min(Math.max(0, b.w - e.size), e.x));
       e.y = Math.max(0, Math.min(Math.max(0, b.h - strip - e.size), e.y));
-      if (t >= e.poseAt) {
+      const reacting = grab.dragging(e) || t < e.dragFaceUntil;
+      if (t >= e.poseAt && !reacting) {
         e.poseAt = t + 0.42;
         e.sway += 1;
         e.setPose(e.state === 'walk' && !calm() ? SWAY[e.sway % SWAY.length] : 'body-idle');
       }
-      if (t >= e.faceAt && !e.pic) {
+      if (t >= e.faceAt && !e.pic && !reacting) {
         const blink = Math.random() < 0.3;
         e.setFace(blink ? '-_-' : any(IDLE_FACES));
         e.faceAt = t + (blink ? 0.16 : rand(2.5, 6));
@@ -570,6 +625,16 @@ function mountSwarm(ctx) {
       if (e.scr.style.transform !== want) e.scr.style.transform = want;   // the screen reads the right way round
       if (e === main && hat.style.transform !== want) hat.style.transform = want;
       if (e === main && balance.style.transform !== want) balance.style.transform = want;
+    }
+    if (rideBubble) {
+      const e = rideBubble.e;
+      if (t >= rideBubble.until) { rideBubble.el.remove(); rideBubble = null; }
+      else {
+        // Give her protest its own space when an upgrade line is still above her head.
+        const below = e.y + e.size + rideBubble.h + 6 < b.h - strip;
+        const lineY = below ? e.y + e.size + rideBubble.h + 12 : e.y;
+        placeBubble(rideBubble, e.x, lineY, e.size, b.w);
+      }
     }
     if (!credit.hidden) credit.style.transform = `translate(${(main.x + main.size / 2).toFixed(1)}px,${(main.y + main.size).toFixed(1)}px) translateX(-50%)`;
     for (let i = bubs.length - 1; i >= 0; i--) {

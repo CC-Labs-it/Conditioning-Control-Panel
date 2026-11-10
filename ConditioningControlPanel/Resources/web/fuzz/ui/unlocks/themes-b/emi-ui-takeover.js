@@ -21,7 +21,7 @@ export function createUiTakeover(ctx) {
   const doc = ctx.button.el.ownerDocument, counter = ctx.parts.counter;
   const targets = new Map();
   let beat = Math.max(0, Math.min(9, Number(ctx.store.get('uiBeat')) || 0));
-  let clock = 0, active = false;
+  let clock = 0, active = false, covered = false;
 
   function wear(button, original, account = false) {
     if (!button || targets.has(button)) return;
@@ -53,7 +53,7 @@ export function createUiTakeover(ctx) {
   }
   function clear() {
     if (!active) return;
-    active = false;
+    active = false; covered = false;
     for (const undo of targets.values()) undo();
     targets.clear();
     digit(false);
@@ -69,7 +69,7 @@ export function createUiTakeover(ctx) {
     if (beat === 0) return;
     for (const [button,undo] of targets) if (!button.isConnected) { undo(); targets.delete(button); }
     const rows = doc.querySelectorAll('#shop .row[data-id]');
-    const take = Math.max(1,beat-2);
+    const take = beat >= 9 ? rows.length : Math.max(1,beat-2);
     for (let i=0; i<Math.min(rows.length,take); i++) {
       const row = rows[i];
       wear(row, row.querySelector(':scope > .rep-ico, :scope > .ico'));
@@ -83,7 +83,14 @@ export function createUiTakeover(ctx) {
       const account = doc.getElementById('account-chip');
       if (account) wear(account, account.querySelector('span'), true);
     }
+    if (beat >= 5) {
+      const folded = [...doc.querySelectorAll('#dock-strip .dk-chip[aria-expanded="false"]')];
+      for (const chip of folded.slice(0, beat >= 9 ? folded.length : beat - 4)) {
+        wear(chip, chip.querySelector('.dk-i'));
+      }
+      covered = [...rows, ...folded].every(el => targets.has(el));
+    }
   }
   ctx.cleanup(clear);
-  return { update };
+  return { update, get covered() { return covered; } };
 }

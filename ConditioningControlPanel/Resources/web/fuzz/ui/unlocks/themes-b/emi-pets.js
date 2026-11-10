@@ -53,7 +53,7 @@ export function bindCopyPets(ctx, enabled) {
     ctx.after(1900,()=>{if(bark===line){line.remove();bark=null;}});
   }
   function click(event) {
-    if (!event.isTrusted || !event.detail || ctx.paused || !enabled() || event.target.closest?.('#wake,#pause,#cards,.et-dlg')) return;
+    if (!event.isTrusted || !event.detail || ctx.paused || !enabled() || event.target.closest?.('#wake,#pause,#cards,.et-dlg,.et-box .et-emi')) return;
     let target;
     doc.documentElement.classList.add('et-check-pet');
     try { target=doc.elementFromPoint(event.clientX,event.clientY)?.closest('[data-et-pet]'); }

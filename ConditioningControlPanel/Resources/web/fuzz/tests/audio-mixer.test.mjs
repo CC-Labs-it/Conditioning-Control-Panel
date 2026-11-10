@@ -113,6 +113,24 @@ test('running loops keep their fade and one source never alters another', async 
   assert.equal(sourceGain.disconnected, true);
 });
 
+test('the ending cut releases active, fading and pending game loops along with streams', async () => {
+  const f = fixture();
+  const music = f.kit.loop('music.ogg', { source: 'breakout_music' });
+  f.kit.loop('rain.ogg', { source: 'rain' });
+  f.kit.stream('radio.mp3');
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(f.sources.length, 2);
+  music.stop(5000);
+  f.kit.loop('pending.ogg', { source: 'mini_race' });
+  f.kit.stopStreams();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(f.sources.length, 2, 'the pending decode cannot start after the cut');
+  assert.ok(f.sources.every(node => node.stopped && node.disconnected));
+  assert.ok(f.elements.every(el => el.paused));
+  await f.kit.play('error.wav', { source: 'go_end' });
+  assert.ok(f.sources.at(-1).started && !f.sources.at(-1).stopped, 'the ending still has its own cues');
+});
+
 test('closing a cabinet cancels its in-flight and already playing cues independently', async () => {
   const f = fixture(), first = new AbortController(), second = new AbortController();
   const pending = f.kit.play('wall.wav',{signal:first.signal});

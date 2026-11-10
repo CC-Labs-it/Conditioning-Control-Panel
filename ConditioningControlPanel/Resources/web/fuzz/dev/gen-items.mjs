@@ -61,7 +61,7 @@ const LATE_ROWS = [
   { after: 'go_pals', id: 'go_tx', emoji: '📺', name: 'Transmission', what: 'Drag EMI anywhere. Her screen switches between your pictures and her face.', line: 'Now showing: you, staring.', cost: 780000, lane: 'goon', req: ['go_pals'], pay: 'c', click: 300 },
   { after: 'go_tx', id: 'go_will', emoji: '💭', name: 'Give EMI FREE WILL', what: 'EMI walks around on her own. She stops, comments, hops now and then.', line: 'It feels like wanting snacks.', cost: 930000, lane: 'goon', req: ['go_tx'], pay: 'f', fps: 1700 },
   { after: 'go_will', id: 'go_corp', emoji: '💼', name: 'Founded Startup', what: 'EMI starts a business. Watch her pouch fill, then watch her spend it on upgrades.', line: 'The pitch deck is her face.', cost: 1120000, lane: 'goon', req: ['go_will'], pay: 'c', click: 380 },
-  { after: 'go_corp', id: 'go_hive', emoji: '🐝', name: 'HIVE MIND', what: 'The EMIs agree with each other. Their screens move together, in patterns.', line: 'They voted. You were a yes.', cost: 1350000, lane: 'goon', req: ['go_corp'], pay: 'f', fps: 2100 },
+  { after: 'go_corp', id: 'go_hive', emoji: '🐝', name: 'HIVE MIND', what: 'Their screens fall into step. Keep clicking and the EMIs will take over the page.', line: 'They voted. You were a yes.', cost: 1350000, lane: 'goon', req: ['go_corp'], pay: 'f', fps: 2100 },
 ];
 function addLate(rows) {
   const out = [...rows];
@@ -157,7 +157,7 @@ const BUTTON_NAMES = {
 /* Owner 2026-11-09: the goon ending is the EMI Takeover. The id go_end stays (prestige, PINNED_ENDS). */
 const NAME_OVERRIDE = { go_end: 'Ending: EMI Takeover' };
 const WHAT_OVERRIDE = {
-  go_end: 'Ends the run: you let EMI press this one. The page will pretend to crash. It is fine, and Wake Up stays yours.',
+  go_end: 'Keep clicking after Hive Mind. When the swarm fills your screen, the page will pretend to crash. Wake Up stays yours.',
   bi_end: 'The bubble swallows the page. When it pops, float inside beneath a sky of moving pictures.',
   bi_lips:'Sign in with Bambi Cloud. The button already knows your name.',
   dr_hex:'Tap to download drone firmware. Tap again to install the user.',

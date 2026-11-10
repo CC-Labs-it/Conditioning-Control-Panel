@@ -75,7 +75,8 @@ export function canBuy({ phase, budget, bought = [], sinceBuyS }) {
 
 /** A funded shop row still waits for the part EMI plays herself, including after a reload. */
 export function purchaseHint(run, id) {
-  if (id !== 'go_hive' && id !== 'go_end') return '';
+  if (id === 'go_end') return 'The hive takes it from here. Keep clicking.';
+  if (id !== 'go_hive') return '';
   for (const stage of CHAIN) {
     if (run.owned[stage] && run.off?.[stage]) return 'Switch the EMI upgrades back on so she can finish.';
   }
@@ -83,9 +84,6 @@ export function purchaseHint(run, id) {
   const bag = story?.bag;
   const next = nextTile(bag?.bought);
   if (next) return 'EMI is saving for ' + next.name + ' with her own money.';
-  if (id === 'go_hive') return '';
-  if (!bag?.copies && !bag?.clicked && !bag?.took) return 'Click the main button to make an EMI copy.';
-  if (!(story.uiBeat >= 4)) return 'Watch the EMI screens sync up.';
   return '';
 }
 
@@ -126,6 +124,12 @@ export const repCap = (lite = false) => (lite ? REP.CAP_LITE : REP.CAP);
 export function repPress({ now, lastAt = -Infinity, count, lite = false, objects = 0, override = false, rng = Math.random }) {
   if (now - lastAt < REP.COOL_S || count >= repCap(lite)) return null;
   return override && objects > 0 && rng() < REP.CONVERT ? 'convert' : 'split';
+}
+
+// The player grows the walking crowd first. Only the final screen-filling wave runs by itself.
+export const hiveCrowd = lite => lite ? 8 : 16;
+export function readyToFill({ count, lite, presses, uiTaken, objects, buzzing }) {
+  return count >= hiveCrowd(lite) && presses >= 4 && uiTaken && !objects && !buzzing;
 }
 
 /** The bzzz: never while one plays, never closer than SOUND_GAP_S to the last. */

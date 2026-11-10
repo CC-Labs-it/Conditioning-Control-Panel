@@ -62,6 +62,7 @@ export function emiTakeoverTake(ctx) {
   const live = liveSwarm();
   const pts = live?.points?.() || [];
   const sz = live?.sizes?.() || [];
+  const spread = T.spreadOrder(grid, pts);
   const seeds = pts.map((p, i) => ({ x: p.x, y: p.y, size: sz[i] || size * 1.6 }));
   live?.hide?.();
   const pile = T.backPile({ w: W, h: Hfull, pitch: size, seeds, controls: walls, lite: LITE });
@@ -95,7 +96,8 @@ export function emiTakeoverTake(ctx) {
       if (Math.random() < 0.2) s.show(null); else s.show(pic(Math.floor(rand(0, kinds() * 4))));
       s.at = t + T.flickerGap(Math.random, LITE, gapBack) / 1000;
     };
-    const putFront = (i) => {
+    const putFront = (arrival) => {
+      const i = spread[arrival];
       const cell = grid.cells[i];
       const s = sprite(doc, size);
       s.el.style.transform = `translate(${cell.x.toFixed(1)}px,${cell.y.toFixed(1)}px)`;
@@ -128,6 +130,8 @@ export function emiTakeoverTake(ctx) {
     const seedN = pile.filter((p) => p.seed).length;
 
     function shut() {
+      // The last screen goes dark. Only the takeover may be heard from here through the error and closing beats.
+      ctx.audio.solo(true);
       pets.clear(); root.style.clipPath = '';
       every((s) => { s.dark(true); s.at = 0; });
       showCredit(false);
@@ -247,7 +251,6 @@ export function emiTakeoverTake(ctx) {
     function freeze() {
       /* no motion anywhere and the page silent; the dialog's OK is live and takes the focus */
       frozen = true;
-      ctx.audio.solo(true);
       err?.stop?.(0);
       for (const a of root.getAnimations({ subtree: true })) { if (a.effect?.target === root && a.effect.getKeyframes?.().some((k) => k.backgroundColor)) { a.finish(); continue; } a.pause(); }
       startDrone();
@@ -317,7 +320,7 @@ export function emiTakeoverTake(ctx) {
       }
       t += dt;
       if (t < at.shut) {
-        /* the fill: front pixels row after row, the back pile behind, every lit screen on its own flash clock */
+        /* the fill: new screens spread outward from the walking copies, the back pile behind, every lit screen on its own flash clock */
         let budget = LITE ? 10 : 24;   // never build the whole screen in one frame
         while (backIn < B && T.backAt(backIn, B, seedN) <= t && budget > 0) { putBack(backIn++); budget -= 1; }
         const want = T.gridCount(t, N);

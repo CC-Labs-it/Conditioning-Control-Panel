@@ -15,6 +15,13 @@ let seed = 11;
 const rng = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
 const src = (f) => readFileSync(new URL(`../ui/unlocks/themes-b/${f}`, import.meta.url), 'utf8');
 
+test('the last wave grows from the actual EMI positions and visits every DROP pixel once', () => {
+  const grid = { cols: 5, rows: 1, pitch: 10, ox: 0, oy: 0, cells: [0,10,20,30,40].map(x => ({ x, y: 0 })) };
+  const order = T.spreadOrder(grid, [{ x: 45, y: 5 }, { x: 5, y: 5 }], () => 0);
+  assert.deepEqual(order, [0,4,1,3,2]);
+  assert.deepEqual(T.spreadOrder(grid, [{ x: 45, y: 5 }], () => 0), [4,3,2,1,0]);
+});
+
 test('the front grid fills the screen, leaves Wake Up\'s corner empty, its lit cells read DROP, and it comes row after row', () => {
   for (const s of SCREENS) {
     const g = T.dropGrid(s);

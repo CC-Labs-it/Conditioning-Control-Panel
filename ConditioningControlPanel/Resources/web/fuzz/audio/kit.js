@@ -237,30 +237,38 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
     try { src.start(); } catch { shot.done(); }
   }
 
+  function stopLoop(l, ms) {
+    if (!loops.has(l) || (ms > 0 && l.stopped)) return;
+    l.stopped = true;
+    clearTimeout(l.stopTimer);
+    if (ms > 0 && l.src) {
+      l.g.gain.cancelScheduledValues(ctx.currentTime);
+      l.g.gain.setTargetAtTime(0.0001, ctx.currentTime, ms / 3000);
+      l.stopTimer = setTimeout(() => stopLoop(l, 0), ms + 50);
+      return;
+    }
+    loops.delete(l);
+    try { l.src?.stop(); } catch { /* already ended */ }
+  }
+
   /** A loop asked for before the first gesture starts on the first gesture. Returns {stop(fadeMs)}. */
   function loop(url, { bus = 'ambient', gain = 1, fadeMs = 1500, pan = 0, source, sourceLabel } = {}) {
     source = registerSource(bus, source, sourceLabel);
     const l = { url, bus, gain, fadeMs, pan, source, src: null, g: null, stopped: false };
     loops.add(l);
     if (armed) startLoop(l);
-    return {
-      stop(ms = 500) {
-        if (l.stopped) return;
-        l.stopped = true; loops.delete(l);
-        if (!l.src) return;
-        l.g.gain.cancelScheduledValues(ctx.currentTime);
-        if (!(ms > 0)) { try { l.src.stop(); } catch { /* already stopped */ } return; }
-        l.g.gain.setTargetAtTime(0.0001, ctx.currentTime, ms / 3000);
-        setTimeout(() => { try { l.src.stop(); } catch { /* already stopped */ } }, ms + 50);
-      },
-    };
+    return { stop(ms = 500) { stopLoop(l, ms); } };
   }
 
   return {
     arm, play, loop, stream, mixer,
     preload(path) { if (armed && path) return load(path); },
-    /** The end of a run: every stream dead at once, whoever started it. */
-    stopStreams() { clearShots(); for (const s of [...streams]) killStream(s); },
+    /** Release playback from the previous scene, including loops still decoding or fading out. */
+    stopStreams() {
+      clearShots();
+      for (const l of loops) stopLoop(l, 0);
+      for (const s of streams) killStream(s);
+    },
     /** The player's own switch. */
     setMuted(v) { muted = !!v; applyLevel(); },
     setVolume(v) {
