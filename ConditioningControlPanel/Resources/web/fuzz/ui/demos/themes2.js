@@ -158,11 +158,17 @@ Object.assign(DEMOS, {
     p.name.style.color = themes2Go.hot;
   },
   go_pals: (k) => {
-    const t = themes2Go; themes2Set(k, t);
-    themes2Txt(k, 10, 12, 220, 'CCP Community', 'font-size:18px;color:' + t.hot);
-    themes2Txt(k, 10, 39, 220, 'Sample counts', 'font-size:11px');
-    themes2Txt(k, 10, 68, 220, 'Discord · 914 online · 8,467 members');
-    themes2Txt(k, 10, 94, 220, 'CCP · 82 active in the last 3 min');
+    k.page('#faf3df url("assets/shop/pencil/rag-paper.webp") center / 210px 168px');
+    const face = 'ShopRound,"Segoe UI",sans-serif';
+    k.add(9, 8, 'width:216px;padding:1px 7px;background:#efc36e;color:#372c3f;transform:rotate(-2deg);font:600 21px ' + face, 'CCP Community');
+    function sample(y, icon, label, counts, color, tilt) {
+      k.add(14, y, 'width:30px;height:30px;border:2px solid #443448;border-radius:9px;box-shadow:1px 2px #443448;background:#fff url("assets/img/brand/' + icon + '") center/contain no-repeat;transform:rotate(' + tilt + 'deg)');
+      k.add(55, y - 1, 'font:600 15px ' + face + ';color:' + color, label);
+      k.add(55, y + 16, 'font:600 11px "Segoe UI",sans-serif;color:#372c3f', counts);
+    }
+    sample(43, 'discord-mark.png', 'Discord', '914 online · 8,467 members', '#5145a9', -7);
+    sample(83, 'ccp-server-icon.png', 'CCP', '82 active in the last 3 min', '#972e66', 5);
+    themes2Txt(k, 61, 126, 118, 'Sample counts', 'background:#5846ac;color:#fff;border-radius:6px;transform:rotate(-1deg)');
   },
   go_end: (k) => {
     const t = themes2Go; themes2Set(k, t);
