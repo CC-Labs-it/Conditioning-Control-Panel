@@ -21,7 +21,7 @@ export function createUiTakeover(ctx) {
   const doc = ctx.button.el.ownerDocument, counter = ctx.parts.counter;
   const targets = new Map();
   let beat = Math.max(0, Math.min(9, Number(ctx.store.get('uiBeat')) || 0));
-  let clock = 0, active = false;
+  let clock = 0, active = false, covered = false;
 
   function wear(button, original, account = false) {
     if (!button || targets.has(button)) return;
@@ -51,15 +51,19 @@ export function createUiTakeover(ctx) {
     const roll = doc.querySelector('#fz-roll > .d:last-child');
     for (const node of [plain, roll]) if (node) writeScore(node, node.textContent, on);
   }
-  function clear() {
-    if (!active) return;
-    active = false;
-    for (const undo of targets.values()) undo();
-    targets.clear();
-    digit(false);
+  function wearItem(el) {
+    wear(el, el.querySelector(':scope > .rep-ico, :scope > .ico, :scope > .dk-i'));
   }
-  function update(seconds, hive) {
-    if (!hive) { clear(); return; }
+  function clear(keepItems = false) {
+    for (const [button, undo] of targets) {
+      if (keepItems && button.isConnected && button.matches('#shop .row[data-id], #dock-strip .dk-chip')) continue;
+      undo(); targets.delete(button);
+    }
+    if (active) digit(false);
+    active = false; covered = false;
+  }
+  function update(seconds, hive, override = false) {
+    if (!hive) { clear(override); return; }
     active = true;
     clock += seconds;
     if (clock >= 2.5) {
@@ -69,10 +73,10 @@ export function createUiTakeover(ctx) {
     if (beat === 0) return;
     for (const [button,undo] of targets) if (!button.isConnected) { undo(); targets.delete(button); }
     const rows = doc.querySelectorAll('#shop .row[data-id]');
-    const take = Math.max(1,beat-2);
+    const take = beat >= 9 ? rows.length : Math.max(1,beat-2);
     for (let i=0; i<Math.min(rows.length,take); i++) {
       const row = rows[i];
-      wear(row, row.querySelector(':scope > .rep-ico, :scope > .ico'));
+      if (!row.hasAttribute('data-et-buzz')) wearItem(row);
     }
     if (beat >= 2) {
       const panel = doc.getElementById('ctl-panel-btn');
@@ -83,7 +87,14 @@ export function createUiTakeover(ctx) {
       const account = doc.getElementById('account-chip');
       if (account) wear(account, account.querySelector('span'), true);
     }
+    if (beat >= 5) {
+      const folded = [...doc.querySelectorAll('#dock-strip .dk-chip[aria-expanded="false"]')];
+      for (const chip of folded.slice(0, beat >= 9 ? folded.length : beat - 4)) {
+        if (!chip.hasAttribute('data-et-buzz')) wearItem(chip);
+      }
+      covered = [...rows, ...folded].every(el => targets.has(el));
+    }
   }
   ctx.cleanup(clear);
-  return { update };
+  return { update, wearItem, get covered() { return covered; } };
 }

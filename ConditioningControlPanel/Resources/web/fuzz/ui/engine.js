@@ -125,7 +125,18 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     scope.els.clear(); scope.timers.clear(); scope.frames.clear(); scope.anims.clear(); scope.loops.clear();
   }
 
+  // Free Will retires the quiz, including its timers, dock tab and any open question.
+  function emiRoams() {
+    return ['go_tx', 'go_will'].every(id => E.has(run, id) && liveOn(run.off, id));
+  }
+  function syncQuiz() {
+    if (!E.has(run, 'quiz') || !liveOn(run.off, 'quiz')) return;
+    if (emiRoams()) unmount('quiz');
+    else if (!scopes.has('quiz')) mount('quiz', true);
+  }
+
   function mount(id, restored = false) {
+    if (id === 'quiz' && emiRoams()) return false;
     const item = BY_ID[id];
     const entry = registry[id];
     if (!item || !entry?.mount) return false;
@@ -203,6 +214,7 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
       restack();
     } else if (on) { mount(id, true); restack(); }
     else unmount(id);
+    if (id === 'go_tx' || id === 'go_will') syncQuiz();
     syncQuiet();
     save();
     emit('switch', { id, on });
@@ -431,6 +443,7 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
       if (liveOn(run.off, r.id)) mount(r.id);
       emit('switch', { id: r.id, on: true });
     }
+    if (id === 'go_tx' || id === 'go_will') syncQuiz();
     PE.tickerHeadStart(run, prestigeOf());   // Unit Complete ending (dr_end): Scrolling Thoughts arrives at Rank 2 (Journey)
     syncQuiet();
     save();
@@ -438,7 +451,17 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     ui.draw?.(true);
   }
 
-  const purchaseHint = id => emiPurchaseHint(run, id);
+  let hiveOrderSize = -1, hiveTookShop = false;
+  function purchaseHint(id) {
+    if (E.has(run, 'go_hive')) {
+      if (hiveOrderSize !== run.order.length) {
+        hiveOrderSize = run.order.length;
+        hiveTookShop = E.heldEnding(run) === 'go_end';
+      }
+      if (hiveTookShop) return 'EMI has the shop. Keep clicking.';
+    }
+    return emiPurchaseHint(run, id);
+  }
   function buy(id, option) {
     if (stopped) return { ok: false, reason: 'ended' };
     const waiting = purchaseHint(id);
@@ -463,6 +486,8 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
   }
 
   function choose(forkId, lane) {
+    const waiting = purchaseHint(forkId);
+    if (waiting) return { ok: false, reason: 'story', line: waiting };
     const res = journey ? journey.choose(forkId, lane, mods) : E.choose(run, forkId, lane, mods);
     if (!res.ok) return res;
     emit('fork', { fork: forkId, lane });
@@ -531,6 +556,7 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
   function grant(id) {
     const added = E.grant(run, id);
     for (const a of added) mount(a);
+    if (added.includes('go_tx') || added.includes('go_will')) syncQuiz();
     syncQuiet();
     ui.draw?.(true);
     return added;

@@ -153,7 +153,10 @@ export function mountBreakout(ctx) {
   const onScreen=()=>visible && host.dock?.visible !== false && !doc.hidden && !ctx.paused && !ending && !dead;
   function measure() {
     const r=canvas.getBoundingClientRect();
-    visible=r.width>0 && r.height>0 && r.bottom>0 && r.right>0 && r.left<doc.defaultView.innerWidth && r.top<doc.defaultView.innerHeight;
+    // A cabinet taken by Override keeps its layout box while the visible game is gone.
+    visible = r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 &&
+      r.left < doc.defaultView.innerWidth && r.top < doc.defaultView.innerHeight &&
+      doc.defaultView.getComputedStyle(canvas).visibility === 'visible';
     audio.audible(onScreen());
     if (!onScreen() && pictures.effects.active) pictures.effects.clear();
   }

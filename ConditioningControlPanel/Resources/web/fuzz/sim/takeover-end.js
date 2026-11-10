@@ -1,12 +1,12 @@
 /* sim/takeover-end.js - EMI Takeover ending (go_end take), the pure part. No DOM. Re-exported by sim/takeover.js.
  *
  * The take (owner notes 2026-11-09 + 2026-11-10, handoff-1109/TC-EMI-TAKEOVER-V3-BRIEF.md):
- *   fill    the front grid arrives row after row like pixels, its screens flashing pictures; behind it EMIs of
+ *   fill    the front grid grows in patches from the walking EMIs, its screens flashing pictures; behind it EMIs of
  *           different sizes pile in from where the swarm stood until no page shows through
  *   shut    every screen goes dark at once
  *   drop    pictures only on the grid pixels of DROP
- *   error   error sound, a small system dialog with the logo, a short shake
- *   waiting everything frozen and silent but a quiet eerie drone; the dialog's OK is live and the take waits for it
+ *   error   a silent, small system dialog with the logo, a short shake
+ *   waiting everything frozen and silent; the dialog's OK is live and the take waits for it
  *           (on its own after WAIT_MAX_S)
  *   giant   OK: a hard shake and a sting, the giant EMI is there at once (jumpscare), blinks, then the cheeky face
  *   close   the eyelid shuts to black (Gentle: a plain fade) */
@@ -29,7 +29,6 @@ export const TAKE = Object.freeze({
   CLOSE_S: 0.3,          // eyelid shut
   DARK_S: 0.7,
   GENTLE_CLOSE_S: 1.2,
-  DRONE_GAIN: 0.16,      // the eerie drone under the wait (Gentle: half)
   STING_GAIN: 0.9,       // the jumpscare sting (Gentle: half)
   FLICKER_MS: [380, 680],        // a front screen changes this often: under 3 times a second
   FLICKER_MS_LITE: [520, 900],
@@ -115,7 +114,17 @@ export function dropGrid({ w, h, controls = null }) {
   return { stacked, cols, rows, pitch, ox, oy, c0, r0, wordC, wordR, cells, readable: !clash(r0) };
 }
 
-/** When front cell k of n arrives: evenly, row after row, from GRID_START_S to FILL_S. */
+/** Start each patch of little screens beside a walking EMI. Indexes still refer to the original DROP mask. */
+export function spreadOrder(grid, seeds, rng = Math.random) {
+  const origins = seeds.length ? seeds : [{ x: grid.ox + grid.cols * grid.pitch / 2, y: grid.oy + grid.rows * grid.pitch }];
+  return grid.cells.map((cell, index) => {
+    const cx = cell.x + grid.pitch / 2, cy = cell.y + grid.pitch / 2;
+    const nearest = Math.min(...origins.map(p => Math.hypot(cx - p.x, cy - p.y)));
+    return { index, distance: nearest + rng() * grid.pitch * 1.5 };
+  }).sort((a, b) => a.distance - b.distance).map(cell => cell.index);
+}
+
+/** When the next front cell arrives between GRID_START_S and FILL_S. */
 export const gridAt = (k, n) => TAKE.GRID_START_S + (TAKE.FILL_S - TAKE.GRID_START_S) * (n > 1 ? k / (n - 1) : 0);
 /** How many front cells have arrived at take time t. */
 export function gridCount(t, n) {

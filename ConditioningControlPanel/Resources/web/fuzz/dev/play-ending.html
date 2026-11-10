@@ -101,7 +101,7 @@ frame.addEventListener('load', () => {
        shop window beside Endless Mode. The trunk fork row stays as the goal; forks and endings are never granted here. */
     // Keep power-ups on EMI's shelf for her to take over during the finale.
     const takeover = endId === 'go_end';
-    if (takeover) fuzz.engine.env.featuredShop.unshift(endId);
+    // Hive Mind is the final purchase. The swarm finishes the run through play.
     let guard = from || takeover || endId === E.FALLBACK_ENDING ? 0 : 240;
     for (;;) {
       const next = guard-- > 0 && E.openItems(run).find((i) => i.kind !== 'end' && i.kind !== 'fork' && i.id !== 'taste2' && !held.has(i.id));   // Second Theme asks a question of its own: leave it as the goal row
@@ -127,8 +127,10 @@ frame.addEventListener('load', () => {
       // The normal shop owns pricing, affordability, the terms card and the purchase.
       // Bring this chain into view while leaving later steps locked behind their parents.
       fuzz.engine.env.featuredShop.unshift(...held);
-      finishPath();
-      fuzz.engine.subscribe('buy', finishPath);
+      if (!takeover) {
+        finishPath();
+        fuzz.engine.subscribe('buy', finishPath);
+      }
       fuzz.ui.draw(true);
       note.remove();
       frame.focus();
@@ -153,7 +155,7 @@ frame.addEventListener('load', () => {
     style.textContent = `#shop [data-id="${endId}"]{outline:4px solid #fff;outline-offset:2px;box-shadow:0 0 0 9px #ff2f9a,0 0 40px #ff2f9a;animation:pe-pulse 1s ease-in-out infinite alternate}
       @keyframes pe-pulse{from{transform:scale(1)}to{transform:scale(1.08)}}`;
     frame.contentDocument.head.appendChild(style);
-    note.innerHTML = `Sound on. The glowing shop tile is <b>${end.name}</b>: buy it, press ${endId === 'go_end' ? 'Let her' : 'Yes'}. Wake Up still works the whole time.`;
+    note.innerHTML = `Sound on. The glowing shop tile is <b>${end.name}</b>: buy it, press Yes. Wake Up still works the whole time.`;
     setTimeout(() => note.classList.add('gone'), 14000);
     frame.focus();
   };

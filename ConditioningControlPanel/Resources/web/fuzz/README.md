@@ -8,7 +8,7 @@ Brief: `handoff-1102/GAME-BUILD-BRIEF.md`. **To add an unlock read `ENGINE.md`.*
 
 ## Run
 
-The shared playtest is [on port 8817](http://127.0.0.1:8817/). [Play the EMI story from Transmission](http://127.0.0.1:8817/fuzz/dev/play-ending.html?end=go_end) to buy the upgrades in the regular shop.
+The shared playtest is [on port 8817](http://127.0.0.1:8817/). [Play the EMI story from Transmission](http://127.0.0.1:8817/fuzz/dev/play-ending.html?end=go_end) to buy her upgrades in the regular shop. Free Will puts away her quiz. Pat or drag any walking copy. Override starts making visible toys and shop icons buzz, shake and turn into EMIs while the player can still buy Hive Mind. Hive Mind is the last purchase. Keep clicking until the crowd has taken the page and the final wave spreads on its own.
 
 ```bash
 cd ConditioningControlPanel/Resources/web/fuzz

@@ -29,9 +29,26 @@ const errors = [];
 const check = (name, ok, info = '') => { if (!ok) failed += 1; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${info ? ' - ' + info : ''}`); };
 const context = await browser.newContext({ viewport: { width: W, height: H }, hasTouch: touch, isMobile: touch, reducedMotion: reduced ? 'reduce' : 'no-preference' });
 const page = await context.newPage();
+await page.addInitScript(() => {
+  const outputs = [], connect = AudioNode.prototype.connect;
+  AudioNode.prototype.connect = function (dest, ...args) {
+    const result = connect.call(this, dest, ...args);
+    if (dest instanceof AudioDestinationNode) {
+      const analyser = this.context.createAnalyser();
+      connect.call(this, analyser);
+      outputs.push(analyser);
+    }
+    return result;
+  };
+  window.endingOutputPeak = () => outputs.length ? Math.max(...outputs.map(analyser => {
+    const samples = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(samples);
+    return samples.reduce((peak, sample) => Math.max(peak, Math.abs(sample)), 0);
+  })) : null;
+});
 page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource|ERR_|navigator\.vibrate/.test(m.text())) errors.push(m.text()); });
-await page.goto(`${base}index.html?buy=go_hive&pictures=online${touch ? '&lite=1' : ''}`, { waitUntil: 'load' });
+await page.goto(`${base}index.html?buy=go_hive,mini_breakout&pictures=online${touch ? '&lite=1' : ''}`, { waitUntil: 'load' });
 await page.waitForFunction(() => window.fuzz?.engine, null, { timeout: 20000 });
 await wait(4000);
 const shot = (name) => page.screenshot({ path: `${shots}/end-${name}-${tag}.png` });
@@ -41,6 +58,7 @@ const wakeOk = () => page.evaluate(() => {
 });
 const swarm = await page.evaluate(() => document.querySelectorAll('.et-emi').length);
 await page.evaluate(() => window.fuzz.engine.audio?.arm?.());
+await page.waitForFunction(() => window.endingOutputPeak() > 0.00001, null, { timeout: 8000 });
 if (auto) await page.evaluate(() => { window.__emiTakeoverWaitS = 3; });
 await page.evaluate(() => window.fuzz.end('go_end'));
 await page.waitForFunction(() => window.__emiTakeoverProbe, null, { timeout: 8000 });
@@ -80,6 +98,7 @@ while (Date.now() - t0 < 90000) {
   if (p.phase === 'waiting' && !waitInfo) {
     /* the wait: frozen, quiet, OK focused; it holds while nobody presses */
     await wait(1200);
+    check('the full-screen waiting dialog has zero audio output', await page.evaluate(() => window.endingOutputPeak() === 0));
     frozenAnims = await page.evaluate(() => {
       const root = document.getElementById('l-ending');
       const a = root.getAnimations({ subtree: true });
@@ -114,7 +133,7 @@ check('shut: every screen dark at once', !!seen.shut, JSON.stringify(seen.shut &
 check('DROP: every lit pixel shows a picture', !!seen.drop && seen.drop.lit === seen.drop.wantLit && seen.drop.readable, JSON.stringify(seen.drop && { lit: seen.drop.lit, want: seen.drop.wantLit }));
 check('the error dialog came with the logo', !!seen.error && seen.error.dialog);
 check('waiting: frozen, nothing running', !!frozenAnims && frozenAnims.running === 0, JSON.stringify(frozenAnims));
-check('waiting: OK focused, drone on, the take holds', !!waitInfo && waitInfo.phase === 'waiting' && waitInfo.focused && waitInfo.drone && waitInfo.heldS > (auto ? 1 : 2.5), JSON.stringify(waitInfo && { phase: waitInfo.phase, focused: waitInfo.focused, drone: waitInfo.drone, held: waitInfo.heldS?.toFixed(1) }));
+check('waiting: OK focused and the take holds', !!waitInfo && waitInfo.phase === 'waiting' && waitInfo.focused && waitInfo.heldS > (auto ? 1 : 2.5), JSON.stringify(waitInfo && { phase: waitInfo.phase, focused: waitInfo.focused, held: waitInfo.heldS?.toFixed(1) }));
 check(auto ? 'nobody pressed: the take went on alone at the dev wait' : `OK pressed (${touch ? 'Enter' : 'mouse'}) ended the wait`, !!seen.giant && seen.giant.okBy === (auto ? 'timeout' : 'ok'), JSON.stringify(seen.giant && { by: seen.giant.okBy, waited: seen.giant.waitedS?.toFixed(1) }));
 check(reduced ? 'Gentle: she fades in, no shake' : 'jumpscare: she is there at once, no fade, with the hard shake', !!jump && (reduced ? !seen.giant.jolted : jump.opacity === '1' && seen.giant.jolted), JSON.stringify(jump));
 check('giant EMI, idle face then a blink', !!seen.giant && seen.giant.big, `blink caught: ${blinkShot}`);

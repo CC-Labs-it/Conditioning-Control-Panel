@@ -2,16 +2,16 @@
  * handoff-1109/TC-EMI-TAKEOVER-V3-BRIEF.md). The run-up rows live in emi-swarm.js.
  *
  * go_end take, one timeline on the game clock (numbers in sim/takeover-end.js):
- *   fill   the front grid arrives row after row like pixels, each screen flashing pictures (under 3 Hz); behind it
+ *   fill   the front grid spreads out from the walking EMIs, each screen flashing pictures (under 3 Hz); behind it
  *          EMIs of different sizes pile in from where the swarm stood until no page shows through
  *   shut   every screen dark at once, about 1 s
  *   drop   pictures only on the grid pixels of DROP (DR over OP on a portrait phone)
- *   error  error sound, a small system dialog with the game logo, a short shake (none under Gentle)
- *   waiting every animation and the page's sound stop; a quiet synthesised drone swells underneath; the dialog's OK
+ *   error  a silent, small system dialog with the game logo, a short shake (none under Gentle)
+ *   waiting every animation and all audio stop. The dialog's OK
  *          (or its x, or Enter/Space) is live and focused, and the take waits for it (on its own after 45 s)
- *   giant  on OK the drone cuts, a hard shake and a sting, and a giant EMI (the shipped idle sprite scaled whole) is
+ *   giant  on OK a hard shake and a sting accompany a giant EMI (the shipped idle sprite scaled whole) is
  *          there in the same frame, slightly too big then settled; she blinks, then ^_~ on body-smug
- *          (owner 2026-11-10; Gentle: no shakes, a 300 ms fade, the sting and drone at half)
+ *          (owner 2026-11-10; Gentle: no shakes, a 300 ms fade, the sting at half volume)
  *   close  the eyelid shuts to black (Gentle: a plain fade). Then the engine goes straight to the recap.
  *
  * No bubbles, nothing follows or gathers round the pointer. Pictures are DOM <img> from ctx.pictures, never a canvas.
@@ -42,7 +42,7 @@ let aborted = false;
 /** True when the last take ended on panic. */
 export const emiTakeoverAborted = () => aborted;
 
-export function emiTakeoverTake(ctx) {
+export function emiTakeoverTake(ctx, releaseWorld) {
   aborted = false;
   const doc = ctx.button.el.ownerDocument, view = doc.defaultView;
   const calm = !!(ctx.gentle || ctx.reduced);
@@ -62,6 +62,7 @@ export function emiTakeoverTake(ctx) {
   const live = liveSwarm();
   const pts = live?.points?.() || [];
   const sz = live?.sizes?.() || [];
+  const spread = T.spreadOrder(grid, pts);
   const seeds = pts.map((p, i) => ({ x: p.x, y: p.y, size: sz[i] || size * 1.6 }));
   live?.hide?.();
   const pile = T.backPile({ w: W, h: Hfull, pitch: size, seeds, controls: walls, lite: LITE });
@@ -70,7 +71,7 @@ export function emiTakeoverTake(ctx) {
 
   return new Promise((resolve) => {
     let done = false;
-    const finish = () => { if (done) return; done = true; drone?.stop(); delete view.__emiTakeoverProbe; resolve(); };
+    const finish = () => { if (done) return; done = true; delete view.__emiTakeoverProbe; resolve(); };
     ctx.on('suspend', (s) => { if (s?.on && s.reason === 'panic') { aborted = true; finish(); } });
 
     const root = ctx.el('div', 'position:absolute;inset:0;overflow:hidden;pointer-events:auto;background:rgba(22,17,13,0);', null, 'ending');
@@ -95,7 +96,8 @@ export function emiTakeoverTake(ctx) {
       if (Math.random() < 0.2) s.show(null); else s.show(pic(Math.floor(rand(0, kinds() * 4))));
       s.at = t + T.flickerGap(Math.random, LITE, gapBack) / 1000;
     };
-    const putFront = (i) => {
+    const putFront = (arrival) => {
+      const i = spread[arrival];
       const cell = grid.cells[i];
       const s = sprite(doc, size);
       s.el.style.transform = `translate(${cell.x.toFixed(1)}px,${cell.y.toFixed(1)}px)`;
@@ -121,14 +123,24 @@ export function emiTakeoverTake(ctx) {
     };
     const every = (fn) => { for (const s of cells) if (s) fn(s); for (const s of backs) if (s) fn(s); };
 
-    let t = 0, phase = 'fill', big = null, dlg = null, err = null, blinks = [], frozen = false, shook = false, jolted = false;
+    let t = 0, phase = 'fill', big = null, dlg = null, blinks = [], frozen = false, shook = false, jolted = false;
     /* dev door: the drive can shorten the wait to prove the take goes on alone (always inside the take's own cap) */
     const waitMaxS = T.clampWait(Number(view.__emiTakeoverWaitS) || T.TAKE.WAIT_MAX_S);
     const pets = bindCopyPets(ctx, () => !done && phase === 'fill');
     const seedN = pile.filter((p) => p.seed).length;
 
+    let worldReleased = false;
+    function cutAudio() {
+      if (worldReleased) return;
+      worldReleased = true;
+      releaseWorld();
+      ctx.audio.solo(true);
+      ctx.audio.silence(true);
+      root.style.clipPath = '';
+    }
     function shut() {
-      pets.clear(); root.style.clipPath = '';
+      cutAudio();
+      pets.clear();
       every((s) => { s.dark(true); s.at = 0; });
       showCredit(false);
     }
@@ -153,7 +165,6 @@ export function emiTakeoverTake(ctx) {
       okAt = t; okBy = by;
     };
     function error() {
-      err = ctx.audio.play('assets/audio/sfx/ui_denied.mp3', { bus: 'sfx', gain: 0.8 });
       const d = T.errorDialog();
       dlg = doc.createElement('div');
       dlg.className = 'et-dlg';
@@ -180,42 +191,6 @@ export function emiTakeoverTake(ctx) {
         ctx.anim(root, [{ transform: 'none' }, { transform: 'translate(5px,-2px)' }, { transform: 'translate(-6px,2px)' }, { transform: 'translate(4px,1px)' }, { transform: 'translate(-3px,-1px)' }, { transform: 'none' }], { duration: T.TAKE.SHAKE_S * 1000 });
         shook = true;
       }
-    }
-
-    /* the eerie drone under the wait: two detuned low hums and a faint fifth through a lowpass, a slow swell.
-     * Synthesised through the kit on this take's own source, so solo keeps it; never a voice. */
-    let drone = null;
-    function startDrone() {
-      const io = ctx.audio.input?.({ bus: 'sfx', gain: 1 });
-      if (!io) return;
-      const ac = io.ac, t0 = ac.currentTime;
-      const level = T.TAKE.DRONE_GAIN * (calm ? 0.5 : 1);
-      const out = ac.createGain(), lp = ac.createBiquadFilter(), swell = ac.createGain(), lfo = ac.createOscillator(), depth = ac.createGain();
-      out.gain.setValueAtTime(0.0001, t0);
-      out.gain.linearRampToValueAtTime(level, t0 + 2.5);
-      lp.type = 'lowpass'; lp.frequency.value = 420; lp.Q.value = 0.7;
-      swell.gain.value = 0.7; lfo.frequency.value = 0.07; depth.gain.value = 0.3;
-      lfo.connect(depth); depth.connect(swell.gain);
-      const oscs = [[55, 'triangle', 0.5], [55.7, 'sine', 0.45], [82.6, 'sine', 0.16], [110.9, 'sine', 0.06]].map(([f, type, g]) => {
-        const o = ac.createOscillator(), og = ac.createGain();
-        o.type = type; o.frequency.value = f; og.gain.value = g;
-        o.connect(og); og.connect(lp);
-        return o;
-      });
-      lp.connect(swell); swell.connect(out); out.connect(io.node);
-      for (const o of [...oscs, lfo]) o.start(t0);
-      let dead = false;
-      drone = {
-        stop() {
-          if (dead) return;
-          dead = true;
-          const n = ac.currentTime;
-          out.gain.cancelScheduledValues(n); out.gain.setValueAtTime(out.gain.value, n); out.gain.linearRampToValueAtTime(0.0001, n + 0.04);
-          for (const o of [...oscs, lfo]) { try { o.stop(n + 0.06); } catch { /* already stopped */ } }
-          ctx.after(150, () => io.stop());
-        },
-      };
-      ctx.cleanup(() => drone?.stop());
     }
 
     /* the sting: a short sharp hit, a thud under a noise crack and a dissonant stab, on the normal sfx bus */
@@ -247,17 +222,16 @@ export function emiTakeoverTake(ctx) {
     function freeze() {
       /* no motion anywhere and the page silent; the dialog's OK is live and takes the focus */
       frozen = true;
-      ctx.audio.solo(true);
-      err?.stop?.(0);
       for (const a of root.getAnimations({ subtree: true })) { if (a.effect?.target === root && a.effect.getKeyframes?.().some((k) => k.backgroundColor)) { a.finish(); continue; } a.pause(); }
-      startDrone();
       dlg?.querySelector('.ok')?.focus({ preventScroll: true });
     }
     function giant() {
-      /* OK: the drone cuts, a hard shake, and she is there in the same frame (the shipped idle sprite, scaled whole) */
-      drone?.stop();
+      /* The jump and its single impact share the first frame after acknowledging the dialog. */
       for (const b of dlg?.querySelectorAll('button') || []) b.disabled = true;
-      sting();
+      if (okBy !== 'timeout') {
+        ctx.audio.silence(false);
+        sting();
+      }
       const bh = Math.min(Hfull * 0.96, W * 1.05), bw = bh * 859 / 869;
       const top = Math.max(0, (Hfull - bh) * 0.5);
       big = sprite(doc, bh, true);
@@ -294,7 +268,7 @@ export function emiTakeoverTake(ctx) {
       lit: cells.filter((c) => c?.lit && c.pic && !c.scr.dataset.off).length, wantLit: grid.cells.filter((c) => c.lit).length,
       dark: [...cells, ...backs].filter((c) => c && c.scr.dataset.off).length, frozen, shook, jolted, dialog: !!dlg?.isConnected,
       waiting: phase === 'waiting', waitedS: okAt != null ? okAt - at.waiting : phase === 'waiting' ? t - at.waiting : null, okBy,
-      waitMaxS, drone: !!drone, focused: doc.activeElement === dlg?.querySelector('.ok'),
+      waitMaxS, focused: doc.activeElement === dlg?.querySelector('.ok'),
       big: !!big?.el.isConnected, face: big?.face || '', pose: big?.poseName || '', credit: !credit.hidden,
     });
 
@@ -304,7 +278,7 @@ export function emiTakeoverTake(ctx) {
     let uiClock = 0;
     ctx.frame((dt) => {
       if (done) return;
-      if (t < at.shut && (uiClock += dt) >= 0.25) {
+      if (!worldReleased && (uiClock += dt) >= 0.25) {
         live?.advanceEndingUi?.(uiClock * 2);
         uiClock = 0;
         // Keep her counter place visible through the filling grid until every little screen shuts.
@@ -317,7 +291,7 @@ export function emiTakeoverTake(ctx) {
       }
       t += dt;
       if (t < at.shut) {
-        /* the fill: front pixels row after row, the back pile behind, every lit screen on its own flash clock */
+        /* the fill: new screens spread outward from the walking copies, the back pile behind, every lit screen on its own flash clock */
         let budget = LITE ? 10 : 24;   // never build the whole screen in one frame
         while (backIn < B && T.backAt(backIn, B, seedN) <= t && budget > 0) { putBack(backIn++); budget -= 1; }
         const want = T.gridCount(t, N);
@@ -325,15 +299,21 @@ export function emiTakeoverTake(ctx) {
         if (!calm) every((s) => { if (s.at && t >= s.at) flash(s, !!s.isBack); });
         if (!calm && t > 0.5) showCredit(true);
         if (calm && t > T.TAKE.GRID_START_S) showCredit(true);
-      } else if (t < at.drop) {
-        /* stragglers on a slow frame budget land now, then every screen goes dark at once */
+        if (backIn === B && gridIn === N) cutAudio();
+        return;
+      }
+      // Run every crossed beat, including on a slow frame with the game clock sped up.
+      if (phase === 'fill') {
         while (backIn < B) putBack(backIn++);
         while (gridIn < N) putFront(gridIn++);
         enter('shut', shut);
-      } else if (t < at.error) enter('drop', drop);
-      else if (t < at.waiting) enter('error', error);
-      else if (!beats) {
-        if (!dlg) error();
+      }
+      if (t < at.drop) return;
+      if (phase === 'shut') enter('drop', drop);
+      if (t < at.error) return;
+      if (!dlg) enter('error', error);
+      if (t < at.waiting) return;
+      if (!beats) {
         enter('waiting', freeze);
         if (okAt == null && t - at.waiting >= waitMaxS) { okAt = t; okBy = 'timeout'; }
         if (okAt != null) beats = T.phaseStarts({ calm, waitS: okAt - at.waiting });

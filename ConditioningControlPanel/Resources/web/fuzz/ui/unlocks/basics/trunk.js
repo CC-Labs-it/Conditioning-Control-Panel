@@ -349,7 +349,7 @@ export default {
       const setGrow = () => docOf(ctx).documentElement.style.setProperty('--tilt-grow', grow());
       setGrow();
       ctx.every(1000, () => { if (ctx.gentle) a.cancel(); setGrow(); });
-      ctx.cleanup(() => docOf(ctx).documentElement.style.removeProperty('--tilt-grow'));
+      ctx.cleanup(() => docOf(ctx).documentElement.style.removeProperty('--tilt-grow'));
       return {};
     },
   },

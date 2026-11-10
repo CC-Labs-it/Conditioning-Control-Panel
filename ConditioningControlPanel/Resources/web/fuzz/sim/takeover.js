@@ -4,8 +4,8 @@
  * The player buys go_tx (one EMI, her screen alternates pictures and her face), go_will (she walks, stops, comments,
  * hops), go_corp (she gets her own budget and buys her own tiles: Amplifier, Overclock, Louder Opinions, Self
  * Replication, then Override), go_hive (the EMIs run the transmission in patterns). After Self Replication each of
- * the player's own manual clicks splits an EMI off a nearby one; once Override is hers (owner 2026-11-10) about half
- * of those clicks turn a page object into an EMI instead (a little bzzz and a shake first). If HIVE MIND is still
+ * the player's manual clicks splits an EMI off a nearby one. Override starts converting visible items on its own.
+ * Clicks can also convert an item. Every conversion has a little buzz and shake first. If HIVE MIND is still
  * unbought FORCE_S after Override, EMI buys it herself (free). Her budget is her own number: nothing is ever taken
  * from the bank. */
 
@@ -27,7 +27,7 @@ export const HER_TILES = Object.freeze([
   Object.freeze({ id: 'h_oc', name: 'Overclock', price: 38, what: 'She walks a little faster and her pictures change a little faster.' }),
   Object.freeze({ id: 'h_loud', name: 'Louder Opinions', price: 42, what: 'She comments more often.' }),
   Object.freeze({ id: 'h_rep', name: 'Self Replication', price: 45, what: 'Your own clicks make more of her.' }),
-  Object.freeze({ id: 'h_over', name: 'Override', price: 45, what: 'Your clicks turn things on the page into her.' }),
+  Object.freeze({ id: 'h_over', name: 'Override', price: 45, what: 'She makes toys and shop icons buzz, then turns them into little EMIs.' }),
 ]);
 const TILE_IDS = HER_TILES.map((t) => t.id);
 
@@ -75,7 +75,8 @@ export function canBuy({ phase, budget, bought = [], sinceBuyS }) {
 
 /** A funded shop row still waits for the part EMI plays herself, including after a reload. */
 export function purchaseHint(run, id) {
-  if (id !== 'go_hive' && id !== 'go_end') return '';
+  if (id === 'go_end') return 'The hive takes it from here. Keep clicking.';
+  if (id !== 'go_hive') return '';
   for (const stage of CHAIN) {
     if (run.owned[stage] && run.off?.[stage]) return 'Switch the EMI upgrades back on so she can finish.';
   }
@@ -83,9 +84,6 @@ export function purchaseHint(run, id) {
   const bag = story?.bag;
   const next = nextTile(bag?.bought);
   if (next) return 'EMI is saving for ' + next.name + ' with her own money.';
-  if (id === 'go_hive') return '';
-  if (!bag?.copies && !bag?.clicked && !bag?.took) return 'Click the main button to make an EMI copy.';
-  if (!(story.uiBeat >= 4)) return 'Watch the EMI screens sync up.';
   return '';
 }
 
@@ -114,6 +112,7 @@ export const REP = Object.freeze({
   CAP: 30,           // EMIs on the page, the first one included
   CAP_LITE: 12,
   CONVERT: 0.5,      // with Override: the share of new EMIs that take a page object's place
+  OVERRIDE_GAP_S: [5, 8], // active time between the items she chooses herself
   BUZZ_MS: 400,      // Override: the object buzzes and shakes this long before an EMI takes its spot
   SOUND_GAP_S: 0.6,  // the bzzz never stacks: at most one this often
 });
@@ -124,8 +123,16 @@ export const repCap = (lite = false) => (lite ? REP.CAP_LITE : REP.CAP);
  *  Only with Override (`override`) does a click ever convert. `objects` = how many page objects could become an
  *  EMI right now; `count` includes the EMIs still on their way in. */
 export function repPress({ now, lastAt = -Infinity, count, lite = false, objects = 0, override = false, rng = Math.random }) {
-  if (now - lastAt < REP.COOL_S || count >= repCap(lite)) return null;
-  return override && objects > 0 && rng() < REP.CONVERT ? 'convert' : 'split';
+  if (now - lastAt < REP.COOL_S) return null;
+  const full = count >= repCap(lite);
+  if (override && objects > 0 && (full || rng() < REP.CONVERT)) return 'convert';
+  return full ? null : 'split';
+}
+
+// The player grows the walking crowd first. Only the final screen-filling wave runs by itself.
+export const hiveCrowd = lite => lite ? 8 : 16;
+export function readyToFill({ count, lite, presses, uiTaken, objects, buzzing }) {
+  return count >= hiveCrowd(lite) && presses >= 4 && uiTaken && !objects && !buzzing;
 }
 
 /** The bzzz: never while one plays, never closer than SOUND_GAP_S to the last. */

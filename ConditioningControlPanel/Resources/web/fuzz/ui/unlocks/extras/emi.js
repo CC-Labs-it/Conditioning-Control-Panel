@@ -3,6 +3,7 @@ export {drawFace} from './emi-face.js';
 /* ui/unlocks/extras/emi.js - EMI herself: the art in assets/img/emi with a face drawn on her screen, one per page.
  * Whoever needs her first (em_head, or Watched on its way in) brings her; every other EMI unlock talks to the same one. */
 
+import { dragLine } from '../../../data/content/emi-takeover.js';
 import { HOLD_SLOP, railWidth } from '../../dock.js';
 import { FONT, h } from './kit.js';
 
@@ -80,7 +81,7 @@ export function getEmi(ctx) {
     ctx.store.setLayout(layoutKey, resting);
   }
   const placements = new Set();
-  let grab = null;
+  let grab = null, lastRide = '';
   const fit = (x, y, scale = 1) => {
     const { w, h } = ctxs.bounds();
     const strip = el.ownerDocument.getElementById('dock-strip')?.offsetHeight || 0;
@@ -218,6 +219,11 @@ export function getEmi(ctx) {
       el.style.transition = 'none';
       el.setAttribute('data-held', '');
       grab.moved = true;
+      if (grab.tapBody) {
+        lastRide = dragLine(false, lastRide);
+        if (!self.napping && !self.blocking) self.mood('glee', 1400);
+        self.say(lastRide, 2100);
+      }
       pos.s = grab.scale;
     }
     const delta = new DOMPoint(dx, dy, 0, 0).matrixTransform(grab.world);
