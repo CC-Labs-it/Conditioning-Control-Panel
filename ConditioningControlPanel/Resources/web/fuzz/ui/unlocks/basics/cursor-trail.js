@@ -55,6 +55,8 @@ export function mountCursorTrail(ctx) {
   }
   const leave=()=>renderer?.leave();
   selectTier();
+  // The stage (ui/stage.js): the one trail canvas fades with the cast; trail, Starburst and Word Comet are one family.
+  ctx.stage.register('trail',s=>{if(canvas)canvas.style.opacity=s>=.999?'':s.toFixed(3);});
   ctx.on('buy',selectTier);ctx.on('switch',selectTier);ctx.on('cursor-style',selectTier);
   win.addEventListener('pointermove',move,{passive:true});
   doc.addEventListener('pointerleave',leave);win.addEventListener('blur',leave);

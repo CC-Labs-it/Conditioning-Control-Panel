@@ -168,7 +168,7 @@ export function tone(ctx, vars) { if (!onDark(ctx) && !ctx.pick('f5')) ctx.vars(
 /* ---- the spiral: one canvas per run, shared by the rows that change it ---- */
 let spiralNow = null;
 export function mountSpiral(ctx, { opacity = 0.6, fadeMs = 1400 } = {}) {
-  const c = ctx.el('canvas', `position:absolute;left:50%;top:50%;width:110vmax;height:110vmax;transform:translate(-50%,-50%);opacity:0;transition:opacity ${fadeMs}ms;`, null, 'back');
+  const c = ctx.el('canvas', `position:absolute;left:50%;top:50%;width:110vmax;height:110vmax;transform:translate(-50%,-50%);opacity:0;transition:opacity ${fadeMs}ms;`, null, ctx.stage.holder('back', 'spiral'));
   const sp = createSpiral(c, { reduced: ctx.gentle, manual: true, ctx });
   sp.show();
   const handle = {

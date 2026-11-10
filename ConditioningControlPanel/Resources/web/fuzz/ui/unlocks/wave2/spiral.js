@@ -9,6 +9,7 @@ export default {
   sp_colors: {
     mount(ctx) {
       spiralBus.use(ctx);
+      ctx.stage.register('spiral');   // its buy is the spirals' solo
       spiralBus.setDrift(true, { arrive: newest(ctx) });
       return { off() { spiralBus.setDrift(false); } };
     },
@@ -17,6 +18,7 @@ export default {
   sp_shapes: {
     mount(ctx) {
       spiralBus.use(ctx);
+      ctx.stage.register('spiral');
       spiralBus.setShapes(true, {
         rng: ctx.rng,
         start: ctx.store.get('at') || 0,
