@@ -86,7 +86,7 @@ export function bakeFaces(doc) {
 }
 
 /** One EMI: the body picture, her screen with a face on it, and a picture slot over the face. */
-export function sprite(doc, size, crisp = false) {
+export function sprite(doc, size, crisp = false, pictures = null) {
   const el = doc.createElement('div');
   el.className = 'et-emi';
   el.style.width = el.style.height = `${size}px`;
@@ -102,6 +102,7 @@ export function sprite(doc, size, crisp = false) {
   picImg.className = 'et-p'; picImg.alt = ''; picImg.referrerPolicy = 'strict-origin'; picImg.decoding = 'async';
   scr.append(faceImg, picImg);
   el.append(body, scr);
+  let lease = null;
   const s = {
     el, body, scr, face: '', poseName: 'body-idle', pic: null,
     setFace(name) { if (name === s.face || !faces[name]) return; s.face = name; faceImg.src = faces[name]; },
@@ -110,16 +111,23 @@ export function sprite(doc, size, crisp = false) {
     show(what) {
       if (what === s.pic) return;
       s.pic = what;
-      if (!what) { delete scr.dataset.pic; scr.style.background = ''; return; }
-      scr.dataset.pic = '1';
-      if (what[0] === '#') { scr.style.background = what; picImg.style.display = 'none'; return; }
+      lease?.release(); lease = null;
+      delete scr.dataset.pic;
       scr.style.background = '';
+      if (!what) { picImg.removeAttribute('src'); return; }
+      if (what[0] === '#') { scr.dataset.pic = '1'; scr.style.background = what; picImg.style.display = 'none'; return; }
       picImg.style.display = '';
-      if (picImg.getAttribute('src') !== what) picImg.src = what;
+      lease = pictures?.acquire({ url: what, kind: 'picture' });
+      picImg.src = lease?.url || what;
+      if (picImg.complete && picImg.naturalWidth) scr.dataset.pic = '1';
     },
     /** The screen switched off: no face, no picture. */
     dark(on) { if (on) { s.show(null); scr.dataset.off = '1'; } else delete scr.dataset.off; },
+    dispose() { s.show(null); sprites.delete(s); },
   };
+  picImg.addEventListener('load', () => {
+    if (s.pic && picImg.complete && picImg.naturalWidth && picImg.getAttribute('src') === (lease?.url || s.pic)) scr.dataset.pic = '1';
+  });
   sprites.add(s);
   s.setFace('0_0');
   return s;
@@ -147,15 +155,37 @@ export function controlsRect(doc, pad = 10) {
   return r && r.width ? { x: r.left - pad, y: r.top - pad, w: r.width + pad * 2, h: r.height + pad * 2 } : null;
 }
 
-/** The player's pictures for EMI screens: a small pool of stills. Empty means plain colour tiles. */
-export async function morePictures(ctx, pool, max) {
-  if (ctx.pick('f3') === 'blind') return;
-  for (let i = pool.length; i < max; i++) {
-    let p = null;
-    try { p = await ctx.pictures.next({ niche: 'goon', still: true, allowScrolller: true }); } catch { p = null; }
-    if (!p?.url || pool.some((q) => q.url === p.url)) break;
-    pool.push({ url: p.url, credit: p.credit || '' });
+/** A display draw uses today's source and its full rotation. Extra EMIs keep their faces when every photo is in use. */
+export function emiPicture(ctx, group, previous, occupied) {
+  if (ctx.pick('f3') === 'blind' || ctx.pictures.source === 'none') {
+    const free = tilesOf(ctx).filter(tile => !occupied.includes(tile));
+    const alternatives = free.filter(tile => tile !== previous);
+    return any(alternatives.length ? alternatives : free) || null;
   }
+  return ctx.pictures.dealStill({
+    group, previousUrl: previous && !previous.startsWith('#') ? previous : null,
+    exclude: occupied.filter(url => url && !url.startsWith('#')), allowScrolller: true,
+  })?.url || null;
+}
+
+// A handful of neighbours share each channel. New copies join the existing broadcasts.
+export const HIVE_CHANNELS = 3;
+export const hiveChannel = index => Math.floor(index / 3) % HIVE_CHANNELS;
+export function hivePictures(ctx, previous, channels) {
+  const picks = [];
+  for (let i = 0; i < channels; i++) {
+    const group = 'emi-hive-' + i;
+    let url = emiPicture(ctx, group, previous[i], picks);
+    if (!url && previous[i]) url = emiPicture(ctx, group, null, picks);
+    picks.push(url || picks.find(pic => pic && pic !== previous[i]) || picks[0] || null);
+  }
+  // The last available still can belong to its old channel. Trade with another channel when both can change.
+  for (let i = 0; i < picks.length; i++) {
+    if (!picks[i] || picks[i] !== previous[i]) continue;
+    const j = picks.findIndex((pic, index) => pic && pic !== picks[i] && previous[index] !== picks[i]);
+    if (j >= 0) [picks[i], picks[j]] = [picks[j], picks[i]];
+  }
+  return picks;
 }
 export const tilesOf = (ctx) => { const p = ctx.palette(); return [...new Set([p.a, p.b, '#f2a33c', '#fff4df'].filter((c) => /^#/.test(c || '')))]; };
 

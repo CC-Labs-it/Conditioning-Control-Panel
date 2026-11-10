@@ -55,7 +55,9 @@ const previewQuery = new URLSearchParams({ buy: buy.join(',') });
 for (const key of ['pictures', 'lite']) {
   if (qs.has(key)) previewQuery.set(key, qs.get(key));
 }
-if (bubble) previewQuery.set('pictures', demoReel ? 'none' : 'scrolller'); // Let the player choose their source in the normal game dialog.
+if (bubble) previewQuery.set('pictures', demoReel ? 'none' : 'scrolller');
+// Without an explicit test source, EMI starts with the normal opt-in picture chooser.
+if (endId === 'go_end' && !qs.has('pictures')) previewQuery.set('pictures', 'scrolller');
 frame.src = '../index.html?' + previewQuery;
 frame.addEventListener('load', () => {
   const t0 = performance.now();

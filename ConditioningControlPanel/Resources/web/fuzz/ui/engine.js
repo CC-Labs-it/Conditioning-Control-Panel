@@ -88,7 +88,7 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
   /* The Living Ad card counts what was dealt to the screens: a picture, gif or clip from the player's feed (not the
    * sample drawings shown with no feed). */
   const dealt = (row) => !!row && typeof row.url === 'string' && !row.url.startsWith('data:');
-  for (const name of ['next', 'rewardBatch', 'stillsForDisplay']) {
+  for (const name of ['next', 'rewardBatch', 'stillsForDisplay', 'dealStill']) {
     const real = pictures[name];
     if (typeof real !== 'function') continue;
     pictures[name] = (...args) => {

@@ -16,7 +16,7 @@ import { LITE, frameRect } from '../../perf.js';
 import { shopDoor } from '../../shop.js';
 import * as T from '../../../sim/takeover.js';
 import { heldEnding } from '../../../sim/economy.js';
-import { SWAY, IDLE_FACES, rand, any, CSS, pose, sprites, bakeFaces, sprite, controlsRect, morePictures, tilesOf, bubble, placeBubble, deskHandoff } from './emi-kit.js';
+import { SWAY, IDLE_FACES, rand, any, CSS, pose, bakeFaces, sprite, controlsRect, emiPicture, HIVE_CHANNELS, hiveChannel, hivePictures, bubble, placeBubble, deskHandoff } from './emi-kit.js';
 import { bindCopyPets } from './emi-pets.js';
 import { createUiTakeover, UI_TAKEOVER_CSS } from './emi-ui-takeover.js';
 import { bindEmiGrab } from './emi-grab.js';
@@ -104,7 +104,7 @@ function mountSwarm(ctx) {
   let t = 0;
   function add(main, at = null) {
     const size = sizeOf(main);
-    const s = sprite(doc, size, size >= 80 || (main && !!desk));
+    const s = sprite(doc, size, size >= 80 || (main && !!desk), ctx.pictures);
     box.appendChild(s.el);
     const spot = at ? { x: clampX(at.x, size), y: clampY(at.y, size) } : freeSpot(size, main);
     const e = Object.assign(s, {
@@ -184,41 +184,56 @@ function mountSwarm(ctx) {
   for (let i = 0; i < bag.copies; i++) add(false);
 
   /* -- pictures on the screens -- */
-  const pics = [];
-  const picMax = LITE ? 4 : 8;
-  morePictures(ctx, pics, LITE ? 3 : 6);
-  ctx.every(40000, () => { if (pics.length < picMax) morePictures(ctx, pics, picMax); });
-  ctx.on('pictures', () => { pics.length = 0; for (const e of emis) { e.show(null); e.mode = 'face'; e.modeUntil = t + rand(1, 3); } morePictures(ctx, pics, LITE ? 3 : 6); });
-  const picFor = (i) => (pics.length ? pics[((i % pics.length) + pics.length) % pics.length].url : tilesOf(ctx)[Math.abs(i) % tilesOf(ctx).length]);
-  let pattern = null, patternUntil = 0, hiveT0 = null;
+  let pattern = null, patternUntil = 0, hiveT0 = null, wave = -1, broadcasts = [];
+  function resetScreens() {
+    wave = -1; broadcasts = [];
+    for (const e of emis) {
+      e.show(null); e.previousPic = null; e.mode = 'face'; e.modeUntil = t + rand(0.4, 1.5);
+    }
+    credit.hidden = true;
+  }
+  ctx.on('pictures', resetScreens);
   function screens() {
     const ph = phase();
     if (ph === 'none') return;
     if (ph === 'hive') {
       if (hiveT0 == null) hiveT0 = t;
       if (t >= patternUntil) { pattern = T.nextPattern(pattern); patternUntil = t + rand(...T.HIVE.ROTATE_S); }
-      const b = ctx.bounds(), period = bag.bought.includes('h_oc') ? T.HIVE.PERIOD_S_FAST : T.HIVE.PERIOD_S;
-      const cx = main.x + main.size / 2, cy = main.y + main.size / 2, diag = Math.hypot(b.w, b.h) || 1;
-      const tt = t - hiveT0;
+      const period = bag.bought.includes('h_oc') ? T.HIVE.PERIOD_S_FAST : T.HIVE.PERIOD_S;
+      const tt = t - hiveT0, nextWave = T.patternPic(tt, period);
+      const channels = Math.min(HIVE_CHANNELS, Math.ceil(emis.length / 3));
+      if (wave !== nextWave || broadcasts.length !== channels) {
+        broadcasts = hivePictures(ctx, broadcasts, channels);
+        wave = nextWave;
+      }
+      const lit = broadcasts.map((url, i) => {
+        const position = (i + 0.5) / channels;
+        return T.patternLit(pattern, { t: tt, period, x01: position, d01: position, i, n: channels, side: i % 2 }) ? url : null;
+      });
       emis.forEach((e, i) => {
-        if (grab.dragging(e) || t < e.dragFaceUntil) return;
-        const ex = e.x + e.size / 2, ey = e.y + e.size / 2;
-        const lit = T.patternLit(pattern, { t: tt, period, x01: ex / (b.w || 1), d01: Math.hypot(ex - cx, ey - cy) / diag, i, n: emis.length, side: ex < b.w / 2 ? 0 : 1 });
-        if (lit === !!e.pic || t - e.lastScreen < T.HIVE.MIN_GAP_S) return;
-        e.show(lit ? picFor(T.patternPic(tt, period)) : null);
-        e.lastScreen = t;
+        const pic = lit[hiveChannel(i)];
+        if (grab.dragging(e) || t < e.dragFaceUntil || e.pic === pic || t - e.lastScreen < T.HIVE.MIN_GAP_S) return;
+        e.show(pic); e.lastScreen = t;
       });
     } else {
-      hiveT0 = null;
-      for (const e of emis) {
-        if (grab.dragging(e) || t < e.dragFaceUntil || t < e.modeUntil || t - e.lastScreen < T.HIVE.MIN_GAP_S) continue;
-        e.mode = e.mode === 'face' ? 'pic' : 'face';
+      if (hiveT0 != null) { hiveT0 = null; resetScreens(); }
+      const occupied = new Set(emis.map(e => e.pic).filter(Boolean));
+      emis.forEach((e, i) => {
+        if (grab.dragging(e) || t < e.dragFaceUntil || t < e.modeUntil || t - e.lastScreen < T.HIVE.MIN_GAP_S) return;
+        if (e.mode === 'pic') {
+          occupied.delete(e.pic);
+          e.show(null); e.mode = 'face';
+        } else {
+          const pic = emiPicture(ctx, 'emi-screen-' + i, e.previousPic, [...occupied]);
+          if (!pic) { e.modeUntil = t + 0.65; return; }
+          occupied.add(pic);
+          e.show(pic); e.previousPic = pic; e.mode = 'pic';
+        }
         e.modeUntil = t + rand(...fx().picS);
-        e.show(e.mode === 'pic' ? picFor(Math.floor(rand(0, 64))) : null);
         e.lastScreen = t;
-      }
+      });
     }
-    credit.hidden = !emis.some((e) => e.pic && pics.some((p) => p.url === e.pic && p.credit));
+    credit.hidden = ctx.pictures.source !== 'scrolller' || !emis.some(e => e.pic && !e.pic.startsWith('#'));
   }
 
   /* -- barks -- */
@@ -720,7 +735,7 @@ function mountSwarm(ctx) {
     for (const d of tabs) d.undisguise?.();   // every tab reads its own name again
     tabs.clear();
     io?.stop();
-    for (const e of emis) sprites.delete(e);
+    for (const e of emis) e.dispose();
     if (desk?.el.isConnected) desk.borrow(false);   // back where she stood, as she was
   });
   return {};

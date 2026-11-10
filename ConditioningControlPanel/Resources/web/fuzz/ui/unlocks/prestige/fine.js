@@ -177,11 +177,12 @@ export default {
       /* ---- Blank ---- */
       if (on.has('blank') && ctx.pictures) {
         const pics = ctx.pictures;
-        const saved = { next: pics.next, rewardBatch: pics.rewardBatch, stillsForDisplay: pics.stillsForDisplay };
+        const saved = { next: pics.next, rewardBatch: pics.rewardBatch, stillsForDisplay: pics.stillsForDisplay, dealStill: pics.dealStill };
         try {
           pics.next = async () => null;
           pics.rewardBatch = () => [];
           pics.stillsForDisplay = () => [];
+          pics.dealStill = () => null;
           ctx.cleanup(() => Object.assign(pics, saved));
         } catch { /* a frozen feed (tests): the rule then only paints */ }
         doc?.documentElement?.classList?.add('fp-blank');

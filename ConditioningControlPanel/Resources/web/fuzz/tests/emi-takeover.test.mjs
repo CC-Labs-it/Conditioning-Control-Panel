@@ -3,10 +3,31 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as T from '../sim/takeover.js';
 import { BY_ID } from '../data/items.js';
+import { createPictures } from '../ui/pictures.js';
+import { hiveChannel, hivePictures } from '../ui/unlocks/themes-b/emi-kit.js';
 import { CONFIG } from '../data/config.js';
 import { EMI_BARKS, EMI_UPGRADE_LINES } from '../data/content/emi-takeover.js';
 
 const has = (...ids) => (id) => ids.includes(id);
+
+test('Hive Mind gives neighbours one channel and rotates each channel on the next wave', () => {
+  const pictures = createPictures({ scrolller: { consent: true } });
+  const ctx = { pictures, pick: () => 'goon' };
+  const rows = ['a','b','c'].map(id => ({kind: 'image', url: 'https://cdn.scrolller.com/' + id + '.jpg'}));
+  pictures.receiveScrolller({v: 1, rows: rows.slice(0, 1)});
+  let previous = hivePictures(ctx, [], 3);
+  assert.deepEqual(previous, [rows[0].url, rows[0].url, rows[0].url]);
+  pictures.receiveScrolller({v: 1, rows});
+  previous = hivePictures(ctx, previous, 3);
+  assert.deepEqual(Array.from({length: 10}, (_, i) => hiveChannel(i)), [0,0,0,1,1,1,2,2,2,0]);
+  for (let i = 0; i < 20; i++) {
+    const next = hivePictures(ctx, previous, 3);
+    assert.equal(new Set(next).size, 3);
+    assert.ok(next.every((url, group) => url !== previous[group]));
+    previous = next;
+  }
+  pictures.setRemoteConsent(false);
+});
 
 test('the four rows sit between Fake Online Count and the goon ending, which keeps its id', () => {
   assert.deepEqual(T.CHAIN, ['go_tx', 'go_will', 'go_corp', 'go_hive']);

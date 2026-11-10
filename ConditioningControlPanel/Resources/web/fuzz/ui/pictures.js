@@ -291,6 +291,13 @@ export function createPictures({ source = null, onChange = () => {}, onAdded = (
   function stillsForDisplay(count,{allowScrolller=false}={}) {
     return [...stillPool(allowScrolller).values()].slice(0,Math.max(0,count)).map(stillRow);
   }
+  // Independent screens share the library, but each has its own rotation and can reserve what others are showing.
+  function dealStill({ group, exclude = [], previousUrl = null, allowScrolller = false }) {
+    const pool = stillPool(allowScrolller);
+    if (previousUrl && pool.size > 1) pool.delete(keyFor(previousUrl));
+    for (const url of exclude) pool.delete(keyFor(url));
+    return drawMedia([...pool.values()].map(stillRow), group, null);
+  }
   function rewardBatch(count=3, preferredUrl=null, signal) {
     if (signal?.aborted) return [];
     const available=stillPool(true);
@@ -322,7 +329,7 @@ export function createPictures({ source = null, onChange = () => {}, onAdded = (
   }
 
   return {
-    rewardBatch, stillsForDisplay, asStill, setGameplayActive,
+    rewardBatch, stillsForDisplay, dealStill, asStill, setGameplayActive,
     acquire: mediaCache.acquire, takePlayer: mediaCache.take,
     noteView() { if (gameplayActive && current === 'scrolller' && consent && scrolller?.playWarmup) send('scrolller-view'); },
     get rewardRevision() { return revision; },

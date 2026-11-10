@@ -175,7 +175,7 @@ export function patternLit(pattern, { t, period = HIVE.PERIOD_S, x01 = 0, d01 = 
   }
 }
 
-/** Which picture of the pool a lit screen shows: one per wave, the same on every screen. */
+/** Wave number: each hive channel deals its next still on this beat. */
 export const patternPic = (t, period = HIVE.PERIOD_S) => Math.floor(t / period);
 
 /* ---- the saved bag ---- */

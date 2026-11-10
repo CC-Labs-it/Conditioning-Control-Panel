@@ -21,7 +21,7 @@ import { bindCopyPets } from './emi-pets.js';
 import { LITE } from '../../perf.js';
 import * as T from '../../../sim/takeover.js';
 import swarmRows, { liveSwarm } from './emi-swarm.js';
-import { IDLE_FACES, rand, any, CSS, bakeFaces, sprite, controlsRect, morePictures, tilesOf } from './emi-kit.js';
+import { IDLE_FACES, rand, any, CSS, bakeFaces, sprite, controlsRect, hivePictures, HIVE_CHANNELS, hiveChannel, tilesOf } from './emi-kit.js';
 
 const TAKE_CSS = `
 .et-front,.et-back{position:absolute;inset:0;pointer-events:none;}
@@ -80,46 +80,41 @@ export function emiTakeoverTake(ctx, releaseWorld) {
     /* the backing only ever shows under Wake Up's corner: everywhere else an EMI covers it */
     ctx.anim(root, [{ backgroundColor: 'rgba(22,17,13,0)' }, { backgroundColor: 'rgba(22,17,13,1)' }], { duration: T.TAKE.BACK_S * 1000, fill: 'both', easing: 'ease-in' });
 
-    const pool = [];
-    morePictures(ctx, pool, LITE ? 3 : 6);
     const tiles = tilesOf(ctx);
-    const pic = (i) => (pool.length ? pool[i % pool.length].url : tiles[i % tiles.length]);
-    const kinds = () => (pool.length || tiles.length);
+    let broadcasts = hivePictures(ctx, [], HIVE_CHANNELS), wave = 0;
+    const pic = i => broadcasts[hiveChannel(i)] || tiles[i % tiles.length];
     const credit = ctx.el('div', 'position:absolute;right:6px;bottom:4px;z-index:5;font:11px var(--font);color:#fff;text-shadow:0 0 2px #000,0 0 2px #000;', 'via Scrolller', root);
     credit.hidden = true;
-    const showCredit = (on) => { credit.hidden = !(on && pool.some((p) => p.credit)); };
+    const showCredit = (on) => { credit.hidden = !(on && ctx.pictures.source === 'scrolller' && broadcasts.some(url => url && !url.startsWith('#'))); };
 
     const cells = new Array(N).fill(null), backs = new Array(B).fill(null);
     let gridIn = 0, backIn = 0;
-    const flash = (s, gapBack) => {
-      /* one screen's next flash: a picture, now and then her face */
-      if (Math.random() < 0.2) s.show(null); else s.show(pic(Math.floor(rand(0, kinds() * 4))));
-      s.at = t + T.flickerGap(Math.random, LITE, gapBack) / 1000;
-    };
+    const transmitting = Array(HIVE_CHANNELS).fill(true), nextFlash = Array(HIVE_CHANNELS).fill(0);
+    const tune = s => s.show(transmitting[hiveChannel(s.station)] ? pic(s.station) : null);
     const putFront = (arrival) => {
       const i = spread[arrival];
       const cell = grid.cells[i];
-      const s = sprite(doc, size);
+      const s = sprite(doc, size, false, ctx.pictures);
       s.el.style.transform = `translate(${cell.x.toFixed(1)}px,${cell.y.toFixed(1)}px)`;
       s.setFace(any(IDLE_FACES));
       s.el.dataset.etPet = '';
-      s.lit = cell.lit;
+      s.lit = cell.lit; s.station = i;
       front.appendChild(s.el);
       cells[i] = s;
       if (calm) { s.show(pic(i)); ctx.anim(s.el, [{ opacity: 0 }, { opacity: 1 }], { duration: 400 }); }
-      else flash(s, false);
+      else tune(s);
     };
     const putBack = (k) => {
       const p = pile[k];
-      const s = sprite(doc, p.size);
+      const s = sprite(doc, p.size, false, ctx.pictures);
       s.el.style.transform = `translate(${p.x.toFixed(1)}px,${p.y.toFixed(1)}px)`;
       s.setFace(any(IDLE_FACES));
       back.appendChild(s.el);
       backs[k] = s;
-      s.isBack = true;
+      s.station = k;
       s.el.dataset.etPet = '';
       if (calm) { if (Math.random() < 0.4) s.show(pic(k)); if (!p.seed) ctx.anim(s.el, [{ opacity: 0 }, { opacity: 1 }], { duration: 500 }); }
-      else { flash(s, true); if (!p.seed && !LITE) ctx.anim(s.el, [{ transform: `${s.el.style.transform} scale(.6)` }, { transform: s.el.style.transform }], { duration: 180, easing: 'ease-out' }); }
+      else { tune(s); if (!p.seed && !LITE) ctx.anim(s.el, [{ transform: `${s.el.style.transform} scale(.6)` }, { transform: s.el.style.transform }], { duration: 180, easing: 'ease-out' }); }
     };
     const every = (fn) => { for (const s of cells) if (s) fn(s); for (const s of backs) if (s) fn(s); };
 
@@ -128,6 +123,13 @@ export function emiTakeoverTake(ctx, releaseWorld) {
     const waitMaxS = T.clampWait(Number(view.__emiTakeoverWaitS) || T.TAKE.WAIT_MAX_S);
     const pets = bindCopyPets(ctx, () => !done && phase === 'fill');
     const seedN = pile.filter((p) => p.seed).length;
+    ctx.cleanup(() => { every(s => s.dispose()); big?.dispose(); });
+    ctx.on('pictures', () => {
+      broadcasts = hivePictures(ctx, [], HIVE_CHANNELS);
+      if (phase === 'fill') every(tune);
+      else if (phase !== 'shut') cells.forEach(s => { if (s?.lit) s.show(pic(s.station)); });
+      showCredit(phase !== 'shut');
+    });
 
     let worldReleased = false;
     function cutAudio() {
@@ -141,7 +143,7 @@ export function emiTakeoverTake(ctx, releaseWorld) {
     function shut() {
       cutAudio();
       pets.clear();
-      every((s) => { s.dark(true); s.at = 0; });
+      every(s => s.dark(true));
       showCredit(false);
     }
     function drop() {
@@ -264,7 +266,7 @@ export function emiTakeoverTake(ctx, releaseWorld) {
 
     view.__emiTakeoverProbe = () => ({
       phase, t, calm, front: N, frontIn: gridIn, back: B, backIn, seeds: seedN, stacked: grid.stacked, cols: grid.cols, rows: grid.rows,
-      readable: grid.readable, pool: pool.length, bubbles: 0,
+      readable: grid.readable, pool: new Set(broadcasts.filter(Boolean)).size, bubbles: 0,
       lit: cells.filter((c) => c?.lit && c.pic && !c.scr.dataset.off).length, wantLit: grid.cells.filter((c) => c.lit).length,
       dark: [...cells, ...backs].filter((c) => c && c.scr.dataset.off).length, frozen, shook, jolted, dialog: !!dlg?.isConnected,
       waiting: phase === 'waiting', waitedS: okAt != null ? okAt - at.waiting : phase === 'waiting' ? t - at.waiting : null, okBy,
@@ -296,7 +298,17 @@ export function emiTakeoverTake(ctx, releaseWorld) {
         while (backIn < B && T.backAt(backIn, B, seedN) <= t && budget > 0) { putBack(backIn++); budget -= 1; }
         const want = T.gridCount(t, N);
         while (gridIn < want && budget > 0) { putFront(gridIn++); budget -= 1; }
-        if (!calm) every((s) => { if (s.at && t >= s.at) flash(s, !!s.isBack); });
+        const nextWave = T.patternPic(t, calm ? 4 : T.HIVE.PERIOD_S);
+        let changed = wave !== nextWave;
+        if (changed) { broadcasts = hivePictures(ctx, broadcasts, HIVE_CHANNELS); wave = nextWave; }
+        for (let channel = 0; !calm && channel < HIVE_CHANNELS; channel++) {
+          if (t < nextFlash[channel]) continue;
+          const on = Math.random() >= 0.2;
+          if (transmitting[channel] !== on) changed = true;
+          transmitting[channel] = on;
+          nextFlash[channel] = t + T.flickerGap(Math.random, LITE, channel === 0) / 1000;
+        }
+        if (changed) every(tune);
         if (!calm && t > 0.5) showCredit(true);
         if (calm && t > T.TAKE.GRID_START_S) showCredit(true);
         if (backIn === B && gridIn === N) cutAudio();
