@@ -2,6 +2,9 @@ import { createBreakout, stepBreakout, snapshot, ballsFor, paddleWidthFor, WIDTH
 import { gameRank } from './game-rank.js';
 import { squashScale } from './breakout-core/contact.js';
 import { bubbleInk } from './canvas-lettering.js';
+/** A board clear asks this many times its reward seconds: it has its own toy budget (CONFIG.TOY_SHARE), and at 8-12 s a
+ *  clear asked for less than a played board earns (2026-11-10). */
+const CLEAR_PAY = 2;
 import { breakoutAudio, createBrickPhoto, drawDrop, drawSpecialBrick } from './breakout-core/presentation.js';
 
 export function mountBreakout(ctx) {
@@ -81,7 +84,7 @@ export function mountBreakout(ctx) {
   function pay(event) {
     // Store the advanced board before crediting. A remount cannot repeat this clearance.
     save();
-    const rates = ctx.rates(), amount = ctx.pay(Math.max(2, rates.fps, rates.click * 2) * event.seconds, 'mini_breakout');
+    const rates = ctx.rates(), amount = ctx.pay(Math.max(2, rates.fps, rates.click * 2) * event.seconds * CLEAR_PAY, 'mini_breakout');
     ctx.emit('sticker', { key: 'brkclear' });   // Sticker Book: Clean Sweep
     receipt.textContent = `+${ctx.fmt(amount)} ${ctx.brand.currencyPlural}${event.manual ? ' · played' : ''}`;
     burst(WIDTH / 2, 75, sim.board % 4, 40); glow = .8;

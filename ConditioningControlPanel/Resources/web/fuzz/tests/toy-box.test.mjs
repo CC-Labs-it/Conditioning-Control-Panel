@@ -3,15 +3,20 @@ import assert from 'node:assert/strict';
 import { advanceBox, BIG_WINDOW, BOX_PRIZE_BASE, BOX_WINDOW, boxInterval, boxPerks, boxPrizeMult, boxPrizeSeconds, boxWindow, createToyBox, dealBox, fitPiece, restoreBox, toyBoxRank, PIECES } from '../ui/unlocks/arcade/toy-box-model.js';
 import { createRun, earn, sideLump } from '../sim/economy.js';
 
-/* Toy Box paid outside the side budget until 2026-11-04 and made half a run's income (dev/measure.mjs). It is weighted now. */
-test('completed boxes pay more each time, from a weighted share of the side budget', () => {
+/* Toy Box paid outside the side budget until 2026-11-04 and made half a run's income (dev/measure.mjs). Since 2026-11-10 it
+ * has its own toy budget (CONFIG.TOY_SHARE): other prizes cannot drain it, and it cannot pay past it. */
+test('completed boxes pay more each time, from the Toy Box budget alone', () => {
   const run = createRun();
-  earn(run, 1e6);
+  run.owned.toy_box = 1; run.order.push('toy_box');
+  for (let t = 0; t < 600; t++) { run.clock += 1000; earn(run, 1000); }
   sideLump(run, 1e6, 'noise');
+  const before = { ...run.side };
   const paid = [0, 1, 10].map((completed) => sideLump(run, boxPrizeSeconds(completed) * 100, 'toy_box'));
   assert.ok(paid[0] < paid[1] && paid[1] < paid[2], `box prizes ${paid}`);
-  assert.ok(paid[0] > boxPrizeSeconds(0) * 100 * 0.2, 'the weight keeps a real part of the ask after other prizes drained the budget');
-  assert.ok(run.side.paid <= run.side.budget + 1e6 * 0.05 + 1, 'the budget holds');
+  assert.equal(paid[0], boxPrizeSeconds(0) * 100, 'drained shared money leaves the Toy Box budget alone');
+  assert.deepEqual(run.side, before, 'the shared side budget is not touched');
+  const pot = run.toys.toy_box;
+  assert.ok(pot.paid <= pot.budget + 1, 'the budget holds');
 });
 
 test('intro has two pieces, later boxes rise to four distinct approved pieces', () => {

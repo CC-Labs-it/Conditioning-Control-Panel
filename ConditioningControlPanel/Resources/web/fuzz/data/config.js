@@ -50,15 +50,28 @@ export const CONFIG = Object.freeze({
   SHOP_MIN: 3,
   SHOP_MAX: 8,
 
-  /** Side money: everything ctx.pay hands out (prizes, lumps, ad clicks) shares a budget of this much of what taps, walls
-   * and per-second pay earned, so it stays about a fifth of a run's income however many side games are on. */
+  /** Side money: everything ctx.pay hands out (prizes, lumps, ad clicks) except the toys in TOY_SHARE shares a budget of
+   * this much of what taps, walls and per-second pay earned, so it stays about a fifth of a run's income. */
   SIDE_SHARE: 0.25,
   /** How much of the budget a prize can claim, per unit it asks for. A choice the player got right should not shrink like a
    * corner hit nobody pressed for. Sources not named here are 1. */
-  SIDE_WEIGHT: Object.freeze({ quiz: 7, levels: 4, golden: 3, toy_box: 5 }),
-  /** Limited coins and crank cooldowns already restrict these prizes: they pay in full. Toy Box paid in full until 2026-11-04 and then made
-   *  half of a run's income on its own (dev/measure.mjs), so it is back inside the budget at a high weight. */
-  FULL_PRIZE_SOURCES: Object.freeze(['mini_slots', 'dispenser']),
+  SIDE_WEIGHT: Object.freeze({ levels: 4, golden: 3 }),
+  /** Sources that pay their ask in full, outside every budget. Empty since the toys got their own budgets (2026-11-10). */
+  FULL_PRIZE_SOURCES: Object.freeze([]),
+  /** Toy budgets (owner 2026-11-10, "active toys pay for attention"): each on-screen game has its own budget, this share of
+   *  what taps, walls and per-second pay earned while the game is owned and switched on, sized by the attention it takes.
+   *  The shares add up to 1, so a player who plays every toy roughly doubles the base income. A toy nobody plays pays
+   *  nothing, and its unused budget never goes to another toy or to the shared side budget. These sources never touch
+   *  SIDE_SHARE: Golden Button, boxes, levels, ads and every other prize keep that one. */
+  TOY_SHARE: Object.freeze({
+    wheel: 0.06, mini_slots: 0.08, quiz: 0.08, mini_race: 0.10,
+    mini_deep: 0.14, mini_breakout: 0.16, dispenser: 0.16, toy_box: 0.22,
+  }),
+  /** A toy's unused budget stops growing at this many seconds of its share of recent income (the last TOY_CAP_S of
+   *  play), so a neglected toy cannot dump a fortune later. */
+  TOY_CAP_S: 180,
+  /** A toy just bought starts with this many seconds of its share of recent income, so its first play pays something. */
+  TOY_START_S: 60,
   /** A prize never pays less than this part of what it asked for, so a press always shows something. */
   SIDE_FLOOR: 0.05,
   /** Value modifiers keep working past these multiples of the plan, at MOD_SLOPE of their strength. A modifier marked
