@@ -75,22 +75,61 @@ export const trunkBoost = (s) => (s.store?.journey ? TRUNK_BOOST ** TRUNK_SHOWS.
  * is kept as the base; the first chapter's targetSeconds in sim/journey.js take the same factor. */
 /* 2026-11-10 (late game wave): 1.47 -> 1.51. Felt ranks bought cheapest-first ran the staying player about 3 minutes ahead
  * of the plan (87 min); 1.51 lands it at 89-90 again. */
-export const JOURNEY_STRETCH = 1.51;
-const BASE_CHAPTERS = [[2.34, 14], [4.91, 28], [9.81, 49], [18.67, 77], [28.26, 102], [38.52, 124], [49.19, 144]];
-export const JOURNEY_CHAPTERS = BASE_CHAPTERS.map(([min, end]) => [min * JOURNEY_STRETCH, end]);
-/* Renewal Sky (2026-11-09): a renewed run is planned to last T_RUN[depth] minutes (data/prestige.js); 90 = the stretch above.
- * The purchase ends stay; only the minutes scale. */
-export const journeyStretch = (minutes = T_RUN[0]) => (minutes === T_RUN[0] ? JOURNEY_STRETCH : JOURNEY_STRETCH * (minutes / T_RUN[0]));
-export const journeyChapters = (minutes = T_RUN[0]) => {
-  const k = journeyStretch(minutes);
-  return k === JOURNEY_STRETCH ? JOURNEY_CHAPTERS : BASE_CHAPTERS.map(([min, end]) => [min * k, end]);
+/* Even beat (owner 2026-11-10, handoff-1110/TC-EVEN-BEAT-BRIEF.md: "a buy about every 30-40 s, pleasant not chaotic"). The
+ * chapter minutes above are replaced by ONE beat on the staying player's clock (4 taps): a quick hook (PACE_HOOK, purchase ->
+ * minute: the four rows before Watch or Listen sell at catalog prices in about 20 s), then the seconds a purchase takes (PACE_GAPS, minute ->
+ * seconds, straight lines between) only ever rise: about 30 s at first, 33-35 s to minute 30 (so 9 buys by minute 3 and at most 22 in the
+ * first 10), 38 s to minute 60, 46 s after. 144 purchases land near minute 90. dev/journey-timing.mjs --windows prints it. */
+export const PACE_HOOK = Object.freeze([[4, .3]]);
+export const PACE_GAPS = Object.freeze([[.3, 31], [3, 34], [28, 35], [32, 38], [58, 39], [62, 46], [120, 48]]);
+export const PLAN_BUYS = 144;
+const lerp = (pts, x) => {
+  if (x <= pts[0][0]) return pts[0][1];
+  for (let i = 1; i < pts.length; i++) if (x <= pts[i][0]) {
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+    return y0 + (y1 - y0) * (x - x0) / (x1 - x0);
+  }
+  return pts.at(-1)[1];
 };
+/** The planned minute of purchase n (1-based) for a run of T_RUN[0] minutes: index 0 is the run start. */
+export const PACE_MINUTES = Object.freeze((() => {
+  const out = [0];
+  const hookBuys = PACE_HOOK.at(-1)[0];
+  for (let n = 1; n <= PLAN_BUYS; n++) {
+    if (n <= hookBuys) out.push(lerp([[0, 0], ...PACE_HOOK], n));
+    else out.push(out[n - 1] + lerp(PACE_GAPS, out[n - 1]) / 60);
+  }
+  return out;
+})());
+/* The plan prices purchases on its own reference income (sim/journey.js fixedRate), which runs ahead of the measured staying
+ * player (browser players also earn route rewards and chapter coupons; the plan's shadow claims banks in full). PLAN_CLOCK maps
+ * the measured minutes above onto that plan clock; tuned with node dev/journey-timing.mjs so 4 taps lands at 88-92 min. */
+export const PLAN_CLOCK = .865;
+/* Renewal Sky (2026-11-09): a renewed run is planned to last T_RUN[depth] minutes (data/prestige.js); every minute scales. */
+export const journeyStretch = (minutes = T_RUN[0]) => minutes / T_RUN[0];
+const CHAPTER_ENDS = [14, 28, 49, 77, 102, 124, 144];
+/** [minute the chapter ends, purchase it ends on], on the staying player's clock. The purchase ends stay. */
+export const journeyChapters = (minutes = T_RUN[0]) => CHAPTER_ENDS.map((end) => [PACE_MINUTES[end] * journeyStretch(minutes), end]);
+export const JOURNEY_CHAPTERS = Object.freeze(journeyChapters());
 export function journeyChapter(s) {
   const purchases = s.buys - Object.keys(s.picks).length;
   const next = JOURNEY_CHAPTERS.findIndex(([, end]) => purchases < end);
   return next < 0 ? JOURNEY_CHAPTERS.length - 1 : next;
 }
 export const passiveRank = id => ['ticker', 'e_spiral', 'a_hum'].includes(id);
+/* Even beat (owner 2026-11-10, handoff-1110/TC-EVEN-BEAT-BRIEF.md): the on-screen toys and games the player meets one at a
+ * time, and the kind of each purchase, so the planner can alternate kinds. */
+export const TOYS = ['wheel', 'mini_slots', 'quiz', 'mini_race', 'boxes', 'mini_breakout', 'mini_deep', 'toy_box', 'dispenser'];
+/** 'copy' (a Bouncing Button copy), 'look', 'rank' (a plain rank row), 'toy' (a new toy or game), 'upgrade' (a game's named
+ *  upgrade or its pick-one), or 'feature'. `id` is a plan row id (rank_<parent>_<n>, spec_*, or an item id). */
+export function buyKind(id, lane) {
+  if (id === 'stray') return 'copy';
+  const rank = /^rank_(.+)_(\d+)$/.exec(id);
+  if (rank) return GAMES.includes(rank[1]) && Number(rank[2]) <= GAME_UPGRADES[rank[1]].length ? 'upgrade' : 'rank';
+  if (SPECIALTIES[id]) return GAMES.includes(SPECIALTIES[id].parent) ? 'upgrade' : 'feature';
+  if (TOYS.includes(id)) return 'toy';
+  return lane === 'look' ? 'look' : 'feature';
+}
 /** The shop name of rank row `rank` (1 = the second level) of `name`: a game's first two are its named upgrades. */
 export function rankName(id, rank, name) {
   const up = gameUpgrade(id, rank);

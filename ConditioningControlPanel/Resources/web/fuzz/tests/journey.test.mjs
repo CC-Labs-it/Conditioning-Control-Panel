@@ -56,7 +56,7 @@ test('a different specialization changes the right hit; a missing option never c
     } = shop.shop(6);
     if ([goal, ...rows].some(it => it?.id === 'spec_rebounds')) break;
     if (goal.kind === 'fork') {
-      shop.choose(goal.id, { f1:'eyes', f5:'trance', f3:'scroll' }[goal.id]);
+      shop.choose(goal.id, { f1:'eyes', f5:'trance', f3:'scroll', f2:'sweet' }[goal.id]);  // even beat: Rest or Tap now comes before the specialty
     } else {
       shop.buy(goal.id);
     }
@@ -91,6 +91,6 @@ test('different first runs retain their ranks and choices after a save and reach
       f5
     });
     assert.ok(r.buys >= 140 && r.max < 270, JSON.stringify([r.buys, r.max]));
-    assert.ok(r.minutes > 70 && r.minutes < 150, `${r.minutes} min: owner 2026-11-09, about 90 staying (JOURNEY_STRETCH 1.51)`);
+    assert.ok(r.minutes > 70 && r.minutes < 150, `${r.minutes} min: owner 2026-11-09, about 90 staying (even beat, PACE_GAPS)`);
   }
 });

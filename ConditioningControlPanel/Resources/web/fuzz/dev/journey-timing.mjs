@@ -1,9 +1,11 @@
-// Run with node dev/journey-timing.mjs [--all] [--games] [--ranks]. Elapsed time is active play.
-//   --games: the minute each on-screen game arrives (4 taps); --ranks: how much one rank row lifts total income when bought.
+// Run with node dev/journey-timing.mjs [--all] [--games] [--ranks] [--windows]. Elapsed time is active play.
+//   --games: the minute each on-screen game arrives (4 taps); --ranks: how much one rank row lifts total income when bought;
+//   --windows: buys and mean gap per 10 minutes (4 taps), plus the order checks of the even beat (kinds in a row, looks,
+//   copies, toys, plain ranks in the last 30 minutes).
 import { pathToFileURL } from 'node:url';
 import { allRoutes } from '../sim/route.js';
 import { createJourney, EXTRAS } from '../sim/journey.js';
-import { takeActivity, bankRate, trunkBoost, GAMES } from '../sim/journey-effects.js';
+import { takeActivity, bankRate, trunkBoost, buyKind, GAMES, TOYS } from '../sim/journey-effects.js';
 import * as E from '../sim/economy.js';
 import { BY_ID } from '../data/items.js';
 export function measureJourney(picks, {
@@ -88,12 +90,50 @@ export function measureJourney(picks, {
     s
   };
 }
+/** Buys and mean gap (s) per `size`-minute window of a measured run. */
+export function windows(report, size = 10) {
+  const out = [];
+  for (const p of report.paid) {
+    const w = Math.floor(p.at / 60 / size);
+    (out[w] ||= { from: w * size, buys: 0, gaps: 0 });
+    out[w].buys++;
+    out[w].gaps += p.gap;
+  }
+  return Array.from(out, (w, k) => w ? { ...w, mean: w.gaps / w.buys } : { from: k * size, buys: 0, gaps: 0, mean: 0 });
+}
+/** The even beat order checks on a measured run (owner 2026-11-10, handoff-1110/TC-EVEN-BEAT-BRIEF.md). */
+export function orderReport(report) {
+  const kinds = report.paid.map(p => buyKind(p.id, BY_ID[p.id]?.lane));
+  let run = 1, longest = { n: 1, kind: kinds[0], at: 1 }, copyRun = 0, copyLongest = 0, looks4 = 0;
+  for (let i = 1; i < kinds.length; i++) {
+    run = kinds[i] === kinds[i - 1] ? run + 1 : 1;
+    if (run > longest.n) longest = { n: run, kind: kinds[i], at: i + 1 };
+  }
+  for (const k of kinds) { copyRun = k === 'copy' ? copyRun + 1 : 0; copyLongest = Math.max(copyLongest, copyRun); }
+  for (let i = 0; i + 4 <= kinds.length; i++) looks4 = Math.max(looks4, kinds.slice(i, i + 4).filter(k => k === 'look').length);
+  const copiesBy15 = report.paid.filter(p => p.id === 'stray' && p.at <= 15 * 60).length;
+  const toyAt = report.paid.map((p, i) => [p.id, i]).filter(([id]) => TOYS.includes(id)).map(([, i]) => i);
+  const toyGap = Math.min(...toyAt.slice(1).map((n, k) => n - toyAt[k]));
+  const end = report.minutes * 60 - 30 * 60, late = kinds.filter((k, i) => report.paid[i].at > end);
+  return { longest, copyLongest, looks4, copiesBy15, toyGap, lateRanks: late.filter(k => k === 'rank').length, lateBuys: late.length };
+}
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const routes = allRoutes().filter((_, i) => process.argv.includes('--all') || [0, 39, 84, 125, 159, 190].includes(i));
+  if (process.argv.includes('--windows')) {
+    for (const [i, r] of routes.entries()) {
+      const rep = measureJourney(r, { taps: 4, share: .125, option: i % 2 });
+      const w = windows(rep).map(x => x.buys + '/' + Math.round(x.mean) + 's').join(' ');
+      const o = orderReport(rep);
+      const first3 = rep.paid.filter(p => p.at <= 180).length;
+      console.log(Object.values(r).join('/').padEnd(36), rep.minutes.toFixed(1), 'min | first 3 min', first3, '| per 10 min', w, '| max gap', Math.round(rep.max) + 's');
+      console.log(' '.repeat(36), 'longest same kind', o.longest.n, o.longest.kind, '@' + o.longest.at, '| copies in a row', o.copyLongest, '| looks in 4', o.looks4, '| copies by min 15', o.copiesBy15, '| toy gap', o.toyGap, '| plain ranks last 30 min', o.lateRanks + '/' + o.lateBuys);
+    }
+    process.exit(0);
+  }
   if (process.argv.includes('--games') || process.argv.includes('--ranks')) {
     const reports = routes.map((r, i) => measureJourney(r, { taps: 4, share: .125, option: i % 2 }));
     if (process.argv.includes('--games')) {
-      for (const id of ['gold', ...GAMES, 'boxes']) {
+      for (const id of ['gold', ...TOYS]) {
         const at = reports.map(r => r.paid.findIndex(p => p.id === id)).map((n, k) => n < 0 ? null : [n + 1, reports[k].paid[n].at / 60]);
         const firstRank = reports.map(r => r.paid.findIndex(p => p.id === 'rank_' + id + '_1')).map((n, k) => n < 0 ? null : n + 1);
         const mins = at.filter(Boolean).map(a => a[1]);
