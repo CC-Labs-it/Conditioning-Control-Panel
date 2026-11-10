@@ -82,33 +82,17 @@ frame.addEventListener('load', () => {
     if (from) {
       const want = Math.round([...held].reduce((sum, id) => sum + E.price(run, id), 0) * 1.1);
       if (run.fuzz < want) fuzz.add(want - run.fuzz);
-      /* The row may sit behind cheaper shop tiles: one button buys the next step of the chain, in order. */
-      const steps = [...held].reverse();
-      const bar = document.createElement('div');
-      bar.style.cssText = 'position:fixed;left:50%;top:8px;transform:translateX(-50%);z-index:10;display:flex;gap:8px;align-items:center;background:#fff;border:2px solid #ff2f9a;border-radius:10px;padding:6px 10px;box-shadow:0 4px 18px rgba(0,0,0,.35);font:600 14px Segoe UI,sans-serif;color:#301c33';
-      const label = document.createElement('span');
-      const next = document.createElement('button');
-      next.style.cssText = 'padding:6px 12px;min-height:36px;font:inherit;cursor:pointer;background:#ff2f9a;color:#fff;border:0;border-radius:6px';
-      bar.append(label, next);
-      document.body.appendChild(bar);
-      let k = 0;
-      const draw = () => {
-        while (k < steps.length && E.has(run, steps[k])) k += 1;
-        if (k >= steps.length) { bar.remove(); return; }
-        label.textContent = `Step ${k + 1} of ${steps.length}`;
-        next.textContent = `Buy: ${BY_ID[steps[k]].name}`;
+      // The normal shop owns pricing, affordability, the terms card and the purchase.
+      // Bring this chain into view while leaving later steps locked behind their parents.
+      fuzz.engine.env.featuredShop.unshift(...held);
+      const finishPath = () => {
+        if (!from || !end.req.every(id => E.has(run, id))) return;
+        for (const id of BY_ID.drop.req) fuzz.grant(id);
       };
-      next.addEventListener('click', () => {
-        fuzz.engine.audio.arm();
-        const id = steps[k], p = E.price(run, id);
-        if (run.fuzz < p) fuzz.add(p - run.fuzz + 1);
-        fuzz.buy(id);
-        frame.focus();
-        draw();
-      });
-      draw();
-      note.innerHTML = `Sound on. Press <b>Buy: ${from.name}</b> at the top to start, then each next step when you want it. The pink tiles in the shop still work as normal. Wake Up still works the whole time.`;
-      setTimeout(() => note.classList.add('gone'), 14000);
+      finishPath();
+      fuzz.engine.subscribe('buy', finishPath);
+      fuzz.ui.draw(true);
+      note.remove();
       frame.focus();
       return;
     }

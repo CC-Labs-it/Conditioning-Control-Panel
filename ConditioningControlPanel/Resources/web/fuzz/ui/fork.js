@@ -13,6 +13,8 @@ function loadDemos() {
     await Promise.all([import('./demos/basics.js'), import('./demos/routes.js'), import('./demos/themes1.js'), import('./demos/themes2.js'), import('./demos/extras.js'), import('./demos/wave2-spiral.js'), import('./demos/wave2-edges.js'), import('./demos/wave2-meta.js'), import('./demos/score-heat.js'), import('./demos/deep-end.js'), import('./demos/sissy-late.js'), import('./demos/double-wield.js'), import('./demos/warp-tunnel.js')]);
     const {registerTrailDemos} = await import('./demos/trail-upgrades.js');
     registerTrailDemos();
+    const { registerEmiUpgradeDemos } = await import('./demos/emi-upgrades.js');
+    registerEmiUpgradeDemos();
     return Demo;
   })();
   return demos;

@@ -54,9 +54,9 @@ const LATE_ROWS = [
   /* Owner 2026-11-09, EMI Takeover v3 (handoff-1109/TC-EMI-TAKEOVER-V3-BRIEF.md): four rows between Fake Online Count and
    * the goon ending. Her screen transmits, she walks on her own, she founds a startup and buys her own tiles (Self
    * Replication among them), then the EMIs run the transmission together (ui/unlocks/themes-b/emi-swarm.js). */
-  { after: 'go_pals', id: 'go_tx', emoji: '📺', name: 'Transmission', what: 'EMI shows up and stays put. Her screen shows your pictures, then her face, then pictures again.', line: 'Now showing: you, staring.', cost: 780000, lane: 'goon', req: ['go_pals'], pay: 'c', click: 300 },
+  { after: 'go_pals', id: 'go_tx', emoji: '📺', name: 'Transmission', what: 'Drag EMI anywhere. Her screen switches between your pictures and her face.', line: 'Now showing: you, staring.', cost: 780000, lane: 'goon', req: ['go_pals'], pay: 'c', click: 300 },
   { after: 'go_tx', id: 'go_will', emoji: '💭', name: 'Give EMI FREE WILL', what: 'EMI walks around on her own. She stops, comments, hops now and then.', line: 'It feels like wanting snacks.', cost: 930000, lane: 'goon', req: ['go_tx'], pay: 'f', fps: 1700 },
-  { after: 'go_will', id: 'go_corp', emoji: '💼', name: 'Founded Startup', what: 'EMI gets a budget of her own and buys her own upgrades with it. Never with your money.', line: 'The pitch deck is her face.', cost: 1120000, lane: 'goon', req: ['go_will'], pay: 'c', click: 380 },
+  { after: 'go_will', id: 'go_corp', emoji: '💼', name: 'Founded Startup', what: 'EMI starts a business. Watch her pouch fill, then watch her spend it on upgrades.', line: 'The pitch deck is her face.', cost: 1120000, lane: 'goon', req: ['go_will'], pay: 'c', click: 380 },
   { after: 'go_corp', id: 'go_hive', emoji: '🐝', name: 'HIVE MIND', what: 'The EMIs agree with each other. Their screens move together, in patterns.', line: 'They voted. You were a yes.', cost: 1350000, lane: 'goon', req: ['go_corp'], pay: 'f', fps: 2100 },
 ];
 function addLate(rows) {
