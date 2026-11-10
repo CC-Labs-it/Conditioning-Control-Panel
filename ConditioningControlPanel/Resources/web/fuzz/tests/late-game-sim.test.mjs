@@ -15,14 +15,16 @@ const minuteOf = (id) => run.paid.find((p) => p.id === id).at / 60;
 const indexOf = (id) => run.paid.findIndex((p) => p.id === id) + 1;
 
 test('games arrive slowly, in the owner order, and the run keeps its length', () => {
-  const want = { gold: [1.5, 3], wheel: [3, 5.5], mini_slots: [9.5, 13], mini_race: [16.5, 20], boxes: [22, 26], mini_breakout: [26, 30], mini_deep: [36, 40], toy_box: [47, 53], dispenser: [60, 66] };
+  // Even beat (owner 2026-11-10, handoff-1110/TC-EVEN-BEAT-BRIEF.md): Wheel ~4, Slots ~9, Pop-Up Question ~12, Race ~15,
+  // Boxes ~19, Breakout ~22, Deep End ~30, Toy Box ~44, Dispenser ~56, each within about 2 minutes.
+  const want = { gold: [1, 3], wheel: [2, 6], mini_slots: [7, 11], quiz: [10, 14], mini_race: [13, 17], boxes: [17, 21], mini_breakout: [20, 24.5], mini_deep: [28, 32], toy_box: [42, 46], dispenser: [54, 58] };
   for (const [id, [lo, hi]] of Object.entries(want)) {
     const m = minuteOf(id);
     assert.ok(m >= lo && m <= hi, `${id} arrives at minute ${m.toFixed(1)}, wanted ${lo}-${hi}`);
   }
   assert.ok(minuteOf('dispenser') > minuteOf('mini_slots'));
   assert.ok(run.minutes > 87 && run.minutes < 94, `${run.minutes} min`);
-  assert.ok(run.max < 90, `longest gap ${run.max} s`);
+  assert.ok(run.max <= 60.5, `longest gap ${run.max} s`);
 });
 
 test('a game rank waits SAVOUR_BUYS purchases after its game, and games stop at four ranks', () => {
