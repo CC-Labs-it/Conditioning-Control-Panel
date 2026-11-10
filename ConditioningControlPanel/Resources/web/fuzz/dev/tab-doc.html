@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="strict-origin">
+  <title>A Natural History of the Tab</title>
+  <link rel="icon" href="data:,">
+  <script type="importmap">{"imports":{"three":"../../vendor/three/three.module.min.js"}}</script>
+  <style>
+    html,body { margin:0;height:100%;overflow:hidden;background:#0b080a;color:#efe9dc;font:14px Georgia,serif; }
+    #l-ending { position:fixed;inset:0; }
+    #wake { position:fixed;right:15px;top:15px;z-index:100;min-height:44px;padding:10px 18px;border:1px solid #b4a179;border-radius:5px;background:#efe9dc;color:#2a2320;cursor:pointer; }
+    #preview { position:fixed;left:12px;top:14px;z-index:90; }
+    #preview summary { cursor:pointer;padding:12px;background:#211813d9;border:1px solid #79613c;font:12px Arial,sans-serif; }
+    #preview nav { display:flex;flex-wrap:wrap;max-width:270px;gap:8px;padding:12px;background:#211813; }
+    #preview a,#preview button { padding:7px;color:#eee0c0;border:1px solid #79613c;background:#32251b;text-decoration:none;cursor:pointer; }
+    #preview p { max-width:250px;margin:0;padding:10px;font:12px/1.4 Arial,sans-serif;background:#211813; }
+    #pause,#finished { position:fixed;inset:0;z-index:110;background:#100b09eb;display:grid;place-content:center;text-align:center;gap:15px;padding:25px; }
+    [hidden] { display:none!important; }
+    #pause button,#finished a { min-height:44px;padding:12px 22px;background:#efe9dc;color:#2a2320;border:1px solid #a7824a;text-decoration:none;cursor:pointer;font:16px Georgia,serif; }
+  </style>
+</head>
+<body>
+  <main id="l-ending"></main>
+  <button id="wake">Wake Up</button>
+  <details id="preview"><summary>Ride preview</summary><nav>
+    <a href="?at=booth">Booth</a><a href="?at=lever">Lever</a><a href="?at=floorboard">Floorboard</a><a href="?at=wakeup">Wake Up case</a><a href="?at=stage">Stage</a>
+    <button id="unlock">Leave platform</button><button id="panic">End preview</button>
+  </nav><p>Silent preview. Illustrations and recorded narration connect through the exhibit manifest and cue hooks.</p></details>
+  <section id="pause" hidden><h1>Paused</h1><button id="resume">Resume</button><button id="stop">End preview</button></section>
+  <section id="finished" hidden><h1>The preview has ended</h1><p>The game continues to the run recap here.</p><a href="tab-doc.html">Board again</a></section>
+  <script type="module" src="tab-doc.js"></script>
+</body>
+</html>
