@@ -3,12 +3,11 @@
 
 import { moan } from '../moan.js';
 import { BY_ID } from '../../../data/items.js';
-import { THEMES, ENDINGS } from '../../../data/content/index.js';
+import { THEMES } from '../../../data/content/index.js';
 import { mountPodcast } from '../podcast-player.js';
 import { bag, geo, counterEl, sheet, done, frame, shopWords, pick, gentleSwitch } from './kit.js';
 import { themeScreens } from './theme-screens.js';
-import { endingShow } from './endings.js';
-import { bimbodollTake, bimbodollAborted } from './bimbodoll.js';
+import { playBimbodoll } from './bambi-interior.js';
 import { COPY } from './copy.js';
 import { THEME_PAGES } from '../../palette.js';
 import { setRich } from '../../rich-text.js';
@@ -298,12 +297,11 @@ export default {
     },
   },
 
-  /* Bimbodoll: the bubble swallows the page (take, before the fade, ./bimbodoll.js), a black fade, then the card. Panic
-   * during the take ends it at once: no pop, no card. */
   bi_end: {
     mount() { return {}; },
     fadeColour: '#000',
-    take(ctx) { return bimbodollTake(ctx); },
-    ending(ctx) { return bimbodollAborted() ? Promise.resolve() : endingShow(ctx, ENDINGS.bi_end, 'bimbo'); },
+    fadeMs: 0,
+    takeMaxMs: 150000, // Allow the full unassisted swallow and the 30-second interior.
+    take: playBimbodoll,
   },
 };

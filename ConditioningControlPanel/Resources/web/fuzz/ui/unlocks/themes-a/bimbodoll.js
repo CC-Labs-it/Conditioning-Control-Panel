@@ -1,6 +1,6 @@
 /* Bimbodoll (bi_end): the button becomes a pink bubble, pink fog creeps in from the edges, and the bubble grows until it
  * has swallowed the whole page, then pops. Runs as the ending's take phase (ENGINE.md), while the page is still mounted
- * and frozen; ui/unlocks/themes-a/endings.js bimbo() is the card after the pop.
+ * and frozen. The prepared bubble interior follows the pop.
  *
  * The real nodes are only moved and shrunk (individual translate/scale, opacity), never removed: unmountAll after the
  * fade puts every object away as in every other ending. A taken node's own translate/scale is kept and composed with the
@@ -333,7 +333,7 @@ function popSound(ctx, decoded) {
   setTimeout(() => io.stop(), 4500);
 }
 
-export function bimbodollTake(ctx) {
+export function bimbodollTake(ctx, readyForPop = () => true) {
   aborted = false;
   const doc = ctx.world?.ownerDocument || document;
   const gentle = () => ctx.gentle || ctx.reduced;
@@ -348,6 +348,7 @@ export function bimbodollTake(ctx) {
   return new Promise((resolve) => {
     let done = false;
     const finish = () => { if (done) return; done = true; resolve(); };
+    ctx.cleanup(finish);
 
     /* Layers on the ending layer: fog, a click catcher, the bubble, and the black at the end. */
     const fog = ctx.el('canvas', 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;', null, 'ending');
@@ -569,7 +570,8 @@ export function bimbodollTake(ctx) {
         const now = nextTakes(cands, cx, cy, b.r);
         now.forEach((c, i) => take(c, i * 0.06));
         if (b.popped && popAt === Infinity) swallowLast();
-        if (b.t >= popAt) pop();
+        // If a selected clip is still decoding, keep the live bubble on screen for a short final hold.
+        if (b.t >= popAt && (readyForPop() || b.t >= popAt + 4)) pop();
       } else b.t += dt;
       if (!popped) {
         for (const c of cands) c.now = c.taken && !c.released && b.t >= c.t0 ? frameRect(c.el) : null;   // reads first,

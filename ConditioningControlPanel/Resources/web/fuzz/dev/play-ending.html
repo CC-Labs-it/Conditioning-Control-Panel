@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Play an ending</title>
+<link rel="icon" href="../assets/img/bubble.png">
 <style>
   :root { color-scheme:light; font:15px/1.4 'Segoe UI',sans-serif; color:#301c33; background:#f8f3f7 }
   * { box-sizing:border-box } html,body { margin:0; height:100% }
@@ -14,6 +15,7 @@
   #note.gone { opacity:0; pointer-events:none }
   #note b { color:#9a2a74 }
   #note button { padding:8px 14px; min-height:44px; font:inherit; font-weight:600; cursor:pointer }
+
 </style>
 </head>
 <body>
@@ -35,13 +37,46 @@ const basics = ['colour', 'font', 'sound', 'rounded', 'softw', 'a_rain', 'v_fram
 const extra = (qs.get('buy') || '').split(',').map((s) => s.trim()).filter(Boolean);
 const buy = [...new Set([...end.req, ...basics, ...extra])]; // the theme chain first: a side item that needs the theme fork would otherwise pick its first option
 const frame = document.getElementById('game');
-frame.src = `../index.html?buy=${buy.join(',')}`;
+const demoReel = qs.get('reel') === 'demo' && ['localhost','127.0.0.1'].includes(location.hostname);
+const bubble = endId === 'bi_end';
+if (bubble) note.hidden = true;
+const previewQuery = new URLSearchParams({ buy: buy.join(',') });
+if (bubble) previewQuery.set('pictures', demoReel ? 'none' : 'scrolller'); // Let the player choose their source in the normal game dialog.
+frame.src = '../index.html?' + previewQuery;
 frame.addEventListener('load', () => {
   const t0 = performance.now();
-  const tick = () => {
+  const tick = async () => {
     const fuzz = frame.contentWindow?.fuzz;
     if (!fuzz) { if (performance.now() - t0 < 20000) return void setTimeout(tick, 100); note.textContent = 'The game did not start.'; return; }
     const run = fuzz.state;
+    if (bubble) {
+      // The source chooser starts this in-memory run. Its first real clock tick means the toys are mounted.
+      if (!run.clock) return void setTimeout(tick, 100);
+      if (demoReel) {
+        try {
+          const files = await Promise.all([1, 2, 3, 4].map(async n => {
+            const filename = `demo-${n}.webm`;
+            const response = await fetch(`./bambi-demo/${filename}`);
+            if (!response.ok) throw new Error(filename);
+            return new frame.contentWindow.File([await response.blob()], filename, { type: 'video/webm' });
+          }));
+          fuzz.engine.pictures.addOwn(files);
+          fuzz.engine.pictures.setSource('own');
+        } catch {
+          note.hidden = false;
+          note.textContent = 'The sample clips could not load. Reload to retry.';
+          return;
+        }
+      }
+      fuzz.add(Math.max(0, fuzz.engine.price(endId) - run.fuzz) + 1);
+      // Let each widget finish its first layout before freezing the page for the swallow.
+      frame.contentWindow.requestAnimationFrame(() => frame.contentWindow.requestAnimationFrame(() => {
+        fuzz.engine.audio.arm();
+        if (fuzz.buy(endId).ok) { note.remove(); frame.focus(); frame.contentWindow.focus(); }
+        else { note.hidden = false; note.textContent = 'The ending could not start. Reload to retry.'; }
+      }));
+      return;
+    }
     /* Buy out everything else that is open (riders open more rows, so loop), so the ending is the only tile left in the
        shop window beside Endless Mode. The trunk fork row stays as the goal; forks and endings are never granted here. */
     let guard = 240;

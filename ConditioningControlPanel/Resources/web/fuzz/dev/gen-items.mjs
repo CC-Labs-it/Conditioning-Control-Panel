@@ -142,6 +142,7 @@ const BUTTON_NAMES = {
   lo_pad:'Keyholder Support', ce_bar:'Redacted Button',
 };
 const WHAT_OVERRIDE = {
+  bi_end: 'The bubble swallows the page. When it pops, float inside beneath a sky of moving pictures.',
   bi_lips:'Sign in with Bambi Cloud. The button already knows your name.',
   dr_hex:'Tap to download drone firmware. Tap again to install the user.',
   tr_skin:'A fortune ball swings on its chain. Tap on center for a reading and extra click income.',

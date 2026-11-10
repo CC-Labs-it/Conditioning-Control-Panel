@@ -57,7 +57,7 @@ export const ENDINGS = Object.freeze({
     link: link('More of this, without the counting, in CCP'),
   }),
 
-  bi_end: e('bi_end', 'Bimbodoll', 'One [[pink:pink]] bubble. It takes everything, then pops.', [
+  bi_end: e('bi_end', 'Bimbodoll', 'Congratulations, Bambi. You finished inside the [[pink:pink]] bubble.', [
     'Starring: um',
     'Written by: someone with lots of words',
     'Thinking: cut for time',
@@ -65,8 +65,8 @@ export const ENDINGS = Object.freeze({
     'Number: a lot',
   ], 'Good girl. Nothing left to accept.', {
     link: link('The Bambi mod, in CCP. Press the pink one.'),
-    flash: ['GOOD GIRL BAMBI', 'SEE YOU SOON :3'],
     card: 'I accept that there is nothing left to accept.',
+    trigger: 'BAMBI SLEEP',
   }),
 
   dr_end: e('dr_end', 'Unit Complete', 'Shop: off. Counter: off. Name: off. Input: off. Unit: **complete**.', [

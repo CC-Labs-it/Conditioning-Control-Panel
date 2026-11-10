@@ -221,8 +221,10 @@ function start(init) {
   };
   ui.attach(engine, hooks);
   let playing = false;
-  const syncMedia = () => engine.pictures.setGameplayActive(playing && !document.hidden && !engine.paused && !engine.suspended && !engine.stopped);
+  let endingMedia = false;
+  const syncMedia = () => engine.pictures.setGameplayActive(playing && !document.hidden && !engine.paused && !engine.suspended && (!engine.stopped || endingMedia));
   for (const event of ['pause','resume','suspend','ending']) engine.subscribe(event,syncMedia);
+  engine.subscribe('ending-media', active => { endingMedia = active; syncMedia(); });
   document.addEventListener('visibilitychange',syncMedia);
   window.addEventListener('pagehide',() => engine.pictures.setGameplayActive(false));
   window.addEventListener('pageshow',syncMedia);

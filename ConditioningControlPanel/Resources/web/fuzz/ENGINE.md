@@ -25,9 +25,10 @@ ticker: {
 `{ tick(dt, now)?, off()?, grow(count)? }`. `dt` is seconds, `now` is game-clock ms. A stacking row with `grow` stays
 mounted and hears the new count; any other re-buy remounts. Your code throwing 3 times switches the unlock off; the game
 carries on. An ending row may also export `ending(ctx) -> Promise`: its show between the fade and the credits, up to 90 s.
-It may also export `take(ctx) -> Promise`: a phase BEFORE the fade, with the page still mounted but frozen and streams still
-playing (stopped when it resolves), capped at `ENDING_TAKE_MAX_MS` game time; `fadeColour` sets that row's end fade (Bimbodoll), `fadeMs` its length (at most the
-usual 1600 ms; the Living Ad take leaves its own stage over the page, so its fade is short).
+A row can export `take(ctx, releaseWorld) -> Promise` to use the frozen game page before the fade. Its streams play until the take
+ends or calls `releaseWorld()`. That call unmounts the game while keeping the take and its prepared media alive. Bimbodoll uses it
+between swallowing the page and entering the sky. A take has `ENDING_TAKE_MAX_MS` of game time by default, or the row's `takeMaxMs`.
+The row's `fadeColour` and `fadeMs` control the final fade, up to 1600 ms.
 
 ## Testing it
 
