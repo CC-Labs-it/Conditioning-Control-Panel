@@ -521,8 +521,7 @@ function mountSwarm(ctx) {
   ctx.frame((dt) => {
     t += dt;
     const ph = phase(), moving = ph !== 'none' && ph !== 'tx';
-    const hurry = stage() === 'hive' && T.isShopping(ph, bag.bought);
-    bag.budget = T.budgetStep(bag.budget, dt, { phase: ph, bought: bag.bought, hurry });
+    bag.budget = T.budgetStep(bag.budget, dt, { phase: ph, bought: bag.bought });
     if (T.hiveClockRuns({ phase: ph, bought: bag.bought, ownsHive: ctx.has('go_hive') })) bag.sinceOver = Math.min(T.HIVE.FORCE_S, bag.sinceOver + dt);
 
     slow += dt;
@@ -535,7 +534,7 @@ function mountSwarm(ctx) {
       screens();
       celebrate();
       if (T.isShopping(ph, bag.bought) && !shopping && !stamped && !quiet()) {
-        const tile = T.canBuy({ phase: ph, budget: bag.budget, bought: bag.bought, sinceBuyS: t - lastBuy, hurry });
+        const tile = T.canBuy({ phase: ph, budget: bag.budget, bought: bag.bought, sinceBuyS: t - lastBuy });
         if (tile && guest?.tile === tile) { shopping = { tile, since: t }; main.jumpT = -1; }
       }
       if (T.mustForceHive({ phase: ph, bought: bag.bought, ownsHive: ctx.has('go_hive'), sinceOverS: bag.sinceOver })) force();

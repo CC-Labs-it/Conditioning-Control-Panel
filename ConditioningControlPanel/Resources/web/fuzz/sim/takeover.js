@@ -50,7 +50,6 @@ export function poolOf(phase, bought = []) {
 
 export const BUDGET = Object.freeze({
   PER_S: 1,          // her budget grows this much a second on the game clock, from Founded Startup on
-  HURRY: 4,          // HIVE MIND already bought: she shops faster so the story catches up
   BUY_GAP_S: 30,     // never two of her buys closer than this
 });
 
@@ -62,16 +61,32 @@ export const nextTile = (bought = []) => HER_TILES.find((t) => !bought.includes(
 export const isShopping = (phase, bought = []) => (phase === 'corp' || phase === 'rep') && !!nextTile(bought);
 
 /** Her budget after `dt` seconds. It grows only while she still has a tile to buy. */
-export const budgetStep = (budget, dt, { phase, bought = [], hurry = false }) =>
-  (isShopping(phase, bought) ? budget + dt * BUDGET.PER_S * (hurry ? BUDGET.HURRY : 1) : budget);
+export const budgetStep = (budget, dt, { phase, bought = [] }) =>
+  (isShopping(phase, bought) ? budget + dt * BUDGET.PER_S : budget);
 
 /** May she buy now? Only while she is a startup, with the budget, and never two tiles close together. */
-export function canBuy({ phase, budget, bought = [], sinceBuyS, hurry = false }) {
+export function canBuy({ phase, budget, bought = [], sinceBuyS }) {
   const tile = nextTile(bought);
   if (!tile || !isShopping(phase, bought)) return null;
   if (budget < tile.price) return null;
-  if (sinceBuyS < BUDGET.BUY_GAP_S / (hurry ? BUDGET.HURRY : 1)) return null;
+  if (sinceBuyS < BUDGET.BUY_GAP_S) return null;
   return tile;
+}
+
+/** A funded shop row still waits for the part EMI plays herself, including after a reload. */
+export function purchaseHint(run, id) {
+  if (id !== 'go_hive' && id !== 'go_end') return '';
+  for (const stage of CHAIN) {
+    if (run.owned[stage] && run.off?.[stage]) return 'Switch the EMI upgrades back on so she can finish.';
+  }
+  const story = run.store?.go_tx;
+  const bag = story?.bag;
+  const next = nextTile(bag?.bought);
+  if (next) return 'EMI is saving for ' + next.name + ' with her own money.';
+  if (id === 'go_hive') return '';
+  if (!bag?.copies && !bag?.clicked && !bag?.took) return 'Click the main button to make an EMI copy.';
+  if (!(story.uiBeat >= 4)) return 'Watch the EMI screens sync up.';
+  return '';
 }
 
 /** Her purchase: her budget goes down by the price, the tile is hers. The bank is not an argument on purpose. */

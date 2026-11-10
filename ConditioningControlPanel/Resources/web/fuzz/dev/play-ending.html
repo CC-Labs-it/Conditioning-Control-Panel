@@ -38,7 +38,7 @@ const basics = ['colour', 'font', 'sound', 'rounded', 'softw', 'a_rain', 'v_fram
 const extra = (qs.get('buy') || '').split(',').map((s) => s.trim()).filter(Boolean);
 /* ?from=go_tx: land one row before that item instead, with the rows from it up to the ending left to buy by hand.
    The wallet covers all of them, so the player buys each one when they choose. */
-const fromId = qs.get('from');
+const fromId = qs.get('from') || (endId === 'go_end' ? 'go_tx' : null);
 const from = fromId ? BY_ID[fromId] : null;
 if (fromId && !from) { note.textContent = `No item "${fromId}".`; throw new Error(note.textContent); }
 const held = new Set();
@@ -121,10 +121,6 @@ frame.addEventListener('load', () => {
       tally.golden ||= 12;
       tally.terms ||= 160;
     }
-    /* EMI Takeover: the chain (go_tx, go_will, go_corp, go_hive) came with go_end's req. Hand her every tile she
-       buys herself (Override included) and a small crowd, so the take starts from a HIVE MIND swarm. ?emi=0 leaves her as the grant left her. */
-    const swarm = frame.contentWindow.__emiSwarm;
-    if (!from && endId === 'go_end' && swarm?.dev && qs.get('emi') !== '0') { swarm.dev.tiles(99); swarm.dev.crowd(qs.get('lite') ? 5 : 11); }
     if (from) {
       const want = Math.round([...held].reduce((sum, id) => sum + E.price(run, id), 0) * 1.1);
       if (run.fuzz < want) fuzz.add(want - run.fuzz);

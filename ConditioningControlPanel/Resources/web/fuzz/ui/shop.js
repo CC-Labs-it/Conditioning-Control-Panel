@@ -76,7 +76,7 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
 
   const tip = createTip({
     doc,
-    buyLabel: (r) => (engine.funds(r.item.id) < engine.price(r.item.id) ? `${whole(engine.price(r.item.id) - engine.funds(r.item.id))} short` : 'Buy'),
+    buyLabel: (r) => r.waiting ? 'Wait for EMI' : (engine.funds(r.item.id) < engine.price(r.item.id) ? `${whole(engine.price(r.item.id) - engine.funds(r.item.id))} short` : 'Buy'),
     onBuy: (r) => { onPress(r.item.id, r.el); tip.hide(); },
   });
 
@@ -140,13 +140,18 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     const run = engine.run, it = r.item;
     const p = engine.price(it.id);
     const funds = engine.funds(it.id);
-    const short = funds < p;
+    const waiting = engine.purchaseHint(it.id);
+    const short = funds < p || !!waiting;
+    if ((r.waiting || '') !== waiting) {
+      setRich(r.el.querySelector('small'), waiting || it.what);
+      r.waiting = waiting;
+    }
     r.el.classList.toggle('short', short);
     const badge = offerBadge(it, run);
     paintBadges(r.art, badge);
     setText(r.rep, badge ? badge.label : '');
     const fork = it.kind === 'fork';
-    setText(r.costNum, fork ? (short ? `at ${whole(p)}` : 'Choose') : whole(p));
+    setText(r.costNum, waiting ? 'Wait for EMI' : fork ? (short ? `at ${whole(p)}` : 'Choose') : whole(p));
     const fill = `scaleY(${Math.max(0, Math.min(1, funds / Math.max(1, p))).toFixed(3)})`;
     if (r.fill !== fill) { r.fill = fill; r.bar.style.transform = fill; }
     const step = readyStep(r.buyable, !short);

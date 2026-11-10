@@ -7,6 +7,7 @@
 import { BY_ID, ITEMS, FORKS } from '../data/items.js';
 import { CONFIG } from '../data/config.js';
 import { brandText } from '../data/brand.js';
+import { purchaseHint as emiPurchaseHint } from '../sim/takeover.js';
 import * as E from '../sim/economy.js';
 import { adClickFactor, moodOf } from '../sim/moods.js';
 import { noteSeen, recordEnding, ENDING_IDS } from '../sim/save.js';
@@ -436,8 +437,11 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     ui.draw?.(true);
   }
 
+  const purchaseHint = id => emiPurchaseHint(run, id);
   function buy(id, option) {
     if (stopped) return { ok: false, reason: 'ended' };
+    const waiting = purchaseHint(id);
+    if (waiting) { ui.toast?.(waiting); return { ok: false, reason: 'story', line: waiting }; }
     const refused = refusal(id);
     if (refused) {
       ui.denied?.(id, refused);
@@ -556,6 +560,7 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     mount, unmount, mountAll, unmountAll, emit, subscribe, step, away,
     awayCap: () => E.awayCap(run, mods),
     setPaused, setSuspended, tap, pay, spend, addGuard, wallHit, buy, choose, end, grant, syncQuiet, save,
+    purchaseHint,
     rates: () => E.rates(run, mods, now),
     item: (id) => journey ? journey.item(id) : BY_ID[id],
     funds: (id) => journey && FORKS[id] ? run.total : run.fuzz,

@@ -291,6 +291,8 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   function press(id, row) {
     const it = engine.item(id);
     if (!it || engine.paused) return;
+    const waiting = engine.purchaseHint(id);
+    if (waiting) { toast(waiting); return; }
     if (engine.funds(id) < engine.price(id)) { shop.denied(id); return; }
     if (it.options) {
       cards.open({title:it.name,body:it.what,front:true,buttons:[

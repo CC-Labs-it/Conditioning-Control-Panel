@@ -28,6 +28,20 @@ test('the four rows sit between Fake Online Count and the goon ending, which kee
 
 const ALL = ['h_amp', 'h_oc', 'h_loud', 'h_rep', 'h_over'];
 
+test('paying for the final shop rows cannot skip shopping, a manual copy, or the first hive pattern', () => {
+  const run = { owned: { go_tx: 1, go_will: 1, go_corp: 1 }, store: { go_tx: { bag: { bought: [] } } } };
+  assert.match(T.purchaseHint(run, 'go_hive'), /Amplifier/);
+  run.store.go_tx.bag.bought = ALL.slice(0, 4);
+  assert.match(T.purchaseHint(run, 'go_end'), /Override/);
+  run.store.go_tx.bag.bought = ALL;
+  assert.equal(T.purchaseHint(run, 'go_hive'), '');
+  assert.match(T.purchaseHint(run, 'go_end'), /main button/);
+  run.store.go_tx.bag.clicked = 1;
+  assert.match(T.purchaseHint(run, 'go_end'), /sync/);
+  run.store.go_tx.uiBeat = 4;
+  assert.equal(T.purchaseHint(run, 'go_end'), '');
+});
+
 test('the stage follows the rows owned, in order; Self Replication and Override are hers, not rows', () => {
   assert.equal(T.stageOf(has()), 'none');
   assert.equal(T.stageOf(has('go_tx')), 'tx');
@@ -72,7 +86,7 @@ test('her tiles: Amplifier, Overclock, Louder Opinions, Self Replication, then O
   assert.equal(T.budgetStep(5, 10, { phase: 'rep', bought: ALL.slice(0, 4) }), 15, 'saving for Override');
   assert.equal(T.canBuy({ phase: 'will', budget: 999, bought: [], sinceBuyS: 999 }), null);
   assert.equal(T.canBuy({ phase: 'corp', budget: 999, bought: ['h_amp'], sinceBuyS: 10 }), null, 'the gap between her buys');
-  assert.equal(T.canBuy({ phase: 'corp', budget: 999, bought: ['h_amp'], sinceBuyS: 10, hurry: true }).id, 'h_oc', 'HIVE MIND already bought: she hurries');
+  assert.equal(T.canBuy({ phase: 'corp', budget: 999, bought: ['h_amp'], sinceBuyS: 29 }), null);
   assert.deepEqual(T.buyTile({ budget: 10, bought: [] }, T.HER_TILES[0]), { budget: 10, bought: [] }, 'not enough budget: nothing changes');
   assert.equal(T.nextTile(T.HER_TILES.map((t) => t.id)), null);
   assert.equal(T.buyTile.length, 2, 'the bank is not an argument: her shopping never spends the player\'s money');
