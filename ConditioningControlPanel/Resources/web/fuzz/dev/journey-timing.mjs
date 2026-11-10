@@ -5,14 +5,15 @@
 import { pathToFileURL } from 'node:url';
 import { allRoutes } from '../sim/route.js';
 import { createJourney, EXTRAS } from '../sim/journey.js';
-import { takeActivity, bankRate, trunkBoost, buyKind, GAMES, TOYS } from '../sim/journey-effects.js';
+import { takeActivity, bankRate, trunkBoost, buyKind, toyLift, TOY_PLAY, GAMES, TOYS } from '../sim/journey-effects.js';
 import * as E from '../sim/economy.js';
 import { BY_ID } from '../data/items.js';
 export function measureJourney(picks, {
   taps = 4,
   share = .125,
   option = 0,
-  restore = null
+  restore = null,
+  toys = TOY_PLAY
 } = {}) {
   let s = E.createRun(),
     shop = createJourney(s);
@@ -28,7 +29,7 @@ export function measureJourney(picks, {
     const active = r.manualClick * taps + E.count(s, 'stray') * r.walls * r.bounce;
     const j = s.store.journey;
     const banks = Object.keys(j.banks).reduce((sum, id) => sum + bankRate(id, j.ranks[id]) * s.base.fps * trunkBoost(s), 0);
-    return (active + r.fps) * (1 + (s.owned.gold ? share : 0)) + banks * s.pace * Math.min(1, share / .25);
+    return (active + r.fps) * (toyLift(s, toys) + (s.owned.gold ? share : 0)) + banks * s.pace * Math.min(1, share / .25);
   };
   let last = 0,
     nextClaim = 60,
@@ -63,7 +64,7 @@ export function measureJourney(picks, {
     if (!items.length) throw Error('Shop empty (held ' + E.heldEnding(s) + ', main ' + E.mainPathDone(s) + ', ended ' + JSON.stringify(s.ended) + ') on ' + JSON.stringify(picks) + ' after ' + paid.at(-1)?.id);
     const r = E.rates(s, mods);
     const active = r.manualClick * taps + E.count(s, 'stray') * r.walls * r.bounce;
-    const side = s.owned.gold ? (active + r.fps) * share : 0;
+    const side = (active + r.fps) * ((s.owned.gold ? share : 0) + toyLift(s, toys) - 1);   // prizes, plus the toys played at `toys` of their budgets
     const rate = active + r.fps + side;
     const missing = Math.min(...items.map(it => shop.price(it.id) - (it.kind === 'fork' ? s.total : s.fuzz)));
     const dt = Math.max(.01, Math.min(60, nextClaim - s.clock / 1000, (missing + .001) / Math.max(rate, .01)));

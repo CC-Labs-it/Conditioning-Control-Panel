@@ -1,4 +1,5 @@
 import { T_RUN } from '../data/prestige.js';
+import { CONFIG } from '../data/config.js';
 // Only runs opened in the long preview carry this bag. The save already persists run.store.
 export const SPECIALTIES = {
   spec_rebounds: {
@@ -104,7 +105,11 @@ export const PACE_MINUTES = Object.freeze((() => {
 /* The plan prices purchases on its own reference income (sim/journey.js fixedRate), which runs ahead of the measured staying
  * player (browser players also earn route rewards and chapter coupons; the plan's shadow claims banks in full). PLAN_CLOCK maps
  * the measured minutes above onto that plan clock; tuned with node dev/journey-timing.mjs so 4 taps lands at 88-92 min. */
-export const PLAN_CLOCK = .865;
+/* Even beat (owner 2026-11-10): the toys pay from their own budgets (CONFIG.TOY_SHARE). The player the run is planned for
+ * plays about half of what the toys he owns can pay; one who plays them all finishes sooner, one who ignores them later. */
+export const TOY_PLAY = .5;
+export const toyLift = (s, play = TOY_PLAY) => 1 + play * Object.entries(CONFIG.TOY_SHARE).reduce((sum, [id, share]) => sum + ((s.owned[id] || 0) > 0 ? share : 0), 0);
+export const PLAN_CLOCK = .88;
 /* Renewal Sky (2026-11-09): a renewed run is planned to last T_RUN[depth] minutes (data/prestige.js); every minute scales. */
 export const journeyStretch = (minutes = T_RUN[0]) => minutes / T_RUN[0];
 const CHAPTER_ENDS = [14, 28, 49, 77, 102, 124, 144];

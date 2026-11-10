@@ -1,7 +1,7 @@
 import { ITEMS, BY_ID, FORKS } from '../data/items.js';
 import { LEAD_OF } from '../data/folds.js';
 import * as E from './economy.js';
-import { ACTIVITIES, GAMES, TOYS, SAVOUR_BUYS, PACE_MINUTES, PLAN_BUYS, PLAN_CLOCK, bankRate, buyKind, trunkBoost, journeyStretch, rankCap, rankName, SPECIALTIES, rankDescription, setupJourney } from './journey-effects.js';
+import { ACTIVITIES, GAMES, TOYS, SAVOUR_BUYS, PACE_MINUTES, PLAN_BUYS, PLAN_CLOCK, toyLift, bankRate, buyKind, trunkBoost, journeyStretch, rankCap, rankName, SPECIALTIES, rankDescription, setupJourney } from './journey-effects.js';
 import { T_RUN } from '../data/prestige.js';
 
 // Durations calibrate sticker prices on an independent first-run economy.
@@ -114,7 +114,7 @@ function fixedRate(s) {
   const total = r.fps + r.manualClick * 4 + E.count(s, 'stray') * r.walls * r.bounce;
   const banks = Object.keys(s.store.journey.banks).reduce((sum, id) => sum + bankRate(id, s.store.journey.ranks[id]) * s.base.fps * r.boost, 0);
   // The reference player stays: taps 4 a second and catches most Golden Buttons (Deep, Lucky, Obey are worth about a third).
-  return total * (s.owned.gold ? 1.3 : 1) + banks * .5;
+  return total * ((s.owned.gold ? 1.3 : 1) + toyLift(s) - 1) + banks * .5;   // toys add to the prizes, they do not multiply them
 }
 /* minutes: the run's planned length; priceMult: the run multiplier (prices scale with it, 1 = today). */
 export function buildPlan(picks, minutes = T_RUN[0], priceMult = 1) {
