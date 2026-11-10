@@ -127,12 +127,15 @@ test('per-second income follows the game clock and pace', () => {
   assert.equal(s.clock, 1000);
 });
 
-test('Drop ends the run; nothing is on offer after an ending and income stops', () => {
+test('Go Outside is the fallback ending; Drop is retired; nothing is on offer after an ending and income stops', () => {
   const s = rich(E.createRun());
   E.grant(s, 'tunnel');
-  assert.equal(E.goal(s).id, 'drop');
-  assert.ok(E.buy(s, 'drop').ok);
-  assert.equal(s.ended.id, 'drop');
+  assert.equal(E.heldEnding(s), 'outside');
+  assert.equal(E.goal(s).id, 'outside', 'the held ending takes the main path\'s last place');
+  assert.ok(!E.isOpen(s, BY_ID.drop));
+  assert.ok(!E.buy(s, 'drop').ok);
+  assert.ok(E.buy(s, 'outside').ok);
+  assert.equal(s.ended.id, 'outside');
   assert.equal(E.openItems(s).length, 0);
   assert.equal(E.goal(s), null);
   const f = s.fuzz;

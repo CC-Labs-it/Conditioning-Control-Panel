@@ -289,3 +289,13 @@ test('engine: Skip Ahead buys chapter 1 in the Journey', () => {
 test('star data stays in step with the rules', () => {
   for (const l of LANES) for (const s of l.stars) assert.equal(STAR_BY_ID[s.id].depth, s.n);
 });
+
+test('the Endless star lights once three different endings have (owner 2026-11-10: Endless Mode left the shop)', () => {
+  const life = { prestige: P.createPrestige() };
+  for (const [i, id] of ['tr_end', 'o_out', 'tr_end', 'go_end'].entries()) {
+    const run = E.createRun();
+    run.ended = { id, at: 1 };
+    P.renew(life, run);
+    assert.equal(!!life.prestige.lit.onemore, i === 3, `after ${id}`);
+  }
+});

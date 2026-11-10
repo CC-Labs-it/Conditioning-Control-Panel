@@ -141,7 +141,7 @@ export const ENDING_STARS = Object.freeze([
   ['ce_end', 'Redacted', 'ink', 'Censor bars pay when tapped.', 'the Censored theme ending'],
   ['in_end', 'Flatline', 'bug', 'Infection spreads faster.', 'the Infection theme ending'],
   ['outside', 'Go Outside', 'hat', 'Away pay +25%.', 'the ending where you log off'],
-  ['onemore', 'Endless', 'infinity', 'Keep playing after an ending, at full pay.', 'the ending you get by refusing to stop'],
+  ['onemore', 'Endless', 'infinity', 'Keep playing after an ending, at full pay.', 'any three different endings'],
 ].map(([id, name, icon, perk, which]) => Object.freeze({ id, name, icon, perk, which })));
 
 export const CORE = Object.freeze({
