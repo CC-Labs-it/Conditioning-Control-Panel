@@ -88,13 +88,13 @@ export const ENDINGS = Object.freeze({
     'The audience: seated, very seated',
   ], 'Lovely. Now do it again, and this time as if you meant the bow.', { link: link('The Sissy mod, in CCP') }),
 
-  go_end: e('go_end', 'Sunrise', 'Four hours later, the curtain has a thin orange line in it. It was dinner time a moment ago.', [
-    'Tabs: all of them, still open',
-    'Clock: unreliable witness',
-    'Others online: nodding, all night',
-    'Dinner: a rumour',
-    'Sunlight: uninvited',
-  ], 'What time is it. Do not check. You did not close those tabs.', { link: link('Goon, the game, in CCP') }),
+  go_end: e('go_end', 'Taken Over', 'The page answers to EMI now. There are more of her than there were of you.', [
+    'Transmission: always on',
+    'Free will: given to EMI',
+    'Startup: funded by your clicks',
+    'Copies: all of them',
+    'Your input: no longer required',
+  ], 'You let EMI press this one. EMI is still pressing it.', { link: link('Goon, the game, in CCP') }),
 
   lo_end: e('lo_end', 'Lost Key', 'The key goes up, comes down, and makes a very small splash a long way out.', [
     'Throw: nice',

@@ -4,24 +4,31 @@ import { bubbleInk } from './canvas-lettering.js';
 import { breakoutAudio, createBrickPhoto, drawDrop, drawSpecialBrick } from './breakout-core/presentation.js';
 
 export function mountBreakout(ctx) {
-  const host = ctx.dock({ title: 'Mini Breakout', icon: '▰', width: 232 });
+  const host = ctx.dock({ title: 'Mini Breakout', icon: '▰', width: 232, allowUnderStrip: true });
   host.dock?.setReady(false);
-  const root = ctx.el('div', 'width:100%;max-width:280px;margin:auto;pointer-events:auto;', null, host);
+  host.style.overflow = 'clip';
+  host.style.flexShrink = '0';
+  const root = ctx.el('div', 'width:100%;border:1px solid var(--niche);border-radius:8px;overflow:clip;background:var(--panel);color:var(--ink);pointer-events:auto;', null, host);
   root.dataset.dockSurface = '';
   root.dataset.arcade = 'mini_breakout';
-  const header = ctx.el('div', 'display:grid;grid-template-columns:auto auto;align-items:center;gap:2px 6px;flex:1;min-width:0;font-size:10px;line-height:1.2;color:var(--ink);', null, root);
-  const board = ctx.el('span', 'font-weight:700;', '', header);
-  const mode = ctx.el('span', 'opacity:.7;', '', header);
-  const canvas = ctx.el('canvas', 'display:block;width:100%;aspect-ratio:280/196;border:1px solid var(--niche);border-radius:9px;background:#15151e;touch-action:pan-y;', null, root);
-  canvas.dataset.dockInteractive = '';
+  const screen = ctx.el('div', 'position:relative;', null, root);
+  const canvas = ctx.el('canvas', 'display:block;width:100%;aspect-ratio:280/196;background:#15151e;touch-action:none;', null, screen);
+  // The top casing stays reachable when the footer sits below the viewport and the court owns the paddle.
+  const rim = ctx.el('div', 'position:absolute;inset:0 0 auto;height:24px;border-top:4px solid var(--line);', null, screen);
+  rim.dataset.dockSurface = '';
+  rim.setAttribute('aria-hidden', 'true');
+  rim.title = 'Move Mini Breakout. On touch, hold first.';
+  canvas.dataset.dockSurface = '';
   canvas.width = WIDTH * 2; canvas.height = HEIGHT * 2; canvas.tabIndex = 0;
-  canvas.setAttribute('aria-label', 'Mini Breakout. Hover to play, or take control with arrow keys. Catch flames to pierce bricks and shields to save a missed ball. Riveted bricks take two hits.');
-  const footer = ctx.el('div', 'display:flex;align-items:center;justify-content:space-between;gap:5px;margin-top:3px;', null, root);
-  footer.appendChild(header);
-  const credit = ctx.el('small','grid-column:1/-1;font:11px system-ui;color:var(--ink);','',header);
-  credit.hidden=true;
-  const receipt = ctx.el('span', 'grid-column:1/-1;font-size:11px;line-height:1.2;color:var(--niche-text);', '', header);
-  const toggle = ctx.el('button', 'flex:none;min-height:44px;padding:4px 7px;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:var(--ink);font:inherit;font-size:11px;', 'Take control', footer);
+  canvas.setAttribute('aria-label', 'Mini Breakout. Hover to play. Drag the board to move it, or hold then drag on touch. Take control to play with touch or arrow keys. Drag the top edge to move while playing. Catch flames to pierce bricks and shields to save a missed ball. Riveted bricks take two hits.');
+  const footer = ctx.el('div', 'display:flex;align-items:center;gap:5px;padding:3px 5px;border-top:1px solid var(--line);', null, root);
+  const details = ctx.el('div', 'display:flex;flex:1;min-width:0;flex-wrap:wrap;align-items:baseline;gap:1px 5px;font-size:10px;line-height:1.2;overflow-wrap:anywhere;', null, footer);
+  const board = ctx.el('span', 'font-weight:700;', '', details);
+  const mode = ctx.el('span', 'color:var(--ink-soft);', '', details);
+  const receipt = ctx.el('span', 'color:var(--niche-text);', '', details);
+  const credit = ctx.el('small', 'flex-basis:100%;font:10px/1.2 system-ui;', '', details);
+  credit.hidden = true;
+  const toggle = ctx.el('button', 'flex:none;min-height:24px;padding:2px 5px;border:1px solid var(--line);border-radius:4px;background:var(--panel-short);color:var(--ink);font:inherit;font-size:10px;line-height:1.1;cursor:pointer;', 'Take control', footer);
   toggle.type = 'button';
   const g = canvas.getContext('2d'), sim = createBreakout(ctx.store.get('game'), ctx.state.store.journey?.specs?.spec_breakout);
   const doc=canvas.ownerDocument, audio=breakoutAudio(ctx), pictures=createBrickPhoto(ctx,canvas,credit);
@@ -39,7 +46,11 @@ export function mountBreakout(ctx) {
     toggle.textContent = touchControl ? 'Autoplay' : 'Take control';
     toggle.disabled = calm();
     toggle.setAttribute('aria-pressed', String(touchControl));
-    canvas.style.touchAction = touchControl ? 'none' : 'pan-y';
+    // Hover steers without a press. Only explicit paddle control claims a board drag.
+    const ownsDrag = touchControl && !calm();
+    canvas.toggleAttribute('data-dock-interactive', ownsDrag);
+    canvas.style.cursor = ownsDrag ? 'crosshair' : '';
+    rim.style.pointerEvents = ownsDrag ? 'auto' : 'none';
   }
   function point(e) {
     const r = canvas.getBoundingClientRect();
@@ -48,7 +59,7 @@ export function mountBreakout(ctx) {
   canvas.addEventListener('pointerenter', (e) => { if (ctx.paused || e.pointerType !== 'mouse') return; hovered = true; point(e); controls(); });
   canvas.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') { hovered = false; controls(); } });
   canvas.addEventListener('pointermove', (e) => { if (!ctx.paused && manual()) point(e); });
-  canvas.addEventListener('pointerdown', (e) => { if (ctx.paused || !manual()) return; point(e); if (e.pointerType === 'touch') { e.preventDefault(); canvas.setPointerCapture?.(e.pointerId); } });
+  canvas.addEventListener('pointerdown', (e) => { if (ctx.paused || !touchControl || !manual()) return; point(e); if (e.pointerType === 'touch') { e.preventDefault(); canvas.setPointerCapture?.(e.pointerId); } });
   canvas.addEventListener('keydown', (e) => {
     if (ctx.paused || calm() || !['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
     e.preventDefault(); touchControl = true;

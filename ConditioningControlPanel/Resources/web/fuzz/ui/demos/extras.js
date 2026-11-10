@@ -38,29 +38,7 @@ const extrasTile = (k, x, y, w, h, emoji, tint) => {
   e.style.padding = '0';
   return e;
 };
-const extrasEmiFaces = {
-  happy: { bg: '#ffb3da', l: 'width:5px;height:6px;border-radius:50%;background:#222;', r: 'width:5px;height:6px;border-radius:50%;background:#222;', m: 'width:10px;height:4px;border:2px solid #222;border-top:0;border-radius:0 0 8px 8px;' },
-  glee: { bg: '#ffd0e8', l: 'width:5px;height:5px;border:2px solid #222;border-right:0;border-bottom:0;transform:translateY(2px) rotate(45deg);', r: 'width:5px;height:5px;border:2px solid #222;border-right:0;border-bottom:0;transform:translateY(2px) rotate(45deg);', m: 'width:13px;height:7px;background:#222;border-radius:0 0 8px 8px;' },
-  annoyed: { bg: '#f2a6c8', l: 'width:7px;height:2px;background:#222;margin-top:3px;', r: 'width:7px;height:2px;background:#222;margin-top:3px;', m: 'width:10px;height:2px;background:#222;' },
-  rage: { bg: '#ff6b6b', l: 'width:8px;height:3px;background:#222;margin-top:2px;transform:rotate(25deg);', r: 'width:8px;height:3px;background:#222;margin-top:2px;transform:rotate(-25deg);', m: 'width:13px;height:4px;background:#222;' },
-  sleep: { bg: '#e8b6d2', l: 'width:7px;height:3px;border-bottom:2px solid #222;border-radius:0 0 6px 6px;', r: 'width:7px;height:3px;border-bottom:2px solid #222;border-radius:0 0 6px 6px;', m: 'width:4px;height:4px;border-radius:50%;background:#222;' },
-};
-/* EMI, a little robot. e.mood('happy'|'glee'|'annoyed'|'rage'|'sleep'). Move it with left/top, size it with s. */
-const extrasEmi = (k, x, y, s, mood) => {
-  const el = k.add(x, y, 'width:36px;height:44px;transform-origin:0 0;transform:scale(' + (s || 1) + ');');
-  const draw = (m) => {
-    const f = extrasEmiFaces[m];
-    const part = (css) => '<div style="position:absolute;' + css + '"></div>';
-    el.innerHTML = part('left:17px;top:0;width:2px;height:8px;background:#555;') + part('left:15px;top:0;width:6px;height:6px;border-radius:50%;background:#ff2f92;')
-      + part('left:9px;top:32px;width:18px;height:11px;background:#7d86a8;border:1.5px solid #333;border-radius:3px;box-sizing:border-box;')
-      + part('left:0;top:17px;width:36px;height:6px;background:#555;border-radius:3px;')
-      + part('left:2px;top:7px;width:32px;height:26px;background:' + f.bg + ';border:1.5px solid #333;border-radius:9px;box-sizing:border-box;')
-      + part('left:9px;top:15px;' + f.l) + part('left:21px;top:15px;' + f.r)
-      + '<div style="position:absolute;left:0;top:25px;width:36px;display:flex;justify-content:center;"><div style="box-sizing:content-box;' + f.m + '"></div></div>';
-  };
-  draw(mood || 'happy');
-  return { el, mood: draw };
-};
+import { companionDemo as extrasEmi } from './emi-character.js';
 const extrasSay = (k, x, y, str, ms) => {
   const t = ms || 1200;
   const e = k.add(x, y, 'background:#fff;color:#111;border:1px solid #333;border-radius:7px;padding:3px 6px;font:600 10px/1.15 ' + extrasFont + ';white-space:nowrap;z-index:20;', str);

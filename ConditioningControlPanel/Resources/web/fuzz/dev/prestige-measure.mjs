@@ -56,7 +56,7 @@ export function measureRun(picks, p, { taps = 4, share = .125, option = 0, catch
   let last = 0, nextClaim = 60, wordT = 0, countT = 0, caught = 0;
   while (!s.ended && s.clock < 12 * 3600e3) {
     const shelf = shop.shop(8);
-    const items = [shelf.goal, ...shelf.rows].filter(it => it && (it.kind !== 'end' || it.id === 'drop'));
+    const items = [shelf.goal, ...shelf.rows].filter(it => it && (it.kind !== 'end' || it.id === E.heldEnding(s)));   // one ending a run
     const ready = items.filter(it => (it.kind === 'fork' ? s.total : s.fuzz) + 1e-8 >= shop.price(it.id)).sort((a, b) => Number(b.kind === 'fork') - Number(a.kind === 'fork') || shop.price(a.id) - shop.price(b.id));
     const it = ready[0];
     if (it) {
@@ -94,7 +94,7 @@ export function measureRun(picks, p, { taps = 4, share = .125, option = 0, catch
       nextClaim += 60;
     }
   }
-  if (s.ended?.id !== 'drop') throw Error('Failed to reach Drop: ' + Object.values(picks));
+  if (!s.ended) throw Error('Failed to reach the ending: ' + Object.values(picks));
   const sorted = [...paid].sort((a, b) => a - b);
   return { minutes: s.clock / 60000, buys: paid.length, max: sorted.at(-1), run: s, caught };
 }

@@ -166,7 +166,7 @@ function minutesFor(stamp, picks) {
   const mods = [{ fps: (v, s) => (s.owned.depth ? v * 1.1 : v), click: (v, s) => (s.owned.f1 ? v * 1.5 : v) }];
   while (!s.ended && s.clock < 8 * 3600e3) {
     const sh = shop.shop(8);
-    const items = [sh.goal, ...sh.rows].filter((it) => it && (it.kind !== 'end' || it.id === 'drop'));
+    const items = [sh.goal, ...sh.rows].filter((it) => it && (it.kind !== 'end' || it.id === E.heldEnding(s)));
     const ready = items.filter((it) => (it.kind === 'fork' ? s.total : s.fuzz) + 1e-8 >= shop.price(it.id))
       .sort((a, b) => Number(b.kind === 'fork') - Number(a.kind === 'fork') || shop.price(a.id) - shop.price(b.id));
     if (ready[0]) {
@@ -197,7 +197,7 @@ test('run length follows T_RUN[depth], and the run multiplier never makes a run 
   const r = minutesFor(st, picks);
   const want = base * T_RUN[5] / T_RUN[0] * st.price / st.pay;
   assert.ok(Math.abs(r.minutes - want) / want < 0.12, `${r.minutes.toFixed(1)} min vs ${want.toFixed(1)}`);
-  assert.equal(r.s.ended?.id, 'drop');
+  assert.ok(r.s.ended, 'the run reached its ending');
 });
 
 test('dustFor: a normal finished run earns about P_RUN[depth], times the Fine Print factor', () => {
@@ -288,4 +288,14 @@ test('engine: Skip Ahead buys chapter 1 in the Journey', () => {
 
 test('star data stays in step with the rules', () => {
   for (const l of LANES) for (const s of l.stars) assert.equal(STAR_BY_ID[s.id].depth, s.n);
+});
+
+test('the Endless star lights once three different endings have (owner 2026-11-10: Endless Mode left the shop)', () => {
+  const life = { prestige: P.createPrestige() };
+  for (const [i, id] of ['tr_end', 'o_out', 'tr_end', 'go_end'].entries()) {
+    const run = E.createRun();
+    run.ended = { id, at: 1 };
+    P.renew(life, run);
+    assert.equal(!!life.prestige.lit.onemore, i === 3, `after ${id}`);
+  }
 });

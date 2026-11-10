@@ -9,6 +9,7 @@ import { setRich } from './rich-text.js';
 import { CONFIG } from '../data/config.js';
 import { whole, clock } from '../sim/format.js';
 import { SAVE_EVERY_MS } from '../sim/save.js';
+import { writeScore } from './emi-score.js';
 import { bindButtonFace, wardrobeSkins } from './button-faces.js';
 import { createCards } from './cards.js';
 import { openRunRecap } from './recap/recap.js';
@@ -301,7 +302,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       return;
     }
     if (it.kind === 'end' && id !== 'onemore') {
-      cards.open({ title: it.name, body: `${it.what} ${it.line}`, front: true, buttons: [{ label: 'Yes', onPress: () => engine.buy(id) }, { label: 'Not yet' }] });
+      cards.open({ title: it.name, body: `${it.what} ${it.line}`, front: true, buttons: [{ label: id === 'go_end' ? 'Let her' : 'Yes', onPress: () => engine.buy(id) }, { label: 'Not yet' }] });
       return;
     }
     /* The terms card (ui/clause.js): accept first, then the purchase lands exactly as before. */
@@ -485,7 +486,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   let shown = -1, lastDraw = 0, lastSave = 0, last = 0;
   function drawCounter() {
     const n = Math.floor(engine.run.fuzz);
-    if (n !== shown) { shown = n; el.count.textContent = whole(n); }
+    if (n !== shown) { shown = n; writeScore(el.count, whole(n), el.counter.hasAttribute('data-et-score')); }
   }
   let refreshCursorShop = null;
   function draw(force) {
@@ -537,7 +538,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       p.hidden = !show;
       shop?.fit();
     },
-    showCount(n) { el.count.textContent = whole(n); shown = -1; },
+    showCount(n) { writeScore(el.count, whole(n), el.counter.hasAttribute('data-et-score')); shown = -1; },
     setWakeGate(fn) { wakeGate = fn; },
     getWindowLayout: layouts.get,
     saveWindowLayout(key, value) { layouts.set(key, value); engine?.save(); },
@@ -560,6 +561,15 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       refreshCursorShop = bindCursorShop(engine,ui);
       purchaseFeel = createPurchaseFeel({ doc, engine, gentle, reduced, dock });
       shop = createShop({ doc, engine, onPress: press, onReady: (row) => purchaseFeel.ready(row) });
+      /* EMI Takeover (owner 2026-11-09): HIVE MIND is the one row EMI may buy herself when the player waited too long
+       * (ui/unlocks/themes-b/emi-swarm.js). Free for the player, no terms card; nothing else can be bought this way. */
+      doc.addEventListener('fuzz:emi-buys-hive', () => {
+        const run = engine.run;
+        if (engine.paused || engine.suspended || engine.stopped || run.owned.go_hive || !run.owned.go_corp) return;
+        const gift = engine.price('go_hive');
+        run.fuzz += gift;
+        if (!engine.buy('go_hive').ok) run.fuzz = Math.max(0, run.fuzz - gift);
+      });
       ui.credits = (id) => credits(id, { hooks });
       el.cur.textContent = BRAND.currencyPlural;
       wireButton();

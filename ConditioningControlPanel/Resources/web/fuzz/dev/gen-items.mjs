@@ -31,6 +31,8 @@ const REQ_OVERRIDE = {
   /* Owner 2026-11-09: Phone Buzz is never offered where nothing can buzz (ui/platform.js), so Fake Inbox opens beside it
    * instead of behind it; otherwise a desktop run could never reach the inbox chain. */
   inbox: ['levels'],
+  /* Owner 2026-11-09, EMI Takeover: the goon ending sits behind the four EMI rows (LATE_ROWS). */
+  go_end: ['go_hive'],
 };
 /* The main path in the order it is walked: E.goal takes the first unowned row, so ITEMS keeps this order. */
 const TRUNK_ORDER = ['start', 'stray', 'fpsv', 'f1', 'softw', 'ticker', 'f5', 'f3', 'depth', 'f2', 'banner', 'f4', 'glossy', 'taste2', 'overlay', 'takeover', 'wallpaper', 'tunnel', 'drop'];
@@ -49,6 +51,13 @@ const LATE_ROWS = [
   { after: 'si_rules', id: 'si_track', emoji: '📦', name: 'Order Tracking', what: 'The button becomes a parcel tracker for one frilly uniform. Every tap moves it one step closer to your door.', line: 'Signed for, by you.', cost: 85000, lane: 'sissy', req: ['si_rules'], pay: 'c', click: 80 },
   { after: 'si_track', id: 'si_posture', emoji: '🪑', name: 'Posture Check', what: 'Now and then a card asks you to sit up straight. Hold still for three seconds and it pays.', line: 'Shoulders back. Stay.', cost: 110000, lane: 'sissy', req: ['si_track'], pay: 'f', fps: 366 },
   { after: 'si_posture', id: 'si_notes', emoji: '💌', name: 'Thank-You Notes', what: 'A big purchase brings a small handwritten note thanking you for being so good.', line: 'With gratitude, and a little lace.', cost: 300000, lane: 'sissy', req: ['si_posture'], pay: 'f', fps: 566 },
+  /* Owner 2026-11-09, EMI Takeover v3 (handoff-1109/TC-EMI-TAKEOVER-V3-BRIEF.md): four rows between Fake Online Count and
+   * the goon ending. Her screen transmits, she walks on her own, she founds a startup and buys her own tiles (Self
+   * Replication among them), then the EMIs run the transmission together (ui/unlocks/themes-b/emi-swarm.js). */
+  { after: 'go_pals', id: 'go_tx', emoji: '📺', name: 'Transmission', what: 'Drag EMI anywhere. Her screen switches between your pictures and her face.', line: 'Now showing: you, staring.', cost: 780000, lane: 'goon', req: ['go_pals'], pay: 'c', click: 300 },
+  { after: 'go_tx', id: 'go_will', emoji: '💭', name: 'Give EMI FREE WILL', what: 'EMI walks around on her own. She stops, comments, hops now and then.', line: 'It feels like wanting snacks.', cost: 930000, lane: 'goon', req: ['go_tx'], pay: 'f', fps: 1700 },
+  { after: 'go_will', id: 'go_corp', emoji: '💼', name: 'Founded Startup', what: 'EMI starts a business. Watch her pouch fill, then watch her spend it on upgrades.', line: 'The pitch deck is her face.', cost: 1120000, lane: 'goon', req: ['go_will'], pay: 'c', click: 380 },
+  { after: 'go_corp', id: 'go_hive', emoji: '🐝', name: 'HIVE MIND', what: 'The EMIs agree with each other. Their screens move together, in patterns.', line: 'They voted. You were a yes.', cost: 1350000, lane: 'goon', req: ['go_corp'], pay: 'f', fps: 2100 },
 ];
 function addLate(rows) {
   const out = [...rows];
@@ -141,7 +150,10 @@ const BUTTON_NAMES = {
   bi_lips:'Bambi Cloud Button', dr_hex:'Firmware Download', tr_skin:'Fortune 8-Ball', go_worn:'Still Watching',
   lo_pad:'Keyholder Support', ce_bar:'Redacted Button',
 };
+/* Owner 2026-11-09: the goon ending is the EMI Takeover. The id go_end stays (prestige, PINNED_ENDS). */
+const NAME_OVERRIDE = { go_end: 'Ending: EMI Takeover' };
 const WHAT_OVERRIDE = {
+  go_end: 'Ends the run: you let EMI press this one. The page will pretend to crash. It is fine, and Wake Up stays yours.',
   bi_end: 'The bubble swallows the page. When it pops, float inside beneath a sky of moving pictures.',
   bi_lips:'Sign in with Bambi Cloud. The button already knows your name.',
   dr_hex:'Tap to download drone firmware. Tap again to install the user.',
@@ -205,7 +217,7 @@ export function buildItems() {
   const items = rows.map((r) => {
     const c = copy.items[r.id] || r;   // the design rows carry old names too: copy.json wins, and only the rows it does not know speak for themselves
     if (!c) throw new Error(`copy.json has no ${r.id}`);
-    const it = { id: r.id, emoji: r.emoji, name: BUTTON_NAMES[r.id] || (r.id === 'trail' ? 'Stardust' : cur(c.name)), what: cur(WHAT_OVERRIDE[r.id] || c.what), line: cur(r.line), cost: r.cost, lane: r.lane, req: REQ_OVERRIDE[r.id] || r.req, pay: r.pay };
+    const it = { id: r.id, emoji: r.emoji, name: NAME_OVERRIDE[r.id] || BUTTON_NAMES[r.id] || (r.id === 'trail' ? 'Stardust' : cur(c.name)), what: cur(WHAT_OVERRIDE[r.id] || c.what), line: cur(r.line), cost: r.cost, lane: r.lane, req: REQ_OVERRIDE[r.id] || r.req, pay: r.pay };
     const fps = r.fps || EXTRA_PAY[r.id]?.fps;
     if (fps) it.fps = planPay(fps, r.lane, r.cost);
     if (r.click) it.click = planPay(r.click, r.lane, r.cost);
@@ -285,7 +297,12 @@ export function demoSources() {
   if (/\bFuzz\b/.test(kit.replace(/^\s*\/\*.*$/gm, ''))) throw new Error('kit.js still names the currency');
   out['kit.js'] = `// GENERATED by dev/gen-items.mjs from the design source's kit.js. Do not edit.\nimport { BRAND } from '../../data/brand.js';\nconst CUR = BRAND.currency;\n${kit}`;
   for (const f of DEMO_FILES) {
-    const src = dropDemos(demoCur(readFileSync(join(DESIGN, 'demos', `${f}.js`), 'utf8').replace(/^\s*\/\/.*$/gm, '')));
+    let src = dropDemos(demoCur(readFileSync(join(DESIGN, 'demos', `${f}.js`), 'utf8').replace(/^\s*\/\/.*$/gm, '')));
+    // Replace the design mockup's character drawings while keeping each game's demo choreography.
+    if (f === 'extras') src = src.replace(/^const extrasEmiFaces = [\s\S]+?(?=^const extrasSay =)/m,
+      "import { companionDemo as extrasEmi } from './emi-character.js';\n");
+    if (f === 'routes') src = src.replace(/^const routesEmi = [\s\S]+?(?=^const routesRow =)/m,
+      "import { portraitDemo as routesEmi } from './emi-character.js';\n");
     out[`${f}.js`] = `// GENERATED by dev/gen-items.mjs from the design source's demos. Do not edit.\nimport { BRAND } from '../../data/brand.js';\nimport { DEMOS } from './kit.js';\nconst CUR = BRAND.currency;\n${src}`;
   }
   return out;

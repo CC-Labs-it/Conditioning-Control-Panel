@@ -71,6 +71,20 @@ function harness(W = 1280, H = 800, opts = {}) {
     flush: () => { while (frames.length) frames.shift()(); }, event: (name, ev = {}) => { for (const f of listeners[name] || []) f(ev); } };
 }
 
+test('a dock that can sit under the tabs can cross the viewport bottom and still be pulled back', () => {
+  const h = harness(390, 650);
+  const s = h.dock.add({ min: false, allowUnderStrip: true, layout: { x: 30, y: 9999 } });
+  h.flush();
+  assert.equal(s.root.getBoundingClientRect().bottom, 650 + EDGE_BLEED);
+  s.root.fire('pointerdown', { clientY: 570 });
+  s.root.fire('pointermove', { clientY: 400 });
+  s.root.fire('pointerup');
+  assert.equal(s.root.getBoundingClientRect().bottom, 650 + EDGE_BLEED - 170);
+  const button = h.make('button'); s.body.appendChild(button);
+  s.root.fire('pointerdown', { target: button });
+  assert.equal(s.root.fire('click', { target: button }).defaultPrevented, false, 'the next tap can take control immediately');
+});
+
 test('legacy object layouts retain visibility and position but lose obsolete empty window dimensions', () => {
   const old = { x: 80, y: 100, w: 700, h: 600, min: true, z: 4 };
   assert.deepEqual(migrateLayout(old), { ...old, w: null, h: null, version: LAYOUT_VERSION });
@@ -447,4 +461,30 @@ test('a touch that drags a casing without holding reports a hold miss once per t
   s.root.fire('pointerdown', { target: s.body, pointerType: 'mouse', clientX: 320, clientY: 220 });
   s.root.fire('pointermove', { pointerType: 'mouse', clientX: 380, clientY: 220 }); s.root.fire('pointerup');
   assert.equal(h.events.filter(e => e.type === 'fz-dock-hold-miss').length, 1, 'a mouse never misses');
+});
+
+test('a disguised tab reads another title and icon, keeps its own hidden, and undisguise puts it back exactly', () => {
+  const h = harness(), s = h.dock.add({ title: 'Lying Clock', icon: 'C' }); h.flush();
+  const chip = s.chip, tip = chip.title;
+  const own = chip.children.filter(e => e.classes.has('dk-label') || e.classes.has('dk-i'));
+  assert.deepEqual(own.map(e => e.textContent), ['C', 'Lying Clock']);
+  const art = h.make('img');
+  assert.equal(s.body.dock.disguise({ title: 'EMI', icon: art }), chip);
+  assert.equal(s.body.dock.disguised, true);
+  const shown = chip.children.filter(e => (e.classes.has('dk-label') || e.classes.has('dk-i')) && e.style.display !== 'none');
+  assert.equal(shown.length, 2);
+  assert.equal(shown.find(e => e.classes.has('dk-label')).textContent, 'EMI');
+  assert.equal(shown.find(e => e.classes.has('dk-i')).children[0], art);
+  assert.equal(chip.attributes['aria-label'], 'EMI'); assert.equal(chip.title, 'EMI'); assert.equal(chip.dataset.disguised, '1');
+  s.body.dock.setReady(true, 'Ready'); assert.equal(chip.attributes['aria-label'], 'EMI: Ready');
+  s.body.dock.disguise({ title: 'EMI', icon: 'E' });   // again: still one mask
+  assert.equal(chip.children.filter(e => e.classes.has('dk-label')).length, 2);
+  s.body.dock.undisguise();
+  assert.equal(s.body.dock.disguised, false);
+  assert.deepEqual(chip.children.filter(e => e.classes.has('dk-label') || e.classes.has('dk-i')), own);
+  assert.ok(own.every(e => e.style.display === ''));
+  assert.equal(chip.attributes['aria-label'], 'Lying Clock: Ready'); assert.equal(chip.title, tip); assert.equal(chip.dataset.disguised, undefined);
+  s.body.dock.undisguise();   // nothing to undo
+  const bare = h.dock.add({ title: 'No tab', chip: false }); h.flush();
+  assert.equal(bare.body.dock.disguise({ title: 'EMI' }), null);
 });
