@@ -1,3 +1,5 @@
+import { trackMotion, trackPitch, trackPoint } from './track.js';
+
 export const SPEED_BANDS = Object.freeze([
   { label: 'Stopped', below: 0.15, reactionS: 4.5, cooldownS: 7 },
   { label: 'Crawl', below: 2, reactionS: 2.4, cooldownS: 7 },
@@ -49,6 +51,8 @@ export function createRide(manifest, { cues = [], reduced = false, at = 0 } = {}
     get docked() { return docked; }, get leverAngle() { return leverAngle; },
     get leverTarget() { return leverTarget; }, get band() { return band; },
     get zone() { return zone; }, get exhibit() { return exhibit; },
+    get motion() { return trackMotion(z, reduced).mode; },
+    get height() { return trackPoint(z).y; }, get pitch() { return trackPitch(z); },
     get holds() { return Object.freeze([...holds.keys()]); },
   });
   const stoppedByHold = () => [...holds.values()].some(stop => z >= stop.point - 0.0001);
@@ -103,13 +107,21 @@ export function createRide(manifest, { cues = [], reduced = false, at = 0 } = {}
       const dt = Math.min(1 / 60, remaining);
       remaining -= dt;
       leverAngle += (leverTarget - leverAngle) * (1 - Math.exp(-12 * dt));
-      if (locked || stoppedByHold()) v = 0;
+      const blocked = locked || stoppedByHold();
+      if (blocked) v = 0;
       const currentZone = manifest.track.zones.find(item => z >= item.from && z < item.to);
-      let cap = reduced ? 6 : 14;
+      const motion = trackMotion(z, reduced);
+      let cap = motion.cap;
       if (currentZone?.cap) cap = Math.min(cap, currentZone.cap);
       if (z >= 553) cap = Math.min(cap, Math.max(0.7, (dock - z) * 0.4));
       v = Math.min(v, cap);
-      const nextV = Math.max(0, (v + 0.375) * Math.exp(-0.32 * dt) - 0.375);
+      let nextV = Math.max(0, (v + 0.375) * Math.exp(-0.32 * dt) - 0.375);
+      if (!blocked && motion.mode !== 'manual') {
+        const gravity = motion.mode === 'descent' ? Math.max(0, -motion.grade) * (reduced ? 2 : 9.81) : 0;
+        // Powered lifts crest without clicking; downhill momentum carries the connecting galleries.
+        const drive = Math.max(0, Math.min(motion.acceleration, (motion.target - v) * 1.5));
+        nextV = Math.min(cap, Math.max(0, v + (drive + gravity - .045 * v) * dt));
+      }
       let nextZ = Math.min(dock, z + (v + nextV) * 0.5 * dt);
       v = nextV < 0.001 ? 0 : nextV;
       for (const { point } of holds.values()) nextZ = Math.min(nextZ, Math.max(z, point));
@@ -137,7 +149,7 @@ export function createRide(manifest, { cues = [], reduced = false, at = 0 } = {}
       const blocked = locked || docked || stoppedByHold();
       leverTarget = leverTarget > 0 ? -0.34 : 0.34;
       if (blocked) leverTarget *= 0.22;
-      if (!blocked) v = Math.min(reduced ? 6 : 14, v + (v < 1 ? 1.4 : 1));
+      if (!blocked) v = Math.min(trackMotion(z, reduced).cap, v + (v < 1 ? 1.4 : 1));
       emit('pump', { v, locked: blocked });
     },
     hold(id, untilZ) {

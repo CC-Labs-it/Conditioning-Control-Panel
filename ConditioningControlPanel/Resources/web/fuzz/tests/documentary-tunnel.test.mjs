@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createRide, validateManifest } from '../ui/documentary/model.js';
 import { createStageClock } from '../ui/documentary/stage.js';
 import { needsDomMedia } from '../ui/unlocks/arcade/slot-reel-media.js';
+import { trackPoint, trackPosition, trackYaw, trackPitch, trackMotion, trackStyle } from '../ui/documentary/track.js';
 
 const manifest = JSON.parse(await readFile(new URL('../assets/documentary/exhibits.json', import.meta.url), 'utf8'));
 test('manifest covers the complete ride and validates art paths', () => {
@@ -92,5 +93,53 @@ test('Scrolller slots stay on the DOM media path', async () => {
   for (const file of ['media.js', 'scene.js', 'stage.js']) {
     const source = await readFile(new URL(`../ui/documentary/${file}`, import.meta.url), 'utf8');
     assert.doesNotMatch(source, /getContext\(|drawImage\(|texImage2D\(|createImageBitmap\(/);
+  }
+});
+
+test('winding track measures real distance, joins slopes smoothly and grounds exhibits', () => {
+  let length = 0, minHeight = Infinity, maxHeight = -Infinity, minYaw = Infinity, maxYaw = -Infinity;
+  for (let s = 0; s < 600; s += .25) {
+    const a = trackPoint(s), b = trackPoint(s + .25);
+    length += Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+    minHeight = Math.min(minHeight, a.y); maxHeight = Math.max(maxHeight, a.y);
+    minYaw = Math.min(minYaw, trackYaw(s)); maxYaw = Math.max(maxYaw, trackYaw(s));
+    assert.ok(Number.isFinite(trackPitch(s)));
+    const placed = trackPosition(s, 3, 1.5);
+    assert.ok(Math.abs(placed.y - a.y - 1.5) < 1e-9);
+    assert.ok(Math.abs(Math.hypot(placed.x - a.x, placed.z - a.z) - 3) < 1e-9);
+  }
+  assert.ok(Math.abs(length - 600) < .03);
+  assert.ok(maxHeight - minHeight >= 8);
+  assert.ok(maxYaw - minYaw > 1.5);
+  assert.deepEqual([0, 150, 200, 375, 450, 580].map(s => trackStyle(s).id),
+    ['intake', 'connector', 'reflex', 'descent', 'wakeup', 'theatre']);
+});
+
+test('lift and descent move without pumping, then brake before the scripted exhibit', () => {
+  const ride = createRide(manifest, { at: 118 });
+  let fastest = 0, descending = false;
+  for (let i = 0; i < 45 * 60 && ride.state.z < 190; i++) {
+    ride.step(1 / 60);
+    fastest = Math.max(fastest, ride.state.v);
+    descending ||= ride.state.motion === 'descent' && ride.state.pitch < -.1;
+  }
+  assert.ok(ride.state.z >= 190);
+  assert.ok(fastest > 10);
+  assert.ok(descending);
+  assert.ok(ride.state.v <= 4.5);
+  assert.equal(trackMotion(250).mode, 'manual');
+});
+
+test('second descent respects reduced motion and holds override its powered movement', () => {
+  for (const reduced of [false, true]) {
+    const ride = createRide(manifest, { at: 340, reduced });
+    const release = ride.hold('inspect', 370);
+    let fastest = 0;
+    for (let i = 0; i < 45 * 60; i++) { ride.step(1 / 60); fastest = Math.max(fastest, ride.state.v); }
+    assert.equal(ride.state.z, 370);
+    assert.equal(ride.state.v, 0);
+    if (reduced) assert.ok(fastest <= 6);
+    release(); ride.step(1);
+    assert.ok(ride.state.z > 370);
   }
 });

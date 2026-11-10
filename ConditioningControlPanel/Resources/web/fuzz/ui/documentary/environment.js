@@ -1,393 +1,520 @@
-import { mergeGeometries } from '../../../vendor/three/addons/utils/BufferGeometryUtils.js';
-import { trackPoint, trackYaw } from './track.js';
+import { mergeGeometries, mergeVertices } from '../../../vendor/three/addons/utils/BufferGeometryUtils.js';
+import { trackPosition, trackStyle } from './track.js';
 
-const BAY_LENGTH = 12;
+const BAY_LENGTH = 8;
 const HALF_WIDTH = 4.6;
-const SPRING = 3.65;
-const VAULT_RISE = 2.9;
+const ROOM_ENDS = [130, 180, 340, 400, 520];
+const ROOM_IDS = ['intake', 'connector', 'reflex', 'descent', 'wakeup', 'theatre'];
 
-/** Recycled, solid museum architecture. All materials and textures belong to the caller. */
+function roomAt(distance) {
+  const index = ROOM_ENDS.findIndex(end => distance < end);
+  return ROOM_IDS[index < 0 ? 5 : index];
+}
+
+/** Six room kits deform along the same elevated rail centreline, with a bounded geometry pool. */
 export function createMuseum(THREE, materials, { lite = false } = {}) {
   const group = new THREE.Group();
-  group.name = 'Museum vaulted galleries';
-  const ownedGeometry = new Set();
-  const temporaryGeometry = new Set();
-  const batches = new Map();
-  const matrix = new THREE.Matrix4();
-  const rotation = new THREE.Quaternion();
-  const unitBox = new THREE.BoxGeometry(1, 1, 1);
-  const unitCylinder = new THREE.CylinderGeometry(1, 1, 1, lite ? 12 : 20);
-  const unitSphere = new THREE.SphereGeometry(1, lite ? 12 : 20, lite ? 8 : 12);
-  temporaryGeometry.add(unitBox);
-  temporaryGeometry.add(unitCylinder);
-  temporaryGeometry.add(unitSphere);
+  group.name = 'Gooning Museum rooms';
+  const temporary = new Set();
+  const templates = new Map();
+  const beveledBoxes = new Map();
+  const transform = new THREE.Matrix4();
+  const quaternion = new THREE.Quaternion();
+  const sweptBoxes = new Map();
+  const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
+  const cylinderGeometry = new THREE.CylinderGeometry(1, 1, 1, lite ? 12 : 20);
+  const sphereGeometry = new THREE.SphereGeometry(1, lite ? 12 : 20, lite ? 8 : 12);
+  const smallSphereGeometry = new THREE.SphereGeometry(1, 8, 4);
+  const smallCylinderGeometry = new THREE.CylinderGeometry(1, 1, 1, 8);
+  for (const geometry of [cubeGeometry, cylinderGeometry, sphereGeometry, smallSphereGeometry, smallCylinderGeometry]) temporary.add(geometry);
 
-  function meterUV(geometry, density = 1) {
-    const positions = geometry.attributes.position;
-    const normals = geometry.attributes.normal;
-    const uv = geometry.attributes.uv;
-    for (let i = 0; i < positions.count; i++) {
-      const x = Math.abs(normals.getX(i));
-      const y = Math.abs(normals.getY(i));
-      const z = Math.abs(normals.getZ(i));
-      if (y >= x && y >= z) uv.setXY(i, positions.getX(i) * density, positions.getZ(i) * density);
-      else if (x >= z) uv.setXY(i, positions.getZ(i) * density, positions.getY(i) * density);
-      else uv.setXY(i, positions.getX(i) * density, positions.getY(i) * density);
+  function sweptBox(width, depth) {
+    const across = Math.max(1, Math.ceil(width / 0.5));
+    const along = Math.max(1, Math.ceil(depth / 0.25));
+    const key = `${across}/${along}`;
+    if (!sweptBoxes.has(key)) {
+      const geometry = new THREE.BoxGeometry(1, 1, 1, across, 1, along);
+      sweptBoxes.set(key, geometry); temporary.add(geometry);
     }
-    return geometry;
+    return sweptBoxes.get(key);
   }
 
-  function add(geometry, material, x, y, z, sx = 1, sy = 1, sz = 1, rx = 0, ry = 0, rz = 0, uv = true) {
-    const name = materials[material] ? material : 'stone';
-    rotation.setFromEuler(new THREE.Euler(rx, ry, rz));
-    matrix.compose(new THREE.Vector3(x, y, z), rotation, new THREE.Vector3(sx, sy, sz));
-    let copy = geometry.clone();
-    copy.applyMatrix4(matrix);
-    if (uv) meterUV(copy, ['stone', 'plaster', 'plasterBlue', 'floor'].includes(name) ? 0.5 : 1);
-    if (copy.index) {
-      const unindexed = copy.toNonIndexed();
-      copy.dispose();
-      copy = unindexed;
+  function makeKit(id, variant = 0) {
+    const batches = new Map();
+    const solidParts = [];
+    const names = {
+      intake: { wall: 'lacquerPlum', trim: 'lacquerRose', light: 'pinkLight', accent: 'brass', floor: 'floor' },
+      connector: { wall: 'lacquerBlack', trim: 'cyanPanel', light: 'cyanLight', accent: 'chrome', floor: 'lacquerBlack' },
+      reflex: { wall: 'lacquerBlack', trim: 'cyanPanel', light: 'amberLight', accent: 'chrome', floor: 'dark' },
+      descent: { wall: 'lacquerPlum', trim: 'pinkPanel', light: 'pinkLight', accent: 'chrome', floor: 'lacquerPlum' },
+      wakeup: { wall: 'pearl', trim: 'mint', light: 'mintLight', accent: 'brass', floor: 'floor' },
+      theatre: { wall: 'velvet', trim: 'pinkPanel', light: 'amberLight', accent: 'brass', floor: 'woodDark' },
+    }[id];
+    function add(geometry, material, x, y, z, sx = 1, sy = 1, sz = 1, rx = 0, ry = 0, rz = 0, solid = false) {
+      quaternion.setFromEuler(new THREE.Euler(rx, ry, rz));
+      transform.compose(new THREE.Vector3(x, y, z), quaternion, new THREE.Vector3(sx, sy, sz));
+      let copy = geometry.clone().applyMatrix4(transform);
+      const positions = copy.attributes.position, normals = copy.attributes.normal, uv = copy.attributes.uv;
+      if (uv) for (let i = 0; i < positions.count; i++) {
+        const ax = Math.abs(normals.getX(i)), ay = Math.abs(normals.getY(i)), az = Math.abs(normals.getZ(i));
+        const density = ['stone', 'floor', 'plaster', 'plasterBlue'].includes(material) ? 0.5 : 1;
+        if (ay > ax && ay > az) uv.setXY(i, positions.getX(i) * density, positions.getZ(i) * density);
+        else if (ax > az) uv.setXY(i, positions.getZ(i) * density, positions.getY(i) * density);
+        else uv.setXY(i, positions.getX(i) * density, positions.getY(i) * density);
+      }
+      if (!copy.index) {
+        const indexed = mergeVertices(copy);
+        copy.dispose(); copy = indexed;
+      }
+      if (!batches.has(material)) batches.set(material, []);
+      batches.get(material).push(copy);
+      if (solid) solidParts.push(copy.clone());
     }
-    if (!batches.has(name)) batches.set(name, []);
-    batches.get(name).push(copy);
-  }
-  const box = (material, x, y, z, width, height, depth, ry = 0) => add(unitBox, material, x, y, z, width, height, depth, 0, ry);
-  const cylinder = (material, x, y, z, radius, height, ry = 0, rz = 0) => add(unitCylinder, material, x, y, z, radius, height, radius, 0, ry, rz);
-  const sphere = (material, x, y, z, radius) => add(unitSphere, material, x, y, z, radius, radius, radius);
-
-  function archGeometry(radiusX, radiusY, thickness, depth, segments = 36) {
-    const shape = new THREE.Shape();
-    for (let i = 0; i <= segments; i++) {
-      const angle = i / segments * Math.PI;
-      const x = Math.cos(angle) * (radiusX + thickness);
-      const y = Math.sin(angle) * (radiusY + thickness);
-      if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
+    const box = (material, x, y, z, width, height, depth, solid = false, rx = 0, ry = 0, rz = 0) =>
+      add(depth > 1.5 ? sweptBox(width, depth) : cubeGeometry, material, x, y, z, width, height, depth, rx, ry, rz, solid);
+    const cylinder = (material, x, y, z, radius, height, rx = 0, ry = 0, rz = 0) =>
+      add(radius < 0.075 ? smallCylinderGeometry : cylinderGeometry, material, x, y, z, radius, height, radius, rx, ry, rz);
+    const sphere = (material, x, y, z, radius) => add(radius < 0.1 ? smallSphereGeometry : sphereGeometry, material, x, y, z, radius, radius, radius);
+    function rounded(material, x, y, z, width, height, depth, radius = 0.035) {
+      const r = Math.min(radius, width * 0.23, height * 0.23, depth * 0.23);
+      const key = `${width}/${height}/${depth}/${r}`;
+      if (!beveledBoxes.has(key)) {
+        const w = width / 2 - r, h = height / 2 - r;
+        const shape = new THREE.Shape();
+        shape.moveTo(-w, -h); shape.lineTo(w, -h); shape.lineTo(w, h); shape.lineTo(-w, h); shape.closePath();
+        const geometry = new THREE.ExtrudeGeometry(shape, {
+          depth: depth - r * 2, steps: Math.max(1, Math.ceil(depth / 0.3)),
+          bevelEnabled: true, bevelThickness: r, bevelSize: r, bevelSegments: 1, curveSegments: 1,
+        });
+        geometry.translate(0, 0, -depth / 2 + r);
+        beveledBoxes.set(key, geometry); temporary.add(geometry);
+      }
+      add(beveledBoxes.get(key), material, x, y, z);
     }
-    for (let i = segments; i >= 0; i--) {
-      const angle = i / segments * Math.PI;
-      shape.lineTo(Math.cos(angle) * radiusX, Math.sin(angle) * radiusY);
+    function fastener(side, x, y, z, radius = 0.018) {
+      cylinder(names.accent, side * x, y, z, radius, 0.014, 0, 0, Math.PI / 2);
+      box('lacquerBlack', side * (x - 0.01), y, z, 0.006, 0.005, radius * 1.35);
     }
-    shape.closePath();
-    const geometry = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, steps: 1, curveSegments: segments });
-    geometry.translate(0, 0, -depth / 2);
-    temporaryGeometry.add(geometry);
-    return geometry;
-  }
-
-  function vaultGeometry() {
-    const positions = [], normals = [], uv = [], indices = [];
-    const segments = lite ? 28 : 48;
-    for (let row = 0; row < 2; row++) for (let i = 0; i <= segments; i++) {
-      const angle = i / segments * Math.PI;
-      const x = Math.cos(angle), y = Math.sin(angle);
-      positions.push(x * HALF_WIDTH, SPRING + y * VAULT_RISE, (row - 0.5) * BAY_LENGTH);
-      const normal = new THREE.Vector3(-x / HALF_WIDTH, -y / VAULT_RISE, 0).normalize();
-      normals.push(normal.x, normal.y, 0);
-      uv.push(i / segments * 12, row * BAY_LENGTH);
+    function panel(side, x, y, z, height, width, fill = names.wall) {
+      rounded(names.trim, side * x, y, z, 0.16, height, width);
+      rounded('lacquerBlack', side * (x - 0.09), y, z, 0.055, height - 0.10, width - 0.10, 0.018);
+      rounded(fill, side * (x - 0.13), y, z, 0.045, height - 0.18, width - 0.18, 0.015);
+      for (const dy of [-1, 1]) for (const dz of [-1, 1]) fastener(side, x - 0.1, y + dy * (height / 2 - 0.055), z + dz * (width / 2 - 0.055), 0.012);
     }
-    for (let i = 0; i < segments; i++) {
-      const a = i, b = i + 1, c = i + segments + 1, d = c + 1;
-      indices.push(a, c, b, b, c, d);
+    function grille(side, x, y, z, width = 0.76, height = 0.34) {
+      rounded(names.accent, side * x, y, z, 0.11, height + 0.09, width + 0.09, 0.018);
+      box('lacquerBlack', side * (x - 0.064), y, z, 0.025, height, width);
+      const rows = lite ? 5 : 8;
+      for (let i = 0; i < rows; i++) box(names.accent, side * (x - 0.09), y - height * 0.4 + i / (rows - 1) * height * 0.8, z, 0.045, 0.012, width - 0.065, false, 0, 0, side * 0.24);
+      for (const dy of [-1, 1]) for (const dz of [-1, 1]) fastener(side, x - 0.065, y + dy * (height / 2 + 0.018), z + dz * (width / 2 + 0.018), 0.012);
     }
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-    geometry.setIndex(indices);
-    temporaryGeometry.add(geometry);
-    return geometry;
-  }
-
-  // Broad surfaces have world-sized UVs. The recesses add real depth behind the display route.
-  box('floor', 0, -0.12, 0, 12.2, 0.24, BAY_LENGTH + 0.14);
-  box('stone', 0, -0.025, 0, 1.55, 0.035, BAY_LENGTH + 0.16);
-  box('woodDark', -HALF_WIDTH, 0.08, 0, 0.22, 0.16, BAY_LENGTH + 0.14);
-  box('woodDark', HALF_WIDTH, 0.08, 0, 0.22, 0.16, BAY_LENGTH + 0.14);
-  add(vaultGeometry(), 'brick', 0, 0, 0, 1, 1, 1, 0, 0, 0, false);
-
-  const vaultRib = archGeometry(4.35, 2.73, 0.19, 0.38);
-  const innerRib = archGeometry(4.31, 2.68, 0.045, 0.48);
-  const alcoveArch = archGeometry(2.55, 1.02, 0.24, 0.38, 28);
-  const alcoveBead = archGeometry(2.49, 0.97, 0.055, 0.48, 28);
-  const spandrelShape = new THREE.Shape();
-  spandrelShape.moveTo(-2.8, 4.0);
-  spandrelShape.lineTo(2.8, 4.0);
-  spandrelShape.lineTo(2.8, 2.65);
-  for (let i = 0; i <= 32; i++) {
-    const angle = i / 32 * Math.PI;
-    spandrelShape.lineTo(Math.cos(angle) * 2.55, 2.65 + Math.sin(angle) * 1.02);
-  }
-  spandrelShape.lineTo(-2.8, 2.65);
-  spandrelShape.closePath();
-  const spandrel = new THREE.ExtrudeGeometry(spandrelShape, { depth: 0.32, bevelEnabled: false });
-  spandrel.translate(0, 0, -0.16);
-  temporaryGeometry.add(spandrel);
-  for (const z of [-6, 0]) {
-    add(vaultRib, 'stone', 0, SPRING, z);
-    add(innerRib, 'plaster', 0, SPRING, z);
-  }
-  // Iron tie rods and hangers sit below the brickwork, where their supports remain readable.
-  for (const z of [-5.5, 0.5]) {
-    cylinder('iron', 0, 5.05, z, 0.025, 8.2, 0, Math.PI / 2);
-    cylinder('iron', 0, 5.7, z, 0.02, 1.28);
-    sphere('brass', 0, 5.05, z, 0.075);
-  }
-
-  for (const side of [-1, 1]) {
-    const x = side * HALF_WIDTH;
-    // Each twelve-metre gallery has a five-metre-wide recessed exhibition alcove.
-    for (const z of [-4.6, 4.6]) {
-      box('plasterBlue', x + side * 0.12, 2.43, z, 0.3, 2.42, 2.8);
-      box('wood', x - side * 0.04, 0.72, z, 0.22, 1.34, 2.8);
-      for (let panel = 0; panel < 3; panel++) {
-        const pz = z + (panel - 1) * 0.86;
-        box('woodDark', x - side * 0.17, 0.72, pz, 0.035, 0.92, 0.69);
-        box('wood', x - side * 0.192, 0.72, pz, 0.028, 0.82, 0.59);
-        box('brass', x - side * 0.21, 1.16, pz, 0.018, 0.014, 0.63);
+    function wallSpeaker(side, x, y, z) {
+      rounded('lacquerBlack', side * x, y, z, 0.24, 0.66, 0.40, 0.045);
+      for (const [dy, radius] of [[-0.12, 0.11], [0.18, 0.055]]) {
+        cylinder(names.accent, side * (x - 0.13), y + dy, z, radius + 0.018, 0.025, 0, 0, Math.PI / 2);
+        cylinder('lacquerBlack', side * (x - 0.15), y + dy, z, radius, 0.03, 0, 0, Math.PI / 2);
+        sphere('iron', side * (x - 0.18), y + dy, z, radius * 0.38);
+      }
+      for (let i = 0; i < 5; i++) box('iron', side * (x - 0.2), y - 0.25 + i * 0.11, z, 0.012, 0.009, 0.30);
+    }
+    function bench(side, z = 0) {
+      const x = side * 5.13;
+      rounded('woodDark', x, 0.48, z, 0.98, 0.30, 2.52, 0.06);
+      for (const dz of [-0.87, 0, 0.87]) {
+        rounded('leather', x, 0.72, z + dz, 0.98, 0.19, 0.83, 0.065);
+        box(names.accent, x, 0.59, z + dz, 0.99, 0.012, 0.82);
+      }
+      for (const dx of [-0.35, 0.35]) for (const dz of [-1.02, 1.02]) {
+        cylinder('lacquerBlack', x + dx, 0.23, z + dz, 0.045, 0.42);
+        cylinder(names.accent, x + dx, 0.055, z + dz, 0.052, 0.08);
+      }
+      for (const dz of [-1.23, 1.23]) {
+        box(names.accent, x, 0.76, z + dz, 0.76, 0.055, 0.055);
+        for (const dx of [-0.34, 0.34]) box(names.accent, x + dx, 0.64, z + dz, 0.045, 0.28, 0.055);
       }
     }
-    box('plasterBlue', x + side * 0.14, 4.17, 0, 0.32, 1.08, BAY_LENGTH + 0.05);
-    box('woodDark', x - side * 0.1, 1.38, -4.6, 0.3, 0.12, 2.8);
-    box('woodDark', x - side * 0.1, 1.38, 4.6, 0.3, 0.12, 2.8);
-    box('brass', x - side * 0.27, 1.42, -4.6, 0.018, 0.018, 2.8);
-    box('brass', x - side * 0.27, 1.42, 4.6, 0.018, 0.018, 2.8);
-    box('stone', x - side * 0.06, 3.62, 0, 0.38, 0.16, BAY_LENGTH + 0.03);
-    box('plaster', x - side * 0.12, 3.76, 0, 0.48, 0.1, BAY_LENGTH + 0.03);
-    box('stone', x - side * 0.15, 3.87, 0, 0.54, 0.1, BAY_LENGTH + 0.03);
-
-    // Recess backing and returns are substantial walls, not a painted opening.
-    box(side < 0 ? 'velvet' : 'plaster', side * 5.94, 1.95, 0, 0.18, 3.9, 5.6);
-    box('woodDark', side * 5.83, 0.15, 0, 0.12, 0.3, 5.6);
-    for (const z of [-2.85, 2.85]) box('plaster', side * 5.23, 1.92, z, 1.55, 3.84, 0.22);
-    box('dark', side * 5.2, 3.97, 0, 1.6, 0.18, 5.6);
-    add(alcoveArch, 'stone', x - side * 0.035, 2.65, 0, 1, 1, 1, 0, Math.PI / 2);
-    add(alcoveBead, 'plaster', x - side * 0.065, 2.65, 0, 1, 1, 1, 0, Math.PI / 2);
-    add(spandrel, 'plasterBlue', x + side * 0.13, 0, 0, 1, 1, 1, 0, Math.PI / 2);
-    for (const z of [-2.68, 2.68]) {
-      box('stone', x - side * 0.025, 1.32, z, 0.45, 2.64, 0.36);
-      box('stone', x - side * 0.06, 0.14, z, 0.62, 0.28, 0.56);
-      box('plaster', x - side * 0.07, 2.57, z, 0.58, 0.18, 0.52);
+    function archiveShelf(side) {
+      panel(side, 5.94, 1.7, 0, 2.65, 3.15, 'woodDark');
+      for (const y of [0.55, 1.18, 1.81, 2.44]) {
+        rounded('wood', side * 5.68, y, 0, 0.58, 0.07, 2.95, 0.018);
+        box(names.accent, side * 5.37, y, 0, 0.035, 0.05, 2.97);
+      }
+      for (let shelf = 0; shelf < 3; shelf++) for (let book = 0; book < (lite ? 7 : 10); book++) {
+        const z = -1.28 + book * 0.25, height = 0.35 + ((book + shelf) % 3) * 0.055;
+        const material = ['lacquerRose', 'velvet', 'cyanPanel', 'woodDark'][(book + shelf * 2) % 4];
+        rounded(material, side * 5.60, 0.60 + shelf * 0.63 + height / 2, z, 0.35, height, 0.19, 0.012);
+        box('paper', side * 5.407, 0.60 + shelf * 0.63 + height * 0.73, z, 0.012, 0.08, 0.12);
+      }
+    }
+    function instrumentRack(side) {
+      panel(side, 5.88, 2.05, 0, 1.72, 3.55, 'lacquerBlack');
+      for (const z of [-1.10, 0, 1.10]) {
+        rounded('chrome', side * 5.66, 2.15, z, 0.24, 0.91, 0.93, 0.035);
+        rounded('lacquerBlack', side * 5.51, 2.23, z, 0.09, 0.53, 0.73, 0.025);
+        box('cyanPanel', side * 5.455, 2.23, z, 0.018, 0.42, 0.62);
+        for (let line = 0; line < 5; line++) box('cyanLight', side * 5.44, 2.12 + line * 0.05, z - 0.16 + Math.sin(line + z) * 0.12, 0.012, 0.012, 0.15 + (line % 2) * 0.12);
+        for (const dz of [-0.23, 0, 0.23]) {
+          cylinder('lacquerBlack', side * 5.48, 1.87, z + dz, 0.055, 0.08, 0, 0, Math.PI / 2);
+          box('paper', side * 5.43, 1.884, z + dz, 0.012, 0.035, 0.008);
+        }
+      }
+      box('lacquerBlack', side * 5.5, 1.49, 0, 0.72, 0.13, 3.65);
+      box('chrome', side * 5.08, 1.49, 0, 0.065, 0.075, 3.69);
+      for (const z of [-1.65, 1.65]) grille(side, 5.35, 0.55, z, 0.50, 0.38);
     }
 
-    for (const z of [-6, 0]) {
-      const pierX = side * 4.25;
-      // Main piers line up with each vault rib; the centre pier separates twin exhibit bays.
-      if (z === 0) continue;
-      box('stone', pierX, 1.74, z, 0.58, 3.48, 0.68);
-      box('stone', pierX, 0.12, z, 0.9, 0.24, 0.94);
-      box('plaster', pierX, 0.29, z, 0.77, 0.1, 0.82);
-      box('stone', pierX, 3.43, z, 0.8, 0.22, 0.88);
-      box('plaster', pierX, 3.6, z, 0.93, 0.12, 1.0);
-      // Small carved flutes and rosettes give the stone a readable secondary scale.
-      for (const offset of [-0.18, 0, 0.18]) box('plaster', pierX - side * 0.3, 1.89, z + offset, 0.035, 2.66, 0.055);
-      for (const offset of [-0.22, 0.22]) sphere('plaster', pierX - side * 0.34, 3.38, z + offset, 0.095);
+    function curveShell(points, material, solid = false, depth = BAY_LENGTH) {
+      const positions = [], uv = [], indices = [];
+      const rows = Math.ceil(depth / 0.25);
+      // Faceted shells keep independent vertices at each crease instead of smoothing across it.
+      for (let segment = 0; segment < points.length - 1; segment++) {
+        const first = positions.length / 3;
+        const [a, b] = [points[segment], points[segment + 1]];
+        const divisions = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 0.5));
+        for (let row = 0; row <= rows; row++) for (let i = 0; i <= divisions; i++) {
+          const fraction = i / divisions;
+          positions.push(a[0] + (b[0] - a[0]) * fraction, a[1] + (b[1] - a[1]) * fraction, row / rows * depth - depth / 2);
+          uv.push((segment + fraction) / (points.length - 1) * 8, row / rows * depth);
+        }
+        for (let row = 0; row < rows; row++) for (let i = 0; i < divisions; i++) {
+          const a = first + row * (divisions + 1) + i, b = a + 1, c = a + divisions + 1, d = c + 1;
+          indices.push(a, c, b, b, c, d);
+        }
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      geometry.setIndex(indices); geometry.computeVertexNormals();
+      temporary.add(geometry);
+      add(geometry, material, 0, 0, 0, 1, 1, 1, 0, 0, 0, solid);
+    }
+    function frame(points, material, radius, z) {
+      const vertices = points.map(point => new THREE.Vector3(point[0], point[1], z));
+      let curve;
+      if (points.length > 8) curve = new THREE.CatmullRomCurve3(vertices);
+      else {
+        curve = new THREE.CurvePath();
+        for (let i = 1; i < vertices.length; i++) curve.add(new THREE.LineCurve3(vertices[i - 1], vertices[i]));
+      }
+      const geometry = new THREE.TubeGeometry(curve, lite ? 64 : 96, radius, lite ? 6 : 8, false);
+      temporary.add(geometry); add(geometry, material, 0, 0, 0);
+    }
+    function fixture(side, y, z) {
+      const x = side * 4.27;
+      rounded(names.accent, side * 4.48, y, z, 0.12, 0.52, 0.31, 0.035);
+      box('lacquerBlack', side * 4.40, y, z, 0.04, 0.43, 0.22);
+      box(names.accent, side * 4.34, y - 0.16, z, 0.28, 0.07, 0.12);
+      cylinder('glass', x, y, z, 0.19, 0.46);
+      cylinder(names.light, x, y, z, 0.145, 0.43);
+      cylinder('lacquerBlack', x, y + 0.29, z, 0.22, 0.075);
+      cylinder(names.accent, x, y + 0.25, z, 0.20, 0.04);
+      cylinder('lacquerBlack', x, y - 0.29, z, 0.22, 0.075);
+      cylinder(names.accent, x, y - 0.25, z, 0.20, 0.04);
+      for (let i = 0; i < 4; i++) {
+        const a = i * Math.PI / 2;
+        cylinder(names.accent, x + Math.cos(a) * 0.195, y, z + Math.sin(a) * 0.195, 0.015, 0.50);
+      }
+      for (const dy of [-0.2, 0.2]) fastener(side, 4.405, y + dy, z, 0.02);
+    }
+    function alcove(side, height = 3.5) {
+      // The centre of each bay opens into a real two-metre-deep exhibition pocket.
+      box(names.wall, side * 4.74, height / 2, -3.3, 0.28, height, 1.4, true);
+      box(names.wall, side * 4.74, height / 2, 3.3, 0.28, height, 1.4, true);
+      box(names.wall, side * 6.12, height / 2, 0, 0.2, height, 5.2, true);
+      for (const z of [-2.65, 2.65]) box(names.trim, side * 5.4, height / 2, z, 1.5, height, 0.18, true);
+      box(names.trim, side * 5.4, height - 0.05, 0, 1.55, 0.2, 5.4, true);
+      box(names.accent, side * 4.55, 0.14, 0, 0.09, 0.11, BAY_LENGTH);
+      box(names.light, side * 4.5, 0.24, 0, 0.045, 0.045, BAY_LENGTH);
+      // Layered skirting, shadow gaps and cornice give the pocket an architectural finish.
+      box('lacquerBlack', side * 6.0, 0.16, 0, 0.10, 0.30, 5.15);
+      box(names.accent, side * 5.94, 0.31, 0, 0.045, 0.045, 5.15);
+      box(names.accent, side * 4.62, height - 0.17, 0, 0.10, 0.065, BAY_LENGTH);
+      box('lacquerBlack', side * 4.63, height - 0.29, 0, 0.06, 0.035, BAY_LENGTH);
+      for (const z of [-2.62, 2.62]) {
+        rounded(names.trim, side * 4.59, height / 2, z, 0.25, height, 0.30);
+        box(names.accent, side * 4.44, height / 2, z, 0.035, height - 0.15, 0.045);
+      }
+    }
+    box(names.floor, 0, -0.14, 0, 12.5, 0.28, BAY_LENGTH, true);
+    // A clean central inlay gives the rails continuity through each change of room.
+    box(id === 'wakeup' ? 'pearl' : 'lacquerBlack', 0, 0.022, 0, 1.55, 0.04, BAY_LENGTH);
+    for (const side of [-1, 1]) {
+      box(names.accent, side * 0.81, 0.045, 0, 0.035, 0.035, BAY_LENGTH);
+      box(names.light, side * 1.02, 0.035, 0, 0.045, 0.024, BAY_LENGTH);
     }
 
-    // Warm wall sconces with brackets, opaque brass cups and frosted glass shades.
-    for (const z of [-4.1, 4.1]) {
-      box('brass', x - side * 0.21, 2.62, z, 0.09, 0.32, 0.17);
-      cylinder('brass', x - side * 0.42, 2.53, z, 0.032, 0.43, 0, Math.PI / 2);
-      cylinder('brass', x - side * 0.62, 2.67, z, 0.035, 0.31);
-      cylinder('brass', x - side * 0.62, 2.77, z, 0.16, 0.065);
-      const shade = new THREE.CylinderGeometry(0.21, 0.12, 0.24, lite ? 12 : 24);
-      temporaryGeometry.add(shade);
-      add(shade, 'lamp', x - side * 0.62, 2.93, z);
-      cylinder('brass', x - side * 0.62, 3.065, z, 0.215, 0.025);
+    if (id === 'intake') {
+      for (const side of [-1, 1]) {
+        alcove(side, 3.8);
+        for (const z of [-3.6, 3.6]) {
+          box('lacquerRose', side * 4.4, 1.75, z, 0.3, 3.5, 0.4);
+          box('brass', side * 4.21, 1.75, z, 0.035, 3.32, 0.11);
+        }
+        for (const z of [-1.8, 0, 1.8]) {
+          panel(side, 5.98, 1.56, z, 2.48, 1.62, 'velvet');
+          for (let channel = 0; channel < 6; channel++) {
+            const channelZ = z - 0.61 + channel * 0.245;
+            add(cylinderGeometry, 'velvet', side * 5.77, 1.57, channelZ, 0.10, 2.15, 0.115);
+            for (const y of [1.05, 2.08]) sphere('brass', side * 5.665, y, channelZ, 0.018);
+          }
+        }
+        fixture(side, 2.85, -2.9);
+        for (const z of [-3.25, 3.25]) panel(side, 4.48, 1.18, z, 1.88, 0.95, 'leather');
+        grille(side, 4.46, 0.48, 3.25, 0.68, 0.26);
+        wallSpeaker(side, 4.47, 3.06, 3.22);
+      }
+      const shell = Array.from({ length: 33 }, (_, i) => {
+        const angle = i / 32 * Math.PI;
+        return [Math.cos(angle) * 4.63, 3.78 + Math.sin(angle) * 1.35];
+      });
+      curveShell(shell, 'lacquerPlum', true);
+      frame(shell, 'lacquerRose', 0.14, -3.9);
+      frame(shell.map(([x, y]) => [x * 0.985, y - 0.055]), 'pinkLight', 0.025, -3.76);
+      // Recessed square ceiling lanterns have visible housings and attachments.
+      box('brass', 0, 4.95, 0, 1.55, 0.13, 1.45);
+      box('lamp', 0, 4.86, 0, 1.37, 0.045, 1.27);
+      bench(variant ? 1 : -1);
+      if (variant) archiveShelf(-1);
+      else {
+        rounded('woodDark', 5.13, 0.59, 0.85, 0.72, 0.10, 0.72, 0.045);
+        cylinder('brass', 5.13, 0.30, 0.85, 0.045, 0.55);
+        cylinder('woodDark', 5.13, 0.055, 0.85, 0.27, 0.075);
+        for (let book = 0; book < 3; book++) rounded(book % 2 ? 'paper' : 'lacquerRose', 5.13, 0.68 + book * 0.045, 0.85, 0.35 + book * 0.03, 0.035, 0.46, 0.01);
+      }
+    } else if (id === 'connector' || id === 'descent') {
+      const color = id === 'connector' ? 'cyanLight' : 'pinkLight';
+      const dark = id === 'connector' ? 'cyanPanel' : 'lacquerPlum';
+      const outline = [[-4.62, 0], [-4.62, 2.8], [-3.3, 4.25], [3.3, 4.25], [4.62, 2.8], [4.62, 0]];
+      curveShell([...outline].reverse(), dark, true);
+      for (const z of [-3.85, 0]) {
+        frame(outline.map(([x, y]) => [x * 0.97, Math.max(0.1, y - 0.18)]), 'lacquerBlack', 0.18, z);
+        frame(outline.map(([x, y]) => [x * 0.968, Math.max(0.1, y - 0.22)]), color, 0.035, z + 0.16);
+      }
+      for (const side of [-1, 1]) {
+        for (const z of [-2.5, 1.5]) {
+          panel(side, 4.37, 1.45, z, 1.95, 1.28, 'lacquerBlack');
+          box(color, side * 4.27, 1.45, z, 0.035, 1.58, 0.075);
+          box(names.accent, side * 4.26, 2.38, z, 0.08, 0.1, 1.27);
+          grille(side, 4.34, 0.30, z, 0.88, 0.21);
+        }
+        box('lacquerBlack', side * 4.48, 0.18, 0, 0.18, 0.34, BAY_LENGTH);
+        box(names.accent, side * 4.36, 0.37, 0, 0.055, 0.04, BAY_LENGTH);
+        box('lacquerBlack', side * 4.47, 2.66, 0, 0.14, 0.13, BAY_LENGTH);
+        wallSpeaker(side, 4.39, 2.31, variant ? -0.35 : 3.2);
+        for (const z of [-3.8, 0]) {
+          rounded(names.accent, side * 4.38, 0.30, z, 0.35, 0.52, 0.48, 0.04);
+          rounded('lacquerBlack', side * 4.17, 0.30, z, 0.08, 0.40, 0.34, 0.025);
+          fastener(side, 4.10, 0.39, z - 0.09, 0.025);
+          fastener(side, 4.10, 0.21, z + 0.09, 0.025);
+        }
+      }
+      // Repeated asymmetric chevrons provide speed and descent cues on the solid walls.
+      for (const side of [-1, 1]) for (const z of [-2, 2]) {
+        box(color, side * 4.19, 1.15, z, 0.045, 0.10, 0.65, false, side * 0.55);
+        box(color, side * 4.19, 1.47, z + 0.28, 0.045, 0.10, 0.65, false, -side * 0.55);
+      }
+    } else if (id === 'reflex') {
+      for (const side of [-1, 1]) {
+        alcove(side, 3.9);
+        box('cyanPanel', side * 4.44, 1.0, -3.25, 0.25, 1.8, 1.2);
+        box('cyanPanel', side * 4.44, 1.0, 3.25, 0.25, 1.8, 1.2);
+        box('amberLight', side * 4.26, 1.95, -3.25, 0.055, 0.06, 1.2);
+        box('amberLight', side * 4.26, 1.95, 3.25, 0.055, 0.06, 1.2);
+        // Closed specimen drawers, controls and inset instrument windows.
+        box('chrome', side * 5.73, 0.58, 0, 0.65, 1.15, 3.6);
+        for (const z of [-1.25, -0.42, 0.42, 1.25]) {
+          box('lacquerBlack', side * 5.36, 0.62, z, 0.04, 0.74, 0.72);
+          cylinder('amberLight', side * 5.31, 0.72, z, 0.055, 0.025, 0, 0, Math.PI / 2);
+        }
+        fixture(side, 3.0, -2.8);
+        for (const z of [-3.25, 3.25]) {
+          panel(side, 4.43, 1.02, z, 1.74, 1.1, 'cyanPanel');
+          grille(side, 4.28, 0.49, z, 0.80, 0.42);
+        }
+        wallSpeaker(side, 4.48, 3.28, 3.22);
+      }
+      instrumentRack(variant ? 1 : -1);
+      const stoolSide = variant ? -1 : 1;
+      cylinder('lacquerBlack', stoolSide * 5.07, 0.12, -0.85, 0.32, 0.09);
+      cylinder('chrome', stoolSide * 5.07, 0.35, -0.85, 0.045, 0.45);
+      cylinder('leather', stoolSide * 5.07, 0.62, -0.85, 0.34, 0.16);
+      box('lacquerBlack', 0, 4.35, 0, 9.4, 0.32, BAY_LENGTH, true);
+      for (const x of [-3.1, 0, 3.1]) {
+        rounded('lacquerBlack', x, 4.14, 0, 0.98, 0.18, 4.02, 0.04);
+        box('chrome', x, 4.09, 0, 0.82, 0.16, 3.8);
+        box('cyanLight', x, 3.99, 0, 0.67, 0.045, 3.6);
+        for (const dx of [-0.42, 0.42]) box('iron', x + dx, 3.99, 0, 0.045, 0.12, 3.92);
+        for (const z of [-1.87, 1.87]) box('iron', x, 3.99, z, 0.89, 0.12, 0.055);
+      }
+      for (const side of [-1, 1]) {
+        box('chrome', side * 4.3, 2.1, -3.85, 0.3, 4.2, 0.42);
+        box('amberLight', side * 4.12, 2.1, -3.85, 0.045, 3.9, 0.06);
+      }
+    } else if (id === 'wakeup') {
+      for (const side of [-1, 1]) {
+        alcove(side, 3.7);
+        box('mint', side * 4.4, 1.85, -3.7, 0.35, 3.7, 0.35);
+        box('mint', side * 4.4, 1.85, 3.7, 0.35, 3.7, 0.35);
+        box('pearl', side * 5.12, 0.34, 0, 1.2, 0.68, 3.6);
+        box('dark', side * 5.12, 0.71, 0, 1.0, 0.1, 3.4);
+        box('brass', side * 4.48, 0.68, 0, 0.045, 0.04, 3.64);
+        for (const z of [-1.6, 0, 1.6]) {
+          panel(side, 5.97, 2.64, z, 1.66, 1.42, 'pearl');
+          for (const dy of [-0.45, 0, 0.45]) box('mint', side * 5.78, 2.64 + dy, z, 0.045, 0.028, 1.2);
+          box('mint', side * 5.76, 2.64, z, 0.045, 1.43, 0.035);
+        }
+        for (const z of [-3.18, 3.18]) panel(side, 4.47, 1.65, z, 2.8, 0.89, 'pearl');
+        grille(side, 4.33, 0.58, variant ? 3.18 : -3.18, 0.62, 0.34);
+        for (const z of [-1.4, -0.65, 0.1, 0.85, 1.6]) {
+          cylinder('mint', side * 5.12, 1.18, z, 0.045, 0.95);
+          for (let leaf = 0; leaf < 3; leaf++) {
+            const leafGeometry = new THREE.SphereGeometry(1, 10, 6);
+            temporary.add(leafGeometry);
+            add(leafGeometry, 'mint', side * (5.12 + (leaf - 1) * 0.19), 1.15 + leaf * 0.25 + Math.sin(z + variant) * 0.12, z, 0.35, 0.085, 0.16, 0, leaf * 0.7 + variant, side * 0.5);
+          }
+        }
+      }
+      const roof = [[4.64, 3.72], [0, 6.05], [-4.64, 3.72]];
+      curveShell(roof, 'pearl', true);
+      frame(roof.map(([x, y]) => [x, y - 0.13]), 'mint', 0.10, -3.86);
+      frame(roof.map(([x, y]) => [x, y - 0.13]), 'mint', 0.075, 0);
+      // Tall frosted skylight panels alternate with the structural greenhouse ribs.
+      for (const side of [-1, 1]) {
+        box('mintLight', side * 2.1, 4.99, 0, 3.55, 0.055, 2.7, false, 0, 0, -side * 0.465);
+        box('mint', side * 2.1, 5.06, -1.46, 3.7, 0.1, 0.1, false, 0, 0, -side * 0.465);
+        box('mint', side * 2.1, 5.06, 1.46, 3.7, 0.1, 0.1, false, 0, 0, -side * 0.465);
+      }
+      const benchX = variant ? 3.3 : -3.3;
+      for (const z of [-0.25, 1.85]) rounded('pearl', benchX, 0.36, z, 0.65, 0.72, 0.22, 0.04);
+      rounded('wood', benchX, 0.76, 0.8, 0.72, 0.14, 2.9, 0.045);
+      for (const x of [-0.22, 0, 0.22]) box('lacquerBlack', benchX + x, 0.835, 0.8, 0.013, 0.005, 2.79);
+    } else {
+      for (const side of [-1, 1]) {
+        alcove(side, 5.05);
+        // Full-height curtains and golden stage columns make the finale a theatre.
+        for (const z of [-2.15, -1.4, -0.65, 0.1, 0.85, 1.6, 2.35]) cylinder('velvet', side * 5.94, 2.45, z, 0.24, 4.9);
+        for (const z of [-3.18, 3.18]) panel(side, 4.43, 2.31, z, 4.2, 0.83, 'velvet');
+        fixture(side, 3.14, variant ? 3.2 : -3.2);
+        grille(side, 4.26, 0.55, 3.18, 0.58, 0.36);
+        wallSpeaker(side, 4.47, 4.25, -3.18);
+        box('pinkPanel', side * 4.33, 2.45, -3.68, 0.45, 4.9, 0.55);
+        box('brass', side * 4.05, 2.45, -3.68, 0.065, 4.7, 0.14);
+        for (const y of [0.6, 1.2, 1.8, 2.4, 3.0, 3.6, 4.2]) sphere('amberLight', side * 3.98, y, -3.68, 0.065);
+      }
+      bench(variant ? 1 : -1);
+      box('lacquerBlack', 0, 5.48, 0, 9.5, 0.3, BAY_LENGTH, true);
+      const arch = [[-4.35, 0], [-4.35, 4.3], [-3.4, 5.05], [3.4, 5.05], [4.35, 4.3], [4.35, 0]];
+      frame(arch, 'pinkPanel', 0.16, -3.7);
+      frame(arch.map(([x, y]) => [x * 0.965, y - 0.035]), 'amberLight', 0.035, -3.49);
+      box('pinkLight', 0, 5.26, 0, 2.8, 0.045, 1.45);
+      box('brass', 0, 5.35, 0, 3.0, 0.12, 1.65);
     }
-  }
-
-  // Cabinet in the right-hand recess, complete with inset drawer fronts and brass pulls.
-  box('woodDark', 5.43, 0.64, 0, 0.82, 1.12, 3.1);
-  box('wood', 5.38, 1.24, 0, 1.03, 0.14, 3.35);
-  box('woodDark', 5.42, 0.1, 0, 0.96, 0.2, 3.24);
-  for (let row = 0; row < 3; row++) for (let col = 0; col < 5; col++) {
-    const y = 0.35 + row * 0.3, z = (col - 2) * 0.59;
-    box('wood', 4.995, y, z, 0.045, 0.25, 0.54);
-    box('brass', 4.963, y + 0.055, z, 0.02, 0.047, 0.14);
-    cylinder('brass', 4.93, y - 0.035, z, 0.022, 0.11, 0, Math.PI / 2);
-  }
-  // The left recess provides a bench and its carved feet, useful human-scale cues.
-  box('velvet', -5.22, 0.53, 0, 0.67, 0.15, 2.65);
-  box('wood', -5.22, 0.42, 0, 0.73, 0.13, 2.78);
-  box('woodDark', -5.56, 0.89, 0, 0.085, 0.76, 2.74);
-  box('wood', -5.55, 1.29, 0, 0.15, 0.13, 2.86);
-  for (const z of [-1.14, 1.14]) for (const x of [-5.46, -4.99]) {
-    cylinder('woodDark', x, 0.23, z, 0.065, 0.43);
-    sphere('wood', x, 0.11, z, 0.08);
-  }
-  for (const z of [-1.36, 1.36]) {
-    box('wood', -5.21, 0.83, z, 0.77, 0.1, 0.12);
-    cylinder('woodDark', -4.94, 0.65, z, 0.05, 0.33);
-  }
-
-  // A reading stand brings a human-scale object into the room, clear of the cart route.
-  box('stone', -3.32, 0.08, -3.75, 0.66, 0.16, 0.65);
-  cylinder('brass', -3.32, 0.57, -3.75, 0.07, 0.92);
-  cylinder('brass', -3.32, 0.2, -3.75, 0.17, 0.09);
-  add(unitBox, 'wood', -3.32, 1.08, -3.75, 0.96, 0.09, 0.68, 0.32);
-  add(unitBox, 'paper', -3.52, 1.147, -3.75, 0.39, 0.035, 0.53, 0.32, 0, -0.06);
-  add(unitBox, 'paper', -3.12, 1.147, -3.75, 0.39, 0.035, 0.53, 0.32, 0, 0.06);
-  add(unitBox, 'brass', -3.32, 0.99, -3.43, 0.99, 0.045, 0.04, 0.32);
-
-  function flushBatches(label) {
-    const result = new THREE.Group();
-    for (const [name, geometryParts] of batches) {
-      const geometry = mergeGeometries(geometryParts, false);
-      for (const part of geometryParts) part.dispose();
-      if (!geometry) throw new Error(`Museum material batch failed: ${name}`);
-      geometry.computeBoundingSphere();
-      ownedGeometry.add(geometry);
-      const mesh = new THREE.Mesh(geometry, materials[name]);
-      mesh.name = `${label} ${name}`;
-      mesh.castShadow = name !== 'lamp';
-      mesh.receiveShadow = true;
-      result.add(mesh);
+    const meshes = [];
+    for (const [name, parts] of batches) {
+      const geometry = mergeGeometries(parts, false);
+      for (const part of parts) part.dispose();
+      if (!geometry) throw new Error(`Museum room merge failed: ${id}/${name}`);
+      meshes.push({ name, geometry });
     }
-    batches.clear();
-    return result;
+    const solid = mergeGeometries(solidParts, false);
+    for (const part of solidParts) part.dispose();
+    return { meshes, solid };
   }
-  const prototype = flushBatches('Gallery');
 
-  // Cross-gallery portals make a sequence of rooms rather than an uninterrupted nave.
-  const portalShape = new THREE.Shape();
-  portalShape.moveTo(-HALF_WIDTH, 0);
-  portalShape.lineTo(-1.85, 0);
-  for (let i = 32; i >= 0; i--) {
-    const angle = i / 32 * Math.PI;
-    portalShape.lineTo(Math.cos(angle) * 1.85, 2.45 + Math.sin(angle) * 1.6);
-  }
-  portalShape.lineTo(1.85, 0);
-  portalShape.lineTo(HALF_WIDTH, 0);
-  for (let i = 0; i <= 48; i++) {
-    const angle = i / 48 * Math.PI;
-    portalShape.lineTo(Math.cos(angle) * HALF_WIDTH, SPRING + Math.sin(angle) * VAULT_RISE);
-  }
-  portalShape.closePath();
-  const upperOpening = new THREE.Path();
-  upperOpening.moveTo(-1.9, 4.43);
-  upperOpening.lineTo(1.9, 4.43);
-  for (let i = 0; i <= 32; i++) {
-    const angle = i / 32 * Math.PI;
-    upperOpening.lineTo(Math.cos(angle) * 1.9, 5.2 + Math.sin(angle) * 1.0);
-  }
-  upperOpening.closePath();
-  portalShape.holes.push(upperOpening);
-  const portalWall = new THREE.ExtrudeGeometry(portalShape, { depth: 0.42, bevelEnabled: false });
-  portalWall.translate(0, 0, -0.21);
-  temporaryGeometry.add(portalWall);
-  add(portalWall, 'plasterBlue', 0, 0, 0);
-  add(archGeometry(1.85, 1.6, 0.24, 0.58), 'stone', 0, 2.45, 0);
-  add(archGeometry(1.81, 1.55, 0.045, 0.65), 'plaster', 0, 2.45, 0);
-  add(archGeometry(1.9, 1.0, 0.13, 0.55), 'stone', 0, 5.2, 0);
-  for (const side of [-1, 1]) {
-    box('stone', side * 1.98, 1.22, 0, 0.26, 2.44, 0.58);
-    box('stone', side * 1.99, 0.14, 0, 0.43, 0.28, 0.7);
-    box('plaster', side * 1.98, 2.42, 0, 0.4, 0.16, 0.68);
-    box('stone', side * 1.98, 4.84, 0, 0.17, 0.82, 0.55);
-    // Small projecting corbels visibly support the balcony floor.
-    box('stone', side * 2.22, 4.11, 0.34, 0.24, 0.38, 0.54);
-    box('plaster', side * 2.22, 4.24, 0.48, 0.35, 0.18, 0.76);
-  }
-  box('woodDark', 0, 4.36, 0.18, 4.75, 0.16, 1.15);
-  box('stone', 0, 4.25, 0.45, 4.84, 0.13, 0.73);
-  box('wood', 0, 5.18, 0.65, 4.71, 0.11, 0.13);
-  box('woodDark', 0, 4.49, 0.65, 4.67, 0.09, 0.1);
-  for (let x = -2.22; x <= 2.22; x += 0.27) {
-    cylinder('iron', x, 4.83, 0.65, 0.019, 0.67);
-    sphere('brass', x, 4.98, 0.65, 0.035);
-  }
-  const portalPrototype = flushBatches('Cross gallery');
-  for (const geometry of temporaryGeometry) geometry.dispose();
-
-  const railMaterial = materials.iron;
-  const bays = Array.from({ length: lite ? 5 : 7 }, () => {
-    const bay = prototype.clone();
-    const rails = new THREE.Group();
-    rails.name = 'Continuous railway';
-    const portal = portalPrototype.clone();
-    portal.name = 'Cross gallery landing';
-    group.add(bay, rails, portal);
-    const light = new THREE.PointLight(0xffd7a0, lite ? 12 : 18, 17, 2);
-    light.position.set(0, 3.7, 0);
-    bay.add(light);
-    return { bay, rails, portal, index: null, light };
+  for (const id of ROOM_IDS) for (let variant = 0; variant < 2; variant++) templates.set(`${id}/${variant}`, makeKit(id, variant));
+  for (const geometry of temporary) geometry.dispose();
+  const occlusionMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+  const bays = Array.from({ length: lite ? 9 : 11 }, () => ({ node: new THREE.Group(), rails: new THREE.Group(), index: null, occluder: null }));
+  for (const entry of bays) group.add(entry.node, entry.rails);
+  const lights = Array.from({ length: 3 }, () => {
+    const light = new THREE.PointLight(0xffc2df, 25, 18, 2);
+    group.add(light); return light;
   });
+  const raycaster = new THREE.Raycaster();
+  const rayOrigin = new THREE.Vector3(), rayDirection = new THREE.Vector3();
 
-  function rebuildRails(entry, centerZ) {
-    for (const child of [...entry.rails.children]) {
-      child.geometry.dispose();
-      entry.rails.remove(child);
+  function deform(base, center) {
+    const geometry = base.clone();
+    const positions = geometry.attributes.position;
+    for (let i = 0; i < positions.count; i++) {
+      const point = trackPosition(center - positions.getZ(i), positions.getX(i), positions.getY(i));
+      positions.setXYZ(i, point.x, point.y, point.z);
     }
+    geometry.computeVertexNormals();
+    geometry.computeBoundingBox(); geometry.computeBoundingSphere();
+    return geometry;
+  }
+  function clearEntry(entry) {
+    for (const mesh of [...entry.node.children]) { mesh.geometry.dispose(); entry.node.remove(mesh); }
+    for (const mesh of [...entry.rails.children]) { mesh.geometry.dispose(); entry.rails.remove(mesh); }
+    entry.occluder?.geometry.dispose(); entry.occluder = null;
+  }
+  function buildEntry(entry, index) {
+    clearEntry(entry);
+    entry.index = index;
+    const center = index * BAY_LENGTH + BAY_LENGTH / 2;
+    const id = roomAt(center);
+    const template = templates.get(`${id}/${Math.abs(index) % 2}`);
+    entry.node.name = `Museum ${id} ${index}`;
+    for (const item of template.meshes) {
+      const mesh = new THREE.Mesh(deform(item.geometry, center), materials[item.name]);
+      mesh.castShadow = !item.name.endsWith('Light'); mesh.receiveShadow = true;
+      entry.node.add(mesh);
+    }
+    entry.occluder = new THREE.Mesh(deform(template.solid, center), occlusionMaterial);
+    entry.occluder.updateMatrixWorld(true);
     for (const side of [-1, 1]) {
       const points = [];
-      for (let i = 0; i <= 18; i++) {
-        const distance = centerZ - BAY_LENGTH / 2 + i / 18 * BAY_LENGTH;
-        const point = trackPoint(distance);
-        const angle = trackYaw(distance);
-        points.push(new THREE.Vector3(point.x + Math.cos(angle) * side * 0.58, 0.035, point.z - Math.sin(angle) * side * 0.58));
+      for (let i = 0; i <= 24; i++) {
+        const distance = center - BAY_LENGTH / 2 + i / 24 * BAY_LENGTH;
+        const point = trackPosition(distance, side * 0.58, 0.095);
+        points.push(new THREE.Vector3(point.x, point.y, point.z));
       }
       const curve = new THREE.CatmullRomCurve3(points);
-      const rail = new THREE.Mesh(new THREE.TubeGeometry(curve, 36, 0.034, lite ? 5 : 8, false), railMaterial);
-      rail.name = side < 0 ? 'Left running rail' : 'Right running rail';
-      rail.receiveShadow = true;
-      entry.rails.add(rail);
+      const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, 64, 0.035, lite ? 5 : 8, false), materials.chrome);
+      mesh.receiveShadow = true;
+      entry.rails.add(mesh);
     }
   }
-
-  function update(z) {
-    const first = Math.floor(z / BAY_LENGTH) - 1;
+  function update(distance) {
+    const first = Math.floor(distance / BAY_LENGTH) - 3;
     for (let i = 0; i < bays.length; i++) {
       const index = first + i;
       const entry = bays[((index % bays.length) + bays.length) % bays.length];
-      if (entry.index !== index) {
-        entry.index = index;
-        const centerZ = index * BAY_LENGTH + BAY_LENGTH / 2;
-        const point = trackPoint(centerZ);
-        entry.bay.position.set(point.x, 0, point.z);
-        entry.bay.rotation.y = trackYaw(centerZ);
-        entry.bay.scale.x = index % 2 === 0 ? 1 : -1;
-        entry.portal.position.copy(entry.bay.position);
-        entry.portal.rotation.y = trackYaw(centerZ);
-        rebuildRails(entry, centerZ);
-      }
-      entry.bay.visible = index >= -1 && index * BAY_LENGTH < 600;
-      entry.rails.visible = entry.bay.visible;
-      entry.portal.visible = entry.bay.visible && ((index % 3) + 3) % 3 === 1;
+      if (entry.index !== index) buildEntry(entry, index);
+      entry.node.visible = entry.rails.visible = index * BAY_LENGTH < 608;
+    }
+    for (let i = 0; i < lights.length; i++) {
+      const at = distance - 4 + i * 14;
+      const point = trackPosition(at, i % 2 ? -2.8 : 2.8, 3.05);
+      lights[i].position.set(point.x, point.y, point.z);
+      const style = trackStyle(at);
+      lights[i].color.set(style?.accent || '#ffb5d5');
+      lights[i].intensity = roomAt(at) === 'wakeup' ? 15 : 28;
     }
   }
   update(0);
   return {
     group, update,
-    /** DOM exhibit faces use this alongside the WebGL room walls to preserve occlusion. */
     occludes(point, origin) {
+      rayOrigin.set(origin.x, origin.y, origin.z);
+      rayDirection.set(point.x - origin.x, point.y - origin.y, point.z - origin.z);
+      const distance = rayDirection.length();
+      if (distance < 0.01) return false;
+      rayDirection.multiplyScalar(1 / distance);
+      raycaster.set(rayOrigin, rayDirection); raycaster.near = 0.05; raycaster.far = distance - 0.08;
       for (const entry of bays) {
-        if (!entry.portal.visible) continue;
-        const position = entry.portal.position;
-        const angle = entry.portal.rotation.y;
-        const c = Math.cos(angle), s = Math.sin(angle);
-        const originZ = s * (origin.x - position.x) + c * (origin.z - position.z);
-        const targetZ = s * (point.x - position.x) + c * (point.z - position.z);
-        const denominator = targetZ - originZ;
-        if (Math.abs(denominator) < 0.00001) continue;
-        const t = -originZ / denominator;
-        if (t <= 0.001 || t >= 0.999) continue;
-        const x = origin.x + (point.x - origin.x) * t - position.x;
-        const z = origin.z + (point.z - origin.z) * t - position.z;
-        const localX = c * x - s * z;
-        const y = origin.y + (point.y - origin.y) * t;
-        const doorTop = 2.45 + 1.6 * Math.sqrt(Math.max(0, 1 - (localX / 1.85) ** 2));
-        const upperTop = 5.2 + Math.sqrt(Math.max(0, 1 - (localX / 1.9) ** 2));
-        const throughDoor = Math.abs(localX) < 1.85 && y >= 0 && y < doorTop;
-        const throughUpper = Math.abs(localX) < 1.9 && y > 4.43 && y < upperTop;
-        if (!throughDoor && !throughUpper) return true;
+        if (entry.node.visible && raycaster.intersectObject(entry.occluder, false).length) return true;
       }
       return false;
     },
     dispose() {
-      for (const geometry of ownedGeometry) geometry.dispose();
-      for (const entry of bays) for (const child of entry.rails.children) child.geometry.dispose();
-      group.removeFromParent();
+      for (const entry of bays) clearEntry(entry);
+      for (const template of templates.values()) {
+        for (const item of template.meshes) item.geometry.dispose();
+        template.solid.dispose();
+      }
+      occlusionMaterial.dispose(); group.removeFromParent();
     },
   };
 }

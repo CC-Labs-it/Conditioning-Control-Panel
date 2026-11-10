@@ -126,6 +126,118 @@
     }
   },
   {
+    "material": "terrazzo",
+    "asset": "terrazzo_tiles",
+    "source": "https://polyhaven.com/a/terrazzo_tiles",
+    "license": "CC0-1.0",
+    "license_url": "https://polyhaven.com/license",
+    "maps": {
+      "color": {
+        "file": "terrazzo-color.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/terrazzo_tiles/terrazzo_tiles_diff_2k.jpg",
+        "source_md5": "b4bfb01525c22e611d9a0651f372ae91",
+        "derivation": {
+          "operation": "Grayscale and colourise for a tintable museum material",
+          "endpoints": [
+            "#58515c",
+            "#d0c5ca"
+          ],
+          "output": "RGB WebP, quality 90, method 6"
+        }
+      },
+      "normal": {
+        "file": "terrazzo-normal.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/terrazzo_tiles/terrazzo_tiles_nor_gl_2k.jpg",
+        "source_md5": "6fdd6cc116b9018108b91f3d5ddf1cff"
+      },
+      "roughness": {
+        "file": "terrazzo-roughness.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/terrazzo_tiles/terrazzo_tiles_rough_2k.jpg",
+        "source_md5": "f75be6541a4fa5c8197408224946efb3"
+      }
+    }
+  },
+  {
+    "material": "velour",
+    "asset": "velour_velvet",
+    "source": "https://polyhaven.com/a/velour_velvet",
+    "license": "CC0-1.0",
+    "license_url": "https://polyhaven.com/license",
+    "maps": {
+      "color": {
+        "file": "velour-color.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/velour_velvet/velour_velvet_diff_2k.jpg",
+        "source_md5": "8a177e9b50140fda3a46e1349b65473a",
+        "derivation": {
+          "operation": "Grayscale and colourise for a tintable museum material",
+          "endpoints": [
+            "#65616b",
+            "#f2e8ed"
+          ],
+          "output": "RGB WebP, quality 90, method 6"
+        }
+      },
+      "normal": {
+        "file": "velour-normal.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/velour_velvet/velour_velvet_nor_gl_2k.jpg",
+        "source_md5": "9118512b61c6f1b074c747d7201fabee"
+      },
+      "roughness": {
+        "file": "velour-roughness.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/velour_velvet/velour_velvet_rough_2k.jpg",
+        "source_md5": "4553577d1d92669fd46534ee2ab55719"
+      }
+    }
+  },
+  {
+    "material": "leather",
+    "asset": "fabric_leather_02",
+    "source": "https://polyhaven.com/a/fabric_leather_02",
+    "license": "CC0-1.0",
+    "license_url": "https://polyhaven.com/license",
+    "maps": {
+      "color": {
+        "file": "leather-color.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/fabric_leather_02/fabric_leather_02_diff_2k.jpg",
+        "source_md5": "32b45ed7c13638babcb9802e0350a625"
+      },
+      "normal": {
+        "file": "leather-normal.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/fabric_leather_02/fabric_leather_02_nor_gl_2k.jpg",
+        "source_md5": "3deeccfecf50c2d576e63523c7e7ef5c"
+      },
+      "roughness": {
+        "file": "leather-roughness.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/fabric_leather_02/fabric_leather_02_rough_2k.jpg",
+        "source_md5": "c93f8111ea81c285954d49134c00a766"
+      }
+    }
+  },
+  {
+    "material": "rubber",
+    "asset": "rubber_tiles",
+    "source": "https://polyhaven.com/a/rubber_tiles",
+    "license": "CC0-1.0",
+    "license_url": "https://polyhaven.com/license",
+    "maps": {
+      "color": {
+        "file": "rubber-color.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/rubber_tiles/rubber_tiles_diff_2k.jpg",
+        "source_md5": "5bfab6657e8b95310d22cb40b81fe42e"
+      },
+      "normal": {
+        "file": "rubber-normal.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/rubber_tiles/rubber_tiles_nor_gl_2k.jpg",
+        "source_md5": "260d48a0422429cedb1eba6ee44b6c48"
+      },
+      "roughness": {
+        "file": "rubber-roughness.webp",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/rubber_tiles/rubber_tiles_rough_2k.jpg",
+        "source_md5": "46aff3216fd140ced87cd1eaf366410e"
+      }
+    }
+  },
+  {
     "material": "environment",
     "asset": "brown_photostudio_02",
     "source": "https://polyhaven.com/a/brown_photostudio_02",

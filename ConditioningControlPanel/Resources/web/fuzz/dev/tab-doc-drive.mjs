@@ -21,9 +21,27 @@ try {
     page.on('pageerror', error => errors.push(String(error)));
     const open = async (at, extra = '') => {
       await page.goto(`${base}dev/tab-doc.html?manual=1&test=1&at=${at}&lite=${Number(phone)}${extra}`);
-      await page.waitForFunction(() => window.__tabDoc?.tunnel.state.zone);
+      await page.waitForFunction(() => window.__tabDoc?.tunnel.debug().ready && window.__tabDoc?.tunnel.state.zone);
     };
-    const pump = () => phone ? page.touchscreen.tap(180, 680) : page.mouse.click(720, 690);
+    const pump = async () => {
+      const point = await page.evaluate(() => __tabDoc.tunnel.debug().pumpPosition);
+      assert.ok(point?.visible, 'the physical lever must be in view');
+      if (phone) await page.touchscreen.tap(point.x, point.y);
+      else await page.mouse.click(point.x, point.y);
+    };
+    const dragLook = async () => {
+      const x = phone ? 180 : 700, y = phone ? 330 : 400;
+      if (phone) {
+        const session = await context.newCDPSession(page);
+        await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+        await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + 95, y: y + 30 }] });
+        await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        await session.detach();
+      } else {
+        await page.mouse.move(x, y); await page.mouse.down();
+        await page.mouse.move(x + 230, y + 65, { steps: 8 }); await page.mouse.up();
+      }
+    };
     const wakeClear = () => page.evaluate(() => {
       const button = document.getElementById('wake'), rect = button.getBoundingClientRect();
       return document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2) === button;
@@ -33,6 +51,12 @@ try {
     check(`${tag} booth input rattles without motion`, await page.evaluate(() => __tabDoc.tunnel.state.z === 0));
     check(`${tag} user text stays text`, await page.locator('.td-name img').count() === 0);
     await page.evaluate(() => __tabDoc.step(39));
+    await dragLook();
+    check(tag + ' drag looks around without pumping', await page.evaluate(() => Math.abs(__tabDoc.tunnel.debug().lookYaw) > .2 && __tabDoc.tunnel.state.v === 0));
+    await page.locator('.td-center-view').click();
+    check(tag + ' center restores the forward view', await page.evaluate(() => __tabDoc.tunnel.debug().lookYaw === 0 && __tabDoc.tunnel.debug().lookPitch === 0));
+    await page.mouse.click(phone ? 200 : 700, 200);
+    check(tag + ' clicking scenery does not pump', await page.evaluate(() => __tabDoc.tunnel.state.v === 0));
     check(`${tag} silent fallback stamps and unlocks`, await page.evaluate(() => !__tabDoc.tunnel.state.locked && !document.querySelector('.td-stamp').hidden));
     await page.screenshot({ path: join(shots, `${tag}-booth.png`) });
     await pump(); await page.evaluate(() => __tabDoc.step(1));
@@ -49,7 +73,7 @@ try {
     await page.evaluate(() => {
       const root = document.querySelector('.td-root');
       for (let i = 0; i < 600 && __tabDoc.tunnel.state.z < 305; i++) {
-        root.dispatchEvent(new PointerEvent('pointerdown', { button: 0, isPrimary: true, bubbles: true }));
+        root.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
         __tabDoc.step(0.2);
       }
     });
@@ -65,16 +89,21 @@ try {
     await page.evaluate(() => {
       const root = document.querySelector('.td-root');
       while (__tabDoc.tunnel.state.z < 466) {
-        root.dispatchEvent(new PointerEvent('pointerdown', { button: 0, isPrimary: true, bubbles: true }));
+        root.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
         __tabDoc.step(0.2);
       }
     });
     await page.screenshot({ path: join(shots, `${tag}-vitrine.png`) });
+    if (!(await page.locator('.td-specimen').isVisible())) await dragLook();
+    check(tag + ' looking toward the specimen reveals its control', await page.locator('.td-specimen').isVisible());
     await page.locator('.td-specimen').click();
     check(`${tag} specimen uses the real Wake Up handler`, await page.locator('#pause').isVisible());
     await page.evaluate(() => __tabDoc.panic());
     check(`${tag} panic releases callbacks, media and nodes`, await page.evaluate(() => __tabDoc.stats().callbacks === 0 && __tabDoc.stats().timers === 0 && __tabDoc.stats().subscriptions === 0 && !document.querySelector('.td-root')));
     await open('stage', '&hours=1');
+    await dragLook();
+    check(tag + ' parked camera responds without a permanent render loop', await page.evaluate(() => Math.abs(__tabDoc.tunnel.debug().lookYaw) > .2 && __tabDoc.tunnel.debug().callbacks === 0));
+    await page.locator('.td-center-view').click();
     await page.evaluate(() => __tabDoc.step(1));
     const before = await page.evaluate(() => __tabDoc.stats());
     await page.evaluate(() => { __tabDoc.wall(3 * 3600); __tabDoc.step(600); });

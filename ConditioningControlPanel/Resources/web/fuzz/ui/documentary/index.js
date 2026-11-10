@@ -58,7 +58,10 @@ export function createTabTunnel(ctx, parent, opts = {}) {
   parent.append(root);
   const media = createMedia(ctx, { lite });
   try {
-    scene = createScene(ctx, root, opts.manifest, media, { lite, onWake: () => doc.getElementById('wake')?.click() });
+    scene = createScene(ctx, root, opts.manifest, media, {
+      lite, onWake: () => doc.getElementById('wake')?.click(),
+      onPump: () => { if (!disposed && !ctx.paused && !doc.hidden) ride.pump(); },
+    });
     stage = createStage(ctx, scene.stageAnchor, opts.manifest, {
       onNewRun: () => { try { opts.onNewRun?.(); } finally { dispose(); } },
       hours: opts.hours, now: opts.now, onEvent: emit,
@@ -115,10 +118,8 @@ export function createTabTunnel(ctx, parent, opts = {}) {
   const interactive = target => target?.closest?.('button,a,input,textarea,select,[contenteditable=true],[role=button]');
   function pump(event) {
     if (disposed || ctx.paused || doc.hidden || interactive(event.target)) return;
-    if (event.type === 'keydown') {
-      if (event.repeat || event.ctrlKey || event.altKey || event.metaKey || ![' ', 'Enter'].includes(event.key)) return;
-      event.preventDefault();
-    } else if (event.button !== 0 || event.isPrimary === false) return;
+    if (event.repeat || event.ctrlKey || event.altKey || event.metaKey || ![' ', 'Enter'].includes(event.key)) return;
+    event.preventDefault();
     ride.pump();
   }
   function sync() {
@@ -137,7 +138,6 @@ export function createTabTunnel(ctx, parent, opts = {}) {
     if (opts.fallback !== false && ride.state.locked) { later('booth.stamp', 30000); later('booth.unlock', 40000); }
     emit('ready');
   }
-  root.addEventListener('pointerdown', pump);
   doc.addEventListener('keydown', pump);
   doc.addEventListener('visibilitychange', sync);
   win.addEventListener('resize', scene.resize);
@@ -157,7 +157,6 @@ export function createTabTunnel(ctx, parent, opts = {}) {
     for (const stop of heldStops.values()) stop.release();
     for (const cleanup of cleanups) cleanup?.();
     cleanups.clear();
-    root.removeEventListener('pointerdown', pump);
     doc.removeEventListener('keydown', pump);
     doc.removeEventListener('visibilitychange', sync);
     win.removeEventListener('resize', scene.resize);

@@ -14,6 +14,10 @@ MATERIALS = {
     'wood': 'wood_table_worn',
     'brick': 'medieval_red_brick',
     'floor': 'marble_mosaic_tiles',
+    'terrazzo': 'terrazzo_tiles',
+    'velour': 'velour_velvet',
+    'leather': 'fabric_leather_02',
+    'rubber': 'rubber_tiles',
 }
 MAPS = {'color': ['Diffuse', 'diff'], 'normal': ['nor_gl'], 'roughness': ['Rough', 'rough']}
 
@@ -30,7 +34,8 @@ for name, asset in MATERIALS.items():
     maps = {}
     for output, choices in MAPS.items():
         key = next(key for key in choices if key in files)
-        spec = files[key]['1k']['jpg']
+        resolution = '2k' if name in ('terrazzo', 'velour', 'leather', 'rubber') else '1k'
+        spec = files[key][resolution]['jpg']
         target = args.out / f'{name}-{output}.webp'
         if not target.exists():
             data = session.get(spec['url'], timeout=60)
@@ -40,8 +45,18 @@ for name, asset in MATERIALS.items():
             if name == 'stone' and output == 'color':
                 # Keep the scanned grain while matching the reference's pale limestone.
                 picture = ImageOps.colorize(ImageOps.grayscale(picture), '#a89e8a', '#efe6d3')
+            if name == 'terrazzo' and output == 'color':
+                picture = ImageOps.colorize(ImageOps.grayscale(picture), '#58515c', '#d0c5ca')
+            if name == 'velour' and output == 'color':
+                picture = ImageOps.colorize(ImageOps.grayscale(picture), '#65616b', '#f2e8ed')
             picture.save(target, quality=90, method=6)
         maps[output] = {'file': target.name, 'source': spec['url'], 'source_md5': spec['md5']}
+        if name in ('terrazzo', 'velour') and output == 'color':
+            maps[output]['derivation'] = {
+                'operation': 'Grayscale and colourise for a tintable museum material',
+                'endpoints': ['#58515c', '#d0c5ca'] if name == 'terrazzo' else ['#65616b', '#f2e8ed'],
+                'output': 'RGB WebP, quality 90, method 6',
+            }
         if name == 'stone' and output == 'color':
             maps[output]['derivation'] = {
                 'operation': 'Pillow ImageOps.grayscale then ImageOps.colorize',

@@ -17,7 +17,8 @@ function advance(seconds) {
   if (paused || document.hidden) return;
   let remaining = seconds;
   while (remaining > 0.000001) {
-    const dt = Math.min(1 / 60, remaining);
+    // The ride integrates its own 60Hz physics. Manual drives need only eight visual samples per second.
+    const dt = Math.min(manual ? 1 / 8 : 1 / 60, remaining);
     remaining -= dt;
     active += dt * 1000;
     for (const timer of [...timers]) if (timer.at <= active) { timers.delete(timer); timer.fn(); }
@@ -77,8 +78,10 @@ document.addEventListener('keydown', event => {
 });
 document.addEventListener('visibilitychange', () => { last = performance.now(); schedule(); });
 const manifest = await fetch(MANIFEST_URL).then(response => response.json());
+const requestedStart = query.get('at') || 'booth';
+const startAt = /^\d+(?:\.\d+)?$/.test(requestedStart) ? Number(requestedStart) : requestedStart;
 const tunnel = createTabTunnel(ctx, $('l-ending'), {
-  manifest, at: query.get('at') || 'booth', lite: query.get('lite') === '1' || innerWidth < 600,
+  manifest, at: startAt, lite: query.get('lite') === '1' || innerWidth < 600,
   hours: query.get('hours'), now: () => performance.now() + simulatedWall,
   onDispose() { $('finished').hidden = false; },
 });
