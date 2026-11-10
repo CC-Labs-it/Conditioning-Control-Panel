@@ -1,11 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { slotState, slotStep, beginSpin, finishSpin, dispenserState, dispenserStep, dispense, catchPrize, COIN_MS, SPIN_MS, DROP_MS, CATCH_MS } from '../sim/arcade.js';
-import { createRun, sideLump } from '../sim/economy.js';
+import { createRun, earn, sideLump } from '../sim/economy.js';
 
-test('a scarce slot win pays its advertised prize even when other side games drained their shared budget', () => {
+test('a slot win pays from the Slots budget, whatever other side games did to the shared budget', () => {
   const s = createRun();
+  s.owned.mini_slots = 1; s.order.push('mini_slots');
+  for (let t = 0; t < 600; t++) { s.clock += 1000; earn(s, 1000); }
   sideLump(s, 100000, 'noise');
+  sideLump(s, 100000, 'dispenser');
   const before = { ...s.side };
   assert.equal(sideLump(s, 5000, 'mini_slots'), 5000);
   assert.deepEqual(s.side, before);

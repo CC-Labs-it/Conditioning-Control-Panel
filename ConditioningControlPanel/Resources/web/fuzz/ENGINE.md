@@ -94,7 +94,7 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 Mini Slots and the Prize Dispenser use `mini_slots` and `dispenser`, the explicit full-prize exceptions in config. Other sources share the usual side budget.
 Always show the returned credited amount, and consume a saved claim before paying it.
 
-- `ctx.pay(amount, source, {x, y}?)`: a lump. With a point it flies to the counter. Pace applies, so pass plain numbers like `ctx.rates().fps * 30`. An ad press uses the source `'ad'`, which is what the Broke mood doubles.
+- `ctx.pay(amount, source, {x, y}?)`: a lump. With a point it flies to the counter. Pace applies, so pass plain numbers like `ctx.rates().fps * 30`. An ad press uses the source `'ad'`, which is what the Broke mood doubles. A source named in `CONFIG.TOY_SHARE` (the eight on-screen games) draws on that game's own budget, its share of base income while owned and switched on, capped at `TOY_CAP_S` of unused share (`sim/economy.js` toyPot); every other source shares `SIDE_SHARE`.
 - `ctx.spend(amount, reason?)`: takes from the bank, never below zero, answers what it took. No debt, and it does not touch `total`. Pace does not apply. Reasons add up in `ctx.state.spent`.
 - `ctx.guardBuy(fn(item) -> {refuse: 'line'} | null)`: refuse or delay a buy; the line shows as a toast. Returns a remover. Use this, never capture listeners on the shop. It cannot make a run impossible: a row goes through after 3 refusals whatever you answer, a fork or ending row never reaches you, and a throw lets the row through.
 - `ctx.wallHit({x, y, corner})`: a bouncing thing hit a wall: pays the wall value, emits `wall`, answers the gain.

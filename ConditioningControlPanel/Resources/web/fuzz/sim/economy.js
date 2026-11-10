@@ -32,6 +32,8 @@ export function createRun({ pace = 1, mood = null, seed = 1, perk = null, presti
     sources: {},
     spent: {},         // ctx.spend by reason
     side: { budget: 0, asked: 0, paid: 0 },  // side money: see sideLump
+    toys: {},          // toy budgets, id -> {budget, asked, paid}: see CONFIG.TOY_SHARE
+    inc: { k: 0, b: [], sum: 0 },  // recent income in 10 s buckets, caps the toy budgets
     store: {},         // ctx.store per unlock
     off: {},           // Control Panel: unlock id -> 1 while switched off (sim/switches.js)
     endless: false,
@@ -223,10 +225,64 @@ function credit(s, amount, source) {
 
 export const lump = (s, amount, source = 'lump') => credit(s, Math.max(0, amount), source);
 
-/** Planned income: taps, walls, per-second pay. Each bit also fills the side money budget. */
+/** Planned income: taps, walls, per-second pay. Each bit also fills the side money budget and the toy budgets. */
 export function earn(s, amount, source = 'earn') {
   s.side.budget += amount * CONFIG.SIDE_SHARE;
+  accrueToys(s, amount);
   return credit(s, amount, source);
+}
+
+/* ---- toy budgets (CONFIG.TOY_SHARE) ---- */
+const TOY_SHARES = Object.entries(CONFIG.TOY_SHARE);
+const INC_BUCKET_MS = 10000;
+const INC_BUCKETS = Math.max(1, Math.round(CONFIG.TOY_CAP_S * 1000 / INC_BUCKET_MS));
+
+/** True when ctx.pay from this source draws on its own toy budget instead of the shared side money. */
+export const isToySource = (source) => Object.hasOwn(CONFIG.TOY_SHARE, source);
+
+/** One toy's budget: {budget, asked, paid}, the same sum the shared side money keeps, but for that toy alone. */
+export function toyPot(s, id) {
+  s.toys ||= {};
+  return (s.toys[id] ||= { budget: 0, asked: 0, paid: 0 });
+}
+
+/** Income of the last TOY_CAP_S of play, in INC_BUCKET_MS buckets on the run clock (paused time earns nothing). */
+function recentIncome(s, amount) {
+  const w = (s.inc ||= { k: 0, b: [], sum: 0 });
+  const k = Math.floor((s.clock || 0) / INC_BUCKET_MS);
+  if (k !== w.k) {
+    if (k < w.k || k - w.k >= INC_BUCKETS) { w.b = []; w.sum = 0; }
+    else for (let j = w.k + 1; j <= k; j++) { const i = j % INC_BUCKETS; w.sum -= w.b[i] || 0; w.b[i] = 0; }
+    w.k = k;
+  }
+  const i = k % INC_BUCKETS;
+  w.b[i] = (w.b[i] || 0) + amount;
+  w.sum = Math.max(0, w.sum + amount);
+  return w.sum;
+}
+
+/** Fills each owned, switched-on toy's budget with its share of this income, up to TOY_CAP_S of its share of recent
+ *  income unspent. A toy not owned or switched off in the Control Panel gets nothing, and nothing it misses goes elsewhere. */
+function accrueToys(s, amount) {
+  if (!(amount > 0)) return;
+  const recent = recentIncome(s, amount);
+  for (const [id, share] of TOY_SHARES) {
+    if (!(s.owned?.[id] > 0) || s.off?.[id]) continue;
+    const fresh = !s.toys?.[id];
+    const t = toyPot(s, id), cap = share * recent;
+    /* A toy just bought starts with TOY_START_S of its share, so its first coin or spin is not a dud. */
+    if (fresh) t.budget = cap * Math.min(1, CONFIG.TOY_START_S / CONFIG.TOY_CAP_S);
+    if (t.budget - t.paid < cap) t.budget = Math.min(t.budget + amount * share, t.paid + cap);
+  }
+}
+
+/** What one toy prize pays: like the shared side money, every ask of this toy gets the same part of it while the toy asks
+ *  for more than its budget, never more than the budget it has left, and never under SIDE_FLOOR of the ask. */
+function quoteToy(s, ask, source) {
+  const t = s.toys?.[source] || { budget: 0, asked: 0, paid: 0 };
+  const requested = t.asked + ask;
+  const fair = requested > 0 ? ask * Math.min(1, t.budget / requested) : 0;
+  return Math.max(Math.min(fair, Math.max(0, t.budget - t.paid)), ask * CONFIG.SIDE_FLOOR);
 }
 
 /** Side money. Every prize asks for a sum, usually seconds of the player's rate. While all prizes together ask for less than
@@ -237,6 +293,7 @@ export function earn(s, amount, source = 'earn') {
 export function quoteSideLump(s, amount, source = 'lump') {
   const ask = Number.isFinite(amount) ? Math.max(0, amount) : 0;
   if (CONFIG.FULL_PRIZE_SOURCES.includes(source)) return ask;
+  if (isToySource(source)) return quoteToy(s, ask, source);
   const g = s.side;
   const w = CONFIG.SIDE_WEIGHT[source] || 1;
   const requested = g.asked + ask * w;
@@ -247,8 +304,11 @@ export function quoteSideLump(s, amount, source = 'lump') {
 
 export function sideLump(s, amount, source = 'lump') {
   const got = quoteSideLump(s, amount, source);
-  if (!CONFIG.FULL_PRIZE_SOURCES.includes(source)) {
-    const ask = Number.isFinite(amount) ? Math.max(0, amount) : 0;
+  const ask = Number.isFinite(amount) ? Math.max(0, amount) : 0;
+  if (isToySource(source)) {
+    const t = toyPot(s, source);
+    t.asked += ask; t.paid += got;
+  } else if (!CONFIG.FULL_PRIZE_SOURCES.includes(source)) {
     s.side.asked += ask * (CONFIG.SIDE_WEIGHT[source] || 1);
     s.side.paid += got;
   }
