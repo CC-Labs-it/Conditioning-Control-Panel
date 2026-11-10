@@ -93,6 +93,7 @@ export function makeContext(engine, scope) {
         keep: !!opts.keep,
         width: opts.width,
         reserveHeight: opts.reserveHeight,
+        allowUnderStrip: opts.allowUnderStrip,
         min: typeof saved.min === 'boolean' ? saved.min : opts.min,
         onMin: opts.onMin,
         layout: saved,

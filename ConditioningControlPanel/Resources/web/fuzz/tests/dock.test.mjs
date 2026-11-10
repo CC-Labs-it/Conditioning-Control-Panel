@@ -71,6 +71,20 @@ function harness(W = 1280, H = 800, opts = {}) {
     flush: () => { while (frames.length) frames.shift()(); }, event: (name, ev = {}) => { for (const f of listeners[name] || []) f(ev); } };
 }
 
+test('a dock that can sit under the tabs can cross the viewport bottom and still be pulled back', () => {
+  const h = harness(390, 650);
+  const s = h.dock.add({ min: false, allowUnderStrip: true, layout: { x: 30, y: 9999 } });
+  h.flush();
+  assert.equal(s.root.getBoundingClientRect().bottom, 650 + EDGE_BLEED);
+  s.root.fire('pointerdown', { clientY: 570 });
+  s.root.fire('pointermove', { clientY: 400 });
+  s.root.fire('pointerup');
+  assert.equal(s.root.getBoundingClientRect().bottom, 650 + EDGE_BLEED - 170);
+  const button = h.make('button'); s.body.appendChild(button);
+  s.root.fire('pointerdown', { target: button });
+  assert.equal(s.root.fire('click', { target: button }).defaultPrevented, false, 'the next tap can take control immediately');
+});
+
 test('legacy object layouts retain visibility and position but lose obsolete empty window dimensions', () => {
   const old = { x: 80, y: 100, w: 700, h: 600, min: true, z: 4 };
   assert.deepEqual(migrateLayout(old), { ...old, w: null, h: null, version: LAYOUT_VERSION });
