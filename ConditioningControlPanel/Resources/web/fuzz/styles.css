@@ -73,7 +73,7 @@ input, textarea, [contenteditable="true"], [contenteditable=""] { user-select: t
 #counter, #phrase, #btn-wrap, #l-meters > * { pointer-events: auto; }   /* the stage's empty parts let a press through to a screen under them */
 #counter { flex: none; font-size: 40px; line-height: 1.1; font-variant-numeric: tabular-nums; text-align: center; }
 #l-meters { flex: 0 1 auto; min-height: 20px; max-width: 100%; overflow: hidden; display: flex; flex-direction: column; align-items: center; text-align: center; color: var(--ink-soft); }
-#btn-zone { flex: none; width: 100%; height: 108px; display: grid; place-items: center; }
+#btn-zone { --zone-h: 108px; flex: none; width: 100%; height: var(--zone-h); display: grid; place-items: center; }   /* Big Button fills --zone-h in place (ui/button-size.js) */
 #btn-wrap { position: relative; transition: transform .25s ease-out; }
 #btn { display: block; width: 150px; height: 54px; background: var(--btn-fill); border: 2px outset #fff; font-size: 18px; cursor: default; touch-action: manipulation; user-select: none; -webkit-user-select: none; transition: transform .07s ease-out; }
 #btn.down { transform: scale(.95); border-style: inset; }
@@ -352,14 +352,14 @@ body.niched #btn[data-skin=spiral] { border-color: var(--niche); }
   .row .ico { font-size: 30px; }
   #goal .row .ico { font-size: 38px; }
   #counter { font-size: 34px; }
-  #btn-zone { height: 96px; }
+  #btn-zone { --zone-h: 96px; }
   #btn { width: 170px; height: 58px; }
   #l-meters { flex-direction: row; flex-wrap: wrap; justify-content: center; align-content: flex-start; column-gap: 10px; width: 100%; }
   #l-meters > * { flex: none; max-width: 100%; }
 }
 @media (max-height: 620px) {
   #stage { padding-top: 40px; }
-  #btn-zone { height: 76px; }
+  #btn-zone { --zone-h: 76px; }
   #btn { height: 48px; }
 }
 /* Phones: the touch-size sound buttons (44 px, from 8 px down) reached into the counter; the stage starts under them. */

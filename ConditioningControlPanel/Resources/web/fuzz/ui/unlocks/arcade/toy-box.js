@@ -1,10 +1,12 @@
-import { advanceBox, BOX_FLIP, BOX_WINDOW, boxPrizeSeconds, createToyBox, fitPiece, restoreBox } from './toy-box-model.js';
+import { advanceBox, BOX_FLIP, BOX_PRIZE_BASE, boxPerks, boxPrizeMult, boxPrizeSeconds, boxWindow, createToyBox, fitPiece, restoreBox, toyBoxRank } from './toy-box-model.js';
 import { sfx } from '../basics/fx.js';
 import { autopilotShare, peekRate, prizeMult } from '../prestige/boosts.js';  // prestige hooks (Renewal Sky, boosts lane)
 import { lostKeyRate } from '../../../sim/prestige-endings.js';  // prestige hook (Renewal Sky, ending stars)
 
 const art = (id) => `assets/toy-box/${id}.png`;
 const names = { pawn: 'Pawn', rook: 'Rook', knight: 'Knight', bishop: 'Bishop', queen: 'Queen', king: 'King' };
+// Journey rank 1 Golden Piece: the same approved piece art, tinted gold (no new art). A still tint, so Gentle needs nothing.
+const GOLD_FILTER = 'sepia(1) saturate(3.2) hue-rotate(-8deg) brightness(1.08) drop-shadow(0 0 2px #fff6c8) drop-shadow(0 0 4px #e8b021)';
 
 // Bounds of the visible piece in each 180 x 240 capture. Ignore the transparent
 // camera margins when fitting both the silhouette and the placed piece.
@@ -45,6 +47,9 @@ export function mountToyBox(ctx) {
     [data-arcade=toy_box] .tb-piece{justify-self:center;width:100%;max-width:94px;height:86px;cursor:grab;touch-action:none;}
     [data-arcade=toy_box] .tb-piece.carrying .tb-shape{visibility:hidden;}
     [data-arcade=toy_box] .tb-piece.selected .tb-shape{filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 4px var(--accent));}
+    [data-arcade=toy_box] .tb-piece.gold .tb-shape,[data-arcade=toy_box] .tb-hole.gold.filled .tb-shape{filter:${GOLD_FILTER};}
+    [data-arcade=toy_box] .tb-piece.gold.selected .tb-shape{filter:${GOLD_FILTER} drop-shadow(0 0 3px var(--accent));}
+    [data-arcade=toy_box] .tb-hole.gold:not(.filled) .tb-shape{filter:brightness(0) saturate(100%) invert(28%) sepia(16%) saturate(750%) hue-rotate(344deg) drop-shadow(0 0 1.5px #f2c23a) drop-shadow(0 0 3px #e8b021);}
     [data-arcade=toy_box] .tb-piece:focus-visible,[data-arcade=toy_box] .tb-hole:focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
     [data-arcade=toy_box] .tb-dust{position:absolute;pointer-events:none;border-radius:50%;background:#fff3d7;box-shadow:0 .6px 0 #926f54;}
     [data-arcade=toy_box] .tb-note{min-height:14px;margin:3px 0 0;text-align:center;font-size:11px;color:var(--ink);}
@@ -107,13 +112,14 @@ export function mountToyBox(ctx) {
     for (const [key, button] of controls) { button.classList.toggle('selected', key === id); button.setAttribute('aria-pressed', String(key === id)); }
     note.textContent = id ? `Find the ${names[id].toLowerCase()}` : 'Match the shapes';
   };
+  const lidName = () => state.outcome === 'packed' ? 'Packed' : toyBoxRank(ctx.state) >= 2 ? 'Big Box' : 'Toy Box';
   function setReady(on) {
     dock.dock?.setReady(on, 'Box open: match the pieces');
   }
   function paintClock() {
     const text = state.phase === 'play' ? `Open | ${state.windowLeft.toFixed(1)} s` : state.phase === 'closing' ? (state.outcome === 'packed' ? 'Packed' : 'Next time') : `Opens in ${Math.ceil(state.nextIn)} s`;
     if (shownClock !== text) { clock.textContent = text; shownClock = text; }
-    const fill = `scaleX(${state.phase === 'play' ? (state.windowLeft / BOX_WINDOW).toFixed(3) : 0})`;
+    const fill = `scaleX(${state.phase === 'play' ? (state.windowLeft / boxWindow(state)).toFixed(3) : 0})`;
     if (fill !== shownFill) { windowFill.style.transform = fill; shownFill = fill; }
     windowMeter.style.visibility = state.phase === 'play' ? 'visible' : 'hidden';
   }
@@ -142,7 +148,7 @@ export function mountToyBox(ctx) {
     boxAnimation?.cancel(); boxAnimation = null;
     setReady(false); root.dataset.phase = state.phase;
     holes.hidden = state.outcome !== 'packed'; tray.hidden = true;
-    lid.hidden = false; lidLabel.textContent = state.outcome === 'packed' ? 'Packed' : 'Toy Box';
+    lid.hidden = false; lidLabel.textContent = lidName();
     note.textContent = credited == null ? 'A fresh box next time' : `+${ctx.fmt(credited)} ${ctx.brand.currencyPlural}`;
     paintClosing();
     paintClock();
@@ -190,10 +196,12 @@ export function mountToyBox(ctx) {
     settlePiece(slot, piece, tilt);
     if (result.complete) {
       const rates = ctx.rates(), r = root.getBoundingClientRect();
-      const credited = ctx.pay(Math.max(rates.fps, rates.click * 2, 2) * boxPrizeSeconds(state.completed - 1) * prizeMult(ctx.prestige), 'toy_box', { x: r.left + r.width / 2, y: r.top + r.height / 2 });
+      // Journey ranks: Golden Piece doubles a box once its gold piece is in, Big Box pays 1.5x (boxPrizeMult).
+      const credited = ctx.pay(Math.max(rates.fps, rates.click * 2, 2) * boxPrizeSeconds(state.completed - 1) * boxPrizeMult(state) * prizeMult(ctx.prestige), 'toy_box', { x: r.left + r.width / 2, y: r.top + r.height / 2 });
       ctx.after(180, () => sfx(ctx, 'sfx/rank_settle.mp3', .22));
       closeBox(credited);
-    } else note.textContent = `${state.placed.length} of ${state.pieces.length}`;
+    } else note.textContent = `${state.placed.length} of ${state.pieces.length}${piece === state.gold ? ' | Gold piece in' : ''}`;
+    if (piece === state.gold) sfx(ctx, 'sfx/chime1.mp3', .14);
   }
   function render() {
     boxAnimation?.cancel(); boxAnimation = null;
@@ -207,8 +215,8 @@ export function mountToyBox(ctx) {
     box.classList.toggle('closed', shut);
     paintClock();
     if (shut) {
-      lidLabel.textContent = state.outcome === 'packed' ? 'Packed' : 'Toy Box';
-      note.textContent = `${state.completed} packed | Next prize x${(boxPrizeSeconds(state.completed) / 12).toFixed(2)}`;
+      lidLabel.textContent = lidName();
+      note.textContent = `${state.completed} packed | Next prize x${(boxPrizeSeconds(state.completed) / BOX_PRIZE_BASE).toFixed(2)}`;
       if (state.phase === 'closing') paintClosing();
       if (!closingPacked) return;
     }
@@ -217,11 +225,13 @@ export function mountToyBox(ctx) {
       b.appendChild(shapeImage(doc, id)); b.setAttribute('aria-label', `${names[id]} shape`);
       b.addEventListener('click', () => { if (selected && !ctx.paused) place(selected, id); });
       if (state.placed.includes(id)) { b.classList.add('filled'); b.disabled = true; }
+      if (state.gold === id) b.classList.add('gold');
       slots.set(id, b);
     }
     if (shut) return;
     for (const id of state.tray) {
-      const b = make('button', 'tb-piece', tray); b.type = 'button'; b.dataset.dockInteractive = ''; b.dataset.toyPiece = id; b.setAttribute('aria-label', names[id]);
+      const b = make('button', 'tb-piece', tray); b.type = 'button'; b.dataset.dockInteractive = ''; b.dataset.toyPiece = id; b.setAttribute('aria-label', state.gold === id ? `Gold ${names[id].toLowerCase()}, doubles this box` : names[id]);
+      if (state.gold === id) b.classList.add('gold');
       b.appendChild(shapeImage(doc, id));
       if (state.placed.includes(id)) { b.style.visibility = 'hidden'; b.disabled = true; }
       controls.set(id, b);
@@ -244,6 +254,7 @@ export function mountToyBox(ctx) {
         if (!drag.ghost) {
           drag.ghost = shapeImage(doc, id);
           drag.ghost.classList.add('tb-held-piece');
+          if (state.gold === id) drag.ghost.style.filter = GOLD_FILTER;
           drag.ghost.style.cssText = `position:fixed;left:0;top:0;width:${drag.width}px;height:${drag.height}px;transform-origin:${drag.grabX}px ${drag.grabY}px;pointer-events:none;`;
           ctx.layer('fx').appendChild(drag.ghost);
           b.classList.add('carrying');
@@ -273,7 +284,7 @@ export function mountToyBox(ctx) {
     const elapsed = Math.max(0, ctx.state.clock - lastClock) / 1000;
     lastClock = ctx.state.clock;
     swingCarry(elapsed);
-    const before = state.phase, result = advanceBox(state, elapsed * (state.phase === 'closed' ? peekRate(ctx.prestige) * lostKeyRate(ctx.prestige) : 1), ctx.rng);  // prestige hooks: Peek (luck_2/5), Lost Key ending (lo_end)
+    const before = state.phase, result = advanceBox(state, elapsed * (state.phase === 'closed' ? peekRate(ctx.prestige) * lostKeyRate(ctx.prestige) : 1), ctx.rng, boxPerks(toyBoxRank(ctx.state)));  // prestige hooks: Peek (luck_2/5), Lost Key ending (lo_end); Journey ranks read live per deal
     state = result.box; save();
     if (result.timedOut && autopilotShare(ctx.prestige)) { const rt = ctx.rates(); ctx.pay(Math.max(rt.fps, rt.click * 2, 2) * boxPrizeSeconds(state.completed) * prizeMult(ctx.prestige) * autopilotShare(ctx.prestige), 'toy_box'); }  // prestige hook: Autopilot (idle_6)
     if (result.timedOut && state.phase === 'closing') closeBox();

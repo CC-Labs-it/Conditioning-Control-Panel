@@ -11,8 +11,8 @@ import { DESIGN, itemsSource } from '../dev/gen-items.mjs';
 const tree = fileURLToPath(new URL('..', import.meta.url));
 
 test('every unlock from the design is here, with a real parent', () => {
-  assert.equal(ITEMS.length, 299);  // + dualwield (owner 2026-11-08), + the four EMI Takeover rows (owner 2026-11-09)
-  assert.equal(new Set(ITEMS.map((i) => i.id)).size, 299);
+  assert.equal(ITEMS.length, 298);  // Four EMI purchases, with Friend Remote retired.
+  assert.equal(new Set(ITEMS.map(it => it.id)).size, ITEMS.length);
   assert.equal(BY_ID.tr_breath, undefined);
   assert.deepEqual(BY_ID.tr_feed.req, ['tr_still']);
   for (const it of ITEMS) for (const q of it.req) assert.ok(BY_ID[q], `${it.id} needs ${q}`);
@@ -42,8 +42,8 @@ test('no row is cheaper than a parent, and each theme opens on its head, with ro
 test('a label never names a multiple: modifiers bend and prizes share a budget, so a shown number is a paid number', () => {
   const walk = (d) => readdirSync(d).flatMap((n) => { const p = join(d, n); return statSync(p).isDirectory() ? walk(p) : p.endsWith('.js') ? [p] : []; });
   // Prices x2 is a real price modifier. Frenzy x7 and Deep x5 are timed Golden Button buffs that skip the knees, so they
-  // pay exactly what they say (owner 2026-11-07, sim/economy.js rates).
-  const allowed = /Prices x2|Frenzy x7|Deep x5/;
+  // pay exactly what they say (owner 2026-11-07, sim/economy.js rates). EMI Calls Pick up (taps pay x3, owner 2026-11-10) is the same kind of buff.
+  const allowed = /Prices x2|Frenzy x7|Deep x5|taps pay x3/;
   for (const f of [...walk(join(tree, 'ui', 'unlocks')), ...walk(join(tree, 'data', 'content'))]) {
     for (const line of readFileSync(f, 'utf8').split(/\r?\n/)) {
       if (/^\s*(\/\*|\*|\/\/)/.test(line) || allowed.test(line)) continue;

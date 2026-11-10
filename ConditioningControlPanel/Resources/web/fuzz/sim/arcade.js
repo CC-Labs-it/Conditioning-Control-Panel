@@ -72,7 +72,8 @@ export function dispense(s, cooldown = 30000, rng = Math.random) {
   return true;
 }
 
-export function dispenserStep(s, ms) {
+// catchMs: the catch window (Wide Catch, the dispenser's Journey rank 1, passes 4000).
+export function dispenserStep(s, ms, catchMs = CATCH_MS) {
   let dt = Math.max(0, Number.isFinite(ms) ? ms : 0);
   s.cooldown = Math.max(0, s.cooldown - dt);
   // Carry the remainder across phases, so a slow frame never widens the catch window.
@@ -80,7 +81,7 @@ export function dispenserStep(s, ms) {
     if (s.phase === 'cooldown') { if (s.cooldown === 0) s.phase = 'ready'; break; }
     const used = Math.min(dt, s.left); s.left -= used; dt -= used;
     if (s.left > 0) break;
-    if (s.phase === 'drop') { s.phase = 'catch'; s.left = CATCH_MS; }
+    if (s.phase === 'drop') { s.phase = 'catch'; s.left = catchMs; }
     else if (s.phase === 'catch') { s.phase = 'dissolve'; s.left = 650; s.missed++; }
     else { s.phase = s.cooldown > 0 ? 'cooldown' : 'ready'; }
   }

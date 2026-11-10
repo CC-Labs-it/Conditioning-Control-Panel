@@ -97,6 +97,31 @@ export function canMove(b) {
 
 export const deepest = (b) => b.tiles.reduce((m, t) => Math.max(m, t.tier), 0);
 
+/* Journey upgrades (owner 2026-11-10): rank 1 Bigger Board = 5x5, rank 2 Chains = each extra match in one move pays 1.5x
+ * the one before. */
+export const sizeFor = (rank) => rank >= 1 ? 5 : 4;
+export const CHAIN_STEP = 1.5;
+
+/** Grows the board in place: every tile keeps its cell, the new row and column are open water. Never shrinks. */
+export function growBoard(b, n) {
+  if (Number.isInteger(n) && n > b.n) b.n = n;
+  return b;
+}
+
+/**
+ * Chain pay for one move, in units of the game's chain unit. Without Chains a move pays only from three matches, one unit
+ * each (today's rule). With Chains a move pays from two matches, and every extra match pays 1.5x the one before
+ * (1, 1.5, 2.25, ...), so it is never less than the plain rule.
+ */
+export function chainUnits(count, chains) {
+  const k = Math.max(0, Math.floor(Number(count) || 0));
+  if (!chains) return k >= 3 ? k : 0;
+  if (k < 2) return 0;
+  let sum = 0;
+  for (let i = 0; i < k; i++) sum += CHAIN_STEP ** i;
+  return sum;
+}
+
 /** A fresh dive: two tiles. */
 export function deal(b, rng = Math.random) {
   b.tiles = [];

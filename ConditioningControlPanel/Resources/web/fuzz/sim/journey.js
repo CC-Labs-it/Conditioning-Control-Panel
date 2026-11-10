@@ -1,12 +1,17 @@
 import { ITEMS, BY_ID, FORKS } from '../data/items.js';
 import { LEAD_OF } from '../data/folds.js';
 import * as E from './economy.js';
-import { ACTIVITIES, journeyChapters, journeyStretch, SPECIALTIES, rankDescription, setupJourney } from './journey-effects.js';
+import { ACTIVITIES, GAMES, SAVOUR_BUYS, bankRate, trunkBoost, journeyChapters, journeyStretch, rankCap, rankName, SPECIALTIES, rankDescription, setupJourney } from './journey-effects.js';
 import { T_RUN } from '../data/prestige.js';
 
 // Durations calibrate sticker prices on an independent first-run economy.
 // The playable shop uses those prices and prerequisites. It never waits on a timer.
 const forks = new Map([[8, 'f1'], [14, 'f5'], [28, 'f3'], [49, 'f2'], [77, 'f4']]);
+/* Late game wave (owner 2026-11-10: "most toys and on screen games are unlocked early, way too early - this should be
+ * slowly paced so they savour the different games"). Purchase index to minute on the 4-tap reference: 16~4, 36~11.5,
+ * 52~19, 67~28, 84~38, 100~50, 116~63. Was: Toy Box 16, Prize Wheel 26, Racing Thoughts 42, Breakout 52, Deep End 60,
+ * Mini Slots 79, Dispenser 80. Levels moves from 14 (a chapter-end price the player left on the shelf until minute 8) to 16,
+ * so the Prize Wheel behind it can open at about minute 4. */
 const anchors = {
   1: 'stray',
   2: 'rounded',
@@ -19,42 +24,48 @@ const anchors = {
   11: 'ticker',
   12: 'gold',
   13: 'screen',
-  14: 'levels',
   15: 'theme',
-  16: 'toy_box',
+  16: 'levels',
   17: 'lofi_radio',
+  18: 'wheel',
   20: 'spec_rebounds',
   21: 'guide',  // owner 2026-11-07: the map comes early (was about purchase 51)
-  26: 'wheel',
   29: 'media',
   30: 'panel',  // owner 2026-11-07: the Control Panel comes sooner (an icon beside the volume button; was about purchase 110)
   33: 'd_autoscroll',
   35: 'depth',
+  32: 'mini_slots',  // owner 2026-11-10: the slots earlier (was purchase 79)
   38: 'pod',  // owner 2026-11-07: the theme podcast a little sooner (was about purchase 53)
-  42: 'mini_race',  // owner 2026-11-07: Racing Thoughts arrives earlier (was purchase 85)
   50: 'em_head',
   51: 'quiz',
-  52: 'mini_breakout',
+  48: 'mini_race',  // about minute 19 (was 42)
   56: 'banner',
-  60: 'mini_deep',  // owner 2026-11-07: The Deep End joins the arcade
-  63: 'spec_breakout',
+  61: 'boxes',  // Mystery Boxes stay at about minute 24
+  67: 'mini_breakout',  // about minute 28 (was 52)
   78: 'glossy',
-  79: 'mini_slots',
-  80: 'dispenser',
-  96: 'spec_dispenser',
+  82: 'spec_breakout',
+  84: 'mini_deep',  // about minute 38 (was 60)
+  100: 'toy_box',  // owner 2026-11-10: the Toy Box later (was purchase 16), about minute 50
   102: 'taste2',
   106: 'dualwield',  // owner 2026-11-08: Double Wielding, the mid-game power-up (about minute 27)
   110: 'overlay',
+  116: 'dispenser',  // about minute 63, still after the slots (was 80)
   118: 'takeover',
   120: 'spec_mix',
   125: 'tr_skin',
+  127: 'spec_dispenser',
   129: 'em_call',
   131: 'wallpaper',
   135: 'tunnel',
   139: 'x_infinite',
-  142: 'toy',
   144: 'drop'
 };
+const RANK_SPACING = 6;
+/* Owner 2026-11-10: the haptic rows (Toy Link, Phone Buzz) are offered only when the host says a toy is connected (the CCP
+ * desktop app, later), and Friend Remote is cut. None of them is ever a plan row: a row the shelf cannot show would hold
+ * Drop back. Toy Link and Phone Buzz ride beside the plan instead (EXTRAS), at their own price, once open. */
+export const EXTRAS = ['toy', 'buzz'];
+const UNPLANNED = new Set([...EXTRAS, 'remote']);
 const reserve = new Map(Object.entries(anchors).map(([n, id]) => [id, Number(n)]));
 const themeHead = Object.fromEntries(ITEMS.filter(it => it.id.endsWith('_head') && FORKS.f5.opts[it.lane]).map(it => [it.lane, it.id]));
 const themePod = Object.fromEntries(ITEMS.filter(it => it.id.endsWith('_pod') && FORKS.f5.opts[it.lane]).map(it => [it.lane, it.id]));
@@ -98,14 +109,14 @@ function extraItem(parent, id, name, what) {
   };
 }
 function fixedRate(s) {
-  const r = E.rates(s, referenceMods);
+  const r = { ...E.rates(s, referenceMods), boost: trunkBoost(s) };
   const total = r.fps + r.manualClick * 4 + E.count(s, 'stray') * r.walls * r.bounce;
-  const bankRate = Object.keys(s.store.journey.banks).reduce((sum, id) => sum + s.store.journey.ranks[id] * s.base.fps * .01, 0);
+  const banks = Object.keys(s.store.journey.banks).reduce((sum, id) => sum + bankRate(id, s.store.journey.ranks[id]) * s.base.fps * r.boost, 0);
   // The reference player stays: taps 4 a second and catches most Golden Buttons (Deep, Lucky, Obey are worth about a third).
-  return total * (s.owned.gold ? 1.3 : 1) + bankRate * .5;
+  return total * (s.owned.gold ? 1.3 : 1) + banks * .5;
 }
 /* minutes: the run's planned length; priceMult: the run multiplier (prices scale with it, 1 = today). */
-function buildPlan(picks, minutes = T_RUN[0], priceMult = 1) {
+export function buildPlan(picks, minutes = T_RUN[0], priceMult = 1) {
   const { targetSeconds, firstChapterEnd } = timeline(minutes);
   const pm = c => priceMult === 1 ? c : Math.max(1, Math.round(c * priceMult));
   const shadow = E.createRun(),
@@ -113,6 +124,7 @@ function buildPlan(picks, minutes = T_RUN[0], priceMult = 1) {
     entries = [];
   let elapsed = 0,
     spent = 0;
+  const arrived = {}, lastRank = {};
   for (let i = 1; i <= 144; i++) {
     const sense = shadow.picks.f1 === 'ears' ? 'a_hum' : 'e_spiral';
     const media = {
@@ -127,9 +139,13 @@ function buildPlan(picks, minutes = T_RUN[0], priceMult = 1) {
       pod: themePod[shadow.picks.f5]
     };
     const wanted = roles[anchors[i]] || anchors[i];
-    const available = ITEMS.filter(it => it.kind === 'item' && !LEAD_OF[it.id] && E.isOpen(shadow, it) && !(reserve.get(it.id) > i));
-    const families = ['stray', 'rounded', 'ticker', sense, 'levels', 'toy_box', 'wheel', media, 'quiz', 'mini_breakout', 'dispenser', 'mini_race', 'mini_deep'];
-    const ranked = families.filter(id => id && shadow.owned[id] && (j.ranks[id] || 0) < 6).sort((a, b) => (j.ranks[a] || 0) - (j.ranks[b] || 0));
+    const available = ITEMS.filter(it => it.kind === 'item' && !LEAD_OF[it.id] && !UNPLANNED.has(it.id) && E.isOpen(shadow, it) && !(reserve.get(it.id) > i));
+    const families = ['stray', 'rounded', 'ticker', sense, 'levels', 'toy_box', 'wheel', media, 'quiz', 'mini_breakout', 'dispenser', 'mini_race', 'mini_deep', 'mini_slots'];
+    // Savour rule (owner 2026-11-10): a game's first rank waits SAVOUR_BUYS purchases after the game arrived, and one family
+    // never ranks twice within RANK_SPACING purchases while another family can (no three Dispenser upgrades in a row).
+    const rankable = families.filter(id => id && shadow.owned[id] && (j.ranks[id] || 0) < rankCap(id) && !(GAMES.includes(id) && !j.ranks[id] && i - arrived[id] < SAVOUR_BUYS));
+    const spaced = rankable.filter(id => !(i - lastRank[id] < RANK_SPACING));
+    const ranked = (spaced.length ? spaced : rankable).sort((a, b) => (j.ranks[a] || 0) - (j.ranks[b] || 0));
     const specialty = SPECIALTIES[wanted];
     let item = BY_ID[wanted === 'drop' ? E.heldEnding(shadow) : wanted],   // one ending a run: the plan ends on the held one
       parent,
@@ -146,7 +162,7 @@ function buildPlan(picks, minutes = T_RUN[0], priceMult = 1) {
         parent = BY_ID[ranked[0]];
         rank = (j.ranks[parent.id] || 0) + 1;
         item = {
-          ...extraItem(parent, 'rank_' + parent.id + '_' + rank, parent.name + ' · Rank ' + (rank + 1), rankDescription(parent.id)),
+          ...extraItem(parent, 'rank_' + parent.id + '_' + rank, rankName(parent.id, rank, parent.name), rankDescription(parent.id, rank)),
           rank
         };
       } else {
@@ -171,12 +187,14 @@ function buildPlan(picks, minutes = T_RUN[0], priceMult = 1) {
     elapsed += cost / rate;
     if (rank) {
       j.ranks[parent.id] = rank;
+      lastRank[parent.id] = i;
       if (ACTIVITIES.includes(parent.id)) j.banks[parent.id] = 0;
     } else if (specialty) {
       j.specs[item.id] = specialty.options[0][0];
     } else {
       shadow.fuzz = cost;
       if (!E.buy(shadow, item.id, null, cost).ok) throw Error('Invalid journey purchase ' + item.id);
+      if (GAMES.includes(item.id)) arrived[item.id] = i;
     }
     const fork = forks.get(i);
     if (fork) {
@@ -260,12 +278,17 @@ export function createJourney(s) {
       }
       if (offers.some(e => e.item.id === it.id)) continue;
       if (entry.rank && ((j.ranks[entry.parent] || 0) + 1 !== entry.rank || !s.owned[entry.parent])) continue;
+      if (entry.rank === 1 && s.buys - (j.arrive[entry.parent] ?? -Infinity) < SAVOUR_BUYS) continue;
       if (it.options && !s.owned[entry.parent]) continue;
       if (!entry.rank && !it.options && (!E.isOpen(s, it) || E.count(s, it.id) + 1 !== entry.occurrence)) continue;
       offers.push(entry);
       if (offers.length === 3) break;
     }
     if (ready && !offers.some(e => e.item === gate.item)) offers.unshift(gate);
+    for (const id of EXTRAS) {
+      const it = BY_ID[id];
+      if (it && offers.length && E.isOpen(s, it)) offers.push({ item: it, cost: Math.max(1, Math.round(E.price(s, id) * priceMult)), occurrence: 1, extra: true });
+    }
     return offers;
   }
   const find = id => shelf().find(e => e.item.id === id);
@@ -295,7 +318,11 @@ export function createJourney(s) {
         reason: 'closed'
       };
       const cost = sticker(e, mods);
-      if (!e.rank && !e.item.options) return E.buy(s, id, mods, cost);
+      if (!e.rank && !e.item.options) {
+        const res = E.buy(s, id, mods, cost);
+        if (res.ok && GAMES.includes(id)) j.arrive[id] = s.buys;
+        return res;
+      }
       if (s.fuzz < cost) return {
         ok: false,
         reason: 'short',
