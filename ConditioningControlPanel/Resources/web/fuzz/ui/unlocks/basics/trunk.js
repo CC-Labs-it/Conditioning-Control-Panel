@@ -328,7 +328,19 @@ export default {
        * about 2% of the width; 10vmax is a wide margin). Layers keep their own clipping, so nothing inside them spills out. */
       ctx.css('#world{overflow:visible;background:inherit}');
       ctx.el('div', 'position:absolute;inset:-10vmax;z-index:-1;pointer-events:none;background:inherit;', null, ctx.world);
-      ctx.every(1000, () => { if (ctx.gentle) a.cancel(); });
+      /* The theme backdrops (spirals, washes, galleries) live in the back and wash layers, which end at the viewport edge, so
+       * the lean still showed a bare wedge at the top (owner 2026-11-10). Those two layers grow from their centre by exactly
+       * what a 2.2 degree turn needs on this screen shape (cos + long/short * sin), a little over. Their children keep their
+       * own positions inside the layer, so nothing is moved, only enlarged with it. */
+      const grow = () => {
+        const b = ctx.bounds(), r = Math.max(b.w, b.h) / Math.max(1, Math.min(b.w, b.h)), t = 2.2 * Math.PI / 180;
+        return (Math.cos(t) + r * Math.sin(t) + 0.01).toFixed(3);
+      };
+      ctx.css(`#l-back,#l-wash{transform:scale(var(--tilt-grow,1.08));transform-origin:50% 50%;}`);
+      const setGrow = () => docOf(ctx).documentElement.style.setProperty('--tilt-grow', grow());
+      setGrow();
+      ctx.every(1000, () => { if (ctx.gentle) a.cancel(); setGrow(); });
+      ctx.cleanup(() => docOf(ctx).documentElement.style.removeProperty('--tilt-grow'));
       return {};
     },
   },

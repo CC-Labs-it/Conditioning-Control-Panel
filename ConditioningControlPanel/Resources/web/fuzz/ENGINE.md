@@ -25,9 +25,10 @@ ticker: {
 `{ tick(dt, now)?, off()?, grow(count)? }`. `dt` is seconds, `now` is game-clock ms. A stacking row with `grow` stays
 mounted and hears the new count; any other re-buy remounts. Your code throwing 3 times switches the unlock off; the game
 carries on. An ending row may also export `ending(ctx) -> Promise`: its show between the fade and the credits, up to 90 s.
-It may also export `take(ctx) -> Promise`: a phase BEFORE the fade, with the page still mounted but frozen and streams still
-playing (stopped when it resolves), capped at `ENDING_TAKE_MAX_MS` game time; `fadeColour` sets that row's end fade (Bimbodoll), `fadeMs` its length (at most the
-usual 1600 ms; the Living Ad take leaves its own stage over the page, so its fade is short).
+A row can export `take(ctx, releaseWorld) -> Promise` to use the frozen game page before the fade. Its streams play until the take
+ends or calls `releaseWorld()`. That call unmounts the game while keeping the take and its prepared media alive. Bimbodoll uses it
+between swallowing the page and entering the sky. A take has `ENDING_TAKE_MAX_MS` of game time by default, or the row's `takeMaxMs`.
+The row's `fadeColour` and `fadeMs` control the final fade, up to 1600 ms.
 
 ## Testing it
 
@@ -42,6 +43,7 @@ usual 1600 ms; the Living Ad take leaves its own stage over the page, so its fad
 - `node dev/object-desktop-drive.mjs` checks hold movement, tab toggling/reordering, native touch, readiness, saved layouts and crowded features. `node dev/layout-mixer-drive.mjs` checks source volume/mute. Drivers use one muted browser at a time and leave normal saves untouched. The object driver defaults to Chromium for native touch scrolling; OBJECT_BROWSER=firefox retains gesture comparison support.
 - `node dev/prestige-measure.mjs`: Renewal Sky pacing, minutes to Drop and Stardust per Depth for the cheapest-first sky, the every-star-the-Depth-opens sky and the full sky (pure loop on dev/journey-timing.mjs plus the boost helpers).
 - `node dev/prestige-drive.mjs` is the Renewal Sky regression: end a run, Renew, reload mid-Sky (renewed once, the Sky reopens), light a star, the Looks shelf (locked before the core), Next run with rules, a word and a keepsake, then reload the renewed run and check the stamp, pay, pstore, ghost recording and looks. Muted Chrome, its own server on 8839, desktop and 390 px; exits 1 on a failed check or page error (`SHOTS=1` saves screens).
+- `node dev/emi-takeover-drive.mjs` (its own `node dev/serve.mjs 8861`) drives the EMI Takeover run-up in muted Chrome: Transmission, FREE WILL, Founded Startup and her guest tiles, Self Replication (player clicks turn page objects into EMIs or multiply them), the forced HIVE MIND and its patterns. `node dev/emi-takeover-end-drive.mjs` (`node dev/serve.mjs 8862`) drives the go_end take through `dev/play-ending.html?end=go_end`: pixel grid + mixed-size pile, shut, DROP, error, freeze, giant EMI, eyelid, then the recap with the poster. `W=390 H=844 TOUCH=1` for the phone. Rules: `sim/takeover.js` (run-up) and `sim/takeover-end.js` (ending); brief handoff-1109/TC-EMI-TAKEOVER-V3-BRIEF.md. Her tiles are one guest element in the shop grid (`shopDoor.guest(el)`), never engine rows.
 - `node --test --test-concurrency=2 tests/*.test.mjs` includes the timing of all 192 routes.
 
 ## ctx
@@ -119,6 +121,7 @@ Always show the returned credited amount, and consume a saved claim before payin
 - The speaker beside Wake Up toggles master mute from the start. Its arrow opens the audio mixer with master volume and individual controls for discovered sounds. Each ctx tags audio with its unlock source; related hum/headphone features share a source. `source` and `sourceLabel` can override that grouping. `ctx.audio.mixer` exposes `sources`, `setVolume(id, 0..1)`, `setMuted(id, bool)`, and `subscribe(fn)`. Main saves preferences in `extras.audioMix`, restores them before mounts, and keeps undiscovered sources out of the UI. Source gains sit after each sound's fade envelope and before pan/master, including streamed audio. Master mute and pause always win. Rain uses half its previous default gain with the existing three-second fade. Trusted toy/mixer input arms audio as well as the main button.
 - `ctx.audio.muteFor(ms)`: everything silent for up to 15 s, then back.
 - `ctx.audio.solo(on)`: while on, only this unlock's own sources are heard (playing ones and ones started later read gain 0, streams mute; kit `solo(keep)`); it lets go with the unlock. An ending show (Go Outside) uses it so nothing else plays underneath.
+- `ctx.audio.preload(path)` warms a short local clip after audio is armed. A later `ctx.audio.play` uses the decoded clip.
 - `ctx.audio.play(path, {bus, gain, pan})`, `ctx.audio.loop(path, {bus, gain, pan})` -> `{stop(ms)}`. Buses `sfx ambient voice podcast`. `pan` is -1 (left) to 1 (right), fixed at the start, on `stream` too; files on this site only for a stream. A missing file is silence. Clips in `assets/audio/`.
 - `ctx.audio.stream(url, {bus, gain, loop, autoplay, pan})` -> `{el, play(), pause(), setGain(v), stop(ms), playing}`: long audio on a media element the kit owns, never decoded whole. Use it for anything long, and never `new Audio()` or an `<audio>` of your own: those keep playing through panic. It follows mute, quiet, muteFor and hold, pauses at once on pause, suspend and panic, comes back with them, and dies at the end and with your unlock. Starts on the first gesture. Read `el` (`currentTime`, `duration`, listeners); volume changes and a play during a hold are put back.
 - `ctx.voice(slug, opts?)`: a recorded word (`data/words.js`); no clip = silence. Never speech synthesis.

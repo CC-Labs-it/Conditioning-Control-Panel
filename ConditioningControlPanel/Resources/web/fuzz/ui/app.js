@@ -9,9 +9,10 @@ import { setRich } from './rich-text.js';
 import { CONFIG } from '../data/config.js';
 import { whole, clock } from '../sim/format.js';
 import { SAVE_EVERY_MS } from '../sim/save.js';
+import { writeScore } from './emi-score.js';
 import { bindButtonFace, wardrobeSkins } from './button-faces.js';
 import { createCards } from './cards.js';
-import { openUnitRecap } from './unit-recap.js';
+import { openRunRecap } from './recap/recap.js';
 import { bindCursorShop } from './cursor-shop.js';
 import { createShop } from './shop.js';
 import { bindAudioControls } from './audio-controls.js';
@@ -70,7 +71,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
 
   /* ---- layers ---- */
   function layer(name, side) {
-    if (name === 'credits') return $('l-credits') || el.fx;
+    if (name === 'credits') return creditsRoot || $('l-credits') || el.fx;
     if (name === 'side') {
       const rails = $('l-side').children;
       if (side === 'left') return rails[0];
@@ -301,7 +302,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       return;
     }
     if (it.kind === 'end' && id !== 'onemore') {
-      cards.open({ title: it.name, body: `${it.what} ${it.line}`, front: true, buttons: [{ label: 'Yes', onPress: () => engine.buy(id) }, { label: 'Not yet' }] });
+      cards.open({ title: it.name, body: `${it.what} ${it.line}`, front: true, buttons: [{ label: id === 'go_end' ? 'Let her' : 'Yes', onPress: () => engine.buy(id) }, { label: 'Not yet' }] });
       return;
     }
     /* The terms card (ui/clause.js): accept first, then the purchase lands exactly as before. */
@@ -460,44 +461,27 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     });
   }
 
+  let creditsRoot = null;
   function credits(id, { hooks }) {
     dock.cancelMove();
     doc.body.dataset.tcEnding = 'true';
-    const it = BY_ID[id], run = engine.run, life = engine.life;
-    const stats = {
-      Route: hooks.routeNames(run) || 'None taken',
-      Time: clock(run.clock),
-      Unlocks: String(run.order.length - 1),
-      'Endings seen': `${Object.keys(life.endings).length} of ${engine.endingsTotal}`,
-    };
-    const slot = doc.createElement('div');
-    slot.id = 'l-credits';
-    /* Renew (prestige, ui/prestige-sky.js): the run turns into Stardust and the Sky opens. New run stays beside it. */
-    const renewDust = hooks.renewDust?.();
-    const renew = hooks.renew ? [{ label: Number.isFinite(renewDust) ? `Renew: +${whole(renewDust)} ${hooks.renewCurrency || 'Stardust'}` : 'Renew', keepOpen: true, onPress: hooks.renew }] : [];
-    /* Endless ending star (onemore, sim/prestige-endings.js): Keep playing carries this same run on, at full pay. */
-    const keep = hooks.keepPlaying && hooks.canKeepPlaying?.() ? [{ label: 'Keep playing', keepOpen: true, onPress: hooks.keepPlaying }] : [];
-    const buttons = [...renew, ...keep, { label: 'New run', keepOpen: true, onPress: hooks.newRun }];
-    if (id === 'dr_end') {
-      openUnitRecap({ cards, doc, slot, stats, buttons, line: it.line, run, life, audio, name: init.identity?.displayName || '' });
-      return;
-    }
-    const node = doc.createElement('div'), dl = doc.createElement('dl');
-    for (const [label, value] of Object.entries(stats)) {
-      const dt = doc.createElement('dt'), dd = doc.createElement('dd');
-      dt.textContent = label;
-      dd.textContent = value;
-      dl.append(dt, dd);
-    }
-    node.append(dl, slot);
-    cards.open({ title: it.name, body: it.line, node, className: 'credits', clear: true, guard: false, buttons });
+    const run = engine.run, life = engine.life;
+    /* The end-of-run card (ui/recap/recap.js, owner 2026-11-09): every ending, no tab bar. The after-run unlocks fill it
+     * through ctx.layer('credits'), which answers this root even while the card waits in the queue. */
+    creditsRoot = openRunRecap({
+      cards, doc, id, run, life, hooks, audio,
+      name: init.identity?.displayName || '',
+      stats: { time: clock(run.clock), unlocks: Math.max(0, run.order.length - 1) },
+      openLink: (url) => openAllowedLink(url, { inPress, hosted: !!engine.host?.isHosted, send: (t, f) => engine.host?.send?.(t, f), win }),
+      gentle: () => gentle(),
+    });
   }
 
   /* ---- the loop ---- */
   let shown = -1, lastDraw = 0, lastSave = 0, last = 0;
   function drawCounter() {
     const n = Math.floor(engine.run.fuzz);
-    if (n !== shown) { shown = n; el.count.textContent = whole(n); }
+    if (n !== shown) { shown = n; writeScore(el.count, whole(n), el.counter.hasAttribute('data-et-score')); }
   }
   let refreshCursorShop = null;
   function draw(force) {
@@ -551,7 +535,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       p.hidden = !show;
       shop?.fit();
     },
-    showCount(n) { el.count.textContent = whole(n); shown = -1; },
+    showCount(n) { writeScore(el.count, whole(n), el.counter.hasAttribute('data-et-score')); shown = -1; },
     setWakeGate(fn) { wakeGate = fn; },
     getWindowLayout: layouts.get,
     saveWindowLayout(key, value) { layouts.set(key, value); engine?.save(); },
@@ -574,6 +558,15 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       refreshCursorShop = bindCursorShop(engine,ui);
       purchaseFeel = createPurchaseFeel({ doc, engine, gentle, reduced, dock });
       shop = createShop({ doc, engine, onPress: press, onReady: (row) => purchaseFeel.ready(row) });
+      /* EMI Takeover (owner 2026-11-09): HIVE MIND is the one row EMI may buy herself when the player waited too long
+       * (ui/unlocks/themes-b/emi-swarm.js). Free for the player, no terms card; nothing else can be bought this way. */
+      doc.addEventListener('fuzz:emi-buys-hive', () => {
+        const run = engine.run;
+        if (engine.paused || engine.suspended || engine.stopped || run.owned.go_hive || !run.owned.go_corp) return;
+        const gift = engine.price('go_hive');
+        run.fuzz += gift;
+        if (!engine.buy('go_hive').ok) run.fuzz = Math.max(0, run.fuzz - gift);
+      });
       ui.credits = (id) => credits(id, { hooks });
       el.cur.textContent = BRAND.currencyPlural;
       wireButton();

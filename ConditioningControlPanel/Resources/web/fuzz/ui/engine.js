@@ -185,7 +185,7 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
       mountEntry(prestigeItem(`prestige_${lane}`, LANE_BY_ID[lane]?.name || lane), entry, lane, restored);
     }
   }
-  const unmountAll = () => { for (const id of [...scopes.keys()]) unmount(id); };
+  const unmountAll = (except = null) => { for (const id of [...scopes.keys()]) if (id !== except) unmount(id); };
 
   /* ---- the Control Panel: a row switched off is not mounted, now or on the next load. Its own pay stays in the sim. ---- */
   const isOn = (id) => !run.off[id];
@@ -488,7 +488,10 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
         scopes.set(ENDING_SCOPE, scope);
         scope.ctx = makeContext(api, scope);
         try {
-          await Promise.race([take(scope.ctx), new Promise((r) => scope.timers.add({ at: now + CONFIG.ENDING_TAKE_MAX_MS, fn: r }))]);
+          // An ending that leaves the game world mid-take keeps its own camera and prepared media.
+          const releaseWorld = () => { audio?.stopStreams?.(); unmountAll(ENDING_SCOPE); };
+          const limit = registry[id].takeMaxMs || CONFIG.ENDING_TAKE_MAX_MS;
+          await Promise.race([take(scope.ctx, releaseWorld), new Promise(r => scope.timers.add({ at: now + limit, fn: r }))]);
         } catch (e) { console.error(e); }
         audio?.stopStreams?.();
       }

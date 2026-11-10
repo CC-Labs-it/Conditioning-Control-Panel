@@ -127,12 +127,15 @@ test('per-second income follows the game clock and pace', () => {
   assert.equal(s.clock, 1000);
 });
 
-test('Drop ends the run; nothing is on offer after an ending and income stops', () => {
+test('Go Outside is the fallback ending; Drop is retired; nothing is on offer after an ending and income stops', () => {
   const s = rich(E.createRun());
   E.grant(s, 'tunnel');
-  assert.equal(E.goal(s).id, 'drop');
-  assert.ok(E.buy(s, 'drop').ok);
-  assert.equal(s.ended.id, 'drop');
+  assert.equal(E.heldEnding(s), 'outside');
+  assert.equal(E.goal(s).id, 'outside', 'the held ending takes the main path\'s last place');
+  assert.ok(!E.isOpen(s, BY_ID.drop));
+  assert.ok(!E.buy(s, 'drop').ok);
+  assert.ok(E.buy(s, 'outside').ok);
+  assert.equal(s.ended.id, 'outside');
   assert.equal(E.openItems(s).length, 0);
   assert.equal(E.goal(s), null);
   const f = s.fuzz;
@@ -140,20 +143,33 @@ test('Drop ends the run; nothing is on offer after an ending and income stops', 
   assert.equal(s.fuzz, f);
 });
 
-test('an alternate ending ends the run the same way; One Last Go refuses to', () => {
-  for (const id of ['outside', 'tr_end', 'o_out']) {
+test('one ending a run: the first lane chain finished, offered only once the main path is done', () => {
+  for (const id of ['tr_end', 'o_out']) {
     const s = rich(E.createRun());
     E.grant(s, BY_ID[id].req[0]);
-    if (BY_ID[id].lane === 'trance') E.grant(s, 'tr_deep');
+    assert.equal(E.heldEnding(s), id);
+    assert.ok(!E.isOpen(s, BY_ID[id]), `${id} waits for the end of the main path`);
+    assert.ok(!E.buy(s, id).ok);
+    E.grant(s, 'tunnel');
+    assert.ok(E.isOpen(s, BY_ID[id]), id);
+    assert.ok(!E.isOpen(s, BY_ID.drop), 'Drop steps aside for the held ending');
+    assert.ok(!E.isOpen(s, BY_ID.outside), 'Go Outside is not offered beside it');
+    assert.equal(E.openItems(s).filter((i) => i.kind === 'end').length, 1);
     assert.ok(E.buy(s, id).ok, id);
     assert.equal(s.ended.id, id);
   }
+  /* two chains: the one finished first is held, whatever finishes later */
   const s = rich(E.createRun());
-  E.grant(s, 'f5');
-  assert.ok(E.buy(s, 'onemore').ok);
-  assert.equal(s.ended, null);
-  assert.equal(s.endless, true);
-  assert.ok(E.goal(s), 'Drop stays ahead in endless mode');
+  E.grant(s, BY_ID.o_out.req[0]);
+  E.grant(s, BY_ID.tr_end.req[0]);
+  E.grant(s, 'tunnel');
+  assert.equal(E.heldEnding(s), 'o_out');
+  assert.deepEqual(E.openItems(s).filter((i) => i.kind === 'end').map((i) => i.id), ['o_out']);
+  /* Endless Mode is off the shelf (owner 2026-11-10) */
+  const t = rich(E.createRun());
+  E.grant(t, 'f5');
+  assert.ok(!E.isOpen(t, BY_ID.onemore));
+  assert.ok(!E.buy(t, 'onemore').ok);
 });
 
 test('the shop is a rolling window: the goal plus the next few by price, never a wall', () => {

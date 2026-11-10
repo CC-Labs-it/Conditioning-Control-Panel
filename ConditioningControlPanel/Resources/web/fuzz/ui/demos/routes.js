@@ -106,14 +106,7 @@ const routesSwipe = (k, f, feed, then, tint) => {
     k.after(340, () => f.el.classList.remove('down'));
   });
 };
-const routesEmi = (k, x, y, s) => {
-  const e = k.add(x, y, `width:${s}px;height:${s}px;border-radius:50%;background:#ffe0d2;border:2px solid #d4488f;box-sizing:border-box;overflow:hidden;`);
-  k.add(-2, -2, `width:${s + 2}px;height:${s * .36}px;background:#ff69b4;`, null, e);
-  const eye = (l) => k.add(s * l, s * .48, `width:${s * .13}px;height:${s * .17}px;border-radius:50%;background:#2a0f22;`, null, e);
-  eye(.24); eye(.6);
-  k.add(s * .38, s * .72, `width:${s * .2}px;height:${s * .08}px;border-radius:0 0 8px 8px;background:#d4488f;`, null, e);
-  return e;
-};
+import { portraitDemo as routesEmi } from './emi-character.js';
 const routesRow = (k, x, y, w, h, left, right, css) => k.add(x, y, `width:${w}px;height:${h}px;box-sizing:border-box;display:flex;justify-content:space-between;align-items:center;padding:0 7px;background:#fff;border:1px solid #777;font-weight:600;font-size:11px;white-space:nowrap;transition:background .6s,color .6s,border-color .6s;${css || ''}`, `<span>${left}</span><span>${right || ''}</span>`);
 const routesPaper = '#fbf7ea';
 const routesRed = '#b3121d', routesGold = '#c9a227';

@@ -242,6 +242,9 @@ export function dustFor(run, p) {
 
 const toysOf = (run) => TOY_IDS.filter((id) => (run?.owned?.[id] || 0) > 0);
 
+/** Different endings that light the Endless star (owner 2026-11-10). */
+export const ENDLESS_AFTER = 3;
+
 /** Finish + New run: adds the dust, one Depth (max 10), lights the ending, remembers the run. Twice on one run = nothing. */
 export function renew(life, run) {
   const p = (life.prestige ||= createPrestige());
@@ -251,7 +254,9 @@ export function renew(life, run) {
   p.depth = Math.min(MAX_DEPTH, p.depth + 1);
   const end = run?.ended?.id;
   if (end && ENDING_BY_ID[end]) p.lit[end] = 1;
-  p.last = { route: { ...(run?.picks || {}) }, toys: toysOf(run), ms: Math.round(run?.clock || 0) };
+  /* Endless (owner 2026-11-10): Endless Mode left the shop, so its star lights once three different endings have. */
+  if (!p.lit.onemore && Object.keys(p.lit).filter((id) => id !== 'onemore').length >= ENDLESS_AFTER) p.lit.onemore = 1;
+  p.last ={ route: { ...(run?.picks || {}) }, toys: toysOf(run), ms: Math.round(run?.clock || 0) };
   p.next.keep = p.next.keep.filter((id) => p.last.toys.includes(id));
   p.next.rules = strs(p.next.rules, (id) => rulesOpen(p).includes(id), fineSlots(p));
   if (run) {

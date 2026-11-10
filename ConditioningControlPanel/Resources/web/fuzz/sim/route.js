@@ -45,7 +45,8 @@ export function playRoute(picks, { taps = 4, mood = null, mods = null, maxS = 72
       const { r, cost } = pending[i];
       if (cost > s.fuzz) break;
       if (!r.req.every((q) => E.has(s, q))) continue;
-      const res = r.kind === 'fork' ? E.choose(s, r.id, picks[r.id], mods) : E.buy(s, r.id, mods);
+      // One ending a run (sim/economy.js heldEnding): at Drop's place the run buys the ending it holds, Drop or another.
+      const res = r.kind === 'fork' ? E.choose(s, r.id, picks[r.id], mods) : E.buy(s, r.id === 'drop' ? E.heldEnding(s) : r.id, mods);
       if (!res.ok) continue;
       at[r.id] = t;
       for (const x of res.riders || []) at[x] = t;

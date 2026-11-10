@@ -335,7 +335,7 @@ test('a guard never sees a fork or an ending, nor a buy that would fail anyway',
   assert.equal(engine.buy('rounded').reason, 'short');
   assert.deepEqual(asked, []);
   E.lump(run, 1e8);
-  assert.equal(engine.buy('drop').ok, true);
+  assert.equal(engine.buy(E.FALLBACK_ENDING).ok, true);
   assert.deepEqual(asked, []);
   const fresh = setup({ stray: { mount(c) { c.guardBuy(() => ({ refuse: 'no' })); return {}; } } });
   fresh.engine.mount('stray');

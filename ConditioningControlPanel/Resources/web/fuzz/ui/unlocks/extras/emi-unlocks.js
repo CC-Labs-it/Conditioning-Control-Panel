@@ -145,6 +145,13 @@ export const EMI_UNLOCKS = {
       const t = onEmiTap(ctx, e, () => { if (e.blocking) standDown(); });
       let warned = false;
       ctx.every(500, () => {
+        if (e.borrowed) {   // the Takeover has her: no timer, and she leaves the shop row quietly
+          e.lastTouch = ctx.state.clock;
+          warned = false;
+          label.hidden = true;
+          if (e.blocking) { e.blocking = false; e.controls.style.display = ''; e.mood('happy'); e.goHome(0); }
+          return;
+        }
         if (e.held || e.asking || e.blocking || e.napping || cardUp()) return;
         const gone = ctx.state.clock - e.lastTouch;
         label.hidden = gone < WARN_MS;
@@ -225,7 +232,7 @@ export const EMI_UNLOCKS = {
       let wake = null, snore = null;
       const stop = () => { e.napping = false; e.controls.style.display = ''; snore?.(); wake?.(); snore = wake = null; };
       const lie = () => {
-        if (e.held || e.asking || e.napping || e.blocking || cardUp()) return;
+        if (e.held || e.asking || e.napping || e.blocking || e.borrowed || cardUp()) return;
         const c = ctx.parts.counter?.querySelector('#count')?.getBoundingClientRect();
         if (!c) return;
         e.napping = true;
@@ -256,6 +263,8 @@ export const EMI_UNLOCKS = {
       ctx.after(ctx.store.get('did') ? 45000 : 2500, lie);
       ctx.store.set('did', 1);
       ctx.every(85000, lie);
+      /* The Takeover has her: no nap on the counter, she wakes and goes home unseen. */
+      ctx.every(500, () => { if (e.borrowed && e.napping) { stop(); e.mood('happy'); e.goHome(0); } });
       return { off() { t.off(); stop(); } };
     },
   },
@@ -264,7 +273,7 @@ export const EMI_UNLOCKS = {
    * ignoring it costs nothing and never holds the page. */
   em_call: {
     mount(ctx) {
-      getEmi(ctx);
+      const e = getEmi(ctx);
       const lineOf = picker(ctx, FAKE_CALL.lines);
       const hung = picker(ctx, FAKE_CALL.afterHangUp);
       const host = ctx.el('div', 'position:absolute;inset:0;z-index:20;display:none;', null, 'over');
@@ -291,7 +300,7 @@ export const EMI_UNLOCKS = {
         if (rude) ctx.toast(hung());
       };
       const ringNow = () => {
-        if (up || cardUp()) return false;
+        if (up || cardUp() || e.borrowed) return false;   // her call card would be a second EMI over the Takeover
         up = true;
         host.style.display = 'block';
         who.textContent = FAKE_CALL.caller;

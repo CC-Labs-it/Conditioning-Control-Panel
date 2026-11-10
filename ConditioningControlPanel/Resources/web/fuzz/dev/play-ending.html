@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Play an ending</title>
+<link rel="icon" href="../assets/img/bubble.png">
 <style>
   :root { color-scheme:light; font:15px/1.4 'Segoe UI',sans-serif; color:#301c33; background:#f8f3f7 }
   * { box-sizing:border-box } html,body { margin:0; height:100% }
@@ -14,6 +15,7 @@
   #note.gone { opacity:0; pointer-events:none }
   #note b { color:#9a2a74 }
   #note button { padding:8px 14px; min-height:44px; font:inherit; font-weight:600; cursor:pointer }
+
 </style>
 </head>
 <body>
@@ -23,6 +25,7 @@
 /* Dev launcher: lands a filled run one shop buy away from an ending (local 8817 host only, dev doors).
    ?end=bi_end (default)    the ending item; its chain is granted and the wallet topped up to afford it
    ?buy=a,b,c               extra items on top of the basics
+   ?pictures=online         passed on to the game (placeholder art), like ?lite
    The game runs standalone in a same-origin frame (8817 is not a web host origin), so audio and the page are the real thing. */
 import { BY_ID } from '../data/items.js';
 import * as E from '../sim/economy.js';
@@ -33,20 +36,75 @@ const note = document.getElementById('note');
 if (!end || end.kind !== 'end') { note.textContent = `No ending item "${endId}".`; throw new Error(note.textContent); }
 const basics = ['colour', 'font', 'sound', 'rounded', 'softw', 'a_rain', 'v_frame', 'wheel', 'quiz', 'toy_box', 'mini_breakout', 'mini_slots', 'word_comet'];
 const extra = (qs.get('buy') || '').split(',').map((s) => s.trim()).filter(Boolean);
-const buy = [...new Set([...end.req, ...basics, ...extra])]; // the theme chain first: a side item that needs the theme fork would otherwise pick its first option
+/* ?from=go_tx: land one row before that item instead, with the rows from it up to the ending left to buy by hand.
+   The wallet covers all of them, so the player buys each one when they choose. */
+const fromId = qs.get('from');
+const from = fromId ? BY_ID[fromId] : null;
+if (fromId && !from) { note.textContent = `No item "${fromId}".`; throw new Error(note.textContent); }
+const held = new Set();
+if (from) {
+  for (let id = endId; id && id !== fromId; id = BY_ID[id].req.find((r) => BY_ID[r]?.lane === end.lane)) held.add(id);
+  held.add(fromId);
+}
+const buy = [...new Set([...(from ? from.req : end.req), ...basics, ...extra])]; // the theme chain first: a side item that needs the theme fork would otherwise pick its first option
 const frame = document.getElementById('game');
-frame.src = `../index.html?buy=${buy.join(',')}`;
+const demoReel = qs.get('reel') === 'demo' && ['localhost','127.0.0.1'].includes(location.hostname);
+const bubble = endId === 'bi_end';
+if (bubble) note.hidden = true;
+const previewQuery = new URLSearchParams({ buy: buy.join(',') });
+for (const key of ['pictures', 'lite']) {
+  if (qs.has(key)) previewQuery.set(key, qs.get(key));
+}
+if (bubble) previewQuery.set('pictures', demoReel ? 'none' : 'scrolller'); // Let the player choose their source in the normal game dialog.
+frame.src = '../index.html?' + previewQuery;
 frame.addEventListener('load', () => {
   const t0 = performance.now();
-  const tick = () => {
+  const tick = async () => {
     const fuzz = frame.contentWindow?.fuzz;
     if (!fuzz) { if (performance.now() - t0 < 20000) return void setTimeout(tick, 100); note.textContent = 'The game did not start.'; return; }
     const run = fuzz.state;
+    const finishPath = () => {
+      if (!E.mainPathDone(run) && end.req.every(id => E.has(run, id))) {
+        for (const id of BY_ID.drop.req) fuzz.grant(id);
+      }
+    };
+    if (bubble && !run.clock) return void setTimeout(tick, 100);
+    if (!from) finishPath();
+    if (bubble && !from) {
+      // The source chooser starts this in-memory run. Its first real clock tick means the toys are mounted.
+      if (demoReel) {
+        try {
+          const files = await Promise.all([1, 2, 3, 4].map(async n => {
+            const filename = `demo-${n}.webm`;
+            const response = await fetch(`./bambi-demo/${filename}`);
+            if (!response.ok) throw new Error(filename);
+            return new frame.contentWindow.File([await response.blob()], filename, { type: 'video/webm' });
+          }));
+          fuzz.engine.pictures.addOwn(files);
+          fuzz.engine.pictures.setSource('own');
+        } catch {
+          note.hidden = false;
+          note.textContent = 'The sample clips could not load. Reload to retry.';
+          return;
+        }
+      }
+      fuzz.add(Math.max(0, fuzz.engine.price(endId) - run.fuzz) + 1);
+      // Let each widget finish its first layout before freezing the page for the swallow.
+      frame.contentWindow.requestAnimationFrame(() => frame.contentWindow.requestAnimationFrame(() => {
+        fuzz.engine.audio.arm();
+        if (fuzz.buy(endId).ok) { note.remove(); frame.focus(); frame.contentWindow.focus(); }
+        else { note.hidden = false; note.textContent = 'The ending could not start. Reload to retry.'; }
+      }));
+      return;
+    }
     /* Buy out everything else that is open (riders open more rows, so loop), so the ending is the only tile left in the
        shop window beside Endless Mode. The trunk fork row stays as the goal; forks and endings are never granted here. */
-    let guard = 240;
+    // Keep power-ups on EMI's shelf for her to take over during the finale.
+    const takeover = endId === 'go_end';
+    if (takeover) fuzz.engine.env.featuredShop.unshift(endId);
+    let guard = from || takeover ? 0 : 240;
     for (;;) {
-      const next = guard-- > 0 && E.openItems(run).find((i) => i.kind !== 'end' && i.kind !== 'fork' && i.id !== 'taste2');   // Second Theme asks a question of its own: leave it as the goal row
+      const next = guard-- > 0 && E.openItems(run).find((i) => i.kind !== 'end' && i.kind !== 'fork' && i.id !== 'taste2' && !held.has(i.id));   // Second Theme asks a question of its own: leave it as the goal row
       if (!next) break;
       if (!E.has(run, next.id)) { fuzz.grant(next.id); continue; }
       // A repeat row (another copy, a rank) stays open while owned: grant refuses those, so buy it with the dev wallet.
@@ -63,8 +121,26 @@ frame.addEventListener('load', () => {
       tally.golden ||= 12;
       tally.terms ||= 160;
     }
+    /* EMI Takeover: the chain (go_tx, go_will, go_corp, go_hive) came with go_end's req. Hand her every tile she
+       buys herself (Override included) and a small crowd, so the take starts from a HIVE MIND swarm. ?emi=0 leaves her as the grant left her. */
+    const swarm = frame.contentWindow.__emiSwarm;
+    if (!from && endId === 'go_end' && swarm?.dev && qs.get('emi') !== '0') { swarm.dev.tiles(99); swarm.dev.crowd(qs.get('lite') ? 5 : 11); }
+    if (from) {
+      const want = Math.round([...held].reduce((sum, id) => sum + E.price(run, id), 0) * 1.1);
+      if (run.fuzz < want) fuzz.add(want - run.fuzz);
+      // The normal shop owns pricing, affordability, the terms card and the purchase.
+      // Bring this chain into view while leaving later steps locked behind their parents.
+      fuzz.engine.env.featuredShop.unshift(...held);
+      finishPath();
+      fuzz.engine.subscribe('buy', finishPath);
+      fuzz.ui.draw(true);
+      note.remove();
+      frame.focus();
+      return;
+    }
     const want = Math.round(E.price(run, endId) * 1.05);
     if (run.fuzz < want) fuzz.add(want - run.fuzz);
+    fuzz.ui.draw(true);
     if (endId === 'dr_end') {
       // A crowded ending preview can put a toy or a setup card over its shop tile.
       const play = document.createElement('button');
@@ -81,7 +157,7 @@ frame.addEventListener('load', () => {
     style.textContent = `#shop [data-id="${endId}"]{outline:4px solid #fff;outline-offset:2px;box-shadow:0 0 0 9px #ff2f9a,0 0 40px #ff2f9a;animation:pe-pulse 1s ease-in-out infinite alternate}
       @keyframes pe-pulse{from{transform:scale(1)}to{transform:scale(1.08)}}`;
     frame.contentDocument.head.appendChild(style);
-    note.innerHTML = `Sound on. The glowing shop tile is <b>${end.name}</b>: buy it, press Yes. Wake Up still works the whole time.`;
+    note.innerHTML = `Sound on. The glowing shop tile is <b>${end.name}</b>: buy it, press ${endId === 'go_end' ? 'Let her' : 'Yes'}. Wake Up still works the whole time.`;
     setTimeout(() => note.classList.add('gone'), 14000);
     frame.focus();
   };

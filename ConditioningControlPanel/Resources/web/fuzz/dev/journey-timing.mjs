@@ -4,6 +4,7 @@ import { allRoutes } from '../sim/route.js';
 import { createJourney } from '../sim/journey.js';
 import { takeActivity } from '../sim/journey-effects.js';
 import * as E from '../sim/economy.js';
+import { BY_ID } from '../data/items.js';
 export function measureJourney(picks, {
   taps = 4,
   share = .125,
@@ -22,7 +23,7 @@ export function measureJourney(picks, {
     restored = false;
   while (!s.ended && s.clock < 12 * 3600e3) {
     const shelf = shop.shop(8);
-    const items = [shelf.goal, ...shelf.rows].filter(it => it && (it.kind !== 'end' || it.id === 'drop'));
+    const items = [shelf.goal, ...shelf.rows].filter(it => it && (it.kind !== 'end' || it.id === E.heldEnding(s)));   // one ending a run: the held one ends it
     const ready = items.filter(it => (it.kind === 'fork' ? s.total : s.fuzz) + 1e-8 >= shop.price(it.id)).sort((a, b) => Number(b.kind === 'fork') - Number(a.kind === 'fork') || shop.price(a.id) - shop.price(b.id));
     const it = ready[0];
     if (it) {
@@ -44,7 +45,7 @@ export function measureJourney(picks, {
         continue;
       }
     }
-    if (!items.length) throw Error('Shop empty on ' + JSON.stringify(picks) + ' after ' + paid.at(-1)?.id);
+    if (!items.length) throw Error('Shop empty (held ' + E.heldEnding(s) + ', main ' + E.mainPathDone(s) + ', ended ' + JSON.stringify(s.ended) + ') on ' + JSON.stringify(picks) + ' after ' + paid.at(-1)?.id);
     const r = E.rates(s, mods);
     const active = r.manualClick * taps + E.count(s, 'stray') * r.walls * r.bounce;
     const side = s.owned.gold ? (active + r.fps) * share : 0;
@@ -61,7 +62,7 @@ export function measureJourney(picks, {
       nextClaim += 60;
     }
   }
-  if (s.ended?.id !== 'drop') throw Error('Failed to reach Drop: ' + Object.values(picks));
+  if (!s.ended || BY_ID[s.ended.id]?.kind !== 'end') throw Error('Failed to reach the ending: ' + Object.values(picks));
   const sorted = paid.map(x => x.gap).sort((a, b) => a - b);
   return {
     picks,

@@ -144,11 +144,38 @@ export function adjustPrice(s, it, v, mods, now = s.clock) {
 const laneOpen = (s, it) => { const f = FORK_OF_LANE[it.lane]; return !f || s.picks[f] === it.lane; };
 const canHaveMore = (s, it) => (it.grow ? count(s, it.id) < it.grow.max : !has(s, it.id));
 
-/** On offer ignoring price: right lane for the picks made, parents owned, not already owned. */
-export function isOpen(s, it) {
+/** Parents owned, right lane, not owned yet: the plain rule, before the one-ending rule below. */
+function reached(s, it) {
   if (it.group !== 'run' || it.id === 'start' || s.ended) return false;
   if (!laneOpen(s, it) || !canHaveMore(s, it)) return false;
   return it.req.every((q) => has(s, q)) && (!it.any || it.any.some((q) => has(s, q)));
+}
+
+/* ONE ENDING A RUN (owner 2026-11-10: "only 1 ending should pop up and only at the end of the run"; pick = the first ending
+ * chain finished). The ending held for this run is the one whose chain the player finished first (its parent bought
+ * earliest); Go Outside when no lane chain finished. It is offered only once the main path is done (Drop's old parents
+ * owned) and no other ending is ever offered. Endless Mode and Drop are retired from the shop (owner 2026-11-10; Drop's
+ * perk and card stay for players who already have it). Derived from the purchase order, so nothing is saved. */
+const OFF_SHELF = new Set(['onemore', 'drop']);
+/** Endings on the main path itself (Go Outside hangs off Spiral Overlay) are not a chain the player builds. */
+const MAIN_PATH_LANES = new Set(['trunk', 'exit']);
+export const FALLBACK_ENDING = 'outside';
+export const mainPathDone = (s) => BY_ID.drop.req.every((q) => has(s, q));
+export function heldEnding(s) {
+  let best = null, at = Infinity;
+  for (const it of ITEMS) {
+    if (it.kind !== 'end' || MAIN_PATH_LANES.has(it.lane) || OFF_SHELF.has(it.id) || !reached(s, it)) continue;
+    const i = Math.max(...it.req.map((q) => s.order.indexOf(q)));
+    if (i < at) { at = i; best = it.id; }
+  }
+  return best || FALLBACK_ENDING;
+}
+
+/** On offer ignoring price: right lane for the picks made, parents owned, not already owned; an ending only as above. */
+export function isOpen(s, it) {
+  if (!reached(s, it)) return false;
+  if (it.kind !== 'end') return true;
+  return !OFF_SHELF.has(it.id) && mainPathDone(s) && heldEnding(s) === it.id;
 }
 
 /** Shuffled Shop: from the second run on (a mood means not the first), open side rows sort by a price scaled per run. */
@@ -162,7 +189,12 @@ export const openItems = (s, mods = null) => ITEMS.filter((it) => isOpen(s, it))
 /** The next row on the main path: always in sight, always one press away. */
 export function goal(s) {
   if (s.ended) return null;
-  for (const it of ITEMS) if (it.lane === 'trunk' && it.group === 'run' && !has(s, it.id)) return it;
+  for (const it of ITEMS) {
+    if (it.lane !== 'trunk' || it.group !== 'run' || has(s, it.id)) continue;
+    if (it.kind !== 'end') return it;
+    const held = BY_ID[heldEnding(s)];   // one ending a run: the held ending takes the main path's last place
+    return held && isOpen(s, held) ? held : null;
+  }
   return null;
 }
 

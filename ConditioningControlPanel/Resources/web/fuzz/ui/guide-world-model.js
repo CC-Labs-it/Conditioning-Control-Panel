@@ -58,7 +58,7 @@ const OVERRIDE = {
   fpsv: 'number', depth: 'progress', softw: 'tap', ticker: 'word', banner: 'ad', glossy: 'page', taste2: 'theme', overlay: 'spiral', takeover: 'page', wallpaper: 'picture', tunnel: 'spiral',
   bi_lips: 'button', bi_giggle: 'voice', bi_gloss: 'page', tr_skin: 'prize', tr_still: 'rest', tr_fade: 'page', tr_deep: 'rest', dr_serial: 'drone', dr_term: 'page',
   dr_hex: 'drone', dr_auto: 'tap', dr_hive: 'feed', dr_update: 'check', si_curtsy: 'rule', si_posture: 'rule', si_notes: 'word', si_track: 'social', si_mirror: 'gaze', si_class: 'rule',
-  go_hold: 'tap', go_worn: 'tap', go_edge: 'number', go_tabs: 'feed', go_cave: 'mood', go_clock: 'time', go_pals: 'social',
+  go_hold: 'tap', go_worn: 'tap', go_edge: 'number', go_tabs: 'feed', go_cave: 'mood', go_clock: 'time', go_pals: 'social', go_tx: 'mascot', go_will: 'mascot', go_corp: 'mascot', go_hive: 'mascot',
   lo_timer: 'time', lo_beg: 'lock', lo_key: 'lock', lo_pad: 'lock', lo_refuse: 'lock', lo_tease: 'number', lo_wheel: 'prize',
   ce_bar: 'bar', ce_blur: 'picture', ce_nums: 'number', ce_peek: 'gaze', ce_wall: 'perk', ce_text: 'bar', ce_all: 'bar',
   in_spot: 'bug', in_spread: 'bug', in_tile: 'bug', in_cure: 'check', in_fever: 'number', in_share: 'social', in_mut: 'bug',

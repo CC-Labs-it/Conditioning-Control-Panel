@@ -131,7 +131,7 @@ function buildPlan(picks, minutes = T_RUN[0], priceMult = 1) {
     const families = ['stray', 'rounded', 'ticker', sense, 'levels', 'toy_box', 'wheel', media, 'quiz', 'mini_breakout', 'dispenser', 'mini_race', 'mini_deep'];
     const ranked = families.filter(id => id && shadow.owned[id] && (j.ranks[id] || 0) < 6).sort((a, b) => (j.ranks[a] || 0) - (j.ranks[b] || 0));
     const specialty = SPECIALTIES[wanted];
-    let item = BY_ID[wanted],
+    let item = BY_ID[wanted === 'drop' ? E.heldEnding(shadow) : wanted],   // one ending a run: the plan ends on the held one
       parent,
       rank = 0;
     if (specialty) {
@@ -250,7 +250,14 @@ export function createJourney(s) {
         });
         break;
       }
-      if (it.id === 'drop' && offers.length) break;
+      if (it.kind === 'end') {
+        // One ending a run (owner 2026-11-10): the plan's last row is an ending; the player's own held ending (sim/economy.js
+        // heldEnding) takes its place, at the planned price, only once the main path is done.
+        if (offers.length) break;
+        const held = BY_ID[E.heldEnding(s)];
+        if (held && E.isOpen(s, held)) offers.push(held === it ? entry : { ...entry, item: held });
+        break;
+      }
       if (offers.some(e => e.item.id === it.id)) continue;
       if (entry.rank && ((j.ranks[entry.parent] || 0) + 1 !== entry.rank || !s.owned[entry.parent])) continue;
       if (it.options && !s.owned[entry.parent]) continue;
@@ -259,18 +266,6 @@ export function createJourney(s) {
       if (offers.length === 3) break;
     }
     if (ready && !offers.some(e => e.item === gate.item)) offers.unshift(gate);
-    const goal = offers[0];
-    if (goal?.item.id === 'drop' || s.owned.overlay && goal?.item.kind !== 'fork') {
-      for (const it of ITEMS.filter(i => i.kind === 'end' && i.id !== 'drop' && E.isOpen(s, i))) {
-        if (goal?.item.id === 'drop' || it.id === 'outside') {
-          const anchor = it.id === 'outside' ? 'overlay' : 'drop';
-          offers.push({
-            item: it,
-            cost: rows.find(e => e.item.id === anchor)?.cost ?? E.price(s, it.id)
-          });
-        }
-      }
-    }
     return offers;
   }
   const find = id => shelf().find(e => e.item.id === id);
@@ -281,7 +276,7 @@ export function createJourney(s) {
     shop(size = 6) {
       const all = shelf();
       // Every available ending must remain selectable on the smallest shop layout.
-      const limit = all[0]?.item.id === 'drop' ? all.length : 1 + Math.max(2, size);
+      const limit = all[0]?.item.kind === 'end' ? all.length : 1 + Math.max(2, size);
       return {
         goal: all[0]?.item || null,
         rows: all.slice(1, limit).map(e => e.item),
