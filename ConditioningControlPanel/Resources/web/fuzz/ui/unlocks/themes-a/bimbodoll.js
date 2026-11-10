@@ -192,6 +192,7 @@ function bubbleMist(doc, world, { lite, still }) {
   let W = 0, H = 0;
   return {
     el: cv,
+    dispose() {cv.remove();for(const c of [cv,...sprites])c.width=c.height=1;},
     draw(cx, cy, R, t, w, h, fade = 1) {
       if (w !== W || h !== H) { W = w; H = h; cv.width = Math.max(1, Math.round(w * k)); cv.height = Math.max(1, Math.round(h * k)); }
       const tt = still ? 0 : t;
@@ -346,8 +347,14 @@ export function bimbodollTake(ctx, readyForPop, voices) {
   const b = newBubble(plan);
 
   return new Promise((resolve) => {
-    let done = false;
-    const finish = () => { if (done) return; done = true; resolve(); };
+    let done = false, stopFrame = null;
+    const finish = () => {
+      if (done) return; done = true; stopFrame?.();
+      for (const layer of [fog,catcher,bubble,black]) layer?.remove();
+      fog.width = fog.height = spr.width = spr.height = 1;
+      mist?.dispose();
+      resolve();
+    };
     ctx.cleanup(finish);
 
     /* Layers on the ending layer: fog, a click catcher, the bubble, and the black at the end. */
@@ -358,13 +365,15 @@ export function bimbodollTake(ctx, readyForPop, voices) {
       + 'background:radial-gradient(circle at 34% 28%,rgba(255,255,255,.7) 0 3%,rgba(255,255,255,0) 11%),'
       + 'radial-gradient(circle,rgba(255,168,213,0) 0 80%,rgba(255,140,205,.16) 92%,rgba(255,236,248,.6) 98%,rgba(255,255,255,0) 100%);', null, 'ending');
     const mist = ctx.world?.appendChild ? bubbleMist(doc, ctx.world, { lite: LITE || !!ctx.gentle, still: !!ctx.reduced }) : null;
-    if (mist) ctx.cleanup(() => mist.el.remove());
+    if (mist) ctx.cleanup(() => mist.dispose());
     let mistFade = 1;
     /* The hued bubble art as the rim only: screen-blended, so its dark body drops out and the iridescent edge stays. */
     ctx.el('div', 'position:absolute;inset:0;border-radius:50%;background:url("assets/img/bubble.png") center/100% 100% no-repeat;mix-blend-mode:screen;opacity:.85;', null, bubble);
     const black = ctx.el('div', 'position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;', null, 'ending');
     const dpr = Math.min(1.5, globalThis.devicePixelRatio || 1);
     const sizeFog = () => { fog.width = Math.round(W * dpr); fog.height = Math.round(H * dpr); };
+    const sizeBubble = () => {bubble.style.width=bubble.style.height=`${2*plan.rPop}px`;};
+    sizeBubble();
     sizeFog();
     const g = fog.getContext('2d');
     const spr = fogSprite(doc);
@@ -399,18 +408,22 @@ export function bimbodollTake(ctx, readyForPop, voices) {
     if (wake) cands.push(wake);
     let sinceCollect = 0, popAt = Infinity;
 
+    function measureTake(c) {
+      c.rect=frameRect(c.el);
+      const cs=getComputedStyle(c.el);
+      c.bt=parseTranslate(cs.translate,c.el.offsetWidth||c.rect.width,c.el.offsetHeight||c.rect.height);
+      c.bs=parseScale(cs.scale);
+    }
     function take(c, delay = 0) {
       c.taken = true;
       c.t0 = b.t + delay;
-      c.rect = frameRect(c.el);
+
       const mx = (c.rect.left + c.rect.right) / 2, my = (c.rect.top + c.rect.bottom) / 2;
       c.mx = mx; c.my = my;
       c.ang = Math.random() * TAU; c.frac = 0.12 + Math.random() * 0.4; c.ph = Math.random() * TAU;
       c.style = swallowStyle(c);
       /* Compose, never replace: the floaters and copies are placed with their own translate/scale. */
-      const cs = getComputedStyle(c.el);
-      c.bt = parseTranslate(cs.translate, c.el.offsetWidth || c.rect.width, c.el.offsetHeight || c.rect.height);
-      c.bs = parseScale(cs.scale);
+
       c.base = { translate: c.el.style.translate, scale: c.el.style.scale, opacity: c.el.style.opacity, transition: c.el.style.transition, pe: c.el.style.pointerEvents };
       c.el.style.transition = 'none';
       if (c.style.pointerEvents) c.el.style.pointerEvents = c.style.pointerEvents;
@@ -505,14 +518,16 @@ export function bimbodollTake(ctx, readyForPop, voices) {
 
     /** The bubble is full: what is still out goes in at once, Wake Up's group last, and the pop waits for it to settle. */
     function swallowLast() {
-      popOrder(cands).forEach((c, i) => take(c, c.wake ? 0.25 : i * 0.02));
+      const last=popOrder(cands);last.forEach(measureTake);
+      last.forEach((c, i) => take(c, c.wake ? 0.25 : i * 0.02));
       popAt = b.t + (wake ? WAKE_SETTLE_S : 0.3);
     }
 
     function pop() {
       voices.hush();
       popped = true;
-      for (const c of popOrder(cands)) take(c);
+      const last=popOrder(cands);last.forEach(measureTake);
+      for (const c of last) take(c);
       tone.stop(50);
       ctx.after(60, () => popSound(ctx, decoded.filter(Boolean)));   // the stretch lets go 60 ms before the pop
       ctx.audio.play(GIGGLES[Math.floor(Math.random() * GIGGLES.length)], { bus: 'voice', gain: 0.4 });
@@ -547,13 +562,13 @@ export function bimbodollTake(ctx, readyForPop, voices) {
       if (s?.on && s.reason === 'panic') { aborted = true; tone.stop(0); finish(); }
     });
 
-    ctx.frame((dt) => {
+    stopFrame=ctx.frame((dt) => {
       if (done) return;
       const nb = ctx.bounds();
       if (nb.w && nb.h && (nb.w !== W || nb.h !== H)) {
         W = nb.w; H = nb.h; sizeFog();
         const np = bubblePlan({ w: W, h: H, cx, cy, r0: plan.r0 });
-        plan.rPop = np.rPop; plan.diag = np.diag;
+        plan.rPop = np.rPop; plan.diag = np.diag; sizeBubble();
       }
       if (!popped) {
         stepBubble(b, plan, dt);
@@ -570,6 +585,7 @@ export function bimbodollTake(ctx, readyForPop, voices) {
           ctx.after(1800, () => card.h?.close());
         }
         const now = nextTakes(cands, cx, cy, b.r);
+        now.forEach(measureTake);
         now.forEach((c, i) => take(c, i * 0.06));
         if (b.popped && popAt === Infinity) swallowLast();
         // If a selected clip is still decoding, keep the live bubble on screen for a short final hold.
@@ -583,8 +599,8 @@ export function bimbodollTake(ctx, readyForPop, voices) {
       /* the bubble */
       const wob = gentle() || popped ? 0 : Math.sin(b.t * 2.1);
       const R = b.r;
-      bubble.style.width = bubble.style.height = `${(2 * R).toFixed(1)}px`;
-      bubble.style.transform = `translate(${(cx - R).toFixed(1)}px,${(cy - R).toFixed(1)}px) scale(${(1 + 0.018 * wob).toFixed(4)},${(1 - 0.018 * wob).toFixed(4)})`;
+      const scale=R/plan.rPop;
+      bubble.style.transform = `translate(${(cx - plan.rPop).toFixed(1)}px,${(cy - plan.rPop).toFixed(1)}px) scale(${(scale*(1 + 0.018 * wob)).toFixed(6)},${(scale*(1 - 0.018 * wob)).toFixed(6)})`;
       if (mist) {
         if (popped) mistFade = Math.max(0, mistFade - dt / (gentle() ? 0.9 : 0.26));
         mist.draw(cx, cy, R * (popped && !gentle() ? 1 + 0.18 * (1 - mistFade) : 1), b.t * (ctx.gentle ? 0.5 : 1), W, H, mistFade);
