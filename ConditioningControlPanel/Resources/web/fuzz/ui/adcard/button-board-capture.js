@@ -212,21 +212,28 @@ export function captureButtonBoard(ctx,mediaMembers) {
   }
   // The engine can hide the purchase shelf in the synchronous draw immediately before take(). Its rows still exist.
   const shop = doc.getElementById('shop'), hiddenShop = !!shop?.hidden;
-  if (hiddenShop) shop.hidden = false;
-  try { group('#shop .row','shop'); } finally { if (hiddenShop) shop.hidden = true; }
+  const cabinets = [], opened = [];
   for (const el of doc.querySelectorAll('.dk')) {
     const id = el.dataset.fzOwner;
-    if (el.matches('.open')) add(el,'toy');
+    if (el.matches('.open')) cabinets.push({el,anchor:null});
     else if (CABINETS.has(id)) {
       const chip = doc.querySelector(`.dk-chip[data-fz-owner="${id}"]`), anchor = chip && rectOf(chip);
       if (!anchor || !within(anchor,width,height)) continue;
-      const style = el.style.getPropertyValue('display'), priority = el.style.getPropertyPriority('display');
-      try {
-        el.style.setProperty('display','block','important');
-        add(el,'toy',anchor);
-      } finally {
-        if (style) el.style.setProperty('display',style,priority); else el.style.removeProperty('display');
-      }
+      cabinets.push({el,anchor});
+      opened.push({el,style:el.style.getPropertyValue('display'),priority:el.style.getPropertyPriority('display')});
+    }
+  }
+  // These floating cabinets do not participate in each other's layout. Read every tab anchor first,
+  // reveal their bodies together, then print them without alternating layout writes and reads.
+  if (hiddenShop) shop.hidden = false;
+  for (const {el} of opened) el.style.setProperty('display','block','important');
+  try {
+    group('#shop .row','shop');
+    for (const {el,anchor} of cabinets) add(el,'toy',anchor);
+  } finally {
+    if (hiddenShop) shop.hidden = true;
+    for (const {el,style,priority} of opened) {
+      if (style) el.style.setProperty('display',style,priority); else el.style.removeProperty('display');
     }
   }
   group('#phrase,#l-ticker,#l-meters > *','hud');

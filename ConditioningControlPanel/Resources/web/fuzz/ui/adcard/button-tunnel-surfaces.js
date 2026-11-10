@@ -185,7 +185,7 @@ export function createTunnelSurfaces(doc,host,surfaces,rect,lens){
       const viewZ=(worldY-s.y)*pitchS+cameraZ*pitchC;
       const distanceFade=1-fold*smooth(p.feature?13:7,p.feature?24:14,dist);
       const gone=p.surface.node.hidden||distanceFade<.004||s.capture>.77||(mounted&&dist< -14)||viewZ< -Math.max(finalWidth,1);
-      p.root.style.display=gone?'none':'';
+      if(p.gone!==gone){p.gone=gone;p.root.style.display=gone?'none':'';}
       if(gone)continue;
       p.root.style.transform='translate3d('+(worldX*UNIT)+'px,'+(-worldY*UNIT)+'px,'+(-worldZ*UNIT)+'px) '+
         'rotateY('+turnY+'rad) rotateX('+turnX+'rad) rotateZ('+roll+'rad) scale3d('+scale+','+scale+','+scale+') translate(-50%,-50%)';
@@ -194,16 +194,19 @@ export function createTunnelSurfaces(doc,host,surfaces,rect,lens){
       // Set opacity on individual surfaces rather than flattening the 3D box.
       const alpha=open*(1-smooth(.15,.76,s.capture))*distanceFade*(p.feature?1:1-fold*.24);
       const ink=String(alpha);
-      p.face.style.opacity=ink;
+      if(p.ink!==ink){p.ink=ink;p.face.style.opacity=ink;}
       const stock=alpha*(mounted?1:nearFade*.32);
       if(p.cabinet)p.cabinet.pose(thickness,stock);
       else{
-        p.back.style.transform='translateZ('+(-thickness-.35)+'px) rotateY(180deg)';
-        p.back.style.opacity=String(stock);
-        for(let k=0;k<4;k++){
-          p.sides[k].style.transform=k<2?
+        if(p.thickness!==thickness){
+          p.thickness=thickness;
+          p.back.style.transform='translateZ('+(-thickness-.35)+'px) rotateY(180deg)';
+          for(let k=0;k<4;k++)p.sides[k].style.transform=k<2?
             'rotateY(90deg) scaleX('+thickness/100+')':'rotateX(-90deg) scaleY('+thickness/100+')';
-          p.sides[k].style.opacity=String(stock);
+        }
+        if(p.stock!==stock){
+          p.stock=stock;p.back.style.opacity=String(stock);
+          for(const side of p.sides)side.style.opacity=String(stock);
         }
       }
     }
