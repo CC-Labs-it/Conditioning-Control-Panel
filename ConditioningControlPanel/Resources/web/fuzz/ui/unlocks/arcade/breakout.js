@@ -63,9 +63,15 @@ export function mountBreakout(ctx) {
     const r = canvas.getBoundingClientRect();
     if (r.width) aim = Math.max(paddleW() / 2, Math.min(WIDTH - paddleW() / 2, (e.clientX - r.left) * WIDTH / r.width));
   }
-  canvas.addEventListener('pointerenter', (e) => { if (ctx.paused || e.pointerType !== 'mouse') return; hovered = true; point(e); controls(); });
-  canvas.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') { hovered = false; controls(); } });
-  canvas.addEventListener('pointermove', (e) => { if (!ctx.paused && manual()) point(e); });
+  // An appearing cabinet can enter a stationary pointer. Start hover play when the player actually moves the mouse.
+  canvas.addEventListener('pointermove', e => {
+    if (ctx.paused) return;
+    if (e.pointerType === 'mouse' && !hovered && (e.movementX || e.movementY)) { hovered = true; controls(); }
+    if (manual()) point(e);
+  });
+  canvas.addEventListener('pointerleave', e => {
+    if (e.pointerType === 'mouse') { hovered = false; controls(); syncAudio(); }
+  });
   canvas.addEventListener('pointerdown', (e) => { if (ctx.paused || !touchControl || !manual()) return; point(e); if (e.pointerType === 'touch') { e.preventDefault(); canvas.setPointerCapture?.(e.pointerId); } });
   canvas.addEventListener('keydown', (e) => {
     if (ctx.paused || calm() || !['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
@@ -151,13 +157,19 @@ export function mountBreakout(ctx) {
     board.textContent = [`Board ${sim.board + (sim.wait ? 0 : 1)}`, ...buffs].join(' · ');
   }
   const onScreen=()=>visible && host.dock?.visible !== false && !doc.hidden && !ctx.paused && !ending && !dead;
+  function syncAudio() {
+    const steering = manual() && (hovered || doc.activeElement === canvas);
+    audio.audible(steering && onScreen() && doc.hasFocus() && !host.dock?.moving);
+  }
+  function leaveWindow() { hovered = false; audio.audible(false); }
+  doc.defaultView.addEventListener('blur', leaveWindow);
   function measure() {
     const r=canvas.getBoundingClientRect();
     // A cabinet taken by Override keeps its layout box while the visible game is gone.
     visible = r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 &&
       r.left < doc.defaultView.innerWidth && r.top < doc.defaultView.innerHeight &&
       doc.defaultView.getComputedStyle(canvas).visibility === 'visible';
-    audio.audible(onScreen());
+    syncAudio();
     if (!onScreen() && pictures.effects.active) pictures.effects.clear();
   }
   const observer=doc.defaultView.IntersectionObserver ? new doc.defaultView.IntersectionObserver(measure) : null;
@@ -172,7 +184,7 @@ export function mountBreakout(ctx) {
   ctx.frame((dt) => {
     if (dead || ctx.paused || ending) return;
     const shown=onScreen();
-    audio.audible(shown);
+    syncAudio();
     if (shown && !sim.wait && sim.bricks.some(b=>b.alive && b.photo)) pictures.prepare(sim.board);
     const events = stepBreakout(sim, dt, { manual: manual(), x: aim, specialty: ctx.state.store.journey?.specs?.spec_breakout, balls: ballsFor(rank()), paddleW: paddleW() });
     for (const e of events) {
@@ -201,6 +213,6 @@ export function mountBreakout(ctx) {
     if (visible) draw();
   });
   controls(); measure(); draw();
-  ctx.cleanup(() => { dead = true; observer?.disconnect(); doc.removeEventListener('visibilitychange',measure); save(); particles.length = trail.length = 0; });
+  ctx.cleanup(() => { dead = true; observer?.disconnect(); doc.defaultView.removeEventListener('blur', leaveWindow); doc.removeEventListener('visibilitychange',measure); save(); particles.length = trail.length = 0; });
   return {};
 }

@@ -77,6 +77,15 @@ try {
   assert.ok(stats.trigger[0][1]-stats.entered>=34000,'30 s of roaming plus the closing fade');
   assert.ok(stats.trigger[1][1]-stats.trigger[0][1]>=265 && stats.trigger[1][1]-stats.trigger[0][1]<470,'about 300 ms on black');
   assert.match(await f.locator('.rr-line').first().textContent(),/Congratulations, Bambi/);
+  const poster = f.locator('[data-rr="poster"] .adc-recap');
+  await poster.waitFor({state:'visible'});
+  await poster.locator('.pic img.base').evaluate(img => img.decode());
+  assert.match(await poster.locator('.pic img.base').getAttribute('src'), /bimbo\.webp$/);
+  const totals = await f.evaluate(() => {
+    const run = window.fuzz.state, tally = run.store.adcard || {};
+    return [tally.pics || 0, Math.floor(run.total), tally.golden || 0, window.fuzz.life.llamas || 3];
+  });
+  assert.deepEqual(await poster.locator('.stats .stat .num[data-n]').evaluateAll(nodes => nodes.map(n => Number(n.dataset.n))), totals);
   assert.deepEqual(errors,[]);
   console.log(JSON.stringify({live,held,prepared:stats.prepared,firstFrameClips:stats.transferred,triggerMs:Math.round(stats.trigger[1][1]-stats.trigger[0][1]),credits:true}));
 } finally { await browser.close(); }

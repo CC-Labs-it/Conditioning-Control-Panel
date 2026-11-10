@@ -2,6 +2,7 @@
  * autoplay false: the card waits for start(muteMs) (the end card's intro drops it in first; beats inside muteMs are
  * folded into its landing). loop: like the exported GIF, the finished card holds 2.5 s and builds again, silently. */
 import { ADCARD_COPY } from '../../data/content/adcard.js';
+import { exportCard } from './export.js';
 import { cardModel } from './model.js';
 import { createAdCard, loadCardCss } from './card.js';
 
@@ -46,7 +47,7 @@ export function mountRunPoster({ doc, host, run, life, name, onBeat, autoplay = 
   if (cards) observer.observe(cards, { attributes: true, attributeFilter: ['inert'], childList: true });
   doc.addEventListener('visibilitychange', sync);
   motion.addEventListener('change', sync);
-  loadCardCss(doc).then(() => {
+  const ready = loadCardCss(doc).then(() => {
     if (closed || !box.isConnected) { unmount(); return; }
     calmChime = reduced();
     ad = createAdCard({ doc, box, model, label: ADCARD_COPY.posterLabel, reduced: calmChime, onBeat: onBeat ? beat : null });
@@ -71,6 +72,24 @@ export function mountRunPoster({ doc, host, run, life, name, onBeat, autoplay = 
     started = true;
     quietUntil = performance.now() + Math.max(0, muteMs);
     if (ad) { ad.play(); scheduleLoop(); }
+  };
+  // Export a separate flat copy so the live poster can keep tilting and looping while a file is drawn.
+  unmount.export = async (format, options) => {
+    await ready;
+    if (closed) return { status: 'cancelled' };
+    const surface = doc.createElement('div');
+    surface.className = 'adc-box';
+    surface.style.cssText = 'position:fixed;left:-10000px;top:0;width:432px;pointer-events:none';
+    surface.setAttribute('aria-hidden', 'true');
+    doc.body.append(surface);
+    let snapshot;
+    try {
+      snapshot = createAdCard({ doc, box: surface, model, reduced: reduced() });
+      return await exportCard(snapshot, format, { ...options, stop: () => closed });
+    } finally {
+      snapshot?.destroy();
+      surface.remove();
+    }
   };
   return unmount;
 }

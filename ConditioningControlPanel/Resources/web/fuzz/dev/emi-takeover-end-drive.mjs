@@ -29,6 +29,9 @@ const errors = [];
 const check = (name, ok, info = '') => { if (!ok) failed += 1; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${info ? ' - ' + info : ''}`); };
 const context = await browser.newContext({ viewport: { width: W, height: H }, hasTouch: touch, isMobile: touch, reducedMotion: reduced ? 'reduce' : 'no-preference' });
 const page = await context.newPage();
+const musicPath = 'assets/audio/breakout/music.ogg';
+let musicRequested = false;
+page.on('request', request => { if (request.url().endsWith(musicPath)) musicRequested = true; });
 await page.addInitScript(() => {
   const outputs = [], connect = AudioNode.prototype.connect;
   AudioNode.prototype.connect = function (dest, ...args) {
@@ -57,8 +60,21 @@ const wakeOk = () => page.evaluate(() => {
   return !!r && r.width > 0 && document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)?.id === 'wake';
 });
 const swarm = await page.evaluate(() => document.querySelectorAll('.et-emi').length);
-await page.evaluate(() => window.fuzz.engine.audio?.arm?.());
-await page.waitForFunction(() => window.endingOutputPeak() > 0.00001, null, { timeout: 8000 });
+await page.evaluate(() => {
+  window.fuzz.engine.audio.arm();
+  return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+});
+check('the idle cabinet never requested its theme', !musicRequested);
+if (!reduced) {
+  const takeControl = page.locator('[data-arcade="mini_breakout"]').getByRole('button', {name:'Take control'});
+  const press = button => touch ? button.tap() : button.click();
+  if (!await takeControl.isVisible()) await press(page.locator('.dk-chip[data-fz-owner="mini_breakout"]'));
+  await Promise.all([
+    page.waitForRequest(request => request.url().endsWith(musicPath), {timeout:8000}),
+    press(takeControl),
+  ]);
+  await page.waitForFunction(() => window.endingOutputPeak() > 0.00001, null, { timeout: 8000 });
+}
 if (auto) await page.evaluate(() => { window.__emiTakeoverWaitS = 3; });
 await page.evaluate(() => window.fuzz.end('go_end'));
 await page.waitForFunction(() => window.__emiTakeoverProbe, null, { timeout: 8000 });
@@ -142,7 +158,7 @@ check('Wake Up stayed on top the whole take', wake);
 /* after the dark: no ending card, the credits with the recap and the poster */
 let recap = null, cardText = '';
 for (let i = 0; i < 200 && !recap; i++) {
-  const st = await page.evaluate(() => ({ ending: (document.getElementById('l-ending')?.innerText || '').trim(), rr: !!document.querySelector('[data-rr]'), poster: (document.querySelector('[data-rr="poster"] .rr-frame')?.children.length || 0) > 0, title: (document.querySelector('[data-rr]')?.closest('.rr, [class*="rr-"]')?.innerText || '').slice(0, 90) }));
+  const st = await page.evaluate(() => ({ ending: (document.getElementById('l-ending')?.innerText || '').trim(), rr: !!document.querySelector('[data-rr]'), poster: !!document.querySelector('[data-rr="poster"] .adc-recap .pic img.base'), title: (document.querySelector('[data-rr]')?.closest('.rr, [class*="rr-"]')?.innerText || '').slice(0, 90) }));
   if (st.ending && !cardText) cardText = st.ending.slice(0, 80);
   if (st.rr) recap = st;
   await wait(150);
@@ -151,7 +167,7 @@ await wait(9000);
 await shot('recap');
 check('no "four hours later" card', !/hours later/i.test(cardText), cardText);
 check('the run recap came right after', !!recap, JSON.stringify(recap));
-check('the recap carries its poster column (hero tile; the Living Ad poster is Unit Complete only)', !!recap?.poster);
+check('the recap carries the illustrated run poster', !!recap?.poster);
 check('Wake Up still on top at the end', await wakeOk());
 check('no page errors', errors.length === 0, errors.slice(0, 6).join(' | '));
 await browser.close();

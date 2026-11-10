@@ -7,8 +7,7 @@
  *   road     your five picks as clip art; peel the corner for the roads not taken (Map) with tallies (Choices)
  *   coll     13 ending cards, tap one to read it (Endings); the seen number and meter (Seen Counter)
  *   next     Renew, Take one along (Keep One Look), Today's road ticket (Daily Route), New run, the shuffling tiles
- *   poster   the run poster on Unit Complete (the Living Ad card's own timeline, looping like its GIF), otherwise the
- *            ending's clip art; Share and Save stickers under it, then "A game by CC Labs"
+ *   poster   every ending plays the shareable run poster, with Share and Save stickers beneath it
  * The pieces are filled by the after-run unlocks (ui/unlocks/extras/after.js) through recapFor(layer).fill.*; a piece
  * nothing fills stays out of sight. The intro (ui/recap/intro.js) drops every piece onto the card. */
 
@@ -18,6 +17,7 @@ import { THEME_PALETTES, mixHex } from '../palette.js';
 import { iconFor } from '../icons.js';
 import { setRich } from '../rich-text.js';
 import { brandText } from '../../data/brand.js';
+import { ADCARD_COPY } from '../../data/content/adcard.js';
 import { mountRunPoster } from '../adcard/recap.js';
 import { beatCue, playCardCue } from '../adcard/stage.js';
 import { crayonStarSvg, starVariant, LOOPY, RUSHED } from '../unlocks/basics/gold-fx.js';
@@ -213,24 +213,46 @@ export function openRunRecap({ cards, doc, id, run, life, hooks, audio, name = '
   const tilt = h('div', 'rr-tilt', null, posterCol);
   const frame = h('div', 'rr-frame', null, tilt);
   h('i', 'rr-glare', null, tilt).setAttribute('aria-hidden', 'true');
-  let poster = null;
-  if (id === 'dr_end' || id === 'go_end') {
-    poster = mountRunPoster({ doc, host: frame, run, life, name, autoplay: false, loop: true, unit: id === 'dr_end', onBeat: (beat, i) => {
-      if (controller.signal.aborted || root.closest('[inert]') || doc.hidden) return;
-      openChannel();
-      playCardCue(audio, doc, beatCue(beat, i), { source: SOURCE, sourceLabel: title, signal: controller.signal });
-    } });
-  } else {
-    const hero = h('div', 'rr-hero', null, frame);
-    hero.append(icon(id, 'rr-heroicon'));
-  }
+  const poster = mountRunPoster({ doc, host: frame, run, life, name, autoplay: false, loop: true, unit: id === 'dr_end', onBeat: (beat, i) => {
+    if (controller.signal.aborted || root.closest('[inert]') || doc.hidden) return;
+    openChannel();
+    playCardCue(audio, doc, beatCue(beat, i), { source: SOURCE, sourceLabel: title, signal: controller.signal });
+  } });
   const pocket = h('div', 'rr-pocket', null, posterCol);
-  const shareBtn = button('rr-sticker', pocket, R.share); shareBtn.hidden = true;
+  const shareBtn = button('rr-sticker', pocket, R.share);
+  shareBtn.setAttribute('aria-expanded', 'false');
   shareBtn.append(clip('link')); h('span', 'rr-lbl', R.share, shareBtn);
   const saveBtn = button('rr-sticker', pocket, R.save); saveBtn.hidden = true;
   saveBtn.append(clip('scroll')); h('span', 'rr-lbl', R.save, saveBtn);
   saveBtn.setAttribute('aria-expanded', 'false');
   const savePop = h('div', 'rr-pop', null, pocket); savePop.hidden = true;
+  const sharePop = h('div', 'rr-pop', null, pocket); sharePop.hidden = true;
+  const formats = h('div', 'rr-row', null, sharePop);
+  const shareStatus = h('div', 'rr-note', '', sharePop); shareStatus.setAttribute('role', 'status');
+  const formatButtons = [];
+  for (const format of ['png', 'gif', 'video']) {
+    const option = button('rr-chip', formats);
+    option.textContent = ADCARD_COPY.buttons[format];
+    formatButtons.push(option);
+    option.addEventListener('click', async () => {
+      for (const b of formatButtons) b.disabled = true;
+      shareStatus.textContent = R.preparingCard;
+      try {
+        const { status } = await poster.export(format, { filename: 'terms-and-conditioning-' + id, progress: (_i, _n, line) => { shareStatus.textContent = line; } });
+        shareStatus.textContent = status === 'saved' ? ADCARD_COPY.saved : status === 'shared' ? R.sharedCard : '';
+      } catch {
+        shareStatus.textContent = R.exportFailed;
+      } finally {
+        for (const b of formatButtons) b.disabled = false;
+      }
+    });
+  }
+  shareBtn.addEventListener('click', () => {
+    savePop.hidden = true; saveBtn.setAttribute('aria-expanded', 'false');
+    sharePop.hidden = !sharePop.hidden;
+    shareBtn.setAttribute('aria-expanded', String(!sharePop.hidden));
+    sfx('pop2', .26);
+  });
   const credit = button('rr-credit', posterCol);
   h('span', 'rr-by', R.by, credit); h('span', 'rr-lab', R.studio, credit); h('span', 'rr-url', R.site, credit);
   credit.addEventListener('click', () => openLink?.('https://cclabs.app/'));
@@ -421,17 +443,15 @@ export function openRunRecap({ cards, doc, id, run, life, hooks, audio, name = '
       },
       /** z_share: send(text) -> Promise<bool> (share sheet or clipboard). */
       share({ lines, send, done }) {
-        shareBtn.hidden = false;
-        shareBtn.addEventListener('click', async () => {
-          sfx('pop2', .26);
-          if (!calm()) shareBtn.animate([{ transform: 'rotate(-6deg)' }, { transform: 'rotate(354deg) scale(1.15)' }], { duration: 520, easing: 'cubic-bezier(.2,1.5,.4,1)' });
-          if (await send(lines.join('. '))) toast(done);
-        });
+        const summary = button('rr-chip', formats);
+        summary.textContent = R.shareSummary;
+        summary.addEventListener('click', async () => { if (await send(lines.join('. '))) toast(done); });
       },
       /** z_save: copy() -> text; load(text) -> true or an error line. */
       save({ copy, load, copied, bad }) {
         saveBtn.hidden = false;
         saveBtn.addEventListener('click', () => {
+          sharePop.hidden = true; shareBtn.setAttribute('aria-expanded', 'false');
           savePop.hidden = !savePop.hidden;
           saveBtn.setAttribute('aria-expanded', String(!savePop.hidden));
           sfx('pop', .2);
@@ -479,7 +499,7 @@ export function openRunRecap({ cards, doc, id, run, life, hooks, audio, name = '
     if (controller.signal.aborted) return;
     controller.abort();
     intro?.stop(false);
-    poster?.();
+    poster();
     toastEl?.remove();
     if (wasQuiet !== undefined && audio) { audio.setQuiet(wasQuiet); audio.solo(null); }
   }
@@ -553,9 +573,9 @@ export function openRunRecap({ cards, doc, id, run, life, hooks, audio, name = '
       win.requestAnimationFrame(() => win.requestAnimationFrame(() => {
         centrePoster();
         const settle = () => { root.classList.add('settled'); skip?.remove(); skip = null; centrePoster(); };
-        if (calm()) { root.classList.add('calm'); poster?.start(0); sfx('chime', .28); settle(); return; }
+        if (calm()) { root.classList.add('calm'); poster.start(0); sfx('chime', .28); settle(); return; }
         warm();
-        intro = createIntro({ doc, root, scroller: backdrop, fx, sfx, stars: (i) => starSvg(i), poster: poster ? { start: (ms) => poster.start(ms) } : null, onSettled: settle });
+        intro = createIntro({ doc, root, scroller: backdrop, fx, sfx, stars: (i) => starSvg(i), poster, onSettled: settle });
         skip = button('rr-skip', backdrop); skip.textContent = R.skip;
         skip.addEventListener('click', () => intro.stop(true));
         win.setTimeout(() => { if (!controller.signal.aborted) intro.start(); }, 380);
