@@ -129,7 +129,7 @@ export function createTabTunnel(ctx, parent, opts = {}) {
         stop.cancel = ctx.after(12000, stop.release);
       }
     }
-    if (ride.state.docked) return;
+    if (ride.state.docked || (ride.state.locked && !scene.needsMotion())) return;
     paintWait += dt;
     const interval = lite ? 1 / 30 : 1 / 60;
     if (paintWait + 0.00001 < interval) return;

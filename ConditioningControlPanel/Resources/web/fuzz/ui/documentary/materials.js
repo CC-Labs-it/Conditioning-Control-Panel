@@ -6,13 +6,31 @@ export function createMuseumMaterials(THREE, { lite = false } = {}) {
   const maps = new Map();
   const loader = new THREE.TextureLoader();
   const pending = [];
+  const bitmaps = new Set();
   let disposed = false;
   function texture(name, kind) {
     const key = `${name}-${kind}`;
     if (maps.has(key)) return maps.get(key);
     let finish;
     pending.push(new Promise(resolve => { finish = resolve; }));
-    const map = loader.load(new URL(`${key}.webp`, ROOT).href, finish, undefined, finish);
+    const loaded = async map => {
+      try {
+        const image = map.image;
+        const longest = Math.max(image.width, image.height);
+        if (lite && longest > 1024 && typeof createImageBitmap === 'function') {
+          const ratio = 1024 / longest;
+          const bitmap = await createImageBitmap(image, {
+            resizeWidth: Math.max(1, Math.round(image.width * ratio)),
+            resizeHeight: Math.max(1, Math.round(image.height * ratio)), resizeQuality: 'high',
+            imageOrientation: 'flipY',
+          });
+          if (disposed) { bitmap.close(); return; }
+          bitmaps.add(bitmap); map.image = bitmap; map.needsUpdate = true;
+        }
+      } catch { /* Keep the original map when bitmap resizing is unavailable. */ }
+      finally { if (disposed) map.dispose(); finish(); }
+    };
+    const map = loader.load(new URL(`${key}.webp`, ROOT).href, loaded, undefined, finish);
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
     map.colorSpace = kind === 'color' ? THREE.SRGBColorSpace : THREE.NoColorSpace;
     map.anisotropy = lite ? 2 : 8;
@@ -156,13 +174,17 @@ export function createMuseumMaterials(THREE, { lite = false } = {}) {
   environment.colorSpace = THREE.SRGBColorSpace;
   textures.add(environment);
   return {
-    materials, environment,
+    materials, environment, textures,
     ready: Promise.all(pending),
+    textureBytes: () => [...textures].reduce((bytes, map) => bytes +
+      (map.image?.width || 0) * (map.image?.height || 0) * 4 * (map.generateMipmaps ? 4 / 3 : 1), 0),
     dispose() {
       if (disposed) return;
       disposed = true;
       for (const value of Object.values(materials)) value.dispose();
       for (const map of textures) map.dispose();
+      for (const bitmap of bitmaps) bitmap.close();
+      bitmaps.clear();
     },
   };
 }

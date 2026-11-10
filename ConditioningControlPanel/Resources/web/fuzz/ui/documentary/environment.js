@@ -1,4 +1,5 @@
 import { mergeGeometries, mergeVertices } from '../../../vendor/three/addons/utils/BufferGeometryUtils.js';
+import { createOcclusionQuery } from './occlusion.js';
 import { trackPosition, trackStyle, trackYaw } from './track.js';
 
 const BAY_LENGTH = 8;
@@ -590,7 +591,7 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
   function clearEntry(entry) {
     for (const mesh of [...entry.node.children]) { mesh.geometry.dispose(); entry.node.remove(mesh); }
     for (const mesh of [...entry.rails.children]) { mesh.geometry.dispose(); entry.rails.remove(mesh); }
-    entry.occluder?.geometry.dispose(); entry.occluder = null;
+    entry.occluder?.geometry.dispose(); entry.occluder = null; entry.occlusionQuery = null;
     for (const cone of entry.speakerCones) cone.removeFromParent();
     entry.speakerCones.length = 0;
   }
@@ -608,6 +609,7 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
     }
     entry.occluder = new THREE.Mesh(deform(template.solid, center), occlusionMaterial);
     entry.occluder.updateMatrixWorld(true);
+    entry.occlusionQuery = createOcclusionQuery(THREE, entry.occluder.geometry);
     for (const driver of template.speakers) {
       const at = center - driver.z, yaw = trackYaw(at);
       const point = trackPosition(at, driver.side * driver.x, driver.y);
@@ -687,7 +689,7 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
       raycaster.set(rayOrigin, rayDirection); raycaster.near = 0.05; raycaster.far = distance - 0.08;
       if (raycaster.intersectObject(finalWall, false).length) return true;
       for (const entry of bays) {
-        if (entry.node.visible && raycaster.intersectObject(entry.occluder, false).length) return true;
+        if (entry.node.visible && entry.occlusionQuery(raycaster.ray, raycaster.near, raycaster.far)) return true;
       }
       return false;
     },

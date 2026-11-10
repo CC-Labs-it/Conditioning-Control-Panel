@@ -962,6 +962,8 @@ export function createMuseumProps(THREE, materials, { lite = false, onWake = () 
   bulb.userData.interactive = true;
   const bulbLight = new THREE.PointLight(0xffe2ae, 10, 9, 2); bulbLight.position.set(0, 3.12, 0.40); service.add(bulbLight);
   batch(service);
+  // Keep the light count stable when its fixture leaves the streamed view.
+  group.attach(bulbLight);
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
   const failures = [];
@@ -1038,7 +1040,7 @@ export function createMuseumProps(THREE, materials, { lite = false, onWake = () 
     fixedExhibits.forEach(({ station, at }) => { station.visible = at - z > -18 && at - z < (lite ? 38 : 57); });
     service.visible = z > 525;
     const glow = gentle ? 1 : 0.96 + Math.sin(time * 0.83) * 0.035 + Math.sin(time * 2.1) * 0.012;
-    bulbMaterial.emissiveIntensity = 1.25 * glow; bulbLight.intensity = 10 * glow;
+    bulbMaterial.emissiveIntensity = 1.25 * glow; bulbLight.intensity = z > 525 ? 10 * glow : 0;
   }
   update(0);
   return {

@@ -115,6 +115,9 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
   let toyFrameOff = null, toyTime = 0, renders = 0, projectorFrameOff = null;
   let bulbJob=null,bulbRestore=null,bulbDim=false,bulbCycle=0;
   let lookYaw = 0, lookPitch = 0, gesture = null;
+  const cssMatrix = new Array(16);
+  const clipRay = new THREE.Vector3(), clipHit = new THREE.Vector3();
+  const specimenWorld = new THREE.Vector3(), specimenView = new THREE.Vector3(), lensCorner = new THREE.Vector3();
   const viewMatrix = new THREE.Matrix4(), projectionView = new THREE.Matrix4();
   const frustum = new THREE.Frustum(), surfaceSphere = new THREE.Sphere();
   const pointInView = new THREE.Vector3(), projectedPump = new THREE.Vector3();
@@ -362,12 +365,12 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
       surface.nicheFacePoint = new THREE.Vector3(0, 0, .075).applyMatrix4(surface.frameGroup.matrixWorld);
     }
     const origin = camera.position, normal = surface.nicheNormal;
-    const planeDistance = surface.nicheFacePoint.clone().sub(origin).dot(normal);
+    const planeDistance = clipHit.copy(surface.nicheFacePoint).sub(origin).dot(normal);
     const opening = [];
     for (const point of surface.nicheOpening) {
-      const ray = point.clone().sub(origin), denominator = ray.dot(normal);
+      const ray = clipRay.copy(point).sub(origin), denominator = ray.dot(normal);
       if (Math.abs(denominator) < .00001 || planeDistance / denominator <= 0) return false;
-      const hit = origin.clone().addScaledVector(ray, planeDistance / denominator).applyMatrix4(surface.nicheInverse);
+      const hit = clipHit.copy(origin).addScaledVector(ray, planeDistance / denominator).applyMatrix4(surface.nicheInverse);
       opening.push({ x: hit.x, y: hit.y });
     }
     const width = spec.width - .08, height = spec.height - .08;
@@ -551,7 +554,7 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
         if(item.progress===0) projectorEffects.resetUnroll(item.id);
         moving ||= item.progress!==item.target;
       }
-      if(lastState?.docked) draw(lastState);
+      if(lastState?.docked || lastState?.locked) draw(lastState);
       if(!moving) { projectorFrameOff?.(); projectorFrameOff=null; }
     });
   }
@@ -610,23 +613,46 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
       });
     });
   }
+  const yieldLoad = () => new Promise(resolve => setTimeout(resolve, 0));
   const ready = Promise.resolve().then(() => createMuseumMaterials(THREE, { lite })).then(async pack => {
     materialPack = pack; materials = pack.materials;
     world.environment = pack.environment || null;
     world.environmentIntensity = .35;
     if (disposed) { pack.dispose(); return; }
+    await yieldLoad();
+    if (disposed) return;
     museum = createMuseum(THREE, materials, { lite }); world.add(museum.group);
+    await yieldLoad();
+    if (disposed) return;
     props = createMuseumProps(THREE, materials, { lite, onWake }); world.add(props.group); cartRig.add(props.cart);
     props.setAdVisible(!subscriberPlan(ctx.caps));
+    await yieldLoad();
+    if (disposed) return;
     buildExhibits();
     await Promise.all([pack.ready, props.ready, preloadStoryArt()]);
+    if (disposed) return;
+    for (const texture of pack.textures) {
+      renderer.initTexture(texture);
+      await yieldLoad();
+      if (disposed) return;
+    }
+    await renderer.compileAsync(world, camera);
     if (disposed) return;
     readyState = true;
     for(const [id,data] of pendingProjectorBeats.splice(0)) projectorBeat(id,data);
     resize();
   });
 
-  function releaseSurface(surface) { for (const release of surface.mounts) release(); surface.mounts.length = 0; }
+  function keepSurface(surface) { surface.releaseJob?.(); surface.releaseJob = null; }
+  function releaseSurface(surface) {
+    keepSurface(surface);
+    for (const release of surface.mounts) release();
+    surface.mounts.length = 0;
+  }
+  function deferRelease(surface) {
+    if (surface.releaseJob || !surface.mounts.length) return;
+    surface.releaseJob = ctx.after(2000, () => releaseSurface(surface));
+  }
   function resize() {
     if (disposed) return;
     const rect = root.getBoundingClientRect();
@@ -666,7 +692,7 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
         if(Math.abs(lookYaw)<.35&&Math.abs(lookPitch)<.25) {
           viewing.group.updateWorldMatrix(true,false);
           for(const x of [-viewing.w/2,viewing.w/2]) for(const y of [viewing.top,viewing.top-viewing.h]) {
-            const corner=new THREE.Vector3(x,y,.13).applyMatrix4(viewing.group.matrixWorld).applyMatrix4(camera.matrixWorldInverse);
+            const corner=lensCorner.set(x,y,.13).applyMatrix4(viewing.group.matrixWorld).applyMatrix4(camera.matrixWorldInverse);
             if(corner.z<-.5) halfWidthRatio=Math.max(halfWidthRatio,Math.abs(corner.x)/-corner.z);
           }
         }
@@ -685,11 +711,12 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
     camera.updateMatrixWorld();
     // CSS uses downward-positive Y and pixel units. Conjugate the exact view matrix.
     viewMatrix.copy(camera.matrixWorldInverse);
-    const values = viewMatrix.elements.map((value, index) => {
+    for (let index = 0; index < 16; index++) {
+      const value = viewMatrix.elements[index];
       const row = index % 4, column = Math.floor(index / 4);
-      return value * (row === 1 ? -1 : 1) * (column === 1 ? -1 : 1) * (column === 3 && row < 3 ? UNIT : 1);
-    });
-    domCamera.style.transform = `translateZ(${focal}px) matrix3d(${values.join(',')})`;
+      cssMatrix[index] = value * (row === 1 ? -1 : 1) * (column === 1 ? -1 : 1) * (column === 3 && row < 3 ? UNIT : 1);
+    }
+    domCamera.style.transform = `translateZ(${focal}px) matrix3d(${cssMatrix.join(',')})`;
     projectionView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     frustum.setFromProjectionMatrix(projectionView);
     const roomStyle = trackStyle(state.z);
@@ -713,8 +740,13 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
       if (visible && surface.niche) visible = clipNicheFace(surface);
       surface.node.hidden = !visible;
       surface.frameGroup.visible = visible;
+      if (visible && !surface.personal) keepSurface(surface);
       if (visible) {
-        surface.node.style.filter = `brightness(${Math.max(.52, Math.min(1, (depth - Math.abs(distance)) / (depth - 8)))})`;
+        const brightness = Math.max(.52, Math.min(1, (depth - Math.abs(distance)) / (depth - 8)));
+        if (surface.brightness !== brightness) {
+          surface.brightness = brightness;
+          surface.node.style.filter = `brightness(${brightness})`;
+        }
         if (surface.placard) surface.placard.hidden = Math.abs(distance) > 14;
         lit.push(surface);
       }
@@ -723,18 +755,19 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
       if (visible && !surface.personal && !surface.mounts.length) {
         for (const { face, kind } of surface.faces) surface.mounts.push(media.mount(face, { ...surface.exhibit, kind }));
       }
-      if (!visible) releaseSurface(surface);
+      if (!visible) deferRelease(surface);
     }
     visiblePersonal.sort((a,b)=>Math.abs(a.at-state.z)-Math.abs(b.at-state.z));
     const activePersonal=new Set(visiblePersonal.slice(0,lite?10:16));
-    for(const surface of surfaces) if(surface.personal&&!activePersonal.has(surface)) releaseSurface(surface);
+    for(const surface of surfaces) if(surface.personal&&!activePersonal.has(surface)) deferRelease(surface);
+    for(const surface of activePersonal) keepSurface(surface);
     for(const surface of activePersonal) if(!surface.mounts.length) {
       for(const {face,kind} of surface.faces) surface.mounts.push(media.mount(face,{...surface.exhibit,kind}));
     }
     lit.sort((a, b) => Math.abs(a.at-state.z)-Math.abs(b.at-state.z));
     exhibitLights.forEach((light, index) => {
       const surface = lit[index];
-      light.visible = Boolean(surface);
+      light.intensity = surface ? 14 : 0;
       if (!surface) return;
       const point = surface.frameGroup.position;
       light.position.set(point.x+Math.sin(surface.yaw)*.85, point.y+surface.h/2+.3, point.z+Math.cos(surface.yaw)*.85);
@@ -754,8 +787,8 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
     specimenButton.hidden = !target || state.z < 450 || state.z > 478;
     if (!specimenButton.hidden) {
       target.updateWorldMatrix(true, false);
-      const worldPoint = target.getWorldPosition(new THREE.Vector3());
-      const point = worldPoint.clone().project(camera);
+      const worldPoint = target.getWorldPosition(specimenWorld);
+      const point = specimenView.copy(worldPoint).project(camera);
       specimenButton.hidden = point.z < -1 || point.z > 1 || Math.abs(point.x) > 1 || Math.abs(point.y) > 1 ||
         Boolean(museum.occludes?.(worldPoint, camera.position));
       specimenButton.style.left = `${(point.x * .5 + .5) * width - 24}px`;
@@ -922,15 +955,20 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
   resize();
   return {
     ready, stageAnchor, stageControlsAnchor, draw, resize, beat,
+    needsMotion: () => narrationSpeaking && !ctx.gentle && !ctx.reduced,
     debug: () => ({ drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles,
-      textures: renderer.info.memory.textures, ready: readyState, renders, lookYaw, lookPitch,
+      textures: renderer.info.memory.textures, textureBytes: materialPack?.textureBytes?.(),
+      programs: renderer.info.programs.length, ready: readyState, renders, lookYaw, lookPitch,
       cameraPosition: camera.position.toArray(), pumpPosition, pumpHitBounds,
       projectors:projectors.map(({id,at,progress,target,activeSlot,node})=>({id,at,progress,target,slot:activeSlot||null,
         requestedSlot:node.dataset.requestedSlot||null,imageReady:node.dataset.slideReady==='true'})),
       storyArt:Object.fromEntries(storyImageStatus), projectorEffects:projectorEffects.debug(), environment: museum?.debug?.(),
       personalScreens:surfaces.filter(surface=>surface.personal).length,
       activePersonalScreens:surfaces.filter(surface=>surface.personal&&surface.mounts.length).length }),
-    setSpeaking(on) { narrationSpeaking=Boolean(on);museum?.setSpeaking?.(narrationSpeaking); },
+    setSpeaking(on) {
+      narrationSpeaking=Boolean(on);museum?.setSpeaking?.(narrationSpeaking);
+      if (lastState?.locked && !disposed) draw(lastState);
+    },
     setPaused(on) {
       if (on) cancelGesture();
       root.dataset.paused = String(Boolean(on));
