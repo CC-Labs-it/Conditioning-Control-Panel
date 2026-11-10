@@ -12,7 +12,9 @@ import { iconFor } from './icons.js';
 import { createTip } from './shop-tip.js';
 import { hueClass } from './palette.js';
 import { goalState } from './purchase-feel.js';
-import { ridersFor } from '../sim/economy.js';
+import { ridersFor, fateOf } from '../sim/economy.js';
+import { FATE_BY_ID, SEEDS } from '../data/fate.js';
+import { FATE_CAPTION, STAMP_MS, STAMP_STAGGER_MS, fateClasses, fateCss, fateMarks, fateShelf, stampedSeeds } from './fate-look.js';
 import { SHOP_READY_CSS, hop, nextNudge, readyStep, NUDGE_GAP_MS } from './shop-ready.js';
 import { offerBadge, paintBadges, repeatBadgeCss } from './repeat-badge.js';
 import { devicePlatform, offeredWindow } from './platform.js';
@@ -69,7 +71,24 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     const st = doc.createElement('style'); st.id = 'shop-ready-css'; st.textContent = SHOP_READY_CSS; doc.head.appendChild(st);
   }
   repeatBadgeCss(doc);
-  const now = () => doc.defaultView.performance.now();
+  fateCss(doc);
+  /* The seed shelf (ui/fate-look.js): before a set is picked every seed sits here together under one caption. */
+  const seedRows = new Map();
+  let shelfEl = doc.getElementById('fate-shelf');
+  if (!shelfEl) {
+    shelfEl = doc.createElement('div');
+    shelfEl.id = 'fate-shelf';
+    shelfEl.hidden = true;
+    const cap = doc.createElement('p');
+    cap.className = 'fs-cap';
+    cap.textContent = FATE_CAPTION;
+    const cards = doc.createElement('div');
+    cards.className = 'fs-cards';
+    shelfEl.append(cap, cards);
+    box.insertBefore(shelfEl, goalEl);
+  }
+  const shelfCards = shelfEl.querySelector('.fs-cards');
+  const now =() => doc.defaultView.performance.now();
   /* Rows this device cannot use (ui/platform.js) never get a tile; the next rows move up. */
   const platform = devicePlatform(doc.defaultView, () => engine.env?.caps || {});
   const offered = (n) => offeredWindow((k) => engine.shop(k), n, it => it.id !== 'go_end' && platform.canOffer(it));
@@ -148,7 +167,7 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
   function makeRow(item, isGoal) {
     const el = doc.createElement('button');
     el.type = 'button';
-    el.className = `row in ${hueClass(item.lane)}`.trim();
+    el.className = ['row', 'in', hueClass(item.lane), ...fateClasses(item)].filter(Boolean).join(' ');
     el.dataset.id = item.id;
     const body = doc.createElement('span');
     body.className = 'body';
@@ -181,7 +200,7 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     el.appendChild(bar);
     if (tag) el.appendChild(tag);
     const art = tileArt(doc, item);
-    el.append(art, body, cost);
+    el.append(art, body, cost, ...fateMarks(doc, item));
     el.setAttribute('aria-label', name.textContent);
     const r = { el, costNum, tag, bar: el.querySelector('.bar'), item, art: art.classList.contains('rep-ico') ? art : null, rep };
     let pointer = '';
@@ -242,7 +261,10 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     if (run.ended) { tip.hide(); box.hidden = true; return; }
     if (!run.taps && !run.total && run.buys === 0) { box.hidden = true; return; }
     box.hidden = false;
-    const win = offered(size);
+    const picked = fateOf(run), raw = offered(size);
+    /* The whole offer feeds the shelf, so a small window never splits the seeds (classic shop: equal prices sort by ITEMS). */
+    const win = fateShelf(raw, picked, picked ? raw : offered(99), SEEDS);
+    drawShelf(win.seeds, picked);
 
     if (goalRow?.item !== win.goal) { goalRow?.el.remove(); goalRow = null; }
     if (win.goal && !goalRow) { goalRow = makeRow(win.goal, true); goalEl.appendChild(goalRow.el); }
@@ -264,6 +286,67 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     tip.refresh();
   }
 
+  /* ---- the seed shelf ---- */
+  let leaving = 0;
+  function syncShelf(seedCount = seedRows.size) {
+    const show = seedCount > 0 || leaving > 0;
+    shelfEl.classList.toggle('fs-leaving', !seedCount && leaving > 0);
+    if (shelfEl.hidden === show) { shelfEl.hidden = !show; fit(); }
+  }
+
+  /** A seed that was not picked: the red stamp for about a second, then it leaves. Gentle and reduced motion: a plain fade.
+   *  It takes no input while it goes, and nothing is saved: a reload just shows the shop without it (state is fateOf). */
+  function stampOut(r, k) {
+    const el = r.el, win = doc.defaultView;
+    leaving += 1;
+    if (tip.row === r) tip.hide();
+    el.classList.add('fate-out');
+    el.tabIndex = -1;
+    el.setAttribute('aria-hidden', 'true');
+    let gone = false;
+    const done = () => {
+      if (gone) return;
+      gone = true;
+      el.remove();
+      leaving = Math.max(0, leaving - 1);
+      syncShelf();
+    };
+    const delay = k * STAMP_STAGGER_MS;
+    if (moving() && el.animate) {
+      el.querySelector('.fate-no')?.animate(
+        [{ opacity: 0, scale: '1.9' }, { opacity: 1, scale: '.94', offset: .7 }, { opacity: 1, scale: '1' }],
+        { duration: 220, delay, easing: 'ease-out', fill: 'backwards' });
+      const out = el.animate([{ opacity: 1, translate: '0 0', rotate: '0deg' }, { opacity: 0, translate: '0 10px', rotate: '-5deg' }],
+        { duration: 340, delay: delay + STAMP_MS - 340, easing: 'ease-in', fill: 'forwards' });
+      out.onfinish = done;
+    } else if (el.animate) {
+      // Gentle and reduced motion: the stamp is simply there, and the card fades. Opacity only.
+      const out = el.animate([{ opacity: 1 }, { opacity: 1, offset: .45 }, { opacity: 0 }], { duration: STAMP_MS, delay, easing: 'linear', fill: 'forwards' });
+      out.onfinish = done;
+    }
+    win.setTimeout(done, delay + STAMP_MS + 300);
+  }
+
+  function drawShelf(seeds, picked) {
+    const want = new Set(seeds.map((it) => it.id));
+    const pickedSeed = picked ? FATE_BY_ID[picked]?.cards[0] || null : null;
+    const stamp = new Set(stampedSeeds([...seedRows.keys()], [...want], pickedSeed));
+    let k = 0;
+    for (const [id, r] of seedRows) {
+      if (want.has(id)) continue;
+      seedRows.delete(id);
+      if (stamp.has(id)) stampOut(r, k++);
+      else r.el.remove();
+    }
+    seeds.forEach((item, i) => {
+      let r = seedRows.get(item.id);
+      if (!r) { r = makeRow(item, false); seedRows.set(item.id, r); }
+      if (shelfCards.children[i] !== r.el) shelfCards.insertBefore(r.el, shelfCards.children[i] || null);
+      paint(r, false);
+    });
+    syncShelf(seeds.length);
+  }
+
   /** Buyable tiles that stay unbought hop again every 6 to 8 seconds, at most one tile per NUDGE_GAP_MS. */
   function nudge() {
     const colour = (engine.run.owned.colour && engine.switches.isOn('colour')) || engine.run.picks?.f5;
@@ -271,7 +354,7 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     if (!moving()) return;
     const t = now();
     if (t - lastHop < NUDGE_GAP_MS) return;
-    for (const r of [goalRow, ...rows.values()]) {
+    for (const r of [goalRow, ...seedRows.values(), ...rows.values()]) {
       if (!r?.buyable || !(t >= r.nextHop) || r.el.matches(':active')) continue;
       hop(r.el, 'nudge');
       lastHop = t;
@@ -286,20 +369,21 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     const room = Math.min(760, w - 32) - (wide ? 118 : 96) - TILE_GAP;
     const cols = Math.max(1, Math.floor((room + TILE_GAP) / ((wide ? 84 : 68) + TILE_GAP)));
     const tile = (room - (cols - 1) * TILE_GAP) / cols;
-    const strip = nextEl.hidden ? 0 : (wide ? GHOST.wide : GHOST.narrow) + TILE_GAP;   // the Next up row
+    const strip = (nextEl.hidden ? 0 : (wide ? GHOST.wide : GHOST.narrow) + TILE_GAP)   // the Next up row
+      + (shelfEl.hidden ? 0 : (wide ? 100 : 80) + 26 + TILE_GAP);   // the seed shelf: its cards and caption (ui/fate-look.js)
     const avail = box.parentElement.clientHeight - box.offsetTop - 44 - strip;   // the shop starts 16px higher with 16px more top padding, room for a hop (ui/shop-ready.js)
     size = Math.max(CONFIG.SHOP_MIN, Math.min(6, Math.floor(avail / (tile + TILE_GAP)) * cols));
   }
 
   function denied(id) {
-    const r = rows.get(id) || (goalRow?.item.id === id ? goalRow : null);
+    const r = rows.get(id) || seedRows.get(id) || (goalRow?.item.id === id ? goalRow : null);
     if (!r) return;
     r.el.classList.remove('no');
     void r.el.offsetWidth;
     r.el.classList.add('no');
   }
 
-  function flush() { tip.hide(); nextKey = ''; nextEl.replaceChildren(nextLabel); nextEl.hidden = true; goalRow?.el.remove(); goalRow = null; for (const r of rows.values()) r.el.remove(); rows.clear(); }
+  function flush() { tip.hide(); nextKey = ''; nextEl.replaceChildren(nextLabel); nextEl.hidden = true; goalRow?.el.remove(); goalRow = null; for (const r of rows.values()) r.el.remove(); rows.clear(); seedRows.clear(); shelfCards.replaceChildren(); leaving = 0; shelfEl.hidden = true; }
 
   shopDoor = {
     /** True when the shop would sell this row right now: open, on a tile or waiting behind them, and usable here. */
