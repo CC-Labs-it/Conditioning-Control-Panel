@@ -29,6 +29,9 @@ const errors = [];
 const check = (name, ok, info = '') => { if (!ok) failed += 1; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${info ? ' - ' + info : ''}`); };
 const context = await browser.newContext({ viewport: { width: W, height: H }, hasTouch: touch, isMobile: touch, reducedMotion: reduced ? 'reduce' : 'no-preference' });
 const page = await context.newPage();
+const musicPath = 'assets/audio/breakout/music.ogg';
+let musicRequested = false;
+page.on('request', request => { if (request.url().endsWith(musicPath)) musicRequested = true; });
 await page.addInitScript(() => {
   const outputs = [], connect = AudioNode.prototype.connect;
   AudioNode.prototype.connect = function (dest, ...args) {
@@ -57,8 +60,21 @@ const wakeOk = () => page.evaluate(() => {
   return !!r && r.width > 0 && document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)?.id === 'wake';
 });
 const swarm = await page.evaluate(() => document.querySelectorAll('.et-emi').length);
-await page.evaluate(() => window.fuzz.engine.audio?.arm?.());
-await page.waitForFunction(() => window.endingOutputPeak() > 0.00001, null, { timeout: 8000 });
+await page.evaluate(() => {
+  window.fuzz.engine.audio.arm();
+  return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+});
+check('the idle cabinet never requested its theme', !musicRequested);
+if (!reduced) {
+  const takeControl = page.locator('[data-arcade="mini_breakout"]').getByRole('button', {name:'Take control'});
+  const press = button => touch ? button.tap() : button.click();
+  if (!await takeControl.isVisible()) await press(page.locator('.dk-chip[data-fz-owner="mini_breakout"]'));
+  await Promise.all([
+    page.waitForRequest(request => request.url().endsWith(musicPath), {timeout:8000}),
+    press(takeControl),
+  ]);
+  await page.waitForFunction(() => window.endingOutputPeak() > 0.00001, null, { timeout: 8000 });
+}
 if (auto) await page.evaluate(() => { window.__emiTakeoverWaitS = 3; });
 await page.evaluate(() => window.fuzz.end('go_end'));
 await page.waitForFunction(() => window.__emiTakeoverProbe, null, { timeout: 8000 });
