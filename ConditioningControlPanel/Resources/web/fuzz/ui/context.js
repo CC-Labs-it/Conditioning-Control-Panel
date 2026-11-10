@@ -13,6 +13,7 @@ import * as E from '../sim/economy.js';
 import { openAllowedLink } from './links.js';
 import { AD_ASK, adLinkStep } from './ads.js';
 import { paletteOf } from './palette.js';
+import { earnSticker, noteLife, syncLife } from '../sim/stickers.js';
 import { slotOrder } from './dock.js';
 import { incomeFeel } from './income-feel.js';
 import { iconFor } from './icons.js';
@@ -334,6 +335,13 @@ export function makeContext(engine, scope) {
       engine.save();
       return true;
     },
+    /* The Sticker Book's pen (sim/stickers.js): the Achievements row writes the book with it. earn(id) and sync()
+       answer what is new in the book; note(key, n) adds to a lifetime counter. Each write saves. */
+    stickers: Object.freeze({
+      earn(id) { const n = earnSticker(engine.life, id); if (n) engine.save(); return n; },
+      note(key, n = 1) { const v = noteLife(engine.life, key, n); if (v) engine.save(); return v; },
+      sync() { const got = syncLife(engine.life); if (got.length) engine.save(); return got; },
+    }),
   };
   return ctx;
 }
@@ -350,4 +358,6 @@ export const CTX_MEMBERS = Object.freeze([
   'prestige', 'pstore', 'endRun', 'shop', 'price', 'buy',
   // Living Ad card (2026-11-09)
   'identity',
+  // Sticker Book (2026-11-10)
+  'stickers',
 ]);
