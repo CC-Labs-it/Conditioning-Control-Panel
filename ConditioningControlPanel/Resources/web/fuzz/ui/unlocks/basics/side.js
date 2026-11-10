@@ -2,6 +2,7 @@
  * Fake Inbox, Fake Live Chat. Anything tappable lands in `over` with at least a 44 px target and always leaves by itself. */
 
 import { APP_ONLY, BOXES, FAKE_CHAT, FAKE_INBOX, GOLDEN, LEVELS, SCREEN_TIME } from '../../../data/content/index.js';
+import { runThemes, themed } from '../../theme-text.js';
 import { baseCss, burst, btnCenter, chip, docOf, fresh, pop, sfx, squish } from './fx.js';
 import { XP_PER_SECOND, XP_PER_TAP, bankOf, collect, xpNeed } from '../../../sim/levels.js';
 import { mountPrizeWheel } from './prize-wheel.js';
@@ -67,7 +68,7 @@ export default {
         }
         ctx.emit('golden-caught', { key });   // the Living Ad card counts these
         fx.reveal(x, y, key, text, () => { if (key === 'free') fx.ticket(x, y); });
-        ctx.say(p.line);
+        ctx.say(themed(runThemes(ctx.state), 'golden', p.line, { sub: key }));   // themed line per prize; pay and odds untouched
       };
 
       const launch = () => {
@@ -120,7 +121,7 @@ export default {
                 /* Missed: it winks at the edge and goes up in a puff. */
                 fx.miss(g, p.x, p.y);
                 g = null;
-                ctx.say(pick(ctx, GOLDEN.missed));
+                ctx.say(themed(runThemes(ctx.state), 'missed', pick(ctx, GOLDEN.missed)));
                 nextAt = gap();
               }
             }
@@ -237,7 +238,7 @@ export default {
         const { w, h } = ctx.bounds();
         const x = 20 + ctx.rng() * (w - 110), y = 80 + ctx.rng() * (h * 0.5);
         live += 1;
-        const box = fx.make(x, y, pick(ctx, BOXES.labels));
+        const box = fx.make(x, y, themed(runThemes(ctx.state), 'boxLabels', pick(ctx, BOXES.labels)));
         const landMs = box.arrive();
         const life = 6000 + boxHoldMs(ctx.prestige);  // prestige hook: Hold On (luck_8)
         box.countdown(life);
@@ -246,7 +247,7 @@ export default {
         if (!(ctx.gentle || ctx.reduced)) ctx.after(landMs, () => { if (!gone) sfx(ctx, 'sfx/thud.mp3', 0.15); });
         const leave = () => { gone = true; live -= 1; };
         const stop = ctx.after(life, () => {
-          if (gone) return; leave(); box.expire(); ctx.say(pick(ctx, BOXES.expired));
+          if (gone) return; leave(); box.expire(); ctx.say(themed(runThemes(ctx.state), 'boxExpired', pick(ctx, BOXES.expired)));
           if (autopilotShare(ctx.prestige)) ctx.pay(worth(ctx, 12) * prizeMult(ctx.prestige) * autopilotShare(ctx.prestige), 'boxes', box.center);  // prestige hook: Autopilot (idle_6)
         });
         box.el.addEventListener('pointerdown', (e) => {
@@ -259,7 +260,7 @@ export default {
           ctx.pay(worth(ctx, 12) * prizeMult(ctx.prestige), 'boxes', mouth);  // prestige hook: Lucky/Charm (luck_1/3/6/9)
           burst(ctx, mouth.x, mouth.y, { color: 'var(--accent)', n: 16, reach: 80 });
           sfx(ctx, 'sfx/chain_pop.mp3', 0.6);
-          ctx.say(pick(ctx, BOXES.opened));
+          ctx.say(themed(runThemes(ctx.state), 'boxOpened', pick(ctx, BOXES.opened)));
           ctx.emit('box', { x: cx, y: cy });
         });
       };

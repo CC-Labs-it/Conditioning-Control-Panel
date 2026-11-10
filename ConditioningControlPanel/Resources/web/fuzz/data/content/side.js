@@ -58,7 +58,10 @@ export const LUCKY_WORDS = Object.freeze(['soft', 'easy', 'sink', 'slow', 'warm'
 export const STRAY_WORDS = Object.freeze(['DROP', 'SINK', 'RELAX', 'DEEP', 'SOFT', 'CALM', 'BLANK', 'FLOAT', 'LET GO', 'GOOD', 'STILL', 'DOWN']);
 export const THEME_STRAY_WORDS = Object.freeze({
   trance: Object.freeze(['SLEEP', 'DEEPER', 'DRIFT', 'SWAY', 'HEAVY', 'FADE', 'UNDER', 'FOCUS']),
-  bimbo: Object.freeze(['GIGGLE', 'PRETTY', 'DUMB', 'POUT', 'GLOSS', 'SHINY', 'EMPTY', 'PINK']),
+  bimbo: Object.freeze(['GIGGLE', 'PRETTY', 'DUMB', 'POUT', 'GLOSS', 'SHINY', 'EMPTY', 'PINK',
+    /* The owner's Bambi triggers (2026-11-10), about half the Bimbo words. */
+    'BAMBI SLEEP', 'BAMBI FREEZE', 'BAMBI DROP FOR COCK', 'BAMBI RESET', 'SAFE AND SECURE', 'PRIMPED AND PAMPERED',
+    'BAMBI CUM AND COLLAPSE', 'BAMBI POSTURE LOCK', 'BAMBI ATTITUDE LOCK', 'COCK ZOMBIE NOW', 'BIMBODOLL']),
   drone: Object.freeze(['OBEY', 'COMPLY', 'UNIT', 'SYNC', 'SERVE', 'IDLE', 'UPLOAD', 'HIVE']),
   sissy: Object.freeze(['CURTSY', 'PRETTY', 'LACE', 'POLITE', 'KNEEL', 'SWEET', 'PROPER', 'BOW']),
   goon: Object.freeze(['STROKE', 'EDGE', 'MORE', 'PUMP', 'GOON', 'AGAIN', 'STARE', 'LEAK']),

@@ -2,6 +2,7 @@
  * Nonverbal beds are pre-rendered loops. Spoken words always use real recordings. */
 
 import { EDGE_WORDS, PHONES_PROMPT } from '../../../data/content/index.js';
+import { themedDraw } from '../../theme-text.js';
 import { MANTRA } from '../../../data/words.js';
 import { DARK, darkCss, mountSpiral, spiral, deck, ring, flash, bar, panel, btnCentre, meterRow, setLine, burst, railsRoom, ink, freeSpot, fill } from './kit.js';
 import { ROUTE_COPY } from './copy.js';
@@ -51,7 +52,7 @@ export default {
   /* Whispers: small words all over the page, each with a ripple, and a real whispered clip now and then. */
   a_whisp: {
     mount(ctx) {
-      const words = deck([...EDGE_WORDS, ...ROUTE_COPY.whispers, ...ROUTE_COPY.whispers], ctx), clips = deck(MANTRA, ctx);
+      const words = themedDraw(ctx, 'edge', deck([...EDGE_WORDS, ...ROUTE_COPY.whispers, ...ROUTE_COPY.whispers], ctx)), clips = deck(MANTRA, ctx);
       const row = ctx.el('div', 'display:flex;align-items:center;gap:4px;font:12px Arial,Helvetica,sans-serif;color:var(--ink-soft);', null, meterRow(ctx));
       ctx.el('span', '', ROUTE_COPY.volume, row).className = 'routes-lbl';
       bar(ctx, row, 'width:40px;height:6px;', 'var(--accent-2)').set(0.1);
