@@ -1,12 +1,14 @@
 # Terms & Conditioning (T&C; working folder name: fuzz)
 
 A free browser clicker in the shape of Stimulation Clicker that advertises CCP from inside the joke. One grey button on a
-grey page. Every buy adds something to the screen and stays on. Buying Drop ends the main run. Five choices
+grey page. Every buy adds something to the screen and stays on. The route's first completed ending chain determines the last purchase. Go Outside is the fallback. Five choices
 on the way make 192 routes and 13 endings. `data/brand.js` holds the names; the currency's is still a placeholder.
 
 Brief: `handoff-1102/GAME-BUILD-BRIEF.md`. **To add an unlock read `ENGINE.md`.** Host wire: `CONTRACT.md`.
 
 ## Run
+
+The shared playtest is [on port 8817](http://127.0.0.1:8817/). [Play the EMI story from Transmission](http://127.0.0.1:8817/fuzz/dev/play-ending.html?end=go_end) to buy the upgrades in the regular shop.
 
 ```bash
 cd ConditioningControlPanel/Resources/web/fuzz
@@ -20,11 +22,11 @@ Debug door: `?pace=N`, `?buy=id,id`, `?mood=m_x`, `?pictures=none`, `?fresh=1`, 
 
 Do not open `index.html` from `file://`: modules and the Loom need a server rooted at `Resources/web`.
 
-## Four-hour player preview
+## Guided player preview
 
 Open `/fuzz/index.html?preview=journey&slot=playtest` on the combined host. A new slot starts with the picture choice, contract, 0 Fuzz and one button. Reopening the same slot resumes it. The funded showcase and the original short player preview keep their own saves.
 
-The shop uses seven chapters and 144 purchase opportunities to reach Drop. Prices follow a reference route and respect discounts. Each main fork counts lifetime Fuzz earned. Completing its discounted purchases also opens the fork. Golden Buttons can award one free purchase per chapter. Ranks and specialties persist with the run. The two-minute activity banks fill during active play and pay out on the corresponding activity.
+The shop uses seven chapters and 144 purchase opportunities to reach the route ending. Prices follow a reference route and respect discounts. Each main fork counts lifetime Fuzz earned. Completing its discounted purchases also opens the fork. Golden Buttons can award one free purchase per chapter. Ranks and specialties persist with the run. The two-minute activity banks fill during active play and pay out on the corresponding activity.
 
 Run `node dev/journey-timing.mjs --all` from this directory to measure time to Drop and the longest interval between paid purchases on all 192 route combinations at four and two taps per second. The model uses average side income. Scripted browser play also exercises the individual route modifiers, prizes, and cards.
 

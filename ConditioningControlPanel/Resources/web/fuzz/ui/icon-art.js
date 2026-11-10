@@ -1,5 +1,7 @@
 /* Chunky cut-paper objects, drawn on a transparent 64px canvas. No font glyphs,
  * external images, SVG IDs, filters or generated markup from game text. */
+import { emiTileSprite } from './emi-tile-sprite.js';
+
 const A = 'var(--art-a,#ee9bb7)', B = 'var(--art-b,#a7c8dd)', C = '#fff0cf', D = '#28232b';
 const p = (d, fill = A, extra = '') => `<path d="${d}" fill="${fill}" ${extra}/>`;
 const r = (x, y, w, h, fill = A, rx = 3) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${fill}"/>`;
@@ -56,7 +58,7 @@ export const ART = Object.freeze({
   book: () => p('M5 12Q20 6 32 16 45 6 59 12V54Q43 48 32 57 20 48 5 54Z', C) + line('M32 16V57M12 23 24 26M12 32 24 35M40 26 51 23M40 35 51 32'),
   radio: () => line('M33 14 51 4') + r(5, 17, 54, 39, A, 6) + c(22, 37, 12, C) + line('M15 31H29M13 37H31M15 43H29') + r(40, 25, 12, 6, B, 1) + c(46, 43, 5, C),
   ink: () => p('M30 7C41-1 43 16 42 20 60 9 65 34 51 38 66 54 45 63 35 50 27 68 8 54 17 43-3 43 3 23 18 25 7 5 25 0 30 7Z', D),
-  mascot: () => p('M9 21 12 5 28 13 41 8 55 20V40Q54 59 31 58 6 58 9 37Z', A) + p('M13 31Q24 20 32 31 42 21 52 31V41Q49 55 32 54 15 54 13 41Z', C) + c(23, 35, 3, D) + c(42, 35, 3, D) + line('M28 44Q32 48 37 43'),
+  mascot: () => emiTileSprite(),
   billboard: () => screen() + line('M17 24H45M17 33H36'),
   crown: () => p('M8 14 22 27 32 7 43 27 57 14 51 51H14Z', C) + c(32, 37, 6, A) + line('M14 46H51'),
   card: () => r(5, 13, 54, 38, B, 5) + r(7, 22, 50, 8, D, 0) + r(13, 37, 12, 6, C, 1) + line('M35 40H49'),
@@ -138,6 +140,7 @@ export function badgeMarkup(badge) {
 export function iconMarkup({ shape, badge = '' }, glossy = false) {
   if (!ART[shape] || (badge && !BADGES[badge])) throw new Error(`Unknown icon artwork: ${shape}/${badge}`);
   const stamp = badgeMarkup(badge);
+  if (shape === 'mascot') return ART.mascot() + stamp;
   const polish = glossy ? `<g stroke="#fffaf0" stroke-width="3.5" fill="none" opacity=".95"><path d="M18 22 24 16M18 30 32 16"/></g><g stroke="${D}" stroke-width="1.5">${star(51, 12, .29, C)}</g>` : '';
   return `<g stroke="${D}" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">${ART[shape]()}${stamp}${polish}</g>`;
 }
