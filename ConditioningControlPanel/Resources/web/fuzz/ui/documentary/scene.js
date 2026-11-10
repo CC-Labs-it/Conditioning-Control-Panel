@@ -636,7 +636,17 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
       await yieldLoad();
       if (disposed) return;
     }
-    await renderer.compileAsync(world, camera);
+    // Warm every room material and hidden prop before the spiral reveals the ride.
+    const warmGeometry = new THREE.BoxGeometry(1, 1, 1), warmGroup = new THREE.Group();
+    for (const material of Object.values(materials)) warmGroup.add(new THREE.Mesh(warmGeometry, material));
+    world.add(warmGroup);
+    const hidden = [];
+    world.traverse(object => { if (!object.visible) { hidden.push(object); object.visible = true; } });
+    try { await renderer.compileAsync(world, camera); }
+    finally {
+      for (const object of hidden) object.visible = false;
+      warmGroup.removeFromParent(); warmGeometry.dispose();
+    }
     if (disposed) return;
     readyState = true;
     for(const [id,data] of pendingProjectorBeats.splice(0)) projectorBeat(id,data);

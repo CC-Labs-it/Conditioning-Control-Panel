@@ -28,3 +28,22 @@ test('non-indexed triangles and a target before the wall stay exact', () => {
  assert.equal(query(ray,2.1,4),false);
  geometry.dispose();
 });
+
+test('a reused template partition refits bounds after bending and translating a bay', () => {
+ const template=new THREE.BoxGeometry(8,4,12,16,1,48);
+ createOcclusionQuery(THREE,template,template);
+ const bent=template.clone(), positions=bent.attributes.position;
+ for(let i=0;i<positions.count;i++) {
+  const z=positions.getZ(i);
+  positions.setXYZ(i,positions.getX(i)+Math.sin(z*.2)*3,positions.getY(i)+z*.15,z-20);
+ }
+ const mesh=new THREE.Mesh(bent,new THREE.MeshBasicMaterial({side:THREE.DoubleSide}));
+ const query=createOcclusionQuery(THREE,bent,template), caster=new THREE.Raycaster();
+ mesh.updateMatrixWorld(true);
+ for(let x=-12;x<=12;x++) for(let y=-4;y<=4;y++) for(const far of [15,25,40]) {
+  caster.set(new THREE.Vector3(0,0,0),new THREE.Vector3(x,y,-20).normalize());
+  caster.near=.05;caster.far=far;
+  assert.equal(query(caster.ray,.05,far),caster.intersectObject(mesh,false).length>0);
+ }
+ template.dispose();bent.dispose();mesh.material.dispose();
+});

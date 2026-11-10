@@ -1,11 +1,14 @@
+const layouts = new WeakMap();
+
 /** Exact double-sided triangle queries, accelerated by a static bounding tree. */
-export function createOcclusionQuery(THREE, geometry) {
+export function createOcclusionQuery(THREE, geometry, template = geometry) {
   const positions = geometry.attributes.position, index = geometry.index;
   const vertex = offset => index ? index.getX(offset) : offset;
   const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
   const hit = new THREE.Vector3();
   const triangles = [];
-  for (let offset = 0; offset < (index?.count ?? positions.count); offset += 3) {
+  const cached = layouts.get(template);
+  if (!cached) for (let offset = 0; offset < (index?.count ?? positions.count); offset += 3) {
     a.fromBufferAttribute(positions, vertex(offset));
     b.fromBufferAttribute(positions, vertex(offset + 1));
     c.fromBufferAttribute(positions, vertex(offset + 2));
@@ -22,7 +25,19 @@ export function createOcclusionQuery(THREE, geometry) {
     const middle = items.length >> 1;
     return { box, left: build(items.slice(0, middle)), right: build(items.slice(middle)) };
   }
-  const root = build(triangles);
+  function refit(node) {
+    const box = new THREE.Box3();
+    if (node.items) {
+      for (const { offset } of node.items) for (let i = 0; i < 3; i++) {
+        box.expandByPoint(a.fromBufferAttribute(positions, vertex(offset + i)));
+      }
+      return { box, items: node.items };
+    }
+    const left = refit(node.left), right = refit(node.right);
+    return { box: box.union(left.box).union(right.box), left, right };
+  }
+  const root = cached ? refit(cached) : build(triangles);
+  if (!cached) layouts.set(template, root);
   function query(node, ray, near, far) {
     if (!ray.intersectBox(node.box, hit)) return false;
     // When the origin is inside the box its exit can be beyond the target.
