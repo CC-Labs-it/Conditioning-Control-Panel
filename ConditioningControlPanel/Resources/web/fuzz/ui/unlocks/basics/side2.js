@@ -1,10 +1,11 @@
 /* ui/unlocks/basics/side2.js - Side Toys part two: Flash Picture, Screen Blur, Real Sparkles, Falling Words, Voice Reactions,
- * Listening Test, Toy Link, Friend Remote. Words are recorded clips or nothing. App-only rows say so and do nothing here. */
+ * Listening Test, Toy Link. Words are recorded clips or nothing. App-only rows say so and do nothing here.
+ * Friend Remote was cut (owner 2026-11-10): its row is dropped in dev/gen-items.mjs and a save that owns it mounts nothing. */
 
-import { APP_ONLY, DRIFT_LINES, FALLING_WORDS, LISTENING_TEST, OPINIONS, REMOTE } from '../../../data/content/index.js';
+import { APP_ONLY, DRIFT_LINES, FALLING_WORDS, LISTENING_TEST, OPINIONS } from '../../../data/content/index.js';
+import { LISTEN_NAME } from './copy.js';
+import { burst, btnCenter, chip, docOf, fresh, play, pop, sfx, spawn, squish } from './fx.js';
 import { runThemes, themed } from '../../theme-text.js';
-import { LISTEN_NAME, REMOTE_SOLO } from './copy.js';
-import { burst, btnCenter, chip, docOf, fresh, play, pop, setPalette, sfx, spawn, squish } from './fx.js';
 import { markPopPicture } from '../../pop-picture.js';
 import { LITE } from '../../perf.js';
 
@@ -191,10 +192,11 @@ export default {
     },
   },
 
-  /* Toy Link: follows the earning rate up to a cap, in the app, on a toy the player connected there. On the web, a sign. */
+  /* Toy Link: follows the earning rate up to a cap, in the app, on a toy the player connected there. Offered only when the
+   * host said a toy is connected (ui/platform.js); an old save on the web keeps its sign. */
   toy: {
     mount(ctx) {
-      const app = ctx.hosted && ctx.caps.toys;
+      const app = ctx.hosted && (ctx.caps.toys === true || ctx.caps.toysConnected === true);
       const b = chip(ctx, `Toy: ${APP_ONLY.toy.tag}`, () => ctx.toast(app ? APP_ONLY.toy.app : APP_ONLY.toy.web));
       if (fresh(ctx)) { squish(ctx, b, 1.3); ctx.toast(app ? APP_ONLY.toy.app : APP_ONLY.toy.web); }
       if (app) {
@@ -206,38 +208,6 @@ export default {
           if (level > 0.05) ctx.host('haptic', { level, ms: 1200, tag: 'toy' });
         });
       }
-      return {};
-    },
-  },
-
-  /* Friend Remote: preset buttons and no words, pressed by the player on the player's own run. No friend wire exists, and
-   * the card says so; nothing here pretends one is connected. */
-  remote: {
-    mount(ctx) {
-      const doc = docOf(ctx);
-      const act = (p) => {
-        const el = ctx.button.el;
-        if (p.key === 'poke') squish(ctx, el, 1.5);
-        else if (p.key === 'spin') { if (!ctx.gentle) ctx.anim(el, [{ rotate: '0deg' }, { rotate: '360deg' }], { duration: 700 }); }
-        else if (p.key === 'pink') { setPalette(ctx, 'pink'); ctx.emit('page-colour', { name: 'pink' }); }
-        else if (p.key === 'tap') ctx.button.press();
-        else if (p.key === 'hush') ctx.audio.muteFor(3000);
-        ctx.toast(REMOTE_SOLO.toasts[p.key]);
-      };
-      const open = () => {
-        const node = doc.createElement('div');
-        node.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
-        for (const p of REMOTE.presets) {
-          const b = doc.createElement('button');
-          b.type = 'button';
-          b.textContent = p.label;
-          b.addEventListener('click', () => act(p));
-          node.appendChild(b);
-        }
-        ctx.modal({ title: REMOTE_SOLO.title, body: REMOTE_SOLO.note, node });
-      };
-      const c = chip(ctx, REMOTE_SOLO.chip, open);
-      if (fresh(ctx)) { squish(ctx, c, 1.3); open(); }
       return {};
     },
   },

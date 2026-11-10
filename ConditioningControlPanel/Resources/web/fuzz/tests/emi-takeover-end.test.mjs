@@ -15,6 +15,13 @@ let seed = 11;
 const rng = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
 const src = (f) => readFileSync(new URL(`../ui/unlocks/themes-b/${f}`, import.meta.url), 'utf8');
 
+test('the last wave grows from the actual EMI positions and visits every DROP pixel once', () => {
+  const grid = { cols: 5, rows: 1, pitch: 10, ox: 0, oy: 0, cells: [0,10,20,30,40].map(x => ({ x, y: 0 })) };
+  const order = T.spreadOrder(grid, [{ x: 45, y: 5 }, { x: 5, y: 5 }], () => 0);
+  assert.deepEqual(order, [0,4,1,3,2]);
+  assert.deepEqual(T.spreadOrder(grid, [{ x: 45, y: 5 }], () => 0), [4,3,2,1,0]);
+});
+
 test('the front grid fills the screen, leaves Wake Up\'s corner empty, its lit cells read DROP, and it comes row after row', () => {
   for (const s of SCREENS) {
     const g = T.dropGrid(s);
@@ -111,9 +118,7 @@ test('the beats come in the owner order and lengths, the wait holds for OK up to
   /* the longest take counts the whole wait, with a margin under the engine cap */
   assert.ok(T.takeMaxS() >= T.phaseStarts().waiting + T.TAKE.WAIT_MAX_S);
   assert.ok(T.takeMaxS() * 1000 < CONFIG.ENDING_TAKE_MAX_MS - 20000, `${T.takeMaxS()} s`);
-  /* sound under the wait stays quiet; the sting is loud-ish but under the bus */
-  assert.ok(T.TAKE.DRONE_GAIN > 0 && T.TAKE.DRONE_GAIN <= 0.25);
-  assert.ok(T.TAKE.STING_GAIN > T.TAKE.DRONE_GAIN && T.TAKE.STING_GAIN <= 1);
+  assert.ok(T.TAKE.STING_GAIN > 0 && T.TAKE.STING_GAIN <= 1);
 });
 
 test('no screen flashes 3 times a second, and the giant EMI blinks two or three times inside her idle', () => {
@@ -152,8 +157,10 @@ test('the take keeps its hard rules in the source', () => {
   assert.match(take, /bindCopyPets\(ctx, .*phase === 'fill'/, 'its little EMIs answer a pet until all screens shut');
   assert.match(take, /<button type="button" class="ok">/, 'OK is a real button: Enter and Space work');
   assert.match(take, /ev\.isTrusted\) pressOk/, 'only a real press ends the wait');
-  assert.match(take, /audio\.input\?\.\(/, 'drone and sting are synthesised through the kit');
-  assert.match(take, /drone\?\.stop\(\)/, 'the drone cuts on OK and on panic');
+  const silentBeats = take.slice(take.indexOf('function cutAudio()'), take.indexOf('function sting()'));
+  assert.match(silentBeats, /releaseWorld\(\);\s+ctx\.audio\.solo\(true\);\s+ctx\.audio\.silence\(true\)/);
+  assert.doesNotMatch(silentBeats, /ctx\.audio\.(play|loop|input|stream)\(/);
+  assert.match(take, /if \(okBy !== 'timeout'\) \{\s*ctx\.audio\.silence\(false\);\s*sting\(\);/);
   assert.match(take, /ctx\.anim\(big\.el, \[\{ scale: 1\.12 \}/, 'the jumpscare: there at once, slightly too big, no fade');
   assert.ok(!/background:\s*#fff[^;]*;[^']*inset:0|inset:0;[^']*background:\s*#fff/.test(take), 'no full-screen white flash');
   assert.match(src('emi-kit.js'), /referrerPolicy = 'strict-origin'/);

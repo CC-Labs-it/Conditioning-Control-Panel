@@ -78,6 +78,8 @@ for (const profile of profiles) {
     console.log(`  ends   ${Object.entries(row.endings).map(([k, v]) => `${k} ${m(v)}`).join(' ')}`);
     console.log(`  money  ${top}`);
     console.log(`  side   lumps ${row.lumpShare}%, mods ${row.modShare}%, pressed ${row.pressed}, paid/asked ${(row.side.paid / Math.max(1, row.side.asked)).toFixed(2)}`);
+    /* Toy budgets (CONFIG.TOY_SHARE, 2026-11-10): what each played game took of its own budget. */
+    console.log(`  toys   ${Object.entries(row.toys || {}).map(([k, v]) => `${k} ${(v.paid / Math.max(1, v.budget)).toFixed(2)}`).join(', ') || 'none'}`);
     console.log(`  HUD    ${Object.entries(row.hud || {}).map(([k, v]) => `${k} ${v}`).join(', ')}`);
     console.log(`  lumps  ${Object.entries(row.lumps).sort((a, b) => b[1].got - a[1].got).slice(0, 8).map(([k, l]) => `${k} ${l.n}x ${(l.secs / l.n).toFixed(1)}s late ${l.lateN ? (l.lateSecs / l.lateN).toFixed(1) : '-'}s`).join(', ')}`);
     if (row.errors.length) console.log(`  ERRORS ${row.errors.join(' | ')}`);

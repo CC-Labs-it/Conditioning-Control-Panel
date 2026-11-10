@@ -26,9 +26,11 @@
    ?end=bi_end (default)    the ending item; its chain is granted and the wallet topped up to afford it
    ?buy=a,b,c               extra items on top of the basics
    ?pictures=online         passed on to the game (placeholder art), like ?lite
+   ?end=go_end&from=go_hive  show nine independent EMI screens just before the Hive Mind purchase
    The game runs standalone in a same-origin frame (8817 is not a web host origin), so audio and the page are the real thing. */
 import { BY_ID } from '../data/items.js';
 import * as E from '../sim/economy.js';
+import { HER_TILES } from '../sim/takeover.js';
 const qs = new URLSearchParams(location.search);
 const endId = qs.get('end') || 'bi_end';
 const end = BY_ID[endId];
@@ -38,7 +40,7 @@ const basics = ['colour', 'font', 'sound', 'rounded', 'softw', 'a_rain', 'v_fram
 const extra = (qs.get('buy') || '').split(',').map((s) => s.trim()).filter(Boolean);
 /* ?from=go_tx: land one row before that item instead, with the rows from it up to the ending left to buy by hand.
    The wallet covers all of them, so the player buys each one when they choose. */
-const fromId = qs.get('from');
+const fromId = qs.get('from') || (endId === 'go_end' ? 'go_tx' : null);
 const from = fromId ? BY_ID[fromId] : null;
 if (fromId && !from) { note.textContent = `No item "${fromId}".`; throw new Error(note.textContent); }
 const held = new Set();
@@ -55,7 +57,9 @@ const previewQuery = new URLSearchParams({ buy: buy.join(',') });
 for (const key of ['pictures', 'lite']) {
   if (qs.has(key)) previewQuery.set(key, qs.get(key));
 }
-if (bubble) previewQuery.set('pictures', demoReel ? 'none' : 'scrolller'); // Let the player choose their source in the normal game dialog.
+if (bubble) previewQuery.set('pictures', demoReel ? 'none' : 'scrolller');
+// Without an explicit test source, EMI starts with the normal opt-in picture chooser.
+if (endId === 'go_end' && !qs.has('pictures')) previewQuery.set('pictures', 'scrolller');
 frame.src = '../index.html?' + previewQuery;
 frame.addEventListener('load', () => {
   const t0 = performance.now();
@@ -68,6 +72,13 @@ frame.addEventListener('load', () => {
         for (const id of BY_ID.drop.req) fuzz.grant(id);
       }
     };
+    if (endId === 'go_end' && fromId === 'go_hive') {
+      // Enter the picture comparison after her shopping trip, with Hive Mind still on the shelf.
+      const swarm = frame.contentWindow.__emiSwarm;
+      if (!swarm) { note.hidden = true; return void setTimeout(tick, 100); }
+      swarm.dev.tiles(HER_TILES.length);
+      swarm.dev.crowd(Math.max(0, 9 - swarm.count()));
+    }
     if (bubble && !run.clock) return void setTimeout(tick, 100);
     if (!from) finishPath();
     if (bubble && !from) {
@@ -101,8 +112,8 @@ frame.addEventListener('load', () => {
        shop window beside Endless Mode. The trunk fork row stays as the goal; forks and endings are never granted here. */
     // Keep power-ups on EMI's shelf for her to take over during the finale.
     const takeover = endId === 'go_end';
-    if (takeover) fuzz.engine.env.featuredShop.unshift(endId);
-    let guard = from || takeover ? 0 : 240;
+    // Hive Mind is the final purchase. The swarm finishes the run through play.
+    let guard = from || takeover || endId === E.FALLBACK_ENDING ? 0 : 240;
     for (;;) {
       const next = guard-- > 0 && E.openItems(run).find((i) => i.kind !== 'end' && i.kind !== 'fork' && i.id !== 'taste2' && !held.has(i.id));   // Second Theme asks a question of its own: leave it as the goal row
       if (!next) break;
@@ -115,24 +126,22 @@ frame.addEventListener('load', () => {
       if (E.count(run, next.id) === before) break;
     }
     /* The preview grants the upgrades. Give each poster preview a set of sample tallies. */
-    if (['o_out', 'dr_end'].includes(endId)) {
+    if (['o_out', 'outside', 'dr_end'].includes(endId)) {
       const tally = ((run.store ||= {}).adcard ||= {});
       tally.pics ||= 420;
       tally.golden ||= 12;
       tally.terms ||= 160;
     }
-    /* EMI Takeover: the chain (go_tx, go_will, go_corp, go_hive) came with go_end's req. Hand her every tile she
-       buys herself (Override included) and a small crowd, so the take starts from a HIVE MIND swarm. ?emi=0 leaves her as the grant left her. */
-    const swarm = frame.contentWindow.__emiSwarm;
-    if (!from && endId === 'go_end' && swarm?.dev && qs.get('emi') !== '0') { swarm.dev.tiles(99); swarm.dev.crowd(qs.get('lite') ? 5 : 11); }
     if (from) {
       const want = Math.round([...held].reduce((sum, id) => sum + E.price(run, id), 0) * 1.1);
       if (run.fuzz < want) fuzz.add(want - run.fuzz);
       // The normal shop owns pricing, affordability, the terms card and the purchase.
       // Bring this chain into view while leaving later steps locked behind their parents.
       fuzz.engine.env.featuredShop.unshift(...held);
-      finishPath();
-      fuzz.engine.subscribe('buy', finishPath);
+      if (!takeover) {
+        finishPath();
+        fuzz.engine.subscribe('buy', finishPath);
+      }
       fuzz.ui.draw(true);
       note.remove();
       frame.focus();
@@ -141,10 +150,10 @@ frame.addEventListener('load', () => {
     const want = Math.round(E.price(run, endId) * 1.05);
     if (run.fuzz < want) fuzz.add(want - run.fuzz);
     fuzz.ui.draw(true);
-    if (endId === 'dr_end') {
+    if (endId === 'dr_end' || endId === 'outside') {
       // A crowded ending preview can put a toy or a setup card over its shop tile.
       const play = document.createElement('button');
-      play.textContent = 'Play Unit Complete';
+      play.textContent = endId === 'outside' ? 'Play Go Outside' : 'Play Unit Complete';
       note.replaceChildren(play);
       play.addEventListener('click', () => {
         fuzz.engine.audio.arm();
@@ -157,7 +166,7 @@ frame.addEventListener('load', () => {
     style.textContent = `#shop [data-id="${endId}"]{outline:4px solid #fff;outline-offset:2px;box-shadow:0 0 0 9px #ff2f9a,0 0 40px #ff2f9a;animation:pe-pulse 1s ease-in-out infinite alternate}
       @keyframes pe-pulse{from{transform:scale(1)}to{transform:scale(1.08)}}`;
     frame.contentDocument.head.appendChild(style);
-    note.innerHTML = `Sound on. The glowing shop tile is <b>${end.name}</b>: buy it, press ${endId === 'go_end' ? 'Let her' : 'Yes'}. Wake Up still works the whole time.`;
+    note.innerHTML = `Sound on. The glowing shop tile is <b>${end.name}</b>: buy it, press Yes. Wake Up still works the whole time.`;
     setTimeout(() => note.classList.add('gone'), 14000);
     frame.focus();
   };

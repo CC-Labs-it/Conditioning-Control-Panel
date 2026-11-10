@@ -23,6 +23,11 @@ const metadata = {};
 try {
   const page = await browser.newPage();
   for (const shape of [...shapes].sort()) {
+    if (shape === 'mascot') {
+      const baker = fileURLToPath(new URL('./bake-emi-shop-sprite.py', import.meta.url));
+      metadata.mascot = JSON.parse(execFileSync(process.env.PYTHON || 'python', [baker, out], { encoding: 'utf8' }));
+      continue;
+    }
     const spec = json(join(anim, 'specs', shape + '.json'));
     const dir = join(anim, 'parts', shape);
     const casts = json(join(dir, 'casts.json'));

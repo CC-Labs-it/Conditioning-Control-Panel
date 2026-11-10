@@ -105,6 +105,15 @@ function parseRun(src) {
   for (const [k, v] of Object.entries(obj(src.spent))) s.spent[k] = num(v);
   const side = obj(src.side);
   s.side = { budget: num(side.budget), asked: num(side.asked), paid: num(side.paid) };
+  for (const [id, t] of Object.entries(obj(src.toys))) {
+    if (!Object.hasOwn(CONFIG.TOY_SHARE, id)) continue;
+    const p = obj(t);
+    s.toys[id] = { budget: num(p.budget), asked: num(p.asked), paid: num(p.paid) };
+  }
+  /* Recent income (sim/economy.js recentIncome): one 10 s bucket per slot. An old save has none and starts empty. */
+  const inc = obj(src.inc), slots = Math.max(1, Math.round(CONFIG.TOY_CAP_S / 10));
+  s.inc = { k: Math.floor(num(inc.k)), b: Array.isArray(inc.b) ? inc.b.slice(0, slots).map((v) => num(v)) : [], sum: 0 };
+  s.inc.sum = s.inc.b.reduce((a, v) => a + v, 0);
   s.store = stores(src.store);
   s.off = cleanOff(src.off, s.owned);
   s.endless = !!src.endless && !!s.owned.onemore;

@@ -64,7 +64,24 @@ const COPY = {
   close: 'Close',
   pin: 'Keep on screen',
   unpin: 'Let it close',
+  stage: 'On stage',
+  stageAll: 'Everything at once',
+  stageAllOn: 'Every look at full strength',
+  stageAllOff: 'Three at full strength, the rest take turns',
+  stagePinned: 'Pinned at full strength',
+  stageOn: 'On stage now',
+  stageRest: 'Resting, takes its turn',
+  stageFull: 'At full strength',
 };
+
+/** The stage rows' small line (ui/stage.js): what the effect is doing now. */
+export function stageNote(row, all) {
+  if (all) return COPY.stageFull;
+  if (row.pinned) return COPY.stagePinned;
+  return row.cast ? COPY.stageOn : COPY.stageRest;
+}
+/** The tab the stage group lives on: Looks when there is one, else the first tab. */
+export const stageTabOf = (tabs) => (tabs.some((t) => t.id === 'looks') ? 'looks' : tabs[0]?.id || 'looks');
 
 /** Tabs by lane. Everything not listed is an effect. */
 export const PANEL_TABS = Object.freeze([
@@ -205,7 +222,9 @@ function createPanel(ctx) {
     }
     tabBar.hidden = tabs.length < 2;
     const shownGroups = tabs.find((t) => t.id === tab)?.groups || [];
-    if (!shownGroups.length) { const p = doc.createElement('p'); p.textContent = COPY.none; list.appendChild(p); }
+    const staged = ctx.stage.list();
+    if (staged.length && tab === stageTabOf(tabs)) stageGroup(staged);
+    else if (!shownGroups.length) { const p = doc.createElement('p'); p.textContent = COPY.none; list.appendChild(p); }
     for (const g of shownGroups) {
       const h = doc.createElement('div');
       h.className = 'grp';
@@ -240,6 +259,48 @@ function createPanel(ctx) {
     }
     list.scrollTop = scroll;
   }
+  /* The stage group: one "everything at once" switch, then a pin per ambient effect. A pinned effect always plays at full
+   * strength; the switch turns the cast of three off. */
+  function stageRow(label, note, on, onPress, icon) {
+    const b = doc.createElement('button');
+    b.type = 'button';
+    b.className = 'sw';
+    b.setAttribute('role', 'switch');
+    b.setAttribute('aria-checked', String(on));
+    const nm = doc.createElement('span');
+    nm.className = 'nm';
+    nm.textContent = label;
+    const sm = doc.createElement('small');
+    sm.textContent = note;
+    nm.appendChild(sm);
+    b.append(icon, nm, doc.createElement('i'));
+    b.addEventListener('click', onPress);
+    list.appendChild(b);
+    return b;
+  }
+  function stageGroup(staged) {
+    const h = doc.createElement('div');
+    h.className = 'grp';
+    h.dataset.stage = '';
+    const name = doc.createElement('span');
+    name.textContent = COPY.stage;
+    h.appendChild(name);
+    list.appendChild(h);
+    const all = ctx.stage.all;
+    const star = doc.createElement('span');
+    star.className = 'ico';
+    try { star.appendChild(iconFor(doc, BY_ID.starburst)); } catch {}
+    stageRow(COPY.stageAll, all ? COPY.stageAllOn : COPY.stageAllOff, all, () => ctx.stage.setAll(!ctx.stage.all), star).dataset.stageAll = '';
+    for (const r of staged) {
+      let icon;
+      try { icon = iconFor(doc, r.item); } catch { icon = doc.createElement('span'); icon.className = 'ico'; }
+      const b = stageRow(r.name, stageNote(r, all), r.pinned, () => ctx.stage.pin(r.id, !r.pinned), icon);
+      b.dataset.stagePin = r.id;
+      b.setAttribute('aria-label', `${r.name}: keep at full strength`);
+    }
+  }
+  ctx.on('stage', () => { if (shown) build(); });
+
   ctx.on('switch', ({ id }) => {
     if (!shown) return;
     if (!rows.has(id) && !groups.some((g) => g.rows.some((it) => it.id === id))) { build(); return; }   // a row bought while it was up

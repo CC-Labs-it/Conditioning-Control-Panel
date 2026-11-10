@@ -75,6 +75,29 @@ test('own files stay blob urls on this device, rotate, and skip anything that is
   assert.equal(await p.next(), null);
 });
 
+test('an EMI deals from new arrivals immediately and skips its last picture and every occupied screen', () => {
+  const p = createPictures({ scrolller: {consent: true} });
+  const urls = Array.from({length: 15}, (_, i) => 'https://cdn.scrolller.com/' + i + '.jpg');
+  const feed = list => p.receiveScrolller({ v: 1, rows: list.map(url => ({ kind: 'image', url })) });
+  const draw = (previousUrl, exclude = []) => p.dealStill({ group: 'emi-screen-0', allowScrolller: true, exclude, previousUrl })?.url;
+  feed(urls.slice(0, 1));
+  assert.equal(draw(null), urls[0]);
+  assert.equal(draw(null, [urls[0]]), undefined);
+  feed(urls);
+  let last = urls[0];
+  const seen = new Set([last]);
+  for (let i = 1; i < urls.length; i++) {
+    last = draw(last);
+    assert.ok(!seen.has(last));
+    seen.add(last);
+  }
+  assert.equal(seen.size, urls.length);
+  assert.equal(draw(last, urls.filter(url => url !== last)), undefined);
+  assert.equal(draw(null, urls.map(url => url + '?sig=old')), undefined);
+  p.setRemoteConsent(false);
+  assert.equal(draw(null), undefined);
+});
+
 test('a source change reaches unlocks as a pictures event, and through ctx.pictures', () => {
   const heard = [];
   let ctx;

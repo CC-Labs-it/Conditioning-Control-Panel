@@ -8,6 +8,7 @@ import { brandText } from '../data/brand.js';
 import { richText, setRich } from './rich-text.js';
 import { CLAUSES, CLAUSE_EXTRAS } from '../data/content/clauses.js';
 import { createLegal, esc } from './legal.js';
+import { BY_ID } from '../data/items.js';
 
 export const STAGE_ONE_MAX = 8;
 export const STAGE_TWO_MAX = 25;
@@ -22,6 +23,8 @@ export function clauseStage(purchase, laterRun = false) {
 
 /** The clauses a card shows. A bundle: clause 1 of the lead and each rider, at most BUNDLE_CAP. */
 export function clauseLines(id, riders = [], stage = 1, map = CLAUSES) {
+  /* A question stage (dev/gen-items.mjs INTAKE_STAGES) is one moment: its own single clause, not one per row it brings. */
+  if (riders.length && BY_ID[id]?.qstage && map[id]?.length) return map[id].slice(0, 1);
   if (riders.length) {
     const firsts = [id, ...riders].map((r) => map[r]?.[0]).filter(Boolean).slice(0, BUNDLE_CAP);
     return stage === 3 ? firsts.slice(0, 1) : firsts;

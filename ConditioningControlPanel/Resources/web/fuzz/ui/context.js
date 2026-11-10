@@ -285,6 +285,27 @@ export function makeContext(engine, scope) {
     get restored() { return !!scope.restored; },
     /* The Control Panel's door to the engine: { isOn(id), set(id, on), waitingOn(id), groups() }. */
     switches: engine.switches,
+    /* The stage (ui/stage.js): ambient look layers join it, so a new small buy gets a solo and only a cast of three plays
+     * at full strength. register(el | setStrength) or register(stageId, el | setStrength); register(stageId) alone joins a
+     * family without drawing (Spiral Colours). holder(parent, stageId?) is a see-through div whose opacity the stage owns. */
+    get stage() {
+      if (scope._stage) return scope._stage;
+      const real = ui.stage?.forScope(scope, item);
+      const register = real ? real.register : () => () => {};
+      return (scope._stage = Object.freeze({
+        register,
+        holder(parent = 'back', id) {
+          const h = ctx.el('div', 'position:absolute;inset:0;pointer-events:none;', null, parent);
+          h.dataset.stage = id || item.id;
+          if (id) register(id, h); else register(h);
+          return h;
+        },
+        list: () => real?.list() || [],
+        pin: (id, on) => real?.pin(id, on),
+        setAll: (on) => real?.setAll(on),
+        get all() { return !!real?.all; },
+      }));
+    },
     get gentle() { return ui.gentle(); },
     get reduced() { return ui.reduced(); },
     host: (type, fields) => host.send?.(type, fields),
@@ -361,4 +382,6 @@ export const CTX_MEMBERS = Object.freeze([
   'identity',
   // Sticker Book (2026-11-10)
   'stickers',
+  // The stage (2026-11-10, ui/stage.js)
+  'stage',
 ]);

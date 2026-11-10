@@ -46,6 +46,11 @@ test("every companion tile shows the original sprite with EMI's neutral screen",
 test('the vector source is self-contained and safe to repeat in shop, guide and purchase flight', () => {
   for (const art of Object.values(ICON_CATALOG)) for (const glossy of [false, true]) {
     const svg = iconMarkup(art, glossy);
+    if (art.shape === 'mascot') {
+      assert.match(svg, /assets\/img\/emi\/body-idle\.png/);
+      assert.match(svg, /assets\/img\/emi\/face-neutral\.png/);
+      continue;
+    }
     assert.doesNotMatch(svg, /<(?:script|foreignObject|image|text)|\b(?:href|id|on\w+)=|url\(|gradient|filter/i);
     assert.match(svg, /stroke-width="3.2"/);
     assert.match(svg, /<(?:path|circle|rect)/);

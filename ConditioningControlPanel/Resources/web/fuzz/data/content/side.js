@@ -147,7 +147,7 @@ export const BOXES = Object.freeze({
 export const APP_ONLY = Object.freeze({
   sparkle: { tag: 'app only', web: 'In the CCP app, boxes can drop a real Sparkle, its reward currency. Here they cannot.', app: 'A real Sparkle. Cleverly not a microtransaction.' },
   toy: { tag: 'app only', web: 'In the CCP app, a connected toy follows how fast you earn. Here it does nothing.', app: 'It heard you. It follows your rate, up to your cap.' },
-  buzz: { web: 'Your phone buzzes on lucky taps. Android browsers only.', off: 'This browser cannot buzz. It felt that anyway.' },
+  buzz: { app: 'Your toy buzzes on lucky taps.', web: 'Your phone buzzes on lucky taps. Android browsers only.', off: 'This browser cannot buzz. It felt that anyway.' },
 });
 
 /* triggers Falling Words: rows name these three. */

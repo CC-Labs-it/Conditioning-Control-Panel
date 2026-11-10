@@ -1,17 +1,22 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { advanceBox, BOX_WINDOW, boxInterval, boxPrizeSeconds, createToyBox, dealBox, fitPiece, restoreBox, PIECES } from '../ui/unlocks/arcade/toy-box-model.js';
+import { advanceBox, BIG_WINDOW, BOX_PRIZE_BASE, BOX_WINDOW, boxInterval, boxPerks, boxPrizeMult, boxPrizeSeconds, boxWindow, createToyBox, dealBox, fitPiece, restoreBox, toyBoxRank, PIECES } from '../ui/unlocks/arcade/toy-box-model.js';
 import { createRun, earn, sideLump } from '../sim/economy.js';
 
-/* Toy Box paid outside the side budget until 2026-11-04 and made half a run's income (dev/measure.mjs). It is weighted now. */
-test('completed boxes pay more each time, from a weighted share of the side budget', () => {
+/* Toy Box paid outside the side budget until 2026-11-04 and made half a run's income (dev/measure.mjs). Since 2026-11-10 it
+ * has its own toy budget (CONFIG.TOY_SHARE): other prizes cannot drain it, and it cannot pay past it. */
+test('completed boxes pay more each time, from the Toy Box budget alone', () => {
   const run = createRun();
-  earn(run, 1e6);
+  run.owned.toy_box = 1; run.order.push('toy_box');
+  for (let t = 0; t < 600; t++) { run.clock += 1000; earn(run, 1000); }
   sideLump(run, 1e6, 'noise');
+  const before = { ...run.side };
   const paid = [0, 1, 10].map((completed) => sideLump(run, boxPrizeSeconds(completed) * 100, 'toy_box'));
   assert.ok(paid[0] < paid[1] && paid[1] < paid[2], `box prizes ${paid}`);
-  assert.ok(paid[0] > boxPrizeSeconds(0) * 100 * 0.2, 'the weight keeps a real part of the ask after other prizes drained the budget');
-  assert.ok(run.side.paid <= run.side.budget + 1e6 * 0.05 + 1, 'the budget holds');
+  assert.equal(paid[0], boxPrizeSeconds(0) * 100, 'drained shared money leaves the Toy Box budget alone');
+  assert.deepEqual(run.side, before, 'the shared side budget is not touched');
+  const pot = run.toys.toy_box;
+  assert.ok(pot.paid <= pot.budget + 1, 'the budget holds');
 });
 
 test('intro has two pieces, later boxes rise to four distinct approved pieces', () => {
@@ -84,12 +89,58 @@ test('saved phase, window, cooldown and deal restore without RNG or bonus time',
 });
 
 test('prizes rise only with completed boxes and cap at three times the starting prize', () => {
-  assert.equal(boxPrizeSeconds(0), 12);
-  assert.ok(Math.abs(boxPrizeSeconds(1) - 13.8) < 1e-9);
-  assert.equal(boxPrizeSeconds(1000), 36);
+  // Owner 2026-11-10: Toy Box arrives around minute 50, so a box pays twice the old 12 s.
+  assert.equal(BOX_PRIZE_BASE, 24);
+  assert.equal(boxPrizeSeconds(0), 24);
+  assert.ok(Math.abs(boxPrizeSeconds(1) - 27.6) < 1e-9);
+  assert.equal(boxPrizeSeconds(1000), 72);
   let b = dealBox(0, () => .4);
   b = advanceBox(b, 100, () => .4).box;
-  assert.equal(b.completed, 0); assert.equal(boxPrizeSeconds(b.completed), 12);
+  assert.equal(b.completed, 0); assert.equal(boxPrizeSeconds(b.completed), 24);
+});
+
+test('Journey ranks: rank is read from the run store, and no rank deals exactly the old box', () => {
+  assert.equal(toyBoxRank({ store: {} }), 0);
+  assert.equal(toyBoxRank({ store: { journey: { ranks: { toy_box: 2 } } } }), 2);
+  assert.deepEqual(boxPerks(0), { gold: false, big: false });
+  assert.deepEqual(boxPerks(1), { gold: true, big: false });
+  assert.deepEqual(boxPerks(4), { gold: true, big: true });
+  const seq = () => { let i = 0; const v = [.1, .7, .3, .9, .5, .2, .8, .4, .6]; return () => v[i++ % v.length]; };
+  const plain = dealBox(3, seq()), none = dealBox(3, seq(), boxPerks(0));
+  assert.deepEqual(none, plain);
+  assert.equal(plain.gold, undefined); assert.equal(plain.big, undefined);
+  assert.equal(boxPrizeMult(plain), 1);
+});
+
+test('Golden Piece: one dealt piece is gold and placing it doubles that box', () => {
+  for (const r of [0, .3, .6, .99]) {
+    let b = dealBox(2, () => r, boxPerks(1));
+    assert.ok(b.pieces.includes(b.gold), 'the gold piece is one of this box');
+    assert.equal(boxPrizeMult(b), 1, 'not yet placed');
+    b = fitPiece(b, b.gold, b.gold).box;
+    assert.equal(boxPrizeMult(b), 2);
+    for (const id of b.pieces) b = fitPiece(b, id, id).box;
+    assert.equal(b.phase, 'closing'); assert.equal(boxPrizeMult(b), 2);
+    assert.deepEqual(restoreBox(JSON.parse(JSON.stringify(b))), b, 'a reload keeps the gold');
+  }
+  assert.equal(restoreBox({ ...dealBox(1, () => .4, boxPerks(1)), gold: 'unknown' }).gold, undefined);
+});
+
+test('Big Box: the box stays open 30% longer and pays 1.5x, on top of the gold piece', () => {
+  assert.ok(Math.abs(BIG_WINDOW - BOX_WINDOW * 1.3) < 1e-9);
+  let b = dealBox(0, () => .4, boxPerks(2));
+  assert.equal(b.big, true); assert.equal(b.windowLeft, BIG_WINDOW); assert.equal(boxWindow(b), BIG_WINDOW);
+  b = advanceBox(b, BOX_WINDOW + .5, () => .4, boxPerks(2)).box;
+  assert.equal(b.phase, 'play', 'still open past the plain window');
+  const saved = restoreBox(JSON.parse(JSON.stringify(b)));
+  assert.ok(Math.abs(saved.windowLeft - (BIG_WINDOW - BOX_WINDOW - .5)) < 1e-9, 'a reload keeps the longer window');
+  for (const id of b.pieces) b = fitPiece(b, id, id).box;
+  assert.equal(boxPrizeMult(b), 2 * 1.5);
+  // A rank bought while the lid is shut shapes the next deal.
+  let c = advanceBox(createToyBox(() => 0), 15, () => .5, boxPerks(2)).box;
+  assert.equal(c.phase, 'play'); assert.equal(c.big, true);
+  c = advanceBox(dealBox(0, () => .4), BOX_WINDOW + .5, () => .4).box;
+  assert.equal(c.phase, 'closing', 'a plain box still closes at 9.5 s');
 });
 
 test('a legacy completed box migrates to settled closing without a second completion', () => {

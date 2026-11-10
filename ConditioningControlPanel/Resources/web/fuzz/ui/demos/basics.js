@@ -698,30 +698,4 @@ Object.assign(DEMOS, {
     });
     k.every(1300, () => basicsPing(k, 184, 80, '#b03a7a'));
   },
-
-  remote: (k) => {
-    const me = k.add(8, 24, 'width:124px;height:104px;box-sizing:border-box;background:#d4d0c8;border:2px solid #555;border-radius:4px;transition:background .4s;');
-    basicsLabel(k, 8, 8, 124, 'you', 'font-size:12px;');
-    basicsLabel(k, 160, 8, 72, 'friend', 'font-size:12px;');
-    const mine = k.btn({ x: 29, y: 36 });
-    me.appendChild(mine);
-    const phone = k.add(160, 24, 'width:72px;height:104px;box-sizing:border-box;background:#222;border-radius:7px;');
-    const presets = ['Poke', 'Spin', 'Pink'].map((t, i) => k.add(6, 6 + i * 23, 'width:60px;height:20px;display:grid;place-items:center;background:#ff69b4;color:#fff;border-radius:4px;font:600 11px ' + basicsFont + ';', t, phone));
-    k.add(6, 76, 'width:60px;height:20px;display:grid;place-items:center;background:#555;color:#bbb;border-radius:4px;text-decoration:line-through;font:600 11px ' + basicsFont + ';', 'Panic', phone);
-    const hit = [
-      () => k.anim(mine, [{ transform: 'translateX(-8px)' }, { transform: 'translateX(8px)' }, { transform: 'translateX(0)' }], 500),
-      () => k.anim(mine, [{ transform: 'rotate(0)' }, { transform: 'rotate(360deg)' }], 700),
-      () => { me.style.background = '#ffb8dc'; k.after(1000, () => { me.style.background = '#d4d0c8'; }); },
-    ];
-    const f = k.finger(200, 140);
-    let n = 0;
-    k.every(1800, () => {
-      const i = n++ % 3;
-      f.tap(196, 40 + i * 23, () => {
-        const d = k.add(158, 40 + i * 23, 'width:10px;height:10px;border-radius:50%;background:#ff4fa8;z-index:5;');
-        k.anim(d, [{ left: '158px', top: 40 + i * 23 + 'px' }, { left: '80px', top: '70px' }], 400, { easing: 'ease-in' });
-        k.after(410, () => { d.remove(); hit[i](); });
-      });
-    });
-  },
 });

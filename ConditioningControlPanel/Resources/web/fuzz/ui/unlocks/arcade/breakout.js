@@ -1,6 +1,10 @@
-import { createBreakout, stepBreakout, snapshot, WIDTH, HEIGHT, PADDLE_Y, PADDLE_W, SHIELD_Y } from './breakout-core/game.js';
+import { createBreakout, stepBreakout, snapshot, ballsFor, paddleWidthFor, WIDTH, HEIGHT, PADDLE_Y, SHIELD_Y } from './breakout-core/game.js';
+import { gameRank } from './game-rank.js';
 import { squashScale } from './breakout-core/contact.js';
 import { bubbleInk } from './canvas-lettering.js';
+/** A board clear asks this many times its reward seconds: it has its own toy budget (CONFIG.TOY_SHARE), and at 8-12 s a
+ *  clear asked for less than a played board earns (2026-11-10). */
+const CLEAR_PAY = 2;
 import { breakoutAudio, createBrickPhoto, drawDrop, drawSpecialBrick } from './breakout-core/presentation.js';
 
 export function mountBreakout(ctx) {
@@ -36,6 +40,9 @@ export function mountBreakout(ctx) {
   let hovered = false, touchControl = false, aim = sim.paddle, visible = true, lastPaint = ctx.state.clock, squash = 0, glow = 0, dead = false, ending=false;
   let colours = ['#f48db8', '#bb9cf5', '#89dce4', '#9de7c5'];
   const calm = () => ctx.gentle || ctx.reduced;
+  // Journey upgrades, read live: rank 1 Multiball, rank 2 Wide Paddle.
+  const rank = () => gameRank(ctx.state, 'mini_breakout');
+  const paddleW = () => paddleWidthFor(rank());
   const manual = () => host.dock?.visible !== false && !calm() && (hovered || touchControl);
   const save = () => ctx.store.set('game', snapshot(sim));
   const palette = () => { const p = ctx.palette(); if (p.themes.length) colours = [p.a, p.b, p.a, p.b]; };
@@ -54,7 +61,7 @@ export function mountBreakout(ctx) {
   }
   function point(e) {
     const r = canvas.getBoundingClientRect();
-    if (r.width) aim = Math.max(PADDLE_W / 2, Math.min(WIDTH - PADDLE_W / 2, (e.clientX - r.left) * WIDTH / r.width));
+    if (r.width) aim = Math.max(paddleW() / 2, Math.min(WIDTH - paddleW() / 2, (e.clientX - r.left) * WIDTH / r.width));
   }
   canvas.addEventListener('pointerenter', (e) => { if (ctx.paused || e.pointerType !== 'mouse') return; hovered = true; point(e); controls(); });
   canvas.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') { hovered = false; controls(); } });
@@ -63,7 +70,7 @@ export function mountBreakout(ctx) {
   canvas.addEventListener('keydown', (e) => {
     if (ctx.paused || calm() || !['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
     e.preventDefault(); touchControl = true;
-    aim = Math.max(PADDLE_W / 2, Math.min(WIDTH - PADDLE_W / 2, aim + (e.key === 'ArrowLeft' ? -20 : 20)));
+    aim = Math.max(paddleW() / 2, Math.min(WIDTH - paddleW() / 2, aim + (e.key === 'ArrowLeft' ? -20 : 20)));
     controls();
   });
   toggle.addEventListener('click', () => { if (ctx.paused || calm()) return; touchControl = !touchControl; hovered = false; aim = sim.paddle; controls(); if (touchControl) canvas.focus({ preventScroll: true }); });
@@ -77,7 +84,7 @@ export function mountBreakout(ctx) {
   function pay(event) {
     // Store the advanced board before crediting. A remount cannot repeat this clearance.
     save();
-    const rates = ctx.rates(), amount = ctx.pay(Math.max(2, rates.fps, rates.click * 2) * event.seconds, 'mini_breakout');
+    const rates = ctx.rates(), amount = ctx.pay(Math.max(2, rates.fps, rates.click * 2) * event.seconds * CLEAR_PAY, 'mini_breakout');
     ctx.emit('sticker', { key: 'brkclear' });   // Sticker Book: Clean Sweep
     receipt.textContent = `+${ctx.fmt(amount)} ${ctx.brand.currencyPlural}${event.manual ? ' · played' : ''}`;
     burst(WIDTH / 2, 75, sim.board % 4, 40); glow = .8;
@@ -106,7 +113,7 @@ export function mountBreakout(ctx) {
       g.stroke();
     }
     for (const drop of sim.drops) drawDrop(g,drop);
-    const px = calm() ? WIDTH / 2 : sim.paddle;
+    const px = calm() ? WIDTH / 2 : sim.paddle, PADDLE_W = sim.paddleW;
     g.fillStyle = '#ffffff24'; g.fillRect(px - PADDLE_W / 2 - 3, PADDLE_Y - 2, PADDLE_W + 6, 9);
     g.fillStyle = colours[0]; g.fillRect(px - PADDLE_W / 2, PADDLE_Y - 4, PADDLE_W, 6);
     g.fillStyle = '#ffffffaa'; g.fillRect(px - PADDLE_W / 2 + 2, PADDLE_Y - 4, PADDLE_W - 4, 1);
@@ -119,6 +126,8 @@ export function mountBreakout(ctx) {
         g.lineTo(0,-4.5); g.quadraticCurveTo(8,0,0,4.5); g.lineTo(-6,4); g.closePath(); g.fill();
       }
       g.fillStyle = sim.fireball ? '#fff4b3' : '#ffffff'; g.beginPath(); g.arc(0, 0, b.r, 0, Math.PI * 2); g.fill(); g.restore();
+      // Multiball: the extra balls are plain white; calm modes keep a single still ball.
+      if (!calm()) for (const x of sim.extras) { g.fillStyle = '#ffffffd0'; g.beginPath(); g.arc(x.x, x.y, x.r, 0, Math.PI * 2); g.fill(); }
     } else {
       const ink = bubbleInk(canvas);
       g.save();
@@ -138,12 +147,16 @@ export function mountBreakout(ctx) {
     const buffs=[];
     if (sim.fireball) buffs.push(`Fireball ${Math.ceil(sim.fireball)}s`);
     if (sim.shield) buffs.push(`Shield ${Math.ceil(sim.shield)}s`);
+    if (sim.extras.length && !sim.wait) buffs.push(`${sim.extras.length + 1} balls`);
     board.textContent = [`Board ${sim.board + (sim.wait ? 0 : 1)}`, ...buffs].join(' · ');
   }
   const onScreen=()=>visible && host.dock?.visible !== false && !doc.hidden && !ctx.paused && !ending && !dead;
   function measure() {
     const r=canvas.getBoundingClientRect();
-    visible=r.width>0 && r.height>0 && r.bottom>0 && r.right>0 && r.left<doc.defaultView.innerWidth && r.top<doc.defaultView.innerHeight;
+    // A cabinet taken by Override keeps its layout box while the visible game is gone.
+    visible = r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 &&
+      r.left < doc.defaultView.innerWidth && r.top < doc.defaultView.innerHeight &&
+      doc.defaultView.getComputedStyle(canvas).visibility === 'visible';
     audio.audible(onScreen());
     if (!onScreen() && pictures.effects.active) pictures.effects.clear();
   }
@@ -161,7 +174,7 @@ export function mountBreakout(ctx) {
     const shown=onScreen();
     audio.audible(shown);
     if (shown && !sim.wait && sim.bricks.some(b=>b.alive && b.photo)) pictures.prepare(sim.board);
-    const events = stepBreakout(sim, dt, { manual: manual(), x: aim, specialty: ctx.state.store.journey?.specs?.spec_breakout });
+    const events = stepBreakout(sim, dt, { manual: manual(), x: aim, specialty: ctx.state.store.journey?.specs?.spec_breakout, balls: ballsFor(rank()), paddleW: paddleW() });
     for (const e of events) {
       if (shown) audio.cue(e);
       if (e.type === 'brick' || e.type === 'damage') { burst(e.x, e.y, e.row,e.type==='damage'?3:8); squash = 1; }
@@ -172,7 +185,7 @@ export function mountBreakout(ctx) {
       if (e.type === 'catch' || e.type === 'save') burst(e.x,e.y,e.kind==='fireball'?0:2,12);
       if (e.type === 'paddle') squash = 1;
       if (e.type === 'clear') pay(e);
-      if (['brick', 'damage', 'catch', 'save', 'miss', 'deal'].includes(e.type)) save();
+      if (['brick', 'damage', 'catch', 'save', 'miss', 'deal', 'lost'].includes(e.type)) save();
     }
     if (pictures.effects.active) {
       if (shown && !calm()) pictures.effects.draw(); else pictures.effects.clear();

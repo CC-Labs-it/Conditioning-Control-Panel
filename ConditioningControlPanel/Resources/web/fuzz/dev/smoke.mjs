@@ -207,24 +207,28 @@ const played = await page.evaluate(async (picks) => {
     document.querySelector('.tc [data-pick=none]')?.click();   // the pictures card on Slideshow and Swipe Feed
     const win = e.shop(50);
     for (const it of [...win.rows, win.goal].filter(Boolean)) {
-      if (it.kind === 'fork' || (it.kind === 'end' && it.id !== 'drop')) continue;
+      if (it.kind === 'fork') continue;
       if (f.state.fuzz >= e.price(it.id)) { const r = f.buy(it.id); if (r.ok) n++; }
     }
     await new Promise((r) => requestAnimationFrame(r));
   }
   return { ended: f.state.ended, n, picks: f.state.picks, clock: f.state.clock, order: f.state.order.length };
 }, picks);
+if (!played.ended) throw new Error('The route did not reach an ending: ' + JSON.stringify(played));
+// The Living Ad poster stays open so a player can save it before continuing.
+if (played.ended.id === 'o_out') await page.getByRole('button', { name: 'Continue', exact: true }).click({ timeout: 65000 });
+const newRun = page.locator('button.rr-newrun:not(.inf)');
+await newRun.waitFor({ timeout: 95000 });
+// A take may keep the world and its audio until its own cut. The recap must release both streams.
 const endHeld = await page.evaluate(() => window.__s.el.paused && window.__panned.el.paused);
 if (!endHeld) errors.push('a stream outlived the end of the run');
-await page.waitForTimeout(2600);
 await page.screenshot({ path: join(shots, 'a6-credits.png') });
-if (!played.ended) errors.push('the route did not reach an ending');
 await wakeIsOnTop(page, 'the credits');
 const seen = await page.evaluate(() => window.fuzz.life.endings);
-if (!seen.drop && !played.ended) errors.push('the ending was not recorded');
+if (!seen[played.ended.id]) errors.push('the ending was not recorded: ' + played.ended.id);
 
 /* ---- New run keeps the lifetime ---- */
-await page.click('.credits button:has-text("New run")');   // Renew is the primary button since the Renewal Sky (2026-11-09)
+await newRun.click();
 await page.waitForFunction(() => window.fuzz && window.fuzz.state.clock < 5000 && !window.fuzz.state.ended);
 const life = await page.evaluate(() => ({ runs: window.fuzz.life.runs, endings: window.fuzz.life.endings, age: window.fuzz.life.age }));
 if (life.runs !== 1 || !life.age) errors.push(`the lifetime did not survive New run: ${JSON.stringify(life)}`);

@@ -7,6 +7,7 @@
 import { BY_ID, ITEMS, FORKS } from '../data/items.js';
 import { CONFIG } from '../data/config.js';
 import { brandText } from '../data/brand.js';
+import { purchaseHint as emiPurchaseHint } from '../sim/takeover.js';
 import * as E from '../sim/economy.js';
 import { adClickFactor, moodOf } from '../sim/moods.js';
 import { noteSeen, recordEnding, ENDING_IDS } from '../sim/save.js';
@@ -21,6 +22,7 @@ const MAX_UNLOCK_ERRORS = 3;
 const ENDING_SCOPE = '__ending';
 
 import { createJourney } from '../sim/journey.js';
+import { plainPeek } from './shop-next-model.js';
 import { takeActivity, journeyChapter } from '../sim/journey-effects.js';
 import * as P from '../sim/prestige.js';
 import * as PE from '../sim/prestige-endings.js';   // ending-star perks that are behaviour (Endings lane)
@@ -87,7 +89,7 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
   /* The Living Ad card counts what was dealt to the screens: a picture, gif or clip from the player's feed (not the
    * sample drawings shown with no feed). */
   const dealt = (row) => !!row && typeof row.url === 'string' && !row.url.startsWith('data:');
-  for (const name of ['next', 'rewardBatch', 'stillsForDisplay']) {
+  for (const name of ['next', 'rewardBatch', 'stillsForDisplay', 'dealStill']) {
     const real = pictures[name];
     if (typeof real !== 'function') continue;
     pictures[name] = (...args) => {
@@ -123,7 +125,18 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     scope.els.clear(); scope.timers.clear(); scope.frames.clear(); scope.anims.clear(); scope.loops.clear();
   }
 
+  // Free Will retires the quiz, including its timers, dock tab and any open question.
+  function emiRoams() {
+    return ['go_tx', 'go_will'].every(id => E.has(run, id) && liveOn(run.off, id));
+  }
+  function syncQuiz() {
+    if (!E.has(run, 'quiz') || !liveOn(run.off, 'quiz')) return;
+    if (emiRoams()) unmount('quiz');
+    else if (!scopes.has('quiz')) mount('quiz', true);
+  }
+
   function mount(id, restored = false) {
+    if (id === 'quiz' && emiRoams()) return false;
     const item = BY_ID[id];
     const entry = registry[id];
     if (!item || !entry?.mount) return false;
@@ -201,6 +214,7 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
       restack();
     } else if (on) { mount(id, true); restack(); }
     else unmount(id);
+    if (id === 'go_tx' || id === 'go_will') syncQuiz();
     syncQuiet();
     save();
     emit('switch', { id, on });
@@ -429,6 +443,7 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
       if (liveOn(run.off, r.id)) mount(r.id);
       emit('switch', { id: r.id, on: true });
     }
+    if (id === 'go_tx' || id === 'go_will') syncQuiz();
     PE.tickerHeadStart(run, prestigeOf());   // Unit Complete ending (dr_end): Scrolling Thoughts arrives at Rank 2 (Journey)
     syncQuiet();
     save();
@@ -436,8 +451,21 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     ui.draw?.(true);
   }
 
+  let hiveOrderSize = -1, hiveTookShop = false;
+  function purchaseHint(id) {
+    if (E.has(run, 'go_hive')) {
+      if (hiveOrderSize !== run.order.length) {
+        hiveOrderSize = run.order.length;
+        hiveTookShop = E.heldEnding(run) === 'go_end';
+      }
+      if (hiveTookShop) return 'EMI has the shop. Keep clicking.';
+    }
+    return emiPurchaseHint(run, id);
+  }
   function buy(id, option) {
     if (stopped) return { ok: false, reason: 'ended' };
+    const waiting = purchaseHint(id);
+    if (waiting) { ui.toast?.(waiting); return { ok: false, reason: 'story', line: waiting }; }
     const refused = refusal(id);
     if (refused) {
       ui.denied?.(id, refused);
@@ -458,6 +486,8 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
   }
 
   function choose(forkId, lane) {
+    const waiting = purchaseHint(forkId);
+    if (waiting) return { ok: false, reason: 'story', line: waiting };
     const res = journey ? journey.choose(forkId, lane, mods) : E.choose(run, forkId, lane, mods);
     if (!res.ok) return res;
     emit('fork', { fork: forkId, lane });
@@ -526,6 +556,7 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
   function grant(id) {
     const added = E.grant(run, id);
     for (const a of added) mount(a);
+    if (added.includes('go_tx') || added.includes('go_will')) syncQuiz();
     syncQuiet();
     ui.draw?.(true);
     return added;
@@ -556,6 +587,7 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     mount, unmount, mountAll, unmountAll, emit, subscribe, step, away,
     awayCap: () => E.awayCap(run, mods),
     setPaused, setSuspended, tap, pay, spend, addGuard, wallHit, buy, choose, end, grant, syncQuiet, save,
+    purchaseHint,
     rates: () => E.rates(run, mods, now),
     item: (id) => journey ? journey.item(id) : BY_ID[id],
     funds: (id) => journey && FORKS[id] ? run.total : run.fuzz,
@@ -567,6 +599,8 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     renew() { const r = P.renew(life, run); save(); return r; },
     get freeBuys() { return stamp?.free || 0; },
     shop: (size) => journey ? journey.shop(size) : E.shopWindow(run, mods, size, env.featuredShop),
+    /** The Next up strip (ui/shop-next-model.js): items after what the shop shows, read only. */
+    peek: (n, size = 6) => journey ? journey.peek(n) : plainPeek(run, E.shopWindow(run, mods, size, env.featuredShop), n, mods),
     endingsTotal: ENDING_IDS.length,
   };
   subscribe('golden-caught', () => tally(run, 'golden'));   // the Living Ad card's Golden Buttons

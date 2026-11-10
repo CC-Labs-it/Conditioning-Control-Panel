@@ -5,6 +5,7 @@ import { ENDINGS } from '../../../data/content/endings.js';
 import { AFTER_COPY as C } from './copy.js';
 import { FONT, h, pick } from './kit.js';
 import { outsideShow } from './outside-show.js';
+import { livingAdEnding, LIVING_AD_SHOW_MAX_MS } from '../../adcard/ending.js';
 
 export const EXIT_UNLOCKS = {
   /* Go Outside (2026-11-09, handoff-1109/TC-GO-OUTSIDE-ENDING-BRIEF.md): a white fade onto a playable blocky meadow, then
@@ -13,7 +14,15 @@ export const EXIT_UNLOCKS = {
     /* Nothing to draw during the run; the row is the door. */
     mount() { return {}; },
     fadeColour: '#fff',
-    ending(ctx) { return outsideShow(ctx, ENDINGS.outside); },
+    showMaxMs: LIVING_AD_SHOW_MAX_MS + 60000,
+    async ending(ctx) {
+      if (!await outsideShow(ctx, ENDINGS.outside)) return;
+      const cancelled = new Promise((resolve) => {
+        ctx.on('suspend', (s) => { if (s?.on && s.reason === 'panic') resolve(); });
+        ctx.cleanup(resolve);
+      });
+      await Promise.race([livingAdEnding(ctx), cancelled]);
+    },
   },
 
   onemore: {

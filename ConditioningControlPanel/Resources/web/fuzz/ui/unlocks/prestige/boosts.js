@@ -82,26 +82,27 @@ export const peekRate = (p) => 1 + (has(p, 'luck_2') ? 0.1 : 0) + (has(p, 'luck_
 /** Hold On: the Mystery Box waits 2 s longer. */
 export const boxHoldMs = (p) => (has(p, 'luck_8') ? 2000 : 0);
 
-const span = (id) => { const s = SECTORS.find((x) => x.id === id); return [s.start / 360, s.end / 360]; };
-export const wheelMultAt = (r) => (SECTORS.find((s) => r * 360 < s.end) || SECTORS[SECTORS.length - 1]).mult;
+/* `sectors` is the face the wheel shows now (the Journey Big Wedge rank widens the 10x wedge, sim/prize-wheel.js). */
+const span = (id, sectors = SECTORS) => { const s = sectors.find((x) => x.id === id); return [s.start / 360, s.end / 360]; };
+export const wheelMultAt = (r, sectors = SECTORS) => (sectors.find((s) => r * 360 < s.end) || sectors[sectors.length - 1]).mult;
 /** No Nothing: the same draw squeezed past the Nothing wedge, so the other odds keep their proportions. */
-export function skipNothing(r) {
-  const [a, b] = span('nothing'), w = b - a;
+export function skipNothing(r, sectors = SECTORS) {
+  const [a, b] = span('nothing', sectors), w = b - a;
   const s = Math.min(1 - Number.EPSILON, Math.max(0, num(r))) * (1 - w);
   return s >= a ? s + w : s;
 }
 export const JACKPOT_KEY = 'prestigeJackpot';
 /** The random number the Prize Wheel lands on. Jackpot: the first spin of a run is the top wedge (kept in the wheel's
  *  own run store under JACKPOT_KEY, so a new run gets it again). Second Spin: two draws, the better wedge wins. */
-export function wheelDraw(p, rng, store = null) {
+export function wheelDraw(p, rng, store = null, sectors = SECTORS) {
   if (has(p, 'luck_10') && store && !store.get(JACKPOT_KEY)) {
     store.set(JACKPOT_KEY, true);
-    const [a, b] = span('jackpot');
+    const [a, b] = span('jackpot', sectors);
     return a + (b - a) * (0.25 + 0.5 * rng());
   }
-  const one = () => (has(p, 'luck_7') ? skipNothing(rng()) : rng());
+  const one = () => (has(p, 'luck_7') ? skipNothing(rng(), sectors) : rng());
   let r = one();
-  if (has(p, 'luck_4')) { const r2 = one(); if (wheelMultAt(r2) > wheelMultAt(r)) r = r2; }
+  if (has(p, 'luck_4')) { const r2 = one(); if (wheelMultAt(r2, sectors) > wheelMultAt(r, sectors)) r = r2; }
   return r;
 }
 

@@ -262,6 +262,7 @@ export function mountScoreHeat(ctx) {
   const counter = ctx.parts.counter;
   const doc = counter.ownerDocument, win = doc.defaultView;
   const canvas = ctx.el('canvas', '', null, counter);
+  ctx.stage.register(canvas);   // the fire behind the digits joins the stage; the digits themselves never dim
   canvas.className = 'score-heat-art';
   canvas.setAttribute('aria-hidden', 'true');
   const g = canvas.getContext('2d');

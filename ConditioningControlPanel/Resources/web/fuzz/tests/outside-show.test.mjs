@@ -121,9 +121,9 @@ test('the office track, when present, keeps the contract', { skip: !existsSync(T
   for (const [vw, vh] of VIEWS) for (const [x, y] of mapQuad(last, holdFit(vw, vh, last))) assert.ok(x > 0 && x < vw && y > 0 && y < vh);
 });
 
-test('the beats run white, live (6.5 s of controls), settle, pull (the clip), hold, card, and stay under the show cap', () => {
+test('the beats run white, live (30 s of controls), settle, pull (the clip), hold, card, and stay under the show cap', () => {
   const tl = outsideTimeline({ credits: ENDINGS.outside.credits.length, pullMs: 5000 });
-  assert.equal(tl.lockAt - tl.liveAt, 6500);
+  assert.equal(tl.lockAt - tl.liveAt, 30000);
   assert.equal(tl.pullEnd - tl.pullAt, 5000);
   assert.ok(tl.liveAt < tl.lockAt && tl.lockAt < tl.pullAt && tl.pullAt < tl.holdAt && tl.holdAt < tl.closingAt && tl.closingAt < tl.finishAt);
   assert.equal(phaseAt(tl, 0), 'veil');
@@ -177,6 +177,7 @@ test('the row: a white fade, the new show, 1.5M, and the tab stays open', () => 
   const row = EXIT_UNLOCKS.outside;
   assert.equal(row.fadeColour, '#fff');
   assert.equal(typeof row.ending, 'function');
+  assert.ok(row.showMaxMs > CONFIG.ENDING_SHOW_MAX_MS, 'time to replay or export the poster');
   assert.equal(BY_ID.outside.cost, 1500000);
   assert.equal(ENDINGS.outside.closesTab, undefined);
   const words = [BY_ID.outside.what, ...CLAUSES.outside, ENDINGS.outside.result, ENDINGS.outside.closing, ...ENDINGS.outside.credits].join(' ');

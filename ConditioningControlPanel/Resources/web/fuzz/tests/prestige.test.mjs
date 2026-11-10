@@ -207,7 +207,7 @@ test('dustFor: a normal finished run earns about P_RUN[depth], times the Fine Pr
   assert.ok(Math.abs(got - P_RUN[0]) / P_RUN[0] < 0.1, `${got} vs ${P_RUN[0]}`);
   own(p, 'fine', 1);
   r.s.prestige = { ...P.runStamp(p), rules: ['silent'] };
-  assert.equal(P.dustFor(r.s, p), Math.round(got * 1.2) || got);
+  assert.ok(Math.abs(P.dustFor(r.s, p) - got * 1.2) <= 1, "Fine Print pays 1.2x (both sides are rounded)");
   r.s.prestige.gift = r.s.total;
   assert.equal(P.dustFor(r.s, p), 0, 'money the run was handed is not score');
   for (let d = 1; d < 10; d++) {

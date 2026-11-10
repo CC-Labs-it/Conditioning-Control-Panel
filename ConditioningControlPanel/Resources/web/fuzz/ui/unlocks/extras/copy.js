@@ -29,6 +29,9 @@ export const QUIZ_COPY = Object.freeze({
   right: ['That is what we wanted.', 'Correct.', 'Good answer.', 'See, that was easy.', 'We knew you would.'],
   wrong: ['Noted.', 'Interesting.', 'We will work on that.', 'Not that one.', 'Close enough for a little.'],
   idleNext: 'Next question in: {n}s',
+  /* The question stages (quiz-stages.js): the bonus every answer adds, popped at the card and noted under it. */
+  stagePop: '+{n} bonus',
+  stageNote: 'Stage {s} bonus +{n}.',
   idleNow: 'Answer it.',
 });
 

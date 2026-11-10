@@ -18,6 +18,14 @@ export const EMI_UPGRADE_LINES = Object.freeze({
   h_over: "i found the permissions. they fit.",
 });
 
+const RIDES = ['window seat, please.', 'oh. where are we going?', 'wheee. mind the antenna.'];
+const PROTESTS = ['i have legs. i checked.', 'i was going somewhere.', 'free will included walking, actually.', 'put me down. i have plans.'];
+
+export function dragLine(freeWill, previous) {
+  const pool = (freeWill ? PROTESTS : RIDES).filter(line => line !== previous);
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 export const EMI_BARKS = Object.freeze({
  "solo": {
   "transmission": [

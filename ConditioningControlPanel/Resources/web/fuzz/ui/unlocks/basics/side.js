@@ -272,11 +272,14 @@ export default {
 
   wheel: { mount: mountPrizeWheel },
 
-  /* Phone Buzz: a real buzz on lucky taps where the browser can, and the same shake on screen everywhere. */
+  /* Phone Buzz: offered only when the CCP desktop app says a toy is connected (ui/platform.js), so the buzz goes to that
+   * toy through the host. An old save that owns it elsewhere keeps the phone buzz where the browser can, and the same
+   * shake on screen everywhere. */
   buzz: {
     mount(ctx) {
       const nav = docOf(ctx).defaultView.navigator;
       const can = typeof nav.vibrate === 'function';
+      const toy = ctx.hosted && ctx.caps?.toysConnected === true;
       const shake = () => {
         const el = ctx.button.el;
         if (can) { try { nav.vibrate(70); } catch { /* the browser said no */ } }
@@ -287,7 +290,7 @@ export default {
         for (const [dx, t] of [[-c.w / 2 - 22, '(('], [c.w / 2 + 22, '))']]) pop(ctx, c.x + dx, c.y, t, { color: 'var(--stamp)', size: 30, ms: 700 });
       };
       ctx.on('lucky', shake);
-      if (fresh(ctx)) { shake(); ctx.toast(can ? APP_ONLY.buzz.web : APP_ONLY.buzz.off); }
+      if (fresh(ctx)) { shake(); ctx.toast(toy ? APP_ONLY.buzz.app : can ? APP_ONLY.buzz.web : APP_ONLY.buzz.off); }
       return {};
     },
   },

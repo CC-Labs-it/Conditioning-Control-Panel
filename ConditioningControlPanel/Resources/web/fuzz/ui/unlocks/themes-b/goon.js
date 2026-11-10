@@ -232,6 +232,6 @@ export default {
     mount() { return {}; },
     fadeColour: '#000',
     fadeMs: 200,
-    take(ctx) { return emiTakeoverTake(ctx); },
+    take: emiTakeoverTake,
   },
 };

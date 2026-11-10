@@ -3,10 +3,31 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as T from '../sim/takeover.js';
 import { BY_ID } from '../data/items.js';
+import { createPictures } from '../ui/pictures.js';
+import { hiveChannel, hivePictures } from '../ui/unlocks/themes-b/emi-kit.js';
 import { CONFIG } from '../data/config.js';
 import { EMI_BARKS, EMI_UPGRADE_LINES } from '../data/content/emi-takeover.js';
 
 const has = (...ids) => (id) => ids.includes(id);
+
+test('Hive Mind gives neighbours one channel and rotates each channel on the next wave', () => {
+  const pictures = createPictures({ scrolller: { consent: true } });
+  const ctx = { pictures, pick: () => 'goon' };
+  const rows = ['a','b','c'].map(id => ({kind: 'image', url: 'https://cdn.scrolller.com/' + id + '.jpg'}));
+  pictures.receiveScrolller({v: 1, rows: rows.slice(0, 1)});
+  let previous = hivePictures(ctx, [], 3);
+  assert.deepEqual(previous, [rows[0].url, rows[0].url, rows[0].url]);
+  pictures.receiveScrolller({v: 1, rows});
+  previous = hivePictures(ctx, previous, 3);
+  assert.deepEqual(Array.from({length: 10}, (_, i) => hiveChannel(i)), [0,0,0,1,1,1,2,2,2,0]);
+  for (let i = 0; i < 20; i++) {
+    const next = hivePictures(ctx, previous, 3);
+    assert.equal(new Set(next).size, 3);
+    assert.ok(next.every((url, group) => url !== previous[group]));
+    previous = next;
+  }
+  pictures.setRemoteConsent(false);
+});
 
 test('the four rows sit between Fake Online Count and the goon ending, which keeps its id', () => {
   assert.deepEqual(T.CHAIN, ['go_tx', 'go_will', 'go_corp', 'go_hive']);
@@ -27,6 +48,26 @@ test('the four rows sit between Fake Online Count and the goon ending, which kee
 });
 
 const ALL = ['h_amp', 'h_oc', 'h_loud', 'h_rep', 'h_over'];
+
+test('Hive Mind waits for EMI to shop, and the takeover itself is never a purchase', () => {
+  const run = { owned: { go_tx: 1, go_will: 1, go_corp: 1 }, store: { go_tx: { bag: { bought: [] } } } };
+  assert.match(T.purchaseHint(run, 'go_hive'), /Amplifier/);
+  run.store.go_tx.bag.bought = ALL.slice(0, 4);
+  assert.match(T.purchaseHint(run, 'go_hive'), /Override/);
+  run.store.go_tx.bag.bought = ALL;
+  assert.equal(T.purchaseHint(run, 'go_hive'), '');
+  assert.match(T.purchaseHint(run, 'go_end'), /Keep clicking/);
+});
+
+test('only a player-grown crowd with the whole interface converted starts DROP', () => {
+  for (const lite of [true, false]) {
+    const ready = { count: T.hiveCrowd(lite), lite, presses: 4, objects: 0, buzzing: 0, uiTaken: true };
+    assert.ok(T.readyToFill(ready));
+    for (const missing of [{ count: ready.count - 1 }, { presses: 3 }, { objects: 1 }, { buzzing: 1 }, { uiTaken: false }]) {
+      assert.equal(T.readyToFill({ ...ready, ...missing }), false);
+    }
+  }
+});
 
 test('the stage follows the rows owned, in order; Self Replication and Override are hers, not rows', () => {
   assert.equal(T.stageOf(has()), 'none');
@@ -72,7 +113,7 @@ test('her tiles: Amplifier, Overclock, Louder Opinions, Self Replication, then O
   assert.equal(T.budgetStep(5, 10, { phase: 'rep', bought: ALL.slice(0, 4) }), 15, 'saving for Override');
   assert.equal(T.canBuy({ phase: 'will', budget: 999, bought: [], sinceBuyS: 999 }), null);
   assert.equal(T.canBuy({ phase: 'corp', budget: 999, bought: ['h_amp'], sinceBuyS: 10 }), null, 'the gap between her buys');
-  assert.equal(T.canBuy({ phase: 'corp', budget: 999, bought: ['h_amp'], sinceBuyS: 10, hurry: true }).id, 'h_oc', 'HIVE MIND already bought: she hurries');
+  assert.equal(T.canBuy({ phase: 'corp', budget: 999, bought: ['h_amp'], sinceBuyS: 29 }), null);
   assert.deepEqual(T.buyTile({ budget: 10, bought: [] }, T.HER_TILES[0]), { budget: 10, bought: [] }, 'not enough budget: nothing changes');
   assert.equal(T.nextTile(T.HER_TILES.map((t) => t.id)), null);
   assert.equal(T.buyTile.length, 2, 'the bank is not an argument: her shopping never spends the player\'s money');
@@ -95,8 +136,11 @@ test('Self Replication only splits; with Override about half the clicks convert 
   const rng = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
   const over = true;
   assert.equal(T.repPress({ now: 1, lastAt: 0.8, count: 2, objects: 5, override: over, rng }), null, 'inside the cooldown');
-  assert.equal(T.repPress({ now: 10, count: 30, objects: 5, override: over, rng }), null, 'desktop cap');
-  assert.equal(T.repPress({ now: 10, count: 12, lite: true, objects: 5, override: over, rng }), null, 'phone cap');
+  for (const lite of [false, true]) {
+    const count = T.repCap(lite);
+    assert.equal(T.repPress({ now: 10, count, lite, objects: 5, override: over, rng }), 'convert', 'a full crowd can still convert');
+    assert.equal(T.repPress({ now: 10, count, lite, objects: 0, override: over, rng }), null, 'no room to split');
+  }
   assert.ok(T.repPress({ now: 10, count: 11, lite: true, objects: 5, override: over, rng }));
   assert.equal(T.repPress({ now: 10, count: 2, objects: 0, override: over, rng: () => 0 }), 'split', 'nothing to take: she splits');
   for (let i = 0; i < 200; i++) assert.equal(T.repPress({ now: i, count: 2, objects: 3, rng }), 'split', 'no Override: never a conversion');

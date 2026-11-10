@@ -16,6 +16,7 @@ import { ridersFor } from '../sim/economy.js';
 import { SHOP_READY_CSS, hop, nextNudge, readyStep, NUDGE_GAP_MS } from './shop-ready.js';
 import { offerBadge, paintBadges, repeatBadgeCss } from './repeat-badge.js';
 import { devicePlatform, offeredWindow } from './platform.js';
+import { NEXT_MAX, SECRET, ghostsFor, stripKey } from './shop-next-model.js';
 
 const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
 
@@ -52,6 +53,7 @@ function tileArt(doc, item) {
 }
 
 const TILE_GAP = 12;   // TILE_MIN and the goal's width follow styles.css
+const GHOST = { wide: 60, narrow: 48 };   // the Next up tiles' most height, as #next .ghost in styles.css
 
 /** The live shop, for the Guide map's Buy button (ui/guide-map.js): what the shop offers right now, and the same press a
  *  tile makes (terms card, guards, price check, purchase feel all live behind it in ui/app.js press()). Null before a shop. */
@@ -70,15 +72,78 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
   const now = () => doc.defaultView.performance.now();
   /* Rows this device cannot use (ui/platform.js) never get a tile; the next rows move up. */
   const platform = devicePlatform(doc.defaultView, () => engine.env?.caps || {});
-  const offered = (n) => offeredWindow((k) => engine.shop(k), n, platform.canOffer);
+  const offered = (n) => offeredWindow((k) => engine.shop(k), n, it => it.id !== 'go_end' && platform.canOffer(it));
   /* Hops wait for a still page: not under Gentle or reduced motion (body.gentle covers both), a pause, or a hidden tab. */
   const moving = () => !doc.body.classList.contains('gentle') && !engine.paused && !engine.stopped && !engine.suspended && doc.visibilityState !== 'hidden';
 
   const tip = createTip({
     doc,
-    buyLabel: (r) => (engine.funds(r.item.id) < engine.price(r.item.id) ? `${whole(engine.price(r.item.id) - engine.funds(r.item.id))} short` : 'Buy'),
-    onBuy: (r) => { onPress(r.item.id, r.el); tip.hide(); },
+    buyLabel: (r) => r.ghost ? '' : r.waiting ? 'Wait for EMI' : (engine.funds(r.item.id) < engine.price(r.item.id) ? `${whole(engine.price(r.item.id) - engine.funds(r.item.id))} short` : 'Buy'),
+    onBuy: (r) => { if (r.ghost) return; onPress(r.item.id, r.el); tip.hide(); },
   });
+
+  /* Next up (owner go 2026-11-10): one row of ghost tiles under the shop, what comes after the tiles on show. Read only:
+   * no price, no buy; a mouse hovers and a finger taps to read the card. A fork or ending keeps its secret. */
+  let nextEl = doc.getElementById('next'), nextKey = '';
+  if (!nextEl) {
+    nextEl = doc.createElement('div');
+    nextEl.id = 'next';
+    nextEl.hidden = true;
+    nextEl.setAttribute('aria-label', 'Next up');
+    box.insertBefore(nextEl, moreEl);
+  }
+  const nextLabel = doc.createElement('span');
+  nextLabel.className = 'nx-label';
+  nextLabel.textContent = 'next';
+  nextEl.replaceChildren(nextLabel);
+
+  function makeGhost(g) {
+    const el = doc.createElement('button');
+    el.type = 'button';
+    el.className = ['row', 'ghost', 'nx-' + g.kind, g.kind === 'item' ? hueClass(g.item.lane) : ''].filter(Boolean).join(' ');
+    el.dataset.next = g.key;
+    const secret = SECRET[g.kind];
+    let art;
+    if (g.kind === 'item') art = tileArt(doc, g.item);
+    else if (g.kind === 'fork') art = iconFor(doc, { id: g.key, iconId: 'f1' });
+    else { art = doc.createElement('span'); art.className = 'ico nx-q'; art.setAttribute('aria-hidden', 'true'); art.textContent = '?'; }
+    const body = doc.createElement('span');
+    body.className = 'body';
+    const name = doc.createElement('b');
+    name.textContent = secret ? secret.name : brandText(g.item.name);
+    const what = doc.createElement('small');
+    setRich(what, secret ? secret.what : g.item.what);
+    body.append(name, what);
+    el.append(art, body);
+    el.setAttribute('aria-label', 'Next: ' + name.textContent);
+    const r = { el, ghost: true, item: secret ? { id: g.key } : g.item };
+    let pointer = '';
+    el.addEventListener('pointerdown', (e) => { pointer = e.pointerType; });
+    el.addEventListener('pointerenter', (e) => { if (e.pointerType !== 'touch') tip.show(r, false); });
+    el.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch' && tip.row === r) tip.hide(); });
+    el.addEventListener('focus', () => { if (el.matches(':focus-visible') && !tip.row) tip.show(r, false); });
+    el.addEventListener('blur', () => { if (tip.row === r && !tip.touch) tip.hide(); });
+    el.addEventListener('click', () => {
+      const finger = pointer === 'touch';
+      pointer = '';
+      if (!finger) return;
+      if (tip.row === r) tip.hide(); else tip.show(r, true);
+    });
+    return el;
+  }
+
+  /** Rebuilt only when what it shows changes; hiding or showing it refits the shop (it takes a row of room). */
+  function drawNext(win) {
+    const shown = new Set([win.goal?.id, ...win.rows.map((it) => it.id)].filter(Boolean));
+    const list = (engine.peek?.(NEXT_MAX + 2, size) || []).filter((it) => it && !shown.has(it.id));
+    const ghosts = ghostsFor(list, NEXT_MAX, platform.canOffer);
+    const key = stripKey(ghosts);
+    if (key !== nextKey) {
+      nextKey = key;
+      nextEl.replaceChildren(nextLabel, ...ghosts.map(makeGhost));
+    }
+    if (nextEl.hidden !== !ghosts.length) { nextEl.hidden = !ghosts.length; fit(); }
+  }
 
   function makeRow(item, isGoal) {
     const el = doc.createElement('button');
@@ -140,13 +205,18 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     const run = engine.run, it = r.item;
     const p = engine.price(it.id);
     const funds = engine.funds(it.id);
-    const short = funds < p;
+    const waiting = engine.purchaseHint(it.id);
+    const short = funds < p || !!waiting;
+    if ((r.waiting || '') !== waiting) {
+      setRich(r.el.querySelector('small'), waiting || it.what);
+      r.waiting = waiting;
+    }
     r.el.classList.toggle('short', short);
     const badge = offerBadge(it, run);
     paintBadges(r.art, badge);
     setText(r.rep, badge ? badge.label : '');
     const fork = it.kind === 'fork';
-    setText(r.costNum, fork ? (short ? `at ${whole(p)}` : 'Choose') : whole(p));
+    setText(r.costNum, waiting ? 'Wait for EMI' : fork ? (short ? `at ${whole(p)}` : 'Choose') : whole(p));
     const fill = `scaleY(${Math.max(0, Math.min(1, funds / Math.max(1, p))).toFixed(3)})`;
     if (r.fill !== fill) { r.fill = fill; r.bar.style.transform = fill; }
     const step = readyStep(r.buyable, !short);
@@ -187,6 +257,7 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
       paint(r, false);
     });
     if (guestEl && rowsEl.lastElementChild !== guestEl) rowsEl.appendChild(guestEl);
+    drawNext(win);
     nudge();
     if (moreEl.hidden !== !win.more) moreEl.hidden = !win.more;
     if (win.more) setText(moreEl, `${win.more} more waiting behind these`);
@@ -215,7 +286,8 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     const room = Math.min(760, w - 32) - (wide ? 118 : 96) - TILE_GAP;
     const cols = Math.max(1, Math.floor((room + TILE_GAP) / ((wide ? 84 : 68) + TILE_GAP)));
     const tile = (room - (cols - 1) * TILE_GAP) / cols;
-    const avail = box.parentElement.clientHeight - box.offsetTop - 44;   // the shop starts 16px higher with 16px more top padding, room for a hop (ui/shop-ready.js)
+    const strip = nextEl.hidden ? 0 : (wide ? GHOST.wide : GHOST.narrow) + TILE_GAP;   // the Next up row
+    const avail = box.parentElement.clientHeight - box.offsetTop - 44 - strip;   // the shop starts 16px higher with 16px more top padding, room for a hop (ui/shop-ready.js)
     size = Math.max(CONFIG.SHOP_MIN, Math.min(6, Math.floor(avail / (tile + TILE_GAP)) * cols));
   }
 
@@ -227,7 +299,7 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     r.el.classList.add('no');
   }
 
-  function flush() { tip.hide(); goalRow?.el.remove(); goalRow = null; for (const r of rows.values()) r.el.remove(); rows.clear(); }
+  function flush() { tip.hide(); nextKey = ''; nextEl.replaceChildren(nextLabel); nextEl.hidden = true; goalRow?.el.remove(); goalRow = null; for (const r of rows.values()) r.el.remove(); rows.clear(); }
 
   shopDoor = {
     /** True when the shop would sell this row right now: open, on a tile or waiting behind them, and usable here. */

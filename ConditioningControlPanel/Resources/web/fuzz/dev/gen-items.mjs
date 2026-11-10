@@ -33,13 +33,17 @@ const REQ_OVERRIDE = {
   inbox: ['levels'],
   /* Owner 2026-11-09, EMI Takeover: the goon ending sits behind the four EMI rows (LATE_ROWS). */
   go_end: ['go_hive'],
+  /* Owner 2026-11-10: Mini Slots come earlier (about minute 11), right after the pictures; the Dispenser still follows it. */
+  mini_slots: ['f3'],
 };
 /* The main path in the order it is walked: E.goal takes the first unowned row, so ITEMS keeps this order. */
 const TRUNK_ORDER = ['start', 'stray', 'fpsv', 'f1', 'softw', 'ticker', 'f5', 'f3', 'depth', 'f2', 'banner', 'f4', 'glossy', 'taste2', 'overlay', 'takeover', 'wallpaper', 'tunnel', 'drop'];
 /* Rows that only work on some devices (owner 2026-11-09). ui/platform.js decides; a save that owns one keeps it.
- * buzz: something that can vibrate (an Android browser, or a host with haptics). mouse: a pointer with a right button. */
-const DEVICE = { buzz: 'buzz', dualwield: 'mouse' };
-const DROPPED = new Set(['heart', 'tr_breath', 'watch', 'heartbtn', 'mirror', 'spirbtn', 'si_bow', 'si_ward', 'si_set']);
+ * toys: the host said a toy is connected at run start (caps.toysConnected, only the CCP desktop app; owner 2026-11-10).
+ * mouse: a pointer with a right button. */
+const DEVICE = { buzz: 'toys', toy: 'toys', dualwield: 'mouse' };
+/* remote: Friend Remote is cut (owner 2026-11-10); nothing requires it, and a save that owns it loads without it. */
+const DROPPED = new Set(['heart', 'tr_breath', 'watch', 'heartbtn', 'mirror', 'spirbtn', 'si_bow', 'si_ward', 'si_set', 'remote']);
 /* Dropped before the theme rows are re-priced, so the rows left behind them close the gap (owner 2026-11-07). */
 /* The dropped button looks paid per tap: the look rows left carry that pay, so tapping runs keep their pace. */
 const CLICK_AFTER_DROP = { paint: 6, corner: 22, bigbtn: 67, tinybtn: 100 };
@@ -57,7 +61,7 @@ const LATE_ROWS = [
   { after: 'go_pals', id: 'go_tx', emoji: '📺', name: 'Transmission', what: 'Drag EMI anywhere. Her screen switches between your pictures and her face.', line: 'Now showing: you, staring.', cost: 780000, lane: 'goon', req: ['go_pals'], pay: 'c', click: 300 },
   { after: 'go_tx', id: 'go_will', emoji: '💭', name: 'Give EMI FREE WILL', what: 'EMI walks around on her own. She stops, comments, hops now and then.', line: 'It feels like wanting snacks.', cost: 930000, lane: 'goon', req: ['go_tx'], pay: 'f', fps: 1700 },
   { after: 'go_will', id: 'go_corp', emoji: '💼', name: 'Founded Startup', what: 'EMI starts a business. Watch her pouch fill, then watch her spend it on upgrades.', line: 'The pitch deck is her face.', cost: 1120000, lane: 'goon', req: ['go_will'], pay: 'c', click: 380 },
-  { after: 'go_corp', id: 'go_hive', emoji: '🐝', name: 'HIVE MIND', what: 'The EMIs agree with each other. Their screens move together, in patterns.', line: 'They voted. You were a yes.', cost: 1350000, lane: 'goon', req: ['go_corp'], pay: 'f', fps: 2100 },
+  { after: 'go_corp', id: 'go_hive', emoji: '🐝', name: 'HIVE MIND', what: 'Their screens fall into step. Keep clicking and the EMIs will take over the page.', line: 'They voted. You were a yes.', cost: 1350000, lane: 'goon', req: ['go_corp'], pay: 'f', fps: 2100 },
 ];
 function addLate(rows) {
   const out = [...rows];
@@ -153,7 +157,7 @@ const BUTTON_NAMES = {
 /* Owner 2026-11-09: the goon ending is the EMI Takeover. The id go_end stays (prestige, PINNED_ENDS). */
 const NAME_OVERRIDE = { go_end: 'Ending: EMI Takeover' };
 const WHAT_OVERRIDE = {
-  go_end: 'Ends the run: you let EMI press this one. The page will pretend to crash. It is fine, and Wake Up stays yours.',
+  go_end: 'Keep clicking after Hive Mind. When the swarm fills your screen, the page will pretend to crash. Wake Up stays yours.',
   bi_end: 'The bubble swallows the page. When it pops, float inside beneath a sky of moving pictures.',
   bi_lips:'Sign in with Bambi Cloud. The button already knows your name.',
   dr_hex:'Tap to download drone firmware. Tap again to install the user.',
@@ -191,6 +195,10 @@ const WHAT_OVERRIDE = {
   d_scroll: 'Swipe through a picture feed. Every swipe counts as a tap, it pays every second, and its bar drags it anywhere.',
   /* Copy the design source promises and the game does not do, or no longer does. */
   remote: 'Preset buttons that poke your own run. No friend is on the other end.',
+  /* TOYS lane (owner 2026-11-10): both toy rows are offered only with a toy connected in the CCP desktop app; Big grows in place. */
+  buzz: 'Your connected toy buzzes on lucky taps.',
+  toy: 'A toy you connected in the CCP desktop app follows how fast you earn.',
+  bigbtn: 'The button grows to fill its whole spot. Nothing else on the page moves.',
   z_shuffle: 'A little board of side unlocks that shuffles itself on the credits.',
   tr_head: 'Trance pictures join the page, general hypnosis first.',
   bi_head: 'Bimbo pictures join the page, and CCP ads now mention the Bambi mod.',
@@ -200,6 +208,46 @@ const WHAT_OVERRIDE = {
   lo_head: 'Chastity pictures join the page, and CCP ads now mention its chastity features.',
   ce_head: 'Pictures join the page, hidden behind bars.',
 };
+
+/* ---- INTAKE lane (owner 2026-11-10, late game wave): the question tricks sell as three stages. ----
+ * Each stage is one purchase: its lead (renamed) brings the rows listed in `fold` (data/folds.js reads the field), and
+ * `qstage` tells the quiz how often to ask and how big the per-answer bonus is (ui/unlocks/extras/quiz-stages.js).
+ * `total` is the stage's price before CONFIG.PRICE_SCALE: its rows' design costs are scaled to it, keeping their order,
+ * so on the 4-tap reference stage 1 lands about minute 22-25, stage 2 about 31-35, stage 3 about 46-49.
+ * Per-second pay (fps) stays each row's own. Other lanes: keep your overrides out of this table. */
+const INTAKE_STAGES = {
+  melt: {
+    qstage: 1, total: 45000, fold: ['swap', 'flee', 'nag', 'crowd', 'pbubble'],
+    name: 'Softer Answers',
+    what: 'Questions come about once a minute, and every answer pays a bonus. Wrong answers start to melt, swap places and run.',
+    line: 'Easier to agree with.',
+  },
+  slider: {
+    qstage: 2, total: 450000, fold: ['shrink', 'fadeno', 'magnet', 'late', 'holdno', 'dragno', 'stackno', 'robot'],
+    name: 'Leaning Answers',
+    what: 'Questions come about every 45 seconds, and the answer bonus grows. The card leans, pulls and hides the other answers.',
+    line: 'It tilts your way.',
+  },
+  grid: {
+    qstage: 3, total: 1600000, fold: ['ttype', 'regen', 'onlyyes', 'hijack'],
+    name: 'Nothing But Yes',
+    what: 'Questions come about every 35 seconds, with the biggest answer bonus. Picture checks, wobbly text, then every answer is yes.',
+    line: 'One answer, four ways.',
+  },
+};
+function intakeStages(items) {
+  const by = new Map(items.map((it) => [it.id, it]));
+  for (const [lead, st] of Object.entries(INTAKE_STAGES)) {
+    const rows = [lead, ...st.fold].map((id) => by.get(id));
+    if (rows.some((r) => !r)) throw new Error('INTAKE_STAGES names a missing row under ' + lead);
+    const sum = rows.reduce((t, r) => t + r.cost, 0);
+    /* Never cheaper than the row before it (tests/items.test.mjs), so a stage costs at least its rows at the parent price. */
+    let floor = by.get(rows[0].req[0])?.cost || 0;
+    for (const r of rows) { r.cost = Math.max(floor, Math.round((r.cost * st.total) / sum / 100) * 100); floor = r.cost; r.qstage = st.qstage; }
+    Object.assign(by.get(lead), { name: st.name, what: st.what, line: st.line, fold: st.fold });
+  }
+  return items;
+}
 
 /* Trunk rows walk in TRUNK_ORDER, in the slots trunk rows already hold; every other row stays where it is. */
 function walkOrder(rows) {
@@ -234,6 +282,7 @@ export function buildItems() {
     if (DEVICE[r.id]) it.device = DEVICE[r.id];
     return it;
   });
+  intakeStages(items);
   const outLanes = lanes.map((l) => {
     const c = copy.lanes[l.id] || {};
     const o = { id: l.id, name: cur(c.name || l.name), what: cur(c.what || l.note || '') };
