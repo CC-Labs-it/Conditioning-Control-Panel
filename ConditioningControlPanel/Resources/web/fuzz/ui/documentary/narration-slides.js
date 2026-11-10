@@ -1,4 +1,4 @@
-import { NARRATION_SUBTITLES } from './narration-subtitles.js';
+import { NARRATION_SUBTITLES } from './subtitles.js';
 
 // Phrase matches select the existing subtitle cue. No independent slideshow clock.
 const SLIDES = {
@@ -16,12 +16,12 @@ const SLIDES = {
     { phrase: 'on hearing a floorboard creak', projector: 'reflex', slot: 'floorboard-warning', title: 'A floorboard creak', beat: 'floor.creak' },
     { phrase: 'gone in under a third of a second', beat: 'floor.snap' },
     { phrase: 'and replaced, seamlessly, with a spreadsheet', projector: 'reflex', slot: 'subject-spreadsheet', title: 'A perfectly ordinary spreadsheet' },
-    { phrase: 'Again, in slow motion', projector: 'replay', slot: 'subject-spreadsheet', title: 'Again, in slow motion', beat: 'floor.replay' },
+    { phrase: 'Again, in slow motion', projector: 'reflex', slot: 'subject-spreadsheet', title: 'Again, in slow motion', beat: 'floor.replay' },
     { phrase: 'Magnificent.', beat: 'floor.freeze' },
   ],
   r4: [
     { phrase: 'to a world of daylight', projector: 'wakeup', slot: 'outside-daylight', title: 'The outside world' },
-    { phrase: 'and "we need to talk"', projector: 'wakeup', slot: 'conversation-chairs', title: 'We need to talk' },
+    { phrase: 'and "we need to talk"', projector: 'conversation', slot: 'conversation-chairs', title: 'We need to talk' },
   ],
 };
 const normalize = text => String(text).replace(/\s+/g, ' ').trim().toLowerCase();

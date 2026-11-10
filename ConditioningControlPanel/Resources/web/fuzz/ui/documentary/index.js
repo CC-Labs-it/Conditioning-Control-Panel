@@ -64,7 +64,7 @@ export function createTabTunnel(ctx, parent, opts = {}) {
   const media = createMedia(ctx, { lite });
   try {
     scene = createScene(ctx, root, opts.manifest, media, {
-      lite, onWake: () => doc.getElementById('wake')?.click(),
+      lite, autoProjectors: !useNarration, onWake: () => doc.getElementById('wake')?.click(),
       onPump: () => { if (!disposed && !ctx.paused && !doc.hidden) ride.pump(); },
       onStageAction: event => emit('stage-action', event),
     });
@@ -113,7 +113,7 @@ export function createTabTunnel(ctx, parent, opts = {}) {
     // Replays and booth state changes can be sent repeatedly by the recording lane.
     completed.add(id);
     if (id === 'booth.unlock') ride.unlock();
-    if (id === 'floor.snap' && !floorRelease) floorRelease = hold('floorboard', 305);
+    if (id === 'floor.snap' && !floorRelease && !ride.state.pacing) floorRelease = hold('floorboard', 305);
     if (id === 'floor.release') { floorRelease?.(); floorRelease = null; }
     scene.beat(id, data);
     stage.beat(id, data);
@@ -199,6 +199,7 @@ export function createTabTunnel(ctx, parent, opts = {}) {
     state: ride.state, captions, beat, dispose, ready,
     addCues: ride.addCues,
     hold,
+    setPace: ride.setPace,
     on(event, fn) {
       if (disposed) return () => {};
       if (!listeners.has(event)) listeners.set(event, new Set());
@@ -224,7 +225,7 @@ export function createTabTunnel(ctx, parent, opts = {}) {
     try {
       narration = createDocumentaryNarration(ctx, api, {
         now: opts.now, hours: opts.hours, subtitles: subtitlesOn,
-        onSpeaking(on) { music?.setSpeaking(on); },
+        onSpeaking(on) { music?.setSpeaking(on); scene?.setSpeaking?.(on); },
         onStatus(status) {
           enableVoice.hidden = status.status !== 'blocked';
           opts.onNarrationStatus?.(status);

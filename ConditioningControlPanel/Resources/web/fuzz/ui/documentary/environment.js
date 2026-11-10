@@ -5,7 +5,15 @@ const BAY_LENGTH = 8;
 const HALF_WIDTH = 4.6;
 const ROOM_ENDS = [130, 180, 340, 400, 520];
 const ROOM_IDS = ['intake', 'connector', 'reflex', 'descent', 'wakeup', 'theatre'];
-const SCREEN_NICHES = new Map([[44, 1], [84, -1], [116, 1], [148, -1], [164, 1], [204, 1], [236, -1], [356, 1], [372, -1], [388, 1], [420, 1], [452, -1], [492, 1]]);
+const nichePositions = [[148, -1], [164, 1], [204, 1], [236, -1], [356, 1], [372, -1], [388, 1], [420, 1], [452, -1], [492, 1]];
+for (let distance = 4; distance < 130; distance += BAY_LENGTH) {
+  if (distance === 12 || distance === 20) continue;
+  for (const side of [-1, 1]) nichePositions.push([distance, side]);
+}
+export const SCREEN_NICHES = Object.freeze(nichePositions.sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(([distance, side]) =>
+  Object.freeze({ distance, side, lateral: 5.85, elevation: 2.3, width: 4.45, height: 2.503125 })));
+const screenSides = new Map();
+for (const { distance, side } of SCREEN_NICHES) screenSides.set(distance, screenSides.has(distance) ? 2 : side);
 
 function roomAt(distance) {
   const index = ROOM_ENDS.findIndex(end => distance < end);
@@ -22,11 +30,15 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
   const transform = new THREE.Matrix4();
   const quaternion = new THREE.Quaternion();
   const sweptBoxes = new Map();
+  const leafShapes = new Map();
   const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
   const cylinderGeometry = new THREE.CylinderGeometry(1, 1, 1, lite ? 12 : 20);
   const sphereGeometry = new THREE.SphereGeometry(1, lite ? 12 : 20, lite ? 8 : 12);
   const smallSphereGeometry = new THREE.SphereGeometry(1, 8, 4);
   const smallCylinderGeometry = new THREE.CylinderGeometry(1, 1, 1, 8);
+  let speaking = false, speakingLevel = 1;
+  const coneGeometry = new THREE.LatheGeometry([[0, -.008], [.015, -.010], [.033, -.023], [.044, -.025], [.125, -.004], [.14, 0]].reverse().map(([x, y]) => new THREE.Vector2(x, y)), lite ? 20 : 32);
+  coneGeometry.rotateX(Math.PI / 2);
   for (const geometry of [cubeGeometry, cylinderGeometry, sphereGeometry, smallSphereGeometry, smallCylinderGeometry]) temporary.add(geometry);
 
   function sweptBox(width, depth) {
@@ -40,9 +52,35 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
     return sweptBoxes.get(key);
   }
 
+  function botanicalLeaf(variation) {
+    if (leafShapes.has(variation)) return leafShapes.get(variation);
+    const rows = lite ? 8 : 10, columns = lite ? 2 : 3, positions = [], uv = [], indices = [];
+    for (let row = 0; row <= rows; row++) {
+      const t = row / rows;
+      const width = Math.pow(Math.sin(Math.PI * t), .72) * (.48 + Math.sin(t * 5 + variation) * .035);
+      for (let column = 0; column <= columns; column++) {
+        const across = column / columns * 2 - 1;
+        const ridge = (1 - Math.abs(across)) * Math.sin(Math.PI * t) * .045;
+        positions.push(across * width, t, (.19 + variation * .035) * t * t - Math.abs(across) * .08 * Math.sin(Math.PI * t) + ridge + across * t * .025 * (variation - 1));
+        uv.push(column / columns, t);
+        if (row < rows && column < columns) {
+          const a = row * (columns + 1) + column, b = a + columns + 1;
+          indices.push(a, a + 1, b, a + 1, b + 1, b);
+        }
+      }
+    }
+    const shape = new THREE.BufferGeometry();
+    shape.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    shape.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    shape.setIndex(indices); shape.computeVertexNormals(); shape.userData.preserveUV = true;
+    temporary.add(shape); leafShapes.set(variation, shape); return shape;
+  }
+
   function makeKit(id, variant = 0, screenSide = 0) {
     const batches = new Map();
     const solidParts = [];
+    const speakers = [];
+    const hasScreen = side => screenSide === 2 || screenSide === side;
     const names = {
       intake: { wall: 'lacquerPlum', trim: 'lacquerRose', light: 'pinkLight', accent: 'brass', floor: 'floor' },
       connector: { wall: 'lacquerBlack', trim: 'cyanPanel', light: 'cyanLight', accent: 'chrome', floor: 'lacquerBlack' },
@@ -56,7 +94,7 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
       transform.compose(new THREE.Vector3(x, y, z), quaternion, new THREE.Vector3(sx, sy, sz));
       let copy = geometry.clone().applyMatrix4(transform);
       const positions = copy.attributes.position, normals = copy.attributes.normal, uv = copy.attributes.uv;
-      if (uv) for (let i = 0; i < positions.count; i++) {
+      if (uv && !geometry.userData.preserveUV) for (let i = 0; i < positions.count; i++) {
         const ax = Math.abs(normals.getX(i)), ay = Math.abs(normals.getY(i)), az = Math.abs(normals.getZ(i));
         const density = ['stone', 'floor', 'plaster', 'plasterBlue'].includes(material) ? 0.5 : 1;
         if (ay > ax && ay > az) uv.setXY(i, positions.getX(i) * density, positions.getZ(i) * density);
@@ -110,13 +148,21 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
       for (const dy of [-1, 1]) for (const dz of [-1, 1]) fastener(side, x - 0.065, y + dy * (height / 2 + 0.018), z + dz * (width / 2 + 0.018), 0.012);
     }
     function wallSpeaker(side, x, y, z) {
-      rounded('lacquerBlack', side * x, y, z, 0.24, 0.66, 0.40, 0.045);
-      for (const [dy, radius] of [[-0.12, 0.11], [0.18, 0.055]]) {
-        cylinder(names.accent, side * (x - 0.13), y + dy, z, radius + 0.018, 0.025, 0, 0, Math.PI / 2);
-        cylinder('lacquerBlack', side * (x - 0.15), y + dy, z, radius, 0.03, 0, 0, Math.PI / 2);
-        sphere('iron', side * (x - 0.18), y + dy, z, radius * 0.38);
+      rounded('lacquerBlack', side * x, y, z, 0.28, 0.76, 0.48, 0.045);
+      rounded('rubber', side * (x - .15), y, z, .045, .69, .405, .015);
+      for (const [dy, radius] of [[-.13, .14], [.20, .063]]) {
+        const mountingRing = new THREE.TorusGeometry(radius + .017, .009, 6, lite ? 20 : 32);
+        temporary.add(mountingRing);
+        add(mountingRing, names.accent, side * (x - .195), y + dy, z, 1, 1, 1, 0, Math.PI / 2);
+        const surround = new THREE.TorusGeometry(radius + .004, .009, 6, lite ? 20 : 32);
+        temporary.add(surround);
+        add(surround, 'rubber', side * (x - .218), y + dy, z, 1, 1, 1, 0, Math.PI / 2);
+        if (dy < 0) speakers.push({ side, x: x - .22, y: y + dy, z });
+        else sphere('speakerCone', side * (x - .22), y + dy, z, radius * .69);
       }
-      for (let i = 0; i < 5; i++) box('iron', side * (x - 0.2), y - 0.25 + i * 0.11, z, 0.012, 0.009, 0.30);
+      for (const dy of [-.30, .30]) for (const dz of [-.16, .16]) fastener(side, x - .183, y + dy, z + dz, .012);
+      box('iron', side * (x + .10), y + .34, z, .34, .055, .14);
+      box('iron', side * (x + .10), y - .34, z, .34, .055, .14);
     }
     function bench(side, z = 0) {
       const x = side * 5.13;
@@ -162,6 +208,31 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
       box('lacquerBlack', side * 5.5, 1.49, 0, 0.72, 0.13, 3.65);
       box('chrome', side * 5.08, 1.49, 0, 0.065, 0.075, 3.69);
       for (const z of [-1.65, 1.65]) grille(side, 5.35, 0.55, z, 0.50, 0.38);
+    }
+
+    function foliage(side, z, variety) {
+      const originX = side * 5.12 + Math.sin(z * 3.2 + variety) * .11;
+      const stemHeight = 1.40 + Math.sin(z * 4.1 + variety) * .12;
+      const leanX = Math.sin(z * 5.3) * .08, leanZ = Math.cos(z * 3.7 + variety) * .09;
+      function branch(points, radius) {
+        const curve = new THREE.CatmullRomCurve3(points.map(point => new THREE.Vector3(...point)));
+        const shape = new THREE.TubeGeometry(curve, lite ? 4 : 5, radius, lite ? 3 : 4, false);
+        temporary.add(shape); add(shape, 'plantStem', 0, 0, 0);
+      }
+      branch([[originX, .68, z], [originX - leanX * .3, 1.02, z], [originX + leanX, stemHeight, z + leanZ]], .013);
+      for (let leaf = 0; leaf < (lite ? 6 : 8); leaf++) {
+        const fraction = leaf / 8, y = .79 + fraction * (stemHeight - .75);
+        const angle = leaf * 2.39996 + z * 1.7 + variety;
+        const reach = .10 + (leaf % 3) * .018;
+        const baseX = originX + leanX * fraction + Math.cos(angle) * reach;
+        const baseZ = z + leanZ * fraction + Math.sin(angle) * reach;
+        branch([[originX + leanX * fraction, y - .02, z + leanZ * fraction], [baseX, y + .025, baseZ]], .005);
+        const length = .43 + (leaf % 3) * .065 + Math.sin(z + leaf) * .035;
+        add(botanicalLeaf(leaf % 3), leaf > 5 ? 'foliageYoung' : 'foliage', baseX, y + .025, baseZ,
+          length * .51, length, length, .65 + (leaf % 3) * .17, -angle + Math.PI / 2, Math.sin(angle) * .23);
+      }
+      add(botanicalLeaf(1), 'foliageYoung', originX + leanX, stemHeight - .035, z + leanZ,
+        .10, .29, .29, .25, z, .18);
     }
 
     function curveShell(points, material, solid = false, depth = BAY_LENGTH) {
@@ -251,7 +322,7 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
           box('lacquerRose', side * 4.4, 1.75, z, 0.3, 3.5, 0.4);
           box('brass', side * 4.21, 1.75, z, 0.035, 3.32, 0.11);
         }
-        for (const z of side === screenSide ? [] : [-1.8, 0, 1.8]) {
+        for (const z of hasScreen(side) ? [] : [-1.8, 0, 1.8]) {
           panel(side, 5.98, 1.56, z, 2.48, 1.62, 'velvet');
           for (let channel = 0; channel < 6; channel++) {
             const channelZ = z - 0.61 + channel * 0.245;
@@ -277,7 +348,7 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
         box('lamp', x, 4.62, 0, 0.54, 0.045, 1.02);
       }
       bench(variant ? 1 : -1);
-      if (variant && screenSide !== -1) archiveShelf(-1);
+      if (variant && !hasScreen(-1)) archiveShelf(-1);
       else {
         rounded('woodDark', 5.13, 0.59, 0.85, 0.72, 0.10, 0.72, 0.045);
         cylinder('brass', 5.13, 0.30, 0.85, 0.045, 0.55);
@@ -294,7 +365,7 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
         frame(outline.map(([x, y]) => [x * 0.968, Math.max(0.1, y - 0.22)]), color, 0.035, z + 0.16);
       }
       for (const side of [-1, 1]) {
-        if (side === screenSide) {
+        if (hasScreen(side)) {
           alcove(side, 4.05);
           grille(side, 4.38, 0.45, 3.15, 0.68, 0.27);
           continue;
@@ -318,7 +389,7 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
         }
       }
       // Repeated asymmetric chevrons provide speed and descent cues on the solid walls.
-      for (const side of [-1, 1].filter(side => side !== screenSide)) for (const z of [-2, 2]) {
+      for (const side of [-1, 1].filter(side => !hasScreen(side))) for (const z of [-2, 2]) {
         box(color, side * 4.19, 1.15, z, 0.045, 0.10, 0.65, false, side * 0.55);
         box(color, side * 4.19, 1.47, z + 0.28, 0.045, 0.10, 0.65, false, -side * 0.55);
       }
@@ -365,24 +436,28 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
         alcove(side, 3.7);
         box('mint', side * 4.4, 1.85, -3.7, 0.35, 3.7, 0.35);
         box('mint', side * 4.4, 1.85, 3.7, 0.35, 3.7, 0.35);
-        box('pearl', side * 5.12, 0.34, 0, 1.2, 0.68, 3.6);
-        box(side === screenSide ? 'wood' : 'dark', side * 5.12, 0.71, 0, 1.0, 0.1, 3.4);
+        rounded('planter', side * 5.12, .32, 0, 1.16, .60, 3.58, .045);
+        for (const dz of [-1.43, 1.43]) rounded('planter', side * 5.12, .06, dz, .97, .12, .23, .025);
+        if (hasScreen(side)) rounded('benchWood', side * 5.12, .68, 0, 1.18, .11, 3.62, .035);
+        else {
+          box('soil', side * 5.12, .635, 0, .98, .09, 3.36);
+          for (const dx of [-.54, .54]) rounded('planter', side * 5.12 + dx, .69, 0, .12, .18, 3.62, .025);
+          for (const dz of [-1.75, 1.75]) rounded('planter', side * 5.12, .69, dz, 1.08, .18, .12, .025);
+          for (let pebble = 0; pebble < (lite ? 16 : 30); pebble++) {
+            const x = side * 5.12 + Math.sin(pebble * 12.71) * .42, z = Math.sin(pebble * 5.31 + variant) * 1.61;
+            add(smallSphereGeometry, pebble % 5 ? 'soil' : 'stone', x, .69, z, .015 + pebble % 3 * .007, .009, .025, 0, pebble, 0);
+          }
+          for (const z of [-1.45, -.70, .10, .86, 1.48]) foliage(side, z, variant);
+        }
         box('brass', side * 4.48, 0.68, 0, 0.045, 0.04, 3.64);
-        for (const z of side === screenSide ? [] : [-1.6, 0, 1.6]) {
+        for (const z of hasScreen(side) ? [] : [-1.6, 0, 1.6]) {
           panel(side, 5.97, 2.64, z, 1.66, 1.42, 'pearl');
           for (const dy of [-0.45, 0, 0.45]) box('mint', side * 5.78, 2.64 + dy, z, 0.045, 0.028, 1.2);
           box('mint', side * 5.76, 2.64, z, 0.045, 1.43, 0.035);
         }
         for (const z of [-3.18, 3.18]) panel(side, 4.47, 1.65, z, 2.8, 0.89, 'pearl');
         grille(side, 4.33, 0.58, variant ? 3.18 : -3.18, 0.62, 0.34);
-        for (const z of side === screenSide ? [] : [-1.4, -0.65, 0.1, 0.85, 1.6]) {
-          cylinder('mint', side * 5.12, 1.18, z, 0.045, 0.95);
-          for (let leaf = 0; leaf < 3; leaf++) {
-            const leafGeometry = new THREE.SphereGeometry(1, 10, 6);
-            temporary.add(leafGeometry);
-            add(leafGeometry, 'mint', side * (5.12 + (leaf - 1) * 0.19), 1.15 + leaf * 0.25 + Math.sin(z + variant) * 0.12, z, 0.35, 0.085, 0.16, 0, leaf * 0.7 + variant, side * 0.5);
-          }
-        }
+        wallSpeaker(side, 4.43, 3.03, 3.18);
       }
       const roof = [[4.64, 3.72], [0, 6.05], [-4.64, 3.72]];
       curveShell(roof, 'pearl', true);
@@ -395,9 +470,11 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
         box('mint', side * 2.1, 5.06, 1.46, 3.7, 0.1, 0.1, false, 0, 0, -side * 0.465);
       }
       const benchX = variant ? 3.3 : -3.3;
-      for (const z of [-0.25, 1.85]) rounded('pearl', benchX, 0.36, z, 0.65, 0.72, 0.22, 0.04);
-      rounded('wood', benchX, 0.76, 0.8, 0.72, 0.14, 2.9, 0.045);
-      for (const x of [-0.22, 0, 0.22]) box('lacquerBlack', benchX + x, 0.835, 0.8, 0.013, 0.005, 2.79);
+      for (const z of [-.25, 1.85]) rounded('planter', benchX, .34, z, .65, .68, .22, .04);
+      for (const dx of [-.24, 0, .24]) {
+        rounded('benchWood', benchX + dx, .76, .8, .217, .105, 2.9, .023);
+        for (const z of [-.25, 1.85]) cylinder('brass', benchX + dx, .814, z, .014, .006);
+      }
     } else {
       for (const side of [-1, 1]) {
         box('plaster', side * 4.73, 1.9, 0, 0.26, 3.8, BAY_LENGTH, true);
@@ -421,11 +498,11 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
     }
     const solid = mergeGeometries(solidParts, false);
     for (const part of solidParts) part.dispose();
-    return { meshes, solid };
+    return { meshes, solid, speakers };
   }
 
   for (const id of ROOM_IDS) for (let variant = 0; variant < 2; variant++) templates.set(`${id}/${variant}/0`, makeKit(id, variant));
-  for (const [center, side] of SCREEN_NICHES) {
+  for (const [center, side] of screenSides) {
     const id = roomAt(center), variant = Math.abs(Math.floor(center / BAY_LENGTH)) % 2;
     const key = `${id}/${variant}/${side}`;
     if (!templates.has(key)) templates.set(key, makeKit(id, variant, side));
@@ -440,7 +517,7 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
   finalWall.rotation.y = trackYaw(587);
   finalWall.receiveShadow = true;
   group.add(finalWall); finalWall.updateMatrixWorld(true);
-  const bays = Array.from({ length: lite ? 9 : 11 }, () => ({ node: new THREE.Group(), rails: new THREE.Group(), index: null, occluder: null }));
+  const bays = Array.from({ length: lite ? 9 : 11 }, () => ({ node: new THREE.Group(), rails: new THREE.Group(), speakerCones: [], index: null, occluder: null }));
   for (const entry of bays) group.add(entry.node, entry.rails);
   const lights = Array.from({ length: 3 }, () => {
     const light = new THREE.PointLight(0xffc2df, 25, 18, 2);
@@ -464,13 +541,15 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
     for (const mesh of [...entry.node.children]) { mesh.geometry.dispose(); entry.node.remove(mesh); }
     for (const mesh of [...entry.rails.children]) { mesh.geometry.dispose(); entry.rails.remove(mesh); }
     entry.occluder?.geometry.dispose(); entry.occluder = null;
+    for (const cone of entry.speakerCones) cone.removeFromParent();
+    entry.speakerCones.length = 0;
   }
   function buildEntry(entry, index) {
     clearEntry(entry);
     entry.index = index;
     const center = index * BAY_LENGTH + BAY_LENGTH / 2;
     const id = roomAt(center);
-    const template = templates.get(`${id}/${Math.abs(index) % 2}/${SCREEN_NICHES.get(center) || 0}`);
+    const template = templates.get(`${id}/${Math.abs(index) % 2}/${screenSides.get(center) || 0}`);
     entry.node.name = `Museum ${id} ${index}`;
     for (const item of template.meshes) {
       const mesh = new THREE.Mesh(deform(item.geometry, center), materials[item.name]);
@@ -479,6 +558,17 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
     }
     entry.occluder = new THREE.Mesh(deform(template.solid, center), occlusionMaterial);
     entry.occluder.updateMatrixWorld(true);
+    for (const driver of template.speakers) {
+      const at = center - driver.z, yaw = trackYaw(at);
+      const point = trackPosition(at, driver.side * driver.x, driver.y);
+      const cone = new THREE.Mesh(coneGeometry, materials.speakerCone);
+      cone.name = 'museum_speaker_cone';
+      cone.position.set(point.x, point.y, point.z);
+      cone.userData.rest = cone.position.clone();
+      cone.userData.axis = new THREE.Vector3(-driver.side * Math.cos(yaw), 0, driver.side * Math.sin(yaw));
+      cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), cone.userData.axis);
+      cone.receiveShadow = true; group.add(cone); entry.speakerCones.push(cone);
+    }
     for (const side of [-1, 1]) {
       const points = [];
       for (let i = 0; i <= 24; i++) {
@@ -492,13 +582,19 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
       entry.rails.add(mesh);
     }
   }
-  function update(distance) {
+  function update(distance, { time = 0, gentle = true } = {}) {
+    const level = speaking && !gentle ? speakingLevel : 0;
+    const pulse = .014 * level * (.62 + .38 * Math.sin(time * 7.3) ** 2) * (.72 * Math.sin(time * 67) + .28 * Math.sin(time * 103));
     const first = Math.floor(distance / BAY_LENGTH) - 3;
     for (let i = 0; i < bays.length; i++) {
       const index = first + i;
       const entry = bays[((index % bays.length) + bays.length) % bays.length];
       if (entry.index !== index) buildEntry(entry, index);
       entry.node.visible = entry.rails.visible = index * BAY_LENGTH < 608;
+      for (const cone of entry.speakerCones) {
+        cone.visible = entry.node.visible;
+        cone.position.copy(cone.userData.rest).addScaledVector(cone.userData.axis, pulse);
+      }
     }
     for (let i = 0; i < lights.length; i++) {
       const at = distance - 4 + i * 14;
@@ -512,6 +608,26 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
   update(0);
   return {
     group, update,
+    setSpeaking(on, level = 1) {
+      speaking = Boolean(on);
+      speakingLevel = Number.isFinite(level) ? THREE.MathUtils.clamp(level, 0, 1) : 1;
+      if (!speaking || speakingLevel === 0) for (const entry of bays) for (const cone of entry.speakerCones) cone.position.copy(cone.userData.rest);
+    },
+    debug() {
+      let cones = 0, maxDisplacement = 0, foliageBatches = 0;
+      for (const entry of bays) {
+        if (!entry.node.visible) continue;
+        for (const cone of entry.speakerCones) {
+          cones++;
+          maxDisplacement = Math.max(maxDisplacement, cone.position.distanceTo(cone.userData.rest));
+        }
+        for (const mesh of entry.node.children) if (mesh.material === materials.foliage || mesh.material === materials.foliageYoung) foliageBatches++;
+      }
+      return {
+        speaking, level: speakingLevel, cones, maxDisplacement, foliageBatches,
+        leafMapsReady: Boolean(materials.foliage.map?.image?.data && materials.foliage.normalMap?.image?.data && materials.foliage.roughnessMap?.image?.data),
+      };
+    },
     occludes(point, origin) {
       rayOrigin.set(origin.x, origin.y, origin.z);
       rayDirection.set(point.x - origin.x, point.y - origin.y, point.z - origin.z);
@@ -531,7 +647,7 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
         for (const item of template.meshes) item.geometry.dispose();
         template.solid.dispose();
       }
-      finalWallGeometry.dispose(); occlusionMaterial.dispose(); group.removeFromParent();
+      coneGeometry.dispose(); finalWallGeometry.dispose(); occlusionMaterial.dispose(); group.removeFromParent();
     },
   };
 }

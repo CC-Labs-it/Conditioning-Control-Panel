@@ -53,6 +53,57 @@ export function createMuseumMaterials(THREE, { lite = false } = {}) {
   }
   const paint = finishMaps();
   const metal = finishMaps(true);
+  function botanicalMaps() {
+    const width = 128, height = 256;
+    const color = new Uint8Array(width * height * 4), rough = new Uint8Array(width * height * 4);
+    const relief = new Float32Array(width * height), normal = new Uint8Array(width * height * 4);
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+      const u = x / (width - 1), v = y / (height - 1), lateral = Math.abs(u - .5);
+      const phase = v * 10 - lateral * 2.7;
+      const vein = Math.exp(-Math.pow((phase - Math.round(phase)) * 36, 2));
+      const midrib = Math.exp(-Math.pow((u - .5) * 105, 2));
+      const grain = Math.sin(x * 12.19 + y * 78.23) * Math.sin(x * 43.1 - y * 5.7);
+      const variation = .88 + Math.sin(v * Math.PI) * .14 + grain * .035 - lateral * .15;
+      const i = (y * width + x) * 4;
+      color[i] = 55 * variation + vein * 7 + midrib * 26;
+      color[i + 1] = 103 * variation + vein * 9 + midrib * 30;
+      color[i + 2] = 36 * variation + vein * 4 + midrib * 10;
+      color[i + 3] = 255;
+      rough[i] = rough[i + 1] = rough[i + 2] = 180 + grain * 12 - midrib * 14;
+      rough[i + 3] = 255;
+      relief[y * width + x] = vein * .16 + midrib * .5 + grain * .018;
+    }
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+      const left = relief[y * width + Math.max(0, x - 1)], right = relief[y * width + Math.min(width - 1, x + 1)];
+      const down = relief[Math.max(0, y - 1) * width + x], up = relief[Math.min(height - 1, y + 1) * width + x];
+      const i = (y * width + x) * 4;
+      normal[i] = 128 + (left - right) * 92; normal[i + 1] = 128 + (down - up) * 92;
+      normal[i + 2] = 255; normal[i + 3] = 255;
+    }
+    const make = (data, srgb = false) => {
+      const map = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+      map.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+      map.minFilter = THREE.LinearMipmapLinearFilter; map.generateMipmaps = true;
+      map.anisotropy = lite ? 2 : 8; map.needsUpdate = true; textures.add(map); return map;
+    };
+    return { map: make(color, true), roughnessMap: make(rough), normalMap: make(normal), normalScale: new THREE.Vector2(.22, .22) };
+  }
+  function soilMap() {
+    const size = 128, data = new Uint8Array(size * size * 4);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const grain = Math.sin(x * 21.71 + y * 48.29) * Math.sin(x * 7.13 - y * 64.31);
+      const clump = Math.sin(x * .46 + Math.sin(y * .31) * 2) * Math.cos(y * .43);
+      const fleck = grain > .90 ? 35 : 0, i = (y * size + x) * 4;
+      data[i] = 33 + grain * 9 + clump * 7 + fleck;
+      data[i + 1] = 26 + grain * 7 + clump * 5 + fleck * .8;
+      data[i + 2] = 19 + grain * 5 + clump * 4 + fleck * .55; data[i + 3] = 255;
+    }
+    const map = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+    map.wrapS = map.wrapT = THREE.RepeatWrapping; map.repeat.set(3, 3);
+    map.colorSpace = THREE.SRGBColorSpace; map.minFilter = THREE.LinearMipmapLinearFilter;
+    map.generateMipmaps = true; map.needsUpdate = true; textures.add(map); return map;
+  }
+  const botanical = botanicalMaps();
   const enamel = color => new THREE.MeshPhysicalMaterial({
     color, ...paint, roughness: .73, metalness: .12,
     clearcoat: .24, clearcoatRoughness: .55,
@@ -63,6 +114,13 @@ export function createMuseumMaterials(THREE, { lite = false } = {}) {
     plasterBlue: scanned('plaster', '#8faabd', 1, 0.4),
     wood: scanned('wood', '#e8c49f', 0.77, 0.2),
     woodDark: scanned('wood', '#bf9474', 0.8, 0.2),
+    benchWood: scanned('wood', '#fff0d2', .70, .14),
+    planter: scanned('stone', '#9b9c88', .98, .35),
+    soil: new THREE.MeshStandardMaterial({ color: '#b5a18c', map: soilMap(), roughness: 1, normalMap: texture('stone', 'normal'), normalScale: new THREE.Vector2(.22, .22) }),
+    foliage: new THREE.MeshPhysicalMaterial({ color: '#c5d8ad', ...botanical, side: THREE.DoubleSide, roughness: .86, sheen: .18, sheenColor: '#a2ba75', sheenRoughness: .8 }),
+    foliageYoung: new THREE.MeshPhysicalMaterial({ color: '#e2edb4', ...botanical, side: THREE.DoubleSide, roughness: .82, sheen: .18, sheenColor: '#bad286', sheenRoughness: .8 }),
+    plantStem: new THREE.MeshStandardMaterial({ color: '#536e39', roughness: .9 }),
+    speakerCone: new THREE.MeshStandardMaterial({ color: '#6a6b70', map: texture('rubber', 'color'), normalMap: texture('rubber', 'normal'), normalScale: new THREE.Vector2(.13, .13), roughness: .84 }),
     brick: scanned('brick', '#ddc4b0', 0.98, 0.65),
     floor: scanned('terrazzo', '#eddae6', 0.86, 0.13),
     brass: new THREE.MeshStandardMaterial({ color: '#b89955', ...metal, metalness: 0.82, roughness: 0.58 }),

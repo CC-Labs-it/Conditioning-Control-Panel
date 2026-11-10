@@ -1,22 +1,20 @@
 import * as THREE from '../../../vendor/three/three.module.min.js';
 import { mergeGeometries } from '../../../vendor/three/addons/utils/BufferGeometryUtils.js';
-import { createMuseum } from './environment.js';
+import { createMuseum, SCREEN_NICHES } from './environment.js';
 import { createMuseumProps } from './props.js';
 import { createMuseumMaterials } from './materials.js';
 import { trackPoint, trackYaw, trackPitch, trackPosition, trackStyle } from './track.js';
 import { subscriberPlan } from '../ads.js';
 import { STORY_ART_SLOTS, isDocumentaryArtSlot } from './model.js';
+import { createProjectorEffects } from './projector-effects.js';
 
 const UNIT = 180;
 const ART_ROOT = new URL('../../assets/documentary/art/', import.meta.url);
-const NICHE_SCREENS = [
-  [44,'R'],[84,'L'],[116,'R'],[148,'L'],[164,'R'],[204,'R'],[236,'L'],
-  [356,'R'],[372,'L'],[388,'R'],[420,'R'],[452,'L'],[492,'R'],
-];
 const STORY_PROJECTORS = [
-  { id:'booth',at:12,slot:'intro-subject' }, { id:'lever',at:36,slot:'pump-documentary' },
-  { id:'reflex',at:310,slot:'reflex-cheetah' }, { id:'replay',at:314,slot:'subject-habitat' },
+  { id:'booth',at:12,slot:'intro-subject' }, { id:'lever',at:112,slot:'pump-documentary' },
+  { id:'reflex',at:310,slot:'reflex-cheetah' },
   { id:'wakeup',at:418,slot:'outside-daylight' },
+  { id:'conversation',at:504,slot:'conversation-chairs' },
 ];
 const ART_CARD_ALIAS = {
   'intro-subject':'b-nametag-frame', 'pump-documentary':'l-patent',
@@ -52,8 +50,9 @@ function element(doc, tag, className, parent, text) {
 }
 
 /** Geometry and lighting are WebGL. Every framed picture is a real, display-only DOM image. */
-export function createScene(ctx, root, manifest, media, { lite = false, onWake, onPump, onStageAction } = {}) {
+export function createScene(ctx, root, manifest, media, { lite = false, autoProjectors = true, onWake, onPump, onStageAction } = {}) {
   const doc = root.ownerDocument;
+  const projectorEffects = createProjectorEffects(ctx,{document:doc});
   const canvas = element(doc, 'canvas', 'td-webgl', root);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: !lite, alpha: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(doc.defaultView.devicePixelRatio || 1, lite ? 1.25 : 1.5));
@@ -105,17 +104,14 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
   const stageControlsAnchor = element(doc,'div','td-stage-controls-anchor',root);
   stageControlsAnchor.hidden = true;
   const replay = element(doc, 'div', 'td-plane td-projector-face td-replay', domCamera);
-  replay.hidden = true;
-  const replayWall = element(doc, 'div', 'td-replay-wall', replay);
-  const replayCaption = element(doc, 'p', '', replay, '');
+  replay.hidden = true; replay.style.padding = '0';
   const loading = element(doc, 'p', 'td-loading', root, 'Opening the gallery');
   const surfaces = [], art = new Map(), animated = new Set(), geometries = new Set();
   const artLoads = new Set(), storyImageStatus = new Map();
   const projectors = [];
-  const replayMedia = [];
   const geometryGroup = new THREE.Group();
   world.add(geometryGroup);
-  let materialPack, materials, museum, props, stamp, replayOff;
+  let materialPack, materials, museum, props, stamp;
   let width = 1, height = 1, focal = 1, lastState, disposed = false, readyState = false, stamped = false;
   let toyFrameOff = null, toyTime = 0, renders = 0, projectorFrameOff = null;
   let bulbJob=null,bulbRestore=null,bulbDim=false,bulbCycle=0;
@@ -123,8 +119,11 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
   const viewMatrix = new THREE.Matrix4(), projectionView = new THREE.Matrix4();
   const frustum = new THREE.Frustum(), surfaceSphere = new THREE.Sphere();
   const pointInView = new THREE.Vector3(), projectedPump = new THREE.Vector3();
-  let pumpPosition = null;
+  let pumpPosition = null, pumpHitBounds = null;
+  const pumpBounds = new THREE.Box3(new THREE.Vector3(-.50,-.78,-1.48),new THREE.Vector3(.50,-.31,-1.05));
+  const pumpRay = new THREE.Ray(), pumpLocalHit = new THREE.Vector3(), cartInverse = new THREE.Matrix4();
   const pendingProjectorBeats = [];
+  let scriptedProjectors = !autoProjectors;
   const depth = lite ? 38 : 58;
 
   function plate(parent, slot, title) {
@@ -238,10 +237,6 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
     plate(sheet, 'subject-spreadsheet', 'Quarterly accounts');
     return { tile, face };
   }
-  for (let i = 0; i < (lite ? 4 : 8); i++) browserTile(replayWall, i);
-  let freezePlate = plate(replay, 'subject-spreadsheet', 'Manus fugiens');
-  freezePlate.classList.add('td-freeze-plate'); freezePlate.hidden = true;
-
   function box(parent, name, size, pos, material) {
     const geometry = new THREE.BoxGeometry(...size);
     geometries.add(geometry);
@@ -405,12 +400,13 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
     for (const display of geometryGroup.children) batchDisplay(display);
   }
   function buildNicheScreens() {
-    for (const [at,side] of NICHE_SCREENS) {
+    for (const spec of SCREEN_NICHES) {
+      const at=spec.distance,side=spec.side===-1||spec.side==='L'?'L':'R';
       const original = manifest.exhibits.find(item => item.kind.startsWith('run-') && item.side === side &&
         Math.round((item.at-4)/8)*8+4 === at);
       const exhibit = original || { id:`personal-${at}-${side}`,kind:'run-picture',placard:{title:'The collection',line:'A still from this evening.'} };
-      const room = trackStyle(at).id, w=3.4, h=1.9;
-      const point = positionAt(at,side==='L'?-5.85:5.85,2.05);
+      const room = trackStyle(at).id, w=spec.width, h=spec.height;
+      const point = positionAt(at,(side==='L'?-1:1)*spec.lateral,spec.elevation);
       const yaw = trackYaw(at)+(side==='L'?Math.PI/2:-Math.PI/2);
       const frameGroup = frame(w,h,point,yaw,false,room);
       const node = element(doc,'div','td-plane td-exhibit td-personal-screen',domCamera);
@@ -437,20 +433,20 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
       }
       const cloth=box(group,'Projection fabric',[w,h,.014],[0,top-h/2,.11],materials.paper);
       const bar=box(group,'Weighted screen rail',[w+.04,.045,.045],[0,top-h,.11],materials.iron);
-      const node=spec.id==='replay'?replay:element(doc,'div','td-plane td-projector-face',domCamera);
+      const node=spec.id==='reflex'?replay:element(doc,'div','td-plane td-projector-face',domCamera);
       node.dataset.projector=spec.id;
-      const projector={...spec,w,h,top,group,cloth,bar,node,progress:0,target:0,override:spec.id==='replay'?false:null,mounts:[]};
-      if(spec.id!=='replay') projectorContent(projector,spec.slot);
-      else {
-        freezePlate.querySelector('.td-card-figure')?.remove();
-        cardFigure(freezePlate.querySelector('.td-exposition-card'),'f-spreadsheet',true);
-      }
+      const projector={...spec,w,h,top,group,cloth,bar,node,progress:0,target:0,override:null,mounts:[]};
+      projectorContent(projector,spec.slot);
       cloth.visible=bar.visible=false; node.hidden=true;
       projectors.push(projector); batchDisplay(fixed);
     }
   }
   function projectorContent(projector,slot,title,line) {
     const validSlot=isDocumentaryArtSlot(slot)?slot:projector.slot;
+    if(projector.activeSlot===validSlot && projector.node.dataset.requestedSlot===validSlot) {
+      if(title) projector.node.querySelector('.td-exposition-value').textContent=String(title);
+      return;
+    }
     const version=(projector.contentVersion||0)+1;
     projector.contentVersion=version;projector.node.dataset.requestedSlot=validSlot;
     const staging=doc.createElement('div');
@@ -458,18 +454,17 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
     face.querySelector('.td-card-figure')?.remove();
     cardFigure(face.querySelector('.td-exposition-card'),ART_CARD_ALIAS[validSlot]||validSlot,true);
     if(title) face.querySelector('.td-exposition-value').textContent=String(title);
-    if(line && projector.id!=='replay') element(doc,'p','td-projection-caption',staging,String(line));
+    if(line) element(doc,'p','td-projection-caption',staging,String(line));
     warmArt(staging);
     const image=face.querySelector('.td-art-image');
     const commit=()=>{
       if(disposed||projector.contentVersion!==version) return;
-      if(projector.id==='replay') {
-        replayOff?.();replayOff=null;
-        for(const release of replayMedia) release();replayMedia.length=0;
-        face.classList.add('td-freeze-plate');freezePlate.replaceWith(face);freezePlate=face;
-        replayWall.hidden=true;freezePlate.hidden=false;replay.dataset.mode='slide';
-        if(line!=null) replayCaption.textContent=String(line);
-      } else projector.node.replaceChildren(...staging.childNodes);
+      const outgoing=[...projector.node.querySelectorAll(':scope > .td-art')].at(-1);
+      for(const child of [...projector.node.children]) if(child!==outgoing) child.remove();
+      for(const layer of [outgoing,face]) if(layer) Object.assign(layer.style,{position:'absolute',inset:'0'});
+      projector.node.append(...staging.childNodes);
+      projectorEffects.transition(face,{outgoing,key:`${projector.id}:${version}`,initial:!projector.activeSlot,
+        visible:!projector.node.hidden&&projector.progress>.05});
       projector.activeSlot=validSlot;projector.node.dataset.slot=validSlot;
       projector.node.dataset.slideReady=String(Boolean(image?.naturalWidth));
     };
@@ -478,8 +473,9 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
     else commit();
   }
   function setProjectorTarget(projector,target) {
+    if(target===1&&projector.target!==1&&readyState) projectorEffects.unroll(projector.id);
     projector.target=target;
-    if(ctx.reduced) { projector.progress=target; return; }
+    if(ctx.reduced) { projector.progress=target;if(!target) projectorEffects.resetUnroll(projector.id);return; }
     if(projectorFrameOff || projectors.every(item=>item.progress===item.target)) return;
     projectorFrameOff=ctx.frame(dt=>{
       if(disposed||ctx.paused||doc.hidden) return;
@@ -487,6 +483,7 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
       for(const item of projectors) {
         const step=Math.max(0,dt)/(ctx.gentle?1.6:1.1);
         item.progress=item.target>item.progress?Math.min(item.target,item.progress+step):Math.max(item.target,item.progress-step);
+        if(item.progress===0) projectorEffects.resetUnroll(item.id);
         moving ||= item.progress!==item.target;
       }
       if(lastState?.docked) draw(lastState);
@@ -496,19 +493,21 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
   function projectorBeat(id,data={}) {
     if(!projectors.length) { pendingProjectorBeats.push([id,data]); return; }
     const requested=typeof data==='string'?{id:data}:data||{};
-    const projector=projectors.find(item=>item.id===requested.id)||projectors.reduce((best,item)=>
+    const physicalId=requested.id==='replay'?'reflex':requested.id;
+    const projector=projectors.find(item=>item.id===physicalId)||projectors.reduce((best,item)=>
       Math.abs(item.at-(Number(requested.at)||lastState?.z||0))<Math.abs(best.at-(Number(requested.at)||lastState?.z||0))?item:best);
     const show=id.endsWith('.show');
+    if(show) scriptedProjectors=true;
     projector.override=show;
     if(show && (requested.slot||requested.title||requested.line)) projectorContent(projector,requested.slot,requested.title,requested.line);
-    setProjectorTarget(projector,show?1:0);
     if(lastState) draw(lastState);
   }
   function drawProjectors(state) {
     for(const projector of projectors) {
       const distance=projector.at-state.z;
       const approach=distance<26&&distance>Math.max(6.5,state.v*1.25+2);
-      const target=(projector.override??approach)&&distance>2.5&&distance<55?1:0;
+      const requested=projector.override??(!scriptedProjectors&&approach);
+      const target=requested&&distance>2.5&&distance<32?1:0;
       setProjectorTarget(projector,target);
       const p=projector.progress;
       projector.cloth.scale.y=Math.max(.001,p);
@@ -526,9 +525,6 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
       cssPlace(projector.node,point,yaw,projector.w-.05,projector.h-.025);
       projector.node.style.clipPath=`inset(0 0 ${(1-p)*100}% 0)`;
       if(visible) warmArt(projector.node);
-      if(projector.id==='replay' && !visible && replayMedia.length) {
-        for(const release of replayMedia) release(); replayMedia.length=0;
-      }
     }
   }
   function scheduleBulb() {
@@ -613,10 +609,10 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
     key.position.set(point.x - 3, point.y + 4.8, point.z - 3);
     const ahead = trackPosition(state.z + 10, 0, .4);
     key.target.position.set(ahead.x, ahead.y, ahead.z);
-    museum.update(state.z);
+    museum.update(state.z,{time:doc.defaultView.performance.now()/1000,gentle:calm||ctx.paused});
     props.update(state.z,{time:0,gentle:calm||!bulbDim});
     props.pump(state.leverAngle);
-    const lit = [];
+    const lit = [], visiblePersonal = [];
     for (const surface of surfaces) {
       const distance = surface.at - state.z;
       pointInView.copy(surface.frameGroup.position).applyMatrix4(camera.matrixWorldInverse);
@@ -633,10 +629,17 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
         lit.push(surface);
       }
       if (distance < depth + 12 && distance > -18) warmArt(surface.node);
-      if (visible && !surface.mounts.length) {
+      if(visible&&surface.personal) visiblePersonal.push(surface);
+      if (visible && !surface.personal && !surface.mounts.length) {
         for (const { face, kind } of surface.faces) surface.mounts.push(media.mount(face, { ...surface.exhibit, kind }));
       }
       if (!visible) releaseSurface(surface);
+    }
+    visiblePersonal.sort((a,b)=>Math.abs(a.at-state.z)-Math.abs(b.at-state.z));
+    const activePersonal=new Set(visiblePersonal.slice(0,lite?4:8));
+    for(const surface of surfaces) if(surface.personal&&!activePersonal.has(surface)) releaseSurface(surface);
+    for(const surface of activePersonal) if(!surface.mounts.length) {
+      for(const {face,kind} of surface.faces) surface.mounts.push(media.mount(face,{...surface.exhibit,kind}));
     }
     lit.sort((a, b) => Math.abs(a.at-state.z)-Math.abs(b.at-state.z));
     exhibitLights.forEach((light, index) => {
@@ -687,6 +690,17 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
       pumpPosition = { x: (projectedPump.x*.5+.5)*width, y: (-projectedPump.y*.5+.5)*height,
         visible: Math.abs(projectedPump.x) < 1 && Math.abs(projectedPump.y) < 1 && projectedPump.z > -1 && projectedPump.z < 1 };
     }
+    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    for(const x of [pumpBounds.min.x,pumpBounds.max.x]) for(const y of [pumpBounds.min.y,pumpBounds.max.y]) {
+      for(const z of [pumpBounds.min.z,pumpBounds.max.z]) {
+        projectedPump.set(x,y,z).applyMatrix4(cartRig.matrixWorld).project(camera);
+        if(projectedPump.z< -1||projectedPump.z>1) continue;
+        const px=(projectedPump.x*.5+.5)*width,py=(-projectedPump.y*.5+.5)*height;
+        minX=Math.min(minX,px);maxX=Math.max(maxX,px);minY=Math.min(minY,py);maxY=Math.max(maxY,py);
+      }
+    }
+    pumpHitBounds=Number.isFinite(minX)?{left:minX,top:minY,right:maxX,bottom:maxY,
+      visible:maxX>0&&minX<width&&maxY>0&&minY<height}:null;
   }
   function beat(id,data={}) {
     if (disposed) return;
@@ -712,41 +726,15 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
       });
     }
     if (id === 'floor.replay') {
-      projectorBeat('projector.show',{id:'replay'});
-      for (const release of replayMedia) release();
-      replayMedia.length = 0;
-      freezePlate.hidden = true;
-      replayWall.hidden = false;
-      replay.dataset.mode = 'open';
-      const projector=projectors.find(item=>item.id==='replay');
-      if(projector) {
-        projector.contentVersion=(projector.contentVersion||0)+1;
-        projector.activeSlot=null;projector.node.dataset.slot='run-replay';
-        delete projector.node.dataset.requestedSlot;delete projector.node.dataset.slideReady;
-      }
-      for (const face of replayWall.querySelectorAll('.td-tab > .td-art')) {
-        replayMedia.push(media.mount(face, { kind: 'run-picture' }));
-      }
-      warmArt(replay);
-      replayCaption.textContent = 'Again, in slow motion';
-      replayOff?.();
-      replayOff = ctx.after(1800, () => { replay.dataset.mode = 'sheet'; });
+      replay.dataset.mode = 'replay';
+      projectorBeat('projector.show',{id:'reflex',slot:'subject-spreadsheet',title:'Again, in slow motion',line:''});
     }
     if (id === 'floor.freeze') {
-      projectorBeat('projector.show',{id:'replay'});
       replay.dataset.mode = 'freeze';
-      replayWall.hidden = true;
-      freezePlate.hidden = false;
-      warmArt(freezePlate);
-      replayCaption.textContent = manifest.exhibits.find(item => item.id === 'ex-freeze')?.caption || 'In slow motion';
-      const projector=projectors.find(item=>item.id==='replay');
-      if(projector) projectorContent(projector,'subject-spreadsheet',null,replayCaption.textContent);
+      projectorBeat('projector.show',{id:'reflex',slot:'subject-spreadsheet',line:''});
     }
     if (id === 'floor.release') {
-      projectorBeat('projector.hide',{id:'replay'});
-      replayOff?.();
-      for (const release of replayMedia) release();
-      replayMedia.length = 0;
+      projectorBeat('projector.hide',{id:'reflex'});
     }
     if (id === 'pump' && lastState?.docked && !toyFrameOff) {
       toyTime = 0;
@@ -762,6 +750,19 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   const isControl = target => target?.closest?.('button,a,input,textarea,select,[contenteditable=true],[role=button]');
+  function pointerRay(event) {
+    const rect=root.getBoundingClientRect();
+    pointer.set((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);
+    raycaster.setFromCamera(pointer,camera);
+  }
+  function hitsPump(event) {
+    if(!props?.pumpTargets?.length) return false;
+    pointerRay(event);
+    cartRig.updateWorldMatrix(true,false);
+    cartInverse.copy(cartRig.matrixWorld).invert();
+    pumpRay.copy(raycaster.ray).applyMatrix4(cartInverse);
+    return Boolean(pumpRay.intersectBox(pumpBounds,pumpLocalHit));
+  }
   function centerView() {
     if (disposed || ctx.paused || doc.hidden) return;
     cancelGesture();
@@ -779,7 +780,8 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
         event.isPrimary === false || isControl(event.target)) return;
     root.tabIndex = -1;
     root.focus({ preventScroll: true });
-    gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, yaw: lookYaw, pitch: lookPitch, dragged: false };
+    gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, yaw: lookYaw, pitch: lookPitch,
+      dragged: false, pump: hitsPump(event) };
     root.setPointerCapture?.(event.pointerId);
     event.preventDefault();
   }
@@ -798,11 +800,13 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
   function pointerUp(event) {
     if (!gesture || event.pointerId !== gesture.id) return;
     const dragged = gesture.dragged || Math.hypot(event.clientX-gesture.x, event.clientY-gesture.y) >= 6;
+    const pumpStarted=gesture.pump;
     cancelGesture();
     if (dragged || !readyState || disposed || ctx.paused || doc.hidden) return;
-    const rect = root.getBoundingClientRect();
-    pointer.set((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1);
-    raycaster.setFromCamera(pointer, camera);
+    if(pumpStarted||hitsPump(event)) {
+      onPump?.();event.preventDefault();return;
+    }
+    pointerRay(event);
     const entries = (props.interactive || []).filter(entry => {
       for (let parent = entry.mesh; parent; parent = parent.parent) if (!parent.visible) return false;
       return true;
@@ -830,23 +834,26 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
     ready, stageAnchor, stageControlsAnchor, draw, resize, beat,
     debug: () => ({ drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles,
       textures: renderer.info.memory.textures, ready: readyState, renders, lookYaw, lookPitch,
-      cameraPosition: camera.position.toArray(), pumpPosition,
+      cameraPosition: camera.position.toArray(), pumpPosition, pumpHitBounds,
       projectors:projectors.map(({id,at,progress,target,activeSlot,node})=>({id,at,progress,target,slot:activeSlot||null,
         requestedSlot:node.dataset.requestedSlot||null,imageReady:node.dataset.slideReady==='true'})),
-      storyArt:Object.fromEntries(storyImageStatus) }),
+      storyArt:Object.fromEntries(storyImageStatus), projectorEffects:projectorEffects.debug(), environment: museum?.debug?.(),
+      personalScreens:surfaces.filter(surface=>surface.personal).length,
+      activePersonalScreens:surfaces.filter(surface=>surface.personal&&surface.mounts.length).length }),
+    setSpeaking(on) { museum?.setSpeaking?.(Boolean(on)); },
     setPaused(on) {
       if (on) cancelGesture();
       root.dataset.paused = String(Boolean(on));
       for (const animation of animated) if (on) animation.pause(); else animation.play();
+      projectorEffects.pause(on);
     },
     dispose() {
       if (disposed) return;
       disposed = true;
-      replayOff?.();
+      projectorEffects.dispose();
       toyFrameOff?.();
       projectorFrameOff?.();
       bulbJob?.(); bulbRestore?.();
-      for (const release of replayMedia) release();
       for (const surface of surfaces) releaseSurface(surface);
       for (const animation of animated) animation.cancel();
       cancelGesture();

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createDocumentaryNarration } from './narration.js';
 import { NARRATION_CLIPS, STAGE_SCHEDULE, VERIFIED_RELEASE_SECONDS, RIDE_RECORDINGS } from './narration-data.js';
-import { NARRATION_SUBTITLES, SUBTITLE_TIMING } from './narration-subtitles.js';
+import { NARRATION_SUBTITLES, SUBTITLE_TIMING } from './subtitles.js';
 import { projectionTimeline } from './narration-slides.js';
 
 function bus() {
@@ -14,7 +14,7 @@ function bus() {
   };
 }
 function harness(options = {}) {
-  let clock = 0, serial = 0, concurrent = 0, maxConcurrent = 0, blocked = false;
+  let clock = 0, serial = 0, concurrent = 0, maxConcurrent = 0, blocked = false, paceProvider = null;
   const timers = new Map(), streams = [], beats = [], statuses = [], speaking = [], holds = new Set(), holdPoints = new Map();
   const events = bus(), host = bus(), doc = new EventTarget(); doc.hidden = false;
   const ctx = { paused: false, caps: options.caps || {}, state: {}, on: host.on, cleanup() {} };
@@ -22,6 +22,7 @@ function harness(options = {}) {
   const tunnel = {
     state, ready: Promise.resolve(), captions: { ownerDocument: doc, textContent: '', hidden: true, dataset: {} }, on: events.on, addCues() {},
     hold(id, at) { holds.add(id); holdPoints.set(id, at); return () => { holds.delete(id); holdPoints.delete(id); }; },
+    setPace(provider) { paceProvider = provider; return () => { if (paceProvider === provider) paceProvider = null; }; },
     beat(id, data) { beats.push({ id, data }); if (id === 'booth.unlock') state.locked = false; },
   };
   function createStream(url, settings) {
@@ -50,6 +51,7 @@ function harness(options = {}) {
   return {
     narration, streams, beats, statuses, speaking, holds, holdPoints, doc, ctx, events, host, timers, captions: tunnel.captions,
     setBlocked(value) { blocked = value; }, get concurrent() { return concurrent; }, get maxConcurrent() { return maxConcurrent; },
+    pace() { return paceProvider?.(state) || null; },
     cue(id, z) { state.z = z; events.emit('cue', { id, at: z }); },
     pause(value) { ctx.paused = value; host.emit(value ? 'pause' : 'resume'); },
     tick(ms) {
@@ -74,7 +76,7 @@ test('recording allowlist is complete and schedule has no placeholder clips', ()
 test('ride queue cannot overlap; ended applies terminal beats and releases before the next recording', async () => {
   const h = harness(); await h.narration.ready;
   assert.equal(h.streams[0].id, 'r1');
-  h.cue('narration.r2', 12);
+  h.cue('narration.r2', 92);
   assert.equal(h.streams.length, 1);
   h.streams[0].end();
   assert.equal(h.ctx.paused, false);
@@ -88,14 +90,14 @@ test('ride queue cannot overlap; ended applies terminal beats and releases befor
   h.narration.dispose(); assert.equal(h.concurrent, 0); assert.equal(h.timers.size, 0);
 });
 
-test('recordings continue through every former distance gate and release cart holds only on ended', async () => {
-  for (const [at, id, offset] of [[12, 'r2', 23], [285, 'r3', 22], [407, 'r4', 10]]) {
+test('recordings continue through every former distance gate without installing stationary holds', async () => {
+  for (const [at, id, offset] of [[92, 'r2', 23], [268, 'r3', 22], [370, 'r4', 10]]) {
     const h = harness({ at }); await h.narration.ready;
     const recording = h.streams[0]; assert.equal(recording.id, id);
     recording.time(offset);
     assert.equal(h.narration.debug().gated, false); assert.equal(recording.el.paused, false);
     assert.equal(recording.el.currentTime, offset, 'narration never seeks backwards at a route cue');
-    assert.ok(h.holds.has(`narration.${id}`));
+    assert.equal(h.holds.size, 0);
     if (id === 'r3') { recording.time(35); assert.ok(h.beats.some(beat => beat.id === 'floor.replay')); }
     recording.end(); assert.equal(h.holds.size, 0);
     if (id === 'r3') assert.ok(h.beats.some(beat => beat.id === 'floor.release'));
@@ -119,7 +121,8 @@ test('missing recording uses finite paused visual fallback, without a second voi
   const h = harness(); await h.narration.ready; h.streams[0].error();
   assert.equal(h.narration.debug().missing, true); assert.equal(h.concurrent, 0);
   h.tick(5000); h.pause(true); h.tick(120000);
-  assert.ok(!h.beats.some(beat => beat.id === 'booth.unlock'));
+  assert.equal(h.narration.debug().current, 'r1');
+  assert.ok(!h.beats.some(beat => beat.id === 'booth.stamp'));
   h.pause(false); h.tick(50000);
   assert.ok(h.beats.some(beat => beat.id === 'booth.unlock')); assert.equal(h.streams.length, 1);
   h.narration.dispose(); assert.equal(h.timers.size, 0);
@@ -128,9 +131,31 @@ test('missing recording uses finite paused visual fallback, without a second voi
 test('autoplay denial exposes retry and resumes on a gesture', async () => {
   const h = harness(); h.setBlocked(true); await h.narration.ready; await Promise.resolve();
   assert.equal(h.narration.debug().status, 'blocked'); assert.equal(h.concurrent, 0);
+  assert.equal(h.beats.filter(beat => beat.id === 'projector.show').length, 0);
+  h.tick(3000);
+  assert.equal(h.beats.filter(beat => beat.id === 'projector.show').length, 0);
   h.setBlocked(false); h.doc.dispatchEvent(new Event('pointerdown'));
   assert.equal(h.narration.debug().status, 'playing'); assert.equal(h.concurrent, 1);
+  assert.equal(h.beats.filter(beat => beat.id === 'projector.show').length, 1);
+  assert.equal(h.beats.find(beat => beat.id === 'projector.show').data.id, 'booth');
+  h.pause(true); h.pause(false);
+  assert.equal(h.beats.filter(beat => beat.id === 'projector.show').length, 1, 'resume does not redeploy the opening screen');
   h.narration.dispose();
+});
+
+test('an unavailable opening clip starts one finite visual fallback after pause clears', async () => {
+  const h = harness(); h.setBlocked(true); await h.narration.ready; await Promise.resolve();
+  h.pause(true); h.streams[0].error();
+  assert.equal(h.narration.debug().missing, true);
+  h.tick(120000);
+  assert.equal(h.beats.filter(beat => beat.id === 'projector.show').length, 0);
+  assert.equal(h.narration.debug().current, 'r1');
+  h.pause(false);
+  assert.equal(h.beats.filter(beat => beat.id === 'projector.show').length, 1);
+  h.tick(NARRATION_CLIPS.r1.duration * 1000 + 1);
+  assert.equal(h.narration.debug().current, null);
+  assert.ok(h.beats.some(beat => beat.id === 'projector.hide' && beat.data.id === 'booth'));
+  h.narration.dispose(); assert.equal(h.timers.size, 0);
 });
 
 test('stage chains in a hidden document, has one bounded timer, and respects Wake pause', async () => {
@@ -199,8 +224,8 @@ test('unknown accepted clauses skip Terms and their linking lines', async () => 
   h.narration.dispose();
 });
 
-test('subtitle delivery covers each recording with readable two-line estimated phrases', () => {
-  assert.equal(SUBTITLE_TIMING, 'estimated');
+test('subtitle delivery covers each recording with readable two-line phrases and mixed timing provenance', () => {
+  assert.equal(SUBTITLE_TIMING, 'mixed');
   assert.deepEqual(Object.keys(NARRATION_SUBTITLES).sort(), Object.keys(NARRATION_CLIPS).sort());
   for (const [id, cues] of Object.entries(NARRATION_SUBTITLES)) {
     let previous = 0;
@@ -216,9 +241,9 @@ test('subtitle delivery covers each recording with readable two-line estimated p
 
 test('subtitles follow actual media duration and seeks, toggle immediately, and clear on pause and disposal', async () => {
   const h = harness(); await h.narration.ready; const recording = h.streams[0]; recording.el.duration = 60;
-  recording.time(2); assert.equal(h.captions.textContent, 'This is the story of a person');
+  recording.time(4); assert.equal(h.captions.textContent, 'This is the story of a person');
   recording.time(18); assert.match(h.captions.textContent, /^I would tell you their name/);
-  assert.equal(h.captions.dataset.timing, 'estimated');
+  assert.equal(h.captions.dataset.timing, 'aligned');
   h.narration.setSubtitles(false); assert.equal(h.captions.textContent, '');
   recording.time(30); assert.equal(h.captions.textContent, '');
   h.narration.setSubtitles(true); assert.ok(h.captions.textContent.length > 0);
@@ -228,12 +253,12 @@ test('subtitles follow actual media duration and seeks, toggle immediately, and 
 });
 
 test('voice fades use actual media time and ducking clears during the gap and immediately on panic', async () => {
-  const h = harness({ at: 285 }); await h.narration.ready; const recording = h.streams[0]; recording.el.duration = 60;
+  const h = harness({ at: 268 }); await h.narration.ready; const recording = h.streams[0]; recording.el.duration = 60;
   assert.equal(recording.gains[0], 0);
   recording.time(0.06); assert.ok(Math.abs(recording.gains.at(-1) - 0.5) < 0.001);
   recording.time(0.12); assert.equal(recording.gains.at(-1), 1);
   recording.time(60 - VERIFIED_RELEASE_SECONDS.r3 / 2); assert.ok(Math.abs(recording.gains.at(-1) - 0.5) < 0.001);
-  h.cue('narration.r2', 12); recording.end();
+  h.cue('narration.r2', 92); recording.end();
   assert.equal(h.speaking.at(-1), false); assert.equal(h.captions.textContent, '');
   h.tick(1499); assert.equal(h.streams.length, 1);
   h.tick(1); assert.equal(h.speaking.at(-1), true); assert.equal(h.maxConcurrent, 1);
@@ -260,7 +285,7 @@ test('unverified recording tails retain full gain and do not end on estimated du
 
 test('missing audio still advances subtitle phrases and preserves pause timing', async () => {
   const h = harness(); await h.narration.ready; h.streams[0].error();
-  h.tick(1000); assert.equal(h.captions.textContent, 'This is the story of a person');
+  h.tick(3000); assert.equal(h.captions.textContent, 'This is the story of a person');
   h.pause(true); h.tick(5000); assert.equal(h.captions.textContent, '');
   h.pause(false); assert.equal(h.captions.textContent, 'This is the story of a person');
   h.tick(6000); assert.match(h.captions.textContent, /^who sat down/);
@@ -294,10 +319,11 @@ test('replacing a queued hover reaction does not consume its quota', async () =>
 });
 
 test('slideshow order follows the same subtitle cue boundaries at actual media duration', async () => {
-  const h = harness({ at: 285 }); await h.narration.ready;
+  const h = harness({ at: 268 }); await h.narration.ready;
   const recording = h.streams[0]; recording.el.duration = 80;
   const slides = projectionTimeline('r3').filter(cue => cue.slot);
   assert.deepEqual(slides.map(cue => cue.slot), ['reflex-cheetah', 'reflex-shrimp', 'subject-habitat', 'floorboard-warning', 'subject-spreadsheet', 'subject-spreadsheet']);
+  assert.ok(slides.every(cue => cue.projector === 'reflex'), 'slow motion stays on the same physical projector');
   let previous;
   for (const slide of slides) {
     recording.time(slide.at * 80 - 0.0001);
@@ -309,7 +335,8 @@ test('slideshow order follows the same subtitle cue boundaries at actual media d
     assert.equal(recording.el.paused, false);
     previous = slide.slot;
   }
-  assert.equal(h.holdPoints.get('narration.r3'), 303);
+  assert.equal(h.holds.size, 0);
+  assert.equal(h.beats.some(beat => beat.id === 'projector.hide'), false, 'the narration never retracts between comparison and slow motion');
   recording.end(); assert.equal(h.holds.size, 0); h.narration.dispose();
 });
 
@@ -318,7 +345,7 @@ test('adjusting a subtitle boundary moves the matching slide without an independ
   const cheetah = subtitleData.r3.find(cue => cue[2].includes('The cheetah reaches'));
   cheetah[0] = 0.15;
   assert.equal(projectionTimeline('r3', subtitleData).find(cue => cue.slot === 'reflex-cheetah').at, 0.15);
-  const h = harness({ at: 285, subtitleData }); await h.narration.ready;
+  const h = harness({ at: 268, subtitleData }); await h.narration.ready;
   h.streams[0].el.duration = 40;
   h.streams[0].time(5.999); assert.ok(!h.beats.some(beat => beat.data?.slot === 'reflex-cheetah'));
   h.streams[0].time(6.001); assert.match(h.captions.textContent, /^The cheetah reaches/);
@@ -331,12 +358,31 @@ test('adjusting a subtitle boundary moves the matching slide without an independ
   h.narration.dispose();
 });
 
-test('viewing stops keep projectors ahead and the floorboard preview waits until the screening', async () => {
-  assert.deepEqual(RIDE_RECORDINGS.filter(row => row.id !== 'r1').map(row => [row.id, row.at, row.hold]), [['r2', 12, 24], ['r3', 285, 303], ['r4', 407, 410]]);
+test('earlier commentary drives a moving route and has no end-of-recording distance hold', async () => {
+  assert.deepEqual(RIDE_RECORDINGS.filter(row => row.id !== 'r1').map(row => [row.id, row.at, row.hold]), [['r2', 92, null], ['r3', 268, null], ['r4', 370, null]]);
   const h = harness({ at: 180 }); await h.narration.ready;
   assert.equal(h.narration.debug().current, null);
-  h.cue('narration.r3', 285); assert.equal(h.narration.debug().current, 'r3');
-  assert.equal(h.holdPoints.get('narration.r3'), 303);
-  h.streams[0].time(NARRATION_CLIPS.r3.duration + 1); assert.ok(h.holds.has('narration.r3'));
+  h.cue('narration.r3', 268); assert.equal(h.narration.debug().current, 'r3');
+  assert.equal(h.holds.size, 0);
+  h.streams[0].time(22); assert.equal(h.pace().mode, 'narration');
+  assert.ok(h.pace().speed > .3);
+  h.streams[0].time(NARRATION_CLIPS.r3.duration + 1); assert.equal(h.holds.size, 0);
   h.streams[0].end(); assert.equal(h.holds.size, 0); h.narration.dispose();
+});
+
+test('intro releases the cart after the opening words and pacing detaches on panic', async () => {
+  const h = harness(); await h.narration.ready;
+  h.streams[0].time(1.5); assert.ok(h.beats.some(beat => beat.id === 'booth.unlock'));
+  h.streams[0].time(20); assert.ok(h.pace().target > 20);
+  assert.equal(h.streams[0].el.paused, false);
+  h.host.emit('suspend', { on: true, reason: 'panic' }); assert.equal(h.pace(), null);
+});
+
+test('the later conversation image and its cleanup use the second wakeup projector', async () => {
+  const h = harness({ at: 370 }); await h.narration.ready;
+  h.streams[0].time(37);
+  assert.ok(h.beats.some(beat => beat.id === 'projector.show' && beat.data.id === 'conversation'));
+  h.streams[0].end();
+  assert.ok(h.beats.some(beat => beat.id === 'projector.hide' && beat.data.id === 'conversation'));
+  h.narration.dispose();
 });

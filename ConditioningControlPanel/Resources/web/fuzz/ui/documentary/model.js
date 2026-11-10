@@ -53,6 +53,7 @@ export function createRide(manifest, { cues = [], reduced = false, at = 0 } = {}
   let v = 0, locked = z < 12, docked = z === dock;
   let leverAngle = 0, leverTarget = 0, band = 0, heldS = 0, bandTick = 0;
   let zone = null, exhibit = null, started = false;
+  let paceProvider = null, pumpEnergy = 0;
   const holds = new Map();
   const cueMap = new Map();
   const crossed = new Set();
@@ -64,6 +65,7 @@ export function createRide(manifest, { cues = [], reduced = false, at = 0 } = {}
     get motion() { return trackMotion(z, reduced).mode; },
     get height() { return trackPoint(z).y; }, get pitch() { return trackPitch(z); },
     get holds() { return Object.freeze([...holds.keys()]); },
+    get pacing() { return Boolean(paceProvider); },
   });
   const stoppedByHold = () => [...holds.values()].some(stop => z >= stop.point - 0.0001);
   function addCues(items) {
@@ -121,6 +123,7 @@ export function createRide(manifest, { cues = [], reduced = false, at = 0 } = {}
       if (blocked) v = 0;
       const currentZone = manifest.track.zones.find(item => z >= item.from && z < item.to);
       const motion = trackMotion(z, reduced);
+      const pace = paceProvider?.(state);
       let cap = motion.cap;
       if (currentZone?.cap) cap = Math.min(cap, currentZone.cap);
       if (z >= 553) cap = Math.min(cap, Math.max(0.7, (dock - z) * 0.4));
@@ -132,7 +135,18 @@ export function createRide(manifest, { cues = [], reduced = false, at = 0 } = {}
         const drive = Math.max(0, Math.min(motion.acceleration, (motion.target - v) * 1.5));
         nextV = Math.min(cap, Math.max(0, v + (drive + gravity - .045 * v) * dt));
       }
+      pumpEnergy *= Math.exp(-2.4 * dt);
+      if (!blocked && pace) {
+        const error = Number.isFinite(pace.target) ? pace.target - z : 0;
+        const limit = Math.min(cap, Number.isFinite(pace.maxSpeed) ? pace.maxSpeed : cap);
+        let desired = Math.max(pace.minSpeed || 0, (pace.speed || 0) + error * 1.35 + pumpEnergy);
+        if (Number.isFinite(pace.ceiling)) desired = Math.min(desired, Math.sqrt(Math.max(0, pace.ceiling - z) * 5.6));
+        desired = Math.min(limit, desired);
+        const acceleration = Math.max(-2.8, Math.min(1.65, (desired - v) * 3));
+        nextV = Math.max(0, Math.min(limit, v + acceleration * dt));
+      }
       let nextZ = Math.min(dock, z + (v + nextV) * 0.5 * dt);
+      if (pace && Number.isFinite(pace.ceiling)) nextZ = Math.min(nextZ, Math.max(z, pace.ceiling));
       v = nextV < 0.001 ? 0 : nextV;
       for (const { point } of holds.values()) nextZ = Math.min(nextZ, Math.max(z, point));
       const due = [...cueMap.values()].filter(cue => !crossed.has(cue.id) && cue.at >= z && cue.at <= nextZ)
@@ -154,12 +168,18 @@ export function createRide(manifest, { cues = [], reduced = false, at = 0 } = {}
   }
   return {
     state, step, addCues,
+    setPace(provider) {
+      if (provider !== null && typeof provider !== 'function') throw new Error('Invalid ride pacing provider');
+      paceProvider = provider; pumpEnergy = 0;
+      return () => { if (paceProvider === provider) { paceProvider = null; pumpEnergy = 0; } };
+    },
     unlock() { locked = false; },
     pump() {
       const blocked = locked || docked || stoppedByHold();
       leverTarget = leverTarget > 0 ? -0.34 : 0.34;
       if (blocked) leverTarget *= 0.22;
-      if (!blocked) v = Math.min(trackMotion(z, reduced).cap, v + (v < 1 ? 1.4 : 1));
+      if (!blocked && paceProvider) pumpEnergy = Math.min(1.2, pumpEnergy + .32);
+      else if (!blocked) v = Math.min(trackMotion(z, reduced).cap, v + (v < 1 ? 1.4 : 1));
       emit('pump', { v, locked: blocked });
     },
     hold(id, untilZ) {

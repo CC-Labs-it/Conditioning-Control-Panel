@@ -18,6 +18,10 @@
     #preview button { min-height:44px; } #preview button:disabled { opacity:.5;cursor:wait; }
     #preview label { display:block;width:100%;font:12px Arial,sans-serif; } #media-files { max-width:250px;font:11px Arial,sans-serif; }
     #preview p { max-width:250px;margin:0;padding:10px;font:12px/1.4 Arial,sans-serif;background:#211813; }
+    #gallery-connect { position:fixed;top:70px;left:12px;z-index:85;max-width:250px;padding:9px 11px;border:1px solid #dca4c466;border-radius:7px;background:#171b23ed;box-shadow:0 4px 18px #0003;font:12px/1.4 Arial,sans-serif; }
+    #connect-gallery { display:block;min-height:44px;padding:10px 13px;background:#edc6df;color:#251a24;border:0;border-radius:4px;font-weight:bold;cursor:pointer; }
+    #gallery-status { display:block;max-width:225px;margin-top:7px;color:#ded4de; }
+    @media(max-width:600px) { #gallery-connect { max-width:190px; } #gallery-status { max-width:165px; } }
     #pause,#finished { position:fixed;inset:0;z-index:110;background:#100b09eb;display:grid;place-content:center;text-align:center;gap:15px;padding:25px; }
     [hidden] { display:none!important; }
     #pause button,#finished a { min-height:44px;padding:12px 22px;background:#efe9dc;color:#2a2320;border:1px solid #a7824a;text-decoration:none;cursor:pointer;font:16px Georgia,serif; }
@@ -26,8 +30,9 @@
 <body>
   <main id="l-ending"></main>
   <button id="wake">Wake Up</button>
+  <aside id="gallery-connect"><button id="connect-gallery" type="button">Connect Scrolller images</button><span id="gallery-status">The gallery screens need a picture source. Own files are also available under Ride preview.</span></aside>
   <details id="preview"><summary>Ride preview</summary><nav>
-    <a href="?at=booth">The Subject</a><a href="?at=lever">Pumping gallery</a><a href="?at=145">First drop</a><a href="?at=floorboard">Reflex laboratory</a><a href="?at=303">Documentary slides</a><a href="?at=363">Down the rabbit hole</a><a href="?at=wakeup">Outside world</a><a href="?at=stage">The last wall</a>
+    <a href="?at=booth">The Subject</a><a href="?at=lever">Pumping gallery</a><a href="?at=145">First drop</a><a href="?at=floorboard">Reflex laboratory</a><a href="?at=268">Documentary slides</a><a href="?at=363">Down the rabbit hole</a><a href="?at=wakeup">Outside world</a><a href="?at=stage">The last wall</a>
     <button id="use-scrolller">Use Scrolller</button><button id="use-own">Use own files</button><button id="use-none">No pictures</button>
     <label id="media-label" for="media-files">Choose personal media</label><input id="media-files" type="file" accept="image/*,video/*" multiple><button id="mute">Sound on</button>
     <button id="unlock">Leave platform</button><button id="panic">End preview</button>

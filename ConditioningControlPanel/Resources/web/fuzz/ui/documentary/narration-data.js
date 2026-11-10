@@ -463,10 +463,10 @@ export const NARRATION_BANKS = Object.freeze({
   "terms": ["term-start-1", "term-tr_feed-2", "term-go_feed-1", "term-dr_auto-2", "term-wallpaper-2", "term-robot-2", "term-bi_iq-1", "term-sound-2", "term-em_call-2", "term-s_good-2", "term-ce_text-2", "term-lo_tease-2", "term-go_worn-2", "term-tunnel-1", "term-p_life-2", "term-in_spread-2", "term-title-2", "term-onlyyes-2", "term-si_feed-2", "term-b_frame-1", "term-go_clock-2", "term-bi_words-2", "term-d_refresh-2", "term-dr_serial-2", "term-lo_feed-2", "term-ce_bar-1", "term-em_jeal-2", "term-z_share-2", "term-late-2", "term-tr_count-2", "term-z_save-2", "term-x_fourhr-2", "term-p_member-2", "term-cur_calm-2", "term-lo_head-3", "term-e_speed-2", "term-ce_blur-2", "term-mini_breakout-2", "term-bi_head-3", "term-go_will-1", "term-a_close-1", "term-go_head-3", "term-dr_hex-1", "term-in_head-2", "term-s_glow-2", "term-ttype-1", "term-lo_end-2", "term-si_head-3", "term-t_still-2", "term-o_second-2", "term-ce_end-2", "term-buzz-1", "term-go_edge-2", "term-v_gif-1", "term-bi_lips-1", "term-tr_breath-2", "term-go_corp-1", "term-lo_wheel-2", "term-bubble-2", "term-flee-1", "term-slip-2", "term-dr_term-1", "term-go_pod-1", "term-ce_peek-2", "term-f4-2", "term-p_badge-1", "term-dualwield-1", "term-lo_beg-1", "term-in_cure-1", "term-bi_end-1", "term-e_pull-2", "term-magnet-1", "term-em_head-2", "term-si_curtsy-2", "term-go_tabs-1", "term-e_bounce-1", "term-lo_pod-1", "term-ce_all-1", "term-colour-2", "term-o_emi-1"]
 });
 export const RIDE_RECORDINGS = Object.freeze([
-  {"id": "r1", "at": 0, "projector": "booth", "hold": null, "beats": []},
-  {"id": "r2", "at": 12, "projector": "lever", "hold": 24, "beats": []},
-  {"id": "r3", "at": 285, "projector": "reflex", "hold": 303, "beats": []},
-  {"id": "r4", "at": 407, "projector": "wakeup", "hold": 410, "beats": []}
+  {"id": "r1", "at": 0, "projector": "booth", "hold": null, "beats": [{"id": "booth.unlock", "at": 1.4}]},
+  {"id": "r2", "at": 92, "projector": "lever", "hold": null, "beats": []},
+  {"id": "r3", "at": 268, "projector": "reflex", "hold": null, "beats": []},
+  {"id": "r4", "at": 370, "projector": "wakeup", "hold": null, "beats": []}
 ]);
 export const STAGE_SCHEDULE = Object.freeze([
   {"id": "i1", "at": 8},

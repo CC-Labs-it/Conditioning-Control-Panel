@@ -10,10 +10,18 @@ let active = 0, paused = false, manual = query.get('manual') === '1', last = per
 let simulatedWall = 0, openTabs = 0, ended = false;
 const $ = id => document.getElementById(id);
 const emit = (event, data) => { for (const fn of [...(events.get(event) || [])]) fn(data); };
-const feed = createPreviewFeed({ onStatus: text => { $('media-status').textContent = text; } });
+let galleryDismissed = false;
+function updateGalleryStatus(text) {
+  $('media-status').textContent = text;
+  $('gallery-status').textContent = text;
+}
+function syncGallerySource(source) {
+  $('gallery-connect').hidden = galleryDismissed || source === 'own' || source === 'scrolller';
+}
+const feed = createPreviewFeed({ onStatus: updateGalleryStatus });
 const pictures = createPictures({ source: query.get('pics') || 'none', scrolller:feed.capability,
   send:(type,fields)=>feed.send(type,fields),
-  onChange: source => emit('pictures', { source }), onAdded: source => emit('pictures-added', { source }) });
+  onChange: source => { emit('pictures', { source }); syncGallerySource(source); }, onAdded: source => emit('pictures-added', { source }) });
 feed.attach(pictures);
 const ads = createAds({ noCcp: () => ['basic', 'prime'].includes(query.get('plan')) });
 const audio = createKit();
@@ -48,8 +56,9 @@ const ctx = {
   state: { seed: 1110 }, identity: { displayName: query.get('name') || 'The evening visitor' },
   caps: { plan: query.get('plan') || 'free' }, pictures, ads,
   layer: () => $('l-ending'), audio: {
-    solo(on) { audio.solo(on ? id => id === 'documentary' || id === 'documentary-music' : null); },
+    solo(on) { audio.solo(on ? id => ['documentary', 'documentary-music', 'documentary-projectors'].includes(id) : null); },
     stream(url, options = {}) { return audio.stream(url, { source:'documentary', sourceLabel:'Museum narrator', ...options }); },
+    input(options = {}) { return audio.input({ source:'documentary-projectors', sourceLabel:'Museum projectors', ...options }); },
   },
   cleanup(fn) { cleanups.add(fn); },
   frame(fn) { frames.add(fn); schedule(); return () => frames.delete(fn); },
@@ -95,27 +104,34 @@ document.addEventListener('visibilitychange', () => {
 });
 const manifest = await fetch(MANIFEST_URL).then(response => response.json());
 const requestedStart = query.get('at') || 'booth';
-const startAt = /^\d+(?:\.\d+)?$/.test(requestedStart) ? Number(requestedStart) : requestedStart;
+const narratedPreview = query.get('voice') === '1' || (!manual && query.get('test') !== '1' && query.get('voice') !== '0');
+// Chapter doors enter on the approach so the narration has room to travel.
+const chapterDoors = { lever:92, floorboard:268, wakeup:370, '303':268, '410':370 };
+const startAt = narratedPreview && Object.hasOwn(chapterDoors, requestedStart) ? chapterDoors[requestedStart] :
+  /^\d+(?:\.\d+)?$/.test(requestedStart) ? Number(requestedStart) : requestedStart;
 const tunnel = createTabTunnel(ctx, $('l-ending'), {
   manifest, at: startAt, lite: query.get('lite') === '1' || innerWidth < 600,
-  narration: query.get('voice') === '1' || (!manual && query.get('test') !== '1' && query.get('voice') !== '0'),
+  narration: narratedPreview,
   music: query.get('music') === '1' || (!manual && query.get('test') !== '1' && query.get('music') !== '0'),
   hours: query.get('hours'), now: () => performance.now() + simulatedWall,
-  onDispose() { ended=true; pictures.setGameplayActive(false);pictures.setSource('none');feed.dispose();$('finished').hidden = false; },
+  onDispose() { ended=true; galleryDismissed=true; pictures.setGameplayActive(false);pictures.setSource('none');feed.dispose();$('finished').hidden = false; },
 });
 pictures.setGameplayActive(!paused && !document.hidden);
-$('use-scrolller').onclick = async () => {
-  $('use-scrolller').disabled=true;
+async function connectGallery() {
+  galleryDismissed=false;
+  $('use-scrolller').disabled=$('connect-gallery').disabled=true;
   try { if(await feed.choose()) $('preview').open=false; }
-  finally { $('use-scrolller').disabled=false; }
-};
-$('use-none').onclick = () => { feed.cancel();pictures.setSource('none');$('media-status').textContent='Pictures are off.'; };
+  finally { $('use-scrolller').disabled=$('connect-gallery').disabled=false;syncGallerySource(pictures.source); }
+}
+$('use-scrolller').onclick = $('connect-gallery').onclick = connectGallery;
+$('use-none').onclick = () => { galleryDismissed=true;feed.cancel();pictures.setSource('none');syncGallerySource('none');updateGalleryStatus('Pictures are off.'); };
 $('use-own').onclick = () => {
   feed.cancel();
   if(pictures.ownCount) { pictures.setSource('own');$('media-status').textContent=`Using ${pictures.ownCount} personal media files`; }
   else $('media-files').click();
 };
 if(query.get('pics')==='scrolller') $('media-status').textContent='Choose Use Scrolller to connect this visit to your current CCP profile.';
+syncGallerySource(pictures.source);
 $('media-files').addEventListener('change', event => {
   if (pictures.replaceOwn(event.target.files)) {
     feed.cancel();

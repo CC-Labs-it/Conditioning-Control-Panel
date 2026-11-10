@@ -1,6 +1,7 @@
 import { NARRATION_CLIPS, NARRATION_BANKS, RIDE_RECORDINGS, STAGE_SCHEDULE, VERIFIED_RELEASE_SECONDS } from './narration-data.js';
-import { subtitleAt, subtitleBoundaries, SUBTITLE_TIMING } from './subtitles.js';
+import { subtitleAt, subtitleBoundaries, subtitleTiming, SUBTITLE_TIMING } from './subtitles.js';
 import { projectionTimeline } from './narration-slides.js';
+import { createNarrationPacer } from './narration-pacing.js';
 
 const VOICE_ROOT = new URL('../../assets/documentary/voice/', import.meta.url);
 const PROJECTORS = {
@@ -9,6 +10,7 @@ const PROJECTORS = {
   reflex: { title: 'The click reflex', line: 'Notice. Click. Repeat.' },
   replay: { title: 'Again, in slow motion', line: 'An extraordinary specimen.' },
   wakeup: { title: 'The outside world', line: 'Specimen: unpressed.' },
+  conversation: { title: 'We need to talk', line: '' },
 };
 
 /** Final delivery audio only. No speech synthesis and no decoded hour-long buffers. */
@@ -65,7 +67,7 @@ export function createDocumentaryNarration(ctx, tunnel, options = {}) {
     if (!tunnel.captions) return;
     tunnel.captions.textContent = text;
     tunnel.captions.hidden = !text;
-    if (tunnel.captions.dataset) tunnel.captions.dataset.timing = SUBTITLE_TIMING;
+    if (tunnel.captions.dataset) tunnel.captions.dataset.timing = active ? subtitleTiming(active.id) : SUBTITLE_TIMING;
   }
   function duration(job = active) {
     const actual = Number(job?.source?.el?.duration);
@@ -90,7 +92,7 @@ export function createDocumentaryNarration(ctx, tunnel, options = {}) {
     if (complete || !slide || job.lastProjection === slide.key) return;
     if (job.lastProjector && job.lastProjector !== slide.projector) projector(job.lastProjector, false);
     job.lastProjector = slide.projector; job.lastProjection = slide.key;
-    tunnel.beat('projector.show', { id: slide.projector, slot: slide.slot, title: slide.title, line: '', timing: SUBTITLE_TIMING });
+    tunnel.beat('projector.show', { id: slide.projector, slot: slide.slot, title: slide.title, line: '', timing: subtitleTiming(job.id) });
   }
   function setSubtitles(value) {
     subtitles = Boolean(value);
@@ -125,6 +127,11 @@ export function createDocumentaryNarration(ctx, tunnel, options = {}) {
   }
   function projector(id, show) {
     tunnel.beat(show ? 'projector.show' : 'projector.hide', { id, ...PROJECTORS[id] });
+  }
+  function showRideProjector(job) {
+    if (!job?.ride || job.projectorStarted || isPaused()) return;
+    job.projectorStarted = true;
+    projector(job.ride.projector, true);
   }
   function sourceFor(id) {
     const url = new URL(`${id}.mp3`, options.voiceRoot || VOICE_ROOT).href;
@@ -166,7 +173,10 @@ export function createDocumentaryNarration(ctx, tunnel, options = {}) {
     }
     if (job.id === 'r3') tunnel.beat('floor.release');
     job.release?.();
-    if (job.ride) { projector(job.ride.projector, false); if (job.id === 'r3') projector('replay', false); }
+    if (job.ride) {
+      projector(job.ride.projector, false);
+      if (job.lastProjector && job.lastProjector !== job.ride.projector) projector(job.lastProjector, false);
+    }
     if (complete) job.onEnd?.();
   }
   function ended(job) {
@@ -181,12 +191,13 @@ export function createDocumentaryNarration(ctx, tunnel, options = {}) {
     job.missing = true; job.elapsed = at; job.since = isPaused() ? null : now();
     status('missing', reason || 'Recording unavailable; visual timing continues.');
     if (job.final) { ended(job); return; }
+    showRideProjector(job);
     advance();
   }
   function playActive() {
     if (!active || disposed || isPaused()) return;
     const job = active;
-    if (job.missing) { if (job.since === null) job.since = now(); paintSubtitle(); schedule(); return; }
+    if (job.missing) { if (job.since === null) job.since = now(); showRideProjector(job); paintSubtitle(); schedule(); return; }
     try {
       const result = job.source?.play();
       result?.catch?.(error => {
@@ -212,7 +223,6 @@ export function createDocumentaryNarration(ctx, tunnel, options = {}) {
       projections: projectionTimeline(job.id, options.subtitleData), projectionBeats: new Set(), lastProjector: job.ride?.projector || null, lastProjection: null };
     const current = active;
     caption();
-    if (job.ride) projector(job.ride.projector, true);
     status('loading');
     try { current.source = sourceFor(job.id); } catch (error) { missing(current, String(error?.message || error)); return; }
     if (!current.source?.el) { missing(current, 'Audio stream unavailable.'); return; }
@@ -226,6 +236,7 @@ export function createDocumentaryNarration(ctx, tunnel, options = {}) {
       cancelTimer('load'); cancelTimer('blocked');
       if (!current.played) current.onStart?.();
       current.played = true; current.buffering = false; current.fadeStart = position(); current.gain = 0; current.source?.setGain?.(0);
+      showRideProjector(current);
       setSpeaking(true); status('playing'); paintProjection(); paintSubtitle(); updateEnvelope();
       if (current.final && !current.finishStarted) {
         current.finishStarted = true;
@@ -373,6 +384,10 @@ export function createDocumentaryNarration(ctx, tunnel, options = {}) {
       (row.id === 'r4' && z >= row.at && z < 520));
     if (initial) queueRide(initial);
   }
+  const pacer = createNarrationPacer(tunnel, () => active ? {
+    id: active.id, ride: active.ride, time: position(), duration: duration(),
+    playing: !isPaused() && (active.missing || (active.played && !active.buffering && !active.source?.el.paused)),
+  } : null, { subtitles: options.subtitleData });
   const cues = rides.filter(row => row.at > 0).map(row => ({ id: `narration.${row.id}`, at: row.at }));
   tunnel.addCues(cues);
   cleanups.push(tunnel.on('cue', cue => {
@@ -382,7 +397,7 @@ export function createDocumentaryNarration(ctx, tunnel, options = {}) {
   }));
   cleanups.push(tunnel.on('arrive', beginStage));
   cleanups.push(tunnel.on('band', event => {
-    if (!stage && !active && !queue.length && !tunnel.state.locked && event.band >= 3 && event.heldS >= 2.4) reaction('r2b');
+    if (!stage && !active && !queue.length && !tunnel.state.locked && !tunnel.state.pacing && event.band >= 3 && event.heldS >= 2.4) reaction('r2b');
   }));
   cleanups.push(tunnel.on('stage-action', event => {
     if (!stage || stageStarted === null) return;
@@ -429,6 +444,7 @@ export function createDocumentaryNarration(ctx, tunnel, options = {}) {
   function dispose() {
     if (disposed) return;
     disposed = true;
+    pacer.dispose();
     stopActive(false); queue.splice(0).forEach(job => job.release?.()); pendingReaction = null;
     for (const name of ['wake', 'load', 'blocked', 'finish', 'envelope']) cancelTimer(name);
     cleanups.splice(0).forEach(off => off?.());
@@ -444,6 +460,7 @@ export function createDocumentaryNarration(ctx, tunnel, options = {}) {
     debug: () => ({ started, disposed, stage, current: active?.id || null, queued: queue.map(job => job.id),
       gated: false, missing: Boolean(active?.missing), elapsed: elapsed(),
       acceptedTerms: acceptedTerms.length, status: lastStatus.split(':')[0], subtitles, subtitleTiming: SUBTITLE_TIMING, speaking, hoverPlayed,
+      pacing: pacer.debug(),
       timers: [wakeTimer, loadTimer, blockedTimer, finishTimer, envelopeTimer].filter(timer => timer !== null).length }),
   });
 }
