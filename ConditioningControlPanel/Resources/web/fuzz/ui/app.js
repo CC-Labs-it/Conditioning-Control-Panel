@@ -327,9 +327,14 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
           if (engine.paused || engine.suspended) return;
           purchaseFeel?.prepare(it, row);
           if (!engine.buy(id).ok) { purchaseFeel?.clear(); shop.denied(id); }
-          else tally(engine.run, 'terms', clauseLines(id, riders).length);   // the Living Ad card's terms ACCEPTED
+          else {
+            const n = clauseLines(id, riders).length;
+            tally(engine.run, 'terms', n);   // the Living Ad card's terms ACCEPTED
+            engine.emit('sticker', { key: 'terms', life: true });   // Sticker Book: Signed, Sealed
+            if (n >= 3) engine.emit('sticker', { key: 'clause3' });   // Sticker Book: Read the Whole Thing
+          }
         },
-        onDecline: (line) => { settle(); say(line); },
+        onDecline: (line) => { settle(); say(line); engine.emit('sticker', { key: 'decline' }); },   // Sticker Book: Polite No
       });
       clauseCard.settle = settle;
       return;

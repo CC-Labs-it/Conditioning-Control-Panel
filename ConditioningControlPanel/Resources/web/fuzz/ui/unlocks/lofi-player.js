@@ -21,7 +21,11 @@ export function mountLofi(ctx) {
       base: assets.href,
       autoplay: ctx.store.get('playing') !== false,
       onIntent: playing => ctx.store.set('playing', playing),
-      openStream: url => ctx.audio.stream(url, { bus: 'podcast', autoplay: false }),
+      openStream: (url) => {
+        const s = ctx.audio.stream(url, { bus: 'podcast', autoplay: false });
+        s.el?.addEventListener('ended', () => ctx.emit('sticker', { key: 'track' }));   // Sticker Book: Tuned In
+        return s;
+      },
     });
     /* Owner 2026-11-08: a quiet volume line under the controls, the same level as the HUD mixer's Lo-fi Radio row. */
     const pill = host.querySelector('.fm-pill');

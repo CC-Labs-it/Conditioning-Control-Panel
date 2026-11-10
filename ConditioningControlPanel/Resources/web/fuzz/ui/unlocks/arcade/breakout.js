@@ -67,6 +67,7 @@ export function mountBreakout(ctx) {
     // Store the advanced board before crediting. A remount cannot repeat this clearance.
     save();
     const rates = ctx.rates(), amount = ctx.pay(Math.max(2, rates.fps, rates.click * 2) * event.seconds, 'mini_breakout');
+    ctx.emit('sticker', { key: 'brkclear' });   // Sticker Book: Clean Sweep
     receipt.textContent = `+${ctx.fmt(amount)} ${ctx.brand.currencyPlural}${event.manual ? ' · played' : ''}`;
     burst(WIDTH / 2, 75, sim.board % 4, 40); glow = .8;
   }

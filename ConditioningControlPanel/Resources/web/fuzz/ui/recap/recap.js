@@ -23,6 +23,7 @@ import { beatCue, playCardCue } from '../adcard/stage.js';
 import { crayonStarSvg, starVariant, LOOPY, RUSHED } from '../unlocks/basics/gold-fx.js';
 import { RECAP_COPY as R } from '../unlocks/extras/copy.js';
 import { createIntro, SOUNDS, SCALE, arrowPath } from './intro.js';
+import { BOOK_EVENT, newInRun, stickerArt } from '../sticker-book.js';
 
 const CLIP = 'assets/clipart/';
 const SOURCE = 'recap';
@@ -132,6 +133,16 @@ export function openRunRecap({ cards, doc, id, run, life, hooks, audio, name = '
   const stamps = h('div', 'rr-stamps', null, srow);
   const st1 = h('div', 'rr-stamp', null, stamps); st1.title = R.time; st1.append(clipBox('clock'), stats.time);
   const st2 = h('div', 'rr-stamp', null, stamps); st2.title = R.unlocks; st2.append(clipBox('key'), String(stats.unlocks));
+  /* Sticker Book: what this run put in the book, as little stickers; a tap opens the book (ui/sticker-book.js). */
+  const fresh = newInRun(life);
+  if (fresh.length) {
+    const stars = [crayonStarSvg(0), starVariant(LOOPY, 0), starVariant(RUSHED, 0)].map((x) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(x)}`);
+    const sb = button('rr-stickers', splash, `${R.stickers}: ${fresh.length}`);
+    h('span', 'rr-stlabel', `${R.stickers} · ${fresh.length}`, sb);
+    const row = h('span', 'rr-strow', null, sb);
+    for (const s of fresh.slice(0, 7)) { const a = stickerArt(s, life, stars); const i = h('img', a.cls, null, row); i.src = a.src; i.alt = ''; i.decoding = 'async'; }
+    sb.addEventListener('click', () => doc.dispatchEvent(new win.CustomEvent(BOOK_EVENT)));
+  }
 
   // 2 road
   const road = h('section', 'rr-panel rr-road', null, col);

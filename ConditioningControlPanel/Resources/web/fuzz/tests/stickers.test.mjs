@@ -7,7 +7,7 @@ import * as E from '../sim/economy.js';
 import { ACHIEVEMENTS } from '../data/content/index.js';
 import { STICKER_PAGES, STICKERS, STICKER_BY_ID } from '../data/content/stickers.js';
 import { ENDING_IDS, createLife, parse, recordEnding, serialize } from '../sim/save.js';
-import { dueThisRun, earnSticker, met, meterMult, noteLife, pageView, syncLife } from '../sim/stickers.js';
+import { dueThisRun, earnSticker, met, meterMult, noteLife, pageView, parseCardSnapshot, snapshotRun, syncLife } from '../sim/stickers.js';
 import { THEME_IDS } from '../data/content/index.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -111,4 +111,21 @@ test('a save keeps the book and drops what it does not know', () => {
   assert.deepEqual(back.life.tally, { terms: 7 });
   const old = parse(serialize(E.createRun({}), { ...createLife(), stickers: undefined, tally: undefined }));
   assert.deepEqual(old.life.stickers, {});
+});
+
+test('the Living Ad sticker keeps the latest card as numbers, and a pasted save cannot smuggle markup in', () => {
+  const life = createLife();
+  const s = E.createRun({});
+  s.picks.f5 = 'goon';
+  s.store.taste2 = { theme: 'sissy' };
+  s.store.adcard = { pics: 12, golden: 3, terms: 40 };
+  recordEnding(life, s, 'o_out');
+  assert.equal(life.stickers.e_o_out, 1);
+  assert.deepEqual({ f5: life.adcard.f5, second: life.adcard.second, terms: life.adcard.terms }, { f5: 'goon', second: 'sissy', terms: 40 });
+  assert.equal(snapshotRun(life.adcard).picks.f5, 'goon');
+  const bad = JSON.parse(serialize(E.createRun({}), life));
+  bad.life.adcard = { f5: '<img src=x onerror=alert(1)>', terms: 3 };
+  assert.equal(parse(JSON.stringify(bad)).life.adcard, null);
+  bad.life.adcard = { f5: 'trance', second: '<b>', seed: 'x', terms: -4 };
+  assert.deepEqual(parseCardSnapshot(bad.life.adcard), { f5: 'trance', second: null, seed: 0, total: 0, clock: 0, pics: 0, golden: 0, terms: 0, llamas: 0 });
 });

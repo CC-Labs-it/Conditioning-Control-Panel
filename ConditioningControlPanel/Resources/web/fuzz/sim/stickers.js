@@ -9,6 +9,7 @@
  * never fill more than three meters, so the book's extra stickers never pay past +30%. */
 
 import { LIFE_TALLIES, STICKER_BY_ID, STICKERS } from '../data/content/stickers.js';
+import { THEME_IDS } from '../data/content/themes.js';
 
 export const METER_CELLS = 10;
 export const METER_STEP = 0.1;
@@ -97,3 +98,27 @@ export function parseLifeTally(src) {
   if (src && typeof src === 'object') for (const k of LIFE_TALLIES) if (Number.isFinite(src[k]) && src[k] > 0) out[k] = Math.floor(Math.min(src[k], 1e9));
   return out;
 }
+
+/* ---- the Living Ad sticker is the player's own card (owner 2026-11-10) ----
+ * The book reprints it from these few numbers through ui/adcard (mountRunPoster), so the save holds no markup and
+ * an imported save cannot smuggle any in. The latest Living Ad run wins. */
+const THEMES = THEME_IDS;
+const int = (v, hi) => (Number.isFinite(v) ? Math.max(0, Math.min(hi, Math.floor(v))) : 0);
+export function cardSnapshot(s, life) {
+  const f5 = s?.picks?.f5, second = s?.off?.taste2 ? null : s?.store?.taste2?.theme;
+  const t = s?.store?.adcard || {};
+  return parseCardSnapshot({ f5, second, seed: s?.seed, total: s?.total, clock: s?.clock, pics: t.pics, golden: t.golden, terms: t.terms, llamas: life?.llamas });
+}
+export function parseCardSnapshot(v) {
+  if (!v || typeof v !== 'object' || !THEMES.includes(v.f5)) return null;
+  return {
+    f5: v.f5, second: THEMES.includes(v.second) && v.second !== v.f5 ? v.second : null,
+    seed: int(v.seed, 2 ** 32), total: int(v.total, 1e300), clock: int(v.clock, 1e12),
+    pics: int(v.pics, 1e9), golden: int(v.golden, 1e6), terms: int(v.terms, 1e6), llamas: int(v.llamas, 12),
+  };
+}
+/** The run object ui/adcard's cardModel reads, rebuilt from a snapshot. */
+export const snapshotRun = (c) => ({
+  picks: { f5: c.f5 }, store: { taste2: c.second ? { theme: c.second } : undefined, adcard: { pics: c.pics, golden: c.golden, terms: c.terms } },
+  seed: c.seed, total: c.total, clock: c.clock,
+});

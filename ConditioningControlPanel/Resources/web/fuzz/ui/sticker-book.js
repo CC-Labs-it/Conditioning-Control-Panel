@@ -7,6 +7,7 @@
 
 import { STICKER_PAGES, STICKERS } from '../data/content/stickers.js';
 import { brandText } from '../data/brand.js';
+import { snapshotRun } from '../sim/stickers.js';
 
 const CSS = `
 #sticker-book { position: fixed; inset: 0; z-index: 96; display: grid; place-items: center; padding: 12px; padding-top: 52px; background: rgba(40, 35, 43, .42); pointer-events: auto; }
@@ -23,7 +24,7 @@ const CSS = `
 .sb-seg { color: var(--ink); display: inline-flex; border: 2px solid var(--ink); border-radius: 999px; overflow: hidden; background: var(--paper); text-shadow: none; }
 .sb-seg button { border: 0; background: none; padding: 5px 12px; font-size: 14px; }
 .sb-seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
-.sb-x { order: -1; flex: none; color: var(--ink); width: 40px; height: 40px; border: 2px solid var(--ink); border-radius: 50%; background: var(--paper); font-size: 22px; line-height: 1; text-shadow: none; }
+.sb .sb-x { order: -1; flex: none; color: var(--ink); width: 40px; height: 40px; border: 2px solid var(--ink); border-radius: 50%; background: var(--paper); font-size: 22px; line-height: 1; text-shadow: none; }
 .sb-body { display: grid; grid-template-columns: minmax(0, 1fr) auto 280px; gap: 0 14px; min-height: 0; flex: 1; }
 .sb-page { position: relative; min-width: 0; min-height: 0; overflow-y: auto; background: var(--paper); border: 2px solid var(--ink); border-radius: 6px 0 0 6px; box-shadow: 5px 6px 0 var(--shade); padding: 18px 18px 22px 40px; }
 .sb-page::before { content: ""; position: absolute; left: 11px; top: 16px; bottom: 16px; width: 12px; background: radial-gradient(circle at 6px 6px, #c9bfae 4px, var(--ink) 5px, transparent 6px) 0 0 / 12px 44px repeat-y; }
@@ -66,6 +67,7 @@ const CSS = `
 @keyframes sb-sheen { to { background-position: 150% 0; } }
 .sb-card { align-self: start; background: var(--paper); border: 2px solid var(--ink); border-radius: 14px; box-shadow: 5px 6px 0 var(--shade); padding: 14px; display: grid; gap: 8px; max-height: 100%; overflow-y: auto; }
 .sb-card .sb-hole { width: 140px; height: 140px; justify-self: center; }
+.sb-poster { width: min(240px, 100%); justify-self: center; container-type: inline-size; }
 .sb-card h4 { margin: 0; font-size: 22px; }
 .sb-card .ln { margin: 0; font-weight: 500; font-size: 17px; }
 .sb-card .how { margin: 0; color: var(--ink-soft); font-weight: 500; font-size: 14px; }
@@ -88,6 +90,20 @@ const CSS = `
   .sb-card .close { display: block; justify-self: end; border: 2px solid var(--ink); border-radius: 10px; background: var(--paper-2); padding: 6px 14px; }
 }`;
 
+/** A sticker's picture and frame: { src, cls } with cls '' | 'round' | 'ticket'. stars = the three Golden Button data urls. */
+export function stickerArt(s, life, stars = []) {
+  const a = s.art;
+  if (a.k === 'gold') return { src: stars[a.v] || '', cls: '' };
+  if (a.k === 'portrait') return { src: `assets/adcard/${a.theme}.webp`, cls: 'round' };
+  if (a.k === 'scene') return { src: a.src, cls: 'ticket' };
+  if (a.k === 'card') return life?.adcard ? { src: `assets/adcard/${life.adcard.f5}.webp`, cls: 'round' } : { src: 'assets/adcard/logo.webp', cls: '' };
+  return { src: a.src, cls: '' };
+}
+/** Stickers that went in the book during the run that just ended (an ending has counted it in life.runs). */
+export const newInRun = (life) => STICKERS.filter((s) => life?.runs && life?.stickers?.[s.id] === life.runs);
+/** The run recap's strip asks for the book with this event on the document (it has no engine). */
+export const BOOK_EVENT = 'tc:sticker-book';
+
 const tiltOf = (id) => { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) | 0; return ((h % 13) - 6) * 0.9; };
 
 /** Mounts the doors once and builds the book the first time it opens. Returns {open(mode), close(), get shown}. */
@@ -108,7 +124,8 @@ export function mountStickerBook({ doc, engine, gentle = () => false }) {
     if (!door) return;
     door.hidden = !(engine.run.owned.depth || Object.keys(engine.life.stickers || {}).length);
   };
-  engine.subscribe('pause', () => { showDoor(); if (book?.mode === 'play') book.hide(); });
+  engine.subscribe('pause', () => { showDoor(); if (book && book.mode !== 'pause') book.hide(); });
+  doc.addEventListener(BOOK_EVENT, () => { if (!engine.suspended) open('recap'); });
   engine.subscribe('resume', () => { if (book?.mode === 'pause') book.hide(); });
   engine.subscribe('suspend', ({ on }) => { if (on) book?.hide(); });
   engine.subscribe('ending', () => book?.hide());
@@ -167,14 +184,7 @@ function buildBook(doc, engine, stars, gentle) {
 
   const runOf = (id) => engine.life.stickers?.[id] || 0;
   const thisRun = () => new Set(engine.run.store?.depth?.earned || []);
-  const artOf = (s) => {
-    const a = s.art;
-    if (a.k === 'gold') return { src: stars[a.v] || '', cls: '' };
-    if (a.k === 'portrait') return { src: `assets/adcard/${a.theme}.webp`, cls: 'round' };
-    if (a.k === 'scene') return { src: a.src, cls: 'ticket' };
-    if (a.k === 'card') return { src: 'assets/adcard/logo.webp', cls: '' };
-    return { src: a.src, cls: '' };
-  };
+  const artOf = (s) => stickerArt(s, engine.life, stars);
   const slot = (s, now, big = false) => {
     const got = runOf(s.id);
     const b = mk('button', `sb-slot ${got ? (now.has(s.id) ? 'now' : 'past') : 'off'}${fresh.has(s.id) ? ' shine' : ''}`);
@@ -226,8 +236,11 @@ function buildBook(doc, engine, stars, gentle) {
     for (const s of list) grid.appendChild(slot(s, now));
     if (!sel || !list.some((s) => s.id === sel)) sel = (list.find((s) => runOf(s.id)) || list[0]).id;
   }
+  let poster = null;
+  const dropPoster = () => { poster?.(); poster = null; };
   function drawCard(now) {
     const s = STICKERS.find((q) => q.id === sel);
+    dropPoster();
     card.replaceChildren();
     if (!s) return;
     const got = runOf(s.id);
@@ -236,6 +249,17 @@ function buildBook(doc, engine, stars, gentle) {
     big.classList.remove('shine');
     const hole = big.querySelector('.sb-hole');
     card.appendChild(hole);
+    /* Living Ad: the player's own card, reprinted from the numbers the ending kept (sim/stickers.js cardSnapshot). */
+    const snap = s.art.k === 'card' && got ? engine.life.adcard : null;
+    if (snap) {
+      const host = mk('div', 'sb-poster');
+      hole.replaceWith(host);
+      const id = s.id;
+      import('./adcard/recap.js').then(({ mountRunPoster }) => {
+        if (!shown || sel !== id || !host.isConnected) return;
+        poster = mountRunPoster({ doc, host, run: snapshotRun(snap), life: { llamas: snap.llamas }, name: '' });
+      }).catch(() => { host.replaceWith(hole); });
+    }
     mk('h4', '', card, sealed ? 'Secret' : brandText(s.name));
     if (got) mk('p', 'ln', card, brandText(s.line));
     mk('p', 'how', card, sealed ? 'Keep going. Someone will notice.' : brandText(s.how));
@@ -287,6 +311,7 @@ function buildBook(doc, engine, stars, gentle) {
   function hide() {
     if (!shown) return;
     shown = false;
+    dropPoster();
     back.hidden = true;
     fresh = new Set();
   }
