@@ -1,4 +1,4 @@
-/* ui/unlocks/themes-b/emi-takeover.js - EMI Takeover, the goon lane's ending take (owner notes 2026-11-09, v3 brief
+/* ui/unlocks/themes-b/emi-takeover.js - EMI Takeover, the EMI fate set's ending take, any theme (owner notes 2026-11-09, v3 brief
  * handoff-1109/TC-EMI-TAKEOVER-V3-BRIEF.md). The run-up rows live in emi-swarm.js.
  *
  * go_end take, one timeline on the game clock (numbers in sim/takeover-end.js):

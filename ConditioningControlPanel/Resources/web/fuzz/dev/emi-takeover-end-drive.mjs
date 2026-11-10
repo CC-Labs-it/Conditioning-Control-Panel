@@ -51,7 +51,9 @@ await page.addInitScript(() => {
 });
 page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource|ERR_|navigator\.vibrate/.test(m.text())) errors.push(m.text()); });
-await page.goto(`${base}index.html?buy=go_hive,mini_breakout&pictures=online${touch ? '&lite=1' : ''}`, { waitUntil: 'load' });
+/* EMI is an open fate set (every route): THEME=<head row> (tr_head, si_head, ...) picks the theme first. */
+const themeHead = process.env.THEME ? `${process.env.THEME},` : '';
+await page.goto(`${base}index.html?buy=${themeHead}go_hive,mini_breakout&pictures=online${touch ? '&lite=1' : ''}`, { waitUntil: 'load' });
 await page.waitForFunction(() => window.fuzz?.engine, null, { timeout: 20000 });
 await wait(4000);
 const shot = (name) => page.screenshot({ path: `${shots}/end-${name}-${tag}.png` });

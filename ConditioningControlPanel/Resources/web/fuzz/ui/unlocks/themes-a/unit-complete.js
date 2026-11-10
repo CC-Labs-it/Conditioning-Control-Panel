@@ -221,7 +221,8 @@ export function unitCompleteTake(ctx) {
   body.dataset.unitRunning = '';
   const identity = nameTag(ctx);
   const { pieces, backdrops } = targets(doc, lensOrigin(button, w, h), w, h, identity.source);
-  const included = new Set([...backdrops, ...pieces.map(piece => piece.el)]);
+  // The name's own source stays on screen until the last shot lifts it (the Name Tag card lives in #l-over).
+  const included = new Set([...backdrops, ...pieces.map(piece => piece.el), identity.source].filter(Boolean));
   for (const el of original) if (!included.has(el)) delete el.dataset.unitOriginal;
   const plan = scanPlan(pieces.length), muffled = new Set();
   const stage = ctx.el('div', '', null, body); stage.dataset.unitTake = ''; stage.dataset.phase = 'eye';
