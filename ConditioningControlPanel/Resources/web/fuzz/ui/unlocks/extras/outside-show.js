@@ -193,6 +193,14 @@ export function applyMatrix(m, x, y) {
 }
 export const matrixCss = (m) => `matrix3d(${m.map((v) => +v.toFixed(9)).join(',')})`;
 
+/** Map a cropped camera view through the same screen plane as the full cover image. */
+export function cropProjection(full, crop) {
+  return homography(crop.width, crop.height, [
+    applyMatrix(full, crop.x, crop.y), applyMatrix(full, crop.x + crop.width, crop.y),
+    applyMatrix(full, crop.x + crop.width, crop.y + crop.height), applyMatrix(full, crop.x, crop.y + crop.height),
+  ]);
+}
+
 /** One frame of the pull: the fit eases from cover to the hold's fit over the clip, the canvas sits on that frame's quad
  *  mapped through it, the glass fades up over the first half. Frame 0: the canvas is the cover rectangle of the view. */
 export function pullLayout(track, i, vw, vh) {
@@ -495,7 +503,18 @@ export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSE
     }
 
     /* ---- the meadow ---- */
-    let meadow = null, stillImg = null, stillPic = null;
+    let meadow = null, stillImg = null, stillPic = null, crop = null;
+    let screenScale = 1, pullScaled = false;
+    const sizeMeadow = (live = phase !== 'pull' && phase !== 'hold', scale = screenScale) => {
+      screenScale = scale;
+      crop = live && meadow?.viewCrop ? {
+        fullWidth: box.w, fullHeight: box.h, x: (box.w - vw) / 2, y: (box.h - vh) / 2, width: vw, height: vh,
+      } : null;
+      meadowHost.style.width = (crop?.width || box.w) + 'px';
+      meadowHost.style.height = (crop?.height || box.h) + 'px';
+      meadow?.resize?.(crop, scale);
+      placeCanvas(meadow?.canvas);
+    };
     const stillReady = loadImage(doc, assets.still).then((img) => (stillImg = img));
     const meadowReady = reduced ? Promise.resolve(null) : (async () => {
       let make = create;
@@ -513,7 +532,7 @@ export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSE
     /* Individual properties: the meadow's own touch-action and pixelated look stay. */
     const placeCanvas = (c) => {
       if (!c) return;
-      Object.assign(c.style, { position: 'absolute', left: '0', top: '0', width: box.w + 'px', height: box.h + 'px', transformOrigin: '0 0', display: 'block', pointerEvents: 'auto' });
+      Object.assign(c.style, { position: 'absolute', left: '0', top: '0', width: (crop?.width || box.w) + 'px', height: (crop?.height || box.h) + 'px', transformOrigin: '0 0', display: 'block', pointerEvents: 'auto' });
       if (c.tagName === 'IMG') c.style.objectFit = 'cover';
     };
     const screenEl = () => meadow?.canvas || stillPic;
@@ -527,14 +546,20 @@ export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSE
       edge.style.opacity = String(clamp01((cover - fit.s) / (cover * 0.12)));
     };
     const putScreen = (quad, glass, extra = 0) => {
-      const m = matrixCss(homography(box.w, box.h, grow(quad, OVERSCAN_PX + extra)));
+      const full = homography(box.w, box.h, grow(quad, OVERSCAN_PX + extra));
       const c = screenEl();
-      if (c) c.style.transform = m;
-      screenFx.style.transform = m;
+      if (c) c.style.transform = matrixCss(crop ? cropProjection(full, crop) : full);
+      screenFx.style.transform = matrixCss(full);
       if (glass != null) screenFx.style.opacity = String(glass);
     };
     /* Before the pull: the canvas is the screen of frame 0. */
     const layoutLive = () => { const f = coverFit(vw, vh, FRAME); putMedia(f, FRAME); putScreen(mapQuad(track.frames[0], f), 0); };
+    const screenResolution = (q) => Math.min(1, Math.max(
+      Math.hypot(q[1][0] - q[0][0], q[1][1] - q[0][1]) / box.w,
+      Math.hypot(q[2][0] - q[3][0], q[2][1] - q[3][1]) / box.w,
+      Math.hypot(q[3][0] - q[0][0], q[3][1] - q[0][1]) / box.h,
+      Math.hypot(q[2][0] - q[1][0], q[2][1] - q[1][1]) / box.h,
+    ));
     let vidFrame = 0;
     const layoutPull = () => { const l = pullLayout(track, vidFrame, vw, vh); putMedia(l.fit, track.size); putScreen(l.quad, l.glass, l.motion); };
     const layoutHold = () => {
@@ -608,7 +633,9 @@ export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSE
       vw = win.innerWidth; vh = win.innerHeight;
       sizeBox();
       placeCanvas(meadow?.canvas); placeCanvas(stillPic);
-      meadow?.resize?.();
+      if (phase === 'hold' && scene) screenScale = screenResolution(mapQuad(scene.quad, holdFit(vw, vh, scene.quad, scene.size)));
+      else if (phase === 'pull' && pullScaled) screenScale = screenResolution(pullLayout(track, vidFrame, vw, vh).quad);
+      sizeMeadow();
       relayout();
     };
     win.addEventListener('resize', onResize);
@@ -656,6 +683,7 @@ export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSE
     /* The pull, once: the clip if it can play, else a cross-fade into the hold (reduced, or a clip that failed). */
     const startPull = () => {
       phase = 'pull';
+      sizeMeadow(false, 1);
       pullStart = t;
       lock();
       meadow?.autopilot?.(true);
@@ -682,6 +710,8 @@ export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSE
       clipPause();
       buildScene(!reduced && mode === 'video' || fromSkip);
       media.style.opacity = '1';
+      const q = mapQuad(scene.quad, holdFit(vw, vh, scene.quad, scene.size));
+      sizeMeadow(false, screenResolution(q));
       layoutHold();
       if (reduced || mode === 'fade') meadowHost.style.opacity = '1';
       skipBtn.remove();
@@ -710,7 +740,7 @@ export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSE
     const begin = () => {
       started = true;
       if (reduced || !meadow) showStill();
-      if (meadow) { placeCanvas(meadow.canvas); meadow.resize?.(); }
+      if (meadow) sizeMeadow();
       layoutLive();
       if (root.dataset.meadow === 'live') ctx.anim(hint, [
         { opacity: 0 }, { opacity: 1, offset: 0.15 }, { opacity: 1, offset: 0.78 }, { opacity: 0 },
@@ -752,6 +782,11 @@ export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSE
       if (phase === 'pull') {
         if (mode === 'video') {
           if (!rvfc) { vidFrame = frameAt(track, video.currentTime); layoutPull(); }
+          if (!pullScaled && vidFrame >= track.frames.length / 2) {
+            pullScaled = true;
+            sizeMeadow(false, screenResolution(pullLayout(track, vidFrame, vw, vh).quad));
+            layoutPull();
+          }
           /* The clip decides when the hold starts: its end, or a stall past the cap, or a failure (the hold still). */
           if (videoEnded || videoBad || t >= pullStart + trackMs(track) + BEATS.pullCapMs) { tl = holdFrom(tl, t); enterHold(); }
         } else if (t >= pullStart + BEATS.fadeMs) { tl = holdFrom(tl, t); enterHold(); }

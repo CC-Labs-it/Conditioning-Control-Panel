@@ -84,7 +84,7 @@ function icon(canvas, atlas, id) {
     g.fillRect(0, 0, 15.5, 15);
   }
 }
-function makeHud(host, atlas, touch, reduced, select) {
+function makeHud(host, atlas, touch, reduced, select, signal) {
   const root = node(
     host,
     'div',
@@ -149,9 +149,10 @@ function makeHud(host, atlas, touch, reduced, select) {
       'span',
       'width:32px;height:32px;border-radius:50%;background:#fff9;box-shadow:0 1px 4px #2219;pointer-events:none;'
     );
-    let padPointer = null;
+    let padPointer = null, padRect = null;
+    host.ownerDocument.defaultView.addEventListener('resize', () => { padRect = null; }, { signal });
     const move = (e) => {
-      const r = pad.getBoundingClientRect(),
+      const r = padRect ||= pad.getBoundingClientRect(),
         dx = (e.clientX - r.left - r.width / 2) / 28,
         dy = (e.clientY - r.top - r.height / 2) / 28;
       const scale = Math.max(1, Math.hypot(dx, dy));
@@ -162,6 +163,7 @@ function makeHud(host, atlas, touch, reduced, select) {
     pad.onpointerdown = (e) => {
       if (padPointer !== null) return;
       padPointer = e.pointerId;
+      padRect = null;
       pad.setPointerCapture(e.pointerId);
       move(e);
     };
@@ -311,7 +313,8 @@ export function createFieldTools({
       hud.select(id);
     }
   };
-  const hud = makeHud(host, atlas, touch, reduced, select);
+  const signal = new AbortController();
+  const hud = makeHud(host, atlas, touch, reduced, select, signal.signal);
   hud.select(selected);
   const box = keep(new T.BoxGeometry(1.004, 1.004, 1.004));
   const line = new T.LineSegments(
@@ -343,7 +346,7 @@ export function createFieldTools({
     direction = new T.Vector3(),
     dummy = new T.Object3D(),
     tint = new T.Color();
-  const signal = new AbortController();
+
   const sound = (path, gain, rate) => {
     audio?.play?.('assets/audio/' + path, {
       bus: 'sfx',
@@ -406,10 +409,12 @@ export function createFieldTools({
     swing = 1;
     rest = 0.3;
   }
+  const eyeCoords = [0, 0, 0], rayCoords = [0, 0, 0];
+  let lastSwing = NaN;
   function frame(dt, live, mining, placeRequested, walked) {
     camera.getWorldDirection(direction);
-    hit = live ? pickBlock(volume, camera.position.toArray(), direction.toArray()) : null;
-    const key = hit ? [hit.x, hit.y, hit.z].join(',') : '';
+    hit = live ? pickBlock(volume, camera.position.toArray(eyeCoords), direction.toArray(rayCoords)) : null;
+    const key = hit ? hit.x + ',' + hit.y + ',' + hit.z : '';
     if (key !== target || !mining) progress = 0;
     target = key;
     rest = Math.max(0, rest - dt);
@@ -496,7 +501,8 @@ export function createFieldTools({
       }
       if (!reduced) d.mesh.rotation.y += dt * 4;
     }
-    hud.swing(reduced ? 0 : Math.sin(swing * Math.PI * 0.8));
+    const handSwing = reduced ? 0 : Math.sin(swing * Math.PI * 0.8);
+    if (live && handSwing !== lastSwing) { hud.swing(handSwing); lastSwing = handSwing; }
   }
   return {
     inputs: hud.inputs,

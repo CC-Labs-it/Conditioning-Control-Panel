@@ -230,14 +230,12 @@ export function meshVoxels(vol, tile, rects, { ao = true, shade = null, x0 = 0, 
         uv.push(rect[0] + (rect[2] - rect[0]) * QUAD_UV[k][0], rect[1] + (rect[3] - rect[1]) * QUAD_UV[k][1]);
         let a = 3;
         if (ao) {
-          const ax = [0, 1, 2].filter((i) => F.n[i] === 0);
-          const o = [x + nx, y + ny, z + nz], s1 = o.slice(), s2 = o.slice();
-          s1[ax[0]] += c[ax[0]] ? 1 : -1;
-          s2[ax[1]] += c[ax[1]] ? 1 : -1;
-          const cr = s1.slice();
-          cr[ax[1]] += c[ax[1]] ? 1 : -1;
-          const a1 = solid(...s1), a2 = solid(...s2);
-          a = a1 && a2 ? 0 : 3 - (a1 + a2 + solid(...cr));
+          const ox = x + nx, oy = y + ny, oz = z + nz;
+          const dx = c[0] ? 1 : -1, dy = c[1] ? 1 : -1, dz = c[2] ? 1 : -1;
+          const ax = nx === 0 ? dx : 0, ay = nx !== 0 ? dy : 0;
+          const by = nz !== 0 ? dy : 0, bz = nz === 0 ? dz : 0;
+          const a1 = solid(ox + ax, oy + ay, oz), a2 = solid(ox, oy + by, oz + bz);
+          a = a1 && a2 ? 0 : 3 - (a1 + a2 + solid(ox + ax, oy + ay + by, oz + bz));
         }
         aos.push(a);
         const v = lin((shade ? shade(f) : F.shade) * AO[a]);
@@ -814,6 +812,8 @@ export async function createMeadow(host, opts = {}) {
   const cowRng = rng(seed + 991);
   const cows = world.cows.map((c) => { const cow = makeCow(THREE, parts, c); scene.add(cow.g); return cow; });
 
+  const obstacles = cows.map((c) => ({ x: c.x, z: c.z, r: 0.75 }));
+
   /* ---- player ---- */
   const me = { x: world.start.x, z: world.start.z, yaw: world.start.yaw, pitch: world.start.pitch, feet: groundAt(world, world.start.x, world.start.z), bob: 0, walk: 0 };
   let live = false, auto = false, running = false, lost = false, cancel = null, raf = 0, last = 0, t = 0, frames = 0;
@@ -823,6 +823,7 @@ export async function createMeadow(host, opts = {}) {
   const makeBlock = id => new THREE.Mesh(keep(boxGeo(THREE,1,1,1,-.5,-.5,-.5,f=>tileFor(id,f),rects)), solidMat);
   const field = createFieldTools({ T:THREE, world, volume, scene, camera, atlas, makeBlock, keep, remesh,
     host:opts.hudHost || host, audio:opts.audio, touch:matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0, reduced, paused, me });
+  let pointerRect = null, pointerView = null;
   let mouseX = -1, mouseY = -1, mouseHold = false, placeRequested = false, jump = false, velocity = 0;
 
   const onKey = (e) => {
@@ -852,10 +853,11 @@ export async function createMeadow(host, opts = {}) {
   const onMove = (e) => {
     if (!live || paused()) return;
     if (e.pointerType === 'mouse') {
-      const r = canvas.getBoundingClientRect();
+      const r = pointerRect ||= canvas.getBoundingClientRect();
       mouseX = r.width ? (e.clientX - r.left) / r.width : -1;
-      const view = (opts.hudHost || host).getBoundingClientRect();
-      mouseY = view.height ? (e.clientY - view.top) / view.height : -1;
+      if (view && mouseX >= 0) mouseX = (view.x + mouseX * view.width) / view.fullWidth;
+      const hudView = pointerView ||= (opts.hudHost || host).getBoundingClientRect();
+      mouseY = hudView.height ? (e.clientY - hudView.top) / hudView.height : -1;
       me.yaw -= (e.movementX || 0) * 0.0042;
       me.pitch -= (e.movementY || 0) * 0.0036;
       return;
@@ -925,7 +927,7 @@ export async function createMeadow(host, opts = {}) {
     if (fwd || side) {
       const len = Math.max(1, Math.hypot(fwd, side)), [fx, fz] = forwardOf(me.yaw), s = (speed * dt) / len;
       const dx = (fx * fwd - fz * side) * s, dz = (fz * fwd + fx * side) * s;
-      const obstacles = cows.map((c) => ({ x: c.x, z: c.z, r: 0.75 }));
+      for (let i = 0; i < cows.length; i++) { obstacles[i].x = cows[i].x; obstacles[i].z = cows[i].z; }
       const next = stepWalk(world, me, dx, dz, obstacles);
       const moved = Math.hypot(next.x - me.x, next.z - me.z);
       walked = moved;
@@ -975,23 +977,30 @@ export async function createMeadow(host, opts = {}) {
     step(dt);
   };
 
-  function resize() {
-    const w = host.clientWidth || innerWidth, h = host.clientHeight || innerHeight;
+  let view = null, resolutionScale = 1;
+  function resize(nextView = view, scale = resolutionScale) {
+    view = nextView;
+    resolutionScale = scale;
+    pointerRect = pointerView = null;
+    const w = view?.width || host.clientWidth || innerWidth, h = view?.height || host.clientHeight || innerHeight;
     const dpr = globalThis.devicePixelRatio || 1;
-    renderer.setPixelRatio(lite ? Math.min(dpr, 1) * 0.7 : Math.min(dpr, 1.5));
+    renderer.setPixelRatio((lite ? Math.min(dpr, 1) * (view ? 1 : 0.7) : Math.min(dpr, 1.5)) * resolutionScale);
     renderer.setSize(w, h, true);
-    camera.aspect = w / Math.max(1, h);
+    camera.clearViewOffset();
+    camera.aspect = (view?.fullWidth || w) / Math.max(1, view?.fullHeight || h);
     camera.fov = camera.aspect < 1 ? 82 : 70;
+    if (view) camera.setViewOffset(view.fullWidth, view.fullHeight, view.x, view.y, w, h);
     camera.updateProjectionMatrix();
   }
 
   resize();
   update(0);
+  await renderer.compileAsync(scene, camera);
   render();
 
   let stopped = false;
   const api = {
-    canvas,
+    canvas, viewCrop: true,
     start() {
       if (stopped || running) return;
       running = true;
@@ -1036,7 +1045,7 @@ export async function createMeadow(host, opts = {}) {
       canvas.remove();
     },
     /** For the dev page and drivers: where the eye is and how much has been drawn. */
-    debug: () => ({ x: me.x, z: me.z, yaw: me.yaw, pitch: me.pitch, live, auto, frames, ...field.debug(), feet:me.feet, quads: [...chunks.values()].reduce((n,m)=>n+m.geometry.index.count/6,0), plants: plants.quads,
+    debug: () => ({ width: canvas.width, height: canvas.height, programs: renderer.info.programs.length, textures: renderer.info.memory.textures, x: me.x, z: me.z, yaw: me.yaw, pitch: me.pitch, live, auto, frames, ...field.debug(), feet:me.feet, quads: [...chunks.values()].reduce((n,m)=>n+m.geometry.index.count/6,0), plants: plants.quads,
       cows: cows.map((c) => ({ x: c.x, z: c.z, state: c.state })), placeholder: atlas.placeholder, calls: renderer.info.render.calls }),
   };
   return api;

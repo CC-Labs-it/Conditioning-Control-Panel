@@ -515,11 +515,13 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   function frame(t) {
     win.requestAnimationFrame(frame);
     // Read the shared FX targets while the page is still clean: one layout pass here, not one per effect (ui/perf.js).
-    nextFrame(); frameRect(el.btn); frameRect(el.counter);
+    nextFrame();
+    if (!engine.stopped) { frameRect(el.btn); frameRect(el.counter); }
     const dt = last ? t - last : 16;
     last = t;
     const present = !(engine.suspended && engine.suspendReason === 'focus');
     engine.step(Math.min(dt, awayClock.frame(present)));
+    if (engine.stopped && !creditsRoot) return;
     stage?.tick(Math.min(dt, 100));   // small buys get the stage (ui/stage.js)
     tickButton();
     if (!engine.paused && !engine.suspended && !engine.run.ended) faces?.tick();
