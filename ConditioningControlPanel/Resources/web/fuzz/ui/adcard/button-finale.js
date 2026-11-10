@@ -16,7 +16,7 @@ const mix = (a,b,k) => a+(b-a)*k;
 const TAU = 2*Math.PI;
 const wrap = v => Math.atan2(Math.sin(v),Math.cos(v));
 const strengthAt = n => .74+.22*(.5+.5*Math.sin(n*2.71+.6));
-const cursorUrl=new URL('../../assets/clipart/cursor.webp',import.meta.url).href;
+const cursorUrl=new URL('../../assets/arcade/button-cursor.webp',import.meta.url).href;
 const lensControls='#game-controls,#pause,#cards,[data-button-review-controls]';
 
 function pieceKind(p) {
@@ -160,8 +160,11 @@ export function createButtonFinale(ctx,mount,snapshot,{onPress,loop=false}={}) {
   const contents=makePieces(doc,eye,[...board.surfaces,...(shot.mediaSurfaces||[])]);
   contents.write(shot.score.value);
   own?.activate();
-  const pointer=part(root,'cursor'),img=doc.createElement('img');img.src=cursorUrl;img.alt='';img.draggable=false;pointer.append(img);
-  const light=part(root,'click-light');const caption=part(root,'caption','p');caption.textContent='Stay still.';
+  const pointer=part(root,'cursor'), sheet=part(pointer,'cursor-sheet');
+  const img=doc.createElement('img');img.src=cursorUrl;img.alt='';img.draggable=false;sheet.append(img);
+  const tone=part(sheet,'cursor-tone');
+  const light=part(root,'click-light'), contact=part(root,'contact');
+  const caption=part(root,'caption','p');caption.textContent='Stay still.';
   const hint=part(root,'look','p');
   hint.textContent=win.matchMedia?.('(pointer:coarse)').matches?'Drag to look around':'Drag or use the arrow keys to look around';
   const bloom=part(root,'bloom');
@@ -217,7 +220,7 @@ export function createButtonFinale(ctx,mount,snapshot,{onPress,loop=false}={}) {
       if(age<260)onPress?.({index:n,strength:strengthAt(n),pan:.12*Math.sin(n*2.11)});
     }
     if(!hit&&t-lastDraw<(LITE?29:13)&&t>=lastDraw)return;lastDraw=t;
-    const after=1-smooth(age/660),before=1-smooth((nextAt-t)/730),press=Math.max(after,before);
+    const after=1-smooth(Math.max(0,age-48)/612),before=1-smooth((nextAt-t)/730),press=Math.max(after,before);
     const impact=Number.isFinite(age)&&age<300?Math.exp(-age/82)*strengthAt(n):0;
     const shake=calm?0:impact;
     const sx=shake?shake*1.75*Math.cos(age*.056):0,sy=shake?-shake*2.15*Math.cos(age*.049):0;
@@ -229,15 +232,22 @@ export function createButtonFinale(ctx,mount,snapshot,{onPress,loop=false}={}) {
     // approach the distance to the eye falls to 7 cm; the tip meets our POV.
     const s=t/1000,arrival=smooth((t-640)/2400),az=.12+.14*Math.cos(s*.82)+.48*(1-arrival),elev=.08+.11*Math.sin(s*.65);
     const heading=wrap(az-yaw), vertical=elev-pitch;
-    const pull=smooth(press*.99), radius=1.61*(1-press)+.072*press;
+    const pull=smooth(press), radius=mix(1.61,.072,press);
     const x=W*.5+focal*Math.tan(clamp(heading,-1.35,1.35))*(1-pull);
     const y=H*.5-focal*Math.tan(clamp(vertical,-1.2,1.2))*(1-pull);
-    const span=Math.min(Math.min(W,H)*.60,focal*.111/radius);
-    pointer.style.width=pointer.style.height=span+'px';
     pointer.style.opacity=String(arrival*clamp((1.62-Math.abs(heading)*(1-pull))/.32));
-    const squash=calm?0:impact;
-    pointer.style.transform=`translate3d(${x}px,${y}px,0) rotate(${-16+10*press+5*Math.sin(s*.9)*(1-pull)}deg) scale(${1+.045*squash},${1-.055*squash})`;
+    pointer.style.transform=`translate3d(${x}px,${y}px,0)`;
+    // The original 515 px cursor art points from (380.5,463.5) to (64.5,22.5).
+    // Hinge at that inked tip, about the perpendicular to the (316,441) shaft.
+    // Local +shaft then travels into negative Z. Projection magnifies the
+    // approaching tip and independently foreshortens the more distant tail.
+    const scale=focal*.111/(515*radius);
+    const bank=-16+10*press+5*Math.sin(s*.9)*(1-pull);
+    const pitchToEye=mix(12,55,pull);
+    sheet.style.transform=`perspective(${focal}px) rotateZ(${bank}deg) rotate3d(-441,316,0,${pitchToEye}deg) scale3d(${scale},${scale},${scale})`;
+    tone.style.opacity=String(.12+.76*pull);
     light.style.opacity=String((calm?.35:.46)*impact);
+    contact.style.opacity=String((calm?.35:.85)*impact);
     caption.style.opacity=String(smooth((t-2000)/1100)*(.72+.28*(1-smooth((local-11000)/2800)*(1-smooth((local-21500)/3200)))));
     hint.style.opacity=String(looked?0:smooth((t-850)/500)*(loop?1:1-smooth((t-7200)/750)));
     bloom.style.opacity=String(1-smooth(t/1650));
