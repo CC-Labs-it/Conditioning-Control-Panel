@@ -2,8 +2,7 @@
  * data/content/endings.js - the card text for all thirteen endings. Pure data.
  *
  * ENDINGS[id]: { id, title, result, credits: [3 to 6 lines], closing, link? }
- * link is { label, url } and only ever points at cclabs.app. Living Ad also has
- * `price`, with a {score} token the ending shell fills with the run's total.
+ * link is { label, url } and only ever points at cclabs.app.
  * DROP_WORDS: one word at a time in the Drop ending; clip is a slug from
  * data/words.js CIRCE, or null, which stays silent.
  *
@@ -25,17 +24,12 @@ export const ENDINGS = Object.freeze({
     'Thanks for playing',
   ], 'Cannot be undone. You can start again, which is different.', { link: link('The rest of it is called CCP') }),
 
-  o_out: e('o_out', 'Living Ad', 'You stopped watching the ads and became one.', [
-    'This ending was sponsored by you',
-    'Socks: The Socks Group',
-    'Soap: lonely, local',
-    'Goose: on loan, not returned',
-    'Final creative: your face, looking at this',
-  ], 'Everyone has a price. It turns out yours was on the counter the whole time.', {
-    price: '{score} {cur}',
-    priceLabel: 'your price',
-    link: link('See what was being advertised'),
-  }),
+  o_out: e('o_out', 'Living Button', 'There was a click on the other side of the glass. You felt it.', [
+    'Set built from everything you bought',
+    'Scenery: cardboard, printed on one side',
+    'Cursor: the next player',
+    'Button: you',
+  ], 'The next player has a very familiar rhythm.', { link: link('More from CC Labs') }),
 
   p_life: e('p_life', 'Lifetime Plan', 'You are thanked for ever. For ever has been shortened for legal reasons.', [
     'Thank you',

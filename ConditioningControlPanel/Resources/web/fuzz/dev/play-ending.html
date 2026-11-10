@@ -26,6 +26,7 @@
    ?end=bi_end (default)    the ending item; its chain is granted and the wallet topped up to afford it
    ?buy=a,b,c               extra items on top of the basics
    ?pictures=online         passed on to the game (placeholder art), like ?lite
+   ?end=o_out&at=finale     opens the Living Button viewpoint and holds it for inspection
    ?end=go_end&from=go_hive  show nine independent EMI screens just before the Hive Mind purchase
    The game runs standalone in a same-origin frame (8817 is not a web host origin), so audio and the page are the real thing. */
 import { BY_ID } from '../data/items.js';
@@ -38,6 +39,9 @@ const note = document.getElementById('note');
 if (!end || end.kind !== 'end') { note.textContent = `No ending item "${endId}".`; throw new Error(note.textContent); }
 const basics = ['colour', 'font', 'sound', 'rounded', 'softw', 'a_rain', 'v_frame', 'wheel', 'quiz', 'toy_box', 'mini_breakout', 'mini_slots', 'word_comet'];
 const extra = (qs.get('buy') || '').split(',').map((s) => s.trim()).filter(Boolean);
+if (endId === 'o_out') extra.push('a_tick', 'dispenser', 'mini_race', 'starburst');
+const buttonCheckpoint = endId === 'o_out' && qs.get('at') === 'finale' && ['localhost', '127.0.0.1'].includes(location.hostname);
+if (buttonCheckpoint) extra.push('v_wall', 'tr_feed');
 /* ?from=go_tx: land one row before that item instead, with the rows from it up to the ending left to buy by hand.
    The wallet covers all of them, so the player buys each one when they choose. */
 const fromId = qs.get('from') || (endId === 'go_end' ? 'go_tx' : null);
@@ -58,6 +62,11 @@ for (const key of ['pictures', 'lite']) {
   if (qs.has(key)) previewQuery.set(key, qs.get(key));
 }
 if (bubble) previewQuery.set('pictures', demoReel ? 'none' : 'scrolller');
+if (endId === 'o_out' && !qs.has('pictures')) previewQuery.set('pictures', 'scrolller');
+if (buttonCheckpoint) {
+  previewQuery.set('buttonCheckpoint', 'finale');
+  if (!qs.has('pictures')) previewQuery.set('pictures', 'online');
+}
 // Without an explicit test source, EMI starts with the normal opt-in picture chooser.
 if (endId === 'go_end' && !qs.has('pictures')) previewQuery.set('pictures', 'scrolller');
 frame.src = '../index.html?' + previewQuery;
@@ -79,7 +88,7 @@ frame.addEventListener('load', () => {
       swarm.dev.tiles(HER_TILES.length);
       swarm.dev.crowd(Math.max(0, 9 - swarm.count()));
     }
-    if (bubble && !run.clock) return void setTimeout(tick, 100);
+    if ((bubble || endId === 'o_out') && !run.clock) return void setTimeout(tick, 100);
     if (!from) finishPath();
     if (bubble && !from) {
       // The source chooser starts this in-memory run. Its first real clock tick means the toys are mounted.
@@ -113,7 +122,7 @@ frame.addEventListener('load', () => {
     // Keep power-ups on EMI's shelf for her to take over during the finale.
     const takeover = endId === 'go_end';
     // Hive Mind is the final purchase. The swarm finishes the run through play.
-    let guard = from || takeover || endId === E.FALLBACK_ENDING ? 0 : 240;
+    let guard = from || takeover || endId === 'o_out' || endId === E.FALLBACK_ENDING ? 0 : 240;
     for (;;) {
       const next = guard-- > 0 && E.openItems(run).find((i) => i.kind !== 'end' && i.kind !== 'fork' && i.id !== 'taste2' && !held.has(i.id));   // Second Theme asks a question of its own: leave it as the goal row
       if (!next) break;
@@ -150,14 +159,35 @@ frame.addEventListener('load', () => {
     const want = Math.round(E.price(run, endId) * 1.05);
     if (run.fuzz < want) fuzz.add(want - run.fuzz);
     fuzz.ui.draw(true);
-    if (endId === 'dr_end' || endId === 'outside') {
+    if (['dr_end', 'outside', 'o_out'].includes(endId)) {
       // A crowded ending preview can put a toy or a setup card over its shop tile.
       const play = document.createElement('button');
-      play.textContent = endId === 'outside' ? 'Play Go Outside' : 'Play Unit Complete';
+      play.textContent = 'Play ' + end.name.replace(/^Ending:\s*/, '');
+      // The fixture grants a theme and several toys together. Let their arrival finish so the opening freezes the board.
+      if (endId === 'o_out') {
+        // A real late board with its main machines open. These layout choices belong only to this in-memory fixture.
+        const doc = frame.contentDocument;
+        for (const id of ['v_frame','mini_slots','dispenser','toy_box']) {
+          doc.querySelector(`.dk[data-fz-owner="${id}"] .dk-b`)?.dock?.setVisible(true);
+        }
+        const since = performance.now();
+        while (performance.now() - since < 5500) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          if (performance.now() - since >= 2700 && doc.querySelector('.mini-slot[data-cabinet-ready=true]')) break;
+        }
+      }
+      if (buttonCheckpoint) {
+        if (fuzz.buy(endId).ok) {
+          note.remove();
+          frame.focus();
+          frame.contentWindow.focus();
+        } else note.textContent = 'The ending could not start. Reload to retry.';
+        return;
+      }
       note.replaceChildren(play);
       play.addEventListener('click', () => {
         fuzz.engine.audio.arm();
-        if (fuzz.buy(endId).ok) { note.remove(); frame.focus(); }
+        if (fuzz.buy(endId).ok) { note.remove(); frame.focus(); frame.contentWindow.focus(); }
       });
       fuzz.engine.subscribe('ending', () => note.remove());
       return;

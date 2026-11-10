@@ -5,8 +5,7 @@ import { SPONSORED_THOUGHTS, NATIVE_LINES, EMI_AD_READS } from '../../../data/co
 import { nextAd, pressAd, panel, deck, railsRoom, claim, release, fill } from './kit.js';
 import { ROUTE_COPY } from './copy.js';
 import { sellAllJoke, SELL_ALL_AD } from '../../sell-all.js';
-import { livingAdEnding, LIVING_AD_SHOW_MAX_MS } from '../../adcard/ending.js';
-import { livingAdTake } from '../../adcard/stage.js';
+import { buttonEndingTake, isButtonFinaleReview } from '../../adcard/button-ending.js';
 
 const FONT = 'Arial,Helvetica,sans-serif';
 const CHIP = `font:700 10px ${FONT};background:#f0c24b;color:#000;padding:0 4px;border-radius:2px;flex:none;`;
@@ -269,13 +268,13 @@ export default {
     },
   },
 
-  /* Ending: Living Ad. The run prints itself as a shareable ad card (owner 2026-11-09, ui/adcard/): the first theme's
-   * living portrait, both themes' colours, a taunt, terms ACCEPTED and the run's numbers. Save, copy, then the credits. */
+  /* The Ads route keeps its saved ending ID. The black frame hands directly to the recap and share poster. */
   o_out: {
     mount() { return {}; },
-    showMaxMs: LIVING_AD_SHOW_MAX_MS,
-    fadeMs: 120,   // the take leaves its paper stage over the page: the fade underneath is never seen
-    take(ctx) { return livingAdTake(ctx); },
-    ending(ctx) { return livingAdEnding(ctx); },
+    get takeMaxMs() { return isButtonFinaleReview() ? Infinity : 150000; },
+    cutAudioOnTake: true,
+    fadeColour: '#000',
+    fadeMs: 100,
+    take: buttonEndingTake,
   },
 };

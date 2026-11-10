@@ -215,8 +215,6 @@ const played = await page.evaluate(async (picks) => {
   return { ended: f.state.ended, n, picks: f.state.picks, clock: f.state.clock, order: f.state.order.length };
 }, picks);
 if (!played.ended) throw new Error('The route did not reach an ending: ' + JSON.stringify(played));
-// The Living Ad poster stays open so a player can save it before continuing.
-if (played.ended.id === 'o_out') await page.getByRole('button', { name: 'Continue', exact: true }).click({ timeout: 65000 });
 const newRun = page.locator('button.rr-newrun:not(.inf)');
 await newRun.waitFor({ timeout: 95000 });
 // A take may keep the world and its audio until its own cut. The recap must release both streams.

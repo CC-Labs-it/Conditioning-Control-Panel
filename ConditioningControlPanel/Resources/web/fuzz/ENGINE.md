@@ -28,6 +28,7 @@ carries on. An ending row may also export `ending(ctx) -> Promise`: its show bet
 A row can export `take(ctx, releaseWorld) -> Promise` to use the frozen game page before the fade. Its streams play until the take
 ends or calls `releaseWorld()`. That call unmounts the game while keeping the take and its prepared media alive. Bimbodoll uses it
 between swallowing the page and entering the sky. A take has `ENDING_TAKE_MAX_MS` of game time by default, or the row's `takeMaxMs`.
+A row with `cutAudioOnTake: true` starts its soundtrack in silence while the frozen board stays mounted.
 The row's `fadeColour` and `fadeMs` control the final fade, up to 1600 ms.
 
 ## Testing it
@@ -87,6 +88,7 @@ game clock, so never use `setTimeout`, `setInterval` or your own `requestAnimati
 - `ctx.parts`: `.shop`, `.buttonWrap`, `.counter`, `.stage`: the elements themselves, to measure or to animate with `ctx.anim` (`.buttonWrap` moves the button without touching its own transform). Use these, never `querySelector` into `ctx.world`.
 - `ctx.bounds()`: `{w, h}` of the page, cached; use it instead of measuring each frame.
 - `ctx.every(ms, fn)`, `ctx.after(ms, fn)`, `ctx.frame(fn(dt, now))`: each returns a cancel function. Share these; live particles have a cap, so prefer `ctx.float(x, y, text, css?)` for rising numbers.
+- `ctx.activeMs` gives elapsed active milliseconds at normal speed. Pause and suspend stop this clock even when a run owns a time-slowing upgrade.
 - `ctx.anim(el, keyframes, opts)`: Web Animations. Keep loops at or under 3 Hz.
 - `ctx.speed(multiplier)`: while held, every unlock's `every`, `after`, `frame`, `tick` and `anim` run at that speed; holds multiply, held between 0.1 and 4; returns a release, and it ends with your unlock. Per-second income, button locks and swaps stay on real time, so route timing holds. `now` in frames and modifiers follows it; `ctx.state.clock` does not, so never mix the two.
 

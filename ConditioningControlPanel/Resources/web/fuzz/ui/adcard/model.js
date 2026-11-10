@@ -96,7 +96,8 @@ export function cardModel({ run, life = {}, name = '', adNumber = null, serialLa
   const total = Math.max(0, Number(run?.total) || 0);
   const llamas = clampInt(life.llamas ?? LLAMA_MIN, LLAMA_MIN, LLAMA_MAX);
   const lines = ADCARD_LINES[first];
-  const [head, sub] = lines[(seed >>> 3) % lines.length];
+  const button = run?.ended?.id === 'o_out';
+  const [head, sub] = button ? ADCARD_COPY.buttonLines : lines[(seed >>> 3) % lines.length];
   const vals = {
     name: String(name || '').trim().slice(0, 24) || fill(ADCARD_COPY.signee, { n: adText }),
     unit: fill(ADCARD_COPY.unit, { n: adText }),
@@ -109,7 +110,7 @@ export function cardModel({ run, life = {}, name = '', adNumber = null, serialLa
     first, second,
     labels: [ADCARD_COPY.themes[first], ...(second ? [ADCARD_COPY.themes[second]] : [])],
     colours: cardColours(first, second),
-    serial: fill(serialLabel, { n: adText }),
+    serial: fill(button ? ADCARD_COPY.buttonSerial : serialLabel, { n: adText }),
     head: fillLine(head, vals),
     sub: fillLine(sub, vals),
     terms,

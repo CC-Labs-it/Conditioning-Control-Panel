@@ -17,6 +17,7 @@ function loadDemos() {
     registerEmiUpgradeDemos();
     const { registerBubbleDemo } = await import('./demos/bambi-dome.js');
     registerBubbleDemo();
+    await import('./demos/button-ending.js');
     return Demo;
   })();
   return demos;

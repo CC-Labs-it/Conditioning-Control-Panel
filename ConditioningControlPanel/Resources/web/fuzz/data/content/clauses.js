@@ -349,8 +349,8 @@ export const CLAUSES = Object.freeze({
   "Reading an advert for socks is beneath her. She agrees. She needs the work."
  ],
  "o_out": [
-  "I accept that the run ends as a real CCP advert, priced at exactly my score.",
-  "Everyone has a price. I have seen mine. It was paid in {cur}, one yes at a time."
+  "I accept that the pink light at the end of the tunnel marks my place on the page.",
+  "On the other side of the glass, someone has a finger on the mouse."
  ],
  "p_member": [
   "I accept that the joke adverts stop and only adverts for CCP's own things remain.",
