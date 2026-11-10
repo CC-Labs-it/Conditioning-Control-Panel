@@ -102,7 +102,7 @@ frame.addEventListener('load', () => {
     // Keep power-ups on EMI's shelf for her to take over during the finale.
     const takeover = endId === 'go_end';
     if (takeover) fuzz.engine.env.featuredShop.unshift(endId);
-    let guard = from || takeover ? 0 : 240;
+    let guard = from || takeover || endId === E.FALLBACK_ENDING ? 0 : 240;
     for (;;) {
       const next = guard-- > 0 && E.openItems(run).find((i) => i.kind !== 'end' && i.kind !== 'fork' && i.id !== 'taste2' && !held.has(i.id));   // Second Theme asks a question of its own: leave it as the goal row
       if (!next) break;
