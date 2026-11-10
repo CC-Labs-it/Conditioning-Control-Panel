@@ -195,6 +195,7 @@ export function mountToyBox(ctx) {
     slot.classList.add('filled'); slot.disabled = true;
     settlePiece(slot, piece, tilt);
     if (result.complete) {
+      ctx.emit('sticker', { key: 'toybox' });   // Sticker Book: Checkmate
       const rates = ctx.rates(), r = root.getBoundingClientRect();
       // Journey ranks: Golden Piece doubles a box once its gold piece is in, Big Box pays 1.5x (boxPrizeMult).
       const credited = ctx.pay(Math.max(rates.fps, rates.click * 2, 2) * boxPrizeSeconds(state.completed - 1) * boxPrizeMult(state) * prizeMult(ctx.prestige), 'toy_box', { x: r.left + r.width / 2, y: r.top + r.height / 2 });

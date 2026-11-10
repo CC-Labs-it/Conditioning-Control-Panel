@@ -257,6 +257,7 @@ export function mountDeepEnd(ctx) {
     if (tier < 3) return;
     const rates = ctx.rates();
     const got = ctx.pay(Math.max(rates.fps * 4 * tier, rates.click * 6 * tier), 'mini_deep', boardPoint());
+    if (tier >= 10) ctx.emit('sticker', { key: 'deep10' });   // Sticker Book: Out of Your Depth (Trench)
     const lifetime = tier > best;
     if (lifetime) best = tier;
     say(`${lifetime ? 'A new lifetime depth' : 'New depth'}: ${DEPTHS[tier]}. +${ctx.fmt(got)} ${ctx.brand.currencyPlural}`);

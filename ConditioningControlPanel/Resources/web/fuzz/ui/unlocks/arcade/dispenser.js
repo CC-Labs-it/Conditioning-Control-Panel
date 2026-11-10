@@ -104,6 +104,7 @@ export function mountDispenser(ctx) {
     const r = bubble.getBoundingClientRect(), rates = ctx.rates();
     const got = ctx.pay(prizePay(s.prize, rates) * (specialty() === 'jackpot' && s.prize === 'gold' ? 3 : 1), 'dispenser', { x: r.left + r.width / 2, y: r.top });
     art.catch();
+    ctx.emit('sticker', { key: 'catch' });   // Sticker Book: Caught It
     if(dock.dock.visible) effects.start(s.prize,r);
     message = `${prizeFor(s.prize).label} +${ctx.fmt(got)} ${ctx.brand.currency}`;
     sfx(ctx, 'pop/Pop.mp3', .13);

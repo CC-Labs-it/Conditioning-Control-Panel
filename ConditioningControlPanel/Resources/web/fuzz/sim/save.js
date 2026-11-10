@@ -11,6 +11,7 @@ import { MOODS } from './moods.js';
 import { cleanOff } from './switches.js';
 import { setupJourney } from './journey-effects.js';
 import { createPrestige, parsePrestige, parseStamp } from './prestige.js';
+import { cardSnapshot, parseCardSnapshot, parseLifeTally, parseStickers, syncLife } from './stickers.js';
 
 // The playable preview has its own persistent slot, including both save import paths.
 const params = new URLSearchParams(globalThis.location?.search);
@@ -43,6 +44,9 @@ export function createLife() {
     perk: null,        // a Look the next run starts owning
     store: {},         // ctx.store for After lane entries
     prestige: createPrestige(),  // Renewal Sky: depth, Stardust, stars (sim/prestige.js)
+    stickers: {},      // Sticker Book: sticker id -> the run it was first earned in (sim/stickers.js)
+    tally: {},         // lifetime counters the book reads (golden, terms, wakeRuns)
+    adcard: null,      // the latest Living Ad card, as numbers: the book reprints it (sim/stickers.js cardSnapshot)
   };
 }
 
@@ -54,6 +58,8 @@ export function recordEnding(life, s, id) {
   noteSeen(life, s);
   life.routes = [{ route: Object.values(s.picks), ending: id, ms: Math.round(s.clock) }, ...life.routes].slice(0, 20);
   if (!life.bestMs || s.clock < life.bestMs) life.bestMs = Math.round(s.clock);
+  if (id === 'o_out') life.adcard = cardSnapshot(s, life);
+  syncLife(life, life.runs);   // ending stickers go in the book under the run that just ended
   return life;
 }
 
@@ -129,6 +135,9 @@ function parseLife(src) {
   life.perk = BY_ID[src.perk]?.lane === 'look' ? src.perk : null;
   life.store = stores(src.store);
   life.prestige = parsePrestige(src.prestige);
+  life.stickers = parseStickers(src.stickers);
+  life.tally = parseLifeTally(src.tally);
+  life.adcard = parseCardSnapshot(src.adcard);
   return life;
 }
 

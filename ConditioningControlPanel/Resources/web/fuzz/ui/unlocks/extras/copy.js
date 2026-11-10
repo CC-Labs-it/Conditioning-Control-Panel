@@ -80,6 +80,7 @@ export const AFTER_COPY = Object.freeze({
 /* ui/recap/recap.js - the end-of-run card (owner 2026-11-09). Short labels only; the long lines stay in AFTER_RUN. */
 export const RECAP_COPY = Object.freeze({
   label: 'End of the run',
+  stickers: 'New in your Sticker Book',
   ending: '{name} ending',
   endingPlain: 'The end',
   road: 'Your road',

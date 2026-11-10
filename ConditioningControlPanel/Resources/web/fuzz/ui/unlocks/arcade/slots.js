@@ -132,6 +132,7 @@ export function mountSlots(ctx) {
     if(completed){
       rolling=false;scene?.settle();scene?.setStops(stops(s.last));scene?.reveal(completed.win);root.dataset.win=String(completed.win);
       if(completed.win){
+        ctx.emit('sticker', { key: 'slots3' });  // Sticker Book: Three of a Kind
         const rates=ctx.rates(),b=canvas.getBoundingClientRect();
         // The win collects the Journey activity bank too: ctx.pay takes the 'mini_slots' bank (ui/engine.js pay -> takeActivity).
         // A miss pays nothing, so the bank waits for the next win.

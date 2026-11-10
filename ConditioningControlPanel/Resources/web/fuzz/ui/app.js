@@ -32,6 +32,7 @@ import { handFor, copyHandFor } from './hands.js';
 import { createTapWindow, emiBell } from '../sim/tap-rate.js';
 import { createAwayClock } from './away.js';
 import { nextFrame, frameRect } from './perf.js';
+import { mountStickerBook } from './sticker-book.js';
 
 export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   const $ = (id) => doc.getElementById(id);
@@ -327,9 +328,14 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
           if (engine.paused || engine.suspended) return;
           purchaseFeel?.prepare(it, row);
           if (!engine.buy(id).ok) { purchaseFeel?.clear(); shop.denied(id); }
-          else tally(engine.run, 'terms', clauseLines(id, riders).length);   // the Living Ad card's terms ACCEPTED
+          else {
+            const n = clauseLines(id, riders).length;
+            tally(engine.run, 'terms', n);   // the Living Ad card's terms ACCEPTED
+            engine.emit('sticker', { key: 'terms', life: true });   // Sticker Book: Signed, Sealed
+            if (n >= 3) engine.emit('sticker', { key: 'clause3' });   // Sticker Book: Read the Whole Thing
+          }
         },
-        onDecline: (line) => { settle(); say(line); },
+        onDecline: (line) => { settle(); say(line); engine.emit('sticker', { key: 'decline' }); },   // Sticker Book: Polite No
       });
       clauseCard.settle = settle;
       return;
@@ -569,6 +575,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       wireButton();
       wirePresses();
       wirePause(hooks);
+      mountStickerBook({ doc, engine, gentle });   // the Sticker Book: pause card door + the meter's 'sticker-book' event
       applyGentle();
       motionQuery?.addEventListener?.('change', applyGentle);
       const onResize = () => { dims = { w: win.innerWidth, h: win.innerHeight }; shop.fit(); };

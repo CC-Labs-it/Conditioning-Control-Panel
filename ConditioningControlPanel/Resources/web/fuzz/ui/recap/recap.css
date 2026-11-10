@@ -241,3 +241,9 @@
   #cards .rr .rr-fr { padding: 5px; }
   #cards .rr .rr-title { font-size: 36px; }
 }
+#cards .rr .rr-stickers { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 8px; padding: 4px 6px; border: 0; background: none; color: var(--rr-ink); cursor: pointer; text-align: left; }
+#cards .rr .rr-strow { display: flex; gap: 6px; }
+#cards .rr .rr-stlabel { font: 700 12px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--rr-ink); opacity: .8; }
+#cards .rr .rr-strow img { width: 34px; height: 34px; object-fit: contain; filter: drop-shadow(1.5px 0 0 #fff) drop-shadow(-1.5px 0 0 #fff) drop-shadow(0 1.5px 0 #fff) drop-shadow(0 -1.5px 0 #fff) drop-shadow(2px 2px 0 rgba(0,0,0,.28)); }
+#cards .rr .rr-strow img.round, #cards .rr .rr-strow img.ticket { object-fit: cover; border: 2px solid #fff; border-radius: 50%; filter: drop-shadow(2px 2px 0 rgba(0,0,0,.28)); }
+#cards .rr .rr-strow img.ticket { border-radius: 5px; }

@@ -80,6 +80,7 @@ export function mountPrizeWheel(ctx) {
       amount = ctx.pay(sector.mult > 0 ? wheelRequest(ctx.state, base * sector.mult) * prizeMult(ctx.prestige) : 0, 'wheel', at);  // prestige hook: Lucky/Charm
     }
     ctx.store.set('receipt', { id, amount });
+    ctx.emit('sticker', { key: 'wheel' });   // Sticker Book: Round and Round
     result.textContent = resultText(id, amount);
     sfx(ctx, sector.mult >= 2 ? 'sfx/pb_fanfare.mp3' : 'sfx/rank_settle.mp3', 0.5);
     controls();
