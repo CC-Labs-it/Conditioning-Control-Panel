@@ -7,7 +7,7 @@
 
 import { STICKER_PAGES, STICKERS } from '../data/content/stickers.js';
 import { brandText } from '../data/brand.js';
-import { snapshotRun } from '../sim/stickers.js';
+import { shown as inBook, snapshotRun } from '../sim/stickers.js';
 
 const CSS = `
 #sticker-book { position: fixed; inset: 0; z-index: 96; display: grid; place-items: center; padding: 12px; padding-top: 52px; background: rgba(40, 35, 43, .42); pointer-events: auto; }
@@ -212,7 +212,7 @@ function buildBook(doc, engine, stars, gentle) {
   function drawTabs(now) {
     tabs.replaceChildren();
     for (const p of STICKER_PAGES) {
-      const list = STICKERS.filter((s) => s.page === p.id);
+      const list = inBook(engine.life).filter((s) => s.page === p.id);
       const got = list.filter((s) => runOf(s.id)).length;
       const t = mk('button', `sb-tab${got === list.length ? ' foil' : ''}${gentle() ? ' still' : ''}`, tabs, `${p.name} ${got}/${list.length}`);
       t.type = 'button';
@@ -222,11 +222,11 @@ function buildBook(doc, engine, stars, gentle) {
       t.addEventListener('click', () => { pageId = p.id; sel = null; draw(); });
     }
     const all = STICKERS.filter((s) => runOf(s.id)).length;
-    count.textContent = `${all} of ${STICKERS.length} · ${now.size} this run`;
+    count.textContent = `${all} of ${inBook(engine.life).length} · ${now.size} this run`;
   }
   function drawPage(now) {
     const p = STICKER_PAGES.find((q) => q.id === pageId);
-    const list = STICKERS.filter((s) => s.page === p.id);
+    const list = inBook(engine.life).filter((s) => s.page === p.id);
     page.replaceChildren();
     const ph = mk('div', 'sb-ph', page);
     mk('h3', '', ph, p.name);

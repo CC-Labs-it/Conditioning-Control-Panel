@@ -161,7 +161,7 @@ function reached(s, it) {
  * earliest); Go Outside when no lane chain finished. It is offered only once the main path is done (Drop's old parents
  * owned) and no other ending is ever offered. Endless Mode and Drop are retired from the shop (owner 2026-11-10; Drop's
  * perk and card stay for players who already have it). Derived from the purchase order, so nothing is saved. */
-const OFF_SHELF = new Set(['onemore', 'drop']);
+export const OFF_SHELF = new Set(['onemore', 'drop']);
 /** Endings on the main path itself (Go Outside hangs off Spiral Overlay) are not a chain the player builds. */
 const MAIN_PATH_LANES = new Set(['trunk', 'exit']);
 export const FALLBACK_ENDING = 'outside';

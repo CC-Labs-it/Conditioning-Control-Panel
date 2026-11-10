@@ -10,6 +10,7 @@
 
 import { LIFE_TALLIES, STICKER_BY_ID, STICKERS } from '../data/content/stickers.js';
 import { THEME_IDS } from '../data/content/themes.js';
+import { OFF_SHELF } from './economy.js';
 
 export const METER_CELLS = 10;
 export const METER_STEP = 0.1;
@@ -41,6 +42,7 @@ export function met(sticker, st, life) {
     case 'owns': return !!st.owned?.[raw];
     case 'ending': return (life?.endings?.[raw] || 0) > 0;
     case 'endings': return Object.keys(life?.endings || {}).length >= need;
+    case 'shelfEndings': return Object.keys(life?.endings || {}).filter((id) => !OFF_SHELF.has(id)).length >= need;
     case 'themes': return STICKERS.filter((s) => s.id.startsWith('t_') && s.when.startsWith('theme:') && life?.stickers?.[s.id]).length >= need;
     case 'depth': return (life?.prestige?.depth || 0) >= need;
     case 'core': return !!life?.prestige?.core;
@@ -82,9 +84,12 @@ export function syncLife(life, run = currentRun(life)) {
   return got;
 }
 
+/** What the book shows: every sticker, except a retired one the player never earned. */
+export const shown = (life) => STICKERS.filter((s) => !s.legacy || life?.stickers?.[s.id]);
+
 /** Book view for one page: [{sticker, run}] with run = 0 for not earned. */
 export function pageView(life, pageId) {
-  return STICKERS.filter((s) => s.page === pageId).map((s) => ({ sticker: s, run: life?.stickers?.[s.id] || 0 }));
+  return shown(life).filter((s) => s.page === pageId).map((s) => ({ sticker: s, run: life?.stickers?.[s.id] || 0 }));
 }
 
 /** Save hygiene: keeps only known sticker ids and known counters. */

@@ -11,6 +11,7 @@
  *   scope  'run' fills this run's meter and can be earned again next run; 'life' only goes in the book.
  *   art    { k: 'img', src } | { k: 'gold', v } (a Golden Button crayon star) | { k: 'portrait', theme }
  *          | { k: 'card' } (the player's own Living Ad card, else that theme's portrait).
+ *   legacy true: a retired ending (Drop, One More: off the shelf since 2026-11-10). Shown and counted only once earned.
  * Tokens: {cur} and {game}, filled by data/brand.js.
  * ==========================================================================*/
 
@@ -31,7 +32,7 @@ export const STICKER_PAGES = Object.freeze([
 const clip = (shape) => ({ k: 'img', src: `assets/clipart/${shape}.webp` });
 const drawn = (id) => ({ k: 'img', src: `assets/stickers/${id}.webp` });
 const img = (src) => ({ k: 'img', src });
-const LIFE_KEYS = ['life.', 'ending', 'endings', 'themes', 'depth', 'core', 'llamas'];
+const LIFE_KEYS = ['life.', 'ending', 'endings', 'shelfEndings', 'themes', 'depth', 'core', 'llamas'];
 const scopeOf = (when) => (LIFE_KEYS.some((k) => when.startsWith(k)) ? 'life' : 'run');
 
 /* The 33 achievements the game already had keep their ids, names, lines and conditions (data/content/side.js). */
@@ -41,6 +42,7 @@ const old = (id, page, how, art) => {
   return { id, page, name: a.name, line: a.line, how, when: a.when, hidden: a.hidden, art };
 };
 const add = (id, page, name, line, how, when, art, hidden = false) => ({ id, page, name, line, how, when, hidden, art });
+const RETIRED = new Set(['e_drop', 'e_onemore']);
 
 const RAW = [
   old('ac_first', 'press', 'Press the button once.', clip('button')),
@@ -122,7 +124,7 @@ const RAW = [
   add('e_outside', 'endings', 'Go Outside', 'You went outside. It looked lovely on the monitor.', 'Reach the Go Outside ending.', 'ending:outside', { k: 'scene', src: 'assets/outside/meadow.jpg' }),
   add('e_onemore', 'endings', 'One More', 'You could have stopped. There were several good places.', 'Reach the One More ending.', 'ending:onemore', drawn('e_onemore')),
   add('e_three', 'endings', 'Three Ways Out', 'Endless is open now.', 'See three different endings.', 'endings:3', clip('infinity')),
-  add('e_all', 'endings', 'Every Ending', 'You have seen how it ends. All of the ways.', 'See all thirteen endings.', 'endings:13', clip('book')),
+  add('e_all', 'endings', 'Every Ending', 'You have seen how it ends. All of the ways.', 'See every ending still on offer.', 'shelfEndings:11', clip('book')),
 
   add('p_renew', 'sky', 'Renewed', 'Same terms. Fresh signature.', 'Renew a run once.', 'depth:1', drawn('p_renew')),
   add('p_depth5', 'sky', 'Depth Five', 'You know the way down by now.', 'Reach Depth 5.', 'depth:5', clip('spiral')),
@@ -130,7 +132,7 @@ const RAW = [
   add('p_llama', 'sky', 'Full Herd', 'Twelve llamas. Nobody asked how.', 'Shelter twelve llamas.', 'llamas:12', drawn('p_llama')),
 ];
 
-export const STICKERS = Object.freeze(RAW.map((s) => Object.freeze({ ...s, hidden: !!s.hidden, scope: scopeOf(s.when) })));
+export const STICKERS = Object.freeze(RAW.map((s) => Object.freeze({ ...s, hidden: !!s.hidden, legacy: RETIRED.has(s.id), scope: scopeOf(s.when) })));
 export const STICKER_BY_ID = Object.freeze(Object.fromEntries(STICKERS.map((s) => [s.id, s])));
 export const STICKER_IDS = Object.freeze(STICKERS.map((s) => s.id));
 /* Lifetime counters the book reads (life.tally). Anything else in a save is dropped. */
