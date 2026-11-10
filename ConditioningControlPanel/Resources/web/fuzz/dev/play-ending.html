@@ -26,9 +26,11 @@
    ?end=bi_end (default)    the ending item; its chain is granted and the wallet topped up to afford it
    ?buy=a,b,c               extra items on top of the basics
    ?pictures=online         passed on to the game (placeholder art), like ?lite
+   ?end=go_end&from=go_hive  show nine independent EMI screens just before the Hive Mind purchase
    The game runs standalone in a same-origin frame (8817 is not a web host origin), so audio and the page are the real thing. */
 import { BY_ID } from '../data/items.js';
 import * as E from '../sim/economy.js';
+import { HER_TILES } from '../sim/takeover.js';
 const qs = new URLSearchParams(location.search);
 const endId = qs.get('end') || 'bi_end';
 const end = BY_ID[endId];
@@ -70,6 +72,13 @@ frame.addEventListener('load', () => {
         for (const id of BY_ID.drop.req) fuzz.grant(id);
       }
     };
+    if (endId === 'go_end' && fromId === 'go_hive') {
+      // Enter the picture comparison after her shopping trip, with Hive Mind still on the shelf.
+      const swarm = frame.contentWindow.__emiSwarm;
+      if (!swarm) { note.hidden = true; return void setTimeout(tick, 100); }
+      swarm.dev.tiles(HER_TILES.length);
+      swarm.dev.crowd(Math.max(0, 9 - swarm.count()));
+    }
     if (bubble && !run.clock) return void setTimeout(tick, 100);
     if (!from) finishPath();
     if (bubble && !from) {
