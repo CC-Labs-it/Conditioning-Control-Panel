@@ -130,7 +130,7 @@ export const STAR_BY_ID = Object.freeze(Object.fromEntries(LANES.flatMap((l) => 
 /** Ending stars: [ending item id, name, icon, perk line, which run]. Lit for good by finishing a run on that ending. */
 export const ENDING_STARS = Object.freeze([
   ['drop', 'Drop', 'drop', '+5% pay, for good.', 'the plain ending, where you sink all the way down'],
-  ['o_out', 'Living Button', 'billboard', 'Ads pay double.', 'the Ads route ending'],
+  ['o_out', 'Living Button', 'billboard', 'Ads pay double.', 'the ending behind the glass'],
   ['p_life', 'Lifetime Plan', 'card', 'Every run starts with the Prize Wheel.', 'the subscription ending'],
   ['tr_end', 'Count Up', 'spiral', 'Spirals pay 10% more.', 'the Trance theme ending'],
   ['bi_end', 'Bimbodoll', 'bubbles', 'The button starts as a bubble.', 'the Bimbo theme ending'],

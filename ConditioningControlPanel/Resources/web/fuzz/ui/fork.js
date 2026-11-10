@@ -19,6 +19,7 @@ function loadDemos() {
     registerBubbleDemo();
     await import('./demos/button-ending.js');
     await import('./demos/fate-outside.js');
+    await import('./demos/fate-button.js');
     return Demo;
   })();
   return demos;

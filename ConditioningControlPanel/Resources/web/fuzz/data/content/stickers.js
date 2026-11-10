@@ -112,7 +112,7 @@ const RAW = [
   add('t_all', 'themes', 'Full Box', 'Every colour in the box.', 'Pick all eight themes, over every run.', 'themes:8', drawn('t_all')),
 
   add('e_drop', 'endings', 'Drop', 'Everything went quiet and you let it.', 'Reach the Drop ending.', 'ending:drop', drawn('e_drop')),
-  add('e_o_out', 'endings', 'Living Button', 'Someone clicked. You felt it.', 'Follow the Ads route to the other side of the glass.', 'ending:o_out', { k: 'card' }),
+  add('e_o_out', 'endings', 'Living Button', 'Someone clicked. You felt it.', 'Reach the Living Button ending.', 'ending:o_out', { k: 'card' }),
   add('e_p_life', 'endings', 'Lifetime Plan', 'You are thanked for ever. For ever has been shortened.', 'Reach the Lifetime Plan ending.', 'ending:p_life', drawn('e_p_life')),
   add('e_tr_end', 'endings', 'Count Up', 'Someone is counting you back up. Take your time.', 'Reach the Count Up ending.', 'ending:tr_end', drawn('e_tr_end')),
   add('e_bi_end', 'endings', 'Bimbodoll', 'One pink bubble. It takes everything, then pops.', 'Reach the Bimbodoll ending.', 'ending:bi_end', drawn('e_bi_end')),
