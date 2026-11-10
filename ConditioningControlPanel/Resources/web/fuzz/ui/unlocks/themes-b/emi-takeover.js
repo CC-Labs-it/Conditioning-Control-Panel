@@ -17,6 +17,7 @@
  * No bubbles, nothing follows or gathers round the pointer. Pictures are DOM <img> from ctx.pictures, never a canvas.
  * Wake Up's group stays clear: no EMI is made under it. */
 
+import { bindCopyPets } from './emi-pets.js';
 import { LITE } from '../../perf.js';
 import * as T from '../../../sim/takeover.js';
 import swarmRows, { liveSwarm } from './emi-swarm.js';
@@ -99,6 +100,7 @@ export function emiTakeoverTake(ctx) {
       const s = sprite(doc, size);
       s.el.style.transform = `translate(${cell.x.toFixed(1)}px,${cell.y.toFixed(1)}px)`;
       s.setFace(any(IDLE_FACES));
+      s.el.dataset.etPet = '';
       s.lit = cell.lit;
       front.appendChild(s.el);
       cells[i] = s;
@@ -113,6 +115,7 @@ export function emiTakeoverTake(ctx) {
       back.appendChild(s.el);
       backs[k] = s;
       s.isBack = true;
+      s.el.dataset.etPet = '';
       if (calm) { if (Math.random() < 0.4) s.show(pic(k)); if (!p.seed) ctx.anim(s.el, [{ opacity: 0 }, { opacity: 1 }], { duration: 500 }); }
       else { flash(s, true); if (!p.seed && !LITE) ctx.anim(s.el, [{ transform: `${s.el.style.transform} scale(.6)` }, { transform: s.el.style.transform }], { duration: 180, easing: 'ease-out' }); }
     };
@@ -121,9 +124,11 @@ export function emiTakeoverTake(ctx) {
     let t = 0, phase = 'fill', big = null, dlg = null, err = null, blinks = [], frozen = false, shook = false, jolted = false;
     /* dev door: the drive can shorten the wait to prove the take goes on alone (always inside the take's own cap) */
     const waitMaxS = T.clampWait(Number(view.__emiTakeoverWaitS) || T.TAKE.WAIT_MAX_S);
+    const pets = bindCopyPets(ctx, () => !done && phase === 'fill');
     const seedN = pile.filter((p) => p.seed).length;
 
     function shut() {
+      pets.clear(); root.style.clipPath = '';
       every((s) => { s.dark(true); s.at = 0; });
       showCredit(false);
     }
@@ -296,8 +301,20 @@ export function emiTakeoverTake(ctx) {
     /* the beats after OK, set when it is pressed (or the wait runs out) */
     let beats = null;
     const enter = (name, fn) => { if (phase !== name) { phase = name; fn?.(); } };
+    let uiClock = 0;
     ctx.frame((dt) => {
       if (done) return;
+      if (t < at.shut && (uiClock += dt) >= 0.25) {
+        live?.advanceEndingUi?.(uiClock * 2);
+        uiClock = 0;
+        // Keep her counter place visible through the filling grid until every little screen shuts.
+        const digit = [...doc.querySelectorAll('#counter [data-et-digit]')].find(el => el.getClientRects().length);
+        if (digit) {
+          const d = digit.getBoundingClientRect(), r = root.getBoundingClientRect();
+          const x = d.left-r.left, y = d.top-r.top, right=x+d.width, bottom=y+d.height;
+          root.style.clipPath = `polygon(evenodd,0 0,100% 0,100% 100%,0 100%,0 0,${x}px ${y}px,${x}px ${bottom}px,${right}px ${bottom}px,${right}px ${y}px,${x}px ${y}px)`;
+        }
+      }
       t += dt;
       if (t < at.shut) {
         /* the fill: front pixels row after row, the back pile behind, every lit screen on its own flash clock */

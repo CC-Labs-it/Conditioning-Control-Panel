@@ -16,6 +16,8 @@ import { LITE, frameRect } from '../../perf.js';
 import { shopDoor } from '../../shop.js';
 import * as T from '../../../sim/takeover.js';
 import { art, SWAY, IDLE_FACES, rand, any, CSS, pose, sprites, bakeFaces, sprite, controlsRect, morePictures, tilesOf, bubble, placeBubble, deskHandoff } from './emi-kit.js';
+import { bindCopyPets } from './emi-pets.js';
+import { createUiTakeover, UI_TAKEOVER_CSS } from './emi-ui-takeover.js';
 import { bindEmiGrab } from './emi-grab.js';
 import { liveEmi } from '../extras/emi.js';
 import { iconFor } from '../../icons.js';
@@ -44,6 +46,8 @@ function mountSwarm(ctx) {
   const doc = ctx.button.el.ownerDocument;
   ctx.css(CSS);
   ctx.css(SWARM_CSS);
+  ctx.css(UI_TAKEOVER_CSS);
+  const uiTakeover = createUiTakeover(ctx);
   bakeFaces(doc);
   for (const n of [...SWAY, 'body-idle']) pose(n);
   const on = (id) => ctx.has(id) && ctx.switches.isOn(id);
@@ -107,6 +111,7 @@ function mountSwarm(ctx) {
       faceAt: t + rand(1, 4), poseAt: 0, sway: emis.length, coolUntil: 0,
       mode: 'face', modeUntil: t + rand(0.6, 2.5), lastScreen: -Infinity,
     });
+    if (!main) s.el.dataset.etPet = '';
     emis.push(e);
     return e;
   }
@@ -261,6 +266,8 @@ function mountSwarm(ctx) {
     if (!calm()) main.jumpT = t;
     nextMilestone = t + T.barkLife(line) / 1000;
   }
+  ctx.on('switch', () => { if (phase() !== 'hive') uiTakeover.update(0, false); });
+  const pets = bindCopyPets(ctx, () => !box.hidden && !quiet());
   const grab = bindEmiGrab(ctx, main, {
     place(x, y) {
       main.x = main.tx = clampX(x, main.size); main.y = main.ty = clampY(y, main.size);
@@ -272,7 +279,9 @@ function mountSwarm(ctx) {
       else ctx.store.setLayout(layoutKey, { x: main.x, y: main.y });
     },
     pet(event) {
-      desk?.petAt(event, text => say(main, text, { react: true }));
+      let spoke = false;
+      desk?.petAt(event, text => { spoke = say(main, text, { react: true }); });
+      if (!spoke && t >= nextMilestone) pets.pet(main.el);
       main.show(null);
       main.setFace(({ rage: '>_<', annoyed: '-_-' })[desk?.currentMood] || '^_^');
       main.faceAt = t + 1.5; main.mode = 'face'; main.modeUntil = t + 1.5;
@@ -522,6 +531,7 @@ function mountSwarm(ctx) {
 
     slow += dt;
     if (slow >= 0.25) {
+      uiTakeover.update(slow, ph === 'hive');
       slow = 0;
       borrowDesk();
       drawGuest();
@@ -580,7 +590,8 @@ function mountSwarm(ctx) {
     points: () => emis.map((e) => ({ x: e.x + e.size / 2, y: e.y + e.size / 2 })),
     /** Each EMI's size in px, in the same order as points(). */
     sizes: () => emis.map((e) => e.size),
-    hide() { box.hidden = true; box.style.display = 'none'; shopDoor?.guest(null); guest = null; borrowDesk(); },
+    advanceEndingUi(dt) { uiTakeover.update(dt, true); },
+    hide() { pets.clear(); box.hidden = true; box.style.display = 'none'; shopDoor?.guest(null); guest = null; borrowDesk(); },
     count: () => emis.length,
     arrive(id) { milestones.push(id); },
     state: () => ({

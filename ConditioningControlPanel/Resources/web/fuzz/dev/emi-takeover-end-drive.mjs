@@ -66,6 +66,7 @@ while (Date.now() - t0 < 90000) {
         if (x > c.left - 250 && y < c.bottom + 250) continue;
         n += 1;
         const el = document.elementFromPoint(x, y);
+        if (el?.closest('[data-et-digit]')) { n--; continue; }   // her score digit still occupies its own place
         if (!el || !root.contains(el)) bad += 1;
         if (bodies.some((q) => x >= q.l && x <= q.r && y >= q.t && y <= q.b)) emi += 1;
       }

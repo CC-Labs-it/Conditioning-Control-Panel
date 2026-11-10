@@ -148,7 +148,8 @@ test('the take keeps its hard rules in the source', () => {
   assert.match(take, /assets\/adcard\/logo\.webp/);
   assert.match(take, /body-smug/);
   assert.match(take, /'\^_~'/);
-  assert.ok(!/boop|pointerdown|bubble\(|placeBubble|EMI_BARKS/.test(take), 'no click-to-spawn, no bubbles in the ending');
+  assert.ok(!/boop|EMI_BARKS/.test(take), 'the final grid never spawns copies or unsolicited chatter');
+  assert.match(take, /bindCopyPets\(ctx, .*phase === 'fill'/, 'its little EMIs answer a pet until all screens shut');
   assert.match(take, /<button type="button" class="ok">/, 'OK is a real button: Enter and Space work');
   assert.match(take, /ev\.isTrusted\) pressOk/, 'only a real press ends the wait');
   assert.match(take, /audio\.input\?\.\(/, 'drone and sting are synthesised through the kit');

@@ -213,12 +213,16 @@ const gaps = await page.evaluate(async () => {
 });
 const minGap = gaps.length ? Math.min(...gaps) : Infinity;
 check('hive: no screen changed 3 times a second', minGap >= 334, `fastest ${Math.round(minGap)} ms over ${gaps.length} changes`);
+const digit = page.locator('#counter [data-et-digit]:visible');
+check('hive: one score digit became EMI and still shows its value', await digit.count() === 1
+  && await digit.evaluate(el => el.dataset.etDigit === el.closest('#count,#fz-roll').textContent.slice(-1)));
+check('hive: actual shop rows keep their buttons', await page.locator('#shop button.row[data-id][data-et-ui]').count() > 0);
 check('Wake Up stayed on top', wake && await wakeOk());
 
 /* switching Transmission off puts every taken object back */
 await page.evaluate(() => window.fuzz.engine.switches.set('go_tx', false));
 await wait(500);
-const back = await page.evaluate(() => ({ hidden: document.querySelectorAll('[data-et-gone], [data-et-buzz]').length, tabs: document.querySelectorAll('.dk-chip[data-disguised]').length, emis: document.querySelectorAll('.et-emi').length, swarm: !!window.__emiSwarm }));
+const back = await page.evaluate(() => ({ hidden: document.querySelectorAll('[data-et-gone], [data-et-buzz], [data-et-ui], [data-et-digit]').length, tabs: document.querySelectorAll('.dk-chip[data-disguised]').length, emis: document.querySelectorAll('.et-emi').length, swarm: !!window.__emiSwarm }));
 check('switch off: every taken object and tab is back, no EMI left', back.hidden === 0 && back.tabs === 0 && back.emis === 0 && !back.swarm, JSON.stringify(back));
 await page.evaluate(() => window.fuzz.engine.switches.set('go_tx', true));
 await wait(800);

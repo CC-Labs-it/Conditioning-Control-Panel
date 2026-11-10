@@ -9,6 +9,7 @@ import { setRich } from './rich-text.js';
 import { CONFIG } from '../data/config.js';
 import { whole, clock } from '../sim/format.js';
 import { SAVE_EVERY_MS } from '../sim/save.js';
+import { writeScore } from './emi-score.js';
 import { bindButtonFace, wardrobeSkins } from './button-faces.js';
 import { createCards } from './cards.js';
 import { openRunRecap } from './recap/recap.js';
@@ -479,7 +480,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   let shown = -1, lastDraw = 0, lastSave = 0, last = 0;
   function drawCounter() {
     const n = Math.floor(engine.run.fuzz);
-    if (n !== shown) { shown = n; el.count.textContent = whole(n); }
+    if (n !== shown) { shown = n; writeScore(el.count, whole(n), el.counter.hasAttribute('data-et-score')); }
   }
   let refreshCursorShop = null;
   function draw(force) {
@@ -531,7 +532,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       p.hidden = !show;
       shop?.fit();
     },
-    showCount(n) { el.count.textContent = whole(n); shown = -1; },
+    showCount(n) { writeScore(el.count, whole(n), el.counter.hasAttribute('data-et-score')); shown = -1; },
     setWakeGate(fn) { wakeGate = fn; },
     getWindowLayout: layouts.get,
     saveWindowLayout(key, value) { layouts.set(key, value); engine?.save(); },

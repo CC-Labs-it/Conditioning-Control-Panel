@@ -1,4 +1,5 @@
 import { openButtonShop, buttonShopCss, buttonShopReady, grandfatherFaces, shopDoor, SIZE_ITEMS } from '../../button-shop.js';
+import { writeScore } from '../../emi-score.js';
 import { mountGameWave } from '../../live-wave.js';
 import { mountCursorTrail } from './cursor-trail.js';
 import { FACE_CSS, grandfatherCopies } from '../../bouncing-art.js';
@@ -327,7 +328,7 @@ body.gentle #fz-roll, body.tb-hidecount #fz-roll, #counter:has(#count[hidden]) #
           const isDigit = ch >= '0' && ch <= '9';
           column.el.className = isDigit ? 'd' : 'c';
           // One live glyph per place. Only a steady, adjacent lower digit rolls in.
-          column.el.textContent = ch;
+          writeScore(column.el, ch, i === text.length-1 && counter.hasAttribute('data-et-score'));
           if (i > 0 && !resized && isDigit && Math.abs(Number(ch) - Number(previous)) === 1 &&
               time - column.changedAt >= 180 && !ctx.gentle && !ctx.reduced) {
             const dy = ch > previous ? '.18em' : '-.18em';
