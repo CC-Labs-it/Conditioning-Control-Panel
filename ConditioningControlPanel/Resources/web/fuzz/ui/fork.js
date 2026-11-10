@@ -18,6 +18,7 @@ function loadDemos() {
     const { registerBubbleDemo } = await import('./demos/bambi-dome.js');
     registerBubbleDemo();
     await import('./demos/button-ending.js');
+    await import('./demos/fate-outside.js');
     return Demo;
   })();
   return demos;
