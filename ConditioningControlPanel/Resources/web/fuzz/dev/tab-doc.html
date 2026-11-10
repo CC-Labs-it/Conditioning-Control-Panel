@@ -15,6 +15,7 @@
     #preview summary { cursor:pointer;padding:12px;background:#211813d9;border:1px solid #79613c;font:12px Arial,sans-serif; }
     #preview nav { display:flex;flex-wrap:wrap;max-width:270px;gap:8px;padding:12px;background:#211813; }
     #preview a,#preview button { padding:7px;color:#eee0c0;border:1px solid #79613c;background:#32251b;text-decoration:none;cursor:pointer; }
+    #preview label { display:block;width:100%;font:12px Arial,sans-serif; } #media-files { max-width:250px;font:11px Arial,sans-serif; }
     #preview p { max-width:250px;margin:0;padding:10px;font:12px/1.4 Arial,sans-serif;background:#211813; }
     #pause,#finished { position:fixed;inset:0;z-index:110;background:#100b09eb;display:grid;place-content:center;text-align:center;gap:15px;padding:25px; }
     [hidden] { display:none!important; }
@@ -25,9 +26,10 @@
   <main id="l-ending"></main>
   <button id="wake">Wake Up</button>
   <details id="preview"><summary>Ride preview</summary><nav>
-    <a href="?at=booth">The Subject</a><a href="?at=lever">Pumping gallery</a><a href="?at=145">First drop</a><a href="?at=floorboard">Reflex laboratory</a><a href="?at=363">Down the rabbit hole</a><a href="?at=wakeup">Outside world</a><a href="?at=stage">Theatre</a>
+    <a href="?at=booth">The Subject</a><a href="?at=lever">Pumping gallery</a><a href="?at=145">First drop</a><a href="?at=floorboard">Reflex laboratory</a><a href="?at=363">Down the rabbit hole</a><a href="?at=wakeup">Outside world</a><a href="?at=stage">The last wall</a>
+    <label id="media-label" for="media-files">Choose personal media</label><input id="media-files" type="file" accept="image/*,video/*" multiple><button id="mute">Sound on</button>
     <button id="unlock">Leave platform</button><button id="panic">End preview</button>
-  </nav><p>Drag to look around. Click the lever or press Space to pump. The connecting slopes carry you downhill. Silent preview.</p></details>
+  </nav><p>Drag to look around. Click the lever or press Space to pump. The connecting slopes carry you downhill. Recorded narration starts with your first interaction.</p></details>
   <section id="pause" hidden><h1>Paused</h1><button id="resume">Resume</button><button id="stop">End preview</button></section>
   <section id="finished" hidden><h1>The preview has ended</h1><p>The game continues to the run recap here.</p><a href="tab-doc.html">Board again</a></section>
   <script type="module" src="tab-doc.js"></script>

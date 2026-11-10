@@ -1,10 +1,11 @@
 import { mergeGeometries, mergeVertices } from '../../../vendor/three/addons/utils/BufferGeometryUtils.js';
-import { trackPosition, trackStyle } from './track.js';
+import { trackPosition, trackStyle, trackYaw } from './track.js';
 
 const BAY_LENGTH = 8;
 const HALF_WIDTH = 4.6;
 const ROOM_ENDS = [130, 180, 340, 400, 520];
 const ROOM_IDS = ['intake', 'connector', 'reflex', 'descent', 'wakeup', 'theatre'];
+const SCREEN_NICHES = new Map([[44, 1], [84, -1], [116, 1], [148, -1], [164, 1], [204, 1], [236, -1], [356, 1], [372, -1], [388, 1], [420, 1], [452, -1], [492, 1]]);
 
 function roomAt(distance) {
   const index = ROOM_ENDS.findIndex(end => distance < end);
@@ -39,7 +40,7 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
     return sweptBoxes.get(key);
   }
 
-  function makeKit(id, variant = 0) {
+  function makeKit(id, variant = 0, screenSide = 0) {
     const batches = new Map();
     const solidParts = [];
     const names = {
@@ -48,7 +49,7 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
       reflex: { wall: 'lacquerBlack', trim: 'cyanPanel', light: 'amberLight', accent: 'chrome', floor: 'dark' },
       descent: { wall: 'lacquerPlum', trim: 'pinkPanel', light: 'pinkLight', accent: 'chrome', floor: 'lacquerPlum' },
       wakeup: { wall: 'pearl', trim: 'mint', light: 'mintLight', accent: 'brass', floor: 'floor' },
-      theatre: { wall: 'velvet', trim: 'pinkPanel', light: 'amberLight', accent: 'brass', floor: 'woodDark' },
+      theatre: { wall: 'plaster', trim: 'pearl', light: 'lamp', accent: 'iron', floor: 'floor' },
     }[id];
     function add(geometry, material, x, y, z, sx = 1, sy = 1, sz = 1, rx = 0, ry = 0, rz = 0, solid = false) {
       quaternion.setFromEuler(new THREE.Euler(rx, ry, rz));
@@ -240,7 +241,7 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
     box(id === 'wakeup' ? 'pearl' : 'lacquerBlack', 0, 0.022, 0, 1.55, 0.04, BAY_LENGTH);
     for (const side of [-1, 1]) {
       box(names.accent, side * 0.81, 0.045, 0, 0.035, 0.035, BAY_LENGTH);
-      box(names.light, side * 1.02, 0.035, 0, 0.045, 0.024, BAY_LENGTH);
+      if (id !== 'theatre') box(names.light, side * 1.02, 0.035, 0, 0.045, 0.024, BAY_LENGTH);
     }
 
     if (id === 'intake') {
@@ -250,7 +251,7 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
           box('lacquerRose', side * 4.4, 1.75, z, 0.3, 3.5, 0.4);
           box('brass', side * 4.21, 1.75, z, 0.035, 3.32, 0.11);
         }
-        for (const z of [-1.8, 0, 1.8]) {
+        for (const z of side === screenSide ? [] : [-1.8, 0, 1.8]) {
           panel(side, 5.98, 1.56, z, 2.48, 1.62, 'velvet');
           for (let channel = 0; channel < 6; channel++) {
             const channelZ = z - 0.61 + channel * 0.245;
@@ -271,10 +272,12 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
       frame(shell, 'lacquerRose', 0.14, -3.9);
       frame(shell.map(([x, y]) => [x * 0.985, y - 0.055]), 'pinkLight', 0.025, -3.76);
       // Recessed square ceiling lanterns have visible housings and attachments.
-      box('brass', 0, 4.95, 0, 1.55, 0.13, 1.45);
-      box('lamp', 0, 4.86, 0, 1.37, 0.045, 1.27);
+      for (const x of [-2.7, 2.7]) {
+        box('brass', x, 4.71, 0, 0.66, 0.13, 1.15);
+        box('lamp', x, 4.62, 0, 0.54, 0.045, 1.02);
+      }
       bench(variant ? 1 : -1);
-      if (variant) archiveShelf(-1);
+      if (variant && screenSide !== -1) archiveShelf(-1);
       else {
         rounded('woodDark', 5.13, 0.59, 0.85, 0.72, 0.10, 0.72, 0.045);
         cylinder('brass', 5.13, 0.30, 0.85, 0.045, 0.55);
@@ -284,13 +287,19 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
     } else if (id === 'connector' || id === 'descent') {
       const color = id === 'connector' ? 'cyanLight' : 'pinkLight';
       const dark = id === 'connector' ? 'cyanPanel' : 'lacquerPlum';
-      const outline = [[-4.62, 0], [-4.62, 2.8], [-3.3, 4.25], [3.3, 4.25], [4.62, 2.8], [4.62, 0]];
-      curveShell([...outline].reverse(), dark, true);
-      for (const z of [-3.85, 0]) {
+      const outline = [[-4.62, 0], [-4.62, 4.05], [-3.3, 5.45], [3.3, 5.45], [4.62, 4.05], [4.62, 0]];
+      curveShell([...outline.slice(1, -1)].reverse(), dark, true);
+      for (const z of [-3.85]) {
         frame(outline.map(([x, y]) => [x * 0.97, Math.max(0.1, y - 0.18)]), 'lacquerBlack', 0.18, z);
         frame(outline.map(([x, y]) => [x * 0.968, Math.max(0.1, y - 0.22)]), color, 0.035, z + 0.16);
       }
       for (const side of [-1, 1]) {
+        if (side === screenSide) {
+          alcove(side, 4.05);
+          grille(side, 4.38, 0.45, 3.15, 0.68, 0.27);
+          continue;
+        }
+        box(dark, side * 4.75, 2.025, 0, 0.26, 4.05, BAY_LENGTH, true);
         for (const z of [-2.5, 1.5]) {
           panel(side, 4.37, 1.45, z, 1.95, 1.28, 'lacquerBlack');
           box(color, side * 4.27, 1.45, z, 0.035, 1.58, 0.075);
@@ -309,7 +318,7 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
         }
       }
       // Repeated asymmetric chevrons provide speed and descent cues on the solid walls.
-      for (const side of [-1, 1]) for (const z of [-2, 2]) {
+      for (const side of [-1, 1].filter(side => side !== screenSide)) for (const z of [-2, 2]) {
         box(color, side * 4.19, 1.15, z, 0.045, 0.10, 0.65, false, side * 0.55);
         box(color, side * 4.19, 1.47, z + 0.28, 0.045, 0.10, 0.65, false, -side * 0.55);
       }
@@ -321,7 +330,7 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
         box('amberLight', side * 4.26, 1.95, -3.25, 0.055, 0.06, 1.2);
         box('amberLight', side * 4.26, 1.95, 3.25, 0.055, 0.06, 1.2);
         // Closed specimen drawers, controls and inset instrument windows.
-        box('chrome', side * 5.73, 0.58, 0, 0.65, 1.15, 3.6);
+        box('chrome', side * 5.73, 0.49, 0, 0.65, 0.98, 3.6);
         for (const z of [-1.25, -0.42, 0.42, 1.25]) {
           box('lacquerBlack', side * 5.36, 0.62, z, 0.04, 0.74, 0.72);
           cylinder('amberLight', side * 5.31, 0.72, z, 0.055, 0.025, 0, 0, Math.PI / 2);
@@ -333,22 +342,23 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
         }
         wallSpeaker(side, 4.48, 3.28, 3.22);
       }
-      instrumentRack(variant ? 1 : -1);
+      instrumentRack(screenSide ? -screenSide : variant ? 1 : -1);
       const stoolSide = variant ? -1 : 1;
       cylinder('lacquerBlack', stoolSide * 5.07, 0.12, -0.85, 0.32, 0.09);
       cylinder('chrome', stoolSide * 5.07, 0.35, -0.85, 0.045, 0.45);
       cylinder('leather', stoolSide * 5.07, 0.62, -0.85, 0.34, 0.16);
-      box('lacquerBlack', 0, 4.35, 0, 9.4, 0.32, BAY_LENGTH, true);
-      for (const x of [-3.1, 0, 3.1]) {
-        rounded('lacquerBlack', x, 4.14, 0, 0.98, 0.18, 4.02, 0.04);
-        box('chrome', x, 4.09, 0, 0.82, 0.16, 3.8);
-        box('cyanLight', x, 3.99, 0, 0.67, 0.045, 3.6);
-        for (const dx of [-0.42, 0.42]) box('iron', x + dx, 3.99, 0, 0.045, 0.12, 3.92);
-        for (const z of [-1.87, 1.87]) box('iron', x, 3.99, z, 0.89, 0.12, 0.055);
+      box('lacquerBlack', 0, 5.15, 0, 9.4, 0.32, BAY_LENGTH, true);
+      for (const x of [-3.1, 3.1]) {
+        rounded('lacquerBlack', x, 4.94, 0, 0.98, 0.18, 4.02, 0.04);
+        box('chrome', x, 4.89, 0, 0.82, 0.16, 3.8);
+        box('cyanLight', x, 4.79, 0, 0.67, 0.045, 3.6);
+        for (const dx of [-0.42, 0.42]) box('iron', x + dx, 4.79, 0, 0.045, 0.12, 3.92);
+        for (const z of [-1.87, 1.87]) box('iron', x, 4.79, z, 0.89, 0.12, 0.055);
       }
+      for (const side of [-1, 1]) box('lacquerBlack', side * 4.7, 4.45, 0, 0.25, 1.15, BAY_LENGTH, true);
       for (const side of [-1, 1]) {
-        box('chrome', side * 4.3, 2.1, -3.85, 0.3, 4.2, 0.42);
-        box('amberLight', side * 4.12, 2.1, -3.85, 0.045, 3.9, 0.06);
+        box('chrome', side * 4.3, 2.5, -3.85, 0.3, 5.0, 0.42);
+        box('amberLight', side * 4.12, 2.5, -3.85, 0.045, 4.7, 0.06);
       }
     } else if (id === 'wakeup') {
       for (const side of [-1, 1]) {
@@ -356,16 +366,16 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
         box('mint', side * 4.4, 1.85, -3.7, 0.35, 3.7, 0.35);
         box('mint', side * 4.4, 1.85, 3.7, 0.35, 3.7, 0.35);
         box('pearl', side * 5.12, 0.34, 0, 1.2, 0.68, 3.6);
-        box('dark', side * 5.12, 0.71, 0, 1.0, 0.1, 3.4);
+        box(side === screenSide ? 'wood' : 'dark', side * 5.12, 0.71, 0, 1.0, 0.1, 3.4);
         box('brass', side * 4.48, 0.68, 0, 0.045, 0.04, 3.64);
-        for (const z of [-1.6, 0, 1.6]) {
+        for (const z of side === screenSide ? [] : [-1.6, 0, 1.6]) {
           panel(side, 5.97, 2.64, z, 1.66, 1.42, 'pearl');
           for (const dy of [-0.45, 0, 0.45]) box('mint', side * 5.78, 2.64 + dy, z, 0.045, 0.028, 1.2);
           box('mint', side * 5.76, 2.64, z, 0.045, 1.43, 0.035);
         }
         for (const z of [-3.18, 3.18]) panel(side, 4.47, 1.65, z, 2.8, 0.89, 'pearl');
         grille(side, 4.33, 0.58, variant ? 3.18 : -3.18, 0.62, 0.34);
-        for (const z of [-1.4, -0.65, 0.1, 0.85, 1.6]) {
+        for (const z of side === screenSide ? [] : [-1.4, -0.65, 0.1, 0.85, 1.6]) {
           cylinder('mint', side * 5.12, 1.18, z, 0.045, 0.95);
           for (let leaf = 0; leaf < 3; leaf++) {
             const leafGeometry = new THREE.SphereGeometry(1, 10, 6);
@@ -390,24 +400,17 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
       for (const x of [-0.22, 0, 0.22]) box('lacquerBlack', benchX + x, 0.835, 0.8, 0.013, 0.005, 2.79);
     } else {
       for (const side of [-1, 1]) {
-        alcove(side, 5.05);
-        // Full-height curtains and golden stage columns make the finale a theatre.
-        for (const z of [-2.15, -1.4, -0.65, 0.1, 0.85, 1.6, 2.35]) cylinder('velvet', side * 5.94, 2.45, z, 0.24, 4.9);
-        for (const z of [-3.18, 3.18]) panel(side, 4.43, 2.31, z, 4.2, 0.83, 'velvet');
-        fixture(side, 3.14, variant ? 3.2 : -3.2);
-        grille(side, 4.26, 0.55, 3.18, 0.58, 0.36);
-        wallSpeaker(side, 4.47, 4.25, -3.18);
-        box('pinkPanel', side * 4.33, 2.45, -3.68, 0.45, 4.9, 0.55);
-        box('brass', side * 4.05, 2.45, -3.68, 0.065, 4.7, 0.14);
-        for (const y of [0.6, 1.2, 1.8, 2.4, 3.0, 3.6, 4.2]) sphere('amberLight', side * 3.98, y, -3.68, 0.065);
+        box('plaster', side * 4.73, 1.9, 0, 0.26, 3.8, BAY_LENGTH, true);
+        box('pearl', side * 4.57, 0.12, 0, 0.08, 0.24, BAY_LENGTH);
+        box('iron', side * 4.52, 0.25, 0, 0.025, 0.025, BAY_LENGTH);
+        box('pearl', side * 4.57, 3.69, 0, 0.12, 0.14, BAY_LENGTH);
+        if (variant && side < 0) grille(side, 4.54, 3.16, -1.1, 0.8, 0.28);
       }
-      bench(variant ? 1 : -1);
-      box('lacquerBlack', 0, 5.48, 0, 9.5, 0.3, BAY_LENGTH, true);
-      const arch = [[-4.35, 0], [-4.35, 4.3], [-3.4, 5.05], [3.4, 5.05], [4.35, 4.3], [4.35, 0]];
-      frame(arch, 'pinkPanel', 0.16, -3.7);
-      frame(arch.map(([x, y]) => [x * 0.965, y - 0.035]), 'amberLight', 0.035, -3.49);
-      box('pinkLight', 0, 5.26, 0, 2.8, 0.045, 1.45);
-      box('brass', 0, 5.35, 0, 3.0, 0.12, 1.65);
+      box('plaster', 0, 3.92, 0, 9.5, 0.24, BAY_LENGTH, true);
+      if (variant) {
+        rounded('pearl', -2.8, 3.73, 0, 0.36, 0.13, 1.25, 0.025);
+        box('lamp', -2.8, 3.65, 0, 0.24, 0.035, 1.06);
+      }
     }
     const meshes = [];
     for (const [name, parts] of batches) {
@@ -421,9 +424,22 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
     return { meshes, solid };
   }
 
-  for (const id of ROOM_IDS) for (let variant = 0; variant < 2; variant++) templates.set(`${id}/${variant}`, makeKit(id, variant));
+  for (const id of ROOM_IDS) for (let variant = 0; variant < 2; variant++) templates.set(`${id}/${variant}/0`, makeKit(id, variant));
+  for (const [center, side] of SCREEN_NICHES) {
+    const id = roomAt(center), variant = Math.abs(Math.floor(center / BAY_LENGTH)) % 2;
+    const key = `${id}/${variant}/${side}`;
+    if (!templates.has(key)) templates.set(key, makeKit(id, variant, side));
+  }
   for (const geometry of temporary) geometry.dispose();
   const occlusionMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+  const finalWallGeometry = new THREE.BoxGeometry(9.5, 3.8, 0.24);
+  const finalWall = new THREE.Mesh(finalWallGeometry, materials.plaster);
+  finalWall.name = 'museum_plain_service_end_wall';
+  const wallPoint = trackPosition(587, 0, 1.9);
+  finalWall.position.set(wallPoint.x, wallPoint.y, wallPoint.z);
+  finalWall.rotation.y = trackYaw(587);
+  finalWall.receiveShadow = true;
+  group.add(finalWall); finalWall.updateMatrixWorld(true);
   const bays = Array.from({ length: lite ? 9 : 11 }, () => ({ node: new THREE.Group(), rails: new THREE.Group(), index: null, occluder: null }));
   for (const entry of bays) group.add(entry.node, entry.rails);
   const lights = Array.from({ length: 3 }, () => {
@@ -454,7 +470,7 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
     entry.index = index;
     const center = index * BAY_LENGTH + BAY_LENGTH / 2;
     const id = roomAt(center);
-    const template = templates.get(`${id}/${Math.abs(index) % 2}`);
+    const template = templates.get(`${id}/${Math.abs(index) % 2}/${SCREEN_NICHES.get(center) || 0}`);
     entry.node.name = `Museum ${id} ${index}`;
     for (const item of template.meshes) {
       const mesh = new THREE.Mesh(deform(item.geometry, center), materials[item.name]);
@@ -489,8 +505,8 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
       const point = trackPosition(at, i % 2 ? -2.8 : 2.8, 3.05);
       lights[i].position.set(point.x, point.y, point.z);
       const style = trackStyle(at);
-      lights[i].color.set(style?.accent || '#ffb5d5');
-      lights[i].intensity = roomAt(at) === 'wakeup' ? 15 : 28;
+      lights[i].color.set(at >= 520 ? '#fff0d6' : style?.accent || '#ffb5d5');
+      lights[i].intensity = at >= 520 ? 13 : roomAt(at) === 'wakeup' ? 15 : 28;
     }
   }
   update(0);
@@ -503,6 +519,7 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
       if (distance < 0.01) return false;
       rayDirection.multiplyScalar(1 / distance);
       raycaster.set(rayOrigin, rayDirection); raycaster.near = 0.05; raycaster.far = distance - 0.08;
+      if (raycaster.intersectObject(finalWall, false).length) return true;
       for (const entry of bays) {
         if (entry.node.visible && raycaster.intersectObject(entry.occluder, false).length) return true;
       }
@@ -514,7 +531,7 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
         for (const item of template.meshes) item.geometry.dispose();
         template.solid.dispose();
       }
-      occlusionMaterial.dispose(); group.removeFromParent();
+      finalWallGeometry.dispose(); occlusionMaterial.dispose(); group.removeFromParent();
     },
   };
 }

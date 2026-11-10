@@ -4,11 +4,21 @@ import { createMuseum } from './environment.js';
 import { createMuseumProps } from './props.js';
 import { createMuseumMaterials } from './materials.js';
 import { trackPoint, trackYaw, trackPitch, trackPosition, trackStyle } from './track.js';
+import { subscriberPlan } from '../ads.js';
 
 const UNIT = 180;
 const ART_ROOT = new URL('../../assets/documentary/art/', import.meta.url);
+const NICHE_SCREENS = [
+  [44,'R'],[84,'L'],[116,'R'],[148,'L'],[164,'R'],[204,'R'],[236,'L'],
+  [356,'R'],[372,'L'],[388,'R'],[420,'R'],[452,'L'],[492,'R'],
+];
+const STORY_PROJECTORS = [
+  { id:'booth',at:12,slot:'b-booth' }, { id:'lever',at:36,slot:'l-motion-study' },
+  { id:'reflex',at:196,slot:'f-hand' }, { id:'replay',at:314,slot:'f-tabwall' },
+  { id:'wakeup',at:418,slot:'w-case' },
+];
 const EXHIBIT_CARDS = {
-  'b-booth': ['RECORDING BOOTH', 'One afternoon', 'In the studio.'],
+  'b-booth': ['NARRATION BUDGET', 'One afternoon', 'Paid by the letter.'],
   'b-usernames': ['THE REGISTER', '11,000', 'Usernames.'],
   'b-nametag-frame': ['GOONING MUSEUM', 'The Subject', ''],
   'l-patent': ['RAILWAY HANDCAR', 'The pump lever', 'Patent drawing.'],
@@ -23,6 +33,7 @@ const EXHIBIT_CARDS = {
   'f-freeze': ['MANUS FUGIENS', 'In slow motion', ''],
   'w-daylight': ['DAYLIGHT', 'Unanswered messages', 'A world of unanswered messages.'],
   'w-talk': ['WE NEED TO TALK', 'Two chairs', 'And a box of tissues.'],
+  'w-case': ['THE WAKE UP BUTTON', 'Specimen: unpressed', ''],
 };
 
 function element(doc, tag, className, parent, text) {
@@ -34,7 +45,7 @@ function element(doc, tag, className, parent, text) {
 }
 
 /** Geometry and lighting are WebGL. Every framed picture is a real, display-only DOM image. */
-export function createScene(ctx, root, manifest, media, { lite = false, onWake, onPump } = {}) {
+export function createScene(ctx, root, manifest, media, { lite = false, onWake, onPump, onStageAction } = {}) {
   const doc = root.ownerDocument;
   const canvas = element(doc, 'canvas', 'td-webgl', root);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: !lite, alpha: false, powerPreference: 'high-performance' });
@@ -84,23 +95,28 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
   specimenButton.addEventListener('click', onWake);
   const stageAnchor = element(doc, 'div', 'td-stage-anchor td-plane', domCamera);
   stageAnchor.hidden = true;
-  const replay = element(doc, 'div', 'td-replay', root);
+  const stageControlsAnchor = element(doc,'div','td-stage-controls-anchor',root);
+  stageControlsAnchor.hidden = true;
+  const replay = element(doc, 'div', 'td-plane td-projector-face td-replay', domCamera);
   replay.hidden = true;
   const replayWall = element(doc, 'div', 'td-replay-wall', replay);
   const replayCaption = element(doc, 'p', '', replay, '');
   const loading = element(doc, 'p', 'td-loading', root, 'Opening the gallery');
   const surfaces = [], art = new Map(), animated = new Set(), geometries = new Set();
+  const projectors = [];
   const replayMedia = [];
   const geometryGroup = new THREE.Group();
   world.add(geometryGroup);
   let materialPack, materials, museum, props, stamp, replayOff;
   let width = 1, height = 1, focal = 1, lastState, disposed = false, readyState = false, stamped = false;
-  let toyFrameOff = null, toyTime = 0, renders = 0;
+  let toyFrameOff = null, toyTime = 0, renders = 0, projectorFrameOff = null;
+  let bulbJob=null,bulbRestore=null,bulbDim=false,bulbCycle=0;
   let lookYaw = 0, lookPitch = 0, gesture = null;
   const viewMatrix = new THREE.Matrix4(), projectionView = new THREE.Matrix4();
   const frustum = new THREE.Frustum(), surfaceSphere = new THREE.Sphere();
   const pointInView = new THREE.Vector3(), projectedPump = new THREE.Vector3();
   let pumpPosition = null;
+  const pendingProjectorBeats = [];
   const depth = lite ? 38 : 58;
 
   function plate(parent, slot, title) {
@@ -122,7 +138,7 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
     }
     return face;
   }
-  function cardFigure(parent, slot) {
+  function cardFigure(parent, slot, projection = false) {
     const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox','0 0 160 90'); svg.setAttribute('aria-hidden','true');
     svg.classList.add('td-card-figure'); parent.append(svg);
@@ -132,7 +148,26 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
       svg.append(node); return node;
     };
     const line = (x1,y1,x2,y2) => shape('line',{x1,y1,x2,y2});
-    if (slot === 'l-motion-study' || slot === 'l-patent') {
+    if (projection && slot.startsWith('b-')) {
+      shape('rect',{x:68,y:12,width:24,height:40,rx:12});
+      shape('path',{d:'M58 32 V42 Q58 62 80 62 Q102 62 102 42 V32 M80 62 V78 M60 78 H100'});
+      for(let y=22;y<45;y+=7) line(73,y,87,y);
+      shape('path',{d:'M43 24 Q30 35 43 48 M117 24 Q130 35 117 48 M31 15 Q12 35 31 57 M129 15 Q148 35 129 57'});
+    } else if (projection && slot.startsWith('l-')) {
+      shape('path',{d:'M32 73 H128 V79 H32 Z M40 73 V62 H120 V73 M80 62 V31 M45 31 H115','stroke-width':3});
+      shape('circle',{cx:48,cy:78,r:8}); shape('circle',{cx:112,cy:78,r:8});
+      shape('path',{d:'M42 18 Q80 -2 118 18 M108 11 L118 18 L108 22 M52 11 L42 18 L52 22'});
+      line(45,19,115,43); line(45,43,115,19);
+    } else if (projection && slot === 'w-case') {
+      shape('path',{d:'M40 73 V20 Q40 10 50 10 H110 Q120 10 120 20 V73 M29 73 H131 V82 H29 Z'});
+      shape('rect',{x:54,y:38,width:52,height:23,rx:5,'stroke-width':3});
+      const text = shape('text',{x:80,y:53,'text-anchor':'middle','font-size':10,fill:'currentColor',stroke:'none'}); text.textContent='Wake Up';
+      line(48,17,48,67); line(112,17,112,67);
+    } else if (projection && (slot === 'f-hand' || slot === 'f-freeze')) {
+      shape('path',{d:'M45 78 L35 56 Q31 48 37 46 Q42 44 49 57 V21 Q49 13 55 13 Q61 13 61 21 V43 V15 Q61 8 67 8 Q73 8 73 15 V42 V19 Q73 12 79 12 Q85 12 85 19 V45 V29 Q85 22 91 22 Q97 22 97 29 V58 Q97 73 87 79 Z'});
+      shape('rect',{x:113,y:43,width:24,height:35,rx:12}); line(125,43,125,56);
+      shape('path',{d:'M103 26 H139 M133 21 L139 26 L133 31'});
+    } else if (slot === 'l-motion-study' || slot === 'l-patent') {
       line(6,72,154,72);
       for(let i=0;i<12;i++) { const x=8+i*13, y=45-Math.sin(i/11*Math.PI*2)*24;
         line(x,72,x,y); shape('circle',{cx:x,cy:y,r:3}); }
@@ -277,7 +312,7 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
   }
   function buildExhibits() {
     for (const exhibit of manifest.exhibits) {
-      if (exhibit.kind.startsWith('stage-') || exhibit.kind === 'cutout' || exhibit.kind === 'vitrine') continue;
+      if (exhibit.kind.startsWith('stage-') || ['cutout','vitrine','run-picture','run-clip'].includes(exhibit.kind)) continue;
       const sides = exhibit.side === 'both' ? ['L', 'R'] : [exhibit.side];
       const locations = exhibit.kind === 'tab-wall' ? [248,264,280,300] : [exhibit.at + (exhibit.zone === 'booth' && exhibit.side !== 'C' ? 4 : 0)];
       for (const at of locations) for (const side of sides) {
@@ -335,13 +370,138 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
       const frameGroup = frame(2.4,.7,{...point,z:point.z-.03},yaw);
       surfaces.push({ node, frameGroup, at: banner.at, side:'C',w:2.3,h:.7,yaw,faces:[],mounts:[] });
     }
-    const dock = positionAt(587, 0, 2.35);
-    const dockYaw = trackYaw(587);
-    const stageFrame = frame(5.7,3.5,dock,dockYaw,true);
-    box(stageFrame,'Left screen support',[.20,2.2,.20],[-2.4,-2.2,-.1],materials.woodDark);
-    box(stageFrame,'Right screen support',[.20,2.2,.20],[2.4,-2.2,-.1],materials.woodDark);
+    buildNicheScreens();
+    buildProjectors();
+    const dock = positionAt(587, 0, 2.35), dockYaw = trackYaw(587);
     cssPlace(stageAnchor, {...dock,z:dock.z+.09},dockYaw,8.7,3.4);
     for (const display of geometryGroup.children) batchDisplay(display);
+  }
+  function buildNicheScreens() {
+    for (const [at,side] of NICHE_SCREENS) {
+      const original = manifest.exhibits.find(item => item.kind.startsWith('run-') && item.side === side &&
+        Math.round((item.at-4)/8)*8+4 === at);
+      const exhibit = original || { id:`personal-${at}-${side}`,kind:'run-picture',placard:{title:'The collection',line:'A still from this evening.'} };
+      const room = trackStyle(at).id, w=3.4, h=1.9;
+      const point = positionAt(at,side==='L'?-5.85:5.85,2.05);
+      const yaw = trackYaw(at)+(side==='L'?Math.PI/2:-Math.PI/2);
+      const frameGroup = frame(w,h,point,yaw,false,room);
+      const node = element(doc,'div','td-plane td-exhibit td-personal-screen',domCamera);
+      node.dataset.exhibit=exhibit.id; node.dataset.room=room;
+      const facePoint = new THREE.Vector3(0,0,.075).applyAxisAngle(new THREE.Vector3(0,1,0),yaw).add(new THREE.Vector3(point.x,point.y,point.z));
+      cssPlace(node,facePoint,yaw,w*.94,h*.91);
+      const face = plate(node,null,'A still from this evening');
+      surfaces.push({node,frameGroup,exhibit,at,side,w,h,yaw,room,faces:[{face,kind:exhibit.kind}],mounts:[],personal:true});
+    }
+  }
+  function buildProjectors() {
+    for (const spec of STORY_PROJECTORS) {
+      const w=4.8,h=2.4,top=3.94;
+      const group = new THREE.Group(), fixed = new THREE.Group();
+      const point=positionAt(spec.at,0,0), yaw=trackYaw(spec.at);
+      group.position.set(point.x,point.y,point.z); group.rotation.y=yaw;
+      group.add(fixed); world.add(group);
+      box(fixed,'Motorized projection screen case',[w+.28,.20,.27],[0,top+.14,0],materials.iron);
+      box(fixed,'Case end trim',[w+.34,.10,.28],[0,top+.14,0],materials.chrome||materials.brass);
+      box(fixed,'Roller slot',[w,.018,.06],[0,top+.035,.12],materials.dark);
+      for (const side of [-1,1]) {
+        box(fixed,'Ceiling suspension bracket',[.05,.5,.08],[side*(w/2-.3),top+.47,0],materials.iron);
+        box(fixed,'Screen motor end cap',[.12,.22,.30],[side*(w/2+.12),top+.14,0],materials.dark);
+      }
+      const cloth=box(group,'Projection fabric',[w,h,.014],[0,top-h/2,.11],materials.paper);
+      const bar=box(group,'Weighted screen rail',[w+.04,.045,.045],[0,top-h,.11],materials.iron);
+      const node=spec.id==='replay'?replay:element(doc,'div','td-plane td-projector-face',domCamera);
+      node.dataset.projector=spec.id;
+      const projector={...spec,w,h,top,group,cloth,bar,node,progress:0,target:0,override:null,mounts:[]};
+      if(spec.id!=='replay') projectorContent(projector,spec.slot);
+      else {
+        freezePlate.querySelector('.td-card-figure')?.remove();
+        cardFigure(freezePlate.querySelector('.td-exposition-card'),'f-freeze',true);
+      }
+      cloth.visible=bar.visible=false; node.hidden=true;
+      projectors.push(projector); batchDisplay(fixed);
+    }
+  }
+  function projectorContent(projector,slot,title,line) {
+    if(projector.id==='replay') return;
+    projector.node.replaceChildren();
+    const validSlot=typeof slot==='string'&&/^[blfws]-[a-z-]+$/.test(slot)?slot:projector.slot;
+    const face=plate(projector.node,validSlot,title);
+    face.querySelector('.td-card-figure')?.remove();
+    cardFigure(face.querySelector('.td-exposition-card'),validSlot,true);
+    if(title) face.querySelector('.td-exposition-value').textContent=String(title);
+    if(line) element(doc,'p','td-projection-caption',projector.node,String(line));
+  }
+  function setProjectorTarget(projector,target) {
+    projector.target=target;
+    if(ctx.reduced) { projector.progress=target; return; }
+    if(projectorFrameOff || projectors.every(item=>item.progress===item.target)) return;
+    projectorFrameOff=ctx.frame(dt=>{
+      if(disposed||ctx.paused||doc.hidden) return;
+      let moving=false;
+      for(const item of projectors) {
+        const step=Math.max(0,dt)/(ctx.gentle?1.6:1.1);
+        item.progress=item.target>item.progress?Math.min(item.target,item.progress+step):Math.max(item.target,item.progress-step);
+        moving ||= item.progress!==item.target;
+      }
+      if(lastState?.docked) draw(lastState);
+      if(!moving) { projectorFrameOff?.(); projectorFrameOff=null; }
+    });
+  }
+  function projectorBeat(id,data={}) {
+    if(!projectors.length) { pendingProjectorBeats.push([id,data]); return; }
+    const requested=typeof data==='string'?{id:data}:data||{};
+    const projector=projectors.find(item=>item.id===requested.id)||projectors.reduce((best,item)=>
+      Math.abs(item.at-(Number(requested.at)||lastState?.z||0))<Math.abs(best.at-(Number(requested.at)||lastState?.z||0))?item:best);
+    const show=id.endsWith('.show');
+    projector.override=show;
+    if(show && (requested.slot||requested.title||requested.line)) projectorContent(projector,requested.slot,requested.title,requested.line);
+    setProjectorTarget(projector,show?1:0);
+    if(lastState) draw(lastState);
+  }
+  function drawProjectors(state) {
+    for(const projector of projectors) {
+      const distance=projector.at-state.z;
+      const approach=distance<26&&distance>Math.max(6.5,state.v*1.25+2);
+      const target=(projector.override??approach)&&distance>2.5&&distance<55?1:0;
+      setProjectorTarget(projector,target);
+      const p=projector.progress;
+      projector.cloth.scale.y=Math.max(.001,p);
+      projector.cloth.position.y=projector.top-projector.h*p/2;
+      projector.bar.position.y=projector.top-projector.h*p;
+      const center=positionAt(projector.at,0,projector.top-projector.h*p/2);
+      pointInView.set(center.x,center.y,center.z).applyMatrix4(camera.matrixWorldInverse);
+      const visible=p>.001&&pointInView.z<-.15&&distance>-4&&distance<depth&&
+        !museum.occludes?.(center,camera.position);
+      projector.group.visible=distance>-18&&distance<depth;
+      projector.cloth.visible=projector.bar.visible=p>.001;
+      projector.node.hidden=!visible;
+      const point=positionAt(projector.at,0,projector.top-projector.h/2),yaw=trackYaw(projector.at);
+      point.x+=Math.sin(yaw)*.127; point.z+=Math.cos(yaw)*.127;
+      cssPlace(projector.node,point,yaw,projector.w-.05,projector.h-.025);
+      projector.node.style.clipPath=`inset(0 0 ${(1-p)*100}% 0)`;
+      if(visible) warmArt(projector.node);
+      if(projector.id==='replay' && !visible && replayMedia.length) {
+        for(const release of replayMedia) release(); replayMedia.length=0;
+      }
+    }
+  }
+  function scheduleBulb() {
+    if(disposed||bulbJob||bulbRestore||!lastState?.docked||ctx.gentle||ctx.reduced) return;
+    const delay=[6200,9100,7300,8400][bulbCycle++%4];
+    bulbJob=ctx.after(delay,()=>{
+      bulbJob=null;
+      if(disposed||!lastState?.docked) return;
+      if(ctx.paused||doc.hidden||ctx.gentle||ctx.reduced) { scheduleBulb(); return; }
+      bulbDim=true; props.update(lastState.z,{time:0,gentle:false});
+      renderer.render(world,camera); renders++;
+      bulbRestore=ctx.after(1600,()=>{
+        bulbRestore=null; bulbDim=false;
+        if(disposed) return;
+        props.update(lastState.z,{gentle:true});
+        if(!ctx.paused&&!doc.hidden) { renderer.render(world,camera); renders++; }
+        scheduleBulb();
+      });
+    });
   }
   const ready = Promise.resolve().then(() => createMuseumMaterials(THREE, { lite })).then(async pack => {
     materialPack = pack; materials = pack.materials;
@@ -350,10 +510,13 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
     if (disposed) { pack.dispose(); return; }
     museum = createMuseum(THREE, materials, { lite }); world.add(museum.group);
     props = createMuseumProps(THREE, materials, { lite, onWake }); world.add(props.group); cartRig.add(props.cart);
+    props.setAdVisible(!subscriberPlan(ctx.caps));
     buildExhibits();
     await Promise.all([pack.ready, props.ready]);
     if (disposed) return;
-    readyState = true; loading.remove(); resize();
+    readyState = true; loading.remove();
+    for(const [id,data] of pendingProjectorBeats.splice(0)) projectorBeat(id,data);
+    resize();
   }).catch(error => { loading.textContent = 'The gallery could not open'; throw error; });
 
   function releaseSurface(surface) { for (const release of surface.mounts) release(); surface.mounts.length = 0; }
@@ -405,7 +568,7 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
     const ahead = trackPosition(state.z + 10, 0, .4);
     key.target.position.set(ahead.x, ahead.y, ahead.z);
     museum.update(state.z);
-    props.update(state.z);
+    props.update(state.z,{time:0,gentle:calm||!bulbDim});
     props.pump(state.leverAngle);
     const lit = [];
     for (const surface of surfaces) {
@@ -438,10 +601,16 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
       light.position.set(point.x+Math.sin(surface.yaw)*.85, point.y+surface.h/2+.3, point.z+Math.cos(surface.yaw)*.85);
       light.target.position.copy(point);
     });
+    drawProjectors(state);
     const stagePoint = positionAt(587, 0, 2.35);
     pointInView.set(stagePoint.x, stagePoint.y, stagePoint.z).applyMatrix4(camera.matrixWorldInverse);
     stageAnchor.hidden = state.z < 535 || pointInView.z > -.2;
-    stageAnchor.style.width = `${(width < 600 ? 5.6 : 8.7) * UNIT}px`;
+    const controlPoint=positionAt(586.70,0,1.45);
+    pointInView.set(controlPoint.x,controlPoint.y,controlPoint.z).project(camera);
+    stageControlsAnchor.hidden=state.z<570||pointInView.z< -1||pointInView.z>1||Math.abs(pointInView.x)>1.1||Math.abs(pointInView.y)>1.1||
+      Boolean(museum.occludes?.(controlPoint,camera.position));
+    stageControlsAnchor.style.left=`${(pointInView.x*.5+.5)*width}px`;
+    stageControlsAnchor.style.top=`${(-pointInView.y*.5+.5)*height}px`;
     const target = props.interactive?.[0]?.mesh;
     specimenButton.hidden = !target || state.z < 450 || state.z > 478;
     if (!specimenButton.hidden) {
@@ -462,6 +631,7 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
     root.dataset.gentle = String(Boolean(ctx.gentle || ctx.reduced));
     root.dataset.docked = String(state.docked);
     renderer.render(world, camera); renders++;
+    if(state.docked) scheduleBulb();
     const pumpTarget = props.pumpTargets?.[0];
     pumpPosition = null;
     if (pumpTarget) {
@@ -472,8 +642,9 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
         visible: Math.abs(projectedPump.x) < 1 && Math.abs(projectedPump.y) < 1 && projectedPump.z > -1 && projectedPump.z < 1 };
     }
   }
-  function beat(id) {
+  function beat(id,data={}) {
     if (disposed) return;
+    if(['projector.show','projector.hide','story.show','story.hide'].includes(id)) { projectorBeat(id,data); return; }
     if (id === 'booth.stamp' && stamp && !stamped) {
       stamped = true;
       stamp.hidden = false;
@@ -487,7 +658,7 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
     if (id === 'floor.snap') {
       root.dataset.floor = 'sheet';
       const gentle = ctx.gentle || ctx.reduced;
-      domCamera.querySelectorAll('.td-tab').forEach((tile, i) => {
+      domCamera.querySelectorAll('.td-kind-tab-wall .td-tab').forEach((tile, i) => {
         animate(tile.querySelector('.td-art'), [
           { opacity: 1, transform: 'scaleY(1)' },
           { opacity: 0, transform: gentle ? 'scaleY(1)' : 'scaleY(.01)' },
@@ -495,9 +666,9 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
       });
     }
     if (id === 'floor.replay') {
+      projectorBeat('projector.show',{id:'replay'});
       for (const release of replayMedia) release();
       replayMedia.length = 0;
-      replay.hidden = false;
       freezePlate.hidden = true;
       replayWall.hidden = false;
       replay.dataset.mode = 'open';
@@ -510,7 +681,7 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
       replayOff = ctx.after(1800, () => { replay.dataset.mode = 'sheet'; });
     }
     if (id === 'floor.freeze') {
-      replay.hidden = false;
+      projectorBeat('projector.show',{id:'replay'});
       replay.dataset.mode = 'freeze';
       replayWall.hidden = true;
       freezePlate.hidden = false;
@@ -518,7 +689,7 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
       replayCaption.textContent = manifest.exhibits.find(item => item.id === 'ex-freeze')?.caption || 'In slow motion';
     }
     if (id === 'floor.release') {
-      replay.hidden = true;
+      projectorBeat('projector.hide',{id:'replay'});
       replayOff?.();
       for (const release of replayMedia) release();
       replayMedia.length = 0;
@@ -591,8 +762,9 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
         return;
       }
       const entry = entries.find(item => item.mesh === hit.object || item.mesh.getObjectById(hit.object.id));
-      if (!museum.occludes?.(hit.point, camera.position)) entry?.onPress?.();
+      if (entry?.onPress && !museum.occludes?.(hit.point, camera.position)) { entry.onPress(); return; }
     }
+    if(lastState?.docked) onStageAction?.({id:'empty-click'});
   }
   root.addEventListener('pointerdown', pointerDown);
   root.addEventListener('pointermove', pointerMove);
@@ -601,10 +773,11 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
   root.addEventListener('lostpointercapture', cancelGesture);
   resize();
   return {
-    ready, stageAnchor, draw, resize, beat,
+    ready, stageAnchor, stageControlsAnchor, draw, resize, beat,
     debug: () => ({ drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles,
       textures: renderer.info.memory.textures, ready: readyState, renders, lookYaw, lookPitch,
-      cameraPosition: camera.position.toArray(), pumpPosition }),
+      cameraPosition: camera.position.toArray(), pumpPosition,
+      projectors:projectors.map(({id,at,progress,target})=>({id,at,progress,target})) }),
     setPaused(on) {
       if (on) cancelGesture();
       root.dataset.paused = String(Boolean(on));
@@ -615,6 +788,8 @@ export function createScene(ctx, root, manifest, media, { lite = false, onWake, 
       disposed = true;
       replayOff?.();
       toyFrameOff?.();
+      projectorFrameOff?.();
+      bulbJob?.(); bulbRestore?.();
       for (const release of replayMedia) release();
       for (const surface of surfaces) releaseSurface(surface);
       for (const animation of animated) animation.cancel();

@@ -25,7 +25,7 @@
   ],
   "exhibits": [
     { "id": "ex-booth", "slot": "b-booth", "zone": "booth", "side": "L", "at": 4, "kind": "art",
-      "placard": { "title": "The recording booth", "line": "One afternoon in the studio." } },
+      "placard": { "title": "The narration budget", "line": "One afternoon. Paid by the letter." } },
     { "id": "ex-usernames", "slot": "b-usernames", "zone": "booth", "side": "R", "at": 5, "kind": "art",
       "placard": { "title": "The register", "line": "Eleven thousand usernames." } },
     { "id": "ex-nametag", "slot": "b-nametag-frame", "stamp": "b-stamp", "zone": "booth", "side": "C", "at": 8, "kind": "name-tag",

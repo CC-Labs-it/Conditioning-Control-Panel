@@ -3,6 +3,7 @@ import { createRide, validateManifest } from './model.js';
 import { createScene } from './scene.js';
 import { createMedia } from './media.js';
 import { createStage } from './stage.js';
+import { createDocumentaryNarration } from './narration.js';
 
 export const DOCUMENTARY_SHOW_MAX_MS = 4 * 3600e3;
 export const MANIFEST_URL = new URL('../../assets/documentary/exhibits.json', import.meta.url);
@@ -27,15 +28,17 @@ export function createTabTunnel(ctx, parent, opts = {}) {
   const completed = new Set();
   const heldStops = new Map();
   const lite = opts.lite ?? LITE;
+  const useNarration = opts.narration === true || (opts.narration !== false && !opts.connect);
+  const fallback = opts.fallback ?? !useNarration;
   let disposed = false, started = false, frameOff = null, floorRelease = null, paintWait = 0;
-  let stage, scene, frameCount = 0;
+  let stage, scene, narration, frameCount = 0;
   const emit = (event, data) => {
     for (const fn of [...(listeners.get(event) || [])]) {
       try { fn(data); } catch (error) { console.error(error); }
     }
   };
   const ride = createRide(opts.manifest, { cues: opts.cues, reduced: ctx.reduced, at: opts.at }, (event, data) => {
-    if (event === 'cue' && opts.fallback !== false) {
+    if (event === 'cue' && fallback) {
       if (data.id === 'floor.creak') beat('floor.creak');
       if (data.id === 'floor.snap') beat('floor.snap');
       if (data.id === 'floor.park') {
@@ -50,7 +53,7 @@ export function createTabTunnel(ctx, parent, opts = {}) {
       frameCount++;
       frameOff?.(); frameOff = null;
       emit('stage', { ready: true });
-      if (opts.fallback !== false) { beat('stage.pitch'); later('stage.buttons', opts.at === 'stage' ? 800 : 48000); }
+      if (fallback) { beat('stage.pitch'); later('stage.buttons', opts.at === 'stage' ? 800 : 48000); }
     }
     if (event === 'pump') scene.beat('pump', data);
     emit(event, data);
@@ -61,9 +64,16 @@ export function createTabTunnel(ctx, parent, opts = {}) {
     scene = createScene(ctx, root, opts.manifest, media, {
       lite, onWake: () => doc.getElementById('wake')?.click(),
       onPump: () => { if (!disposed && !ctx.paused && !doc.hidden) ride.pump(); },
+      onStageAction: event => emit('stage-action', event),
     });
     stage = createStage(ctx, scene.stageAnchor, opts.manifest, {
-      onNewRun: () => { try { opts.onNewRun?.(); } finally { dispose(); } },
+      controlsAnchor: scene.stageControlsAnchor,
+      onNewRun: async () => {
+        try { await narration?.finishNewRun?.(); }
+        finally {
+          if (!disposed) { try { opts.onNewRun?.(); } finally { dispose(); } }
+        }
+      },
       hours: opts.hours, now: opts.now, onEvent: emit,
     });
   } catch (error) {
@@ -95,7 +105,7 @@ export function createTabTunnel(ctx, parent, opts = {}) {
     if (disposed || ctx.paused || doc.hidden) return;
     ride.step(dt);
     for (const stop of heldStops.values()) {
-      if (opts.fallback !== false && !stop.cancel && ride.state.z >= stop.at) {
+      if (fallback && !stop.cancel && ride.state.z >= stop.at) {
         stop.cancel = ctx.after(12000, stop.release);
       }
     }
@@ -135,7 +145,7 @@ export function createTabTunnel(ctx, parent, opts = {}) {
     frameOff = ctx.frame(tick);
     ride.step(0);
     scene.draw(ride.state); frameCount++;
-    if (opts.fallback !== false && ride.state.locked) { later('booth.stamp', 30000); later('booth.unlock', 40000); }
+    if (fallback && ride.state.locked) { later('booth.stamp', 30000); later('booth.unlock', 40000); }
     emit('ready');
   }
   doc.addEventListener('keydown', pump);
@@ -167,7 +177,7 @@ export function createTabTunnel(ctx, parent, opts = {}) {
   // The caller gets one synchronous opportunity to attach the audio lane before ready fires.
   const ready = Promise.all([scene.ready, stylesReady]).then(start);
   ready.catch(error => { console.error(error); dispose(); });
-  return Object.freeze({
+  const api = Object.freeze({
     state: ride.state, captions, beat, dispose, ready,
     addCues: ride.addCues,
     hold,
@@ -177,8 +187,28 @@ export function createTabTunnel(ctx, parent, opts = {}) {
       listeners.get(event).add(fn);
       return () => listeners.get(event)?.delete(fn);
     },
-    debug: () => ({ frames: frameCount, disposed, callbacks: Number(Boolean(frameOff)), pending: jobs.size, ...scene.debug?.() }),
+    get narration() { return narration; },
+    debug: () => ({ frames: frameCount, disposed, callbacks: Number(Boolean(frameOff)), pending: jobs.size, ...scene.debug?.(), narration: narration?.debug?.() }),
   });
+  if (useNarration) {
+    const enableVoice = doc.createElement('button');
+    enableVoice.className = 'td-enable-voice';
+    enableVoice.type = 'button';
+    enableVoice.textContent = 'Enable narrator';
+    enableVoice.hidden = true;
+    enableVoice.addEventListener('click', () => narration?.retry?.());
+    root.append(enableVoice);
+    try {
+      narration = createDocumentaryNarration(ctx, api, {
+        now: opts.now, hours: opts.hours,
+        onStatus(status) {
+          enableVoice.hidden = status.status !== 'blocked';
+          opts.onNarrationStatus?.(status);
+        },
+      });
+    } catch (error) { dispose(); throw error; }
+  }
+  return api;
 }
 
 /** Registry ending(ctx) entry point. New run resolves into the engine's ordinary recap. */

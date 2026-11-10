@@ -4,6 +4,10 @@ import { mergeGeometries } from '../../../vendor/three/addons/utils/BufferGeomet
 import { trackPoint, trackYaw, trackStyle } from './track.js';
 
 const COLLECTION_ROOT = new URL('../../../backroom/room/assets/customization/', import.meta.url);
+export const SERVICE_END = Object.freeze({
+  distance: 587,
+  button: Object.freeze({ distance: 586.70, side: 0, elevation: 1.45, width: 0.62, height: 0.34 }),
+});
 
 /** Museum furniture, the handcar, and the existing Backroom sculpture collection. */
 export function createMuseumProps(THREE, materials, { lite = false, onWake = () => {} } = {}) {
@@ -564,10 +568,160 @@ export function createMuseumProps(THREE, materials, { lite = false, onWake = () 
   label(loopStation, 'Again, for science', 0.84, 0.6, 0.88);
   batch(loopStation);
 
-  const adStation = exhibit('museum_intermission_screen', 544, 2.8);
-  screen(adStation, 'One more thing', 'Please remain comfortably curious.', 'intermission', 0, 1.72, 0);
-  ring(adStation, 0.62, 0.022, pink, 0.08);
-  batch(adStation);
+  const decorStops = [20, 68, 100, 196, 260, 284, 500];
+  function castor(parent, x, z) {
+    mesh(parent, box(0.08, 0.12, 0.11, 0.012), chrome, x, 0.17, z);
+    const wheel = mesh(parent, cylinder(0.075, 0.075, 0.055, 20), rubber, x, 0.085, z);
+    wheel.rotation.z = Math.PI / 2;
+    fastener(parent, x + 0.03, 0.085, z, 0.019, 'x');
+  }
+  function grille(parent, x, y, z, width, height) {
+    mesh(parent, box(width, height, 0.025, 0.01), rubber, x, y, z);
+    for (let i = 0; i < 7; i++) mesh(parent, box(width - 0.035, 0.009, 0.018, 0.003), chrome, x, y - height * 0.4 + i * height * 0.8 / 6, z + 0.018);
+  }
+  function plaque(parent, text, width, height, x, y, z, background = '#e9e4d8', ink = '#292d32') {
+    const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = Math.max(96, Math.round(512 * height / width));
+    const context = canvas.getContext('2d');
+    context.fillStyle = background; context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = ink; context.font = `600 ${Math.round(canvas.height * 0.49)}px Arial`;
+    context.textAlign = 'center'; context.textBaseline = 'middle'; context.fillText(text, 256, canvas.height / 2, 470);
+    const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; importedTextures.add(texture);
+    const surface = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.72 }); ownedMaterials.add(surface);
+    return mesh(parent, geometry(`flat-sign:${width}:${height}`, () => new THREE.PlaneGeometry(width, height)), surface, x, y, z);
+  }
+
+  // Standalone furniture appears at authored stops, rather than being repeated in every bay.
+  const tickets = exhibit('museum_ticket_turnstile', 20, -3.25);
+  for (const x of [-0.51, 0.51]) {
+    mesh(tickets, box(0.37, 1.04, 0.60, 0.07), enamel, x, 0.56, 0);
+    mesh(tickets, box(0.39, 0.08, 0.63, 0.035), chrome, x, 1.11, 0);
+    mesh(tickets, box(0.38, 0.12, 0.62, 0.025), rubber, x, 0.12, 0);
+    mesh(tickets, box(0.23, 0.018, 0.21, 0.015), rubber, x, 1.16, 0.08);
+    mesh(tickets, box(0.14, 0.006, 0.035, 0.004), cyan, x, 1.172, 0.08);
+    for (const z of [-0.21, 0.21]) fastener(tickets, x, 1.16, z, 0.018, 'y');
+    grille(tickets, x, 0.42, 0.31, 0.23, 0.23);
+  }
+  const turnstileHub = mesh(tickets, cylinder(0.10, 0.10, 0.15, 28), chrome, -0.24, 0.85, 0); turnstileHub.rotation.z = Math.PI / 2;
+  for (let i = 0; i < 3; i++) {
+    const angle = i * Math.PI * 2 / 3;
+    beam(tickets, [-0.19, 0.85, 0], [0.23, 0.85 + Math.cos(angle) * 0.30, Math.sin(angle) * 0.30], 0.026, chrome);
+    beam(tickets, [0.23, 0.85 + Math.cos(angle) * 0.30, Math.sin(angle) * 0.30], [0.52, 0.85 + Math.cos(angle) * 0.30, Math.sin(angle) * 0.30], 0.036, rubber);
+  }
+  mesh(tickets, box(0.23, 0.04, 0.09, 0.008), ivory, -0.51, 1.175, -0.10);
+  for (let i = 0; i < 5; i++) mesh(tickets, box(0.19, 0.008, 0.08, 0.002), materials.paper, -0.51, 1.203 + i * 0.009, -0.10);
+  plaque(tickets, 'ADMIT ONE', 0.31, 0.08, -0.51, 0.89, 0.307);
+  batch(tickets);
+
+  const listening = exhibit('museum_headphones_listening_station', 68, 3.25);
+  mesh(listening, cylinder(0.31, 0.38, 0.09, 32), enamel, 0, 0.06, 0);
+  mesh(listening, cylinder(0.034, 0.055, 1.15), chrome, 0, 0.66, 0);
+  mesh(listening, box(0.65, 0.15, 0.45, 0.035), enamel, 0, 1.13, 0.03);
+  mesh(listening, box(0.60, 0.025, 0.39, 0.018), chrome, 0, 1.225, 0.03);
+  for (const x of [-0.20, 0, 0.20]) {
+    mesh(listening, cylinder(0.045, 0.045, 0.035, 20), rubber, x, 1.26, 0.10);
+    mesh(listening, box(0.006, 0.005, 0.027, 0.001), ivory, x, 1.28, 0.11);
+  }
+  beam(listening, [0, 1.18, -0.12], [0, 1.95, -0.12], 0.025, chrome);
+  beam(listening, [0, 1.93, -0.12], [0, 1.93, 0.04], 0.025, chrome);
+  const headband = Array.from({ length: 19 }, (_, i) => { const angle = i / 18 * Math.PI; return [Math.cos(angle) * 0.24, 1.67 + Math.sin(angle) * 0.28, 0.07]; });
+  tube(listening, headband, 0.033, leather, 32);
+  tube(listening, headband.map(([x, y, z]) => [x, y + 0.027, z]), 0.009, chrome, 32);
+  for (const side of [-1, 1]) {
+    for (const [offset, radius, depth, surface] of [[0, 0.125, 0.07, enamel], [-side * 0.04, 0.10, 0.045, leather]]) {
+      const cup = mesh(listening, cylinder(radius, radius, depth, 24), surface, side * 0.24 + offset, 1.63, 0.07); cup.rotation.z = Math.PI / 2;
+    }
+    beam(listening, [side * 0.24, 1.74, 0.06], [side * 0.24, 1.64, 0.06], 0.015, chrome);
+  }
+  tube(listening, [[0.26, 1.55, 0.07], [0.35, 1.34, 0.13], [0.35, 1.05, 0.15], [0.18, 0.93, 0.16], [0.16, 1.14, 0.17]], 0.009, rubber, 32);
+  plaque(listening, 'LISTEN CLOSELY', 0.43, 0.085, 0, 1.13, 0.261);
+  batch(listening);
+
+  const clocks = exhibit('museum_clock_cluster', 100, -3.25);
+  mesh(clocks, box(1.16, 0.10, 0.52, 0.035), enamel, 0, 0.07, 0);
+  for (const x of [-0.43, 0.43]) beam(clocks, [x, 0.13, 0], [x, 2.27, 0], 0.028, chrome);
+  mesh(clocks, box(1.18, 0.07, 0.08, 0.018), chrome, 0, 2.28, 0);
+  for (const [x, y, radius, phase] of [[-0.29, 1.78, 0.27, 0.8], [0.34, 1.57, 0.22, 2.1], [-0.12, 1.02, 0.20, 4.4]]) {
+    for (const [r, depth, z, surface] of [[radius + 0.035, 0.12, 0.02, enamel], [radius + 0.012, 0.024, 0.09, chrome], [radius, 0.008, 0.108, ivory]]) {
+      const face = mesh(clocks, cylinder(r, r, depth, 40), surface, x, y, z); face.rotation.x = Math.PI / 2;
+    }
+    for (let tick = 0; tick < 12; tick++) {
+      const angle = tick / 12 * Math.PI * 2;
+      beam(clocks, [x + Math.sin(angle) * radius * 0.75, y + Math.cos(angle) * radius * 0.75, 0.117], [x + Math.sin(angle) * radius * 0.88, y + Math.cos(angle) * radius * 0.88, 0.117], 0.006, enamel);
+    }
+    for (const [angle, length] of [[phase, radius * 0.62], [phase * 3, radius * 0.40]]) beam(clocks, [x, y, 0.126], [x + Math.sin(angle) * length, y + Math.cos(angle) * length, 0.126], 0.009, enamel);
+    mesh(clocks, sphere(0.025, 12, 8), chrome, x, y, 0.137);
+  }
+  plaque(clocks, 'TIME WELL SPENT', 0.73, 0.11, 0, 0.45, 0.08);
+  batch(clocks);
+
+  const lost = exhibit('museum_lost_and_found', 196, -3.25);
+  mesh(lost, box(1.14, 1.38, 0.65, 0.055), materials.woodDark, 0, 0.76, 0);
+  for (const x of [-0.46, 0.46]) for (const z of [-0.23, 0.23]) mesh(lost, cylinder(0.033, 0.04, 0.16, 12), chrome, x, 0.10, z);
+  for (const x of [-0.27, 0.27]) for (const y of [0.48, 1.02]) {
+    mesh(lost, box(0.47, 0.45, 0.035, 0.016), rubber, x, y, 0.34);
+    mesh(lost, bezel(0.49, 0.47, 0.025, 0.04, 0.025), chrome, x, y, 0.37);
+    for (let bar = 0; bar < 5; bar++) mesh(lost, box(0.008, 0.41, 0.012, 0.002), chrome, x - 0.18 + bar * 0.09, y, 0.40);
+    for (const dy of [-0.12, 0.12]) mesh(lost, box(0.42, 0.008, 0.012, 0.002), chrome, x, y + dy, 0.405);
+  }
+  mesh(lost, lathe([[0, 0], [0.23, 0], [0.23, 0.025], [0.15, 0.035], [0.14, 0.13], [0.12, 0.17], [0, 0.18]], 28), feltMaterial, -0.25, 1.47, 0);
+  for (let fold = 0; fold < 3; fold++) mesh(lost, box(0.38, 0.055, 0.30, 0.022), fold % 2 ? leather : materials.velvet, 0.25, 1.50 + fold * 0.055, 0);
+  tube(lost, [[0.74, 0.10, 0.08], [0.74, 1.35, 0.08], [0.70, 1.45, 0.08], [0.61, 1.42, 0.08], [0.62, 1.34, 0.08]], 0.023, chrome, 28);
+  const umbrella = mesh(lost, cylinder(0.035, 0.09, 0.81, 12), materials.velvet, 0.74, 0.60, 0.08);
+  for (let rib = 0; rib < 6; rib++) { const angle = rib / 6 * Math.PI * 2; beam(lost, [0.74 + Math.cos(angle) * 0.03, 1.0, 0.08 + Math.sin(angle) * 0.03], [0.74 + Math.cos(angle) * 0.085, 0.20, 0.08 + Math.sin(angle) * 0.085], 0.003, chrome); }
+  plaque(lost, 'LOST + FOUND', 0.78, 0.12, 0, 1.32, 0.36);
+  batch(lost);
+
+  const av = exhibit('museum_av_cart', 260, 3.25);
+  for (const x of [-0.45, 0.45]) for (const z of [-0.27, 0.27]) {
+    castor(av, x, z); beam(av, [x, 0.22, z], [x, 1.29, z], 0.022, chrome);
+  }
+  for (const y of [0.28, 0.67, 1.12]) mesh(av, box(1.02, 0.065, 0.68, 0.025), enamel, 0, y, 0);
+  mesh(av, box(0.78, 0.20, 0.48, 0.025), ivory, 0, 0.43, 0);
+  grille(av, 0, 0.43, 0.25, 0.62, 0.10);
+  mesh(av, box(0.79, 0.18, 0.51, 0.025), enamel, 0, 0.79, 0);
+  mesh(av, box(0.35, 0.035, 0.022, 0.004), rubber, -0.08, 0.81, 0.265);
+  for (const x of [0.22, 0.30]) { const knob = mesh(av, cylinder(0.024, 0.024, 0.025, 16), chrome, x, 0.81, 0.27); knob.rotation.x = Math.PI / 2; }
+  mesh(av, box(0.84, 0.64, 0.54, 0.06), ivory, 0, 1.47, 0);
+  mesh(av, bezel(0.72, 0.49, 0.055, 0.06, 0.06), enamel, -0.035, 1.49, 0.295);
+  mesh(av, box(0.60, 0.37, 0.025, 0.025), rubber, -0.035, 1.49, 0.30);
+  const trace = Array.from({ length: 31 }, (_, i) => [-0.30 + i * 0.018, 1.49 + Math.sin(i * 0.6) * 0.08 + Math.sin(i * 1.7) * 0.02, 0.321]);
+  tube(av, trace, 0.006, cyan, 36);
+  for (const y of [1.28, 1.39]) { const dial = mesh(av, cylinder(0.025, 0.025, 0.026, 16), chrome, 0.345, y, 0.285); dial.rotation.x = Math.PI / 2; }
+  tube(av, [[-0.25, 1.22, -0.29], [-0.49, 1.0, -0.35], [-0.49, 0.54, -0.35], [-0.10, 0.39, -0.34]], 0.012, rubber, 28);
+  plaque(av, 'PLAYBACK UNIT 03', 0.49, 0.065, 0, 1.13, 0.354);
+  batch(av);
+
+  const rotary = exhibit('museum_rotary_call_station', 284, -3.25);
+  mesh(rotary, box(0.70, 0.12, 0.61, 0.045), enamel, 0, 0.10, 0);
+  mesh(rotary, box(0.45, 0.80, 0.40, 0.035), materials.woodDark, 0, 0.55, 0);
+  mesh(rotary, box(0.78, 0.09, 0.65, 0.025), chrome, 0, 1.0, 0);
+  mesh(rotary, box(0.56, 0.18, 0.44, 0.065), enamel, 0, 1.14, 0.04);
+  mesh(rotary, cylinder(0.16, 0.17, 0.035, 40), chrome, 0, 1.247, 0.12);
+  mesh(rotary, cylinder(0.072, 0.072, 0.041, 32), ivory, 0, 1.252, 0.12);
+  for (let hole = 0; hole < 10; hole++) {
+    const angle = hole / 10 * Math.PI * 2;
+    mesh(rotary, cylinder(0.022, 0.022, 0.006, 16), rubber, Math.sin(angle) * 0.118, 1.268, 0.12 + Math.cos(angle) * 0.118);
+  }
+  tube(rotary, [[-0.25, 1.33, -0.12], [-0.18, 1.39, -0.12], [0, 1.42, -0.12], [0.18, 1.39, -0.12], [0.25, 1.33, -0.12]], 0.043, enamel, 28);
+  for (const x of [-0.25, 0.25]) {
+    mesh(rotary, cylinder(0.085, 0.075, 0.07, 28), enamel, x, 1.31, -0.12);
+    mesh(rotary, cylinder(0.073, 0.073, 0.02, 28), rubber, x, 1.265, -0.12);
+  }
+  tube(rotary, [[-0.26, 1.30, -0.13], [-0.42, 1.17, -0.17], [-0.44, 0.94, -0.04], [-0.36, 0.86, 0.12], [-0.25, 1.10, 0.17]], 0.012, rubber, 32);
+  grille(rotary, 0, 0.50, 0.209, 0.30, 0.29);
+  plaque(rotary, 'OUTSIDE LINE', 0.43, 0.09, 0, 0.83, 0.215);
+  batch(rotary);
+
+  const reading = exhibit('museum_visitor_map_desk', 500, 3.25);
+  for (const x of [-0.50, 0.50]) for (const z of [-0.28, 0.28]) beam(reading, [x, 0.03, z], [x, 0.94, z], 0.027, chrome);
+  mesh(reading, box(1.18, 0.08, 0.73, 0.04), materials.wood, 0, 0.96, 0);
+  mesh(reading, box(0.73, 0.012, 0.48, 0.01), materials.paper, -0.05, 1.01, 0);
+  for (const x of [-0.25, 0, 0.25]) mesh(reading, box(0.003, 0.003, 0.43, 0.001), chrome, x, 1.018, 0);
+  for (let road = 0; road < 4; road++) beam(reading, [-0.35, 1.02, -0.18 + road * 0.11], [0.25, 1.02, -0.12 + road * 0.09], 0.003, materials.plasterBlue);
+  mesh(reading, cylinder(0.06, 0.05, 0.14, 20), enamel, 0.47, 1.065, -0.18);
+  for (const dx of [-0.02, 0.015, 0.03]) beam(reading, [0.47 + dx, 1.07, -0.18], [0.48 + dx, 1.24, -0.17], 0.006, materials.wood);
+  plaque(reading, 'YOU ARE HERE', 0.65, 0.10, 0, 0.89, 0.374);
+  batch(reading);
   const sculptureSlots = Array.from({ length: lite ? 3 : 5 }, (_, index) => {
     const holder = new THREE.Group();
     holder.name = `museum_collection_${index}`;
@@ -645,6 +799,71 @@ export function createMuseumProps(THREE, materials, { lite = false, onWake = () 
   }
   positionAt(grass, 436, 2.65, -Math.PI / 2);
   positionAt(wake, 470, 2.8, -Math.PI / 2);
+
+  const service = new THREE.Group();
+  service.name = 'museum_plain_service_ending';
+  positionAt(service, SERVICE_END.distance);
+  group.add(service);
+  const serviceAd = new THREE.Group();
+  serviceAd.name = 'museum_service_ad_control';
+  service.add(serviceAd);
+  mesh(serviceAd, box(0.84, 0.53, 0.07, 0.025), chrome, 0, 1.45, 0.16);
+  mesh(serviceAd, box(0.74, 0.43, 0.025, 0.018), rubber, 0, 1.45, 0.21);
+  const serviceButton = mesh(serviceAd, box(0.64, 0.36, 0.065, 0.035), buttonMaterial, 0, 1.45, 0.2675);
+  serviceButton.name = 'museum_physical_ad_button';
+  serviceButton.userData.interactive = true;
+  plaque(serviceAd, 'AD', SERVICE_END.button.width, SERVICE_END.button.height, 0, 1.45, 0.301, '#ded9cd', '#292929');
+  for (const x of [-0.36, 0.36]) for (const dy of [-0.20, 0.20]) fastener(serviceAd, x, 1.45 + dy, 0.201, 0.017);
+  batch(serviceAd);
+
+  const plant = new THREE.Group(); plant.position.set(-2.3, 0, 0.58); service.add(plant);
+  mesh(plant, lathe([[0, 0], [0.19, 0], [0.20, 0.025], [0.25, 0.38], [0.255, 0.43], [0.23, 0.45], [0.205, 0.43], [0.18, 0.08], [0, 0.08]], 32), ceramic);
+  mesh(plant, cylinder(0.21, 0.21, 0.025, 32), rubber, 0, 0.414, 0);
+  mesh(plant, cylinder(0.23, 0.25, 0.04, 32), ceramic, 0, 0.022, 0);
+  const plantLeaf = loft('service-plant-leaf', [[-0.19, 0.001, 0.001], [-0.12, 0.068, 0.009], [0, 0.10, 0.017], [0.13, 0.055, 0.010], [0.22, 0.001, 0.001]], 10);
+  for (let branch = 0; branch < 7; branch++) {
+    const angle = branch * 2.3999, reach = 0.18 + branch % 3 * 0.04, height = 0.85 + (branch % 4) * 0.17;
+    const x = Math.cos(angle) * reach, z = Math.sin(angle) * reach;
+    beam(plant, [0, 0.42, 0], [x, height, z], 0.012, leafMaterial);
+    for (const sign of [-1, 1]) {
+      const leaf = mesh(plant, plantLeaf, leafMaterial, x + Math.cos(angle) * 0.10 * sign, height - (sign + 1) * 0.13, z + Math.sin(angle) * 0.10 * sign);
+      leaf.rotation.set(0.23 * sign, angle + Math.PI / 2, sign * 0.24);
+    }
+  }
+  batch(plant);
+
+  const cooler = new THREE.Group(); cooler.position.set(2.3, 0, 0.43); service.add(cooler);
+  mesh(cooler, box(0.52, 1.02, 0.47, 0.055), ivory, 0, 0.55, 0);
+  mesh(cooler, box(0.48, 0.09, 0.43, 0.025), rubber, 0, 0.075, 0);
+  mesh(cooler, box(0.47, 0.08, 0.43, 0.025), chrome, 0, 1.085, 0);
+  mesh(cooler, box(0.35, 0.28, 0.035, 0.016), rubber, 0, 0.79, 0.245);
+  for (const [x, surface] of [[-0.10, pink], [0.10, cyan]]) {
+    const tap = mesh(cooler, cylinder(0.025, 0.025, 0.08, 16), chrome, x, 0.87, 0.29); tap.rotation.x = Math.PI / 2;
+    mesh(cooler, box(0.045, 0.055, 0.032, 0.012), surface, x, 0.92, 0.30);
+    mesh(cooler, cylinder(0.012, 0.012, 0.045, 12), chrome, x, 0.84, 0.335);
+  }
+  mesh(cooler, box(0.37, 0.025, 0.18, 0.018), rubber, 0, 0.65, 0.285);
+  for (let slat = 0; slat < 7; slat++) mesh(cooler, box(0.009, 0.010, 0.13, 0.002), chrome, -0.135 + slat * 0.045, 0.669, 0.30);
+  grille(cooler, 0, 0.35, 0.244, 0.32, 0.25);
+  const bottleGlass = material(materials.glass, { opacity: 0.45, roughness: 0.18, metalness: 0 }); bottleGlass.color.set('#96c3cc');
+  const bottleWater = material(materials.glass, { opacity: 0.32, roughness: 0.24, metalness: 0 }); bottleWater.color.set('#5d9fad');
+  mesh(cooler, lathe([[0.07, 0], [0.07, 0.06], [0.17, 0.10], [0.20, 0.17], [0.20, 0.46], [0.18, 0.53], [0.12, 0.56], [0, 0.56]], 36), bottleGlass, 0, 1.10, 0);
+  mesh(cooler, cylinder(0.187, 0.187, 0.28, 32), bottleWater, 0, 1.39, 0);
+  for (const y of [1.29, 1.43, 1.57]) ring(cooler, 0.20, 0.008, bottleGlass, y);
+  mesh(cooler, cylinder(0.077, 0.077, 0.045, 24), cyan, 0, 1.115, 0);
+  const cups = mesh(cooler, cylinder(0.065, 0.052, 0.37, 24), ivory, 0.325, 0.93, 0.02);
+  for (const y of [0.78, 0.85, 0.92, 0.99, 1.06]) { const rim = ring(cooler, 0.065, 0.006, chrome, y); rim.position.x = 0.325; rim.position.z = 0.02; }
+  batch(cooler);
+
+  mesh(service, cylinder(0.12, 0.12, 0.035, 24), ceramic, 0, 3.765, 0.30);
+  beam(service, [0, 3.75, 0.30], [0, 3.38, 0.30], 0.009, rubber);
+  mesh(service, cylinder(0.052, 0.04, 0.13, 24), ceramic, 0, 3.32, 0.30);
+  for (const y of [3.27, 3.29, 3.31]) ring(service, 0.047, 0.004, chrome, y).position.z = 0.30;
+  const bulbMaterial = material(materials.lamp, { emissiveIntensity: 1.25, roughness: 0.30 });
+  const bulb = mesh(service, lathe([[0, 0], [0.045, 0.012], [0.075, 0.05], [0.082, 0.09], [0.067, 0.14], [0.037, 0.18], [0.036, 0.205]], 28), bulbMaterial, 0, 3.06, 0.30);
+  bulb.userData.interactive = true;
+  const bulbLight = new THREE.PointLight(0xffe2ae, 10, 9, 2); bulbLight.position.set(0, 3.12, 0.40); service.add(bulbLight);
+  batch(service);
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
   const failures = [];
@@ -702,14 +921,14 @@ export function createMuseumProps(THREE, materials, { lite = false, onWake = () 
     importedTextures.forEach(texture => texture.dispose());
     importedGeometries.clear(); importedMaterials.clear(); importedTextures.clear();
   }
-  function update(z) {
+  function update(z, { time = 0, gentle = true } = {}) {
     const first = Math.floor(z / 18);
     sculptureSlots.forEach((slot, index) => {
       const count = sculptureSlots.length;
       const distanceIndex = first + (index - first % count + count) % count;
       const at = distanceIndex * 18 + 9;
       const style = trackStyle(at);
-      const reserved = [49, 225, 306, 436, 470, 544].some(distance => Math.abs(at - distance) < 8);
+      const reserved = [49, 225, 306, 436, 470, ...decorStops].some(distance => Math.abs(at - distance) < 8);
       slot.holder.visible = !reserved && style.id !== 'connector' && style.id !== 'descent' && at < 550 && at - z < (lite ? 38 : 66);
       if (slot.index === distanceIndex) return;
       slot.index = distanceIndex;
@@ -718,11 +937,15 @@ export function createMuseumProps(THREE, materials, { lite = false, onWake = () 
     });
     grass.visible = z > 396 && z < 443;
     wake.visible = z > 430 && z < 478;
-    fixedExhibits.forEach(({ station, at }) => { station.visible = at - z > -9 && at - z < (lite ? 38 : 57); });
+    fixedExhibits.forEach(({ station, at }) => { station.visible = at - z > -18 && at - z < (lite ? 38 : 57); });
+    service.visible = z > 525;
+    const glow = gentle ? 1 : 0.96 + Math.sin(time * 0.83) * 0.035 + Math.sin(time * 2.1) * 0.012;
+    bulbMaterial.emissiveIntensity = 1.25 * glow; bulbLight.intensity = 10 * glow;
   }
   update(0);
   return {
-    group, cart, lever, pumpGrip, ready, update, interactive, pumpTargets: [lever],
+    group, cart, lever, pumpGrip, ready, update, interactive, serviceButton, serviceEnd: SERVICE_END, pumpTargets: [lever],
+    setAdVisible(on) { serviceAd.visible = Boolean(on); },
     pump(angle) {
       lever.rotation.x = angle;
       kineticUpdates.forEach(updateMechanism => updateMechanism(angle));

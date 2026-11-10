@@ -54,7 +54,10 @@ export function createMedia(ctx, { lite = false } = {}) {
       }
       if (!current() || !row?.url || row.kind === 'gif' || (!playClip && row.kind === 'clip')) return;
       const clip = row.kind === 'clip';
-      if (!clip) clipSlots.delete(slot);
+      if (clip) {
+        if (!clipSlots.has(slot) && clipSlots.size >= maxClips) return;
+        clipSlots.add(slot);
+      } else clipSlots.delete(slot);
       const lease = await pictures.acquire?.(row);
       if (!current()) { lease?.release?.(); return; }
       slot.lease = lease;
