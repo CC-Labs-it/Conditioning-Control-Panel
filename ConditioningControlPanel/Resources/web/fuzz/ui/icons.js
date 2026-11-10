@@ -1,6 +1,7 @@
 /* Shared art across shop, guide, purchase flights and switches. */
 import { ICON_CATALOG } from './icon-catalog.js';
 import { badgeMarkup, iconMarkup } from './icon-art.js';
+import { emiUpgradeArt, EMI_ICON_BEATS } from './emi-upgrade-art.js';
 import { clips } from '../assets/clipart/clips.js';
 import { amethystEnamel } from './dispenser-enamel.js';
 
@@ -28,6 +29,8 @@ function paintIcon(svg, id) {
 }
 
 function markupFor(id) {
+  const emi = emiUpgradeArt(id);
+  if (emi) return emi;
   const art = ICON_CATALOG[id];
   if (current === 'glossy') return runtimeArt[id]
     ? `<image href="assets/glossy/${runtimeArt[id]}.webp" width="64" height="64"/>`
@@ -44,7 +47,7 @@ export function stopIconMotion(doc) {
   active.delete(doc);
   clip.animation?.cancel();
   clip.sheet?.remove();
-  clip.poster.style.visibility = '';
+  if (clip.poster) clip.poster.style.visibility = '';
 }
 
 function allowsMotion(svg) {
@@ -54,10 +57,21 @@ function allowsMotion(svg) {
 }
 
 export async function playIcon(svg) {
-  const viewport = svg?.querySelector('[data-clip]');
-  if (!viewport || !allowsMotion(svg)) return;
+  if (!svg || !allowsMotion(svg)) return;
   const doc = svg.ownerDocument;
   stopIconMotion(doc);
+  const moving = svg.querySelector('[data-emi-motion]');
+  if (moving) {
+    moving.style.transformOrigin = 'center';
+    moving.style.transformBox = 'fill-box';
+    const animation = moving.animate(EMI_ICON_BEATS[svg.dataset.fzIcon] || EMI_ICON_BEATS.go_will, {duration: 630, easing: 'ease-in-out'});
+    const clip = { animation };
+    active.set(doc, clip);
+    animation.onfinish = () => { if (active.get(doc) === clip) stopIconMotion(doc); };
+    return;
+  }
+  const viewport = svg.querySelector('[data-clip]');
+  if (!viewport) return;
   const clip = { poster: viewport.firstElementChild };
   active.set(doc, clip);
   const shape = viewport.dataset.clip;

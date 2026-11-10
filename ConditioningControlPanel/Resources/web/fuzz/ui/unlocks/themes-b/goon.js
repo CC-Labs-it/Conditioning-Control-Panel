@@ -1,11 +1,11 @@
 /* ui/unlocks/themes-b/goon.js - lane goon. Night amber, a dark room, one screen. The mechanic: hold the button, let go in the zone. */
 
 import { THEMES } from '../../../data/content/themes.js';
-import { ENDINGS } from '../../../data/content/endings.js';
 import { mountPodcast } from '../podcast-player.js';
 import { COPY } from './copy.js';
 import { themeScreens } from '../themes-a/theme-screens.js';
-import { buttonCentre, docOf, endingStage, endingWords, fresh, gallery, moment, motion, pick, ring, sfx, slot, tile } from './kit.js';
+import takeover, { emiTakeoverTake } from './emi-takeover.js';
+import { buttonCentre, docOf, fresh, gallery, moment, motion, pick, ring, sfx, slot, tile } from './kit.js';
 
 const R = THEMES.goon.rules;
 const HOT = '#f2a33c';
@@ -244,24 +244,14 @@ export default {
     },
   },
 
-  /* Sunrise through the curtain. Four hours later. */
+  ...takeover,
+
+  /* EMI Takeover (./emi-takeover.js): the take fills the screen with her and ends in the dark, then the engine goes
+   * straight to the run recap and its poster (owner 2026-11-09: no "four hours later" card). */
   go_end: {
     mount() { return {}; },
-    ending(ctx) {
-      const data = ENDINGS.go_end;
-      return endingStage(ctx, 'background:#16110d;color:#f7e6cf;--font:"Segoe UI",system-ui,sans-serif;', 16000, (root) => {
-        const b = ctx.bounds(), w = Math.min(420, b.w - 48), h = Math.round(w * 0.6);
-        const win = ctx.el('div', `position:absolute;left:50%;top:12%;width:${w}px;height:${h}px;margin-left:${-w / 2}px;overflow:hidden;background:linear-gradient(#27294a,#c95f36 70%,#ffc27a);border:6px solid #2d1d12;`, null, root);
-        const sun = ctx.el('div', `position:absolute;left:50%;bottom:-${w * 0.2}px;width:${w * 0.22}px;height:${w * 0.22}px;margin-left:${-w * 0.11}px;border-radius:50%;background:#ffe2a0;box-shadow:0 0 60px 20px #ffb45c;`, null, win);
-        ctx.anim(sun, [{ transform: 'translateY(0)' }, { transform: `translateY(${-h * 0.62}px)` }], { duration: 7000, easing: 'ease-out', fill: 'forwards' });
-        for (const side of ['left', 'right']) {
-          const c = ctx.el('div', `position:absolute;top:0;bottom:0;${side}:0;width:50%;background:repeating-linear-gradient(90deg,#3f2714 0 14px,#2d1b0e 14px 28px);`, null, win);
-          ctx.anim(c, [{ width: '50%' }, { width: '32%' }], { duration: 7000, easing: 'ease-out', fill: 'forwards' });
-        }
-        ctx.el('div', `position:absolute;left:0;right:0;top:calc(12% + ${h + 22}px);text-align:center;font:600 20px var(--font);`, COPY.goon.later, root);
-        endingWords(ctx, root, data);
-        sfx(ctx, 'reveal_chime', 0.5);
-      });
-    },
+    fadeColour: '#000',
+    fadeMs: 200,
+    take(ctx) { return emiTakeoverTake(ctx); },
   },
 };

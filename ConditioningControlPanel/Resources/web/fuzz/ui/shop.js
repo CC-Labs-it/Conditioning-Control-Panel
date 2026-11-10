@@ -61,6 +61,8 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
   const box = doc.getElementById('shop'), goalEl = doc.getElementById('goal'), rowsEl = doc.getElementById('rows'), moreEl = doc.getElementById('more');
   const rows = new Map();
   let goalRow = null, size = 6, lastHop = -Infinity;
+  /* A guest tile (EMI Takeover): one element another module owns, kept last in the grid. Never an engine row. */
+  let guestEl = null;
   if (!doc.getElementById('shop-ready-css')) {
     const st = doc.createElement('style'); st.id = 'shop-ready-css'; st.textContent = SHOP_READY_CSS; doc.head.appendChild(st);
   }
@@ -184,6 +186,7 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
       if (rowsEl.children[i] !== r.el) rowsEl.insertBefore(r.el, rowsEl.children[i] || null);
       paint(r, false);
     });
+    if (guestEl && rowsEl.lastElementChild !== guestEl) rowsEl.appendChild(guestEl);
     nudge();
     if (moreEl.hidden !== !win.more) moreEl.hidden = !win.more;
     if (win.more) setText(moreEl, `${win.more} more waiting behind these`);
@@ -234,6 +237,8 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     platform,
     /** The press a tile makes. `el` is where the purchase flies from. */
     press(id, el) { tip.hide(); onPress(id, el); },
+    /** Show one guest tile after the rows (or none). The caller owns the element and its presses. */
+    guest(el) { if (guestEl !== el) guestEl?.remove(); guestEl = el || null; if (guestEl && rowsEl.lastElementChild !== guestEl) rowsEl.appendChild(guestEl); },
   };
 
   return { draw, fit, denied, flush, closeTip: tip.hide, get size() { return size; } };

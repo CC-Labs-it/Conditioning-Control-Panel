@@ -81,10 +81,11 @@ test('modifiers past the knee keep counting at a fraction of their strength', ()
   assert.equal(E.rates(s, [{ fps: (v) => v * 1.05 }]).fps, s.base.fps * 1.05, 'below the knee nothing changes');
 });
 
-test('the route respects its forks: Drop is the last buy, locked lanes stay out', () => {
+test('the route respects its forks: its one ending is the last buy, locked lanes stay out', () => {
   const p = allRoutes()[0];
   const r = playRoute(p);
-  assert.equal(r.state.ended.id, 'drop');
+  assert.ok(r.state.ended, 'the run ended');
+  assert.ok(!['onemore', 'outside'].includes(r.state.ended.id), r.state.ended.id);
   assert.deepEqual(r.state.picks, p);
   assert.equal(Object.keys(r.state.owned).some((id) => id.startsWith('a_')), false, 'Watch route bought a Listen row');
 });

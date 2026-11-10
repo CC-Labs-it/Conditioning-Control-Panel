@@ -14,6 +14,7 @@ const SINGLE = new Set([
   'rounded', 'bubble', 'bigbtn', 'tinybtn',
   'gold', 'screen', 'levels', 'boxes', 'wheel', 'guide', 'panel', 'lofi_radio',
   'starburst', 'word_comet', 'score_heat', 'dualwield', 'em_head', 'quiz', 'd_autoscroll',
+  'go_tx', 'go_will', 'go_corp', 'go_hive',   // EMI Takeover: each row is one step of her story (owner 2026-11-10)
   'toy_box', 'toy', 'mini_breakout', 'mini_race', 'mini_deep', 'mini_slots', 'dispenser', 'dispenser_fast', 'dispenser_faster',
 ]);
 
