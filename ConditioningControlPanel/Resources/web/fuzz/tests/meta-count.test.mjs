@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { bump, read } from '../ui/meta-count.js';
+import { bump, read, community } from '../ui/meta-count.js';
 
 const key = 'tc:end:dr_end';
 function fixture(t, url, fetcher) {
@@ -63,4 +63,29 @@ test('local, development and preview pages never contact the global counter', as
     assert.deepEqual(await read([key]), { [key]: null });
   }
   assert.equal(calls, 0);
+});
+
+test('community permits read-only playtests, isolates malformed rows and forwards cancellation', async t => {
+  const asOf = new Date().toISOString();
+  const ccp = { active: 0, windowSeconds: 180, asOf };
+  let reply = { discord: { online: 914, members: -1, asOf }, ccp }, calls = 0, captured;
+  fixture(t, 'http://127.0.0.1:8817/fuzz/?buy=go_pals', async (url, options) => {
+    assert.equal(url, 'https://codebambi-proxy.vercel.app/v2/tc/community');
+    assert.equal(options.method, 'GET');
+    assert.equal(options.credentials, 'omit');
+    calls++;
+    captured = options.signal;
+    return Response.json(reply);
+  });
+  const controller = new AbortController();
+  assert.deepEqual(await community(controller.signal), { discord: null, ccp });
+  controller.abort();
+  assert.ok(captured.aborted);
+  assert.equal(await bump(key), null);
+  globalThis.location = new URL('https://tc.cclabs.app/fuzz/?preview=x');
+  reply = { discord: { online: 0, members: 0, asOf }, ccp: { ...ccp, asOf: null } };
+  assert.deepEqual(await community(), { discord: reply.discord, ccp: null });
+  globalThis.location = new URL('http://127.0.0.1:8818/fuzz/');
+  assert.equal(await community(), null);
+  assert.equal(calls, 2);
 });

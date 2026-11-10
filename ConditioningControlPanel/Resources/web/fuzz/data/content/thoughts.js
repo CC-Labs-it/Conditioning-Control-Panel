@@ -183,7 +183,7 @@ export const THOUGHTS = Object.freeze({
       'I have twelve tabs open and I am going to close them when',
       'The curtains are shut because of the glare from the, from outside, from',
       'Do not **let go** yet, not yet, not because of anything, only',
-      'There are others online and we are all nodding at the',
+      'I just caught myself nodding along with the',
       'I had a dinner planned for some earlier version of',
     ]),
     locked: Object.freeze([

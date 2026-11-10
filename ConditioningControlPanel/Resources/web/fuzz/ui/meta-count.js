@@ -23,19 +23,21 @@ function remember(key, n) {
   try { localStorage.setItem(STORAGE + key, String(Math.max(cached(key) ?? 0, n))); } catch { /* storage may be disabled */ }
 }
 
-async function request(path, options) {
-  if (!liveGame()) return null;
+async function request(path, options, signal) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 2200);
   try {
-    const response = await fetch(API + path, { ...options, credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer', signal: controller.signal });
+    const response = await fetch(API + path, {
+      cache: 'no-store', ...options, credentials: 'omit', referrerPolicy: 'no-referrer',
+      signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
+    });
     return response.ok ? await response.json() : null;
   } catch { return null; }
   finally { clearTimeout(timer); }
 }
 
 export async function bump(key) {
-  const response = await request('/count', {
+  const response = liveGame() && await request('/count', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }),
   });
   if (response?.key === key && valid(response.n)) {
@@ -49,10 +51,24 @@ export async function bump(key) {
 export async function read(keys) {
   const unique = [...new Set(keys)];
   if (!unique.length) return {};
-  const response = await request('/counts?' + new URLSearchParams({ keys: unique.join(',') }));
+  const response = liveGame() && await request('/counts?' + new URLSearchParams({ keys: unique.join(',') }));
   return Object.fromEntries(unique.map(key => {
     const n = response?.[key];
     if (valid(n)) remember(key, n);
     return [key, valid(n) ? n : cached(key)];
   }));
+}
+
+/** Anonymous read. Preview purchases must never increment the ending counter. */
+export async function community(signal) {
+  const origin = globalThis.location?.origin;
+  if (origin !== 'https://tc.cclabs.app' && origin !== 'http://127.0.0.1:8817') return null;
+  const result = await request('/community', { method: 'GET', cache: 'default' }, signal);
+  if (!result || typeof result !== 'object') return null;
+  const { discord, ccp } = result;
+  const dated = row => typeof row?.asOf === 'string' && Number.isFinite(Date.parse(row.asOf));
+  return {
+    discord: dated(discord) && valid(discord.online) && valid(discord.members) ? discord : null,
+    ccp: dated(ccp) && valid(ccp.active) && ccp.windowSeconds === 180 ? ccp : null,
+  };
 }

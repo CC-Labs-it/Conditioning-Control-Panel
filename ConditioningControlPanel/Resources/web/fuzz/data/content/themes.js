@@ -209,7 +209,7 @@ export const THEMES = Object.freeze({
       'Local resident has not seen the kitchen in hours, kitchen fine',
       'Five more minutes enters its third hour',
       'Curtains remain shut, spokesperson says it is the glare',
-      'Thousands online, all nodding, no one has said why',
+      'Head starts nodding, no one has said why',
       'Dinner postponed, then cancelled, then forgotten',
       'Hydration concerns raised, then scrolled past',
     ],
@@ -217,7 +217,7 @@ export const THEMES = Object.freeze({
       'You will close this one later.',
       'Only **five more minutes** of this.',
       'Comes with a dark room. You had one.',
-      'Others online bought this one.',
+      'You nodded at this one.',
       'Good for hours. You will not know how many.',
       'It has seen things. So has your thumb.',
     ],
@@ -234,8 +234,6 @@ export const THEMES = Object.freeze({
       ],
       /* Lying Clock: shown minutes are always a fraction of the truth. */
       clock: ['Session: {min} min', 'Only {min} minutes. Sure.', 'Barely {min} minutes.', 'Just got here.'],
-      /* Fake Online Count: no real people. {n} is made up too. */
-      pals: ['{n} others online, nodding', '{n} online, nobody has asked why', '{n} still here, you are not alone, you should be', '{n} nodding. One has stopped. Start again.'],
     },
   }),
 

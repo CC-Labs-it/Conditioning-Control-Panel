@@ -719,7 +719,7 @@ export const CLAUSES = Object.freeze({
   "I consent to a goon podcast playing out loud as I tap. Episode 412. Nobody left."
  ],
  "go_pals": [
-  "I accept a fake counter of others online, all of them nodding along."
+  "I accept that I am not the only one still here. I will nod along with the rest."
  ],
  "go_tx": [
   "I accept a little screen that shows me pictures, then a face, then pictures, and I keep watching both."

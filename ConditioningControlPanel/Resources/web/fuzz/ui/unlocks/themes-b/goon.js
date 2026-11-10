@@ -1,6 +1,7 @@
 /* ui/unlocks/themes-b/goon.js - lane goon. Night amber, a dark room, one screen. The mechanic: hold the button, let go in the zone. */
 
 import { THEMES } from '../../../data/content/themes.js';
+import { mountCommunity } from './community.js';
 import { mountPodcast } from '../podcast-player.js';
 import { COPY } from './copy.js';
 import { themeScreens } from '../themes-a/theme-screens.js';
@@ -221,28 +222,7 @@ export default {
 
   go_pod: { mount(ctx) { return mountPodcast(ctx, { theme: 'goon', show: 'Still Going' }); } },
 
-  /* Thousands online, nodding. All made up, and it says so if you read closely. */
-  go_pals: {
-    mount(ctx) {
-      const s = slot(ctx);
-      const line = ctx.el(s.roomy ? 'div' : 'span', '', '', s.el);
-      let n = 4812, i = 0;
-      const draw = () => { line.textContent = R.pals[i % R.pals.length].replace('{n}', ctx.fmt(n)); };
-      draw();
-      ctx.every(1600, () => { n += pick(ctx, [3, 7, -2, 11]); draw(); });
-      ctx.every(9000, () => { i += 1; });
-      if (s.roomy) {
-        const grid = ctx.el('div', 'display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-top:6px;', null, s.el);
-        for (let k = 0; k < 10; k++) {
-          const cell = ctx.el('div', 'position:relative;height:34px;background:#2a2019;border:1px solid var(--line);overflow:hidden;', null, grid);
-          const head = ctx.el('div', `position:absolute;left:50%;top:6px;width:13px;height:13px;margin-left:-6px;border-radius:50%;background:${HOT};`, null, cell);
-          ctx.el('div', 'position:absolute;left:10%;right:10%;top:22px;height:18px;border-radius:50%;background:#7a4a1c;', null, cell);
-          motion(ctx, head, [{ transform: 'translateY(0)' }, { transform: 'translateY(5px)' }, { transform: 'translateY(0)' }], { duration: 1400, iterations: Infinity, delay: -k * 90 });
-        }
-      }
-      return {};
-    },
-  },
+  go_pals: { mount: mountCommunity },
 
   ...takeover,
 
