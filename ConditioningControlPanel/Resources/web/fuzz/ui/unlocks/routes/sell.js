@@ -278,7 +278,9 @@ export default {
     },
   },
 
-  /* The Ads route keeps its saved ending ID. The black frame hands directly to the recap and share poster. */
+  /* Living Button keeps its saved ending ID. Since the fate cards it can end any route and either Ads pick, Sponsored Mascot
+   * or not: the take prints whatever is on screen, and the tunnel falls back to the button, score and toys when no ad is up.
+   * The black frame hands directly to the recap and share poster. */
   o_out: {
     mount() { return {}; },
     get takeMaxMs() { return isButtonFinaleReview() ? Infinity : 150000; },
