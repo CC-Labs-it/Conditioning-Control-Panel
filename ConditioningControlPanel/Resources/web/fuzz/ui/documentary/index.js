@@ -232,7 +232,7 @@ export function createTabTunnel(ctx, parent, opts = {}) {
     root.append(enableVoice);
     try {
       narration = createDocumentaryNarration(ctx, api, {
-        now: opts.now, hours: opts.hours, subtitles: subtitlesOn,
+        now: opts.now, hours: opts.hours, subtitles: subtitlesOn, acceptedClauseIds: opts.acceptedClauseIds,
         onSpeaking(on) { music?.setSpeaking(on); scene?.setSpeaking?.(on); },
         onStatus(status) {
           enableVoice.hidden = status.status !== 'blocked';
@@ -248,7 +248,8 @@ export function createTabTunnel(ctx, parent, opts = {}) {
 export async function tabDocumentary(ctx, opts = {}) {
   ctx.audio.solo(true);
   const endingLayer = ctx.layer('ending');
-  const arrival = createMuseumArrival(ctx, endingLayer);
+  // A caller that loads this module lazily mounts the cover first and hands it over.
+  const arrival = opts.arrival || createMuseumArrival(ctx, endingLayer);
   const abort = new AbortController();
   let tunnel, resolveDone;
   const done = new Promise(resolve => { resolveDone = resolve; });

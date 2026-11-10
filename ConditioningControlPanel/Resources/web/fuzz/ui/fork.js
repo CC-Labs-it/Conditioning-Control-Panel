@@ -21,6 +21,7 @@ function loadDemos() {
     await import('./demos/fate-outside.js');
     await import('./demos/fate-button.js');
     await import('./demos/fate-themes.js');
+    await import('./demos/fate-museum.js');
     return Demo;
   })();
   return demos;
