@@ -1,4 +1,5 @@
 import { mergeGeometries, mergeVertices } from '../../../vendor/three/addons/utils/BufferGeometryUtils.js';
+import { createOcclusionQuery } from './occlusion.js';
 import { trackPosition, trackStyle, trackYaw } from './track.js';
 
 const BAY_LENGTH = 8;
@@ -590,11 +591,11 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
   function clearEntry(entry) {
     for (const mesh of [...entry.node.children]) { mesh.geometry.dispose(); entry.node.remove(mesh); }
     for (const mesh of [...entry.rails.children]) { mesh.geometry.dispose(); entry.rails.remove(mesh); }
-    entry.occluder?.geometry.dispose(); entry.occluder = null;
+    entry.occluder?.geometry.dispose(); entry.occluder = null; entry.occlusionQuery = null;
     for (const cone of entry.speakerCones) cone.removeFromParent();
     entry.speakerCones.length = 0;
   }
-  function buildEntry(entry, index) {
+  function* buildEntrySteps(entry, index) {
     clearEntry(entry);
     entry.index = index;
     const center = index * BAY_LENGTH + BAY_LENGTH / 2;
@@ -605,9 +606,12 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
       const mesh = new THREE.Mesh(deform(item.geometry, center), materials[item.name]);
       mesh.castShadow = !item.name.endsWith('Light'); mesh.receiveShadow = true;
       entry.node.add(mesh);
+      yield;
     }
     entry.occluder = new THREE.Mesh(deform(template.solid, center), occlusionMaterial);
     entry.occluder.updateMatrixWorld(true);
+    entry.occlusionQuery = createOcclusionQuery(THREE, entry.occluder.geometry, template.solid);
+    yield;
     for (const driver of template.speakers) {
       const at = center - driver.z, yaw = trackYaw(at);
       const point = trackPosition(at, driver.side * driver.x, driver.y);
@@ -617,7 +621,7 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
       cone.userData.rest = cone.position.clone();
       cone.userData.axis = new THREE.Vector3(-driver.side * Math.cos(yaw), 0, driver.side * Math.sin(yaw));
       cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), cone.userData.axis);
-      cone.receiveShadow = true; group.add(cone); entry.speakerCones.push(cone);
+      cone.receiveShadow = true; cone.visible = false; group.add(cone); entry.speakerCones.push(cone);
     }
     for (const side of [-1, 1]) {
       const points = [];
@@ -630,7 +634,14 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
       const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, 64, 0.035, lite ? 5 : 8, false), materials.chrome);
       mesh.receiveShadow = true;
       entry.rails.add(mesh);
+      yield;
     }
+  }
+  function buildEntry(entry, index) { for (const step of buildEntrySteps(entry, index)) { /* Complete an uncached jump. */ } }
+  let staged = null;
+  function discardStaged() {
+    if (!staged) return;
+    staged.steps.return(); clearEntry(staged.entry); staged = null;
   }
   function update(distance, { time = 0, gentle = true } = {}) {
     const level = speaking && !gentle ? speakingLevel : 0;
@@ -638,7 +649,14 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
     const first = Math.floor(distance / BAY_LENGTH) - 3;
     for (let i = 0; i < bays.length; i++) {
       const index = first + i;
-      const entry = bays[((index % bays.length) + bays.length) % bays.length];
+      const slot = ((index % bays.length) + bays.length) % bays.length;
+      let entry = bays[slot];
+      if (entry.index !== index && staged?.index === index) {
+        for (const step of staged.steps) { /* Finish only if travel overtook preparation. */ }
+        clearEntry(entry); entry.node.removeFromParent(); entry.rails.removeFromParent();
+        entry = bays[slot] = staged.entry; staged = null;
+        group.add(entry.node, entry.rails);
+      }
       if (entry.index !== index) buildEntry(entry, index);
       entry.node.visible = entry.rails.visible = index * BAY_LENGTH < 608;
       for (const cone of entry.speakerCones) {
@@ -646,6 +664,14 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
         cone.position.copy(cone.userData.rest).addScaledVector(cone.userData.axis, pulse);
       }
     }
+    const nextIndex = first + bays.length;
+    if (staged && staged.index !== nextIndex) discardStaged();
+    if (!staged && nextIndex * BAY_LENGTH < 608) {
+      const entry = { node: new THREE.Group(), rails: new THREE.Group(), speakerCones: [], index: null, occluder: null };
+      staged = { index: nextIndex, entry, steps: buildEntrySteps(entry, nextIndex), done: false };
+    }
+    // Prepare one geometry batch per frame while the current bay is still on screen.
+    if (staged && !staged.done) staged.done = staged.steps.next().done;
     for (let i = 0; i < lights.length; i++) {
       const at = distance - 4 + i * 14;
       const point = trackPosition(at, i % 2 ? -2.8 : 2.8, 3.05);
@@ -687,11 +713,12 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
       raycaster.set(rayOrigin, rayDirection); raycaster.near = 0.05; raycaster.far = distance - 0.08;
       if (raycaster.intersectObject(finalWall, false).length) return true;
       for (const entry of bays) {
-        if (entry.node.visible && raycaster.intersectObject(entry.occluder, false).length) return true;
+        if (entry.node.visible && entry.occlusionQuery(raycaster.ray, raycaster.near, raycaster.far)) return true;
       }
       return false;
     },
     dispose() {
+      discardStaged();
       for (const entry of bays) clearEntry(entry);
       for (const template of templates.values()) {
         for (const item of template.meshes) item.geometry.dispose();
