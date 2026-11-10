@@ -8,6 +8,16 @@ export const SPEED_BANDS = Object.freeze([
   { label: 'Montage', below: Infinity, reactionS: 2.4, cooldownS: 7 },
 ]);
 
+export const STORY_ART_SLOTS = Object.freeze([
+  'intro-subject', 'pump-documentary', 'reflex-cheetah', 'reflex-shrimp',
+  'subject-habitat', 'floorboard-warning', 'subject-spreadsheet',
+  'outside-daylight', 'conversation-chairs',
+]);
+
+export function isDocumentaryArtSlot(slot) {
+  return typeof slot === 'string' && (/^[blfws]-[a-z-]+$/.test(slot) || STORY_ART_SLOTS.includes(slot));
+}
+
 export function validateManifest(manifest) {
   if (manifest?.version !== 1 || !Number.isFinite(manifest.track?.dock) || manifest.track.dock <= 0 ||
       manifest.track.length < manifest.track.dock) throw new Error('Invalid documentary track');
@@ -28,7 +38,7 @@ export function validateManifest(manifest) {
     if (!['L', 'R', 'C', 'both'].includes(exhibit.side) || !Number.isFinite(exhibit.at) ||
         exhibit.at < 0 || exhibit.at > manifest.track.length) throw new Error('Invalid exhibit position');
     for (const slot of [exhibit.slot, exhibit.fallback, exhibit.stamp, exhibit.snapTo, ...Object.values(exhibit.states || {})]) {
-      if (slot != null && !/^[blfws]-[a-z-]+$/.test(slot)) throw new Error('Invalid art slot');
+      if (slot != null && !isDocumentaryArtSlot(slot)) throw new Error('Invalid art slot');
     }
   }
   return manifest;

@@ -8,13 +8,13 @@ The three sculptures and their pedestals reuse Backroom's knight.glb, queen.glb 
 
 Run from the fuzz directory:
 
-    node dev/serve.mjs 8897
+    node dev/tab-doc-preview-server.mjs --root ../ --port 8897 --feed http://127.0.0.1:8817
 
 Open http://127.0.0.1:8897/fuzz/dev/tab-doc.html
 
-Drag with mouse or touch to look around. Click/tap the physical lever, or press Space/Enter, to pump. Scenery clicks do not pump. Center view resets the head direction. The opening recording unlocks the platform when it finishes; **Ride preview > Leave platform** skips that wait. **Ride preview > Choose personal media** lets the standalone preview display local files. In the game, the screens use the player's existing selected Scrolller or own-file source.
+Drag with mouse or touch to look around. Click/tap the physical lever, or press Space/Enter, to pump. Scenery clicks do not pump. Center view resets the head direction. The opening recording unlocks the platform when it finishes; **Ride preview > Leave platform** skips that wait. **Ride preview > Use Scrolller** connects this visit through the existing authenticated local feed host. The host still owns consent, approved channels, allowance and expiry. No feed request starts before that explicit selection. **Use own files** and **No pictures** switch sources and release the remote visit. The adapter binds only to loopback and streams media without saving it. In the game, the screens use the player's existing selected Scrolller or own-file source.
 
-Preview doors: ?at=lever, ?at=145 (first drop), ?at=floorboard, ?at=363 (second descent), ?at=wakeup, ?at=stage. Numeric distances work. Add lite=1, reduced=1, gentle=1, plan=prime or hours=3 as needed. The normal preview includes recorded narration. voice=0 is silent; manual=1 and test=1 default to silent for deterministic drives, with voice=1 overriding that default.
+Preview doors: ?at=lever, ?at=145 (first drop), ?at=floorboard, ?at=363 (second descent), ?at=wakeup, ?at=stage. Numeric distances work. Add lite=1, reduced=1, gentle=1, plan=prime or hours=3 as needed. The normal preview includes recorded narration, subtitles and music. voice=0 disables narration; music=0 disables music. manual=1 and test=1 default to silent for deterministic drives, with voice=1 and music=1 overriding those defaults. CC toggles subtitles.
 
 Distance follows the 580m rail, including its real slopes and bends. Powered lifts and downhill acceleration run only in the connecting sections, then brake before scripted exhibits. This owner-requested behavior supersedes the original pump-only rule for those connections. Reduced motion caps speed and disables banking, anticipation and speed FOV. Holds and Wake Up always win over automatic movement.
 
@@ -32,7 +32,15 @@ The real game host was checked by temporarily replacing the outside handler insi
 
 ## Narration and illustrations
 
-Finished original recordings are packaged in assets/documentary/voice. Narration uses the game's voice mixer, one clip at a time, and stops on Wake Up or panic. Opening and exhibit holds release from recorded clip endings. Phrase-level visual offsets are estimates because the recording delivery has no word-alignment file. Missing clips remain silent and release their hold after their measured duration. Missing final illustrations use purpose-built diagrams; approved images can replace them at assets/documentary/art/<slot>.webp.
+Finished original recordings are packaged in assets/documentary/voice. Narration uses the game's voice mixer, one clip at a time, with a 1.5-second gap after each natural ending. No distance gate pauses or seeks inside a recording. Opening and exhibit holds release from recorded clip endings. New run queues its closing response behind the active recording; Wake Up pauses immediately and panic disposes immediately. Hover reactions are at least five minutes apart and limited to two played reactions per run.
+
+Subtitles preserve the approved script for all 217 recordings, in phrases of at most two lines. Phrase boundaries are estimated from the script and follow actual media time and duration; they are not forced-aligned transcripts. The projector slideshow shares those same phrase boundaries. Missing clips remain silent and release their hold after their measured duration.
+
+Voice attacks fade over 120ms. Release fades are limited to measured quiet tails with a safety margin, so they do not lower final spoken syllables. The packaged files hash-match their delivered originals, and duration metadata agrees within 0.5ms. Many originals have no quiet tail; this does not establish whether words are missing, and playback cannot restore missing source audio. No recording was regenerated or modified in this pass.
+
+The background playlist reuses Breathe In, Idle Cycle and Sealed from the existing licensed lo-fi runtime pack. It loops throughout the ride and the parked ending, fades at track boundaries, and ducks under speech. Only one music stream is active at once. Those MP3s remain part of the existing ignored runtime audio pack rather than a duplicate committed asset set.
+
+Story slides use realistic documentary images, with a clothed Vitruvian-inspired Subject diagram for the introduction. Nine new slides cover the Subject, handcar, cheetah, mantis shrimp, room, floorboard, matching spreadsheet room, daylight and conversation chairs. The cart holds for viewing at 24m, 303m and 410m while the corresponding whole recording finishes. The reflex recording starts at 285m; use ?at=303 to review that slideshow directly. The first three parchment exhibit samples remain separate supporting art. Missing final illustrations use purpose-built diagrams; images replace them at assets/documentary/art/<slot>.webp. The final plain service wall remains free of story projection cards.
 
 The three-hour post-ride sequence uses wall time and audio ended events, with no permanent render loop. Regular browser-tab hiding allows narration to continue. If the host explicitly suspends audio on focus loss, the mixer remains authoritative: speech resumes when the host releases it and the stage clock keeps wall time. New run can play its short recorded response before resolving to recap; panic is immediate. Terms read-back requires exact accepted clause IDs. The current game stores counts, so those blocks and their linking lines are skipped rather than claiming the player accepted every recorded clause.
 
@@ -52,7 +60,7 @@ The built-in recording controller owns timing by default. An external recording 
       },
     });
 
-The returned tunnel has ready, read-only state, on, addCues, hold, beat, captions, narration and dispose. Events include ready, zone, band, exhibit, cue, pump, stage, stage-action, beat and dispose. Set narration:false for a silent integration. projector.show accepts a story id (booth, lever, reflex, replay, wakeup) plus optional slot/title/line; projector.hide retracts the selected screen.
+The returned tunnel has ready, read-only state, on, addCues, hold, beat, captions, narration, music and dispose. Events include ready, zone, band, exhibit, cue, pump, stage, stage-action, beat and dispose. Set narration:false and music:false for a silent integration. projector.show accepts a story id (booth, lever, reflex, replay, wakeup) plus optional slot/title/line; projector.hide retracts the selected screen.
 
 Visual beats: booth.stamp, booth.unlock, floor.creak, floor.snap, floor.replay, floor.freeze, floor.release, stage.pitch, stage.buttons, stage.booth with {state:'a'|'b'|'c'}, and stage.caption with {text}. The stage.buttons beat starts the elapsed timer after the recorded pitch. Keep the floor hold through the replay, then send floor.release.
 
@@ -60,7 +68,7 @@ Run pictures remain display-only DOM media, aligned to the camera with portal oc
 
 ## Checks
 
-    node --test --test-concurrency=2 tests/documentary-tunnel.test.mjs ui/documentary/narration.test.mjs
+    node --test --test-concurrency=2 tests/documentary-tunnel.test.mjs ui/documentary/narration.test.mjs ui/documentary/music.test.mjs dev/tab-doc-preview-server.test.mjs
     node dev/tab-doc-drive.mjs
 
 The browser drive expects the server above and Playwright. Set PW_ROOT to the package.json beside an installed Playwright package, CHROME_EXE to Chrome, and optionally SHOTS to a screenshot directory.

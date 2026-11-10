@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { createRide, validateManifest } from '../ui/documentary/model.js';
+import { createRide, validateManifest, STORY_ART_SLOTS, isDocumentaryArtSlot } from '../ui/documentary/model.js';
 import { createStageClock } from '../ui/documentary/stage.js';
 import { needsDomMedia } from '../ui/unlocks/arcade/slot-reel-media.js';
 import { trackPoint, trackPosition, trackYaw, trackPitch, trackMotion, trackStyle } from '../ui/documentary/track.js';
@@ -9,9 +9,18 @@ import { trackPoint, trackPosition, trackYaw, trackPitch, trackMotion, trackStyl
 const manifest = JSON.parse(await readFile(new URL('../assets/documentary/exhibits.json', import.meta.url), 'utf8'));
 test('manifest covers the complete ride and validates art paths', () => {
   assert.equal(validateManifest(manifest), manifest);
-  const bad = structuredClone(manifest);
-  bad.exhibits[0].slot = '../private';
-  assert.throws(() => validateManifest(bad));
+  for (const slot of STORY_ART_SLOTS) {
+    const valid = structuredClone(manifest);
+    valid.exhibits[0].slot = slot;
+    assert.equal(validateManifest(valid), valid);
+  }
+  for (const slot of ['../private', '../intro-subject', 'intro-subject.webp', 'reflex-cheetah/../../private',
+    'subject-spreadsheet?private', 'https://example.com/image', 'unlisted-slide']) {
+    const bad = structuredClone(manifest);
+    bad.exhibits[0].slot = slot;
+    assert.equal(isDocumentaryArtSlot(slot), false);
+    assert.throws(() => validateManifest(bad));
+  }
 });
 test('booth stays locked, pumping gains speed, and coasting stops', () => {
   const ride = createRide(manifest);

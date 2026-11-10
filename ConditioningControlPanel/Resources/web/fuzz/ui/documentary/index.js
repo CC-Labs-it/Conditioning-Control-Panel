@@ -4,6 +4,7 @@ import { createScene } from './scene.js';
 import { createMedia } from './media.js';
 import { createStage } from './stage.js';
 import { createDocumentaryNarration } from './narration.js';
+import { createDocumentaryMusic } from './music.js';
 
 export const DOCUMENTARY_SHOW_MAX_MS = 4 * 3600e3;
 export const MANIFEST_URL = new URL('../../assets/documentary/exhibits.json', import.meta.url);
@@ -31,7 +32,8 @@ export function createTabTunnel(ctx, parent, opts = {}) {
   const useNarration = opts.narration === true || (opts.narration !== false && !opts.connect);
   const fallback = opts.fallback ?? !useNarration;
   let disposed = false, started = false, frameOff = null, floorRelease = null, paintWait = 0;
-  let stage, scene, narration, frameCount = 0;
+  let stage, scene, narration, music, frameCount = 0;
+  let subtitlesOn = opts.subtitles !== false;
   const emit = (event, data) => {
     for (const fn of [...(listeners.get(event) || [])]) {
       try { fn(data); } catch (error) { console.error(error); }
@@ -85,6 +87,22 @@ export function createTabTunnel(ctx, parent, opts = {}) {
   captions.className = 'td-captions';
   captions.setAttribute('aria-live', 'polite');
   root.append(captions);
+  const subtitles = doc.createElement('button');
+  subtitles.className = 'td-subtitle-toggle';
+  subtitles.type = 'button';
+  subtitles.textContent = 'CC';
+  subtitles.hidden = !useNarration;
+  function updateSubtitleButton() {
+    subtitles.setAttribute('aria-pressed', String(subtitlesOn));
+    subtitles.setAttribute('aria-label', `Turn subtitles ${subtitlesOn ? 'off' : 'on'}`);
+  }
+  updateSubtitleButton();
+  subtitles.addEventListener('click', () => {
+    subtitlesOn = !subtitlesOn;
+    narration?.setSubtitles(subtitlesOn);
+    updateSubtitleButton();
+  });
+  root.append(subtitles);
   function later(id, ms) {
     if (disposed || completed.has(id) || jobs.has(id)) return;
     jobs.set(id, ctx.after(ms, () => { jobs.delete(id); beat(id); }));
@@ -188,8 +206,13 @@ export function createTabTunnel(ctx, parent, opts = {}) {
       return () => listeners.get(event)?.delete(fn);
     },
     get narration() { return narration; },
-    debug: () => ({ frames: frameCount, disposed, callbacks: Number(Boolean(frameOff)), pending: jobs.size, ...scene.debug?.(), narration: narration?.debug?.() }),
+    get music() { return music; },
+    debug: () => ({ frames: frameCount, disposed, callbacks: Number(Boolean(frameOff)), pending: jobs.size, ...scene.debug?.(), narration: narration?.debug?.(), music: music?.debug?.() }),
   });
+  if (opts.music !== false) {
+    try { music = createDocumentaryMusic(ctx, api); }
+    catch (error) { dispose(); throw error; }
+  }
   if (useNarration) {
     const enableVoice = doc.createElement('button');
     enableVoice.className = 'td-enable-voice';
@@ -200,7 +223,8 @@ export function createTabTunnel(ctx, parent, opts = {}) {
     root.append(enableVoice);
     try {
       narration = createDocumentaryNarration(ctx, api, {
-        now: opts.now, hours: opts.hours,
+        now: opts.now, hours: opts.hours, subtitles: subtitlesOn,
+        onSpeaking(on) { music?.setSpeaking(on); },
         onStatus(status) {
           enableVoice.hidden = status.status !== 'blocked';
           opts.onNarrationStatus?.(status);

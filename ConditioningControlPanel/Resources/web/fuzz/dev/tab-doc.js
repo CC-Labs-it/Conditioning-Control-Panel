@@ -2,14 +2,19 @@ import { createTabTunnel, MANIFEST_URL } from '../ui/documentary/index.js';
 import { createPictures } from '../ui/pictures.js';
 import { createAds } from '../ui/ads.js';
 import { createKit } from '../audio/kit.js';
+import { createPreviewFeed } from './tab-doc-feed.js';
 
 const query = new URLSearchParams(location.search);
 const events = new Map(), frames = new Set(), timers = new Set(), cleanups = new Set(), animations = new Set();
 let active = 0, paused = false, manual = query.get('manual') === '1', last = performance.now(), raf = null;
-let simulatedWall = 0, openTabs = 0;
+let simulatedWall = 0, openTabs = 0, ended = false;
 const $ = id => document.getElementById(id);
 const emit = (event, data) => { for (const fn of [...(events.get(event) || [])]) fn(data); };
-const pictures = createPictures({ source: query.get('pics') || 'none', onChange: source => emit('pictures', { source }), onAdded: source => emit('pictures-added', { source }) });
+const feed = createPreviewFeed({ onStatus: text => { $('media-status').textContent = text; } });
+const pictures = createPictures({ source: query.get('pics') || 'none', scrolller:feed.capability,
+  send:(type,fields)=>feed.send(type,fields),
+  onChange: source => emit('pictures', { source }), onAdded: source => emit('pictures-added', { source }) });
+feed.attach(pictures);
 const ads = createAds({ noCcp: () => ['basic', 'prime'].includes(query.get('plan')) });
 const audio = createKit();
 document.addEventListener('pointerdown', () => audio.arm(), { capture: true });
@@ -43,8 +48,8 @@ const ctx = {
   state: { seed: 1110 }, identity: { displayName: query.get('name') || 'The evening visitor' },
   caps: { plan: query.get('plan') || 'free' }, pictures, ads,
   layer: () => $('l-ending'), audio: {
-    solo(on) { audio.solo(on ? id => id === 'documentary' : null); },
-    stream(url, options) { return audio.stream(url, { ...options, source: 'documentary', sourceLabel: 'Museum narrator' }); },
+    solo(on) { audio.solo(on ? id => id === 'documentary' || id === 'documentary-music' : null); },
+    stream(url, options = {}) { return audio.stream(url, { source:'documentary', sourceLabel:'Museum narrator', ...options }); },
   },
   cleanup(fn) { cleanups.add(fn); },
   frame(fn) { frames.add(fn); schedule(); return () => frames.delete(fn); },
@@ -71,6 +76,7 @@ const ctx = {
 };
 function pause(on) {
   paused = on;
+  pictures.setGameplayActive(!on && !document.hidden && !ended);
   audio.hold(on);
   $('pause').hidden = !on;
   if (!on) { $('l-ending').tabIndex = -1; $('l-ending').focus(); }
@@ -84,20 +90,38 @@ $('resume').onclick = () => pause(false);
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape') { event.preventDefault(); pause(!paused); }
 });
-document.addEventListener('visibilitychange', () => { last = performance.now(); schedule(); });
+document.addEventListener('visibilitychange', () => {
+  last = performance.now(); pictures.setGameplayActive(!paused && !document.hidden && !ended); schedule();
+});
 const manifest = await fetch(MANIFEST_URL).then(response => response.json());
 const requestedStart = query.get('at') || 'booth';
 const startAt = /^\d+(?:\.\d+)?$/.test(requestedStart) ? Number(requestedStart) : requestedStart;
 const tunnel = createTabTunnel(ctx, $('l-ending'), {
   manifest, at: startAt, lite: query.get('lite') === '1' || innerWidth < 600,
   narration: query.get('voice') === '1' || (!manual && query.get('test') !== '1' && query.get('voice') !== '0'),
+  music: query.get('music') === '1' || (!manual && query.get('test') !== '1' && query.get('music') !== '0'),
   hours: query.get('hours'), now: () => performance.now() + simulatedWall,
-  onDispose() { $('finished').hidden = false; },
+  onDispose() { ended=true; pictures.setGameplayActive(false);pictures.setSource('none');feed.dispose();$('finished').hidden = false; },
 });
+pictures.setGameplayActive(!paused && !document.hidden);
+$('use-scrolller').onclick = async () => {
+  $('use-scrolller').disabled=true;
+  try { if(await feed.choose()) $('preview').open=false; }
+  finally { $('use-scrolller').disabled=false; }
+};
+$('use-none').onclick = () => { feed.cancel();pictures.setSource('none');$('media-status').textContent='Pictures are off.'; };
+$('use-own').onclick = () => {
+  feed.cancel();
+  if(pictures.ownCount) { pictures.setSource('own');$('media-status').textContent=`Using ${pictures.ownCount} personal media files`; }
+  else $('media-files').click();
+};
+if(query.get('pics')==='scrolller') $('media-status').textContent='Choose Use Scrolller to connect this visit to your current CCP profile.';
 $('media-files').addEventListener('change', event => {
   if (pictures.replaceOwn(event.target.files)) {
+    feed.cancel();
     pictures.setSource('own');
     $('media-label').textContent = `${pictures.ownCount} personal media files`;
+    $('media-status').textContent = `Using ${pictures.ownCount} personal media files`;
     $('preview').open = false;
   }
 });
@@ -114,4 +138,4 @@ window.__tabDoc = {
   wall(seconds) { simulatedWall += seconds * 1000; tunnel.beat('stage.timer'); },
   stats() { return { ...tunnel.debug(), callbacks: frames.size, timers: timers.size, subscriptions: [...events.values()].reduce((n, set) => n + set.size, 0), openTabs, nodes: document.querySelectorAll('*').length }; },
 };
-addEventListener('pagehide', () => { for (const cleanup of cleanups) cleanup(); for (const animation of animations) animation.cancel(); audio.stopStreams(); pictures.clearOwn(); });
+addEventListener('pagehide', () => { for (const cleanup of cleanups) cleanup(); for (const animation of animations) animation.cancel(); feed.dispose(); audio.stopStreams(); pictures.clearOwn(); });

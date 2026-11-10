@@ -85,8 +85,10 @@
 .td-replay { background:#e9e3cc;padding:18px 18px 46px; }
 .td-replay-wall { display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr);gap:7px;height:100%; }
 .td-replay>p { position:absolute;bottom:8px;left:0;right:0;margin:0;text-align:center;font:italic 26px/30px Georgia,serif;color:#34302a; }
-.td-captions { position:absolute;bottom:24%;left:12%;right:12%;margin:0;text-align:center;font:16px/1.5 Georgia,serif;color:#f4eee1;background:#0b080adb;padding:9px 18px;z-index:5; }
+.td-captions { position:absolute;bottom:27%;left:50%;right:auto;transform:translateX(-50%);width:max-content;max-width:min(760px,88%);box-sizing:border-box;margin:0;text-align:center;white-space:pre-line;font:18px/1.45 Arial,sans-serif;color:#fff9f0;background:#11151bc9;border-radius:5px;padding:8px 15px;text-shadow:0 1px 2px #000;z-index:5;pointer-events:none; }
+.td-subtitle-toggle { position:absolute;top:16px;right:232px;min-width:44px;min-height:42px;padding:8px 10px;border:1px solid #bb9e76;border-radius:5px;background:#1b2028ed;color:#f2e8d8;font:12px Arial,sans-serif!important;z-index:6; }
+.td-subtitle-toggle[aria-pressed=true] { color:#29221d;background:#eee5cf; }
 .td-captions:empty { display:none; }
 .td-loading { position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:20px 30px;background:#2b2823;color:#efe9dc; }
 @media(max-width:600px) { .td-center-view { top:70px;right:12px;min-height:44px;padding:10px 12px; }.td-pump-hint { left:82px;right:12px;bottom:16px;font-size:10px;line-height:1.3; } }
-@media(max-width:600px) { .td-instrument { left:12px;bottom:42px;width:65px;padding:4px; }.td-instrument strong { font-size:18px; }.td-instrument span { font-size:8px; }.td-captions { left:5%;right:5%;bottom:25%;font-size:14px; }.td-replay-wall { grid-template-columns:repeat(2,1fr); }.td-replay-wall .td-tab:nth-child(n+5) { display:none; } }
+@media(max-width:600px) { .td-instrument { left:12px;bottom:42px;width:65px;padding:4px; }.td-instrument strong { font-size:18px; }.td-instrument span { font-size:8px; }.td-captions { max-width:92%;bottom:27%;font-size:15px; }.td-subtitle-toggle { top:122px;right:12px;min-height:44px; }.td-replay-wall { grid-template-columns:repeat(2,1fr); }.td-replay-wall .td-tab:nth-child(n+5) { display:none; } }
