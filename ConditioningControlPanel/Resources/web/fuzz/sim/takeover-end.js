@@ -5,8 +5,8 @@
  *           different sizes pile in from where the swarm stood until no page shows through
  *   shut    every screen goes dark at once
  *   drop    pictures only on the grid pixels of DROP
- *   error   error sound, a small system dialog with the logo, a short shake
- *   waiting everything frozen and silent but a quiet eerie drone; the dialog's OK is live and the take waits for it
+ *   error   a silent, small system dialog with the logo, a short shake
+ *   waiting everything frozen and silent; the dialog's OK is live and the take waits for it
  *           (on its own after WAIT_MAX_S)
  *   giant   OK: a hard shake and a sting, the giant EMI is there at once (jumpscare), blinks, then the cheeky face
  *   close   the eyelid shuts to black (Gentle: a plain fade) */
@@ -29,7 +29,6 @@ export const TAKE = Object.freeze({
   CLOSE_S: 0.3,          // eyelid shut
   DARK_S: 0.7,
   GENTLE_CLOSE_S: 1.2,
-  DRONE_GAIN: 0.16,      // the eerie drone under the wait (Gentle: half)
   STING_GAIN: 0.9,       // the jumpscare sting (Gentle: half)
   FLICKER_MS: [380, 680],        // a front screen changes this often: under 3 times a second
   FLICKER_MS_LITE: [520, 900],

@@ -7,7 +7,7 @@
  * go_corp    her own budget grows on the game clock; she walks to her guest tile in the shop and buys it
  *            (Amplifier, Overclock, Louder Opinions, Self Replication, then Override)
  * Self Rep.  each of the player's own manual clicks splits an EMI off a nearby one
- * Override   about half of those clicks turn a page object (and its bottom tab) into an EMI: a bzzz and a shake first
+ * Override   EMI starts turning toys and shop icons into herself. Each target buzzes and shakes first.
  * go_hive    the screens run in patterns while everyone keeps wandering; bought by EMI herself if the player waits
  *            (150 s after Override) */
 
@@ -35,7 +35,7 @@ const SWARM_CSS = `
 .et-purse{position:absolute;left:64%;top:64%;width:32%;height:32%;pointer-events:none;}
 .et-purse>img{inset:0;width:100%;height:100%;object-fit:contain;}
 .et-purse>span{position:absolute;right:-5px;bottom:-4px;padding:0 3px;border:1px solid #512b38;border-radius:5px;background:#ffe39b;color:#342032;font:700 10px/1.1 var(--font);}
-[data-et-buzz]{pointer-events:none;}
+[data-et-buzz]{pointer-events:none;outline:2px solid #ff97bf!important;outline-offset:2px;}
 .et-emi .et-h{position:absolute;left:0;right:0;bottom:79%;text-align:center;line-height:1;font-family:"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif;pointer-events:none;}
 `;
 const STEP_HZ = 2.4;      // step bob: bumps a second while she walks
@@ -272,7 +272,10 @@ function mountSwarm(ctx) {
     if (!calm()) main.jumpT = t;
     nextMilestone = t + T.barkLife(line) / 1000;
   }
-  ctx.on('switch', () => { if (phase() !== 'hive') uiTakeover.update(0, false); });
+  ctx.on('switch', () => {
+    const ph = phase();
+    uiTakeover.update(0, ph === 'hive', ph === 'rep' && fx().override);
+  });
   const pets = bindCopyPets(ctx, () => !box.hidden && !quiet());
   const grab = bindEmiGrab(ctx, box, {
     pick: el => emis.find(e => e.el === el),
@@ -367,11 +370,12 @@ function mountSwarm(ctx) {
     if (tile.id === 'h_loud') barkAt = Math.min(barkAt, t + 4);
   }
 
-  /* -- Self Replication (she splits) and Override (things on the page become her): the player's own clicks -- */
+  /* -- Self Replication makes walking copies. Override also acts on its own, one item at a time. -- */
   const gone = new Set();
   const tabs = new Set();       // dock bodies whose bottom tab reads EMI while their object is hers
   const buzzing = new Set();    // objects shaking right now, about to be hers
   let lastRep = -Infinity, hiveTargets = null, filling = false;
+  let nextOverride = 0, preferShop = false;
   let hivePresses = Number(ctx.store.get('hivePresses')) || 0;
   function remainingTargets() {
     const visible = objects();
@@ -393,6 +397,30 @@ function mountSwarm(ctx) {
       const cs = doc.defaultView.getComputedStyle(el);
       return cs.visibility !== 'hidden' && cs.display !== 'none' && Number(cs.opacity) > 0.05;
     });
+  }
+  function chooseOverrideTarget(hive) {
+    const toys = hive ? remainingTargets() : objects();
+    const shop = [...doc.querySelectorAll('#shop .row[data-id]:not([data-et-ui]):not([data-et-buzz])')].filter(row => {
+      const id = row.dataset.id;
+      if (id === 'go_hive' || BY_ID[id]?.kind !== 'item') return false;
+      const r = row.getBoundingClientRect(), b = ctx.bounds();
+      return r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < b.w && r.top < b.h;
+    });
+    const docks = toys.filter(el => el.matches('section.dk'));
+    const pageItem = preferShop && shop.length ? any(shop) : any(docks) || any(toys) || any(shop);
+    if (pageItem) return pageItem;
+    // A folded toy can still be seen and taken by its tab.
+    const folded = [...doc.querySelectorAll('#dock-strip .dk-chip[data-fz-owner][aria-expanded="false"]:not([data-et-ui],[data-disguised],[data-et-buzz])')];
+    return any(folded.filter(chip => {
+      const r = chip.getBoundingClientRect();
+      return r.width && chip.contains(doc.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+    }));
+  }
+  function autoOverride(ph) {
+    if (t < nextOverride || buzzing.size || quiet() || !fx().override || (ph !== 'rep' && ph !== 'hive')) return;
+    const target = chooseOverrideTarget(ph === 'hive');
+    if (target) override(target);
+    else nextOverride = t + 2;
   }
   /* the bzzz: a short, quiet, low electric buzz, synthesised (no sfx in the box fits); never two at once */
   let io = null, buzzAt = -Infinity;
@@ -445,10 +473,12 @@ function mountSwarm(ctx) {
     const near = emis.reduce((best, e) => (dist(e) < dist(best) ? e : best), main);
     if (!near.pic) { near.setFace('o_o'); near.faceAt = t + 1.2; }
     if (Math.abs(cx - (near.x + near.size / 2)) > 4) near.dir = cx > near.x + near.size / 2 ? 1 : -1;
+    const shopRow = el.matches('#shop .row[data-id]');
+    preferShop = !shopRow;
+    nextOverride = t + rand(...T.REP.OVERRIDE_GAP_S);
     el.setAttribute('data-et-buzz', '');
     buzzing.add(el);
     const dock = dockOf(el), chip = dock?.chip;
-    if (dock && chip) { tabs.add(dock); dock.disguise({ title: 'EMI', icon: iconNode() }); }
     bzzz();
     const ms = calm() ? 200 : T.REP.BUZZ_MS;
     const a = shake(el, ms), b = chip ? shake(chip, ms) : null;
@@ -456,7 +486,16 @@ function mountSwarm(ctx) {
     ctx.after(ms, () => {
       buzzing.delete(el);
       el.removeAttribute('data-et-buzz');
-      if (el.isConnected) convert(el);
+      if (el.isConnected && fx().override && ['rep', 'hive'].includes(phase())) {
+        if (shopRow || el.matches('.dk-chip')) {
+          uiTakeover.wearItem(el);
+          bag.took++;
+          save();
+        } else {
+          convert(el);
+          if (dock && chip) { tabs.add(dock); dock.disguise({ title: 'EMI', icon: iconNode() }); }
+        }
+      }
       for (const x of [a, b, fade]) x?.cancel();   // after it is hidden, so it never flashes back
     });
   }
@@ -497,18 +536,18 @@ function mountSwarm(ctx) {
     if (t - lastRep < T.REP.COOL_S) return;
     const hive = ph === 'hive';
     const over = fx().override;
-    const objs = hive ? remainingTargets() : over ? objects() : [];
+    const target = over && !buzzing.size ? chooseOverrideTarget(hive) : null;
     if (hive) {
       ctx.store.set('hivePresses', ++hivePresses);
       lastRep = t;
-      if (objs.length && (count >= T.hiveCrowd(LITE) || Math.random() < T.REP.CONVERT)) override(any(objs));
+      if (target && (count >= T.hiveCrowd(LITE) || Math.random() < T.REP.CONVERT)) override(target);
       else if (count < T.repCap(LITE)) split();
       return;
     }
-    const act = T.repPress({ now: t, lastAt: lastRep, count, lite: LITE, objects: objs.length, override: over });
+    const act = T.repPress({ now: t, lastAt: lastRep, count, lite: LITE, objects: target ? 1 : 0, override: over });
     if (!act) return;
     lastRep = t;
-    if (act === 'convert') override(any(objs)); else split();
+    if (act === 'convert') override(target); else split();
   });
 
   /* -- HIVE MIND: she buys it herself when the player waits too long -- */
@@ -567,7 +606,8 @@ function mountSwarm(ctx) {
 
     slow += dt;
     if (slow >= 0.25) {
-      uiTakeover.update(slow, ph === 'hive');
+      autoOverride(ph);
+      uiTakeover.update(slow, ph === 'hive', ph === 'rep' && fx().override);
       if (ph === 'hive' && !filling && !quiet()) {
         if (!hiveTargets) remainingTargets();
         const ready = T.readyToFill({

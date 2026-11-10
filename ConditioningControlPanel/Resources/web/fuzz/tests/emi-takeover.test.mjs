@@ -115,8 +115,11 @@ test('Self Replication only splits; with Override about half the clicks convert 
   const rng = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
   const over = true;
   assert.equal(T.repPress({ now: 1, lastAt: 0.8, count: 2, objects: 5, override: over, rng }), null, 'inside the cooldown');
-  assert.equal(T.repPress({ now: 10, count: 30, objects: 5, override: over, rng }), null, 'desktop cap');
-  assert.equal(T.repPress({ now: 10, count: 12, lite: true, objects: 5, override: over, rng }), null, 'phone cap');
+  for (const lite of [false, true]) {
+    const count = T.repCap(lite);
+    assert.equal(T.repPress({ now: 10, count, lite, objects: 5, override: over, rng }), 'convert', 'a full crowd can still convert');
+    assert.equal(T.repPress({ now: 10, count, lite, objects: 0, override: over, rng }), null, 'no room to split');
+  }
   assert.ok(T.repPress({ now: 10, count: 11, lite: true, objects: 5, override: over, rng }));
   assert.equal(T.repPress({ now: 10, count: 2, objects: 0, override: over, rng: () => 0 }), 'split', 'nothing to take: she splits');
   for (let i = 0; i < 200; i++) assert.equal(T.repPress({ now: i, count: 2, objects: 3, rng }), 'split', 'no Override: never a conversion');
