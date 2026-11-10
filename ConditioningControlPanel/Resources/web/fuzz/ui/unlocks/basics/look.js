@@ -1,3 +1,4 @@
+import { mountConfetti } from './confetti.js';
 import { openButtonShop, buttonShopCss, buttonShopReady, grandfatherFaces, shopDoor, SIZE_ITEMS } from '../../button-shop.js';
 import { writeScore } from '../../emi-score.js';
 import { mountGameWave } from '../../live-wave.js';
@@ -231,28 +232,7 @@ body { transition: background-color .6s, color .6s; }
     },
   },
 
-  /* Confetti: every purchase, sized to how much of the bank it took. */
-  confetti: {
-    mount(ctx) {
-      const COLS = ['var(--accent)', 'var(--accent-2)', 'var(--accent-soft)', 'var(--accent-deep)'];
-      const shower = (n) => {
-        const { w } = ctx.bounds(), c = btnCenter(ctx);
-        if (ctx.gentle) { burst(ctx, c.x, c.y, { color: COLS[0], reach: 90 }); return; }
-        for (let i = 0; i < n; i++) {
-          const x = c.x + (ctx.rng() - 0.5) * Math.min(w, 340), up = c.y - 40 - ctx.rng() * 90, down = ctx.bounds().h + 20, spin = 200 + ctx.rng() * 500;
-          const d = spawn(ctx, `width:7px;height:10px;background:${COLS[i % 4]};`);
-          play(ctx, d, [
-            { transform: `translate(${c.x}px,${c.y}px) rotate(0)`, opacity: 1 },
-            { transform: `translate(${(x + c.x) / 2}px,${up}px) rotate(${spin * 0.3}deg)`, opacity: 1, offset: 0.28, easing: 'ease-in' },
-            { transform: `translate(${x}px,${down}px) rotate(${spin}deg)`, opacity: 0.8 },
-          ], { duration: 1300 + ctx.rng() * 500, easing: 'ease-out' });
-        }
-      };
-      ctx.on('buy', ({ cost }) => shower(Math.min(28, 10 + Math.round(Math.log10(Math.max(1, cost)) * 3))));
-      if (fresh(ctx)) shower(30);
-      return {};
-    },
-  },
+  confetti: { mount: mountConfetti },
 
   /* Bubble Button: the button and its copies. A bubble pops when pressed. The wardrobe chip lives here: swap back any time. */
   bubble: {
