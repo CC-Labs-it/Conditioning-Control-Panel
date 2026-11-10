@@ -22,7 +22,7 @@ export function mountMetronome(ctx) {
   ctx.css(CSS);
   const dock = ctx.dock({ edge: 'right', title: 'Metronome', width: 164 });
   const root = ctx.el('div', '', null, dock);
-  root.title = 'Drag the gold weight up for slower beats, down for faster. Tap the lever with the beat. Drag the case to move.';
+  root.title = 'Scroll up to speed up or down to slow down. You can also drag the gold weight. Tap the lever on the beat.';
   dock.dock?.setReady(false);
   root.className = 'tc-metronome';
   root.dataset.dockSurface = '';
@@ -60,7 +60,7 @@ export function mountMetronome(ctx) {
     svg.setAttribute('aria-label', `Metronome, ${pulse.bpm} beats per minute`);
     weight.setAttribute('transform', `translate(0 ${weightY(pulse.bpm) - 115})`);
     weight.setAttribute('aria-valuenow', String(pulse.bpm));
-    weight.setAttribute('aria-valuetext', `${pulse.bpm} beats per minute. Up slows down; down speeds up.`);
+    weight.setAttribute('aria-valuetext', `${pulse.bpm} beats per minute. Moving the weight up slows the beat and down speeds it up.`);
   };
   const draw = () => {
     const calm = ctx.gentle || ctx.reduced;
@@ -106,6 +106,23 @@ export function mountMetronome(ctx) {
     if (ctx.paused || ctx.state.ended) { releaseWeight(event); return; }
     changeTempo(bpmAtWeight(drag.start + (event.clientY - drag.y) / drag.scale));
   });
+  let wheelRemainder = 0;
+  root.addEventListener('pointerleave', () => { wheelRemainder = 0; });
+  root.addEventListener('wheel', event => {
+    if (ctx.paused || ctx.state.ended || drag || event.ctrlKey || event.metaKey || event.shiftKey ||
+        !event.deltaY || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    // One standard wheel notch changes two BPM. Smooth trackpads accumulate smaller movements.
+    const scale = event.deltaMode === 1 ? 2 / 3 : 1 / 50;
+    const delta = event.deltaMode === 2 ? -Math.sign(event.deltaY) * 2 : -event.deltaY * scale;
+    if (Math.sign(wheelRemainder) !== Math.sign(delta)) wheelRemainder = 0;
+    wheelRemainder += delta;
+    const steps = Math.trunc(wheelRemainder);
+    wheelRemainder -= steps;
+    const next = Math.max(MIN_BPM, Math.min(MAX_BPM, pulse.bpm + steps));
+    if (next !== pulse.bpm) changeTempo(next);
+  }, { passive: false });
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) weight.addEventListener(type, releaseWeight);
   weight.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); });
   weight.addEventListener('keydown', event => {
