@@ -1,6 +1,6 @@
-/* ui/unlocks/themes-b/emi-swarm.js - EMI Takeover run-up (v3 brief handoff-1109/TC-EMI-TAKEOVER-V3-BRIEF.md): the goon
- * chain rows before go_end and the swarm they share. Numbers and rules: sim/takeover.js. Shared sprite parts:
- * emi-kit.js. The ending reads `liveSwarm()`.
+/* ui/unlocks/themes-b/emi-swarm.js - EMI Takeover run-up (v3 brief handoff-1109/TC-EMI-TAKEOVER-V3-BRIEF.md): the EMI
+ * fate set rows before go_end (lane fate, open to every theme since the fate cards) and the swarm they share. Numbers
+ * and rules: sim/takeover.js. Shared sprite parts: emi-kit.js. The ending reads `liveSwarm()`.
  *
  * go_tx      one EMI stays put; her screen shows a picture, then her face, then another picture (2-3 s each)
  * go_will    she walks in short steps, stops, comments, hops now and then; never follows the cursor

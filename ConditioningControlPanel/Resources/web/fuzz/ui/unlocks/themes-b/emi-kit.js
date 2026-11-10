@@ -187,7 +187,9 @@ export function hivePictures(ctx, previous, channels) {
   }
   return picks;
 }
-export const tilesOf = (ctx) => { const p = ctx.palette(); return [...new Set([p.a, p.b, '#f2a33c', '#fff4df'].filter((c) => /^#/.test(c || '')))]; };
+/* Her screen's plain colour tiles (no pictures): the run's own palette. EMI is on every route now, so no fixed goon amber;
+ * on a goon run p.a is that amber, so the goon tiles are unchanged. */
+export const tilesOf = (ctx) => { const p = ctx.palette(); return [...new Set([p.a, p.b, '#fff4df'].filter((c) => /^#/.test(c || '')))]; };
 
 /** A bubble over an EMI. Text only: nothing here is ever spoken. */
 export function bubble(ctx, parent, text) {

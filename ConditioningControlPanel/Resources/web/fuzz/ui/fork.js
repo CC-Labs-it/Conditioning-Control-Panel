@@ -20,6 +20,7 @@ function loadDemos() {
     await import('./demos/button-ending.js');
     await import('./demos/fate-outside.js');
     await import('./demos/fate-button.js');
+    await import('./demos/fate-themes.js');
     return Demo;
   })();
   return demos;
