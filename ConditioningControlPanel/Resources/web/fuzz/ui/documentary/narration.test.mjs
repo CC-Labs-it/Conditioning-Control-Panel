@@ -365,6 +365,13 @@ test('missing audio still advances subtitle phrases and preserves pause timing',
   assert.equal(h.speaking.at(-1), false); h.narration.dispose();
 });
 
+test('a recording that stalls before it fails still shows its subtitles', async () => {
+  const h = harness(); await h.narration.ready;
+  h.streams[0].el.dispatchEvent(new Event('stalled')); h.streams[0].error();
+  h.tick(3000); assert.equal(h.captions.textContent, 'This is the story of a person');
+  h.narration.dispose();
+});
+
 test('hover speech is at least five minutes apart and capped at two played lines', async () => {
   const h = harness({ at: 580, schedule: [] }); await h.narration.ready;
   h.streams[0].end(); h.tick(1500); h.streams[1].end(); h.tick(15000);

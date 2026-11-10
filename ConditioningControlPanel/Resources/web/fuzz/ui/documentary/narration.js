@@ -220,7 +220,8 @@ export function createDocumentaryNarration(ctx, tunnel, options = {}) {
   function missing(job, reason) {
     if (disposed || active !== job || job.missing) return;
     const at = position(); clearSource(job);
-    job.missing = true; job.elapsed = at; job.since = isPaused() ? null : now();
+    // A stream that stalled before failing must not keep its finite subtitle timing hidden.
+    job.missing = true; job.buffering = false; job.elapsed = at; job.since = isPaused() ? null : now();
     status('missing', reason || 'Recording unavailable; visual timing continues.');
     if (job.final) { ended(job); return; }
     showRideProjector(job);

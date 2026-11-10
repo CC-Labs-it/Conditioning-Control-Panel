@@ -27,6 +27,7 @@ import { createPurchaseFeel } from './purchase-feel.js';
 import { windowPreferences } from './preferences.js';
 import { openClause, clauseLines, skipsCard } from './clause.js';
 import { tally } from './adcard/model.js';
+import { noteAcceptedTerms } from './unlocks/fate/museum/terms.js';
 import { ridersOf } from '../data/folds.js';
 import { handFor, copyHandFor } from './hands.js';
 import { createTapWindow, emiBell } from '../sim/tap-rate.js';
@@ -324,8 +325,9 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       ];
       const settle = () => { for (const off of offs) off(); clauseCard = null; };
       const run = engine.run;
+      const purchase = run.buys - Object.keys(run.picks).length + 1, laterRun = !!run.mood;
       clauseCard = openClause({
-        doc, item: it, riders, gentle, purchase: run.buys - Object.keys(run.picks).length + 1, laterRun: !!run.mood,
+        doc, item: it, riders, gentle, purchase, laterRun,
         icon: (() => { try { return iconFor(doc, it); } catch { return null; } })(),
         onAccept: () => {
           settle();
@@ -335,6 +337,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
           else {
             const n = clauseLines(id, riders).length;
             tally(engine.run, 'terms', n);   // the Living Ad card's terms ACCEPTED
+            noteAcceptedTerms(engine.run, id, riders, purchase, laterRun);   // the museum narrator reads back these clauses
             engine.emit('sticker', { key: 'terms', life: true });   // Sticker Book: Signed, Sealed
             if (n >= 3) engine.emit('sticker', { key: 'clause3' });   // Sticker Book: Read the Whole Thing
           }
