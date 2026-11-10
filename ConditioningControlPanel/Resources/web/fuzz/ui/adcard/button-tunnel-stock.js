@@ -58,14 +58,18 @@ export function createCabinetStock(doc,root,surface) {
   strip(.04*W,0,.92*W,Math.max(0,art.y-1));
   const bottom=Math.max(0,art.y+art.h);
   strip(.025*W,bottom,.95*W,H-bottom);
+  let lastThickness, lastAlpha;
   return {
     pose(thickness,alpha){
       const thin=Math.min(thickness*.16,Math.max(2,W*.028));
-      holder.style.setProperty('--bt-shell-depth',thickness+'px');
-      holder.style.setProperty('--bt-shell-ratio',String(thickness/100));
-      holder.style.setProperty('--bt-thin-depth',thin+'px');
-      holder.style.setProperty('--bt-thin-ratio',String(thin/100));
-      holder.style.setProperty('--bt-stock-alpha',String(alpha));
+      if (thickness !== lastThickness) {
+        lastThickness = thickness;
+        holder.style.setProperty('--bt-shell-depth',thickness+'px');
+        holder.style.setProperty('--bt-shell-ratio',String(thickness/100));
+        holder.style.setProperty('--bt-thin-depth',thin+'px');
+        holder.style.setProperty('--bt-thin-ratio',String(thin/100));
+      }
+      if (alpha !== lastAlpha) { lastAlpha = alpha; holder.style.setProperty('--bt-stock-alpha',String(alpha)); }
     }
   };
 }

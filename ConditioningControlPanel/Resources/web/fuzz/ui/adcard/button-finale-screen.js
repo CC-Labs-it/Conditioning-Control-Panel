@@ -14,7 +14,7 @@ export function captureButtonScreen(ctx) {
 
 export function createButtonSky(canvas) {
   const g = canvas.getContext('2d',{alpha:true}), doc = canvas.ownerDocument;
-  let seed = 8731, W = 1, H = 1, px = 1;
+  let seed = 8731, W = 1, H = 1, px = 1, previous = null;
   const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
   const tau = Math.PI * 2;
   const stars = Array.from({length:680}, () => {
@@ -50,11 +50,14 @@ export function createButtonSky(canvas) {
     }
   }
   function resize(width,height) {
+    previous=null;
     W=width;H=height;px=Math.min(1.12,1120/Math.max(width,height));
     canvas.width=Math.max(1,Math.ceil(W*px));canvas.height=Math.max(1,Math.ceil(H*px));
   }
   function paint(yaw,pitch,focal,time,calm) {
     if(!g)return;
+    if(calm && previous && previous[0]===yaw && previous[1]===pitch && previous[2]===focal)return;
+    previous=calm?[yaw,pitch,focal]:null;
     g.setTransform(px,0,0,px,0,0);g.clearRect(0,0,W,H);
     const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
     const bandWidth=focal*tau, bandHeight=focal*2.3, xo=W/2-bandWidth*(.5+yaw/tau), yo=H*.52-bandHeight*.46+focal*pitch*.78;

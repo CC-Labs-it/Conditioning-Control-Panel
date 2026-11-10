@@ -12,6 +12,7 @@ import { QR_PATH, QR_SIZE } from './qr.js';
 import { llamaLayout } from './model.js';
 import { ADCARD_COPY } from '../../data/content/adcard.js';
 import { whole } from '../../sim/format.js';
+import { canvasDpr, paintEvery } from '../perf.js';
 
 const ASSETS = new URL('../../assets/adcard/', import.meta.url).href;
 const CSS_URL = new URL('./card.css', import.meta.url).href;
@@ -41,10 +42,10 @@ export function loadCardCss(doc) {
 }
 
 /* ---------- spiral background ---------- */
-function drawSpiral(cv, spec, t) {
-  const W0 = cv.offsetWidth, H0 = cv.offsetHeight;
+function drawSpiral(cv, spec, t, size) {
+  const [W0, H0] = size;
   if (!W0) return;
-  const dpr = Math.min(2, cv.ownerDocument.defaultView.devicePixelRatio || 1), W = Math.round(W0 * dpr), H = Math.round(H0 * dpr);
+  const dpr = canvasDpr(2), W = Math.round(W0 * dpr), H = Math.round(H0 * dpr);
   if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
   const g = cv.getContext('2d');
   g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H);
@@ -158,11 +159,12 @@ export function createAdCard({ doc, box, model, label = ADCARD_COPY.cardLabel, r
   const canvas = card.querySelector('canvas.sp'), spec = { cols: C.spiral, base: C.paper };
   let tl = null, raf = 0, dead = false, lastSpiral = 0, phase = 0, heldAt = null;
   const heldAnimations = new Set();
+  let spiralSize = [0, 0];
   function drawSpiralAt(t) {
     phase = reduced ? 0 : (t + 20000) / 1000 * 0.25;
-    drawSpiral(canvas, spec, phase);
+    drawSpiral(canvas, spec, phase, spiralSize);
   }
-  const refit = () => { fitCard(card); drawSpiral(canvas, spec, phase); };
+  const refit = () => { fitCard(card); spiralSize = [canvas.offsetWidth, canvas.offsetHeight]; drawSpiral(canvas, spec, phase, spiralSize); };
   refit();
 
   // A late font or a narrower column can wrap the headline and push the footer out.
@@ -298,7 +300,7 @@ export function createAdCard({ doc, box, model, label = ADCARD_COPY.cardLabel, r
   /** What the timeline shows at t for the parts WAAPI does not own: the counting numbers and the ACCEPTED buzz. */
   function sideAt(s, t, live) {
     const fmt = (n) => whole(n);
-    s.counts.forEach((c) => { const k = Math.max(0, Math.min(1, (t - c.start) / c.dur)); c.el.textContent = fmt(c.to * (1 - Math.pow(1 - k, 3))); });
+    s.counts.forEach((c) => { const k = Math.max(0, Math.min(1, (t - c.start) / c.dur)); const text = fmt(c.to * (1 - Math.pow(1 - k, 3))); if (c.el.textContent !== text) c.el.textContent = text; });
     s.vibs.forEach((v) => {
       const on = !reduced && ((t >= v.start && t < v.start + v.dur) || (live && t < s.hover));
       if (live) { v.el.classList.toggle('buzz', on); v.el.style.transform = ''; } else v.el.style.transform = on ? JITTER[Math.floor((t - v.start) / 70) % 4] : '';
@@ -318,7 +320,7 @@ export function createAdCard({ doc, box, model, label = ADCARD_COPY.cardLabel, r
       const b = tl.beats.shift();
       if (t - b.t < 400) { try { onBeat(b.n, b.i); } catch (e) { console.error(e); } }
     }
-    if (now - lastSpiral > 33) { lastSpiral = now; drawSpiralAt(t); }
+    if (now - lastSpiral >= paintEvery(30)) { lastSpiral = now; drawSpiralAt(t); }
     scheduleFrame();
   }
 

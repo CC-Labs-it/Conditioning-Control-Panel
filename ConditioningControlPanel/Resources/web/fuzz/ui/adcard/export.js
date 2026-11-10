@@ -48,77 +48,126 @@ async function snap(ad, s, t, width) {
   } finally { restore(); }
 }
 
-async function frames(ad, fps, width, progress, stop) {
+async function* frames(ad, fps, width, progress, stop) {
   const s = ad.build(true), END = s.end + (s.tail || 0);
-  const total = Math.ceil(END / 1000 * fps) + 1, out = [];
+  const total = Math.ceil(END / 1000 * fps) + 1;
   try {
     for (let f = 0; f < total; f++) {
       if (stop()) throw new Error('stopped');
-      out.push(await snap(ad, s, Math.min(END, 250 + f * 1000 / fps), width));
-      progress(f + 1, total * 2, fill(ADCARD_COPY.working, { i: f + 1, n: total }));
+      let canvas = await snap(ad, s, Math.min(END, 250 + f * 1000 / fps), width);
+      try {
+        canvas = even(canvas, ad.card.ownerDocument);
+        yield { canvas, last: f === total - 1 };
+        progress(f + 1, total, fill(ADCARD_COPY.working, { i: f + 1, n: total }));
+      } finally { canvas.width = canvas.height = 0; }
     }
   } finally { ad.play({ quiet: true }); }
+}
+
+function even(canvas, doc) {
+  const w = canvas.width & ~1, h = canvas.height & ~1;
+  if (canvas.width === w && canvas.height === h) return canvas;
+  const out = doc.createElement('canvas'); out.width = w; out.height = h;
+  out.getContext('2d').drawImage(canvas, 0, 0, w, h);
+  canvas.width = canvas.height = 0;
   return out;
 }
 
-function even(list, doc) {
-  const w = list[0].width & ~1, h = list[0].height & ~1;
-  return list.map((c) => {
-    if (c.width === w && c.height === h) return c;
-    const n = doc.createElement('canvas'); n.width = w; n.height = h; n.getContext('2d').drawImage(c, 0, 0, w, h); return n;
-  });
-}
-
-async function gif(list, fps, doc, progress) {
-  const { GIFEncoder, quantize, applyPalette } = await import(VENDOR + 'gifenc.esm.js');
-  list = even(list, doc);
-  const w = list[0].width, h = list[0].height, enc = GIFEncoder();
-  for (let i = 0; i < list.length; i++) {
-    const data = list[i].getContext('2d').getImageData(0, 0, w, h).data;
-    const palette = quantize(data, 256), index = applyPalette(data, palette);
-    enc.writeFrame(index, w, h, { palette, delay: i === list.length - 1 ? 2500 : Math.round(1000 / fps) });
-    progress(list.length + i + 1, list.length * 2, ADCARD_COPY.encoding);
-    if (i % 3 === 0) await sleep(0);
+async function gif(source, fps, doc) {
+  let worker = null, encoder = null;
+  function response() {
+    return new Promise((resolve, reject) => {
+      worker.onmessage = ({ data }) => data.error ? reject(new Error(data.error)) : resolve(data);
+      worker.onerror = (event) => { event.preventDefault(); reject(new Error(event.message || 'GIF worker failed')); };
+    });
   }
-  enc.finish();
-  return new Blob([enc.bytes()], { type: 'image/gif' });
+  try {
+    try {
+      worker = new doc.defaultView.Worker(new URL('./export-gif-worker.js', import.meta.url), { type: 'module' });
+      await response();
+    } catch {
+      worker?.terminate(); worker = null;
+      encoder = (await import('./export-gif.js')).createGifEncoder();
+    }
+    for await (const { canvas, last } of source) {
+      const width = canvas.width, height = canvas.height;
+      const data = canvas.getContext('2d').getImageData(0, 0, width, height).data;
+      const frame = { data, width, height, delay: last ? 2500 : Math.round(1000 / fps) };
+      if (worker) {
+        const done = response(); worker.postMessage(frame, [data.buffer]); await done;
+      } else { encoder.frame(frame); await sleep(0); }
+    }
+    let bytes;
+    if (worker) {
+      const done = response(); worker.postMessage({ finish: true }); ({ bytes } = await done);
+    } else bytes = encoder.finish();
+    return new Blob([bytes], { type: 'image/gif' });
+  } finally { worker?.terminate(); }
 }
 
-async function video(list, fps, doc, progress) {
+async function video(source, fps, doc, progress, stop) {
+  const list = [];
+  let w = 0, h = 0;
+  for await (const { canvas } of source) {
+    w = canvas.width; h = canvas.height;
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error('Frame encoding failed');
+    list.push(blob);
+  }
   const win = doc.defaultView;
-  list = even(list, doc);
-  const w = list[0].width, h = list[0].height;
   const cv = doc.createElement('canvas'); cv.width = w; cv.height = h;
   cv.style.cssText = 'position:fixed;left:-10000px;top:0;';
   doc.body.append(cv);
+  let stream = null, rec = null;
+  const decode = async blob => {
+    if (win.createImageBitmap) {
+      const image = await win.createImageBitmap(blob);
+      return { image, close: () => image.close() };
+    }
+    const url = win.URL.createObjectURL(blob), image = new win.Image();
+    try { image.src = url; await image.decode(); return { image, close: () => { image.src = ''; } }; }
+    finally { win.URL.revokeObjectURL(url); }
+  };
+  const paint = async blob => {
+    const frame = await decode(blob);
+    try { cv.getContext('2d').drawImage(frame.image, 0, 0); } finally { frame.close(); }
+  };
   try {
-    const g = cv.getContext('2d'); g.drawImage(list[0], 0, 0);
+    await paint(list[0]);
     const types = ['video/mp4;codecs=avc1.42E01E', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
     const type = types.find((x) => win.MediaRecorder && win.MediaRecorder.isTypeSupported(x));
     if (!type || !cv.captureStream) throw new Error('no recorder');
-    const rec = new win.MediaRecorder(cv.captureStream(fps), { mimeType: type, videoBitsPerSecond: 5e6 });
+    stream = cv.captureStream(fps);
+    rec = new win.MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 5e6 });
     const chunks = [];
     rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-    const done = new Promise((r) => { rec.onstop = r; });
+    const done = new Promise((resolve, reject) => { rec.onstop = resolve; rec.onerror = event => reject(event.error || new Error('Recording failed')); });
+    done.catch(() => {});
     rec.start();
     const dt = 1000 / fps, t0 = win.performance.now();
     for (let i = 0; i < list.length; i++) {
-      g.drawImage(list[i], 0, 0);
+      if (stop()) throw new Error('stopped');
+      await paint(list[i]); list[i] = null;
       progress(list.length + i + 1, list.length * 2, ADCARD_COPY.encoding);
       await sleep(Math.max(0, t0 + (i + 1) * dt - win.performance.now()));
     }
     await sleep(2000);
     rec.stop(); await done;
     return new Blob(chunks, { type: (rec.mimeType || type).split(';')[0] });
-  } finally { cv.remove(); }
+  } finally {
+    if (rec && rec.state !== 'inactive') rec.stop();
+    stream?.getTracks().forEach(track => track.stop());
+    list.length = 0; cv.width = cv.height = 0; cv.remove();
+  }
 }
 
 async function png(ad) {
   const s = ad.build(true);
+  let c;
   try {
-    const c = await snap(ad, s, s.end, 1080);
+    c = await snap(ad, s, s.end, 1080);
     return await new Promise((r) => c.toBlob(r, 'image/png'));
-  } finally { ad.play({ quiet: true }); }
+  } finally { if(c)c.width=c.height=0; ad.play({ quiet: true }); }
 }
 
 /** Hands a file to the player: the share sheet where the device has one for files (phones), else a download. */
@@ -156,8 +205,9 @@ export async function exportCard(ad, kind, { progress = () => {}, stop = () => f
     return { status: await saveBlob(doc, blob, filename + '.png'), blob };
   }
   const fps = kind === 'gif' ? 12 : 15, width = kind === 'gif' ? 432 : 640;
-  const list = await frames(ad, fps, width, progress, stop);
-  const blob = kind === 'gif' ? await gif(list, fps, doc, progress) : await video(list, fps, doc, progress);
+  const captureProgress = kind === 'gif' ? progress : (i, n, text) => progress(i, n * 2, text);
+  const source = frames(ad, fps, width, captureProgress, stop);
+  const blob = kind === 'gif' ? await gif(source, fps, doc) : await video(source, fps, doc, progress, stop);
   if (stop()) return { status: 'cancelled' };
   const ext = kind === 'gif' ? 'gif' : blob.type.includes('mp4') ? 'mp4' : 'webm';
   return { status: await saveBlob(doc, blob, filename + '.' + ext), blob };

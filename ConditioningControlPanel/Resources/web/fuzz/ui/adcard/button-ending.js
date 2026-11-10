@@ -41,7 +41,7 @@ export function buttonEndingTake(ctx, releaseWorld) {
   root.dataset.buttonEnding = 'freeze';
   const screen = captureButtonScreen(ctx);
   const media = captureButtonMedia(ctx);
-  const board = captureButtonBoard(ctx, media.members);
+  const board = captureButtonBoard(ctx, media.members, {deferStyles:true});
   screen.board = board;
   screen.mediaSurfaces = media.surfaces;
 
@@ -100,11 +100,12 @@ export function buttonEndingTake(ctx, releaseWorld) {
   });
   try {
     sound = createButtonSound(ctx);
-    if (review) enterFinale();
-    else {
-      tunnel = createButtonTunnel(ctx, root, [...board.surfaces, ...media.surfaces]);
-      sound.update('freeze', 0, 0);
-    }
+    sound.update('freeze', 0, 0);
+    board.prepare().then(ready => {
+      if (!ready || finished) return;
+      if (review) enterFinale();
+      else tunnel = createButtonTunnel(ctx, root, [...board.surfaces, ...media.surfaces]);
+    }).catch(error => { finish(); console.error(error); });
     let previous = ctx.activeMs;
     function advance() {
       if (finished) return;
@@ -114,7 +115,7 @@ export function buttonEndingTake(ctx, releaseWorld) {
       elapsed += dt * 1000;
       if (phase === 'freeze') {
         sound.update('freeze', elapsed, 0);
-        if (elapsed >= FREEZE_MS) {
+        if (elapsed >= FREEZE_MS && tunnel) {
           enter('tunnel');
           board.activate();
           media.activate();

@@ -42,12 +42,19 @@ function looksLocal(value, base) {
   return true;
 }
 
-function copyStyle(out, style, keys, base) {
+function copyStyle(out, style, keys, base, pending = null) {
+  const values = pending ? [] : null;
   for (const key of keys) {
     const value = style.getPropertyValue(key);
     if (!value || (value.includes('url(') && !looksLocal(value, base))) continue;
     // SVG definitions live beside their own shapes in this shadow root, even on an iframe with a query string.
-    out.style.setProperty(key, value.replace(/url\("[^"#]+#([^"#]+)"\)/g,'url("#$1")'));
+    const frozen = value.replace(/url\("[^"#]+#([^"#]+)"\)/g,'url("#$1")');
+    if (values) values.push(key+':'+frozen+';'); else out.style.setProperty(key,frozen);
+  }
+  if (values) {
+    const frozenCSS=values.join('');
+    // Capture-specific overrides were written after copyStyle. Replay them last, exactly as in the sync path.
+    pending.push(() => { out.style.cssText=frozenCSS+out.style.cssText; });
   }
 }
 
@@ -64,7 +71,7 @@ function freezePixels(src, doc) {
 }
 
 // Inline vector attributes carry the art's path data and local masks. Its paint can come from CSS variables on the board.
-function vector(el, doc, win, budget, root = false) {
+function vector(el, doc, win, budget, root = false, pending = null) {
   if (budget.remaining-- <= 0 || el.matches(OMIT)) return null;
   const out = doc.createElementNS(SVG, el.localName), style = win.getComputedStyle(el);
   for (const a of el.attributes) {
@@ -72,10 +79,10 @@ function vector(el, doc, win, budget, root = false) {
     if (/href$/i.test(a.name) && !looksLocal(`url("${a.value}")`,doc.baseURI)) continue;
     if (a.namespaceURI) out.setAttributeNS(a.namespaceURI,a.name,a.value); else out.setAttribute(a.name,a.value);
   }
-  copyStyle(out,style,root ? [...CSS,...VECTOR_STYLE] : VECTOR_STYLE,doc.baseURI);
+  copyStyle(out,style,root ? [...CSS,...VECTOR_STYLE] : VECTOR_STYLE,doc.baseURI,pending);
   for (const child of el.childNodes) {
     if (child.nodeType === 3) out.append(doc.createTextNode(child.data));
-    else if (child.nodeType === 1) { const node = vector(child,doc,win,budget); if (node) out.append(node); }
+    else if (child.nodeType === 1) { const node = vector(child,doc,win,budget,false,pending); if (node) out.append(node); }
   }
   return out;
 }
@@ -93,7 +100,7 @@ function staticElement(el, env, root = false) {
     space.style.visibility = 'hidden';
     return space;
   }
-  if (el.namespaceURI === SVG) return vector(el,doc,win,budget,true);
+  if (el.namespaceURI === SVG) return vector(el,doc,win,budget,true,env.styles);
   if (budget.remaining-- <= 0 || el.matches(OMIT) || el.hidden) return null;
   const style = win.getComputedStyle(el);
   if (style.display === 'none' || style.visibility === 'hidden' || +style.opacity <= 0.001) return null;
@@ -111,7 +118,7 @@ function staticElement(el, env, root = false) {
   if (coldSlot && el.classList.contains('mini-slot-cabinet')) {
     const out = doc.createElement('img');out.alt = '';out.draggable = false;out.src = 'assets/arcade/button-slot-cabinet.webp';
     out.dataset.buttonSlotStill = '';
-    copyStyle(out,style,CSS,doc.baseURI);out.style.pointerEvents = 'none';return out;
+    copyStyle(out,style,CSS,doc.baseURI,env.styles);out.style.pointerEvents = 'none';return out;
   }
   // Only use ordinary HTML elements: never instantiate custom components or native browsing contexts in a copy.
   // A WebGL default framebuffer can be cleared after every composite. Loan the original cabinet canvas, including
@@ -129,7 +136,7 @@ function staticElement(el, env, root = false) {
     out.dataset.buttonNativeCanvas = '';
     env.loans.push({source:el,stub:out});
   }
-  copyStyle(out,style,CSS,doc.baseURI);
+  copyStyle(out,style,CSS,doc.baseURI,env.styles);
   out.style.pointerEvents = 'none';
   if (el.id === 'count') out.dataset.buttonPrintedCount = '';
   if (el.id === 'fz-roll') out.dataset.buttonPrintedRoll = '';
@@ -144,7 +151,7 @@ function staticElement(el, env, root = false) {
     const s = win.getComputedStyle(el,pseudo), content = s.content;
     if (!content || content === 'none' || content === 'normal' || s.display === 'none' || s.visibility === 'hidden') return;
     const part = doc.createElement('span');
-    copyStyle(part,s,CSS,doc.baseURI);
+    copyStyle(part,s,CSS,doc.baseURI,env.styles);
     if (/^["']/.test(content)) part.textContent = content.slice(1,-1).replace(/\\(["'\\])/g,'$1');
     out.append(part);
   }
@@ -172,10 +179,10 @@ function printed(el, r, env) {
 }
 
 /** Capture just before the board is released. x/y/w/h use the same viewport space as getBoundingClientRect(). */
-export function captureButtonBoard(ctx,mediaMembers) {
+export function captureButtonBoard(ctx,mediaMembers,{deferStyles = false} = {}) {
   const doc = ctx.world?.ownerDocument || document, win = doc.defaultView;
   const width = win.innerWidth, height = win.innerHeight, surfaces = [], sources = new Set();
-  const env = {doc,win,budget:{remaining:8500},loans:[],mediaMembers};
+  const env = {doc,win,budget:{remaining:8500},loans:[],mediaMembers,styles:deferStyles?[]:null};
   function add(el,kind,anchor = null) {
     if (!el || mediaMembers?.has(el) || sources.has(el) || surfaces.length >= 74 || env.budget.remaining <= 0) return;
     const r = rectOf(el);
@@ -212,21 +219,28 @@ export function captureButtonBoard(ctx,mediaMembers) {
   }
   // The engine can hide the purchase shelf in the synchronous draw immediately before take(). Its rows still exist.
   const shop = doc.getElementById('shop'), hiddenShop = !!shop?.hidden;
-  if (hiddenShop) shop.hidden = false;
-  try { group('#shop .row','shop'); } finally { if (hiddenShop) shop.hidden = true; }
+  const cabinets = [], opened = [];
   for (const el of doc.querySelectorAll('.dk')) {
     const id = el.dataset.fzOwner;
-    if (el.matches('.open')) add(el,'toy');
+    if (el.matches('.open')) cabinets.push({el,anchor:null});
     else if (CABINETS.has(id)) {
       const chip = doc.querySelector(`.dk-chip[data-fz-owner="${id}"]`), anchor = chip && rectOf(chip);
       if (!anchor || !within(anchor,width,height)) continue;
-      const style = el.style.getPropertyValue('display'), priority = el.style.getPropertyPriority('display');
-      try {
-        el.style.setProperty('display','block','important');
-        add(el,'toy',anchor);
-      } finally {
-        if (style) el.style.setProperty('display',style,priority); else el.style.removeProperty('display');
-      }
+      cabinets.push({el,anchor});
+      opened.push({el,style:el.style.getPropertyValue('display'),priority:el.style.getPropertyPriority('display')});
+    }
+  }
+  // These floating cabinets do not participate in each other's layout. Read every tab anchor first,
+  // reveal their bodies together, then print them without alternating layout writes and reads.
+  if (hiddenShop) shop.hidden = false;
+  for (const {el} of opened) el.style.setProperty('display','block','important');
+  try {
+    group('#shop .row','shop');
+    for (const {el,anchor} of cabinets) add(el,'toy',anchor);
+  } finally {
+    if (hiddenShop) shop.hidden = true;
+    for (const {el,style,priority} of opened) {
+      if (style) el.style.setProperty('display',style,priority); else el.style.removeProperty('display');
     }
   }
   group('#phrase,#l-ticker,#l-meters > *','hud');
@@ -238,6 +252,21 @@ export function captureButtonBoard(ctx,mediaMembers) {
   }
   group('#dock-strip .dk-chip','tab');
   let active = false, disposed = false;
+  let preparation = null;
+  function prepare() {
+    return preparation ||= (async () => {
+      const tasks=env.styles;
+      if (!tasks) return !disposed;
+      let cursor=0;
+      while (!disposed && cursor<tasks.length) {
+        const until=win.performance.now()+6;
+        do { const apply=tasks[cursor];tasks[cursor++]=null;apply(); } while (cursor<tasks.length && win.performance.now()<until);
+        if (cursor<tasks.length) await new Promise(resolve=>win.setTimeout(resolve,0));
+      }
+      tasks.length=0;
+      return !disposed;
+    })();
+  }
   function activate() {
     if (active || disposed) return;
     active = true;
@@ -254,6 +283,7 @@ export function captureButtonBoard(ctx,mediaMembers) {
   function dispose() {
     if (disposed) return;
     disposed = true;
+    if (env.styles) env.styles.length=0;
     for (const l of env.loans) if (l.home) {
       l.source.removeAttribute('data-button-native-canvas');
       if (l.inline !== null) l.source.setAttribute('style',l.inline); else l.source.removeAttribute('style');
@@ -261,5 +291,5 @@ export function captureButtonBoard(ctx,mediaMembers) {
     }
     for (const s of surfaces) s.node.remove();
   }
-  return {width,height,surfaces,activate,dispose};
+  return {width,height,surfaces,prepare,activate,dispose};
 }
