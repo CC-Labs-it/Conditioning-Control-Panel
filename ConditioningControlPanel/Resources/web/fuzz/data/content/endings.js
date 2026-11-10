@@ -1,5 +1,5 @@
 /* ============================================================================
- * data/content/endings.js - the card text for all thirteen endings. Pure data.
+ * data/content/endings.js - the card text for all fourteen endings. Pure data.
  *
  * ENDINGS[id]: { id, title, result, credits: [3 to 6 lines], closing, link? }
  * link is { label, url } and only ever points at cclabs.app.
@@ -122,6 +122,14 @@ export const ENDINGS = Object.freeze({
     'Fresh air: not supported',
     'You: still here',
   ], 'There is no outside. There is a very nice screensaver.'),
+
+  go_mus: e('go_mus', 'Gooning Museum', 'The tour is over. You were the main exhibit, and the gift shop sold out.', [
+    'Curator: the button',
+    'Exhibits: everything you bought',
+    'Placards: polished daily',
+    'Velvet rope: decorative',
+    'Gift shop: same prices',
+  ], 'Please exit through the gift shop. You already did.', { link: link('More of this lives in CCP') }),
 
   onemore: e('onemore', 'One More', 'You could have stopped. There were several good places.', [
     'The credits were going to go here',

@@ -10,7 +10,12 @@ import spiral from './wave2/spiral.js';
 import edges from './wave2/edges.js';
 import meta from './wave2/meta.js';
 import arcade from './arcade.js';
+import fateOutside from './fate/outside.js';
+import fateButton from './fate/button.js';
+import fateThemes from './fate/themes.js';
+import fateMuseum from './fate/museum.js';
 import { mergeGroups } from './merge.js';
 
-export const GROUPS = Object.freeze({ basics, routes, 'themes-a': themesA, 'themes-b': themesB, extras, spiral, edges, meta, arcade });
-export const REGISTRY = Object.freeze(mergeGroups([basics, routes, themesA, themesB, extras, spiral, edges, meta, arcade]));
+export const GROUPS = Object.freeze({ basics, routes, 'themes-a': themesA, 'themes-b': themesB, extras, spiral, edges, meta, arcade,
+  'fate-outside': fateOutside, 'fate-button': fateButton, 'fate-themes': fateThemes, 'fate-museum': fateMuseum });
+export const REGISTRY = Object.freeze(mergeGroups([basics, routes, themesA, themesB, extras, spiral, edges, meta, arcade, fateOutside, fateButton, fateThemes, fateMuseum]));

@@ -127,9 +127,14 @@ test('per-second income follows the game clock and pace', () => {
   assert.equal(s.clock, 1000);
 });
 
-test('Go Outside is the fallback ending; Drop is retired; nothing is on offer after an ending and income stops', () => {
+test('no fallback ending: the fate pick holds the ending; Drop is retired; nothing is on offer after an ending and income stops', () => {
   const s = rich(E.createRun());
-  E.grant(s, 'tunnel');
+  E.grant(s, 'taste2');
+  assert.equal(E.heldEnding(s), null, 'no seed, no ending');
+  E.grant(s, 'tunnel');   // Spiral Overlay needs a seed: the dev door grants the first, A Window (Go Outside)
+  assert.equal(E.fateOf(s), 'outside');
+  assert.ok(!E.isOpen(s, BY_ID.outside), 'Go Outside waits for its fourth card');
+  E.grant(s, 'ft_door');
   assert.equal(E.heldEnding(s), 'outside');
   assert.equal(E.goal(s).id, 'outside', 'the held ending takes the main path\'s last place');
   assert.ok(!E.isOpen(s, BY_ID.drop));
@@ -143,8 +148,8 @@ test('Go Outside is the fallback ending; Drop is retired; nothing is on offer af
   assert.equal(s.fuzz, f);
 });
 
-test('one ending a run: the first lane chain finished, offered only once the main path is done', () => {
-  for (const id of ['tr_end', 'o_out']) {
+test('one ending a run: the fate set picked, offered only once the main path is done', () => {
+  for (const id of ['go_mus', 'o_out']) {
     const s = rich(E.createRun());
     E.grant(s, BY_ID[id].req[0]);
     assert.equal(E.heldEnding(s), id);
@@ -158,13 +163,18 @@ test('one ending a run: the first lane chain finished, offered only once the mai
     assert.ok(E.buy(s, id).ok, id);
     assert.equal(s.ended.id, id);
   }
-  /* two chains: the one finished first is held, whatever finishes later */
+  /* the first seed holds the set: another set's cards never open, and the dev door cannot grant them */
   const s = rich(E.createRun());
   E.grant(s, BY_ID.o_out.req[0]);
-  E.grant(s, BY_ID.tr_end.req[0]);
+  assert.deepEqual(E.grant(s, 'ft_window'), []);
   E.grant(s, 'tunnel');
   assert.equal(E.heldEnding(s), 'o_out');
   assert.deepEqual(E.openItems(s).filter((i) => i.kind === 'end').map((i) => i.id), ['o_out']);
+  /* the retired theme and Premium endings are never offered, even with their old chain owned */
+  const r = rich(E.createRun());
+  E.grant(r, 'tr_deep'); E.grant(r, 'go_tx'); E.grant(r, 'tunnel');
+  assert.ok(!E.isOpen(r, BY_ID.tr_end));
+  assert.ok(!E.buy(r, 'tr_end').ok);
   /* Endless Mode is off the shelf (owner 2026-11-10) */
   const t = rich(E.createRun());
   E.grant(t, 'f5');

@@ -335,7 +335,8 @@ test('a guard never sees a fork or an ending, nor a buy that would fail anyway',
   assert.equal(engine.buy('rounded').reason, 'short');
   assert.deepEqual(asked, []);
   E.lump(run, 1e8);
-  assert.equal(engine.buy(E.FALLBACK_ENDING).ok, true);
+  E.grant(run, 'ft_door');   // tunnel granted Spiral Overlay with A Window: Go Outside is this run's ending
+  assert.equal(engine.buy('outside').ok, true);
   assert.deepEqual(asked, []);
   const fresh = setup({ stray: { mount(c) { c.guardBuy(() => ({ refuse: 'no' })); return {}; } } });
   fresh.engine.mount('stray');
@@ -426,7 +427,7 @@ test('a single fork handler and a plain row pass through untouched', () => {
 });
 
 test('the registry merges independent group files, no id claimed twice, every id real', () => {
-  assert.deepEqual(Object.keys(GROUPS).sort(), ['arcade', 'basics', 'edges', 'extras', 'meta', 'routes', 'spiral', 'themes-a', 'themes-b']);
+  assert.deepEqual(Object.keys(GROUPS).sort(), ['arcade', 'basics', 'edges', 'extras', 'fate-button', 'fate-museum', 'fate-outside', 'fate-themes', 'meta', 'routes', 'spiral', 'themes-a', 'themes-b']);
   const seen = new Set();
   for (const [name, group] of Object.entries(GROUPS)) {
     for (const [id, entry] of Object.entries(group)) {

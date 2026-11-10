@@ -11,7 +11,7 @@ import { DESIGN, itemsSource } from '../dev/gen-items.mjs';
 const tree = fileURLToPath(new URL('..', import.meta.url));
 
 test('every unlock from the design is here, with a real parent', () => {
-  assert.equal(ITEMS.length, 298);  // Four EMI purchases, with Friend Remote retired.
+  assert.equal(ITEMS.length, 314);  // Four EMI purchases, with Friend Remote retired; 15 fate cards and the Gooning Museum.
   assert.equal(new Set(ITEMS.map(it => it.id)).size, ITEMS.length);
   assert.equal(BY_ID.tr_breath, undefined);
   assert.deepEqual(BY_ID.tr_feed.req, ['tr_still']);
@@ -53,8 +53,8 @@ test('a label never names a multiple: modifiers bend and prizes share a budget, 
   for (const it of ITEMS) if (it.lane !== 'meta') assert.ok(!/\b(double|doubles|triple|triples)\b(?! tap)/i.test(it.what), `${it.id}: ${it.what}`);
 });
 
-test('thirteen endings, five forks, every fork lane named', () => {
-  assert.equal(ITEMS.filter((i) => i.kind === 'end').length, 13);
+test('fourteen endings, five forks, every fork lane named', () => {
+  assert.equal(ITEMS.filter((i) => i.kind === 'end').length, 14);
   assert.deepEqual(Object.keys(FORKS), ['f1', 'f2', 'f3', 'f4', 'f5']);
   for (const [f, def] of Object.entries(FORKS)) {
     assert.equal(BY_ID[f].kind, 'fork');

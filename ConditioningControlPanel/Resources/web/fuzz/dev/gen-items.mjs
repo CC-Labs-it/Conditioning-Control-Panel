@@ -5,6 +5,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { COPY_MARKS, markCopy } from './copy-marks.mjs';
+import { FATE_SETS, SEEDS } from '../data/fate.js';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const tree = join(here, '..');
@@ -96,7 +97,63 @@ const EXTRA_ROWS = [
   { id: 'dispenser', emoji: '', name: 'Prize Dispenser', what: 'Catch a colored capsule: red Flashes or cyan Subliminals (45% each), purple Mind Drain (8%, 4x prize), or gold Jackpot (2%, 10x, both bursts). Catch within 2.5 seconds; crank every 30 seconds.', line: 'Catch it before it goes.', cost: 22000, lane: 'side', req: ['mini_slots'], pay: '-' },
   { id: 'dispenser_fast', emoji: '', name: 'Quick Refill', what: 'The prize dispenser refills in 22 seconds.', line: 'Less waiting. Same small window.', cost: 40000, lane: 'side', req: ['dispenser'], pay: '-' },
   { id: 'dispenser_faster', emoji: '', name: 'Express Refill', what: 'The prize dispenser refills in 15 seconds.', line: 'Keep a finger free.', cost: 75000, lane: 'side', req: ['dispenser_fast'], pay: '-' },
+  /* Fate cards (owner 2026-11-10, handoff-1110/TC-FATE-CARDS-BRIEF.md). Lane, parents, price and pay come from FATE_STEP
+   * below (fateRows); the copy never names the ending a card leads to. */
+  { id: 'ft_window', emoji: '🪟', name: 'A Window', what: 'A small window sits on the page. Its sky matches your real time of day.', line: 'You can look. That is all.', cost: 0, lane: 'fate', req: [], pay: '-' },
+  { id: 'ft_air', emoji: '🍃', name: 'Fresh Air', what: 'Birdsong leaks in under the music. A breeze nudges things on the page.', line: 'Something is open somewhere.', cost: 0, lane: 'fate', req: [], pay: '-' },
+  { id: 'ft_grass', emoji: '🌱', name: 'Touch Grass', what: 'Grass grows along the bottom edge. Brushing it pays.', line: 'Technically counts.', cost: 0, lane: 'fate', req: [], pay: '-' },
+  { id: 'ft_door', emoji: '🚪', name: 'Door Ajar', what: 'A strip of white light opens at one edge, wider with every purchase.', line: 'Nobody closed it.', cost: 0, lane: 'fate', req: [], pay: '-' },
+  { id: 'ft_depth', emoji: '🧊', name: 'A Little Depth', what: 'Things on the page lean as the cursor moves, as if they had a back.', line: 'Flat was a phase.', cost: 0, lane: 'fate', req: [], pay: '-' },
+  { id: 'ft_cursor', emoji: '👆', name: 'Second Cursor', what: 'Another cursor drifts in now and then and presses the button for you.', line: 'Not yours. Very polite.', cost: 0, lane: 'fate', req: [], pay: '-' },
+  { id: 'ft_pressed', emoji: '🫸', name: 'Pressed', what: 'The whole page flinches a little on every press.', line: 'It felt that.', cost: 0, lane: 'fate', req: [], pay: '-' },
+  { id: 'ft_glass', emoji: '🔮', name: 'Glass', what: 'A faint curved reflection sits over the page edges.', line: 'Someone is on the other side of it.', cost: 0, lane: 'fate', req: [], pay: '-' },
+  { id: 'ft_bubble', emoji: '🫧', name: 'Little Bubble', what: 'One pink bubble in the corner. It grows with every purchase.', line: 'It is fine. It is small.', cost: 0, lane: 'fate', req: [], pay: '-' },
+  { id: 'ft_scan', emoji: '📡', name: 'Scan Line', what: 'A green line sweeps the page once a minute and pays for each thing it crosses.', line: 'Inventory in progress.', cost: 0, lane: 'fate', req: [], pay: '-' },
+  { id: 'ft_tag', emoji: '🏷️', name: 'Name Tag', what: 'Your name on a pinned tag. The scan line always skips it.', line: 'For now.', cost: 0, lane: 'fate', req: [], pay: '-' },
+  { id: 'ft_ticket', emoji: '🎟️', name: 'Museum Ticket', what: 'A ticket stub is pinned to the page. Admit one.', line: 'Keep it on you.', cost: 0, lane: 'fate', req: [], pay: '-' },
+  { id: 'ft_placard', emoji: '🪧', name: 'Placards', what: 'Small brass labels appear under things. "Button. Pressed 4,112 times."', line: 'Everything here is on loan.', cost: 0, lane: 'fate', req: [], pay: '-' },
+  { id: 'ft_rope', emoji: '🪢', name: 'Velvet Rope', what: 'A rope goes up round the button. Tapping still works. Someone coughs.', line: 'Please do not touch. Go on.', cost: 0, lane: 'fate', req: [], pay: '-' },
+  { id: 'ft_gift', emoji: '🛍️', name: 'Exit Through the Gift Shop', what: 'The shop is renamed Gift Shop. Prices stay the same.', line: 'Everything must go.', cost: 0, lane: 'fate', req: [], pay: '-' },
+  { id: 'go_mus', emoji: '🏛️', name: 'Ending: Gooning Museum', what: 'Ends the run: the tour starts. Keep your hands inside the cart.', line: 'Admission is free. You are the exhibit.', cost: 1700000, lane: 'goon', req: [], pay: '-', kind: 'end', flags: 'aE' },
 ];
+
+/* ---- FATE (owner 2026-11-10, handoff-1110/TC-FATE-CARDS-BRIEF.md): four cards per ending set, card 1 is the seed. ----
+ * Every seed needs Second Theme and costs the same (price never decides the ending); card N+1 needs card N; the ending
+ * needs card 4. The cards live in lane `fate` and never fold. Rows that move in from a lane (EMI's four, three Bimbo and
+ * two Drone rows) keep their ids and their value for money: their pay follows the new price along the design's own curve.
+ * The Journey plan places them by role (sim/journey.js), so these prices only pace the plain shop. Endings that sat in a
+ * forked lane they no longer need (EMI Takeover in Goon, Living Button in More Ads) move to lane `fate`. */
+const FATE_STEP = [
+  { cost: 55000, fps: 130 },
+  { cost: 300000, fps: 500 },
+  { cost: 600000, fps: 880 },
+  { cost: 1100000, fps: 1400 },
+];
+const NEW_CARDS = new Set(EXTRA_ROWS.filter((r) => r.lane === 'fate').map((r) => r.id));
+function fateRows(items) {
+  const by = new Map(items.map((it) => [it.id, it]));
+  const get = (id) => { const it = by.get(id); if (!it) throw new Error('FATE_SETS names a missing row ' + id); return it; };
+  for (const set of FATE_SETS) {
+    set.cards.forEach((id, k) => {
+      const it = get(id), { cost, fps } = FATE_STEP[k];
+      if (NEW_CARDS.has(id)) { it.pay = 'f'; it.fps = fps; }
+      else {
+        const f = (cost / it.cost) ** 0.8;
+        if (it.fps) it.fps = Math.max(1, Math.round(it.fps * f));
+        if (it.click) it.click = Math.max(1, Math.round(it.click * f));
+      }
+      Object.assign(it, { cost, lane: 'fate', req: k ? [set.cards[k - 1]] : ['taste2'], fate: set.id, step: k + 1 });
+    });
+    const end = get(set.end);
+    end.req = [set.cards[3]];
+    end.fate = set.id;
+    if (!set.theme && ['goon', 'sell'].includes(end.lane)) end.lane = 'fate';
+  }
+  /* The main path waits: Spiral Overlay needs one seed, whichever. */
+  get('overlay').any = [...SEEDS];
+  return items;
+}
+const FATE_LANE = { id: 'fate', name: 'Fate', what: 'Four cards. The first one you take decides how this run ends.' };
 
 /* The design sim paid for 30 minutes with nothing on top. The real game has prizes and modifiers on top (capped in
  * sim/economy.js), so the plan pays 70% of the design's numbers and the whole run lands near 30. Measured: dev/measure.mjs. */
@@ -285,12 +342,14 @@ export function buildItems() {
     return it;
   });
   intakeStages(items);
+  fateRows(items);
   const outLanes = lanes.map((l) => {
     const c = copy.lanes[l.id] || {};
     const o = { id: l.id, name: cur(c.name || l.name), what: cur(c.what || l.note || '') };
     if (l.fork) o.fork = l.fork;
     return o;
   });
+  if (!outLanes.some((l) => l.id === FATE_LANE.id)) outLanes.push({ ...FATE_LANE });
   const forks = {};
   for (const [id, f] of Object.entries(copy.forks)) forks[id] = { name: cur(f.name), ask: cur(f.ask), opts: Object.fromEntries(Object.entries(f.opts).map(([k, v]) => [k, { name: cur(v.name), what: cur(v.what) }])) };
   return { items, lanes: outLanes, forks };

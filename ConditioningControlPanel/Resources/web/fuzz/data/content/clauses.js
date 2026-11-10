@@ -737,6 +737,54 @@ export const CLAUSES = Object.freeze({
   "This run ends with a drawn sunrise through a curtain, then a real link to Goon.",
   "The real sunrise may be out there too. I will not be able to tell which I earned."
  ],
+ "ft_window": [
+  "I accept a small window on the page, and I agree to look through it instead of the real one."
+ ],
+ "ft_air": [
+  "I accept birdsong under the music and a breeze across the page. I will not ask where it gets in."
+ ],
+ "ft_grass": [
+  "I accept grass along the bottom of my screen, and I agree that brushing it counts as touching it."
+ ],
+ "ft_door": [
+  "I accept a door left ajar, a little wider every time I buy something. I do not have to go through it. Yet."
+ ],
+ "ft_depth": [
+  "I accept that the page has a back now, and that it leans toward my cursor like it is listening."
+ ],
+ "ft_cursor": [
+  "I accept a second cursor that presses my button for me. It is not mine. I let it."
+ ],
+ "ft_pressed": [
+  "I accept that the page flinches every time I press. I will press gently. I will not press less."
+ ],
+ "ft_glass": [
+  "I accept a faint reflection over the edges of the page, and I agree not to mind if it looks back."
+ ],
+ "ft_bubble": [
+  "I accept one small pink bubble in the corner, and that it grows a little every time I give in."
+ ],
+ "ft_scan": [
+  "I accept a green line that sweeps my page and counts what is on it. I will hold still while it counts."
+ ],
+ "ft_tag": [
+  "I accept a tag with my name on it. The scan skips it for now, and I find that soothing."
+ ],
+ "ft_ticket": [
+  "I accept one ticket, admit one, pinned to my page. I understand that I am the one it admits."
+ ],
+ "ft_placard": [
+  "I accept small brass labels under my things, describing them calmly. I agree to be described."
+ ],
+ "ft_rope": [
+  "I accept a velvet rope around my button. I may still touch it. I will feel watched while I do."
+ ],
+ "ft_gift": [
+  "I accept that the shop is a gift shop now. Same prices. I was always going to buy something on the way out."
+ ],
+ "go_mus": [
+  "This run ends with a guided tour. I keep my hands inside the cart and my mind wherever it is put."
+ ],
  "lo_head": [
   "I accept chastity pictures on my page and ads about what CCP can lock. Click.",
   "Click was the sound of the theme, not of anything else, yet. Yet made me go soft and still.",

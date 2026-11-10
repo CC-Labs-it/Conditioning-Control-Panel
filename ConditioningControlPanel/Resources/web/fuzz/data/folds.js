@@ -7,8 +7,9 @@
 import { ITEMS, BY_ID } from './items.js';
 import { CONFIG } from './config.js';
 
-/** Lanes that never fold: the main path, crossovers, exits and the free rows. */
-const NEVER_LANES = new Set(['trunk', 'combo', 'exit', 'meta', 'after']);
+/** Lanes that never fold: the main path, crossovers, exits, the free rows and the fate cards (each card is one step
+ *  of the run's ending, owner 2026-11-10). */
+const NEVER_LANES = new Set(['trunk', 'combo', 'exit', 'meta', 'after', 'fate']);
 /** Rows that stay single wherever they are. Button skins: one tap shows one new button. Side hubs and toys: windows. */
 const SINGLE = new Set([
   'rounded', 'bubble', 'bigbtn', 'tinybtn',

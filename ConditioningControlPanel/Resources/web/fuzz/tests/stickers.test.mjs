@@ -14,8 +14,8 @@ import { THEME_IDS } from '../data/content/index.js';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const st = (o = {}) => ({ taps: 0, buys: 0, total: 0, clock: 0, picks: {}, owned: {}, tally: {}, ...o });
 
-test('the book: 77 stickers on 9 pages, every old achievement kept, every page and picture real', () => {
-  assert.equal(STICKERS.length, 77);
+test('the book: 78 stickers on 9 pages, every old achievement kept, every page and picture real', () => {
+  assert.equal(STICKERS.length, 78);
   assert.equal(new Set(STICKERS.map((s) => s.id)).size, STICKERS.length);
   for (const a of ACHIEVEMENTS) {
     const s = STICKER_BY_ID[a.id];
@@ -23,7 +23,7 @@ test('the book: 77 stickers on 9 pages, every old achievement kept, every page a
     assert.equal(s.when, a.when);
     assert.equal(s.hidden, a.hidden);
   }
-  assert.equal(STICKERS.length - ACHIEVEMENTS.length, 44);
+  assert.equal(STICKERS.length - ACHIEVEMENTS.length, 45);
   const pages = new Set(STICKER_PAGES.map((p) => p.id));
   for (const s of STICKERS) {
     assert.ok(pages.has(s.page), `${s.id} page`);

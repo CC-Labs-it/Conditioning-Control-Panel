@@ -11,7 +11,7 @@ import { BY_ID, ITEMS, FORKS } from './data/items.js';
 import { CONFIG } from './data/config.js';
 import { createKit } from './audio/kit.js';
 import * as E from './sim/economy.js';
-import { CHAIN as EMI_UPGRADES } from './sim/takeover.js';
+import { CHAIN as EMI_UPGRADES } from './sim/takeover.js';  // featured after the pick only: go_tx is a fate seed and sits level with the others
 import { MOODS, rollMood } from './sim/moods.js';
 import { createLife, forget, load, parse, serialize, store, JOURNEY_PREVIEW, PLAYER_PREVIEW, SAVE_KEY } from './sim/save.js';
 import { createUi } from './ui/app.js';
@@ -122,7 +122,7 @@ function start(init) {
   engine = createEngine({
     run, life, ui, audio, registry: REGISTRY, save: persist,
     host: { send: bridge.send, isHosted: bridge.isHosted },
-    env: { journey: JOURNEY_PREVIEW, featuredShop: [...EMI_UPGRADES, ...(feedPreview ? ['d_autoscroll'] : []), ...(trailPreview ? ['starburst', 'word_comet'] : [])], caps: init.caps || {}, identity: typeof init.identity?.displayName === 'string' && init.identity.displayName.trim() ? { displayName: init.identity.displayName.trim().slice(0, 40) } : null, mod: init.mod || 'default', hosted: bridge.isHosted, pictureSource: pictureDoor || 'none' },
+    env: { journey: JOURNEY_PREVIEW, featuredShop: [...EMI_UPGRADES.slice(1), ...(feedPreview ? ['d_autoscroll'] : []), ...(trailPreview ? ['starburst', 'word_comet'] : [])], caps: init.caps || {}, identity: typeof init.identity?.displayName === 'string' && init.identity.displayName.trim() ? { displayName: init.identity.displayName.trim().slice(0, 40) } : null, mod: init.mod || 'default', hosted: bridge.isHosted, pictureSource: pictureDoor || 'none' },
   });
   engine.subscribe('wave-equipped', persist);
   engine.subscribe('wardrobe-equipped',persist);

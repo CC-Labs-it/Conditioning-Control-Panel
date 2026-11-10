@@ -8,6 +8,7 @@ import { createJourney, EXTRAS } from '../sim/journey.js';
 import { takeActivity, bankRate, trunkBoost, buyKind, toyLift, TOY_PLAY, GAMES, TOYS } from '../sim/journey-effects.js';
 import * as E from '../sim/economy.js';
 import { BY_ID } from '../data/items.js';
+import { FATE_BY_ID, routeFate } from '../data/fate.js';
 export function measureJourney(picks, {
   taps = 4,
   share = .125,
@@ -34,10 +35,13 @@ export function measureJourney(picks, {
   let last = 0,
     nextClaim = 60,
     restored = false;
+  /* The fate pick (data/fate.js): the reference player takes this route's sampled set, or picks.fate. */
+  const seed = FATE_BY_ID[picks.fate || routeFate(picks)].cards[0];
   while (!s.ended && s.clock < 12 * 3600e3) {
     const shelf = shop.shop(8);
     // The web player: no toy connected, so the haptic rows beside the plan are never offered (ui/platform.js).
-    const items = [shelf.goal, ...shelf.rows].filter(it => it && (it.kind !== 'end' || it.id === E.heldEnding(s)) && !EXTRAS.includes(it.id));
+    const offered = [shelf.goal, ...shelf.rows].filter(it => it && (it.kind !== 'end' || it.id === E.heldEnding(s)) && !EXTRAS.includes(it.id));
+    const items = offered.some(it => it.id === seed) ? offered.filter(it => it.step !== 1 || it.id === seed) : offered;
     const ready = items.filter(it => (it.kind === 'fork' ? s.total : s.fuzz) + 1e-8 >= shop.price(it.id)).sort((a, b) => Number(b.kind === 'fork') - Number(a.kind === 'fork') || shop.price(a.id) - shop.price(b.id));
     const it = ready[0];
     if (it) {

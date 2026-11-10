@@ -3,6 +3,7 @@ import { LEAD_OF } from '../data/folds.js';
 import * as E from './economy.js';
 import { ACTIVITIES, GAMES, TOYS, SAVOUR_BUYS, PACE_MINUTES, PLAN_BUYS, PLAN_CLOCK, toyLift, bankRate, buyKind, trunkBoost, journeyStretch, rankCap, rankName, SPECIALTIES, rankDescription, setupJourney } from './journey-effects.js';
 import { T_RUN } from '../data/prestige.js';
+import { FATE_BY_ID, offeredTo } from '../data/fate.js';
 
 // Durations calibrate sticker prices on an independent first-run economy.
 // The playable shop uses those prices and prerequisites. It never waits on a timer.
@@ -48,15 +49,23 @@ const anchors = {
   46: 'mini_breakout',
   57: 'mini_deep',
   67: 'glossy',
+  /* Fate cards (owner 2026-11-10, handoff-1110/TC-FATE-CARDS-BRIEF.md): Second Theme moves up from purchase 92 (about
+   * minute 53) so the seeds can arrive right behind it, about minute 39, and the picked set's cards 2-4 land near minutes
+   * 45, 60 and 75 of the 90-minute run. fate1..fate4 are roles: the planned set's card at that step (buildPlan `fate`).
+   * At fate1 the shelf offers every seed the run may pick, at the same price (createJourney). */
+  69: 'taste2',
+  70: 'fate1',
   72: 'spec_breakout',
+  79: 'fate2',
   80: 'toy_box',
-  92: 'taste2',
   95: 'dualwield',  // owner 2026-11-08: Double Wielding, the mid-game power-up
   99: 'dispenser',
+  104: 'fate3',
   108: 'overlay',
   114: 'spec_mix',
   117: 'tr_skin',
   120: 'takeover',
+  123: 'fate4',
   124: 'em_call',
   127: 'spec_dispenser',
   129: 'wallpaper',
@@ -116,8 +125,14 @@ function fixedRate(s) {
   // The reference player stays: taps 4 a second and catches most Golden Buttons (Deep, Lucky, Obey are worth about a third).
   return total * ((s.owned.gold ? 1.3 : 1) + toyLift(s) - 1) + banks * .5;   // toys add to the prizes, they do not multiply them
 }
-/* minutes: the run's planned length; priceMult: the run multiplier (prices scale with it, 1 = today). */
-export function buildPlan(picks, minutes = T_RUN[0], priceMult = 1) {
+/** The ending set a plan is built for: the given one when this run is offered it, else Go Outside (always offered). The
+ *  rows before the seed do not depend on it, so a plan made before the pick stays right up to the seed. */
+export const PLAN_FATE = 'outside';
+export const planFate = (fate, picks = {}) => (FATE_BY_ID[fate] && offeredTo(fate, picks) ? fate : PLAN_FATE);
+/* minutes: the run's planned length; priceMult: the run multiplier (prices scale with it, 1 = today); fate: the ending set
+ * the plan places (fate1..fate4 anchors, then its ending last); picks.fate is read when no fate is given. */
+export function buildPlan(picks, minutes = T_RUN[0], priceMult = 1, fate = picks.fate) {
+  const cards = FATE_BY_ID[planFate(fate, picks)].cards;
   const { targetSeconds } = timeline(minutes);
   const pm = c => priceMult === 1 ? c : Math.max(1, Math.round(c * priceMult));
   const shadow = E.createRun(),
@@ -151,10 +166,14 @@ export function buildPlan(picks, minutes = T_RUN[0], priceMult = 1) {
       sense,
       media,
       theme: themeHead[shadow.picks.f5],
-      pod: themePod[shadow.picks.f5]
+      pod: themePod[shadow.picks.f5],
+      fate1: cards[0],
+      fate2: cards[1],
+      fate3: cards[2],
+      fate4: cards[3]
     };
     const wanted = roles[anchors[i]] || anchors[i];
-    const available = ITEMS.filter(it => it.kind === 'item' && !LEAD_OF[it.id] && !UNPLANNED.has(it.id) && E.isOpen(shadow, it) && !(reserve.get(it.id) > i) && !(TOYS.includes(it.id) && !reserve.has(it.id)));
+    const available = ITEMS.filter(it => it.kind === 'item' && !it.fate && !LEAD_OF[it.id] && !UNPLANNED.has(it.id) && E.isOpen(shadow, it) && !(reserve.get(it.id) > i) && !(TOYS.includes(it.id) && !reserve.has(it.id)));
     const families = ['stray', 'rounded', 'ticker', sense, 'levels', 'toy_box', 'wheel', media, 'quiz', 'mini_breakout', 'dispenser', 'mini_race', 'mini_deep', 'mini_slots'];
     // Savour rule (owner 2026-11-10): a game's first rank waits SAVOUR_BUYS purchases after the game arrived, and one family
     // never ranks twice within RANK_SPACING purchases while another family can (no three Dispenser upgrades in a row).
@@ -261,9 +280,10 @@ export function createJourney(s) {
   let previous = '',
     entries = [];
   function plan() {
-    const key = Object.values(s.picks).join('/') + '#';
+    const fate = E.fateOf(s);
+    const key = Object.values(s.picks).join('/') + '#' + (fate || '');
     if (key !== previous) {
-      entries = buildPlan(s.picks, minutes, priceMult);
+      entries = buildPlan(s.picks, minutes, priceMult, fate);
       previous = key;
     }
     return entries;
@@ -301,6 +321,12 @@ export function createJourney(s) {
         });
         break;
       }
+      if (it.fate && it.step === 1 && !E.fateOf(s)) {
+        // The seeds arrive together (fate cards): every seed this run may pick, at the planned price. The first one bought
+        // picks the run's ending, and the plan is rebuilt for its set.
+        if (!offers.length) for (const seed of ITEMS) if (seed.fate && seed.step === 1 && E.isOpen(s, seed)) offers.push(seed === it ? entry : { ...entry, item: seed });
+        break;
+      }
       if (it.kind === 'end') {
         // One ending a run (owner 2026-11-10): the plan's last row is an ending; the player's own held ending (sim/economy.js
         // heldEnding) takes its place, at the planned price, only once the main path is done.
@@ -331,8 +357,8 @@ export function createJourney(s) {
   return {
     shop(size = 6) {
       const all = shelf();
-      // Every available ending must remain selectable on the smallest shop layout.
-      const limit = all[0]?.item.kind === 'end' ? all.length : 1 + Math.max(2, size);
+      // Every available ending, and every seed of the fate pick, must remain selectable on the smallest shop layout.
+      const limit = all[0]?.item.kind === 'end' || all[0]?.item.step === 1 ? all.length : 1 + Math.max(2, size);
       return {
         goal: all[0]?.item || null,
         rows: all.slice(1, limit).map(e => e.item),
@@ -394,7 +420,7 @@ export function createJourney(s) {
         if (out.length >= n) break;
         if (taken(e) || on.has(e.item.id) || out.some(it => it.id === e.item.id)) continue;
         out.push(e.item);
-        if (e.item.kind === 'fork' || e.item.kind === 'end') break;
+        if (e.item.kind === 'fork' || e.item.kind === 'end' || (e.item.step === 1 && !E.fateOf(s))) break;
       }
       return out;
     }

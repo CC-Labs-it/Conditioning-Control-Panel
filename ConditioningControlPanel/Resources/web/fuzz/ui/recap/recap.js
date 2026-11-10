@@ -13,6 +13,7 @@
 
 import { ENDINGS } from '../../data/content/endings.js';
 import { FORKS } from '../../data/items.js';
+import { OFF_SHELF } from '../../sim/economy.js';
 import { THEME_PALETTES, mixHex } from '../palette.js';
 import { iconFor } from '../icons.js';
 import { setRich } from '../rich-text.js';
@@ -31,7 +32,8 @@ const SOURCE = 'recap';
 const LANE_ART = { eyes: 'eye', ears: 'headphones', sweet: 'moon', strict: 'hand', slides: 'gallery', scroll: 'phone', blind: 'eraser', sell: 'billboard',
   premium: 'shield', trance: 'spiral', bimbo: 'bubbles', drone: 'robot', sissy: 'bow', goon: 'heart', locked: 'lock', censored: 'ink', infection: 'bug' };
 /** Each theme's own ending: its pill reads "Drone ending"; any other ending reads "The end". */
-const THEME_END = { trance: 'tr_end', bimbo: 'bi_end', drone: 'dr_end', sissy: 'si_end', goon: 'go_end', locked: 'lo_end', censored: 'ce_end', infection: 'in_end' };
+/* The theme's own ending (fate cards, data/fate.js: Goon's is the Gooning Museum; EMI Takeover is open to every theme). */
+const THEME_END = { trance: 'tr_end', bimbo: 'bi_end', drone: 'dr_end', sissy: 'si_end', goon: 'go_mus', locked: 'lo_end', censored: 'ce_end', infection: 'in_end' };
 const REG = new WeakMap();
 const CSS_URL = new URL('./recap.css', import.meta.url).href;
 
@@ -333,7 +335,8 @@ export function openRunRecap({ cards, doc, id, run, life, hooks, audio, name = '
       /** z_ends: got = Set of ending ids seen, nudge(n) -> a line for a locked card. */
       ends({ got, nudge }) {
         coll.hidden = false;
-        const ids = Object.keys(ENDINGS);
+        // The endings on offer, plus any retired one this player already has (sim/economy.js OFF_SHELF).
+        const ids = Object.keys(ENDINGS).filter((eid) => !OFF_SHELF.has(eid) || got.has(eid));
         coll.dataset.got = String(got.size);
         const big = h('div', 'rr-big rr-ends-big', null, endsBox);
         big.append(String(got.size)); h('span', '', '/' + ids.length, big);

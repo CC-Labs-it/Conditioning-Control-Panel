@@ -7,6 +7,7 @@ import { ITEMS, FORKS, FORK_OF_LANE } from '../data/items.js';
 import { CONFIG } from '../data/config.js';
 import { FOLD, LEAD_OF } from '../data/folds.js';
 import * as E from './economy.js';
+import { routeFate } from '../data/fate.js';
 
 export function allRoutes() {
   let all = [{}];
@@ -18,16 +19,19 @@ export function allRoutes() {
   return all;
 }
 
-export function playRoute(picks, { taps = 4, mood = null, mods = null, maxS = 7200, side = false } = {}) {
+/* Fate cards (data/fate.js): a route also carries one ending set. `fate` picks it; by default each fork route samples
+ * one set it is offered (routeFate), so the 192 routes cover every set without a full cross product. The set's seed is
+ * the only seed the run buys, so it holds that set's ending. */
+export function playRoute(picks, { taps = 4, mood = null, mods = null, maxS = 7200, side = false, fate = routeFate(picks) } = {}) {
   const dt = 0.25;
   const s = E.createRun({ mood });
-  const inRoute = (it) => { const f = FORK_OF_LANE[it.lane]; return !f || picks[f] === it.lane; };
+  const inRoute = (it) => { const f = FORK_OF_LANE[it.lane]; return (!f || picks[f] === it.lane) && (!it.fate || it.fate === fate); };
   /* A rider is never pressed: its lead's purchase brings it (data/folds.js). */
   let pending = ITEMS.filter((r) => r.group === 'run' && r.id !== 'start' && r.kind !== 'end' && !r.grow && !LEAD_OF[r.id] && inRoute(r)).concat(ITEMS.filter((r) => r.id === 'drop'));
   pending = pending.map((r) => ({ r, cost: E.price(s, r.id, mods) })).sort((a, b) => a.cost - b.cost);
   let t = 0, longest = 0, lastBuy = 0, dirty = true;
   const at = { start: 0 };
-  const ends = ITEMS.filter((r) => r.kind === 'end' && r.group === 'run' && r.id !== 'drop' && r.id !== 'onemore' && inRoute(r));
+  const ends = ITEMS.filter((r) => r.kind === 'end' && r.group === 'run' && !E.OFF_SHELF.has(r.id) && inRoute(r));
   let firstAlt = null;
   while (pending.length && t < maxS) {
     const rate = E.rates(s, mods, t * 1000);
@@ -53,7 +57,7 @@ export function playRoute(picks, { taps = 4, mood = null, mods = null, maxS = 72
       longest = Math.max(longest, t - lastBuy); lastBuy = t;
       pending.splice(i, 1); i--;
       dirty = true;
-      if (r.id === 'drop') return { end: t, buys: s.buys, fps: s.base.fps, at, longest, firstAlt, stuck: false, state: s };
+      if (r.id === 'drop') return { end: t, buys: s.buys, fps: s.base.fps, at, longest, firstAlt, stuck: false, state: s, fate };
     }
     // Rows whose parents can never be bought drop out, so the run cannot hang on them.
     if (dirty) {
@@ -64,5 +68,5 @@ export function playRoute(picks, { taps = 4, mood = null, mods = null, maxS = 72
       pending = pending.filter(({ r }) => reach.has(r.id));
     }
   }
-  return { end: t, buys: s.buys, fps: s.base.fps, at, longest, firstAlt, stuck: true, state: s };
+  return { end: t, buys: s.buys, fps: s.base.fps, at, longest, firstAlt, stuck: true, state: s, fate };
 }
