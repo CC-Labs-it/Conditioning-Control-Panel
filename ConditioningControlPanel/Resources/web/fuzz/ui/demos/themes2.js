@@ -159,14 +159,10 @@ Object.assign(DEMOS, {
   },
   go_pals: (k) => {
     const t = themes2Go; themes2Set(k, t);
-    const c = k.counter({ v: 4812, y: 10, label: 'online', css: 'color:' + t.hot });
-    for (let i = 0; i < 10; i++) {
-      const cell = k.add(14 + (i % 5) * 43, 44 + Math.floor(i / 5) * 50, 'width:39px;height:44px;background:#2a2019;border:1px solid ' + t.dim + ';overflow:hidden');
-      const head = k.add(11, 8, 'width:17px;height:17px;border-radius:50%;background:' + t.hot, null, cell);
-      k.add(4, 30, 'width:31px;height:20px;border-radius:50%;background:' + t.tints[i % 4], null, cell);
-      k.anim(head, [{ transform: 'translateY(0)' }, { transform: 'translateY(7px)' }, { transform: 'translateY(0)' }], 1400, { iterations: Infinity, delay: -i * 90 });
-    }
-    k.every(1500, () => c.add(k.pick([3, 7, -2, 11])), true);
+    themes2Txt(k, 10, 12, 220, 'CCP Community', 'font-size:18px;color:' + t.hot);
+    themes2Txt(k, 10, 39, 220, 'Sample counts', 'font-size:11px');
+    themes2Txt(k, 10, 68, 220, 'Discord · 914 online · 8,467 members');
+    themes2Txt(k, 10, 94, 220, 'CCP · 82 active in the last 3 min');
   },
   go_end: (k) => {
     const t = themes2Go; themes2Set(k, t);
