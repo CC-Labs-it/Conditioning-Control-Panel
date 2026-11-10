@@ -6,6 +6,7 @@ import { nextAd, pressAd, panel, deck, railsRoom, claim, release, fill } from '.
 import { ROUTE_COPY } from './copy.js';
 import { sellAllJoke, SELL_ALL_AD } from '../../sell-all.js';
 import { buttonEndingTake, isButtonFinaleReview } from '../../adcard/button-ending.js';
+import { createSponsorCard } from '../../sponsor-card.js';
 
 const FONT = 'Arial,Helvetica,sans-serif';
 const CHIP = `font:700 10px ${FONT};background:#f0c24b;color:#000;padding:0 4px;border-radius:2px;flex:none;`;
@@ -242,28 +243,34 @@ export default {
   o_emi: {
     mount(ctx) {
       const reads = deck(EMI_AD_READS, ctx);
+      const beatMs = 1250;
+      let showing = false;
+      let retry = null;
+      let nextRead = null;
       const read = () => {
-        const beats0 = 4;
-        if (!claim(ctx, 'emi', beats0 * 1250 + 900, 'low')) { ctx.after(5000, read); return; }
-        const beats = reads(), { w, h } = ctx.bounds();
-        const box = ctx.el('div', `position:absolute;right:8px;top:${h - 66 - (ctx.parts.shop.ownerDocument.getElementById('dock-strip')?.offsetHeight || 0)}px;height:58px;width:${Math.min(290, w - 16)}px;`, null, 'over');
-        const head = ctx.el('div', 'position:absolute;right:0;top:0;width:58px;height:58px;border-radius:50%;background:#ffe0d2;border:2px solid #d4488f;box-sizing:border-box;overflow:hidden;', null, box);
-        ctx.el('div', 'position:absolute;left:-2px;top:-2px;width:60px;height:21px;background:#ff69b4;', null, head);
-        [13, 32].forEach((x) => ctx.el('div', `position:absolute;left:${x}px;top:27px;width:7px;height:10px;border-radius:50%;background:#2a0f22;`, null, head));
-        const mouth = ctx.el('div', 'position:absolute;left:21px;top:41px;width:12px;height:5px;border-radius:0 0 8px 8px;background:#d4488f;', null, head);
-        const bubble = ctx.el('div', `position:absolute;right:66px;top:12px;max-width:${Math.min(220, w - 90)}px;padding:4px 9px;background:#fff;color:#111;border:1px solid #333;border-radius:9px;font:700 16px ${FONT};white-space:nowrap;`, '', box);
-        ctx.anim(box, ctx.gentle ? [{ opacity: 0 }, { opacity: 1 }] : [{ transform: 'translateY(80px)' }, { transform: 'none' }], { duration: 280, easing: 'ease-out' });
-        beats.forEach((t, i) => ctx.after(i * 1250, () => {
-          bubble.textContent = t;
-          if (!ctx.gentle) ctx.anim(mouth, [{ height: '5px' }, { height: '9px' }, { height: '5px' }], { duration: 300 });
-        }));
-        ctx.after(beats.length * 1250 + 500, () => {
+        if (showing || retry) return;
+        const beats = nextRead ??= reads();
+        if (!claim(ctx, 'emi', beats.length * beatMs + 900, 'low')) {
+          retry = ctx.after(5000, () => { retry = null; read(); });
+          return;
+        }
+        showing = true;
+        nextRead = null;
+        const dockHeight = ctx.parts.shop.ownerDocument.getElementById('dock-strip')?.offsetHeight || 0;
+        const box = ctx.el('div', `position:absolute;z-index:4;right:10px;bottom:calc(${dockHeight + 10}px + env(safe-area-inset-bottom, 0px));`, null, 'over');
+        const card = createSponsorCard(box, beats.length);
+        card.show(beats[0], 0);
+        for (let i = 1; i < beats.length; i++) ctx.after(i * beatMs, () => card.show(beats[i], i));
+        const enter = ctx.gentle || ctx.reduced ? { opacity: 0 } : { opacity: 0, transform: 'translateY(9px)' };
+        ctx.anim(box, [enter, { opacity: 1, transform: 'none' }], { duration: 220, easing: 'ease-out' });
+        ctx.after(beats.length * beatMs + 500, () => {
           ctx.anim(box, [{ opacity: 1 }, { opacity: 0 }], { duration: 280, fill: 'both' });
-          ctx.after(300, () => { box.remove(); release('emi', 'low'); });
+          ctx.after(300, () => { box.remove(); showing = false; release('emi', 'low'); });
         });
       };
       ctx.after(1000, read);
       ctx.every(24000, read);
+      ctx.cleanup(() => { if (showing) release('emi', 'low'); });
       return {};
     },
   },
