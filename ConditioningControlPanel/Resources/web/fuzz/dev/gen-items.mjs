@@ -154,6 +154,7 @@ const BUTTON_NAMES = {
 const NAME_OVERRIDE = { go_end: 'Ending: EMI Takeover' };
 const WHAT_OVERRIDE = {
   go_end: 'Ends the run: you let EMI press this one. The page will pretend to crash. It is fine, and Wake Up stays yours.',
+  bi_end: 'The bubble swallows the page. When it pops, float inside beneath a sky of moving pictures.',
   bi_lips:'Sign in with Bambi Cloud. The button already knows your name.',
   dr_hex:'Tap to download drone firmware. Tap again to install the user.',
   tr_skin:'A fortune ball swings on its chain. Tap on center for a reading and extra click income.',

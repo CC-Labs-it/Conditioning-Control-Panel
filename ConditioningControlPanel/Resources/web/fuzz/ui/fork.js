@@ -15,6 +15,8 @@ function loadDemos() {
     registerTrailDemos();
     const { registerEmiUpgradeDemos } = await import('./demos/emi-upgrades.js');
     registerEmiUpgradeDemos();
+    const { registerBubbleDemo } = await import('./demos/bambi-dome.js');
+    registerBubbleDemo();
     return Demo;
   })();
   return demos;

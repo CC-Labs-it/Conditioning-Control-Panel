@@ -258,6 +258,7 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
 
   return {
     arm, play, loop, stream, mixer,
+    preload(path) { if (armed && path) return load(path); },
     /** The end of a run: every stream dead at once, whoever started it. */
     stopStreams() { clearShots(); for (const s of [...streams]) killStream(s); },
     /** The player's own switch. */

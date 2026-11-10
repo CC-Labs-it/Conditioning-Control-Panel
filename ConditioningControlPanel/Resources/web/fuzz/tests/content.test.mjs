@@ -213,9 +213,8 @@ test('the writing does not assume a gender of the player', () => {
     LISTENING_TEST, OPINIONS, STILL_WORDS, STARE_LINES, GOLDEN, SCREEN_TIME, LEVELS, WHEEL, BOXES, FEED_LINES, ACHIEVEMENTS,
     combos, SLEEP_STORY, AUDIO_DRAMA, INDUCTION, MOODS, AFTER_RUN,
   });
-  /* The Bimbodoll ending's "GOOD GIRL BAMBI" flash and "Good girl." closing are the owner's own words (2026-11-08,
-   * handoff-1108/TC-BIMBODOLL-ENDING-BRIEF.md): the Bambi theme's sign-off, named exception. */
-  const owned = new Set(['.ENDINGS.bi_end.closing', '.ENDINGS.bi_end.flash[0]']);
+  /* The Bambi theme keeps the owner's original sign-off. */
+  const owned = new Set(['.ENDINGS.bi_end.closing']);
   none(rows.filter((r) => !owned.has(r.path)),/\b(girl|girls|boy|boys|princess|lady|ladies|gentleman|sir|madam|miss|mister|woman|women|wife|husband)\b/i);
   none(rows.filter((r) => !/EMI|Circe/.test(r.text)), /\b(she|her|hers|he|him|his)\b/i);
 });
