@@ -5,6 +5,7 @@ import { moan } from '../moan.js';
 import { critMult } from '../prestige/boosts.js';  // prestige hook (Renewal Sky, boosts lane)
 import { mountCountUp } from '../../../sim/prestige-endings.js';  // prestige hook (Renewal Sky): Count Up ending, spirals pay more
 import { DROP_WORDS, FAKE_DESKTOP, LUCKY_WORDS, THEMES, THEME_IDS, thoughtsFor } from '../../../data/content/index.js';
+import { runThemes, themed } from '../../theme-text.js';
 import { FORKS } from '../../../data/items.js';
 import { SECOND_THEME } from './copy.js';
 import { THEME_PALETTES } from '../../palette.js';
@@ -47,7 +48,7 @@ export default {
         unhide();
         el.style.color = 'transparent';
         unhide = ctx.after(850, () => { el.style.color = ''; });
-        pop(ctx, c.x, c.y, LUCKY_WORDS[Math.floor(ctx.rng() * LUCKY_WORDS.length)], { color: 'var(--ink)', size: 28, ms: 900 });
+        pop(ctx, c.x, c.y, themed(runThemes(ctx.state), 'lucky', LUCKY_WORDS[Math.floor(ctx.rng() * LUCKY_WORDS.length)]), { color: 'var(--ink)', size: 28, ms: 900 });
       };
       ctx.on('tap', ({ x, y, auto }) => {
         dry += 1;

@@ -6,6 +6,7 @@ import { whole } from '../sim/format.js';
 import { drawFace } from './unlocks/extras/emi-face.js';
 import { PET_MOODS, petSettle, petStart, petTap } from './emi-pet.js';
 import { inEmiSweet } from '../sim/tap-rate.js';
+import { CLOUD_FIRST, cloudGap, nextCloudLabel } from '../data/cloud-lines.js';
 
 const SWEET_HOLD_MS = 450;
 
@@ -98,6 +99,7 @@ export function bindButtonFace(button, engine, gentle) {
   let skin = '', box = null, face = null, expires = 0, taps = 0;
   let pending = null, rotor = null, angle = '', fortuneIndex = 0, held = false;
   let emi = null, pet = petStart(), hopAt = -1e9, hearts = 0, sweetUntil = 0;
+  let cloud = CLOUD_FIRST, cloudAt = 0, cloudW = 0;
   const bank = () => engine.run.store.buttonReplies ||= {};
   const doc = button.ownerDocument;
   function reset() {
@@ -111,6 +113,7 @@ export function bindButtonFace(button, engine, gentle) {
     if (rotor && held) face.querySelector('.tc-readout').textContent = 'Tap for a reading';
     if (pending) face.querySelector('b').textContent = pending[0];
     if (skin === 'si-parcel') paintParcel(face, bank());
+    if (skin === 'bi-lips') { const b = face.querySelector('b'); b.textContent = cloud; if (cloudW) b.style.minWidth = cloudW + 'px'; }
     emi = skin === 'emi' ? dressEmi(box) : null;
     if (emi) { pet = petStart(); paintEmi(false); }
   }
@@ -150,7 +153,7 @@ export function bindButtonFace(button, engine, gentle) {
     box?.remove();
     button.removeAttribute('data-art-face');
     button.removeAttribute('aria-label');
-    skin = name; box = makeFace(doc,skin); pending = null; rotor = null; taps = 0; expires = 0;
+    skin = name; box = makeFace(doc,skin); pending = null; rotor = null; taps = 0; expires = 0; cloud = CLOUD_FIRST; cloudAt = 0;
     if (!box) return;
     button.dataset.artFace = skin;
     if (skin === 'bubble') button.setAttribute('aria-label','Pop bubble');
@@ -160,6 +163,28 @@ export function bindButtonFace(button, engine, gentle) {
       pending = drawPair(bank(),skin,false);
     }
     reset();
+  }
+  /* Bambi Cloud (owner 2026-11-10): the label turns to another login line or Bambi trigger every 6 to 12 s, with a short
+   * fade (a slow one under Gentle). Math.random only. The tap's "Welcome back, Bambi" holds it (expires), then reset()
+   * puts the current label back. The bouncing copies re-clone on the text change (bouncing-art.js watchFace). */
+  function turnCloud() {
+    const now = engine.now;
+    if (!cloudAt) {
+      /* The face keeps the width of its first line, so a shorter label never shrinks the button. */
+      const first = face?.querySelector('b'), w = first?.offsetWidth || 0;
+      if (w > 0 && cloud === CLOUD_FIRST) { cloudW = w; first.style.minWidth = w + 'px'; }
+      cloudAt = now + cloudGap();
+      return;
+    }
+    if (now < cloudAt) return;
+    cloudAt = now + cloudGap();
+    const b = face?.querySelector('b'), next = nextCloudLabel(cloud);
+    if (!b) return;
+    cloud = next;
+    const quiet = gentle(), put = () => { if (!expires && face?.contains(b)) b.textContent = cloud; };
+    const out = b.animate?.([{ opacity: 1 }, { opacity: 0 }], { duration: quiet ? 700 : 140, easing: 'ease-in', fill: 'forwards' });
+    if (!out) { put(); return; }
+    out.onfinish = () => { put(); out.cancel(); b.animate([{ opacity: 0 }, { opacity: 1 }], { duration: quiet ? 900 : 220, easing: 'ease-out' }); };
   }
   /* The sweet spot cue holds SWEET_HOLD_MS of game time past the last press in it, so a steady rhythm reads as one glow. */
   function markSweet(on, now) {
@@ -182,6 +207,7 @@ export function bindButtonFace(button, engine, gentle) {
       }
       reset();
     }
+    if (skin === 'bi-lips' && !expires) turnCloud();
     if (rotor) {
       const quiet = gentle();
       if (quiet !== held && !expires) face.querySelector('.tc-readout').textContent = quiet ? 'Tap for a reading' : 'Tap on center';
