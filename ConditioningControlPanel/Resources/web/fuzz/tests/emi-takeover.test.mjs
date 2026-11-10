@@ -29,14 +29,14 @@ test('Hive Mind gives neighbours one channel and rotates each channel on the nex
   pictures.setRemoteConsent(false);
 });
 
-test('the four rows sit between Fake Online Count and the goon ending, which keeps its id', () => {
+test('the four rows are the EMI fate set after Second Theme, and the ending keeps its id', () => {
   assert.deepEqual(T.CHAIN, ['go_tx', 'go_will', 'go_corp', 'go_hive']);
-  const chain = ['go_pals', ...T.CHAIN, 'go_end'];
+  const chain = ['taste2', ...T.CHAIN, 'go_end'];
   for (let i = 1; i < chain.length; i++) {
     assert.deepEqual(BY_ID[chain[i]].req, [chain[i - 1]], chain[i]);
     assert.ok(BY_ID[chain[i]].cost > BY_ID[chain[i - 1]].cost, chain[i]);
   }
-  assert.deepEqual(chain.slice(1).map((id) => BY_ID[id].cost), [780000, 930000, 1120000, 1350000, 1700000]);
+  assert.deepEqual(chain.slice(1).map((id) => BY_ID[id].cost), [55000, 300000, 600000, 1100000, 1700000]);
   assert.equal(BY_ID.go_tx.name, 'Transmission');
   assert.equal(BY_ID.go_corp.name, 'Founded Startup');
   assert.equal(BY_ID.go_auto, undefined);
@@ -44,7 +44,9 @@ test('the four rows sit between Fake Online Count and the goon ending, which kee
   assert.equal(BY_ID.go_end.kind, 'end');
   assert.equal(BY_ID.go_end.name, 'Ending: EMI Takeover');
   assert.match(BY_ID.go_end.what, /pretend to crash/);
-  for (const id of T.CHAIN) assert.equal(BY_ID[id].lane, 'goon');
+  for (const id of T.CHAIN) assert.equal(BY_ID[id].lane, 'fate');
+  for (const id of [...T.CHAIN, 'go_end']) assert.equal(BY_ID[id].fate, 'emi');
+  assert.equal(BY_ID.go_end.lane, 'fate', 'EMI Takeover no longer needs the goon theme');
 });
 
 const ALL = ['h_amp', 'h_oc', 'h_loud', 'h_rep', 'h_over'];

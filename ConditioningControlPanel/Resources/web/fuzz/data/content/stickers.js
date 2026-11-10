@@ -11,7 +11,8 @@
  *   scope  'run' fills this run's meter and can be earned again next run; 'life' only goes in the book.
  *   art    { k: 'img', src } | { k: 'gold', v } (a Golden Button crayon star) | { k: 'portrait', theme }
  *          | { k: 'card' } (the player's own Living Ad card, else that theme's portrait).
- *   legacy true: a retired ending (Drop, One More: off the shelf since 2026-11-10). Shown and counted only once earned.
+ *   legacy true: a retired ending (Drop, One More, and the endings without a fate set: off the shelf since 2026-11-10,
+ *   sim/economy.js OFF_SHELF). Shown and counted only once earned.
  * Tokens: {cur} and {game}, filled by data/brand.js.
  * ==========================================================================*/
 
@@ -42,7 +43,7 @@ const old = (id, page, how, art) => {
   return { id, page, name: a.name, line: a.line, how, when: a.when, hidden: a.hidden, art };
 };
 const add = (id, page, name, line, how, when, art, hidden = false) => ({ id, page, name, line, how, when, hidden, art });
-const RETIRED = new Set(['e_drop', 'e_onemore']);
+const RETIRED = new Set(['e_drop', 'e_onemore', 'e_tr_end', 'e_si_end', 'e_lo_end', 'e_ce_end', 'e_in_end', 'e_p_life']);
 
 const RAW = [
   old('ac_first', 'press', 'Press the button once.', clip('button')),
@@ -111,7 +112,7 @@ const RAW = [
   add('t_all', 'themes', 'Full Box', 'Every colour in the box.', 'Pick all eight themes, over every run.', 'themes:8', drawn('t_all')),
 
   add('e_drop', 'endings', 'Drop', 'Everything went quiet and you let it.', 'Reach the Drop ending.', 'ending:drop', drawn('e_drop')),
-  add('e_o_out', 'endings', 'Living Button', 'Someone clicked. You felt it.', 'Follow the Ads route to the other side of the glass.', 'ending:o_out', { k: 'card' }),
+  add('e_o_out', 'endings', 'Living Button', 'Someone clicked. You felt it.', 'Reach the Living Button ending.', 'ending:o_out', { k: 'card' }),
   add('e_p_life', 'endings', 'Lifetime Plan', 'You are thanked for ever. For ever has been shortened.', 'Reach the Lifetime Plan ending.', 'ending:p_life', drawn('e_p_life')),
   add('e_tr_end', 'endings', 'Count Up', 'Someone is counting you back up. Take your time.', 'Reach the Count Up ending.', 'ending:tr_end', drawn('e_tr_end')),
   add('e_bi_end', 'endings', 'Bimbodoll', 'One pink bubble. It takes everything, then pops.', 'Reach the Bimbodoll ending.', 'ending:bi_end', drawn('e_bi_end')),
@@ -122,9 +123,10 @@ const RAW = [
   add('e_ce_end', 'endings', 'Redacted', 'Your result is ████. Congratulations.', 'Reach the Redacted ending.', 'ending:ce_end', drawn('e_ce_end')),
   add('e_in_end', 'endings', 'Flatline', 'The line stopped being a line and started turning.', 'Reach the Flatline ending.', 'ending:in_end', clip('pulse')),
   add('e_outside', 'endings', 'Go Outside', 'You went outside. It looked lovely on the monitor.', 'Reach the Go Outside ending.', 'ending:outside', { k: 'scene', src: 'assets/outside/meadow.jpg' }),
+  add('e_go_mus', 'endings', 'Gooning Museum', 'You took the tour. You were on it.', 'Reach the Gooning Museum ending.', 'ending:go_mus', clip('gallery')),
   add('e_onemore', 'endings', 'One More', 'You could have stopped. There were several good places.', 'Reach the One More ending.', 'ending:onemore', drawn('e_onemore')),
   add('e_three', 'endings', 'Three Ways Out', 'Endless is open now.', 'See three different endings.', 'endings:3', clip('infinity')),
-  add('e_all', 'endings', 'Every Ending', 'You have seen how it ends. All of the ways.', 'See every ending still on offer.', 'shelfEndings:11', clip('book')),
+  add('e_all', 'endings', 'Every Ending', 'You have seen how it ends. All of the ways.', 'See every ending still on offer.', 'shelfEndings:6', clip('book')),
 
   add('p_renew', 'sky', 'Renewed', 'Same terms. Fresh signature.', 'Renew a run once.', 'depth:1', drawn('p_renew')),
   add('p_depth5', 'sky', 'Depth Five', 'You know the way down by now.', 'Reach Depth 5.', 'depth:5', clip('spiral')),

@@ -50,3 +50,12 @@ test('the last tag uses the full hosted name or the issued run number even if th
   doc.querySelector = () => null;
   assert.deepEqual(nameTag(ctx), { source: null, label: 'UNIT 1021' });
 });
+
+test('a pinned Name Tag card (ft_tag) is the tag the show saves for last, with its own words', () => {
+  const pinned = { dataset: { ftLabel: 'UNIT 4017' }, hidden: false };
+  const doc = { getElementById: () => null, querySelector: (sel) => (sel.includes('data-ft-tag') ? pinned : null) };
+  const ctx = { world: { ownerDocument: doc }, identity: { displayName: 'Rory' }, state: { seed: 21, store: {} } };
+  assert.deepEqual(nameTag(ctx), { source: pinned, label: 'UNIT 4017' });
+  pinned.hidden = true;
+  assert.deepEqual(nameTag(ctx), { source: null, label: 'Rory' });
+});

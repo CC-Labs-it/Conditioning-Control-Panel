@@ -5,7 +5,8 @@
 import { _loadDemos } from './fork.js';
 import { makeFace, SKIN_ITEMS } from './button-faces.js';
 
-const NOT_COPIED = new Set(['in', 'out', 'no', 'ready', 'peek', 'short', 'buyable', 'ghost']);
+/* A fate card's own look (`fate`, `fate-end`, ui/fate-look.js) is copied so the card matches; its leaving stamp is not. */
+const NOT_COPIED = new Set(['in', 'out', 'no', 'ready', 'peek', 'short', 'buyable', 'ghost', 'fate-out', 'fate-seed']);
 const MARGIN = 8;
 
 const gone = (node) => {

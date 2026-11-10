@@ -2,6 +2,9 @@
  * Bring its full label above the strips for the last shot. Both cuts use this same piece of lettering. */
 export function nameTag(ctx) {
   const doc = ctx.world.ownerDocument;
+  /* The Name Tag card (ft_tag, ui/unlocks/fate/themes.js) is the tag the show saves for last when the run has it. */
+  const pinned = doc.querySelector('#l-over > [data-ft-tag]');
+  if (pinned?.dataset?.ftLabel && !pinned.hidden) return { source: pinned, label: pinned.dataset.ftLabel };
   const account = doc.getElementById('account-chip'), serial = doc.querySelector('#l-meters > [data-fz-owner="dr_serial"]');
   const displayName = ctx.identity?.displayName?.trim();
   const seed = Number.isFinite(ctx.state?.seed) ? ctx.state.seed : 0;

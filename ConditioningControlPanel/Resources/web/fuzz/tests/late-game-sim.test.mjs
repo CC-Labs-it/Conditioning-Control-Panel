@@ -8,6 +8,7 @@ import { ACTIVITIES, GAMES, GAME_UPGRADES, GAME_RANK_MAX, SAVOUR_BUYS, TRUNK_SHO
 import { BY_ID } from '../data/items.js';
 import { allRoutes } from '../sim/route.js';
 import { measureJourney } from '../dev/journey-timing.mjs';
+import { FATE_BY_ID, routeFate } from '../data/fate.js';
 
 const route = allRoutes()[0];
 const run = measureJourney(route);
@@ -101,6 +102,6 @@ test('haptic rows and Friend Remote are never plan rows, so a web run reaches it
     const ids = buildPlan(r).map((e) => e.item.id);
     for (const id of ['toy', 'buzz', 'remote']) assert.ok(!ids.includes(id), id);
   }
-  assert.equal(run.s.ended.id, 'o_out');  // This route completes the Living Ad chain first.
+  assert.equal(run.s.ended.id, FATE_BY_ID[routeFate(route)].end);  // the route's sampled fate set holds its ending
   assert.ok(!run.paid.some((p) => ['toy', 'buzz', 'remote'].includes(p.id)));
 });

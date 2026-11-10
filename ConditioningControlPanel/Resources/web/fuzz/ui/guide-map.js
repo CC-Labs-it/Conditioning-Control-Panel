@@ -21,6 +21,7 @@ import { TIP_REPLAY } from '../data/content/tips.js';
 import { shopDoor } from './shop.js';
 import { devicePlatform } from './platform.js';
 import { whole } from '../sim/format.js';
+import { FATE_GUIDE_CSS, fateClasses, fateMarks } from './fate-look.js';
 
 const STATUS = { own: 'You have this.', offer: 'On offer now.', skip: 'Walked past it. Still on offer.', later: 'Not open yet.', off: 'Not on your route this run.' };
 const CHIP_NAME = { own: 'Owned', offer: 'On offer', skip: 'Walked past', later: 'Later', off: 'Not this run' };
@@ -217,6 +218,7 @@ export function createGuide(ctx) {
   const phone = () => ctx.bounds().w < 760;
   const W = layoutWorld();
   ctx.css(CSS);
+  ctx.css(FATE_GUIDE_CSS);   // the Fate pocket: the shop's fate card look (ui/fate-look.js)
   /* Rows this device cannot use (ui/platform.js) read as off, with the reason on their card. */
   const platform = devicePlatform(win, () => ctx.caps || {});
   const statusOf = (id, st) => (view?.device?.[id] ? platform.whyNot(id) : STATUS[st]) || '';
@@ -320,7 +322,7 @@ export function createGuide(ctx) {
     world.innerHTML = h;
     for (const n of W.nodes) {
       if (n.fork) continue;
-      const b = mk('button', ['tk', n.head ? 'head' : '', n.end ? 'end' : '', n.pic ? 'pic' : ''].filter(Boolean).join(' '), world);
+      const b = mk('button', ['tk', n.head ? 'head' : '', n.end ? 'end' : '', n.pic ? 'pic' : '', ...fateClasses(BY_ID[n.id])].filter(Boolean).join(' '), world);
       b.type = 'button';
       b.dataset.id = n.id;
       b.style.left = n.x + 'px';
@@ -329,6 +331,7 @@ export function createGuide(ctx) {
       else b.appendChild(icon(n.id));
       const bd = mk('span', 'bd', b);
       bd.innerHTML = TICK;
+      b.append(...fateMarks(doc, BY_ID[n.id]));
       tokens[n.id] = b;
     }
     const pin = doc.createElementNS(SVG, 'svg');
@@ -364,11 +367,16 @@ export function createGuide(ctx) {
 
   function applyStates() {
     view = worldStates(ctx.state, W, { canOffer: platform.canOffer });
+    const picked = E.fateOf(ctx.state);
     for (const [id, b] of Object.entries(tokens)) {
       const st = view.states[id];
       for (const s of ['own', 'offer', 'skip', 'later', 'off']) b.classList.toggle(s, s === st);
       b.setAttribute('aria-label', `${nameOf(id)}, ${statusOf(id, st)}`);
       if (BY_ID[id]) paintBadges(b, standingBadges(BY_ID[id], ctx.state));   // level and copies, ui/repeat-badge.js
+      if (BY_ID[id]?.fate) {   // the picked set lit; a seed this run can never take wears the stamp (ui/fate-look.js)
+        b.classList.toggle('fate-lit', picked === BY_ID[id].fate);
+        b.classList.toggle('fate-stamp', BY_ID[id].step === 1 && st === 'off');
+      }
     }
     for (const i of W.islands) {
       const st = islandState(ctx.state, i);

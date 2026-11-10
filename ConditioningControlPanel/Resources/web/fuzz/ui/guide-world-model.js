@@ -11,6 +11,7 @@ import { ICON_CATALOG } from './icon-catalog.js';
 import { THEME_PALETTES } from './palette.js';
 import * as E from '../sim/economy.js';
 import { gateLine, gateOf, gateOpen } from './shop-gates.js';
+import { FATE_BY_ID, FATE_SETS } from '../data/fate.js';
 
 /* ---- types: what kind of thing a power-up is. Shape family first, then per-item corrections read off the names. ---- */
 export const TYPES = Object.freeze({
@@ -26,6 +27,8 @@ export const TYPES = Object.freeze({
   video: ['Clips', 'film'], sneaky: ['Sneaky answers', 'magnet'], bug: ['Spots', 'bug'], bar: ['Black bars', 'terminal'], drone: ['Unit', 'robot'], exit: ['Exits', 'sunrise'],
   face: ['Button styles', 'button'], themeface: ['Theme faces', 'tag'], wave: ['Ribbons', 'speaker'], kinetic: ['Kinetic waves', 'metronome'],
   pointer: ['Cursors', 'cursor'], trail: ['Trails', 'cursor'], family: ['Trail families', 'palette'],
+  /* Fate cards (data/fate.js): one row per set in the Fate pocket, named after its seed, drawn with the seed's shape. */
+  ...Object.fromEntries(FATE_SETS.map((set) => ['fate_' + set.id, [BY_ID[set.cards[0]]?.name || set.id, ICON_CATALOG[set.cards[0]]?.shape || 'card']])),
 });
 const SHAPE_TYPE = {
   button: 'button', lipstick: 'button', paddle: 'button', cursor: 'cursor', palette: 'page', numbers: 'number', chart: 'number', meter: 'number',
@@ -68,6 +71,7 @@ const OVERRIDE = {
 };
 export function typeOf(it) {
   const shape = ICON_CATALOG[it.id]?.shape;
+  if (it.fate && it.lane === 'fate') return 'fate_' + it.fate;
   if (it.kind === 'end') return FORK_OF_LANE[it.lane] === 'f5' ? 'theme' : 'end';
   if (/_head$/.test(it.id) && FORK_OF_LANE[it.lane] === 'f5') return 'theme';
   if (/_pod$/.test(it.id)) return FORK_OF_LANE[it.lane] === 'f5' ? 'theme' : 'podcast';
@@ -79,7 +83,7 @@ const TYPE_RANK = { theme: -2, podcast: -1, end: 99, exit: 99, face: 0, themefac
 export const LANE_COLOUR = Object.freeze({
   eyes: '#6fc3ff', ears: '#c39cf3', slides: '#ffcf5a', scroll: '#5fd3b6', blind: '#b9b3ad',
   sweet: '#ffb0a3', strict: '#ff8b5e', sell: '#f6c544', premium: '#8fd49f',
-  look: '#ff9fd0', side: '#ffd98a', emi: '#ff6fb5', trouble: '#9fb0ff', combo: '#d9b6ff', exit: '#c9c3bd', shops: '#ffb86b',
+  look: '#ff9fd0', side: '#ffd98a', emi: '#ff6fb5', trouble: '#9fb0ff', combo: '#d9b6ff', exit: '#c9c3bd', shops: '#ffb86b', fate: '#2a2630',
   ...Object.fromEntries(Object.entries(THEME_PALETTES).map(([id, p]) => [id, p.a])),
 });
 
@@ -120,7 +124,7 @@ export const SHOP_BY_ID = Object.freeze(Object.fromEntries(SHOP_GOODS.map((g) =>
 const RUNG = 88, ROW = 84, STAMP = 112, PAD = 16, TITLE = 26, SPINE = 22, GAP_ISL = 48;
 const CX = 1300, LX = CX - 100, RX = CX + 100;
 const LAYOUT_LANES = new Set(['look', 'side', 'shops', 'eyes', 'ears', 'bimbo', 'sissy', 'drone', 'trance', 'goon', 'locked', 'censored', 'infection',
-  'slides', 'scroll', 'blind', 'sweet', 'strict', 'emi', 'sell', 'premium', 'combo', 'trouble', 'exit']);
+  'slides', 'scroll', 'blind', 'sweet', 'strict', 'emi', 'sell', 'premium', 'combo', 'trouble', 'exit', 'fate']);
 
 let memo = null;
 /** The map, built once from the catalog: { W, H, CX, nodes, islands, forks, roads, paths, twigs, trunkD, trunk }. */
@@ -280,6 +284,8 @@ export function layoutWorld() {
   t7.forEach((id, i) => trunk(id, y + i * 125 + (id === 'drop' ? 30 : 0)));
   m = row(y, [{ id: 'combo', kind: 'pocket' }], [{ id: 'trouble', kind: 'pocket' }]);
   footpath(m.combo); footpath(m.trouble);
+  /* Fate cards: a pocket under Combos, one row per ending set (owner 2026-11-10, handoff-1110/TC-FATE-CARDS-BRIEF.md). */
+  { const fa = row(m.combo.y + m.combo.h + 70, [{ id: 'fate', kind: 'pocket' }], []).fate; footpath(fa); m.fate = fa; }
   { const ex = row(m.trouble.y + m.trouble.h + 70, [], [{ id: 'exit', kind: 'pocket' }]).exit; footpath(ex); m.exit = ex; }
   /* Under the Drop the road runs on into a maelstrom: clear of every island near the road. */
   const dropY = nodes.drop?.y ?? y + 6 * 125 + 30;
@@ -330,6 +336,15 @@ export function laneShut(run, lane) {
   const f = FORK_OF_LANE[lane];
   return Boolean(f && run.picks?.[f] && run.picks[f] !== lane);
 }
+/** A fate card or ending this run can never have: another set was picked, or its theme was not (data/fate.js). The
+ *  endings retired from the shop (sim/economy.js OFF_SHELF, Drop aside: it is the road's end) read as shut too. */
+export function fateShut(run, it) {
+  if (it.id !== 'drop' && E.OFF_SHELF.has(it.id)) return true;
+  if (!it.fate) return false;
+  const picked = E.fateOf(run), theme = FATE_BY_ID[it.fate]?.theme;
+  if (picked) return picked !== it.fate;
+  return Boolean(theme && run.picks?.f5 && run.picks.f5 !== theme);
+}
 /** An island's look: pocket (every run), picked, open (fork still ahead) or shut. */
 export function islandState(run, isl) {
   if (isl.kind !== 'route') return 'pocket';
@@ -341,7 +356,7 @@ function shutItem(run, id, seen = new Set()) {
   seen.add(id);
   const it = BY_ID[id];
   if (!it) return false;
-  if (laneShut(run, it.lane)) return true;
+  if (laneShut(run, it.lane) || fateShut(run, it)) return true;
   if ((it.req || []).some((q) => shutItem(run, q, seen))) return true;
   return Boolean(it.any?.length && it.any.every((q) => shutItem(run, q, new Set(seen))));
 }

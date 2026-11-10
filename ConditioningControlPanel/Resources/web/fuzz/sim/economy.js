@@ -9,6 +9,7 @@ import { CONFIG } from '../data/config.js';
 import { moodOf } from './moods.js';
 import { accrueActivities, trunkBoost, RANK_BOUNCE, RANK_TAP, RANK_PASSIVE } from './journey-effects.js';
 import { ridersOf } from '../data/folds.js';
+import { FATE_BY_ID, SEEDS, setOf } from '../data/fate.js';
 import { EMI_LIFT } from './tap-rate.js';
 
 export const WALL_BASE = 1;
@@ -151,31 +152,40 @@ export function adjustPrice(s, it, v, mods, now = s.clock) {
 const laneOpen = (s, it) => { const f = FORK_OF_LANE[it.lane]; return !f || s.picks[f] === it.lane; };
 const canHaveMore = (s, it) => (it.grow ? count(s, it.id) < it.grow.max : !has(s, it.id));
 
-/** Parents owned, right lane, not owned yet: the plain rule, before the one-ending rule below. */
+/** Parents owned, right lane, not owned yet, and the run's fate allows it: the plain rule, before the one-ending rule below. */
 function reached(s, it) {
   if (it.group !== 'run' || it.id === 'start' || s.ended) return false;
-  if (!laneOpen(s, it) || !canHaveMore(s, it)) return false;
+  if (!laneOpen(s, it) || !canHaveMore(s, it) || !fateAllows(s, it)) return false;
   return it.req.every((q) => has(s, q)) && (!it.any || it.any.some((q) => has(s, q)));
 }
 
-/* ONE ENDING A RUN (owner 2026-11-10: "only 1 ending should pop up and only at the end of the run"; pick = the first ending
- * chain finished). The ending held for this run is the one whose chain the player finished first (its parent bought
- * earliest); Go Outside when no lane chain finished. It is offered only once the main path is done (Drop's old parents
- * owned) and no other ending is ever offered. Endless Mode and Drop are retired from the shop (owner 2026-11-10; Drop's
- * perk and card stay for players who already have it). Derived from the purchase order, so nothing is saved. */
-export const OFF_SHELF = new Set(['onemore', 'drop']);
-/** Endings on the main path itself (Go Outside hangs off Spiral Overlay) are not a chain the player builds. */
-const MAIN_PATH_LANES = new Set(['trunk', 'exit']);
-export const FALLBACK_ENDING = 'outside';
+/* FATE CARDS (owner 2026-11-10, handoff-1110/TC-FATE-CARDS-BRIEF.md). Six ending sets of 4 cards and an ending
+ * (data/fate.js). Before a pick only seeds are on offer: the open sets' seeds and the seed of the set for the first theme
+ * (f5). The first seed bought is the run's fate: from then on only that set's cards and its ending ever open. Derived
+ * from the purchase order, so nothing new is saved. */
+export function fateOf(s) {
+  for (const id of s.order) if (SEEDS.includes(id)) return setOf(id);
+  return null;
+}
+function fateAllows(s, it) {
+  if (!it.fate) return true;
+  const picked = fateOf(s);
+  if (picked) return it.fate === picked;
+  if (it.step !== 1) return false;
+  const theme = FATE_BY_ID[it.fate]?.theme;
+  return !theme || s.picks.f5 === theme;
+}
+
+/* ONE ENDING A RUN (owner 2026-11-10: "only 1 ending should pop up and only at the end of the run"). The ending held for
+ * this run is the picked set's ending; before a pick there is none, and no ending is offered (no silent fallback). It is
+ * offered only once the main path is done (Drop's old parents owned) and no other ending is ever offered. Retired from
+ * the shop (owner 2026-11-10; perks, cards and stickers stay for players who already have them): Endless Mode, Drop, and
+ * the theme and Premium endings that lost their set (Count Up, The Debut, Lost Key, Redacted, Flatline, Lifetime Plan). */
+export const OFF_SHELF = new Set(['onemore', 'drop', 'tr_end', 'si_end', 'lo_end', 'ce_end', 'in_end', 'p_life']);
 export const mainPathDone = (s) => BY_ID.drop.req.every((q) => has(s, q));
 export function heldEnding(s) {
-  let best = null, at = Infinity;
-  for (const it of ITEMS) {
-    if (it.kind !== 'end' || MAIN_PATH_LANES.has(it.lane) || OFF_SHELF.has(it.id) || !reached(s, it)) continue;
-    const i = Math.max(...it.req.map((q) => s.order.indexOf(q)));
-    if (i < at) { at = i; best = it.id; }
-  }
-  return best || FALLBACK_ENDING;
+  const set = FATE_BY_ID[fateOf(s)];
+  return set ? set.end : null;
 }
 
 /** On offer ignoring price: right lane for the picks made, parents owned, not already owned; an ending only as above. */
@@ -198,7 +208,8 @@ export function goal(s) {
   if (s.ended) return null;
   for (const it of ITEMS) {
     if (it.lane !== 'trunk' || it.group !== 'run' || has(s, it.id)) continue;
-    if (it.kind !== 'end') return it;
+    /* Spiral Overlay waits for a fate seed (its `any`): until one is bought there is no goal, the seeds are the shop. */
+    if (it.kind !== 'end') return !it.any || it.any.some((q) => has(s, q)) ? it : null;
     const held = BY_ID[heldEnding(s)];   // one ending a run: the held ending takes the main path's last place
     return held && isOpen(s, held) ? held : null;
   }
@@ -416,7 +427,23 @@ export function grant(s, id, added = []) {
     s.picks[f] = it.lane;
     grant(s, f, added);
   }
+  /* A fate card or ending: only the run's own set, and a theme set picks its theme first (data/fate.js). */
+  if (it.fate) {
+    const picked = fateOf(s), theme = FATE_BY_ID[it.fate]?.theme;
+    if (picked && picked !== it.fate) return added;
+    if (theme) {
+      if (s.picks.f5 && s.picks.f5 !== theme) return added;
+      s.picks.f5 = theme;
+      grant(s, 'f5', added);
+    }
+  }
   for (const q of it.req) grant(s, q, added);
+  /* A row that needs one of several (Spiral Overlay needs a seed): the run's own set's seed, else the first one. */
+  if (it.any && !it.any.some((q) => has(s, q))) {
+    const own = FATE_BY_ID[fateOf(s)]?.cards[0];
+    const pickAny = it.any.includes(own) ? own : it.any.find((q) => !BY_ID[q]?.fate || !FATE_BY_ID[BY_ID[q].fate].theme || FATE_BY_ID[BY_ID[q].fate].theme === s.picks.f5) || it.any[0];
+    grant(s, pickAny, added);
+  }
   if (it.kind === 'fork' && !s.picks[id]) s.picks[id] = Object.keys(FORKS[id].opts)[0];
   add(s, id);
   added.push(id);

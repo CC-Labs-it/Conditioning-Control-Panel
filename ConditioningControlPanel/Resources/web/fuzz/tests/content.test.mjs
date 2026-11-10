@@ -22,7 +22,9 @@ const {
   COMBO_LINES, SLEEP_STORY, AUDIO_DRAMA, INDUCTION, MOODS, MOOD_CARD, AFTER_RUN,
 } = content;
 
-const PINNED_ENDS = ['drop', 'o_out', 'p_life', 'tr_end', 'bi_end', 'dr_end', 'si_end', 'go_end', 'lo_end', 'ce_end', 'in_end', 'outside', 'onemore'];
+const PINNED_ENDS = ['drop', 'o_out', 'p_life', 'tr_end', 'bi_end', 'dr_end', 'si_end', 'go_end', 'lo_end', 'ce_end', 'in_end', 'outside', 'onemore', 'go_mus'];
+/* Endings the generator adds after the design source (dev/gen-items.mjs EXTRA_ROWS): the Gooning Museum fate set. */
+const EXTRA_ENDS = ['go_mus'];
 const ROWS = 'C:/Projects/Conditioning-Control-Panel---CSharp-WPF/handoff-1102/fuzz-tree/rows.json';
 
 /** Every string under a value, with a path for the failure message. */
@@ -147,7 +149,7 @@ test('every trick has questions and every question can be finished', () => {
 
 test('the endings cover every kind end row and each card is complete', () => {
   const ids = existsSync(ROWS)
-    ? JSON.parse(readFileSync(ROWS, 'utf8')).filter((r) => r.kind === 'end').map((r) => r.id)
+    ? [...JSON.parse(readFileSync(ROWS, 'utf8')).filter((r) => r.kind === 'end').map((r) => r.id), ...EXTRA_ENDS]
     : PINNED_ENDS;
   assert.deepEqual([...ids].sort(), [...PINNED_ENDS].sort());
   assert.deepEqual(Object.keys(ENDINGS).sort(), [...ids].sort());

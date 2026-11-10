@@ -64,8 +64,24 @@ test('a fresh run: start owned, the first row on offer and tagged next, every ro
   assert.equal(v.here, 'start');
   assert.equal(v.states.stray, 'offer');
   assert.equal(v.next, 'stray');
-  assert.equal(v.counts.off || 0, 0);
+  /* Only the endings retired from the shop read as shut on a fresh run (sim/economy.js OFF_SHELF; Drop is the road's end). */
+  const retired = layoutWorld().nodes.filter((n) => n.id !== 'drop' && E.OFF_SHELF.has(n.id)).map((n) => n.id);
+  assert.ok(retired.length >= 5, retired.join());
+  assert.deepEqual(Object.keys(v.states).filter((id) => v.states[id] === 'off').sort(), retired.sort());
   for (const i of layoutWorld().islands) assert.notEqual(islandState(s, i), 'shut', i.id);
+});
+
+test('fate cards: the first seed shuts every other set, and a theme set waits for its theme', () => {
+  const s = E.createRun();
+  E.grant(s, 'f5'); s.picks.f5 = 'trance';
+  let v = worldStates(s);
+  assert.equal(v.states.ft_bubble, 'off', 'Bimbodoll needs the Bimbo theme');
+  assert.notEqual(v.states.ft_window, 'off');
+  E.grant(s, 'ft_depth');
+  v = worldStates(s);
+  for (const id of ['ft_window', 'go_tx', 'go_end', 'outside', 'ft_ticket']) assert.equal(v.states[id], 'off', id);
+  assert.notEqual(v.states.ft_cursor, 'off');
+  assert.ok(layoutWorld().islands.some((i) => i.id === 'fate'), 'the fate pocket is on the map');
 });
 
 test('a picked fork shuts the other routes and everything that needs them', () => {

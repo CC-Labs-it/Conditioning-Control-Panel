@@ -59,8 +59,11 @@ const closeCards = () => page.evaluate(() => {
   }
 });
 
-/* go_head brings three picture screens; a metronome and a toy give her more to take later */
-await page.goto(`${base}index.html?buy=go_tx,a_tick,toy_box&pictures=online${touch ? '&lite=1' : ''}`, { waitUntil: 'load' });
+/* go_head brings three picture screens; a metronome and a toy give her more to take later. EMI is an open fate set now
+ * (every route): THEME=<head row> (tr_head, si_head, ...) runs the same drive on another theme, default the goon head. */
+const head = process.env.THEME || 'go_head';
+await page.goto(`${base}index.html?buy=${head},go_tx,a_tick,toy_box&pictures=online${touch ? '&lite=1' : ''}`, { waitUntil: 'load' });
+console.log(`theme: ${await page.evaluate(() => window.fuzz.state.picks.f5)}`);
 await page.waitForFunction(() => window.__emiSwarm, null, { timeout: 20000 });
 await page.evaluate(() => window.fuzz.engine.audio.arm?.());
 await wait(1500);
