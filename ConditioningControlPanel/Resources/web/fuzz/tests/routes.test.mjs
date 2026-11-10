@@ -58,9 +58,9 @@ test('side money stays a share of income however much is asked for, and never pa
 
 test('a weighted prize keeps more of its ask, and the budget still holds', () => {
   const s = E.createRun();
-  for (let i = 0; i < 2000; i++) { E.earn(s, 10, 'plan'); E.sideLump(s, 20, 'noise'); if (i % 10 === 0) E.sideLump(s, 40, 'quiz'); }
-  const right = E.sideLump(s, 40, 'quiz'), noise = E.sideLump(s, 40, 'noise');
-  assert.ok(right >= noise * (CONFIG.SIDE_WEIGHT.quiz - 0.1), `right ${right} against ${noise}`);
+  for (let i = 0; i < 2000; i++) { E.earn(s, 10, 'plan'); E.sideLump(s, 20, 'noise'); if (i % 10 === 0) E.sideLump(s, 40, 'levels'); }
+  const right = E.sideLump(s, 40, 'levels'), noise = E.sideLump(s, 40, 'noise');
+  assert.ok(right >= noise * (CONFIG.SIDE_WEIGHT.levels - 0.1), `right ${right} against ${noise}`);
   const side = (s.total - s.sources.plan) / s.total;
   assert.ok(side <= CONFIG.SIDE_SHARE / (1 + CONFIG.SIDE_SHARE) + 0.01, `side money was ${side} of income`);
 });

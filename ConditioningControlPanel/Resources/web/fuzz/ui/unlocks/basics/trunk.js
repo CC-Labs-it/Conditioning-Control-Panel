@@ -85,6 +85,7 @@ export default {
       };
       next();
       ctx.every(9000, next);
+      ctx.stage.register(ctx.layer('ticker'));   // the strip fades with the cast (ui/stage.js)
       return {};
     },
   },
@@ -316,7 +317,7 @@ export default {
    * the stage and the shop), never in the top layer. */
   overlay: {
     mount(ctx) {
-      const sp = spiralCanvas(ctx, 'position:absolute;left:50%;top:50%;width:150vmax;height:150vmax;margin:-75vmax 0 0 -75vmax;opacity:0;pointer-events:none;', 'wash', { px: 640, turnMs: 18000 });
+      const sp = spiralCanvas(ctx, 'position:absolute;left:50%;top:50%;width:150vmax;height:150vmax;margin:-75vmax 0 0 -75vmax;opacity:0;pointer-events:none;', ctx.stage.holder('wash', 'spiral'), { px: 640, turnMs: 18000 });
       ctx.anim(sp.el, [{ opacity: 0 }, { opacity: 0.16 }], { duration: fresh(ctx) ? 1200 : 1, fill: 'forwards', easing: 'ease-in' });
       mountCountUp(ctx);  // prestige hook: Count Up ending (tr_end)
       return { off: sp.off };

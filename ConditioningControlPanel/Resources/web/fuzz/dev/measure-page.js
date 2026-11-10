@@ -294,7 +294,7 @@
         pod: P.gaps.find((g) => g.next.endsWith('_pod'))?.at ?? null,
         at: Object.fromEntries(P.gaps.map((g) => [g.next, Math.round(g.at)])),
         gaps: P.gaps.map((g) => ({ id: g.next, at: Math.round(g.at * 10) / 10, gap: Math.round(g.gap * 10) / 10, c: Math.round(g.c || 0) })),
-        qAsked: P.qAsked || 0, qRight: P.qRight || 0, lumps: P.lumps, sideLog: P.sideLog, side: { ...s.side }, panelDone: P.panelDone || null,
+        qAsked: P.qAsked || 0, qRight: P.qRight || 0, lumps: P.lumps, sideLog: P.sideLog, side: { ...s.side }, toys: JSON.parse(JSON.stringify(s.toys || {})), panelDone: P.panelDone || null,
       };
     },
   };

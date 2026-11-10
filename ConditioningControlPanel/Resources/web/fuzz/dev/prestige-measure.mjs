@@ -18,7 +18,7 @@ import { pathToFileURL } from 'node:url';
 import { writeFileSync } from 'node:fs';
 import { allRoutes } from '../sim/route.js';
 import { createJourney, EXTRAS } from '../sim/journey.js';
-import { takeActivity, journeyChapter } from '../sim/journey-effects.js';
+import { takeActivity, journeyChapter, toyLift } from '../sim/journey-effects.js';
 import { FORKS } from '../data/items.js';
 import * as E from '../sim/economy.js';
 import * as P from '../sim/prestige.js';
@@ -75,12 +75,14 @@ export function measureRun(picks, p, { taps = 4, share = .125, option = 0, catch
     const active = (r.manualClick * taps + r.click * ghost.taps + E.count(s, 'stray') * r.walls * r.bounce) * s.pace;
     const fps = r.fps * s.pace;
     const side = s.owned.gold ? (active + fps) * share * (sky.length ? goldF : 1) : 0;
-    const rate = active + fps + side;
+    const toys = (active + fps) * (toyLift(s) - 1);   // the toys played at half their own budgets, outside the shared prize pot
+    const rate = active + fps + side + toys;
     const missing = Math.min(...items.map(it => shop.price(it.id) - (it.kind === 'fork' ? s.total : s.fuzz)));
     const dt = Math.max(.01, Math.min(60, nextClaim - s.clock / 1000, (missing + .001) / Math.max(rate, .01)));
     E.tick(s, dt * 1000, mods);
     E.earn(s, active * dt, 'active');
     if (sky.length) E.sideLump(s, side * dt, 'prizes'); else E.lump(s, side * dt, 'prizes');
+    E.lump(s, toys * dt, 'prizes');
     const worth = Math.max(r.fps, r.click * 2, 2) * s.pace;
     if (has('trig_1') && (wordT += dt) >= WORD_GAP_S / (has('trig_2') ? W.OFTEN : 1)) {
       wordT = 0;

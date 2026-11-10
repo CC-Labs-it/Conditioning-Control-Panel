@@ -123,6 +123,7 @@ export default {
     mount(ctx) {
       ctx.css(FACE_CSS);
       const w = dvdWord(ctx, 'DROP', { crossX: 8, crossY: 6, phase: 1.3 });
+      ctx.stage.register(w.el);
       return { tick: (dt) => w.step(dt) };
     },
   },
@@ -131,6 +132,7 @@ export default {
       ctx.css(FACE_CSS);
       const a = dvdWord(ctx, 'SINK', { crossX: 9, crossY: 7.2, phase: 3.1, size: 0.85 });
       const b = dvdWord(ctx, 'SOFT', { crossX: 7, crossY: 10.5, phase: 6.7, size: 0.85 });
+      ctx.stage.register(a.el); ctx.stage.register(b.el);
       return { tick: (dt) => { a.step(dt); b.step(dt); } };
     },
   },
