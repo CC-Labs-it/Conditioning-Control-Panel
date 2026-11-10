@@ -4,6 +4,20 @@
  * Hand-written since v3: dev/gen-emi-barks.mjs still writes the old v2 pools, do not run it over this file.
  * Lowercase, text only, never spoken. */
 
+
+/** Shown on the first purchase, once the shop's terms close. */
+export const EMI_UPGRADE_LINES = Object.freeze({
+  go_tx: "testing, testing. oh good. you're looking.",
+  go_will: "i can go anywhere. two steps left feels right.",
+  go_corp: "my first company. my first company purse.",
+  go_hive: "all in favour? me, me, me and me.",
+  h_amp: "i bought more screen. it came with more me.",
+  h_oc: "i finished this sentence yesterday.",
+  h_loud: "my inside voice got promoted.",
+  h_rep: "finally, someone who gets me. hi, me.",
+  h_over: "i found the permissions. they fit.",
+});
+
 export const EMI_BARKS = Object.freeze({
  "solo": {
   "transmission": [

@@ -106,6 +106,7 @@ export function getEmi(ctx) {
 
   let mood = 'happy', moodUntil = 0, swayAt = 0, bubble = null, bubbleOff = null, busyPose = false;
   const setPose = (name) => { const url = frame(name); if (img.getAttribute('src') !== url) img.src = url; };
+  let petBubble = null;
   const self = {
     el, sprite, img, wide, face, hat, controls, home, pos, place,
     get size() { return size; },
@@ -127,6 +128,12 @@ export function getEmi(ctx) {
     lastTouch: ctxs.state.clock,
     get held() { return grab !== null; },
     tapFns: new Set(),
+    petAt(event, showLine = null) {
+      self.lastTouch = ctxs.state.clock;
+      petBubble = showLine;
+      try { for (const fn of [...self.tapFns]) fn(event); }
+      finally { petBubble = null; }
+    },
     adopt(c) { ctxs = c; },
     /* Mood for ms, then back to happy. No ms: until the next mood call. */
     mood(m, ms = 0) {
@@ -150,7 +157,7 @@ export function getEmi(ctx) {
       place();
     },
     say(text, ms = 3000) {
-      if (self.borrowed) return;
+      if (self.borrowed) { petBubble?.(text); return; }
       bubbleOff?.();
       bubble?.remove();
       bubble = h('div', '', ctxs.brand.text(text), el);
@@ -234,8 +241,7 @@ export function getEmi(ctx) {
       if (!self.napping && !self.blocking) self.goHome(0);
       else if (!released) self.moveTo(previous.x, previous.y, previous.s, 0);
     } else if (released && tapBody) {
-      self.lastTouch = ctxs.state.clock;
-      for (const fn of [...self.tapFns]) fn(ev);
+      self.petAt(ev);
     }
   };
   el.addEventListener('pointermove', track);

@@ -34,7 +34,7 @@ test('asleep on the counter or on a shop row she is away: her home spot at her n
 
 test('every desk feature that would show or move her stands down while she is borrowed', () => {
   const emi = readFileSync(new URL('../ui/unlocks/extras/emi.js', import.meta.url), 'utf8');
-  assert.match(emi, /say\(text, ms = 3000\) \{\s*if \(self\.borrowed\) return;/);
+  assert.match(emi, /if \(self\.borrowed\) \{ petBubble\?\.\(text\); return; \}/, 'only a direct pet can forward a line to the visible EMI');
   assert.match(emi, /grab \|\| self\.borrowed \|\|/);
   assert.match(emi, /\.xe\[data-borrowed\]>:is\(\.xe-sprite,\.xe-c,\.xe-s,\.xe-t\)\{visibility:hidden/);
   const lane = readFileSync(new URL('../ui/unlocks/extras/emi-unlocks.js', import.meta.url), 'utf8');

@@ -11,11 +11,12 @@
  * go_hive    the screens run in patterns while everyone keeps wandering; bought by EMI herself if the player waits
  *            (150 s after Override) */
 
-import { EMI_BARKS } from '../../../data/content/emi-takeover.js';
+import { EMI_BARKS, EMI_UPGRADE_LINES } from '../../../data/content/emi-takeover.js';
 import { LITE, frameRect } from '../../perf.js';
 import { shopDoor } from '../../shop.js';
 import * as T from '../../../sim/takeover.js';
 import { art, SWAY, IDLE_FACES, rand, any, CSS, pose, sprites, bakeFaces, sprite, controlsRect, morePictures, tilesOf, bubble, placeBubble, deskHandoff } from './emi-kit.js';
+import { bindEmiGrab } from './emi-grab.js';
 import { liveEmi } from '../extras/emi.js';
 import { iconFor } from '../../icons.js';
 import { BY_ID } from '../../../data/items.js';
@@ -23,6 +24,11 @@ import { BY_ID } from '../../../data/items.js';
 const SWARM_CSS = `
 [data-et-gone]{visibility:hidden !important;}
 .et-box .et-credit{z-index:4;}
+.et-box .et-main{pointer-events:auto;touch-action:none;user-select:none;cursor:grab;}
+.et-main[data-held]{cursor:grabbing;}
+.et-purse{position:absolute;left:64%;top:64%;width:32%;height:32%;pointer-events:none;}
+.et-purse>img{inset:0;width:100%;height:100%;object-fit:contain;}
+.et-purse>span{position:absolute;right:-5px;bottom:-4px;padding:0 3px;border:1px solid #512b38;border-radius:5px;background:#ffe39b;color:#342032;font:700 10px/1.1 var(--font);}
 [data-et-buzz]{pointer-events:none;}
 .et-emi .et-h{position:absolute;left:0;right:0;bottom:79%;text-align:center;line-height:1;font-family:"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif;pointer-events:none;}
 `;
@@ -105,13 +111,33 @@ function mountSwarm(ctx) {
     return e;
   }
   const popIn = (e) => ctx.anim(e.el, calm() || LITE ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1 }], { duration: calm() ? 400 : 260 });
-  const main = add(true, hand);
+  const layoutKey = 'em_head:mascot';
+  const resting = ctx.store.getLayout(layoutKey);
+  const savedSpot = Number.isFinite(resting.x) && Number.isFinite(resting.y) ? resting : null;
+  const main = add(true, hand || savedSpot);
+  main.el.title = 'Drag EMI';
   /* her hat (em_hat) rides on the main sprite, sized as on the desk */
   const hat = doc.createElement('div');
   hat.className = 'et-h';
   main.el.appendChild(hat);
   const fitHat = () => { hat.style.fontSize = `${Math.round(main.size * 0.42)}px`; };
   fitHat();
+  const purse = ctx.el('div', '', null, main.el);
+  purse.className = 'et-purse';
+  purse.hidden = true;
+  const purseArt = doc.createElement('img');
+  purseArt.src = 'assets/clipart/wallet.webp'; purseArt.alt = ''; purseArt.draggable = false;
+  const balance = doc.createElement('span');
+  purse.append(purseArt, balance);
+  function showPurse() {
+    purse.hidden = !['corp', 'hive'].includes(stage());
+    if (purse.hidden) return;
+    const amount = String(Math.floor(bag.budget));
+    if (balance.textContent !== amount) {
+      balance.textContent = amount;
+      purse.setAttribute('aria-label', `EMI's pouch: ${amount}`);
+    }
+  }
   const resize = (e, s) => {
     const d = (s - e.size) / 2;
     e.size = s; e.x = clampX(e.x - d, s); e.y = clampY(e.y - d, s); e.tx = e.x; e.ty = e.y;
@@ -188,9 +214,15 @@ function mountSwarm(ctx) {
   const bubs = [];
   let barkAt = Infinity;
   const quiet = () => !!doc.querySelector('#cards .backdrop, #cards .tc');   // a card is up: no bubbles, no copies, no shopping
-  function say(e, text, { react = false } = {}) {
+  const milestones = ctx.restored ? [] : ['go_tx'];
+  let nextMilestone = 0;
+  function say(e, text, { react = false, milestone = false } = {}) {
     if (!text || quiet()) return false;
-    if (!T.barkRoom(barks, { now: t, visible: bubs.length, lite: LITE }) || (!react && t < e.coolUntil)) return false;
+    if (milestone) {
+      for (let i = bubs.length - 1; i >= 0; i--) {
+        if (bubs[i].e === e || bubs.length >= T.BARKS.MAX_VISIBLE) bubs.splice(i, 1)[0].el.remove();
+      }
+    } else if ((e === main && nextMilestone > t) || !T.barkRoom(barks, { now: t, visible: bubs.length, lite: LITE }) || (!react && t < e.coolUntil)) return false;
     const b = bubble(ctx, box, text);
     b.e = e; b.until = t + T.barkLife(text) / 1000;
     bubs.push(b);
@@ -219,7 +251,33 @@ function mountSwarm(ctx) {
     const line = T.pickBark(barks, EMI_BARKS.solo[pool], { now: t });
     if (line) say(speaker, line);
   }
-  if (!ctx.restored) ctx.after(1600, () => say(main, any(EMI_BARKS.solo.transmission), { react: true }));
+  function celebrate() {
+    if (!milestones.length || t < nextMilestone || quiet() || grab.held) return;
+    const id = milestones.shift(), line = EMI_UPGRADE_LINES[id];
+    say(main, line, { react: true, milestone: true });
+    main.show(null); main.setFace('^_^'); main.faceAt = t + 1.5;
+    main.mode = 'face'; main.modeUntil = t + 1.5; main.lastScreen = t;
+    main.state = 'stand'; main.until = t + 1.1;
+    if (!calm()) main.jumpT = t;
+    nextMilestone = t + T.barkLife(line) / 1000;
+  }
+  const grab = bindEmiGrab(ctx, main, {
+    place(x, y) {
+      main.x = main.tx = clampX(x, main.size); main.y = main.ty = clampY(y, main.size);
+      if (inWalls(main.x, main.y, main.size)) main.y = main.ty = clampY(walls.y + walls.h, main.size);
+      main.state = 'stand'; main.until = t + 1.5; main.jumpT = -1;
+    },
+    drop() {
+      if (desk?.el.isConnected) desk.shift(main.x - desk.pos.x, main.y - desk.pos.y);
+      else ctx.store.setLayout(layoutKey, { x: main.x, y: main.y });
+    },
+    pet(event) {
+      desk?.petAt(event, text => say(main, text, { react: true }));
+      main.show(null);
+      main.setFace(({ rage: '>_<', annoyed: '-_-' })[desk?.currentMood] || '^_^');
+      main.faceAt = t + 1.5; main.mode = 'face'; main.modeUntil = t + 1.5;
+    },
+  });
   const nextBark = () => { const [lo, hi] = fx().barkS; barkAt = t + rand(lo, hi); };
 
   /* -- her tiles: one guest tile in the shop, filled by her budget. She walks to it and it is hers. -- */
@@ -262,8 +320,14 @@ function mountSwarm(ctx) {
     }
     ctx.audio.play('assets/audio/sfx/ui_unlock.mp3', { bus: 'sfx', gain: 0.3 });
     if (!main.pic) { main.setFace('^_^'); main.faceAt = t + 2; }
-    main.coolUntil = 0;
-    say(main, any(EMI_BARKS.reactions[tile.id === 'h_over' ? 'override_bought' : 'emi_buys_tile']), { react: true });
+    milestones.push(tile.id);
+    showPurse();
+    const spend = ctx.el('span', 'position:absolute;left:0;top:0;z-index:3;color:#672a3c;background:#fff2bf;border:1px solid #512b38;border-radius:5px;padding:1px 4px;font:700 12px/1.2 var(--font);', null, box);
+    spend.textContent = `-${tile.price}`;
+    spend.style.left = `${main.x + main.size * .55}px`;
+    spend.style.top = `${main.y + main.size * .72}px`;
+    ctx.anim(spend, [{opacity:1}, {opacity:0, translate:calm() ? '0 0' : '0 -16px'}], {duration:850, fill:'both'});
+    ctx.after(860, () => spend.remove());
     if (tile.id === 'h_amp') {
       for (const e of emis) resize(e, sizeOf(e.main));
     }
@@ -409,7 +473,6 @@ function mountSwarm(ctx) {
     doc.dispatchEvent(new CustomEvent('fuzz:emi-buys-hive'));
     if (ctx.has('go_hive')) {
       ctx.toast('EMI bought HIVE MIND herself. It was free.');
-      say(any(emis), any(EMI_BARKS.reactions.hive_forced), { react: true });
     }
   }
 
@@ -462,7 +525,9 @@ function mountSwarm(ctx) {
       slow = 0;
       borrowDesk();
       drawGuest();
+      showPurse();
       screens();
+      celebrate();
       if (T.isShopping(ph, bag.bought) && !shopping && !stamped && !quiet()) {
         const tile = T.canBuy({ phase: ph, budget: bag.budget, bought: bag.bought, sinceBuyS: t - lastBuy, hurry });
         if (tile && guest?.tile === tile) { shopping = { tile, since: t }; main.jumpT = -1; }
@@ -474,7 +539,7 @@ function mountSwarm(ctx) {
 
     const b = ctx.bounds();
     for (const e of emis) {
-      if (moving) walk(e, dt);
+      if (moving && !(e === main && grab.held)) walk(e, dt);
       let lift = 0;
       if (e.jumpT >= 0) {
         const p = (t - e.jumpT) / JUMP_S;
@@ -498,7 +563,8 @@ function mountSwarm(ctx) {
       e.el.style.transform = `translate(${e.x.toFixed(1)}px,${(e.y - lift).toFixed(1)}px)${flip ? ' scaleX(-1)' : ''}`;
       const want = flip ? 'scaleX(-1)' : '';
       if (e.scr.style.transform !== want) e.scr.style.transform = want;   // the screen reads the right way round
-      if (e === main && hat.style.transform !== want) hat.style.transform = want;   // and so does her hat
+      if (e === main && hat.style.transform !== want) hat.style.transform = want;
+      if (e === main && balance.style.transform !== want) balance.style.transform = want;
     }
     if (!credit.hidden) credit.style.transform = `translate(${(main.x + main.size / 2).toFixed(1)}px,${(main.y + main.size).toFixed(1)}px) translateX(-50%)`;
     for (let i = bubs.length - 1; i >= 0; i--) {
@@ -516,8 +582,7 @@ function mountSwarm(ctx) {
     sizes: () => emis.map((e) => e.size),
     hide() { box.hidden = true; box.style.display = 'none'; shopDoor?.guest(null); guest = null; borrowDesk(); },
     count: () => emis.length,
-    /** A sibling row just arrived: one line from its pool, soon. */
-    arrive() { barkAt = Math.min(barkAt, t + 1.2); },
+    arrive(id) { milestones.push(id); },
     state: () => ({
       stage: stage(), phase: phase(), budget: Math.floor(bag.budget), bought: [...bag.bought], count: emis.length, copies: emis.length - 1,
       bubbles: bubs.length, shopping: !!shopping, pattern: phase() === 'hive' ? pattern : null, gone: gone.size, tabs: tabs.size, buzzing: buzzing.size, sinceOver: Math.floor(bag.sinceOver),
@@ -553,7 +618,7 @@ function mountSwarm(ctx) {
 /** The swarm on the page, or null. The ending starts its fill from it and hides it. */
 export const liveSwarm = () => live;
 
-const sibling = { mount(ctx) { if (!ctx.restored) live?.arrive(); return {}; } };
+const sibling = { mount(ctx) { if (!ctx.restored) live?.arrive(ctx.item.id); return {}; } };
 
 export default {
   /* Transmission owns the swarm; the three rows after it only change what the swarm reads. */

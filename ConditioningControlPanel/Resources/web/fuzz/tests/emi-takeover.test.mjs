@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import * as T from '../sim/takeover.js';
 import { BY_ID } from '../data/items.js';
 import { CONFIG } from '../data/config.js';
-import { EMI_BARKS } from '../data/content/emi-takeover.js';
+import { EMI_BARKS, EMI_UPGRADE_LINES } from '../data/content/emi-takeover.js';
 
 const has = (...ids) => (id) => ids.includes(id);
 
@@ -179,7 +179,10 @@ test('barks: at most 2 bubbles and 3 a 10 s, no line twice inside six minutes, s
 });
 
 test('the bark bank is EMI: lowercase, no exclamation marks, no dashes, never about stopping', () => {
-  const all = [...Object.values(EMI_BARKS.solo).flat(), ...Object.values(EMI_BARKS.pairs).flat(2), ...Object.values(EMI_BARKS.reactions).flat()];
+  const upgrades = [...T.CHAIN, ...T.HER_TILES.map(tile => tile.id)];
+  assert.equal(new Set(upgrades.map(id => EMI_UPGRADE_LINES[id])).size, upgrades.length);
+  for (const id of upgrades) assert.ok(EMI_UPGRADE_LINES[id], id);
+  const all = [...Object.values(EMI_UPGRADE_LINES), ...Object.values(EMI_BARKS.solo).flat(), ...Object.values(EMI_BARKS.pairs).flat(2), ...Object.values(EMI_BARKS.reactions).flat()];
   assert.ok(all.length > 150);
   for (const l of all) {
     assert.equal(l, l.toLowerCase(), l);
