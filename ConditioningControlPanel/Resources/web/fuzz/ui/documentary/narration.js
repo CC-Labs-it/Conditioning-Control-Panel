@@ -13,7 +13,7 @@ const PROJECTORS = {
   conversation: { title: 'We need to talk', line: '' },
 };
 
-/** Final delivery audio only. No speech synthesis and no decoded hour-long buffers. */
+/** Streams the recorded narrator clips individually, with bounded playback resources. */
 export function createDocumentaryNarration(ctx, tunnel, options = {}) {
   const doc = options.document || tunnel.captions?.ownerDocument || globalThis.document;
   const now = options.now || (() => performance.now());
