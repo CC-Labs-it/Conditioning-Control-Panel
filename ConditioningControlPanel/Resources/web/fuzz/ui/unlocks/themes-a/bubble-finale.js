@@ -96,7 +96,7 @@ function glassChime(ctx) {
   ctx.cleanup(() => input.stop());
 }
 
-export function playBubbleFinale(ctx, stage, { onBlack } = {}) {
+export function playBubbleFinale(ctx, stage, { onClosing, onBlack } = {}) {
   ctx.css(CSS);
   const veil = ctx.el('div', '', null, stage);
   veil.className = 'bi-finale';
@@ -138,6 +138,7 @@ export function playBubbleFinale(ctx, stage, { onBlack } = {}) {
         case 'roam':
           if (elapsed < ROAM) return;
           phase = 'closing';
+          onClosing?.();
           elapsed -= ROAM;
           break;
         case 'black':

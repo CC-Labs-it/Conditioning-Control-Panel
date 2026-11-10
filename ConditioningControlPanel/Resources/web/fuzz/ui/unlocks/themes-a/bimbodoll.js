@@ -333,7 +333,7 @@ function popSound(ctx, decoded) {
   setTimeout(() => io.stop(), 4500);
 }
 
-export function bimbodollTake(ctx, readyForPop = () => true) {
+export function bimbodollTake(ctx, readyForPop, voices) {
   aborted = false;
   const doc = ctx.world?.ownerDocument || document;
   const gentle = () => ctx.gentle || ctx.reduced;
@@ -422,7 +422,7 @@ export function bimbodollTake(ctx, readyForPop = () => true) {
       if (c.kind === 'counter' && !underwater) { underwater = true; ctx.audio.muffleOthers?.(true); }
       if (b.t - lastGiggle > GIGGLE_GAP_S) {
         lastGiggle = b.t;
-        ctx.audio.play(GIGGLES[Math.floor(Math.random() * GIGGLES.length)], { bus: 'voice', gain: 0.35 });
+        voices.giggle(performance.now() / 1000, GIGGLES[Math.floor(Math.random() * GIGGLES.length)], 0.35);
       }
     }
 
@@ -510,6 +510,7 @@ export function bimbodollTake(ctx, readyForPop = () => true) {
     }
 
     function pop() {
+      voices.hush();
       popped = true;
       for (const c of popOrder(cands)) take(c);
       tone.stop(50);
@@ -533,7 +534,8 @@ export function bimbodollTake(ctx, readyForPop = () => true) {
 
     catcher.addEventListener('pointerdown', (e) => {
       if (!e.isTrusted || popped) return;
-      swell(b, plan);
+      const amount = swell(b, plan);
+      if (amount > 0) voices.click(e, performance.now() / 1000);
       tone.bend();
       Ct = Math.max(0.02, Ct - 0.25);
       cap = Math.min(0.9, cap + 0.02);
