@@ -672,6 +672,7 @@ export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSE
 
     /* ---- beats ---- */
     let nextCrackle = Infinity, started = false, locked = false, mode = null, pullStart = 0;
+    let fadePending = false, fadeReady = null, fadeUrl = null;
 
     const lock = () => {
       if (locked) return;
@@ -684,6 +685,7 @@ export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSE
     const startPull = () => {
       phase = 'pull';
       sizeMeadow(false, 1);
+      layoutLive();
       pullStart = t;
       lock();
       meadow?.autopilot?.(true);
@@ -705,6 +707,10 @@ export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSE
       if (phase === 'hold') return;
       lock();
       phase = 'hold';
+      if (fadePending) {
+        fadePending = false; fadeReady = null;
+        if (fadeUrl) { win.URL.revokeObjectURL(fadeUrl); fadeUrl = null; }
+      }
       meadow?.autopilot?.(true);
       if (fromSkip && video && !holdImg && !videoBad && Number.isFinite(video.duration)) { try { video.currentTime = Math.max(0, video.duration - 0.02); } catch { /* fine */ } }
       clipPause();
@@ -789,7 +795,13 @@ export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSE
           }
           /* The clip decides when the hold starts: its end, or a stall past the cap, or a failure (the hold still). */
           if (videoEnded || videoBad || t >= pullStart + trackMs(track) + BEATS.pullCapMs) { tl = holdFrom(tl, t); enterHold(); }
-        } else if (t >= pullStart + BEATS.fadeMs) { tl = holdFrom(tl, t); enterHold(); }
+        } else {
+          if (fadePending && fadeReady) {
+            fadePending = false; pullStart = t;
+            showFade(fadeReady); fadeReady = null;
+          }
+          if (!fadePending && t >= pullStart + BEATS.fadeMs) { tl = holdFrom(tl, t); enterHold(); }
+        }
         return;
       }
       const next = phaseAt(tl, t);
@@ -805,13 +817,28 @@ export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSE
     });
 
     /* Reduced and a failed clip: no zoom. The hold (the meadow in its screen) fades in under the full-view meadow. */
-    function startFade() {
-      const big = doc.createElement('img');
-      const src = reduced ? stillPic : null;
-      let url = null;
-      if (src instanceof win.HTMLImageElement) url = src.src;
-      else if (src instanceof win.HTMLCanvasElement) { try { url = src.toDataURL(); } catch { url = null; } }
-      else if (meadow?.still) { try { url = meadow.still(); } catch { url = null; } }
+    async function startFade() {
+      fadePending = true;
+      const big = doc.createElement('img'), src = reduced ? stillPic : null;
+      let url = null, owned = false;
+      try {
+        if (src instanceof win.HTMLImageElement) url = src.src;
+        else {
+          const canvas = src instanceof win.HTMLCanvasElement ? src : meadow?.canvas;
+          const blob = meadow?.stillBlob ? await meadow.stillBlob() : await new Promise((resolve) => {
+            if (!canvas?.toBlob) { resolve(null); return; }
+            try { canvas.toBlob(resolve, 'image/jpeg', .86); } catch { resolve(null); }
+          });
+          if (blob) { url = win.URL.createObjectURL(blob); owned = true; }
+        }
+        if (url) { big.src = url; await big.decode?.().catch(() => {}); }
+      } catch { /* The room can fade in without a snapshot. */ }
+      if (over || phase !== 'pull' || mode !== 'fade') { if (owned) win.URL.revokeObjectURL(url); return; }
+      if (owned) fadeUrl = url;
+      // The scoped frame resumes this handoff only when the show itself is running.
+      fadeReady = { big, url };
+    }
+    function showFade({ big, url }) {
       buildScene(false);
       media.style.opacity = '0';
       layoutHold();
@@ -838,6 +865,8 @@ export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSE
       stopSound(completed ? 180 : 0);
       if (video) { try { video.pause(); video.removeAttribute('src'); video.load(); } catch { /* gone */ } }
       meadow?.stop?.();
+      if (fadeUrl) { win.URL.revokeObjectURL(fadeUrl); fadeUrl = null; }
+      fadeReady = null;
       root.remove();
       done(completed);
     }

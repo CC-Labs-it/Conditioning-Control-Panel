@@ -615,20 +615,22 @@ export async function createMeadow(host, opts = {}) {
     mesh.geometry.dispose();
     disposables.delete(mesh.geometry);
   };
-  function addChunk(x, z) {
-    const x0 = x * chunkSize,
-      z0 = z * chunkSize,
-      key = chunkKey(x, z);
-    if (x0 < 0 || z0 < 0 || x0 >= world.W || z0 >= world.W) return;
-    const old = chunks.get(key);
-    if (old) clearMesh(old);
+  function makeChunk(x, z) {
+    const x0 = x * chunkSize, z0 = z * chunkSize;
+    if (x0 < 0 || z0 < 0 || x0 >= world.W || z0 >= world.W) return null;
     const m = meshVoxels(volume, tileFor, rects, {
       x0,
       z0,
       x1: Math.min(world.W, x0 + chunkSize),
       z1: Math.min(world.W, z0 + chunkSize)
     });
-    const mesh = new THREE.Mesh(toGeo(m), solidMat);
+    return new THREE.Mesh(toGeo(m), solidMat);
+  }
+  function addChunk(x, z) {
+    const mesh = makeChunk(x, z);
+    if (!mesh) return;
+    const key = chunkKey(x, z), old = chunks.get(key);
+    if (old) clearMesh(old);
     chunks.set(key, mesh);
     scene.add(mesh);
   }
@@ -727,31 +729,46 @@ export async function createMeadow(host, opts = {}) {
       part.instanceMatrix.needsUpdate = true;
     }
   }
-  let lastX, lastZ;
-  function stream(x, z) {
-    const cx = chunkOf(x),
-      cz = chunkOf(z);
-    if (cx === lastX && cz === lastZ) return;
-    lastX = cx;
-    lastZ = cz;
-    updateTreeHorizon(cx,cz);
-    nearBox.value.set(
-      (cx - radius) * chunkSize,
-      (cz - radius) * chunkSize,
-      (cx + radius + 1) * chunkSize,
-      (cz + radius + 1) * chunkSize
-    );
+  let lastX, lastZ, pendingRing = null;
+  const discardRing = () => {
+    if (!pendingRing) return;
+    for (const mesh of pendingRing.ready.values()) clearMesh(mesh);
+    pendingRing = null;
+  };
+  function commitRing(cx, cz) {
+    lastX = cx; lastZ = cz;
+    updateTreeHorizon(cx, cz);
+    nearBox.value.set((cx - radius) * chunkSize, (cz - radius) * chunkSize,
+      (cx + radius + 1) * chunkSize, (cz + radius + 1) * chunkSize);
     for (const [key, mesh] of chunks) {
       const [bx, bz] = key.split(',').map(Number);
       if (!caveChunk(bx, bz) && (Math.abs(bx - cx) > radius || Math.abs(bz - cz) > radius)) {
-        clearMesh(mesh);
-        chunks.delete(key);
+        clearMesh(mesh); chunks.delete(key);
       }
     }
-    for (let bz = cz - radius; bz <= cz + radius; bz++)
-      for (let bx = cx - radius; bx <= cx + radius; bx++) {
-        if (!chunks.has(chunkKey(bx, bz))) addChunk(bx, bz);
+  }
+  function stream(x, z) {
+    const cx = chunkOf(x), cz = chunkOf(z);
+    if (cx === lastX && cz === lastZ) { discardRing(); return; }
+    if (pendingRing && (pendingRing.cx !== cx || pendingRing.cz !== cz)) discardRing();
+    if (!pendingRing) {
+      pendingRing = { cx, cz, todo: [], ready: new Map() };
+      for (let bz = cz - radius; bz <= cz + radius; bz++) for (let bx = cx - radius; bx <= cx + radius; bx++) {
+        if (bx < 0 || bz < 0 || bx * chunkSize >= world.W || bz * chunkSize >= world.W) continue;
+        const key = chunkKey(bx, bz);
+        if (!chunks.has(key)) pendingRing.todo.push([bx, bz, key]);
       }
+    }
+    // Keep the old terrain and horizon intact until the entire replacement ring is ready.
+    const budget = lastX == null ? pendingRing.todo.length : 1;
+    for (let i = 0; i < budget && pendingRing.todo.length; i++) {
+      const [bx, bz, key] = pendingRing.todo.shift(), mesh = makeChunk(bx, bz);
+      if (mesh) pendingRing.ready.set(key, mesh);
+    }
+    if (pendingRing.todo.length) return;
+    for (const [key, mesh] of pendingRing.ready) { chunks.set(key, mesh); scene.add(mesh); }
+    pendingRing = null;
+    commitRing(cx, cz);
   }
 
   // Plants: one double-sided draw, tips sway in a slow wind.
@@ -769,7 +786,13 @@ export async function createMeadow(host, opts = {}) {
     const dirty = new Set();
     for (const dx of [-1, 0, 1])
       for (const dz of [-1, 0, 1]) dirty.add(chunkKey(chunkOf(x + dx), chunkOf(z + dz)));
-    for (const key of dirty) if (chunks.has(key)) addChunk(...key.split(',').map(Number));
+    for (const key of dirty) {
+      if (chunks.has(key)) addChunk(...key.split(',').map(Number));
+      if (pendingRing?.ready.has(key)) {
+        clearMesh(pendingRing.ready.get(key)); pendingRing.ready.delete(key);
+        pendingRing.todo.push([...key.split(',').map(Number), key]);
+      }
+    }
     if (removed) {
       const count = world.plants.length;
       world.plants = world.plants.filter(
@@ -1017,6 +1040,13 @@ export async function createMeadow(host, opts = {}) {
     },
     autopilot(on) { auto = !!on; },
     resize,
+    stillBlob(quality = 0.86) {
+      if (stopped) return Promise.resolve(null);
+      update(0); render();
+      return new Promise((resolve) => {
+        try { canvas.toBlob(resolve, 'image/jpeg', quality); } catch { resolve(null); }
+      });
+    },
     still(quality = 0.86) {
       update(0);
       render();
@@ -1039,13 +1069,14 @@ export async function createMeadow(host, opts = {}) {
       canvas.removeEventListener('pointerleave', onLeave);
       canvas.removeEventListener('contextmenu', noMenu);
       field.stop();
+      discardRing();
       for (const d of disposables) d.dispose?.();
       renderer.dispose();
       renderer.forceContextLoss?.();
       canvas.remove();
     },
     /** For the dev page and drivers: where the eye is and how much has been drawn. */
-    debug: () => ({ width: canvas.width, height: canvas.height, programs: renderer.info.programs.length, textures: renderer.info.memory.textures, x: me.x, z: me.z, yaw: me.yaw, pitch: me.pitch, live, auto, frames, ...field.debug(), feet:me.feet, quads: [...chunks.values()].reduce((n,m)=>n+m.geometry.index.count/6,0), plants: plants.quads,
+    debug: () => ({ pendingChunks: pendingRing?.todo.length || 0, readyChunks: pendingRing?.ready.size || 0, ringX: lastX, ringZ: lastZ, width: canvas.width, height: canvas.height, programs: renderer.info.programs.length, textures: renderer.info.memory.textures, x: me.x, z: me.z, yaw: me.yaw, pitch: me.pitch, live, auto, frames, ...field.debug(), feet:me.feet, quads: [...chunks.values()].reduce((n,m)=>n+m.geometry.index.count/6,0), plants: plants.quads,
       cows: cows.map((c) => ({ x: c.x, z: c.z, state: c.state })), placeholder: atlas.placeholder, calls: renderer.info.render.calls }),
   };
   return api;
