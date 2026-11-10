@@ -203,9 +203,10 @@ export function createDock({ doc, rails, strip, onStrip, lock: lockPrefs = null 
     // A previous max-height must not hide the new artwork when a saved toy grows.
     const h = Math.max(s.root.getBoundingClientRect().height, (s.body.scrollHeight || 0) * s.scale) || s.lastHeight || 80;
     if (!s.min) s.lastHeight = h;
-    const point = clampWindow(s, { w: size.w, h: s.lastHeight || h, W: win.innerWidth, H: win.innerHeight, bottom: bottomSpace() });
+    const bottom = s.allowUnderStrip ? 0 : bottomSpace();
+    const point = clampWindow(s, { w: size.w, h: s.lastHeight || h, W: win.innerWidth, H: win.innerHeight, bottom });
     s.x = point.x; s.y = point.y;
-    Object.assign(s.root.style, { left: `${s.x}px`, top: `${s.y}px`, height: '', maxHeight: `${Math.max(44, win.innerHeight - bottomSpace() - s.y + EDGE_BLEED)}px`, zIndex: String(s.z) });
+    Object.assign(s.root.style, { left: `${s.x}px`, top: `${s.y}px`, height: '', maxHeight: `${Math.max(44, win.innerHeight - bottom - s.y + EDGE_BLEED)}px`, zIndex: String(s.z) });
     s.root.classList.toggle('min', s.min);
     s.root.classList.toggle('open', !s.min);
     s.root.classList.toggle('locked', locked);
@@ -409,13 +410,14 @@ export function createDock({ doc, rails, strip, onStrip, lock: lockPrefs = null 
   function cancel(s) { finish(s, {}, true); }
   function begin(s, ev, kind) {
     if (paused() || s.gesture || ev.button > 0 || ev.isPrimary === false) return;
+    // A new physical press may hit a button just after a drag suppressed its own release click.
+    s.suppressClick = false;
     if (kind === 'object' && (locked || s.anchor || s.min || !canMoveFrom(ev.target, s.root))) return;
     if (active) cancel(active);
     active = s;
     const d = { kind, id: ev.pointerId, target: kind === 'object' ? s.root : s.chip, x: ev.clientX, y: ev.clientY,
       left: s.x, top: s.y, held: false, moved: false, touch: ev.pointerType === 'touch', timer: null, from: ev.target, at: win.performance?.now?.() ?? Date.now() };
     s.gesture = d;
-    s.suppressClick = false;
     const hold = () => {
       if (s.gesture !== d || paused()) { cancel(s); return; }
       d.held = true; s.fresh = false;
@@ -535,7 +537,7 @@ export function createDock({ doc, rails, strip, onStrip, lock: lockPrefs = null 
     return true;
   }
   function add({ edge, anchor = null, title = '', icon = '', order = 100000, chip = true, onChip = null, door = null,
-    min, onMin = null, width: defaultWidth = null, reserveHeight = 0, layout: original = {}, onLayout = null }) {
+    min, onMin = null, width: defaultWidth = null, reserveHeight = 0, allowUnderStrip = false, layout: original = {}, onLayout = null }) {
     const saved = migrateLayout(original);
     const counts = [...slots].reduce((n, s) => { if (!s.min && !s.door) n[s.side]++; return n; }, { left: 0, right: 0 });
     const side = edge === 'left' || edge === 'right' ? edge : emptierEdge(counts.left, counts.right);
@@ -547,7 +549,7 @@ export function createDock({ doc, rails, strip, onStrip, lock: lockPrefs = null 
     const z = Number.isFinite(saved.z) && saved.z > 0 ? Math.min(saved.z, 1000000) : topZ + 1;
     topZ = Math.max(topZ, z);
     const maxOrder = ordered().reduce((n, s) => Math.max(n, s.tabOrder), -1);
-    const s = { root, body, title, side, anchor, chip: null, door: !!door, onMin, onLayout, z, defaultW: desired(defaultWidth),
+    const s = { root, body, title, side, anchor, allowUnderStrip, chip: null, door: !!door, onMin, onLayout, z, defaultW: desired(defaultWidth),
       x: saved.x ?? 8, y: saved.y ?? 48, w: saved.w, h: null, reserveH: Math.max(0, Math.min(1000, finite(reserveHeight, 0))), tabOrder: Number.isFinite(saved.tabOrder) ? saved.tabOrder : maxOrder + 1,
       // wantOpen: the caller asked for it open (theme screens on a phone). With no free room it still waits as a NEW tab.
       serial: serial++, min: typeof min === 'boolean' ? min : typeof saved.min === 'boolean' ? saved.min : !isRail(), fresh: !restored && !anchor, wantOpen: min === false,
