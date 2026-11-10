@@ -7,7 +7,8 @@ import * as E from '../sim/economy.js';
 import { ACHIEVEMENTS } from '../data/content/index.js';
 import { STICKER_PAGES, STICKERS, STICKER_BY_ID } from '../data/content/stickers.js';
 import { ENDING_IDS, createLife, parse, recordEnding, serialize } from '../sim/save.js';
-import { dueThisRun, earnSticker, met, meterMult, noteLife, pageView, parseCardSnapshot, snapshotRun, syncLife } from '../sim/stickers.js';
+import { dueThisRun, earnSticker, met, meterMult, noteLife, pageView, parseCardSnapshot, shown, snapshotRun, syncLife } from '../sim/stickers.js';
+import { OFF_SHELF } from '../sim/economy.js';
 import { THEME_IDS } from '../data/content/index.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -31,6 +32,18 @@ test('the book: 77 stickers on 9 pages, every old achievement kept, every page a
     const src = s.art.k === 'img' || s.art.k === 'scene' ? s.art.src : s.art.k === 'portrait' ? `assets/adcard/${s.art.theme}.webp` : null;
     if (src) assert.ok(existsSync(join(ROOT, src)), `${s.id} art ${src}`);
   }
+});
+
+test('retired endings: Drop and One More show only once earned, and Every Ending counts the endings on offer', () => {
+  const life = createLife();
+  assert.deepEqual(STICKERS.filter((s) => s.legacy).map((s) => s.id).sort(), [...OFF_SHELF].map((id) => `e_${id}`).sort());
+  assert.equal(shown(life).length, STICKERS.length - OFF_SHELF.size);
+  const shelf = ENDING_IDS.filter((id) => !OFF_SHELF.has(id));
+  assert.equal(STICKER_BY_ID.e_all.when, `shelfEndings:${shelf.length}`);
+  for (const id of shelf) life.endings[id] = 1;
+  assert.ok(met(STICKER_BY_ID.e_all, st(), life));
+  earnSticker(life, 'e_drop', 1);
+  assert.equal(shown(life).length, STICKERS.length - OFF_SHELF.size + 1, 'an old Drop sticker stays in the book');
 });
 
 test('every ending and every theme has its sticker', () => {
