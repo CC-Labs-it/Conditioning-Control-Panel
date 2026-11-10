@@ -15,11 +15,12 @@ import { EMI_BARKS, EMI_UPGRADE_LINES } from '../../../data/content/emi-takeover
 import { LITE, frameRect } from '../../perf.js';
 import { shopDoor } from '../../shop.js';
 import * as T from '../../../sim/takeover.js';
-import { art, SWAY, IDLE_FACES, rand, any, CSS, pose, sprites, bakeFaces, sprite, controlsRect, morePictures, tilesOf, bubble, placeBubble, deskHandoff } from './emi-kit.js';
+import { SWAY, IDLE_FACES, rand, any, CSS, pose, sprites, bakeFaces, sprite, controlsRect, morePictures, tilesOf, bubble, placeBubble, deskHandoff } from './emi-kit.js';
 import { bindCopyPets } from './emi-pets.js';
 import { createUiTakeover, UI_TAKEOVER_CSS } from './emi-ui-takeover.js';
 import { bindEmiGrab } from './emi-grab.js';
 import { liveEmi } from '../extras/emi.js';
+import { emiUpgradeArt } from '../../emi-upgrade-art.js';
 import { iconFor } from '../../icons.js';
 import { BY_ID } from '../../../data/items.js';
 
@@ -302,8 +303,8 @@ function mountSwarm(ctx) {
       el.className = 'row et-guest short';
       el.setAttribute('aria-label', `${tile.name}. ${tile.what} Hers, not for sale.`);
       el.title = `${tile.name}: ${tile.what} Hers, not for sale.`;
-      el.innerHTML = '<span class="bar" aria-hidden="true"></span><img class="ico" alt="" draggable="false"><span class="et-who"></span><span class="cost"></span>';
-      el.querySelector('img').src = art('body-idle');
+      el.innerHTML = '<span class="bar" aria-hidden="true"></span><svg class="ico" viewBox="0 0 64 64" aria-hidden="true" width="44" height="44"></svg><span class="et-who"></span><span class="cost"></span>';
+      el.querySelector('svg.ico').innerHTML = emiUpgradeArt(tile.id);
       el.querySelector('.et-who').textContent = tile.name;
       el.addEventListener('click', () => { ctx.toast('Hers, not for sale.'); if (!main.pic) { main.setFace('o_o'); main.faceAt = t + 1; } });
       guest = { el, tile, bar: el.querySelector('.bar'), cost: el.querySelector('.cost'), text: '' };
@@ -405,12 +406,7 @@ function mountSwarm(ctx) {
   /** The dock body behind a page object, if it is a dock object. */
   const dockOf = (el) => (el.matches('section.dk') ? el : el.closest('section.dk'))?.querySelector(':scope > .dk-b')?.dock || null;
   let emiIcon = null;
-  const iconNode = () => {
-    try { return (emiIcon ||= iconFor(doc, BY_ID.em_head)).cloneNode(true); } catch {
-      const i = doc.createElement('img'); i.src = art('body-idle'); i.alt = ''; i.style.cssText = 'width:20px;height:20px;image-rendering:pixelated;';
-      return i;
-    }
-  };
+  const iconNode = () => (emiIcon ||= iconFor(doc, BY_ID.em_head)).cloneNode(true);
   /** Override: the nearest EMI looks, the object (and its tab) buzz and shake, then an EMI stands where it was. */
   function override(el) {
     const r0 = el.getBoundingClientRect();

@@ -1,11 +1,11 @@
+import { emiTileSprite } from '../../emi-tile-sprite.js';
 import { writeScore } from '../../emi-score.js';
 
 export const UI_TAKEOVER_CSS = `
 [data-et-ui] > [data-et-original]{display:none!important}
-.et-ui-emi,#account-chip .et-ui-emi{display:inline-block;position:relative;width:32px;height:32px;flex:0 0 auto;background:url("assets/img/emi/body-idle.png") center/contain no-repeat;image-rendering:pixelated;pointer-events:none}
-.et-ui-emi::after{content:"^_^";position:absolute;left:31%;top:32%;width:47%;height:29%;display:grid;place-content:center;color:#ff9fc9;font:700 8px/1 monospace;text-shadow:none}
+.et-ui-emi,#account-chip .et-ui-emi{display:inline-block;position:relative;width:32px;height:32px;flex:0 0 auto;pointer-events:none}
+.et-ui-emi>svg{display:block;width:100%;height:100%}
 #shop .et-ui-emi{width:44px;height:44px;max-width:100%}
-#shop .et-ui-emi::after{font-size:11px}
 #goal .et-ui-emi{width:52px;height:52px}
 #account-chip .et-ui-emi{width:26px;height:26px}
 #account-chip[data-et-ui]{color:#ffd2e5;background:#392c40}
@@ -27,6 +27,7 @@ export function createUiTakeover(ctx) {
     if (!button || targets.has(button)) return;
     const mini = doc.createElement('span');
     mini.className = 'et-ui-emi'; mini.setAttribute('aria-hidden', 'true'); mini.dataset.etPet = '';
+    mini.innerHTML = emiTileSprite();
     original?.setAttribute('data-et-original', '');
     button.insertBefore(mini, original || null);
     let name = null;

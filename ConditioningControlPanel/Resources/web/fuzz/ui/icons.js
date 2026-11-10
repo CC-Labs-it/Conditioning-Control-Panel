@@ -29,7 +29,7 @@ function paintIcon(svg, id) {
 }
 
 function markupFor(id) {
-  const emi = emiUpgradeArt(id, current === 'glossy');
+  const emi = emiUpgradeArt(id);
   if (emi) return emi;
   const art = ICON_CATALOG[id];
   if (current === 'glossy') return runtimeArt[id]
@@ -64,7 +64,7 @@ export async function playIcon(svg) {
   if (moving) {
     moving.style.transformOrigin = 'center';
     moving.style.transformBox = 'fill-box';
-    const animation = moving.animate(EMI_ICON_BEATS[svg.dataset.fzIcon], {duration: 630, easing: 'ease-in-out'});
+    const animation = moving.animate(EMI_ICON_BEATS[svg.dataset.fzIcon] || EMI_ICON_BEATS.go_will, {duration: 630, easing: 'ease-in-out'});
     const clip = { animation };
     active.set(doc, clip);
     animation.onfinish = () => { if (active.get(doc) === clip) stopIconMotion(doc); };

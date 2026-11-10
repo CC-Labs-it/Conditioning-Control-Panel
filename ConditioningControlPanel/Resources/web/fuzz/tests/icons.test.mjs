@@ -5,6 +5,8 @@ import { clips } from '../assets/clipart/clips.js';
 import { ITEMS } from '../data/items.js';
 import { ICON_CATALOG } from '../ui/icon-catalog.js';
 import { ART, BADGE_NAMES, iconMarkup } from '../ui/icon-art.js';
+import { emiUpgradeArt } from '../ui/emi-upgrade-art.js';
+import { CHAIN, HER_TILES } from '../sim/takeover.js';
 import { iconSet, setIconSet } from '../ui/icons.js';
 
 test('every unlock, fork, theme and ending has intentional clip art, with no stale rows', () => {
@@ -26,6 +28,19 @@ test('the plain set ships a rest image and a playable sheet for every catalogue 
       assert.ok(existsSync(new URL('../assets/clipart/' + shape + suffix, import.meta.url)), shape + suffix);
     }
   }
+});
+
+test("every companion tile shows the original sprite with EMI's neutral screen", () => {
+  const ids = [...ITEMS.filter(item => item.lane === 'emi').map(item => item.id),
+    ...CHAIN, 'go_end', 'o_emi', 'p_line', 'm_watch', ...HER_TILES.map(tile => tile.id)];
+  for (const id of ids) {
+    const art = emiUpgradeArt(id);
+    const poses = [...art.matchAll(/href="(assets\/img\/emi\/body[^"]*\.png)"/g)];
+    assert.ok(poses.length, id);
+    assert.equal(art.split('assets/img/emi/face-neutral.png').length - 1, poses.length, id);
+    for (const [, pose] of poses) assert.ok(existsSync(new URL('../' + pose, import.meta.url)), pose);
+  }
+  assert.ok(existsSync(new URL('../assets/img/emi/face-neutral.png', import.meta.url)));
 });
 
 test('the vector source is self-contained and safe to repeat in shop, guide and purchase flight', () => {
