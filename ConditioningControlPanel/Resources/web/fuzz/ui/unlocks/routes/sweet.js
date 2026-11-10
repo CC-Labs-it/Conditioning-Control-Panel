@@ -5,6 +5,7 @@ import { PRAISE, PRAISE_NAMED, REST_LINES, TUCK_LINES, GLOW_LINES, WARM_LINES, N
 import { PLUCKS } from '../../../audio/kit.js';
 import { deck, fill, btnCentre, setLine, meterRow, bar, ring, burst, tone, onDark, docOf, ink } from './kit.js';
 import { ROUTE_COPY } from './copy.js';
+import { themedDraw } from '../../theme-text.js';
 
 /** Fires on real taps only and answers how long the hands have been off, in game seconds. */
 function restClock(ctx) {
@@ -19,7 +20,7 @@ export default {
   s_good: {
     mount(ctx) {
       tone(ctx, { '--page': '#fff0e6', '--panel': '#fff7f0', '--panel-short': '#f3e2d6', '--line': '#d9b9a3', '--fill': '#f5cdb0', '--btn': '#f7e3d4' });
-      const rest = restClock(ctx), next = deck(PRAISE.filter(fitsLine(ctx)), ctx);
+      const rest = restClock(ctx), next = themedDraw(ctx, 'praise', deck(PRAISE.filter(fitsLine(ctx)), ctx), { fits: fitsLine(ctx) });
       const css = `font-style:italic;font-size:20px;color:${ink(ctx, '#a8246a', '#ffb0d6')};`;
       const say = () => setLine(ctx, next(), css, 2600);
       ctx.after(500, say);
@@ -66,7 +67,7 @@ export default {
   /* Warm Colours: the corners come off everything and the page warms up. */
   s_blanket: {
     mount(ctx) {
-      const warm = deck(WARM_LINES, ctx);
+      const warm = themedDraw(ctx, 'sweet', deck(WARM_LINES, ctx));
       if (ctx.pick('f5')) { /* A picked theme keeps its page: only the shapes below change. */ }
       else if (onDark(ctx)) ctx.vars({ '--page': '#2a1a14', '--panel': '#3a261c', '--panel-short': '#2f1f18', '--line': '#7d5a45', '--fill': '#6d4632', '--btn': '#5a3a2a' });
       else ctx.vars({ '--page': '#ffd9bb', '--panel': '#fff0e2', '--panel-short': '#f7dcc6', '--line': '#d9a079', '--fill': '#ffbf91', '--btn': '#ffb98a', '--ink': '#3d1f12', '--ink-soft': '#6b3f2a' });
@@ -123,7 +124,7 @@ export default {
   /* Quiet Taps: the longer your hands rest, the softer the next tap, and the softest one pays the most. */
   s_tuck: {
     mount(ctx) {
-      const rest = restClock(ctx), lines = deck(TUCK_LINES, ctx);
+      const rest = restClock(ctx), lines = themedDraw(ctx, 'sweet', deck(TUCK_LINES, ctx));
       const row = ctx.el('div', 'display:flex;align-items:flex-end;gap:2px;height:20px;', null, meterRow(ctx));
       const ticks = [0, 1, 2, 3, 4].map((i) => ctx.el('div', `width:6px;height:${5 + i * 3}px;background:var(--accent-deep);transition:opacity .4s;`, null, row));
       let hush = 0;
@@ -151,7 +152,7 @@ export default {
   /* Warm Glow: your per-second pay keeps climbing for as long as you do nothing, up to three times. A tap puts the fire out. */
   s_glow: {
     mount(ctx) {
-      const rest = restClock(ctx), lines = deck(GLOW_LINES, ctx);
+      const rest = restClock(ctx), lines = themedDraw(ctx, 'sweet', deck(GLOW_LINES, ctx));
       const mul = () => 1 + Math.min(2, rest.seconds / 60);
       ctx.mod({ fps: (v) => v * mul() });
       const g = ctx.el('div', 'position:absolute;left:50%;top:150px;width:90vmin;height:90vmin;margin:-45vmin 0 0 -45vmin;border-radius:50%;background:radial-gradient(circle,rgba(255,226,168,.95) 0,rgba(255,154,74,.75) 35%,rgba(255,154,74,0) 70%);transform:scale(.2);opacity:.4;transition:transform .9s linear,opacity .9s;', null, 'wash');
@@ -180,7 +181,7 @@ export default {
   s_nap: {
     mount(ctx) {
       const doc = docOf(ctx), MAX = 10 * 60 * 1000;
-      const titles = deck(NAP_LINES.tabTitles, ctx), welcome = deck(NAP_LINES.welcome, ctx);
+      const titles = deck(NAP_LINES.tabTitles, ctx), welcome = themedDraw(ctx, 'away', deck(NAP_LINES.welcome, ctx));
       const tag = ctx.el('div', 'font:12px Arial,Helvetica,sans-serif;color:var(--ink-soft);', ROUTE_COPY.napTag, meterRow(ctx));
       if (!ctx.gentle) ctx.anim(tag, [{ opacity: 0.4 }, { opacity: 1 }], { duration: 1500, iterations: Infinity, direction: 'alternate' });
       let oldTitle = null;

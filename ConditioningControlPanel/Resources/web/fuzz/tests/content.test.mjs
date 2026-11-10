@@ -196,7 +196,9 @@ test('every link in the content goes to cclabs.app', () => {
 });
 
 test('adult, not explicit, and nothing young', () => {
-  none(all, /\b(cock|dick|pussy|cunt|cum|tits|penis|vagina|orgasm|anal|fuck\w*|slut\w*|whore\w*)\b/i);
+  /* The owner's own Bambi trigger phrases (2026-11-10, Bimbo theme only) are the named exception, as spelled, nothing else. */
+  const triggers = new Set(content.BAMBI_TRIGGERS.map((t) => t.toLowerCase()));
+  none(all.filter((r) => !triggers.has(r.text.toLowerCase())), /\b(cock|dick|pussy|cunt|cum|tits|penis|vagina|orgasm|anal|fuck\w*|slut\w*|whore\w*)\b/i);
   none(all, /\b(school\w*|student\w*|pupil\w*|class\w*|teen\w*|underage|minor\w*|kid\w*|child\w*|baby|babies|little (one|girl|boy)|young\w*|homework|detention|teacher\w*)\b/i);
 });
 
@@ -225,7 +227,7 @@ test('EMI ad reads are short beats', () => {
 });
 
 test('no export name is lost to a clash in the index', async () => {
-  const names = ['ads', 'thoughts', 'questions', 'endings', 'themes', 'fakes', 'sweet', 'strict', 'blind', 'emi', 'side', 'combos'];
+  const names = ['ads', 'thoughts', 'questions', 'endings', 'themes', 'fakes', 'sweet', 'strict', 'blind', 'emi', 'side', 'combos', 'theme-text'];
   const keys = (await Promise.all(names.map((n) => import(`../data/content/${n}.js`)))).flatMap((m) => Object.keys(m));
   assert.equal(new Set(keys).size, keys.length);
   assert.deepEqual([...keys].sort(), Object.keys(content).sort());

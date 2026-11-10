@@ -11,3 +11,4 @@ export * from './blind.js';
 export * from './emi.js';
 export * from './side.js';
 export * from './combos.js';
+export * from './theme-text.js';

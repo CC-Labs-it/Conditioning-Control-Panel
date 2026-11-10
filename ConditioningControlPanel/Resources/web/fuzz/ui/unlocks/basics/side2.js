@@ -2,6 +2,7 @@
  * Listening Test, Toy Link, Friend Remote. Words are recorded clips or nothing. App-only rows say so and do nothing here. */
 
 import { APP_ONLY, DRIFT_LINES, FALLING_WORDS, LISTENING_TEST, OPINIONS, REMOTE } from '../../../data/content/index.js';
+import { runThemes, themed } from '../../theme-text.js';
 import { LISTEN_NAME, REMOTE_SOLO } from './copy.js';
 import { burst, btnCenter, chip, docOf, fresh, play, pop, setPalette, sfx, spawn, squish } from './fx.js';
 import { markPopPicture } from '../../pop-picture.js';
@@ -32,7 +33,7 @@ export default {
           f.appendChild(img);
           if (pic.credit) { const c = spawn(ctx, 'left:auto;top:auto;right:8px;bottom:8px;position:absolute;font-size:12px;color:#fff;', pic.credit, f); c.style.left = 'auto'; }
         } else {
-          const box = spawn(ctx, 'position:static;width:min(60vw,320px);height:min(60vh,420px);display:grid;place-items:center;padding:12px;text-align:center;border:2px dashed #fff;color:#fff;font-style:italic;', pick(ctx, DRIFT_LINES), f);
+          const box = spawn(ctx, 'position:static;width:min(60vw,320px);height:min(60vh,420px);display:grid;place-items:center;padding:12px;text-align:center;border:2px dashed #fff;color:#fff;font-style:italic;', themed(runThemes(ctx.state), 'drift', pick(ctx, DRIFT_LINES)), f);
           box.style.position = 'relative';
         }
         /* The picture itself sits at 80% (styles.css [data-pop-picture] img), so its plateau is 0.8 and the fade still starts at 0. */
@@ -53,7 +54,7 @@ export default {
         const px = LITE ? 3 : 6;
         const v = spawn(ctx, `inset:0;-webkit-backdrop-filter:blur(${px}px);backdrop-filter:blur(${px}px);`);
         play(ctx, v, [{ opacity: 0 }, { opacity: 1, offset: 0.45 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }], { duration: 6000, easing: 'ease-in-out' });
-        ctx.say(pick(ctx, DRIFT_LINES));
+        ctx.say(themed(runThemes(ctx.state), 'drift', pick(ctx, DRIFT_LINES)));
       };
       if (fresh(ctx)) blur();
       ctx.every(42000, blur);
@@ -85,9 +86,11 @@ export default {
       ctx.mod({ walls: (v, s, t) => (t < fastUntil ? v * 1.6 : v) });
       const fall = () => {
         const { w, h } = ctx.bounds();
-        const word = FALLING_WORDS[n++ % FALLING_WORDS.length];
+        const at = n++ % FALLING_WORDS.length, word = FALLING_WORDS[at];
+        /* Themed: only the shown word changes, by index (0 crit, 1 mute, 2 speed); effect, label and line stay. */
+        const shown = themed(runThemes(ctx.state), 'falling', word.word, { sub: at });
         const x = 10 + ctx.rng() * (w - 110);
-        const b = ctx.el('button', `position:absolute;left:${x}px;top:0;min-width:88px;min-height:44px;padding:0 8px;border:0;border-radius:4px;background:${COLS[word.effect]};color:#17132c;font-weight:700;font-size:15px;pointer-events:auto;touch-action:manipulation;will-change:transform;`, word.word, 'over');
+        const b = ctx.el('button', `position:absolute;left:${x}px;top:0;min-width:88px;min-height:44px;padding:0 8px;border:0;border-radius:4px;background:${COLS[word.effect]};color:#17132c;font-weight:700;font-size:15px;pointer-events:auto;touch-action:manipulation;will-change:transform;`, shown, 'over');
         b.type = 'button';
         const dur = ctx.gentle ? 9000 : 6000;
         const a = ctx.anim(b, [{ transform: 'translateY(-50px)' }, { transform: `translateY(${h + 10}px)` }], { duration: dur, easing: 'linear', fill: 'forwards' });

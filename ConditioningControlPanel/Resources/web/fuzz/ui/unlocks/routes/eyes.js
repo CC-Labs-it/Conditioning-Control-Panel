@@ -1,6 +1,7 @@
 /* Watch: the screen does the work. Words cross it, the spiral pulls, and the bonuses come from looking and holding still. */
 
 import { BOUNCE_WORDS, BIG_WORDS, EDGE_WORDS, STILL_WORDS, STARE_LINES } from '../../../data/content/index.js';
+import { themedDraw } from '../../theme-text.js';
 import { DARK, darkCss, mountSpiral, spiral, deck, burst, ring, flash, bar, claim, release, docOf, btnCentre, setLine, dropLine, meterRow } from './kit.js';
 import { bindBounce, FACE_CSS } from '../../bouncing-art.js';
 import { ROUTE_COPY } from './copy.js';
@@ -42,7 +43,7 @@ const wordColour = (ctx, c) => {
 function dvdWord(ctx, startText, { crossX = 8, crossY = 6, phase = 0, size = 1 } = {}) {
   const el = ctx.el('div',`position:absolute;left:0;top:0;color:${wordColour(ctx,0)};will-change:transform;`);
   const art = bindBounce(ctx,el,{index:Math.floor(phase),word:startText,scale:size});
-  const nextWord = deck(BOUNCE_WORDS,ctx);
+  const nextWord = themedDraw(ctx, 'bounce', deck(BOUNCE_WORDS,ctx));
   art.sync();
   let t = phase, fx = null, fy = null, c = 0;
   const tri = (u) => { const m = u % 2; return m < 1 ? m : 2 - m; };
@@ -137,7 +138,7 @@ export default {
   /* Big Word: a huge word fades through the middle. Tap while it is up and it pays once. */
   e_flash: {
     mount(ctx) {
-      const next = deck(BIG_WORDS, ctx);
+      const next = themedDraw(ctx, 'big', deck(BIG_WORDS, ctx));
       let up = false;
       const show = () => {
         const b = btnCentre(ctx), word = next(), big = Math.min(ctx.bounds().w / Math.max(4, word.length) * 1.25, 110);
@@ -161,7 +162,7 @@ export default {
   /* Edge Words: small words fade in at the edges, all round the screen. */
   e_sublim: {
     mount(ctx) {
-      const next = deck(EDGE_WORDS, ctx);
+      const next = themedDraw(ctx, 'edge', deck(EDGE_WORDS, ctx));
       const spot = () => {
         const { w, h } = ctx.bounds(), s = Math.floor(ctx.rng() * 4), u = ctx.rng();
         if (s === 0) return `left:${8 + u * (w - 90)}px;top:40px;`;
@@ -219,7 +220,7 @@ export default {
   /* Hold Still Word: only keeping completely still shows it, and moving at all takes it away. */
   e_blink: {
     mount(ctx) {
-      const next = deck(STILL_WORDS, ctx);
+      const next = themedDraw(ctx, 'still', deck(STILL_WORDS, ctx));
       const win = docOf(ctx).defaultView;
       let still = 0, shown = null, paid = false;
       const hide = () => { if (shown) { dropLine(shown); shown = null; } };

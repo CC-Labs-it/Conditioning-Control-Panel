@@ -4,7 +4,7 @@
  * ==========================================================================*/
 
 import { BY_ID, ITEMS } from '../data/items.js';
-import { BRAND, brandText } from '../data/brand.js';
+import { BRAND, brandText, brandTokens } from '../data/brand.js';
 import { setRich } from './rich-text.js';
 import { CONFIG } from '../data/config.js';
 import { whole, clock } from '../sim/format.js';
@@ -30,6 +30,7 @@ import { ridersOf } from '../data/folds.js';
 import { handFor, copyHandFor } from './hands.js';
 import { createTapWindow, emiBell } from '../sim/tap-rate.js';
 import { createAwayClock } from './away.js';
+import { runThemes, themed } from './theme-text.js';
 import { nextFrame, frameRect } from './perf.js';
 
 export function createUi({ doc = document, init = {}, audio, extras = {} }) {
@@ -509,7 +510,9 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   let awayClock = null;
   const backFromAway = (gain) => {
     if (whole(gain) === '0') return;
-    toast(`While you were away: +${whole(gain)} ${BRAND.currencyPlural}`);
+    /* Themed (owner 2026-11-10): a picked theme words it its own way about 60% of the time. */
+    const plain = `While you were away: +${whole(gain)} ${BRAND.currencyPlural}`;
+    toast(brandTokens(themed(runThemes(engine.run), 'away', plain).replace('{pay}', whole(gain))));
     draw(true);
   };
   function startAway() {
