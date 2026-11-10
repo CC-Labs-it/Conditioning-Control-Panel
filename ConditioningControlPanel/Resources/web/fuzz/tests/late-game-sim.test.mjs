@@ -94,11 +94,11 @@ test('each trunk show multiplies every Journey income path by 1.5, the plain sho
   for (const p of show) assert.ok(p.lift > .45, `${p.id} lifts ${p.lift}`);
 });
 
-test('haptic rows and Friend Remote are never plan rows, so a web run reaches Drop without them', () => {
+test('haptic rows and Friend Remote are never plan rows, so a web run reaches its own ending without them', () => {
   for (const r of allRoutes().filter((_, i) => i % 40 === 0)) {
     const ids = buildPlan(r).map((e) => e.item.id);
     for (const id of ['toy', 'buzz', 'remote']) assert.ok(!ids.includes(id), id);
   }
-  assert.equal(run.s.ended.id, 'drop');
+  assert.equal(run.s.ended.id, 'o_out');  // This route completes the Living Ad chain first.
   assert.ok(!run.paid.some((p) => ['toy', 'buzz', 'remote'].includes(p.id)));
 });
