@@ -54,9 +54,18 @@ frame.addEventListener('load', () => {
     const fuzz = frame.contentWindow?.fuzz;
     if (!fuzz) { if (performance.now() - t0 < 20000) return void setTimeout(tick, 100); note.textContent = 'The game did not start.'; return; }
     const run = fuzz.state;
+    const finishPath = () => {
+      if (!E.mainPathDone(run) && end.req.every(id => E.has(run, id))) {
+        for (const id of BY_ID.drop.req) fuzz.grant(id);
+      }
+    };
+    if (!from) finishPath();
     /* Buy out everything else that is open (riders open more rows, so loop), so the ending is the only tile left in the
        shop window beside Endless Mode. The trunk fork row stays as the goal; forks and endings are never granted here. */
-    let guard = from ? 0 : 240;   // ?from keeps the page calm: only the path to that row is granted
+    // Keep power-ups on EMI's shelf for her to take over during the finale.
+    const takeover = endId === 'go_end';
+    if (takeover) fuzz.engine.env.featuredShop.unshift(endId);
+    let guard = from || takeover ? 0 : 240;
     for (;;) {
       const next = guard-- > 0 && E.openItems(run).find((i) => i.kind !== 'end' && i.kind !== 'fork' && i.id !== 'taste2' && !held.has(i.id));   // Second Theme asks a question of its own: leave it as the goal row
       if (!next) break;
@@ -85,10 +94,6 @@ frame.addEventListener('load', () => {
       // The normal shop owns pricing, affordability, the terms card and the purchase.
       // Bring this chain into view while leaving later steps locked behind their parents.
       fuzz.engine.env.featuredShop.unshift(...held);
-      const finishPath = () => {
-        if (!from || !end.req.every(id => E.has(run, id))) return;
-        for (const id of BY_ID.drop.req) fuzz.grant(id);
-      };
       finishPath();
       fuzz.engine.subscribe('buy', finishPath);
       fuzz.ui.draw(true);
@@ -98,6 +103,7 @@ frame.addEventListener('load', () => {
     }
     const want = Math.round(E.price(run, endId) * 1.05);
     if (run.fuzz < want) fuzz.add(want - run.fuzz);
+    fuzz.ui.draw(true);
     if (endId === 'dr_end') {
       // A crowded ending preview can put a toy or a setup card over its shop tile.
       const play = document.createElement('button');
