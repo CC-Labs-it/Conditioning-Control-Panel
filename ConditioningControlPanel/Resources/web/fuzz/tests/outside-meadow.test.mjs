@@ -1,9 +1,10 @@
 // The Go Outside meadow's pure parts: heightmap, world layout, meshing counts, walking clamps and the autopilot.
 // The live scene itself is driven in a browser by dev/meadow-drive.mjs.
 import test from 'node:test';
+import { pickBlock, breakBlock, placeBlock } from '../ui/unlocks/extras/outside-field-tools.js';
 import assert from 'node:assert/strict';
 import {
-  MEADOW, TILE_NAMES, AIR, GRASS, LOG, heightAt, buildWorld, worldVolume, meshVoxels, tileFor, atlasRects,
+  MEADOW, TILE_NAMES, AIR, GRASS, DIRT, LOG, STONE, DEEP_STONE, floorAt, heightAt, buildWorld, worldVolume, meshVoxels, tileFor, atlasRects,
   placeholderLayout, plantMesh, cloudVolume, stepWalk, groundAt, walkBounds, autopilotYaw, forwardOf, clearYaw,
 } from '../ui/unlocks/extras/outside-meadow.js';
 
@@ -32,11 +33,11 @@ test('the world is deterministic per seed', () => {
   assert.notDeepEqual(a.trees, c.trees);
 });
 
-test('6-10 trees in the meadow, cows and trees in front of the start', () => {
+test('a nearby harvestable tree, cows and landmarks ahead of spawn', () => {
   for (const lite of [false, true]) {
     const w = buildWorld({ lite });
     const inside = w.trees.filter((t) => t.x >= w.pad && t.x < w.pad + w.size && t.z >= w.pad && t.z < w.pad + w.size);
-    assert.ok(inside.length >= 6 && inside.length <= 10, `${inside.length} trees`);
+    assert.ok(inside.some(t=>Math.hypot(t.x+.5-w.start.x,t.z+.5-w.start.z)<=4.5),'wood within reach from spawn');
     const [fx, fz] = forwardOf(w.start.yaw);
     const ahead = (o, cone) => {
       const dx = o.x - w.start.x, dz = o.z - w.start.z, d = Math.hypot(dx, dz);
@@ -87,12 +88,13 @@ test('a lone block shades its top brightest and keeps uvs inside its tile', () =
   }
 });
 
-test('the whole meadow fits a phone budget', () => {
+test('the detailed meadow around the player fits a phone budget', () => {
   for (const lite of [false, true]) {
     const w = buildWorld({ lite });
-    const m = meshVoxels(worldVolume(w), tileFor, rects);
+    const radius = lite ? 1 : 2, c = Math.floor(w.start.x/16);
+    const m = meshVoxels(worldVolume(w),tileFor,rects,{x0:(c-radius)*16,z0:(c-radius)*16,x1:(c+radius+1)*16,z1:(c+radius+1)*16});
     assert.ok(m.quads < (lite ? 9000 : 16000), `${lite ? 'lite' : 'full'} ${m.quads} quads`);
-    assert.ok(m.quads > 3000, 'something was meshed');
+    assert.ok(m.quads > 2000, 'something was meshed');
     const p = plantMesh(w, rects);
     assert.equal(p.quads, w.plants.length * 2);
     assert.equal(p.sway.filter((s) => s === 1).length, p.quads * 2);
@@ -189,4 +191,49 @@ test('the calm view after the lock turns off a trunk in the face', () => {
   const y = clearYaw(facing, pos, 0);
   assert.ok(Math.abs(y) >= 0.35 && Math.abs(y) <= 1.4, `yaw ${y}`);
   assert.equal(clearYaw({ ...w, trees: [] }, pos, 0.3), 0.3);
+});
+
+test('movement reaches thirty seconds in any direction before a world edge; cave and exposed stone are real voxels', () => {
+  const w = buildWorld(),
+    v = worldVolume(w),
+    c = w.cave,
+    travel = MEADOW.walkSpeed * 30;
+  const { lo, hi } = walkBounds(w);
+  for (const n of [w.start.x, w.start.z]) assert.ok(n - lo > travel && hi - n > travel);
+  assert.ok(Math.hypot(w.start.x - c.x, w.start.z - c.z) > travel);
+  assert.equal(v.get(c.x, c.y + 2, c.z), AIR);
+  assert.equal(v.get(c.x, c.y + 6, c.z), DEEP_STONE);
+  assert.equal(v.get(c.x, c.y + 2, c.z - 3), DEEP_STONE);
+  const x = Math.floor(w.start.x) - 10,
+    z = Math.floor(w.start.z) - 16;
+  assert.equal(v.get(x, groundAt(w, x, z) - 1, z), STONE);
+});
+
+test('a held dig can remove dirt and wood; a stale target never awards a second block', () => {
+  const w = buildWorld(),
+    v = worldVolume(w),
+    x = Math.floor(w.start.x),
+    z = Math.floor(w.start.z),
+    h = groundAt(w, x, z);
+  const dirt = pickBlock(v, [x + 0.5, h + 1.62, z + 0.5], [0, -1, 0]);
+  assert.equal(breakBlock(w, v, dirt), DIRT);
+  assert.equal(breakBlock(w, v, dirt), null);
+  assert.equal(floorAt(w, x, z, h), h - 1);
+  const t = w.trees[0],
+    wood = { x: t.x, y: t.g, z: t.z, id: LOG };
+  assert.equal(breakBlock(w, v, wood), LOG);
+  assert.equal(v.get(wood.x, wood.y, wood.z), AIR);
+  const ledge = pickBlock(v, [x + 0.5, h + 1.62, z + 0.5], [0, -1, 0]);
+  const standing = { x: x + 0.5, z: z + 0.5, feet: h - 1 };
+  assert.equal(placeBlock(w, v, ledge, DIRT, 1, standing), null);
+  assert.equal(placeBlock(w, v, ledge, DIRT, 0, { ...standing, x: x + 2 }), null);
+  assert.deepEqual(placeBlock(w, v, ledge, DIRT, 1, { ...standing, x: x + 2 }), { x, y: h - 1, z });
+  assert.equal(v.get(x, h - 1, z), DIRT);
+});
+test('picking respects reach, nearest face and overlying unbreakable rock', () => {
+  const volume = { get: (x, y, z) => (y === 2 && z === 2 && x >= 4 ? STONE : AIR) };
+  assert.equal(pickBlock(volume, [0.1, 2.5, 2.5], [1, 0, 0], 3), null);
+  const hit = pickBlock(volume, [0.1, 2.5, 2.5], [1, 0, 0], 4);
+  assert.equal(hit.x, 4);
+  assert.deepEqual(hit.face, [-1, 0, 0]);
 });

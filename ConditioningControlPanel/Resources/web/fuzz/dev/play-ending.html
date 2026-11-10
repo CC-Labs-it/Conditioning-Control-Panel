@@ -115,7 +115,7 @@ frame.addEventListener('load', () => {
       if (E.count(run, next.id) === before) break;
     }
     /* The preview grants the upgrades. Give each poster preview a set of sample tallies. */
-    if (['o_out', 'dr_end'].includes(endId)) {
+    if (['o_out', 'outside', 'dr_end'].includes(endId)) {
       const tally = ((run.store ||= {}).adcard ||= {});
       tally.pics ||= 420;
       tally.golden ||= 12;
@@ -141,10 +141,10 @@ frame.addEventListener('load', () => {
     const want = Math.round(E.price(run, endId) * 1.05);
     if (run.fuzz < want) fuzz.add(want - run.fuzz);
     fuzz.ui.draw(true);
-    if (endId === 'dr_end') {
+    if (endId === 'dr_end' || endId === 'outside') {
       // A crowded ending preview can put a toy or a setup card over its shop tile.
       const play = document.createElement('button');
-      play.textContent = 'Play Unit Complete';
+      play.textContent = endId === 'outside' ? 'Play Go Outside' : 'Play Unit Complete';
       note.replaceChildren(play);
       play.addEventListener('click', () => {
         fuzz.engine.audio.arm();

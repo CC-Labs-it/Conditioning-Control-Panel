@@ -40,17 +40,16 @@ export const SKY = '#9fd3f5';
 /* Beat lengths in game milliseconds from the start of the show (the white fade before it is the engine's). */
 export const BEATS = Object.freeze({
   veilMs: 1200,        // the white clears onto the meadow
-  liveMs: 6500,        // controls on
+  liveMs: 30000,        // controls on
   settleMs: 900,       // controls cut, camera eases to the calm view
   pullMs: 5000,        // the planned pull back (the clip's own length decides; the track's frame count plans it)
   pullCapMs: 4000,     // a stalled clip: the hold starts anyway this long after its planned end
   videoWaitMs: 1500,   // the clip not ready at the pull: wait this long (the meadow goes on), then the cross-fade
   cardLeadMs: 900,     // hold -> first card line
   lineGapMs: 900,      // between card lines
-  tailMs: 6500,        // the last line stays this long, then the credits
+  tailMs: 1700,        // let the last office line land before the poster prints
   stillMs: 3600,       // reduced: the meadow still holds this long
   fadeMs: 1600,        // reduced and fallback: the cross-fade to the hold
-  hintInMs: 2000,
   crackleMinMs: 3000,
   crackleMaxMs: 7000,
 });
@@ -67,14 +66,14 @@ export function holdBeats(holdAt, credits = 0) {
 }
 
 /** The whole plan. Reduced: no live part, no settle, the "pull" is a cross-fade. */
-export function outsideTimeline({ reduced = false, credits = 0, pullMs = BEATS.pullMs } = {}) {
+export function outsideTimeline({ reduced = false, credits = 0, pullMs = BEATS.pullMs, liveMs = BEATS.liveMs } = {}) {
   if (reduced) {
     const pullAt = BEATS.veilMs + BEATS.stillMs;
     const holdAt = pullAt + BEATS.fadeMs;
     return { reduced: true, liveAt: null, lockAt: null, pullAt, pullEnd: holdAt, ...holdBeats(holdAt, credits) };
   }
   const liveAt = Math.round(BEATS.veilMs / 2);
-  const lockAt = liveAt + BEATS.liveMs;
+  const lockAt = liveAt + liveMs;
   const pullAt = lockAt + BEATS.settleMs;
   const holdAt = pullAt + Math.max(1, pullMs);
   return { reduced: false, liveAt, lockAt, pullAt, pullEnd: holdAt, ...holdBeats(holdAt, credits) };
@@ -440,7 +439,7 @@ async function fetchJson(url) {
 }
 const within = (p, ms, fallback = null) => Promise.race([Promise.resolve(p).catch(() => fallback), new Promise((r) => setTimeout(() => r(fallback), ms))]);
 
-/** The ending show. Resolves when the card has stood a while, or at once on a panic suspend. */
+/** The office resolves true after its closing line. A panic or scope cleanup cancels the handoff to the poster. */
 export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSETS } = {}) {
   return new Promise((done) => {
     /* Owner 2026-11-09: nothing else plays underneath, from the first frame of the show to its end. The ending scope's
@@ -498,11 +497,14 @@ export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSE
     /* ---- the meadow ---- */
     let meadow = null, stillImg = null, stillPic = null;
     const stillReady = loadImage(doc, assets.still).then((img) => (stillImg = img));
-    const meadowReady = reduced ? stillReady.then(() => null) : (async () => {
+    const meadowReady = reduced ? Promise.resolve(null) : (async () => {
       let make = create;
       if (!make) { try { make = (await import('./outside-meadow.js')).createMeadow; } catch { make = null; } }
       if (typeof make !== 'function') return null;
-      const pending = Promise.resolve().then(() => make(meadowHost, { atlasUrl: assets.atlas, atlasJsonUrl: assets.atlasJson, reduced, lite: LITE || touch, frame: ctx.frame }));
+      const pending = Promise.resolve().then(() => make(meadowHost, {
+        atlasUrl: assets.atlas, atlasJsonUrl: assets.atlasJson, reduced, lite: LITE || touch,
+        frame: ctx.frame, audio: ctx.audio, paused: () => ctx.paused, hudHost: root,
+      }));
       const late = await Promise.race([pending.catch(() => null), new Promise((r) => setTimeout(() => r('late'), MEADOW_WAIT_MS))]);
       if (late === 'late') { pending.then((m) => m?.stop?.(), () => {}); return null; }
       return late;
@@ -588,7 +590,7 @@ export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSE
     };
 
     /* ---- input ---- */
-    const hint = h('div', `position:absolute;left:50%;bottom:12%;transform:translateX(-50%) rotate(-1.5deg);padding:7px 14px;background:#fffdf4;color:#2b2530;border-radius:3px;box-shadow:0 3px 12px rgba(0,0,0,.25);font:600 15px/1.2 ${FONT};opacity:0;pointer-events:none;white-space:nowrap;`, touch ? 'Drag to look. Hold to walk.' : 'Look around. Walk.', root);
+    const hint = h('div', `position:absolute;left:50%;top:15%;transform:translateX(-50%) rotate(-1.5deg);padding:7px 14px;background:#fffdf4;color:#2b2530;border-radius:3px;box-shadow:0 3px 12px rgba(0,0,0,.25);font:600 15px/1.2 ${FONT};opacity:0;pointer-events:none;width:max-content;max-width:78%;text-align:center;`, touch ? 'Move with the pad. Drag to look. Hold Dig.' : 'WASD to walk. Hold click to dig. Right click to place. Space to jump.', root);
     const skipBtn = h('button', `position:absolute;left:14px;top:14px;padding:6px 14px;border:0;border-radius:3px;background:#fffdf4;color:#2b2530;box-shadow:0 2px 8px rgba(0,0,0,.25);font:600 14px ${FONT};cursor:pointer;pointer-events:auto;opacity:.85;z-index:4;`, 'Skip', root);
     skipBtn.type = 'button';
     skipBtn.dataset.outside = 'skip';
@@ -647,6 +649,7 @@ export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSE
     const lock = () => {
       if (locked) return;
       locked = true;
+      if (phase === 'veil') meadow?.start?.();
       meadow?.lockControls?.();
       ctx.anim(hint, [{ opacity: +getComputedStyle(hint).opacity || 0 }, { opacity: 0 }], { duration: 400, fill: 'forwards' });
     };
@@ -672,8 +675,8 @@ export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSE
     };
     const enterHold = (fromSkip = false) => {
       if (phase === 'hold') return;
-      phase = 'hold';
       lock();
+      phase = 'hold';
       meadow?.autopilot?.(true);
       if (fromSkip && video && !holdImg && !videoBad && Number.isFinite(video.duration)) { try { video.currentTime = Math.max(0, video.duration - 0.02); } catch { /* fine */ } }
       clipPause();
@@ -707,28 +710,30 @@ export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSE
     const begin = () => {
       started = true;
       if (reduced || !meadow) showStill();
-      if (meadow) { placeCanvas(meadow.canvas); meadow.resize?.(); meadow.start?.(); }
+      if (meadow) { placeCanvas(meadow.canvas); meadow.resize?.(); }
       layoutLive();
-      if (!reduced && meadow) ctx.anim(hint, [{ opacity: 0 }, { opacity: 1 }], { duration: BEATS.hintInMs, fill: 'forwards', easing: 'ease-out' });
+      if (root.dataset.meadow === 'live') ctx.anim(hint, [
+        { opacity: 0 }, { opacity: 1, offset: 0.15 }, { opacity: 1, offset: 0.78 }, { opacity: 0 },
+      ], { duration: 5500, fill: 'forwards', easing: 'ease-out' });
       ctx.anim(veil, [{ opacity: 1 }, { opacity: 0 }], { duration: BEATS.veilMs, easing: 'ease-in-out', fill: 'forwards' });
       birdsTick();
     };
     const birdsTick = () => birds?.tick();
-    ctx.every(220, birdsTick);
+    const stopBirdClock = ctx.every(220, birdsTick);
 
     /* The meadow (or its stand-in) and the track must be there before the veil clears: the show clock waits, capped. */
     let ready = false;
-    Promise.all([meadowReady, stillReady, trackReady, holdReady]).then(([m]) => {
+    Promise.all([meadowReady, within(stillReady, LOAD_WAIT_MS), trackReady, holdReady]).then(([m]) => {
       if (over) { m?.stop?.(); return; }
       meadow = m;
       if (!reduced && !meadow) { meadow = stubMeadow(doc, meadowHost, { still: stillImg, frame: ctx.frame }); }
       root.dataset.meadow = reduced ? 'still' : (m ? 'live' : 'stub');
-      if (!reduced) tl = outsideTimeline({ reduced, credits: E.credits.length, pullMs: trackMs(track) });
+      if (!reduced) tl = outsideTimeline({ reduced, credits: E.credits.length, pullMs: trackMs(track), liveMs: m ? BEATS.liveMs : BEATS.stillMs });
       ready = true;
       if (!started) begin();
     });
 
-    ctx.frame((sec) => {
+    const stopClock = ctx.frame((sec) => {
       if (over || !ready) return;
       t += sec * 1000;
       if (phase === 'hold') {
@@ -753,6 +758,7 @@ export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSE
         return;
       }
       const next = phaseAt(tl, t);
+      if (next === 'live' && phase === 'veil') meadow?.start?.();
       if (next === 'settle' || next === 'pull' || next === 'hold' || next === 'done') lock();
       if (next === 'pull' || next === 'hold' || next === 'done') {
         /* The clip still loading: the meadow goes on a little longer, then the cross-fade. */
@@ -786,25 +792,22 @@ export function outsideShow(ctx, E, { createMeadow: create = null, assets = ASSE
       ctx.anim(screenFx, [{ opacity: 0 }, { opacity: 1 }], { duration: BEATS.fadeMs, fill: 'forwards' });
     }
 
-    function finish() {
+    function finish(completed = true) {
       if (over) return;
       over = true;
-      stopSound(500);
-      clipPause();
-      done();
-    }
-    ctx.on('suspend', (s) => { if (s?.on && s.reason === 'panic') { root.dataset.aborted = '1'; stopSound(0); finish(); } });
-    ctx.cleanup(() => {
-      over = true;
+      stopClock();
+      stopBirdClock();
       doc.removeEventListener('keydown', onKey);
       win.removeEventListener('resize', onResize);
       if (bed) ctx.audio.muffle('outside-bed', false);
-      stopSound(0);
+      stopSound(completed ? 180 : 0);
       if (video) { try { video.pause(); video.removeAttribute('src'); video.load(); } catch { /* gone */ } }
       meadow?.stop?.();
-      meadowReady.then((m) => { if (m && m !== meadow) m.stop?.(); });
       root.remove();
-    });
+      done(completed);
+    }
+    ctx.on('suspend', (s) => { if (s?.on && s.reason === 'panic') finish(false); });
+    ctx.cleanup(() => finish(false));
     /* Test hooks: the phase, the live timeline, the pull mode and the frame on show. */
     root.__outside = {
       get phase() { return phase; }, get t() { return t; }, get timeline() { return tl; }, get mode() { return mode; },
