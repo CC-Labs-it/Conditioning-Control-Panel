@@ -155,8 +155,9 @@ const BUTTON_NAMES = {
   lo_pad:'Keyholder Support', ce_bar:'Redacted Button',
 };
 /* Owner 2026-11-09: the goon ending is the EMI Takeover. The id go_end stays (prestige, PINNED_ENDS). */
-const NAME_OVERRIDE = { go_end: 'Ending: EMI Takeover' };
+const NAME_OVERRIDE = { go_end: 'Ending: EMI Takeover', o_out: 'Ending: Living Button' };
 const WHAT_OVERRIDE = {
+  o_out: 'Walk through what you bought. There is a pink light at the far end.',
   go_end: 'Keep clicking after Hive Mind. When the swarm fills your screen, the page will pretend to crash. Wake Up stays yours.',
   bi_end: 'The bubble swallows the page. When it pops, float inside beneath a sky of moving pictures.',
   bi_lips:'Sign in with Bambi Cloud. The button already knows your name.',
@@ -272,6 +273,7 @@ export function buildItems() {
     if (CLICK_AFTER_DROP[r.id]) { it.click = CLICK_AFTER_DROP[r.id]; if (it.pay === '-') it.pay = 'c'; }
     if (r.wall) it.wall = r.wall;
     if (r.flags) it.flags = r.flags;
+    if (r.id === 'o_out') it.line = 'Someone is still clicking.';
     if (r.any) it.any = r.any;
     /* Keywords and diegetic colours (owner 2026-11-08): laid on here, so the design source stays plain. */
     const mk = COPY_MARKS[r.id];

@@ -159,6 +159,7 @@ export function makeContext(engine, scope) {
       scope.frames.add(fn);
       return () => scope.frames.delete(fn);
     },
+    get activeMs() { return engine.real; },
     anim(el, keyframes, opts) {
       const a = el.animate(keyframes, typeof opts === 'number' ? { duration: opts } : opts);
       scope.anims.add(a);
@@ -371,7 +372,7 @@ export function makeContext(engine, scope) {
 /** Every member the brief and ENGINE.md promise. tests/contract.test.mjs reads this. */
 export const CTX_MEMBERS = Object.freeze([
   'item', 'count', 'state', 'has', 'pick', 'fmt', 'rng', 'brand',
-  'layer', 'el', 'every', 'after', 'frame', 'anim', 'on', 'pay', 'mod', 'button',
+  'layer', 'el', 'every', 'after', 'frame', 'activeMs', 'anim', 'on', 'pay', 'mod', 'button',
   'say', 'toast', 'modal', 'audio', 'voice', 'pictures', 'ads', 'gentle', 'reduced', 'host', 'hosted', 'caps', 'store',
   // additions the unlock lanes will want, documented in ENGINE.md
   'life', 'world', 'bounds', 'css', 'vars', 'emit', 'wallHit', 'rates', 'float', 'config',

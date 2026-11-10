@@ -504,7 +504,7 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     /* take(ctx) -> Promise: an optional phase BEFORE the fade, while the page is still mounted (and frozen: `stopped`
      * stops every unlock's frames). Streams keep playing until it resolves. Capped on the game clock. */
     const take = !restored && registry[id]?.take;
-    if (!take) audio?.stopStreams?.();
+    if (!take || registry[id]?.cutAudioOnTake) audio?.stopStreams?.();
     emit('ending', { id });
     if (!restored) {
       recordEnding(life, run, id);

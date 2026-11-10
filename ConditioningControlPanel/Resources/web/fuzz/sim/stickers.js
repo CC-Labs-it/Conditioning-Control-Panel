@@ -124,6 +124,7 @@ export function parseCardSnapshot(v) {
 }
 /** The run object ui/adcard's cardModel reads, rebuilt from a snapshot. */
 export const snapshotRun = (c) => ({
+  ended: { id: 'o_out' },
   picks: { f5: c.f5 }, store: { taste2: c.second ? { theme: c.second } : undefined, adcard: { pics: c.pics, golden: c.golden, terms: c.terms } },
   seed: c.seed, total: c.total, clock: c.clock,
 });
