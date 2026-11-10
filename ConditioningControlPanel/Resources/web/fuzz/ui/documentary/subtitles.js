@@ -1,5 +1,6 @@
 import { NARRATION_SUBTITLES as ESTIMATED_SUBTITLES } from './narration-subtitles.js';
 import { NARRATION_ALIGNMENT } from './narration-alignment.js';
+import { brandText } from '../../data/brand.js';
 
 export const SUBTITLE_TIMING = 'mixed';
 export const SUBTITLE_DELAY_SECONDS = 0.5;
@@ -37,7 +38,7 @@ export function subtitleAt(id, time, duration, subtitles = NARRATION_SUBTITLES) 
   if (!Number.isFinite(duration) || !(duration > 0) || !Number.isFinite(time) || time < SUBTITLE_DELAY_SECONDS) return '';
   const cues = subtitles[id] || [];
   for (const [from, to, text] of cues) {
-    if (time >= from * duration + SUBTITLE_DELAY_SECONDS && time < to * duration + SUBTITLE_DELAY_SECONDS) return text;
+    if (time >= from * duration + SUBTITLE_DELAY_SECONDS && time < to * duration + SUBTITLE_DELAY_SECONDS) return brandText(text);
   }
   return '';
 }

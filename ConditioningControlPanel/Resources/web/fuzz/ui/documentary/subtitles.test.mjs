@@ -5,6 +5,15 @@ import { NARRATION_SUBTITLES as ESTIMATED } from './narration-subtitles.js';
 import { NARRATION_ALIGNMENT } from './narration-alignment.js';
 import { projectionTimeline } from './narration-slides.js';
 import { pacingTimeline } from './narration-pacing.js';
+import { BRAND } from '../../data/brand.js';
+
+test('recorded captions expand the shared currency token at presentation time', () => {
+  const entry = Object.entries(NARRATION_SUBTITLES).find(([, cues]) => cues.some(cue => cue[2].includes('{cur}')));
+  assert.ok(entry);
+  const [id, cues] = entry, [from, to, text] = cues.find(cue => cue[2].includes('{cur}'));
+  const at = (from + to) * 5 + SUBTITLE_DELAY_SECONDS;
+  assert.equal(subtitleAt(id, at, 10), text.replace('{cur}', BRAND.currencyPlural));
+});
 
 test('all four ride transcripts use acoustic word timings while other recordings keep honest estimates', () => {
   for (const [id, cues] of Object.entries(NARRATION_SUBTITLES)) {

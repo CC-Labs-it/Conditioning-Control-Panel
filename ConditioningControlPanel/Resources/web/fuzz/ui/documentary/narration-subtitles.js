@@ -802,7 +802,7 @@ export const NARRATION_SUBTITLES = Object.freeze({
     [0.026822, 0.954884, "I consent to every goon collection\njoining my feed. I live here now."]
   ],
   "term-dr_auto-2": [
-    [0.033417, 0.949937, "I will not take credit for the\ntaps. I will take the Fuzz."]
+    [0.033417, 0.949937, "I will not take credit for the\ntaps. I will take the {cur}."]
   ],
   "term-wallpaper-2": [
     [0.026333, 0.733425, "I will minimise everything to\ncheck, then keep it minimised,"],
