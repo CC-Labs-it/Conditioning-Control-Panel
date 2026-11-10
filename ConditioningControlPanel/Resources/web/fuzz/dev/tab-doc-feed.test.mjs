@@ -8,7 +8,7 @@ function harness({bridge=true}={}) {
   let now=0,next=0,listener=null,awaiting=null,stills=[],removed=0;
   const timers=new Map(),statuses=[],messages=[];
   const transport={addEventListener(_,fn){listener=fn;},removeEventListener(){listener=null;},postMessage(value){messages.push(value);}};
-  const feed=createPreviewFeed({location:{hostname:'127.0.0.1'},window:bridge?{chrome:{webview:transport}}:{},
+  const feed=createPreviewFeed({location:{hostname:'127.0.0.1',origin:'http://127.0.0.1:8897'},window:bridge?{chrome:{webview:transport}}:{},
     document:{createElement:()=>({remove(){removed++;}}),head:{append(){}}},
     onStatus:(text,state)=>statuses.push({text,...state}),
     setTimer:(fn,delay)=>{const id=++next;timers.set(id,{fn,at:now+delay});return id;},clearTimer:id=>timers.delete(id)});
@@ -47,11 +47,27 @@ test('host consent alone never reports ready and rejected rows never count as pi
   const h=harness(),chosen=h.feed.choose();await flush();
   h.receive({type:'setting',key:'media.remoteConsent',value:true});assert.equal(await chosen,true);
   assert.equal(h.feed.debug().phase,'loading');assert.equal(h.pictures.requests,1);
-  h.receive({type:'scrolller-feed',rows:[{kind:'image',valid:false}],building:false});
+  h.receive({type:'scrolller-feed',v:1,rows:[{kind:'image',url:'https://unapproved.example/photo.jpg'}],building:false});
   assert.equal(h.feed.debug().phase,'empty');assert.equal(h.feed.debug().imageCount,0);
-  h.receive({type:'scrolller-feed',rows:[{kind:'image',valid:true}],building:false});
+  h.receive({type:'scrolller-feed',v:1,rows:[{kind:'image',url:'http://127.0.0.1:8897/photo.jpg',mime:'image/jpeg'}],building:false});
   assert.equal(h.feed.debug().phase,'ready');assert.equal(h.feed.debug().imageCount,1);
   h.feed.dispose();assert.equal(h.timers.size,0);
+});
+
+test('motion-only feeds count approved GIFs and clips without consuming a display pick',async()=>{
+  const h=harness(),chosen=h.feed.choose();await flush();
+  h.receive({type:'setting',key:'media.remoteConsent',value:true});await chosen;
+  const video={kind:'video',url:'http://127.0.0.1:8897/movie.mp4',mime:'video/mp4'};
+  h.receive({type:'scrolller-feed',v:1,rows:[video,video,
+    {kind:'image',url:'http://127.0.0.1:8897/motion.gif',mime:'image/gif'},
+    {kind:'video',url:'https://unapproved.example/movie.mp4',mime:'video/mp4'},
+    {kind:'image',url:'http://127.0.0.1:8897/thumbnail.jpg',mime:'image/jpeg',isThumbnail:true}],building:false});
+  assert.equal(h.feed.debug().phase,'ready');assert.equal(h.feed.debug().imageCount,2);
+  assert.equal(h.timers.size,0);
+  h.receive({type:'setting',key:'media.remoteConsent',value:false,reason:'disabled'});
+  h.receive({type:'scrolller-feed',v:1,rows:[video],building:false});
+  assert.equal(h.feed.debug().phase,'error');assert.equal(h.feed.debug().imageCount,0);
+  h.feed.dispose();
 });
 
 test('empty feeds show a bounded failure, retry requests fresh host data, and denial stays authoritative',async()=>{

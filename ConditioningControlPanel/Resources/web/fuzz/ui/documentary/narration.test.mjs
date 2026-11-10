@@ -163,11 +163,12 @@ test('stage chains in a hidden document, has one bounded timer, and respects Wak
   assert.equal(h.streams[0].id, 'p1'); h.streams[0].end(); h.tick(1500); assert.equal(h.streams[1].id, 'p2'); h.streams[1].end();
   assert.ok(h.beats.some(beat => beat.id === 'stage.buttons'));
   h.doc.hidden = true; h.doc.dispatchEvent(new Event('visibilitychange'));
-  h.tick(1500);
-  if (h.narration.debug().current) h.streams.at(-1).end();
-  h.tick(18500); assert.equal(h.streams.at(-1).id, 'n0a');
+  h.tick(14999); assert.equal(h.streams.length, 2);
+  h.tick(1); assert.equal(h.streams.at(-1).id, 'aw1'); h.streams.at(-1).end();
+  assert.equal(h.timers.size, 1);
+  h.tick(15000); assert.equal(h.streams.at(-1).id, 'n0a');
   h.streams.at(-1).end(); h.pause(true); h.tick(90000);
-  assert.equal(h.narration.debug().elapsed, 20);
+  assert.equal(h.narration.debug().elapsed, 30);
   h.pause(false); h.tick(15000); assert.equal(h.streams.at(-1).id, 'n0b');
   assert.equal(h.maxConcurrent, 1); h.narration.dispose(); assert.equal(h.timers.size, 0);
 });
@@ -219,7 +220,7 @@ test('host focus can hold the mixer without freezing the stage wall clock', asyn
 
 test('unknown accepted clauses skip Terms and their linking lines', async () => {
   const h = harness({ at: 580, schedule: [{ id: 'c6', at: 0 }, { id: 'term-start-1', at: 0 }, { id: 'c7', at: 0 }, { id: 'b1', at: 0 }] });
-  await h.narration.ready; h.streams[0].end(); h.tick(1500); h.streams[1].end(); h.tick(1500);
+  await h.narration.ready; h.streams[0].end(); h.tick(1500); h.streams[1].end(); h.tick(15000);
   assert.equal(h.streams[2].id, 'b1'); assert.equal(h.narration.debug().acceptedTerms, 0);
   h.narration.dispose();
 });
@@ -250,6 +251,78 @@ test('subtitles follow actual media duration and seeks, toggle immediately, and 
   h.pause(true); assert.equal(h.captions.textContent, '');
   h.pause(false); assert.ok(h.captions.textContent.length > 0);
   h.narration.dispose(); assert.equal(h.captions.textContent, ''); assert.equal(h.captions.hidden, true);
+});
+
+test('a delayed final subtitle can start after EOF and clears without extending voice or ride holds', async () => {
+  const h = harness({ subtitleData: { r1: [[.9, 1, 'Final phrase']] } }); await h.narration.ready;
+  const recording = h.streams[0]; recording.el.duration = 2;
+  recording.time(1.99); assert.equal(h.captions.textContent, '');
+  recording.end();
+  assert.equal(h.concurrent, 0); assert.equal(h.speaking.at(-1), false);
+  assert.equal(h.narration.debug().current, null); assert.equal(h.holds.size, 0);
+  h.tick(299); assert.equal(h.captions.textContent, '');
+  h.tick(1); assert.equal(h.captions.textContent, 'Final phrase');
+  h.tick(199); assert.equal(h.captions.textContent, 'Final phrase');
+  h.tick(1); assert.equal(h.captions.textContent, '');
+  h.narration.dispose(); assert.equal(h.timers.size, 0);
+});
+
+test('new speech cancels the previous subtitle tail without overlap or a forced speech delay', async () => {
+  const h = harness({ speechGapMs: 0, subtitleData: { r1: [[.5, 1, 'Old phrase']], r2: [[0, 1, 'New phrase']] } });
+  await h.narration.ready;
+  const first = h.streams[0]; first.el.duration = 2; first.time(2);
+  h.cue('narration.r2', 102); first.end();
+  assert.equal(h.streams[1].id, 'r2'); assert.equal(h.captions.textContent, '');
+  h.streams[1].el.duration = 2; h.streams[1].time(.5);
+  assert.equal(h.captions.textContent, 'New phrase');
+  h.tick(500); assert.equal(h.captions.textContent, 'New phrase');
+  assert.equal(h.maxConcurrent, 1); h.narration.dispose();
+});
+
+test('pause, hidden document, subtitle toggle and disposal cancel delayed caption tails', async () => {
+  for (const action of ['pause', 'hide', 'toggle', 'dispose']) {
+    const h = harness({ subtitleData: { r1: [[.5, 1, 'Final phrase']] } }); await h.narration.ready;
+    h.streams[0].el.duration = 2; h.streams[0].time(2); h.streams[0].end();
+    assert.equal(h.captions.textContent, 'Final phrase');
+    if (action === 'pause') h.pause(true);
+    else if (action === 'hide') { h.doc.hidden = true; h.doc.dispatchEvent(new Event('visibilitychange')); }
+    else if (action === 'toggle') h.narration.setSubtitles(false);
+    else h.narration.dispose();
+    assert.equal(h.captions.textContent, '', action);
+    h.tick(1000); assert.equal(h.captions.textContent, '', action);
+    h.narration.dispose(); assert.equal(h.timers.size, 0);
+  }
+});
+
+test('post-pitch scheduled chatter waits fifteen seconds after every completed line and freezes with Wake pause', async () => {
+  const h = harness({ at: 580, schedule: [{ id: 'n0a', at: 0 }, { id: 'n0b', at: 0 }] }); await h.narration.ready;
+  h.streams[0].end(); h.tick(1499); assert.equal(h.streams.length, 1);
+  h.tick(1); assert.equal(h.streams[1].id, 'p2', 'pitch segments retain their ordinary gap'); h.streams[1].end();
+  h.tick(5000); assert.equal(h.narration.debug().chatterCooldown, 10);
+  h.pause(true); h.tick(60000); assert.equal(h.narration.debug().chatterCooldown, 10); assert.equal(h.streams.length, 2);
+  h.pause(false); h.tick(9999); assert.equal(h.streams.length, 2);
+  h.tick(1); assert.equal(h.streams[2].id, 'n0a');
+  h.streams[2].time(1);
+  h.tick(20000); assert.equal(h.streams.length, 3, 'a healthy line is not cut to meet the schedule');
+  h.streams[2].end(); h.tick(14999); assert.equal(h.streams.length, 3);
+  h.tick(1); assert.equal(h.streams[3].id, 'n0b');
+  assert.equal(h.maxConcurrent, 1); h.narration.dispose(); assert.equal(h.timers.size, 0);
+});
+
+test('post-pitch waiting reactions share the cooldown while explicit AD and New run keep the ordinary queue', async () => {
+  const h = harness({ at: 580, schedule: [] }); await h.narration.ready;
+  h.streams[0].end(); h.tick(1500); h.streams[1].end();
+  h.events.emit('stage-action', { id: 'hover-new-run' });
+  h.tick(14999); assert.equal(h.streams.length, 2); assert.equal(h.narration.debug().hoverPlayed, 0);
+  h.tick(1); assert.equal(h.streams[2].id, 'hv1'); h.streams[2].end();
+  h.events.emit('stage-action', { id: 'ad', opened: true });
+  h.tick(1499); assert.equal(h.streams.length, 3);
+  h.tick(1); assert.equal(h.streams[3].id, 'ad0'); h.streams[3].end();
+  const finished = h.narration.finishNewRun();
+  h.tick(1499); assert.equal(h.streams.length, 4);
+  h.tick(1); assert.equal(h.streams[4].id, 'nr0');
+  h.streams[4].end(); await finished;
+  assert.equal(h.maxConcurrent, 1); h.narration.dispose(); assert.equal(h.timers.size, 0);
 });
 
 test('voice fades use actual media time and ducking clears during the gap and immediately on panic', async () => {
@@ -294,7 +367,7 @@ test('missing audio still advances subtitle phrases and preserves pause timing',
 
 test('hover speech is at least five minutes apart and capped at two played lines', async () => {
   const h = harness({ at: 580, schedule: [] }); await h.narration.ready;
-  h.streams[0].end(); h.tick(1500); h.streams[1].end(); h.tick(1500);
+  h.streams[0].end(); h.tick(1500); h.streams[1].end(); h.tick(15000);
   h.events.emit('stage-action', { id: 'hover-new-run' });
   assert.equal(h.streams.at(-1).id, 'hv1'); assert.equal(h.narration.debug().hoverPlayed, 1);
   h.streams.at(-1).end();
@@ -308,7 +381,7 @@ test('hover speech is at least five minutes apart and capped at two played lines
 
 test('replacing a queued hover reaction does not consume its quota', async () => {
   const h = harness({ at: 580, schedule: [{ id: 'n1', at: 0 }] }); await h.narration.ready;
-  h.streams[0].end(); h.tick(1500); h.streams[1].end(); h.tick(1500);
+  h.streams[0].end(); h.tick(1500); h.streams[1].end(); h.tick(15000);
   assert.equal(h.streams.at(-1).id, 'n1');
   h.events.emit('stage-action', { id: 'hover-new-run' }); assert.equal(h.narration.debug().hoverPlayed, 0);
   h.streams.at(-1).time(10); h.tick(12000);
@@ -318,7 +391,7 @@ test('replacing a queued hover reaction does not consume its quota', async () =>
   h.narration.dispose();
 });
 
-test('slideshow order follows the same subtitle cue boundaries at actual media duration', async () => {
+test('slideshow keeps acoustic cue boundaries while subtitle presentation follows half a second later', async () => {
   const h = harness({ at: 291 }); await h.narration.ready;
   const recording = h.streams[0]; recording.el.duration = 80;
   const slides = projectionTimeline('r3').filter(cue => cue.slot && cue.visible);
@@ -331,6 +404,8 @@ test('slideshow order follows the same subtitle cue boundaries at actual media d
     recording.time(slide.at * 80 + 0.0001);
     const shown = h.beats.filter(beat => beat.id === 'projector.show' && beat.data.slot).at(-1).data;
     assert.equal(shown.slot, slide.slot); assert.equal(shown.id, slide.projector);
+    assert.ok(!h.captions.textContent.replace(/\s+/g, ' ').includes(slide.phrase));
+    recording.time(slide.at * 80 + .5001);
     assert.ok(h.captions.textContent.replace(/\s+/g, ' ').includes(slide.phrase));
     assert.equal(recording.el.paused, false);
     previous = slide.slot;
@@ -400,8 +475,9 @@ test('adjusting a subtitle boundary moves the matching slide without an independ
   const h = harness({ at: 291, subtitleData }); await h.narration.ready;
   h.streams[0].el.duration = 40;
   h.streams[0].time(5.999); assert.ok(!h.beats.some(beat => beat.data?.slot === 'reflex-cheetah'));
-  h.streams[0].time(6.001); assert.match(h.captions.textContent, /^The cheetah reaches/);
+  h.streams[0].time(6.001); assert.doesNotMatch(h.captions.textContent, /^The cheetah reaches/);
   assert.ok(h.beats.some(beat => beat.data?.slot === 'reflex-cheetah'));
+  h.streams[0].time(6.501); assert.match(h.captions.textContent, /^The cheetah reaches/);
   h.narration.setSubtitles(false);
   const shrimp = projectionTimeline('r3', subtitleData).find(cue => cue.slot === 'reflex-shrimp');
   h.streams[0].time(shrimp.at * 40 + 0.001);

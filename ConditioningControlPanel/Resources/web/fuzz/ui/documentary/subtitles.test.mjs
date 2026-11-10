@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { NARRATION_SUBTITLES, alignSubtitlePhrases, subtitleAt, subtitleTiming } from './subtitles.js';
+import { NARRATION_SUBTITLES, alignSubtitlePhrases, subtitleAt, subtitleBoundaries, subtitleTiming, SUBTITLE_DELAY_SECONDS } from './subtitles.js';
 import { NARRATION_SUBTITLES as ESTIMATED } from './narration-subtitles.js';
 import { NARRATION_ALIGNMENT } from './narration-alignment.js';
 import { projectionTimeline } from './narration-slides.js';
@@ -15,7 +15,8 @@ test('all four ride transcripts use acoustic word timings while other recordings
   const first = NARRATION_SUBTITLES.r1[0][0] * NARRATION_ALIGNMENT.r1.duration;
   assert.equal(first, 2.24, 'the opening throat clear no longer advances the opening caption');
   assert.equal(subtitleAt('r1', 2, NARRATION_ALIGNMENT.r1.duration), '');
-  assert.equal(subtitleAt('r1', 2.3, NARRATION_ALIGNMENT.r1.duration), 'This is the story of a person');
+  assert.equal(subtitleAt('r1', 2.3, NARRATION_ALIGNMENT.r1.duration), '');
+  assert.equal(subtitleAt('r1', 2.74, NARRATION_ALIGNMENT.r1.duration), 'This is the story of a person');
 });
 
 test('the animal, floorboard and replay slides use actual recorded phrase onsets', () => {
@@ -39,4 +40,34 @@ test('hyphen tokenization preserves phrase timing, and mismatched transcripts ca
   const actual = alignSubtitlePhrases(cues, alignment);
   assert.equal(actual[0][0], .8 / 6); assert.equal(actual[1][0], .5);
   assert.equal(alignSubtitlePhrases([[0, 1, 'Different words.']], alignment), null);
+});
+
+test('presentation begins half a second later and switches exactly at delayed cue boundaries', () => {
+  const subtitles = { demo: [[0, .4, 'First phrase'], [.4, 1, 'Second phrase']] };
+  assert.equal(SUBTITLE_DELAY_SECONDS, .5);
+  for (const time of [-2, -.01, 0, .499]) assert.equal(subtitleAt('demo', time, 5, subtitles), '');
+  assert.equal(subtitleAt('demo', .5, 5, subtitles), 'First phrase');
+  assert.equal(subtitleAt('demo', 2.499, 5, subtitles), 'First phrase');
+  assert.equal(subtitleAt('demo', 2.5, 5, subtitles), 'Second phrase');
+  assert.deepEqual(subtitleBoundaries('demo', 5, subtitles), [.5, 2.5, 2.5, 5.5]);
+});
+
+test('seeks use the current media clock and corrected duration without accumulated subtitle lag', () => {
+  const subtitles = { demo: [[0, .4, 'First phrase'], [.4, .6, 'Second phrase'], [.8, 1, 'Last phrase']] };
+  assert.equal(subtitleAt('demo', 4.7, 5, subtitles), 'Last phrase');
+  assert.equal(subtitleAt('demo', .7, 5, subtitles), 'First phrase');
+  assert.equal(subtitleAt('demo', 3.7, 5, subtitles), '');
+  assert.equal(subtitleAt('demo', 4.7, 10, subtitles), 'Second phrase');
+  assert.deepEqual(subtitleBoundaries('demo', 10, subtitles), [.5, 4.5, 4.5, 6.5, 8.5, 10.5]);
+  assert.equal(subtitleAt('demo', NaN, 5, subtitles), '');
+  assert.equal(subtitleAt('demo', 1, Infinity, subtitles), '');
+});
+
+test('the last phrase retains its delayed tail after EOF, including a phrase starting within the final half second', () => {
+  const subtitles = { demo: [[.9, 1, 'Final phrase']] };
+  assert.equal(subtitleAt('demo', 2.2, 2, subtitles), '');
+  assert.equal(subtitleAt('demo', 2.3, 2, subtitles), 'Final phrase');
+  assert.equal(subtitleAt('demo', 2.499, 2, subtitles), 'Final phrase');
+  assert.equal(subtitleAt('demo', 2.5, 2, subtitles), '');
+  assert.deepEqual(subtitleBoundaries('demo', 2, subtitles), [2.3, 2.5]);
 });

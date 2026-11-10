@@ -1,4 +1,6 @@
 // Local preview only. The existing host owns sign-in, consent, licensing and metering.
+import { scrolllerMedia } from '../ui/scrolller-pictures.js';
+
 export function createPreviewFeed({ onStatus = () => {}, location = globalThis.location,
   window = globalThis.window, document = globalThis.document,
   setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
@@ -22,7 +24,7 @@ export function createPreviewFeed({ onStatus = () => {}, location = globalThis.l
     clearWait();
     timeout=setTimer(()=>{
       timeout=null;
-      if(!disposed&&phase!=='ready') status('No usable pictures arrived. Retry Scrolller or choose your own files.','empty');
+      if(!disposed&&phase!=='ready') status('No usable media arrived. Retry Scrolller or choose your own files.','empty');
     },30000);
   }
   function cancel() {
@@ -41,15 +43,15 @@ export function createPreviewFeed({ onStatus = () => {}, location = globalThis.l
     } else if (frame.type === 'scrolller-feed') {
       pictures?.receiveScrolller(frame);
       if(pictures?.source!=='scrolller') return;
-      const count=pictures.stillsForDisplay?.(36,{allowScrolller:true}).length||0;
+      const count=scrolllerMedia(frame,capability,location.origin).length;
       if(count) {
-        clearWait();status(`${count} Scrolller pictures are available for the gallery.`,'ready',count);
+        clearWait();status(`${count} Scrolller media items are available for the gallery.`,'ready',count);
       } else if(frame.building===true) {
         if(phase==='empty') return;
-        status('Preparing pictures from your current CCP channels...','loading');
+        status('Preparing media from your current CCP channels...','loading');
         if(timeout===null) waitForImages();
       } else {
-        clearWait();status('The current feed has no usable still pictures. Retry Scrolller or choose your own files.','empty');
+        clearWait();status('The current feed has no usable media. Retry Scrolller or choose your own files.','empty');
       }
     }
   }
@@ -101,7 +103,7 @@ export function createPreviewFeed({ onStatus = () => {}, location = globalThis.l
             if(choice!==pending) return;
             choice=null;clearWait();
             if(allowed) {
-              status('Preparing pictures from your current CCP channels...','loading');
+              status('Preparing media from your current CCP channels...','loading');
               waitForImages();pictures.requestFeed?.();
             } else failure(reason);
             resolve(allowed);

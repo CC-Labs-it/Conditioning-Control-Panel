@@ -218,34 +218,101 @@ export function createMuseumProps(THREE, materials, { lite = false, onWake = () 
     }
   }
 
-  // The compact enamel dashboard retains a physical pivot, rod and hand grips.
-  const hull = new THREE.Group();
-  hull.position.set(0, 0.16, -0.52);
-  cart.add(hull);
-  mesh(hull, box(1.35, 0.09, 0.15, 0.035), enamel, 0, -0.78, -0.98);
-  mesh(hull, box(1.39, 0.018, 0.16, 0.008), chrome, 0, -0.717, -0.98);
-  mesh(hull, box(1.30, 0.15, 0.04, 0.018), enamel, 0, -0.88, -0.94);
-  mesh(hull, box(1.18, 0.009, 0.012, 0.003), cyan, 0, -0.75, -0.883);
+  // A complete handcar tub sits beneath the original lever interaction coordinates.
+  const hull = new THREE.Group(); hull.name = 'handcar_body'; cart.add(hull);
+  const cartPaint = material(materials.lacquerBlack || enamel, { roughness: .43, metalness: .23 });
+  cartPaint.color.set('#344b52');
+  const cartInset = material(cartPaint, { roughness: .54 }); cartInset.color.set('#4b3949');
+  const cartPadding = material(leather, { roughness: .77 }); cartPadding.color.set('#50616a');
+  const cartDeck = material(rubber, { roughness: .89 }); cartDeck.color.set('#8b9395');
+
+  // This opaque deck closes the entire footprint, including below the rider.
+  mesh(hull, box(1.52, .12, 2.24, .045), cartPaint, 0, -1.22, -.56);
+  mesh(hull, box(1.35, .035, 2.02, .025), chrome, 0, -1.145, -.55);
+  mesh(hull, box(1.28, .027, 1.94, .025), cartDeck, 0, -1.115, -.55);
   for (const side of [-1, 1]) {
-    mesh(hull, box(0.085, 0.12, 0.82, 0.025), enamel, side * 0.65, -0.83, -0.56);
-    mesh(hull, box(0.10, 0.012, 0.86, 0.006), chrome, side * 0.65, -0.756, -0.56);
-    for (const z of [-0.87, -0.55, -0.27]) {
-      fastener(hull, side * 0.65, -0.744, z, 0.012, 'y');
+    mesh(hull, box(.51, .014, 1.30, .022), rubber, side * .34, -1.095, -.35);
+    for (let i = 0; i < 17; i++) {
+      mesh(hull, box(.46, .007, .017, .003), cartDeck, side * .34, -1.083, -.97 + i * .077);
     }
-    mesh(hull, box(0.026, 0.012, 0.62, 0.006), rubber, side * 0.65, -0.745, -0.56);
-    mesh(hull, box(0.16, 0.055, 0.11, 0.014), chrome, side * 0.54, -0.797, -0.935);
-    fastener(hull, side * 0.56, -0.786, -0.873, 0.013);
+    mesh(hull, box(.024, .014, 1.75, .004), side < 0 ? cyan : pink, side * .624, -1.095, -.48);
   }
-  mesh(hull, box(0.28, 0.06, 0.18, 0.015), materials.iron, 0, -0.94, -0.73);
-  const axle = mesh(hull, cylinder(0.055, 0.055, 0.23), chrome, 0, -0.91, -0.73);
-  axle.rotation.z = Math.PI / 2;
-  for (const x of [-0.15, 0.15]) mesh(hull, sphere(0.024), pink, x, -0.89, -0.73);
-  mesh(hull, box(0.25, 0.105, 0.018, 0.018), materials.dark, -0.4, -0.8, -0.88);
-  mesh(hull, bezel(0.274, 0.127, 0.012, 0.008, 0.015), chrome, -0.4, -0.8, -0.863);
-  for (let i = 0; i < 5; i++) mesh(hull, box(0.018, 0.018 + i * 0.012, 0.01, 0.004), i < 3 ? cyan : pink, -0.48 + i * 0.04, -0.8, -0.863);
-  for (const x of [-0.56, 0.56]) fastener(hull, x, -0.875, -0.913, 0.011);
-  mesh(hull, box(0.35, 0.005, 0.008, 0.002), rubber, 0.33, -0.83, -0.914);
-  for (let i = 0; i < 7; i++) mesh(hull, box(0.025, 0.035, 0.008, 0.006), rubber, 0.2 + i * 0.04, -0.875, -0.913);
+  mesh(hull, box(.32, .019, .39, .026), cartPaint, 0, -1.092, -.43);
+  for (const x of [-.125, .125]) for (const z of [-.57, -.29]) fastener(hull, x, -1.078, z, .012, 'y');
+
+  const sideShell = geometry('handcar:shaped-side-shell', () => {
+    const outline = new THREE.Shape();
+    outline.moveTo(-.52, -1.20); outline.lineTo(1.62, -1.20);
+    outline.quadraticCurveTo(1.70, -1.20, 1.70, -1.10);
+    outline.lineTo(1.70, -.75); outline.quadraticCurveTo(1.68, -.62, 1.49, -.61);
+    outline.lineTo(-.35, -.65); outline.quadraticCurveTo(-.55, -.65, -.55, -.84);
+    outline.lineTo(-.55, -1.15); outline.quadraticCurveTo(-.55, -1.20, -.52, -1.20);
+    const result = new THREE.ExtrudeGeometry(outline, { depth: .058, bevelEnabled: true,
+      bevelSize: .025, bevelThickness: .018, bevelSegments: lite ? 1 : 3, steps: 1, curveSegments: 8 });
+    result.translate(0, 0, -.029); return result;
+  });
+  for (const side of [-1, 1]) {
+    const cheek = mesh(hull, sideShell, cartPaint, side * .71, 0, 0); cheek.rotation.y = Math.PI / 2;
+    mesh(hull, box(.036, .30, 1.72, .017), cartInset, side * .667, -.894, -.46);
+    mesh(hull, box(.15, .095, 1.62, .035), cartPadding, side * .665, -.624, -.40);
+    mesh(hull, box(.018, .012, 1.47, .004), chrome, side * .610, -.590, -.40);
+    tube(hull, [[side * .65, -.672, -1.34], [side * .65, -.687, -.55], [side * .65, -.702, .29]], .006, side < 0 ? cyan : pink, 16);
+    for (const z of [-1.28, -.62, .18]) {
+      mesh(hull, box(.045, .36, .037, .009), chrome, side * .639, -.91, z);
+      fastener(hull, side * .616, -.78, z, .011, 'x');
+    }
+    mesh(hull, box(.07, .047, .38, .018), chrome, side * .611, -.928, -.37);
+    mesh(hull, box(.075, .035, .28, .014), rubber, side * .604, -.934, -.37);
+    // Small running boards and flanged wheels establish a solid rail vehicle below the tub.
+    mesh(hull, box(.18, .045, .54, .022), chrome, side * .79, -1.155, -.30);
+    mesh(hull, box(.14, .012, .45, .012), rubber, side * .79, -1.124, -.30);
+    for (const z of [-1.28, .27]) {
+      const wheel = mesh(hull, cylinder(.145, .145, .10, 32), materials.iron, side * .58, -1.29, z);
+      wheel.rotation.z = Math.PI / 2;
+      const flange = mesh(hull, cylinder(.164, .164, .019, 32), chrome, side * .53, -1.29, z); flange.rotation.z = Math.PI / 2;
+      fastener(hull, side * .641, -1.29, z, .028, 'x');
+    }
+  }
+  // A padded rear bench and back rail complete the cockpit when the rider looks down.
+  mesh(hull, box(1.27, .18, .44, .045), cartPadding, 0, -.902, .31);
+  mesh(hull, box(1.28, .34, .095, .035), cartPadding, 0, -.67, .535);
+  mesh(hull, box(1.34, .040, .13, .015), chrome, 0, -.464, .535);
+  for (const x of [-.49, 0, .49]) {
+    mesh(hull, box(.009, .012, .35, .003), cartInset, x, -.805, .31);
+    mesh(hull, box(.009, .24, .011, .003), cartInset, x, -.67, .482);
+  }
+  mesh(hull, box(1.36, .47, .115, .035), cartPaint, 0, -.91, -1.61);
+  mesh(hull, box(1.42, .105, .33, .04), cartPaint, 0, -.655, -1.52);
+  mesh(hull, box(1.34, .018, .31, .008), chrome, 0, -.594, -1.52);
+  mesh(hull, box(1.21, .012, .23, .009), cartPadding, 0, -.579, -1.52);
+  mesh(hull, box(1.16, .010, .014, .003), cyan, 0, -.718, -1.338);
+  mesh(hull, box(.30, .112, .020, .012), rubber, -.39, -.665, -1.339);
+  mesh(hull, bezel(.32, .132, .012, .009, .018), chrome, -.39, -.665, -1.325);
+  for (let i = 0; i < 5; i++) mesh(hull, box(.024, .021 + i * .010, .008, .003), i < 3 ? cyan : pink, -.49 + i * .048, -.667, -1.312);
+  const dial = mesh(hull, cylinder(.069, .069, .025, 32), chrome, .43, -.659, -1.327); dial.rotation.x = Math.PI / 2;
+  const dialFace = mesh(hull, cylinder(.057, .057, .004, 32), ivory, .43, -.659, -1.310); dialFace.rotation.x = Math.PI / 2;
+  for (let i = 0; i < 9; i++) {
+    const angle = -2.2 + i * .55;
+    beam(hull, [.43 + Math.sin(angle) * .042, -.659 + Math.cos(angle) * .042, -1.305],
+      [.43 + Math.sin(angle) * .050, -.659 + Math.cos(angle) * .050, -1.305], .0015, rubber);
+  }
+  const cartGauge = new THREE.Group(); cartGauge.position.set(.43, -.659, -1.300); hull.add(cartGauge);
+  beam(cartGauge, [0, -.007, 0], [0, .043, 0], .0024, pink);
+  mesh(cartGauge, sphere(.007, 10, 6), chrome);
+  for (const x of [-.60, -.18, .18, .60]) fastener(hull, x, -.670, -1.319, .011);
+  for (let i = 0; i < 7; i++) mesh(hull, box(.075, .008, .008, .002), rubber, .36, -.83 - i * .025, -1.545);
+
+  // The pump is mounted to the deck through a cast gearbox and two axle bearings.
+  mesh(hull, box(.42, .065, .42, .035), chrome, 0, -1.063, -1.23);
+  mesh(hull, box(.32, .265, .29, .032), cartPaint, 0, -.914, -1.25);
+  mesh(hull, box(.24, .18, .018, .018), cartInset, 0, -.922, -1.094);
+  for (const x of [-.165, .165]) for (const z of [-1.38, -1.08]) fastener(hull, x, -1.017, z, .015, 'y');
+  for (const x of [-.14, .14]) {
+    mesh(hull, box(.055, .195, .13, .024), chrome, x, -.827, -1.25);
+    const bearing = mesh(hull, cylinder(.064, .064, .067, 24), rubber, x, -.75, -1.25); bearing.rotation.z = Math.PI / 2;
+    fastener(hull, x + Math.sign(x) * .040, -.75, -1.25, .029, 'x');
+  }
+  const axle = mesh(hull, cylinder(.037, .037, .37), chrome, 0, -.75, -1.25); axle.rotation.z = Math.PI / 2;
   const lever = new THREE.Group();
   lever.name = 'handcar_lever_pivot';
   lever.position.set(0, -0.75, -1.25);
@@ -268,6 +335,37 @@ export function createMuseumProps(THREE, materials, { lite = false, onWake = () 
     fastener(lever, sign * 0.34, 0.27, 0, 0.017, 'x');
   }
   const pumpGrip = new THREE.Object3D(); pumpGrip.position.set(0, 0.27, 0); lever.add(pumpGrip);
+  beam(lever, [0, -.006, 0], [0, -.135, .035], .024, chrome);
+  mesh(lever, sphere(.032), chrome, 0, -.135, .035);
+  const pistonBase = new THREE.Vector3(0, -1.035, -.69);
+  mesh(hull, box(.20, .08, .16, .024), cartPaint, 0, -1.065, -.69);
+  for (const x of [-.075, .075]) {
+    mesh(hull, box(.035, .115, .095, .015), chrome, x, -1.015, -.69);
+    fastener(hull, x, -1.035, -.69, .018, 'x');
+  }
+  const pistonOuter = mesh(hull, cylinder(.043, .048, .22), chrome);
+  const pistonCollar = mesh(hull, cylinder(.050, .050, .028), cartPaint);
+  const pistonRod = mesh(hull, cylinder(.018, .018, 1, 16), chrome);
+  const cartReturnSpring = spring(hull, 0, 0, 0, .032, .22, 7);
+  for (const part of [pistonOuter, pistonCollar, pistonRod, cartReturnSpring]) part.userData.interactive = true;
+  tube(hull, [[.06, -1.04, -.72], [.19, -1.06, -.72], [.24, -1.07, -.84], [.24, -1.07, -1.07], [.17, -1.02, -1.12]], .012, rubber, 24);
+  const cartLinkPoint = new THREE.Vector3(), cartLinkAxis = new THREE.Vector3();
+  const cartPumpAxis = new THREE.Vector3(1, 0, 0), cartCylinderAxis = new THREE.Vector3(0, 1, 0);
+  function updateCartPump(angle) {
+    cartLinkPoint.set(0, -.135, .035).applyAxisAngle(cartPumpAxis, angle).add(lever.position);
+    cartLinkAxis.copy(cartLinkPoint).sub(pistonBase);
+    const length = cartLinkAxis.length(); cartLinkAxis.normalize();
+    for (const part of [pistonOuter, pistonCollar, pistonRod, cartReturnSpring]) part.quaternion.setFromUnitVectors(cartCylinderAxis, cartLinkAxis);
+    pistonOuter.position.copy(pistonBase).addScaledVector(cartLinkAxis, .11);
+    pistonCollar.position.copy(pistonBase).addScaledVector(cartLinkAxis, .208);
+    const exposed = Math.max(.05, length - .22);
+    pistonRod.scale.y = exposed;
+    pistonRod.position.copy(pistonBase).addScaledVector(cartLinkAxis, .22 + exposed / 2);
+    cartReturnSpring.position.copy(pistonBase).addScaledVector(cartLinkAxis, .224);
+    cartReturnSpring.scale.y = Math.max(.10, length - .264) / .22;
+    cartGauge.rotation.z = -.55 - angle * 1.6;
+  }
+  updateCartPump(0);
   batch(hull);
   batch(lever);
 
@@ -948,6 +1046,7 @@ export function createMuseumProps(THREE, materials, { lite = false, onWake = () 
     setAdVisible(on) { serviceAd.visible = Boolean(on); },
     pump(angle) {
       lever.rotation.x = angle;
+      updateCartPump(angle);
       kineticUpdates.forEach(updateMechanism => updateMechanism(angle));
     },
     dispose() {

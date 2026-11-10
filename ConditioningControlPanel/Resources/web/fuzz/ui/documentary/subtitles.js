@@ -2,6 +2,7 @@ import { NARRATION_SUBTITLES as ESTIMATED_SUBTITLES } from './narration-subtitle
 import { NARRATION_ALIGNMENT } from './narration-alignment.js';
 
 export const SUBTITLE_TIMING = 'mixed';
+export const SUBTITLE_DELAY_SECONDS = 0.5;
 const letters = text => String(text).toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
 
 /** Keep the approved phrase text, using the first and last acoustically aligned word. */
@@ -31,16 +32,17 @@ export const NARRATION_SUBTITLES = Object.freeze(Object.fromEntries(Object.entri
 })));
 export function subtitleTiming(id) { return aligned.has(id) ? 'aligned' : 'estimated'; }
 
-/** Phrase timing follows the media clock, including pause, resume and duration corrections. */
+/** Delay only presentation; shared phrase data still drives slides and ride pacing. */
 export function subtitleAt(id, time, duration, subtitles = NARRATION_SUBTITLES) {
-  if (!(duration > 0) || !Number.isFinite(time) || time < 0) return '';
-  const progress = time / duration;
+  if (!Number.isFinite(duration) || !(duration > 0) || !Number.isFinite(time) || time < SUBTITLE_DELAY_SECONDS) return '';
   const cues = subtitles[id] || [];
-  for (const [from, to, text] of cues) if (progress >= from && progress < to) return text;
+  for (const [from, to, text] of cues) {
+    if (time >= from * duration + SUBTITLE_DELAY_SECONDS && time < to * duration + SUBTITLE_DELAY_SECONDS) return text;
+  }
   return '';
 }
 
 export function subtitleBoundaries(id, duration, subtitles = NARRATION_SUBTITLES) {
-  if (!(duration > 0)) return [];
-  return (subtitles[id] || []).flatMap(([from, to]) => [from * duration, to * duration]);
+  if (!Number.isFinite(duration) || !(duration > 0)) return [];
+  return (subtitles[id] || []).flatMap(([from, to]) => [from * duration + SUBTITLE_DELAY_SECONDS, to * duration + SUBTITLE_DELAY_SECONDS]);
 }
