@@ -22,6 +22,7 @@ const MAX_UNLOCK_ERRORS = 3;
 const ENDING_SCOPE = '__ending';
 
 import { createJourney } from '../sim/journey.js';
+import { plainPeek } from './shop-next-model.js';
 import { takeActivity, journeyChapter } from '../sim/journey-effects.js';
 import * as P from '../sim/prestige.js';
 import * as PE from '../sim/prestige-endings.js';   // ending-star perks that are behaviour (Endings lane)
@@ -572,6 +573,8 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     renew() { const r = P.renew(life, run); save(); return r; },
     get freeBuys() { return stamp?.free || 0; },
     shop: (size) => journey ? journey.shop(size) : E.shopWindow(run, mods, size, env.featuredShop),
+    /** The Next up strip (ui/shop-next-model.js): items after what the shop shows, read only. */
+    peek: (n, size = 6) => journey ? journey.peek(n) : plainPeek(run, E.shopWindow(run, mods, size, env.featuredShop), n, mods),
     endingsTotal: ENDING_IDS.length,
   };
   subscribe('golden-caught', () => tally(run, 'golden'));   // the Living Ad card's Golden Buttons

@@ -88,6 +88,18 @@ input, textarea, [contenteditable="true"], [contenteditable=""] { user-select: t
 #goal { flex: none; width: 118px; }
 #goal:empty { display: none; }
 #rows { flex: 1 1 0; min-width: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; }
+/* Next up (ui/shop.js drawNext): one row of ghost tiles under the tiles, lined up with them, never wrapping or scrolling.
+ * Most height 60px (48px on a phone): GHOST in ui/shop.js. Gaps are TILE_GAP. Fades in only, so Gentle needs nothing. */
+#next { flex: 0 0 100%; display: flex; flex-wrap: nowrap; align-items: center; gap: 12px; min-width: 0; overflow: hidden; padding-left: 130px; box-sizing: border-box; }
+#next[hidden] { display: none; }
+#goal:empty ~ #next { padding-left: 0 !important; }
+#next .nx-label { flex: none; font-size: 12px; line-height: 1; color: var(--ink-soft); text-shadow: 0 0 3px var(--page), 0 0 6px var(--page); }
+#next .row.ghost { flex: 0 1 60px; width: auto; min-width: 30px; max-width: 60px; padding: 3px; gap: 0; background: color-mix(in srgb, var(--panel) 35%, transparent); border: 1.5px dashed color-mix(in srgb, var(--ink) 38%, transparent); animation: nx-in .4s ease-out; }
+#next .row.ghost .rep-ico, #next .row.ghost > .ico { opacity: .45; width: 72%; height: 72%; display: flex; align-items: center; justify-content: center; }
+#next .row.ghost .rep-ico .ico { width: 100%; height: 100%; }
+#next .row.ghost img.shop-sample { width: 100%; height: 60%; object-fit: cover; }
+#next .row.ghost .nx-q { font-size: 28px; font-weight: 700; line-height: 1; color: var(--ink); font-family: var(--shop-font); }
+@keyframes nx-in { from { opacity: 0; } to { opacity: 1; } }
 #more { flex: 0 0 100%; font-size: 13px; color: var(--ink-soft); text-align: center; text-shadow: 0 0 3px var(--page), 0 0 6px var(--page); }
 .row { --hue-a: var(--accent); --hue-b: var(--accent-2); position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; width: 100%; aspect-ratio: 1; padding: 4px; text-align: center; background: var(--panel); border: 1px solid var(--line); overflow: hidden; touch-action: manipulation; }
 .row > * { position: relative; }
@@ -349,6 +361,8 @@ body.niched #btn[data-skin=spiral] { border-color: var(--niche); }
 @media (max-width: 759px) {
   #goal { width: 96px; }
   #rows { grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); }
+  #next { padding-left: 108px; }
+  #next .row.ghost { flex-basis: 48px; max-width: 48px; }
   .row .ico { font-size: 30px; }
   #goal .row .ico { font-size: 38px; }
   #counter { font-size: 34px; }
