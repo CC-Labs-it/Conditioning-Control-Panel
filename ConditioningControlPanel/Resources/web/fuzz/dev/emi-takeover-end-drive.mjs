@@ -158,7 +158,7 @@ check('Wake Up stayed on top the whole take', wake);
 /* after the dark: no ending card, the credits with the recap and the poster */
 let recap = null, cardText = '';
 for (let i = 0; i < 200 && !recap; i++) {
-  const st = await page.evaluate(() => ({ ending: (document.getElementById('l-ending')?.innerText || '').trim(), rr: !!document.querySelector('[data-rr]'), poster: (document.querySelector('[data-rr="poster"] .rr-frame')?.children.length || 0) > 0, title: (document.querySelector('[data-rr]')?.closest('.rr, [class*="rr-"]')?.innerText || '').slice(0, 90) }));
+  const st = await page.evaluate(() => ({ ending: (document.getElementById('l-ending')?.innerText || '').trim(), rr: !!document.querySelector('[data-rr]'), poster: !!document.querySelector('[data-rr="poster"] .adc-recap .pic img.base'), title: (document.querySelector('[data-rr]')?.closest('.rr, [class*="rr-"]')?.innerText || '').slice(0, 90) }));
   if (st.ending && !cardText) cardText = st.ending.slice(0, 80);
   if (st.rr) recap = st;
   await wait(150);
@@ -167,7 +167,7 @@ await wait(9000);
 await shot('recap');
 check('no "four hours later" card', !/hours later/i.test(cardText), cardText);
 check('the run recap came right after', !!recap, JSON.stringify(recap));
-check('the recap carries its poster column (hero tile; the Living Ad poster is Unit Complete only)', !!recap?.poster);
+check('the recap carries the illustrated run poster', !!recap?.poster);
 check('Wake Up still on top at the end', await wakeOk());
 check('no page errors', errors.length === 0, errors.slice(0, 6).join(' | '));
 await browser.close();

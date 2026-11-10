@@ -152,11 +152,13 @@ export async function exportCard(ad, kind, { progress = () => {}, stop = () => f
   }
   if (kind === 'png') {
     const blob = await png(ad);
+    if (stop()) return { status: 'cancelled' };
     return { status: await saveBlob(doc, blob, filename + '.png'), blob };
   }
   const fps = kind === 'gif' ? 12 : 15, width = kind === 'gif' ? 432 : 640;
   const list = await frames(ad, fps, width, progress, stop);
   const blob = kind === 'gif' ? await gif(list, fps, doc, progress) : await video(list, fps, doc, progress);
+  if (stop()) return { status: 'cancelled' };
   const ext = kind === 'gif' ? 'gif' : blob.type.includes('mp4') ? 'mp4' : 'webm';
   return { status: await saveBlob(doc, blob, filename + '.' + ext), blob };
 }
