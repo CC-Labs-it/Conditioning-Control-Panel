@@ -31,6 +31,7 @@ import { handFor, copyHandFor } from './hands.js';
 import { createTapWindow, emiBell } from '../sim/tap-rate.js';
 import { createAwayClock } from './away.js';
 import { nextFrame, frameRect } from './perf.js';
+import { mountStickerBook } from './sticker-book.js';
 
 export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   const $ = (id) => doc.getElementById(id);
@@ -559,6 +560,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       wireButton();
       wirePresses();
       wirePause(hooks);
+      mountStickerBook({ doc, engine, gentle });   // the Sticker Book: pause card door + the meter's 'sticker-book' event
       applyGentle();
       motionQuery?.addEventListener?.('change', applyGentle);
       const onResize = () => { dims = { w: win.innerWidth, h: win.innerHeight }; shop.fit(); };

@@ -97,6 +97,17 @@ export default {
       const note = (k, n = 1) => { tally[k] = (tally[k] || 0) + n; ctx.store.set('tally', tally); };
       const row = ctx.el('div', 'order:2;display:flex;gap:3px;margin-top:3px;', null, ctx.layer('meters'));
       const cells = Array.from({ length: 10 }, () => ctx.el('i', 'display:block;width:15px;height:9px;background:var(--panel-short);border:1px solid var(--line);transition:background .25s;', null, row));
+      /* The Sticker Book's door (ui/sticker-book.js): a little book at the start of the meter; it hops after a new sticker. */
+      const bookBtn = ctx.el('button', 'width:26px;height:26px;margin:-9px 2px 0 0;padding:0;border:0;background:none;cursor:pointer;pointer-events:auto;touch-action:manipulation;', null, row);
+      bookBtn.type = 'button';
+      bookBtn.title = 'Sticker Book';
+      bookBtn.setAttribute('aria-label', 'Open the Sticker Book');
+      const bookArt = ctx.el('img', 'width:100%;height:100%;object-fit:contain;pointer-events:none;', null, bookBtn);
+      bookArt.alt = '';
+      bookArt.src = 'assets/clipart/book.webp';
+      row.prepend(bookBtn);
+      bookBtn.addEventListener('click', () => ctx.emit('sticker-book'));
+      const hop = () => { if (!ctx.gentle) ctx.anim(bookBtn, [{ transform: 'none' }, { transform: 'translateY(-6px) rotate(-10deg)', offset: 0.4 }, { transform: 'none' }], { duration: 450, iterations: 3, easing: 'ease-out' }); };
       const paint = () => { const on = earned.size % METER_CELLS; cells.forEach((c, i) => { c.style.background = i < on ? 'var(--stamp)' : 'var(--panel-short)'; }); };
       const mult = () => meterMult(earned.size);
       ctx.mod({ fps: (v) => v * mult(), click: (v) => v * mult() });
@@ -120,7 +131,7 @@ export default {
         if (showing || !queue.length) return;
         const a = queue.shift();
         card(a);
-        ctx.stickers.earn(a.id);
+        if (ctx.stickers.earn(a.id) || a.scope === 'life') hop();   // a lifetime sticker was written by sync() already
         const r = row.getBoundingClientRect();
         ctx.float(r.left + r.width / 2, r.top, '★', 'color:var(--stamp);font-size:20px;');
         sfx(ctx, 'sfx/chime2.mp3', 0.4);
