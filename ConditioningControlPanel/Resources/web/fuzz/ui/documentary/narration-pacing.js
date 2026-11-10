@@ -1,4 +1,5 @@
 import { NARRATION_SUBTITLES } from './subtitles.js';
+import { RIDE_RECORDINGS } from './narration-data.js';
 
 const normalize = text => String(text).replace(/\s+/g, ' ').trim().toLowerCase();
 // The opening image can pass while the narrator continues through the gallery.
@@ -12,22 +13,27 @@ const PROFILES = {
     { phrase: 'you will be known as the Subject', z: 75 }, { at: 1, z: 90 },
   ],
   r2: [
-    { at: 0, z: 92 }, { phrase: 'I raised this with the writers', z: 104 },
-    { phrase: 'that it was beneath', z: 111 },
+    { at: 0, z: 102 }, { phrase: 'and stops the very', z: 103.6 },
+    { phrase: 'I raised this with the writers', z: 105 },
+    { phrase: 'that it was beneath', z: 106.8 },
     { phrase: 'pumping for the sake of a narrative', z: 122 }, { at: 1, z: 132 },
   ],
   r3: [
-    { at: 0, z: 268 }, { phrase: 'The cheetah reaches', z: 282 },
-    { phrase: 'The mantis shrimp strikes', z: 287 },
-    { phrase: "moves quite as fast as the Subject's", z: 294 },
-    { phrase: 'on hearing a floorboard creak', z: 297 },
-    { phrase: 'and replaced, seamlessly, with a spreadsheet', z: 303 },
-    { phrase: 'Again, in slow motion', z: 305 }, { at: 1, z: 307 },
+    { at: 0, z: 291 }, { phrase: 'The cheetah reaches', z: 300.6 },
+    { phrase: 'The mantis shrimp strikes', z: 301.11 },
+    { phrase: "moves quite as fast as the Subject's", z: 301.92 },
+    { phrase: 'on hearing a floorboard creak', z: 302.34 },
+    { phrase: 'and replaced, seamlessly, with a spreadsheet', z: 303.64 },
+    { phrase: 'Again, in slow motion', z: 304.2 }, { at: 1, z: 304.7 },
   ],
   r4: [
-    { at: 0, z: 370 }, { phrase: 'to a world of daylight', z: 405 },
-    { phrase: 'Our research shows almost nobody', z: 420 },
-    { phrase: 'and "we need to talk"', z: 491 }, { at: 1, z: 501 },
+    { at: 0, z: 370 }, { phrase: 'to a world of daylight', z: 409 },
+    { phrase: 'to a world of daylight', edge: 'end', z: 413 },
+    { phrase: 'Our research shows almost nobody', z: 417 },
+    { phrase: 'Because to this particular audience', z: 449 },
+    { phrase: '"wake up" is the single least', z: 461 },
+    { phrase: 'language, narrowly', z: 482 },
+    { phrase: 'and "we need to talk"', z: 495 }, { at: 1, z: 498.5 },
   ],
 };
 
@@ -36,7 +42,7 @@ export function pacingTimeline(id, duration, subtitles = NARRATION_SUBTITLES) {
   const cues = subtitles[id] || [];
   return (PROFILES[id] || []).flatMap(anchor => {
     const cue = anchor.phrase ? cues.find(([, , text]) => normalize(text).includes(normalize(anchor.phrase))) : null;
-    const at = anchor.seconds ?? ((anchor.at ?? cue?.[0]) * duration);
+    const at = anchor.seconds ?? ((anchor.at ?? cue?.[anchor.edge === 'end' ? 1 : 0]) * duration);
     return Number.isFinite(at) ? [{ at, z: anchor.z }] : [];
   }).sort((a, b) => a.at - b.at).filter((point, index, points) => !index || point.at > points[index - 1].at);
 }
@@ -70,7 +76,10 @@ export function createNarrationPacer(tunnel, read, { subtitles = NARRATION_SUBTI
     if (disposed || state.docked) return null;
     const clip = read();
     if (!clip?.ride) {
-      last = { mode: 'travel', target: state.z, speed: 5.5, minSpeed: 0, maxSpeed: 7, ceiling: 580 };
+      const next = RIDE_RECORDINGS.find(ride => ride.at > state.z);
+      const entrySpeed = next?.id === 'r2' ? .35 : next?.id === 'r3' ? 2.5 : 2.4;
+      const speed = next ? Math.min(5.5, Math.sqrt(entrySpeed ** 2 + Math.max(0, next.at - state.z) * 3.2)) : 5.5;
+      last = { mode: 'travel', target: state.z, speed, minSpeed: 0, maxSpeed: 7, ceiling: 580 };
       return last;
     }
     if (cachedId !== clip.id || cachedDuration !== clip.duration) {
@@ -92,10 +101,13 @@ export function createNarrationPacer(tunnel, read, { subtitles = NARRATION_SUBTI
     if (!sample) return null;
     // Loading and stalled audio can brake the cart. Movement never pauses or seeks the recording.
     const playing = Boolean(clip.playing);
-    const lead = clip.id === 'r3' ? .7 : 1.2;
+    const lead = clip.id === 'r3' ? .1 : 1.2;
+    // The two Wake Up images are 86m apart. A brief faster transfer follows the
+    // daylight phrase, then the allowance tapers before the conversation screen.
+    const zoneCap = clip.id === 'r4' && state.z >= 413 ? Math.min(6.5, 4.5 + Math.max(0, 490 - state.z) * .3) : undefined;
     last = { mode: playing ? 'narration' : 'waiting', ...sample,
-      speed: playing ? sample.speed : 0, minSpeed: playing && clip.time > 1.4 ? .3 : 0,
-      maxSpeed: 7, ceiling: sample.target + (playing ? lead : 0), id: clip.id };
+      speed: playing ? sample.speed : 0, minSpeed: playing && clip.time > 1.4 ? (clip.id === 'r3' ? .12 : .3) : 0,
+      maxSpeed: 7, zoneCap, ceiling: sample.target + (playing ? lead : 0), id: clip.id };
     return last;
   }
   const release = tunnel.setPace?.(provide);

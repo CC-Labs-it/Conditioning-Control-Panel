@@ -11,7 +11,7 @@ import { createProjectorEffects } from './projector-effects.js';
 const UNIT = 180;
 const ART_ROOT = new URL('../../assets/documentary/art/', import.meta.url);
 const STORY_PROJECTORS = [
-  { id:'booth',at:12,slot:'intro-subject' }, { id:'lever',at:112,slot:'pump-documentary' },
+  { id:'booth',at:8,slot:'intro-subject' }, { id:'lever',at:112,slot:'pump-documentary' },
   { id:'reflex',at:310,slot:'reflex-cheetah' },
   { id:'wakeup',at:418,slot:'outside-daylight' },
   { id:'conversation',at:504,slot:'conversation-chairs' },
@@ -112,7 +112,7 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
   const geometryGroup = new THREE.Group();
   world.add(geometryGroup);
   let materialPack, materials, museum, props, stamp;
-  let width = 1, height = 1, focal = 1, lastState, disposed = false, readyState = false, stamped = false;
+  let width = 1, height = 1, focal = 1, lensTime = 0, lastState, disposed = false, readyState = false, stamped = false;
   let toyFrameOff = null, toyTime = 0, renders = 0, projectorFrameOff = null;
   let bulbJob=null,bulbRestore=null,bulbDim=false,bulbCycle=0;
   let lookYaw = 0, lookPitch = 0, gesture = null;
@@ -123,7 +123,7 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
   const pumpBounds = new THREE.Box3(new THREE.Vector3(-.50,-.78,-1.48),new THREE.Vector3(.50,-.31,-1.05));
   const pumpRay = new THREE.Ray(), pumpLocalHit = new THREE.Vector3(), cartInverse = new THREE.Matrix4();
   const pendingProjectorBeats = [];
-  let scriptedProjectors = !autoProjectors;
+  let scriptedProjectors = !autoProjectors, narrationSpeaking = false;
   const depth = lite ? 38 : 58;
 
   function plate(parent, slot, title) {
@@ -294,10 +294,10 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
       group.add(mesh);
     }
   }
-  function frame(w, h, point, yaw, ornate = false, room = 'intake') {
+  function frame(w, h, point, yaw, ornate = false, room = 'intake', niche = false) {
     const group = new THREE.Group();
     group.position.set(point.x, point.y, point.z); group.rotation.y = yaw;
-    const modern = ['connector', 'reflex', 'descent', 'wakeup'].includes(room);
+    const modern = niche || ['connector', 'reflex', 'descent', 'wakeup'].includes(room);
     const border = modern ? .075 : ornate ? .09 : .055;
     const edge = modern ? materials.chrome || materials.iron : materials.brass;
     const shell = modern ? materials.lacquerBlack || materials.iron : materials.woodDark;
@@ -309,19 +309,21 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
     if (!modern) housing(group,'Fine inner frame bead',w-.035,h-.035,.016,.046,materials.brass,.012);
     for (const x of [-1,1]) for (const y of [-1,1]) {
       fastener(group,x*(w/2+border*.38),y*(h/2+border*.38),.075,edge);
-      box(group,'Wall mounting standoff',[.075,.075,.075],[x*w*.37,y*h*.34,-.19],materials.iron);
+      box(group,'Wall mounting standoff',[.075,.075,niche?.24:.075],[x*w*.37,y*h*.34,niche?-.25:-.19],materials.iron);
     }
     if (modern) {
       for (let i=0;i<9;i++) box(group,'Cooling vent',[.026,.004,.035],[-w*.34+i*.045,-h/2-border*.36,.07],materials.dark);
       box(group,'Display status indicator',[.042,.008,.01],[w*.4,-h/2-border*.36,.074],materials.cyanLight || materials.lamp);
     }
-    for (const side of [-1,1]) {
+    if (!niche) for (const side of [-1,1]) {
       box(group,'Picture light wall plate',[.075,.10,.025],[side*w*.22,h/2+.14,-.07],shell);
       box(group,'Picture light bracket',[.025,.025,.36],[side*w*.22,h/2+.18,.11],edge);
     }
-    box(group, 'Picture light housing', [w*.62,.065,.14], [0,h/2+.18,.29], shell);
-    box(group, 'Picture light diffuser', [w*.56,.012,.09], [0,h/2+.141,.30], materials.lamp);
-    for (const side of [-1,1]) box(group,'Light end cap',[.025,.068,.14],[side*w*.315,h/2+.18,.29],edge);
+    if (!niche) {
+      box(group, 'Picture light housing', [w*.62,.065,.14], [0,h/2+.18,.29], shell);
+      box(group, 'Picture light diffuser', [w*.56,.012,.09], [0,h/2+.141,.30], materials.lamp);
+      for (const side of [-1,1]) box(group,'Light end cap',[.025,.068,.14],[side*w*.315,h/2+.18,.29],edge);
+    }
     geometryGroup.add(group);
     return group;
   }
@@ -332,32 +334,95 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
     node.style.width = `${w * UNIT}px`; node.style.height = `${h * UNIT}px`;
     node.style.transform = `translate3d(${point.x * UNIT}px,${-point.y * UNIT}px,${point.z * UNIT}px) rotateY(${yaw}rad) translate(-50%,-50%)`;
   }
+  function placeNicheFace(node, frameGroup, spec) {
+    frameGroup.rotateZ(spec.roll || 0);
+    frameGroup.updateWorldMatrix(true, false);
+    const matrix = frameGroup.matrixWorld.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0, .075));
+    const values = matrix.elements.map((value, index) => {
+      const row = index % 4, column = Math.floor(index / 4);
+      return value * (row === 1 ? -1 : 1) * (column === 1 ? -1 : 1) * (column === 3 && row < 3 ? UNIT : 1);
+    });
+    node.style.width = `${(spec.width - .08) * UNIT}px`;
+    node.style.height = `${(spec.height - .08) * UNIT}px`;
+    node.style.transform = `matrix3d(${values.join(',')}) translate(-50%,-50%)`;
+    node.style.overflow = 'hidden';
+    node.style.clipPath = 'inset(0)';
+    node.dataset.niche = `${spec.distance}/${spec.side}`;
+    node.dataset.frameInset = '.04';
+  }
+  function clipNicheFace(surface) {
+    const spec = surface.niche;
+    if (!surface.nicheOpening) {
+      const height = { intake: 3.8, connector: 4.05, reflex: 3.9, descent: 4.05, wakeup: 3.7, theatre: 3.8 }[surface.room];
+      surface.nicheOpening = [[-2.45, .34], [2.45, .34], [2.45, height - .22], [-2.45, height - .22]].map(([offset, y]) => {
+        const point = trackPosition(spec.distance + offset, spec.side * 4.44, y);
+        return new THREE.Vector3(point.x, point.y, point.z);
+      });
+      surface.nicheInverse = surface.frameGroup.matrixWorld.clone().invert();
+      surface.nicheNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(surface.frameGroup.quaternion);
+      surface.nicheFacePoint = new THREE.Vector3(0, 0, .075).applyMatrix4(surface.frameGroup.matrixWorld);
+    }
+    const origin = camera.position, normal = surface.nicheNormal;
+    const planeDistance = surface.nicheFacePoint.clone().sub(origin).dot(normal);
+    const opening = [];
+    for (const point of surface.nicheOpening) {
+      const ray = point.clone().sub(origin), denominator = ray.dot(normal);
+      if (Math.abs(denominator) < .00001 || planeDistance / denominator <= 0) return false;
+      const hit = origin.clone().addScaledVector(ray, planeDistance / denominator).applyMatrix4(surface.nicheInverse);
+      opening.push({ x: hit.x, y: hit.y });
+    }
+    const width = spec.width - .08, height = spec.height - .08;
+    let polygon = [{ x: -width / 2, y: -height / 2 }, { x: width / 2, y: -height / 2 }, { x: width / 2, y: height / 2 }, { x: -width / 2, y: height / 2 }];
+    const winding = Math.sign(opening.reduce((area, point, index) => {
+      const next = opening[(index + 1) % opening.length]; return area + point.x * next.y - next.x * point.y;
+    }, 0)) || 1;
+    for (let edge = 0; edge < opening.length && polygon.length; edge++) {
+      const a = opening[edge], b = opening[(edge + 1) % opening.length];
+      const signed = point => winding * ((b.x - a.x) * (point.y - a.y) - (b.y - a.y) * (point.x - a.x));
+      const input = polygon; polygon = [];
+      for (let index = 0; index < input.length; index++) {
+        const current = input[index], previous = input[(index + input.length - 1) % input.length];
+        const here = signed(current), there = signed(previous);
+        if ((here >= 0) !== (there >= 0)) {
+          const t = there / (there - here);
+          polygon.push({ x: previous.x + (current.x - previous.x) * t, y: previous.y + (current.y - previous.y) * t });
+        }
+        if (here >= 0) polygon.push(current);
+      }
+    }
+    if (polygon.length < 3) return false;
+    surface.node.style.clipPath = `polygon(${polygon.map(point => `${((point.x / width + .5) * 100).toFixed(3)}% ${((.5 - point.y / height) * 100).toFixed(3)}%`).join(',')})`;
+    return true;
+  }
   function buildExhibits() {
     for (const exhibit of manifest.exhibits) {
       if (exhibit.kind.startsWith('stage-') || ['cutout','vitrine','run-picture','run-clip'].includes(exhibit.kind)) continue;
       const sides = exhibit.side === 'both' ? ['L', 'R'] : [exhibit.side];
       const locations = exhibit.kind === 'tab-wall' ? [248,264,280,300] :
         [exhibit.at + (exhibit.kind === 'name-tag' ? 2 : exhibit.zone === 'booth' && exhibit.side !== 'C' ? 4 : 0)];
-      for (const at of locations) for (const side of sides) {
+      for (const sourceAt of locations) for (const side of sides) {
+        const niche = exhibit.kind === 'tab-wall' ? SCREEN_NICHES.find(spec => spec.collectionAt === sourceAt && spec.side === (side === 'L' ? -1 : 1)) : null;
+        const at = niche?.distance ?? sourceAt;
         const node = element(doc, 'div', `td-plane td-exhibit td-kind-${exhibit.kind}`, domCamera);
         node.dataset.exhibit = exhibit.id;
         const room = trackStyle(at).id;
         node.dataset.room = room;
-        const w = exhibit.w || (exhibit.kind === 'tab-wall' ? 3.1 : exhibit.kind === 'name-tag' ? 1.45 : 1.65);
-        const h = exhibit.h || (exhibit.kind === 'tab-wall' ? 1.6 : exhibit.kind === 'name-tag' ? .85 : 1.1);
+        const w = niche?.width || exhibit.w || (exhibit.kind === 'tab-wall' ? 3.1 : exhibit.kind === 'name-tag' ? 1.45 : 1.65);
+        const h = niche?.height || exhibit.h || (exhibit.kind === 'tab-wall' ? 1.6 : exhibit.kind === 'name-tag' ? .85 : 1.1);
         const closeBooth = exhibit.zone === 'booth';
-        const lateral = side === 'L' ? -4.35 : side === 'R' ? 4.35 : exhibit.kind === 'name-tag' ? -3.15 : -1.5;
-        const y = exhibit.kind === 'name-tag' ? 1.7 : 2.20;
+        const lateral = niche ? niche.side * niche.lateral : side === 'L' ? -4.35 : side === 'R' ? 4.35 : exhibit.kind === 'name-tag' ? -3.15 : -1.5;
+        const y = niche?.elevation ?? (exhibit.kind === 'name-tag' ? 1.7 : 2.20);
         const point = positionAt(at, lateral, y);
         const yaw = trackYaw(at) + (side === 'L' ? Math.PI / 2 : side === 'R' ? -Math.PI / 2 : 0);
-        const frameGroup = frame(w, h, point, yaw, closeBooth, room);
+        const frameGroup = frame(w, h, point, yaw, closeBooth, room, Boolean(niche));
         if (exhibit.kind === 'name-tag') {
           box(frameGroup, 'Name lectern post', [.14,1.3,.14], [0,-1.05,-.08], materials.woodDark);
           box(frameGroup, 'Name lectern base', [.7,.14,.48], [0,-1.62,-.08], materials.woodDark);
           box(frameGroup, 'Lectern brass foot', [.75,.025,.52], [0,-1.54,-.08], materials.brass);
         }
         const facePoint = new THREE.Vector3(0,0,.075).applyAxisAngle(new THREE.Vector3(0,1,0), yaw).add(new THREE.Vector3(point.x,point.y,point.z));
-        cssPlace(node, facePoint, yaw, w*.90, h*.86);
+        if (niche) placeNicheFace(node, frameGroup, niche);
+        else cssPlace(node, facePoint, yaw, w*.90, h*.86);
         const faces = [], mounts = [];
         if (exhibit.kind === 'tab-wall') {
           for (let i = 0; i < (lite ? 4 : 6); i++) {
@@ -380,7 +445,7 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
           box(frameGroup, 'Information plate backing', [w*.80,.31,.045], [0,-h/2-.24,.012], materials.iron);
           for (const x of [-1,1]) fastener(frameGroup,x*w*.365,-h/2-.24,.066,materials.brass);
         }
-        surfaces.push({ node, frameGroup, exhibit, at, side, w, h, yaw, room, faces, mounts, placard: node.querySelector('.td-placard') });
+        surfaces.push({ node, frameGroup, exhibit, at, side, w, h, yaw, room, faces, mounts, niche, placard: node.querySelector('.td-placard') });
       }
     }
     for (const banner of manifest.banners) {
@@ -401,6 +466,7 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
   }
   function buildNicheScreens() {
     for (const spec of SCREEN_NICHES) {
+      if (spec.collectionAt != null) continue;
       const at=spec.distance,side=spec.side===-1||spec.side==='L'?'L':'R';
       const original = manifest.exhibits.find(item => item.kind.startsWith('run-') && item.side === side &&
         Math.round((item.at-4)/8)*8+4 === at);
@@ -408,18 +474,18 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
       const room = trackStyle(at).id, w=spec.width, h=spec.height;
       const point = positionAt(at,(side==='L'?-1:1)*spec.lateral,spec.elevation);
       const yaw = trackYaw(at)+(side==='L'?Math.PI/2:-Math.PI/2);
-      const frameGroup = frame(w,h,point,yaw,false,room);
+      const frameGroup = frame(w,h,point,yaw,false,room,true);
       const node = element(doc,'div','td-plane td-exhibit td-personal-screen',domCamera);
       node.dataset.exhibit=exhibit.id; node.dataset.room=room;
-      const facePoint = new THREE.Vector3(0,0,.075).applyAxisAngle(new THREE.Vector3(0,1,0),yaw).add(new THREE.Vector3(point.x,point.y,point.z));
-      cssPlace(node,facePoint,yaw,w*.94,h*.91);
-      const face = plate(node,null,'A still from this evening');
-      surfaces.push({node,frameGroup,exhibit,at,side,w,h,yaw,room,faces:[{face,kind:exhibit.kind}],mounts:[],personal:true});
+      placeNicheFace(node,frameGroup,spec);
+      const face = element(doc,'div','td-art',node);
+      face.style.background = '#111820';
+      surfaces.push({node,frameGroup,exhibit,at,side,w,h,yaw,room,faces:[{face,kind:exhibit.kind}],mounts:[],personal:true,niche:spec});
     }
   }
   function buildProjectors() {
     for (const spec of STORY_PROJECTORS) {
-      const w=4.8,h=2.4,top=3.94;
+      const w=6.2,h=3.1,top=4.3;
       const group = new THREE.Group(), fixed = new THREE.Group();
       const point=positionAt(spec.at,0,0), yaw=trackYaw(spec.at);
       group.position.set(point.x,point.y,point.z); group.rotation.y=yaw;
@@ -505,9 +571,9 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
   function drawProjectors(state) {
     for(const projector of projectors) {
       const distance=projector.at-state.z;
-      const approach=distance<26&&distance>Math.max(6.5,state.v*1.25+2);
-      const requested=projector.override??(!scriptedProjectors&&approach);
-      const target=requested&&distance>2.5&&distance<32?1:0;
+      const approach=distance<14&&distance>Math.max(5,state.v*.65+2);
+      const requested=projector.override??((!scriptedProjectors||narrationSpeaking)&&approach);
+      const target=requested&&distance>3.8&&distance<16?1:0;
       setProjectorTarget(projector,target);
       const p=projector.progress;
       projector.cloth.scale.y=Math.max(.001,p);
@@ -569,6 +635,7 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
     height = rect.height || 1;
     camera.aspect = width / height;
     camera.fov = width < 600 ? 85 : 61;
+    lensTime = 0;
     camera.updateProjectionMatrix();
     focal = height * .5 * camera.projectionMatrix.elements[5];
     renderer.setSize(width, height, false);
@@ -585,12 +652,35 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
     const viewYaw = calm || state.motion === 'manual' ? yaw : trackYaw(state.z+THREE.MathUtils.clamp(state.v*.35,0,4));
     const curvature = trackYaw(state.z + 1) - trackYaw(Math.max(0, state.z - 1));
     const bank = calm ? 0 : THREE.MathUtils.clamp(curvature * state.v * -.12, -.035, .035);
-    const fov = (width < 600 ? 85 : 61) + (calm ? 0 : THREE.MathUtils.smoothstep(state.v, 4, 14) * 5);
-    if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
-    focal = height * .5 * camera.projectionMatrix.elements[5];
-    viewport.style.perspective = `${focal}px`;
     camera.position.set(point.x, point.y + 1.45 + bob, point.z);
     camera.rotation.set(pitch + .055 + lookPitch, viewYaw + lookYaw, bank, 'YXZ');
+    camera.updateMatrixWorld();
+    let fov = (width < 600 ? 85 : 61) + (calm ? 0 : THREE.MathUtils.smoothstep(state.v, 4, 14) * 5);
+    // Portrait windows need a wider lens as the physical screen approaches.
+    // Keep the entire photograph in view without changing the player's look direction.
+    if (width < 600) {
+      const viewing = projectors.find(item => item.at-state.z>3.8 && item.at-state.z<16 &&
+        (item.override===true || item.progress>0));
+      if(viewing) {
+        let halfWidthRatio = viewing.w/(2*Math.max(4.5,viewing.at-state.z));
+        // A bend can put the far edge off-centre even when its total width fits.
+        if(Math.abs(lookYaw)<.35&&Math.abs(lookPitch)<.25) {
+          viewing.group.updateWorldMatrix(true,false);
+          for(const x of [-viewing.w/2,viewing.w/2]) for(const y of [viewing.top,viewing.top-viewing.h]) {
+            const corner=new THREE.Vector3(x,y,.13).applyMatrix4(viewing.group.matrixWorld).applyMatrix4(camera.matrixWorldInverse);
+            if(corner.z<-.5) halfWidthRatio=Math.max(halfWidthRatio,Math.abs(corner.x)/-corner.z);
+          }
+        }
+        const fit = 2*Math.atan((height/width)*halfWidthRatio/.84)*180/Math.PI;
+        fov = Math.max(fov,Math.min(115,fit));
+      }
+    }
+    const lensNow = doc.defaultView.performance.now();
+    const lensBlend = calm || !lensTime ? 1 : 1-Math.exp(-Math.max(0,lensNow-lensTime)*.008);
+    lensTime = lensNow;
+    if (camera.fov !== fov) { camera.fov += (fov-camera.fov)*lensBlend; camera.updateProjectionMatrix(); }
+    focal = height * .5 * camera.projectionMatrix.elements[5];
+    viewport.style.perspective = `${focal}px`;
     cartRig.position.copy(camera.position);
     cartRig.rotation.set(pitch + .055, yaw, bank, 'YXZ');
     camera.updateMatrixWorld();
@@ -618,9 +708,10 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
       pointInView.copy(surface.frameGroup.position).applyMatrix4(camera.matrixWorldInverse);
       surfaceSphere.center.copy(surface.frameGroup.position);
       surfaceSphere.radius = Math.hypot(surface.w, surface.h) * .55;
-      const visible = distance > -18 && distance < depth && pointInView.z < -.2 &&
+      let visible = distance > -18 && distance < depth && pointInView.z < -.2 &&
         frustum.intersectsSphere(surfaceSphere) &&
         !museum.occludes?.(surface.frameGroup.position, camera.position);
+      if (visible && surface.niche) visible = clipNicheFace(surface);
       surface.node.hidden = !visible;
       surface.frameGroup.visible = visible;
       if (visible) {
@@ -636,7 +727,7 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
       if (!visible) releaseSurface(surface);
     }
     visiblePersonal.sort((a,b)=>Math.abs(a.at-state.z)-Math.abs(b.at-state.z));
-    const activePersonal=new Set(visiblePersonal.slice(0,lite?4:8));
+    const activePersonal=new Set(visiblePersonal.slice(0,lite?10:16));
     for(const surface of surfaces) if(surface.personal&&!activePersonal.has(surface)) releaseSurface(surface);
     for(const surface of activePersonal) if(!surface.mounts.length) {
       for(const {face,kind} of surface.faces) surface.mounts.push(media.mount(face,{...surface.exhibit,kind}));
@@ -840,7 +931,7 @@ export function createScene(ctx, root, manifest, media, { lite = false, autoProj
       storyArt:Object.fromEntries(storyImageStatus), projectorEffects:projectorEffects.debug(), environment: museum?.debug?.(),
       personalScreens:surfaces.filter(surface=>surface.personal).length,
       activePersonalScreens:surfaces.filter(surface=>surface.personal&&surface.mounts.length).length }),
-    setSpeaking(on) { museum?.setSpeaking?.(Boolean(on)); },
+    setSpeaking(on) { narrationSpeaking=Boolean(on);museum?.setSpeaking?.(narrationSpeaking); },
     setPaused(on) {
       if (on) cancelGesture();
       root.dataset.paused = String(Boolean(on));

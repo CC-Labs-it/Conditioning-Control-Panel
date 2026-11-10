@@ -1,25 +1,56 @@
 // Local preview only. The existing host owns sign-in, consent, licensing and metering.
-export function createPreviewFeed({ onStatus = () => {} } = {}) {
+export function createPreviewFeed({ onStatus = () => {}, location = globalThis.location,
+  window = globalThis.window, document = globalThis.document,
+  setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
   const local = ['127.0.0.1', 'localhost'].includes(location.hostname);
   const capability = local ? { origin:'device', consent:false, clips:true, sessionOptIn:true, playWarmup:true } : null;
   let transport = null, opening = null, pictures = null, disposed = false, choice = null, requestId = 0;
+  let timeout = null, abortOpening = null, phase = 'idle', imageCount = 0;
+  const clearWait = () => { if(timeout!==null) clearTimer(timeout);timeout=null; };
+  function status(text, next, count = 0) {
+    phase=next;imageCount=count;
+    onStatus(text,{phase,count});
+  }
+  function failure(reason) {
+    const text = reason === 'sign-in' ? 'Sign in to CCP, then retry Scrolller.' :
+      reason === 'allowance-used' ? 'The current Scrolller allowance has been used.' :
+      reason === 'disabled' ? 'Scrolller is disabled in the current desktop profile.' :
+      'The Scrolller connection is unavailable. Retry the connection.';
+    status(text,'error');
+  }
+  function waitForImages() {
+    clearWait();
+    timeout=setTimer(()=>{
+      timeout=null;
+      if(!disposed&&phase!=='ready') status('No usable pictures arrived. Retry Scrolller or choose your own files.','empty');
+    },30000);
+  }
   function cancel() {
-    requestId++;
+    requestId++;clearWait();abortOpening?.();
     const pending=choice;choice=null;
     pending?.cancel?.();pending?.resolve(false);
     transport?.postMessage({type:'scrolller-release'});
+    phase='idle';imageCount=0;
   }
   function receive(event) {
     const frame = event.data;
     if (disposed || !frame || typeof frame !== 'object') return;
     if (frame.type === 'setting' && frame.key === 'media.remoteConsent') {
       pictures?.setRemoteConsent(frame.value, frame.reason);
-      if (!frame.value) onStatus(frame.reason === 'sign-in' ? 'Sign in to CCP, then choose Scrolller again.' :
-        frame.reason === 'allowance-used' ? 'The current Scrolller allowance has been used.' :
-        frame.reason === 'disabled' ? 'Scrolller is disabled in the current desktop profile.' : 'Scrolller connection closed.');
+      if (!frame.value) { clearWait();failure(frame.reason); }
     } else if (frame.type === 'scrolller-feed') {
       pictures?.receiveScrolller(frame);
-      if (pictures?.source === 'scrolller') onStatus(frame.rows?.length ? `Scrolller connected: ${frame.rows.length} media items` : 'Scrolller is preparing your approved channels.');
+      if(pictures?.source!=='scrolller') return;
+      const count=pictures.stillsForDisplay?.(36,{allowScrolller:true}).length||0;
+      if(count) {
+        clearWait();status(`${count} Scrolller pictures are available for the gallery.`,'ready',count);
+      } else if(frame.building===true) {
+        if(phase==='empty') return;
+        status('Preparing pictures from your current CCP channels...','loading');
+        if(timeout===null) waitForImages();
+      } else {
+        clearWait();status('The current feed has no usable still pictures. Retry Scrolller or choose your own files.','empty');
+      }
     }
   }
   async function open() {
@@ -28,9 +59,16 @@ export function createPreviewFeed({ onStatus = () => {} } = {}) {
     if (!opening) opening = new Promise((resolve, reject) => {
       if (window.chrome?.webview) { resolve(); return; }
       const script = document.createElement('script');
+      let settled=false;
+      const finish=error=>{
+        if(settled) return;settled=true;clearTimer(timer);abortOpening=null;script.remove();
+        if(error) reject(error);else resolve();
+      };
+      const timer=setTimer(()=>finish(new Error('The local Scrolller preview host did not respond.')),15000);
+      abortOpening=()=>finish(new Error('The preview connection was canceled.'));
       script.src = '/__wheel-feed/bridge.js'; script.async = true;
-      script.onload = () => { script.remove(); resolve(); };
-      script.onerror = () => { script.remove(); reject(new Error('The local Scrolller preview host is unavailable.')); };
+      script.onload = () => finish();
+      script.onerror = () => finish(new Error('The local Scrolller preview host is unavailable.'));
       document.head.append(script);
     }).then(() => {
       if (disposed || !window.chrome?.webview) throw new Error('The local Scrolller bridge did not open.');
@@ -47,24 +85,34 @@ export function createPreviewFeed({ onStatus = () => {} } = {}) {
     send(type, fields = {}) { transport?.postMessage({ type, ...fields }); },
     async choose() {
       const current=++requestId;
-      onStatus('Connecting to the current CCP media profile...');
+      const previous=choice;choice=null;previous?.cancel?.();previous?.resolve(false);clearWait();
+      status('Connecting to the current CCP media profile...','connecting');
       try {
         await open();
         if(disposed||current!==requestId) return false;
         return await new Promise(resolve => {
           const pending={resolve,cancel:null};choice=pending;
+          timeout=setTimer(()=>{
+            if(choice!==pending) return;
+            choice=null;timeout=null;pending.cancel?.();
+            status('The CCP media profile did not respond. Retry the connection.','error');resolve(false);
+          },15000);
           pending.cancel=pictures.chooseScrolller((allowed, reason) => {
-            if(choice===pending) choice=null;
-            if (allowed) onStatus('Scrolller is preparing your approved channels.');
-            else if (reason === 'sign-in') onStatus('Sign in to CCP, then choose Scrolller again.');
+            if(choice!==pending) return;
+            choice=null;clearWait();
+            if(allowed) {
+              status('Preparing pictures from your current CCP channels...','loading');
+              waitForImages();pictures.requestFeed?.();
+            } else failure(reason);
             resolve(allowed);
           });
         });
       } catch {
-        onStatus('Open this preview through its local Scrolller adapter, then try again.');
+        if(!disposed&&current===requestId) status('The local Scrolller adapter is unavailable. Retry after it is running.','error');
         return false;
       }
     },
+    debug:()=>({phase,imageCount,pending:Boolean(choice),waiting:timeout!==null}),
     dispose() {
       if (disposed) return;
       cancel();

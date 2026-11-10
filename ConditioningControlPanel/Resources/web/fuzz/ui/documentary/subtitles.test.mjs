@@ -23,7 +23,7 @@ test('the animal, floorboard and replay slides use actual recorded phrase onsets
   const slides = projectionTimeline('r3').filter(cue => cue.slot);
   const expected = [4.08, 8.16, 14.72, 18.08, 28.56, 33.04];
   slides.forEach((cue, index) => assert.ok(Math.abs(cue.at * duration - expected[index]) < 1e-6));
-  assert.equal(pacingTimeline('r3', duration).find(point => point.z === 287).at, 8.16);
+  assert.equal(pacingTimeline('r3', duration).find(point => point.z === 301.11).at, 8.16);
   const wakeup = projectionTimeline('r4').filter(cue => cue.slot);
   assert.deepEqual(wakeup.map(cue => cue.projector), ['wakeup', 'conversation']);
   assert.ok(Math.abs(wakeup[0].at * NARRATION_ALIGNMENT.r4.duration - 15.52) < 1e-6);

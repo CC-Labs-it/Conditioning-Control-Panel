@@ -5,13 +5,62 @@ const BAY_LENGTH = 8;
 const HALF_WIDTH = 4.6;
 const ROOM_ENDS = [130, 180, 340, 400, 520];
 const ROOM_IDS = ['intake', 'connector', 'reflex', 'descent', 'wakeup', 'theatre'];
-const nichePositions = [[148, -1], [164, 1], [204, 1], [236, -1], [356, 1], [372, -1], [388, 1], [420, 1], [452, -1], [492, 1]];
-for (let distance = 4; distance < 130; distance += BAY_LENGTH) {
+const curatedArt = [[36, -1], [66, 1], [104, -1], [194, -1], [210, 1], [226, -1], [298, 1], [312, -1], [418, -1], [504, -1]];
+const physicalExhibits = [[49, -1], [68, 1], [100, -1], [196, -1], [225, 1], [260, 1], [284, -1], [306, -1], [436, 1], [470, 1], [500, 1]];
+const nichePositions = new Map();
+for (let distance = 4; distance <= 548; distance += BAY_LENGTH) for (const side of [-1, 1]) {
   if (distance === 12 || distance === 20) continue;
-  for (const side of [-1, 1]) nichePositions.push([distance, side]);
+  if (curatedArt.some(([at, wall]) => wall === side && Math.abs(distance - at) < 4.1)) continue;
+  if ([248, 264, 280, 300].some(at => Math.abs(distance - at) < 4.1)) continue;
+  if (physicalExhibits.some(([at, wall]) => wall === side && Math.abs(distance - at) < 3.8)) continue;
+  nichePositions.set(`${distance}/${side}`, { distance, side });
 }
-export const SCREEN_NICHES = Object.freeze(nichePositions.sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(([distance, side]) =>
-  Object.freeze({ distance, side, lateral: 5.85, elevation: 2.3, width: 4.45, height: 2.503125 })));
+for (const [distance, side, collectionAt] of [[244, -1, 248], [244, 1, 248], [268, -1, 264], [268, 1, 264], [276, -1, 280], [276, 1, 280], [300, -1, 300], [292, 1, 300]]) {
+  nichePositions.set(`${distance}/${side}`, { distance, side, collectionAt });
+}
+export const SCREEN_NICHES = Object.freeze([...nichePositions.values()].sort((a, b) => a.distance - b.distance || a.side - b.side).map(spec => {
+  const { distance, side } = spec, lateral = 4.54;
+  const center = trackPosition(distance, side * lateral), before = trackPosition(distance - .05, side * lateral), after = trackPosition(distance + .05, side * lateral);
+  const dx = after.x - before.x, dy = after.y - before.y, dz = after.z - before.z, length = Math.hypot(dx, dy, dz);
+  const direction = { x: dx / length, y: dy / length, z: dz / length };
+  const extent = sign => {
+    const edge = trackPosition(distance + sign * 2.45, side * lateral);
+    return Math.abs((edge.x - center.x) * direction.x + (edge.y - center.y) * direction.y + (edge.z - center.z) * direction.z);
+  };
+  // Tight inner turns have shorter walls. Size the flat frame to that actual pocket.
+  let width = Math.min(4.45, 2 * Math.min(extent(-1), extent(1)) - .24);
+  const roll = -side * Math.atan2(dy, Math.hypot(dx, dz));
+  const yaw = trackYaw(distance) + (side < 0 ? Math.PI / 2 : -Math.PI / 2);
+  const ceiling = { intake: 3.8, connector: 4.05, reflex: 3.9, descent: 4.05, wakeup: 3.7, theatre: 3.8 }[roomAt(distance)] - .18;
+  const fits = candidate => {
+    for (const x of [-1, 1]) for (const y of [-1, 1]) for (const depth of [-.167, .082]) {
+      const localX = x * (candidate / 2 + .082), localY = y * (candidate * 9 / 32 + .082);
+      const horizontal = localX * Math.cos(roll) - localY * Math.sin(roll);
+      const corner = {
+        x: center.x + Math.cos(yaw) * horizontal + Math.sin(yaw) * depth,
+        y: center.y + 2.18 + localX * Math.sin(roll) + localY * Math.cos(roll),
+        z: center.z - Math.sin(yaw) * horizontal + Math.cos(yaw) * depth,
+      };
+      const along = at => {
+        const point = trackPosition(at), angle = trackYaw(at);
+        return (corner.x - point.x) * -Math.sin(angle) + (corner.z - point.z) * -Math.cos(angle);
+      };
+      let at = distance;
+      for (let iteration = 0; iteration < 5; iteration++) {
+        const derivative = (along(at + .02) - along(at - .02)) / .04;
+        if (Math.abs(derivative) < .05) return false;
+        at = Math.max(distance - 3.4, Math.min(distance + 3.4, at - along(at) / derivative));
+      }
+      const point = trackPosition(at), angle = trackYaw(at);
+      const wallDistance = Math.abs((corner.x - point.x) * Math.cos(angle) - (corner.z - point.z) * Math.sin(angle));
+      const elevation = corner.y - point.y;
+      if (Math.abs(at - distance) > 2.42 || wallDistance > 5.99 || elevation < .86 || elevation > ceiling) return false;
+    }
+    return true;
+  };
+  for (let attempt = 0; attempt < 24 && !fits(width); attempt++) width *= .96;
+  return Object.freeze({ ...spec, lateral, elevation: 2.18, width, height: width * 9 / 16, roll });
+}));
 const screenSides = new Map();
 for (const { distance, side } of SCREEN_NICHES) screenSides.set(distance, screenSides.has(distance) ? 2 : side);
 
@@ -401,8 +450,8 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
         box('amberLight', side * 4.26, 1.95, -3.25, 0.055, 0.06, 1.2);
         box('amberLight', side * 4.26, 1.95, 3.25, 0.055, 0.06, 1.2);
         // Closed specimen drawers, controls and inset instrument windows.
-        box('chrome', side * 5.73, 0.49, 0, 0.65, 0.98, 3.6);
-        for (const z of [-1.25, -0.42, 0.42, 1.25]) {
+        if (!hasScreen(side)) box('chrome', side * 5.73, 0.49, 0, 0.65, 0.98, 3.6);
+        for (const z of hasScreen(side) ? [] : [-1.25, -0.42, 0.42, 1.25]) {
           box('lacquerBlack', side * 5.36, 0.62, z, 0.04, 0.74, 0.72);
           cylinder('amberLight', side * 5.31, 0.72, z, 0.055, 0.025, 0, 0, Math.PI / 2);
         }
@@ -413,7 +462,7 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
         }
         wallSpeaker(side, 4.48, 3.28, 3.22);
       }
-      instrumentRack(screenSide ? -screenSide : variant ? 1 : -1);
+      if (screenSide !== 2) instrumentRack(screenSide ? -screenSide : variant ? 1 : -1);
       const stoolSide = variant ? -1 : 1;
       cylinder('lacquerBlack', stoolSide * 5.07, 0.12, -0.85, 0.32, 0.09);
       cylinder('chrome', stoolSide * 5.07, 0.35, -0.85, 0.045, 0.45);
@@ -477,11 +526,12 @@ export function createMuseum(THREE, materials, { lite = false } = {}) {
       }
     } else {
       for (const side of [-1, 1]) {
-        box('plaster', side * 4.73, 1.9, 0, 0.26, 3.8, BAY_LENGTH, true);
+        if (hasScreen(side)) alcove(side, 3.8);
+        else box('plaster', side * 4.73, 1.9, 0, 0.26, 3.8, BAY_LENGTH, true);
         box('pearl', side * 4.57, 0.12, 0, 0.08, 0.24, BAY_LENGTH);
         box('iron', side * 4.52, 0.25, 0, 0.025, 0.025, BAY_LENGTH);
         box('pearl', side * 4.57, 3.69, 0, 0.12, 0.14, BAY_LENGTH);
-        if (variant && side < 0) grille(side, 4.54, 3.16, -1.1, 0.8, 0.28);
+        if (variant && side < 0 && !hasScreen(side)) grille(side, 4.54, 3.16, -1.1, 0.8, 0.28);
       }
       box('plaster', 0, 3.92, 0, 9.5, 0.24, BAY_LENGTH, true);
       if (variant) {

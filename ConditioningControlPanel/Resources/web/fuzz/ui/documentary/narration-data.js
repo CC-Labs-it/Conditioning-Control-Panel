@@ -464,8 +464,8 @@ export const NARRATION_BANKS = Object.freeze({
 });
 export const RIDE_RECORDINGS = Object.freeze([
   {"id": "r1", "at": 0, "projector": "booth", "hold": null, "beats": [{"id": "booth.unlock", "at": 1.4}]},
-  {"id": "r2", "at": 92, "projector": "lever", "hold": null, "beats": []},
-  {"id": "r3", "at": 268, "projector": "reflex", "hold": null, "beats": []},
+  {"id": "r2", "at": 102, "projector": "lever", "hold": null, "beats": []},
+  {"id": "r3", "at": 291, "projector": "reflex", "hold": null, "beats": []},
   {"id": "r4", "at": 370, "projector": "wakeup", "hold": null, "beats": []}
 ]);
 export const STAGE_SCHEDULE = Object.freeze([

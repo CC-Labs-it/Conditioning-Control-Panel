@@ -76,7 +76,7 @@ test('recording allowlist is complete and schedule has no placeholder clips', ()
 test('ride queue cannot overlap; ended applies terminal beats and releases before the next recording', async () => {
   const h = harness(); await h.narration.ready;
   assert.equal(h.streams[0].id, 'r1');
-  h.cue('narration.r2', 92);
+  h.cue('narration.r2', 102);
   assert.equal(h.streams.length, 1);
   h.streams[0].end();
   assert.equal(h.ctx.paused, false);
@@ -91,7 +91,7 @@ test('ride queue cannot overlap; ended applies terminal beats and releases befor
 });
 
 test('recordings continue through every former distance gate without installing stationary holds', async () => {
-  for (const [at, id, offset] of [[92, 'r2', 23], [268, 'r3', 22], [370, 'r4', 10]]) {
+  for (const [at, id, offset] of [[102, 'r2', 23], [291, 'r3', 22], [370, 'r4', 10]]) {
     const h = harness({ at }); await h.narration.ready;
     const recording = h.streams[0]; assert.equal(recording.id, id);
     recording.time(offset);
@@ -253,12 +253,12 @@ test('subtitles follow actual media duration and seeks, toggle immediately, and 
 });
 
 test('voice fades use actual media time and ducking clears during the gap and immediately on panic', async () => {
-  const h = harness({ at: 268 }); await h.narration.ready; const recording = h.streams[0]; recording.el.duration = 60;
+  const h = harness({ at: 291 }); await h.narration.ready; const recording = h.streams[0]; recording.el.duration = 60;
   assert.equal(recording.gains[0], 0);
   recording.time(0.06); assert.ok(Math.abs(recording.gains.at(-1) - 0.5) < 0.001);
   recording.time(0.12); assert.equal(recording.gains.at(-1), 1);
   recording.time(60 - VERIFIED_RELEASE_SECONDS.r3 / 2); assert.ok(Math.abs(recording.gains.at(-1) - 0.5) < 0.001);
-  h.cue('narration.r2', 92); recording.end();
+  h.cue('narration.r2', 102); recording.end();
   assert.equal(h.speaking.at(-1), false); assert.equal(h.captions.textContent, '');
   h.tick(1499); assert.equal(h.streams.length, 1);
   h.tick(1); assert.equal(h.speaking.at(-1), true); assert.equal(h.maxConcurrent, 1);
@@ -319,7 +319,7 @@ test('replacing a queued hover reaction does not consume its quota', async () =>
 });
 
 test('slideshow order follows the same subtitle cue boundaries at actual media duration', async () => {
-  const h = harness({ at: 268 }); await h.narration.ready;
+  const h = harness({ at: 291 }); await h.narration.ready;
   const recording = h.streams[0]; recording.el.duration = 80;
   const slides = projectionTimeline('r3').filter(cue => cue.slot);
   assert.deepEqual(slides.map(cue => cue.slot), ['reflex-cheetah', 'reflex-shrimp', 'subject-habitat', 'floorboard-warning', 'subject-spreadsheet', 'subject-spreadsheet']);
@@ -345,7 +345,7 @@ test('adjusting a subtitle boundary moves the matching slide without an independ
   const cheetah = subtitleData.r3.find(cue => cue[2].includes('The cheetah reaches'));
   cheetah[0] = 0.15;
   assert.equal(projectionTimeline('r3', subtitleData).find(cue => cue.slot === 'reflex-cheetah').at, 0.15);
-  const h = harness({ at: 268, subtitleData }); await h.narration.ready;
+  const h = harness({ at: 291, subtitleData }); await h.narration.ready;
   h.streams[0].el.duration = 40;
   h.streams[0].time(5.999); assert.ok(!h.beats.some(beat => beat.data?.slot === 'reflex-cheetah'));
   h.streams[0].time(6.001); assert.match(h.captions.textContent, /^The cheetah reaches/);
@@ -359,13 +359,13 @@ test('adjusting a subtitle boundary moves the matching slide without an independ
 });
 
 test('earlier commentary drives a moving route and has no end-of-recording distance hold', async () => {
-  assert.deepEqual(RIDE_RECORDINGS.filter(row => row.id !== 'r1').map(row => [row.id, row.at, row.hold]), [['r2', 92, null], ['r3', 268, null], ['r4', 370, null]]);
+  assert.deepEqual(RIDE_RECORDINGS.filter(row => row.id !== 'r1').map(row => [row.id, row.at, row.hold]), [['r2', 102, null], ['r3', 291, null], ['r4', 370, null]]);
   const h = harness({ at: 180 }); await h.narration.ready;
   assert.equal(h.narration.debug().current, null);
-  h.cue('narration.r3', 268); assert.equal(h.narration.debug().current, 'r3');
+  h.cue('narration.r3', 291); assert.equal(h.narration.debug().current, 'r3');
   assert.equal(h.holds.size, 0);
   h.streams[0].time(22); assert.equal(h.pace().mode, 'narration');
-  assert.ok(h.pace().speed > .3);
+  assert.ok(h.pace().speed >= .12);
   h.streams[0].time(NARRATION_CLIPS.r3.duration + 1); assert.equal(h.holds.size, 0);
   h.streams[0].end(); assert.equal(h.holds.size, 0); h.narration.dispose();
 });

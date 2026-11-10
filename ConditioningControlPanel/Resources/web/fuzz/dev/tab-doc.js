@@ -3,6 +3,7 @@ import { createPictures } from '../ui/pictures.js';
 import { createAds } from '../ui/ads.js';
 import { createKit } from '../audio/kit.js';
 import { createPreviewFeed } from './tab-doc-feed.js';
+import { previewPictureSource, rememberPreviewPictureSource } from './tab-doc-source.js';
 
 const query = new URLSearchParams(location.search);
 const events = new Map(), frames = new Set(), timers = new Set(), cleanups = new Set(), animations = new Set();
@@ -10,16 +11,29 @@ let active = 0, paused = false, manual = query.get('manual') === '1', last = per
 let simulatedWall = 0, openTabs = 0, ended = false;
 const $ = id => document.getElementById(id);
 const emit = (event, data) => { for (const fn of [...(events.get(event) || [])]) fn(data); };
-let galleryDismissed = false;
-function updateGalleryStatus(text) {
+let sourceStorage;
+try { sourceStorage=window.localStorage; } catch { /* Use this visit's preference when storage is unavailable. */ }
+let preferredSource=previewPictureSource(location.search,sourceStorage);
+if(!manual&&query.get('test')!=='1'&&['scrolller','own','none'].includes(query.get('pics'))) rememberPreviewPictureSource(preferredSource,sourceStorage);
+let galleryDismissed=preferredSource==='none',galleryPhase='idle';
+function rememberSource(source) {
+  preferredSource=source;
+  rememberPreviewPictureSource(source,sourceStorage);
+  const url=new URL(location.href);url.searchParams.set('pics',source);history.replaceState(null,'',url);
+}
+function updateGalleryStatus(text, state) {
+  if(state) { galleryPhase=state.phase;if(preferredSource!=='scrolller') return; }
   $('media-status').textContent = text;
   $('gallery-status').textContent = text;
+  syncGallerySource();
 }
-function syncGallerySource(source) {
-  $('gallery-connect').hidden = galleryDismissed || source === 'own' || source === 'scrolller';
+function syncGallerySource() {
+  const own=preferredSource==='own';
+  $('gallery-connect').hidden=galleryDismissed||preferredSource==='none'||(own&&pictures.ownCount>0)||(!own&&galleryPhase==='ready');
+  $('connect-gallery').textContent=own?'Choose own files':galleryPhase==='connecting'?'Connecting Scrolller...':'Retry Scrolller images';
 }
 const feed = createPreviewFeed({ onStatus: updateGalleryStatus });
-const pictures = createPictures({ source: query.get('pics') || 'none', scrolller:feed.capability,
+const pictures = createPictures({ source: preferredSource==='own'?'own':'none', scrolller:feed.capability,
   send:(type,fields)=>feed.send(type,fields),
   onChange: source => { emit('pictures', { source }); syncGallerySource(source); }, onAdded: source => emit('pictures-added', { source }) });
 feed.attach(pictures);
@@ -106,7 +120,7 @@ const manifest = await fetch(MANIFEST_URL).then(response => response.json());
 const requestedStart = query.get('at') || 'booth';
 const narratedPreview = query.get('voice') === '1' || (!manual && query.get('test') !== '1' && query.get('voice') !== '0');
 // Chapter doors enter on the approach so the narration has room to travel.
-const chapterDoors = { lever:92, floorboard:268, wakeup:370, '303':268, '410':370 };
+const chapterDoors = { lever:102, floorboard:291, wakeup:370, '92':102, '268':291, '303':291, '410':370 };
 const startAt = narratedPreview && Object.hasOwn(chapterDoors, requestedStart) ? chapterDoors[requestedStart] :
   /^\d+(?:\.\d+)?$/.test(requestedStart) ? Number(requestedStart) : requestedStart;
 const tunnel = createTabTunnel(ctx, $('l-ending'), {
@@ -117,27 +131,34 @@ const tunnel = createTabTunnel(ctx, $('l-ending'), {
   onDispose() { ended=true; galleryDismissed=true; pictures.setGameplayActive(false);pictures.setSource('none');feed.dispose();$('finished').hidden = false; },
 });
 pictures.setGameplayActive(!paused && !document.hidden);
-async function connectGallery() {
+async function connectGallery(persist = true) {
+  if(persist!==false) rememberSource('scrolller');
   galleryDismissed=false;
   $('use-scrolller').disabled=$('connect-gallery').disabled=true;
   try { if(await feed.choose()) $('preview').open=false; }
   finally { $('use-scrolller').disabled=$('connect-gallery').disabled=false;syncGallerySource(pictures.source); }
 }
-$('use-scrolller').onclick = $('connect-gallery').onclick = connectGallery;
-$('use-none').onclick = () => { galleryDismissed=true;feed.cancel();pictures.setSource('none');syncGallerySource('none');updateGalleryStatus('Pictures are off.'); };
-$('use-own').onclick = () => {
+$('use-scrolller').onclick = () => connectGallery();
+$('connect-gallery').onclick = () => preferredSource==='own'?useOwnFiles():connectGallery();
+$('use-none').onclick = () => { rememberSource('none');galleryDismissed=true;feed.cancel();pictures.setSource('none');syncGallerySource();updateGalleryStatus('Pictures are off. Your choice is saved for the next visit.'); };
+function useOwnFiles() {
+  rememberSource('own');galleryDismissed=false;
   feed.cancel();
-  if(pictures.ownCount) { pictures.setSource('own');$('media-status').textContent=`Using ${pictures.ownCount} personal media files`; }
-  else $('media-files').click();
-};
-if(query.get('pics')==='scrolller') $('media-status').textContent='Choose Use Scrolller to connect this visit to your current CCP profile.';
-syncGallerySource(pictures.source);
+  pictures.setSource('own');
+  if(pictures.ownCount) updateGalleryStatus(`Using ${pictures.ownCount} personal media files`);
+  else { updateGalleryStatus('Your own-file choice is saved. Choose files again for this visit.');$('media-files').click(); }
+}
+$('use-own').onclick = useOwnFiles;
+if(preferredSource==='own') updateGalleryStatus('Your own-file choice is saved. Choose files again for this visit.');
+else if(preferredSource==='none') updateGalleryStatus('Pictures are off. Choose a source under Ride preview.');
+syncGallerySource();
 $('media-files').addEventListener('change', event => {
   if (pictures.replaceOwn(event.target.files)) {
+    rememberSource('own');galleryDismissed=false;
     feed.cancel();
     pictures.setSource('own');
     $('media-label').textContent = `${pictures.ownCount} personal media files`;
-    $('media-status').textContent = `Using ${pictures.ownCount} personal media files`;
+    updateGalleryStatus(`Using ${pictures.ownCount} personal media files`);
     $('preview').open = false;
   }
 });
@@ -152,6 +173,8 @@ window.__tabDoc = {
   tunnel, ctx, emit, pause, panic,
   step(seconds) { manual = true; if (raf !== null) cancelAnimationFrame(raf); raf = null; advance(seconds); },
   wall(seconds) { simulatedWall += seconds * 1000; tunnel.beat('stage.timer'); },
-  stats() { return { ...tunnel.debug(), callbacks: frames.size, timers: timers.size, subscriptions: [...events.values()].reduce((n, set) => n + set.size, 0), openTabs, nodes: document.querySelectorAll('*').length }; },
+  stats() { return { ...tunnel.debug(), callbacks: frames.size, timers: timers.size, subscriptions: [...events.values()].reduce((n, set) => n + set.size, 0), openTabs, nodes: document.querySelectorAll('*').length,
+    pictures:{source:pictures.source,preferred:preferredSource,...feed.debug()} }; },
 };
+if(preferredSource==='scrolller') void connectGallery(false);
 addEventListener('pagehide', () => { for (const cleanup of cleanups) cleanup(); for (const animation of animations) animation.cancel(); feed.dispose(); audio.stopStreams(); pictures.clearOwn(); });

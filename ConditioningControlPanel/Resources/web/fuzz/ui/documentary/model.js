@@ -125,7 +125,10 @@ export function createRide(manifest, { cues = [], reduced = false, at = 0 } = {}
       const motion = trackMotion(z, reduced);
       const pace = paceProvider?.(state);
       let cap = motion.cap;
-      if (currentZone?.cap) cap = Math.min(cap, currentZone.cap);
+      if (currentZone?.cap) {
+        const zoneCap = Number.isFinite(pace?.zoneCap) && pace.zoneCap > 0 ? pace.zoneCap : currentZone.cap;
+        cap = Math.min(cap, zoneCap);
+      }
       if (z >= 553) cap = Math.min(cap, Math.max(0.7, (dock - z) * 0.4));
       v = Math.min(v, cap);
       let nextV = Math.max(0, (v + 0.375) * Math.exp(-0.32 * dt) - 0.375);
