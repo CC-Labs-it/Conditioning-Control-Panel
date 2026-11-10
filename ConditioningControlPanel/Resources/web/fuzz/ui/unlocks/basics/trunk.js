@@ -4,7 +4,7 @@
 import { moan } from '../moan.js';
 import { critMult } from '../prestige/boosts.js';  // prestige hook (Renewal Sky, boosts lane)
 import { mountCountUp } from '../../../sim/prestige-endings.js';  // prestige hook (Renewal Sky): Count Up ending, spirals pay more
-import { ACHIEVEMENTS, DROP_WORDS, FAKE_DESKTOP, LUCKY_WORDS, THEMES, THEME_IDS, thoughtsFor } from '../../../data/content/index.js';
+import { DROP_WORDS, FAKE_DESKTOP, LUCKY_WORDS, THEMES, THEME_IDS, thoughtsFor } from '../../../data/content/index.js';
 import { FORKS } from '../../../data/items.js';
 import { SECOND_THEME } from './copy.js';
 import { THEME_PALETTES } from '../../palette.js';
@@ -15,6 +15,8 @@ import { setIconSet } from '../../icons.js';
 import { mediaSlot, themeLists, themeNiche } from '../../screens.js';
 import { createTunnelGL, cssRgb, mixRgb } from './warp-tunnel.js';
 import { BURST_HOLD_MS, burstTiers, createTapWindow } from '../../../sim/tap-rate.js';
+import { dueThisRun, meterMult, METER_CELLS } from '../../../sim/stickers.js';
+import { STICKER_BY_ID } from '../../../data/content/stickers.js';
 import { sellAllJoke, SELL_ALL_AD } from '../../sell-all.js';
 
 /* A fork lands like a stamp: the choice crosses the middle of the screen. */
@@ -32,23 +34,6 @@ const stampFork = {
 };
 
 const stageOf = (s) => (s.clock > 18 * 60000 ? 'late' : s.clock > 8 * 60000 ? 'mid' : 'early');
-
-/* ---- achievements: conditions read from state and events, kept in the store ---- */
-function achieved(st, seen) {
-  return ACHIEVEMENTS.filter((a) => {
-    if (seen.has(a.id)) return false;
-    const [what, n] = a.when.split(':');
-    const need = Number(n);
-    switch (what) {
-      case 'taps': return st.taps >= need;
-      case 'buys': return st.buys >= need;
-      case 'total': return st.total >= need;
-      case 'minutes': return st.clock >= need * 60000;
-      case 'forks': return Object.keys(st.picks).length >= need;
-      default: return (st.tally[what] || 0) >= need;
-    }
-  });
-}
 
 export default {
   f1: stampFork, f2: stampFork, f3: stampFork, f4: stampFork, f5: stampFork,
@@ -103,16 +88,28 @@ export default {
     },
   },
 
-  /* Achievements: stars fly into a ten cell meter. Each full meter is +10% of everything. */
+  /* Achievements: stars fly into a ten cell meter. Each full meter is +10% of everything, up to the old +30%.
+     Every sticker also goes in the Sticker Book (life.stickers, sim/stickers.js), which keeps them across runs. */
   depth: {
     mount(ctx) {
-      const earned = new Set(ctx.store.get('earned') || []);
+      const earned = new Set((ctx.store.get('earned') || []).filter((id) => STICKER_BY_ID[id]));
       const tally = ctx.store.get('tally') || {};
-      const note = (k) => { tally[k] = (tally[k] || 0) + 1; ctx.store.set('tally', tally); };
+      const note = (k, n = 1) => { tally[k] = (tally[k] || 0) + n; ctx.store.set('tally', tally); };
       const row = ctx.el('div', 'order:2;display:flex;gap:3px;margin-top:3px;', null, ctx.layer('meters'));
       const cells = Array.from({ length: 10 }, () => ctx.el('i', 'display:block;width:15px;height:9px;background:var(--panel-short);border:1px solid var(--line);transition:background .25s;', null, row));
-      const paint = () => { const on = earned.size % 10; cells.forEach((c, i) => { c.style.background = i < on ? 'var(--stamp)' : 'var(--panel-short)'; }); };
-      const mult = () => 1 + Math.floor(earned.size / 10) * 0.1;
+      /* The Sticker Book's door (ui/sticker-book.js): a little book at the start of the meter; it hops after a new sticker. */
+      const bookBtn = ctx.el('button', 'width:26px;height:26px;margin:-9px 2px 0 0;padding:0;border:0;background:none;cursor:pointer;pointer-events:auto;touch-action:manipulation;', null, row);
+      bookBtn.type = 'button';
+      bookBtn.title = 'Sticker Book';
+      bookBtn.setAttribute('aria-label', 'Open the Sticker Book');
+      const bookArt = ctx.el('img', 'width:100%;height:100%;object-fit:contain;pointer-events:none;', null, bookBtn);
+      bookArt.alt = '';
+      bookArt.src = 'assets/clipart/book.webp';
+      row.prepend(bookBtn);
+      bookBtn.addEventListener('click', () => ctx.emit('sticker-book'));
+      const hop = () => { if (!ctx.gentle) ctx.anim(bookBtn, [{ transform: 'none' }, { transform: 'translateY(-6px) rotate(-10deg)', offset: 0.4 }, { transform: 'none' }], { duration: 450, iterations: 3, easing: 'ease-out' }); };
+      const paint = () => { const on = earned.size % METER_CELLS; cells.forEach((c, i) => { c.style.background = i < on ? 'var(--stamp)' : 'var(--panel-short)'; }); };
+      const mult = () => meterMult(earned.size);
       ctx.mod({ fps: (v) => v * mult(), click: (v) => v * mult() });
       paint();
 
@@ -134,21 +131,27 @@ export default {
         if (showing || !queue.length) return;
         const a = queue.shift();
         card(a);
-        earned.add(a.id);
-        ctx.store.set('earned', [...earned]);
+        if (ctx.stickers.earn(a.id) || a.scope === 'life') hop();   // a lifetime sticker was written by sync() already
         const r = row.getBoundingClientRect();
         ctx.float(r.left + r.width / 2, r.top, '★', 'color:var(--stamp);font-size:20px;');
         sfx(ctx, 'sfx/chime2.mp3', 0.4);
+        if (a.scope !== 'run') return;   // a lifetime sticker goes in the book, not on this run's meter
+        const before = mult();
+        earned.add(a.id);
+        ctx.store.set('earned', [...earned]);
         paint();
-        if (earned.size % 10 === 0) {
+        if (mult() > before) {
           sfx(ctx, 'sfx/rank_up.mp3', 0.6);
           pop(ctx, r.left + r.width / 2, r.bottom + 24, '+10%', { size: 30, ms: 1400 });
           burst(ctx, r.left + r.width / 2, r.top, { n: 18, reach: 90 });
         }
       };
       ctx.on('wall', ({ corner }) => { if (corner) note('corner'); });
-      ctx.on('golden', () => note('golden'));
-      ctx.on('resume', () => note('resume'));
+      ctx.on('golden', () => { note('golden'); ctx.stickers.note('golden'); });
+      ctx.on('resume', () => { if (!tally.resume) ctx.stickers.note('wakeRuns'); note('resume'); });
+      ctx.on('away', (d) => { if ((d?.ms || 0) >= 3600000) note('away1h'); });
+      /* Games and cards report sticker progress: {key, n?, life?}. life = a lifetime counter (sim/stickers.js LIFE_TALLIES). */
+      ctx.on('sticker', (d) => { if (typeof d?.key !== 'string') return; if (d.life) ctx.stickers.note(d.key, d.n || 1); else note(d.key, d.n || 1); });
       ctx.on('ad', (d) => { note('adclick'); if (d?.ccp) note('ccpclick'); });
       ctx.on('answer', () => note('answers'));
       ctx.on('refused', () => note('refusals'));
@@ -164,11 +167,16 @@ export default {
         const st = ctx.state;
         if (st.taps !== lastTaps) { lastTaps = st.taps; idle = 0; }
         else { idle += 1; if (idle >= 30 && !tally.rest) { tally.rest = 30; } if (idle >= 120) tally.rest = 120; }
-        for (const a of achieved({ taps: st.taps, buys: st.buys, total: st.total, clock: st.clock, picks: st.picks, tally }, earned)) {
+        for (const a of dueThisRun({ taps: st.taps, buys: st.buys, total: st.total, clock: st.clock, picks: st.picks, owned: st.owned, tally }, ctx.life, earned)) {
           if (!queue.includes(a)) queue.push(a);
         }
+        for (const id of ctx.stickers.sync()) queue.push(STICKER_BY_ID[id]);
         pump();
       };
+      /* Quietly, once: this run's stickers and what the save already earns (endings seen before the book existed)
+         go in the book without a card each. Cards are for what happens while playing. */
+      for (const id of earned) ctx.stickers.earn(id);
+      ctx.stickers.sync();
       check();
       ctx.every(1000, check);
       return {};
@@ -339,7 +347,7 @@ export default {
       const setGrow = () => docOf(ctx).documentElement.style.setProperty('--tilt-grow', grow());
       setGrow();
       ctx.every(1000, () => { if (ctx.gentle) a.cancel(); setGrow(); });
-      ctx.cleanup(() => docOf(ctx).documentElement.style.removeProperty('--tilt-grow'));
+      ctx.cleanup(() => docOf(ctx).documentElement.style.removeProperty('--tilt-grow'));
       return {};
     },
   },

@@ -125,6 +125,7 @@ export function mountSlots(ctx) {
     if(completed){
       rolling=false;scene?.settle();scene?.setStops(stops(s.last));scene?.reveal(completed.win);root.dataset.win=String(completed.win);
       if(completed.win){
+        ctx.emit('sticker', { key: 'slots3' });  // Sticker Book: Three of a Kind
         const rates=ctx.rates(),b=canvas.getBoundingClientRect();
         const got=ctx.pay(Math.max(rates.fps*(completed.big?90:45),rates.click*(completed.big?160:80)),'mini_slots',{x:b.left+b.width/2,y:b.top+b.height/2});
         s.result=`${completed.big?'Spiral sweep':'Lovely little win'} +${ctx.fmt(got)} ${ctx.brand.currency}`;
