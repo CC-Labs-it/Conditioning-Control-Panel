@@ -34,6 +34,7 @@ import { createAwayClock } from './away.js';
 import { runThemes, themed } from './theme-text.js';
 import { nextFrame, frameRect } from './perf.js';
 import { mountStickerBook } from './sticker-book.js';
+import { createStage } from './stage.js';
 
 export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   const $ = (id) => doc.getElementById(id);
@@ -52,7 +53,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   const cards = createCards(doc, el.cards);
   const motionQuery = win.matchMedia?.('(prefers-reduced-motion: reduce)');
   let gentleOn = !!extras.gentle, initGentle = !!init.gentle, initReduced = !!init.reduced;
-  let engine = null, shop = null, purchaseFeel = null;
+  let engine = null, shop = null, purchaseFeel = null, stage = null;
   let particles = 0, dims = { w: win.innerWidth, h: win.innerHeight };
   let lockUntil = 0, swapUntil = 0, toastEl = null, tickerBusy = 0;
   let downTimer = 0;
@@ -519,6 +520,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     last = t;
     const present = !(engine.suspended && engine.suspendReason === 'focus');
     engine.step(Math.min(dt, awayClock.frame(present)));
+    stage?.tick(Math.min(dt, 100));   // small buys get the stage (ui/stage.js)
     tickButton();
     if (!engine.paused && !engine.suspended && !engine.run.ended) faces?.tick();
     draw(false);
@@ -556,6 +558,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     },
     ending: endingFade,
     credits: null,
+    stage: null,
     pause, resume,
     setInit(f) { if (f.gentle !== undefined) initGentle = !!f.gentle; if (f.reduced !== undefined) initReduced = !!f.reduced; applyGentle(); },
 
@@ -565,6 +568,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       engine.subscribe('wardrobe-equipped',applySkin);
       refreshCursorShop = bindCursorShop(engine,ui);
       purchaseFeel = createPurchaseFeel({ doc, engine, gentle, reduced, dock });
+      ui.stage = stage = createStage({ doc, engine, gentle, reduced });
       shop = createShop({ doc, engine, onPress: press, onReady: (row) => purchaseFeel.ready(row) });
       /* EMI Takeover (owner 2026-11-09): HIVE MIND is the one row EMI may buy herself when the player waited too long
        * (ui/unlocks/themes-b/emi-swarm.js). Free for the player, no terms card; nothing else can be bought this way. */

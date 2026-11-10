@@ -161,6 +161,7 @@ export default {
   colour: {
     mount(ctx) {
       baseCss(ctx);
+      ctx.stage.register('wash');   // the page is the theme: never dimmed, but its buy gets the solo
       ctx.on('tap', (event) => contactSparks(ctx, event));
       ctx.css(`
 body { transition: background-color .6s, color .6s; }
@@ -334,6 +335,7 @@ body.gentle #fz-roll, body.tb-hidecount #fz-roll, #counter:has(#count[hidden]) #
   paint: {
     mount(ctx) {
       baseCss(ctx);
+      ctx.stage.register('wash');
       ctx.css(`.fz-pot { width: 34px; min-height: 34px; padding: 0; border: 0; background: transparent; touch-action: manipulation; pointer-events: auto; } .fz-pot i { display: block; width: 24px; height: 24px; margin: auto; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.5); transition: scale .15s; } .fz-pot[aria-pressed=true] i { scale: 1.25; }`);
       const row = ctx.el('span', 'display:inline-flex;gap:0;', null, tools(ctx));
       const dots = {};
