@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import {
-  homography, applyMatrix, matrixCss, coverFit, holdFit, mapQuad, pullLayout, readTrack, fallbackTrack, frameAt, trackMs,
+  homography, applyMatrix, matrixCss, cropProjection, coverFit, holdFit, mapQuad, pullLayout, readTrack, fallbackTrack, frameAt, trackMs,
   outsideTimeline, skipTo, holdFrom, phaseAt, holdBeats, crackleGap, BEATS, FRAME,
 } from '../ui/unlocks/extras/outside-show.js';
 import { ENDINGS } from '../data/content/endings.js';
@@ -21,6 +21,19 @@ import * as E from '../sim/economy.js';
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
 const nearPt = (p, q, eps = 1e-6) => { near(p[0], q[0], eps); near(p[1], q[1], eps); };
 const VIEWS = [[1280, 800], [1920, 1080], [1366, 768], [390, 844], [844, 390], [360, 640]];
+
+test('cropping the live camera preserves every sampled screen position before restoring the full pull frame', () => {
+  for (const [vw, vh] of VIEWS) {
+    const f = coverFit(vw, vh, FRAME), w = FRAME[0] * f.s, h = FRAME[1] * f.s;
+    const crop = { x: (w - vw) / 2, y: (h - vh) / 2, width: vw, height: vh };
+    for (const quad of [mapQuad(fallbackTrack().frames[0], f), [[-30, 8], [w + 12, -4], [w - 20, h], [-5, h + 18]]]) {
+      const full = homography(w, h, quad), cropped = cropProjection(full, crop);
+      for (const u of [0, .25, .5, .75, 1]) for (const v of [0, .25, .5, .75, 1]) {
+        nearPt(applyMatrix(cropped, u * vw, v * vh), applyMatrix(full, crop.x + u * vw, crop.y + v * vh));
+      }
+    }
+  }
+});
 
 test('the homography sends the box corners onto a perspective quad, and the middle inside it', () => {
   const quad = [[412, 230], [790, 248], [772, 470], [425, 455]];
