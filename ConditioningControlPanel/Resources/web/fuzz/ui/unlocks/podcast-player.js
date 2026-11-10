@@ -98,6 +98,7 @@ export function mountPodcast(ctx, { theme, show, base = `assets/audio/podcast/${
     }, { once: true });
     stream.el.addEventListener('ended', () => {
       if (gone || ep !== stream) return;
+      ctx.emit?.('sticker', { key: 'episode' });   // Sticker Book: Regular Listener
       ep = null;
       stream.stop();
       pendingNext = (k + 1) % playlist.length;

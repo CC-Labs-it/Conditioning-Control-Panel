@@ -216,12 +216,19 @@ export function bindButtonFace(button, engine, gentle) {
       if (pose !== angle) { rotor.style.transform = pose; angle = pose; }
     }
   }
+  let sweetFrom = null, sweetLast = 0;
   engine.subscribe('tap', ({auto,gain,via,mult}) => {
     if (auto || !box || !face) return;
     const now = engine.now;
     if (emi) {
       const sweet = via === 'hand' && inEmiSweet(mult);
       if (via === 'hand') markSweet(sweet, now);
+      /* Sticker Book, Sweet Spot: ten seconds of presses in the sweet spot, no gap over a second. */
+      if (via === 'hand') {
+        if (!sweet || now - sweetLast > 1000) sweetFrom = sweet ? now : null;
+        sweetLast = now;
+        if (sweet && sweetFrom !== null && now - sweetFrom >= 10000) { sweetFrom = null; engine.emit('sticker', { key: 'sweet10' }); }
+      }
       const before = pet.rung;
       pet = petTap(pet, now, sweet);
       if (pet.rung !== before) paintEmi(true);

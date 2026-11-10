@@ -189,6 +189,7 @@ export function mountToyBox(ctx) {
     slot.classList.add('filled'); slot.disabled = true;
     settlePiece(slot, piece, tilt);
     if (result.complete) {
+      ctx.emit('sticker', { key: 'toybox' });   // Sticker Book: Checkmate
       const rates = ctx.rates(), r = root.getBoundingClientRect();
       const credited = ctx.pay(Math.max(rates.fps, rates.click * 2, 2) * boxPrizeSeconds(state.completed - 1) * prizeMult(ctx.prestige), 'toy_box', { x: r.left + r.width / 2, y: r.top + r.height / 2 });
       ctx.after(180, () => sfx(ctx, 'sfx/rank_settle.mp3', .22));
