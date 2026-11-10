@@ -5,7 +5,7 @@
 import { _loadDemos } from './fork.js';
 import { makeFace, SKIN_ITEMS } from './button-faces.js';
 
-const NOT_COPIED = new Set(['in', 'out', 'no', 'ready', 'peek', 'short', 'buyable']);
+const NOT_COPIED = new Set(['in', 'out', 'no', 'ready', 'peek', 'short', 'buyable', 'ghost']);
 const MARGIN = 8;
 
 const gone = (node) => {
@@ -53,7 +53,7 @@ export function createTip({ doc, buyLabel, onBuy }) {
     stamp = next;
     el.className = `row tip${touch ? ' touch' : ''}${src.classList.contains('short') ? ' tip-short' : ''} ${[...src.classList].filter((c) => c !== 'row' && !NOT_COPIED.has(c)).join(' ')}`;
     words.replaceChildren(...[tag, name, rep, what, also, cost].filter((p) => p && !gone(p)).map((p) => p.cloneNode(true)));
-    buy.hidden = !touch;
+    buy.hidden = !touch || !!cur.ghost;   // a Next up ghost (ui/shop.js) is only read, never bought
     buy.textContent = buyLabel(cur);
     buy.disabled = src.classList.contains('short');
     place();
@@ -117,7 +117,7 @@ export function createTip({ doc, buyLabel, onBuy }) {
     el.hidden = true;
   }
 
-  buy.addEventListener('click', () => { if (cur) onBuy(cur); });
+  buy.addEventListener('click', () => { if (cur && !cur.ghost) onBuy(cur); });
   /* A press anywhere but the card and its own tile closes it, a finger's or a mouse's (a card opened by keyboard focus too).
    * A press on another tile closes this one; that tile's own click (or hover) opens its card. */
   doc.addEventListener('pointerdown', (e) => {

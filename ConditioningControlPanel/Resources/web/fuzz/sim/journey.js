@@ -352,6 +352,18 @@ export function createJourney(s) {
         ok: false,
         reason: 'closed'
       };
+    },
+    /** Read-only look-ahead for the "Next up" strip (ui/shop-next.js): up to n planned items after the shelf, in plan
+     *  order, each id once. A fork or ending row is included and ends the list, so nothing past a choice is shown. */
+    peek(n = 3) {
+      const on = new Set(shelf().map(e => e.item.id)), out = [];
+      for (const e of plan()) {
+        if (out.length >= n) break;
+        if (taken(e) || on.has(e.item.id) || out.some(it => it.id === e.item.id)) continue;
+        out.push(e.item);
+        if (e.item.kind === 'fork' || e.item.kind === 'end') break;
+      }
+      return out;
     }
   };
 }
