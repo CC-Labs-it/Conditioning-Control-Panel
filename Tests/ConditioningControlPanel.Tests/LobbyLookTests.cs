@@ -68,8 +68,15 @@ public class LobbyLookTests
         Assert.Same(PlayerLook.None, junk.Open.Single().Look);
         if (ShopCosmetics.FrameIds()?.Contains("profile.frame.lace") == true)
         {
-            var worn = PbpLobbyApi.Parse("{\"players\":[{\"id\":\"p_1\",\"name\":\"ann\",\"time_control\":{\"initial_ms\":600000,\"increment_ms\":0},\"since_ms\":1,\"cosmetics\":{\"frame_id\":\"profile.frame.lace\"}}]}");
-            Assert.Equal("profile.frame.lace", worn.Open.Single().Look.FrameId);
+            // App's static constructor seeds this provider only when some earlier test touched App, so pin it here.
+            var saved = PlayerLook.KnownIdsProvider;
+            PlayerLook.KnownIdsProvider = () => (CosmeticsPool.AvatarIds, ShopCosmetics.FrameIds());
+            try
+            {
+                var worn = PbpLobbyApi.Parse("{\"players\":[{\"id\":\"p_1\",\"name\":\"ann\",\"time_control\":{\"initial_ms\":600000,\"increment_ms\":0},\"since_ms\":1,\"cosmetics\":{\"frame_id\":\"profile.frame.lace\"}}]}");
+                Assert.Equal("profile.frame.lace", worn.Open.Single().Look.FrameId);
+            }
+            finally { PlayerLook.KnownIdsProvider = saved; }
         }
     }
 
