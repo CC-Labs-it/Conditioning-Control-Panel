@@ -630,6 +630,21 @@ namespace ConditioningControlPanel.Avalonia
             completed?.Invoke(); // WPF App.xaml.cs:4069-4074: initialization has finished successfully.
         }
 
+        internal static void RepairLaunchSettings(SettingsService settings)
+        {
+            try { InstallDateRecorder.EnsureRecorded(settings, CorePaths.UserData, AppDomain.CurrentDomain.BaseDirectory); }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "Install date recording failed"); }
+            var presets = new KeywordTriggerPresetService();
+            try { presets.SyncInstalledCustomSources(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Custom preset source sync failed"); }
+            foreach (var id in settings.PendingPresetReinstalls.ToList())
+            {
+                try { presets.InstallPreset(id, presets.ChasterTimeWasAllowed(id)); }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Pending preset reinstall failed for {Id}", id); }
+            }
+            settings.PendingPresetReinstalls.Clear();
+        }
+
         private async Task StartDesktop(Func<double, string, Task> step)
         {
             await step(0.0, "Starting...");
@@ -666,6 +681,7 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.BrowserVideoSurface.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
+                RepairLaunchSettings(Settings);
                 // WPF App.xaml.cs:2928: launch only sweeps retention on disk (creates nothing, arms no timer);
                 // the ledger starts when awareness turns on. No observer feeds it on this head yet.
                 InstallPrivacyLedger(new ConditioningControlPanel.Services.Awareness.ActivityLedger());
