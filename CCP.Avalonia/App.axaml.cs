@@ -488,7 +488,7 @@ namespace ConditioningControlPanel.Avalonia
             splash.FadeOutAndClose(() => { if (window is { IsVisible: true }) window.Activate(); });
         }
 
-        private async Task StartDesktop(Func<double, string, Task> step)
+        internal async Task StartDesktop(Func<double, string, Task> step)
         {
             await step(0.0, "Starting...");
             // The app shell is the startup window. Until now this head opened the diagnostics
