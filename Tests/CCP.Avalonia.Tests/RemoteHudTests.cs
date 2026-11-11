@@ -9,6 +9,7 @@ using Avalonia.Threading;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform;
+using Avalonia.Media;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -51,6 +52,74 @@ public class RemoteHudTests
         await relay.PollOnceAsync();
         return relay;
     }
+
+    [Fact]
+    public Task Motion_tracks_commands_connection_and_reduced_motion() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var server = new FakeRelay();
+        using var relay = await Connected(server, _ => { });
+        var clock = new Clock();
+        bool full = true;
+        var hud = new RemoteHudWindow(() => relay, () => false, () => null)
+        { Clock = clock, FullMotion = () => full, AmbientMotion = () => full };
+        try
+        {
+            hud.Refresh();
+            Assert.Equal(0, hud.Opacity);
+            clock.Now = clock.Now.AddMilliseconds(90);
+            hud.StepMotion();
+            Assert.Equal(.5, hud.Opacity, 2);
+            clock.Now = clock.Now.AddMilliseconds(90);
+            hud.StepMotion();
+            Assert.Equal(1, hud.Opacity);
+            var press = new ScaleTransform(1, 1);
+            hud.Press(press, true);
+            clock.Now = clock.Now.AddMilliseconds(70);
+            hud.StepMotion();
+            Assert.Equal(.88, press.ScaleX, 2);
+            hud.Press(press, false);
+            clock.Now = clock.Now.AddMilliseconds(140);
+            hud.StepMotion();
+            Assert.Equal(1, press.ScaleX, 2);
+            clock.Now = clock.Now.AddMilliseconds(510);
+            hud.StepMotion();
+            Assert.Equal(.35, hud.DotOpacity, 2);
+            hud.NoteAction("show_spiral");
+            clock.Now = clock.Now.AddMilliseconds(84);
+            hud.StepMotion();
+            Assert.Equal(1.07, hud.PillScale, 2);
+            clock.Now = clock.Now.AddMilliseconds(156);
+            hud.StepMotion();
+            Assert.Equal(1, hud.PillScale, 3);
+            await hud.OnSignalAsync("more", "remote_hud_more");
+            clock.Now = clock.Now.AddMilliseconds(63);
+            hud.StepMotion();
+            Assert.Equal(1.04, hud.PillScale, 2);
+            clock.Now = clock.Now.AddMilliseconds(117);
+            hud.StepMotion();
+            Assert.Equal(1, hud.PillScale, 3);
+            await relay.StopAsync();
+            hud.Refresh();
+            Assert.False(hud.MotionRunning);
+            Assert.Equal(1, hud.DotOpacity);
+            await relay.StartAsync("light");
+            await relay.PollOnceAsync();
+            hud.Refresh();
+            Assert.True(hud.MotionRunning);
+            full = false;
+            hud.StepMotion();
+            hud.NoteAction("show_spiral");
+            Assert.Equal(1, hud.PillScale);
+            Assert.Equal(1, hud.DotOpacity);
+            Assert.False(hud.MotionRunning);
+            full = true;
+            await relay.StopAsync();
+            hud.Refresh();
+            Assert.False(hud.MotionRunning);
+            Assert.Equal(1, hud.DotOpacity);
+        }
+        finally { hud.Dispose(); await relay.StopAsync(); }
+    });
 
     /// <summary>WPF RemoteHudRules.ConfirmFor and StopDebounce on the pill: a confirmation outlives the 1 s tick
     /// until 1.6 s have passed, a second Stop inside 2.5 s is swallowed, and a window manager close (WPF
