@@ -269,7 +269,8 @@ export default {
   /* Dark Edges: the edges close in until you tap. The longer you let them, the more that tap pays. */
   e_last: {
     mount(ctx) {
-      const v = ctx.el('div', 'position:absolute;inset:0;background:radial-gradient(ellipse at 50% 22%,transparent 22%,rgba(0,0,0,.9) 72%);opacity:0;', null, 'over');
+      // Page Tilt extends the backdrop. Its dark veil must cover the same corners without the over layer's clip.
+      const v = ctx.el('div', 'position:absolute;inset:0;z-index:63;pointer-events:none;transform:scale(var(--tilt-grow,1));transform-origin:50% 50%;background:radial-gradient(ellipse at 50% 22%,transparent 22%,rgba(0,0,0,.9) 72%);opacity:0;', null, ctx.world);
       let dark = 0;
       ctx.on('tap', ({ x, y, auto }) => {
         if (auto || dark < 0.15) { if (!auto) dark = 0; return; }

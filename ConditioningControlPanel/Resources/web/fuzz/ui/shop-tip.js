@@ -9,6 +9,19 @@ import { makeFace, SKIN_ITEMS } from './button-faces.js';
 const NOT_COPIED = new Set(['in', 'out', 'no', 'ready', 'peek', 'short', 'buyable', 'ghost', 'fate-out', 'fate-seed']);
 const MARGIN = 8;
 
+/** The same preview by mouse, keyboard or touch, with no purchase action. */
+export function bindReadOnlyTip(el, item, tip) {
+  const row = { el, item, ghost: true };
+  const events = new el.ownerDocument.defaultView.AbortController();
+  const on = (type, fn) => el.addEventListener(type, fn, { signal: events.signal });
+  on('pointerenter', e => { if (e.pointerType !== 'touch') tip.show(row, false); });
+  on('pointerleave', e => { if (e.pointerType !== 'touch' && tip.row === row) tip.hide(); });
+  on('focus', () => { if (el.matches(':focus-visible')) tip.show(row, false); });
+  on('blur', () => { if (tip.row === row && !tip.touch) tip.hide(); });
+  on('click', () => { if (tip.row === row && tip.touch) tip.hide(); else tip.show(row, true); });
+  return () => { events.abort(); if (tip.row === row) tip.hide(); };
+}
+
 const gone = (node) => {
   if (!node) return true;
   const s = getComputedStyle(node);
@@ -79,7 +92,7 @@ export function createTip({ doc, buyLabel, onBuy }) {
       demo.replaceChildren(image);
     }
     // Gentle can show the same still as the tile without playing the demo.
-    const gentle = doc.body.classList.contains('gentle');
+    const gentle = doc.body.classList.contains('gentle') || doc.defaultView.matchMedia('(prefers-reduced-motion: reduce)').matches;
     demo.hidden = gentle && !still;
     if (gentle) return;
     const mine = ++token;

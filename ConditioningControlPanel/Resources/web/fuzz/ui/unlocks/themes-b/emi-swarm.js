@@ -343,13 +343,13 @@ function mountSwarm(ctx) {
       el.type = 'button';
       el.className = 'row et-guest short';
       el.setAttribute('aria-label', `${tile.name}. ${tile.what} Hers, not for sale.`);
-      el.title = `${tile.name}: ${tile.what} Hers, not for sale.`;
-      el.innerHTML = '<span class="bar" aria-hidden="true"></span><svg class="ico" viewBox="0 0 64 64" aria-hidden="true" width="44" height="44"></svg><span class="et-who"></span><span class="cost"></span>';
+      el.innerHTML = '<span class="bar" aria-hidden="true"></span><svg class="ico" viewBox="0 0 64 64" aria-hidden="true" width="44" height="44"></svg><span class="et-who"></span><span class="body"><b></b><small></small><span class="also">EMI pays from her own pouch.</span></span><span class="cost"></span>';
       el.querySelector('svg.ico').innerHTML = emiUpgradeArt(tile.id);
       el.querySelector('.et-who').textContent = tile.name;
-      el.addEventListener('click', () => { ctx.toast('Hers, not for sale.'); if (!main.pic) { main.setFace('o_o'); main.faceAt = t + 1; } });
+      el.querySelector('b').textContent = tile.name;
+      el.querySelector('small').textContent = tile.what;
       guest = { el, tile, bar: el.querySelector('.bar'), cost: el.querySelector('.cost'), text: '' };
-      shopDoor?.guest(el);
+      shopDoor?.guest(el, tile);
     }
     const have = Math.floor(Math.min(bag.budget, tile.price));
     const text = `${have}/${tile.price} hers`;

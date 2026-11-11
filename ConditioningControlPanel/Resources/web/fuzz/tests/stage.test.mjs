@@ -106,7 +106,7 @@ test('easing moves toward the target without overshoot', () => {
 test('saves that already own more than three effects start with everything at once', () => {
   assert.equal(initialStage({}).all, false);
   assert.equal(initialStage({ trail: 1, starburst: 1, word_comet: 1, overlay: 1, e_bounce: 1 }).all, false, 'families, not rows');
-  assert.equal(ambientOwned({ trail: 1, starburst: 1, overlay: 1, e_bounce: 1, ticker: 1, colour: 1 }), 4, 'the wash is steady');
+  assert.equal(ambientOwned({ trail: 1, starburst: 1, overlay: 1, e_bounce: 1, ticker: 1, colour: 1 }), 3, 'the wash and cursor feedback are steady');
   assert.equal(initialStage({ trail: 1, overlay: 1, e_bounce: 1, ticker: 1 }).all, true);
 });
 
@@ -163,11 +163,11 @@ test('runtime: a buy solos, eases the others down, pays through the normal path 
   assert.equal(stage.solo, null);
   assert.equal(engine.paid.length, SOLO_PAYS);
   assert.ok(engine.paid.every((p) => p.source === 'stage' && p.amount > 0));
-  /* Four effects now: the newest (trail) keeps its seat, one of the others rests. */
+  /* Cursor feedback is steady: the three ambient effects can all keep their seats. */
   run(engine, stage, 3000);
   const strengths = [spiral, word, strip].map(strengthOf);
-  assert.equal(strengths.filter((s) => s === 1).length, 2);
-  assert.equal(strengths.filter((s) => Math.abs(s - IDLE) < 0.01).length, 1);
+  assert.equal(strengths.filter((s) => s === 1).length, 3);
+  assert.equal(strengths.filter((s) => Math.abs(s - IDLE) < 0.01).length, 0);
   assert.equal(knob, 1);
   /* Everything at once from the panel. */
   stage.setAll(true);
@@ -201,6 +201,33 @@ test('runtime: pins and the panel list', () => {
   assert.ok(stage.list().find((r) => r.id === 'ticker').pinned);
   assert.ok(stage.list().find((r) => r.id === 'ticker').cast);
   assert.ok(engine.events.includes('stage'));
+});
+
+test('runtime: cursor trails and Word Comet stay readable through later solos and ambient rotation', () => {
+  for (const lite of [false, true]) {
+    const engine = fakeEngine(), stage = createStage({ engine, lite });
+    engine.run.store.stage = initialStage();
+    const trail = target(), ambient = [];
+    engine.run.owned.word_comet = 1; engine.run.order.push('word_comet');
+    stage.forScope(scopeOf(true), BY_ID.word_comet).register('trail', trail);
+    for (const id of ['overlay', 'e_bounce', 'ticker', 'score_heat']) {
+      engine.run.owned[id] = 1; engine.run.order.push(id);
+      const el = target(); ambient.push(el);
+      stage.forScope(scopeOf(true), BY_ID[id]).register(el);
+    }
+    for (let i = 0; i < 6; i++) {
+      run(engine, stage, ROTATE_MS + 1500); // Let the new ambient cast finish easing.
+      assert.equal(strengthOf(trail), 1, `cursor remains readable, lite=${lite}`);
+      assert.equal(ambient.filter(el => strengthOf(el) === 1).length, lite ? CAST_LITE : CAST);
+    }
+    engine.run.owned.sp_colors = 1; engine.run.order.push('sp_colors');
+    stage.forScope(scopeOf(false), BY_ID.sp_colors).register('spiral');
+    run(engine, stage, 1500);
+    assert.equal(stage.solo?.id, 'spiral');
+    assert.equal(strengthOf(trail), 1, 'a later spiral purchase never fades the cursor');
+    assert.ok(ambient.slice(1).every(el => strengthOf(el) <= SOLO_DIM + .01), 'other ambient effects still yield to the solo');
+    assert.equal(stage.list().some(row => row.id === 'trail'), false, 'cursor feedback does not consume an ambient seat');
+  }
 });
 
 test('panel copy for the stage rows', () => {
