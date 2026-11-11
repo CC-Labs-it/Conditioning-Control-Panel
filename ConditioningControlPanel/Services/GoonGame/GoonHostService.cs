@@ -1269,53 +1269,23 @@ namespace ConditioningControlPanel.Services.GoonGame
                 var s = App.Settings?.Current;
                 if (s == null) return;
 
-                var sharedChanged = false;
-                var rpTurnedOff = false;
-
-                var a = (bool?)o["shareAvatar"];
-                if (a.HasValue && s.GoonShareAvatar != a.Value) { s.GoonShareAvatar = a.Value; sharedChanged = true; }
-
-                var dm = (bool?)o["shareDm"];
-                if (dm.HasValue && s.GoonShareDiscordDm != dm.Value) { s.GoonShareDiscordDm = dm.Value; sharedChanged = true; }
-
-                var rp = (bool?)o["richPresence"];
-                if (rp.HasValue && s.GoonRichPresence != rp.Value)
-                {
-                    s.GoonRichPresence = rp.Value;
-                    rpTurnedOff = !rp.Value;
-                }
-
-                var seen = (bool?)o["seenSharePrompt"];
-                if (seen.HasValue && s.GoonSeenSharePrompt != seen.Value) s.GoonSeenSharePrompt = seen.Value;
-
-                App.Settings?.Save();
-
-                // Turning the flag off mid-session must retract the presence NOW. rp-state is
-                // dropped while the flag is off, so the page's own "off" would never arrive.
-                if (rpTurnedOff)
-                {
-                    try { App.DiscordRpc?.SetGoonActivity("off"); }
-                    catch (Exception ex) { App.Logger?.Debug("GoonHostService: rp retract: {E}", ex.Message); }
-                }
-
-                if (sharedChanged)
-                {
-                    // Push-on-change (contract §2, RemoteControl precedent): the server's room
-                    // snapshot is taken at invite/join, so a flag flipped in the lobby has to reach
-                    // it before the next match rather than at the next scheduled sync. The service's
-                    // own 30 s cooldown may defer it; the flags ride the normal sync body too, so a
-                    // deferred push costs latency, never correctness.
-                    _ = Task.Run(async () =>
+                GoonDiscordPresence.Prefs(s, (bool?)o["shareAvatar"], (bool?)o["shareDm"],
+                    (bool?)o["richPresence"], (bool?)o["seenSharePrompt"],
+                    () => App.Settings?.Save(),
+                    state => { try { App.DiscordRpc?.SetGoonActivity(state); } catch (Exception ex) { App.Logger?.Debug("GoonHostService: rp retract: {E}", ex.Message); } },
+                    () =>
                     {
-                        try
+                        _ = Task.Run(async () =>
                         {
-                            var svc = App.ProfileSync;
-                            if (svc != null) await svc.SyncProfileAsync().ConfigureAwait(false);
-                        }
-                        catch (Exception ex) { App.Logger?.Debug("GoonHostService: prefs sync push: {E}", ex.Message); }
+                            try
+                            {
+                                var svc = App.ProfileSync;
+                                if (svc != null) await svc.SyncProfileAsync().ConfigureAwait(false);
+                            }
+                            catch (Exception ex) { App.Logger?.Debug("GoonHostService: prefs sync push: {E}", ex.Message); }
+                        });
+                        if (s.GoonShareAvatar) KickOwnAvatarRefresh();
                     });
-                    if (s.GoonShareAvatar) KickOwnAvatarRefresh();
-                }
 
                 PostDiscordEcho();
             }
@@ -1633,20 +1603,15 @@ namespace ConditioningControlPanel.Services.GoonGame
         /// user who did not ask for it (contract §1).</summary>
         private static void OnRichPresenceState(JObject o)
         {
-            var s = (string?)o["s"] ?? "";
-            if (s != "lobby" && s != "live" && s != "recap" && s != "off")
+            GoonDiscordPresence.State((string?)o["s"] ?? "", App.Settings?.Current?.GoonRichPresence == true, state =>
             {
-                App.Logger?.Debug("GoonHostService: rp-state rejected (not in the enum)");
-                return;
-            }
-            if (App.Settings?.Current?.GoonRichPresence != true) return;
-
-            var disp = Application.Current?.Dispatcher;
-            if (disp == null || disp.HasShutdownStarted) return;
-            disp.BeginInvoke(() =>
-            {
-                try { App.DiscordRpc?.SetGoonActivity(s); }
-                catch (Exception ex) { App.Logger?.Debug("GoonHostService.rp-state: {E}", ex.Message); }
+                var disp = Application.Current?.Dispatcher;
+                if (disp == null || disp.HasShutdownStarted) return;
+                disp.BeginInvoke(() =>
+                {
+                    try { App.DiscordRpc?.SetGoonActivity(state); }
+                    catch (Exception ex) { App.Logger?.Debug("GoonHostService.rp-state: {E}", ex.Message); }
+                });
             });
         }
 
@@ -2126,7 +2091,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 // The duel's rich presence dies with the duel WHATEVER killed it — a window closed
                 // mid-match would otherwise leave "In a duel" published forever (and, when GG owned
                 // the connection, an RPC pipe open). No-op when GG never set it.
-                try { App.DiscordRpc?.SetGoonActivity("off"); } catch { }
+                try { GoonDiscordPresence.Teardown(state => App.DiscordRpc?.SetGoonActivity(state)); } catch { }
                 try { ResetPeerCardState(); } catch { }
                 // Online pictures: stop fetching and hand back every temp file this window owned.
                 try { _onlineMedia?.Dispose(); } catch { }
