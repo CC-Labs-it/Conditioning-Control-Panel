@@ -8,8 +8,7 @@ namespace ConditioningControlPanel
     /// The engine half of WPF <c>ProgressionService.AddXP</c> / <c>SpendXPOnLevels</c>, for a head that seeds
     /// <see cref="CoreProgression.AddXPProvider"/> with <see cref="Add"/>: the login gate, the XP add and the
     /// level loop with <c>HighestLevelEver</c>.
-    /// ponytail: of the skill multiplier only Pink Rush's 3x is applied (sparkle boosts, streak power, night
-    /// shift, early bird and event boost are not, so owners are under-awarded, which errs safe). Each level
+    /// Chaos awards use the full skill multiplier; other sources currently apply only Pink Rush. Each level
     /// gained credits <see cref="PointsPerLevel"/> Sparkle (WPF SkillTreeService.OnLevelUp, shared with web
     /// XP claims as WPF SpendXPOnLevels is). Companion XP: CompanionCore.AddCompanionXP. Level achievements listen to <see cref="LevelUp"/>; quests listen to <see cref="QuestAwarded"/>
     /// (the Avalonia head feeds it to QuestService.TrackXPEarned, as WPF AddXP:120 does).
@@ -52,8 +51,11 @@ namespace ConditioningControlPanel
             }
             // WPF ProgressionService.AddXP:90: the lasting Descent bonus for a migrated account (1.0 otherwise).
             // Awarded still carries the base amount: WPF feeds quests the base too (AddXP:120).
-            // WPF AddXP:89 skill multiplier: only Pink Rush's 3x term so far (decisions 2026-10-08).
-            var adjusted = amount * Models.PinkRushRules.XpFactor(s) * Services.Descent.DescentCycleXp.XpBonusFor(s);
+            // WPF AddXP:89 applies the skill multiplier once, while quests and companions receive base XP.
+            var skillMult = source == "Chaos"
+                ? Models.SkillTreeRules.GetTotalXpMultiplier(s, DateTime.Now.Hour, 0.0)
+                : Models.PinkRushRules.XpFactor(s);
+            var adjusted = amount * skillMult * Services.Descent.DescentCycleXp.XpBonusFor(s);
             s.PlayerXP += adjusted;
             Log.Information("XP awarded: +{Amount} from {Source} (now {Now})", adjusted, source, s.PlayerXP);
             // WPF AddXP:117: the active companion gets the BASE amount, after the gates, before the level loop.
