@@ -12,7 +12,7 @@ using ConditioningControlPanel.Services.EmiDesk;
 namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 
 // WPF EmiDeskWindow.Glass.cs:77-88, 174-215, 256-283, 294-342, 385-419, 440-477.
-// This part ports the off-air saver; the other channels and their effects are still pending.
+// Off-air and Pong savers; the other channels and their effects are still pending.
 public partial class EmiDeskWindow
 {
     private static readonly Random GlassRng = new();
@@ -138,8 +138,22 @@ public partial class EmiDeskWindow
             if (elapsed < 220) { PaintGlassGlitch(); return; } // WPF EmiChannels.cs:85-86
             _glassLanded = true;
             _glassPhase = now;
-            PaintOffAir();
+            var level = AmbientFxCanvas.Env.Level;
+            bool pong = PongFeasible(level) && (GlassChannelOverride == "pong" ||
+                (GlassChannelOverride == null && GlassRng.Next(2) == 0));
+            if (pong && _glassLayer != null)
+            {
+                _glassLayer.Children.Clear();
+                _glassPong = new PongPainter(_glassLayer.Width, _glassLayer.Height, GlassRng);
+                _glassPong.Attach(_glassLayer);
+            }
+            else PaintOffAir();
             return;
+        }
+        if (_glassPong != null)
+        {
+            if (!PongFeasible(AmbientFxCanvas.Env.Level)) { CloseGlass(); return; }
+            _glassPong.Tick(elapsed);
         }
         if (elapsed >= 10_000) { CloseGlass(); return; } // WPF EmiChannels.cs:58-59
         if (_glassMotion && _glassSignal != null && _glassDim != null)
@@ -198,7 +212,7 @@ public partial class EmiDeskWindow
         _glassLive = _glassLanded = false;
         _glassFrames?.Stop(); _glassFrames = null;
         if (_glassLayer != null) GlassHost.Children.Remove(_glassLayer);
-        _glassLayer = null; _glassDim = null; _glassSignal = null;
+        _glassLayer = null; _glassDim = null; _glassSignal = null; _glassPong = null;
         _glassActivity = DateTime.UtcNow;
         _glassIdle = NextGlassIdle();
         if (wasLive && !_closingForGood && IsVisible && !ChainLive) RestartIdleBeats();
