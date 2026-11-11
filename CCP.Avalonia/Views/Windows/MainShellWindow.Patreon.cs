@@ -263,11 +263,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF MaybeShowPremiumCelebration (MainWindow.Patreon.cs:1140): the one-time card per tier, re-read from
         /// the combined entitlement, never for an invite week, through the presenter (an Inbox row when quiet). The seen-flag
         /// is spent at open time. A live rise bypasses the launch quiet window when the user is free.</summary>
+        internal bool? TierCelebrationEnabledForTests;
+
         internal void MaybeShowPremiumCelebration()
         {
             var onRise = _pendingRiseTier > 0;
             _pendingRiseTier = 0;
-            if (!Services.Startup.PopupSwitches.TierCelebration) { TierOnNoticePass(); return; }
+            if (!(TierCelebrationEnabledForTests ?? Services.Startup.PopupSwitches.TierCelebration)) { TierOnNoticePass(); return; }
             try
             {
                 if (!CoreAccount.HasPremiumAccess) return;
@@ -359,7 +361,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     s.LastKnownEffectiveTier = verdict.Record;
                     if (hadReading) CoreSettings.Save();
                 }
-                if (!Services.Startup.PopupSwitches.TierCelebration || !verdict.Owed || TierCelebration.IsOwed(s.SeenFeatureIntros, current, onRise: true)) return;
+                if (!(TierCelebrationEnabledForTests ?? Services.Startup.PopupSwitches.TierCelebration) || !verdict.Owed || TierCelebration.IsOwed(s.SeenFeatureIntros, current, onRise: true)) return;
                 var title = Loc.Get(Services.TierOnNotice.TitleKey(current));
                 var body = Loc.Get("tier_on_body");
                 Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem

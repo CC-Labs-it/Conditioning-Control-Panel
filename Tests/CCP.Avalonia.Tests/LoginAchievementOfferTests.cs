@@ -28,7 +28,9 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class LoginAchievementOfferTests
 {
-    private static Task Run(Func<MainShellWindow, AppSettings, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
+    private static Task RunEnabled(Func<MainShellWindow, AppSettings, Task> body) => Run(body, enabled: true);
+
+    private static Task Run(Func<MainShellWindow, AppSettings, Task> body, bool enabled = false) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
@@ -63,7 +65,7 @@ public sealed class LoginAchievementOfferTests
         AccountSeed.Sync = null;
         AccountSeed.Seed(p => new ProviderSubscription(p, () => s), p => new DiscordAccount(() => p, () => s));
         StartupLadder.ResetForTests();
-        var shell = new MainShellWindow();
+        var shell = new MainShellWindow { DiscordSharePromptEnabledForTests = enabled ? true : null };
         try
         {
             shell.Show();
@@ -230,6 +232,125 @@ public sealed class LoginAchievementOfferTests
 
     [Fact]
     public Task AlreadySharingDoesNotOfferAgain() => Run(async (shell, s) =>
+    {
+        s.DiscordShareAchievements = true;
+        await SignIn(shell);
+        Assert.Empty(shell.OwnedWindows.OfType<MessageDialog>());
+        Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key == "discord-share-achievements");
+        Assert.True(s.DiscordShareAchievements);
+    });
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task DiscordSignInOffersExplicitOptInWithPanelAsOwnerWhenEnabled(bool accept) => RunEnabled(async (shell, s) =>
+    {
+        var signIn = SignIn(shell);
+        await WaitFor(() => signIn.IsCompleted || shell.OwnedWindows.OfType<MessageDialog>().Any());
+        var offer = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
+        Assert.Same(shell, offer.Owner);
+        Assert.Equal(Loc.Get("title_discord_linked"), offer.Title);
+        Assert.Equal(Loc.Get("msg_discord_share_achievements_prompt"), offer.FindControl<TextBlock>("TxtMessage")!.Text);
+        Assert.False(s.DiscordShareAchievements); // never enabled merely by linking
+        Assert.Equal(Loc.Get("btn_yes"), ((TextBlock)offer.FindControl<Button>("BtnOk")!.Content!).Text);
+        Assert.Equal(Loc.Get("btn_no"), ((TextBlock)offer.FindControl<Button>("BtnCancel")!.Content!).Text);
+        var service = CoreSettings.Service!;
+        SettingsService.DisarmAllPendingSaves();
+        offer.FindControl<Button>(accept ? "BtnOk" : "BtnCancel")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        if (accept)
+        {
+            await WaitFor(() => s.DiscordShareAchievements);
+            Assert.True(service.HasPendingSave); // set and saved in the same continuation
+        }
+        await signIn;
+        Assert.Equal(accept, s.DiscordShareAchievements);
+        if (accept)
+        {
+            var sharing = shell.ProfilePage!.PrivacyPanel.FindControl<CheckBox>("ChkDiscordTabShareAchievements")!;
+            Assert.True(sharing.IsChecked);
+            // The question promises this switch can turn sharing off again; prove the whole path.
+            SettingsService.DisarmAllPendingSaves();
+            sharing.IsChecked = false;
+            Assert.False(s.DiscordShareAchievements);
+            Assert.True(service.HasPendingSave);
+        }
+    });
+
+    [Fact]
+    public Task GameParksOneOfferAndInboxClickAsksEvenWhileGameRemains() => RunEnabled(async (shell, s) =>
+    {
+        PanicSurfaces.All = new[] { new PanicSurfaces.Surface("test-game", _ => { }, () => true) };
+        await SignIn(shell);
+        Assert.Empty(shell.OwnedWindows.OfType<MessageDialog>());
+        var row = Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "discord-share-achievements");
+        StartupLadder.Inbox.Open(row);
+        await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().Any());
+        Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key == row.Key);
+        var offer = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
+        offer.Close(false);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(s.DiscordShareAchievements);
+    });
+
+
+    [Fact]
+    public Task SlowCloudProfileDoesNotDelayTheSharingQuestion() => RunEnabled(async (shell, s) =>
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        AccountSeed.NewV2 = () => new V2AuthService(() => s, new HeldProfile(release.Task));
+        var signIn = SignIn(shell);
+        try
+        {
+            await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().Any());
+            Assert.False(release.Task.IsCompleted);
+            // WPF OnProfileLoaded repaints the level while the question is still open.
+            s.PlayerLevel = 42;
+            release.TrySetResult();
+            await WaitFor(() => shell.Named<TextBlock>("TxtLevelLabel")?.Text == "LVL 42");
+            Assert.Single(shell.OwnedWindows.OfType<MessageDialog>()).Close(false);
+        }
+        finally
+        {
+            release.TrySetResult();
+            await WaitFor(() => signIn.IsCompleted || shell.OwnedWindows.OfType<MessageDialog>().Any());
+            foreach (var offer in shell.OwnedWindows.OfType<MessageDialog>().ToArray()) offer.Close(false);
+            await signIn;
+        }
+    });
+
+    [Fact]
+    public Task HiddenPanelParksOnlyOneRowAndDoesNotEnableSharing() => RunEnabled(async (shell, s) =>
+    {
+        shell.Hide();
+        await shell.OfferAchievementSharingAfterDiscordLink();
+        await shell.OfferAchievementSharingAfterDiscordLink();
+        Assert.Empty(shell.OwnedWindows.OfType<MessageDialog>());
+        Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "discord-share-achievements");
+        Assert.False(s.DiscordShareAchievements);
+    });
+
+    [Fact]
+    public Task ClosingTheEnabledOfferDoesNotOptIn() => RunEnabled(async (shell, s) =>
+    {
+        var signIn = SignIn(shell);
+        await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().Any());
+        Assert.Single(shell.OwnedWindows.OfType<MessageDialog>()).Close();
+        await signIn;
+        Assert.False(s.DiscordShareAchievements);
+    });
+
+
+    [Fact]
+    public Task SignInWithoutAuthenticatedDiscordDoesNotAskWhenEnabled() => RunEnabled(async (shell, s) =>
+    {
+        AccountSeed.Discord!.Logout();
+        await SignIn(shell);
+        Assert.Empty(shell.OwnedWindows.OfType<MessageDialog>());
+        Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key == "discord-share-achievements");
+        Assert.False(s.DiscordShareAchievements);
+    });
+
+    [Fact]
+    public Task AlreadySharingDoesNotOfferAgainWhenEnabled() => RunEnabled(async (shell, s) =>
     {
         s.DiscordShareAchievements = true;
         await SignIn(shell);

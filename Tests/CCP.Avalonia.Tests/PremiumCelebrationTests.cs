@@ -20,7 +20,9 @@ namespace CCP.Avalonia.Tests;
 /// TierChanged (OnPatreonTierChanged / OnSubscribeStarTierChanged) and from the launch re-check.</summary>
 public sealed class PremiumCelebrationTests
 {
-    private static void Run(bool premiumAtLaunch, Action<MainShellWindow, List<Window>, Action<bool, bool>> body) =>
+    private static void RunEnabled(bool premiumAtLaunch, Action<MainShellWindow, List<Window>, Action<bool, bool>> body) => Run(premiumAtLaunch, body, enabled: true);
+
+    private static void Run(bool premiumAtLaunch, Action<MainShellWindow, List<Window>, Action<bool, bool>> body, bool enabled = false) =>
         AvaloniaTestDispatcher.Run(() =>
         {
             var builder = global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp();
@@ -59,7 +61,7 @@ public sealed class PremiumCelebrationTests
                 // After the seed, which installs its own providers; the grant is this test's switch.
                 CoreAccount.HasPremiumAccessProvider = () => premium;
                 CoreAccount.HasLabAccessProvider = () => lab;
-                shell = new MainShellWindow();
+                shell = new MainShellWindow { TierCelebrationEnabledForTests = enabled ? true : null };
                 shell.Show();
                 Dispatcher.UIThread.RunJobs();
                 body(shell, opened, Grant);
@@ -296,6 +298,68 @@ public sealed class PremiumCelebrationTests
     public void PremiumHeldAtLaunchAndInviteWeekDoNotShowCelebrations() => Run(premiumAtLaunch: true, (shell, opened, grant) =>
     {
         Assert.Null(Celebration(opened, TierCelebration.KeyT1));
+
+        CoreSettings.Current.InviteGrantUntil = DateTime.UtcNow.AddDays(3);   // a free trial, not a purchase
+        grant(true, true);
+        shell.MaybeShowPremiumCelebration();
+        Assert.Null(Celebration(opened, TierCelebration.KeyT2));
+        Assert.DoesNotContain(TierCelebration.KeyT2, CoreSettings.Current.SeenFeatureIntros);
+    });
+    [Fact]
+    public void LiveRiseIgnoresLegacyFlagAndFirstLaunchQuietButBusyRiseStaysInInbox() => RunEnabled(false, (shell, opened, grant) =>
+    {
+        Celebration(opened, TierCelebration.KeyT1);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        CoreSettings.Current.SeenFeatureIntros.Add(TierCelebration.LegacyKey);
+        CoreSettings.Current.PatreonTier = 0;
+        CoreSettings.Current.UnifiedId = "test-account";
+        CoreSettings.Current.AuthToken = "test-token";
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        grant(true, false);
+        AccountSeed.ApplyTierReading(1, "test");   // the one tier path: heartbeat, profile load and focus refresh all land here
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(opened, w => w is FeatureIntroPopup);
+        var ring = shell.FindControl<global::Avalonia.Controls.Shapes.Ellipse>("ProfileBubbleGlowRing")!;
+        Assert.Equal(global::Avalonia.Media.Color.FromRgb(0xFF, 0xD7, 0x00),
+            Assert.IsAssignableFrom<global::Avalonia.Media.ISolidColorBrush>(ring.Stroke).Color);
+        Assert.Contains(TierCelebration.KeyT1, CoreSettings.Current.SeenFeatureIntros);
+        Celebration(opened, TierCelebration.KeyT1);
+        MainShellWindow.IsStartupDialogShowing = true;
+        try
+        {
+            grant(true, true);
+            AccountSeed.ApplyTierReading(2, "test");
+            Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain(opened, w => w is FeatureIntroPopup);
+            Assert.Equal(global::Avalonia.Media.Color.FromRgb(0x5E, 0xE6, 0xFF),
+                Assert.IsAssignableFrom<global::Avalonia.Media.ISolidColorBrush>(ring.Stroke).Color);
+            Assert.Contains(StartupLadder.Inbox.Items, i => i.Key == "intro:" + TierCelebration.KeyT2);
+            Assert.DoesNotContain(TierCelebration.KeyT2, CoreSettings.Current.SeenFeatureIntros);
+        }
+        finally { MainShellWindow.IsStartupDialogShowing = false; }
+    });
+    [Fact]
+    public void SubscribeStarTierChangeCelebratesEachTierOnce() => RunEnabled(premiumAtLaunch: false, (shell, opened, grant) =>
+    {
+        Assert.Null(Celebration(opened, TierCelebration.KeyT1));   // nothing held at launch
+
+        grant(true, false);
+        AccountSeed.SubscribeStar!.NotifyEntitlementRaised(PatreonTier.Level1);
+        Assert.Equal(FeatureIntros.All[TierCelebration.KeyT1].Title, Celebration(opened, TierCelebration.KeyT1));
+        Assert.Contains(TierCelebration.KeyT1, CoreSettings.Current.SeenFeatureIntros);
+
+        AccountSeed.SubscribeStar!.NotifyEntitlementRaised(PatreonTier.Level1);   // spent: never again
+        Assert.Null(Celebration(opened, TierCelebration.KeyT1));
+
+        grant(true, true);   // Basic -> Prime celebrates again, from the Patreon side
+        AccountSeed.Patreon!.NotifyEntitlementRaised(PatreonTier.Level2);
+        Assert.Equal(FeatureIntros.All[TierCelebration.KeyT2].Title, Celebration(opened, TierCelebration.KeyT2));
+    });
+
+    [Fact]
+    public void PremiumHeldAtLaunchIsCelebratedButAnInviteWeekIsNot() => RunEnabled(premiumAtLaunch: true, (shell, opened, grant) =>
+    {
+        Assert.Equal(FeatureIntros.All[TierCelebration.KeyT1].Title, Celebration(opened, TierCelebration.KeyT1));
 
         CoreSettings.Current.InviteGrantUntil = DateTime.UtcNow.AddDays(3);   // a free trial, not a purchase
         grant(true, true);

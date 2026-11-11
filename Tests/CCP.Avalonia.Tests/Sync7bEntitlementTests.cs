@@ -100,6 +100,21 @@ public class Sync7bEntitlementTests {
             Assert.Equal(2, s.LastKnownEffectiveTier);
         } finally { StartupLadder.Inbox.Changed -= Fail; shell.Close(); StartupLadder.ResetForTests(); }
     });
+    [Fact] public void TierNoticeDoesNotLetPresenterFailureEscape() => AvaloniaTestDispatcher.Run(() => {
+        using var isolation = new EntitlementTestScope();
+        if (Application.Current == null) AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>()
+            .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+            .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        StartupLadder.ResetForTests(); var shell = new MainShellWindow { TierCelebrationEnabledForTests = true };
+        CoreAccount.HasLabAccessProvider = () => true; var s = CoreSettings.Current;
+        s.LastKnownEffectiveTier = 0; s.SeenFeatureIntros.Add(TierCelebration.KeyT2);
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(1));
+        void Fail() => throw new InvalidOperationException("presenter probe"); StartupLadder.Inbox.Changed += Fail;
+        try {
+            Assert.Null(Record.Exception(shell.TierOnNoticePass));
+            Assert.Contains(StartupLadder.Inbox.Items, row => row.Key == "tier-on:2");
+        } finally { StartupLadder.Inbox.Changed -= Fail; shell.Close(); StartupLadder.ResetForTests(); }
+    });
     [Fact] public void HideShowKeepsOneActivationCallback() => AvaloniaTestDispatcher.Run(() => {
         using var isolation = new EntitlementTestScope(); CoreSettings.Current.OfflineMode = true;
         if (Application.Current == null) AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>()

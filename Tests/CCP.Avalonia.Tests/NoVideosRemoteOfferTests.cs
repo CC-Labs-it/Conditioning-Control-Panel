@@ -31,15 +31,18 @@ public sealed class NoVideosRemoteOfferTests
     }
 
     [Theory]
-    [InlineData(false, 0)]   // empty library: the online offer is switched off
-    [InlineData(true, 0)]    // the length filter emptied it: another source is the wrong fix
-    public async Task The_no_videos_box_does_not_offer_remote_media(bool filterEmptied, int offers)
+    [InlineData(false, false, 0)]
+    [InlineData(false, true, 0)]
+    [InlineData(true, false, 1)]
+    [InlineData(true, true, 0)]
+    public async Task The_no_videos_box_offers_remote_media_only_when_enabled_and_not_filtered(bool enabled, bool filterEmptied, int offers)
     {
         await AvaloniaTestDispatcher.RunAsync(async () =>
         {
             EnsureApp();
             var s = CoreSettings.Current;
             var (oldSource, oldMin, oldShow) = (s.MediaSource, s.VideoMinDurationSeconds, RemoteMediaOffer.ShowCard);
+            var oldEnabled = RemoteMediaOffer.EnabledOverrideForTests;
             var overlay = MandatoryVideoOverlay.Instance;
             var oldScheduler = overlay.Scheduler;
             var oldOwner = MandatoryVideoOverlay.NoVideosOwner;
@@ -56,6 +59,7 @@ public sealed class NoVideosRemoteOfferTests
             overlay.Scheduler = scheduler;
             try
             {
+                RemoteMediaOffer.EnabledOverrideForTests = enabled ? true : null;
                 Assert.False(scheduler.Trigger());   // runs the funnel, nothing to play
                 var expectedMessage = MandatoryVideoOverlay.NoVideosMessage(scheduler);
                 // Refill before the posted callback runs. Both the message and offer must
@@ -69,6 +73,7 @@ public sealed class NoVideosRemoteOfferTests
                 var dialog = Assert.Single(owner.OwnedWindows.OfType<MessageDialog>());
                 Assert.Equal(expectedMessage, dialog.FindControl<TextBlock>("TxtMessage")!.Text);
                 Assert.Equal(0, opened);   // never before the box closes
+                Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key == "intro:remote-media");
                 dialog.FindControl<Button>("BtnOk")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 await overlay.NoVideosRun;
                 Dispatcher.UIThread.RunJobs();
@@ -85,6 +90,7 @@ public sealed class NoVideosRemoteOfferTests
                 s.MediaSource = oldSource;
                 s.VideoMinDurationSeconds = oldMin;
                 RemoteMediaOffer.ShowCard = oldShow;
+                RemoteMediaOffer.EnabledOverrideForTests = oldEnabled;
                 RemoteMediaOffer.ResetForTests();
             }
         });

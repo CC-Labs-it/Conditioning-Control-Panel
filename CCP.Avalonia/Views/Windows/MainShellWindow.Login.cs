@@ -106,6 +106,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 await MessageDialog.ShowAsync(this, Loc.Get("title_error"), Loc.Get("logout_not_complete_body"));
         }
 
+        internal bool? DiscordSharePromptEnabledForTests;
+
         private bool _achievementShareOfferUp;
         private MessageDialog? _achievementSharingPrompt;
 
@@ -116,7 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// parks a keyed Inbox row; only its explicit Open bypasses that deferral.</summary>
         internal async Task OfferAchievementSharingAfterDiscordLink(bool userAsked = false)
         {
-            if (!userAsked && !Services.Startup.PopupSwitches.DiscordSharePrompt) return;
+            if (!userAsked && !(DiscordSharePromptEnabledForTests ?? Services.Startup.PopupSwitches.DiscordSharePrompt)) return;
             if (AccountSeed.Discord?.IsAuthenticated != true || _achievementShareOfferUp) return;
             var s = CoreSettings.Current;
             var routing = AchievementSharePromptDecision.Decide(s.DiscordShareAchievements,
