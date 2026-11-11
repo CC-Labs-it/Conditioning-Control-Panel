@@ -12,7 +12,7 @@ using ConditioningControlPanel.Services.EmiDesk;
 namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 
 // WPF EmiDeskWindow.Glass.cs:77-88, 174-215, 256-283, 294-342, 385-419, 440-477.
-// This part ports the off-air saver; the other channels and their effects are still pending.
+// Off-air and browsing savers; the other channels and their effects are still pending.
 public partial class EmiDeskWindow
 {
     private static readonly Random GlassRng = new();
@@ -21,6 +21,8 @@ public partial class EmiDeskWindow
     private DateTime _glassActivity = DateTime.UtcNow, _glassPhase;
     private TimeSpan _glassIdle = NextGlassIdle();
     private Canvas? _glassLayer;
+    private BrowsingPainter? _browsing;
+    internal bool? GlassBrowsingOverride { get; set; }
     private Rectangle? _glassDim;
     private TextBlock? _glassSignal;
     private bool _glassLive, _glassLanded, _glassMotion;
@@ -138,10 +140,19 @@ public partial class EmiDeskWindow
             if (elapsed < 220) { PaintGlassGlitch(); return; } // WPF EmiChannels.cs:85-86
             _glassLanded = true;
             _glassPhase = now;
-            PaintOffAir();
+            _glassMotion = AmbientFxCanvas.Env.Level == MotionLevel.Full;
+            if (GlassBrowsingOverride ?? GlassRng.Next(2) == 0)
+            {
+                _glassLayer!.Children.Clear();
+                _browsing = new BrowsingPainter(_glassLayer.Width, _glassLayer.Height);
+                _browsing.Attach(_glassLayer);
+                _browsing.Tick(0);
+            }
+            else PaintOffAir();
             return;
         }
         if (elapsed >= 10_000) { CloseGlass(); return; } // WPF EmiChannels.cs:58-59
+        if (_glassMotion) _browsing?.Tick(elapsed);
         if (_glassMotion && _glassSignal != null && _glassDim != null)
         {
             Canvas.SetLeft(_glassSignal, (10 + (int)(elapsed / 1000) % 6 * 4) * _glassScale);
@@ -198,7 +209,7 @@ public partial class EmiDeskWindow
         _glassLive = _glassLanded = false;
         _glassFrames?.Stop(); _glassFrames = null;
         if (_glassLayer != null) GlassHost.Children.Remove(_glassLayer);
-        _glassLayer = null; _glassDim = null; _glassSignal = null;
+        _glassLayer = null; _browsing = null; _glassDim = null; _glassSignal = null;
         _glassActivity = DateTime.UtcNow;
         _glassIdle = NextGlassIdle();
         if (wasLive && !_closingForGood && IsVisible && !ChainLive) RestartIdleBeats();

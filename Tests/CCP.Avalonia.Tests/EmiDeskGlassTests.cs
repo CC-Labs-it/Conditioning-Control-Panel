@@ -34,7 +34,7 @@ public class EmiDeskGlassTests
         var language = LocalizationManager.Instance.CurrentLanguage;
         var section = new EmiDeskSettingsSection();
         var host = new Window { Content = section };
-        var desk = new EmiDeskWindow();
+        var desk = new EmiDeskWindow { GlassBrowsingOverride = false };
         try
         {
             LocalizationManager.Instance.SetLanguage("en");
@@ -228,7 +228,7 @@ public class EmiDeskGlassTests
         CoreSettings.ServiceProvider = () => settings;
         var language = LocalizationManager.Instance.CurrentLanguage;
         var savedBedtime = EmiState.Current.BedtimeUntil;
-        var desk = new EmiDeskWindow();
+        var desk = new EmiDeskWindow { GlassBrowsingOverride = false };
         try
         {
             EmiState.Current.BedtimeUntil = DateTime.MinValue;
