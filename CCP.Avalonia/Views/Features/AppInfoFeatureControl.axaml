@@ -31,6 +31,11 @@
             </StackPanel>
         </Border>
 
+        <!-- Upstream names and licence identifiers, not translated prose (B2 section 3). -->
+        <TextBlock x:Name="TxtRaceEngineLicence" Text="Electron (MIT) / Chromium (BSD)"
+                   Foreground="{DynamicResource TextMutedBrush}" FontSize="11"
+                   HorizontalAlignment="Center" Margin="0,0,0,12"/>
+
         <!-- Phase 2: this control is About + support only.
              · The reparented account sections host (ExternalSectionsHost) is gone — the login /
                linking / cloud-backup / privacy cards live permanently in Settings · Account.

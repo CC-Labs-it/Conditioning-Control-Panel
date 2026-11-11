@@ -143,6 +143,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Opened += (_, _) =>
             {
                 if (_firstVisitPulsesArmed) return;
+                // --render/--render-all capture one frame. On a slow host (Linux/WSL Skia) the 1.2 s
+                // timer fires inside CaptureRenderedFrame and photographs Play/You mid-dip; draw at rest.
+                if (RenderProof.Rendering) return;
                 _firstVisitPulsesArmed = true;
                 delay = ScheduleOnce(StartFirstVisitPulses, TimeSpan.FromMilliseconds(1200));
             };

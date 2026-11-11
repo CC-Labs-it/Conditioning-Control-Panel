@@ -6,6 +6,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -120,7 +121,7 @@ public sealed class PerformanceSettingsWiringTests
             Dispatcher.UIThread.RunJobs();
             var dash = w.Named<SettingsTabView>("SettingsTab")!;
             var strip = w.PageStrip!;
-            var lift = w.Named<Border>("SectionEdgeLiftTop")!;
+            var lift = w.Named<SectionEdgeLift>("SectionEdgeLift")!;
             // Home: the fold arrow and the favourites handle breathe, the edge lift is up.
             Assert.True(dash.FoldArrowBreathing && dash.FavoritesDrawerBreathing && lift.IsVisible,
                 "a Home chrome loop never started - the test proves nothing");

@@ -190,6 +190,16 @@ public sealed class StartModsTests
                 var list = dialog.FindControl<global::Avalonia.Controls.ListBox>("ModList")!;
                 list.SelectedItem = list.Items.OfType<global::Avalonia.Controls.ListBoxItem>()
                     .First(i => (string?)i.Tag == BuiltInMods.SissyHypnoId);
+
+                // WPF Customise per-mod defaults: Keep current until picked; an explicit pick is stored
+                // for the previewed mod (ModPresetDefaults), before it is even switched to.
+                var defaults = dialog.FindControl<global::Avalonia.Controls.ComboBox>("CmbDefaultSettings")!;
+                Assert.Equal(ModPresetDefaults.KeepCurrent, (string?)((global::Avalonia.Controls.ComboBoxItem)defaults.SelectedItem!).Tag);
+                Assert.False(svc.Current.ModDefaultSettingsPreset.ContainsKey(BuiltInMods.SissyHypnoId));
+                defaults.SelectedIndex = 1;
+                Assert.Equal((string?)((global::Avalonia.Controls.ComboBoxItem)defaults.SelectedItem!).Tag,
+                    svc.Current.ModDefaultSettingsPreset[BuiltInMods.SissyHypnoId]);
+
                 dialog.FindControl<global::Avalonia.Controls.Button>("BtnActivate")!
                     .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
 

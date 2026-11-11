@@ -1,10 +1,9 @@
 // PORTED from ConditioningControlPanel/MainWindow/MainWindow.xaml.cs ArmPanicWatchdog (:1025) and
-// RunEmergencyPanicTeardown (:1046), #919b. The listener (Win32PanicKey / X11PanicKey) runs on its own
+// RunEmergencyPanicTeardown (:1046), #919b. The listener (Win32PanicKey / X11PanicKey / the portal) runs on its own
 // thread here, so a wedged UI thread can no longer lose the key itself; it can still sit on the queued
 // handler. This watches that handler from a background thread and, if it has not finished inside
 // 2 s, runs the thread-safe part of the stop off the UI thread.
-// ponytail: WPF also stops BrainDrain and the screen OCR here and queues the OCR restart; neither has
-// a twin on this head yet (keyword triggers / OCR are not ported). Add them when they land.
+// ponytail: WPF also stops screen OCR here and queues its restart; OCR has no twin on this head yet.
 
 using System;
 using System.Threading;
@@ -47,35 +46,45 @@ internal static class PanicWatchdog
     {
         HookShutdown();
         DispatcherOperation op;
-        try { op = Dispatcher.UIThread.InvokeAsync(handler); }
+        Interlocked.Increment(ref _pending);
+        try { op = Dispatcher.UIThread.InvokeAsync(() => { try { handler(); } finally { Interlocked.Decrement(ref _pending); } }); }
         catch (Exception ex)
         {
+            Interlocked.Decrement(ref _pending);
             // The dispatcher refused the post (shutting down or broken): the press must still stop things.
             Log.Error(ex, "Panic: could not queue the handler; tearing down off-thread");
-            RunGuarded();
+            _ = Task.Run(RunGuarded);   // this can be the hook or the D-Bus reader, which must never wait
             return;
         }
         Arm(op.GetTask());
     }
 
+    private static int _pending;
+
+    /// <summary>A panic press is queued on the UI thread and has not run yet. Whatever would start
+    /// something on the same thread meanwhile (the Chaos countdown's BeginRun) waits for it.</summary>
+    internal static bool PanicPending => Volatile.Read(ref _pending) > 0;
+
     /// <summary>WPF ArmPanicWatchdog: a background watcher, never a wait on the calling thread.</summary>
-    internal static Task Arm(Task handler, TimeSpan? timeout = null) => Task.Run(async () =>
+    internal static Task Arm(Task handler, TimeSpan? timeout = null)
     {
-        try
+        // Attached here, not after the wait: a handler can still throw once the fallback has run.
+        handler.ContinueWith(t => Log.Error(t.Exception, "Panic: the press handler threw"),
+            CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+        return Task.Run(async () =>
         {
-            var finished = await Task.WhenAny(handler, Task.Delay(timeout ?? Timeout)).ConfigureAwait(false);
-            if (finished == handler)
+            try
             {
-                try { _ = handler.Exception; } catch { }   // observe a faulted handler
-                return;
+                var finished = await Task.WhenAny(handler, Task.Delay(timeout ?? Timeout)).ConfigureAwait(false);
+                if (finished == handler) return;   // as WPF: a thrown handler is logged and not torn down
+                RunGuarded();
             }
-            RunGuarded();
-        }
-        catch (Exception ex)
-        {
-            try { Log.Error(ex, "Panic watchdog failed"); } catch { }
-        }
-    });
+            catch (Exception ex)
+            {
+                try { Log.Error(ex, "Panic watchdog failed"); } catch { }
+            }
+        });
+    }
 
     private static void RunGuarded()
     {
@@ -106,6 +115,7 @@ internal static class PanicWatchdog
     /// hiding: overlays are the UI thread's to drop when it comes back and runs the real handler.</summary>
     private static void RunEmergencyTeardown()
     {
+        Step("race engine download", RaceEngineDownload.Cancel);
         Step("haptics", () => CoreHaptics.Service?.PanicStop());
         Step("remote haptics", RemoteCommands.StopHaptics);
         // WPF RunEmergencyPanicTeardown (main 7e14c2870): the hold the real handler would open first; thread-safe.
@@ -115,6 +125,8 @@ internal static class PanicWatchdog
         Step("panic quiet", () => ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet());
         // Conditional, as WPF (#668): with the standalone Audio Layers master on, the bed is the user's.
         Step("audio layers", () => { if (!CoreSettings.Current.AudioLayersEnabled) LayeredAudio.Instance?.Stop(); });
+        Step("brain drain", () => BrainDrainPlayer.Instance?.Stop());
+        Step("mantra chant", () => App.MantraChant.StopEmergency()); // WPF MainWindow.xaml.cs:1112
         Step("mind wipe", () => CoreMindWipe.StopProvider?.Invoke());
         Step("unduck", () => LibVlcAudio.Instance?.ForceUnduck());
         Log.Information("PANIC FALLBACK complete");
