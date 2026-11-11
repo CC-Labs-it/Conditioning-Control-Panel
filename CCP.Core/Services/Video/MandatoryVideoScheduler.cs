@@ -335,7 +335,12 @@ namespace ConditioningControlPanel.Services
                 if (Interlocked.Exchange(ref _noVideosShown, 1) == 0) NoVideos?.Invoke();
                 return false;
             }
-            if (PlaybackPath(path) == null) return false;
+            // WPF PlayVideo :3044: try one fresh pick before ending a refused run.
+            if (PlaybackPath(path) == null)
+            {
+                path = PickNext();
+                if (path == null || PlaybackPath(path) == null) return false;
+            }
             IsStrict = strictOverride ?? CoreSettings.Current.StrictLockEnabled;
             _playing = true;
             _retryGeneration++;   // WPF PlayVideo CancelPendingRetry: a new clip retires any pending verdict replay

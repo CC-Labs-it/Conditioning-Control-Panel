@@ -129,8 +129,11 @@ public sealed class MandatoryVideoSchedulerTests
         try
         {
             ScrolllerPolicy.Apply(true, null);
-            Assert.False(v.Trigger(path: url));
-            Assert.Empty(host.Shown);
+            Assert.True(v.Trigger(path: url));
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Contains(Assert.Single(host.Shown).Path, Clips);
+            v.End();
+            host.Shown.Clear();
             cached = "/cache/video.mp4";
             Assert.True(v.Trigger(path: url));
             clock.Advance(MandatoryVideoScheduler.PreRoll);
@@ -155,9 +158,24 @@ public sealed class MandatoryVideoSchedulerTests
             clock.Advance(MandatoryVideoScheduler.PreRoll);
             Assert.Empty(host.Shown);
             Assert.False(v.IsPlaying);
-            Assert.False(v.Trigger(path: "https://cdn.scrolller.com/video.mp4"));
+            Assert.True(v.Trigger(path: "https://cdn.scrolller.com/video.mp4"));
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Contains(Assert.Single(host.Shown).Path, Clips);
+            v.End();
         }
         finally { ScrolllerPolicy.Apply(enabled, cap); }
+    });
+
+    [Fact]
+    public void Uncached_Scrolller_with_empty_library_does_not_start() => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var v = new MandatoryVideoScheduler(host, clock, () => Array.Empty<string>())
+            { CachedScrolllerPath = _ => null };
+        Assert.False(v.Trigger(path: "https://cdn.scrolller.com/video.mp4"));
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.False(v.IsPlaying);
+        Assert.Empty(host.Shown);
     });
 
     [Fact]
