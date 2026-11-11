@@ -32,27 +32,27 @@ public sealed class LayeredAudioTests
     }
 
     [Fact]
-    public void UnresponsiveOutputRetriesOffTheCallerAndStaysMutedUntilAGainSticks()
+    public void GainRetriesAndUnmutesOnlyAtTheCurrentTarget()
     {
-        var caller = Environment.CurrentManagedThreadId;
-        int attempts = 0, thread = caller, unmutes = 0, sticks = 0;
-        var gain = new LayeredAudio.VlcLayerPlayer.GainWorker(() => 40, _ =>
+        using var entered = new ManualResetEventSlim(); using var release = new ManualResetEventSlim();
+        int target = 100, attempts = 0, allow = 0, unmutedAt = -1, thread = 0, unmutes = 0;
+        var caller = Environment.CurrentManagedThreadId; var gain = new LayeredAudio.VlcLayerPlayer.GainWorker(() => Volatile.Read(ref target) < 0 ? null : Volatile.Read(ref target), v =>
         {
             Volatile.Write(ref thread, Environment.CurrentManagedThreadId);
-            Interlocked.Increment(ref attempts);
-            return Volatile.Read(ref sticks) == 1;               // the output drops every gain until it recovers
-        }, () => Interlocked.Increment(ref unmutes));
-        var clock = Stopwatch.StartNew();
-        gain.Kick();
-        gain.Kick();                                             // a second set joins the running worker
-        Assert.True(clock.Elapsed < TimeSpan.FromMilliseconds(200), "the caller (mantra ramp, UI thread) never waits on the output");
-        Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref attempts) >= 20, 5000), "bounded: 20 tries");
-        Thread.Sleep(200);
-        Assert.Equal(20, Volatile.Read(ref attempts));
-        Assert.Equal(0, Volatile.Read(ref unmutes));             // unconfirmed gain: never unmuted at an unknown volume
-        Assert.NotEqual(caller, Volatile.Read(ref thread));
-        Volatile.Write(ref sticks, 1); gain.Kick();              // the next set that sticks unmutes, once
-        Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref unmutes) == 1, 5000));
+            if (Interlocked.Increment(ref attempts) <= 25) return false;
+            if (v == 100) { entered.Set(); release.Wait(TimeSpan.FromSeconds(5)); }
+            return v == 100 || Volatile.Read(ref allow) == 1;
+        }, v => { Interlocked.Increment(ref unmutes); Volatile.Write(ref unmutedAt, v); });
+        try {
+            var clock = Stopwatch.StartNew(); gain.Kick(); gain.Kick();
+            Assert.True(clock.Elapsed < TimeSpan.FromMilliseconds(200));
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(5))); // recovered after 25 failed writes
+            Assert.Equal(-1, Volatile.Read(ref unmutedAt)); Assert.NotEqual(caller, Volatile.Read(ref thread));
+            Volatile.Write(ref target, 10); gain.Kick(); release.Set();
+            Assert.False(SpinWait.SpinUntil(() => Volatile.Read(ref unmutedAt) >= 0, 500));
+            Volatile.Write(ref allow, 1); Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref unmutedAt) == 10, 5000));
+            Assert.Equal(1, Volatile.Read(ref unmutes));
+        } finally { Volatile.Write(ref target, -1); release.Set(); }
     }
 
     [Fact]

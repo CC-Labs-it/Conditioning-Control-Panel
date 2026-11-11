@@ -174,7 +174,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 public readonly MediaPlayer Player = player;
                 public readonly Media Media = media;
-                public bool Playing, Disposed;
+                public bool Playing; public volatile bool Disposed;
                 public GainWorker Gain = null!;
             }
 
@@ -236,7 +236,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                             try { c.Player.Volume = v; return c.Player.Volume == v; }
                             catch (Exception ex) { Log.Debug(ex, "LayeredAudio: volume update"); return false; }
                         }
-                    }, () => { lock (c) if (!c.Disposed) c.Player.Mute = false; });
+                    }, v => { lock (_gate) if (!_disposed && _volume == v) lock (c) if (!c.Disposed) c.Player.Mute = false; });
                     if (Copies > 0 && _live.Count == 0) GapStarts++;
                     Copies++;
                     _live.Add(c);
@@ -323,24 +323,23 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
 
             /// <summary>Per pass: pulse drops a volume set too soon after the stream opens, so retry the newest
-            /// target off the caller (the mantra ramp is on the UI thread), bounded at 20 x 25 ms. Unmutes only on a
-            /// confirmed gain (WPF sets it before Play); unconfirmed stays muted until a later set sticks.</summary>
-            internal sealed class GainWorker(Func<int?> target, Func<int, bool> trySet, Action unmute)
+            /// target off the caller until it sticks or the pass retires. Unmute only at the current confirmed gain.</summary>
+            internal sealed class GainWorker(Func<int?> target, Func<int, bool> trySet, Action<int> unmute)
             {
                 private int _busy;
 
                 public void Kick()
                 {
-                    if (Interlocked.Exchange(ref _busy, 1) == 0) ThreadPool.QueueUserWorkItem(_ => Run());
+                    if (Interlocked.Exchange(ref _busy, 1) == 0) _ = Task.Run(Run);
                 }
 
-                private void Run()
+                private async Task Run()
                 {
                     while (true)
                     {
-                        int? v = null; var ok = false;
-                        for (var i = 0; i < 20 && (v = target()) is { } want && !(ok = trySet(want)); i++) Thread.Sleep(25);
-                        if (ok) unmute();
+                        int? v;
+                        while ((v = target()) is { } want && !trySet(want)) await Task.Delay(25).ConfigureAwait(false);
+                        if (v is { } confirmed && target() == confirmed) unmute(confirmed);
                         Volatile.Write(ref _busy, 0);
                         // A target set while we held _busy skipped its own Kick: take it on unless another did.
                         if (v == null || target() == v || Interlocked.Exchange(ref _busy, 1) != 0) return;
