@@ -267,10 +267,9 @@ namespace ConditioningControlPanel
                     App.Logger?.Information("Entitlement lapsed: Mantra Chant switched off");
                 }
 
-                // Haptics. The mixer already self-mutes live (HapticMixer.IsGateOpen), so this is
-                // about the master toggle not sitting ON underneath the veil.
-                if (settings.Haptics?.Enabled == true && !premium
-                    && App.DailyFree?.IsFreeToday("haptics") != true)
+                // Haptics. Free for everyone since 2026-11-11, so this never fires today; it stays
+                // on HapticsAccess so a later tier move cannot leave the switch on under a veil.
+                if (settings.Haptics?.Enabled == true && !Services.Haptics.HapticsAccess.IsOpen)
                 {
                     settings.Haptics.Enabled = false;
                     changed = true;
@@ -343,11 +342,10 @@ namespace ConditioningControlPanel
             // Before repainting the padlocks: a feature left ON without entitlement is switched
             // off, so a veil can never trap a running feature behind an unreachable toggle.
             EnforceEntitlementLapse();
-            // Haptics content grid - the dim-and-disable half of that page's gate. It has to ask
-            // the same question HapticsGate does, or the free day lifts the veil and leaves an
-            // inert page underneath.
-            var hasHapticsAccess = App.Patreon?.HasPremiumAccess == true
-                                   || App.DailyFree?.IsFreeToday("haptics") == true;
+            // Haptics content grid - the dim-and-disable half of that page's gate. It asks the
+            // same question as the HapticsGate veil below (HapticsAccess, free for everyone since
+            // 2026-11-11), or the veil lifts and leaves an inert page underneath.
+            var hasHapticsAccess = Services.Haptics.HapticsAccess.IsOpen;
             if (HapticsTab?.HapticsContentGrid != null)
             {
                 HapticsTab.HapticsContentGrid.Opacity = hasHapticsAccess ? 1.0 : 0.3;
@@ -357,7 +355,9 @@ namespace ConditioningControlPanel
             if (HapticsTab?.HapticsFeatureBox != null) HapticsTab.HapticsFeatureBox.IsEnabled = hasHapticsAccess;
 
             RefreshPremiumGate(BambiTakeoverTab?.BambiTakeoverGate, "takeover");
-            RefreshPremiumGate(HapticsTab?.HapticsGate, "haptics");
+            // Toys are free: the padlock veil is never drawn, whatever the tier.
+            if (HapticsTab?.HapticsGate != null)
+                HapticsTab.HapticsGate.Visibility = hasHapticsAccess ? Visibility.Collapsed : Visibility.Visible;
             RefreshPremiumGate(RemoteControlTab?.RemoteControlGate, "remote");
             RefreshPremiumGate(AwarenessTab?.AwarenessGate, "awareness");
             // Lockdown is not in the rotation and has no DailyFreeKey.

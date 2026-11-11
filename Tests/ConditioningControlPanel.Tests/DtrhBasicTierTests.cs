@@ -53,7 +53,8 @@ public class DtrhBasicTierTests
     [Fact]
     public void TheMysteryBoxAndTheShelfSayTierOne()
     {
-        Assert.Contains("\"dtrh\" or \"takeover\" or \"awareness\" or \"haptics\" or \"voice\" or \"fyp\" or \"remote\" => 1,",
+        // Haptics left this list on 2026-11-11 (free for everyone, HapticsFreeTierTests).
+        Assert.Contains("\"dtrh\" or \"takeover\" or \"awareness\" or \"voice\" or \"fyp\" or \"remote\" => 1,",
             Read("MainWindow", "MainWindow.Presets.cs"));
 
         var card = ExclusiveFeature.All.Single(f => f.Key == "dtrh");
