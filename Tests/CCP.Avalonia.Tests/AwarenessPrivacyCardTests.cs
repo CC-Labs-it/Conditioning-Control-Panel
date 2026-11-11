@@ -57,14 +57,25 @@ public sealed class AwarenessPrivacyCardTests
     [Fact]
     public Task PublishedAdultFrameUsesProjection() => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        var settings = new SettingsService();
-        CoreSettings.ServiceProvider = () => settings;
-        var s = CoreSettings.Current;
-        s.AwarenessModeEnabled = s.AwarenessConsentGiven = true;
-        AwarenessPause.Resume();
-        AwarenessLive.Clear();
+        var previousProvider = CoreSettings.ServiceProvider;
+        var previousObserver = AwarenessLive.ObserverEnabled;
+        var previousPause = AwarenessPause.PausedUntil;
+        // Publish assigns a new timestamp when CutAt is default, so preserve both fields exactly.
+        var flags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic;
+        var liveLock = typeof(AwarenessLive).GetField("Lock", flags)!.GetValue(null)!;
+        var frameField = typeof(AwarenessLive).GetField("_lastFrame", flags)!;
+        var timeField = typeof(AwarenessLive).GetField("_lastFrameAt", flags)!;
+        object? previousFrame, previousTime;
+        lock (liveLock) { previousFrame = frameField.GetValue(null); previousTime = timeField.GetValue(null); }
         try
         {
+            var settings = new SettingsService();
+            CoreSettings.ServiceProvider = () => settings;
+            var s = CoreSettings.Current;
+            s.AwarenessModeEnabled = s.AwarenessConsentGiven = true;
+            AwarenessPause.Resume();
+            AwarenessLive.Clear();
+            AwarenessLive.ObserverEnabled = false;
             var vm = new AwarenessPrivacyViewModel(() => null);
             Assert.True(vm.IsLegacyPipeline);
             Assert.False(vm.IsWireLive);
@@ -84,7 +95,14 @@ public sealed class AwarenessPrivacyCardTests
             Assert.Contains("Contact", vm.WireLine);
             Assert.Contains("Contact", vm.WireJson);
         }
-        finally { AwarenessLive.ObserverEnabled = false; AwarenessLive.Clear(); }
+        finally
+        {
+            lock (liveLock) { frameField.SetValue(null, previousFrame); timeField.SetValue(null, previousTime); }
+            AwarenessLive.ObserverEnabled = previousObserver;
+            AwarenessPause.Resume();
+            if (previousPause is { } until) AwarenessPause.Pause(TimeSpan.FromTicks(1), until.AddTicks(-1));
+            CoreSettings.ServiceProvider = previousProvider;
+        }
         return Task.CompletedTask;
     });
 

@@ -81,21 +81,19 @@ public class AwarenessPrivacyCandidatesTests
     [Fact]
     public void KeywordRingFeedsSeenAndCandidates()
     {
-        var settings = new SettingsService();
-        CoreSettings.ServiceProvider = () => settings;
-        var s = CoreSettings.Current;
-        s.KeywordTriggersEnabled = true;
-        s.AwarenessDenySeeded = true;
-        s.AwarenessDenyList = new();
-        var old = CoreEntitlement.HasPremiumProvider;
+        var previousProvider = CoreSettings.ServiceProvider;
         var ring = (System.Collections.Generic.LinkedList<string>)typeof(KeywordAudioRuntime).GetField("_seenApps", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(KeywordTriggerHead.Engine)!;
         var prior = ring.ToArray();
-        ring.Clear();
         try
         {
-            CoreEntitlement.HasPremiumProvider = () => true;
-            KeywordTriggerHead.Engine.Start();
-            KeywordTriggerHead.Engine.Character('a', "ring-test-app");
+            var settings = new SettingsService();
+            CoreSettings.ServiceProvider = () => settings;
+            var s = CoreSettings.Current;
+            s.KeywordTriggersEnabled = true;
+            s.AwarenessDenySeeded = true;
+            s.AwarenessDenyList = new();
+            ring.Clear();
+            ring.AddFirst("ring-test-app");
             var vm = new AwarenessPrivacyViewModel(() => null);
             Assert.Contains(vm.SeenApps, c => c.Label == "ring-test-app");
             Assert.Contains("ring-test-app", AwarenessPrivacyViewModel.Candidates(Array.Empty<string>()));
@@ -104,7 +102,12 @@ public class AwarenessPrivacyCandidatesTests
             Assert.DoesNotContain(vm.SeenApps, c => c.Label == "ring-test-app");
             Assert.DoesNotContain("ring-test-app", AwarenessPrivacyViewModel.Candidates(s.AwarenessDenyList));
         }
-        finally { KeywordTriggerHead.Engine.Stop(); ring.Clear(); foreach (var app in prior) ring.AddLast(app); CoreEntitlement.HasPremiumProvider = old; }
+        finally
+        {
+            ring.Clear();
+            foreach (var app in prior) ring.AddLast(app);
+            CoreSettings.ServiceProvider = previousProvider;
+        }
     }
 
     [Fact]
