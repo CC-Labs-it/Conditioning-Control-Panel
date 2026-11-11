@@ -142,8 +142,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private void RestackGameAndTargets()
         {
-            // Without a separate attention surface, the opaque video must remain above gameplay.
-            if (!_surfaces.Any(x => x.AttentionWindow == null && (_attention || x.Layer.Children.Count > 0)))
+            // WPF ChaosModeService.cs:745: gameplay rides above the video, except while a fallback
+            // target shares the opaque video window (then the video must sit on top until it retires).
+            if (!_surfaces.Any(x => x.AttentionWindow == null && x.Layer.Children.Count > 0))
                 ChaosRunHost.RaiseGameLayerAboveVideo();
             foreach (var x in _surfaces)
                 if (x.Layer.Children.Count > 0)

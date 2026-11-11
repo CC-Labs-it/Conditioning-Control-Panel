@@ -86,8 +86,8 @@ public sealed class ChaosVideoRestackTests
     [Fact]
     public async Task Video_show_and_pointer_press_raise_attention_after_gameplay()
     {
-        try { _ = new LibVlcAudio("--aout=dummy"); }
-        catch (Exception e) { Assert.Skip("libvlc not available: " + e.Message); }
+        // No skip: CI installs libvlc on Linux (build.yml:330) and the Windows head bundles it.
+        _ = new LibVlcAudio("--aout=dummy");
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
@@ -231,8 +231,7 @@ public sealed class ChaosVideoRestackTests
                 ChaosRunHost.StopTimerForTests();
                 o.Show("fake-video", false);  // same public host entry used by the scheduler
                 Assert.Equal(1, starts);
-                if (attentionEnabled && !regionFails) Assert.DoesNotContain(ChaosRunHost.Hud!, raises);
-                else Assert.Contains(ChaosRunHost.Hud!, raises);
+                Assert.Contains(ChaosRunHost.Hud!, raises); // no fallback target yet: gameplay above video
                 Assert.Equal(TimeSpan.FromMilliseconds(60), Assert.Single(scheduled).Delay);
                 var surface = Assert.Single(o.Surfaces);
                 var video = surface.Window;
@@ -258,8 +257,7 @@ public sealed class ChaosVideoRestackTests
                 Assert.Equal(video, raises[^1]);
                 raises.Clear();
                 o.Step(s.AttentionLifespan + 1, 0);
-                if (attentionEnabled) Assert.DoesNotContain(ChaosRunHost.Hud!, raises);
-                else Assert.Contains(ChaosRunHost.Hud!, raises);
+                Assert.Contains(ChaosRunHost.Hud!, raises); // last fallback target retired
                 Assert.DoesNotContain(video, raises);
 
                 // Exercise a pending fade from a separate surface, then tear down immediately.
