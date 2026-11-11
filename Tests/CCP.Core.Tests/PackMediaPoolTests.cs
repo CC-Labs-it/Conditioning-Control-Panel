@@ -113,6 +113,18 @@ public sealed class PackMediaPoolTests : IDisposable
         File.WriteAllText(encrypted, "invalid ciphertext"); Assert.Null(video.PickNext()); Assert.False(video.HasPlayableContent() ?? true);
     }
     [Fact]
+    public void PlaybackFailureLeavesTheCensusUntilTheFileChanges() {
+        var (guid, _) = ContentPackStoreTests.WritePack(_root, "p1", "One", ("v.mp4", "video")); var local = Path.Combine(_root, "clip.mp4"); File.WriteAllText(local, "a");
+        var files = new[] { local }; var video = new MandatoryVideoScheduler(null!, null, () => files); bool Is(bool? want) => System.Threading.SpinWait.SpinUntil(() => video.HasPlayableContent() == want, TimeSpan.FromSeconds(10));
+        Assert.True(Is(true)); video.NoteFailed(local); Assert.True(Is(false)); File.AppendAllText(local, "b"); Assert.True(Is(true)); // replaced
+        var store = new ContentPackStore(() => _root, () => _settings, () => { }, decryptFile: _ => new byte[] { 1 }, tempDir: () => Path.Combine(_root, ".temp"));
+        files = Array.Empty<string>(); video.PackVideos = new PackMediaPool(ContentPackStore.VideoType, store: () => store);
+        Assert.True(Is(true)); var temp = video.PickNext()!; video.NoteFailed(temp); // decrypts, still broken
+        Assert.False(System.Threading.SpinWait.SpinUntil(() => video.HasPlayableContent() != false, TimeSpan.FromSeconds(1)));
+        File.AppendAllText(Directory.GetFiles(Path.Combine(_root, ".packs", guid, "content")).Single(), "x"); Assert.True(Is(true)); // replaced
+        video.PackVideos.CleanupTemps();
+    }
+    [Fact]
     public void AvailabilityProbeDoesNotBlockOrRepeatDecrypts() {
         var (guid, _) = ContentPackStoreTests.WritePack(_root, "p1", "One", ("v.mp4", "video"));
         using var entered = new System.Threading.ManualResetEventSlim(); using var release = new System.Threading.ManualResetEventSlim();

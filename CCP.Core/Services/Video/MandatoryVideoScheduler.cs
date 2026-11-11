@@ -109,13 +109,18 @@ namespace ConditioningControlPanel.Services
             if (Interlocked.CompareExchange(ref _localBusy, 1, 0) == 0)
                 _ = System.Threading.Tasks.Task.Run(() => {
                     var s = CoreSettings.Current; var found = 0;
-                    try { found = KeepByLength(_library(), s.VideoMinDurationSeconds, s.VideoMaxDurationSeconds, DurationOf).Count > 0 ? 1 : 0; }
-                    catch (Exception ex) { Log.Debug("VideoService: library check failed: {Error}", ex.Message); }
+                    try { found = KeepByLength(_library().Where(p => _failedLocal.GetValueOrDefault(p) != Stamp(p)).ToList(), s.VideoMinDurationSeconds, s.VideoMaxDurationSeconds, DurationOf).Count > 0 ? 1 : 0; }
+                    catch (Exception ex) { found = Volatile.Read(ref _localPlayable); Log.Debug("VideoService: library check failed: {Error}", ex.Message); }
                     finally { Volatile.Write(ref _localPlayable, found); Volatile.Write(ref _localBusy, 0); }
                 });
             var local = Volatile.Read(ref _localPlayable); var pack = PackVideos == null ? false : PackVideos.HasEntries;
             return local == 1 || pack == true ? true : local < 0 || pack == null ? null : false;
         }
+
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _failedLocal = new();
+        /// <summary>A clip failed to play: it leaves the playable census until its file changes (a pack decrypt marks its pack entry).</summary>
+        public void NoteFailed(string path) { if (PackVideos?.NoteFailed(path) != true) _failedLocal[path] = Stamp(path); }
+        private static string Stamp(string path) { var i = new FileInfo(path); return i.Exists ? i.Length + ":" + i.LastWriteTimeUtc.Ticks : "missing"; }
 
         public bool IsRunning => _running;
         /// <summary>A video is in pre-roll or on screen (WPF <c>_videoPlaying</c>).</summary>
@@ -359,7 +364,7 @@ namespace ConditioningControlPanel.Services
                 CoreBubbles.Pause();   // WPF StartVideoPlayback: App.Bubbles?.PauseAndClear(), until the run ends
                 CoreDiscord.Service?.SetVideoActivity(); // WPF StartVideoPlayback:3133
                 try { _host.Show(path, strict); }
-                catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); PackVideos?.InvalidateAvailability(); End(); return; }
+                catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); NoteFailed(path); End(); return; }
                 LastVideoPath = path;
                 try { VideoStarted?.Invoke(); }
                 catch (Exception ex) { Log.Debug("VideoStarted handler failed: {Error}", ex.Message); }

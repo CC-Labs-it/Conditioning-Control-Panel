@@ -28,6 +28,8 @@ namespace ConditioningControlPanel.Services
         private readonly object _lock = new();
         private readonly ShuffleBag<(string PackId, PackFileEntry File)> _bag;
         private readonly List<string> _temps = new();
+        private readonly Dictionary<string, (string PackId, PackFileEntry File)> _tempEntries = new(); // under _lock
+        private readonly Dictionary<string, string> _failed = new(); // source key -> stamp at failure, under _availabilityGate
         private readonly object _availabilityGate = new();
         private ContentPackStore? _availabilityStore; private string? _availabilitySignature;
         private int _availabilityVersion, _checking; private bool _available, _probed;
@@ -51,20 +53,29 @@ namespace ConditioningControlPanel.Services
         public void InvalidateAvailability() {
             lock (_availabilityGate) { _availabilityVersion++; _availabilitySignature = null; _available = false; _probed = true; }
         }
+        /// <summary>A decrypt of this pool failed to play: its entry leaves the census until its file changes. False for any other path.</summary>
+        public bool NoteFailed(string temp) {
+            (string PackId, PackFileEntry File) entry; lock (_lock) if (!_tempEntries.TryGetValue(temp, out entry)) return false;
+            MarkFailed(entry); return true;
+        }
+        private void MarkFailed((string PackId, PackFileEntry File) e) {
+            var stamp = Stamp(_store(), e); lock (_availabilityGate) _failed[ContentPackStore.SourceKey(e.PackId, e.File)] = stamp; InvalidateAvailability();
+        }
+        private static string Stamp(ContentPackStore? store, (string PackId, PackFileEntry File) e) {
+            var path = store?.GetEncryptedPath(e.PackId, e.File); var info = path == null ? null : new System.IO.FileInfo(path);
+            return ContentPackStore.SourceKey(e.PackId, e.File) + ":" + path + ":" + info?.Length + ":" + info?.LastWriteTimeUtc.Ticks;
+        }
         private void ProbeAvailability() {
             try {
                 int version; lock (_availabilityGate) version = _availabilityVersion;
-                var store = _store(); var entries = Entries();
+                var store = _store(); var entries = Entries(); var stamps = entries.Select(e => Stamp(store, e)).ToList();
                 // Detect opt-outs, pack changes, removal and replacement without decrypting on every tick.
-                var signature = string.Join("|", entries.Select(e =>
-                {
-                    var path = store?.GetEncryptedPath(e.PackId, e.File); var info = path == null ? null : new System.IO.FileInfo(path);
-                    return ContentPackStore.SourceKey(e.PackId, e.File) + ":" + path + ":" + info?.Length + ":" + info?.LastWriteTimeUtc.Ticks;
-                }));
+                var signature = string.Join("|", stamps);
                 lock (_availabilityGate)
                     if (version != _availabilityVersion || (ReferenceEquals(store, _availabilityStore) && signature == _availabilitySignature)) return;
                 var available = false;
-                if (store != null) foreach (var entry in entries) {
+                if (store != null) for (var i = 0; i < entries.Count; i++) {
+                    var entry = entries[i]; lock (_availabilityGate) if (_failed.GetValueOrDefault(ContentPackStore.SourceKey(entry.PackId, entry.File)) == stamps[i]) continue;
                     var temp = store.GetPackFileTempPath(entry.PackId, entry.File);
                     if (temp != null) { store.DeleteTempFile(temp); available = true; break; }
                 }
@@ -124,7 +135,7 @@ namespace ConditioningControlPanel.Services
                 {
                     var drop = _temps.Count / 2;
                     stale = _temps.GetRange(0, drop);
-                    _temps.RemoveRange(0, drop);
+                    _temps.RemoveRange(0, drop); foreach (var p in stale) _tempEntries.Remove(p);
                 }
             }
             if (stale != null) foreach (var p in stale) store.DeleteTempFile(p);
@@ -133,10 +144,10 @@ namespace ConditioningControlPanel.Services
             {
                 // WPF VideoService.cs:8044 logs at Information (#1135): a pool that LOOKS full handed back nothing.
                 Log.Information("ContentPacks: '{Name}' from pack {PackId} could not be decrypted", entry.File.OriginalName, entry.PackId);
-                InvalidateAvailability();
+                MarkFailed(entry);
                 return null;
             }
-            lock (_lock) _temps.Add(temp);
+            lock (_lock) { _temps.Add(temp); _tempEntries[temp] = entry; }
             return temp;
         }
 
@@ -144,7 +155,7 @@ namespace ConditioningControlPanel.Services
         public void CleanupTemps()
         {
             List<string> all;
-            lock (_lock) { all = new List<string>(_temps); _temps.Clear(); }
+            lock (_lock) { all = new List<string>(_temps); _temps.Clear(); _tempEntries.Clear(); }
             var store = _store();
             foreach (var p in all)
             {
@@ -153,7 +164,6 @@ namespace ConditioningControlPanel.Services
             }
         }
 
-        // Caller holds _lock.
         private List<(string PackId, PackFileEntry File)> Entries()
         {
             try
