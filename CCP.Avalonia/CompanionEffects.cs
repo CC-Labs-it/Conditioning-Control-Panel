@@ -107,22 +107,26 @@ namespace ConditioningControlPanel.Avalonia
                     Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(text, playSound: true, aiGenerated: aiGenerated));
         }
 
-        internal static bool ApplyPink(Window? host, bool on, int? opacity) => Start(() =>
+        internal static bool ApplyPink(Window? host, bool on, int? opacity) => OnUi(() =>
         {
-            if (host is null) return false;
-            var s = CoreSettings.Current;
-            var (oldOpacity, oldEnabled) = (s.PinkFilterOpacity, s.PinkFilterEnabled);
-            if (opacity is int value) s.PinkFilterOpacity = value;
-            s.PinkFilterEnabled = on;
-            if (!PinkFilterOverlay.StartForAi(host))
+            var generation = MainShellWindow.OverlayGeneration;
+            return Start(() =>
             {
-                (s.PinkFilterOpacity, s.PinkFilterEnabled) = (oldOpacity, oldEnabled);
-                PinkFilterOverlay.Refresh(host);
-                return false;
-            }
-            SpiralOverlay.StartForAi(host);
-            CoreSettings.Save();
-            return true;
+                if (generation != MainShellWindow.OverlayGeneration || host is null) return false;
+                var s = CoreSettings.Current;
+                var (oldOpacity, oldEnabled) = (s.PinkFilterOpacity, s.PinkFilterEnabled);
+                if (opacity is int value) s.PinkFilterOpacity = value;
+                s.PinkFilterEnabled = on;
+                if (!PinkFilterOverlay.StartForAi(host))
+                {
+                    (s.PinkFilterOpacity, s.PinkFilterEnabled) = (oldOpacity, oldEnabled);
+                    PinkFilterOverlay.Refresh(host);
+                    return false;
+                }
+                SpiralOverlay.StartForAi(host);
+                CoreSettings.Save();
+                return true;
+            });
         });
 
         /// <summary>WPF App.AiEffects.cs:63,128-150: set, start the overlay even with the engine off,

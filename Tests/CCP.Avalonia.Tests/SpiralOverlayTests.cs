@@ -444,6 +444,54 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
             }
         });
 
+    [Fact]
+    public async Task Confirmed_pause_cancels_a_held_pink_start()
+        => await WithShell(async (shell, s, gif) =>
+        {
+            var lab = CoreAccount.HasLabAccessProvider;
+            var consent = s.CompanionPrompt.AllowAiToControlEffects;
+            var startEffect = CompanionEffects.StartEffect;
+            var skipChecks = PinkFilterOverlay.SkipPlatformChecksForTests;
+            var sessions = global::ConditioningControlPanel.Avalonia.App.Sessions;
+            var sessionProvider = CoreSession.IsSessionRunningProvider;
+            var pink = (s.PinkFilterEnabled, s.PinkFilterOpacity);
+            SessionRunner? runner = null;
+            try
+            {
+                CoreAccount.HasLabAccessProvider = () => true;
+                s.CompanionPrompt.AllowAiToControlEffects = true;
+                runner = global::ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService());
+                s.SkipPauseXpWarning = true;
+                shell.StartSession(new Session { Id = "held_pink", Name = "Held pink", DurationMinutes = 1 });
+                Assert.True(runner.IsRunning);
+                (s.PinkFilterEnabled, s.PinkFilterOpacity) = (false, 10);
+                PinkFilterOverlay.SkipPlatformChecksForTests = true;
+                Action? held = null;
+                CompanionEffects.StartEffect = start => held = start;
+                Assert.True(CompanionEffects.ApplyPink(shell, true, 25));
+                shell.Named<Button>("BtnPauseSession")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                await Task.Yield();
+                Assert.True(runner.IsPaused);
+                Assert.NotNull(held);
+                held!();
+                Assert.Equal((false, 10), (s.PinkFilterEnabled, s.PinkFilterOpacity));
+                Assert.False(PinkFilterOverlay.IsShowing || PinkFilterOverlay.AiRunning);
+            }
+            finally
+            {
+                CompanionEffects.StartEffect = startEffect;
+                PinkFilterOverlay.StopForAi();
+                PinkFilterOverlay.CloseAll();
+                PinkFilterOverlay.SkipPlatformChecksForTests = skipChecks;
+                runner?.Stop();
+                CoreSession.IsSessionRunningProvider = sessionProvider;
+                global::ConditioningControlPanel.Avalonia.App.Sessions = sessions;
+                (s.PinkFilterEnabled, s.PinkFilterOpacity) = pink;
+                s.CompanionPrompt.AllowAiToControlEffects = consent;
+                CoreAccount.HasLabAccessProvider = lab;
+            }
+        });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
