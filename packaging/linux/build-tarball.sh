@@ -2,8 +2,11 @@
 # Build the linux-x64 tarball the Flatpak manifest and the AUR PKGBUILD consume
 # (docs/avalonia-linux-install.html). Local only: never uploads anything.
 #   bash packaging/linux/build-tarball.sh [out-dir]   -> prints the tarball path
-#   CCP_VLC_RUNTIME=<ccp-vlc-runtime-*.tar.gz>: the pinned libVLC runtime (default packaging/linux/vlc/out/, built by
-#   packaging/linux/vlc/build.sh when missing); its sha256 must match RUNTIME_SHA256 in packaging/linux/vlc/versions.env.
+#   CCP_VLC_RUNTIME=<ccp-vlc-runtime-*.tar.gz>: the libVLC runtime (default packaging/linux/vlc/out/). Two paths, by
+#   RUNTIME_URL in packaging/linux/vlc/versions.env (owner decision D2, 2026-11-11):
+#     set:   fetched from RUNTIME_URL when missing; its sha256 must match RUNTIME_SHA256.
+#     empty: built by packaging/linux/vlc/build.sh when missing, accepted once vlc/check.sh passes on it
+#            (check.sh stamps <runtime>.checked with the sha256 it passed; no stamp or a different file = re-check).
 # Layout: ConditioningControlPanel/{CCP.Avalonia, conditioning-control-panel.sh, LICENSE, Resources/Models/vosk/<model>,
 #         lib/{libvlc.so.5,libvlccore.so.9,vlc/plugins}, VLC-NOTICES.txt, SOURCES.txt,
 #         share/{applications,icons/hicolor/*/apps,metainfo}/<app-id>.*}  (share/ maps onto /usr/share or /app/share)
@@ -15,10 +18,27 @@ pub=$root/CCP.Avalonia/bin/publish/linux-x64
 
 # shellcheck source=vlc/versions.env
 . "$root/packaging/linux/vlc/versions.env"
-vlcrt=${CCP_VLC_RUNTIME:-$root/packaging/linux/vlc/out/$ARTIFACT.tar.gz}
-[ -f "$vlcrt" ] || bash "$root/packaging/linux/vlc/build.sh" "$(dirname "$vlcrt")" >&2
-echo "$RUNTIME_SHA256  $vlcrt" | sha256sum -c --quiet - >&2 \
-  || { echo "build-tarball: $vlcrt is not the pinned runtime (RUNTIME_SHA256, packaging/linux/vlc/versions.env)" >&2; exit 1; }
+vlc=$root/packaging/linux/vlc
+vlcrt=${CCP_VLC_RUNTIME:-$vlc/out/$ARTIFACT.tar.gz}
+srcsha=$SOURCES_SHA256
+if [ -n "${RUNTIME_URL:-}" ]; then
+  if [ ! -f "$vlcrt" ]; then
+    mkdir -p "$(dirname "$vlcrt")"
+    curl -fL --retry 3 -o "$vlcrt.part" "$RUNTIME_URL" >&2
+    mv "$vlcrt.part" "$vlcrt"
+  fi
+  echo "$RUNTIME_SHA256  $vlcrt" | sha256sum -c --quiet - >&2 \
+    || { echo "build-tarball: $vlcrt is not the pinned runtime (RUNTIME_SHA256, packaging/linux/vlc/versions.env)" >&2; exit 1; }
+  echo "build-tarball: libVLC runtime = FETCHED $RUNTIME_URL (sha256 pin matched)" >&2
+else
+  [ -f "$vlcrt" ] || bash "$vlc/build.sh" "$(dirname "$vlcrt")" >&2
+  [ "$(cat "$vlcrt.checked" 2>/dev/null)" = "$(sha256sum < "$vlcrt" | cut -d' ' -f1)" ] || bash "$vlc/check.sh" "$vlcrt" >&2
+  srcsha="(local build, not published)"
+  if [ -f "$(dirname "$vlcrt")/$ARTIFACT-sources.tar" ]; then
+    srcsha=$(sha256sum < "$(dirname "$vlcrt")/$ARTIFACT-sources.tar" | cut -d' ' -f1)
+  fi
+  echo "build-tarball: libVLC runtime = LOCAL BUILD $vlcrt (vlc/check.sh passed; no RUNTIME_URL, sha pin not applied)" >&2
+fi
 
 rm -rf "$pub"
 dotnet publish "$root/CCP.Avalonia/CCP.Avalonia.csproj" -c Release -p:PublishProfile=linux-x64 >&2
@@ -37,7 +57,7 @@ test -f "$pub/lib/libvlc.so.5"
 cp "$root/packaging/linux/VLC-NOTICES.txt" "$pub/"
 printf '%s\n' "Corresponding source for the bundled libVLC (lib/, see VLC-NOTICES.txt):" \
   "https://github.com/CC-Labs-it/Conditioning-Control-Panel/releases/download/v$ver/$ARTIFACT-sources.tar" \
-  "sha256 $SOURCES_SHA256" > "$pub/SOURCES.txt"
+  "sha256 $srcsha" > "$pub/SOURCES.txt"
 cp "$root/packaging/linux/conditioning-control-panel.sh" "$pub/"   # the launcher: OpenSSL 3 hint, then CCP.Avalonia
 mkdir -p "$pub/packaging/linux"
 cp "$root/packaging/linux/rt-engine-check.sh" "$pub/packaging/linux/"

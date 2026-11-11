@@ -4,5 +4,5 @@ The verified engine folder must retain the complete upstream LICENSE and
 LICENSES.chromium.html files, including all third-party notices. Do not strip
 these files when extracting, pruning or packaging the engine cache.
 This notice is not a substitute for those licence texts.
-Electron's ffmpeg includes H.264/MP3 decoders. Release is blocked until the
-owner/legal codec decision, or a verified proprietary-codec-free ffmpeg build.
+Electron's ffmpeg includes H.264/MP3 decoders; they are shipped (owner decision
+D1, 2026-11-11, docs/avalonia-decisions.html).

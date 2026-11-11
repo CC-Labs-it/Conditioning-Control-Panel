@@ -50,7 +50,7 @@ process group on panic, close, cancellation and exit. Escape pauses; double Esca
 <p>Licence entry: Electron (MIT) / Chromium (BSD). <code>RT-ENGINE-NOTICES.txt</code> ships beside CCP's licence
 (and in Flatpak's licence directory); it points to the complete notices retained in the downloaded engine folder.
 About names the engine and licences; the fetcher retention gate still needs wiring in its owning lane.
-H.264/MP3 ffmpeg shipping remains blocked on owner/legal approval or a verified codec-free replacement.</p>
+Electron's H.264/MP3 ffmpeg ships (owner decision D1, 2026-11-11, <code>avalonia-decisions.html</code>).</p>
 <h3 id="rt-a6">A6 Linux release checklist</h3>
 <ul>
 <li>Check/bump the Electron version, URL and SHA256 for every manifest architecture; verify downloads resolve,
@@ -61,7 +61,7 @@ checksums match, executables run and both upstream licence files survive install
 Escape/double Escape and panic with the race focused on X11 and Wayland/XWayland; confirm no orphan processes.
 The browser fallback must say &quot;Panic cannot close a browser tab.&quot;</li>
 <li>Build/install the Flatpak and tarball on a clean desktop. Test cached engine reuse without network.
-Keep the release blocked until the shell restrictions, host panic lifetime and codec decision are proven.</li>
+Keep the release blocked until the shell restrictions and host panic lifetime are proven.</li>
 </ul>
 <h3 id="rt-spike-rerun">Spike re-run (measurement only)</h3>
 <p>The nine files in <code>packaging/linux/rt-spike/</code> were copied from

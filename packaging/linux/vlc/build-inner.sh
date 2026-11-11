@@ -77,7 +77,8 @@ test -s "$rt/lib/vlc/plugins/plugins.dat"
 cp "$src/COPYING.LIB" "$rt/lib/vlc/licenses/VLC-COPYING.LIB"
 cp "$src/AUTHORS" "$rt/lib/vlc/licenses/VLC-AUTHORS"
 for d in "$src"/contrib/native/*/; do
-    for f in "$d"COPYING* "$d"LICENSE* "$d"LICENCE* "$d"LGPL*; do
+    # COPYRIGHT: libgsm's only licence text.
+    for f in "$d"COPYING* "$d"COPYRIGHT* "$d"LICENSE* "$d"LICENCE* "$d"LGPL*; do
         [ -f "$f" ] && install -D -m644 "$f" "$rt/lib/vlc/licenses/$(basename "$d")/$(basename "$f")"
     done
 done

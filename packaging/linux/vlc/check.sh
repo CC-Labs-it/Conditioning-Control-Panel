@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Proves a runtime built by build.sh is shippable. Exits non-zero on any failure.
+# Proves a runtime built by build.sh is shippable. Exits non-zero on any failure. On PASS writes
+# <runtime>.checked (its sha256), which build-tarball.sh accepts instead of re-checking.
 #
 #   packaging/linux/vlc/check.sh [RUNTIME_TAR_GZ]     (default: out/ccp-vlc-runtime-<ver>-linux-x64.tar.gz)
 #   packaging/linux/vlc/check.sh --clips              only make the test clips in out/clips
@@ -87,3 +88,5 @@ trap 'rm -rf "$tmp"' EXIT
 tar xzf "$runtime" -C "$tmp"
 "$engine" run --rm -v "$here:/src:ro,z" -v "$tmp:/rt:ro,z" -v "$clips:/clips:ro,z" \
     "$BUILD_IMAGE" bash /src/check.sh --inside
+# Reached only on PASS: build-tarball.sh accepts this exact local runtime without re-checking it.
+sha256sum < "$runtime" | cut -d' ' -f1 > "$runtime.checked"
