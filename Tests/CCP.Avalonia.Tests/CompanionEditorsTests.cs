@@ -4,10 +4,13 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia;
@@ -189,7 +192,12 @@ public sealed class CompanionEditorsTests
         Setup();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
-        var shell = new MainShellWindow();
+        var settings = CoreSettings.Current;
+        settings.Welcomed = settings.HasAcceptedAgeVerification = true;
+        settings.WhatMovedCardShown = 1;
+        settings.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+        settings.MotionLevel = MotionLevel.Full;
+        var shell = new MainShellWindow { TabClock = new SteppedClock() };
         try
         {
             shell.Show();
@@ -197,6 +205,8 @@ public sealed class CompanionEditorsTests
             // WPF v2: Companion > Personality adopts Make-her-yours (Pages/PersonalityPage.xaml.cs:43).
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            shell.CompleteTabTransition();
+            Assert.Null(shell.EnteringTab);
             Dispatcher.UIThread.RunJobs();
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
@@ -205,8 +215,20 @@ public sealed class CompanionEditorsTests
             {
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
                 button.BringIntoView();
+                shell.UpdateLayout();
                 Dispatcher.UIThread.RunJobs();
+                // A single tick can render an older in-flight batch, so wait for this tree's commit.
+                var batch = ElementComposition.GetElementVisual(shell)!.Compositor.RequestCompositionBatchCommitAsync();
+                var deadline = DateTime.UtcNow.AddSeconds(10);
+                while (!batch.Rendered.IsCompleted)
+                {
+                    Assert.True(DateTime.UtcNow < deadline, "the compositor did not render the companion view");
+                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                    Dispatcher.UIThread.RunJobs();
+                }
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
+                var hit = Assert.IsAssignableFrom<Visual>(shell.InputHitTest(at));
+                Assert.Contains(button, hit.GetSelfAndVisualAncestors());
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
                 Dispatcher.UIThread.RunJobs();
