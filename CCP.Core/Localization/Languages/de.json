@@ -1,4 +1,9 @@
 {
+  "chaos_rabbit_pointer": "Kaninchenruf braucht Zugriff auf den Desktopzeiger",
+  "chaos_rabbit_whistle": "🐇 der Pfiff wartet. dein nächster Klick ruft sie",
+  "chaos_rabbit_storm": "Kaninchensturm",
+  "chaos_rabbit_summoned": "🐇 {0} folgen deinem Ruf",
+  "chaos_rabbit_summoned_storm": "🐇 {0} an deiner Fingerspitze. der Bau leert sich",
   "deeper_submission_badge_published": "Veröffentlicht",
   "deeper_submission_badge_published_tip": "Diese Erweiterung ist im Community-Katalog live.",
   "deeper_submission_badge_pending": "Ausstehend",

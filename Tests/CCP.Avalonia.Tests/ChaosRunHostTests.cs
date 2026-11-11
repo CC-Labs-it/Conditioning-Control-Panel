@@ -42,6 +42,247 @@ public sealed class ChaosRunHostTests
     }
 
     [Fact]
+    public void Windows_pointer_uses_physical_position_and_left_button_high_bit()
+    {
+        var read = ConditioningControlPanel.Avalonia.Platform.X11Pointer.ReadWindows;
+        var p = read(() => (true, -120, 350), key => key == 1 ? unchecked((short)0x8000) : (short)1);
+        Assert.NotNull(p);
+        Assert.Equal(new PixelPoint(-120, 350), p!.Value.At);
+        Assert.True(p.Value.Pressed);
+        Assert.False(p.Value.Escape);
+        Assert.Null(read(() => (false, 0, 0), _ => 0));
+        Assert.False(read(() => (true, 0, 0), _ => 1)!.Value.Pressed);
+    }
+
+    [Fact]
+    public void Wayland_session_has_no_rabbit_pointer()
+    {
+        var session = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
+        try
+        {
+            Environment.SetEnvironmentVariable("XDG_SESSION_TYPE", "wayland");
+            Assert.True(ConditioningControlPanel.Avalonia.Platform.X11Pointer.IsWaylandSession());
+        }
+        finally { Environment.SetEnvironmentVariable("XDG_SESSION_TYPE", session); }
+    }
+
+    private static global::Avalonia.Threading.DispatcherTimer? AimTimer() =>
+        (global::Avalonia.Threading.DispatcherTimer?)typeof(ChaosRunHost)
+            .GetField("_rabbitAimTimer", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null);
+
+    private static int Rabbits() => BubbleOverlay.Field.Bubbles.Count(b => b.Spec?.IsDarter == true);
+
+    // WPF ChaosModeService.cs:2751-2759,2834-2914,2986-2992,3015-3024.
+    [Fact]
+    public Task Rabbit_caller_waits_for_a_fresh_live_click_and_storm_ends_on_teardown() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        FreshMeta();
+        var oldRead = ChaosRunHost.ReadRabbitPointer;
+        var oldSpawn = ChaosRunHost.SpawnRabbit;
+        var oldMake = ChaosCursorGlowOverlay.MakeClickThrough;
+        var oldGlowRead = ChaosCursorGlowOverlay.ReadPointer;
+        var oldSkia = CoreSettings.Current.ChaosSkiaFxEnabled;
+        var at = new PixelPoint(500, 300);
+        bool down = true, available = false;
+        ChaosRunHost.ReadRabbitPointer = () => available ? (at, down, false) : null;
+        ChaosCursorGlowOverlay.ReadPointer = () => (at, down, false);
+        ChaosCursorGlowOverlay.MakeClickThrough = _ => true;
+        CoreSettings.Current.ChaosSkiaFxEnabled = false;
+        try
+        {
+            ChaosRunHost.StartRun(Cfg());
+            ChaosRunHost.Overlay!.FinishCountdown();
+            ChaosRunHost.StopTimerForTests();
+            var state = ChaosRunHost.State!;
+            state.ToyPower["rabbit_caller"] = 3;
+            state.MaxedBoons.Add("rabbit_caller");
+            var toy = new ChaosToyState { Id = "rabbit_caller", CooldownSec = 20 };
+            state.ActiveToys.Add(toy);
+            ChaosRunHost.UseToyById("rabbit_caller");   // no desktop pointer: denied, nothing spent
+            Assert.Equal(0, toy.CooldownRemainingSec);
+            Assert.Null(ChaosCursorGlowOverlay.Active);
+            available = true;
+            ChaosRunHost.UseToyById("rabbit_caller");
+            Assert.Equal(20, toy.CooldownRemainingSec);
+            Assert.Contains(ConditioningControlPanel.Localization.Loc.Get("chaos_rabbit_whistle"), state.RecentEvents);
+            Assert.True(ChaosCursorGlowOverlay.Active!.HaloVisible);
+            // WPF :2859: a 16 ms dispatcher poll, not a render-frame callback.
+            var aimTimer = AimTimer()!;
+            Assert.True(aimTimer.IsEnabled);
+            Assert.Equal(TimeSpan.FromMilliseconds(16), aimTimer.Interval);
+            int spawned = 0;
+            ChaosRunHost.SpawnRabbit = (x, y) => ++spawned == 1 ? oldSpawn(x, y) : null;
+            down = false;
+            ChaosRunHost.RabbitAimTick();
+            down = true;
+            ChaosRunHost.RabbitAimTick();   // a refused second rabbit undoes the first and refunds
+            Assert.False(aimTimer.IsEnabled);
+            Assert.Equal(0, toy.CooldownRemainingSec);
+            Assert.Equal(0, Rabbits());
+            ChaosRunHost.SpawnRabbit = oldSpawn;
+            ChaosRunHost.UseToyById("rabbit_caller");
+            ChaosRunHost.RabbitAimTick();   // arming click is swallowed
+            Assert.Equal(0, Rabbits());
+            down = false;
+            ChaosRunHost.RabbitAimTick();
+            ChaosRunHost.ToggleManualPause();
+            down = true;
+            ChaosRunHost.RabbitAimTick();   // pause holds the whistle
+            Assert.True(ChaosCursorGlowOverlay.Active!.HaloVisible);
+            ChaosRunHost.ToggleManualPause();
+            ChaosRunHost.RabbitAimTick();   // still held, not another press
+            Assert.Equal(0, Rabbits());
+            down = false;
+            ChaosRunHost.RabbitAimTick();
+            down = true;
+            ChaosRunHost.RabbitAimTick();
+            Assert.False(ChaosCursorGlowOverlay.Active!.HaloVisible);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("chaos_rabbit_summoned_storm", 3), state.RecentEvents[0]);
+            var rabbits = BubbleOverlay.Field.Bubbles.Where(b => b.Spec?.IsDarter == true).ToArray();
+            Assert.Equal(3, rabbits.Length);
+            Assert.All(rabbits, b =>
+            {
+                Assert.InRange(b.CenterX, 440, 560);
+                Assert.InRange(b.CenterY, 240, 360);
+            });
+            Ticks(4);
+            Assert.True(toy.IsEffectActive);
+            Assert.Equal(3, BubbleOverlay.ChaosCount);
+            Ticks(1);
+            Assert.Equal(4, BubbleOverlay.ChaosCount);
+            Ticks(35);   // the final 1.25 s spawn ends the ten-second storm
+            Assert.Equal(11, BubbleOverlay.ChaosCount);
+            Assert.False(toy.IsEffectActive);
+            state.Focus = 0;
+            foreach (var (rabbit, steps) in rabbits.Take(2).Select((b, i) => (b, i == 0 ? 13 : 30)))
+            {
+                var score = state.Score;
+                var focus = state.Focus;
+                var combo = state.Combo;
+                var heat = state.Heat;
+                var multiplier = state.TotalMult;
+                for (int i = 0; i < steps; i++) rabbit.Step();
+                BubbleOverlay.PopChaos(rabbit);
+                Assert.Equal(score + (ChaosBubbleVariants.DARTER_BASE_POINTS + (steps == 13 ? ChaosBubbleVariants.DARTER_QUICK_BONUS : 0)) * multiplier, state.Score, 6);
+                Assert.Equal(focus + ChaosTuning.FOCUS_PER_RABBIT, state.Focus);
+                Assert.Equal(combo + 1, state.Combo);
+                Assert.Equal(Math.Min(1, heat + 0.05), state.Heat, 6);
+            }
+            toy.CooldownRemainingSec = 0;
+            ChaosRunHost.UseToyById("rabbit_caller");
+            Assert.True(ChaosCursorGlowOverlay.Active!.HaloVisible);
+            available = false;
+            ChaosRunHost.RabbitAimTick();   // pointer lost: cancel and refund
+            Assert.Equal(0, toy.CooldownRemainingSec);
+            Assert.False(ChaosCursorGlowOverlay.Active!.HaloVisible);
+            available = true;
+            ChaosRunHost.UseToyById("rabbit_caller");
+            Assert.True(ChaosCursorGlowOverlay.Active!.HaloVisible);
+            var shutdownTimer = AimTimer()!;
+            ChaosRunHost.ForceShutdown();
+            Assert.False(shutdownTimer.IsEnabled);
+            Assert.Equal(0, Rabbits());
+            ChaosRunHost.RabbitAimTick();
+            Assert.Null(ChaosCursorGlowOverlay.Active);
+        }
+        finally
+        {
+            ChaosRunHost.ForceShutdown();
+            ChaosRunHost.SpawnRabbit = oldSpawn;
+            ChaosRunHost.ReadRabbitPointer = oldRead;
+            ChaosCursorGlowOverlay.MakeClickThrough = oldMake;
+            ChaosCursorGlowOverlay.ReadPointer = oldGlowRead;
+            CoreSettings.Current.ChaosSkiaFxEnabled = oldSkia;
+            FreshMeta();
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task An_empty_field_refills_on_the_next_tick() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        FreshMeta();
+        try
+        {
+            ChaosRunHost.StartRun(Cfg());
+            ChaosRunHost.Overlay!.FinishCountdown();
+            ChaosRunHost.StopTimerForTests();
+            BubbleOverlay.Field.Bubbles.Clear();
+            Ticks(1);   // WPF ChaosModeService.cs:977
+            Assert.Single(BubbleOverlay.Field.Bubbles);
+        }
+        finally
+        {
+            ChaosRunHost.ForceShutdown();
+            FreshMeta();
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task Rabbit_caller_text_is_translated_and_formats_in_every_language() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var original = loc.CurrentLanguage;
+        var keys = new[]
+        {
+            "chaos_rabbit_pointer", "chaos_rabbit_whistle", "chaos_rabbit_storm", "chaos_rabbit_summoned", "chaos_rabbit_summoned_storm",
+        };
+        try
+        {
+            loc.SetLanguage("en");
+            var english = keys.Select(loc.Get).ToArray();
+            foreach (var (code, _, _) in ConditioningControlPanel.Localization.LocalizationManager.AvailableLanguages)
+            {
+                loc.SetLanguage(code);
+                for (int i = 0; i < keys.Length && code != "en"; i++) Assert.NotEqual(english[i], loc.Get(keys[i]));
+                Assert.Contains("3", loc.GetF("chaos_rabbit_summoned_storm", 3));
+            }
+        }
+        finally { loc.SetLanguage(original); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task Initial_window_refusal_refunds_the_caller() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        FreshMeta();
+        var oldLive = BubbleOverlay.LiveApplication;
+        var oldRead = ChaosRunHost.ReadRabbitPointer;
+        var oldMake = ChaosCursorGlowOverlay.MakeClickThrough;
+        bool down = false;
+        try
+        {
+            ChaosRunHost.ReadRabbitPointer = () => (new PixelPoint(500, 300), down, false);
+            ChaosCursorGlowOverlay.MakeClickThrough = _ => true;
+            ChaosRunHost.StartRun(Cfg());
+            ChaosRunHost.Overlay!.FinishCountdown();
+            ChaosRunHost.StopTimerForTests();
+            BubbleOverlay.LiveApplication = () => true;
+            var toy = new ChaosToyState { Id = "rabbit_caller", CooldownSec = 20 };
+            ChaosRunHost.State!.ActiveToys.Add(toy);
+            ChaosRunHost.UseToyById("rabbit_caller");
+            ChaosRunHost.RabbitAimTick();
+            down = true;
+            ChaosRunHost.RabbitAimTick();
+            Assert.Equal(0, toy.CooldownRemainingSec);
+            Assert.Equal(0, Rabbits());
+        }
+        finally
+        {
+            ChaosRunHost.ForceShutdown();
+            BubbleOverlay.LiveApplication = oldLive;
+            ChaosRunHost.ReadRabbitPointer = oldRead;
+            ChaosCursorGlowOverlay.MakeClickThrough = oldMake;
+            FreshMeta();
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public async Task A_run_counts_down_ticks_and_ends_on_the_recap()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>

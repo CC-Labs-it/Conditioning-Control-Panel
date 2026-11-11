@@ -1,4 +1,9 @@
 {
+  "chaos_rabbit_pointer": "La llamada necesita acceso al puntero del escritorio",
+  "chaos_rabbit_whistle": "🐇 el silbido espera. tu próximo clic los llama",
+  "chaos_rabbit_storm": "Tormenta de conejos",
+  "chaos_rabbit_summoned": "🐇 {0} responden a tu llamada",
+  "chaos_rabbit_summoned_storm": "🐇 {0} en tu dedo. la madriguera se vacía",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Esta mejora está publicada en el catálogo de la comunidad.",
   "deeper_submission_badge_pending": "Pendiente",

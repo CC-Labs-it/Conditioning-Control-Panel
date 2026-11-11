@@ -35,6 +35,19 @@ public sealed class ChaosDarterMotionTests
         Assert.Empty(field.Bubbles); // three reflections followed by exit, not a FloatUp miss
     }
 
+    [Fact]
+    public void Flare_fraction_and_size_follow_the_darter_clock()
+    {
+        var spec = new EffectBubbleSpec { IsDarter = true, SizePx = 80.6, TelegraphMs = 64, LifetimeMs = 8000 };
+        var b = AmbientBubble.SpawnChaos(new Random(1), 0, 0, 0, 1920, 1080, 1, spec);
+        Assert.Equal(81, b.Size);
+        Assert.Equal(1, b.DarterFlareFraction);
+        b.Step();
+        Assert.Equal(0.5, b.DarterFlareFraction);
+        b.Step();
+        Assert.Equal(0, b.DarterFlareFraction);
+    }
+
     private sealed class HorizontalRandom : Random
     {
         public override double NextDouble() => 0;

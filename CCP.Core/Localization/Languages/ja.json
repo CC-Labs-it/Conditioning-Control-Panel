@@ -1,4 +1,9 @@
 {
+  "chaos_rabbit_pointer": "ウサギの呼び出しにはデスクトップのポインターが必要です",
+  "chaos_rabbit_whistle": "🐇 口笛が待っています。次のクリックで呼び出します",
+  "chaos_rabbit_storm": "ウサギの嵐",
+  "chaos_rabbit_summoned": "🐇 {0}匹が指先に応えました",
+  "chaos_rabbit_summoned_storm": "🐇 指先に{0}匹。巣穴が空になります",
   "deeper_submission_badge_published": "公開済み",
   "deeper_submission_badge_published_tip": "このエンハンスメントはコミュニティカタログで公開中です。",
   "deeper_submission_badge_pending": "審査中",

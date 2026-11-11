@@ -49,12 +49,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static bool _running;
         private static TimeSpan? _lastStep;
         private static bool _pending;   // a frame is requested; the loop idles while the field is empty
-        internal static Bitmap? Image;
+        internal static Bitmap? Image, DarterImage;
+        internal static Func<bool> LiveApplication = () => Application.Current?.ApplicationLifetime is global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+        private static Visual? _chaosHost;
 
         /// <summary>WPF BubbleService.LoadBubbleImage (BubbleService.cs:221, :918-936): every Start re-resolves
         /// the active mod's bubble.png, so a mod switch shows its sprite on the next start (a <c>??=</c>
         /// cache kept the first mod's art for the life of the process).</summary>
-        internal static void LoadBubbleImage() => Image = Helpers.ModArt.TryLoad("bubble.png");
+        internal static void LoadBubbleImage()
+        {
+            Image = Helpers.ModArt.TryLoad("bubble.png");
+            DarterImage ??= LoadDarterImage();
+        }
+
+        // WPF BubbleService.cs:3415-3422: ChaosArt "bubbles/darter", user art first.
+        private static Bitmap? LoadDarterImage()
+        {
+            var user = Path.Combine(CorePaths.UserData, "assets", "assets", "Chaos", "bubbles", "darter.png");
+            var bundled = Path.Combine(AppContext.BaseDirectory, "assets", "Chaos", "bubbles", "darter.png");
+            foreach (var path in new[] { user, bundled })
+            {
+                try
+                {
+                    if (File.Exists(path)) return new Bitmap(path);
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug("Darter art {Path}: {E}", path, ex.Message);
+                }
+            }
+            return Helpers.ModArt.TryLoadBuiltIn("chaos/bubbles/darter.png");
+        }
 
         /// <summary>The "N/300 today" line listens to this (WPF AmbientXpBudgetChanged).</summary>
         internal static event Action? XpBudgetChanged;
@@ -216,6 +241,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Action<AmbientBubble>? onDefuse = null, Action<AmbientBubble>? onDetonate = null,
             Func<AmbientBubble, bool>? canChannel = null)
         {
+            _chaosHost = host;
             _chaosPopped = onPop;
             _chaosCanChannel = canChannel;
             Field.Held = false;
@@ -245,6 +271,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             Field.HoldChaos = false;
             _chaosPopped = null;
+            _chaosHost = null;
             _chaosCanChannel = null;
             Field.ChaosDefused = Field.ChaosDetonated = null;
             Field.Held = false;
@@ -255,14 +282,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF SpawnChaosBubble, FloatUp only. Without an overlay window (headless, or a
         /// platform that refuses click-through) the bubble lives on a 1920x1080 model screen.</summary>
-        internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec)
+        internal static AmbientBubble? SpawnChaos(Services.Chaos.EffectBubbleSpec spec)
         {
             AmbientBubble b;
+            if (Targets.Count == 0 && _chaosHost != null && LiveApplication()) return null;
             if (Targets.Count == 0)
                 b = AmbientBubble.SpawnChaos(Field.Random, 0, 0, 0, 1920, 1080, 1, spec);
             else
             {
-                var i = Field.Random.Next(Targets.Count);
+                // WPF BubbleService.cs:1580 PickScreenFor: the primary. ponytail: a pinned spawn on
+                // another monitor is the follow-up lane; it lands on the primary target here.
+                var i = Math.Max(0, Targets.FindIndex(sc => sc.IsPrimary));
                 var a = Targets[i].WorkingArea;
                 b = AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec);
             }
@@ -278,7 +308,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             b.Popping = true;
             ChaosLastPopX = b.CenterX;
             ChaosLastPopY = b.CenterY;
-            PlayChaosCue(null, 1f);   // WPF onBenignPop: PlayPopSound(false)
+            PlayChaosCue(b.Spec.IsDarter ? "rabbit_catch" : null, b.Spec.IsDarter ? 0.6f : 1f);
             _chaosPopped?.Invoke(b);
             RequestFrame();
         }
@@ -360,6 +390,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             GradientStops = { new GradientStop(Color.FromArgb(180, 200, 220, 255), 0), new GradientStop(Color.FromArgb(80, 255, 255, 255), 1) },
         };
         private static readonly IPen FallbackPen = new Pen(Brushes.White, 2);
+        private static readonly DropShadowEffect DarterGlow = new() { Color = Color.FromRgb(255, 77, 196), BlurRadius = 26, OffsetX = 0, OffsetY = 0, Opacity = 0.9 };
         private static readonly Dictionary<uint, IPen> FuseCache = new();
         private static readonly Dictionary<uint, (IBrush, IPen)> TintCache = new();
 
@@ -492,13 +523,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     using (dc.PushTransform(m))
                     using (dc.PushOpacity(Math.Clamp(b.Fade, 0, 1)))
                     {
-                        if (b.Spec != null)   // chaos bubble: its variant tint under the sprite
+                        var sprite = b.Spec?.IsDarter == true ? BubbleOverlay.DarterImage : null;
+                        if (b.Spec != null && sprite == null)   // WPF skips the tint for variant art
                         {
                             var (fill, pen) = TintPaint(b.Spec.Tint);
                             dc.DrawEllipse(fill, pen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
                         }
-                        if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
+                        var rect = new Rect(cx - size / 2, cy - size / 2, size, size);
+                        if (b.Spec?.IsDarter == true)
+                        {
+                            using (dc.PushEffect(DarterGlow, rect.Inflate(26)))
+                                if ((sprite ?? img) is { } art) dc.DrawImage(art, rect);
+                                else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                        }
+                        else if (img != null) dc.DrawImage(img, rect);
                         else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                        if (b.DarterFlareFraction > 0 && !b.Popping) // WPF BubbleService.cs:3853-3859,5104-5120
+                        {
+                            var fraction = b.DarterFlareFraction;
+                            using (dc.PushOpacity(0.85 * fraction))
+                                dc.DrawEllipse(null, FusePen(b.Spec!.Tint | 0xff000000), new Point(cx, cy),
+                                    size / 2 * (1 + 0.3 * fraction), size / 2 * (1 + 0.3 * fraction));
+                        }
                         if (b.FuseTotalMs > 0 && !b.Popping)   // WPF fuse ring: shrinks 1 -> 0.45; yellow, flash, red brink
                         {
                             double rr = (size / 2 - 2) * (0.45 + 0.55 * b.FuseFraction);

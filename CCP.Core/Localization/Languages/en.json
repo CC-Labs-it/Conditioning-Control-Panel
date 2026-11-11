@@ -1,4 +1,9 @@
 {
+  "chaos_rabbit_pointer": "Rabbit Caller needs desktop pointer access",
+  "chaos_rabbit_whistle": "🐇 the whistle hangs. your next click calls them",
+  "chaos_rabbit_storm": "Rabbit Storm",
+  "chaos_rabbit_summoned": "🐇 {0} answered at your fingertip",
+  "chaos_rabbit_summoned_storm": "🐇 {0} at your fingertip. the burrow is emptying",
   "Sparkles_Slip_Paid": "Paid",
   "Sparkles_Slip_Place": "Place {0} of {1}",
   "Sparkles_Slip_Gold": "Gold",

@@ -50,6 +50,57 @@ public sealed class BubbleOverlayTests
         });
     }
 
+    private static void HeadlessApp()
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+    }
+
+    private static byte[] PixelAt(global::Avalonia.Media.Imaging.WriteableBitmap frame, int x, int y)
+    {
+        var bytes = new byte[4];
+        using var fb = frame.Lock();
+        System.Runtime.InteropServices.Marshal.Copy(fb.Address + y * fb.RowBytes + x * 4, bytes, 0, 4);
+        return bytes;
+    }
+
+    [Fact]
+    public Task Darter_sprite_and_glow_are_visible_in_the_rendered_field() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        HeadlessApp();
+        var (oldImage, oldBubble) = (BubbleOverlay.DarterImage, BubbleOverlay.Image);
+        var w = new BubbleOverlayWindow(0, new PixelRect(0, 0, 400, 300), 1) { Width = 400, Height = 300 };
+        try
+        {
+            BubbleOverlay.LoadBubbleImage();
+            Assert.NotNull(BubbleOverlay.DarterImage);
+            var spec = ConditioningControlPanel.Services.Chaos.ChaosBubbleVariants.BuildDarter(0);
+            BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { Screen = 0, X = 100, Y = 100, Size = 100, Spec = spec });
+            w.Show();
+            w.Sync();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var withArt = w.CaptureRenderedFrame()!;
+            var sprite = PixelAt(withArt, 150, 150);
+            Assert.True(sprite[0] != sprite[2] && sprite[3] > 0, $"sprite pixel: {string.Join(",", sprite)}");
+            Assert.True(PixelAt(withArt, 203, 150)[3] > 0);   // the glow extends past the image rectangle
+            BubbleOverlay.DarterImage = null;
+            w.Sync();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.NotEqual(sprite, PixelAt(w.CaptureRenderedFrame()!, 150, 150));
+        }
+        finally
+        {
+            BubbleOverlay.Field.Bubbles.Clear();
+            w.Close();
+            BubbleOverlay.DarterImage = oldImage;
+            BubbleOverlay.Image = oldBubble;
+        }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public async Task Press_on_a_bubble_pops_it_and_pays_the_bucket()
     {

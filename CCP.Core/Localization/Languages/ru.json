@@ -1,4 +1,9 @@
 {
+  "chaos_rabbit_pointer": "Для призыва нужен указатель рабочего стола",
+  "chaos_rabbit_whistle": "🐇 свист ждёт. следующий щелчок призовёт их",
+  "chaos_rabbit_storm": "Кроличья буря",
+  "chaos_rabbit_summoned": "🐇 {0} ответили на зов",
+  "chaos_rabbit_summoned_storm": "🐇 {0} у кончика пальца. нора пустеет",
   "deeper_submission_badge_published": "Опубликовано",
   "deeper_submission_badge_published_tip": "Это улучшение доступно в каталоге сообщества.",
   "deeper_submission_badge_pending": "На проверке",

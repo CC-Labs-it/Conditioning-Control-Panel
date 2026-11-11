@@ -20,8 +20,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// on whatever is underneath, exactly like WPF's WS_EX_TRANSPARENT | WS_EX_NOACTIVATE.
     ///
     /// <para>One static seam like WPF (Arm / Disarm / MoveToPx / CloseActive). The difference: WPF's
-    /// cursor poll lives in ChaosModeService's aim timer, which the Avalonia ChaosRunHost does not
-    /// have yet (no Rabbit Caller skill), so the overlay polls the pointer itself on the same 16 ms
+    /// cursor poll lives in ChaosModeService's aim timer. This overlay also polls on a 16 ms
     /// Render-priority timer, only while armed. Hidden = no timer, no work (P07).</para>
     ///
     /// <para>If the platform cannot make the window click-through, or the compositor refuses

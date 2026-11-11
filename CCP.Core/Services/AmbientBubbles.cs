@@ -85,6 +85,9 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>A live threat the player defuses by holding (WPF NeedsHoldDefuse for the plain lives).</summary>
         public bool IsLiveThreat => Spec is { IsLive: true, IsDarter: false, IsFreeze: false };
+        public double DarterFlareFraction => Spec is { IsDarter: true, TelegraphMs: > 0 }
+            ? Math.Clamp(_telegraphMs / Spec.TelegraphMs, 0, 1) : 0;
+        public bool WasQuickCatch => Spec is { IsDarter: true } && _telegraphMs <= 0 && Spec.LifetimeMs - _darterLifeMs - Math.Ceiling(Spec.TelegraphMs / 32.0) * 32 <= Spec.QuickWindowMs;
         public double FuseSecLeft => Math.Max(0, FuseRemainingMs) / 1000.0;
         /// <summary>WPF DefuseJudgeFuseSec: a held snap is judged at the channel's start (the fuse pauses).</summary>
         public double DefuseJudgeFuseSec => DefusedViaChannel ? _channelStartFuseSec : FuseSecLeft;
@@ -166,7 +169,7 @@ namespace ConditioningControlPanel.Services
         public static AmbientBubble SpawnChaos(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
             double scaling, Chaos.EffectBubbleSpec spec)
         {
-            var b = new AmbientBubble { Screen = screen, Clickable = true, Spec = spec, Size = spec.SizePx };
+            var b = new AmbientBubble { Screen = screen, Clickable = true, Spec = spec, Size = spec.IsDarter ? Math.Max(60, (int)Math.Round(spec.SizePx)) : spec.SizePx };
             if (spec.IsLive) b.FuseTotalMs = b.FuseRemainingMs = Math.Max(1, spec.FuseMs);   // WPF :3362
             b._speed = (1.0 + r.NextDouble()) * Math.Clamp(1.4 - (b.Size - 150) / 220.0, 0.6, 1.4)
                        * Math.Max(0.1, spec.SpeedMult) * Chaos.ChaosTuning.CHAOS_SPEED_MULT;
