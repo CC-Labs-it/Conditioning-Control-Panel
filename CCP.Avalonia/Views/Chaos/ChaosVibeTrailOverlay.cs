@@ -60,7 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     {
                         Log.Warning("ChaosVibeTrail: no click-through or no per-pixel transparency here, so no trail - it would cover the desktop");
                         _refused = true;
-                        CloseNow();
+                        CloseWindow();
                         return;
                     }
                 }
@@ -85,6 +85,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         private static void CloseNow()
+        {
+            _refused = false;   // retry after run teardown, even if refusal closed the window
+            CloseWindow();
+        }
+
+        private static void CloseWindow()
         {
             var w = _active;
             _active = null;
