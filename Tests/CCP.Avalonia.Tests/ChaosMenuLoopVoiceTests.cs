@@ -11,6 +11,37 @@ public class ChaosMenuLoopVoiceTests
     [Fact]
     public void Loop_pauses_position_and_overlap_timer_and_resumes_same_player()
     {
+        var shared = typeof(LibVlcAudio).GetProperty("Shared", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var prior = shared.GetValue(null);
+        try
+        {
+            // Exercise the case where construction would publish the dummy instance.
+            shared.SetValue(null, null);
+            ExerciseLoop();
+            Assert.Null(LibVlcAudio.Shared);
+        }
+        finally { shared.SetValue(null, prior); }
+    }
+
+    [Fact]
+    public void Loop_preserves_an_existing_shared_instance()
+    {
+        var shared = typeof(LibVlcAudio).GetProperty("Shared", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var prior = shared.GetValue(null);
+        try
+        {
+            shared.SetValue(null, null);
+            var marker = new LibVlcAudio("--aout=dummy");
+            ExerciseLoop();
+            Assert.Same(marker.Vlc, LibVlcAudio.Shared);
+        }
+        finally { shared.SetValue(null, prior); }
+    }
+
+    private static void ExerciseLoop()
+    {
+        var shared = typeof(LibVlcAudio).GetProperty("Shared", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var priorShared = shared.GetValue(null);
         var root = Directory.CreateTempSubdirectory("chaos-menu-loop-").FullName;
         var path = Path.Combine(root, "cue.wav");
         using (var w = new BinaryWriter(File.Create(path)))
@@ -21,7 +52,6 @@ public class ChaosMenuLoopVoiceTests
             w.Write(8000); w.Write(16000); w.Write((short)2); w.Write((short)16);
             w.Write("data"u8); w.Write(data); w.Write(new byte[data]);
         }
-        var audio = new LibVlcAudio("--aout=dummy");
         int copies = 0, pauses = 0;
         long firstTime = 0;
         var previous = LibVlcAudio.ConfigureLoopVoice;
@@ -34,6 +64,7 @@ public class ChaosMenuLoopVoiceTests
         LibVlcAudio.IPausableVoice? voice = null;
         try
         {
+            var audio = new LibVlcAudio("--aout=dummy");
             voice = Assert.IsAssignableFrom<LibVlcAudio.IPausableVoice>(audio.PlayVoice(path, 0.5, true, () => { }));
             // Pause can arrive while LibVLC is still opening. A rapid resume must also win.
             voice.SetPaused(true);
@@ -59,6 +90,7 @@ public class ChaosMenuLoopVoiceTests
         {
             voice?.Dispose();
             LibVlcAudio.ConfigureLoopVoice = previous;
+            shared.SetValue(null, priorShared);
             Assert.True(SpinWait.SpinUntil(() =>
             {
                 try { Directory.Delete(root, true); return true; }

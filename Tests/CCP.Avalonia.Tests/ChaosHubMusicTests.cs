@@ -1,10 +1,13 @@
 using System;
+using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Services.Safety;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -15,9 +18,10 @@ public class ChaosHubMusicTests
     {
         public double Last;
         public bool Disposed, Paused;
+        public int Disposals;
         public void SetPaused(bool paused) => Paused = paused;
         public double Volume { set => Last = value; }
-        public void Dispose() => Disposed = true;
+        public void Dispose() { Disposed = true; Disposals++; }
     }
 
     [Fact]
@@ -114,4 +118,63 @@ public class ChaosHubMusicTests
             finally { hub.DisposeMenuMusic(); LibVlcAudio.Instance = priorAudio; }
         });
     }
+    [Fact]
+    public void Panic_stops_all_playing_hub_music_and_prevents_restart()
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            var priorAudio = LibVlcAudio.Instance;
+            var surfaces = PanicSurfaces.All;
+            var oldMaster = CoreSettings.Current.MasterVolume;
+            var oldMute = CoreSettings.Current.ChaosMenuMusicMuted;
+            LibVlcAudio.Instance = null;
+            ChaosHubWindow? first = null, second = null;
+            try
+            {
+                CoreSettings.Current.MasterVolume = 100;
+                CoreSettings.Current.ChaosMenuMusicMuted = false;
+                first = new ChaosHubWindow();
+                second = new ChaosHubWindow();
+                var firstVoice = new Voice();
+                var secondVoice = new Voice();
+                int starts = 0;
+                first.MenuMusicPlay = (_, _, _, _) => { starts++; return firstVoice; };
+                second.MenuMusicPlay = (_, _, _, _) => { starts++; return secondVoice; };
+                first.StartMenuMusic();
+                second.StartMenuMusic();
+                for (int i = 0; i < 20; i++) { first.MenuMusicTick(); second.MenuMusicTick(); }
+                Assert.True(firstVoice.Last > 0);
+                Assert.True(secondVoice.Last > 0);
+                PanicSurfaces.All = surfaces.Where(s => s.Id == "chaos-hub-music").ToArray();
+                Assert.Single(PanicSurfaces.All);
+                PanicSurfaces.StopAll("hub music test");
+                Assert.True(firstVoice.Disposed);
+                Assert.True(secondVoice.Disposed);
+                first.StartMenuMusic();
+                second.FindControl<Grid>("MenuView")!.IsVisible = false;
+                second.FindControl<Grid>("MenuView")!.IsVisible = true;
+                PanicSurfaces.StopAll("hub music again");
+                Assert.Equal(2, starts);
+                Assert.Equal(1, firstVoice.Disposals);
+                Assert.Equal(1, secondVoice.Disposals);
+                var registered = (System.Collections.Generic.HashSet<ChaosHubWindow>)typeof(ChaosHubWindow).GetField("MusicHubs", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!;
+                Assert.DoesNotContain(first, registered);
+                Assert.DoesNotContain(second, registered);
+                var field = typeof(ConditioningControlPanel.Models.AppSettings).GetField("PropertyChanged", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+                var handlers = (Delegate?)field.GetValue(CoreSettings.Current);
+                Assert.DoesNotContain(handlers?.GetInvocationList() ?? Array.Empty<Delegate>(), d => ReferenceEquals(d.Target, first) || ReferenceEquals(d.Target, second));
+            }
+            finally
+            {
+                first?.DisposeMenuMusic();
+                second?.DisposeMenuMusic();
+                PanicSurfaces.All = surfaces;
+                PanicAftermath.EndQuiet();
+                CoreSettings.Current.MasterVolume = oldMaster;
+                CoreSettings.Current.ChaosMenuMusicMuted = oldMute;
+                LibVlcAudio.Instance = priorAudio;
+            }
+        });
+    }
+
 }

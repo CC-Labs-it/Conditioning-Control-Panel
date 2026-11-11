@@ -117,6 +117,7 @@ public sealed class PanicSurfacesTests
         "help-tooltips",
         "chaster-hold",
         "chaos",
+        "chaos-hub-music",
         "chaos-flash",
         "gif-cascade",
         "chaos-announcer",

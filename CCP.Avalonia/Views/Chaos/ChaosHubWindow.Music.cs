@@ -1,5 +1,7 @@
 using System;
 using System.ComponentModel;
+using System.Collections.Generic;
+using System.Linq;
 using System.IO;
 using Avalonia;
 using Avalonia.Threading;
@@ -12,6 +14,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     public partial class ChaosHubWindow
     {
         // WPF ChaosHubWindow.xaml.cs:2789-2913.
+        private static readonly HashSet<ChaosHubWindow> MusicHubs = new();
         private LibVlcAudio.IPausableVoice? _menuMusic;
         private DispatcherTimer? _menuMusicTimer;
         private AppSettings? _menuMusicSettings;
@@ -53,6 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     _menuMusicVolume = 0;
                     _menuMusicSettings = CoreSettings.Current;
                     _menuMusicSettings.PropertyChanged += MenuMusicSettingsChanged;
+                    MusicHubs.Add(this);
                 }
                 _menuMusic.SetPaused(false);
                 FadeMenuMusic(CoreSettings.Current.ChaosMenuMusicMuted ? 0 : 0.5, 40, false);
@@ -105,8 +109,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _menuMusic = null;
         }
 
+        internal static void StopMenuMusicForPanic()
+        {
+            foreach (var hub in MusicHubs.ToArray())
+            {
+                try { hub.DisposeMenuMusic(); }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "ChaosHub: panic music stop failed"); }
+            }
+        }
+
         internal void DisposeMenuMusic()
         {
+            MusicHubs.Remove(this);
             _menuMusicClosed = true;
             _menuMusicTimer?.Stop();
             _menuView.PropertyChanged -= MenuMusicVisibilityChanged;
