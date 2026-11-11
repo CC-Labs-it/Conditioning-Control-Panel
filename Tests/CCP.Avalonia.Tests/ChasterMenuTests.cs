@@ -110,6 +110,25 @@ public sealed class ChasterMenuTests
     }
 
     [Fact]
+    public Task NatashaWeightReadsAndWritesSetting() => AvaloniaTestDispatcher.RunAsync(() => Run((_, _, tab, _) =>
+    {
+        var s = CoreSettings.Current;
+        var old = s.ChasterNatashaTriggerWeight;
+        try
+        {
+            s.ChasterNatashaTriggerWeight = 4;
+            tab.ApplyPriceToggles();
+            var slider = tab.FindControl<Slider>("SliderNatashaTriggerWeight")!;
+            Assert.Equal(4, slider.Value);
+            slider.Value = 7;
+            Assert.Equal(7, s.ChasterNatashaTriggerWeight);
+            Assert.Equal("7x", tab.FindControl<TextBlock>("TxtNatashaTriggerWeight")!.Text);
+        }
+        finally { s.ChasterNatashaTriggerWeight = old; }
+        return Task.CompletedTask;
+    }));
+
+    [Fact]
     public Task TheMenuIsTwoBoardsOfRowsThatWriteThePricesAndTheRedFlashLineFollowsNatasha() => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, _, tab, w) =>
     {
         Assert.True(tab.FindControl<StackPanel>("MenuPanel")!.IsVisible);
