@@ -1,6 +1,7 @@
 // WPF MainWindow.Browser.cs:2814-2860, 2889-3135; BrowserService.cs:255,562.
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -8,6 +9,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;
+using ConditioningControlPanel.Avalonia.Views.Deeper;
 using ConditioningControlPanel.Services;
 using Serilog;
 
@@ -29,6 +31,9 @@ window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='
     private Window? _browserFullscreenWindow;
     private Window? _browserFullscreenPopout;
     private DisplayMirror? _browserFullscreenMirror;
+    private DispatcherTimer? _browserEffectTimer;
+    internal Func<IEnumerable<Window>> BrowserEffectWindows = () => (global::Avalonia.Application.Current?.ApplicationLifetime as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.Windows ?? Array.Empty<Window>();
+    internal Action<Window> BrowserRaiseEffect = w => X11Overlay.Raise(w);
     private int _browserStopGeneration;
     private bool _browserStopPending, _browserEntering;
     private bool _browserFullscreenTransition, _browserFullscreenStopped, _browserFullscreenClosed, _browserFullscreenHostClosed, _browserFullscreenActive;
@@ -51,7 +56,9 @@ window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='
         message = message.Trim().Trim('"');
         if (message == "ccp_fullscreen_on")
         {
-            if (!_browserFullscreenStopped) EnterBrowserFullscreen();
+            // WPF Browser.cs:2819: remote browser playback is not ported on this head,
+            // so no remote video can currently exempt the visible controller card.
+            if (!_browserFullscreenStopped && Named<Border>("RemoteControlOverlay")?.IsVisible != true) EnterBrowserFullscreen();
             else if (BrowserView is { } browser) _ = browser.InvokeScriptAsync("try { document.exitFullscreen(); } catch (_) {}");
         }
         else if (message == "ccp_fullscreen_off" || message == "ccp_exit_fullscreen" ||
@@ -103,6 +110,11 @@ window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='
                 host.WindowState = WindowState.FullScreen;
             }
             _ = browser.InvokeScriptAsync("window._ccpForcedFs = true;");
+            _browserEffectTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+            _browserEffectTimer.Tick -= BrowserEffectTimerTick;
+            _browserEffectTimer.Tick += BrowserEffectTimerTick;
+            _browserEffectTimer.Start();
+            TickBrowserFullscreenEffects();
             entered = true;
         }
         catch (Exception ex) { Log.Warning(ex, "Browser fullscreen entry failed"); }
@@ -110,7 +122,15 @@ window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='
         if (!entered || _browserStopPending) { _browserStopPending = false; ExitBrowserFullscreen(); }
     }
 
-    private void BrowserFullscreenActivated(object? sender, EventArgs e) { if (_browserFullscreenActive && sender == _browserFullscreenWindow) ((Window)sender).Topmost = true; }
+    private void BrowserEffectTimerTick(object? sender, EventArgs e) => TickBrowserFullscreenEffects();
+    internal void TickBrowserFullscreenEffects()
+    {
+        if (_browserFullscreenActive) EnhancementPlayerWindow.ReassertFullscreenEffects(BrowserEffectWindows, BrowserRaiseEffect);
+    }
+    private void BrowserFullscreenActivated(object? sender, EventArgs e)
+    {
+        if (_browserFullscreenActive && sender == _browserFullscreenWindow) { ((Window)sender).Topmost = true; TickBrowserFullscreenEffects(); }
+    }
     private void BrowserFullscreenDeactivated(object? sender, EventArgs e) { if (sender is Window w) w.Topmost = false; }
     private void BrowserFullscreenKey(object? sender, KeyEventArgs e)
     {
@@ -129,6 +149,7 @@ window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='
     internal void ExitBrowserFullscreen(bool closeHost = true)
     {
         if (_browserFullscreenTransition) return;
+        _browserEffectTimer?.Stop();
         if (_browserFullscreenMirror?.DisableMirror() == true) _browserFullscreenMirror = null;
         var host = _browserFullscreenWindow;
         var browser = BrowserView;

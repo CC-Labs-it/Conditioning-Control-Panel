@@ -181,4 +181,59 @@ public class BrowserFullscreenTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task VisibleRemoteCardBlocksLateFullscreenAfterStopAndNavigation() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        AmbientBeatLoopsTests.Setup(); var old = CoreSettings.ServiceProvider; var settings = new SettingsService(); CoreSettings.ServiceProvider = () => settings;
+        var shell = new MainShellWindow();
+        try {
+            shell.Show(); var browser = shell.FindControl<SettingsTabView>("SettingsTab")!.FindControl<WebHost>("BrowserWebHost")!;
+            var scripts = new List<string>(); browser.ScriptInvoker = js => { scripts.Add(js); return Task.FromResult<string?>(null); };
+            var overlay = shell.FindControl<Border>("RemoteControlOverlay")!;
+            browser.OnWebMessage("ccp_fullscreen_on"); Assert.NotNull(shell.BrowserFullscreenWindow);
+            shell.StopBrowserFullscreen(); overlay.IsVisible = true; Dispatcher.UIThread.RunJobs();
+            browser.OnWebMessage("ccp_fullscreen_on"); Assert.Null(shell.BrowserFullscreenWindow);
+            Assert.Contains(scripts, script => script.Contains("document.exitFullscreen"));
+            browser.OnNavigationCompleted(new Uri("https://example.com/"));
+            browser.OnWebMessage("ccp_fullscreen_on"); Assert.Null(shell.BrowserFullscreenWindow);
+            overlay.IsVisible = false; browser.OnWebMessage("ccp_fullscreen_on"); Assert.NotNull(shell.BrowserFullscreenWindow);
+        } finally { shell.ExitBrowserFullscreen(); shell.Close(); CoreSettings.ServiceProvider = old; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task FullscreenReassertsEffectsOnEntryActivationAndTimerWithoutCoveringMandatoryVideo() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        AmbientBeatLoopsTests.Setup(); var old = CoreSettings.ServiceProvider; var oldVideo = CoreEngine.Video;
+        var settings = new SettingsService(); CoreSettings.ServiceProvider = () => settings; CoreEngine.Video = null;
+        var shell = new MainShellWindow();
+        var tint = new ConditioningControlPanel.Avalonia.Views.Overlays.TintOverlayWindow();
+        var spiral = new ConditioningControlPanel.Avalonia.Views.Overlays.SpiralOverlayWindow();
+        var other = new Window(); var raised = new List<Window>();
+        shell.BrowserEffectWindows = () => new[] { other, spiral, tint }; shell.BrowserRaiseEffect = raised.Add;
+        try {
+            shell.Show(); tint.Show(); spiral.Show(); other.Show();
+            var browser = shell.FindControl<SettingsTabView>("SettingsTab")!.FindControl<WebHost>("BrowserWebHost")!;
+            browser.OnWebMessage("ccp_fullscreen_on"); var host = Assert.IsType<Window>(shell.BrowserFullscreenWindow);
+            Assert.Equal(new Window[] { tint, spiral }, raised); raised.Clear();
+            typeof(WindowBase).GetMethod("HandleActivated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(host, null);
+            Assert.Equal(new Window[] { tint, spiral }, raised); raised.Clear();
+            var timer = (DispatcherTimer)typeof(MainShellWindow).GetField("_browserEffectTimer", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(shell)!;
+            Assert.True(timer.IsEnabled); Dispatcher.UIThread.RunJobs(); raised.Clear();
+            var ticks = new List<Window[]>(); var twoTicks = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            timer.Tick += (_, _) => { ticks.Add(raised.ToArray()); raised.Clear(); if (ticks.Count >= 2) twoTicks.TrySetResult(true); };
+            await Task.WhenAny(twoTicks.Task, Task.Delay(3000)); Assert.True(twoTicks.Task.IsCompleted);
+            foreach (var tick in ticks) {
+                Assert.True(tick.Length >= 2); Assert.Equal(0, tick.Length % 2);
+                for (int i = 0; i < tick.Length; i += 2) { Assert.Same(tint, tick[i]); Assert.Same(spiral, tick[i + 1]); }
+            }
+            raised.Clear();
+            CoreEngine.Video = new MandatoryVideoScheduler(null!);
+            typeof(MandatoryVideoScheduler).GetField("_playing", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(CoreEngine.Video, true);
+            shell.TickBrowserFullscreenEffects(); Assert.Empty(raised);
+            CoreEngine.Video = null; shell.ExitBrowserFullscreen(); Assert.False(timer.IsEnabled); raised.Clear();
+            var tickCount = ticks.Count; await Task.Delay(700); Assert.Equal(tickCount, ticks.Count); Assert.Empty(raised);
+        } finally { CoreEngine.Video = oldVideo; shell.ExitBrowserFullscreen(); shell.Close(); tint.Close(); spiral.Close(); other.Close(); CoreSettings.ServiceProvider = old; }
+    });
+
 }

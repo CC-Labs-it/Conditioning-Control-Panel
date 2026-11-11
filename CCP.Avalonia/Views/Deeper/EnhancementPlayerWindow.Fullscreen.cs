@@ -154,10 +154,11 @@ public partial class EnhancementPlayerWindow {
     // WPF player:2182,2256,2383; OverlayService:121-148. Reassert on entry, focus, ticks and exit, without activation.
     internal Func<IEnumerable<Window>> EffectWindows = () => (global::Avalonia.Application.Current?.ApplicationLifetime as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.Windows ?? Array.Empty<Window>();
     internal Action<Window> RaiseEffect = w => X11Overlay.Raise(w);
-    private void ReassertEffects() {
+    private void ReassertEffects() => ReassertFullscreenEffects(EffectWindows, RaiseEffect);
+    internal static void ReassertFullscreenEffects(Func<IEnumerable<Window>> windows, Action<Window> raise) {
         if (CoreEngine.Video?.IsPlaying == true) return; // WPF OverlayService:3050-3120: keep the mandatory video anchor above ambient effects.
-        foreach (var w in EffectWindows().Where(w => w.IsVisible && w.GetType().Namespace == typeof(Overlays.TintOverlayWindow).Namespace).OrderBy(w => w is Overlays.TintOverlayWindow ? 0 : w is Overlays.SpiralOverlayWindow ? 1 : 2).ToArray())
-            try { RaiseEffect(w); } catch (Exception ex) { Serilog.Log.Debug(ex, "Effect raise failed"); }
+        foreach (var w in windows().Where(w => w.IsVisible && w.GetType().Namespace == typeof(Overlays.TintOverlayWindow).Namespace).OrderBy(w => w is Overlays.TintOverlayWindow ? 0 : w is Overlays.SpiralOverlayWindow ? 1 : 2).ToArray())
+            try { raise(w); } catch (Exception ex) { Serilog.Log.Debug(ex, "Effect raise failed"); }
     }
     private void OnVideoHostDeactivated(object? sender, EventArgs e) { _pressed.Clear(); ((Window)sender!).Topmost = false; }
     private void OnVideoHostActivated(object? sender, EventArgs e) { ((Window)sender!).Topmost = true; ReassertEffects(); }
