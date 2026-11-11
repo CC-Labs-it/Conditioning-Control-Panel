@@ -22,6 +22,50 @@ namespace CCP.Avalonia.Tests;
 public sealed class AchievementsRefreshTests
 {
     [Fact]
+    public async Task ModChangeReloadsBadgeReplacedAtSamePath()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var dir = Directory.CreateTempSubdirectory("ccp-ach-replace-");
+            var oldArt = CoreModArt.OverridePathProvider;
+            try
+            {
+                var png = Path.Combine(dir.FullName, "badge.png");
+                void WriteBadge(int width, int height)
+                {
+                    using var bitmap = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(width, height), new Vector(96, 96));
+                    bitmap.Save(png);
+                }
+                WriteBadge(6, 3);
+                CoreModArt.OverridePathProvider = p => p.StartsWith("achievements/", StringComparison.Ordinal) ? png : null;
+                var engine = new AchievementEngine(new AchievementStore(Path.Combine(dir.FullName, "achievements.json")));
+                var view = new AchievementsTabView(engine);
+                var card = view.Cards.Single(c => (string)c.Tag! == "plastic_initiation");
+                var content = (Grid)card.Content!;
+                var badge = (Image)((Panel)content.Children[0]).Children[0];
+                double Ratio() => ((global::Avalonia.Media.Imaging.Bitmap)badge.Source!).Size.AspectRatio;
+                Assert.Equal(2, Ratio());
+                WriteBadge(3, 6);
+                // Exercise the event handler without window layout and its platform font dependency.
+                typeof(AchievementsTabView).GetMethod("OnModChanged", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .Invoke(view, new object?[] { null, new ModPackage(new ModManifest(), null, false) });
+                view.RefreshAll();
+                Assert.Equal(0.5, Ratio());
+                Dispatcher.UIThread.RunJobs();
+            }
+            finally
+            {
+                CoreModArt.OverridePathProvider = oldArt;
+                dir.Delete(true);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task ModAndLanguageRefreshVisibleTilesAndDetach()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
@@ -54,6 +98,7 @@ public sealed class AchievementsRefreshTests
                 Dispatcher.UIThread.RunJobs();
                 Assert.NotSame(original, Badge().Source);
                 Assert.Contains("MOD " + Loc.Get("achievement_plastic_initiation_name"), Texts());
+                var modArt = Badge().Source;
                 LocalizationManager.Instance.SetLanguage("fr");
                 Dispatcher.UIThread.RunJobs();
                 Assert.Contains("MOD " + Loc.Get("achievement_plastic_initiation_name"), Texts());
@@ -66,7 +111,9 @@ public sealed class AchievementsRefreshTests
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal(applies, view.TileApplies);
                 view.IsVisible = true;
-                Assert.Same(original, Badge().Source);
+                Assert.NotSame(modArt, Badge().Source);
+                Assert.Equal(((global::Avalonia.Media.Imaging.Bitmap)original!).Size,
+                    ((global::Avalonia.Media.Imaging.Bitmap)Badge().Source!).Size);
                 Assert.Contains(Loc.Get("achievement_plastic_initiation_name"), Texts());
                 var modEvent = typeof(CoreMods).GetField("ModChanged", BindingFlags.Static | BindingFlags.NonPublic)!;
                 var langEvent = typeof(LocalizationManager).GetField("LanguageChanged", BindingFlags.Instance | BindingFlags.NonPublic)!;

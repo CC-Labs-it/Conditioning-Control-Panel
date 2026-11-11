@@ -81,6 +81,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 engine.Unlocked -= OnUnlocked; engine.Unlocked += OnUnlocked;
                 CoreMods.ModChanged += OnModChanged;
                 LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
+                // A detached view misses mod events. Discard its old art before it is shown again.
+                lock (ArtCache) ArtCache.Clear();
+                if (IsEffectivelyVisible) RefreshAll();
             };
             DetachedFromVisualTree += (_, _) =>
             {
@@ -98,7 +101,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             };
         }
 
-        private void OnModChanged(object? sender, ModPackage mod) => QueueRefresh();
+        private void OnModChanged(object? sender, ModPackage mod)
+        {
+            // Reinstalls can replace a badge at the same path. Invalidate before any show or repaint.
+            lock (ArtCache) ArtCache.Clear();
+            QueueRefresh();
+        }
         private void OnLanguageChanged(object? sender, EventArgs e) => QueueRefresh();
         private void QueueRefresh() => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
