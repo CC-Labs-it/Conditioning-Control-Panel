@@ -66,7 +66,7 @@ namespace ConditioningControlPanel.Services
         /// left in a dealt queue (WPF VideoService.cs:8017 / BubbleCountService.cs:684 weigh queue
         /// lengths); flash weighs whole lists (FlashService.cs:3555).
         /// </summary>
-        public string? TryDraw(int localCount, bool remaining = false)
+        public string? TryDraw(int localCount, bool remaining = false, ISet<string>? chosen = null)
         {
             List<(string PackId, PackFileEntry File)> list;
             (string PackId, PackFileEntry File) entry;
@@ -75,6 +75,7 @@ namespace ConditioningControlPanel.Services
                 list = Entries();
                 var packCount = remaining && list.Count > 0 && _bag.Remaining > 0 ? Math.Min(_bag.Remaining, list.Count) : list.Count;
                 if (!ShouldDrawPack(localCount, packCount, _rng) || !_bag.TryNext(list, out entry)) return null;
+                if (chosen != null && !chosen.Add(ContentPackStore.SourceKey(entry.PackId, entry.File))) return null;
             }
             return Decrypt(entry);
         }
