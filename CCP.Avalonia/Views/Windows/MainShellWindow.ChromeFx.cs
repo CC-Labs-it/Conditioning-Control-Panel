@@ -72,7 +72,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Message sheen is finite. The sibling glow and repeat use the ambient gate.
             Activated += (_, _) => ApplyBannerAmbient();
             Deactivated += (_, _) => { ParkBannerSheen(); ApplyBannerAmbient(); };
-            Opened += (_, _) => { AmbientFxCanvas.Env.MotionGateChanged += ApplyBannerAmbient; ApplyBannerAmbient(); };
+            // Opened fires again after every tray Hide/Show; never stack the static subscription.
+            Opened += (_, _) =>
+            {
+                AmbientFxCanvas.Env.MotionGateChanged -= ApplyBannerAmbient;
+                AmbientFxCanvas.Env.MotionGateChanged += ApplyBannerAmbient;
+                ApplyBannerAmbient();
+            };
             Closed += (_, _) => { AmbientFxCanvas.Env.MotionGateChanged -= ApplyBannerAmbient; ++_bannerAmbientRun; _bannerAmbient?.Stop(); _bannerAmbient = null; ClearBannerSparkles(); };
             Closed += (_, _) => ParkBannerSheen();
             PropertyChanged += (_, e) =>

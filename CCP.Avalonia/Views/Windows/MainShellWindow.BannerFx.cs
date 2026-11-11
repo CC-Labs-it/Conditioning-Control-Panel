@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -38,8 +37,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     return;
                 }
                 // BackEase Out, amplitude 0.6, from 0.96 to 1 over 260 ms.
-                double t = Math.Clamp(seconds / .26, 0, 1) - 1;
-                double eased = 1 + 1.6 * t * t * t + .6 * t * t;
+                double remaining = 1 - Math.Clamp(seconds / .26, 0, 1);
+                double eased = 1 - (remaining * remaining * remaining - .6 * remaining * Math.Sin(Math.PI * remaining));
                 scale.ScaleX = scale.ScaleY = .96 + .04 * eased;
             }) { OnParked = ParkBannerPop };
             _bannerPop.Start();
@@ -59,7 +58,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var text = BannerPrimary;
             if (layer is null || text is null || !layer.IsEffectivelyVisible || layer.Bounds.Width <= 4) return;
             var origin = text.TranslatePoint(new Point(0, 0), layer);
-            if (origin is null || text.Bounds.Width <= 4) return;
+            // WPF centres TxtBannerPrimary, so ActualWidth is the support run only. Here it
+            // stretches to the widest beat, so fly over the centred desired width instead.
+            double width = Math.Min(text.DesiredSize.Width, text.Bounds.Width);
+            if (origin is null || width <= 4) return;
+            double left = origin.Value.X + (text.Bounds.Width - width) / 2;
             var random = new Random();
             var sprites = new (Grid Root, ScaleTransform Scale, RotateTransform Rotate, double From, double To, double Spin)[7];
             var glow = this.TryFindResource("PinkColor", out var resource) && resource is Color color
@@ -68,8 +71,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 double size = 11 + random.NextDouble() * 7;
                 double lane = (random.NextDouble() * 2 - 1) * Math.Min(7, layer.Bounds.Height * .3);
-                double from = origin.Value.X - 6 + random.NextDouble() * text.Bounds.Width * .12;
-                double to = origin.Value.X + text.Bounds.Width * (.82 + random.NextDouble() * .2);
+                double from = left - 6 + random.NextDouble() * width * .12;
+                double to = left + width * (.82 + random.NextDouble() * .2);
                 double spin = (random.NextDouble() < .5 ? -1 : 1) * (90 + random.NextDouble() * 120);
                 var halo = new RadialGradientBrush();
                 halo.GradientStops.Add(new GradientStop(Color.FromArgb(200, glow.R, glow.G, glow.B), 0));

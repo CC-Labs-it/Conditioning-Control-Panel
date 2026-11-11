@@ -7,6 +7,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
@@ -78,6 +79,50 @@ public sealed class BannerMotionTests
         Assert.NotNull(w.Named<SafeLink>("BannerSupportLink"));
         Assert.NotNull(w.Named<SafeLink>("BannerWebLink"));
     });
+
+    [Fact]
+    public Task BannerDepthFollowsSectionNavigation() => InShell(w =>
+    {
+        var lastTabs = CoreSettings.Current.NavLastTabBySection;
+        try
+        {
+            var shade = w.Named<Border>("BannerDrumShade")!;
+            var lip = w.Named<Border>("BannerDrumLip")!;
+
+            (SkiaSharp.SKColor Shade, SkiaSharp.SKColor Lip) Navigate(string tab, string section)
+            {
+                w.ShowTab(tab);
+                Dispatcher.UIThread.RunJobs();
+                w.UpdateLayout();
+                Assert.Equal(tab, w.CurrentTab);
+                var hue = ConditioningControlPanel.Services.UI.NavStripPaint.Accent(section);
+                var top = global::Avalonia.Media.Color.FromUInt32(ConditioningControlPanel.Services.UI.DepthLaw.ShadowColor(hue, ConditioningControlPanel.Services.UI.DepthLaw.WellTopAlpha));
+                var edge = global::Avalonia.Media.Color.FromUInt32(ConditioningControlPanel.Services.UI.DepthLaw.ShadowColor(hue, ConditioningControlPanel.Services.UI.DepthLaw.WellLeftAlpha));
+                Assert.Equal(top, Assert.IsType<global::Avalonia.Media.LinearGradientBrush>(shade.Background).GradientStops[0].Color);
+                Assert.Equal(edge, Assert.IsType<global::Avalonia.Media.LinearGradientBrush>(lip.Background).GradientStops[0].Color);
+                return (Pixel(shade, true), Pixel(lip, false));
+            }
+
+            var home = Navigate("settings", ConditioningControlPanel.Services.UI.NavSections.Home);
+            var studio = Navigate("presets", ConditioningControlPanel.Services.UI.NavSections.Studio);
+            Assert.NotEqual(home.Shade, studio.Shade);
+            Assert.NotEqual(home.Lip, studio.Lip);
+        }
+        finally { CoreSettings.Current.NavLastTabBySection = lastTabs; }
+    });
+
+    private static SkiaSharp.SKColor Pixel(Border layer, bool top)
+    {
+        var width = (int)Math.Floor(layer.Bounds.Width);
+        var height = (int)Math.Floor(layer.Bounds.Height);
+        Assert.True(width > 10 && height > 4);
+        using var frame = new global::Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(width, height));
+        frame.Render(layer);
+        using var png = new System.IO.MemoryStream();
+        frame.Save(png);
+        using var pixels = SkiaSharp.SKBitmap.Decode(png.ToArray());
+        return pixels.GetPixel(top ? width / 2 : 2, top ? 2 : height / 2);
+    }
 
     [Fact]
     public Task SupportLinkUsesTheGuardedOpener() => InShell(w =>
@@ -284,7 +329,16 @@ public sealed class BannerMotionTests
             {
                 var scale = Assert.IsType<global::Avalonia.Media.ScaleTransform>(next.RenderTransform);
                 Assert.Equal(.96, scale.ScaleX, 3);
-                clock.Now += TimeSpan.FromMilliseconds(260).Ticks;
+                Assert.Equal(.96, scale.ScaleY, 3);
+                clock.Now += TimeSpan.FromMilliseconds(130).Ticks;
+                ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+                Assert.Equal(1.007, scale.ScaleX, 3);
+                Assert.Equal(1.007, scale.ScaleY, 3);
+                clock.Now += TimeSpan.FromMilliseconds(129.999).Ticks;
+                ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+                Assert.Equal(1, scale.ScaleX, 3);
+                Assert.Equal(1, scale.ScaleY, 3);
+                clock.Now += TimeSpan.FromMilliseconds(.001).Ticks;
                 ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
                 Assert.Null(next.RenderTransform);
                 Tick(w);
@@ -359,9 +413,18 @@ public sealed class BannerMotionTests
         {
             CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
             ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
-            typeof(MainShellWindow).GetMethod("PopBannerBeat", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .Invoke(w, new object[] { w.Named<TextBlock>("TxtBannerPrimary")! });
+            // A short support lead (as in a terser language) leaves the run narrower than its stretched slot.
+            var primary = w.Named<TextBlock>("TxtBannerPrimary")!;
+            var lead = primary.GetVisualDescendants().OfType<DockPanel>().First().Children.OfType<TextBlock>().First();
+            lead.Inlines = null; lead.Text = "Support ";
+            Dispatcher.UIThread.RunJobs(); w.UpdateLayout();
             var layer = w.Named<Canvas>("BannerSparkleLayer")!;
+            // WPF flies over the centred support run (ActualWidth), not the stretched beat slot.
+            double span = Math.Min(primary.DesiredSize.Width, primary.Bounds.Width);
+            double left = primary.TranslatePoint(new Point(0, 0), layer)!.Value.X + (primary.Bounds.Width - span) / 2;
+            Assert.True(primary.Bounds.Width > span + 40, $"slot {primary.Bounds.Width} vs run {span}");
+            typeof(MainShellWindow).GetMethod("PopBannerBeat", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(w, new object[] { primary });
             var stars = layer.Children.Cast<Grid>().ToArray();
             Assert.Equal(7, stars.Length);
             var halo = Assert.IsType<global::Avalonia.Controls.Shapes.Ellipse>(stars[0].Children[0]);
@@ -369,6 +432,7 @@ public sealed class BannerMotionTests
             Assert.Equal(200, brush.GradientStops[0].Color.A);
             Assert.Equal(0, brush.GradientStops[2].Color.A);
             Assert.IsType<global::Avalonia.Controls.Shapes.Path>(stars[0].Children[1]);
+            Assert.All(stars, s => Assert.InRange(Canvas.GetLeft(s) + s.Width / 2, left - 6.01, left + span * .12 + .01));
             double start0 = Canvas.GetLeft(stars[0]) + stars[0].Width / 2;
             clock.Now += TimeSpan.FromSeconds(.09).Ticks;
             ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
@@ -388,6 +452,7 @@ public sealed class BannerMotionTests
             clock.Now += TimeSpan.FromSeconds(.65).Ticks;
             ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
             double end0 = Canvas.GetLeft(stars[0]) + stars[0].Width / 2;
+            Assert.InRange(end0, left + span * .82 - .01, left + span * 1.02 + .01);
             clock.Now += TimeSpan.FromSeconds(.09).Ticks;
             ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
             double end1 = Canvas.GetLeft(stars[1]) + stars[1].Width / 2;
@@ -448,6 +513,20 @@ public sealed class BannerMotionTests
             (settings.PerformanceMode, settings.AutoPerformanceMode) = performance;
             ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = previous;
         }
+    });
+
+    [Fact]
+    public Task BannerAmbientSubscriptionSurvivesTrayHideShowWithoutStacking() => InShell(w =>
+    {
+        var field = typeof(ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env)
+            .GetField("MotionGateChanged", BindingFlags.Static | BindingFlags.NonPublic)!;
+        int Mine() => ((field.GetValue(null) as Delegate)?.GetInvocationList() ?? Array.Empty<Delegate>())
+            .Count(d => ReferenceEquals(d.Target, w) && d.Method.Name == "ApplyBannerAmbient");
+        Assert.Equal(1, Mine());
+        for (int i = 0; i < 2; i++) { w.Hide(); w.Show(); Dispatcher.UIThread.RunJobs(); }
+        Assert.Equal(1, Mine());
+        w.Close();
+        Assert.Equal(0, Mine());
     });
 
     private sealed class BannerClock : TimeProvider

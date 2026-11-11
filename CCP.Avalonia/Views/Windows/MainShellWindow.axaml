@@ -1051,7 +1051,6 @@
                             </TextBlock>
                             </Grid>
                             </Grid>
-                            <Canvas x:Name="BannerSparkleLayer" ClipToBounds="True" IsHitTestVisible="False"/>
                             <!-- Chrome FX (PR-1): one-shot sheen pass over the banner when the
                                  message changes. Its own ClipToBounds host so the band can't
                                  escape the card - deliberately NOT ClipToBounds on the shared
@@ -1076,6 +1075,8 @@
                                     </Border.RenderTransform>
                                 </Border>
                             </Grid>
+                            <!-- WPF MainWindow.xaml:1224: unclipped, above the sheen. -->
+                            <Canvas x:Name="BannerSparkleLayer" IsHitTestVisible="False"/>
                             <Border x:Name="BannerGlass" CornerRadius="12,12,5,5" Height="11" Margin="7,2,7,0" VerticalAlignment="Top" IsHitTestVisible="False">
                                 <Border.Background><LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Offset="0" Color="#24FFFFFF"/><GradientStop Offset="1" Color="#00FFFFFF"/></LinearGradientBrush></Border.Background>
                             </Border>
