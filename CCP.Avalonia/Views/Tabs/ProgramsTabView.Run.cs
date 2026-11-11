@@ -91,6 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF RefreshProgramsUI + RebuildProgramsTab (:490-584): pick the panel, build it, reveal it.</summary>
         internal void RefreshPrograms()
         {
+            using var trace = TabWorkTrace.Start("programs-refresh");
             if (!IsVisible && VisualRoot is not null)
             {
                 _refreshPending = true;
