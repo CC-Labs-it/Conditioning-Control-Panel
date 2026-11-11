@@ -1,4 +1,7 @@
 {
+  "chaos_chaperone_title": "LA ACOMPAÑANTE",
+  "chaos_chaperone_hint": "primero su pequeña escolta",
+  "chaos_chaperone_event": "ha venido acompañada",
   "scheduler_started_title": "Programación activa",
   "scheduler_started_body": "Sesión iniciada automáticamente según el horario.",
   "scheduler_ended_title": "Programación",

@@ -41,7 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// <para>ponytail: still NOT here: the freeze pickup, darters, the Brittle,
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
     /// (Echo/Bound/Tease); every
-    /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips,
+    /// non-Chaperone motion beyond FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips,
     /// treat lessons, the announcer and the achievement credit; slow-mo,
     /// freeze hold and the perf backoff on the cadence; only the Gif Rain payload fires; the
     /// first-time bonus and ripple-denial pop text. Also missing: the boon draft
@@ -248,9 +248,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 ChaosMeta.State.SeenChaperone = true;
                 ChaosMeta.Save();
-                ChaosAnnouncerOverlay.Announce("💞 THE CHAPERONE: its little escort first", ChaosAnnounceKind.Item,
-                    artKey: "chaperone", subText: "its little escort first");
-                state.PushEvent("💞 it brought company");
+                ChaosAnnouncerOverlay.Announce($"💞 {Loc.Get("chaos_chaperone_title")}: {Loc.Get("chaos_chaperone_hint")}", ChaosAnnounceKind.Item,
+                    artKey: "chaperone", subText: Loc.Get("chaos_chaperone_hint"));
+                state.PushEvent($"💞 {Loc.Get("chaos_chaperone_event")}");
             }
             var (liveSpec, escortSpec) = ChaosBubbleVariants.BuildChaperonePair(intensity, state.FuseTimeMult,
                 state.Config.EffectIntensity, state.BubbleScale, debut ? ChaosTuning.DEBUT_FUSE_MULT : 1.0);
@@ -259,6 +259,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var escort = BubbleOverlay.SpawnChaos(escortSpec);
             escort.Screen = live.Screen;
             escort.OrbitTarget = live;
+            live.InsetChaperoneBounds(escort.Size);
             double radius = Math.Max(ChaosTuning.CHAPERONE_ORBIT_RADIUS_DIP,
                 (live.Size + escort.Size) / 2 + ChaosTuning.CHAPERONE_ORBIT_GAP_DIP);
             escort.X = live.CenterX + radius - escort.Size / 2;

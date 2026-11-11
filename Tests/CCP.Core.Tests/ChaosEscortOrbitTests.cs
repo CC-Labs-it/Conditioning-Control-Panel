@@ -1,4 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text.Json;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
@@ -46,6 +50,53 @@ public sealed class ChaosEscortOrbitTests
         escort.Popping = true;
         field.DefuseAllLive();
         Assert.True(live.Popping);
+    }
+
+    [Theory]
+    [InlineData(0, 0, 1920, 1080, 1)]
+    [InlineData(-1600, 150, 1600, 900, 1.25)]
+    public void Chaperone_roams_with_entire_escort_inside_work_area(double ax, double ay, double w, double h, double scale)
+    {
+        var random = new Random(2);
+        var live = AmbientBubble.SpawnChaos(random, 0, ax, ay, w, h, scale,
+            new EffectBubbleSpec { IsLive = true, IsChaperoneLive = true, SizePx = 220, FuseMs = 100000 });
+        var escort = new AmbientBubble { Size = 100, Spec = new EffectBubbleSpec { IsEscort = true }, OrbitTarget = live };
+        live.InsetChaperoneBounds(escort.Size);
+        double x = live.X, y = live.Y;
+        for (int i = 0; i < 500; i++)
+        {
+            live.Step(); escort.Step();
+            Assert.InRange(escort.X, ax / scale - 0.001, (ax + w) / scale - escort.Size + 0.001);
+            Assert.InRange(escort.Y, ay / scale - 0.001, (ay + h) / scale - escort.Size + 0.001);
+            Assert.InRange(live.X, ax / scale, (ax + w) / scale - live.Size);
+            Assert.InRange(live.Y, ay / scale, (ay + h) / scale - live.Size);
+        }
+        Assert.True(live.X != x || live.Y != y);
+    }
+
+    [Fact]
+    public void Shield_flash_decays_and_cue_is_throttled()
+    {
+        var bubble = new AmbientBubble();
+        var now = new DateTime(2026, 1, 1);
+        Assert.True(bubble.BounceShield(now));
+        Assert.Equal(0.95, bubble.ShieldOpacity);
+        Assert.False(bubble.BounceShield(now.AddMilliseconds(100)));
+        Assert.True(bubble.BounceShield(now.AddMilliseconds(200)));
+        for (int i = 0; i < 10; i++) bubble.Step();
+        Assert.InRange(bubble.ShieldOpacity, 0.35, 0.55);
+    }
+
+    [Fact]
+    public void Chaperone_copy_is_present_in_every_language()
+    {
+        foreach (var (code, _, _) in LocalizationManager.AvailableLanguages)
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, "Localization", "Languages", code + ".json");
+            var strings = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(path))!;
+            foreach (var key in new[] { "chaos_chaperone_title", "chaos_chaperone_hint", "chaos_chaperone_event" })
+                Assert.True(strings.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value), code + ": " + key);
+        }
     }
 
 }

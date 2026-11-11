@@ -1,4 +1,7 @@
 {
+  "chaos_chaperone_title": "LA CHAPERONNE",
+  "chaos_chaperone_hint": "son escorte d’abord",
+  "chaos_chaperone_event": "elle est venue accompagnée",
   "scheduler_started_title": "Planification active",
   "scheduler_started_body": "Séance démarrée automatiquement selon le planning.",
   "scheduler_ended_title": "Planification",

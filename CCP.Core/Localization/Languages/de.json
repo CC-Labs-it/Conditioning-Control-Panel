@@ -1,4 +1,7 @@
 {
+  "chaos_chaperone_title": "DIE BEGLEITUNG",
+  "chaos_chaperone_hint": "erst ihre kleine Begleitung",
+  "chaos_chaperone_event": "sie hat Gesellschaft mitgebracht",
   "scheduler_started_title": "Zeitplan aktiv",
   "scheduler_started_body": "Sitzung automatisch nach Zeitplan gestartet.",
   "scheduler_ended_title": "Zeitplan",

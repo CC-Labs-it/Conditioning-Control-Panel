@@ -273,10 +273,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF OnPlayerPress: a live chaos bubble starts a hold-to-defuse channel (if the
         /// focus gate allows) at the press point (global DIPs); every other bubble pops.</summary>
+        internal static bool IsShielded(AmbientBubble b) => b.Spec is { IsChaperoneLive: true }
+            && b.Escort is { Popping: false } escort && Field.Bubbles.Contains(escort);
+
+        private static void BounceShield(AmbientBubble b)
+        {
+            if (b.BounceShield(DateTime.UtcNow))
+            {
+                var cue = File.Exists(ChaosCuePath("shield_thunk")) ? "shield_thunk" : "toy_denied";
+                if (File.Exists(ChaosCuePath(cue))) PlayChaosCue(cue, 0.45f);
+            }
+            RequestFrame();
+        }
+
         internal static void Press(AmbientBubble b, double x, double y)
         {
             if (!b.IsLiveThreat) { Pop(b); return; }
-            if (b.Spec is { IsChaperoneLive: true } && b.Escort is { Popping: false } escort && Field.Bubbles.Contains(escort)) return;
+            if (Field.HoldChaos) return;
+            if (IsShielded(b)) { BounceShield(b); return; }
             Field.PressLive(b, _chaosCanChannel?.Invoke(b) ?? true, x, y);
             RequestFrame();
         }
@@ -342,7 +356,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var w in Windows) w.Sync();
         }
 
-        /// <summary>WPF SpawnChaosBubble, FloatUp only. Without an overlay window (headless, or a
+        /// <summary>WPF SpawnChaosBubble. Without an overlay window (headless, or a
         /// platform that refuses click-through) the bubble lives on a 1920x1080 model screen.</summary>
         internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec)
         {
@@ -366,7 +380,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (b.Popping || b.Spec == null || Field.HoldChaos) return;   // held: the click is swallowed
             // WPF BubbleService.cs:4645-4669: instant pops preserve touch-only and escort immunity.
             if (b.Spec.IsTease || b.Spec.IsBrittle) return;
-            if (b.Spec.IsChaperoneLive && b.Escort is { Popping: false } escort && Field.Bubbles.Contains(escort)) return;
+            if (IsShielded(b)) { BounceShield(b); return; }
             if (b.IsLiveThreat)
             {
                 if (!b.Snap()) return;
@@ -405,7 +419,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 // WPF BubbleService.cs:4652-4660: instant sweeps cannot end Tease or Brittle.
                 if (b.Popping || b.Spec == null || b.Spec.IsDarter || b.Spec.IsFreeze || b.Spec.IsTease || b.Spec.IsBrittle) continue;
                 if (!rect.Intersects(new Rect(b.X, b.Y, b.Size, b.Size))) continue;
-                if (b.Spec.IsChaperoneLive && b.Escort is { Popping: false } escort && Field.Bubbles.Contains(escort)) continue;
+                if (IsShielded(b)) { BounceShield(b); continue; }
                 if (b.IsLiveThreat)
                 {
                     if (b.Snap()) { Field.ChaosDefused?.Invoke(b); RequestFrame(); }
@@ -525,6 +539,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             GradientStops = { new GradientStop(Color.FromArgb(180, 200, 220, 255), 0), new GradientStop(Color.FromArgb(80, 255, 255, 255), 1) },
         };
         private static readonly IPen FallbackPen = new Pen(Brushes.White, 2);
+        internal static readonly IPen ShieldPen = new Pen(new SolidColorBrush(Color.FromRgb(0x9C, 0xE8, 0xFF)), 3.5,
+            dashStyle: new DashStyle(new[] { 3.0, 2.0 }, 0));
         private static readonly Dictionary<uint, IPen> FuseCache = new();
         private static readonly Dictionary<uint, (IBrush, IPen)> TintCache = new();
 
@@ -705,6 +721,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         }
                         if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
                         else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                        if (!b.Popping && BubbleOverlay.IsShielded(b))
+                        {
+                            using (dc.PushOpacity(b.ShieldOpacity))
+                                dc.DrawEllipse(null, ShieldPen, new Point(cx, cy), size / 2 + 6 * k, size / 2 + 6 * k);
+                        }
                         if (b.FuseTotalMs > 0 && !b.Popping)   // WPF fuse ring: shrinks 1 -> 0.45; yellow, flash, red brink
                         {
                             double rr = (size / 2 - 2) * (0.45 + 0.55 * b.FuseFraction);
