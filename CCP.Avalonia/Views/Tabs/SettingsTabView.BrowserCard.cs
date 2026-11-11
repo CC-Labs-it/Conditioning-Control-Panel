@@ -62,8 +62,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var activeModId = App.Mods?.ActiveModId;
             bool switched = !string.Equals(_browserCardModId, activeModId, StringComparison.OrdinalIgnoreCase);
             _browserCardModId = activeModId;
+            // Asset refreshes also raise ModChanged; they do not own the browser selection.
+            if (!switched) return;
             SyncBrowserCard();
-            if (switched && !(App.Mods?.ShowBambiCloudOption() ?? true) && BrowserWebHost.Source != null
+            if (!(App.Mods?.ShowBambiCloudOption() ?? true) && BrowserWebHost.Source != null
                 && !CoreSettings.Current.OfflineMode)
                 Shell?.NavigateBrowserForMod(App.Mods?.GetDefaultBrowserUrl() ?? "https://hypnotube.com/");
         });
