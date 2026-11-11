@@ -259,7 +259,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         /// <summary>Copies of one clip, each started <see cref="OverlapMs"/> before the previous ends.
-        /// Ends (onEnded) when a copy fails and nothing else is playing.</summary>
+        /// Failed copies are retried while the loop remains active.</summary>
         internal sealed class LoopVoice : MindWipePlayer.IVoice
         {
             private const int OverlapMs = 120;
@@ -302,7 +302,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             private MindWipePlayer.IVoice Build()
             {
                 MindWipePlayer.IVoice v = null!;
-                v = _create(Schedule, failed => Retire(v, failed));
+                v = _create(length => Schedule(v, length), failed => Retire(v, failed));
                 return v;
             }
 
@@ -311,7 +311,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 v.Volume = _vol;
                 _live.Add(v);
-                if (v.Play()) return true;
+                try { if (v.Play()) return true; }
+                catch (Exception ex) { Log.Debug(ex, "[Audio] mindwipe loop start"); }
                 _live.Remove(v);
                 v.Dispose();
                 return false;
@@ -332,18 +333,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
                         if (_done) { v?.Dispose(); return; }
                         if (v == null)
                         {
-                            if (_waiting)
-                            {
-                                _next?.Dispose();
-                                _next = _time.CreateTimer(_ => Advance(), null,
-                                    TimeSpan.FromMilliseconds(100), Timeout.InfiniteTimeSpan);
-                            }
+                            if (_waiting) RetryLocked();
                             return;
                         }
-                        if (_waiting)
+                        // A pending retry timer owns the next start. Park a build that finishes
+                        // before it fires, instead of starting early and leaving a stale timer.
+                        if (_waiting && _next == null)
                         {
                             _waiting = false;
                             if (StartLocked(v)) PrepareLocked();
+                            else RetryLocked();
                         }
                         else { v.Volume = _vol; _pending = v; }
                     }
@@ -355,19 +354,28 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 lock (_gate)
                 {
                     if (_done) return;
+                    _next?.Dispose(); _next = null;
                     if (_pending == null) { _waiting = true; PrepareLocked(); return; }
-                    var v = _pending; _pending = null;
+                    var v = _pending; _pending = null; _waiting = false;
                     if (StartLocked(v)) PrepareLocked();
-                    else { _waiting = true; PrepareLocked(); }
+                    else RetryLocked();
                 }
             }
 
-            private void Schedule(long lengthMs)
+            private void RetryLocked()
+            {
+                _waiting = true;
+                _next?.Dispose();
+                _next = _time.CreateTimer(_ => Advance(), null,
+                    TimeSpan.FromMilliseconds(100), Timeout.InfiniteTimeSpan);
+            }
+
+            private void Schedule(MindWipePlayer.IVoice voice, long lengthMs)
             {
                 if (lengthMs <= 0) return;
                 lock (_gate)
                 {
-                    if (_done) return;
+                    if (_done || !_live.Contains(voice)) return;
                     _next?.Dispose();
                     _next = _time.CreateTimer(_ => Advance(), null,
                         TimeSpan.FromMilliseconds(Math.Max(100, lengthMs - OverlapMs)), Timeout.InfiniteTimeSpan);
@@ -376,21 +384,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
             private void Retire(MindWipePlayer.IVoice v, bool failed)
             {
-                bool dead = false, restart = false;
+                bool restart = false;
                 lock (_gate)
                 {
-                    _live.Remove(v);
-                    if (_done || _live.Count > 0) return;
-                    if (failed)
-                    {
-                        dead = _done = true;
-                        _next?.Dispose();
-                        _pending?.Dispose(); _pending = null;
-                    }
-                    else restart = true;
+                    // A failed start was already removed. Its late completion must not end or
+                    // restart a newer attempt.
+                    if (!_live.Remove(v) || _done || _live.Count > 0) return;
+                    if (failed) RetryLocked();
+                    else if (!_waiting) restart = true;
                 }
-                if (dead) Fire(_onEnded);
-                else if (restart) Advance();
+                if (restart) Advance();
             }
 
             public void Dispose()
