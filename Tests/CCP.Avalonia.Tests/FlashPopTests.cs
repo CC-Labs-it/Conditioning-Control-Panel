@@ -115,6 +115,41 @@ public sealed class FlashPopTests
     });
 
     [Fact]
+    public Task A_shown_flash_buzzes_once_and_a_refused_flash_does_not() => OnUi((s, _) =>
+    {
+        var hs = new HapticSettings { Enabled = true, FlashDisplayEnabled = true };
+        hs.EnsureV2Migrated();
+        hs.V2.Provider("lovense").Enabled = false;
+        hs.V2.Provider("mock").Enabled = true;
+        hs.V2.Rule(HapticEventKind.FlashDecay).Enabled = true;
+        using var haptics = new HapticService(hs);
+        var posted = new System.Collections.Generic.List<string>();
+        haptics.HapticTriggered += (_, label) => posted.Add(label);
+        var old = CoreHaptics.Service;
+        var present = FlashOverlay.Present;
+        try
+        {
+            CoreHaptics.Service = haptics;
+            FlashOverlay.Present = (_, _, _) => true;
+            var screen = new Window().Screens.All[0];
+            Assert.True(FlashOverlay.Show(new global::Avalonia.Media.Imaging.Bitmap(global::Avalonia.Platform.AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/features/flash.png"))),
+                new PixelRect(100, 100, 200, 200), "shown.png", screen, 1, TimeSpan.Zero,
+                TimeSpan.FromSeconds(6), false, false, 0));
+            Assert.Single(posted, p => p.StartsWith("Flash", StringComparison.Ordinal));
+            FlashOverlay.Present = (_, _, _) => false;
+            Assert.False(FlashOverlay.Show(new global::Avalonia.Media.Imaging.Bitmap(global::Avalonia.Platform.AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/features/flash.png"))),
+                new PixelRect(100, 100, 200, 200), "refused.png", screen, 1, TimeSpan.Zero,
+                TimeSpan.FromSeconds(6), false, false, 0));
+            Assert.Single(posted, p => p.StartsWith("Flash", StringComparison.Ordinal));
+        }
+        finally
+        {
+            FlashOverlay.Present = present;
+            CoreHaptics.Service = old;
+        }
+    });
+
+    [Fact]
     public Task A_pop_buzzes_the_flash_click_haptic() => OnUi((s, _) =>
     {
         var hs = new HapticSettings { Enabled = true, FlashClickEnabled = true };
