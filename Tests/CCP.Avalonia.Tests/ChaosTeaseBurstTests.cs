@@ -70,6 +70,7 @@ public sealed class ChaosTeaseBurstTests
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var enabled = CoreSettings.Current.ChaosSkiaFxEnabled;
+        var announcerEnabled = CoreSettings.Current.ChaosAnnouncerEnabled;
         var composited = ChaosSkiaFxOverlay.Composited;
         var rng = ChaosRunHost.Rng;
         var popText = ChaosRunHost.PopText;
@@ -187,6 +188,8 @@ public sealed class ChaosTeaseBurstTests
             double beforeScore = state.Score, beforeFocus = state.Focus;
             int beforeGold = ChaosMeta.State.Gold;
             loc.SetLanguage("es");
+            CoreSettings.Current.ChaosAnnouncerEnabled = true;
+            ChaosAnnouncerOverlay.CloseActive();
             var words = new System.Collections.Generic.List<string>();
             ChaosRunHost.PopText = (_, _, word, _) => words.Add(word);
             for (int i = 0; i < 188; i++) BubbleOverlay.Field.Step();
@@ -196,6 +199,10 @@ public sealed class ChaosTeaseBurstTests
             Assert.True(state.Score > beforeScore);
             Assert.Equal(beforeFocus + ChaosTuning.FOCUS_PER_DENIED, state.Focus);
             Assert.True(ChaosMeta.State.Gold > beforeGold);
+            var reward = $"+{ChaosMeta.State.Gold - beforeGold} {ChaosGlyphs.Gold}";
+            Assert.Equal($"DENEGADA. {reward}", state.RecentEvents[0]);
+            Assert.Equal(state.RecentEvents[0], ChaosAnnouncerOverlay.Active!.Current!.Text);
+            Assert.Equal(reward, ChaosAnnouncerOverlay.Active!.Current!.SubText);
             Assert.Contains("tease", ChaosMeta.State.BubbleHintsLearned);
             Assert.Equal(1, fires);
 
@@ -238,6 +245,7 @@ public sealed class ChaosTeaseBurstTests
             ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;
             ChaosSkiaFxOverlay.Composited = composited;
             CoreSettings.Current.ChaosSkiaFxEnabled = enabled;
+            CoreSettings.Current.ChaosAnnouncerEnabled = announcerEnabled;
             ChaosRunHost.Rng = rng;
             ChaosRunHost.PopText = popText;
             EffectPayload.Firer = firer;

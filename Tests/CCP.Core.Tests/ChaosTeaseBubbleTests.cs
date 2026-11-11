@@ -25,7 +25,9 @@ public sealed class ChaosTeaseBubbleTests
         Assert.Equal(x, bubble.X);
         Assert.Equal(y, bubble.Y);
         field.HoldChaos = false;
-        for (int i = 0; i < 187; i++) Assert.Equal(0, field.Step());
+        Assert.Equal(0, field.Step());
+        Assert.Equal(1 + 0.10 * Math.Sin(0.02 * 5.2), bubble.DrawScale, 8);
+        for (int i = 0; i < 186; i++) Assert.Equal(0, field.Step());
         Assert.Equal(0, denied);
         Assert.True(x != bubble.X || y != bubble.Y);
         Assert.Equal(0, field.Step());

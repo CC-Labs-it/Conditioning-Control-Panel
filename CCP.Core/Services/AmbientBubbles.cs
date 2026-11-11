@@ -205,6 +205,7 @@ namespace ConditioningControlPanel.Services
         {
             get
             {
+                if (Spec?.IsTease == true) return Scale + 0.10 * Math.Sin(_timeAlive * 5.2); // WPF BubbleService.cs:4262
                 double calm = Spec?.VariantId is "video" or "htlink" ? 0.4 : 1.0, d = DangerFactor;
                 return Scale + (0.06 + d * 0.0225 * calm) * Math.Sin(_timeAlive * (7.5 + d * 9.0 * calm) + _wobbleOffset);
             }
