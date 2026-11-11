@@ -33,7 +33,11 @@ internal static class X11Pointer
     private static IntPtr _display, _root;
     private static byte _esc;
 
-    public static (PixelPoint At, bool Pressed, bool Escape)? Read()
+    public static (PixelPoint At, bool Pressed, bool Escape)? Read() => Read(false);
+
+    internal static (PixelPoint At, bool Pressed, bool Escape)? ReadLeft() => Read(true);
+
+    private static (PixelPoint At, bool Pressed, bool Escape)? Read(bool leftOnly)
     {
         try
         {
@@ -55,7 +59,7 @@ internal static class X11Pointer
             XQueryKeymap(_display, ref MemoryMarshal.GetReference(keys));
             bool esc = _esc != 0 && (keys[_esc >> 3] & (1 << (_esc & 7))) != 0;
             keys.Clear();
-            return (new PixelPoint(x, y), (mask & (Button1Mask | Button3Mask)) != 0, esc);
+            return (new PixelPoint(x, y), (mask & (leftOnly ? Button1Mask : Button1Mask | Button3Mask)) != 0, esc);
         }
         catch (Exception ex)
         {

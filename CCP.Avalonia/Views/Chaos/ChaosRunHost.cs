@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Avalonia;
 using Avalonia.Media;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -79,6 +80,45 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static double _lastHeatTint = -1;
         private static bool _active, _spawning, _manualPaused, _endingSoonFired, _lessonCardPaused;
         private static bool _dvdBannerOn;
+        private static DispatcherTimer? _rabbitAimTimer;
+        private static int _rabbitPending;
+        private static bool _rabbitPreviousDown;
+        internal static Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadToyPointer = X11Pointer.ReadLeft;
+        internal static bool RabbitAimRunning => _rabbitAimTimer?.IsEnabled == true;
+
+        private static void DisarmRabbitCall()
+        {
+            _rabbitPending = 0;
+            _rabbitAimTimer?.Stop();
+            ChaosCursorGlowOverlay.Disarm();
+            if (_state != null)
+                foreach (var toy in _state.ActiveToys)
+                    if (toy.Id == "rabbit_caller") toy.IsEffectActive = false;
+        }
+
+        internal static void RabbitAimTick()
+        {
+            if (_rabbitPending <= 0 || !_active || _state == null) { DisarmRabbitCall(); return; }
+            try
+            {
+                if (ReadToyPointer() is not { } pointer) return;
+                ChaosCursorGlowOverlay.MoveToPx(pointer.At.X, pointer.At.Y);
+                bool pressed = pointer.Pressed && !_rabbitPreviousDown;
+                _rabbitPreviousDown = pointer.Pressed;
+                if (!pressed || _manualPaused || _lessonCardPaused || !_spawning) return;
+                int count = _rabbitPending;
+                DisarmRabbitCall();
+                for (int i = 0; i < count; i++)
+                {
+                    var spec = ChaosBubbleVariants.BuildDarter(_state.RunIntensity, spotlight: false,
+                        pointer.At.X + Rng.Next(-60, 61), pointer.At.Y + Rng.Next(-60, 61));
+                    BubbleOverlay.SpawnChaos(spec, pointer.At);
+                }
+                ChaosMeta.MarkDiscovered("bubble:darter");
+                ChaosOverlayWindow.ChaosSfx.Play("rabbit_spawn", 0.5f);
+            }
+            catch (Exception ex) { Log.Debug("Rabbit aim: {E}", ex.Message); }
+        }
         private static double _thoughtAccumSec, _freezeRemainingSec, _slowMoRemainingSec;
         private const double SlowMoFactor = 0.12;
 
@@ -533,6 +573,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Panic / app exit: close everything, no recap, no payout. Safe when idle.</summary>
         public static void ForceShutdown()
         {
+            DisarmRabbitCall();
             ChaosUnlockCardOverlay.CloseActive();
             ChaosAnnouncerOverlay.CloseActive();   // WPF :3177; also clears a queue left by an idle caller
             ChaosCursorGlowOverlay.CloseActive();   // WPF ForceShutdown :3183
@@ -663,6 +704,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF StopKeyHook + CloseToyButtons (EndRun / ForceShutdown / overlay closed). Idempotent.</summary>
         private static void StopToys()
         {
+            DisarmRabbitCall();
             _dvdBannerOn = false;
             X11PanicKey.ToyKey = null;
             X11PanicKey.ToyKeys = null;
@@ -723,7 +765,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             foreach (var t in ChaosToyRules.Tick(_state.ActiveToys, ChaosRunEngine.TICK_SEC))
                 ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.45f);
             foreach (var t in _state.ActiveToys)
-                t.IsEffectActive = t.Id == "porn_dvd" ? ChaosDvdOverlay.AnyToyActive : t.Id == "freeze_trigger" && _freezeRemainingSec > 0;
+                t.IsEffectActive = t.Id == "porn_dvd" ? ChaosDvdOverlay.AnyToyActive : t.Id == "rabbit_caller" ? _rabbitPending > 0 : t.Id == "freeze_trigger" && _freezeRemainingSec > 0;
             if (_dvdBannerOn && !ChaosDvdOverlay.AnyToyActive)
             {
                 ChaosEffectBannerOverlay.End("dvd");
@@ -749,7 +791,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         /// <summary>WPF UseToy, the gate + cooldown half. ponytail: the effect itself (vibe sweep,
-        /// snap, rabbits, e-stim) are not wired yet. DVD follows WPF :2722-2734.</summary>
+        /// snap, e-stim) are not wired yet; Rabbit Caller storm remains. DVD follows WPF :2722-2734.</summary>
         private static void UseToy(ChaosToyState toy)
         {
             if (_state == null) return;
@@ -761,6 +803,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ActivateFreeze();
                 if (_state.MaxedBoons.Contains(toy.Id)) BubbleOverlay.Field.DefuseAllLive();
                 ChaosOverlayWindow.ChaosSfx.Play("freeze_trigger", 0.6f);
+                return;
+            }
+            if (toy.Id == "rabbit_caller")
+            {
+                _rabbitPending = Math.Max(1, (int)(_state.ToyPower.TryGetValue(toy.Id, out var rabbits) ? rabbits : 0));
+                _rabbitPreviousDown = true;
+                ChaosCursorGlowOverlay.Arm();
+                _rabbitAimTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => RabbitAimTick());
+                _rabbitAimTimer.Start();
+                ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.5f);
+                if (!ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Play)) ChaosFirstTimes.TryAward(ChaosFirstTimes.Play);
                 return;
             }
             if (toy.Id != "porn_dvd" || _overlay == null) return;
