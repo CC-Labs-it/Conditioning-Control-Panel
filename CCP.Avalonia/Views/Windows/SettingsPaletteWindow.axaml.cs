@@ -426,10 +426,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Dispatcher.UIThread.Post(() =>
                 {
                     // Name lookup across namescopes: every tab owns its own, so walk the tree.
-                    var root = shell.TabRoot(entry.TabKey);
-                    var target = entry.ElementNames
-                        .Select(n => root?.GetVisualDescendants().OfType<Control>().FirstOrDefault(c => c.Name == n))
-                        .FirstOrDefault(c => c != null);
+                    var target = FindHighlight(shell, entry);
                     if (target == null)
                     {
                         Serilog.Log.Debug("Palette entry {Id}: no element matched [{Names}]",
@@ -444,6 +441,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 Serilog.Log.Warning(ex, "Palette navigation failed for {Id}", entry.Id);
             }
+        }
+
+        internal static Control? FindHighlight(MainShellWindow shell, SettingsPaletteEntry entry)
+        {
+            var root = string.IsNullOrWhiteSpace(entry.TabKey) ? shell : shell.TabRoot(entry.TabKey);
+            return entry.ElementNames
+                .Select(n => root?.GetVisualDescendants().OfType<Control>().FirstOrDefault(c => c.Name == n))
+                .FirstOrDefault(c => c != null);
         }
 
         /// <summary>A 2s accent glow around the found control, then gone. Self-removing: the

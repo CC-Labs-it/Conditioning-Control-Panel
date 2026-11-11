@@ -92,7 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Windows.SettingsPaletteWindow.Navigate(shell, destination.ToPaletteEntry(category));
         }
 
-        private static QuestCategory? DoorCategory(ActiveQuest? quest, QuestDefinition? definition) =>
+        internal static QuestCategory? DoorCategory(ActiveQuest? quest, QuestDefinition? definition) =>
             quest != null && !quest.IsCompleted && definition != null && QuestDestinations.For(definition.Category) != null
                 ? definition.Category : null;
 
@@ -244,7 +244,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 var quest = i < board.Count ? board[i].Quest : null;
                 var def = i < board.Count ? board[i].Definition : null;
-                _dailyDoors[i].Set(DoorCategory(quest, def));
+                var category = DoorCategory(quest, def);
+                _dailyDoors[i].Set(category);
+                _dailyCards[i].SetNavigable(category != null);
                 if (quest == null || def == null)
                     _dailyCards[i].ShowEmpty(i, Loc.Get("quest_card_empty_title"), Loc.Get("quest_card_empty_body"));
                 else
