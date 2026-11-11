@@ -164,6 +164,13 @@ public class BannerDrumTests
                     Assert.False(layer.IsHitTestVisible);
                     Assert.Null(layer.Effect);
                 }
+                // Startup brushes (WPF MainWindow.xaml:1106-1123): the shell opens on the Dashboard with no
+                // ShowTab, so these must already be sunken before the first PaintBannerDepth.
+                var startShade = Assert.IsType<LinearGradientBrush>(w.Named<Border>("BannerDrumShade")!.Background);
+                Assert.Equal(0xA6000000u, startShade.GradientStops[0].Color.ToUInt32());
+                var startLip = Assert.IsType<LinearGradientBrush>(w.Named<Border>("BannerDrumLip")!.Background);
+                Assert.Equal(RelativeUnit.Absolute, startLip.EndPoint.Unit);
+                Assert.Equal(10, startLip.EndPoint.Point.X);
                 var hue = Color.FromRgb(40, 120, 200);
                 w.PaintBannerDepth(hue);
                 var shade = Assert.IsType<LinearGradientBrush>(w.Named<Border>("BannerDrumShade")!.Background);
