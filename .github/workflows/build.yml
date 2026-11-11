@@ -409,13 +409,6 @@ jobs:
         if: steps.missing.outputs.shards != ''
         with:
           dotnet-version: 10.0.x
-          cache: true
-          cache-dependency-path: "**/*.csproj"
-      - uses: actions/cache@v4
-        if: steps.missing.outputs.shards != '' && matrix.os == 'linux'
-        with:
-          path: ~/.cache/ccp-test/vosk
-          key: vosk-model-small-en-us-0.15-30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498
       - name: Install Linux shard dependencies
         if: steps.missing.outputs.shards != '' && matrix.os == 'linux'
         run: |
