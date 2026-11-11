@@ -533,16 +533,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 bmp => { foreach (var w in _allWindows) w._videoImage.Source = bmp; },
                 () => { foreach (var w in _allWindows) w._videoImage.InvalidateVisual(); });
             // LibVLC raises these on its own thread; the game is torn down only on the UI thread.
-            player.Playing += (_, _) => MarkWatchPlaying();
-            player.TimeChanged += (_, a) => NoteWatchPosition(a.Time / 1000.0);
+            BindPlaybackEvents(new VlcBubbleCountEvents(player), () => ReferenceEquals(player, _player));
             player.LengthChanged += (_, a) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) AdoptRealDuration(a.Length / 1000.0); });
-            player.EndReached += (_, _) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) OnVideoEnded(); });
-            player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) OnVideoEnded(); });
             _media = new Media(vlc, _videoPath, FromType.FromPath);
             // WPF 7.2.2 a0b6d5779 (#1549): the primary video names itself in the recent-sounds ring;
             // running = engine or session (WPF EngineOffAudioLog.cs:29), a paused session is not engine-off.
             if (player.Play(_media)) Services.Audio.RecentSounds.Shared.Note("bubblecount-video", _videoPath, CoreEngine.IsRunning || CoreSession.IsSessionRunning, false, DateTime.Now);
             return true;
+        }
+
+        // The real player and the deterministic test source share the same event subscriptions.
+        internal void BindPlaybackEvents(IBubbleCountPlaybackEvents events, Func<bool> isCurrent)
+        {
+            events.Playing += MarkWatchPlaying;
+            events.TimeChanged += NoteWatchPosition;
+            events.Ended += () => Dispatcher.UIThread.Post(() => { if (isCurrent()) OnVideoEnded(); });
         }
 
         /// <summary>Stop joins the decoder thread, so after it no callback touches the frame buffer.</summary>
@@ -905,6 +910,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// somewhere in the keep-above band. Both are applied after Show(), because both need a
     /// mapped X11 window, and both are no-ops off X11 by design.
     /// </summary>
+    internal interface IBubbleCountPlaybackEvents
+    {
+        event Action? Playing;
+        event Action<double>? TimeChanged;
+        event Action? Ended;
+    }
+
+    internal sealed class VlcBubbleCountEvents : IBubbleCountPlaybackEvents
+    {
+        public event Action? Playing;
+        public event Action<double>? TimeChanged;
+        public event Action? Ended;
+
+        internal VlcBubbleCountEvents(MediaPlayer player)
+        {
+            player.Playing += (_, _) => Playing?.Invoke();
+            player.TimeChanged += (_, args) => TimeChanged?.Invoke(args.Time / 1000.0);
+            player.EndReached += (_, _) => Ended?.Invoke();
+            player.EncounteredError += (_, _) => Ended?.Invoke();
+        }
+    }
+
     internal class CountBubble : IDisposable
     {
         private readonly Window _window;
