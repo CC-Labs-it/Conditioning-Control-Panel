@@ -105,24 +105,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         }
 
         /// <summary>The init frame, straight out (this head has no ready queue).</summary>
-        internal async void PostGlassroadInit()
+        internal void PostGlassroadInit()
         {
-            // The page waits only three seconds for init. If the read is slow, boot with the held
-            // snapshot and deliver the result through the page's owned message when it is ready.
-            if (!_grOwnershipLoad.IsCompleted)
-            {
-                try { await _grOwnershipLoad.WaitAsync(TimeSpan.FromSeconds(2)); }
-                catch (TimeoutException)
-                {
-                    if (!_grLateOwnedScheduled)
-                    {
-                        _grLateOwnedScheduled = true;
-                        _grLateOwnedAccount = FriendsHead.Identity()?.UnifiedId;
-                        PostGlassroadOwnedWhenLoaded();
-                    }
-                }
-            }
             if (!_grOpen || _closing) return;
+            // The page's init deadline starts before NavigationCompleted. Never wait here.
+            // Capture this before reading grants so a completion during Post still gets delivered.
+            bool pending = !_grOwnershipLoad.IsCompleted;
             try
             {
                 var s = CoreSettings.Current;
@@ -132,6 +120,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed, PrizeOwnership.Grants()));
             }
             catch (Exception ex) { Log.Debug("Glassroad: init post failed: {E}", ex.Message); }
+            if (pending && !_grLateOwnedScheduled)
+            {
+                _grLateOwnedScheduled = true;
+                _grLateOwnedAccount = FriendsHead.Identity()?.UnifiedId;
+                PostGlassroadOwnedWhenLoaded();
+            }
         }
 
         private async void PostGlassroadOwnedWhenLoaded()

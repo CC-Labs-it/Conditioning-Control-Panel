@@ -121,11 +121,8 @@ public sealed partial class GameWindowTests
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
         w.Web.OnNavigationCompleted(w.PageUrl);
-        Assert.Empty(sent);
-        var clock = System.Diagnostics.Stopwatch.StartNew();
-        while (sent.Count == 0 && clock.Elapsed < TimeSpan.FromSeconds(8))
-        { System.Threading.Thread.Sleep(20); Dispatcher.UIThread.RunJobs(); }
         Assert.Equal("init", (string?)Assert.Single(sent)["type"]);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
         handler.Reply.SetResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)
         { Content = new System.Net.Http.StringContent("{\"ok\":true,\"prizes\":{\"revision\":3,\"grants\":[\"cos.kart.body.petal\"]}}") });
         while (PrizeOwnership.Grants().Length == 0 && clock.Elapsed < TimeSpan.FromSeconds(8))
@@ -135,6 +132,34 @@ public sealed partial class GameWindowTests
         Dispatcher.UIThread.RunJobs();
         Assert.DoesNotContain(sent, o => (string?)o["type"] == "owned");
         w.Web.OnWebMessage("{\"type\":\"ready\"}");
+        var owned = Assert.Single(sent.Where(o => (string?)o["type"] == "owned"));
+        Assert.Equal(new[] { "cos.kart.body.petal" }, ((JArray)owned["grants"]!).Values<string>().ToArray());
+        w.Close();
+    });
+
+    [Fact]
+    public void Glassroad_DelayedNavigationDoesNotWaitForOwnership() => RunGlassroad("1", (_, _, _) =>
+    {
+        PrizeOwnership.ResetHeld();
+        var handler = new SlowOwnedHttp();
+        using var http = new System.Net.Http.HttpClient(handler);
+        GameWindow.GlassroadOwnershipRelay = () => new BackRoomApi(http, FriendsHead.Identity, null, PrizeOwnership.ApplySnapshot, "http://race.test");
+        var w = GameWindow.Launch(GameWindow.GlassroadId)!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        // The bridge timer can start well before NavigationCompleted.
+        System.Threading.Thread.Sleep(1200);
+        w.Web.OnNavigationCompleted(w.PageUrl);
+        var init = Assert.Single(sent);
+        Assert.Equal("init", (string?)init["type"]);
+        Assert.True((bool)init["caps"]!["net"]!);
+        Assert.Equal("discord:12", (string?)init["identity"]!["unifiedId"]);
+        w.Web.OnWebMessage("{\"type\":\"ready\"}");
+        handler.Reply.SetResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        { Content = new System.Net.Http.StringContent("{\"ok\":true,\"prizes\":{\"revision\":3,\"grants\":[\"cos.kart.body.petal\"]}}") });
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (!sent.Any(o => (string?)o["type"] == "owned") && clock.Elapsed < TimeSpan.FromSeconds(8))
+        { System.Threading.Thread.Sleep(20); Dispatcher.UIThread.RunJobs(); }
         var owned = Assert.Single(sent.Where(o => (string?)o["type"] == "owned"));
         Assert.Equal(new[] { "cos.kart.body.petal" }, ((JArray)owned["grants"]!).Values<string>().ToArray());
         w.Close();
