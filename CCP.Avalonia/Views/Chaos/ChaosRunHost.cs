@@ -188,9 +188,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             _spawnSerial = _ordinarySpawns = 0;
             if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse);
+            if (_state.WelcomeShowerEnabled) SpawnWelcomeShower();
             _spawnTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };   // WPF :510
             _spawnTimer.Tick += (_, _) => SpawnTick();
             _spawnTimer.Start();
+        }
+
+        // WPF ChaosModeService.cs:1645: six benign treats rain in, ignoring the normal spawn cap.
+        private static void SpawnWelcomeShower()
+        {
+            if (_state == null) return;
+            for (int i = 0; i < 6; i++)
+            {
+                var variant = ChaosBubbleVariants.All[Rng.Next(2)];
+                BubbleOverlay.SpawnChaos(ChaosBubbleVariants.Build(variant, _state.RunIntensity,
+                    _state.FuseTimeMult, ChaosMotion.RainDown, _state.Config.EffectIntensity, _state.BubbleScale));
+            }
+            var settings = CoreSettings.Current;
+            var path = System.IO.Path.Combine(AppContext.BaseDirectory, "Resources", "sounds", "bubbles", $"chime{Rng.Next(1, 4)}.mp3");
+            if (System.IO.File.Exists(path))
+                CoreAudio.PlayOneShot(path, (float)(Math.Pow(settings.MasterVolume / 100.0 * settings.BubblesVolume / 100.0, 1.5) * 0.25), "chaos-chime");
+            _state.PushEvent("🚿 welcome shower: treats from above");
         }
 
         /// <summary>WPF SpawnTick (:1101), the treat half. Re-times its own timer like WPF.</summary>
@@ -466,6 +484,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state.AllLiveNextWave = false;
                 _state.WaveIndex = newWave;
                 _state.ActIndex = ChaosRunEngine.ActFor(newWave);
+                // Until the draft host is wired, this transition stands in for its GO beat.
+                if (_state.Config.BoonDraftEnabled && _state.WelcomeShowerEnabled) SpawnWelcomeShower();
             }
         }
 

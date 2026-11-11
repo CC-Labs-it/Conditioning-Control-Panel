@@ -132,6 +132,85 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    [Fact]
+    public async Task Hub_mantra_selection_equips_a_discovered_boon_for_the_run()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            ChaosHubWindow? hub = null;
+            try
+            {
+                ChaosMeta.MarkDiscovered("boon:size_queen");
+                hub = new ChaosHubWindow();
+                var rows = hub.FindControl<StackPanel>("MantrasHost")!;
+                int index = ChaosBoonPool.All.FindIndex(b => b.Id == "size_queen");
+                var card = (Border)rows.Children[index];
+                var pointer = new global::Avalonia.Input.Pointer(global::Avalonia.Input.Pointer.GetNextFreeId(), global::Avalonia.Input.PointerType.Mouse, true);
+                card.RaiseEvent(new global::Avalonia.Input.PointerPressedEventArgs(card, pointer, card, new Point(1, 1), 0,
+                    new global::Avalonia.Input.PointerPointProperties(global::Avalonia.Input.RawInputModifiers.LeftMouseButton, global::Avalonia.Input.PointerUpdateKind.LeftButtonPressed),
+                    global::Avalonia.Input.KeyModifiers.None));
+                Assert.Equal("size_queen", ChaosMeta.State.EquippedStartBoon);
+                hub.FindControl<Button>("BtnMenuFallIn")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                ChaosRunHost.Overlay!.FinishCountdown();
+                Assert.True(ChaosRunHost.State!.RippleEnabled);
+                Assert.Equal("size_queen", Assert.Single(ChaosRunHost.State.RunPickTiles).Id);
+            }
+            finally { ChaosRunHost.ForceShutdown(); hub?.Close(); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Theory]
+    [InlineData(true, 12)]
+    [InlineData(false, 6)]
+    public async Task Welcome_shower_rains_treats_at_start_and_draft_loop_transitions(bool drafts, int expected)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            try
+            {
+                ChaosMeta.State.EquippedStartBoon = "welcome_shower";
+                var cfg = Cfg(); cfg.BoonDraftEnabled = drafts;
+                ChaosRunHost.StartRun(cfg); ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                var bubbles = BubbleOverlay.Field.Bubbles.Where(b => b.Spec != null).ToList();
+                Assert.Equal(6, bubbles.Count);
+                Assert.All(bubbles, b => { Assert.False(b.Spec!.IsLive); Assert.Equal(ChaosMotion.RainDown, b.Spec.Motion); Assert.Contains(b.Spec.VariantId, new[] { "flash", "subliminal" }); });
+                Ticks(80);
+                Assert.Equal(expected, BubbleOverlay.Field.Bubbles.Count(b => b.Spec != null));
+                ChaosRunHost.ForceShutdown();
+                ChaosMeta.State.EquippedStartBoon = null;
+                ChaosRunHost.StartRun(cfg); ChaosRunHost.Overlay!.FinishCountdown();
+                Assert.Empty(BubbleOverlay.Field.Bubbles.Where(b => b.Spec != null));
+            }
+            finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Welcome_shower_at_a_draft_loop_goes_to_the_field()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            try
+            {
+                var cfg = Cfg(); cfg.BoonDraftEnabled = true;
+                ChaosRunHost.StartRun(cfg); ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                ChaosRunHost.State!.WelcomeShowerEnabled = true;
+                Ticks(80);
+                Assert.Equal(6, BubbleOverlay.Field.Bubbles.Count(b => b.Spec != null));
+            }
+            finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
     /// <summary>WPF ChaosToyButtonWindow: one hero button per equipped toy; a real click fires the
     /// toy (cooldown starts, the status counts down on the run clock); the toy key rides the panic
     /// key's listener; panic closes every button and unhooks the key.</summary>
