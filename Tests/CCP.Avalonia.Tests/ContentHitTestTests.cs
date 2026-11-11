@@ -72,7 +72,7 @@ public sealed class ContentHitTestTests
                     Dispatcher.UIThread.RunJobs();
                     b.RemoveHandler(InputElement.PointerPressedEvent, (System.EventHandler<PointerPressedEventArgs>)Swallow);
                     if (hit is null || (hit != b && !b.IsVisualAncestorOf(hit)) || !pressed)
-                        misses.Add($"{tab} {b.Name ?? b.GetType().Name} @{p}: hit {hit?.GetType().Name}/{(hit as Control)?.Name}, pressed {pressed}");
+                        misses.Add($"{tab} {b.Name ?? b.GetType().Name} @{p}: hit {hit?.GetType().Name}/{(hit as Control)?.Name}, text {(hit as TextBlock)?.Text}, ancestors {string.Join("/", hit?.GetVisualAncestors().OfType<Control>().Select(v => $"{v.GetType().Name}:{v.Name}") ?? Array.Empty<string>())}, pressed {pressed}");
                 }
                 Assert.True(tested >= 3, $"{tab}: only {tested} buttons on screen to test");
             }

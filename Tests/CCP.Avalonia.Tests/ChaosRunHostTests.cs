@@ -53,6 +53,11 @@ public sealed class ChaosRunHostTests
             try
             {
                 ChaosSkiaFxOverlay.Composited = () => true;
+                settings.ChaosSkiaFxEnabled = true;
+                ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;
+                ChaosSkiaFxOverlay.Ripple(new Point(10, 10), 50, 500);
+                Assert.Null(ChaosSkiaFxOverlay.Active);
+                ChaosSkiaFxOverlay.CloseActive();
                 ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
                 ChaosFieldFxOverlay.SkipPlatformChecksForTests = true;
                 ChaosRunHost.StartRun(Cfg());

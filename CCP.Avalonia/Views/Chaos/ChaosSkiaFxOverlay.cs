@@ -80,6 +80,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             var w = Active;
             Active = null;
+            _refused = false;   // a new run may use a newly available platform surface
             if (w == null) return;
             w.Fx.Clear();
             w.StopRendering();
