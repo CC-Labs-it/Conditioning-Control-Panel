@@ -5,7 +5,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 
 public partial class EmiDeskWindow
 {
-    private CancellationTokenSource? _bodyMove;
+    private CancellationTokenSource? _bodyMoveScaleAnimation;
+    private CancellationTokenSource? _bodyMoveXAnimation;
+    private CancellationTokenSource? _bodyMoveYAnimation;
     // Per-window clock seam, so tests can step the same tween without wall-clock delays.
     internal Action<double, CancellationToken, Action<double>>? BodyMoveTween;
 
@@ -26,13 +28,15 @@ public partial class EmiDeskWindow
             default: return;
         }
         handled = true;
-        StopBodyMove();
+        bool horizontal = !scale && x != 0;
+        StopBodyMove(scale, horizontal);
         var cts = new CancellationTokenSource();
-        _bodyMove = cts;
+        ref var animation = ref BodyMoveAnimation(scale, horizontal);
+        animation = cts;
         void Apply(double p)
         {
             if (cts.IsCancellationRequested) return;
-            if (p >= 1) { StopBodyMove(); return; }
+            if (p >= 1) { StopBodyMove(scale, horizontal); return; }
             if (scale)
             {
                 double u = p < 0.4 ? p / 0.4 : (p - 0.4) / 0.6;
@@ -52,12 +56,29 @@ public partial class EmiDeskWindow
         else Tween(ms, cts.Token, Apply);
     }
 
+    // WPF BeginAnimation replaces only the targeted property, leaving the other axes live.
+    private ref CancellationTokenSource? BodyMoveAnimation(bool scale, bool horizontal)
+    {
+        if (scale) return ref _bodyMoveScaleAnimation;
+        if (horizontal) return ref _bodyMoveXAnimation;
+        return ref _bodyMoveYAnimation;
+    }
+
+    private void StopBodyMove(bool scale, bool horizontal)
+    {
+        ref var animation = ref BodyMoveAnimation(scale, horizontal);
+        animation?.Cancel();
+        animation?.Dispose();
+        animation = null;
+        if (scale) _bodyMoveScale.ScaleX = _bodyMoveScale.ScaleY = 1;
+        else if (horizontal) _bodyMoveShift.X = 0;
+        else _bodyMoveShift.Y = 0;
+    }
+
     private void StopBodyMove()
     {
-        _bodyMove?.Cancel();
-        _bodyMove?.Dispose();
-        _bodyMove = null;
-        _bodyMoveScale.ScaleX = _bodyMoveScale.ScaleY = 1;
-        _bodyMoveShift.X = _bodyMoveShift.Y = 0;
+        StopBodyMove(true, false);
+        StopBodyMove(false, true);
+        StopBodyMove(false, false);
     }
 }

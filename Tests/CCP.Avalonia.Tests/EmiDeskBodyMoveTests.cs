@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -68,6 +69,57 @@ public sealed class EmiDeskBodyMoveTests
             step(1);
             Assert.Equal(1, scale.ScaleX); Assert.Equal(1, scale.ScaleY);
             Assert.Equal(0, shift.X); Assert.Equal(0, shift.Y);
+        }
+        finally { desk.ShutDown(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ReplacementChainWithoutMoveLeavesNodRunning() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var desk = Desk();
+        try
+        {
+            Action<double>? step = null;
+            CancellationToken token = default;
+            desk.BodyMoveTween = (_, t, a) => { token = t; step = a; a(0); };
+            var shift = Field<TranslateTransform>(desk, "_bodyMoveShift");
+            Play(desk, "nod");
+            step!(0.25); Assert.Equal(4, shift.Y);
+            desk.PlayChain(new EmiChain("plain", "plain", new[] { new EmiFrame("^_^", 5000) }));
+            Assert.False(token.IsCancellationRequested);
+            Assert.Equal(4, shift.Y);
+            step(0.5); Assert.Equal(0, shift.Y);
+            step(0.75); Assert.Equal(4, shift.Y);
+            step(1); Assert.Equal(0, shift.Y);
+        }
+        finally { desk.ShutDown(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task DifferentMovePropertiesRunTogetherAndOnlyMatchingMovesReplace() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var desk = Desk();
+        try
+        {
+            var moves = new List<(CancellationToken Token, Action<double> Step)>();
+            desk.BodyMoveTween = (_, t, a) => { moves.Add((t, a)); a(0); };
+            var shift = Field<TranslateTransform>(desk, "_bodyMoveShift");
+            var scale = Field<ScaleTransform>(desk, "_bodyMoveScale");
+            Play(desk, "nod"); moves[0].Step(0.25);
+            Play(desk, "shiver"); moves[1].Step(0.125);
+            Play(desk, "bounce"); moves[2].Step(0.4);
+            Assert.False(moves[0].Token.IsCancellationRequested);
+            Assert.False(moves[1].Token.IsCancellationRequested);
+            Assert.Equal(4, shift.Y); Assert.Equal(2, shift.X); Assert.Equal(1.08, scale.ScaleX, 6);
+            moves[0].Step(1); // ending Y must not reset X or scale
+            Assert.Equal(0, shift.Y); Assert.Equal(2, shift.X); Assert.Equal(1.08, scale.ScaleX, 6);
+            Play(desk, "shiver"); Assert.True(moves[1].Token.IsCancellationRequested);
+            Assert.False(moves[2].Token.IsCancellationRequested);
+            moves[1].Step(0.125); Assert.Equal(-2, shift.X); // stale tick cannot overwrite the new X
+            Play(desk, "thud"); Assert.True(moves[2].Token.IsCancellationRequested);
+            Assert.False(moves[3].Token.IsCancellationRequested);
         }
         finally { desk.ShutDown(); }
         return Task.CompletedTask;

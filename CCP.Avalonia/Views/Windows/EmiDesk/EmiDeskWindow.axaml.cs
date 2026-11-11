@@ -909,7 +909,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             // ponytail: voice mood, prop teardown and pixel/art rendering still need their hosts.
             StopPatFeedback();
             CancelLandFace();
-            StopBodyMove();
             StopIdleBeats();
             _player.Play(chain, BuildHooks(done), bodyFrameOverride);
         }
