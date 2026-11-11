@@ -8,7 +8,7 @@ using ConditioningControlPanel.Services.Remix;
 namespace ConditioningControlPanel.Avalonia.Platform;
 
 // Disk boundaries for the future browser host. WPF: Services/Remix/JackpotRemixBuilder.cs:142,216.
-internal static class JackpotRemixBuilder
+internal sealed partial class JackpotRemixBuilder
 {
     internal const int MaxOutputBytes = 32 * 1024 * 1024;
 
