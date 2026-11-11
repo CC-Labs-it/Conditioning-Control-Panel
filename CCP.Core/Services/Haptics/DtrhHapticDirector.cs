@@ -132,6 +132,7 @@ namespace ConditioningControlPanel.Services.Haptics
         private static readonly object Gate = new();
         private static bool _active;          // host window alive (Launch..DisposeAll)
         private static bool _testMode;
+        private static bool _cancellableFarewell;
         private static bool _runActive;       // between run-started and run-ended
         private static bool _pageRunning;     // page state === 'running' (haptic-state feed)
         private static bool _worldFrozen;     // in-world Freeze bubble holds the real world
@@ -144,6 +145,7 @@ namespace ConditioningControlPanel.Services.Haptics
         private static DateTime _lastAmbientSendUtc = DateTime.MinValue;
 
         private static CancellationTokenSource? _accentCts;
+        private static CancellationTokenSource? _farewellCts;
         private static int _accentTierPlaying;              // 0 = idle
         private static DateTime _lastAccentEndUtc = DateTime.MinValue;
 
@@ -179,12 +181,13 @@ namespace ConditioningControlPanel.Services.Haptics
 
         // ============================ lifecycle (DtrhHostService taps) ============================
 
-        public static void OnLaunch(bool testMode)
+        public static void OnLaunch(bool testMode, bool cancellableFarewell = false)
         {
             lock (Gate)
             {
                 _active = true;
                 _testMode = testMode;
+                _cancellableFarewell = cancellableFarewell;
                 _runActive = false;
                 _pageRunning = false;
                 _worldFrozen = false;
@@ -204,6 +207,7 @@ namespace ConditioningControlPanel.Services.Haptics
             lock (Gate)
             {
                 wasActive = _active;
+                _farewellCts?.Cancel();
                 _active = false;
                 _runActive = false;
                 _pageRunning = false;
@@ -218,6 +222,7 @@ namespace ConditioningControlPanel.Services.Haptics
         {
             lock (Gate)
             {
+                _farewellCts?.Cancel();
                 _runActive = true;
                 _depth = 0; _melt = 0;
                 _lastAmbientSent = -1;
@@ -230,30 +235,53 @@ namespace ConditioningControlPanel.Services.Haptics
             _ = PlayAccent(new Accent(3, 0.50, VibrationMode.Wave, 800), "run-started");
         }
 
-        public static void OnRunEnded()
+        public static void OnRunEnded(bool playFarewell = true)
         {
-            bool notify;
             lock (Gate)
             {
-                notify = _runActive;
+                bool notify = _runActive;
                 _runActive = false;
                 _pageRunning = false;
                 _depth = 0; _melt = 0;
-            }
-            StopAmbientTimer();
-            CancelCoalesce();
-            _accentCts?.Cancel();
-            if (!notify || !Ready) { _ = SafeStopDevice(); return; }
-            // One soft farewell wave, then silence — the recap should feel like surfacing.
-            _ = Task.Run(async () =>
-            {
-                try
+                _farewellCts?.Cancel();
+                StopAmbientTimer();
+                CancelCoalesce();
+                _accentCts?.Cancel();
+                if (!playFarewell || !notify || !Ready) { _ = SafeStopDevice(); return; }
+                // Preserve the WPF caller's existing farewell; the Avalonia host opts into
+                // cancellation because it waits for a page response during panic.
+                if (!_cancellableFarewell)
                 {
-                    await PlayPattern(0.45, 600, VibrationMode.Wave, CancellationToken.None);
-                    await SafeStopDevice();
+                    _ = Task.Run(async () =>
+                    {
+                        try { await PlayPattern(0.45, 600, VibrationMode.Wave, CancellationToken.None); await SafeStopDevice(); }
+                        catch { }
+                    });
+                    return;
                 }
-                catch { }
-            });
+                // Start under Gate so close/panic cannot cancel before a queued task registers.
+                var cts = new CancellationTokenSource();
+                _farewellCts = cts;
+                _ = PlayFarewell(cts);
+            }
+        }
+
+        private static async Task PlayFarewell(CancellationTokenSource cts)
+        {
+            try { await PlayPattern(0.45, 600, VibrationMode.Wave, cts.Token); }
+            catch { }
+            finally
+            {
+                lock (Gate)
+                {
+                    if (_farewellCts == cts)
+                    {
+                        _farewellCts = null;
+                        if (!cts.IsCancellationRequested) _ = SafeStopDevice();
+                    }
+                    cts.Dispose();
+                }
+            }
         }
 
         public static void OnWorldFreeze(bool on)
