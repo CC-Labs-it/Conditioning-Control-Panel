@@ -80,7 +80,7 @@ public sealed class ChaosRunHostTests
     }
 
     [Fact]
-    public void Ripple_copy_exists_and_formats_in_every_language()
+    public Task Ripple_copy_exists_and_formats_in_every_language() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
         var previous = loc.CurrentLanguage;
@@ -94,7 +94,8 @@ public sealed class ChaosRunHostTests
             }
         }
         finally { loc.SetLanguage(previous); }
-    }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public async Task Ripple_gathers_only_during_an_active_unpaused_run()
