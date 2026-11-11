@@ -15,6 +15,8 @@ public static class BrowserPopupRule
         "ads.exoclick.com", "ero-advertising.com", "eroads.com", "traffichaus.com", "awempire.com", "aweptjmp.com", "contentabc.com", "malware-site.com", "adexchangegate.com", "adexchangetracker.com",
         "newrelic.com", "nr-data.net", "onetrust.com", "cookielaw.org", "trustarc.com", "evidon.com", "bounceexchange.com", "bouncex.net"
     };
+    internal static System.Collections.Generic.IReadOnlyList<string> BlockedDomains => Array.AsReadOnly(_blockedDomains);
+
     public static bool ShouldBlock(string? currentUrl, string targetUrl)
     {
         if (Uri.TryCreate(currentUrl, UriKind.Absolute, out var page)
