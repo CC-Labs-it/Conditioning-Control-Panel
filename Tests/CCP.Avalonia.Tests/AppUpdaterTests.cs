@@ -1,12 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
+using Avalonia.Media;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -143,10 +147,12 @@ public sealed class AppUpdaterTests
     [Fact]
     public async Task LauncherChipOffersOnceBeforeStartupAndFollowsLockdown()
     {
-        if (OperatingSystem.IsWindows()) Assert.Skip("Requires the Linux feed path.");
         await AvaloniaTestDispatcher.RunAsync(async () =>
         {
+            AppUpdater.CheckRequiresInstall = () => true;
+            AppUpdater.CheckIsInstalled = () => true;
             AppUpdater._offered = false;
+            CoreSettings.Current.OfflineMode = false;
             AppUpdater.Latest = null;
             AppUpdater.Handler = new FakeFeed();
             Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", "http://127.0.0.1:9/api");
@@ -189,6 +195,61 @@ public sealed class AppUpdaterTests
             }
         });
     }
+
+    [Fact]
+    public async Task UninstalledWindowsCheckStaysOffline()
+    {
+        var feed = new FakeFeed();
+        var oldApi = Environment.GetEnvironmentVariable("CCP_UPDATE_API_URL");
+        try
+        {
+            AppUpdater.CheckRequiresInstall = () => true;
+            AppUpdater.CheckIsInstalled = () => false;
+            AppUpdater.Handler = feed;
+            CoreSettings.Current.OfflineMode = false;
+            Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", "http://127.0.0.1:9/api");
+            Assert.Null(await AppUpdater.CheckAsync(force: true));
+            Assert.Empty(feed.Requests);
+        }
+        finally { AppUpdater.Handler = null; Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", oldApi); }
+    }
+
+    [Fact]
+    public void LauncherChipMotionUsesMatchingWpfCurves() => AvaloniaTestDispatcher.Run(() =>
+    {
+        CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+        CoreSettings.Current.GentleVisuals = false;
+        UiMotionPreference.OsProbe = () => true;
+        UiMotionPreference.CacheStamp = long.MinValue;
+        LockdownService.Current = null;
+        AppUpdater.Latest = null;
+        var launcher = new LauncherWindow();
+        try
+        {
+            launcher.Show();
+            var chip = launcher.FindControl<Button>("UpdateChip")!;
+            var scale = Assert.IsType<ScaleTransform>(chip.RenderTransform);
+            AppUpdater.Latest = new ConditioningControlPanel.Models.UpdateInfo { Version = "99.1.0", IsNewer = true };
+            var x = scale.Transitions!.OfType<DoubleTransition>().Single(t => t.Property == ScaleTransform.ScaleXProperty);
+            var y = scale.Transitions!.OfType<DoubleTransition>().Single(t => t.Property == ScaleTransform.ScaleYProperty);
+            Assert.Equal(TimeSpan.FromMilliseconds(240), x.Duration);
+            Assert.Equal(x.Duration, y.Duration);
+            var pop = Assert.IsType<ConditioningControlPanel.Avalonia.Theme.BackEaseOutAmplitude>(x.Easing);
+            Assert.Equal(0.4, pop.Amplitude);
+            Assert.Same(pop, y.Easing);
+            Assert.Equal(1 - (0.5 * 0.5 * 0.5 - 0.4 * 0.5 * Math.Sin(Math.PI * 0.5)), pop.Ease(0.5), 10);
+
+            AppUpdater.Latest = null;
+            x = scale.Transitions!.OfType<DoubleTransition>().Single(t => t.Property == ScaleTransform.ScaleXProperty);
+            y = scale.Transitions!.OfType<DoubleTransition>().Single(t => t.Property == ScaleTransform.ScaleYProperty);
+            Assert.Equal(TimeSpan.FromMilliseconds(160), x.Duration);
+            Assert.Equal(x.Duration, y.Duration);
+            Assert.IsType<QuadraticEaseIn>(x.Easing);
+            Assert.Same(x.Easing, y.Easing);
+            Assert.Equal(0.25, x.Easing.Ease(0.5), 10);
+        }
+        finally { launcher.Close(); }
+    });
 
     /// <summary>
     /// WPF ddc9dd047 on this head: a loopback server sends the installer's headers and 1000 bytes, then

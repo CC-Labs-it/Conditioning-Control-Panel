@@ -10,6 +10,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Theme;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Safety;
 
@@ -64,9 +65,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             UpdateChip.Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty,
                 Duration = TimeSpan.FromMilliseconds(ms), Easing = show ? new QuadraticEaseOut() : new QuadraticEaseIn() } };
             if (!gentle)
+            {
+                Easing ease = show ? new BackEaseOutAmplitude { Amplitude = 0.4 } : new QuadraticEaseIn();
+                var duration = TimeSpan.FromMilliseconds(show ? 240 : 160);
                 UpdateChipScale.Transitions = new Transitions {
-                    new DoubleTransition { Property = ScaleTransform.ScaleXProperty, Duration = TimeSpan.FromMilliseconds(show ? 240 : 160), Easing = show ? new BackEaseOut() : new QuadraticEaseIn() },
-                    new DoubleTransition { Property = ScaleTransform.ScaleYProperty, Duration = TimeSpan.FromMilliseconds(show ? 240 : 160) } };
+                    new DoubleTransition { Property = ScaleTransform.ScaleXProperty, Duration = duration, Easing = ease },
+                    new DoubleTransition { Property = ScaleTransform.ScaleYProperty, Duration = duration, Easing = ease } };
+            }
             UpdateChip.Opacity = show ? 1 : 0;
             UpdateChipScale.ScaleX = UpdateChipScale.ScaleY = show || gentle ? 1 : 0.9;
             if (!show)

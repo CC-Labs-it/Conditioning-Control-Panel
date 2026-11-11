@@ -49,6 +49,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
             set { _latest = value; LatestChanged?.Invoke(); }
         }
         internal static bool _offered;
+        // Override only the check eligibility in tests; installation still uses the real OS.
+        internal static Func<bool> CheckRequiresInstall = OperatingSystem.IsWindows;
+        internal static Func<bool> CheckIsInstalled = () =>
+            ReleaseFeed.InnoInstallDirOf(Environment.ProcessPath) is not null || RegistryInstallPath() is not null;
         private static bool _busy;
         private static bool _offering;
 
@@ -95,7 +99,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 return null;
             }
             // Only installed users can self-update on Windows (UpdateService.cs:316); Linux notifies.
-            if (OperatingSystem.IsWindows() && ReleaseFeed.InnoInstallDirOf(Environment.ProcessPath) is null && RegistryInstallPath() is null)
+            if (CheckRequiresInstall() && !CheckIsInstalled())
             {
                 Log.Information("App not installed via installer (running from source/dev), skipping update check");
                 return null;
