@@ -118,11 +118,11 @@ internal sealed class KeywordAudioRuntime
     private readonly KeywordTextInput _input = new();
     private readonly KeywordCooldowns _cooldowns = new();
     private readonly SemaphoreSlim _durationGate = new(1, 1);
-    private readonly SemaphoreSlim _clipGate = new(1, 1);
     private CancellationTokenSource _audio = new();
     private Action? _stop;
     internal Func<DateTime> Now = () => DateTime.Now;
     internal Func<int, CancellationToken, Task> Delay = Task.Delay;
+    internal Func<long> Clock = () => Environment.TickCount64;
     internal Func<string, CancellationToken, Task<double?>>? DurationProbe;
     internal bool IsActive { get; private set; }
     internal void Start() { IsActive = true; _input.Clear(); }
@@ -249,10 +249,12 @@ internal sealed class KeywordAudioRuntime
             }
             if (ducked)
             {
-                // WPF :1383-1387 waits the longest clip duration plus 500ms after dispatch.
+                // WPF :1383-1387 waits the longest length plus 500ms from dispatch end; parse time counts.
+                var dispatched = Clock();
                 var lengths = await Task.WhenAll(durations).WaitAsync(cancellation);
                 var longest = lengths.Length == 0 ? 0 : lengths.Max(d => d.TotalMilliseconds);
-                await Delay((int)Math.Min(int.MaxValue, Math.Ceiling(longest + 500)), cancellation);
+                var wait = Math.Ceiling(longest + 500 - (Clock() - dispatched));
+                if (wait > 0) await Delay((int)Math.Min(int.MaxValue, wait), cancellation);
                 cancellation.ThrowIfCancellationRequested();
             }
         }
@@ -347,21 +349,16 @@ internal sealed class KeywordAudioRuntime
         for (var i = 0; i < count; i++)
         {
             if (i > 0 && audio.DelayBetweenMs > 0) await Delay(audio.DelayBetweenMs, cancellation);
-            await _clipGate.WaitAsync(cancellation);
-            try
-            {
-                cancellation.ThrowIfCancellationRequested();
-                // WPF :1863-1865 replaces only the clip, not another dispatch's pending actions.
-                StopClip();
-                var clip = timing = new TaskCompletionSource<TimeSpan>(TaskCreationOptions.RunContinuationsAsynchronously);
-                var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                _ = Settle(clip, probe, finished.Task);
-                _stop = CoreAudio.PlayStoppable(path,
-                    KeywordMatchRules.AudioVolume(audio.Volume, CoreSettings.Current.MasterVolume), "keyword-trigger",
-                    onStarted: duration => { if (duration > TimeSpan.Zero) clip.TrySetResult(duration); },
-                    onFinished: () => finished.TrySetResult());
-            }
-            finally { _clipGate.Release(); }
+            cancellation.ThrowIfCancellationRequested();
+            // WPF :1863-1865 replaces only the clip, not another dispatch's pending actions.
+            StopClip();
+            var clip = timing = new TaskCompletionSource<TimeSpan>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _ = Settle(clip, probe, finished.Task);
+            _stop = CoreAudio.PlayStoppable(path,
+                KeywordMatchRules.AudioVolume(audio.Volume, CoreSettings.Current.MasterVolume), "keyword-trigger",
+                onStarted: duration => { if (duration > TimeSpan.Zero) clip.TrySetResult(duration); },
+                onFinished: () => finished.TrySetResult());
         }
         return timing?.Task;
     }

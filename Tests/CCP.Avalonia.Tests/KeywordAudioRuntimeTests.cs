@@ -55,6 +55,7 @@ public sealed class KeywordAudioRuntimeTests
             (CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider) = (_ => { }, _ => { }, () => 41);
             CoreAudio.PlayStoppableProvider = (path, volume, _, started, _) => { played.Add((path, volume)); started?.Invoke(TimeSpan.FromSeconds(1)); return () => played.Add(("stopped", 0)); };
             engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 0);
+            engine.Clock = () => 0;
             engine.Start();
             await body(engine, s, played);
         }
@@ -375,6 +376,18 @@ public sealed class KeywordAudioRuntimeTests
         lock (delays) Assert.Equal(new[] { 900, 10500 }, delays.OrderBy(d => d));
         Assert.False(unducked.Task.IsCompleted);
         release.SetResult(); await unducked.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    });
+
+    [Theory, InlineData(3000, 7500), InlineData(12000, -1)]   // WPF :1383-1387 times the release from dispatch end.
+    public Task SlowLengthParseCountsAgainstTheDuckRelease(long parseMs, int expected) => RunAsync(async (engine, s, _) =>
+    {
+        var probe = new TaskCompletionSource<double?>(); var delays = new List<int>(); var unducked = new TaskCompletionSource(); long clock = 0;
+        s.AudioDuckingEnabled = true; ((PlayAudioAction)s.KeywordTriggers[0].Actions[0]).DuckSystemAudio = true;
+        (engine.Clock, engine.DurationProbe) = (() => clock, (_, _) => probe.Task);
+        engine.Delay = (ms, _) => { delays.Add(ms); return Task.CompletedTask; };
+        (CoreAudio.UnduckProvider, CoreAudio.PlayStoppableProvider) = (_ => unducked.TrySetResult(), (_, _, _, _, f) => () => f?.Invoke());
+        Type(engine, "sit"); clock = parseMs; probe.SetResult(10);
+        await unducked.Task.WaitAsync(TimeSpan.FromSeconds(5)); Assert.Equal(expected < 0 ? Array.Empty<int>() : new[] { expected }, delays);
     });
 
     [Theory]
