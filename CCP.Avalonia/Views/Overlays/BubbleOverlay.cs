@@ -50,6 +50,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         };
         private static readonly List<BubbleOverlayWindow> Windows = new();
         private static readonly List<Screen> Targets = new();
+        static BubbleOverlay()
+        {
+            Field.ChaosEscortShimmer = escort =>
+            {
+                var target = escort.OrbitTarget!;
+                double t = Field.Random.NextDouble();
+                double scale = escort.Screen >= 0 && escort.Screen < Windows.Count ? Windows[escort.Screen].Scaling : 1;
+                var point = new Point((escort.CenterX + (target.CenterX - escort.CenterX) * t) * scale,
+                    (escort.CenterY + (target.CenterY - escort.CenterY) * t) * scale);
+                if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.TrailDot(point, 0.35);
+                else ChaosFieldFxOverlay.TrailDot(point, 0.35);
+            };
+            Field.ChaosShieldBounce = (_, cue) =>
+            {
+            if (!cue) return;
+            string name = File.Exists(ChaosCuePath("shield_thunk")) ? "shield_thunk" : "toy_denied";
+            if (File.Exists(ChaosCuePath(name))) PlayChaosCue(name, 0.45f);
+            };
+        }
         private static DispatcherTimer? _spawnTimer;
         private static bool _running;
         private static TimeSpan? _lastStep;
@@ -359,13 +378,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return b;
         }
 
+        internal static (AmbientBubble Live, AmbientBubble Escort) SpawnChaperone(Services.Chaos.EffectBubbleSpec liveSpec, Services.Chaos.EffectBubbleSpec escortSpec)
+        {
+            var live = SpawnChaos(liveSpec);
+            int i = live.Screen;
+            var area = Targets.Count == 0 ? new PixelRect(0, 0, 1920, 1080) : Targets[i].WorkingArea;
+            double scale = Targets.Count == 0 ? 1 : Windows[i].Scaling;
+            var escort = AmbientBubble.SpawnChaos(Field.Random, i, area.X, area.Y, area.Width, area.Height, scale, escortSpec);
+            live.AttachChaperone(escort, area.X / scale, area.Y / scale, area.Width / scale, area.Height / scale, Field.Random);
+            Field.Bubbles.Add(escort);
+            RequestFrame();
+            return (live, escort);
+        }
+
         /// <summary>WPF Bubble.Pop with a spec: anchor the pop point, start the burst, hand it to the run.</summary>
         internal static void PopChaos(AmbientBubble b)
         {
             if (b.Popping || b.Spec == null || Field.HoldChaos) return;   // held: the click is swallowed
             // WPF BubbleService.cs:4645-4669: instant pops preserve touch-only and escort immunity.
             if (b.Spec.IsTease || b.Spec.IsBrittle) return;
-            if (Field.IsChaperoneShielded(b)) return;
+            if (Field.BounceIfShielded(b)) return;
             if (b.IsLiveThreat)
             {
                 if (!b.Snap()) return;
@@ -406,7 +438,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (!rect.Intersects(new Rect(b.X, b.Y, b.Size, b.Size))) continue;
                 if (b.IsLiveThreat)
                 {
-                    if (!Field.IsChaperoneShielded(b) && b.Snap()) { Field.ChaosDefused?.Invoke(b); RequestFrame(); }
+                    if (!Field.BounceIfShielded(b) && b.Snap()) { Field.ChaosDefused?.Invoke(b); RequestFrame(); }
                 }
                 else PopChaos(b);
             }
@@ -687,6 +719,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         }
                         if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
                         else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                        if (BubbleOverlay.Field.IsChaperoneShielded(b))
+                        {
+                            double alpha = b.ShieldOpacity;
+                            var ring = new Pen(new SolidColorBrush(Color.FromArgb((byte)(alpha * 255), 0x9C, 0xE8, 0xFF)), 3.5 * k,
+                                new DashStyle(new double[] { 3, 2 }, 0));
+                            dc.DrawEllipse(null, ring, new Point(cx, cy), (size + 12 * k) / 2, (size + 12 * k) / 2);
+                        }
                         if (b.FuseTotalMs > 0 && !b.Popping)   // WPF fuse ring: shrinks 1 -> 0.45; yellow, flash, red brink
                         {
                             double rr = (size / 2 - 2) * (0.45 + 0.55 * b.FuseFraction);

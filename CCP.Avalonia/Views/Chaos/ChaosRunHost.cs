@@ -40,7 +40,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///
     /// <para>ponytail: still NOT here: the freeze pickup, darters, the Brittle,
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
-    /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns treats and plain live variants; every
+    /// (Echo/Bound/Tease) - SpawnTick also spawns Chaperone pairs; every
     /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips,
     /// treat lessons, the announcer and the achievement credit; slow-mo,
     /// freeze hold and the perf backoff on the cadence; only the Gif Rain payload fires; the
@@ -195,6 +195,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             double effIntensity = ChaosFieldMath.EffectiveIntensity(intensity, cfg.DifficultyMult);
             if (BubbleOverlay.ChaosCount < ChaosFieldMath.MaxConcurrent(intensity, cfg.DifficultyMult))
             {
+                if (!TrySpawnChaperone(cfg, effIntensity))
+                {
                 // Treats and plain lives; the freeze pickup waits for its lane (see the ponytail note).
                 IReadOnlyCollection<string> enabled = (cfg.EnabledVariants ?? ChaosBubbleVariants.AllIds())
                     .Where(id => ChaosBubbleVariants.All.Any(v => v.Id == id
@@ -224,6 +226,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     ChaosMeta.MarkDiscovered("bubble:prism");
                     BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildPrism(effIntensity, cfg.EffectIntensity,
                         treatOnly: _state.PrismTreatOnly));
+                }
                 }
             }
             if (_spawnTimer != null)

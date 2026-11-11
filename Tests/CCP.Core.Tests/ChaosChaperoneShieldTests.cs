@@ -36,6 +36,30 @@ public class ChaosChaperoneShieldTests
     }
 
     [Fact]
+    public void Bounce_flashes_and_throttles_cues()
+    {
+        var (field, live, _) = Pair();
+        var now = System.DateTime.UnixEpoch;
+        field.Clock = () => now;
+        int cues = 0;
+        field.ChaosShieldBounce = (_, cue) => { if (cue) cues++; };
+        field.PressLive(live, true, 0, 0);
+        Assert.Equal(320, live.ShieldFlashMs);
+        Assert.Equal(1, cues);
+        now = now.AddMilliseconds(199);
+        field.PressLive(live, true, 0, 0);
+        Assert.Equal(1, cues);
+        now = now.AddMilliseconds(1);
+        field.DefuseAllLive();
+        Assert.Equal(2, cues);
+        for (int i = 0; i < 10; i++) field.Step();
+        Assert.Equal(0, live.ShieldFlashMs);
+        live.Popping = true;
+        field.DefuseAllLive();
+        Assert.Equal(2, cues);
+    }
+
+    [Fact]
     public void Sweep_bounces_until_escort_pops_or_leaves_field()
     {
         var (field, live, escort) = Pair();

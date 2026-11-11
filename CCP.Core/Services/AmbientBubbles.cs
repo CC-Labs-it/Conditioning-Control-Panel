@@ -87,6 +87,56 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>The linked shield-bearer (WPF BubbleService.cs:2708-2709,2730).</summary>
         public AmbientBubble? Escort { get; set; }
+        public double ShieldFlashMs { get; private set; }
+        public double ShieldOpacity => ShieldFlashMs > 0 ? 0.95 : 0.45 + 0.10 * Math.Sin(_timeAlive * 4);
+        private DateTime? _lastShieldCue;
+        public AmbientBubble? OrbitTarget { get; private set; }
+        private double _orbitSeconds, _roamLeft, _roamRight, _roamTop, _roamBottom, _vx, _vy;
+        private int _shimmerSteps;
+        private bool _roaming;
+        public static double EscortRadius(double liveSize, double escortSize) => Math.Max(
+            Chaos.ChaosTuning.CHAPERONE_ORBIT_RADIUS_DIP,
+            (liveSize + escortSize) / 2 + Chaos.ChaosTuning.CHAPERONE_ORBIT_GAP_DIP);
+
+        public void AttachChaperone(AmbientBubble escort, double left, double top, double width, double height, Random random)
+        {
+            Escort = escort;
+            escort.OrbitTarget = this;
+            double overhang = EscortRadius(Size, escort.Size) + escort.Size / 2;
+            _roamLeft = left + overhang - Size / 2;
+            _roamRight = Math.Max(_roamLeft, left + width - overhang - Size / 2);
+            _roamTop = top + overhang - Size / 2;
+            _roamBottom = Math.Max(_roamTop, top + height - overhang - Size / 2);
+            X = _roamLeft + random.NextDouble() * (_roamRight - _roamLeft);
+            Y = _roamTop + random.NextDouble() * (_roamBottom - _roamTop);
+            double angle = random.NextDouble() * Math.PI * 2;
+            _vx = Math.Cos(angle) * _speed * 1.4;
+            _vy = Math.Sin(angle) * _speed * 1.4;
+            _roaming = true;
+            escort.PlaceOrbit();
+        }
+        private void PlaceOrbit()
+        {
+            var target = OrbitTarget!;
+            double radius = EscortRadius(target.Size, Size);
+            double angle = 2 * Math.PI * _orbitSeconds / Chaos.ChaosTuning.CHAPERONE_ORBIT_PERIOD_SEC;
+            X = target.CenterX + Math.Cos(angle) * radius - Size / 2;
+            Y = target.CenterY + Math.Sin(angle) * radius - Size / 2;
+        }
+        internal bool StepOrbit(bool targetPresent)
+        {
+            if (!targetPresent || OrbitTarget!.Popping) { Popping = true; Deflating = true; return false; }
+            _orbitSeconds += 0.032;
+            PlaceOrbit();
+            return ++_shimmerSteps % 7 == 0;
+        }
+        internal bool BounceShield(DateTime now)
+        {
+            ShieldFlashMs = 320;
+            if (_lastShieldCue is { } last && (now - last).TotalMilliseconds < 200) return false;
+            _lastShieldCue = now;
+            return true;
+        }
         /// <summary>A live threat the player defuses by holding (WPF NeedsHoldDefuse for the plain lives).</summary>
         public bool IsLiveThreat => Spec is { IsLive: true, IsDarter: false, IsFreeze: false };
         public double FuseSecLeft => Math.Max(0, FuseRemainingMs) / 1000.0;
@@ -269,6 +319,7 @@ namespace ConditioningControlPanel.Services
         /// running defuse channel; a channel pins the bubble and pauses the fuse (WPF :3796).</summary>
         public Result Step(bool held = false, double cursorX = 0, double cursorY = 0, DateTime nowUtc = default)
         {
+            ShieldFlashMs = Math.Max(0, ShieldFlashMs - FuseStepMs);
             if (Popping)
             {
                 // Pop animation - expand and fade; lucky pops linger ~50% longer.
@@ -292,6 +343,15 @@ namespace ConditioningControlPanel.Services
                 case 1: offset = Math.Sin(_timeAlive * 7.5) * 30; Angle = (Angle + 0.14) % 360; break;
                 case 2: offset = Math.Cos(_timeAlive * 5.4) * 25; Angle = (Angle - 0.66) % 360; break;
                 case 3: offset = Math.Sin(_timeAlive * 3) * 30 + Math.Cos(_timeAlive * 6) * 15; Angle = (Angle + 0.54) % 360; break;
+            }
+            if (_roaming)
+            {
+                X += _vx; Y += _vy;
+                if (X < _roamLeft) { X = _roamLeft; _vx = Math.Abs(_vx); }
+                if (X > _roamRight) { X = _roamRight; _vx = -Math.Abs(_vx); }
+                if (Y < _roamTop) { Y = _roamTop; _vy = Math.Abs(_vy); }
+                if (Y > _roamBottom) { Y = _roamBottom; _vy = -Math.Abs(_vy); }
+                return Result.Alive;
             }
             switch (Motion)
             {
@@ -354,14 +414,24 @@ namespace ConditioningControlPanel.Services
         /// <summary>A live chaos bubble was snapped (held to the end, or swept).</summary>
         public Action<AmbientBubble>? ChaosDefused;
 
+        public Action<AmbientBubble>? ChaosEscortShimmer;
+        public Action<AmbientBubble, bool>? ChaosShieldBounce;
+        public bool BounceIfShielded(AmbientBubble b)
+        {
+            if (!IsChaperoneShielded(b)) return false;
+            bool cue = b.BounceShield(Clock());
+            ChaosShieldBounce?.Invoke(b, cue);
+            return true;
+        }
+
         /// <summary>WPF BubbleService.cs:2708: an active escort shields its live partner.</summary>
         public bool IsChaperoneShielded(AmbientBubble b) =>
-            b.Spec?.IsChaperoneLive == true && b.Escort is { Popping: false } escort && Bubbles.Contains(escort);
+            !b.Popping && b.Spec?.IsChaperoneLive == true && b.Escort is { Popping: false } escort && Bubbles.Contains(escort);
 
         /// <summary>A press on a live bubble (WPF OnPlayerPress): starts its channel, or sets it off.</summary>
         public void PressLive(AmbientBubble b, bool canChannel, double cursorX, double cursorY)
         {
-            if (HoldChaos || IsChaperoneShielded(b)) return;   // pause and escort swallow the press
+            if (HoldChaos || BounceIfShielded(b)) return;
             Held = true; CursorX = cursorX; CursorY = cursorY;
             if (b.Press(canChannel, Clock()) == AmbientBubble.Result.Detonated) ChaosDetonated?.Invoke(b);
         }
@@ -370,7 +440,7 @@ namespace ConditioningControlPanel.Services
         public void DefuseAllLive()
         {
             foreach (var b in Bubbles.ToArray())
-                if (!IsChaperoneShielded(b) && b.Snap()) ChaosDefused?.Invoke(b);
+                if (!BounceIfShielded(b) && b.Snap()) ChaosDefused?.Invoke(b);
         }
 
         public bool CanSpawn(AppSettings s) => Bubbles.Count < Cap(s);
@@ -411,12 +481,20 @@ namespace ConditioningControlPanel.Services
                 if (i >= Bubbles.Count) continue;   // a callback cleared the field
                 var b = Bubbles[i];
                 if (HoldChaos && b.Spec != null && !b.Popping) { b.CancelChannel(); continue; }
+                if (b.OrbitTarget != null && !b.Popping) continue;
                 var r = b.Step(Held, CursorX, CursorY, now);
                 if (r == AmbientBubble.Result.Alive) continue;
                 if (r == AmbientBubble.Result.Detonated) { ChaosDetonated?.Invoke(b); continue; }
                 if (r == AmbientBubble.Result.Defused) { ChaosDefused?.Invoke(b); continue; }
                 if (r == AmbientBubble.Result.Missed) missed++;
                 Bubbles.RemoveAt(i);
+            }
+            for (var i = Bubbles.Count - 1; i >= 0; i--)
+            {
+                if (i >= Bubbles.Count) continue;
+                var b = Bubbles[i];
+                if (b.OrbitTarget == null || b.Popping || HoldChaos) continue;
+                if (b.StepOrbit(Bubbles.Contains(b.OrbitTarget))) ChaosEscortShimmer?.Invoke(b);
             }
             return missed;
         }
