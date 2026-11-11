@@ -299,6 +299,13 @@ internal static class X11Overlay
         }
     }
 
+    // Re-stack an existing window without changing its native styles or taking focus.
+    internal static bool RaiseWithoutActivation(TopLevel window)
+    {
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd)) return Win32Overlay.SetStacking(hwnd, true);
+        return Raise(window);
+    }
+
     /// <summary>Explicit subliminal focus opt-in, after Show. Windows removes NOACTIVATE while
     /// preserving click-through; X11 override-redirect windows bypass the WM so need a direct
     /// focus request (PointerRoot on removal, CurrentTime). Headless/native Wayland return false.</summary>

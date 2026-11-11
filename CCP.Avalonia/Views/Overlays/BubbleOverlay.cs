@@ -69,6 +69,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     new PixelPoint((int)to.X, (int)to.Y)) });
             });
         private static readonly List<BubbleOverlayWindow> Windows = new();
+        internal static IReadOnlyList<BubbleOverlayWindow> GameWindows => Windows;
         private static readonly List<Screen> Targets = new();
         private static DispatcherTimer? _spawnTimer;
         private static bool _running;
