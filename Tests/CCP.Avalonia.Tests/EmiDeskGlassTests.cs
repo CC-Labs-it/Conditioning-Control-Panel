@@ -64,6 +64,8 @@ public class EmiDeskGlassTests
             desk.AdvanceGlass(flip.AddMilliseconds(10_220));
             Assert.False(desk.GlassIsLive);
             Assert.Empty(desk.GlassHost.Children);
+            Assert.True(EmiLineEngine.Instance.HoldActive);
+            Assert.Empty(desk.BubbleHost.Children);
             toggle.IsChecked = false;
             Assert.False(CoreSettings.Current.EmiDeskGlass);
             desk.PollGlass(DateTime.UtcNow.AddSeconds(61));
@@ -79,7 +81,7 @@ public class EmiDeskGlassTests
     });
 
     [Fact]
-    public Task GlassRunsOnTheSharedBeatAndStopsWhenClosed() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task GlassRunsOnTheSharedBeatAndStopsWhenClosed() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         AmbientBeatLoopsTests.Setup();
         var old = CoreSettings.ServiceProvider;
@@ -120,6 +122,7 @@ public class EmiDeskGlassTests
             time.Advance(TimeSpan.FromMilliseconds(1)); BeatLoop.StepAll();
             Assert.False(desk.GlassIsLive);
             Assert.DoesNotContain(BeatLoop.Running, loop => loop.Owner == desk);
+            await Task.Delay(1600); // effectDeclined holds the face before another flip.
             desk.PollGlass(DateTime.UtcNow.AddSeconds(61));
             Assert.Contains(BeatLoop.Running, loop => loop.Owner == desk);
             desk.Hide(); Dispatcher.UIThread.RunJobs();
@@ -133,7 +136,6 @@ public class EmiDeskGlassTests
             EmiState.Current.BedtimeUntil = savedBedtime;
             CoreSettings.ServiceProvider = old;
         }
-        return Task.CompletedTask;
     });
 
     // WPF Glass.cs:174-185/256-278 and Presentation.cs:23: activity and competing work take precedence.

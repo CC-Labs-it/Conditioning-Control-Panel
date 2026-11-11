@@ -141,7 +141,14 @@ public partial class EmiDeskWindow
             PaintOffAir();
             return;
         }
-        if (elapsed >= 10_000) { CloseGlass(); return; } // WPF EmiChannels.cs:58-59
+        if (elapsed >= 10_000)
+        {
+            CloseGlass();
+            // WPF Glass.cs:467-477: an untouched channel ends in a wordless hold.
+            var line = EmiLineEngine.Instance.Draw("effectDeclined", new System.Collections.Generic.Dictionary<string, object?> { ["channel"] = "offair" });
+            if (line != null) HoldFace(line);
+            return;
+        }
         if (_glassMotion && _glassSignal != null && _glassDim != null)
         {
             Canvas.SetLeft(_glassSignal, (10 + (int)(elapsed / 1000) % 6 * 4) * _glassScale);
