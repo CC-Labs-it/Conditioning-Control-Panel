@@ -309,6 +309,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         private async void BtnPatreonLogin_Click(object? sender, RoutedEventArgs e) => await Guard(ProviderClickAsync("patreon", Find<Button>("BtnPatreonLogin"), "TxtBtnPatreonLogin"));
         private async void BtnSubscribeStarLogin_Click(object? sender, RoutedEventArgs e) => await Guard(ProviderClickAsync("substar", Find<Button>("BtnSubscribeStarLogin"), "TxtBtnSubscribeStarLogin"));
         private async void BtnDiscordLogin_Click(object? sender, RoutedEventArgs e) => await Guard(ProviderClickAsync("discord", Find<Button>("BtnDiscordLogin"), "TxtBtnDiscordLogin"));
+        internal Func<Task>? ReconnectPatreonOverride;
+        internal Task ReconnectPatreonAsync() => ReconnectPatreonOverride?.Invoke()
+            ?? Guard(LinkAsync("patreon", Find<Button>("BtnLinkPatreon"), "TxtBtnLinkPatreon"));
+
         private async void BtnLinkPatreon_Click(object? sender, RoutedEventArgs e) => await Guard(LinkAsync("patreon", Find<Button>("BtnLinkPatreon"), "TxtBtnLinkPatreon"));
         private async void BtnLinkDiscord_Click(object? sender, RoutedEventArgs e) => await Guard(LinkAsync("discord", Find<Button>("BtnLinkDiscord"), "TxtBtnLinkDiscord"));
 
