@@ -7,6 +7,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.VisualTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -67,6 +70,63 @@ public sealed class LobbyPageTests
                 Assert.True(pill.Template is not null, name + " has no Template");
                 Assert.True(pill.Bounds.Width > 0 && pill.Bounds.Height > 0, name + " has zero size " + pill.Bounds);
             }
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
+    public void LobbyPillShowsGlassSheenAndPressTravel() => Run(() =>
+    {
+        var page = new AvailableSubjectsTabView();
+        var window = new Window { Width = 900, Height = 700, Content = page };
+        window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            page.SetNarrow(true);
+            window.UpdateLayout();
+            HeadlessInput.RenderLiveTree(window);
+            var pill = Named<Button>(page, "TabOpen");
+            var parts = pill.GetVisualDescendants().OfType<Control>().ToList();
+            var face = parts.OfType<Border>().Single(x => x.Name == "bd");
+            var sheen = parts.OfType<Border>().Single(x => x.Name == "sheen");
+            var root = parts.OfType<Grid>().Single(x => x.Name == "pillRoot");
+            Assert.IsAssignableFrom<ILinearGradientBrush>(face.Background);
+            Assert.IsAssignableFrom<ILinearGradientBrush>(face.BorderBrush);
+            Assert.Equal(0, sheen.Opacity);
+            var at = pill.TranslatePoint(new Point(pill.Bounds.Width / 2, pill.Bounds.Height / 2), window)!.Value;
+            window.MouseMove(at);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, sheen.Opacity);
+            window.MouseDown(at, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, Assert.IsType<TranslateTransform>(root.RenderTransform).Y);
+            window.MouseMove(new Point(1, 1), RawInputModifiers.LeftMouseButton);
+            window.MouseUp(new Point(1, 1), MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, sheen.Opacity);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
+    public void LobbyRowTitleUsesFredokaAtFifteen() => Run(() =>
+    {
+        var page = new AvailableSubjectsTabView();
+        var row = new LobbyRow { Game = LobbyGame.Race, Key = "aaaaaaaaaaaa", HostName = "Host" };
+        var window = new Window { Width = 900, Height = 700, Content = page };
+        window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            page.PaintSnapshot(new LobbySnapshot(new[] { row }, Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true), LobbyGates.From(true, false, false));
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            var card = Named<ItemsControl>(page, "AvailableSubjectsList").ContainerFromIndex(0)!;
+            var title = card.GetVisualDescendants().OfType<TextBlock>().First(x => x.Text == ((LobbyCardView)card.DataContext!).Title);
+            Assert.Equal(15, title.FontSize);
+            Assert.Contains("Fredoka", title.FontFamily.Name);
         }
         finally { window.Close(); }
     });
