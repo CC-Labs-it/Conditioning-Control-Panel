@@ -3,7 +3,7 @@
 // each opens inline in the card, over IFriendsService.
 // The action buttons carry WPF's MDL2 glyphs as Fluent icons (E8A7/E7C9/E714, fluent-icons 2026-10-10).
 // WPF FriendsDrawer.cs:714,1144: action click and send-result cues.
-// ponytail: no Pop() juice (.Juice.cs). The Goon tile stays shut here: GoonHostService is WPF-only, so this head
+// The Goon tile stays shut here: GoonHostService is WPF-only, so this head
 // cannot open a Goon room. Chess challenges use the shared game host.
 using System;
 using System.Collections.Generic;
@@ -70,7 +70,7 @@ public sealed partial class FriendsDrawer
             // WPF hover: pink pill, dark ink (Fluent reads these per button on :pointerover / :pressed).
             foreach (var state in new[] { "PointerOver", "Pressed" })
                 (chip.Resources["ButtonBackground" + state], chip.Resources["ButtonForeground" + state], chip.Resources["ButtonBorderBrush" + state]) = (Pink, PokeInk, Pink);
-            chip.Click += async (_, _) => await PokeAsync(f.Id, id);
+            chip.Click += async (_, _) => { PlayLinkFx(chip, false, Pink); await PokeAsync(f.Id, id); };
             wrap.Children.Add(chip);
         }
         return wrap;
@@ -107,6 +107,7 @@ public sealed partial class FriendsDrawer
             }
             tile.Click += async (_, _) =>
             {
+                PlayLinkFx(tile, false, Lilac);
                 if (id == InviteDestination.Goon) await InviteAsync(f.Id, id, FriendsInviteCodes.GoonCode());
                 else if (id == InviteDestination.Chess) await InviteToChessAsync(f.Id);
                 else await InviteAsync(f.Id, id, null);
@@ -201,7 +202,7 @@ public sealed partial class FriendsDrawer
             {
                 var title = Loc.Get("friends_flavour_" + fl);
                 var chip = Chip(title, "friends-flavour:" + fl);
-                chip.Click += async (_, _) => await SendWatchAsync(f.Id, new WatchRef(WatchKind.Flavour, fl, title));
+                chip.Click += async (_, _) => { PlayLinkFx(chip, false, Gold); await SendWatchAsync(f.Id, new WatchRef(WatchKind.Flavour, fl, title)); };
                 wrap.Children.Add(chip);
             }
             sp.Children.Add(wrap);
@@ -218,7 +219,7 @@ public sealed partial class FriendsDrawer
         {
             var b = Pill(title, ButtonBg, Text, "friends-catalogue:" + id, Line2);
             (b.Margin, b.HorizontalAlignment, b.HorizontalContentAlignment) = (new Thickness(0, 0, 0, 4), HorizontalAlignment.Stretch, HorizontalAlignment.Left);
-            b.Click += async (_, _) => await SendWatchAsync(f.Id, new WatchRef(WatchKind.Catalogue, id, title));
+            b.Click += async (_, _) => { PlayLinkFx(b, false, Gold); await SendWatchAsync(f.Id, new WatchRef(WatchKind.Catalogue, id, title)); };
             sp.Children.Add(b);
         }
         return sp;
@@ -246,7 +247,9 @@ public sealed partial class FriendsDrawer
         send.Click += async (_, _) =>
         {
             var id = FriendsDrawerRules.NormaliseHtId(box.Text);
-            if (id.Length > 0) await SendWatchAsync(f.Id, new WatchRef(WatchKind.Ht, id, null));
+            if (id.Length == 0) return;
+            PlayLinkFx(send, false, Gold);
+            await SendWatchAsync(f.Id, new WatchRef(WatchKind.Ht, id, null));
         };
         Grid.SetColumn(send, 1);
         g.Children.Add(box);
