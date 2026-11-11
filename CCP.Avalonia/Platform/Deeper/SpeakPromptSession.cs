@@ -19,12 +19,14 @@ internal sealed class SpeakPromptSession
     private readonly Func<string, CancellationToken, Task<PhraseResult>> _listen;
     private readonly Action<string> _show;
     private readonly Action _hide;
+    private readonly Action<string, bool> _feedback;
     private readonly CancellationTokenSource _stop = new();
     private bool _started;
 
     internal SpeakPromptSession(TriggerEffectAction effect, IPlaybackTimeSource? source,
         Func<bool> available, Func<Task<bool>> consent, Func<bool> borrowMic, Action restoreMic,
-        Func<string, CancellationToken, Task<PhraseResult>> listen, Action<string> show, Action hide)
+        Func<string, CancellationToken, Task<PhraseResult>> listen, Action<string> show, Action hide,
+        Action<string, bool>? feedback = null)
     {
         _plan = new SpeakPromptPlan(effect, DateTime.UtcNow);
         _source = source;
@@ -35,6 +37,25 @@ internal sealed class SpeakPromptSession
         _listen = listen;
         _show = show;
         _hide = hide;
+        _feedback = feedback ?? Feedback;
+    }
+
+    private static void Feedback(string text, bool correct)
+    {
+        try
+        {
+            var sanitized = text.Trim();
+            if (sanitized.Length > 200) sanitized = sanitized.Substring(0, 200);
+            sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, "<[^>]*>", "");
+            if (!string.IsNullOrWhiteSpace(sanitized))
+            {
+                Views.Overlays.SubliminalWhisperShow.Draw(sanitized);
+                CoreProgression.AddXP(10, "Subliminal");
+            }
+        }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "Speak feedback flash failed"); }
+        try { if (correct) Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(text, playSound: false, aiGenerated: false); }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "Speak feedback avatar failed"); }
     }
 
     // Stop also works while the consent dialog is open. No side effects follow a stopped dialog.
@@ -84,7 +105,16 @@ internal sealed class SpeakPromptSession
                 ct.ThrowIfCancellationRequested();
                 switch (SpeakPromptPlan.Classify(result))
                 {
-                    case SpeakHeard.Correct: reps++; unavailable = 0; break;
+                    case SpeakHeard.Correct:
+                        reps++; unavailable = 0;
+                        _feedback(_plan.CorrectMessage, true);
+                        if (reps < _plan.RequiredReps) await Task.Delay(600, ct);
+                        break;
+                    case SpeakHeard.Incorrect:
+                        unavailable = 0;
+                        _feedback(_plan.IncorrectMessage, false);
+                        await Task.Delay(700, ct);
+                        break;
                     case SpeakHeard.Retry:
                         await Task.Delay(200, ct);
                         break;

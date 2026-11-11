@@ -176,4 +176,31 @@ public class SpeakPromptSessionTests
         Assert.Equal(1, source.Plays);
     }
 
+    [Theory]
+    [InlineData(true, 550)]
+    [InlineData(false, 650)]
+    public async Task FeedbackWaitsBeforeNextListen(bool firstCorrect, int minimumMs)
+    {
+        int listens = 0;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        long firstListen = 0, secondListen = 0;
+        var feedback = new System.Collections.Generic.List<(string, bool)>();
+        var session = new SpeakPromptSession(new TriggerEffectAction
+        {
+            SpeakTarget = "yes", SpeakCueMode = SpeakCueMode.Persistent, SpeakRequiredReps = 2,
+            SpeakCorrectMessage = "correct", SpeakIncorrectMessage = "incorrect"
+        }, null, () => true, () => Task.FromResult(true), () => false, () => { },
+        (_, _) =>
+        {
+            listens++;
+            if (listens == 1) firstListen = clock.ElapsedMilliseconds;
+            if (listens == 2) secondListen = clock.ElapsedMilliseconds;
+            return Task.FromResult(new PhraseResult { Matched = listens != 1 || firstCorrect });
+        }, _ => { }, () => { }, (text, correct) => feedback.Add((text, correct)));
+        await session.RunAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(firstCorrect ? ("correct", true) : ("incorrect", false), feedback[0]);
+        Assert.Equal(2, feedback.FindAll(f => f == ("correct", true)).Count);
+        Assert.True(secondListen - firstListen >= minimumMs, $"Next listen started after {secondListen - firstListen} ms");
+    }
+
 }
