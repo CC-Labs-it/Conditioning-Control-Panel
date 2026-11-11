@@ -34,7 +34,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Panic surface "browser-media" (WPF b9368d963 PanicEndBrowserMedia): page video stops, fullscreen drops.</summary>
         internal void PanicPauseBrowserMedia()
         {
+            EndWebVideoTakeover();
             if (BrowserView is { } host) _ = host.InvokeScriptAsync(WebHostMedia.PanicPauseScript);
+        }
+
+        /// <summary>WPF MainWindow.Browser.cs:973: stop pending takeover playback and page fullscreen.</summary>
+        internal void EndWebVideoTakeover()
+        {
+            if (BrowserView is { } host) _ = host.InvokeScriptAsync(WebHostTakeover.StopScript);
         }
 
         /// <summary>Homepage of whichever site radio is selected. BambiCloud is the default, as on
