@@ -11,6 +11,8 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls;
+using IconKind = FluentIcons.Common.Symbol;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Models;
 using Xunit;
@@ -54,8 +56,10 @@ public class AwarenessPulseTests
             Assert.Equal(3, accent.Width);
             Assert.NotNull(accent.Fill);
             Assert.Equal("\"word5\"", Assert.IsType<TextBlock>(first.Children[1]).Text);
-            var chip = Assert.IsType<TextBlock>(Assert.IsType<StackPanel>(first.Children[2]).Children[0]);
-            Assert.Equal("🔊", chip.Text);
+            var chip = Assert.IsType<IconGlyph>(Assert.IsType<StackPanel>(first.Children[2]).Children[0]);
+            Assert.Equal(IconKind.Speaker2, chip.Kind);
+            Assert.False(chip.IsFallback);
+            Assert.Equal(13, chip.Size);
             Assert.Equal(Loc.Get("pulse_tip_audio"), ToolTip.GetTip(chip));
             Assert.Equal(200, ToolTip.GetShowDelay(chip));
             Assert.Equal(0, ToolTip.GetBetweenShowDelay(chip));
@@ -72,23 +76,23 @@ public class AwarenessPulseTests
     });
 
     [Theory]
-    [InlineData("PlayAudio", "🔊", "Plays an audio clip when the word is detected")]
-    [InlineData("Highlight", "👁", "Draws a glowing box around the matched word on screen (OCR matches only)")]
-    [InlineData("Haptic", "💥", "Fires a haptic vibration pattern on connected devices")]
-    [InlineData("AvatarComment", "💬", "Makes the avatar comment on the matched word (AI + canned fallback)")]
-    [InlineData("ExtendSession", "⏱", "Extends the current session")]
-    [InlineData("ExtendSession:12", "⏱", "Extends the current session by 12 minutes")]
-    [InlineData("ChasterAddTime", "🔒", "Adds time to the Chaster lock")]
-    [InlineData("ChasterAddTime:3", "🔒", "Adds 3 minutes to the Chaster lock")]
-    [InlineData("VisualEffect:SubliminalFlash", "✨", "Flashes a random word from your subliminal pool")]
-    [InlineData("VisualEffect:ExactSubliminal", "🔤", "Flashes the matched keyword itself as subliminal text")]
-    [InlineData("VisualEffect:ImageFlash", "⚡", "Fires a flash burst image when the word is detected")]
-    [InlineData("VisualEffect:OverlayPulse", "🌫", "Briefly intensifies the screen overlay")]
-    [InlineData("VisualEffect:MindWipe", "🧠", "Triggers the MindWipe effect")]
-    [InlineData("VisualEffect:Bubbles", "🫧", "Spawns bubbles on screen")]
-    [InlineData("VisualEffect:Other", "✨", "Fires visual effect: Other")]
-    [InlineData("AddXp:5", "", "")]
-    public void ActionDescriptionsMatchWpf(string key, string icon, string tip)
+    [InlineData("PlayAudio", IconKind.Speaker2, "Plays an audio clip when the word is detected")]
+    [InlineData("Highlight", IconKind.Eye, "Draws a glowing box around the matched word on screen (OCR matches only)")]
+    [InlineData("Haptic", IconKind.PhoneVibrate, "Fires a haptic vibration pattern on connected devices")]
+    [InlineData("AvatarComment", IconKind.Chat, "Makes the avatar comment on the matched word (AI + canned fallback)")]
+    [InlineData("ExtendSession", IconKind.Timer, "Extends the current session")]
+    [InlineData("ExtendSession:12", IconKind.Timer, "Extends the current session by 12 minutes")]
+    [InlineData("ChasterAddTime", IconKind.LockClosed, "Adds time to the Chaster lock")]
+    [InlineData("ChasterAddTime:3", IconKind.LockClosed, "Adds 3 minutes to the Chaster lock")]
+    [InlineData("VisualEffect:SubliminalFlash", IconKind.Sparkle, "Flashes a random word from your subliminal pool")]
+    [InlineData("VisualEffect:ExactSubliminal", IconKind.TextFont, "Flashes the matched keyword itself as subliminal text")]
+    [InlineData("VisualEffect:ImageFlash", IconKind.Flash, "Fires a flash burst image when the word is detected")]
+    [InlineData("VisualEffect:OverlayPulse", IconKind.WeatherFog, "Briefly intensifies the screen overlay")]
+    [InlineData("VisualEffect:MindWipe", IconKind.BrainCircuit, "Triggers the MindWipe effect")]
+    [InlineData("VisualEffect:Bubbles", IconKind.BubbleMultiple, "Spawns bubbles on screen")]
+    [InlineData("VisualEffect:Other", IconKind.Sparkle, "Fires visual effect: Other")]
+    [InlineData("AddXp:5", null, "")]
+    public void ActionDescriptionsMatchWpf(string key, IconKind? icon, string tip)
     {
         var loc = LocalizationManager.Instance;
         var old = loc.CurrentLanguage;

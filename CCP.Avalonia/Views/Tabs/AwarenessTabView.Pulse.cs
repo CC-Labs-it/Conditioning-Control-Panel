@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using Avalonia.Controls.Shapes;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -56,8 +57,9 @@ public partial class AwarenessTabView
             foreach (var key in fire.ActionKeys)
             {
                 var (icon, tip) = PulseChip(key);
-                if (icon.Length == 0) continue;
-                var chip = new TextBlock { Text = icon, FontSize = 13, VerticalAlignment = VerticalAlignment.Center,
+                if (icon is null) continue;
+                var chip = new IconGlyph { Kind = icon.Value, Size = 13, VerticalAlignment = VerticalAlignment.Center,
+                    Variant = icon is IconKind.Sparkle or IconKind.LockClosed ? IconVariant.Filled : IconVariant.Regular,
                     Margin = new Thickness(0, 0, 4, 0) };
                 ToolTip.SetTip(chip, tip);
                 ToolTip.SetShowDelay(chip, 200);
@@ -95,30 +97,30 @@ public partial class AwarenessTabView
         return firedAt.ToString("HH:mm");
     }
 
-    internal static (string icon, string tooltip) PulseChip(string key)
+    internal static (IconKind? icon, string tooltip) PulseChip(string key)
     {
         var colon = key.IndexOf(':');
         var type = colon < 0 ? key : key[..colon];
         var arg = colon < 0 ? "" : key[(colon + 1)..];
         return type switch
         {
-            "PlayAudio" => ("🔊", Loc.Get("pulse_tip_audio")),
-            "Highlight" => ("👁", Loc.Get("pulse_tip_highlight")),
-            "Haptic" => ("💥", Loc.Get("pulse_tip_haptic")),
-            "AvatarComment" => ("💬", Loc.Get("pulse_tip_avatar")),
-            "ExtendSession" => ("⏱", arg.Length == 0 ? Loc.Get("pulse_tip_extend") : Loc.GetF("pulse_tip_extend_minutes", arg)),
-            "ChasterAddTime" => ("🔒", arg.Length == 0 ? Loc.Get("pulse_tip_chaster") : Loc.GetF("pulse_tip_chaster_minutes", arg)),
+            "PlayAudio" => (IconKind.Speaker2, Loc.Get("pulse_tip_audio")),
+            "Highlight" => (IconKind.Eye, Loc.Get("pulse_tip_highlight")),
+            "Haptic" => (IconKind.PhoneVibrate, Loc.Get("pulse_tip_haptic")),
+            "AvatarComment" => (IconKind.Chat, Loc.Get("pulse_tip_avatar")),
+            "ExtendSession" => (IconKind.Timer, arg.Length == 0 ? Loc.Get("pulse_tip_extend") : Loc.GetF("pulse_tip_extend_minutes", arg)),
+            "ChasterAddTime" => (IconKind.LockClosed, arg.Length == 0 ? Loc.Get("pulse_tip_chaster") : Loc.GetF("pulse_tip_chaster_minutes", arg)),
             "VisualEffect" => arg switch
             {
-                "SubliminalFlash" => ("✨", Loc.Get("pulse_tip_subliminal")),
-                "ExactSubliminal" => ("🔤", Loc.Get("pulse_tip_exact")),
-                "ImageFlash" => ("⚡", Loc.Get("pulse_tip_image")),
-                "OverlayPulse" => ("🌫", Loc.Get("pulse_tip_overlay")),
-                "MindWipe" => ("🧠", Loc.Get("pulse_tip_mindwipe")),
-                "Bubbles" => ("🫧", Loc.Get("pulse_tip_bubbles")),
-                _ => ("✨", Loc.GetF("pulse_tip_effect", arg)),
+                "SubliminalFlash" => (IconKind.Sparkle, Loc.Get("pulse_tip_subliminal")),
+                "ExactSubliminal" => (IconKind.TextFont, Loc.Get("pulse_tip_exact")),
+                "ImageFlash" => (IconKind.Flash, Loc.Get("pulse_tip_image")),
+                "OverlayPulse" => (IconKind.WeatherFog, Loc.Get("pulse_tip_overlay")),
+                "MindWipe" => (IconKind.BrainCircuit, Loc.Get("pulse_tip_mindwipe")),
+                "Bubbles" => (IconKind.BubbleMultiple, Loc.Get("pulse_tip_bubbles")),
+                _ => (IconKind.Sparkle, Loc.GetF("pulse_tip_effect", arg)),
             },
-            _ => ("", "")
+            _ => (null, "")
         };
     }
 }
