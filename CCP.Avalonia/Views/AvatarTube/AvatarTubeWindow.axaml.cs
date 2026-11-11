@@ -181,6 +181,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             AvaloniaXamlLoader.Load(this);
 
             _parentWindow = parentWindow;
+            ReloadVideoLinks(); // WPF AvatarTubeWindow.xaml.cs:236
             // Don't set Owner - in WPF it caused black window artifacts during minimize, and the
             // z-order pairing is done natively instead (see OnOpened).
 

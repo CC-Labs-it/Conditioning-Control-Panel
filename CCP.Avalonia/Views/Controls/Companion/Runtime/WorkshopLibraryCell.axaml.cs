@@ -23,9 +23,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
     /// the cell forwards its click there. Everything it touches is in Core here (CoreMods.Service's
     /// GetVideoLinks/SetUserVideoLinks, <see cref="VideoLinkPool"/>), so the cell owns it.</para>
     ///
-    /// <para>No AvatarTubeWindow.ReloadVideoLinks: WPF caches the pool in a static the tube links
-    /// from; every reader on this head (BambiSprite, MediaCommand, CompanionAskService) reads
-    /// CoreMods.Service.GetVideoLinks() live, so a save is visible at once.</para>
+    /// <para>Refresh the tube's title snapshot when the pool is saved, as WPF does.</para>
     /// </summary>
     public partial class WorkshopLibraryCell : UserControl
     {
@@ -194,6 +192,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             if (mods == null) return;
             mods.SetUserVideoLinks(VideoLinkPool.Build(Rows.Select(r => ((string?)r.NameBox.Text, (string?)r.UrlBox.Text))));
             CoreSettings.Save();
+            AvatarTube.AvatarTubeWindow.ReloadVideoLinks();
         }
 
         private void UpdatePlaceholder() => _noLinks.IsVisible = Rows.Count == 0;

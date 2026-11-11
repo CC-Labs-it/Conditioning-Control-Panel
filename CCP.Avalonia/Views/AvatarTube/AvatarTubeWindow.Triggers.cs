@@ -5,6 +5,9 @@ using System.Text.RegularExpressions;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
+using Avalonia.Data;
+using Avalonia.Data.Converters;
+using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Interactivity;
 using Avalonia.Styling;
@@ -123,6 +126,27 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             }
         }
 
+        // WPF Speech.cs:1227-1256: retain the current snapshot until a reload.
+        private static Dictionary<string, string> _knownVideoLinks =
+            new(Services.HypnotubeDefaultLinks.KnownVideoTitles, StringComparer.OrdinalIgnoreCase);
+
+        internal static void ReloadVideoLinks()
+        {
+            var pool = CoreMods.Service?.GetVideoLinks();
+            var current = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (pool != null && pool.Count > 0)
+            {
+                foreach (var pair in pool)
+                    if (!string.IsNullOrEmpty(pair.Key) && Uri.TryCreate(pair.Value, UriKind.Absolute, out var uri) &&
+                        uri.Scheme == Uri.UriSchemeHttps)
+                        current[pair.Key] = pair.Value;
+            }
+            else
+                foreach (var pair in Services.HypnotubeDefaultLinks.KnownVideoTitles)
+                    current[pair.Key] = pair.Value;
+            _knownVideoLinks = current;
+        }
+
         // WPF Speech.cs:1270-1455: markdown first, then longest known titles,
         // fuzzy candidates and raw URLs. The launcher owns the click guard.
         private void RenderSpeechLinks(TextBlock target, string text)
@@ -147,6 +171,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     if (!string.IsNullOrEmpty(pair.Key) && Uri.TryCreate(pair.Value, UriKind.Absolute, out var uri) &&
                         uri.Scheme == Uri.UriSchemeHttps)
                         table[pair.Key] = pair.Value;
+            foreach (var pair in _knownVideoLinks)
+                table[pair.Key] = pair.Value;
             foreach (var pair in Services.HypnotubeDefaultLinks.KnownVideoTitles)
                 table.TryAdd(pair.Key, pair.Value);
 
@@ -199,9 +225,17 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     Theme = (ControlTheme)Resources["SpeechInlineLink"]!,
                     Content = new TextBlock { Text = label, FontSize = target.FontSize,
                         FontWeight = target.FontWeight, Foreground = new SolidColorBrush(Color.FromRgb(255, 176, 224)),
-                        TextDecorations = TextDecorations.Underline },
+                        TextDecorations = TextDecorations.Underline, TextWrapping = TextWrapping.Wrap },
                     Command = CompanionLinkLauncher.CommandFor(url)
                 };
+                // Inline controls measure atomically. Constrain their own wrapping text to the
+                // current line width, including after the bubble or history row is resized.
+                link.Bind(Layoutable.MaxWidthProperty, new Binding(nameof(Bounds))
+                {
+                    Source = target,
+                    Converter = new FuncValueConverter<Rect, double>(bounds => bounds.Width > 0
+                        ? Math.Max(1, bounds.Width - target.Padding.Left - target.Padding.Right) : 320)
+                });
                 inlines.Add(new InlineUIContainer(link) { BaselineAlignment = BaselineAlignment.Baseline });
                 last = start + length;
             }

@@ -158,6 +158,7 @@ public partial class AvatarTubeWindow
     private void OnTubeModChanged(object? sender, ModPackage mod) => RunOnAvatar(() =>
     {
         if (_avatarSetsClosed) return;
+        ReloadVideoLinks(); // WPF AvatarTubeWindow.Avatar.cs:631
         CancelAvatarSwitch();
         var s = CoreSettings.Current;
         var sets = PickableAvatarSets();
