@@ -92,8 +92,6 @@ internal static class OsNotifications
         catch (Exception ex) { Log.Debug("OS notification cleanup failed: {Error}", ex.Message); }
     }
 
-    internal static void Shutdown() => DismissWindowsBalloon();
-
     // One cached task: concurrent first calls share one connection; a failed connect is retried next time.
     private static Task<DBusConnection> BusAsync()
     {

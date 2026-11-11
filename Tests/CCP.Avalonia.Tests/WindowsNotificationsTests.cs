@@ -29,9 +29,11 @@ public class WindowsNotificationsTests
         Assert.True(notifications.Show(new string('a', 100), new string('b', 300)));
         Assert.Equal(63, calls[1].Data.InfoTitle.Length);
         Assert.Equal(255, calls[1].Data.Info.Length);
+        Assert.True(notifications.Show(new string('a', 62) + "\U0001F600", "x"));
+        Assert.Equal(new string('a', 62), calls[2].Data.InfoTitle); // a surrogate pair is never cut in half
         notifications.Dispose();
         notifications.Dispose();
-        Assert.Equal(2, calls.Count); // never add or delete a second icon
+        Assert.Equal(3, calls.Count); // never add or delete a second icon
         Assert.Equal(1, cleared);
     });
 

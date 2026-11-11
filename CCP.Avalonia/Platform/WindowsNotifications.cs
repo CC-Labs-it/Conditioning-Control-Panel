@@ -9,7 +9,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 internal sealed class WindowsNotifications : IDisposable
 {
     internal const uint Modify = 1;
-    private const uint Info = 16;
+    private const uint NifInfo = 16;
     private readonly Func<uint, NotifyIconData, bool> _notify;
     private readonly Action _clear;
     private readonly IntPtr _window;
@@ -57,7 +57,7 @@ internal sealed class WindowsNotifications : IDisposable
         var data = new NotifyIconData
         {
             Size = (uint)Marshal.SizeOf<NotifyIconData>(), Window = _window, Id = _id,
-            Flags = Info, Tip = "", Info = Limit(body, 255), InfoTitle = Limit(title, 63),
+            Flags = NifInfo, Tip = "", Info = Limit(body, 255), InfoTitle = Limit(title, 63),
             InfoFlags = 1 // NIIF_INFO
         };
         if (!_notify(Modify, data)) return false;
@@ -65,7 +65,13 @@ internal sealed class WindowsNotifications : IDisposable
         return true;
     }
 
-    private static string Limit(string value, int length) => value.Length <= length ? value : value.Substring(0, length);
+    private static string Limit(string value, int length)
+    {
+        if (value.Length <= length) return value;
+        // Never cut a surrogate pair in half.
+        if (char.IsHighSurrogate(value[length - 1])) length--;
+        return value.Substring(0, length);
+    }
 
     public void Dispose()
     {
