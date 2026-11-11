@@ -535,6 +535,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             // ponytail: WPF's second prompt ("another interaction is in progress") needs the interaction
             // queue, which this head does not have.
             if (CoreEngine.Video is not { } video) return;
+            if (video.IsPlaying && video.Trigger(userInitiated: true)) return;
             if (video.IsPlaying)
             {
                 if (TopLevel.GetTopLevel(this) is not Window owner) return;

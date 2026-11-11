@@ -28,6 +28,60 @@ public sealed class VideoFeatureCompletionTests
                 .SetupWithoutStarting();
     }
 
+    private sealed class FloatingTestHost : IMandatoryVideoHost
+    {
+        public MandatoryVideoScheduler Video = null!;
+        public int Replacements;
+        public bool IsFloating(bool strict) => !strict;
+        public bool TryFloatingTrigger(bool userInitiated)
+        {
+            if (!userInitiated) return false;
+            Replacements++;
+            Video.ForceCleanup();
+            return Video.Trigger(userInitiated: true);
+        }
+        public void Show(string path, bool strict) { }
+        public double CloseAll() => 0;
+        public void ShowMessage(AttentionVerdict verdict, int ms, Action then) { }
+    }
+
+    [Fact]
+    public async Task Test_during_floating_playback_replaces_without_a_dialog()
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            Setup();
+            var previous = CoreEngine.Video;
+            var strict = CoreSettings.Current.StrictLockEnabled;
+            CoreSettings.Current.StrictLockEnabled = false;
+            var floating = new FloatingTestHost();
+            var video = new MandatoryVideoScheduler(floating, library: () => new[] { "/test/video.mp4" });
+            floating.Video = video;
+            CoreEngine.Video = video;
+            var card = new VideoFeatureControl();
+            var window = new Window { Content = card };
+            window.Show();
+            try
+            {
+                Assert.True(video.Trigger(strictOverride: false));
+                card.FindControl<Button>("BtnTestVideo")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(1, floating.Replacements);
+                Assert.True(video.IsPlaying);
+                Assert.Empty(window.OwnedWindows.OfType<MessageDialog>());
+                await card.TestVideoRun;
+            }
+            finally
+            {
+                video.ForceCleanup();
+                foreach (var w in window.OwnedWindows.ToArray()) w.Close();
+                window.Close();
+                CoreEngine.Video = previous;
+                CoreSettings.Current.StrictLockEnabled = strict;
+            }
+        });
+    }
+
     [Fact]
     public async Task Art_loads_both_plates_repaints_on_mod_switch_and_unhooks()
     {
