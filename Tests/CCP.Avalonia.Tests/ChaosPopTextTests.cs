@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -227,6 +229,11 @@ public sealed class ChaosPopTextTests
             Setup();
             var prepare = ChaosPopText.Prepare;
             var canShow = ChaosPopText.PlatformCanShow;
+            var raise = ChaosPopText.RaiseWindow;
+            bool pinned = CoreSettings.Current.ChaosPinOnTop;
+            var raised = new List<Window>();
+            ChaosPopText.RaiseWindow = w => raised.Add(w);
+            CoreSettings.Current.ChaosPinOnTop = true;
             bool announcer = CoreSettings.Current.ChaosAnnouncerEnabled;
             var clock = BeatLoop.Time;
             var time = new SteppedTime();
@@ -260,6 +267,7 @@ public sealed class ChaosPopTextTests
                 Assert.Equal(Color.FromRgb(71, 215, 255), ((ISolidColorBrush)w.LabelFill).Color);
                 Assert.Equal(0, w.Alpha);
                 Assert.Equal(1, prepared);
+                Assert.Empty(raised);   // first map is unchanged
 
                 time.Advance(TimeSpan.FromMilliseconds(200));
                 BeatLoop.StepAll();
@@ -273,16 +281,28 @@ public sealed class ChaosPopTextTests
                 ChaosPopText.Show(800, 300, "gold", Colors.Gold);   // reused, moved, not re-prepared
                 Dispatcher.UIThread.RunJobs();
                 Assert.Same(w, Assert.Single(ChaosPopText.Pool.All));
+                Assert.Same(w, Assert.Single(raised));
                 Assert.Equal(6, w.RiseY, 6);   // restarts at the bottom, not where the last word ended
                 Assert.True(w.IsVisible);
                 Assert.Equal(1, prepared);
                 var k = w.Screens.Primary?.Scaling is > 0 and var s ? s : 1.0;
                 Assert.Equal((int)Math.Round((800 - 140) * k), w.Position.X);
+
+                w.Frame(490);
+                CoreSettings.Current.ChaosPinOnTop = false;
+                raised.Clear();
+                ChaosPopText.Show(800, 300, "gold", Colors.Gold);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Same(w, Assert.Single(ChaosPopText.Pool.All));
+                Assert.True(w.IsVisible);
+                Assert.Empty(raised);
             }
             finally
             {
                 ChaosPopText.ShutdownPool();
                 ChaosPopText.Prepare = prepare;
+                ChaosPopText.RaiseWindow = raise;
+                CoreSettings.Current.ChaosPinOnTop = pinned;
                 BeatLoop.Time = clock;
                 ChaosPopText.PlatformCanShow = canShow;
                 CoreSettings.Current.ChaosAnnouncerEnabled = announcer;
