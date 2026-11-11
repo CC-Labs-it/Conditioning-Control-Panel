@@ -64,12 +64,22 @@
    <Setter Property="Margin" Value="4,6,6,0"/><Setter Property="TextWrapping" Value="Wrap"/>
   </ControlTheme>
   <DataTemplate x:Key="LobbyRowTemplate" x:DataType="tabs:LobbyCardView">
-   <Grid Margin="0,0,6,8">
+   <Grid Margin="0,0,6,8" Tag="lobby-card">
+    <!-- WPF AvailableSubjectsTabView.xaml:134: the ring a new table sends out (AvailableSubjectsTabView.Fx.cs) -->
+    <Rectangle Tag="lobby-ring" RadiusX="16" RadiusY="16" Stroke="#FF8CC0" StrokeThickness="2" Opacity="0" IsHitTestVisible="False"/>
     <Rectangle Tag="lobby-float" Fill="{Binding CardShadow}" Height="{Binding CardShadowPx}" RadiusX="7" RadiusY="7"
                VerticalAlignment="Bottom" Margin="8,0,8,-6" IsHitTestVisible="False"/>
    <Border CornerRadius="14" Padding="10,9" Background="#14FFFFFF" BorderBrush="{Binding CardRim}" BorderThickness="1">
-    <Grid ColumnDefinitions="*,Auto">
-     <StackPanel>
+    <Grid ColumnDefinitions="Auto,*,Auto">
+     <!-- WPF AvailableSubjectsTabView.xaml:150-165: game art with the host's face and frame on its corner -->
+     <Grid Width="40" Height="40" Margin="0,0,10,0" VerticalAlignment="Center">
+      <Border CornerRadius="11" BorderBrush="#40FFFFFF" BorderThickness="1" Background="{Binding ArtBrush}"/>
+      <Grid Tag="lobby-face" Width="22" Height="22" Margin="0,0,-7,-7" IsHitTestVisible="False" HorizontalAlignment="Right" VerticalAlignment="Bottom" IsVisible="{Binding HasLook}">
+       <Ellipse Fill="{Binding FaceBrush}" Stroke="#1C1233" StrokeThickness="1.5"/>
+       <Image Tag="lobby-frame" Source="{Binding FrameArt}" Stretch="Fill" Width="{Binding FrameSize}" Height="{Binding FrameSize}" Margin="{Binding FrameMargin}"/>
+      </Grid>
+     </Grid>
+     <StackPanel Grid.Column="1" VerticalAlignment="Center">
       <StackPanel Orientation="Horizontal">
        <TextBlock Text="{Binding Title}" Foreground="{DynamicResource TextLightBrush}" FontWeight="SemiBold" MaxLines="1" TextTrimming="CharacterEllipsis" MaxWidth="190"/>
        <Ellipse Width="7" Height="7" Margin="7,1,0,0" VerticalAlignment="Center" Fill="#5FFFD0" IsVisible="{Binding Friend}" ToolTip.Tip="{loc:Str lobby_friend_tip}"/>
@@ -77,7 +87,7 @@
       <TextBlock Text="{Binding Line}" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" Margin="0,2,0,0" MaxLines="1" TextTrimming="CharacterEllipsis"/>
      </StackPanel>
      <!-- ponytail: Goon and Remote doors still require their head hosts. -->
-     <Button Theme="{StaticResource LobbyJoin}" Grid.Column="1" Click="BtnLobbyRow_Click" IsEnabled="{Binding DoorAvailable}" IsVisible="{Binding HasButton}" Opacity="{Binding ButtonOpacity}" MinWidth="64" Margin="8,0,0,0" VerticalAlignment="Center">
+     <Button Theme="{StaticResource LobbyJoin}" Grid.Column="2" Click="BtnLobbyRow_Click" IsEnabled="{Binding DoorAvailable}" IsVisible="{Binding HasButton}" Opacity="{Binding ButtonOpacity}" MinWidth="64" Margin="8,0,0,0" VerticalAlignment="Center">
       <StackPanel Orientation="Horizontal" Spacing="4"><fx:IconGlyph Kind="LockClosed" Size="12" IsVisible="{Binding Locked}"/><TextBlock Text="{Binding ButtonText}"/></StackPanel>
      </Button>
     </Grid>

@@ -15,7 +15,7 @@ public sealed class LobbyPoll : IDisposable
     private readonly Func<Task<OpenTablesReply>> _goon;
     private readonly Func<Task<(IReadOnlyList<RemoteSeat> Seats, bool Ok)>> _remote;
     private readonly Func<IReadOnlyList<Friend>> _friends;
-    private readonly Func<Task<RaceOpenReply>>? _race;
+    private readonly Func<Task<RaceOpenReply>> _race;
     private readonly object _gate = new();
     private Task? _inflight;
     private int _watchers;
@@ -28,7 +28,7 @@ public sealed class LobbyPoll : IDisposable
         Func<Task<(IReadOnlyList<RemoteSeat> Seats, bool Ok)>> remote, Func<Task<RaceOpenReply>>? race = null)
     {
         _timer = timer; _signedIn = signedIn; _friends = friends;
-        _chess = chess; _goon = goon; _remote = remote; _race = race;
+        _chess = chess; _goon = goon; _remote = remote; _race = race ?? (() => Task.FromResult(RaceOpenReply.Empty));
         _timer.Interval = LobbyPollPlan.Base;
         _timer.Tick += OnTick;
     }
@@ -73,10 +73,9 @@ public sealed class LobbyPoll : IDisposable
                 var goon = Safe(_goon, OpenTablesReply.Empty);
                 var remote = Safe(_remote, ((IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), false));
                 // WPF LobbyService.RunAsync (LobbyService.cs:110-118): race rides the same round.
-                var race = _race == null ? Task.FromResult<RaceOpenReply?>(null)
-                    : Safe<RaceOpenReply?>(async () => await _race().ConfigureAwait(false), RaceOpenReply.Empty);
+                var race = Safe(_race, RaceOpenReply.Empty);
                 await Task.WhenAll(chess, goon, remote, race).ConfigureAwait(false);
-                ok = chess.Result.Ok || remote.Result.Item2 || race.Result?.Ok == true; // Goon has no error distinction in WPF.
+                ok = chess.Result.Ok || remote.Result.Item2 || race.Result.Ok; // Goon has no error distinction in WPF.
                 IReadOnlyList<Friend> friends;
                 try { friends = _friends(); } catch { friends = Array.Empty<Friend>(); }
                 snapshot = LobbyMerge.Build(chess.Result, goon.Result, remote.Result.Item1, friends, true,
