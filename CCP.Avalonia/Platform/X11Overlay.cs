@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
@@ -67,6 +68,10 @@ internal static class X11Overlay
     [DllImport(LibX11)] private static extern int XFlush(IntPtr display);
     [DllImport(LibX11)] private static extern int XSync(IntPtr display, bool discard);
     [DllImport(LibX11)] private static extern int XChangeWindowAttributes(IntPtr display, IntPtr window, nuint valueMask, IntPtr attributes);
+    [DllImport(LibX11)] private static extern int XGetWindowAttributes(IntPtr display, IntPtr window, IntPtr attributes);
+    [DllImport(LibX11)] private static extern int XQueryTree(IntPtr display, IntPtr window, out IntPtr root,
+        out IntPtr parent, out IntPtr children, out uint count);
+    [DllImport(LibX11)] private static extern int XFree(IntPtr data);
     [DllImport(LibX11)] private static extern IntPtr XSetErrorHandler(XErrorHandler handler);
     [DllImport(LibX11)] private static extern IntPtr XDefaultRootWindow(IntPtr display);
     [DllImport(LibX11)] private static extern IntPtr XInternAtom(IntPtr display, string name, bool onlyIfExists);
@@ -74,6 +79,9 @@ internal static class X11Overlay
     [DllImport(LibX11)] private static extern IntPtr XGetSelectionOwner(IntPtr display, IntPtr selection);
     [DllImport(LibX11)] private static extern int XDefaultScreen(IntPtr display);
     [DllImport(LibX11)] private static extern int XSetInputFocus(IntPtr display, IntPtr window, int revertTo, nuint time);
+    [StructLayout(LayoutKind.Sequential)]
+    private struct XWindowChanges { public int X, Y, Width, Height, BorderWidth; public IntPtr Sibling; public int StackMode; }
+    [DllImport(LibX11)] private static extern int XConfigureWindow(IntPtr display, IntPtr window, nuint mask, ref XWindowChanges changes);
     [DllImport(LibX11)] private static extern int XRaiseWindow(IntPtr display, IntPtr window);
     [DllImport(LibX11)] private static extern int XSendEvent(IntPtr display, IntPtr window, bool propagate, long mask, IntPtr sendEvent);
 
@@ -225,8 +233,8 @@ internal static class X11Overlay
         }
     }
 
-    /// <summary>Takes <paramref name="window"/> out of the window manager's hands: no frame, no
-    /// focus, no taskbar entry, no WM layer policy - the X11 form of a Win32 tool/topmost overlay.
+    /// <summary>Places the window and, when topmost, takes it out of the X11 window manager's
+    /// hands. An unpinned window stays managed so ordinary windows can cover it.
     ///
     /// <para><b>Must run before <c>Show()</c>.</b> The WM decides whether to manage a window when
     /// it maps, so setting this on a mapped window changes nothing until the next map. Avalonia's
@@ -252,9 +260,10 @@ internal static class X11Overlay
     /// <returns>False when the platform cannot do this (no XID, no display, not 64-bit) or the server refused it.</returns>
     /// <param name="passive">A toast that takes clicks but never focus: Windows keeps WS_EX_NOACTIVATE
     /// (X11 override-redirect already never takes focus).</param>
-    internal static bool SetOverrideRedirect(Window window, PixelRect bounds, bool passive = false)
+    /// <param name="topmost">False leaves an X11 window managed so other applications can cover it.</param>
+    internal static bool SetOverrideRedirect(Window window, PixelRect bounds, bool passive = false, bool topmost = true)
     {
-        var ok = SetOverrideRedirect(window, passive);
+        var ok = SetOverrideRedirect(window, passive, topmost);
         window.WindowStartupLocation = WindowStartupLocation.Manual;
         window.Position = bounds.Position;
         window.Width = bounds.Width / window.DesktopScaling;
@@ -262,9 +271,9 @@ internal static class X11Overlay
         return ok;
     }
 
-    private static bool SetOverrideRedirect(TopLevel window, bool passive)
+    private static bool SetOverrideRedirect(TopLevel window, bool passive, bool topmost)
     {
-        if (TryGet(window, OverlayBackend.Win32, out var hwnd)) return Win32Overlay.SetOverrideRedirect(window, hwnd, passive);
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd)) return Win32Overlay.SetOverrideRedirect(window, hwnd, passive, topmost);
         // The struct offsets below are the LP64 layout (x86_64, arm64).
         if (IntPtr.Size != 8 || !TryGetXid(window, out var xid)) return false;
 
@@ -278,11 +287,57 @@ internal static class X11Overlay
             try
             {
                 for (var i = 0; i < XSetWindowAttributesSize; i += IntPtr.Size) Marshal.WriteIntPtr(attrs, i, IntPtr.Zero);
-                Marshal.WriteInt32(attrs, 88, 1);
+                Marshal.WriteInt32(attrs, 88, topmost ? 1 : 0);
                 _xErrored = false;
                 XChangeWindowAttributes(_display, xid, CWOverrideRedirect, attrs);
                 XSync(_display, false);
                 return !_xErrored; // e.g. BadWindow: the server refused the request
+            }
+            finally { Marshal.FreeHGlobal(attrs); }
+        }
+    }
+
+    /// <summary>A managed X11 window can be reparented into a WM-owned frame whose input shape
+    /// still covers the desktop. After mapping, empty the input shape on each such ancestor too.
+    /// Fail closed if the WM does not finish mapping or the server rejects the shape.</summary>
+    internal static bool SetManagedClickThrough(Window window)
+    {
+        if (TryGet(window, OverlayBackend.Win32, out _)) return true;
+        if (IntPtr.Size != 8 || !TryGetXid(window, out var xid)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            var attrs = Marshal.AllocHGlobal(136); // XWindowAttributes on LP64
+            try
+            {
+                var until = System.Diagnostics.Stopwatch.StartNew();
+                do
+                {
+                    _xErrored = false;
+                    if (XGetWindowAttributes(_display, xid, attrs) == 0 || _xErrored) return false;
+                    if (Marshal.ReadInt32(attrs, 92) != 2) // IsViewable: the WM has mapped it
+                    {
+                        System.Threading.Thread.Sleep(5);
+                        continue;
+                    }
+                    var current = xid;
+                    for (int hop = 0; hop < 8; hop++)
+                    {
+                        if (XQueryTree(_display, current, out var root, out var parent, out var children, out _) == 0) return false;
+                        if (children != IntPtr.Zero) XFree(children);
+                        if (parent == root) return !_xErrored;
+                        if (parent == IntPtr.Zero) return false;
+                        var region = XFixesCreateRegion(_display, IntPtr.Zero, 0);
+                        if (region == IntPtr.Zero) return false;
+                        XFixesSetWindowShapeRegion(_display, parent, ShapeInput, 0, 0, region);
+                        XFixesDestroyRegion(_display, region);
+                        XSync(_display, false);
+                        if (_xErrored) return false;
+                        current = parent;
+                    }
+                    return false;
+                } while (until.ElapsedMilliseconds < 200);
+                return false;
             }
             finally { Marshal.FreeHGlobal(attrs); }
         }
@@ -300,6 +355,51 @@ internal static class X11Overlay
             XRaiseWindow(_display, xid);
             XFlush(_display);
             return true;
+        }
+    }
+
+    // Order override-redirect windows around the managed windows' root frames. The WM
+    // handles raises of its own windows; a child XID cannot be an XConfigureWindow sibling.
+    internal static void RestackLayer(IReadOnlyList<(Window window, bool managed)> layers)
+    {
+        if (layers.Count == 0 || !TryGetXid(layers[0].window, out _)) return;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return;
+            var root = XDefaultRootWindow(_display);
+            if (XQueryTree(_display, root, out _, out _, out var children, out var count) == 0) return;
+            try
+            {
+                var frames = new IntPtr[layers.Count];
+                var order = new int[layers.Count];
+                for (int n = 0; n < layers.Count; n++)
+                {
+                    if (!layers[n].managed || !TryGetXid(layers[n].window, out var child)) continue;
+                    for (int hop = 0; hop < 8 && child != IntPtr.Zero; hop++)
+                    {
+                        for (int i = 0; i < count; i++)
+                            if (Marshal.ReadIntPtr(children, i * IntPtr.Size) == child) { frames[n] = child; order[n] = i; break; }
+                        if (frames[n] != IntPtr.Zero) break;
+                        if (XQueryTree(_display, child, out _, out var parent, out var kids, out _) == 0) break;
+                        if (kids != IntPtr.Zero) XFree(kids);
+                        if (parent == root) break;
+                        child = parent;
+                    }
+                }
+                for (int n = 0; n < layers.Count; n++)
+                {
+                    if (layers[n].managed || !TryGetXid(layers[n].window, out var xid)) continue;
+                    int lowest = (int)count;
+                    IntPtr sibling = IntPtr.Zero;
+                    for (int i = n + 1; i < layers.Count; i++)
+                        if (frames[i] != IntPtr.Zero && order[i] < lowest) { lowest = order[i]; sibling = frames[i]; }
+                    if (sibling == IntPtr.Zero) continue;
+                    var changes = new XWindowChanges { Sibling = sibling, StackMode = 1 /* Below */ };
+                    XConfigureWindow(_display, xid, (1u << 5) | (1u << 6), ref changes);
+                }
+                XFlush(_display);
+            }
+            finally { if (children != IntPtr.Zero) XFree(children); }
         }
     }
 

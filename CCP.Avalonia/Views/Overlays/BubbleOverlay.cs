@@ -44,6 +44,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     {
         internal static readonly AmbientBubbleField Field = new();
         private static readonly List<BubbleOverlayWindow> Windows = new();
+        internal static IReadOnlyList<BubbleOverlayWindow> Surfaces => Windows;
         private static readonly List<Screen> Targets = new();
         private static DispatcherTimer? _spawnTimer;
         private static bool _running;
