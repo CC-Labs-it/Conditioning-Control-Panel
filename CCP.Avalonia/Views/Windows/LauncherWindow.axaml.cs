@@ -158,6 +158,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF App.Boot: the surface this run opened with (decided in App, Core LauncherBoot.Decide).</summary>
         internal static BootDecision Boot { get; set; } = BootDecision.PanelFirst;
 
+        /// <summary>WPF App.xaml.cs:3666-3671: hold before the hidden panel is shown.</summary>
+        internal static bool PrepareBoot(BootDecision boot, bool lockdown)
+        {
+            bool hidden = LauncherBoot.PanelStartsHidden(boot, lockdown);
+            if (hidden) Platform.StartupLadder.HoldLauncher();
+            return hidden;
+        }
+
         /// <summary>WPF LauncherHost.SurfaceInPlay: the launcher is part of this run.</summary>
         internal static bool SurfaceInPlay => _window != null || Boot.Surface != BootSurface.Panel;
 
@@ -175,6 +183,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex)
             {
                 Log.Error(ex, "[Launcher] boot routing failed; leaving the panel up");
+                Platform.StartupLadder.ReleaseLauncher();
                 try { panel.ShowFromTray(); } catch (Exception ex2) { Log.Debug(ex2, "[Launcher] ShowFromTray after failed boot routing"); }
             }
         }
@@ -194,7 +203,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static void OpenPanel(MainShellWindow panel)
         {
             if (_window != null) _window.OpenPanel();
-            else panel.ShowFromTray();
+            else
+            {
+                try { panel.ShowFromTray(); }
+                finally { Platform.StartupLadder.ReleaseLauncher(); }
+            }
         }
 
         /// <summary>A second launch (Platform/SingleInstance): WPF RouteSurfaceHandoff for a
@@ -245,7 +258,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             AfterExitBeat(() =>
             {
                 Hide();
-                panel.ShowFromLauncher();
+                try { panel.ShowFromLauncher(); }
+                finally { Platform.StartupLadder.ReleaseLauncher(); }
                 try { then?.Invoke(panel); }
                 catch (Exception ex) { Log.Debug(ex, "[Launcher] step after OpenPanel failed"); }
             });

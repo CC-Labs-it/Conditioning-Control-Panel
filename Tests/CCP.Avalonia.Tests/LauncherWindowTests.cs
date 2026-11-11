@@ -408,10 +408,16 @@ public sealed class LauncherWindowTests
     public void BootIntoTheLauncher_TucksThePanel() => Run(shell =>
     {
         LauncherWindow.Boot = BootDecision.LauncherFirst;
+        Assert.True(LauncherWindow.PrepareBoot(LauncherWindow.Boot, false));
         LauncherWindow.RouteBoot(shell);
         Dispatcher.UIThread.RunJobs();
         Assert.False(shell.IsVisible);
         Assert.True(LauncherWindow.Instance!.IsVisible);
+        Assert.True(global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.LauncherHeld);
+        LauncherWindow.OpenPanel(shell);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(shell.IsVisible);
+        Assert.False(global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.LauncherHeld);
     });
 
     [Fact]

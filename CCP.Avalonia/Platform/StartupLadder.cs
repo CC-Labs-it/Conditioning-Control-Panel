@@ -24,6 +24,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
     {
         public static StartupInbox Inbox { get; } = new();
 
+        // WPF StartupPresenter.Held: set before the hidden shell is shown at boot.
+        internal static bool LauncherHeld { get; private set; }
+        internal static void HoldLauncher() => LauncherHeld = true;
+        internal static void ReleaseLauncher() => LauncherHeld = false;
+
         private static DateTime? _firstLaunchUntilUtc;
         private static DateTime? _lastPassiveUtc;
         private static readonly List<InboxItem> _held = new();
@@ -56,7 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             ModalUp = Views.Windows.MainShellWindow.IsStartupDialogShowing || AppUpdater.IsUpdateDialogActive,
             TutorialActive = CoreTutorial.IsActive,
             SessionRunning = CoreSession.IsSessionRunning,
-            LauncherHolding = Views.Windows.LauncherWindow.Instance is { IsVisible: true },
+            LauncherHolding = LauncherHeld || Views.Windows.LauncherWindow.Instance is { IsVisible: true },
             GameHostUp = Views.Games.GameWindow.AnyStartupBlockingGame(),
             FirstLaunchUntilUtc = _firstLaunchUntilUtc,
             NowUtc = nowUtc,
@@ -126,6 +131,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Test seam: forget the quiet window, the passive pacing, the passive windows up and every row.</summary>
         internal static void ResetForTests()
         {
+            LauncherHeld = false;
             _firstLaunchUntilUtc = null;
             _lastPassiveUtc = null;
             _held.Clear();

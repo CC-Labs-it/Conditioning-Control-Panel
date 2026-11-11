@@ -14,6 +14,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Startup;
+using ConditioningControlPanel.Services.Launcher;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -25,7 +26,7 @@ public sealed class InboxFlyoutTests
     private static Task Run(Action body) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
@@ -36,6 +37,30 @@ public sealed class InboxFlyoutTests
     });
 
     private static void Click(Button b) => b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task HiddenBootHoldsBeforeTheShellShows(bool game) => Run(() =>
+    {
+        int opened = 0;
+        Assert.True(LauncherWindow.PrepareBoot(game ? BootDecision.GameFirst("race") : BootDecision.LauncherFirst, false));
+        StartupLadder.PresentOrInbox(new InboxItem { Key = "boot", Open = () => opened++ });
+        Assert.True(StartupLadder.Inbox.Contains("boot"));
+        Assert.Equal(0, opened);
+        StartupLadder.ReleaseLauncher();
+        StartupLadder.PresentOrInbox(new InboxItem { Key = "returned", Open = () => opened++ });
+        Assert.Equal(1, opened);
+    });
+
+    [Fact]
+    public Task PanelBootDoesNotHold() => Run(() =>
+    {
+        Assert.False(LauncherWindow.PrepareBoot(BootDecision.PanelFirst, false));
+        Assert.False(StartupLadder.World(StartupLadder.Time.GetUtcNow().UtcDateTime).LauncherHolding);
+        Assert.False(LauncherWindow.PrepareBoot(BootDecision.LauncherFirst, true));
+        Assert.False(StartupLadder.World(StartupLadder.Time.GetUtcNow().UtcDateTime).LauncherHolding);
+    });
 
     [Fact]
     public Task LauncherAndGameRoutePassiveSurfacesToInbox() => Run(() =>
