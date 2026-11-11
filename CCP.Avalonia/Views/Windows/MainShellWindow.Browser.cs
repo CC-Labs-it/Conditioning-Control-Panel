@@ -187,12 +187,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             var host = BrowserView;
             _pendingBrowserAutoplay = autoPlayFullscreen && host != null ? target : null;
+            _browserActiveNavigation = target;
+            _browserNavigationObserved = false;
             if (host != null) HookAvatarBrowser(host);
-            var navigationStarted = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            _browserNavigationStarted = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             var issued = NavigateBrowser(url);
             if (!issued) _pendingBrowserAutoplay = null;
             else if (_pendingBrowserAutoplay != null && !IsBrowserPlaylist(target))
-                _ = WaitForBrowserDomAsync(host!, target, _browserAutoplayGeneration, navigationStarted);
+                _ = WaitForBrowserDomAsync(host!, target, _browserAutoplayGeneration);
             return issued;
         }
 
@@ -200,6 +202,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // The queue service is not on this head; the live claim still gates its available interactions.
         private WebHost? _hookedAvatarBrowser;
         private Uri? _pendingBrowserAutoplay;
+        private Uri? _browserActiveNavigation;
+        private bool _browserNavigationObserved;
+        private long _browserNavigationStarted;
         private int _browserAutoplayGeneration;
         private volatile bool _avatarBrowserPlaying, _avatarBrowserSessionActive, _avatarBrowserTakeover;
         private bool _avatarBrowserPaused;
@@ -256,49 +261,80 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (ReferenceEquals(_hookedAvatarBrowser, host)) return;
             _hookedAvatarBrowser = host;
+            host.NavigationStarting += OnAvatarBrowserNavigationStarting;
             host.NavigationFinished += OnAvatarBrowserNavigationFinished;
             host.WebMessage += OnAvatarBrowserMessage;
             Closed += (_, _) => StopAvatarBrowserSession();
         }
 
-        // NativeWebView has no DOMContentLoaded event. Poll the current document until parsed;
-        // completion and generation changes retire the same pending arm.
+        // Starts for the armed request establish its chain; later starts follow redirects.
+        private void OnAvatarBrowserNavigationStarting(Uri url)
+        {
+            if (_pendingBrowserAutoplay == null) return;
+            if (!_browserNavigationObserved && !url.Equals(_pendingBrowserAutoplay)) return;
+            _browserNavigationObserved = true;
+            _browserActiveNavigation = url;
+        }
+
+        // A document started after the request belongs to the pending navigation generation.
+        private const string BrowserDocumentStateScript = "JSON.stringify({url:location.href,state:document.readyState,started:performance.timeOrigin})";
         internal Func<Task> BrowserDomPollDelay = () => Task.Delay(100);
-        private async Task WaitForBrowserDomAsync(WebHost host, Uri target, int generation, long navigationStarted)
+
+        private bool IsActiveBrowserDocument(string? result, Uri? expectedUrl = null, bool requireParsed = true)
+        {
+            if (result == null || _browserActiveNavigation == null) return false;
+            try
+            {
+                using var outer = System.Text.Json.JsonDocument.Parse(result);
+                var json = outer.RootElement.ValueKind == System.Text.Json.JsonValueKind.String ? outer.RootElement.GetString() : result;
+                using var doc = System.Text.Json.JsonDocument.Parse(json!);
+                var root = doc.RootElement;
+                if (!Uri.TryCreate(root.GetProperty("url").GetString(), UriKind.Absolute, out var current) ||
+                    (expectedUrl != null && !expectedUrl.Equals(current)) ||
+                    root.GetProperty("started").GetDouble() <= _browserNavigationStarted ||
+                    (requireParsed && root.GetProperty("state").GetString() is not ("interactive" or "complete"))) return false;
+                return true;
+            }
+            catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or System.Collections.Generic.KeyNotFoundException) { return false; }
+        }
+
+        private async Task WaitForBrowserDomAsync(WebHost host, Uri target, int generation)
         {
             while (generation == _browserAutoplayGeneration && target.Equals(_pendingBrowserAutoplay))
             {
                 await BrowserDomPollDelay();
                 if (generation != _browserAutoplayGeneration || !target.Equals(_pendingBrowserAutoplay)) return;
-                try
-                {
-                    var result = await host.InvokeScriptAsync("JSON.stringify({url:location.href,state:document.readyState,started:performance.timeOrigin})");
-                    if (generation != _browserAutoplayGeneration || !target.Equals(_pendingBrowserAutoplay)) return;
-                    if (result == null) continue;
-                    using var outer = System.Text.Json.JsonDocument.Parse(result);
-                    var json = outer.RootElement.ValueKind == System.Text.Json.JsonValueKind.String ? outer.RootElement.GetString() : result;
-                    using var doc = System.Text.Json.JsonDocument.Parse(json!);
-                    var root = doc.RootElement;
-                    if (Uri.TryCreate(root.GetProperty("url").GetString(), UriKind.Absolute, out var current) &&
-                        target.Equals(current) && root.GetProperty("started").GetDouble() >= navigationStarted && root.GetProperty("state").GetString() is "interactive" or "complete")
-                    {
-                        _pendingBrowserAutoplay = null;
-                        _ = StartBrowserAutoplay(host, target, generation);
-                        return;
-                    }
-                }
-                catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or System.Collections.Generic.KeyNotFoundException) { }
+                var result = await host.InvokeScriptAsync(BrowserDocumentStateScript);
+                if (generation != _browserAutoplayGeneration || !target.Equals(_pendingBrowserAutoplay)) return;
+                if (!IsActiveBrowserDocument(result)) continue;
+                _pendingBrowserAutoplay = null;
+                _ = StartBrowserAutoplay(host, target, generation);
+                return;
             }
         }
 
         private void OnAvatarBrowserNavigationFinished(Uri url, bool success)
         {
             var target = _pendingBrowserAutoplay;
-            // Completion from an older navigation must not start playback on the wrong page.
-            if (target == null || !target.Equals(url)) return;
+            if (target == null) return;
+            if (!_browserActiveNavigation!.Equals(url))
+            {
+                if (success) _ = CompleteChangedBrowserUrlAsync(url, target, _browserAutoplayGeneration);
+                return;
+            }
             _pendingBrowserAutoplay = null;
             if (!success) { EndAvatarBrowserSession(); return; }
             _ = StartBrowserAutoplay(_hookedAvatarBrowser!, target, _browserAutoplayGeneration);
+        }
+
+        private async Task CompleteChangedBrowserUrlAsync(Uri url, Uri target, int generation)
+        {
+            var host = _hookedAvatarBrowser!;
+            var result = await host.InvokeScriptAsync(BrowserDocumentStateScript);
+            if (generation != _browserAutoplayGeneration || !target.Equals(_pendingBrowserAutoplay) ||
+                !IsActiveBrowserDocument(result, url, requireParsed: false)) return;
+            _pendingBrowserAutoplay = null;
+            _ = StartBrowserAutoplay(host, target, generation);
         }
 
         internal async Task StartBrowserAutoplay(WebHost host, Uri target, int generation)

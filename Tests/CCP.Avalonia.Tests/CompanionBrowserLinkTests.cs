@@ -249,4 +249,78 @@ public sealed class CompanionBrowserLinkTests
         Assert.Single(scripts, x => x.Contains("button.play-action"));
         return Task.CompletedTask;
     }));
+    [Fact]
+    public Task RedirectedVideoStartsAtParsedDocument() => AvaloniaTestDispatcher.RunAsync(() => WithShell(async (shell, host) =>
+    {
+        var scripts = new List<string>(); var step = new TaskCompletionSource(); var polls = 0;
+        var requested = new Uri("https://127.0.0.1/video");
+        var redirected = new Uri("https://127.0.0.1/result");
+        host.NavigationInvoker = _ => true;
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(script.Contains("document.readyState") ? "{\"url\":\"https://127.0.0.1/result#changed\",\"document\":\"https://127.0.0.1/result\",\"state\":\"interactive\",\"started\":9999999999999}" : "ok"); };
+        shell.BrowserDomPollDelay = () => ++polls == 1 ? step.Task : Task.Delay(-1);
+        shell.BrowserAutoplayDelay = () => Task.CompletedTask;
+        Assert.True(shell.NavigateToUrlInBrowser(requested.AbsoluteUri, true));
+        host.OnAllowedNavigationStarting(requested); host.OnAllowedNavigationStarting(redirected);
+        step.SetResult(); await Task.Yield();
+        Assert.Single(scripts, s => s.Contains("ccpAvatarMedia"));
+        host.OnNavigationCompleted(redirected);
+        Assert.Single(scripts, s => s.Contains("ccpAvatarMedia"));
+    }));
+
+    [Fact]
+    public Task RedirectedVideoUsesCompletionFallbackAndIgnoresOldCompletions() => AvaloniaTestDispatcher.RunAsync(() => WithShell(async (shell, host) =>
+    {
+        var scripts = new List<string>(); var step = new TaskCompletionSource();
+        var requested = new Uri("https://127.0.0.1/video");
+        var redirected = new Uri("https://127.0.0.1/result");
+        host.NavigationInvoker = _ => true;
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>("ok"); };
+        shell.BrowserDomPollDelay = () => step.Task;
+        shell.BrowserAutoplayDelay = () => Task.CompletedTask;
+        Assert.True(shell.NavigateToUrlInBrowser(requested.AbsoluteUri, true));
+        host.OnAllowedNavigationStarting(requested); host.OnAllowedNavigationStarting(redirected);
+        host.OnNavigationCompleted(requested, false);
+        Assert.DoesNotContain(scripts, s => s.Contains("ccpAvatarMedia"));
+        host.OnNavigationCompleted(redirected);
+        Assert.Single(scripts, s => s.Contains("ccpAvatarMedia"));
+        step.SetResult(); await Task.Yield();
+        Assert.Single(scripts, s => s.Contains("ccpAvatarMedia"));
+    }));
+
+    [Fact]
+    public Task NewNavigationRejectsStaleRedirectedDocumentAndCompletion() => AvaloniaTestDispatcher.RunAsync(() => WithShell(async (shell, host) =>
+    {
+        var scripts = new List<string>(); var step = new TaskCompletionSource();
+        var requested = new Uri("https://127.0.0.1/video");
+        var redirected = new Uri("https://127.0.0.1/result");
+        var next = new Uri("https://127.0.0.1/new");
+        host.NavigationInvoker = _ => true;
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(script.Contains("document.readyState") ? "{\"url\":\"https://127.0.0.1/result\",\"state\":\"interactive\",\"started\":1}" : "ok"); };
+        var polls = 0; shell.BrowserDomPollDelay = () => ++polls <= 2 ? step.Task : Task.Delay(-1);
+        shell.BrowserAutoplayDelay = () => Task.CompletedTask;
+        Assert.True(shell.NavigateToUrlInBrowser(requested.AbsoluteUri, true));
+        host.OnAllowedNavigationStarting(requested); host.OnAllowedNavigationStarting(redirected);
+        Assert.True(shell.NavigateToUrlInBrowser(next.AbsoluteUri, true));
+        host.OnAllowedNavigationStarting(next);
+        host.OnNavigationCompleted(redirected);
+        step.SetResult(); await Task.Yield();
+        Assert.DoesNotContain(scripts, s => s.Contains("ccpAvatarMedia"));
+        host.OnNavigationCompleted(next);
+        Assert.Single(scripts, s => s.Contains("ccpAvatarMedia"));
+    }));
+    [Fact]
+    public Task RedirectWithoutAnotherStartUsesTheNewDocument() => AvaloniaTestDispatcher.RunAsync(() => WithShell(async (shell, host) =>
+    {
+        var scripts = new List<string>(); var step = new TaskCompletionSource();
+        var requested = new Uri("https://127.0.0.1/video"); var redirected = new Uri("https://127.0.0.1/result");
+        host.NavigationInvoker = _ => true;
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(script.Contains("document.readyState") ? "{\"url\":\"https://127.0.0.1/result\",\"state\":\"loading\",\"started\":9999999999999}" : "ok"); };
+        shell.BrowserDomPollDelay = () => step.Task; shell.BrowserAutoplayDelay = () => Task.CompletedTask;
+        Assert.True(shell.NavigateToUrlInBrowser(requested.AbsoluteUri, true));
+        host.OnAllowedNavigationStarting(requested);
+        host.OnNavigationCompleted(redirected);
+        Assert.Single(scripts, s => s.Contains("ccpAvatarMedia"));
+        step.SetResult(); await Task.Yield();
+        Assert.Single(scripts, s => s.Contains("ccpAvatarMedia"));
+    }));
 }
