@@ -414,15 +414,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private int _artRequest;
         private string? _artMod;
+        private long _artModRevision;
         private bool _artQueued;
         internal Task FeatureArtReady { get; private set; } = Task.CompletedTask;
 
         private void QueueFeatureArt(bool force = false)
         {
             var mod = CoreMods.ActiveModId;
-            if (!force && _artQueued && _artMod == mod) return;
+            var revision = CoreMods.ModRevision;
+            if (!force && _artQueued && _artMod == mod && _artModRevision == revision) return;
             _artQueued = true;
             _artMod = mod;
+            _artModRevision = revision;
             FeatureArtReady = ApplyFeatureArtAsync(++_artRequest);
         }
 

@@ -9,6 +9,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Helpers;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -17,6 +18,7 @@ using AppA = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
+[Collection(RunsAloneCollection.Name)]
 public sealed class TabFirstShowWorkTests
 {
     private static void Setup()
@@ -115,4 +117,45 @@ public sealed class TabFirstShowWorkTests
         }
         finally { release.Set(); window.Close(); }
     });
+
+    [Fact]
+    public Task RemoteArtReloadsWhenSameModChangesWhileDetached() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var previousIdProvider = CoreMods.ActiveModIdProvider;
+        var package = new ModPackage(BuiltInMods.CCPDefault, null, isBuiltIn: true);
+        CoreMods.ActiveModIdProvider = () => package.Id;
+        Window? window = null;
+        try
+        {
+            var loads = 0;
+            var view = new RemoteControlTabView(() =>
+                ModArt.TryLoadBuiltIn(Interlocked.Increment(ref loads) == 1
+                    ? "features/remote_control.png" : "features/awareness.png", 800));
+            window = new Window { Content = view };
+            window.Show();
+            await view.FeatureArtReady.WaitAsync(TimeSpan.FromSeconds(30));
+            var plate = view.FindControl<Border>("HeroArtPlate")!;
+            var firstArt = Assert.IsType<ImageBrush>(plate.Background).Source;
+            Assert.NotNull(firstArt);
+            Assert.Equal(1, loads);
+
+            window.Content = null;
+            // The active package adopts new assets while this view is unsubscribed.
+            CoreMods.RaiseModChanged(null, package);
+            Assert.Equal(package.Id, CoreMods.ActiveModId);
+            window.Content = view;
+            await view.FeatureArtReady.WaitAsync(TimeSpan.FromSeconds(30));
+
+            Assert.Equal(2, loads);
+            var replacement = Assert.IsType<ImageBrush>(plate.Background).Source;
+            Assert.NotNull(replacement);
+            Assert.NotSame(firstArt, replacement);
+        }
+        finally
+        {
+            window?.Close();
+            CoreMods.ActiveModIdProvider = previousIdProvider;
+        }
+    }
 }
