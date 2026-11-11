@@ -21,10 +21,25 @@ public class RemoteHypnotubeTests
         RemoteCommands.PlayHypnotube = u => { played.Add(u); return null; };
         try
         {
-            Assert.Equal("not an eligible HypnoTube URL", RemoteCommands.Execute("play_hypnotube", new JObject { ["url"] = url }));
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("remote_invalid_hypnotube_url"), RemoteCommands.Execute("play_hypnotube", new JObject { ["url"] = url }));
             Assert.Empty(played);   // a bad link never reaches the browser
         }
         finally { RemoteCommands.PlayHypnotube = oldPlay; }
+    }
+
+    [Fact]
+    public void Refusal_uses_the_current_language()
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage("en");
+            Assert.Equal("not an eligible HypnoTube URL", RemoteCommands.Execute("play_hypnotube", null));
+            loc.SetLanguage("fr");
+            Assert.Equal("URL de vidéo HypnoTube non valide", RemoteCommands.Execute("play_hypnotube", null));
+        }
+        finally { loc.SetLanguage(previous); }
     }
 
     [Theory]

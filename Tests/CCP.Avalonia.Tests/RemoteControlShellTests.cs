@@ -52,9 +52,14 @@ public sealed class RemoteControlShellTests
     public Task Controller_gets_the_overlay_toast_start_lock_emotes_and_end_session() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        {
+            var fonts = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options();
+            var mappings = new Dictionary<string, global::Avalonia.Media.FontFamily>(fonts.FontFamilyMappings!);
+            mappings["Segoe UI"] = mappings["Segoe UI Black"] = new global::Avalonia.Media.FontFamily(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter);
+            fonts.FontFamilyMappings = mappings;
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().With(fonts).UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        }
         var (oldRelay, oldTime, oldProvider) = (RemoteControlTabView.Relay, MainShellWindow.RemoteOverlayTime, CoreSettings.ServiceProvider);
         var oldSink = global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink;
         var notified = new List<string>();
@@ -190,9 +195,14 @@ public sealed class RemoteControlShellTests
     public Task Controller_video_opens_over_the_overlay_and_stop_leave_and_offline_restore_the_blindfold() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        {
+            var fonts = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options();
+            var mappings = new Dictionary<string, global::Avalonia.Media.FontFamily>(fonts.FontFamilyMappings!);
+            mappings["Segoe UI"] = mappings["Segoe UI Black"] = new global::Avalonia.Media.FontFamily(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter);
+            fonts.FontFamilyMappings = mappings;
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().With(fonts).UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        }
         var (oldRelay, oldTime, oldProvider) = (RemoteControlTabView.Relay, MainShellWindow.RemoteOverlayTime, CoreSettings.ServiceProvider);
         var (oldSink, oldPlay, oldStop) = (global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink, RemoteCommands.PlayHypnotube, RemoteCommands.StopBrowserVideo);
         var oldSettle = MainShellWindow.TakeoverSettle;
@@ -233,16 +243,28 @@ public sealed class RemoteControlShellTests
 
             // A page engine from here on: the takeover script is what reaches it.
             var scripts = new List<string>();
-            web.ScriptInvoker = js => { scripts.Add(js); return Task.FromResult<string?>("armed"); };
+            var domReady = false;
+            web.ScriptInvoker = js => { scripts.Add(js); return Task.FromResult<string?>(js.Contains("performance.timeOrigin") && domReady ? "ccp-dom-ready" : "armed"); };
             await Poll(play.Replace("ID", "1"));
             Assert.True(browser.IsVisible);
             Assert.Equal(new Uri(video), web.Source);
             // WPF AutoPlayAndFullscreenVideoAsync (:823): once the page loads, play and request fullscreen.
             int Takeovers() => scripts.Count(js => js == global::ConditioningControlPanel.Avalonia.Views.Controls.WebHostMedia.TakeoverScript);
             Assert.Equal(0, Takeovers());
-            web.OnNavigationCompleted(new Uri(video));
-            for (var i = 0; i < 50 && Takeovers() == 0; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(5); }
+            // DOM ready runs before slow ads let navigation complete. Completion cannot run it twice.
+            domReady = true;
+            for (var i = 0; i < 300 && Takeovers() == 0; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(5); }
             Assert.Equal(1, Takeovers());
+            web.OnNavigationCompleted(new Uri(video));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, Takeovers());
+
+            // When DOM ready is unavailable, navigation completion still starts the takeover.
+            domReady = false;
+            await Poll(play.Replace("ID", "fallback"));
+            web.OnNavigationCompleted(new Uri(video));
+            for (var i = 0; i < 300 && Takeovers() < 2; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(5); }
+            Assert.Equal(2, Takeovers());
 
             // Leave without the stop (the subject's choice), back before the fade ends: still visible.
             service.Current.StopEffectsOnRemoteDisconnect = false;
@@ -266,7 +288,7 @@ public sealed class RemoteControlShellTests
             // The home page completing starts no takeover: the leave's stop retired the takeover armed for play 3.
             web.OnNavigationCompleted(new Uri("https://hypnotube.com/"));
             for (var i = 0; i < 10; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(5); }
-            Assert.Equal(1, Takeovers());
+            Assert.Equal(2, Takeovers());
             clock.Step(MainShellWindow.RemoteOverlayFadeOut);
             shell.RemoteOverlayTick();
             Assert.True(browser.IsVisible);

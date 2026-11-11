@@ -74,6 +74,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public event Action<Uri>? NavigationCompleted;
 
+        /// <summary>DOM parsed for a newly navigated document. NativeWebView has no DOM event, so
+        /// the browser takeover watches readyState until this signal or navigation completion.</summary>
+        internal event Action<Uri>? DomContentLoaded;
+
+        internal Action WatchDomReady()
+        {
+            var cancelled = false;
+            var started = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            async Task Watch()
+            {
+                for (var i = 0; i < 600 && !cancelled; i++)
+                {
+                    await Task.Delay(100);
+                    if (cancelled) break;
+                    // Ignore the previous document, including a reload of the same URL.
+                    var result = await InvokeScriptAsync($"(function(){{return ((performance.timeOrigin || performance.timing.navigationStart) >= {started} && document.readyState !== 'loading') ? 'ccp-dom-ready' : '';}})()");
+                    if (cancelled) break;
+                    if (result?.Trim('"') == "ccp-dom-ready" && Source is { } url)
+                    {
+                        DomContentLoaded?.Invoke(url);
+                        break;
+                    }
+                }
+            }
+            _ = Watch();
+            return () => cancelled = true;
+        }
+
         /// <summary>Completion outcome, for decorative embeds that must fall back on a failed load.</summary>
         public event Action<Uri, bool>? NavigationFinished;
 

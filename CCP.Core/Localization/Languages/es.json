@@ -8202,5 +8202,6 @@
   "shop_item_bubbles_v2_name": "Burbujas v2",
   "shop_item_rt_bundle_1_name": "Racing Thoughts: pack 1",
   "shop_item_rt_bundle_2_name": "Racing Thoughts: pack 2",
-  "shop_item_rt_bundle_3_name": "Racing Thoughts: pack 3"
+  "shop_item_rt_bundle_3_name": "Racing Thoughts: pack 3",
+  "remote_invalid_hypnotube_url": "no es una URL de video de HypnoTube válida"
 }

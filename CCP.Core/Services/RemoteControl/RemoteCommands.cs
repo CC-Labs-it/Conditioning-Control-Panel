@@ -90,7 +90,7 @@ namespace ConditioningControlPanel.Services
                 // here it is reported, as every other refusal (ccp-bugs#1138).
                 case "play_hypnotube":
                     var htUrl = p?["url"]?.ToString();
-                    if (!Helpers.HtUrlHelper.IsEligibleHtUrl(htUrl)) return "not an eligible HypnoTube URL";
+                    if (!Helpers.HtUrlHelper.IsEligibleHtUrl(htUrl)) return Localization.Loc.Get("remote_invalid_hypnotube_url");
                     return PlayHypnotube is { } play ? play(htUrl!) : NotOnThisBuild;
                 case "trigger_video": return CoreEngine.Video?.Trigger() == true ? null : CoreEngine.Video == null ? NotOnThisBuild : "a video is already playing";
                 case "start_video": if (CoreEngine.Video == null) return NotOnThisBuild; CoreEngine.Video.Start(); return null;
