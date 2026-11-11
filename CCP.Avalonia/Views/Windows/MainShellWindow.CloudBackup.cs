@@ -15,7 +15,7 @@
 // Members, so nothing disappears silently:
 //   internal void ReloadSettingsUiAfterRestore()
 //       The manual restore repaints through CurrentReplaced + AppSettingsTabView.RefreshSections.
-//       The startup restore prompt (App.CheckCloudSettingsRestoreAsync) is not ported.
+//       The startup welcome-back restore is wired in Platform/WelcomeBackOffer.cs (WPF App.xaml.cs:4885-5319).
 //   internal async void BtnBackupSettingsNow_Click(…) / BtnRestoreSettings_Click(…)
 //       Ported to AccountSettingsSection.BackupNowAsync / RestoreAsync (the local-wins list is
 //       CloudSettingsBackup.KeepLocal); the repaint is CurrentReplaced + RefreshSections.
