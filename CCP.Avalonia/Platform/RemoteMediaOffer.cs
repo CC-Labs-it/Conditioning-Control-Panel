@@ -23,6 +23,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private static (string Surface, Window? Owner)? _pending;
         private static bool ModalUp => AppUpdater.IsUpdateDialogActive || MainShellWindow.IsStartupDialogShowing;
 
+        /// <summary>Test seam: override the shared switch without changing its production default.</summary>
+        internal static bool? EnabledOverrideForTests;
+
         /// <summary>Test seam: what opening the card does (default: the intro popup).</summary>
         internal static Action<Window?> ShowCard = owner => FeatureIntroPopup.ShowIfFirstTime(IntroKey, owner);
 
@@ -49,7 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         internal static void Offer(string surface, Window? owner = null)
         {
-            if (!PopupSwitches.RemoteMediaOffer) return;
+            if (!(EnabledOverrideForTests ?? PopupSwitches.RemoteMediaOffer)) return;
             try
             {
                 if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => Offer(surface, owner)); return; }
