@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,6 +28,16 @@ public class PossessionSwapRelabelTests
         public void EdgePulse(double strength) { }
         public bool AnyPossessed => false;
         public void ReleaseAll() { }
+    }
+    private sealed class CaptionSource : INotifyPropertyChanged
+    {
+        private string _text = "Start Session";
+        public event PropertyChangedEventHandler? PropertyChanged;
+        public string Text
+        {
+            get => _text;
+            set { _text = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Text))); }
+        }
     }
     private static PossessionContext Context(Action? onCharge = null) => new()
     {
@@ -82,6 +93,58 @@ public class PossessionSwapRelabelTests
             effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
             Assert.Same(original, button.Content);
             Assert.False(target.IsLive);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
+    public void RelabelRestoresCurrentBoundNestedLabelAndKeepsBinding() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var source = new CaptionSource();
+        var icon = new TextBlock { Text = "▶" };
+        var label = new TextBlock();
+        label.Bind(TextBlock.TextProperty, new Binding(nameof(CaptionSource.Text)) { Source = source });
+        var content = new StackPanel { Orientation = global::Avalonia.Layout.Orientation.Horizontal, Children = { icon, label } };
+        var button = new Button { Content = content, Width = 200, Height = 40 };
+        var window = Show(button);
+        try
+        {
+            var effect = new RelabelEffect();
+            var target = Target(button);
+            var ctx = Context();
+            Assert.Equal("Start Session", label.Text);
+            Assert.True(effect.CanApply(ctx, target));
+            effect.ApplyAsync(ctx, target, CancellationToken.None).GetAwaiter().GetResult();
+            Assert.Equal("Stay", label.Text);
+            Assert.Equal("▶", icon.Text);
+            Assert.Same(content, button.Content);
+            source.Text = "Stop Session";
+            Assert.Equal("Stay", label.Text);
+            effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+            Assert.Equal("Stop Session", label.Text);
+            source.Text = "Start Again";
+            Assert.Equal("Start Again", label.Text);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
+    public void RelabelRestoresUnboundNestedLabel() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var original = new string("Stop Session".ToCharArray());
+        var label = new TextBlock { Text = original };
+        var button = new Button { Content = new StackPanel { Children = { new TextBlock { Text = "▶" }, label } }, Width = 200, Height = 40 };
+        var window = Show(button);
+        try
+        {
+            var effect = new RelabelEffect();
+            var ctx = Context();
+            var target = Target(button);
+            Assert.True(effect.CanApply(ctx, target));
+            effect.ApplyAsync(ctx, target, CancellationToken.None).GetAwaiter().GetResult();
+            Assert.Equal("Stay", label.Text);
+            effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+            Assert.Same(original, label.Text);
         }
         finally { window.Close(); }
     });
