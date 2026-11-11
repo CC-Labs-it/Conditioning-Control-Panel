@@ -2,7 +2,7 @@
 # Build the linux-x64 tarball the Flatpak manifest and the AUR PKGBUILD consume
 # (docs/avalonia-linux-install.html). Local only: never uploads anything.
 #   bash packaging/linux/build-tarball.sh [out-dir]   -> prints the tarball path
-# Layout: ConditioningControlPanel/{CCP.Avalonia, LICENSE, Resources/Models/vosk/<model>,
+# Layout: ConditioningControlPanel/{CCP.Avalonia, conditioning-control-panel.sh, LICENSE, Resources/Models/vosk/<model>,
 #         share/{applications,icons/hicolor/*/apps,metainfo}/<app-id>.*}  (share/ maps onto /usr/share or /app/share)
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
@@ -20,6 +20,7 @@ cp -r "$model" "$pub/Resources/Models/vosk/"
 cp -r "$root/packaging/linux/share" "$pub/"
 cp "$root/LICENSE" "$pub/"
 cp "$root/packaging/linux/RT-ENGINE-NOTICES.txt" "$pub/"
+cp "$root/packaging/linux/conditioning-control-panel.sh" "$pub/"   # the launcher: OpenSSL 3 hint, then CCP.Avalonia
 mkdir -p "$pub/packaging/linux"
 cp "$root/packaging/linux/rt-engine-check.sh" "$pub/packaging/linux/"
 
