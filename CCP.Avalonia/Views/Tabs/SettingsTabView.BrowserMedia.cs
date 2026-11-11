@@ -15,6 +15,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal bool BrowserMediaOwnsSlot { get; private set; }
         internal Func<DateTime> BrowserMediaClock = () => DateTime.UtcNow;
         private DateTime _browserMediaBeat;
+        internal bool BrowserMediaAvatarLink { get; private set; }
+        internal bool BrowserMediaTakeover { get; private set; }
         private DispatcherTimer? _browserMediaWatchdog;
         private double _browserMediaDuration;
         private IDisposable? _browserMediaRecovery;
@@ -102,6 +104,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal Func<Action, TimeSpan, IDisposable> ScheduleBrowserMediaRecovery =
             (action, delay) => DispatcherTimer.RunOnce(action, delay);
 
+        // WPF CompanionLinkLauncher.cs:47 and BrowserMediaService.cs:196.
+        internal void ClaimAvatarLink()
+        {
+            CancelBrowserMediaRecovery();
+            BrowserMediaPlaying = false;
+            _browserMediaDuration = 0;
+            BrowserMediaAvatarLink = BrowserMediaTakeover = true;
+            BrowserMediaOwnsSlot = BrowserMediaOwnsSlot || (CoreEngine.Video?.IsPlaying != true
+                && CoreEngine.BubbleCount?.IsBusy != true && !Windows.BubbleCountWindow.IsAnyOpen()
+                && !Windows.LockCardWindow.IsAnyOpen() && !Windows.PopQuizWindow.IsAnyOpen());
+            _browserMediaBeat = BrowserMediaClock();
+            StartBrowserMediaWatchdog();
+        }
+
+        internal void ReleaseAvatarLink()
+        {
+            if (BrowserMediaAvatarLink) StopBrowserMediaTracking();
+        }
+
+        private void StartBrowserMediaWatchdog()
+        {
+            _browserMediaWatchdog ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+            _browserMediaWatchdog.Tick -= BrowserMediaWatchdogTick;
+            _browserMediaWatchdog.Tick += BrowserMediaWatchdogTick;
+            _browserMediaWatchdog.Start();
+        }
+
         private void StartBrowserMediaReporter() => _ = BrowserWebHost.InvokeScriptAsync(BrowserMediaReporter);
 
         internal void OnBrowserMediaMessage(string message)
@@ -114,14 +143,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 using var json = JsonDocument.Parse(message);
                 var root = json.RootElement;
                 if (root.ValueKind != JsonValueKind.Object
-                    || !root.TryGetProperty("type", out var type) || type.GetString() != "ccpMedia"
-                    || !root.TryGetProperty("state", out var state)) return;
+                    || !root.TryGetProperty("type", out var type)) return;
+                if (type.GetString() == "fsExit") { BrowserMediaFullscreenExited(); return; }
+                if (type.GetString() != "ccpMedia" || !root.TryGetProperty("state", out var state)) return;
                 switch (state.GetString())
                 {
                     case "playing":
                         // WPF BrowserMediaService.cs:248-257 tries once per user session.
                         // This head has no shared queue, so use its currently exposed owners.
-                        if (!BrowserMediaPlaying)
+                        if (!BrowserMediaPlaying && !BrowserMediaAvatarLink)
                         {
                             _browserMediaDuration = 0;
                             BrowserMediaOwnsSlot = CoreEngine.Video?.IsPlaying != true
@@ -131,34 +161,55 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                         }
                         if (MediaDuration(root) is double duration) _browserMediaDuration = duration;
                         BrowserMediaPlaying = true;
-                        if (BrowserMediaOwnsSlot) ArmBrowserMediaRecovery();
+                        if (!BrowserMediaTakeover) BrowserMediaAvatarLink = false;
+                        if (BrowserMediaOwnsSlot || BrowserMediaTakeover) ArmBrowserMediaRecovery();
                         _browserMediaBeat = BrowserMediaClock();
-                        _browserMediaWatchdog ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-                        _browserMediaWatchdog.Tick -= BrowserMediaWatchdogTick;
-                        _browserMediaWatchdog.Tick += BrowserMediaWatchdogTick;
-                        _browserMediaWatchdog.Start();
+                        StartBrowserMediaWatchdog();
                         break;
                     case "progress":
                         if (BrowserMediaPlaying)
                         {
                             _browserMediaBeat = BrowserMediaClock();
                             if (MediaDuration(root) is double reportedDuration && Math.Abs(reportedDuration - _browserMediaDuration) > 1)
+                            {
                                 _browserMediaDuration = reportedDuration;
+                                if (BrowserMediaTakeover) ArmBrowserMediaRecovery();
+                            }
                         }
                         break;
-                    case "stopped": StopBrowserMediaTracking(); break;
+                    case "stopped":
+                        if (BrowserMediaAvatarLink && !BrowserMediaPlaying
+                            && root.TryGetProperty("reason", out var reason) && reason.GetString() == "navigated")
+                        {
+                            _browserMediaBeat = BrowserMediaClock();
+                            break;
+                        }
+                        StopBrowserMediaTracking(); break;
+                    case "fsExit": BrowserMediaFullscreenExited(); break;
                 }
             }
             catch (JsonException) { }
             catch (InvalidOperationException) { }
         }
 
+        private void BrowserMediaFullscreenExited()
+        {
+            if (!BrowserMediaTakeover) return;
+            BrowserMediaTakeover = false;
+            if (BrowserMediaPlaying) BrowserMediaAvatarLink = false;
+            CancelBrowserMediaRecovery();
+            if (BrowserMediaPlaying && BrowserMediaOwnsSlot) ArmBrowserMediaRecovery();
+        }
+
         private void BrowserMediaWatchdogTick(object? sender, EventArgs e) => CheckBrowserMediaHeartbeat();
 
         internal void CheckBrowserMediaHeartbeat()
         {
-            if (BrowserMediaPlaying && (BrowserMediaClock() - _browserMediaBeat).TotalSeconds >= 20)
+            if ((BrowserMediaPlaying || BrowserMediaAvatarLink) && (BrowserMediaClock() - _browserMediaBeat).TotalSeconds >= (BrowserMediaPlaying ? 20 : 60))
+            {
+                if (BrowserMediaTakeover) _ = BrowserWebHost.InvokeScriptAsync(BrowserMediaRecoveryScript);
                 StopBrowserMediaTracking();
+            }
         }
 
         // WPF BrowserMediaService.cs:436-450 and InteractionQueueService.cs:284-298:
@@ -170,12 +221,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void ArmBrowserMediaRecovery()
         {
             CancelBrowserMediaRecovery();
-            var seconds = _browserMediaDuration > 0 ? Math.Max(300, _browserMediaDuration + 45) : 3630;
+            var seconds = BrowserMediaTakeover
+                ? (_browserMediaDuration > 0 ? Math.Min(3600, _browserMediaDuration + 15) : 3600)
+                : (_browserMediaDuration > 0 ? Math.Max(300, _browserMediaDuration + 45) : 3630);
             var delay = TimeSpan.FromSeconds(Math.Min(seconds, TimeSpan.MaxValue.TotalSeconds - 1));
             var generation = _browserMediaRecoveryGeneration;
             _browserMediaRecovery = ScheduleBrowserMediaRecovery(() =>
             {
-                if (generation != _browserMediaRecoveryGeneration || !BrowserMediaOwnsSlot) return;
+                if (generation != _browserMediaRecoveryGeneration || (!BrowserMediaOwnsSlot && !BrowserMediaTakeover)) return;
                 // WPF InteractionQueueService.cs:471-472 -> BrowserMediaService.cs:400-414 ->
                 // MainWindow.Browser.cs:981-984: stop media and leave fullscreen before releasing.
                 _ = BrowserWebHost.InvokeScriptAsync(BrowserMediaRecoveryScript);
@@ -199,6 +252,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void ClearBrowserMediaClaim()
         {
             BrowserMediaOwnsSlot = false;
+            BrowserMediaTakeover = false;
+            BrowserMediaAvatarLink = false;
             CancelBrowserMediaRecovery();
             CancelBrowserDeferredVideo();
         }
@@ -214,6 +269,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void StopBrowserMediaTracking()
         {
             BrowserMediaPlaying = false;
+            BrowserMediaAvatarLink = false;
+            BrowserMediaTakeover = false;
             _browserMediaDuration = 0;
             BrowserMediaOwnsSlot = false;
             CancelBrowserMediaRecovery();
@@ -295,6 +352,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
                 else init();
                 window.addEventListener('pagehide', function() { report('navigated'); });
+                document.addEventListener('fullscreenchange', function() {
+                    if (!document.fullscreenElement) post({ type: 'ccpMedia', state: 'fsExit' });
+                });
             })();
             """;
     }

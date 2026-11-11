@@ -10,6 +10,8 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -21,6 +23,87 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class BrowserMediaTakeoverTests
 {
+    [Fact]
+    public void AvatarLinkClaimsBeforeNavigationAndReleasesBeforeFallback() => WithDesktopBrowser(host =>
+    {
+        var shell = MainShellWindow.Current!;
+        var tab = shell.Named<SettingsTabView>("SettingsTab")!;
+        var oldNavigate = CompanionLinkLauncher.Navigate;
+        var oldOpen = AppUpdater.OpenUrl;
+        var opened = false;
+        try
+        {
+            CompanionLinkLauncher.Navigate = _ =>
+            {
+                Assert.True(tab.BrowserMediaAvatarLink);
+                Assert.True(tab.BrowserMediaTakeover);
+                Assert.True(shell.BrowserMediaBlocksInterruptions);
+                Assert.True(shell.Autonomy.IsBusy());
+                return false;
+            };
+            AppUpdater.OpenUrl = (_, _) =>
+            {
+                Assert.False(tab.BrowserMediaAvatarLink);
+                Assert.False(tab.BrowserMediaOwnsSlot);
+                opened = true;
+                return Task.CompletedTask;
+            };
+            CompanionLinkLauncher.OpenAsync("https://example.com/video").GetAwaiter().GetResult();
+            Assert.True(opened);
+        }
+        finally { CompanionLinkLauncher.Navigate = oldNavigate; AppUpdater.OpenUrl = oldOpen; }
+    });
+
+    [Fact]
+    public void AvatarLinkLoadHeartbeatAndTakeoverHardStop() => WithDesktopBrowser(host =>
+    {
+        var tab = MainShellWindow.Current!.Named<SettingsTabView>("SettingsTab")!;
+        var clock = new BubbleCountQueueTests.Clock();
+        var scripts = new List<string>();
+        var oldCap = CoreSettings.Current.VideoMaxDurationSeconds;
+        CoreSettings.Current.VideoMaxDurationSeconds = 5;
+        tab.BrowserMediaClock = () => clock.GetUtcNow().UtcDateTime;
+        tab.ScheduleBrowserMediaRecovery = (action, delay) =>
+            clock.CreateTimer(_ => action(), null, delay, System.Threading.Timeout.InfiniteTimeSpan);
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
+        try
+        {
+            tab.ClaimAvatarLink();
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"stopped\",\"reason\":\"navigated\"}");
+            Assert.True(tab.BrowserMediaAvatarLink);
+            clock.Advance(TimeSpan.FromSeconds(59));
+            tab.CheckBrowserMediaHeartbeat();
+            Assert.True(tab.BrowserMediaAvatarLink);
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tab.CheckBrowserMediaHeartbeat();
+            Assert.False(tab.BrowserMediaAvatarLink);
+            tab.ClaimAvatarLink();
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\",\"dur\":30}");
+            clock.Advance(TimeSpan.FromSeconds(19));
+            tab.CheckBrowserMediaHeartbeat();
+            Assert.True(tab.BrowserMediaPlaying);
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tab.CheckBrowserMediaHeartbeat();
+            Assert.False(tab.BrowserMediaPlaying);
+            scripts.Clear();
+            tab.ClaimAvatarLink();
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\",\"dur\":30}");
+            clock.Advance(TimeSpan.FromSeconds(45) - TimeSpan.FromTicks(1));
+            Assert.Empty(scripts);
+            clock.Advance(TimeSpan.FromTicks(1));
+            Assert.Contains(SettingsTabView.BrowserMediaRecoveryScript, scripts);
+            scripts.Clear();
+            tab.ClaimAvatarLink();
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\",\"dur\":30}");
+            host.OnWebMessage("{\"type\":\"fsExit\"}");
+            clock.Advance(TimeSpan.FromSeconds(45));
+            Assert.Empty(scripts);
+            Assert.True(tab.BrowserMediaPlaying);
+            Assert.False(tab.BrowserMediaTakeover);
+        }
+        finally { CoreSettings.Current.VideoMaxDurationSeconds = oldCap; host.ScriptInvoker = null; }
+    });
+
     [Fact]
     public void NavigationAndMediaReportsDeferScheduledTakeoverUntilPlaybackStops()
     {
