@@ -135,6 +135,17 @@ internal static class X11PanicKey
         return true;
     }
 
+    // Keyword input must never prevent panic or the remaining listener handlers from running.
+    // The callback is installed by the keyword source when that source is available.
+    internal static volatile Action<IntPtr, int>? KeywordPress;
+
+    internal static void RoutePress(int keycode, Action onPress, Action<int>? keyword)
+    {
+        Route(true, keycode, onPress);
+        try { keyword?.Invoke(keycode); }
+        catch (Exception ex) { Log.Warning(ex, "Keyword input failed"); }
+    }
+
     [DllImport(LibX11)] private static extern int XQueryKeymap(IntPtr display, byte[] keys);
     private static IntPtr _queryDisplay;
     private static readonly object QueryGate = new();
@@ -242,7 +253,8 @@ internal static class X11PanicKey
 
                 Resolve();
                 if (evType == XI_RawKeyRelease) { Route(false, keycode, onPress); continue; }
-                Route(true, keycode, onPress);
+                var keyword = KeywordPress;
+                RoutePress(keycode, onPress, keyword == null ? null : code => keyword(display, code));
                 // Preserve the base safety order: panic posts before countdown completion.
                 RouteCountdownPress(evType, keycode);
                 // She's Listening push-to-talk rides the same XI2 listener (WPF GlobalKeyboardHook).
