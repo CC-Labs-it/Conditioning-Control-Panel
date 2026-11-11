@@ -168,6 +168,8 @@ namespace ConditioningControlPanel.Services.Companion.Brain
         private bool _disposed;
         internal event Action? ChatMemoryEdited;
         internal bool IsChatMemoryEnabled => ChatDerivedPersistenceEnabled;
+        // The Avalonia head opts in through its existing store setup; WPF keeps its original selection.
+        internal bool UseRenderedInjectionBudget { get; set; }
 
         /// <summary>Production constructor: real path, auto-load, app signals mirrored automatically.</summary>
         public MemoryStore() : this(DefaultMemoryPath, null, null, mirrorAppSignals: true) { }
@@ -544,13 +546,20 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             }
 
             var sb = new StringBuilder();
-            void Append(string line) => sb.AppendLine(line);
+            int spent = 0;
+
+            void Append(string line)
+            {
+                sb.AppendLine(line);
+                spent += ChatSession.ApproxTokens(line) + 1;
+            }
 
             bool TryAppend(string line)
             {
-                // sb already includes the actual platform newline after each previous line.
-                // The trailing newline on this line is trimmed from the returned block.
-                if (((long)sb.Length + line.Length) / 4 > budget) return false;
+                // Account for actual platform newlines only on the head that opts in.
+                if (UseRenderedInjectionBudget
+                    ? ((long)sb.Length + line.Length) / 4 > budget
+                    : spent + ChatSession.ApproxTokens(line) + 1 > budget) return false;
                 Append(line);
                 return true;
             }

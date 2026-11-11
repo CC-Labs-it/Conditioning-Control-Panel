@@ -43,6 +43,29 @@ public sealed class MemorySignalSeedTests
         }
     }
 
+    [Fact]
+    public void SeededMirrorUsesRenderedMemoryBudget()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-memsig-").FullName;
+        var (factory, sources, sent) = (MemoryStore.SignalMirrorFactory, MemorySignalWriter.SourcesHook, CompanionBrain.UserMessageSent);
+        try
+        {
+            AvApp.SeedMemorySignals();
+            using var store = new MemoryStore(Path.Combine(dir, "memory.json"), sessionSeed: 1234);
+            using var writer = MemoryStore.SignalMirrorFactory!(store)!;
+            store.AddFact("abc", MemoryFactKind.Event, 0.5);
+            store.AddFact("def", MemoryFactKind.Event, 0.5);
+            var block = store.GetInjectionBlock(3)!;
+            Assert.Contains("- abc", block);
+            Assert.Contains("- def", block);
+        }
+        finally
+        {
+            (MemoryStore.SignalMirrorFactory, MemorySignalWriter.SourcesHook, CompanionBrain.UserMessageSent) = (factory, sources, sent);
+            Directory.Delete(dir, true);
+        }
+    }
+
     private static int Handlers(string evt) =>
         (typeof(AvApp).GetField(evt, BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null) as Delegate)?.GetInvocationList().Length ?? 0;
 }

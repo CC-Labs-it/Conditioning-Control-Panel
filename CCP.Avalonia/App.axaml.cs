@@ -303,6 +303,7 @@ namespace ConditioningControlPanel.Avalonia
         {
             ConditioningControlPanel.Services.Companion.Brain.MemoryStore.SignalMirrorFactory = store =>
             {
+                store.UseRenderedInjectionBudget = true;
                 var writer = new ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter(store);
                 try { writer.Start(); }
                 catch { writer.Dispose(); throw; }
