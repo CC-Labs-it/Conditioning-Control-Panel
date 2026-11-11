@@ -103,6 +103,19 @@ public sealed class WindowChromeLifecycleTests
     });
 
     [Fact]
+    public Task ARestoreFromTheTrayIsNoStartup_ALiveTakeoverStaysOn() => WithShell(false, shell =>
+    {
+        // Opened fires on every Show, and the startup rule clears a run flag it thinks is stale.
+        Settings.Current.AutonomyResumeOnStartup = false;
+        shell.CreateTray(); shell.TrayHostPresent = () => true;
+        shell.Close();
+        shell.ShowFromTray();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(shell.IsVisible);
+        Assert.True(Settings.Current.AutonomyModeEnabled);
+    });
+
+    [Fact]
     public Task TrayHideKeepsSessionAndDoesNotRaiseExitCleanup() => WithShell(false, shell =>
     {
         shell.CreateTray(); shell.TrayHostPresent = () => true;

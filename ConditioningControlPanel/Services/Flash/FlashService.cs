@@ -4447,7 +4447,7 @@ namespace ConditioningControlPanel.Services
         /// pool that actually played could be a fraction of the list the library showed, small enough
         /// that one clip came back on every single flash.</para>
         ///
-        /// <para>Mirrors <c>AvatarTubeWindow.GetRandomVoiceLinePath</c>, which has always taken the
+        /// <para>Mirrors the old <c>AvatarTubeWindow.GetRandomVoiceLinePath</c>, which always took the
         /// filtered list with an unfiltered fallback. Caller holds <see cref="_lockObj"/>.</para>
         /// </summary>
         private List<string> BuildVoiceLinePool()

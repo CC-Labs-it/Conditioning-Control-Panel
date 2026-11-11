@@ -1823,8 +1823,9 @@ namespace ConditioningControlPanel
 
                 if (App.ProfileSync == null) return;
 
-                // Disable button during request
+                // Disable both doors (Profile bin, Settings > Data) during request
                 if (DiscordTab.BtnDeleteProfile != null) DiscordTab.BtnDeleteProfile.IsEnabled = false;
+                if (AppSettingsTab?.SectionData != null) AppSettingsTab.SectionData.BtnDeleteAccount.IsEnabled = false;
 
                 var (success, error) = await App.ProfileSync.DeleteAccountAsync();
 
@@ -1865,6 +1866,7 @@ namespace ConditioningControlPanel
             finally
             {
                 if (DiscordTab.BtnDeleteProfile != null) DiscordTab.BtnDeleteProfile.IsEnabled = true;
+                if (AppSettingsTab?.SectionData != null) AppSettingsTab.SectionData.BtnDeleteAccount.IsEnabled = true;
             }
         }
 

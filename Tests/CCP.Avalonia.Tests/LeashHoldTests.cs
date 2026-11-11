@@ -270,6 +270,8 @@ public sealed class LeashHoldTests
         svc.ApplyBlock(LeashHeadTests.BlockWithPunishment());
         (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldKeyDown, MainShellWindow.LeashHoldClockInterval) = (svc, clock, key, Parked);
         MainShellWindow? shell = null;
+        var oldTeardown = PanicWatchdog.Teardown;
+        PanicWatchdog.Teardown = () => { };           // a slow first press must not run the real teardown off-thread
         try
         {
             shell = new MainShellWindow();
@@ -285,9 +287,103 @@ public sealed class LeashHoldTests
             shell?.Close();
             Dispatcher.UIThread.RunJobs();
             PortalPanicShortcut.SetSessionForTests(null, null);
+            PanicWatchdog.Teardown = oldTeardown;
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
             (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldKeyDown, MainShellWindow.LeashHoldClockInterval) = (oldSvc, oldClock, oldKey, oldInterval);
             CoreSettings.ServiceProvider = oldSettings;
         }
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void HoldHeardOnBothRoutes_KeepsThePortal_AndStillAsks(bool x11First) => WithPortalShell(() => true, (shell, clock) =>
+    {
+        // PR #4442: dropping the portal's echo also dropped the hold's portal ownership, so the idle poll
+        // closed the grab at 2 s, the hold ended with the key still down and the cut was never offered.
+        CoreSettings.Current.PanicKeyEnabled = true;
+        shell.PanicRouteClock = () => 1000;
+        PortalPanicShortcut.SetSessionForTests("/test/session", shell.OnPortalPanicReleased);
+        Action portal = () => PortalPanicShortcut.Route("/test/session", "panic", true, shell.OnPortalPanicActivated, shell.OnPortalPanicReleased, clock.Now.UtcDateTime);
+        if (x11First) { shell.OnX11PanicPress(); portal(); } else { portal(); shell.OnX11PanicPress(); }
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(MainShellWindow.PortalHoldLive);
+        Assert.False(LeashHoldRing.IsShown);          // a tap shows no ring: the echo is not a repeat
+        for (int t = 250; t <= 2000; t += 250) { clock.Now += TimeSpan.FromMilliseconds(250); shell.LeashHoldClockTick(); }
+        MainShellWindow.ReleasePortalWhenUnused();    // the 2 s poll, with no effect left running
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(PortalPanicShortcut.IsBound);
+        Assert.True(LeashHoldRing.IsShown);
+        for (int t = 2250; t <= 5500; t += 250) { clock.Now += TimeSpan.FromMilliseconds(250); shell.LeashHoldClockTick(); }
+        Dispatcher.UIThread.RunJobs();
+        Assert.NotNull(LeashCutConfirmWindow.Current);
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PressHeardOnBothRoutes_IsWatchedWhicheverRouteWon(bool x11First) => WithPortalShell(() => true, (shell, clock) =>
+    {
+        // PR #4442: only the X11 route armed the watchdog, so a portal win left a wedged UI with no fallback.
+        CoreSettings.Current.PanicKeyEnabled = true;
+        shell.PanicRouteClock = () => 1000;
+        var fired = new System.Threading.ManualResetEventSlim();
+        var old = PanicWatchdog.Teardown;
+        PanicWatchdog.Teardown = fired.Set;
+        try
+        {
+            if (x11First) { shell.OnX11PanicPress(); shell.OnPortalPanicActivated(); }
+            else { shell.OnPortalPanicActivated(); shell.OnX11PanicPress(); }
+            // This thread is the UI thread and does not pump, so the queued press never runs.
+            Assert.True(fired.Wait(PanicWatchdog.Timeout + TimeSpan.FromSeconds(8)));
+        }
+        finally
+        {
+            Dispatcher.UIThread.RunJobs();       // the press was left queued: run it before its hold state leaks
+            shell.LeashHoldReleased();
+            PanicWatchdog.Teardown = old;
+        }
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ProvenPortalHold_HeardOnBothRoutes_OnlyDeactivatedEndsIt(bool x11First) => WithPortalShell(() => false, (shell, clock) =>
+    {
+        // Real desktops send Deactivated, so a hold both routes heard is the portal's: X11's release and key
+        // state are ignored, or a focus change to a Wayland window would end it with the key still down.
+        CoreSettings.Current.PanicKeyEnabled = true;
+        shell.PanicRouteClock = () => 1000;
+        PortalPanicShortcut.SetSessionForTests("/test/session", shell.OnPortalPanicReleased);
+        Action<bool> route = pressed => PortalPanicShortcut.Route("/test/session", "panic", pressed, shell.OnPortalPanicActivated, shell.OnPortalPanicReleased, clock.Now.UtcDateTime);
+        route(false);                                 // the portal has proven it reports release
+        if (x11First) { shell.OnX11PanicPress(); route(true); } else { route(true); shell.OnX11PanicPress(); }
+        Dispatcher.UIThread.RunJobs();
+        X11PanicKey.PanicReleased?.Invoke();
+        Dispatcher.UIThread.RunJobs();
+        for (int t = 250; t <= 1000; t += 250) { clock.Now += TimeSpan.FromMilliseconds(250); shell.LeashHoldClockTick(); }
+        Assert.True(MainShellWindow.PortalHoldLive);
+        route(false);
+        Assert.False(MainShellWindow.PortalHoldLive);
+    });
+
+    [Fact]
+    public void AnEchoThatOvertakesTheX11HoldStep_ShowsNoRing() => WithPortalShell(() => true, (shell, clock) =>
+    {
+        // The echo is posted from the D-Bus thread and can land before the X11 thread posts its hold step.
+        shell.OnPortalEchoPressed();
+        shell.OnX11HoldPressed();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(LeashHoldRing.IsShown);
+        Assert.True(MainShellWindow.PortalHoldLive);
+    });
+
+    [Fact]
+    public void APortalPressWhoseStopPassThrows_StillStartsTheHold() => WithPortalShell(() => true, (shell, clock) =>
+    {
+        // XInput2's report of this press was dropped as an echo, so this is the only route that can start it.
+        Assert.Throws<InvalidOperationException>(() => shell.RunPortalPress(() => throw new InvalidOperationException("stop pass")));
+        Assert.True(MainShellWindow.PortalHoldLive);
     });
 
     [Fact]

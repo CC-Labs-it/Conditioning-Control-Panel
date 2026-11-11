@@ -16,6 +16,7 @@ const FACES = {
   buy: { price: true, buttons: [{ key: 'shop_buy', intent: 'select', main: true }, KEEP] },
   owned: { stamp: 'owned', buttons: [{ key: 'shop_wear', intent: 'select', main: true }, KEEP] },
   prime: { price: true, stamp: 'prime', buttons: [KEEP] },
+  discord: { price: true, buttons: [KEEP] },
   short: { price: true, buttons: [KEEP] },
   soon: { buttons: [] },
   gone: { buttons: [] },
@@ -27,6 +28,7 @@ export function cardModel(card, sp, t) {
   const f = FACES[card.face] || FACES.gone, lines = [];
   if (card.face === 'buy') lines.push({ cls: 'after', text: t('shop_after', Math.max(0, sp - card.priceSp)) });
   if (card.face === 'prime') lines.push({ cls: 'reason', text: t(card.reasonKey || 'shop_prime_reason') });
+  if (card.face === 'discord') lines.push({ cls: 'reason', text: t(card.reasonKey || 'shop_link_discord') });
   if (card.face === 'short') lines.push({ cls: 'short', text: t('shop_short', card.short) });
   if (card.face === 'soon') lines.push({ cls: 'soon', text: t('shop_soon') });
   if (card.face === 'gone') lines.push({ cls: 'gone', text: t('shop_gone') });

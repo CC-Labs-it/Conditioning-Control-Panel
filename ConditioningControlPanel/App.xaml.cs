@@ -1851,6 +1851,27 @@ namespace ConditioningControlPanel
         /// </summary>
         public static bool IsUpdateDialogActive { get; set; } = false;
 
+        /// <summary>The update this launch's background check found, or null. The launcher's
+        /// "Update ready" chip reads it (ccp-bugs #1580): players who go straight into a game never
+        /// reach the panel, where the startup-ladder dialog waits.</summary>
+        public static AppUpdateInfo? PendingUpdate { get; private set; }
+
+        /// <summary>Raised on the UI thread when <see cref="PendingUpdate"/> changes.</summary>
+        public static event Action? PendingUpdateChanged;
+
+        /// <summary>True once the update dialog has been shown this launch (launcher chip or the
+        /// ladder), so the queued ladder copy never asks a second time.</summary>
+        private static bool _updateOffered;
+
+        /// <summary>The launcher chip's door: the SAME in-app dialog and updater the ladder shows,
+        /// never a browser URL. No-op while a dialog or install is already running.</summary>
+        public static void OfferPendingUpdate(Window owner)
+        {
+            var info = PendingUpdate;
+            if (info == null || IsUpdateDialogActive || _isCheckingForUpdates || Current is not App app) return;
+            app.ShowUpdateNotification(info, owner);
+        }
+
         /// <summary>
         /// Flag to prevent concurrent update checks
         /// </summary>
@@ -5410,6 +5431,11 @@ namespace ConditioningControlPanel
                     // First, show the update button immediately (this always works)
                     await Application.Current.Dispatcher.InvokeAsync(() =>
                     {
+                        // The launcher's chip lights from this (#1580).
+                        PendingUpdate = updateInfo;
+                        try { PendingUpdateChanged?.Invoke(); }
+                        catch (Exception chipEx) { Logger?.Warning(chipEx, "Failed to light the launcher update chip"); }
+
                         try
                         {
                             var mainWindow = Application.Current.MainWindow as MainWindow;
@@ -5441,6 +5467,13 @@ namespace ConditioningControlPanel
                     {
                         try
                         {
+                            // Already answered from the launcher's chip: never ask twice in one launch.
+                            if (_updateOffered)
+                            {
+                                Logger?.Information("Update dialog already shown from the launcher; ladder copy skipped");
+                                return;
+                            }
+
                             var mainWindow = (owner as MainWindow) ?? MainWindowRef ?? Application.Current.MainWindow as MainWindow;
 
                             if (mainWindow == null)
@@ -5514,6 +5547,7 @@ namespace ConditioningControlPanel
             {
                 Logger?.Information("Showing update notification dialog for version {Version}", updateInfo.Version);
                 IsUpdateDialogActive = true;
+                _updateOffered = true;
 
                 owner.Activate();
                 owner.Focus();

@@ -1645,6 +1645,11 @@ namespace ConditioningControlPanel
             // Skip if speech is on cooldown or currently showing
             if (!IsSpeechReady()) return;
 
+            // The player's own recorded Voice Line clips get one tick in IdleVoiceLines.OneIn
+            // (lost in 54b4c5c653, when idle chatter moved to the barks). Unprompted, so the
+            // engine-off hold keeps it silent with nothing running; none in the panic quiet.
+            if (!Services.Safety.PanicAftermath.TriggersSilenced() && TrySpeakOwnVoiceLine()) return;
+
             // Idle chatter IS the bark system now: this timer only sets the cadence (the
             // companion-tab slider); the line itself comes from the Idle bark pool with its
             // pool-wide no-repeat rotation. Preset phrases are just the no-barks fallback.
@@ -1862,43 +1867,32 @@ namespace ConditioningControlPanel
             }
         }
 
-        /// <summary>
-        /// Gets a random voice line file path (filtered by phrase manager)
-        /// </summary>
-        private string? GetRandomVoiceLinePath()
-        {
-            // Use service filtering if available
-            var enabledFiles = App.CompanionPhrases?.GetEnabledVoiceLineFiles();
-            if (enabledFiles != null && enabledFiles.Count > 0)
-                return enabledFiles[_random.Next(enabledFiles.Count)];
-
-            // Fallback to unfiltered list
-            if (_voiceLineFiles.Count == 0)
-                RefreshVoiceLines();
-
-            if (_voiceLineFiles.Count == 0)
-                return null;
-
-            return _voiceLineFiles[_random.Next(_voiceLineFiles.Count)];
-        }
+        // The own voice line spoken last, so two idle turns in a row never repeat one clip.
+        private string? _lastOwnVoiceLine;
 
         /// <summary>
-        /// Plays a voice line audio file. Follows the master volume only; when MasterVolume is 0 the
-        /// bubble + text still show, only the attached voiceline goes silent. (No longer tied to the
-        /// subliminal "Mute Whispers" toggle — see bug #436.)
+        /// The idle timer's own-voice-line turn (<see cref="Services.Companion.IdleVoiceLines"/>): one
+        /// tick in OneIn speaks one of the player's own recorded VoiceLine clips. It goes through
+        /// <see cref="Giggle"/> as a voiced, UNPROMPTED line, so every gate a bark meets applies: the
+        /// engine-off hold (CompanionIdleVoice), avatar mute, EMI Desk mute, "Mute Voice Lines"
+        /// (fallback pop instead), master volume and the Voice level. False = the tick is not ours.
         /// </summary>
-        private void PlayVoiceLineAudio(string filePath)
+        private bool TrySpeakOwnVoiceLine()
         {
-            // Companion voice follows the master volume only (like the giggle/pop SFX) — it is no
-            // longer gated behind the subliminal "Mute Whispers" toggle, which defaulted OFF and left
-            // the companion silent even with audio up at max (bug #436).
-            var masterVolume = (App.Settings?.Current?.MasterVolume ?? 100) / 100f;
-            if (masterVolume <= 0f) return;
-            // Idle voicelines were full-volume (×1.0); -20% so today's hotter v3 lines sit under the barks.
-            // The player's Voice level rides on top (CompanionVoiceGain; its default changes nothing).
-            var volume = Services.CompanionVoiceGain.Current(Services.CompanionVoiceGain.IdleTrim);
-            if (volume <= 0f) return; // Voice level 0: the bubble still shows, the line is silent
-            PlaySpokenAudio(filePath, volume);
+            var clips = App.CompanionPhrases?.GetEnabledCustomVoiceLineFiles();
+            if (clips == null || !Services.Companion.IdleVoiceLines.TakesTurn(clips.Count,
+                    _random.Next(Services.Companion.IdleVoiceLines.OneIn))) return false;
+
+            var path = Services.Companion.IdleVoiceLines.Pick(clips, _lastOwnVoiceLine, _random);
+            if (path == null) return false;
+
+            var text = App.CompanionPhrases?.GetVoiceLineDisplayText(path);
+            text = Services.CompanionPhraseService.ResolveVoiceLinePlaceholder(text);
+            if (string.IsNullOrWhiteSpace(text)) text = System.IO.Path.GetFileNameWithoutExtension(path);
+
+            _lastOwnVoiceLine = path;
+            Giggle(text, phraseAudioPath: path, barkVoice: true, unprompted: true);
+            return true;
         }
 
         /// <summary>
@@ -2039,77 +2033,6 @@ namespace ConditioningControlPanel
             Services.AudioPlaybackHandle? h;
             lock (_spokenLock) { h = _spokenHandle; }
             try { h?.Resume(); } catch { }
-        }
-
-        /// <summary>
-        /// Shows a voice line as a speech bubble with synchronized audio playback
-        /// </summary>
-        private void ShowVoiceLineBubble(string filePath)
-        {
-            RunOnAvatar(() =>
-            {
-                if (_isMuted || !IsAvatarVisibleOnScreen) return;
-
-                var text = App.CompanionPhrases?.GetVoiceLineDisplayText(filePath)
-                    ?? System.IO.Path.GetFileNameWithoutExtension(filePath);
-                // Activity voicelines bake the "{0}" app placeholder into their
-                // filename ("target application"); swap it for the focused app so
-                // the bubble names what's actually on screen instead of the literal.
-                text = Services.CompanionPhraseService.ResolveVoiceLinePlaceholder(text);
-                if (string.IsNullOrWhiteSpace(text)) return;
-
-                // Clear the queue - voice line takes priority
-                _speechQueue.Clear();
-                _speechTimer?.Stop();
-                _speechDelayTimer?.Stop();
-
-                _isGiggling = true;
-                PopulateSpeechBubble(text);
-                var plainText = MarkdownLinkRegex.Replace(text ?? "", "$1");
-                AdjustBubbleSize(plainText);
-
-                SpeechBubble.UpdateLayout();
-                SpeechBubble.Visibility = Visibility.Visible;
-
-
-                // Play the voice line audio in sync with the bubble
-                PlayVoiceLineAudio(filePath);
-
-                // Drive the portrait emotion: idle affirmations are unmapped → seductive mix
-                // (alluring/dreamy/entrancing/teasing), pose count scaled to the line's audio length.
-                PlayEmotionForLine(System.IO.Path.GetFileNameWithoutExtension(filePath), filePath, text);
-
-                App.Logger?.Information("VoiceLine: Displayed {Line} ({Chars} chars)",
-                    System.IO.Path.GetFileNameWithoutExtension(filePath), (text ?? "").Length);
-
-                // Calculate display duration based on text length
-                double baseDuration = 5.0;
-                double perCharDuration = 0.05;
-                double calculatedDuration = baseDuration + (text.Length * perCharDuration);
-                double displayDuration = Math.Clamp(calculatedDuration, 5.0, 14.0);
-
-                var textLength = text.Length;
-                _speechTimer?.Stop();
-                _speechTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(displayDuration) };
-                _speechTimer.Tick += (s, e) =>
-                {
-                    if (_isMouseOverSpeechBubble)
-                    {
-                        _speechTimer.Interval = TimeSpan.FromSeconds(1);
-                        return;
-                    }
-                    _speechTimer.Stop();
-                    _isGiggling = false;
-                    _isShowingAiBubble = false; // Clear AI bubble flag when any bubble hides
-                    CollapseSpeechBubble();
-
-                    _lastSpeechEndTime = DateTime.Now;
-                    _lastSpeechSource = SpeechSource.Preset;
-                    _lastSpeechLength = textLength;
-                    ProcessNextSpeech();
-                };
-                _speechTimer.Start();
-            });
         }
 
         private void OnTriggerTick(object? sender, EventArgs e)
