@@ -29,14 +29,16 @@ public sealed class ServerAnnouncementInboxTests
     private sealed class FakeProxy : HttpMessageHandler
     {
         public readonly List<string> Calls = new();
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
+        public TaskCompletionSource<bool>? Gate;
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             var path = r.RequestUri!.AbsolutePath;
             lock (Calls) Calls.Add(r.Method + " " + path + r.RequestUri.Query + " " + r.Content?.ReadAsStringAsync().Result);
             var body = path == "/config/announcement"
                 ? "{\"enabled\":true,\"id\":\"a1\",\"title\":\"The Spiral is open\",\"message\":\"Come\\n\\n  in,   dear.\"}"
                 : "{}";
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
+            if (path == "/config/announcement" && Gate is { } gate) await gate.Task;
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) };
         }
     }
 
@@ -44,7 +46,8 @@ public sealed class ServerAnnouncementInboxTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;   // the profile TestUserDataProfile seeded (feature intros spent)
         var (oldId, oldDismissed) = (s.UnifiedId, s.DismissedAnnouncementId);
@@ -133,6 +136,84 @@ public sealed class ServerAnnouncementInboxTests
             Assert.Empty(StartupLadder.Inbox.Items);
         }
         finally { shell.Close(); foreach (var p in opened) p.Close(); }
+    });
+
+    [Fact]
+    public Task ScheduledCheckRunsForAnOpenShell() => Run(async fake =>
+    {
+        var saved = MainShellWindow.ScheduleAnnouncementCheck;
+        Func<Task>? scheduled = null;
+        MainShellWindow.ScheduleAnnouncementCheck = action => scheduled = action;
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            Assert.NotNull(scheduled);
+            await scheduled!();
+            Assert.Contains(fake.Calls, c => c.StartsWith("GET"));
+            Assert.Equal("announcement:a1", Assert.Single(StartupLadder.Inbox.Items).Key);
+        }
+        finally { shell.Close(); MainShellWindow.ScheduleAnnouncementCheck = saved; }
+    });
+
+    [Fact]
+    public Task ScheduledCheckDoesNotRefileAfterOpeningOrRunAfterClose() => Run(async fake =>
+    {
+        var saved = MainShellWindow.ScheduleAnnouncementCheck;
+        Func<Task>? scheduled = null;
+        MainShellWindow.ScheduleAnnouncementCheck = action => scheduled = action;
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var shell = new MainShellWindow();
+        var opened = new List<AnnouncementPopup>();
+        using var sub = Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) => { if (w is AnnouncementPopup p) opened.Add(p); });
+        try
+        {
+            shell.Show();
+            Assert.NotNull(scheduled);
+            await shell.CheckServerAnnouncementAsync();
+            var row = Assert.Single(StartupLadder.Inbox.Items);
+            StartupLadder.Inbox.Open(row);
+            Assert.Single(opened);
+            Assert.Empty(StartupLadder.Inbox.Items);
+            await scheduled!();
+            Assert.Single(fake.Calls, c => c.StartsWith("GET"));
+            Assert.Empty(StartupLadder.Inbox.Items);
+
+            shell.Close();
+            var closedShell = new MainShellWindow();
+            closedShell.Show();
+            var afterClose = scheduled!;
+            closedShell.Close();
+            await afterClose();
+            Assert.Single(fake.Calls, c => c.StartsWith("GET"));
+            Assert.Empty(StartupLadder.Inbox.Items);
+        }
+        finally
+        {
+            shell.Close();
+            foreach (var p in opened) p.Close();
+            MainShellWindow.ScheduleAnnouncementCheck = saved;
+        }
+    });
+
+    [Fact]
+    public Task ResponseAfterShellClosesDoesNotFileAnAnnouncement() => Run(async fake =>
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        fake.Gate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            var pending = shell.CheckServerAnnouncementAsync();
+            Assert.Contains(fake.Calls, c => c.StartsWith("GET"));
+            shell.Close();
+            fake.Gate.SetResult(true);
+            await pending;
+            Assert.Empty(StartupLadder.Inbox.Items);
+        }
+        finally { fake.Gate.TrySetResult(true); shell.Close(); }
     });
 
     [Fact]

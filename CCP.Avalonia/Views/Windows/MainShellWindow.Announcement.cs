@@ -17,27 +17,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The Core client; seeded by the app at startup only. Unseeded (every test that does not set it) = no check.</summary>
         internal static Func<V2AuthService>? AnnouncementClient;
 
+        internal static Action<Func<Task>> ScheduleAnnouncementCheck = action =>
+            DispatcherTimer.RunOnce(() => _ = action(), TimeSpan.FromSeconds(7));
+
         private bool _announcementArmed;
+        private bool _announcementChecked;
+        private bool _announcementClosed;
 
         private void InitializeServerAnnouncement()
         {
+            Closed += (_, _) => _announcementClosed = true;
             Opened += (_, _) =>
             {
                 if (_announcementArmed || AnnouncementClient == null) return;
                 _announcementArmed = true;
-                DispatcherTimer.RunOnce(() => _ = CheckServerAnnouncementAsync(), TimeSpan.FromSeconds(7));
+                ScheduleAnnouncementCheck(() => _announcementChecked || _announcementClosed
+                    ? Task.CompletedTask : CheckServerAnnouncementAsync());
             };
         }
 
         /// <summary>One check: fetch, skip the dismissed id, route through the startup ladder.</summary>
         internal async Task CheckServerAnnouncementAsync()
         {
+            _announcementChecked = true;
             try
             {
                 var make = AnnouncementClient;
                 if (make == null) return;
                 var a = await make().GetAnnouncementAsync(CoreSettings.Current.UnifiedId);
-                if (a == null || a.Id == CoreSettings.Current.DismissedAnnouncementId) return;
+                if (_announcementClosed || a == null || a.Id == CoreSettings.Current.DismissedAnnouncementId) return;
                 Log.Information("Server announcement received: id={Id}, title={Title}", a.Id, a.Title);
 
                 string id = a.Id!, title = a.Title!, message = a.Message ?? "";
