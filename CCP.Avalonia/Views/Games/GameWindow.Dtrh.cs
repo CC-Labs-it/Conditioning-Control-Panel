@@ -256,7 +256,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try
             {
                 var booking = DtrhRunWire.Book(o, hostElapsed);
-                double skillMult = ChaosRunState.SkillMultProvider?.Invoke() ?? 1.0;
+                double skillMult = global::ConditioningControlPanel.Models.SkillTreeRules.GetTotalXpMultiplier(CoreSettings.Current, DateTime.Now.Hour, 0.0);
                 double finalXp = booking.BaseXp * skillMult;
                 long previousBest = ChaosMeta.State.BestScore;
                 int sparksEarned = DtrhBankSparks(booking.RewardInput(o), booking.Payout.CountsAsRun);

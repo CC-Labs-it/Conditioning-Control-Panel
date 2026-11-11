@@ -1169,6 +1169,27 @@ public sealed partial class GameWindowTests
         }
     });
 
+    [Fact]
+    public void Dtrh_PayoutUsesSkillTreeMultiplier() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var settings = CoreSettings.Current;
+        settings.UnlockedSkills.Add("sparkle_boost_1");
+        try
+        {
+            var w = GameWindow.Launch("dtrh")!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"run-started\"}");
+            w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");
+            var payout = Assert.Single(sent);
+            var expected = global::ConditioningControlPanel.Models.SkillTreeRules.GetTotalXpMultiplier(settings, DateTime.Now.Hour, 0.0);
+            Assert.Equal(expected, (double)payout["skillMult"]!, 6);
+            Assert.Equal(300 * expected, (double)payout["finalXp"]!, 6);
+            w.Close();
+        }
+        finally { settings.UnlockedSkills.Remove("sparkle_boost_1"); }
+    });
+
     /// <summary>WPF LauncherCatalogue (Basic door, DemandPremium refusal), OnPageReady :271 (init with motionLevel
     /// and runSetup, then the manifest with videos), OnRequestRun :523, OnRunEnded :583 (one payout per descent)
     /// and DisposeAll :1002 (a window closed mid-descent banks its last snapshot, paid by the host's clock).</summary>
