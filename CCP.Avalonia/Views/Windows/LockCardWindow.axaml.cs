@@ -1155,7 +1155,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static void PostNext(bool isTest)
         {
             var gen = CloseGeneration;
-            Dispatcher.UIThread.Post(() => { if (gen == CloseGeneration) ShowNext(isTest); });
+            Dispatcher.UIThread.Post(() => { if (gen == CloseGeneration) RequestNext(isTest); });
+        }
+
+        // WPF InteractionQueueService.TryStart keeps at most one pending lock card. Like the
+        // bubble-count scheduler's QueuePoll, retry on the UI thread while a fullscreen interaction owns it.
+        private static DispatcherTimer? _pendingTimer;
+        private static bool _pendingTest;
+
+        private static bool OtherInteractionActive => IsAnyOpen() || PopQuizWindow.IsAnyOpen()
+            || CoreEngine.Video?.IsPlaying == true || CoreEngine.BubbleCount?.IsBusy == true
+            || Overlays.MandatoryVideoOverlay.Instance.Messages.Count != 0;
+
+        private static void RequestNext(bool isTest)
+        {
+            if (_pendingTimer != null) return; // WPF suppresses duplicate pending lock cards
+            if (!OtherInteractionActive) { ShowNext(isTest); return; }
+            _pendingTest = isTest;
+            _pendingTimer = new DispatcherTimer { Interval = BubbleCountScheduler.QueuePoll };
+            _pendingTimer.Tick += (_, _) => RetryPendingCard();
+            _pendingTimer.Start();
+        }
+
+        internal static void RetryPendingCard()
+        {
+            if (_pendingTimer == null || OtherInteractionActive) return;
+            var isTest = _pendingTest;
+            DropPendingCard();
+            ShowNext(isTest);
+        }
+
+        private static void DropPendingCard()
+        {
+            _pendingTimer?.Stop();
+            _pendingTimer = null;
         }
 
         /// <param name="strict">Null: the player's own setting. The leash passes false (never a strict card).</param>
@@ -1204,6 +1237,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public static void ForceCloseAll()
         {
             System.Threading.Interlocked.Increment(ref _closeGeneration);
+            DropPendingCard();
             _heldForQuiz = null;
             var windows = _allWindows.ToList();
             _allWindows.Clear();
