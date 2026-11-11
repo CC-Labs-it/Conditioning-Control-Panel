@@ -67,7 +67,7 @@ window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='
             ExitBrowserFullscreen();
     }
 
-    private void EnterBrowserFullscreen()
+    private async void EnterBrowserFullscreen()
     {
         var browser = BrowserView;
         var container = BrowserPage?.FindControl<Grid>("BrowserContainer");
@@ -77,6 +77,12 @@ window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='
         bool entered = false;
         try
         {
+            _browserPreFullscreenZoom = await browser.ReadZoomAsync();
+            if (_browserStopPending || _browserFullscreenStopped || _browserFullscreenClosed)
+            {
+                _browserStopPending = false;
+                return;
+            }
             // WPF MainWindow.Browser.cs:2829-2836: only All selects multiple screens.
             var screens = ScreenList.Enumerate(this);
             var settings = CoreSettings.Current;
@@ -95,7 +101,6 @@ window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='
                 Position = new global::Avalonia.PixelPoint(screen.X + 100, screen.Y + 100), Width = 400, Height = 300 };
             _browserFullscreenWindow = host;
             _browserFullscreenActive = true;
-            _browserPreFullscreenZoom = browser.Zoom;
             browser.SetZoom(1.0);
             _browserFullscreenHostClosed = false;
             host.Closed += (_, _) => { _browserFullscreenHostClosed = true; if (!_browserFullscreenTransition) ExitBrowserFullscreen(false); };
@@ -151,7 +156,7 @@ window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='
     }
     internal void ExitBrowserFullscreen(bool closeHost = true)
     {
-        if (_browserFullscreenTransition) return;
+        if (_browserFullscreenTransition) { if (_browserEntering) _browserStopPending = true; return; }
         _browserEffectTimer?.Stop();
         if (_browserFullscreenMirror?.DisableMirror() == true) _browserFullscreenMirror = null;
         var host = _browserFullscreenWindow;
