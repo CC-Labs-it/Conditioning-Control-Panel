@@ -138,6 +138,14 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The presence switch moved (either surface): the other one repaints from the setting.</summary>
         internal static event Action? RichPresenceChanged;
 
+        internal static void RecordSeasonActivity()
+        {
+            if (Achievements == null || CoreSettings.Service == null) return;
+            var now = DateTime.UtcNow;
+            SeasonActivity.MarkActiveToday(CoreSettings.Current, now, () => CoreSettings.Save());
+            SeasonActivity.TrackStreakPeak(CoreSettings.Current, Achievements.Progress.ConsecutiveDays, now);
+        }
+
         /// <summary>WPF ProfileSyncService.ApplyServerCurveEpoch -> RaiseProfileLoadedIfProgressionChanged: follow the
         /// server's curve, save, and repaint the level header on the UI thread.</summary>
         internal static void AdoptServerCurveEpoch(int? epoch, Func<Views.Windows.MainShellWindow?> shell)
@@ -1047,6 +1055,9 @@ namespace ConditioningControlPanel.Avalonia
                 // way WPF App.xaml.cs:384/:394 seeds the two unlock seams. Unlocked is raised on the
                 // caller's thread; the popup hops to the UI thread as WPF's DispatcherHelper does.
                 Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
+                RecordSeasonActivity();
+                Platform.AccountSeed.ProfileLoaded -= RecordSeasonActivity;
+                Platform.AccountSeed.ProfileLoaded += RecordSeasonActivity;
                 _achievementSaveTimer?.Stop();
                 _achievementSaveTimer = StartAchievementAutosave(Achievements);
                 WireAchievementUnlocks(Achievements);

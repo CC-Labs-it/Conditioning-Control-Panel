@@ -120,6 +120,19 @@ public sealed class RealCatalogueFailureFallbackTests
                         .SetupWithLifetime(lifetime);
 
                     var app = Assert.IsType<FailingCatalogueApp>(Application.Current);
+                    var today = DateTime.UtcNow.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                    Assert.Contains(today, CoreSettings.Current.SeasonActiveDays);
+                    Assert.Contains(ConditioningControlPanel.Services.EnhancementAnalytics.Series(
+                        CoreSettings.Current, DateTime.UtcNow.ToString("yyyy-MM"),
+                        Array.Empty<ConditioningControlPanel.Models.SeasonRecapSnapshot>()),
+                        season => season.ActiveDays.Contains(today));
+                    CoreSettings.Current.SeasonActiveDays.Clear();
+                    var loaded = typeof(App).Assembly.GetType("ConditioningControlPanel.Avalonia.Platform.AccountSeed")!
+                        .GetField("ProfileLoaded", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!
+                        .GetValue(null) as Action;
+                    var activityHook = Assert.Single(loaded!.GetInvocationList(), d => d.Method.Name == "RecordSeasonActivity");
+                    activityHook.DynamicInvoke();
+                    Assert.Contains(today, CoreSettings.Current.SeasonActiveDays);
                     Assert.Equal(firstAssets, CorePaths.EffectiveAssets);
                     CoreSettings.Current.CustomAssetsPath = secondAssets;
                     Assert.Equal(secondAssets, CorePaths.EffectiveAssets);
