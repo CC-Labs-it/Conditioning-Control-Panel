@@ -549,4 +549,42 @@ public sealed class HomeMarqueeTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task LoadedBrowserNavigatesOnlyForOnlineModSwitches() => WithShell((w, dash) =>
+    {
+        global::ConditioningControlPanel.Avalonia.App.StartMods();
+        var mods = global::ConditioningControlPanel.Avalonia.App.Mods!;
+        var host = dash.FindControl<WebHost>("BrowserWebHost")!;
+        var settings = CoreSettings.Current;
+        try
+        {
+            settings.OfflineMode = false;
+            mods.ActivateMod(BuiltInMods.BambiSleepId);
+            Dispatcher.UIThread.RunJobs();
+            host.Navigate(new Uri("https://example.com/video"));
+            var before = host.NavigationRequests;
+            mods.ActivateMod(BuiltInMods.SissyHypnoId);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(before + 1, host.NavigationRequests);
+            Assert.Equal(mods.GetDefaultBrowserUrl(), host.Source!.ToString());
+
+            host.Navigate(new Uri("https://example.com/keep-playing"));
+            before = host.NavigationRequests;
+            CoreMods.RaiseModChanged(mods, mods.ActiveMod);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(before, host.NavigationRequests);
+            Assert.Equal("https://example.com/keep-playing", host.Source!.ToString());
+
+            mods.ActivateMod(BuiltInMods.BambiSleepId);
+            Dispatcher.UIThread.RunJobs();
+            settings.OfflineMode = true;
+            before = host.NavigationRequests;
+            mods.ActivateMod(BuiltInMods.SissyHypnoId);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(before, host.NavigationRequests);
+        }
+        finally { global::ConditioningControlPanel.Avalonia.App.ResetReleaseContent(); }
+        return Task.CompletedTask;
+    });
+
 }

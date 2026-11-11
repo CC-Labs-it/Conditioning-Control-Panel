@@ -24,6 +24,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     public partial class SettingsTabView
     {
         private bool _browserCardSyncing;
+        private string? _browserCardModId;
 
         /// <summary>Tests: how many times the mute script was sent to the page.</summary>
         internal int BrowserMuteApplies { get; private set; }
@@ -36,6 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 Platform.WebcamTracker.Instance.StateChanged -= OnBrowserCardTrackerChanged;
                 Platform.WebcamTracker.Instance.StateChanged += OnBrowserCardTrackerChanged;
+                _browserCardModId = App.Mods?.ActiveModId;
                 CoreMods.ModChanged -= OnBrowserCardModChanged;
                 CoreMods.ModChanged += OnBrowserCardModChanged;
                 SyncBrowserCard();
@@ -57,8 +59,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void OnBrowserCardTrackerChanged() => Dispatcher.UIThread.Post(RefreshBrowserWebcamButton);
         private void OnBrowserCardModChanged(object? sender, ModPackage? mod) => Dispatcher.UIThread.Post(() =>
         {
+            var activeModId = App.Mods?.ActiveModId;
+            bool switched = !string.Equals(_browserCardModId, activeModId, StringComparison.OrdinalIgnoreCase);
+            _browserCardModId = activeModId;
             SyncBrowserCard();
-            if (!(App.Mods?.ShowBambiCloudOption() ?? true) && BrowserWebHost.Source != null
+            if (switched && !(App.Mods?.ShowBambiCloudOption() ?? true) && BrowserWebHost.Source != null
                 && !CoreSettings.Current.OfflineMode)
                 Shell?.NavigateBrowserForMod(App.Mods?.GetDefaultBrowserUrl() ?? "https://hypnotube.com/");
         });
