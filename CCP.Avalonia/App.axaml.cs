@@ -422,6 +422,8 @@ namespace ConditioningControlPanel.Avalonia
         /// (tests, PanicCheck, VideoCheck) starts synchronously without one, as before.</summary>
         internal static bool SplashOnStartup;
 
+        private Platform.LeashEventCues? _leashEventCues;
+
         public override void OnFrameworkInitializationCompleted()
         {
             // "[SANDBOX] " on every window title of a CCP_USERDATA_DIR run. Desktop only: offscreen renders/snapshots
@@ -744,6 +746,7 @@ namespace ConditioningControlPanel.Avalonia
                     CoreAccount.UnifiedIdentityChanged += (_, _) => v2Purchase.Invalidate();
                 }
                 // WPF App.xaml.cs:3010-3013: the task runner the gate's action starts.
+                _leashEventCues = new Platform.LeashEventCues(Platform.LeashSound.Play);
                 try { Platform.LeashTaskHost.Start(Platform.LeashHead.Service as ConditioningControlPanel.Services.Leash.LeashService); }
                 catch (Exception exRunner) { Serilog.Log.Warning(exRunner, "[Leash] task runner could not be built"); }
                 // WPF App.xaml.cs:2940-2968. EnsureBaselineAsync keeps WPF's rules: no-op on a full
@@ -1298,6 +1301,7 @@ namespace ConditioningControlPanel.Avalonia
             Platform.ScrolllerHead.Stop();   // WPF App.OnExit:6284-6285: the share's ledger and the cache index
             try { Platform.ScrolllerAwayHost.Stop(); } catch { /* WPF App.OnExit:6308 */ }
             try { Platform.LeashTaskHost.Stop(); } catch { /* WPF App.OnExit: the task and its window go first */ }
+            _leashEventCues?.Dispose();
             try { Platform.LeashHead.Stop(); } catch { /* WPF App.OnExit:6289-6292, before the friends poll it rides */ }
             try { DiscordRpc?.Dispose(); } catch { /* WPF App.OnExit:6296 */ }
             try { Platform.FriendsLanding.Stop(); } catch { /* WPF FriendsLanding.Stop on the panel's Closed: no card outlives the app */ }

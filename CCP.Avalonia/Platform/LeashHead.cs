@@ -21,6 +21,7 @@ internal static class LeashHead
     private static string? _offerAccount;
     internal static HashSet<string> SentOffers = new(), PendingOffers = new();
     internal static event Action? OffersChanged;
+    internal static event Action? ServiceChanged;
     internal static ILeashService? Service
     {
         get => _service;
@@ -31,6 +32,7 @@ internal static class LeashHead
             _service = value;
             ResetOffers();
             if (_service != null) { _service.SnapshotChanged += OfferSnapshot; _service.EventArrived += OfferEvent; }
+            ServiceChanged?.Invoke();
         }
     }
     private static void ResetOffers()
