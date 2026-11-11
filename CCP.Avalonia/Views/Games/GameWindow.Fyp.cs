@@ -23,7 +23,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// The For You feed's host (WPF Services/Fyp/FypHostService.cs): <c>fyp/index.html</c> on the app's origin,
     /// the library through the asset gate every game uses, the rules in Core <see cref="FypRules"/> (shared
     /// with WPF). BRIGHT LINE: batches and probes go straight to the provider, media only when RemoteAllowed.
-    /// <para>ponytail: not on this head yet - native ghost mode and EMI's fypOpened/fypClosed moment bus.</para>
+    /// <para>ponytail: not on this head yet - native ghost mode.</para>
     /// </summary>
     internal sealed partial class GameWindow
     {
@@ -33,6 +33,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal static bool IsForYouOnScreen()
         {
             lock (Open) return Open.Any(w => w.Spec.Id == FypId && w.IsVisible);
+        }
+
+        internal static Func<DateTime> FypUtcNow = () => DateTime.UtcNow;
+        private static DateTime? _fypOpenedUtc;
+
+        private static void OpenFypVisit()
+        {
+            try { Windows.EmiDesk.EmiTargets.Moment("fypOpened", null); } catch { }
+            _fypOpenedUtc = FypUtcNow();
+        }
+
+        private static void CloseFypVisit()
+        {
+            if (_fypOpenedUtc is not DateTime opened) return;
+            _fypOpenedUtc = null;
+            int minutes = Math.Max(0, (int)(FypUtcNow() - opened).TotalMinutes);
+            try { Windows.EmiDesk.EmiTargets.Moment("fypClosed", new { minutes }); } catch { }
         }
 
         private FypMetaStore? _fypMeta;

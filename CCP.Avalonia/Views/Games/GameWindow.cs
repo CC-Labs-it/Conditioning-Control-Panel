@@ -132,15 +132,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     ev => App.FeatureDayLog?.Note(ev), DateTime.UtcNow); }
                 catch (Exception ex) { Diag.Swallowed(ex); }
             }
-            var window = new GameWindow(spec);
-            if (spec.Id == GlassroadId && UseLinuxRaceCard())
+            if (spec.Id == FypId) OpenFypVisit();
+            try
             {
-                window.ShowRaceCard();
-                window.HandoffRaceRoom(room);   // joins once the in-app page is ready (Play race slower)
+                var window = new GameWindow(spec);
+                if (spec.Id == GlassroadId && UseLinuxRaceCard())
+                {
+                    window.ShowRaceCard();
+                    window.HandoffRaceRoom(room);   // joins once the in-app page is ready (Play race slower)
+                }
+                else window.Load(Server(), room);
+                window.Show();
+                return window;
             }
-            else window.Load(Server(), room);
-            window.Show();
-            return window;
+            catch
+            {
+                if (spec.Id == FypId) CloseFypVisit();
+                throw;
+            }
         }
 
         /// <summary>--render-all's sample: the Breakout demo's frame with no page loaded.</summary>
@@ -162,7 +171,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); StartBreakoutAccessWatch(); };
             Activated += (_, _) => FunnelPageMessage.OnAppActivated();   // WPF's Application.Activated covers every window
             Closing += (_, _) => { _closing = true; CancelRaceFetch(); };
-            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); if (Spec.Id == FypId) DisableFypEyes(); StopBreakoutAccessWatch(); _raceRooms.Clear(); };
+            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); if (Spec.Id == FypId) { DisableFypEyes(); CloseFypVisit(); } StopBreakoutAccessWatch(); _raceRooms.Clear(); };
             // WPF BackRoom/BackRoomHostService.cs:390,792: Breakout presence lasts until close.
             if (spec.Id == BreakoutDemoId || spec.Id == "breakout")
             {
