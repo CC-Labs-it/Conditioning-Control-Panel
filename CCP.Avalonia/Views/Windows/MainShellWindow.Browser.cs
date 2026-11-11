@@ -188,8 +188,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var host = BrowserView;
             _pendingBrowserAutoplay = autoPlayFullscreen && host != null ? target : null;
             if (host != null) HookAvatarBrowser(host);
+            var navigationStarted = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             var issued = NavigateBrowser(url);
             if (!issued) _pendingBrowserAutoplay = null;
+            else if (_pendingBrowserAutoplay != null && !IsBrowserPlaylist(target))
+                _ = WaitForBrowserDomAsync(host!, target, _browserAutoplayGeneration, navigationStarted);
             return issued;
         }
 
@@ -256,6 +259,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             host.NavigationFinished += OnAvatarBrowserNavigationFinished;
             host.WebMessage += OnAvatarBrowserMessage;
             Closed += (_, _) => StopAvatarBrowserSession();
+        }
+
+        // NativeWebView has no DOMContentLoaded event. Poll the current document until parsed;
+        // completion and generation changes retire the same pending arm.
+        internal Func<Task> BrowserDomPollDelay = () => Task.Delay(100);
+        private async Task WaitForBrowserDomAsync(WebHost host, Uri target, int generation, long navigationStarted)
+        {
+            while (generation == _browserAutoplayGeneration && target.Equals(_pendingBrowserAutoplay))
+            {
+                await BrowserDomPollDelay();
+                if (generation != _browserAutoplayGeneration || !target.Equals(_pendingBrowserAutoplay)) return;
+                try
+                {
+                    var result = await host.InvokeScriptAsync("JSON.stringify({url:location.href,state:document.readyState,started:performance.timeOrigin})");
+                    if (generation != _browserAutoplayGeneration || !target.Equals(_pendingBrowserAutoplay)) return;
+                    if (result == null) continue;
+                    using var outer = System.Text.Json.JsonDocument.Parse(result);
+                    var json = outer.RootElement.ValueKind == System.Text.Json.JsonValueKind.String ? outer.RootElement.GetString() : result;
+                    using var doc = System.Text.Json.JsonDocument.Parse(json!);
+                    var root = doc.RootElement;
+                    if (Uri.TryCreate(root.GetProperty("url").GetString(), UriKind.Absolute, out var current) &&
+                        target.Equals(current) && root.GetProperty("started").GetDouble() >= navigationStarted && root.GetProperty("state").GetString() is "interactive" or "complete")
+                    {
+                        _pendingBrowserAutoplay = null;
+                        _ = StartBrowserAutoplay(host, target, generation);
+                        return;
+                    }
+                }
+                catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or System.Collections.Generic.KeyNotFoundException) { }
+            }
         }
 
         private void OnAvatarBrowserNavigationFinished(Uri url, bool success)

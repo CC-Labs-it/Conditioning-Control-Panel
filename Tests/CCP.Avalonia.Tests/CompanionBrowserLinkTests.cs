@@ -205,4 +205,48 @@ public sealed class CompanionBrowserLinkTests
         host.OnWebMessage($"{{\"type\":\"ccpAvatarMedia\",\"generation\":{gen},\"state\":\"playing\"}}");
         Assert.True(shell.AvatarBrowserSessionActive); Assert.False(shell.AvatarBrowserTakeover);
     }));
+    [Fact]
+    public Task ParsedVideoStartsOnceAndNewNavigationDisarmsIt() => AvaloniaTestDispatcher.RunAsync(() => WithShell(async (shell, host) =>
+    {
+        var scripts = new List<string>();
+        var step = new TaskCompletionSource();
+        host.NavigationInvoker = _ => true;
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(script.Contains("document.readyState") ? "{\"url\":\"https://127.0.0.1/video\",\"state\":\"interactive\",\"started\":9999999999999}" : "ok"); };
+        shell.BrowserDomPollDelay = () => step.Task;
+        shell.BrowserAutoplayDelay = () => Task.CompletedTask;
+        var video = new Uri("https://127.0.0.1/video");
+        Assert.True(shell.NavigateToUrlInBrowser(video.AbsoluteUri, true));
+        step.SetResult(); await Task.Yield();
+        Assert.Single(scripts, x => x.Contains("ccpAvatarMedia"));
+        host.OnNavigationCompleted(video);
+        Assert.Single(scripts, x => x.Contains("ccpAvatarMedia"));
+        scripts.Clear(); step = new TaskCompletionSource();
+        Assert.True(shell.NavigateToUrlInBrowser(video.AbsoluteUri, true));
+        Assert.True(shell.NavigateToUrlInBrowser("https://127.0.0.1/new"));
+        step.SetResult(); await Task.Yield();
+        Assert.DoesNotContain(scripts, x => x.Contains("document.readyState") || x.Contains("ccpAvatarMedia"));
+    }));
+
+    [Fact]
+    public Task PlaylistWaitsForNavigationCompletion() => AvaloniaTestDispatcher.RunAsync(() => WithShell((shell, host) =>
+    {
+        var scripts = new List<string>(); host.NavigationInvoker = _ => true;
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>("ok"); };
+        shell.BrowserAutoplayDelay = () => Task.CompletedTask;
+        var url = new Uri("https://bambicloud.com/playlist/test");
+        // The fake navigation never reaches the network; temporarily allow this URL through
+        // the sandbox gate so the production playlist branch can be exercised.
+        var active = typeof(SandboxNet).GetField("<Active>k__BackingField", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var wasActive = active.GetValue(null);
+        try
+        {
+            active.SetValue(null, false);
+            Assert.True(shell.NavigateToUrlInBrowser(url.AbsoluteUri, true));
+        }
+        finally { active.SetValue(null, wasActive); }
+        Assert.Empty(scripts);
+        host.OnNavigationCompleted(url);
+        Assert.Single(scripts, x => x.Contains("button.play-action"));
+        return Task.CompletedTask;
+    }));
 }
