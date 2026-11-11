@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeFeel } from './sim-fake.mjs';
 import { createBus } from '../core/events.js';
-import { createPayoff, screenFor } from '../fx/payoff.js';
+import { createPayoff, screenFor, WALL_BURST } from '../fx/payoff.js';
 import { subliminalCards } from '../fx/subliminalBurst.js';
 
 function setup({ feel = {}, granted = true, roll = 0 } = {}) {
@@ -126,4 +126,54 @@ test('Gentle and a refused palette soften fog while harmless and remote events l
   assert.ok(t.p.fog.k > 0 && t.p.fog.k < .25);
   assert.equal(t.p.fog.params.gentle, true);
   assert.equal(t.p.flash.kind, 'none'); assert.equal(t.p.words.kind, 'brainDrain');
+});
+
+test('a wall bump pays a short burst: one word, a quick fog and a brief picture, all gone fast', () => {
+  const t = setup();
+  t.bus.emit('wall', { dv: WALL_BURST.minMps + 0.5, side: 1 });
+  assert.equal(t.p.words.kind, 'brainDrain');
+  assert.equal(t.p.fog.kind, 'pink');
+  assert.equal(t.p.flash.kind, 'flash');
+  assert.equal(t.p.flash.durS, WALL_BURST.flashS);
+  assert.ok(t.p.words.durS < t.f.get('payoff.cascadeMinS'), 'shorter than a trap cascade');
+  const most = Math.max(...Array.from({ length: 40 }, (_, i) => subliminalCards(i * 0.05, 16 / 9, 0, false, t.p.words.durS).length));
+  assert.equal(most, 1, 'a light bump shows one word');
+  t.run(1.6);
+  assert.equal(t.p.flash.kind, 'none'); assert.equal(t.p.fog.kind, 'none'); assert.equal(t.p.words.kind, 'none');
+  assert.equal(t.p.stats.walls, 1);
+});
+
+test('a hard wall pays more words than a light one, still fewer than a cascade', () => {
+  const t = setup();
+  t.bus.emit('wall', { dv: WALL_BURST.fullMps });
+  assert.ok(Math.abs(t.p.words.durS - WALL_BURST.wordsMaxS) < 1e-9);
+  const ids = new Set();
+  for (let i = 0; i < 60; i++) for (const c of subliminalCards(i * 0.05, 16 / 9, 0, false, t.p.words.durS)) ids.add(c.index);
+  assert.ok(ids.size >= 2 && ids.size <= 3, 'two or three words: ' + ids.size);
+});
+
+test('scrapes, repeats inside the cooldown, trap re-emits and a live cascade pay no wall burst', () => {
+  const t = setup();
+  t.bus.emit('wall', { dv: WALL_BURST.minMps - 0.1 });
+  t.bus.emit('wall', { dv: 12, trap: true });
+  assert.equal(t.p.stats.walls, 0); assert.equal(t.p.words.kind, 'none');
+  t.bus.emit('wall', { dv: 6 }); t.run(WALL_BURST.coolS - 0.2);
+  t.bus.emit('wall', { dv: 6 });
+  assert.equal(t.p.stats.walls, 1);
+  t.run(0.4); t.bus.emit('wall', { dv: 6 });
+  assert.equal(t.p.stats.walls, 2);
+  const c = setup();
+  c.bus.emit('keep-gate-hit', { racer: 0 }); c.run(0.5);
+  c.bus.emit('wall', { dv: 8 });
+  assert.equal(c.p.stats.walls, 0, 'the trap cascade keeps the screen');
+});
+
+test('a wall burst keeps Gentle, photosafe and the payoff switch', () => {
+  const g = setup({ feel: { 'gentle.on': true }, granted: false });
+  g.bus.emit('wall', { dv: 8 }); g.run(0.3);
+  assert.equal(g.p.flash.kind, 'none'); assert.equal(g.p.stats.refused, 1);
+  assert.ok(g.p.fog.k < .25); assert.equal(g.p.words.params.gentle, true);
+  const off = setup({ feel: { 'payoff.on': false } });
+  off.bus.emit('wall', { dv: 8 });
+  assert.equal(off.p.stats.walls, 0); assert.equal(off.p.fog.kind, 'none');
 });
