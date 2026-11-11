@@ -175,7 +175,9 @@ public sealed partial class AccountSeedTests
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 var dialog = new global::ConditioningControlPanel.Avalonia.Views.Dialogs.LoginDialog();
+                MergedAccountRecoveryHead.PendingSignIn = true;
                 dialog.Succeed(new V2AuthService.V2User { UnifiedId = "u1", Level = 1, Xp = 0 }, "tok", null, false);
+                Assert.False(MergedAccountRecoveryHead.PendingSignIn);
                 await dialog.ProfileLoad;
             });
             Assert.Equal(5, s.PlayerLevel);                     // the login path did load and adopt

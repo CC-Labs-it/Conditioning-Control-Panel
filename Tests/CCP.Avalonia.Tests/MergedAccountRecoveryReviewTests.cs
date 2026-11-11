@@ -16,6 +16,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Invites;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.BackRoom;
 using Newtonsoft.Json;
 using Xunit;
 using App = ConditioningControlPanel.Avalonia.App;
@@ -96,6 +97,9 @@ public class MergedAccountRecoveryReviewTests
             await MergedAccountRecovery.LastSwap;
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("u_canon123", settings.UnifiedId);
+            if (provider != null) MergedAccountRecoveryHead.PendingSignIn = true;
+            Assert.Equal(provider != null, CoreAccount.IsLoggedIn);
+            Assert.Equal(provider != null ? "u_canon123" : null, CoreAccount.UnifiedUserId);
             Assert.Equal(7, settings.PlayerLevel);
             Assert.Equal(42, settings.PlayerXP);
             var expected = provider switch
@@ -120,8 +124,10 @@ public class MergedAccountRecoveryReviewTests
         }
     });
 
-    [Fact]
-    public Task AiMergedResponseTriggersRecovery() => AvaloniaTestDispatcher.RunAsync(async () =>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task AiMergedResponseTriggersRecovery(bool purchase) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
         using var saved = new MergedRecoveryState();
@@ -138,14 +144,18 @@ public class MergedAccountRecoveryReviewTests
         using var server = new FakeServer();
         server.Handle = ctx => FakeServer.Send(ctx, Encoding.UTF8.GetBytes(Body), 409);
         using var ai = new AiService(server.Prefix);
+        using var http = new HttpClient();
         try
         {
 #pragma warning disable CS0618
-            await ai.GetBambiReplyExAsync("hello there");
+            if (purchase)
+                await new BackRoomApi(http, () => ("u_tombstone1", "old"), null, baseUrl: server.Prefix.TrimEnd('/'))
+                    .RelayAsync("counter", "buy", "idem", null);
+            else await ai.GetBambiReplyExAsync("hello there");
 #pragma warning restore CS0618
             await MergedAccountRecovery.LastSwap;
             Dispatcher.UIThread.RunJobs();
-            Assert.Contains(server.Requests, r => r.Path == "/v2/ai/chat");
+            Assert.Contains(server.Requests, r => r.Path == (purchase ? "/v2/backroom/counter/buy" : "/v2/ai/chat"));
             Assert.Equal("u_canon123", settings.UnifiedId);
             Assert.Null(settings.AuthToken);
             Assert.True(StartupLadder.Inbox.Contains("merged-account-signin:u_canon123"));

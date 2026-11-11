@@ -54,8 +54,9 @@ internal static class AccountSeed
         patreon.PeerDisplayName = () => discord.CustomDisplayName; // WPF PatreonService
 
         // WPF App.IsLoggedIn / UserDisplayName / the PatreonService gates.
-        CoreAccount.IsLoggedInProvider = () => patreon.IsAuthenticated || discord.IsAuthenticated
-            || substar.IsAuthenticated || !string.IsNullOrEmpty(CoreAccount.UnifiedUserId);
+        CoreAccount.IsLoggedInProvider = () => (!MergedAccountRecoveryHead.PendingSignIn ||
+            (!string.IsNullOrEmpty(CoreAccount.UnifiedUserId) && !string.IsNullOrEmpty(CoreSettings.Current.AuthToken))) &&
+            (patreon.IsAuthenticated || discord.IsAuthenticated || substar.IsAuthenticated || !string.IsNullOrEmpty(CoreAccount.UnifiedUserId));
         CoreAccount.DisplayNameProvider = () =>
         {
             var s = CoreSettings.Current;
@@ -382,6 +383,7 @@ internal static class AccountSeed
         Discord?.Logout();
         SubscribeStar?.Logout();
         CoreAccount.UnifiedUserId = null;
+        MergedAccountRecoveryHead.PendingSignIn = false;
         var s = CoreSettings.Current;
         s.UnifiedId = null;
         s.AuthToken = null;

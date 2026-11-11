@@ -14,6 +14,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// <summary>WPF MergedAccountRecoveryHead: preserve the merged person's local data.</summary>
 internal static class MergedAccountRecoveryHead
 {
+    internal static volatile bool PendingSignIn;
     internal static void Seed()
     {
         MergedAccountRecovery.StopSync = () => AccountSeed.Sync?.Reset();
@@ -29,7 +30,7 @@ internal static class MergedAccountRecoveryHead
         MergedAccountRecovery.Finished = (canonical, reauthed) => Dispatcher.UIThread.Post(() =>
         {
             var shell = MainShellWindow.Current;
-            // WPF MainWindow.Login.cs:51-58; the other Update* calls are still stubs on this head.
+            // WPF MainWindow.Login.cs:51-58; Account settings repaint remains unported.
             shell?.UpdateQuickLoginUI();
             shell?.UpdateBannerWelcomeMessage();
             if (reauthed)
@@ -52,6 +53,7 @@ internal static class MergedAccountRecoveryHead
             else
                 StartupLadder.PresentOrInbox(item);
         });
+        ConditioningControlPanel.Services.BackRoom.BackRoomApi.MergedReply = MergedAccountRecovery.TryHandle;
         V2AuthService.MergedRecovery = MergedAccountRecovery.TryHandleAsync;
         AiService.MergedAccountHook = response => MergedAccountRecovery.TryHandleAsync(response);
     }
@@ -65,6 +67,8 @@ internal static class MergedAccountRecoveryHead
             await ExchangeAsync(AccountSeed.Discord.GetAccessToken, (v, t) => v.AuthenticateWithDiscordAsync(t))) return true;
         if (AccountSeed.SubscribeStar?.IsAuthenticated == true &&
             await ExchangeAsync(AccountSeed.SubscribeStar.GetAccessToken, (v, t) => v.AuthenticateWithSubstarAsync(t))) return true;
+        PendingSignIn = true;
+        CoreAccount.UnifiedUserId = null;
         return false;
     }
 
@@ -83,6 +87,7 @@ internal static class MergedAccountRecoveryHead
             InviteRules.ApplyGrant(CoreSettings.Current, InviteRules.ParseUtc(result.User.InviteGrantUntilRaw), now);
             CoreAccount.UnifiedUserId = result.User.UnifiedId;
             CoreSettings.Save();
+            if (!string.IsNullOrEmpty(result.User.UnifiedId) && !string.IsNullOrEmpty(result.AuthToken)) PendingSignIn = false;
             return !string.IsNullOrEmpty(result.User.UnifiedId) && !string.IsNullOrEmpty(result.AuthToken);
         }
         catch (Exception ex)

@@ -772,6 +772,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             Controls.Invites.InvitePanel.ArmExpiry();
             CoreSettings.Save();
             CoreAccount.UnifiedUserId = user.UnifiedId; // before the load: its push is gated on signed in
+            if (!string.IsNullOrEmpty(authToken)) MergedAccountRecoveryHead.PendingSignIn = false;
             ProfileLoad = AccountSeed.LoadProfileAsync(); // WPF MainWindow.Login.cs:170
 
             // WPF UpdateServiceProperties
@@ -984,6 +985,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             s.UnifiedId = result.UnifiedId;
             CoreSettings.Save();
             CoreAccount.UnifiedUserId = result.UnifiedId;
+            MergedAccountRecoveryHead.PendingSignIn = false;
             ProfileLoad = AccountSeed.LoadProfileAsync(); // WPF MainWindow.Login.cs:170 runs after every sign-in
             Result = new LoginResult
             {

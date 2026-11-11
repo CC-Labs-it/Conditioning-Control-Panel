@@ -50,7 +50,7 @@ public class MergedAccountRecoveryHeadTests
             MergedAccountRecovery.LastSwap.GetAwaiter().GetResult();
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("u_canon123", settings.UnifiedId);
-            Assert.Equal("u_canon123", CoreAccount.UnifiedUserId);
+            Assert.Null(CoreAccount.UnifiedUserId);
             Assert.Null(settings.AuthToken);
             Assert.False(sync.Loaded);
             Assert.Equal("u_canon123", quests.Progress.OwnerUnifiedId);
@@ -86,6 +86,7 @@ internal sealed class MergedRecoveryState : IDisposable
         _programPremium = CoreProgram.HasPremiumProvider, _session = CoreSession.IsSessionRunningProvider;
     private readonly Func<string?>? _name = CoreAccount.DisplayNameProvider;
     private readonly string? _unifiedUserId = CoreAccount.UnifiedUserId;
+    private readonly bool _pendingSignIn = MergedAccountRecoveryHead.PendingSignIn;
     private readonly Func<Task<bool>>? _revalidate = AuthRecovery.ProviderRevalidate;
     private readonly Action? _recovered = AuthRecovery.Recovered, _stopSync = MergedAccountRecovery.StopSync;
     private readonly Action<string>? _stamp = MergedAccountRecovery.StampQuests;
@@ -94,10 +95,12 @@ internal sealed class MergedRecoveryState : IDisposable
     private readonly Action<string, bool>? _finished = MergedAccountRecovery.Finished;
     private readonly Func<HttpResponseMessage, string?, Task<bool>>? _v2Hook = V2AuthService.MergedRecovery;
     private readonly Func<HttpResponseMessage, Task>? _aiHook = AiService.MergedAccountHook;
+    private readonly Func<int, string, bool>? _backRoomHook = ConditioningControlPanel.Services.BackRoom.BackRoomApi.MergedReply;
 
     public void Dispose()
     {
         MergedAccountRecovery.ResetForTest();
+        MergedAccountRecoveryHead.PendingSignIn = _pendingSignIn;
         (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, AccountSeed.NewV2, AccountSeed.Sync) = (_get, _set, _newV2, _sync);
         (App.Quests, WelcomeBackOffer.Present) = (_quests, _present);
         (CoreAccount.IsLoggedInProvider, CoreAccount.HasPremiumAccessProvider, CoreAccount.HasLabAccessProvider) = (_loggedIn, _premium, _lab);
@@ -108,6 +111,7 @@ internal sealed class MergedRecoveryState : IDisposable
         (MergedAccountRecovery.StopSync, MergedAccountRecovery.StampQuests, MergedAccountRecovery.Reauthenticate) = (_stopSync, _stamp, _reauth);
         (MergedAccountRecovery.ReloadProfile, MergedAccountRecovery.Finished) = (_reload, _finished);
         (V2AuthService.MergedRecovery, AiService.MergedAccountHook) = (_v2Hook, _aiHook);
+        ConditioningControlPanel.Services.BackRoom.BackRoomApi.MergedReply = _backRoomHook;
         Newtonsoft.Json.JsonConvert.PopulateObject(_settingsJson, _settings, Json);
     }
 }
