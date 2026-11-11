@@ -84,7 +84,7 @@ public class Sync7bEntitlementTests {
         CheckoutWatch.Disarm(); CheckoutWatch.NoteOpened("https://patreon.com/checkout");
         await EntitlementRefresh.OnActivated(shell: false); Assert.Equal(1, handler.Reads); CheckoutWatch.Disarm();
     });
-    [Fact] public void TierNoticeDoesNotLetPresenterFailureEscape() => AvaloniaTestDispatcher.Run(() => {
+    [Fact] public void TierNoticeRecordsRiseWithoutPresenting() => AvaloniaTestDispatcher.Run(() => {
         using var isolation = new EntitlementTestScope();
         if (Application.Current == null) AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>()
             .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
@@ -96,7 +96,8 @@ public class Sync7bEntitlementTests {
         void Fail() => throw new InvalidOperationException("presenter probe"); StartupLadder.Inbox.Changed += Fail;
         try {
             Assert.Null(Record.Exception(shell.TierOnNoticePass));
-            Assert.Contains(StartupLadder.Inbox.Items, row => row.Key == "tier-on:2");
+            Assert.DoesNotContain(StartupLadder.Inbox.Items, row => row.Key == "tier-on:2");
+            Assert.Equal(2, s.LastKnownEffectiveTier);
         } finally { StartupLadder.Inbox.Changed -= Fail; shell.Close(); StartupLadder.ResetForTests(); }
     });
     [Fact] public void HideShowKeepsOneActivationCallback() => AvaloniaTestDispatcher.Run(() => {
@@ -126,7 +127,7 @@ public class Sync7bEntitlementTests {
         Assert.Throws<InvalidOperationException>((Action)(() => { using var failed = new EntitlementTestScope(); s.UnifiedId = "failure"; throw new InvalidOperationException(); })); Assert.Equal("baseline", s.UnifiedId);
         Func<Task>[] tests = {
             () => { ReadingRenewsAndRejectsLateLogout(); return Task.CompletedTask; }, () => { ButtonShowsFeedbackAndHidesForPrime(); return Task.CompletedTask; },
-            CheckoutFocusReadsOnceWithoutProgressionPush, () => { TierNoticeDoesNotLetPresenterFailureEscape(); return Task.CompletedTask; },
+            CheckoutFocusReadsOnceWithoutProgressionPush, () => { TierNoticeRecordsRiseWithoutPresenting(); return Task.CompletedTask; },
             () => { HideShowKeepsOneActivationCallback(); return Task.CompletedTask; },
         };
         foreach (var test in tests) {

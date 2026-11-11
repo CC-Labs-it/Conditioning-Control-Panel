@@ -49,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         internal static void Offer(string surface, Window? owner = null)
         {
+            if (!PopupSwitches.RemoteMediaOffer) return;
             try
             {
                 if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => Offer(surface, owner)); return; }

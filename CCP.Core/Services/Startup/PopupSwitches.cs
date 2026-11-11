@@ -5,7 +5,7 @@ namespace ConditioningControlPanel.Services.Startup
     /// back to true to bring that popup back. Static readonly rather than const, so the guarded code
     /// still compiles without unreachable-code warnings.
     /// </summary>
-    internal static class PopupSwitches
+    public static class PopupSwitches
     {
         /// <summary>"Media without the download": the online-media offer at an empty-assets dead end
         /// (<c>App.OfferRemoteMediaSource</c>). The online source stays one click away in Assets.</summary>

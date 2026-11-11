@@ -119,7 +119,9 @@ public sealed class LoginAchievementOfferTests
     [InlineData(false)]
     public Task DiscordSignInOffersExplicitOptInWithPanelAsOwner(bool accept) => Run(async (shell, s) =>
     {
-        var signIn = SignIn(shell);
+        await SignIn(shell);
+        Assert.Empty(shell.OwnedWindows.OfType<MessageDialog>());
+        var signIn = shell.OfferAchievementSharingAfterDiscordLink(userAsked: true);
         await WaitFor(() => signIn.IsCompleted || shell.OwnedWindows.OfType<MessageDialog>().Any());
         var offer = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
         Assert.Same(shell, offer.Owner);
@@ -151,21 +153,18 @@ public sealed class LoginAchievementOfferTests
     });
 
     [Fact]
-    public Task GameParksOneOfferAndInboxClickAsksEvenWhileGameRemains() => Run(async (shell, s) =>
+    public Task GameDoesNotParkUnaskedOfferButExplicitRequestStillAsks() => Run(async (shell, s) =>
     {
         PanicSurfaces.All = new[] { new PanicSurfaces.Surface("test-game", _ => { }, () => true) };
         await SignIn(shell);
         Assert.Empty(shell.OwnedWindows.OfType<MessageDialog>());
-        var row = Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "discord-share-achievements");
-        StartupLadder.Inbox.Open(row);
-        await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().Any());
-        Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key == row.Key);
+        Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key == "discord-share-achievements");
+        var ask = shell.OfferAchievementSharingAfterDiscordLink(userAsked: true);
         var offer = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
         offer.Close(false);
-        Dispatcher.UIThread.RunJobs();
+        await ask;
         Assert.False(s.DiscordShareAchievements);
     });
-
 
     private sealed class HeldProfile(Task release) : HttpMessageHandler
     {
@@ -177,38 +176,34 @@ public sealed class LoginAchievementOfferTests
     }
 
     [Fact]
-    public Task SlowCloudProfileDoesNotDelayTheSharingQuestion() => Run(async (shell, s) =>
+    public Task SlowCloudProfileDoesNotTriggerSharingPrompt() => Run(async (shell, s) =>
     {
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         AccountSeed.NewV2 = () => new V2AuthService(() => s, new HeldProfile(release.Task));
         var signIn = SignIn(shell);
         try
         {
-            await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().Any());
+            await WaitFor(() => !shell.OwnedWindows.OfType<LoginDialog>().Any());
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(signIn.IsCompleted);
             Assert.False(release.Task.IsCompleted);
-            // WPF OnProfileLoaded repaints the level while the question is still open.
+            Assert.Empty(shell.OwnedWindows.OfType<MessageDialog>());
+            Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key == "discord-share-achievements");
             s.PlayerLevel = 42;
             release.TrySetResult();
             await WaitFor(() => shell.Named<TextBlock>("TxtLevelLabel")?.Text == "LVL 42");
-            Assert.Single(shell.OwnedWindows.OfType<MessageDialog>()).Close(false);
         }
-        finally
-        {
-            release.TrySetResult();
-            await WaitFor(() => signIn.IsCompleted || shell.OwnedWindows.OfType<MessageDialog>().Any());
-            foreach (var offer in shell.OwnedWindows.OfType<MessageDialog>().ToArray()) offer.Close(false);
-            await signIn;
-        }
+        finally { release.TrySetResult(); await signIn; }
     });
 
     [Fact]
-    public Task HiddenPanelParksOnlyOneRowAndDoesNotEnableSharing() => Run(async (shell, s) =>
+    public Task HiddenPanelDoesNotParkOfferOrEnableSharing() => Run(async (shell, s) =>
     {
         shell.Hide();
         await shell.OfferAchievementSharingAfterDiscordLink();
         await shell.OfferAchievementSharingAfterDiscordLink();
         Assert.Empty(shell.OwnedWindows.OfType<MessageDialog>());
-        Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "discord-share-achievements");
+        Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key == "discord-share-achievements");
         Assert.False(s.DiscordShareAchievements);
     });
 
@@ -225,7 +220,8 @@ public sealed class LoginAchievementOfferTests
     [Fact]
     public Task ClosingTheOfferDoesNotOptIn() => Run(async (shell, s) =>
     {
-        var signIn = SignIn(shell);
+        await SignIn(shell);
+        var signIn = shell.OfferAchievementSharingAfterDiscordLink(userAsked: true);
         await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().Any());
         Assert.Single(shell.OwnedWindows.OfType<MessageDialog>()).Close();
         await signIn;

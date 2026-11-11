@@ -267,6 +267,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             var onRise = _pendingRiseTier > 0;
             _pendingRiseTier = 0;
+            if (!Services.Startup.PopupSwitches.TierCelebration) { TierOnNoticePass(); return; }
             try
             {
                 if (!CoreAccount.HasPremiumAccess) return;
@@ -358,7 +359,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     s.LastKnownEffectiveTier = verdict.Record;
                     if (hadReading) CoreSettings.Save();
                 }
-                if (!verdict.Owed || TierCelebration.IsOwed(s.SeenFeatureIntros, current, onRise: true)) return;
+                if (!Services.Startup.PopupSwitches.TierCelebration || !verdict.Owed || TierCelebration.IsOwed(s.SeenFeatureIntros, current, onRise: true)) return;
                 var title = Loc.Get(Services.TierOnNotice.TitleKey(current));
                 var body = Loc.Get("tier_on_body");
                 Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem

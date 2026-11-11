@@ -31,9 +31,9 @@ public sealed class NoVideosRemoteOfferTests
     }
 
     [Theory]
-    [InlineData(false, 1)]   // empty library: offer the online source after the box closes
+    [InlineData(false, 0)]   // empty library: the online offer is switched off
     [InlineData(true, 0)]    // the length filter emptied it: another source is the wrong fix
-    public async Task The_no_videos_box_offers_remote_media_unless_the_length_filter_caused_it(bool filterEmptied, int offers)
+    public async Task The_no_videos_box_does_not_offer_remote_media(bool filterEmptied, int offers)
     {
         await AvaloniaTestDispatcher.RunAsync(async () =>
         {
