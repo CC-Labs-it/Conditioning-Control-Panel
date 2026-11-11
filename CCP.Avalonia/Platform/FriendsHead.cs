@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Net.Http;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
@@ -45,11 +46,10 @@ internal static class FriendsHead
         Services.Lobby.LobbyWire.DefaultBaseUrl = () => url;
     }
 
-    internal static FriendsService? Create(string? userDataDir, string? overrideUrl)
+    internal static FriendsService? Create(string? userDataDir, string? overrideUrl, HttpClient? http = null)
     {
         if (BaseUrl(userDataDir, overrideUrl) is not { } url) return null;
-        // ponytail: no Contract D hook yet; Core MergedAccountRecovery is unseeded on this head (re-auth/sign-in seams pending).
-        return new FriendsService(new FriendsApi(null, Identity, url), () => Identity()?.UnifiedId, AnyWindowActive);
+        return new FriendsService(new FriendsApi(http, Identity, url, MergedAccountRecovery.TryHandle), () => Identity()?.UnifiedId, AnyWindowActive);
     }
 
     /// <summary>WPF FriendsServiceApp.AnyAppWindowActive.</summary>

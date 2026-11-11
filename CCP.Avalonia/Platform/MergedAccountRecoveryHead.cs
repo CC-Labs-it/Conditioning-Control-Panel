@@ -30,7 +30,8 @@ internal static class MergedAccountRecoveryHead
         MergedAccountRecovery.Finished = (canonical, reauthed) => Dispatcher.UIThread.Post(() =>
         {
             var shell = MainShellWindow.Current;
-            // WPF MainWindow.Login.cs:51-58; Account settings repaint remains unported.
+            // WPF MainWindow.Login.cs:51-58: repaint the account surfaces.
+            shell?.AppSettingsPage?.RefreshSections();
             shell?.UpdateQuickLoginUI();
             shell?.UpdateBannerWelcomeMessage();
             if (reauthed)
