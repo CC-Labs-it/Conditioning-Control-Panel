@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Platform;
+using CCP.Testing;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -26,6 +27,22 @@ public class WebAssetServerTests
 
     /// <summary>The For You feed seeks a clip window inside each video (fyp/surfaces.js): a media element asks for a
     /// byte range and must get only that slice (206), never the whole file.</summary>
+    [Fact]
+    public async Task M4v_is_served_as_video_for_the_browser_gate()
+    {
+        var (server, root) = Make();
+        using (server)
+        using (var http = Client())
+        {
+            File.Copy(Path.Combine(AppContext.BaseDirectory, "Assets", "bubblecount-2s.mp4"), Path.Combine(root, "clip.m4v"));
+            var response = await http.GetAsync(server.Url("clip.m4v"));
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal("video/mp4", response.Content.Headers.ContentType!.MediaType);
+            Assert.NotEmpty(await response.Content.ReadAsByteArrayAsync());
+        }
+        Directory.Delete(Path.GetDirectoryName(root)!, true);
+    }
+
     [Fact]
     public async Task ServesOneByteRange_AsWebView2DoesForSeekingMedia()
     {
@@ -109,6 +126,7 @@ public class WebAssetServerTests
     [Fact]
     public void RefusesSymlinksThatLeaveTheRoot()
     {
+        Symlinks.RequireOrSkip();
         var (s, root) = Make();
         using (s)
         {
@@ -149,6 +167,7 @@ public class WebAssetServerTests
                 using var unauth = Client();
                 Assert.Equal(HttpStatusCode.Forbidden, (await unauth.GetAsync(url)).StatusCode);
             }
+            Symlinks.RequireOrSkip();   // last, so the token and traversal checks above always run
             File.CreateSymbolicLink(Path.Combine(audio, "link.mp3"), Path.Combine(dir, "outside.mp3"));
             Assert.Null(server.ResolveFile("/ccp.words/link.mp3"));
         }

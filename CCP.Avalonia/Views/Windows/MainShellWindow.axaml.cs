@@ -88,6 +88,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public MainShellWindow()
         {
             AvaloniaXamlLoader.Load(this);
+            Closed += (_, _) => Platform.FriendsLanding.Stop(); // WPF Services/Friends/FriendsLanding.cs:75-82: ownerless notices must not hold exit.
+            Closed += (_, _) => _directoryPillView.Dispose();
             InitializeLanguageSelector();
             InitializeQuestStamps(); // WPF header quest roster; releases service events on Closed.
 
@@ -105,10 +107,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // (MainWindow.xaml.cs:555) and opens the wizard once the window is up. Same here -
             // see MainShellWindow.FirstRun.cs, which owns both halves.
             HookFirstRun();
+            HookDisplayNameAsk();
 
             // The rail's setup pass. Here, not in OnAttachedToVisualTree: a Window IS the visual
             // root, so that override never fires on it and the rail never opened.
             InitializeNavRail();
+            InitializeProgramsToasts(); // WPF ProgramsTab.cs:1864-1940, Presets.cs:2013,2058
             InitializeChromeFx(); // WPF chrome message cue lifecycle
             InitFavoritesRail(); // MainShellWindow.FavoritesRail.cs (WPF MainWindow.xaml.cs:3501)
             ApplyEnableDeeper(); // MainShellWindow.DeeperTab.cs (WPF LoadSettings: rail door follows EnableDeeper)
@@ -117,7 +121,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // The mod switcher's rows, the saved mod's palette and the pending first-run choice
             // (MainShellWindow.ModSwitch.cs). No-op on the headless render path (no App.Mods).
             AttachModSwitch();
+            HookPanicEnabled();
             HookWallRings();   // MainShellWindow.Presets.cs: wall tile rings follow the flags
+            InitializeEventFx(); // WPF EventFx.cs:276, hidden achievement rail burst
+            HookCompanionEvents(); // WPF Companion XP/level/drain/switch subscriptions
             HookLevelDisplay(); // MainShellWindow.HeroFx.cs: header level/XP follow ProgressionBank
             HookAutonomy();     // MainShellWindow.Autonomy.cs: Takeover seeds; starts only on the user's switch
             InitializeDescentFuse(); // MainShellWindow.DescentFuse.cs (WPF MainWindow ctor); no-op without App.DescentCountdown
@@ -125,15 +132,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeProfileVat();
             InitializeProfileFx();     // MainShellWindow.ProfileFx.cs: search glow + OG border loop gate
             InitializeInboxBadge(); // MainShellWindow.Inbox.cs (WPF MainWindow.Inbox.cs:27)
+            InitializeIntakePassNudge();
             InitializeServerAnnouncement(); // MainShellWindow.Announcement.cs (WPF MainWindow.Marquee.cs:688)
             InitializeServerBanners(); // MainShellWindow.ServerBanners.cs (WPF MainWindow.Marquee.cs:649-826)
             InitializeJustDropDoor(); // MainShellWindow.JustDrop.cs (WPF MainWindow.xaml.cs:3793)
             RefreshIntakePassTile(); // startup Home has no ShowTab call
             InitializeFirstVisitPulses(); // MainShellWindow.TabTransitions.cs (WPF MainWindow.xaml.cs:3795-3830)
             InitializeLockdownGreys(); // MainShellWindow.Lockdown.cs (WPF Lab.cs:612/707)
+            InitializePossessionHost(); // MainShellWindow.Possession.cs (WPF Lab.cs:42 InitializePossessionHost)
             InitializeInviteTicket(); // MainShellWindow.InviteTicket.cs (WPF MainWindow.xaml.cs, main e2d4e35ef)
             InitializeInviteEnding(); // MainShellWindow.Patreon.cs (WPF MainWindow.xaml.cs:3590, main fbe161de2)
             InitializePremiumCelebration(); // MainShellWindow.Patreon.cs (WPF InitializePatreonTab + MainWindow.xaml.cs:3559)
+            InitializeSubscribeStarDependents(); // WPF MainWindow.SubscribeStar.cs:28-48
             InitializePremiumSpark();       // MainShellWindow.PremiumSpark.cs (WPF MainWindow.PremiumSpark.cs)
             InitializeSparkleWallet();      // MainShellWindow.SparkleWallet.cs (WPF MainWindow.SparkleWallet.cs)
             InitializeWebcamLoadingSplash(); // MainShellWindow.WebcamSplash.cs (WPF MainWindow.xaml.cs:3631)
@@ -141,6 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeHelpButtons(); // MainShellWindow.HelpButtons.cs (WPF MainWindow.Presets.cs:35 SetupHelpButtons)
             InitializeDashboardFx(); // MainShellWindow.DashboardFx.cs (WPF MainWindow ctor -> InitializeDashboardFx)
             InitializeMotionChrome(); // MainShellWindow.SectionChrome.cs (WPF CmbMotionLevel_SelectionChanged, chrome half)
+            InitializeBrowserSurfaceLifecycle(); // WPF MainWindow.xaml.cs:1987, browser disposal
             InitDashboardBrowserFold(); // MainShellWindow.DashboardFold.cs (WPF MainWindow.xaml.cs:3505)
             InitializeRememberButton(); // MainShellWindow.Remember.cs (WPF MainWindow.xaml.cs:3508)
             InitializeMicActivePill(); // MainShellWindow.SheListening.cs (WPF MainWindow.xaml.cs:3594 WireMicActivePill)
@@ -153,21 +164,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Platform.KeywordTriggerHead.Sync(); // WPF MainWindow.xaml.cs:341: a saved-on switch arms at boot
             InitializeLeashHold(); // MainShellWindow.LeashHold.cs (WPF MainWindow.Leash.cs hold-to-cut)
             // WPF MainWindow.xaml.cs:3695: the tube is built on load when the companion is enabled.
-            Opened += (_, _) => { if (CoreSettings.Current.AvatarEnabled) InitializeAvatarTube(); };
+            Opened += (_, _) => { if (CoreSettings.Current.AvatarEnabled && _avatarTubeWindow == null) InitializeAvatarTube(); };
             Closed += (_, _) => _avatarTubeWindow?.Close();
             // WPF MainWindow.xaml.cs:674: catalogue downloads open in the player.
             App.CatalogueLookup.SetOpener(OpenCatalogueEnhancement);
             Closed += (_, _) =>
             {
+                StopEngineRamp();
                 StopLockdownPulse();
+                Overlays.CornerGifOverlay.ReleaseHost(this);   // StartEngine made this shell the corner GIF host
                 App.CatalogueLookup.ClearOpener(OpenCatalogueEnhancement);
                 if (Platform.X11PanicKey.PushToTalk == OnPushToTalkKey)
                     Platform.X11PanicKey.PushToTalk = null;
             };
             // WPF MainWindow.xaml.cs:3531-3535: one forced share-status poll per launch.
-            Opened += (_, _) => PollCatalogueStatuses(force: true);
+            OnceOpened(() => PollCatalogueStatuses(force: true));
             // WPF MainWindow.xaml.cs:3837 (end of MainWindow_Loaded): MainShellWindow.PendingRegistration.cs.
-            Opened += (_, _) => ArmPendingRegistration();
+            OnceOpened(ArmPendingRegistration);
             Opened += (_, _) => WireOnlineMeterPill();   // MainShellWindow.OnlineMeter.cs (WPF WireOnlineMeter)
         }
 

@@ -560,7 +560,11 @@ async function boot(course, options, lifetime, isCurrent) {
   hud.setCard('start', { title: trackName });
   // the warming card names each stage and its bar fills with the real progress (pass 3)
   const paintGap = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
-  const showLoading=(stage,p)=>{hud.setLoading(stage,p);loading.set(stage,p);};
+  // page -> host `loading { stage, p }` once per stage (CONTRACT section 7): a course build may hold the main thread
+  // next, and the desktop host waits for a page that said so instead of closing it (ccp-bugs #1543).
+  let sentStage=null;
+  const showLoading=(stage,p)=>{hud.setLoading(stage,p);loading.set(stage,p);
+    if(stage!==sentStage){sentStage=stage;bridge.send?.({type:'loading',stage:String(stage),p:Math.round(p*100)/100});}};
   showLoading('Opening the garage', 0.04);
 
   // the saved display options (frame cap, render scale, quality, fps readout) reach the renderer at boot

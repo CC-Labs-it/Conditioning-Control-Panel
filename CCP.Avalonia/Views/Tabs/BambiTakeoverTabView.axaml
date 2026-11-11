@@ -593,6 +593,9 @@
                                                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="10,0,0,0"/>
                                                     </Grid>
 
+                                                    <fx:ScrolllerCreditLine x:Name="TxtWallpaperCredit" IsVisible="False"
+                                                        FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0"/>
+
                                                     <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
                                                     <!-- Wallpaper persistence — every change used to snap back after a hardcoded
@@ -824,8 +827,7 @@
                                 Background="{StaticResource TabHueWashBrush}"
                                 MinHeight="200" MaxHeight="300" Margin="0,0,0,10">
                             <Grid>
-                                <fx:IconGlyph Brand="Spiral" Size="72" Opacity="0.5"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <!-- No placeholder glyph (WPF :776): code-behind paints the art as the Background. -->
                                 <!-- Scrim so the plate sits under the page instead of fighting it. -->
                                 <Border CornerRadius="12">
                                     <Border.Background>

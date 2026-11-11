@@ -25,12 +25,8 @@
 //     CCP.Core/Services/EmiDesk/ carries the book's layout and text, not the desk - so the HOLD
 //     has nothing to hold back on this head. Nothing talks over the wizard here either way.
 //   * `QueueEmiKnock(knockSeenVersion)`, listed as dropped in MainShellWindow.axaml.cs already.
-//   * The rest of the `else` branch (ShowWhatsNewIfNeeded / TryPresentSeasonRecap). Returning users
-//     get no mod popup: WPF removed it (MainWindow.xaml.cs:587-588). MainShellWindow.Marquee.cs documents
-//     why those two are still stubs: they need App.Achievements, App.Seasons and App.xaml.cs's startup-dialog queue. One
-//     consequence worth naming: LastSeenVersion is therefore only ever stamped by the first-run
-//     gate below, never on an upgrade launch. That is pre-existing and this file does not
-//     worsen it - the fix is ShowWhatsNewIfNeeded, not a second stamp here.
+//   * TryPresentSeasonRecap: the pinned WPF reference retires the automatic modal; only
+//     silent monthly bookkeeping remains. Upgrade What's New is in MainShellWindow.UpgradeIntro.cs.
 
 using System;
 using Avalonia.Threading;
@@ -54,8 +50,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 bool fresh = FirstRunWizard.ShouldRunAndClaim();
                 // Nav rework (WPF MainWindow.xaml.cs:537/589): the one-time What moved card, upgrades only.
+                if (!fresh) ArmUpgradeIntro();
                 OfferWhatMovedIfNeeded(freshInstall: fresh);
-                if (fresh) Opened += OnFirstRunShellOpened;
+                if (fresh)
+                {
+                    HoldLadderForFirstRun();
+                    Opened += OnFirstRunShellOpened;
+                }
                 // WPF's else branch (MainWindow.xaml.cs:602-612) no longer opens a mod picker:
                 // mods are offered by the first-run wizard and the Mod Manager only.
                 else if (CoreSettings.Service != null && CoreSettings.Current.Welcomed
@@ -107,6 +108,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Warning(ex, "[FirstShow] first-run show failed to open"); }
         }
 
+        private bool _firstRunHoldsLadder;
+
+        /// <summary>
+        /// WPF MainWindow.xaml.cs:543/552: the wizard (and then the show) are queued on the startup
+        /// ladder from the constructor, so the ladder is busy (StartupPresenter.cs:350 LadderBusy)
+        /// from the first frame. The Dashboard lands with the shell and offers its two cards at once;
+        /// a busy ladder HOLDS them (Route: Defer) instead of letting "Today's Free Feature" open
+        /// under the wizard and sit there through EMI's first show (owner fix3). This head has no
+        /// modal queue, so the hold is <see cref="Platform.StartupLadder.ModalPending"/>.
+        /// </summary>
+        private void HoldLadderForFirstRun()
+        {
+            _firstRunHoldsLadder = true;
+            Platform.StartupLadder.ModalPending = true;
+            Closed += (_, _) => ReleaseFirstRunLadder();   // a shell that never opened must not hold the ladder for good
+        }
+
+        /// <summary>WPF StartupPresenter.cs:501/552 FlushDeferred: the ladder drains once the show has been
+        /// opened, and the held cards are asked again - inside the ten-minute first-launch window they
+        /// become Inbox rows.</summary>
+        private void ReleaseFirstRunLadder()
+        {
+            if (!_firstRunHoldsLadder) return;
+            _firstRunHoldsLadder = false;
+            Platform.StartupLadder.ModalPending = false;
+            Platform.StartupLadder.PumpHeld();
+        }
+
         private void OnFirstRunShellOpened(object? sender, EventArgs e)
         {
             Opened -= OnFirstRunShellOpened;   // one launch, one wizard
@@ -132,6 +161,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 catch (Exception ex)
                 {
                     Log.Warning(ex, "[FirstRun] The first-run wizard failed to run");
+                }
+                finally
+                {
+                    ReleaseFirstRunLadder();
                 }
             }, DispatcherPriority.Normal);
         }

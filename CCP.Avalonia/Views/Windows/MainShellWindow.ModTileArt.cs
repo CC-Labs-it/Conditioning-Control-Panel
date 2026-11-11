@@ -36,8 +36,8 @@ public partial class MainShellWindow
             Set(dash.CardBouncingText, ModArt.TryLoad("features/bouncing_text.png", TileDecodeWidth));
             Set(dash.CardBubblePop, ModArt.TryLoad("features/Bubble_pop.png", TileDecodeWidth));
             Set(dash.CardLockCard, ModArt.TryLoad("features/Phrase_Lock.png", TileDecodeWidth));
+            Set(dash.CardDeeperEditor, ModArt.TryLoad("features/deeper_editor.png", TileDecodeWidth));
             Set(dash.CardMystery, ModTileVariant("mysterybox", TileDecodeWidth));
-            RefreshMysteryTile();
             Set(dash.CardVault, ModTileVariant("vault", WideTileDecodeWidth));
             Split(dash.ComboVideoBubble, "features/mandatory_videos.png", "features/Bubble_count.png");
             Split(dash.ComboSpiralPink, "features/spiral_overlay.png", "features/Pink_filter.png");

@@ -35,8 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
 
         // The bundled Noto Sans Mono first, then the WPF system fallback chain.
-        public static readonly FontFamily FaceFont = new(
-            AppFonts.Mono + ", Noto Sans Mono, Cascadia Mono, Consolas, " +
+        public static readonly FontFamily FaceFont = FontGuard.Startup.Family(AppFonts.Mono + ", Noto Sans Mono, Cascadia Mono, Consolas, " +
             "Noto Sans Symbols 2, Segoe UI Symbol, Segoe UI Emoji, Nirmala UI, MS Gothic, Courier New, monospace");
 
         private string? _face = "0_0";
@@ -49,8 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             set { if (_face == value) return; _face = value; InvalidateVisual(); }
         }
 
-        // ponytail: nothing sets Small/Flat yet (the dock does not mirror the widget's mood
-        // flags, WPF EmiDock binds them); left to the dock-mirroring lane.
+        // Set by EmiDeskWindow.DrawFace and mirrored by EmiDock (WPF binds both).
         public bool Small
         {
             get => _small;

@@ -10,6 +10,7 @@ using Avalonia.Skia;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using CCP.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -152,8 +153,6 @@ public sealed class IntakePageTests
                 File.WriteAllText(Path.Combine(assets, f), "x");
             }
             File.WriteAllText(Path.Combine(outside, "secret.png"), "x");
-            File.CreateSymbolicLink(Path.Combine(assets, "images", "link.png"), Path.Combine(outside, "secret.png"));
-            Directory.CreateSymbolicLink(Path.Combine(assets, "images", "out"), outside);
 
             using var server = new WebAssetServer(web) { AssetsRoot = () => assets, DisabledAssets = () => new[] { "images/off.png" } };
             string P(string rel) => "/" + WebAssetServer.AssetsPrefix + rel;
@@ -167,8 +166,6 @@ public sealed class IntakePageTests
             Assert.Null(server.ResolveFile(P("images/off.png")));       // unchecked in the Assets tree
             Assert.Null(server.ResolveFile(P("../settings.json")));
             Assert.Null(server.ResolveFile(P("../" + Path.GetFileName(web) + "/w.png")));
-            Assert.Null(server.ResolveFile(P("images/link.png")));      // symlink escape
-            Assert.Null(server.ResolveFile(P("images/out/secret.png")));
 
             Directory.CreateDirectory(Path.GetDirectoryName(profileImage)!);
             File.WriteAllText(profileImage, "x");
@@ -176,6 +173,12 @@ public sealed class IntakePageTests
             Assert.Null(profile.ResolveFile(P("images/p.png")));
             using var parent = new WebAssetServer(web) { AssetsRoot = () => Path.GetDirectoryName(CorePaths.UserData), DisabledAssets = () => null };
             Assert.Null(parent.ResolveFile(P(Path.GetFileName(CorePaths.UserData) + "/images/p.png")));
+
+            Symlinks.RequireOrSkip();   // last, so a machine without link rights still runs everything above
+            File.CreateSymbolicLink(Path.Combine(assets, "images", "link.png"), Path.Combine(outside, "secret.png"));
+            Directory.CreateSymbolicLink(Path.Combine(assets, "images", "out"), outside);
+            Assert.Null(server.ResolveFile(P("images/link.png")));      // symlink escape
+            Assert.Null(server.ResolveFile(P("images/out/secret.png")));
         }
         finally
         {
@@ -199,7 +202,6 @@ public sealed class IntakePageTests
             File.WriteAllText(Path.Combine(content, rel), "downloaded");
             File.WriteAllText(Path.Combine(content, "intake/assets/vo/private.json"), "{}");
             File.WriteAllText(Path.Combine(outside, "secret.mp3"), "secret");
-            File.CreateSymbolicLink(Path.Combine(content, "intake/assets/vo/link.mp3"), Path.Combine(outside, "secret.mp3"));
             using var server = new WebAssetServer(web) { ContentRoot = () => content };
             using var http = new HttpClient(new HttpClientHandler { UseCookies = false });
             Assert.Equal(Path.GetFullPath(Path.Combine(content, rel)), server.ResolveFile("/" + rel));
@@ -210,7 +212,6 @@ public sealed class IntakePageTests
             Assert.Equal("audio/mpeg", response.Content.Headers.ContentType!.MediaType);
             Assert.Equal("downloaded", await response.Content.ReadAsStringAsync());
             Assert.Null(server.ResolveFile("/intake/assets/vo/private.json"));
-            Assert.Null(server.ResolveFile("/intake/assets/vo/link.mp3"));
             Assert.Null(server.ResolveFile("/intake/assets/vo/../../../secret.mp3"));
             // Install-dir wins, including the Circe hotfix clips that deliberately override a stale pack.
             Directory.CreateDirectory(Path.Combine(web, "intake/assets/vo"));
@@ -221,6 +222,10 @@ public sealed class IntakePageTests
             Assert.Null(server.ResolveFile("/" + late));
             File.WriteAllText(Path.Combine(content, late), "later");
             Assert.Equal("later", await (await http.GetAsync(server.Url(late))).Content.ReadAsStringAsync());
+
+            Symlinks.RequireOrSkip();   // last, so a machine without link rights still runs everything above
+            File.CreateSymbolicLink(Path.Combine(content, "intake/assets/vo/link.mp3"), Path.Combine(outside, "secret.mp3"));
+            Assert.Null(server.ResolveFile("/intake/assets/vo/link.mp3"));
         }
         finally
         {

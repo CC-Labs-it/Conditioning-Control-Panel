@@ -9,6 +9,7 @@ using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.UI;
 using Serilog;
+using ConditioningControlPanel.Services.Safety;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 {
@@ -34,6 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             // InitializeComponent, not AvaloniaXamlLoader.Load: only the generated one assigns the
             // x:Name fields, and the seed below reads them.
             InitializeComponent();
+            FillGentleChoices();
             SyncFromSettings();
         }
 
@@ -92,10 +94,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 ChkAutoPerformance.IsChecked = s.AutoPerformanceMode;
                 ChkUnifiedOverlay.IsChecked = s.UnifiedOverlayHost;
                 ChkVideoHwDecode.IsChecked = s.VideoForceHardwareDecoding;
+                ChkGentleVisuals.IsChecked = s.GentleVisuals;
+                PnlGentleChoices.IsVisible = s.GentleVisuals;
+                CmbGentleFade.SelectedIndex = NearestIndex(GentleVisuals.FadeChoices, s.GentleFadeSeconds);
+                CmbGentleSpeed.SelectedIndex = NearestIndex(GentleVisuals.SpeedChoices, s.GentleSpeed);
                 // MotionLevel's ordinal IS the item index (Full=0, Reduced=1, Off=2). Clamped rather
                 // than trusted so a settings file from a future build cannot throw here.
                 var index = (int)s.MotionLevel;
                 CmbMotionLevel.SelectedIndex = index >= 0 && index < CmbMotionLevel.ItemCount ? index : 0;
+                // Lighter effects: ordinal IS the item index (Auto=0, On=1, Off=2), clamped like the others.
+                var lighter = (int)s.LighterEffects;
+                CmbLighterEffects.SelectedIndex = lighter >= 0 && lighter < CmbLighterEffects.ItemCount ? lighter : 0;
                 // Back Room effects intensity: ordinal IS the item index (Calm=0, Normal=1, Full=2).
                 var fx = (int)s.BackRoomFxIntensity;
                 CmbBackRoomFxIntensity.SelectedIndex = fx >= 0 && fx < CmbBackRoomFxIntensity.ItemCount ? fx : 1;
@@ -106,6 +115,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 ChkDndSuppressFlashes.IsChecked = s.DndSuppressFlashes;
             }
             finally { _isLoading = false; }
+        }
+
+        private void FillGentleChoices()
+        {
+            var culture = System.Globalization.CultureInfo.CurrentCulture;
+            foreach (var f in GentleVisuals.FadeChoices)
+                CmbGentleFade.Items.Add(f.ToString("0.##", culture) + " s");
+            foreach (var v in GentleVisuals.SpeedChoices)
+                CmbGentleSpeed.Items.Add(v.ToString("0.##", culture) + "x");
+        }
+
+        internal static int NearestIndex(double[] choices, double value)
+        {
+            var best = 0;
+            for (var i = 1; i < choices.Length; i++)
+                if (Math.Abs(choices[i] - value) < Math.Abs(choices[best] - value)) best = i;
+            return best;
+        }
+
+        private void ChkGentleVisuals_Changed(object? sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = CoreSettings.Current;
+            if (s == null) return;
+            s.GentleVisuals = ChkGentleVisuals.IsChecked == true;
+            PnlGentleChoices.IsVisible = s.GentleVisuals;
+            Log.Information("Gentle visuals set to {On}", s.GentleVisuals);
+            global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            CoreSettings.Save();
+        }
+
+        private void CmbGentle_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = CoreSettings.Current;
+            if (s == null) return;
+            if (CmbGentleFade.SelectedIndex >= 0)
+                s.GentleFadeSeconds = GentleVisuals.FadeChoices[CmbGentleFade.SelectedIndex];
+            if (CmbGentleSpeed.SelectedIndex >= 0)
+                s.GentleSpeed = GentleVisuals.SpeedChoices[CmbGentleSpeed.SelectedIndex];
+            CoreSettings.Save();
         }
 
         private void ChkPerformanceMode_Changed(object? sender, RoutedEventArgs e)
@@ -156,6 +206,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             Log.Information("Motion level set to {Level}", level);
             CoreSettings.Save();
             // WPF stops the running ambient loops here (Reduced/Off) and re-arms them on Full.
+            global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        }
+
+        /// <summary>
+        /// Settings ▸ Performance ▸ Lighter effects (Avalonia only; lane perf). The tier, the marquee's beat,
+        /// the tube's bob and the launcher edge all re-read it through the motion gate, live.
+        /// </summary>
+        private void CmbLighterEffects_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+        {
+            if (_isLoading) return;
+            int i = CmbLighterEffects.SelectedIndex;
+            if (i < 0) return;
+            var mode = (LighterEffectsMode)i;
+            if (CoreSettings.Current.LighterEffects == mode) return;
+            CoreSettings.Current.LighterEffects = mode;
+            Log.Information("Lighter effects set to {Mode} (applied {Applied})", mode,
+                global::ConditioningControlPanel.Avalonia.Platform.SoftwareRender.FloorActive);
+            CoreSettings.Save();
             global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
         }
 
