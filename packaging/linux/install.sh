@@ -314,7 +314,9 @@ T mv "$APP.new" "$APP"
 T rm -rf "$APP.old"
 ok "app files"
 
-printf '#!/bin/sh\nexec "%s/CCP.Avalonia" "$@"\n' "$APP" | T tee "$LAUNCHER" >/dev/null
+# Newer tarballs carry their own launcher (it names the missing OpenSSL 3 package instead of a bare abort).
+target=CCP.Avalonia; [ -x "$APP/conditioning-control-panel.sh" ] && target=conditioning-control-panel.sh
+printf '#!/bin/sh\nexec "%s/%s" "$@"\n' "$APP" "$target" | T tee "$LAUNCHER" >/dev/null
 T chmod 755 "$LAUNCHER"
 ok "launcher $LAUNCHER"
 

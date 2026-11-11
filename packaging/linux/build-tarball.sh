@@ -23,6 +23,8 @@ cp "$root/packaging/linux/RT-ENGINE-NOTICES.txt" "$pub/"
 cp "$root/packaging/linux/conditioning-control-panel.sh" "$pub/"   # the launcher: OpenSSL 3 hint, then CCP.Avalonia
 mkdir -p "$pub/packaging/linux"
 cp "$root/packaging/linux/rt-engine-check.sh" "$pub/packaging/linux/"
+# A Windows checkout can hand these over with CRLF: a CRLF shebang cannot run, and desktop tools reject CRLF entries.
+find "$pub" -type f \( -name '*.sh' -o -name '*.desktop' -o -name '*.metainfo.xml' \) -exec sed -i 's/\r$//' {} +
 
 # A checkout with LFS off publishes the media as pointer files, and the app then plays nothing.
 # Refuse them: run `git lfs pull --include "Assets/**"` first (CI does).
