@@ -129,4 +129,56 @@ public class ChaosHudGraceTests
         });
     }
 
+    [Fact]
+    public async Task CollapseTimerWaitsForUnavailablePointerAndUsesRecoveredPosition()
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            Setup();
+            var hud = new ChaosHudWindow(new ChaosRunState(new ChaosRunConfig()));
+            var popup = new Window { Width = 100, Height = 100 };
+            var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            var expanded = typeof(ChaosHudWindow).GetField("_expanded", flags)!;
+            var recheck = typeof(ChaosHudWindow).GetField("_collapseRecheck", flags)!;
+            var expand = typeof(ChaosHudWindow).GetMethod("Expand", flags)!;
+            var leave = typeof(ChaosHudWindow).GetMethod("ScheduleCollapseRecheck", flags)!;
+            PixelPoint? current = null;
+            int reads = 0;
+            try
+            {
+                hud.ReadPointer = () => { reads++; return current; };
+                hud.Show();
+                hud.UpdateLayout();
+                expand.Invoke(hud, null);
+                await Task.Delay(300);
+                hud.UpdateLayout();
+                var panel = hud.FindControl<Border>("Panel")!;
+                var origin = panel.TranslatePoint(new Point(0, 0), hud)!.Value;
+                var inside = hud.PointToScreen(new Point(origin.X + 50, origin.Y + 50));
+                popup.Position = new PixelPoint(inside.X - 10, inside.Y - 10);
+                popup.Show();
+                popup.MouseMove(new Point(10, 10));
+                Assert.False(panel.IsPointerOver);
+                leave.Invoke(hud, null);
+                await Task.Delay(1500);
+                Assert.True(reads > 0);
+                Assert.True((bool)expanded.GetValue(hud)!);
+                Assert.True(((DispatcherTimer)recheck.GetValue(hud)!).IsEnabled);
+                current = hud.PointToScreen(new Point(origin.X + panel.Bounds.Width + 20, origin.Y + 50));
+                await Task.Delay(700);
+                Assert.True((bool)expanded.GetValue(hud)!);
+                current = hud.PointToScreen(new Point(origin.X + panel.Bounds.Width + 60, origin.Y + 50));
+                await Task.Delay(700);
+                Assert.False((bool)expanded.GetValue(hud)!);
+                Assert.False(((DispatcherTimer)recheck.GetValue(hud)!).IsEnabled);
+                expand.Invoke(hud, null);
+                current = null;
+                leave.Invoke(hud, null);
+                hud.Close();
+                Assert.False(((DispatcherTimer)recheck.GetValue(hud)!).IsEnabled);
+            }
+            finally { popup.Close(); hud.Close(); }
+        });
+    }
+
 }

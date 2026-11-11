@@ -484,15 +484,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                         if (_pinnedOpen || !_expanded) return;
                         // #1050 field diagnostics: one Debug line per re-check so a repro log says which
                         // of the two questions disagreed (hit-test vs geometry) and where the panel was.
-                        bool over = _panel.IsPointerOver, grace = CursorInHudGrace();
-                        Log.Debug("ChaosHud collapse re-check: expanded={E} slideX={X:F0} cursor={C} panelOver={O} inGrace={G}",
-                            _expanded, _panelSlide.X, _lastPointer, over, grace);
-                        if (grace)
+                        bool over = _panel.IsPointerOver, grace = CursorInHudGrace(out bool positionKnown);
+                        Log.Debug("ChaosHud collapse re-check: expanded={E} slideX={X:F0} cursor={C} panelOver={O} inGrace={G} positionKnown={K}",
+                            _expanded, _panelSlide.X, _lastPointer, over, grace, positionKnown);
+                        if (grace || !positionKnown)
                         {
-                            // Still on (or within the hysteresis halo of) the HUD. Keep POLLING rather than
-                            // returning: the halo extends past the window, so no further pointer-exit will
-                            // ever arrive to re-arm us, and a cursor parked just outside the edge would
-                            // otherwise pin the sidebar open forever.
+                            // Poll while inside the halo or the position is unknown. A fresh position
+                            // is needed because no further pointer-exit may arrive outside the window.
                             _collapseRecheck.Interval = TimeSpan.FromMilliseconds(LEAVE_RECHECK_MS);
                             _collapseRecheck.Start();
                             return;
@@ -533,14 +531,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// laid-out bounds, grown by a hysteresis margin - which no popup, transform or visibility
         /// flip can answer wrongly.</para>
         ///
-        /// <para>Use the current desktop pointer where available. Without it, trust the panel's
-        /// hit test rather than polling a stale exit position forever.</para>
+        /// <para>Use the current desktop pointer where available. If it is unavailable, the
+        /// collapse timer waits for a fresh position instead of trusting popup-sensitive hit tests.</para>
         /// </summary>
-        internal bool CursorInHudGrace()
+        internal bool CursorInHudGrace() => CursorInHudGrace(out _);
+
+        private bool CursorInHudGrace(out bool positionKnown)
         {
+            positionKnown = false;
             try
             {
                 var screen = ReadPointer();
+                positionKnown = screen is not null;
                 Point? cursor = screen is { } position ? this.PointToClient(position) : null;
                 if (cursor is { } current) _lastPointer = current;
                 return CursorInGrace(ElementBoundsInWindow(_panel), ElementBoundsInWindow(_strip),
