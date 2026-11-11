@@ -664,6 +664,13 @@ begin
         ForceDirectories(SelectedAssetsPath + '\videos');
     end;
 
+    // The InfoBeforeFile page showed the browser reset notice, so the app need not repeat it
+    // (AppUpdater.cs NeedsBrowserResetNotice). Only a non-elevated setup's {localappdata} is the user's own.
+    if not WizardSilent and not IsAdminInstallMode and
+       DirExists(ExpandConstant('{localappdata}\ConditioningControlPanel\browser_data')) then
+      if not SaveStringToFile(ExpandConstant('{localappdata}\ConditioningControlPanel\browser-reset.ack.json'), '{}', False) then
+        Log('Could not write browser reset acknowledgment');
+
     // The "Open with CCP" task is retired (7.2): remove the entries an earlier install wrote, so
     // Explorer stops offering a --play / --edit this exe does not understand.
     CleanupFileAssociations();

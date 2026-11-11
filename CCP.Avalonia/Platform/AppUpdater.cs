@@ -80,6 +80,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         // ---- check (WPF UpdateService.CheckForUpdatesAsync :303 / CheckGitHubReleasesAsync :1261) ----
 
+        // Test seam: Windows CI runs from the build output, not an Inno install.
+        internal static Func<bool> Installed = () => !OperatingSystem.IsWindows()
+            || ReleaseFeed.InnoInstallDirOf(Environment.ProcessPath) is not null || RegistryInstallPath() is not null;
+
         internal static async Task<UpdateInfo?> CheckAsync(bool force)
         {
             if (CoreSettings.Current.OfflineMode)
@@ -88,7 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 return null;
             }
             // Only installed users can self-update on Windows (UpdateService.cs:316); Linux notifies.
-            if (OperatingSystem.IsWindows() && ReleaseFeed.InnoInstallDirOf(Environment.ProcessPath) is null && RegistryInstallPath() is null)
+            if (!Installed())
             {
                 Log.Information("App not installed via installer (running from source/dev), skipping update check");
                 return null;
@@ -243,16 +247,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
         }
 
-        private static Window? StartupOwner(MainShellWindow shell)
-        {
-            if (Views.Games.GameWindow.IsAnyOpen())
-                return null; // WPF StartupQueueCore.cs:256 parks the ladder for a game
-            if (shell.IsVisible && shell.IsActive && !shell.BuildingHiddenForBoot)
-                return shell;
-            if (LauncherWindow.Instance is { IsVisible: true } launcher)
-                return launcher;
-            return shell.IsVisible && !shell.BuildingHiddenForBoot ? shell : null;
-        }
+        // WPF parks the ladder for a game or while the launcher holds the panel in the tray
+        // (StartupQueueCore.cs:256; LauncherHost.cs:260-267 releases it when the panel shows).
+        private static Window? StartupOwner(MainShellWindow shell) =>
+            !Views.Games.GameWindow.IsAnyOpen() && shell.IsVisible && !shell.BuildingHiddenForBoot ? shell : null;
 
         private static async Task<Window?> WaitForStartupOwnerAsync(MainShellWindow shell, Func<bool> closed)
         {

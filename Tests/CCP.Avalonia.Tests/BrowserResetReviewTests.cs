@@ -28,6 +28,7 @@ public class BrowserResetReviewTests
     private static string Ack => Path.Combine(CorePaths.UserData, AppUpdater.BrowserResetAcknowledged);
     private static string OldBrowser => Path.Combine(CorePaths.UserData, "browser_data");
     private static string? _oldApi;
+    private static Func<bool> _oldInstalled = AppUpdater.Installed;
 
     internal static void Setup()
     {
@@ -44,6 +45,7 @@ public class BrowserResetReviewTests
             if (!CoreSettings.Current.SeenFeatureIntros.Contains(key))
                 CoreSettings.Current.SeenFeatureIntros.Add(key);
         _oldApi = Environment.GetEnvironmentVariable("CCP_UPDATE_API_URL");
+        _oldInstalled = AppUpdater.Installed;
         Cleanup();
     }
 
@@ -59,6 +61,7 @@ public class BrowserResetReviewTests
         var feed = new Feed(tag);
         Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", "http://127.0.0.1:9/api");
         AppUpdater.Handler = feed;
+        AppUpdater.Installed = () => true; // Windows CI is not an Inno install
         CoreSettings.Current.OfflineMode = false;
         return feed;
     }
@@ -74,6 +77,7 @@ public class BrowserResetReviewTests
         LauncherWindow.Boot = BootDecision.PanelFirst;
         MainShellWindow.IsStartupDialogShowing = false;
         AppUpdater.Handler = null;
+        AppUpdater.Installed = _oldInstalled;
         Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", _oldApi);
         ReleaseFeed.ClearPendingUpdateAttempt(CorePaths.UserData);
         ReleaseFeed.ClearSkippedUpdateVersion(CorePaths.UserData);
@@ -126,10 +130,8 @@ public class BrowserResetReviewTests
     }
 
     [Fact]
-    public async Task LauncherBootOwnsNoticeAndStartupSurfacesDoNotOverlap() => await AvaloniaTestDispatcher.RunAsync(async () =>
+    public async Task LauncherBootParksNoticeAndStartupSurfacesDoNotOverlap() => await AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        // Windows CI is not an Inno install, so CheckAsync never requests the feed there (AppUpdaterTests.cs:63).
-        if (OperatingSystem.IsWindows()) Assert.Skip("Linux notify path; the Windows install path needs an Inno install.");
         Setup();
         OldProfile();
         var feed = UseFeed("99.1.0");
@@ -150,14 +152,19 @@ public class BrowserResetReviewTests
             var startup = AppUpdater.StartupAsync(shell);
             await Task.Delay(1300);
             Assert.Null(AppUpdater.BrowserResetDialog); // a passive surface is already up
+            announcement.Close();
+            await Until(() => Volatile.Read(ref feed.Requests) > 0 && AppUpdater.Latest?.IsNewer == true);
+            await Task.Delay(1200);
+            Assert.Null(AppUpdater.BrowserResetDialog); // the launcher holds the panel in the tray (WPF StartupQueueCore.cs:256)
+            launcher.Hide();
+            shell.Show();
             game = new GameWindow();
             game.Show();
-            announcement.Close();
             await Task.Delay(1200);
-            Assert.Null(AppUpdater.BrowserResetDialog); // nor over a game (WPF StartupQueueCore.cs:256)
+            Assert.Null(AppUpdater.BrowserResetDialog); // nor over a game
             game.Close();
             await Until(() => AppUpdater.BrowserResetDialog != null);
-            Assert.Same(launcher, AppUpdater.BrowserResetDialog!.Owner);
+            Assert.Same(shell, AppUpdater.BrowserResetDialog!.Owner);
             Assert.True(MainShellWindow.IsStartupDialogShowing);
             Assert.True(StartupLadder.IsQuiet);
             var opened = false;
@@ -166,15 +173,11 @@ public class BrowserResetReviewTests
             Assert.True(StartupLadder.Inbox.Contains("notice-test"));
             CoreSettings.Current.SeenFeatureIntros.Remove("lockdown");
             FeatureIntroPopup.ResetForTests();
-            FeatureIntroPopup.ShowIfFirstTime("lockdown", launcher);
+            FeatureIntroPopup.ShowIfFirstTime("lockdown", shell);
             Dispatcher.UIThread.RunJobs();
             Assert.DoesNotContain("lockdown", CoreSettings.Current.SeenFeatureIntros);
-            await Until(() => Volatile.Read(ref feed.Requests) > 0 && AppUpdater.Latest?.IsNewer == true);
+            Assert.Null(AppUpdater.OpenDialog); // the update offer is last
             CloseNotice();
-            await Task.Delay(1200);
-            Assert.Null(AppUpdater.OpenDialog); // updates wait while the launcher owns the screen
-            launcher.Hide();
-            shell.Show();
             await Until(() => AppUpdater.OpenDialog != null);
             Assert.Same(shell, AppUpdater.OpenDialog!.Owner);
             Later();
@@ -251,8 +254,6 @@ public class BrowserResetReviewTests
     [Fact]
     public async Task PendingNoticeDoesNotDelayUpdateCheckOrFailedUpdateReport() => await AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        // Windows CI is not an Inno install, so CheckAsync never requests the feed there (AppUpdaterTests.cs:63).
-        if (OperatingSystem.IsWindows()) Assert.Skip("Linux notify path; the Windows install path needs an Inno install.");
         Setup();
         OldProfile();
         var feed = UseFeed("99.1.0");
@@ -288,8 +289,6 @@ public class BrowserResetReviewTests
     [InlineData(false)]
     public async Task NoticeAndUpdateOfferWaitForTutorial(bool notice) => await AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        // Windows CI is not an Inno install, so CheckAsync never requests the feed there (AppUpdaterTests.cs:63).
-        if (!notice && OperatingSystem.IsWindows()) Assert.Skip("Linux notify path; the Windows install path needs an Inno install.");
         Setup();
         var oldProvider = CoreTutorial.IsActiveProvider;
         var feed = UseFeed("99.2.0");
