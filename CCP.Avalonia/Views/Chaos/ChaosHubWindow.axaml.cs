@@ -42,11 +42,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///  - <c>BuildBench</c> is inlined over Core <c>ChaosBench</c>; first-open reveal flashes
     ///    live in ChaosHubWindow.Reveals.cs. Reveal visibility clamps and
     ///    the CCP_CHAOS_DEBUG strip remain unported.
-    ///  - The whole Skia menu scene (fog, per-frame glint masks, blooms, the crossfading
-    ///    flipbook) and the NAudio menu music are gone: no SkiaSharp and no NAudio on this head,
-    ///    and a view layer may not add a package. <c>SetupMenuMotion</c>'s breathing/wobble/glow
-    ///    loop has no faithful Avalonia twin without re-authoring it, so it is a stub and the
-    ///    static frame renders — see the note on that method.
+    ///  - The menu flipbook and motion live in ChaosHubWindow.Menu.cs. The Skia fog,
+    ///    per-frame glint masks and blooms, and NAudio menu music remain unported.
     ///  - <c>Visibility</c> -> <c>IsVisible</c>; <c>DragMove()</c> -> <c>BeginMoveDrag(e)</c>;
     ///    <c>MouseLeftButtonDown</c> -> <c>PointerPressed</c>; <c>StateChanged</c> ->
     ///    <c>GetObservable(WindowStateProperty)</c>; <c>ToolTip =</c> -> <c>ToolTip.SetTip</c>;
@@ -114,7 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             _dollhouseView = Part<Grid>("DollhouseView");
             UnlockCards = new ChaosUnlockCardLayer(Part<Grid>("UnlockCardLayer"));
-            Closed += (_, _) => { UnlockCards.Stop(); StopRevealFlashes(); };
+            Closed += (_, _) => { UnlockCards.Stop(); StopRevealFlashes(); StopMenuArt(); };
             _menuView = Part<Grid>("MenuView");
             _menuLeftCol = Part<Grid>("MenuLeftCol");
             _panelImprove = Part<Grid>("PanelImprove");
@@ -227,8 +224,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ShowTab("loadout");
             _btnMenuStory.IsEnabled = StoryModeEnabled;   // greyed until story ships
             UpdateMuteIcon(CoreSettings.Current.ChaosMenuMusicMuted);
-            ShowMenuView();      // the main menu is the landing view; the dollhouse waits behind it
-            SetupMenuMotion();   // ponytail stub — see the method
+            SetupMenuMotion();
+            ShowMenuView();      // the main menu is the landing view
             Opened += (_, _) => IntroShown = OnHubOpenedReveals();   // WPF ChaosHubWindow.xaml.cs:81 Loaded
         }
 
@@ -1953,11 +1950,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _menuLeftCol.IsVisible = true;
             _menuArtPanel.IsVisible = true;
             _menuOptions.IsVisible = false;
+            StartMenuArt();
             RefreshTopBar();   // keep the menu chips current
         }
 
         private void ShowDollhouseView()
         {
+            StopMenuArt();
             _menuView.IsVisible = false;
             _dollhouseView.IsVisible = true;
         }
@@ -1985,6 +1984,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private void Menu_Options_Click(object? sender, RoutedEventArgs e)
         {
+            StopMenuArt();
             _optFullscreen.IsChecked = WindowState == WindowState.Maximized;
             _menuLeftCol.IsVisible = false;
             _menuArtPanel.IsVisible = false;
@@ -1996,6 +1996,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _menuOptions.IsVisible = false;
             _menuLeftCol.IsVisible = true;
             _menuArtPanel.IsVisible = true;
+            StartMenuArt();
         }
 
         private void Menu_Exit_Click(object? sender, RoutedEventArgs e) => Close();
@@ -2151,25 +2152,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             SaveToSettings();    // keep any loadout/setup tweaks made in the dollhouse
             ShowMenuView();
         }
-
-        // ============================ menu art motion ============================
-
-        /// <summary>
-        /// WPF put almost-imperceptible life on the menu art: a slow breathing zoom of the
-        /// ImageBrush's RelativeTransform, a tiny rotate, and a pulsing pink glow on the border,
-        /// all as looping WPF <c>DoubleAnimation</c>s started with <c>BeginAnimation</c>.
-        ///
-        /// ponytail: no faithful twin here. Avalonia has no <c>BeginAnimation</c>, animating a
-        /// brush's RelativeTransform needs the whole thing re-authored as Avalonia Animations,
-        /// and the art the motion exists to move (ChaosArt's menu frames) is not on this head
-        /// anyway. The static frame renders instead — 1.02 baseline zoom, no drift, steady glow.
-        /// Restore it together with the Skia menu scene.
-        /// </summary>
-        private void SetupMenuMotion() { }
-
-        /// <summary>WPF advanced the crossfading flipbook on a click and restarted the dwell
-        /// timer. ponytail: needs the ChaosArt frames + the Skia scene, wired with them.</summary>
-        private void MenuArt_Click(object? sender, PointerPressedEventArgs e) { }
 
         // ============================ menu music ============================
 

@@ -44,6 +44,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             return null;
         }
 
+        internal static Bitmap? MenuImage(string name)
+        {
+            foreach (var root in Roots())
+            {
+                var image = TryLoad(Path.Combine(root, name));
+                if (image != null) return image;
+            }
+            return null;
+        }
+
         /// <summary>The first existing convention path for a kind/id, or null.</summary>
         public static string? PathFor(string kind, string id) => FilePath(Path.Combine(kind, id + ".png"));
 
