@@ -38,10 +38,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private static bool RemoteControllerConnected => RemoteControlTabView.Relay.IsValueCreated && RemoteControlTabView.Relay.Value.ControllerConnected;
 
-        /// <summary>WPF wires these in ChkRemoteControlEnabled_Changed; the relay here is one per process, so
-        /// the shell listens from startup and lets go on close.</summary>
         internal static MainShellWindow? RemoteCommandOwner;
 
+        /// <summary>WPF wires these in ChkRemoteControlEnabled_Changed; the relay here is one per process, so
+        /// the shell listens from startup and lets go on close.</summary>
         private void InitializeRemoteControlOverlay()
         {
             RemoteCommandOwner = this;

@@ -6,6 +6,7 @@ using Avalonia.Headless;
 using Avalonia.Media;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
@@ -40,8 +41,12 @@ public sealed class RemoteSessionPauseTests
                 Assert.Null(RemoteControlTabView.ExecuteRemoteCommand("pause_session", null));
                 shell.StartSession(new Session { Id = "remote_pause_test", Name = "Test", DurationMinutes = 1 });
                 Assert.True(runner.IsRunning);
+                shell.VoiceCmds.Host.ActionFor("spiral_on")!(); shell.VoiceCmds.Host.ActionFor("pink_on")!();
+                Assert.NotNull(SpiralOverlay.VoiceOpacity); Assert.NotNull(PinkFilterOverlay.VoiceOpacity);
                 Assert.Null(RemoteControlTabView.ExecuteRemoteCommand("pause_session", null));
                 Assert.True(runner.IsPaused);
+                // WPF SessionEngine.cs:536: the pause stops every overlay, voice holds included.
+                Assert.Null(SpiralOverlay.VoiceOpacity); Assert.Null(PinkFilterOverlay.VoiceOpacity);
                 Assert.Equal(1, runner.PauseCount);
                 Assert.Equal("\u25B6", shell.Named<TextBlock>("TxtPauseIcon")!.Text);
                 Assert.Null(RemoteControlTabView.ExecuteRemoteCommand("pause_session", null));
@@ -51,6 +56,7 @@ public sealed class RemoteSessionPauseTests
             finally
             {
                 runner.Stop();
+                SpiralOverlay.Stop(); PinkFilterOverlay.Stop();
                 AvApp.Sessions = oldSessions;
                 CoreEngine.Stop();
                 shell.Close();
