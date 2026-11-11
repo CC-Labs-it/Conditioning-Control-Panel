@@ -7,6 +7,8 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -66,6 +68,31 @@ public sealed class TubeQuickMenuTests
         }
         return Task.CompletedTask;
     });
+
+    [Fact]
+    public async Task MenuBrushesRemainUsableWhenTubeStaticsInitializeOffTheUiThread()
+    {
+        // Static helpers can touch AvatarTubeWindow before the UI dispatcher is started.
+        var colors = new[] { ("MenuRed", Color.FromRgb(255, 99, 71)),
+            ("MenuGreen", Color.FromRgb(144, 238, 144)),
+            ("MenuPatreon", Color.FromRgb(155, 89, 182)),
+            ("MenuLocked", Color.FromRgb(0x60, 0x60, 0x70)) };
+        var brushes = await Task.Run(() => colors.Select(pair => typeof(AvatarTubeWindow)
+            .GetField(pair.Item1, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+            .GetValue(null)).ToArray());
+        await WithShell((_, tube) =>
+        {
+            var menu = tube.FindControl<ContextMenu>("AvatarContextMenu")!;
+            menu.Open(tube.FindControl<Border>("AvatarBorder") ?? (Control)tube);
+            Dispatcher.UIThread.RunJobs();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(menu.IsOpen);
+            menu.Close();
+        });
+        for (int i = 0; i < colors.Length; i++)
+            Assert.Equal(colors[i].Item2, Assert.IsType<ImmutableSolidColorBrush>(brushes[i]).Color);
+    }
 
     [Fact]
     public Task EngineItemStartsAndPanicStopsWhatItStarted() => WithShell((shell, tube) =>
