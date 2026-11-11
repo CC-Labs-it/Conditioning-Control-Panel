@@ -11,6 +11,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -21,9 +22,9 @@ internal static class BrainDrainOverlay
 {
     private static readonly List<Window> Hosts = new();
     private static readonly Dictionary<Window, (BrainDrainCapturePump Pump, Image Image, WriteableBitmap? Bitmap, double Scale)> Frames = new();
-    private static readonly DispatcherTimer FrameTimer = new() { Interval = TimeSpan.FromMilliseconds(33) };
+    private static BeatLoop? FrameBeat;
     internal static Func<PixelRect, BrainDrainCapturePump?> CreatePump = bounds => OperatingSystem.IsWindows()
-        ? new BrainDrainCapturePump(bounds, TimeSpan.FromMilliseconds(33)) : null;
+        ? new BrainDrainCapturePump(bounds, TimeSpan.FromSeconds(1.0 / 30)) : null;
     private static Window? _owner;
     private static AppSettings? _settings;
     private static SettingsService? _service;
@@ -48,7 +49,7 @@ internal static class BrainDrainOverlay
     static BrainDrainOverlay()
     {
         Timer.Tick += (_, _) => Reconcile();
-        FrameTimer.Tick += (_, _) => PresentFrames();
+
     }
     internal static void Start(Window owner)
     {
@@ -111,7 +112,8 @@ internal static class BrainDrainOverlay
                     if (pump != null)
                     {
                         var image = new Image { Stretch = Stretch.Fill, IsHitTestVisible = false };
-                        w.Content = image; Frames.Add(w, (pump, image, null, scale)); FrameTimer.Start();
+                        w.Content = image; Frames.Add(w, (pump, image, null, scale));
+                        FrameBeat ??= new BeatLoop(image, _ => PresentFrames()); FrameBeat.Start();
                     }
                 }
                 catch { w.Close(); CloseHosts(); _refused = true; return; }
@@ -119,9 +121,9 @@ internal static class BrainDrainOverlay
         }
         // WPF OverlayService.cs:2814-2823,3786: creation, live change and replacement.
         foreach (var w in Hosts) Capture(w, affinity);
-        // WPF BrainDrainLayer.cs:240-256: convert the physical-pixel radius to each host's DIPs.
+        // WPF BrainDrainLayer.cs:240-256: source-space sigma, independent of monitor DPI.
         foreach (var entry in Frames.Values)
-            entry.Image.Effect = new BlurEffect { Radius = Math.Clamp(s.BrainDrainBlurStrength, 1, 100) * 0.14 / entry.Scale };
+            entry.Pump.SetBlur(Math.Clamp(s.BrainDrainBlurStrength, 1, 100));
         // WPF Compositor/BrainDrainLayer.cs:296-301, rounded alpha at 1..100 strength.
         foreach (var w in Hosts) Alpha(w, Math.Round((.10 + .75 * Math.Pow((Math.Clamp(s.BrainDrainBlurStrength, 1, 100) - 1) / 99.0, .66)) * 255) / 255);
         // Forced off transition raises the blur again. Ordinary ticks only repair an actual drift.
@@ -163,7 +165,7 @@ internal static class BrainDrainOverlay
     }
     private static void CloseHosts()
     {
-        FrameTimer.Stop();
+        FrameBeat?.Stop(); FrameBeat = null;
         foreach (var state in Frames.Values)
         {
             state.Pump.Shutdown(); state.Image.Source = null; state.Bitmap?.Dispose();

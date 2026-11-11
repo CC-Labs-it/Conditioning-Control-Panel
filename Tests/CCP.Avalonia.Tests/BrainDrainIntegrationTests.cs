@@ -178,16 +178,18 @@ public sealed class BrainDrainIntegrationTests
     public Task CapturedPixelsArePresentedWithLiveBlur() => Run(async owner =>
     {
         BrainDrainOverlay.Screens = _ => new[] { (new PixelRect(0, 0, 8, 8), 1.0, true) };
-        BrainDrainOverlay.CreatePump = _ => new BrainDrainCapturePump(
+        BrainDrainCapturePump? pump = null;
+        BrainDrainOverlay.CreatePump = _ => pump = new BrainDrainCapturePump(
             () => new BrainDrainCapturePump.Frame(2, 2, new byte[] { 7, 12, 200, 255, 7, 12, 200, 255, 7, 12, 200, 255, 7, 12, 200, 255 }), TimeSpan.FromSeconds(1));
         BrainDrainOverlay.Start(owner);
         var image = Assert.IsType<Image>(Assert.Single(BrainDrainOverlay.Active).Content);
         for (int i = 0; i < 100 && image.Source == null; i++) await Task.Delay(20);
         var bitmap = Assert.IsType<WriteableBitmap>(image.Source);
         using (var buffer = bitmap.Lock()) Assert.Equal(7, Marshal.ReadByte(buffer.Address));
-        Assert.Equal(14, Assert.IsType<BlurEffect>(image.Effect).Radius, 5);
+        Assert.Null(image.Effect);
+        Assert.Equal(14.0 / 12, pump!.Sigma, 5);
         CoreSettings.Current.BrainDrainBlurStrength = 50;
-        Assert.Equal(7, Assert.IsType<BlurEffect>(image.Effect).Radius, 5);
+        Assert.Equal(7.0 / 12, pump.Sigma, 5);
     });
 
     [Fact]
@@ -223,10 +225,11 @@ public sealed class BrainDrainIntegrationTests
             (new PixelRect(1600, 0, 800, 600), 2.0, false),
             (new PixelRect(2400, 0, 800, 600), 0.0, false) };
         BrainDrainOverlay.Screens = _ => screens;
-        BrainDrainOverlay.CreatePump = _ => new BrainDrainCapturePump(() => null, TimeSpan.FromSeconds(1));
+        var pumps = new List<BrainDrainCapturePump>();
+        BrainDrainOverlay.CreatePump = _ => { var pump = new BrainDrainCapturePump(() => null, TimeSpan.FromSeconds(1)); pumps.Add(pump); return pump; };
         BrainDrainOverlay.Start(owner);
         Assert.Equal(4, BrainDrainOverlay.Active.Count);
-        double Radius(int index) => Assert.IsType<BlurEffect>(Assert.IsType<Image>(BrainDrainOverlay.Active[index].Content).Effect).Radius;
+        double Radius(int index) => pumps[pumps.Count - screens.Length + index].Sigma * 12 / (screens[index].Item2 > 0 ? screens[index].Item2 : 1);
         Assert.Equal(14, Radius(0), 5);
         Assert.Equal(14 / 1.5, Radius(1), 5);
         Assert.Equal(7, Radius(2), 5);
