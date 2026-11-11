@@ -39,7 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private DateTime? _entranceAt, _bumpAt, _pulseAt, _pressAt;
         private double _bumpPeak, _bumpMs, _pressFrom, _pressTo, _pressMs;
         private ScaleTransform? _pressScale;
-        internal Func<bool> FullMotion = () => AmbientFxCanvas.Env.Level == MotionLevel.Full;
+        internal Func<MotionLevel> Motion = () => AmbientFxCanvas.Env.Level;
         internal Func<bool> AmbientMotion = () => AmbientFxCanvas.Env.AllowAmbientLoops;
         private readonly TextBlock _initial, _headline, _subline, _tagText;
         private readonly StackPanel _expanded;
@@ -145,7 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Paint();
             if (!IsVisible)
             {
-                if (FullMotion()) _entranceAt = Clock.GetUtcNow().UtcDateTime;
+                if (Motion() == MotionLevel.Full) _entranceAt = Clock.GetUtcNow().UtcDateTime;
                 if (AmbientMotion()) _pulseAt = Clock.GetUtcNow().UtcDateTime;
                 Opacity = _entranceAt.HasValue ? 0 : 1;
                 Show(); Place();
@@ -265,14 +265,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void Bump(double peak, double ms)
         {
-            if (!FullMotion()) return;
+            if (Motion() != MotionLevel.Full) return;
             (_bumpAt, _bumpPeak, _bumpMs) = (Clock.GetUtcNow().UtcDateTime, peak, ms);
             _motionTick.Start();
         }
 
         internal void Press(ScaleTransform scale, bool down)
         {
-            if (!FullMotion()) return;
+            var level = Motion();
+            if (level == MotionLevel.Off) return;
+            if (level == MotionLevel.Reduced)
+            {
+                StopMotion();
+                _pressScale = null;
+                scale.ScaleX = scale.ScaleY = down ? .88 : 1;
+                return;
+            }
             if (_pressScale != null && _pressScale != scale) _pressScale.ScaleX = _pressScale.ScaleY = 1;
             (_pressScale, _pressAt, _pressFrom, _pressTo, _pressMs) =
                 (scale, Clock.GetUtcNow().UtcDateTime, scale.ScaleX, down ? .88 : 1, down ? 70 : 140);
@@ -281,7 +289,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void StepMotion()
         {
-            if (!IsVisible || !FullMotion()) { StopMotion(); return; }
+            if (!IsVisible || Motion() != MotionLevel.Full) { StopMotion(); return; }
             var now = Clock.GetUtcNow().UtcDateTime;
             if (_entranceAt is { } entrance)
             {
@@ -293,14 +301,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var t = Math.Clamp((now - bump).TotalMilliseconds / _bumpMs, 0, 1);
                 var value = t < .35 ? 1 + (_bumpPeak - 1) * (1 - Math.Pow(1 - t / .35, 2))
-                    : 1 + (_bumpPeak - 1) * (1 - (t - .35) / .65);
+                    : _bumpPeak + (1 - _bumpPeak) * BackEaseOut((t - .35) / .65, .4);
                 _pillScale.ScaleX = _pillScale.ScaleY = value;
                 if (t >= 1) _bumpAt = null;
             }
             if (_pressAt is { } press && _pressScale != null)
             {
                 var t = Math.Clamp((now - press).TotalMilliseconds / _pressMs, 0, 1);
-                _pressScale.ScaleX = _pressScale.ScaleY = _pressFrom + (_pressTo - _pressFrom) * t;
+                var eased = _pressTo == 1 ? BackEaseOut(t, .5) : t;
+                _pressScale.ScaleX = _pressScale.ScaleY = _pressFrom + (_pressTo - _pressFrom) * eased;
                 if (t >= 1) _pressAt = null;
             }
             if (!AmbientMotion()) { _pulseAt = null; _liveDot.Opacity = 1; }
@@ -310,6 +319,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _liveDot.Opacity = 1 - .65 * (phase <= 1 ? phase : 2 - phase);
             }
             if (_entranceAt == null && _bumpAt == null && _pressAt == null && _pulseAt == null) _motionTick.Stop();
+        }
+
+        // WPF BackEase.EaseOut: 1 - EaseIn(1 - t), with the supplied amplitude.
+        private static double BackEaseOut(double t, double amplitude)
+        {
+            var inverse = 1 - t;
+            return 1 - (inverse * inverse * inverse - inverse * amplitude * Math.Sin(Math.PI * inverse));
         }
 
         private void StopMotion()

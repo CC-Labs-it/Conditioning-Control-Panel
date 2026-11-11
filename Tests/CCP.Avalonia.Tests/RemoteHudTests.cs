@@ -16,6 +16,7 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Leash;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Newtonsoft.Json.Linq;
 using Xunit;
@@ -61,7 +62,7 @@ public class RemoteHudTests
         var clock = new Clock();
         bool full = true;
         var hud = new RemoteHudWindow(() => relay, () => false, () => null)
-        { Clock = clock, FullMotion = () => full, AmbientMotion = () => full };
+        { Clock = clock, Motion = () => full ? MotionLevel.Full : MotionLevel.Off, AmbientMotion = () => full };
         try
         {
             hud.Refresh();
@@ -117,6 +118,82 @@ public class RemoteHudTests
             hud.Refresh();
             Assert.False(hud.MotionRunning);
             Assert.Equal(1, hud.DotOpacity);
+        }
+        finally { hud.Dispose(); await relay.StopAsync(); }
+    });
+
+    [Theory]
+    [InlineData(true, 1, .88)]
+    [InlineData(false, .88, 1)]
+    public Task Reduced_press_snaps_both_ways_and_off_does_nothing(bool down, double initial, double expected) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var server = new FakeRelay();
+        using var relay = await Connected(server, _ => { });
+        var level = MotionLevel.Reduced;
+        var hud = new RemoteHudWindow(() => relay, () => false, () => null)
+        { Motion = () => level, AmbientMotion = () => false };
+        var scale = new ScaleTransform(initial, initial);
+        try
+        {
+            hud.Refresh();
+            hud.Press(scale, down);
+            Assert.Equal(expected, scale.ScaleX, 3);
+            Assert.Equal(expected, scale.ScaleY, 3);
+            Assert.False(hud.MotionRunning);
+            level = MotionLevel.Off;
+            hud.Press(scale, !down);
+            Assert.Equal(expected, scale.ScaleX, 3);
+        }
+        finally { hud.Dispose(); await relay.StopAsync(); }
+    });
+
+    [Fact]
+    public Task Full_release_uses_wpf_back_ease() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var server = new FakeRelay();
+        using var relay = await Connected(server, _ => { });
+        var clock = new Clock();
+        var hud = new RemoteHudWindow(() => relay, () => false, () => null)
+        { Clock = clock, Motion = () => MotionLevel.Full, AmbientMotion = () => false };
+        var scale = new ScaleTransform(1, 1);
+        try
+        {
+            hud.Refresh();
+            hud.Press(scale, true);
+            clock.Now = clock.Now.AddMilliseconds(70);
+            hud.StepMotion();
+            hud.Press(scale, false);
+            clock.Now = clock.Now.AddMilliseconds(70);
+            hud.StepMotion();
+            // WPF BackEase EaseOut amplitude .5 at t=.5: 1 - (.5^3 - .5*.5*sin(pi*.5)).
+            Assert.Equal(1.015, scale.ScaleX, 5);
+            Assert.Equal(scale.ScaleX, scale.ScaleY, 5);
+            clock.Now = clock.Now.AddMilliseconds(70);
+            hud.StepMotion();
+            Assert.Equal(1, scale.ScaleX, 5);
+        }
+        finally { hud.Dispose(); await relay.StopAsync(); }
+    });
+
+    [Fact]
+    public Task Command_bump_returns_with_wpf_back_ease() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var server = new FakeRelay();
+        using var relay = await Connected(server, _ => { });
+        var clock = new Clock();
+        var hud = new RemoteHudWindow(() => relay, () => false, () => null)
+        { Clock = clock, Motion = () => MotionLevel.Full, AmbientMotion = () => false };
+        try
+        {
+            hud.Refresh();
+            hud.NoteAction("show_spiral");
+            clock.Now = clock.Now.AddMilliseconds(162); // halfway through the return after the 35% peak
+            hud.StepMotion();
+            // WPF BackEase EaseOut amplitude .4 at t=.5 gives 1.075.
+            Assert.Equal(.99475, hud.PillScale, 5);
+            clock.Now = clock.Now.AddMilliseconds(78);
+            hud.StepMotion();
+            Assert.Equal(1, hud.PillScale, 5);
         }
         finally { hud.Dispose(); await relay.StopAsync(); }
     });
