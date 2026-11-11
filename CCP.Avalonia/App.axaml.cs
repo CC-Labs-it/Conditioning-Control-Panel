@@ -87,12 +87,31 @@ namespace ConditioningControlPanel.Avalonia
         private DispatcherTimer? _achievementSaveTimer;
 
         /// <summary>WPF AchievementService.cs:99-107: periodically save dirty progress off the UI thread.</summary>
-        internal static DispatcherTimer StartAchievementAutosave(AchievementEngine engine)
+        internal static DispatcherTimer StartAchievementAutosave(AchievementEngine engine, Action? checkDay = null)
         {
             var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
-            timer.Tick += (_, _) => _ = engine.SaveIfDirtyAsync();
+            timer.Tick += (_, _) => { checkDay?.Invoke(); _ = engine.SaveIfDirtyAsync(); };
             timer.Start();
             return timer;
+        }
+
+        // WPF AchievementProgressStreak.cs:25-26 and :99: record each day and retain the peak.
+        internal static Action StartSeasonActivity(SettingsService settings, AchievementEngine engine, Func<DateTime> clock)
+        {
+            DateTime? lastDay = null;
+            void CheckDay()
+            {
+                var now = clock().ToUniversalTime();
+                if (lastDay == now.Date) return;
+                var s = settings.Current;
+                var added = SeasonActivity.MarkActiveToday(s, now);
+                var peak = s.SeasonPeakStreak;
+                SeasonActivity.TrackStreakPeak(s, engine.Progress.ConsecutiveDays);
+                if (added || peak != s.SeasonPeakStreak) settings.Save();
+                lastDay = now.Date;
+            }
+            CheckDay();
+            return CheckDay;
         }
 
         /// <summary>The automatic cloud settings backup (WPF ProfileSyncService.BackupSettingsAsync, force: false).</summary>
@@ -1048,7 +1067,7 @@ namespace ConditioningControlPanel.Avalonia
                 // caller's thread; the popup hops to the UI thread as WPF's DispatcherHelper does.
                 Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
                 _achievementSaveTimer?.Stop();
-                _achievementSaveTimer = StartAchievementAutosave(Achievements);
+                _achievementSaveTimer = StartAchievementAutosave(Achievements, StartSeasonActivity(Settings!, Achievements, () => DateTime.UtcNow));
                 WireAchievementUnlocks(Achievements);
                 SeedCompanionRecall();
                 WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
