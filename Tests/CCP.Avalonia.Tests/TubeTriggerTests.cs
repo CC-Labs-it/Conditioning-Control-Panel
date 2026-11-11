@@ -1,5 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Avalonia.Controls.Documents;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
+using ConditioningControlPanel.Services.Companion.Asks;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
@@ -159,5 +164,64 @@ public class TubeTriggerTests
         }
         finally { s.AvatarMuted = oldMute; PanicAftermath.EndQuiet(); tube.Close(); }
         return Task.CompletedTask;
+    });
+    private static Task WithTrigger(Action<AvatarTubeWindow, Action> run) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null) AppBuilder.Configure<AvApp>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var s = CoreSettings.Current; var muted = s.AvatarMuted; s.AvatarMuted = false;
+        var tube = new AvatarTubeWindow(null) { TriggerVisibilityOverride = () => true, TriggerHaptic = _ => { }, TriggerAudio = _ => { } };
+        Action fire = () => { }; tube.SpeechDelayScheduler = (_, action) => { fire = action; return () => { }; };
+        try { PanicAftermath.EndQuiet(); run(tube, () => fire()); }
+        finally { tube.PanicSilence(); tube.Close(); PanicAftermath.EndQuiet(); s.AvatarMuted = muted; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task TriggerRetiresListeningBubble() => WithTrigger((tube, fire) =>
+    {
+        tube.ShowListeningBubble("Listening");
+        tube.ShowTrigger("hello"); fire();
+        tube.HideListeningBubble();
+        Assert.True(tube.FindControl<Border>("SpeechBubble")!.IsVisible);
+        Assert.Null(typeof(AvatarTubeWindow).GetField("_listeningDotsTimer", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(tube));
+    });
+
+    [Fact]
+    public Task TriggerClearsPreviousAskCard() => WithTrigger((tube, fire) =>
+    {
+        tube.ShowAskCard(new AskCard(AskKind.Feedback, "Question?", new[] { new AskChoice("yes", "Yes", AskTone.Yes, AskAction.Loved) }, DateTime.UtcNow));
+        var buttons = tube.FindControl<WrapPanel>("AskButtons")!;
+        Assert.True(buttons.IsVisible); Assert.Single(buttons.Children);
+        tube.EndSpeechBubble(); tube.ShowTrigger("different"); fire();
+        Assert.False(buttons.IsVisible); Assert.Empty(buttons.Children);
+    });
+
+    [Fact]
+    public Task TriggerRestoresClickableLinksAfterTyping() => WithTrigger((tube, fire) =>
+    {
+        var oldNavigate = CompanionLinkLauncher.Navigate; string? opened = null;
+        CompanionLinkLauncher.Navigate = url => { opened = url; return true; };
+        try
+        {
+            tube.ShowTrigger("Try [this](https://example.com/watch)"); fire();
+            while (tube.TriggerTypewriterStep is { } tick) tick();
+            var inlines = tube.FindControl<TextBlock>("TxtSpeech")!.Inlines!;
+            var button = Assert.IsType<SafeHyperlinkButton>(Assert.Single(inlines.OfType<InlineUIContainer>()).Child);
+            button.Command!.Execute(null);
+            Assert.Equal("https://example.com/watch", opened);
+            var video = ConditioningControlPanel.Services.HypnotubeDefaultLinks.KnownVideoTitles.First(x => x.Key.Length >= 10 && x.Value.StartsWith("https://"));
+            tube.EndSpeechBubble(); tube.ShowTrigger(video.Key); fire();
+            while (tube.TriggerTypewriterStep is { } videoTick) videoTick();
+            var videoLink = Assert.IsType<SafeHyperlinkButton>(Assert.Single(tube.FindControl<TextBlock>("TxtSpeech")!.Inlines!.OfType<InlineUIContainer>()).Child);
+            videoLink.Command!.Execute(null);
+            Assert.Equal(video.Value, opened);
+            tube.EndSpeechBubble(); tube.ShowTrigger("'https://example.com/raw'"); fire();
+            while (tube.TriggerTypewriterStep is { } rawTick) rawTick();
+            var rawLink = Assert.IsType<SafeHyperlinkButton>(Assert.Single(tube.FindControl<TextBlock>("TxtSpeech")!.Inlines!.OfType<InlineUIContainer>()).Child);
+            rawLink.Command!.Execute(null); Assert.Equal("https://example.com/raw", opened);
+            tube.EndSpeechBubble(); tube.ShowTrigger("next"); fire(); var staleTick = tube.TriggerTypewriterStep; tube.StartThinkingAnimation();
+            Assert.Null(tube.TriggerTypewriterStep); staleTick?.Invoke(); tube.StopThinkingAnimation();
+        }
+        finally { CompanionLinkLauncher.Navigate = oldNavigate; }
     });
 }

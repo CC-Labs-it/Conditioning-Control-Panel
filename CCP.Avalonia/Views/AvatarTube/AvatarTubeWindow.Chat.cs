@@ -37,6 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal void StartThinkingAnimation()
         {
             StopThinkingAnimation();
+            CancelTriggerPresentation();
             _isWaitingForAi = true;
             _thinkingPhraseBase = ThinkingPhrases.Pick(Random.Shared);
             _thinkingTickCount = 0;
