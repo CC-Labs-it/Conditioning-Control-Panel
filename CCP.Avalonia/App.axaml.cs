@@ -15,6 +15,18 @@ namespace ConditioningControlPanel.Avalonia
 {
     public partial class App : Application
     {
+        internal static void AttachSessionEvents(SessionRunner runner, Views.Windows.MainShellWindow shell)
+        {
+            runner.Ticked += shell.OnSessionTick;
+            runner.Stopped += shell.OnPunchCardSessionStopped;
+        }
+
+        internal static void DetachSessionEvents(SessionRunner runner, Views.Windows.MainShellWindow shell)
+        {
+            runner.Ticked -= shell.OnSessionTick;
+            runner.Stopped -= shell.OnPunchCardSessionStopped;
+        }
+
         /// <summary>The settings service, or null on the headless render path.</summary>
         public static SettingsService? Settings { get; private set; }
 
@@ -961,8 +973,7 @@ namespace ConditioningControlPanel.Avalonia
                 // Dropped: WPF's EmiDesk "premiumTeaseSeen" fire - no EmiDesk service on this head.
                 var shell = (Views.Windows.MainShellWindow)desktop.MainWindow;
                 CoreEngine.StoppedHook = shell.OnEngineStopped;
-                Sessions.Ticked += shell.OnSessionTick;
-                Sessions.Stopped += shell.OnPunchCardSessionStopped;
+                AttachSessionEvents(Sessions, shell);
                 Sessions.SessionLog.LogReady += shell.OnSessionLogReady;
                 // WPF App.xaml.cs:529 (main fbe161de2): "See tiers" opens the vault gate card at the tier this door needs.
                 CoreEntitlement.ShowDeniedHandler = verdict => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
@@ -1002,8 +1013,7 @@ namespace ConditioningControlPanel.Avalonia
                 {
                     Serilog.Log.Information("Shell closed: stopping the session and the engine");
                     CoreEngine.StoppedHook = null;   // the shell is gone; do not repaint it
-                    Sessions.Ticked -= shell.OnSessionTick;
-                    Sessions.Stopped -= shell.OnPunchCardSessionStopped;
+                    DetachSessionEvents(Sessions, shell);
                     Sessions.SessionLog.LogReady -= shell.OnSessionLogReady;
                     Sessions.Stop();   // restores the pre-session settings before exit
                     CoreEngine.Stop();

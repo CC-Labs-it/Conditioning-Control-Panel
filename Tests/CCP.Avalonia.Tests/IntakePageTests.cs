@@ -30,7 +30,7 @@ public sealed class IntakePageTests
     private static void EnsureApp()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().UseSkia()
+            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }

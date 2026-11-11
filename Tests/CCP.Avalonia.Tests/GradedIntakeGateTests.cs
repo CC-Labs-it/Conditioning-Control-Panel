@@ -205,7 +205,7 @@ public sealed class GradedIntakeGateTests
     private static void EnsureAvalonia()
     {
         if (Application.Current is not null) return;
-        AppBuilder.Configure<AvApp>()
+        ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
             .UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
             .SetupWithoutStarting();

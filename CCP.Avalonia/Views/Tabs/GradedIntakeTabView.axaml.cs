@@ -194,7 +194,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
 
             // WPF Lab.cs:195: a first-ever run does not duck the control panel (it reads as a crash).
-            OpenIntake(owner, duckMain: IntakePunchCardState.ReadEverCompletedIntake(CorePaths.UserData));
+            OpenIntake(owner, duckMain: Platform.IntakePunchCardHead.HasEverCompleted(CorePaths.UserData));
         }
 
         /// <summary>WPF IntakeHostService.Launch: one live run at a time, focused if already open;
