@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media.Imaging;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Xunit;
@@ -33,16 +34,22 @@ public sealed class FlashGifTests
         try
         {
             var path = Path.Combine(dir, "loop.gif");
-            File.WriteAllBytes(path, TwoFrameGif);
+            var uneven = (byte[])TwoFrameGif.Clone();
+            // Second frame delay: 300 ms; first is 100 ms.
+            var second = Array.LastIndexOf(uneven, (byte)0xF9);
+            uneven[second + 3] = 30;
+            File.WriteAllBytes(path, uneven);
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (Application.Current is null)
                     AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                         .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
                 var old = FlashOverlay.Present;
+                var speed = CoreSettings.Current.FlashGifSpeedMultiplier;
                 try
                 {
                     FlashOverlay.Present = (_, _, _) => true;
+                    CoreSettings.Current.FlashGifSpeedMultiplier = 2;
                     var screen = new Window().Screens.All[0];
                     Assert.True(FlashOverlay.Show(new Bitmap(path), new PixelRect(100, 100, 100, 100), path, screen,
                         1, TimeSpan.Zero, TimeSpan.FromMinutes(1), false, true, 0));
@@ -51,6 +58,7 @@ public sealed class FlashGifTests
                     await w.GifDecoding!;
                     Assert.Equal(2, w.GifFrameCount);
                     Assert.True(w.GifAnimating);
+                    Assert.Equal(TimeSpan.FromMilliseconds(100), w.GifDelay);
                     var first = w.PictureSource;
                     w.NextGifFrame();
                     Assert.NotSame(first, w.PictureSource);
@@ -61,9 +69,81 @@ public sealed class FlashGifTests
                     Assert.Equal(0, w.GifFrameCount);
                     Assert.Null(w.PictureSource);
                 }
-                finally { FlashOverlay.CloseAll(final: false); FlashOverlay.Present = old; }
+                finally { FlashOverlay.CloseAll(final: false); FlashOverlay.Present = old; CoreSettings.Current.FlashGifSpeedMultiplier = speed; }
             });
         }
         finally { Directory.Delete(dir, true); }
     }
+    [Fact]
+    public async Task DecoderStopsAtSixHundredFrames()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-flash-limits-").FullName;
+        try
+        {
+            int start = Array.IndexOf(TwoFrameGif, (byte)0xF9) - 1;
+            int next = Array.LastIndexOf(TwoFrameGif, (byte)0xF9) - 1;
+            var longPath = Path.Combine(dir, "long.gif");
+            using (var file = File.Create(longPath))
+            {
+                file.Write(TwoFrameGif, 0, start);
+                for (var i = 0; i < 1200; i++) file.Write(TwoFrameGif, start, next - start);
+                file.WriteByte(0x3B);
+            }
+            await AvaloniaTestDispatcher.RunAsync(() =>
+            {
+                if (Application.Current is null)
+                    AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                        .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+                var (frames, delay) = FlashOverlayWindow.DecodeFrames(longPath);
+                try
+                {
+                    Assert.Equal(30, frames.Count);
+                    Assert.Equal(TimeSpan.FromMilliseconds(2000), delay);
+                }
+                finally { foreach (var frame in frames) frame.Dispose(); }
+                return Task.CompletedTask;
+            });
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void DecoderRejectsOversizedSource()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            var big = (byte[])TwoFrameGif.Clone();
+            big[6] = big[8] = 1; big[7] = big[9] = 16; // 4097 x 4097
+            File.WriteAllBytes(path, big);
+            var (frames, _) = FlashOverlayWindow.DecodeFrames(path);
+            try { Assert.Empty(frames); }
+            finally { foreach (var frame in frames) frame.Dispose(); }
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public async Task DecoderAveragesNonuniformFrameDelays()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            var gif = (byte[])TwoFrameGif.Clone();
+            gif[Array.LastIndexOf(gif, (byte)0xF9) + 3] = 30;
+            File.WriteAllBytes(path, gif);
+            await AvaloniaTestDispatcher.RunAsync(() =>
+            {
+                if (Application.Current is null)
+                    AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                        .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+                var (frames, delay) = FlashOverlayWindow.DecodeFrames(path);
+                try { Assert.Equal(TimeSpan.FromMilliseconds(200), delay); }
+                finally { foreach (var frame in frames) frame.Dispose(); }
+                return Task.CompletedTask;
+            });
+        }
+        finally { File.Delete(path); }
+    }
+
 }

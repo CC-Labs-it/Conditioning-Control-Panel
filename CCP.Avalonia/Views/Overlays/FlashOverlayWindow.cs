@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -10,6 +12,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Flash;
+using SkiaSharp;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
 {
@@ -31,6 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     internal sealed class FlashOverlayWindow : Window
     {
         private readonly Image _image;
+        private static readonly SemaphoreSlim GifDecodeGate = new(2, 2);
         private List<Bitmap>? _gifFrames;
         private DispatcherTimer? _gifTimer;
         private bool _closed;
@@ -38,15 +42,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal Task? GifDecoding { get; private set; }
         internal int GifFrameCount => _gifFrames?.Count ?? 0;
         internal bool GifAnimating => _gifTimer?.IsEnabled == true;
+        internal TimeSpan GifDelay => _gifTimer?.Interval ?? TimeSpan.Zero;
         internal object? PictureSource => _image.Source;
 
-        // WPF FlashService.cs:1244 decodes GIF frames. Reuse the bounded spiral decoder;
-        // 350px and 60 frames cap decoded frame storage below 30 MB per flash.
+        // WPF FlashService.cs:1420 and AnimatedWebp.cs:167: bounded GIF decode.
         internal void StartGif(string path) => GifDecoding = DecodeGif(path);
 
         private async Task DecodeGif(string path)
         {
-            var (frames, delay) = await Task.Run(() => SpiralOverlay.Decode(path, fitLongSide: 350, maxFrames: 60));
+            var (frames, delay) = await Task.Run(() => DecodeFrames(path));
             if (_closed || frames.Count < 2)
             {
                 foreach (var frame in frames) frame.Dispose();
@@ -55,9 +59,74 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _gifFrames = frames;
             _gifIndex = 0;
             _image.Source = frames[0];
-            _gifTimer = new DispatcherTimer { Interval = delay };
+            var speed = CoreSettings.Current.FlashGifSpeedMultiplier;
+            if (!double.IsFinite(speed) || speed <= 0) speed = 1;
+            var ms = Math.Max(10, delay.TotalMilliseconds / Math.Clamp(speed, 0.25, 4));
+            if (ConditioningControlPanel.Services.Safety.GentleVisuals.On)
+                ms = ConditioningControlPanel.Services.Safety.GentleVisuals.ScaleDelayMs(ms);
+            _gifTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(ms) };
             _gifTimer.Tick += (_, _) => NextGifFrame();
             _gifTimer.Start();
+        }
+
+        internal static (List<Bitmap> Frames, TimeSpan Delay) DecodeFrames(string path)
+        {
+            var frames = new List<Bitmap>();
+            GifDecodeGate.Wait();
+            try
+            {
+                using var codec = SKCodec.Create(path);
+                if (codec == null || codec.FrameCount <= 1) return (frames, TimeSpan.Zero);
+                int width = codec.Info.Width, height = codec.Info.Height, count = codec.FrameCount;
+                if (width <= 0 || height <= 0 || (long)width * height > 4096L * 4096) return (frames, TimeSpan.Zero);
+                double scale = Math.Min(1, 350.0 / Math.Max(width, height));
+                int tw = Math.Max(1, (int)Math.Round(width * scale)), th = Math.Max(1, (int)Math.Round(height * scale));
+                int step = Math.Max(1, (int)Math.Ceiling(count / 60.0));
+                int limit = Math.Min(count, 600);
+                var infos = codec.FrameInfo;
+                var full = new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
+                using var canvas = new SKBitmap(full);
+                using var scaled = new SKBitmap(new SKImageInfo(tw, th, SKColorType.Bgra8888, SKAlphaType.Premul));
+                byte[]? restore = null;
+                int restoreIndex = -1, samples = 0;
+                long duration = 0;
+                for (int i = 0; i < limit && frames.Count < 60; i++)
+                {
+                    int prior = -1;
+                    if (i > 0 && infos[i].RequiredFrame >= 0)
+                    {
+                        if (infos[i - 1].DisposalMethod != SKCodecAnimationDisposalMethod.RestorePrevious) prior = i - 1;
+                        else if (restore != null && restoreIndex >= infos[i].RequiredFrame)
+                        {
+                            Marshal.Copy(restore, 0, canvas.GetPixels(), restore.Length);
+                            prior = restoreIndex;
+                        }
+                    }
+                    var result = codec.GetPixels(full, canvas.GetPixels(), prior >= 0 ? new SKCodecOptions(i, prior) : new SKCodecOptions(i));
+                    if (result != SKCodecResult.Success && result != SKCodecResult.IncompleteInput) break;
+                    if (i + 1 < limit && infos[i].DisposalMethod != SKCodecAnimationDisposalMethod.RestorePrevious &&
+                        infos[i + 1].DisposalMethod == SKCodecAnimationDisposalMethod.RestorePrevious)
+                    {
+                        restore ??= new byte[canvas.ByteCount];
+                        canvas.GetPixelSpan().CopyTo(restore);
+                        restoreIndex = i;
+                    }
+                    if (i % step != 0) continue;
+                    canvas.ScalePixels(scaled, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
+                    frames.Add(new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, scaled.GetPixels(),
+                        new PixelSize(tw, th), new Vector(96, 96), scaled.RowBytes));
+                    if (infos[i].Duration > 0) { duration += infos[i].Duration; samples++; }
+                }
+                double average = samples > 0 ? (double)duration / samples : 100;
+                if (average < 20) average = 100;
+                return (frames, TimeSpan.FromMilliseconds(Math.Clamp(average * step, 20, 2000)));
+            }
+            catch (Exception)
+            {
+                foreach (var frame in frames) frame.Dispose();
+                return (new List<Bitmap>(), TimeSpan.Zero);
+            }
+            finally { GifDecodeGate.Release(); }
         }
 
         internal void NextGifFrame()
