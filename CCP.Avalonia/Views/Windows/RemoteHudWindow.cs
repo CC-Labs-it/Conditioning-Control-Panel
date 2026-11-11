@@ -17,7 +17,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// centre of the monitor the main window is on, up while a controller holds the remote. Who has it, for how
     /// long, what they did last, the Easy strength tag and three buttons back: More, Easy, Stop. Unowned,
     /// topmost, never activated (WPF WS_EX_NOACTIVATE is ShowActivated=false + ShowInTaskbar=false).
-    /// ponytail: the press/bump/live-dot animations and the once-a-second Win32 topmost re-assert are not here.
+    /// ponytail: the press/bump/live-dot animations are not here.
     /// </summary>
     internal sealed class RemoteHudWindow : Window
     {
@@ -114,6 +114,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Paint();
             if (!IsVisible) { Show(); Place(); }
             _tick.Start();
+            // WPF KeepOnTop (RemoteHudWindow.cs:368), each 1 s refresh: video and lock cards re-assert their own topmost.
+            Topmost = false; Topmost = true;   // re-issues HWND_TOPMOST / _NET_WM_STATE_ABOVE, no activation (ChaosHudWindow)
         }
 
         /// <summary>WPF LastActionChanged: a command landed (RemoteRelay.CommandReceived).</summary>

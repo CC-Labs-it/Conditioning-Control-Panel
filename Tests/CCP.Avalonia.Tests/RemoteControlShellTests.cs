@@ -275,6 +275,9 @@ public sealed class RemoteControlShellTests
             Assert.True(hud.IsVisible);
             Assert.Equal(Loc.GetF("remote_hud_has_remote", "Ana"), hud.Headline);
             Assert.Null(hud.StrengthTag);
+            var raised = 0;   // WPF KeepOnTop (RemoteHudWindow.cs:271): every 1 s Refresh re-asserts topmost
+            hud.PropertyChanged += (_, e) => { if (e.Property == Window.TopmostProperty && e.NewValue is true) raised++; };
+            hud.Refresh(); Assert.Equal(1, raised); Assert.True(hud.Topmost);
             int Emotes() { lock (f.Paths) return f.Paths.Count(x => x == "/v2/remote/emote"); }
             async Task Press(string kind, string confirm)
             {
