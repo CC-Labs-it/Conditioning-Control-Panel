@@ -85,7 +85,7 @@ public sealed class ChaosSkiaFxOverlayTests
             ChaosSkiaFxOverlay.Composited = () => true;
             ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
             ChaosSkiaFxOverlay.FramesForTests = frames;
-            ChaosSkiaFxOverlay.MonitorBoundsForTests = new[] { new PixelRect(-200, -140, 200, 200), new PixelRect(0, -140, 200, 200) };
+            ChaosSkiaFxOverlay.AvailableMonitorBoundsForTests = new[] { new PixelRect(-200, -140, 200, 200), new PixelRect(0, -140, 200, 200) };
             ChaosSkiaFxOverlay.Burst(new Point(-2, -40), Colors.Cyan);
             var owner = ChaosSkiaFxOverlay.Active!;
             Assert.Equal(2, owner.Hosts.Count);
@@ -110,7 +110,7 @@ public sealed class ChaosSkiaFxOverlayTests
             ChaosSkiaFxOverlay.Composited = composited;
             ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;
             ChaosSkiaFxOverlay.FramesForTests = null;
-            ChaosSkiaFxOverlay.MonitorBoundsForTests = null;
+            ChaosSkiaFxOverlay.AvailableMonitorBoundsForTests = null;
         }
         return Task.CompletedTask;
     });
@@ -136,7 +136,7 @@ public sealed class ChaosSkiaFxOverlayTests
             ChaosSkiaFxOverlay.Composited = () => true;
             ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
             ChaosSkiaFxOverlay.FramesForTests = new SteppedFrames();
-            ChaosSkiaFxOverlay.MonitorBoundsForTests = new[] { new PixelRect(0, 0, 200, 200), new PixelRect(200, 0, 200, 200) };
+            ChaosSkiaFxOverlay.AvailableMonitorBoundsForTests = new[] { new PixelRect(0, 0, 200, 200), new PixelRect(200, 0, 200, 200) };
             BubbleOverlay.PopChaos(new AmbientBubble { X = 250, Y = 50, Size = 100,
                 Spec = new EffectBubbleSpec { Tint = 0xFFFF0000 } });
             var owner = ChaosSkiaFxOverlay.Active!;
@@ -158,7 +158,7 @@ public sealed class ChaosSkiaFxOverlayTests
             ChaosSkiaFxOverlay.Composited = composited;
             ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;
             ChaosSkiaFxOverlay.FramesForTests = null;
-            ChaosSkiaFxOverlay.MonitorBoundsForTests = null;
+            ChaosSkiaFxOverlay.AvailableMonitorBoundsForTests = null;
         }
         return Task.CompletedTask;
     });
@@ -181,7 +181,7 @@ public sealed class ChaosSkiaFxOverlayTests
             ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
             ChaosSkiaFxOverlay.FramesForTests = frames;
             ChaosSkiaFxOverlay.MonitorScaleForTests = 1;
-            ChaosSkiaFxOverlay.MonitorBoundsForTests = new[] { new PixelRect(-200, 0, 200, 200), new PixelRect(0, 0, 200, 200) };
+            ChaosSkiaFxOverlay.AvailableMonitorBoundsForTests = new[] { new PixelRect(-200, 0, 200, 200), new PixelRect(0, 0, 200, 200) };
             ChaosSkiaFxOverlay.ArmCursorGlow();
             ChaosSkiaFxOverlay.MoveCursorGlowToPx(150, 150);
             var owner = ChaosSkiaFxOverlay.Active!;
@@ -202,7 +202,7 @@ public sealed class ChaosSkiaFxOverlayTests
 
             // Rearrange, resize, add a display and change the primary DPI while the field is live.
             ChaosSkiaFxOverlay.MonitorScaleForTests = 2;
-            ChaosSkiaFxOverlay.MonitorBoundsForTests = new[] { new PixelRect(-400, -100, 400, 300), new PixelRect(0, -100, 300, 300), new PixelRect(300, -100, 200, 300) };
+            ChaosSkiaFxOverlay.AvailableMonitorBoundsForTests = new[] { new PixelRect(-400, -100, 400, 300), new PixelRect(0, -100, 300, 300), new PixelRect(300, -100, 200, 300) };
             owner.OnScreensChanged(null, EventArgs.Empty);
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(3, owner.Hosts.Count);
@@ -215,7 +215,7 @@ public sealed class ChaosSkiaFxOverlayTests
             Assert.True(GlowAtDistance() > 0);
 
             var removed = owner.Hosts.Skip(1).ToArray();
-            ChaosSkiaFxOverlay.MonitorBoundsForTests = new[] { new PixelRect(-500, 20, 300, 250) };
+            ChaosSkiaFxOverlay.AvailableMonitorBoundsForTests = new[] { new PixelRect(-500, 20, 300, 250) };
             owner.OnScreensChanged(null, EventArgs.Empty);
             Dispatcher.UIThread.RunJobs();
             Assert.Single(owner.Hosts);
@@ -227,7 +227,7 @@ public sealed class ChaosSkiaFxOverlayTests
             frames.Step(5);
             owner.HideTick();
             Assert.False(owner.IsVisible);
-            ChaosSkiaFxOverlay.MonitorBoundsForTests = new[] { new PixelRect(-500, 20, 300, 250), new PixelRect(-200, 20, 300, 250) };
+            ChaosSkiaFxOverlay.AvailableMonitorBoundsForTests = new[] { new PixelRect(-500, 20, 300, 250), new PixelRect(-200, 20, 300, 250) };
             owner.OnScreensChanged(null, EventArgs.Empty);
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(2, owner.Hosts.Count);
@@ -251,7 +251,7 @@ public sealed class ChaosSkiaFxOverlayTests
             ChaosSkiaFxOverlay.Composited = composited;
             ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;
             ChaosSkiaFxOverlay.FramesForTests = null;
-            ChaosSkiaFxOverlay.MonitorBoundsForTests = null;
+            ChaosSkiaFxOverlay.AvailableMonitorBoundsForTests = null;
             ChaosSkiaFxOverlay.MonitorScaleForTests = null;
         }
         return Task.CompletedTask;
