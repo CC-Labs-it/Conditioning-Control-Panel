@@ -65,7 +65,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 if (CoreEntitlement.HasPremiumProvider is null) return;
+                if (NoteDailyGiftUse(CoreSettings.Current)) CoreSettings.Save();
                 var cleared = Services.EntitlementLapse.Enforce(CoreSettings.Current);
+                if (MaybePostRelockRow(CoreSettings.Current)) CoreSettings.Save();
                 foreach (var f in cleared) Serilog.Log.Information("Entitlement lapsed: {Feature} switched off", f);
                 _lapseUnsaved |= cleared.Count > 0;
                 if (persist && _lapseUnsaved)
