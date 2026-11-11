@@ -154,4 +154,48 @@ public sealed partial class GameWindowTests
         Assert.False((bool)sent[^1]["gates"]!["tunnel"]!);
         window.Close();
     });
+    [Fact]
+    public void Breakout_MediaRequestsHonorConsentAndSource() => Run((_, launcher) =>
+    {
+        launcher.Hide();
+        var s = CoreSettings.Current;
+        s.BackRoomMediaSource = "online";
+        s.RemoteMediaConsented = false;
+        s.BackRoomMediaSubs = new();
+        s.FypOnlineNiches = new();
+        s.FypOnlineCustomSubs = new();
+        Assert.NotEmpty(GameWindow.BreakoutChannels(s));
+        var window = GameWindow.Launch("breakoutdemo")!;
+        int calls = 0;
+        window.BreakoutClipsForTests = () => { calls++; return new[] {
+            new ConditioningControlPanel.Services.Chaos.GameMediaManifest.Entry("clip", "/ccp.assets/.temp/clip.webm") }; };
+        var sent = new List<JObject>();
+        window.Posted += json => { var frame = JObject.Parse(json); if ((string?)frame["type"] == "media") sent.Add(frame); };
+        void Request(string id, string source)
+        {
+            window.HandleMessage($"{{\"type\":\"media-request\",\"station\":\"breakout\",\"reqId\":\"{id}\",\"source\":\"{source}\"}}");
+            var end = DateTime.UtcNow.AddSeconds(10);
+            while (sent.Count == 0 && DateTime.UtcNow < end) Dispatcher.UIThread.RunJobs();
+            Assert.Single(sent);
+        }
+        Request("a", "online");
+        Assert.Equal("local", (string?)sent[0]["source"]);
+        Assert.Equal(0, calls);
+        sent.Clear();
+        s.RemoteMediaConsented = true;
+        Request("b", "auto");
+        Assert.Equal("online", (string?)sent[0]["source"]);
+        Assert.Equal("online", (string?)sent[0]["gifs"]![0]!["src"]);
+        Assert.Contains("clip.webm", (string?)sent[0]["gifs"]![0]!["url"]);
+        sent.Clear();
+        Request("c", "bundled");
+        Assert.Equal("bundled", (string?)sent[0]["source"]);
+        Assert.Empty(sent[0]["gifs"]!);
+        sent.Clear();
+        s.RemoteMediaConsented = false;
+        Request("d", "mixed");
+        Assert.Equal("local", (string?)sent[0]["source"]);
+        Assert.All(sent[0]["gifs"]!, g => Assert.NotEqual("online", (string?)g["src"]));
+        window.Close();
+    });
 }

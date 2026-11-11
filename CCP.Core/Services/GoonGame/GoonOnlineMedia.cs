@@ -52,7 +52,7 @@ namespace ConditioningControlPanel.Services.GoonGame
         public static bool IsNiche(string? s) => s != null && NicheRx.IsMatch(s);
 
         /// <summary>Valid names only, first spelling wins on a case-insensitive repeat, capped.</summary>
-        public static List<string> CleanSubs(IEnumerable<string?>? raw)
+        public static List<string> CleanSubs(IEnumerable<string?>? raw, int cap = MaxSubs)
         {
             var list = new List<string>();
             if (raw == null) return list;
@@ -63,7 +63,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 if (s != null && s.StartsWith("r/", StringComparison.OrdinalIgnoreCase)) s = s.Substring(2);
                 if (!IsNiche(s) || !seen.Add(s!)) continue;
                 list.Add(s!);
-                if (list.Count >= MaxSubs) break;
+                if (list.Count >= cap) break;
             }
             return list;
         }
@@ -223,8 +223,9 @@ namespace ConditioningControlPanel.Services.GoonGame
         // registry's first-provider-wins rule is exactly right for it. Stills only.
         private readonly string? _noiseSet;
         private readonly IReadOnlyList<string>? _fixedChannels;
-        private readonly int _stillTarget = GoonOnlineMediaRules.StillTarget;
-        private readonly int _clipTarget = GoonOnlineMediaRules.ClipTarget;
+        private int _stillTarget = GoonOnlineMediaRules.StillTarget;
+        private int _clipTarget = GoonOnlineMediaRules.ClipTarget;
+        private int _channelCap = GoonOnlineMediaRules.MaxSubs;
         // ANOTHER GAME'S OWN DECK (ForGame, 2026-09-28): same fetch, validation and temp-file
         // ownership, on "<prefix>-stills" / "<prefix>-clips". Its channel list lives in a static
         // map keyed by prefix, for the same first-provider-wins reason as _ownChannels.
@@ -261,6 +262,10 @@ namespace ConditioningControlPanel.Services.GoonGame
         /// two games never steer or reset each other's channels.</summary>
         public static GoonOnlineMedia ForGame(string tenantPrefix, Action<Snapshot> onSnapshot)
             => new(onSnapshot, tenantPrefix);
+
+        /// <summary>A game that only uses moving pictures (WPF BackRoomMedia.cs:34).</summary>
+        public static GoonOnlineMedia ForGameClips(string tenantPrefix, Action<Snapshot> onSnapshot)
+            => new(onSnapshot, tenantPrefix) { _stillTarget = 0, _clipTarget = 16, _channelCap = 64 };
 
         /// <summary>The same deck with no clips: a page that only draws stills never pays the share for a clip.</summary>
         public static GoonOnlineMedia ForGameStills(string tenantPrefix, Action<Snapshot> onSnapshot)
@@ -332,7 +337,7 @@ namespace ConditioningControlPanel.Services.GoonGame
         /// pictures = the current snapshot again, no refetch.</summary>
         public void Start(IReadOnlyList<string> subs)
         {
-            var clean = GoonOnlineMediaRules.CleanSubs(subs);
+            var clean = GoonOnlineMediaRules.CleanSubs(subs, _channelCap);
             List<Item>? drop = null;
             Snapshot? same = null;
             int gen = 0;
@@ -405,8 +410,10 @@ namespace ConditioningControlPanel.Services.GoonGame
             {
                 try
                 {
-                    var stills = FillAsync(gen, StillTenant, FeedMediaKind.GifStill, FeedMediaKind.Image,
-                        _stillTarget, isImage: true, ct);
+                    var stills = _stillTarget > 0
+                        ? FillAsync(gen, StillTenant, FeedMediaKind.GifStill, FeedMediaKind.Image,
+                            _stillTarget, isImage: true, ct)
+                        : Task.CompletedTask;
                     var clips = _clipTarget > 0
                         ? FillAsync(gen, ClipTenant, FeedMediaKind.GifClip, FeedMediaKind.GifClip,
                             _clipTarget, isImage: false, ct)

@@ -1,5 +1,8 @@
 using System;
 using System.ComponentModel;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using Serilog;
@@ -9,11 +12,106 @@ using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.BackRoom;
+using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Services.GoonGame;
+using ConditioningControlPanel.Services.Fyp.Online;
+using Newtonsoft.Json.Linq;
 
 namespace ConditioningControlPanel.Avalonia.Views.Games;
 
 internal sealed partial class GameWindow
 {
+
+    // WPF BackRoomMedia.cs:151-170 and BackRoomRemotePool.cs:202-223.
+    private GoonOnlineMedia? _breakoutRemote;
+    private IReadOnlyList<GameMediaManifest.Entry> _breakoutClips = Array.Empty<GameMediaManifest.Entry>();
+    private string _breakoutChannels = "";
+    private readonly HashSet<string> _breakoutMediaRequests = new(StringComparer.Ordinal);
+    // A per-window test seam; production always uses the pool below.
+    internal Func<IReadOnlyList<GameMediaManifest.Entry>>? BreakoutClipsForTests;
+
+    private static string BreakoutSource(JToken? requested)
+    {
+        var s = CoreSettings.Current;
+        var source = BackRoomBridge.MediaSourceRequest(requested);
+        if (source == null || source == "auto") return BackRoomWire.EffectiveMediaSource(s);
+        return source is "online" or "mixed" && !s.HasRemoteMediaConsent ? "local" : source;
+    }
+
+    internal static List<string> BreakoutChannels(AppSettings s)
+    {
+        var off = new HashSet<string>(s.BackRoomMediaSubsOff, StringComparer.OrdinalIgnoreCase);
+        var channels = s.BackRoomMediaSubs.Select(FypOnlineCoordinator.SanitizeSub)
+            .Where(n => n != null && !off.Contains(n)).Select(n => n!).Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(AppSettings.BackRoomMediaSubCap).ToList();
+        if (channels.Count == 0) channels = FypOnlineCoordinator.ResolveChannels(s.FypOnlineNiches, s.FypOnlineCustomSubs);
+        if (channels.Count == 0) channels = FypOnlineCoordinator.Catalog[0].Subs.ToList();
+        return channels;
+    }
+
+    private IReadOnlyList<GameMediaManifest.Entry> BreakoutClips(string source)
+    {
+        if (source is not ("online" or "mixed") || !CoreSettings.Current.HasRemoteMediaConsent)
+            return Array.Empty<GameMediaManifest.Entry>();
+        if (BreakoutClipsForTests != null) return BreakoutClipsForTests();
+        var channels = BreakoutChannels(CoreSettings.Current);
+        string key = string.Join(",", channels.Select(n => n.ToLowerInvariant()));
+        if (_breakoutRemote == null || key != _breakoutChannels)
+        {
+            _breakoutRemote?.Dispose();
+            _breakoutClips = Array.Empty<GameMediaManifest.Entry>();
+            _breakoutChannels = key;
+            GoonOnlineMedia.Materialize = DtrhRemoteMedia.AssetsTempCopier.Materialize;
+            GoonOnlineMedia.ReleaseTempFile = DtrhRemoteMedia.AssetsTempCopier.Release;
+            GoonOnlineMedia? pool = null;
+            pool = GoonOnlineMedia.ForGameClips("backroom-breakout", snapshot => Dispatcher.UIThread.Post(() =>
+            {
+                if (_closing || !ReferenceEquals(pool, _breakoutRemote) || !CoreSettings.Current.HasRemoteMediaConsent) return;
+                var oldCount = _breakoutClips.Count;
+                _breakoutClips = snapshot.Videos.Select(item => new GameMediaManifest.Entry(item.Name,
+                    _server!.AssetUrl(Path.GetRelativePath(CorePaths.EffectiveAssets, item.Path)))).ToArray();
+                if (oldCount == 0 && _breakoutClips.Count > 0) Post(new { type = "media-warm", station = "breakout" });
+            }));
+            _breakoutRemote = pool;
+            pool.Start(channels);
+        }
+        return _breakoutClips;
+    }
+
+    private void DisposeBreakoutMedia()
+    {
+        _breakoutRemote?.Dispose();
+        _breakoutRemote = null;
+        _breakoutChannels = "";
+        _breakoutClips = Array.Empty<GameMediaManifest.Entry>();
+    }
+
+    private void HandleBreakoutMedia(JObject o)
+    {
+        var reqId = (string?)o["reqId"];
+        var station = (string?)o["station"];
+        if (string.IsNullOrEmpty(reqId) || station == null || !System.Text.RegularExpressions.Regex.IsMatch(station, "^[a-z0-9_-]{1,24}$")
+            || !_breakoutMediaRequests.Add(reqId)) return;
+        var requested = o["source"];
+        int count = BackRoomBridge.MediaCount(o["count"]);
+        int seed = Random.Shared.Next();
+        _ = BreakoutClips(BreakoutSource(requested)); // start the pool before the disk walk
+        var server = _server;
+        var library = _library ??= new(() => server == null ? new() : GameMediaManifest.BuildLocal(server.AssetUrl));
+        _ = Task.Run(() =>
+        {
+            GameMediaManifest.Manifest local;
+            try { local = library.Value; } catch { local = new(); }
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_closing) return;
+                var source = BreakoutSource(requested); // consent and settings may have changed during the walk
+                var clips = BreakoutClips(source);
+                Post(GameMediaManifest.BreakoutDeal(local, reqId, seed, count, source, CoreSettings.Current.RemoteMediaRatio, clips));
+            });
+        });
+    }
+
     private bool IsBreakout => Spec.Id is "breakout" or "breakoutdemo";
     private bool _breakoutSwitchPending;
 
@@ -53,12 +151,17 @@ internal sealed partial class GameWindow
     private void OnBreakoutSettingsReplaced() => Dispatcher.UIThread.Post(() =>
     {
         if (_closing) return;
+        DisposeBreakoutMedia();
         HookBreakoutSettings();
         PushBreakoutSettings();
     });
 
     private void OnBreakoutSettingChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName is nameof(AppSettings.BackRoomMediaSource) or nameof(AppSettings.MediaSource)
+            or nameof(AppSettings.BackRoomMediaSubs) or nameof(AppSettings.BackRoomMediaSubsOff)
+            or nameof(AppSettings.RemoteMediaConsented) or nameof(AppSettings.FypOnlineConsented))
+            Dispatcher.UIThread.Post(DisposeBreakoutMedia);
         if (e.PropertyName is nameof(AppSettings.MotionLevel) or nameof(AppSettings.BackRoomFxIntensity)
             or nameof(AppSettings.BackRoomTunnel) or nameof(AppSettings.BackRoomMelt)
             or nameof(AppSettings.BackRoomInvertLook) or nameof(AppSettings.BackRoomMediaSource)
@@ -97,6 +200,7 @@ internal sealed partial class GameWindow
         _breakoutSettingsService = CoreSettings.Service;
         if (_breakoutSettingsService != null) _breakoutSettingsService.CurrentReplaced += OnBreakoutSettingsReplaced;
         HookBreakoutSettings();
+        if (_server != null) _ = BreakoutClips(BreakoutSource(null));
         if (Spec.Id != "breakout") return;
         _lastBreakoutAccess = FullBreakoutAllowed;
         _breakoutPatreon = AccountSeed.Patreon;
