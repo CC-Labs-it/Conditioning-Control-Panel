@@ -49,7 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private Action? _statusAction;
         private string? _statusActionKey, _consentKey;
         private readonly Dictionary<TextBlock, string> _labelKeys = new();
-        private readonly List<(string Folder, string Count, Border Card)> _folderCards = new();
+        private readonly List<(string Folder, string Count, IBrush Pink, Border Card)> _folderCards = new();
         private bool? _paintedMix, _paintedConsent;
         private IBrush? _mixBrush;
         internal int FolderCardBuilds { get; private set; }
@@ -463,16 +463,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void RebuildFolderCards()
         {
             var s = CoreSettings.Current;
-            var next = new List<(string Folder, string Count, Border Card)>();
+            var next = new List<(string Folder, string Count, IBrush Pink, Border Card)>();
+            var unused = _folderCards.ToList();
+            // WPF reads PinkBrush on every build (MainWindow/MainWindow.BlinkTrainer.cs:876, 901-903); a mod
+            // switch or lockdown replaces it, so a card built with the old brush is not reused.
+            var pink = this.FindResource("PinkBrush") as IBrush ?? Brushes.HotPink;
             foreach (var folder in s.BlinkTrainerFolders)
             {
                 // Still rescan: files may have changed while this page was hidden. Only
                 // replace the card when its displayed count/name/language actually changed.
                 var line = BlinkTrainerState.FolderCountLine(AssetPack.FromFolder(folder), s.BlinkTrainerIncludeVideos);
                 var count = line ?? Loc.Get("blink_trainer_folder_empty_or_invalid");
-                var cached = _folderCards.FirstOrDefault(x => x.Folder == folder && x.Count == count);
-                var card = cached.Card ?? BuildFolderCard(folder, count, line == null);
-                next.Add((folder, count, card));
+                // Each cached card serves one entry: saved settings may list a folder twice and
+                // WPF builds one card per entry.
+                var hit = unused.FindIndex(x => x.Folder == folder && x.Count == count && ReferenceEquals(x.Pink, pink));
+                Border card;
+                if (hit >= 0) { card = unused[hit].Card; unused.RemoveAt(hit); }
+                else card = BuildFolderCard(folder, count, line == null, pink);
+                next.Add((folder, count, pink, card));
             }
             for (var i = BlinkTrainerFolderCardsHost.Children.Count - 1; i >= 0; i--)
                 if (!next.Any(x => ReferenceEquals(x.Card, BlinkTrainerFolderCardsHost.Children[i])))
@@ -487,10 +495,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _folderCards.AddRange(next);
         }
 
-        private Border BuildFolderCard(string folder, string countLine, bool invalid)
+        private Border BuildFolderCard(string folder, string countLine, bool invalid, IBrush pink)
         {
             FolderCardBuilds++;
-            var pink = this.FindResource("PinkBrush") as IBrush ?? Brushes.HotPink;
             var rest = new SolidColorBrush(Color.FromRgb(0xFF, 0x69, 0xB4), 0.3);
             var muted = this.FindResource("TextMutedBrush") as IBrush ?? Brushes.Gray;
 

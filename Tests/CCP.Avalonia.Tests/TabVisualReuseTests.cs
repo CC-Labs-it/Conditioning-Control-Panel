@@ -114,6 +114,27 @@ public sealed class TabVisualReuseTests
             blink.AddFolder(second.FullName);
             Assert.Same(card, cards.Children[0]);
             Assert.Equal(2, cards.Children.Count);
+
+            // A mod switch or lockdown replaces PinkBrush: the hover border must follow it.
+            var accent = global::Avalonia.Media.Brushes.Lime;
+            window.Resources["PinkBrush"] = accent;
+            blink.IsVisible = false;
+            blink.IsVisible = true;
+            var recolored = Assert.IsType<Border>(cards.Children[0]);
+            Assert.NotSame(card, recolored);
+            recolored.RaiseEvent(new global::Avalonia.Input.PointerEventArgs(global::Avalonia.Input.InputElement.PointerEnteredEvent, recolored,
+                new global::Avalonia.Input.Pointer(0, global::Avalonia.Input.PointerType.Mouse, true), window, default, 0,
+                new global::Avalonia.Input.PointerPointProperties(), global::Avalonia.Input.KeyModifiers.None));
+            Assert.Same(accent, recolored.BorderBrush);
+
+            // Saved settings may list a folder twice; each entry gets its own card on every refresh.
+            service.Current.BlinkTrainerFolders.Add(second.FullName);
+            blink.IsVisible = false;
+            blink.IsVisible = true;
+            blink.IsVisible = false;
+            blink.IsVisible = true;
+            Assert.Equal(3, cards.Children.Count);
+            Assert.Equal(3, cards.Children.Distinct().Count());
         }
         finally
         {
