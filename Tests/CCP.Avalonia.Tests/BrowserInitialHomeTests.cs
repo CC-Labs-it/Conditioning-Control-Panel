@@ -133,4 +133,33 @@ public sealed class BrowserInitialHomeTests
         Assert.Equal(mod.DefaultUrl, host.Source!.AbsoluteUri);
     });
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public Task CrashShowsPromptAndNavigationRestoresHost(int action) => Run((shell, page, host, mod) =>
+    {
+        host.ScriptInvoker = _ => Task.FromResult<string?>(null);
+        page.OnBrowserPromptClick();
+        host.OnBrowserProcessFailed();
+        var prompt = page.FindControl<TextBlock>("BrowserLoadingText")!;
+        var status = page.FindControl<TextBlock>("TxtBrowserStatus")!;
+        Assert.True(prompt.IsVisible);
+        Assert.Equal(IconText.BareLoc("label_browser_crashed_restart"), prompt.Text);
+        Assert.Equal(IconText.BareLoc("label_disconnected"), IconText.Bare(status.Text));
+        Assert.Equal(global::Avalonia.Media.Color.FromRgb(255, 107, 107), ((global::Avalonia.Media.SolidColorBrush)status.Foreground!).Color);
+        Assert.False(host.IsVisible);
+        Dispatcher.UIThread.RunJobs();
+        using var frame = shell.CaptureRenderedFrame();
+        Assert.NotNull(frame);
+        Assert.DoesNotContain("label_", prompt.Text!);
+        var requests = host.NavigationRequests;
+        if (action == 0) shell.BrowserSiteToggle_Click(page, new global::Avalonia.Interactivity.RoutedEventArgs());
+        else if (action == 1) shell.BtnReloadBrowser_Click(page, new global::Avalonia.Interactivity.RoutedEventArgs());
+        else shell.NavigateToUrlInBrowser("https://hypnotube.com/test");
+        Assert.Equal(requests + 1, host.NavigationRequests);
+        Assert.True(host.IsVisible);
+        Assert.False(prompt.IsVisible);
+    });
+
 }
