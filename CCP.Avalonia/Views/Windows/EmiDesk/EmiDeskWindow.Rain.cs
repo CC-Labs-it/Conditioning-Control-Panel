@@ -20,15 +20,18 @@ public partial class EmiDeskWindow
     private DateTime _rainActivity = DateTime.UtcNow;
     private DateTime _rainOpened;
     private TimeSpan _rainIdle = TimeSpan.FromSeconds(30);
-    private bool _rainGlass;
+    private bool _rainGlass, _rainGlassClick;
+    private Canvas? _rainGlitch;
+    private int _rainGlitchFrame;
+    private bool _rainOfferSent;
 
     partial void OnReadyCore()
     {
         _rainIdle = NextRainIdle();
         _glassCanvas.ClipToBounds = true;
-        PointerActivity += (_, _) => _rainActivity = DateTime.UtcNow;
+        PointerActivity += (_, _) => { if (!_rainGlassClick) CloseRainGlass(); _rainActivity = DateTime.UtcNow; };
         Moved += (_, _) => { CloseRainGlass(); _rainActivity = DateTime.UtcNow; };
-        _rainWatch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+        _rainWatch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(55) };
         _rainWatch.Tick += RainTick;
         _rainWatch.Start();
         Closed += (_, _) => { _rainWatch.Stop(); TearDownRain(); };
@@ -39,10 +42,19 @@ public partial class EmiDeskWindow
 
     private void RainTick(object? sender, EventArgs e)
     {
+        if (RainAskLive && (PresentationActive || CoreSession.IsSessionRunning || CoreEngine.Video?.IsPlaying == true ||
+            ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced())) CancelRainOffer();
         if (!IsVisible) { _rainActivity = DateTime.UtcNow; return; }
         if (_rainGlass)
         {
             var elapsed = (DateTime.UtcNow - _rainOpened).TotalMilliseconds;
+            if (_rainGlitch != null)
+            {
+                if (elapsed < 220) { int frame = (int)(elapsed / 55); if (frame != _rainGlitchFrame) { _rainGlitchFrame = frame; PaintRainGlitch(); } return; }
+                _glassCanvas.Children.Remove(_rainGlitch); _rainGlitch = null; _rainOpened = DateTime.UtcNow;
+                if (!_rainOfferSent) { _rainOfferSent = true; FireRainOffer(); }
+                return;
+            }
             if (elapsed >= 10000) { CloseRainGlass(); return; }
             double height = _glassCanvas.Height;
             for (int i = 0; i < _rainDrops.Count; i++)
@@ -52,15 +64,14 @@ public partial class EmiDeskWindow
         if (DateTime.UtcNow - _rainActivity < _rainIdle) return;
         _rainActivity = DateTime.UtcNow;
         _rainIdle = NextRainIdle();
-        // Other glass channels are still absent: skip their turns rather than filling the glass with rain.
-        if (_rainRandom.Next(10) == 0) TryShowRainChannel();
+        TryShowRainChannel(); // rain is the only channel implemented on this head
     }
 
     internal bool TryShowRainChannel()
     {
         if (!IsVisible || PresentationActive || InputLocked || Transiting || ChainLive || RingOpen ||
             !CoreSettings.Current.EmiDeskGlass || EmiLineEngine.BedtimeSet || EmiLineEngine.Instance.HoldActive ||
-            CoreEngine.Video?.IsPlaying == true || _rainGlass) return false;
+            CoreEngine.Video?.IsPlaying == true || _rainGlass || RainAskLive) return false;
         try
         {
             var files = EmiGifRain.Images().OrderBy(_ => _rainRandom.Next()).Take(4);
@@ -83,12 +94,30 @@ public partial class EmiDeskWindow
                 _glassCanvas.Children.Add(image);
                 _rainDrops.Add(image);
             }
+            _rainGlitch = new Canvas { Width = width, Height = height, Background = Brush.Parse("#0E0E1C") };
+            _glassCanvas.Children.Add(_rainGlitch);
+            _rainGlitchFrame = 0; PaintRainGlitch();
+            _rainOfferSent = false;
             _rainOpened = DateTime.UtcNow;
             _rainGlass = true;
             RainTick(null, EventArgs.Empty);
             return true;
         }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] rain channel failed"); CloseRainGlass(); return false; }
+    }
+
+    private void PaintRainGlitch()
+    {
+        if (_rainGlitch == null) return;
+        _rainGlitch.Children.Clear();
+        for (int i = 0, n = 3 + _rainRandom.Next(3); i < n; i++)
+        {
+            double h = Math.Max(1, _rainGlitch.Height * (0.03 + _rainRandom.NextDouble() * 0.1));
+            var band = new Border { Width = _rainGlitch.Width, Height = h, Background = Brush.Parse("#FF69B4"), Opacity = 0.18 + _rainRandom.NextDouble() * 0.5 };
+            Canvas.SetLeft(band, (_rainRandom.NextDouble() - 0.5) * _rainGlitch.Width * 0.5);
+            Canvas.SetTop(band, _rainRandom.NextDouble() * Math.Max(1, _rainGlitch.Height - h));
+            _rainGlitch.Children.Add(band);
+        }
     }
 
     partial void OnGlassLiveQuery(ref bool live) { if (_rainGlass) live = true; }
@@ -103,6 +132,7 @@ public partial class EmiDeskWindow
     private void CloseRainGlass()
     {
         _rainGlass = false;
+        _rainGlitch = null;
         _glassCanvas.Children.Clear();
         _rainDrops.Clear();
         foreach (var bitmap in _rainBitmaps) bitmap.Dispose();
@@ -114,6 +144,7 @@ public partial class EmiDeskWindow
     private void TearDownRain()
     {
         CloseRainGlass();
+        CancelRainOffer();
         EmiGifRain.Stop();
     }
 }

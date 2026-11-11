@@ -1164,7 +1164,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             if (PresentationActive || InputLocked || _transiting) { e.Handled = true; return; }   // the show owns her
             try
             {
-                RaiseActivity();
+                _rainGlassClick = _rainGlass && GlassRect.Contains(e.GetPosition(_bodyRoot));
+                try { RaiseActivity(); } finally { _rainGlassClick = false; }
                 DisarmPet();
                 // Moving her walks the pointer off her silhouette in the first few pixels at any
                 // speed worth calling a drag. Hold the chrome open for the whole gesture, or the x
@@ -1192,6 +1193,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             {
                 if (!_dragging)
                 {
+                    if (_rainGlass) CloseRainGlass();
                     UpdatePetHover(e.GetPosition(_bodyRoot));
                     return;
                 }
