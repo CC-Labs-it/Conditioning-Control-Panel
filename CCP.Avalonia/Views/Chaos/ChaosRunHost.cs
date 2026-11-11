@@ -510,12 +510,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             FlashOverlay.RaiseAll(RaiseOverlayWindow);
         }
 
+        // WPF ChaosModeService.cs:745-757, 937-951: lift every visible DVD surface.
+        internal static void RaiseDvdAboveVideo()
+        {
+            if (!IsDescending || !CoreSettings.Current.ChaosPinOnTop) return;
+            foreach (var window in ChaosDvdOverlay.Windows)
+                if (window.IsVisible) RaiseOverlayWindow(window);
+        }
+
         /// <summary>One RunTick, the clock half of WPF ChaosModeService.cs:929-1099.</summary>
         internal static void Tick()
         {
             if (!_spawning || _state == null || _manualPaused || _lessonCardPaused) return;
             if (_overlay is not { IsVisible: true }) return;   // P01: nothing ticks while hidden
-            if (++_chromeTicks >= 4) { _chromeTicks = 0; KeepChromeTopmost(); }
+            if (++_chromeTicks >= 4) { _chromeTicks = 0; KeepChromeTopmost(); if (CoreEngine.Video?.IsPlaying == true) RaiseDvdAboveVideo(); }
             double elapsed = ChaosRunEngine.Advance(_state);
             UpdateHeatTint();
             _hud?.SetCursorOnLive(BubbleOverlay.CursorOnLive);
