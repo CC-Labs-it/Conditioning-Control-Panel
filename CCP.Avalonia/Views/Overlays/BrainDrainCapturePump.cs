@@ -3,6 +3,7 @@ using System.Buffers;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Avalonia;
+using SkiaSharp;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 
@@ -24,16 +25,24 @@ internal sealed class BrainDrainCapturePump
     private readonly Func<Frame?> _capture;
     private readonly TimeSpan _interval;
     private Frame? _frame;
+    private volatile float _sigma;
+    internal float Sigma => _sigma;
+    internal void SetBlur(int strength) => _sigma = Math.Clamp(strength, 1, 100) * 0.14f / 12f;
 
     internal BrainDrainCapturePump(PixelRect bounds, TimeSpan interval)
-        : this(() => CaptureDesktop(bounds), interval) { }
+    {
+        _capture = () => CaptureDesktop(bounds, () => _sigma);
+        _interval = interval > TimeSpan.Zero ? interval : TimeSpan.FromSeconds(1.0 / 30);
+        Start();
+    }
 
     internal BrainDrainCapturePump(Func<Frame?> capture, TimeSpan interval)
     {
         _capture = capture;
-        _interval = interval > TimeSpan.Zero ? interval : TimeSpan.FromMilliseconds(33);
-        new Thread(Loop) { IsBackground = true, Name = "BrainDrain-Capture" }.Start();
+        _interval = interval > TimeSpan.Zero ? interval : TimeSpan.FromSeconds(1.0 / 30);
+        Start();
     }
+    private void Start() => new Thread(Loop) { IsBackground = true, Name = "BrainDrain-Capture" }.Start();
 
     internal Frame? Take()
     {
@@ -71,7 +80,7 @@ internal sealed class BrainDrainCapturePump
 
     // WPF OverlayService.cs:2674-2726: shrink the physical monitor bounds while copying.
     // SRCCOPY without CAPTUREBLT excludes layered windows, including the overlay itself.
-    private static Frame? CaptureDesktop(PixelRect bounds)
+    private static Frame? CaptureDesktop(PixelRect bounds, Func<float> sigma)
     {
         if (!OperatingSystem.IsWindows() || bounds.Width <= 0 || bounds.Height <= 0) return null;
         int width = Math.Max(2, bounds.Width / 4), height = Math.Max(2, bounds.Height / 4);
@@ -99,6 +108,7 @@ internal sealed class BrainDrainCapturePump
                 Marshal.Copy(bits, pixels, 0, length);
                 // GDI's fourth byte is undefined. Frames are opaque BGRA.
                 for (int i = 3; i < length; i += 4) pixels[i] = 255;
+                Blur(pixels, width, height, sigma());
                 return new Frame(width, height, pixels, pool);
             }
             catch { pool.Return(pixels); throw; }
@@ -110,6 +120,20 @@ internal sealed class BrainDrainCapturePump
             if (memory != IntPtr.Zero) DeleteDC(memory);
             if (dc != IntPtr.Zero) ReleaseDC(IntPtr.Zero, dc);
         }
+    }
+
+    // WPF BrainDrainCapturePump.cs:431-439,524-529: blur the small capture on the worker.
+    internal static void Blur(byte[] pixels, int width, int height, float sigma)
+    {
+        if (sigma <= 0.05f) return;
+        var info = new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque);
+        using var src = new SKBitmap(info); using var dst = new SKBitmap(info);
+        Marshal.Copy(pixels, 0, src.GetPixels(), checked(width * height * 4));
+        using var filter = SKImageFilter.CreateBlur(sigma, sigma, SKShaderTileMode.Clamp);
+        using var paint = new SKPaint { ImageFilter = filter };
+        using var canvas = new SKCanvas(dst);
+        canvas.DrawBitmap(src, 0, 0, paint); canvas.Flush();
+        Marshal.Copy(dst.GetPixels(), pixels, 0, checked(width * height * 4));
     }
 
     [StructLayout(LayoutKind.Sequential)] private struct BitmapHeader

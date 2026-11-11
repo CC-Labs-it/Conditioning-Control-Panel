@@ -11,6 +11,17 @@ namespace CCP.Avalonia.Tests;
 public sealed class BrainDrainCapturePumpTests
 {
     [Fact]
+    public void BlurSoftensCapturedPixels()
+    {
+        var pixels = new byte[17 * 17 * 4];
+        for (int i = 3; i < pixels.Length; i += 4) pixels[i] = 255;
+        int center = (8 * 17 + 8) * 4; pixels[center] = pixels[center + 1] = pixels[center + 2] = 255;
+        BrainDrainCapturePump.Blur(pixels, 17, 17, 1.2f);
+        Assert.InRange(pixels[center], 1, 254);
+        Assert.True(pixels[center + 4] > 0);
+    }
+
+    [Fact]
     public void DesktopCopyExcludesLayeredWindows()
     {
         Assert.Equal(0x00CC0020u, BrainDrainCapturePump.DesktopCopy);
