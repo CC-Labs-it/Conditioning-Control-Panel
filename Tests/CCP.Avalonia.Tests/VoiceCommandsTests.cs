@@ -109,8 +109,14 @@ public sealed class VoiceCommandsTests
             .OfType<ConditioningControlPanel.Avalonia.Controls.IconLabel>().Where(t => t.Tag is string g && g.StartsWith("voice:")).ToList();
         Assert.False(rows.Single(t => t.Text!.Contains("Spiral")).IsVisible);
         Assert.True(rows.Single(t => t.Text!.Contains("Takeover")).IsVisible);
-        var toys = rows.Single(t => t.Text!.Contains("Quick toys"));   // freeze runs here only if its seam is seeded
-        Assert.Equal(shell.VoiceCmds.Available.Any(i => i.Name == "freeze_once"), toys.IsVisible);
+        var toys = rows.Single(t => t.Text!.Contains("Quick toys"));
+        var available = shell.VoiceCmds.Available.Select(i => i.Name).ToHashSet();
+        Assert.Contains("shake_once", available);
+        Assert.Equal(new[] { "freeze_once", "shake_once", "count_once" }.Any(available.Contains), toys.IsVisible);
+        var toyPanel = Assert.IsAssignableFrom<Panel>(toys.Parent);
+        var toyPhrases = Assert.IsType<TextBlock>(toyPanel.Children[toyPanel.Children.IndexOf(toys) + 1]);
+        var toyText = string.Concat(toyPhrases.Inlines!.OfType<global::Avalonia.Controls.Documents.Run>().Select(r => r.Text));
+        Assert.Contains("shake the screen", toyText);
         // fluent-icons design ref: hearts Filled + pink, pause Filled.
         var heart = (ConditioningControlPanel.Avalonia.Controls.IconGlyph)rows.Single(t => t.Text!.Contains("Pink filter")).Children[0];
         Assert.Equal(FluentIcons.Common.IconVariant.Filled, heart.Variant);
@@ -325,6 +331,9 @@ public sealed class VoiceCommandsTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .WithInterFont()
+                    .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                    .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var mic = new WavMic(pcm ?? LockCardVoiceTests.Wav());   // pcm: zeros = a silent room
