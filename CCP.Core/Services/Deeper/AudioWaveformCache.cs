@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Serilog;
 
@@ -42,22 +43,30 @@ namespace ConditioningControlPanel.Services.Deeper
             return Task.Run(() => Load(audioPath));
         }
 
-        public static AudioWaveformResult Load(string audioPath)
+        /// <summary>Loads with a per-request decoder and cache version.</summary>
+        public static Task<AudioWaveformResult> LoadAsync(string audioPath, Func<string, AudioWaveformResult> decoder,
+            CancellationToken cancellationToken, int cacheVersion) =>
+            Task.Run(() => Load(audioPath, decoder, cancellationToken, cacheVersion), cancellationToken);
+
+        public static AudioWaveformResult Load(string audioPath) => Load(audioPath, Decode, CancellationToken.None, null);
+
+        private static AudioWaveformResult Load(string audioPath, Func<string, AudioWaveformResult> decoder,
+            CancellationToken cancellationToken, int? cacheVersion)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!File.Exists(audioPath))
                 throw new FileNotFoundException("Audio file not found", audioPath);
 
             try { Directory.CreateDirectory(CacheFolder); } catch { /* best-effort */ }
 
             var cacheKey = ComputeCacheKey(audioPath);
-            var cachePath = Path.Combine(CacheFolder, cacheKey + ".peaks");
-
+            var cachePath = Path.Combine(CacheFolder, cacheKey + (cacheVersion.HasValue ? "." + cacheVersion.Value : "") + ".peaks");
+            AudioWaveformResult? cached = null;
             if (File.Exists(cachePath))
             {
                 try
                 {
-                    var cached = ReadCache(cachePath);
-                    if (cached != null) return cached;
+                    cached = ReadCache(cachePath);
                 }
                 catch (Exception ex)
                 {
@@ -65,7 +74,10 @@ namespace ConditioningControlPanel.Services.Deeper
                 }
             }
 
-            var fresh = Decode(audioPath);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (cached != null) return cached;
+            var fresh = decoder(audioPath);
+            cancellationToken.ThrowIfCancellationRequested();
 
             try { WriteCache(cachePath, fresh); }
             catch (Exception ex) { Log.Debug("AudioWaveformCache: cache write failed: {Error}", ex.Message); }

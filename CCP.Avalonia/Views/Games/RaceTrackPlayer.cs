@@ -239,13 +239,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             finally { try { File.Delete(wav); } catch { } }
         }
 
-        /// <summary>The sout chain that writes 16 kHz mono signed 16-bit WAV to <paramref name="dest"/>.
+        /// <summary>The sout chain writes signed 16-bit WAV, mono 16 kHz by default or with source channels.
         /// Forward slashes and an escaped quote, so a Windows path survives libvlc's option parser.</summary>
-        internal static string SoutFor(string dest) =>
-            ":sout=#transcode{vcodec=none,acodec=s16l,channels=1,samplerate=16000}:std{access=file,mux=wav,dst='"
+        internal static string SoutFor(string dest, bool preserveChannels = false) =>
+            ":sout=#transcode{vcodec=none,acodec=s16l" + (preserveChannels ? "" : ",channels=1,samplerate=16000") + "}:std{access=file,mux=wav,dst='"
             + dest.Replace('\\', '/').Replace("'", "\\'") + "'}";
 
-        private static void TranscodeToWav(string source, string dest, IProgress<double>? progress, CancellationToken ct)
+        internal static void TranscodeToWav(string source, string dest, IProgress<double>? progress, CancellationToken ct, bool preserveChannels = false)
         {
             // A short file transcodes inside the first 100 ms wait, so an already-cancelled pick must stop here.
             ct.ThrowIfCancellationRequested();
@@ -253,7 +253,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             using var done = new ManualResetEventSlim(false);
             bool failed = false;
             using var media = new Media(vlc, source, FromType.FromPath);
-            media.AddOption(SoutFor(dest));
+            media.AddOption(SoutFor(dest, preserveChannels));
             media.AddOption(":no-sout-video");
             media.AddOption(":sout-keep");
             using var player = new MediaPlayer(media);
@@ -276,6 +276,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 // The muxer patches the WAV header and closes the file on stop.
                 try { player.Stop(); } catch (Exception ex) { Log.Debug("RaceTrackPlayer.Transcode stop: {E}", ex.Message); }
             }
+            ct.ThrowIfCancellationRequested();
             if (failed) throw new InvalidDataException("the track would not decode");
             progress?.Report(1);
         }

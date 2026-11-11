@@ -213,7 +213,7 @@ public sealed class WindowDropTests
             var peaks = (float[])typeof(EnhancementPlayerWindow).GetField("_peaks", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(player)!;
             Assert.Contains(peaks, p => p > 0.49f && p < 0.51f);
             AudioWaveformCache.Decoder = _ => throw new InvalidOperationException("cache missed");
-            var cached = await AudioWaveformCache.LoadAsync(path);
+            var cached = await AudioWaveformCache.LoadAsync(path, _ => throw new InvalidOperationException("cache missed"), System.Threading.CancellationToken.None, 1);
             Assert.Equal(peaks, cached.Peaks);
         }
         finally
@@ -237,7 +237,7 @@ public sealed class WindowDropTests
         try
         {
             DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(new ProbeAudio());
-            EnhancementPlayerWindow.LoadWaveform = p => p.EndsWith("first.wav") ? pending.Task :
+            EnhancementPlayerWindow.LoadWaveform = (p, _) => p.EndsWith("first.wav") ? pending.Task :
                 Task.FromResult(new AudioWaveformResult { Peaks = new[] { 0.25f, 0.25f } });
             player.Show(); player.OpenLocalMediaFile("/tmp/first.wav");
             if (close) player.Close(); else player.OpenLocalMediaFile("/tmp/second.wav");
@@ -256,9 +256,9 @@ public sealed class WindowDropTests
     [InlineData(true)]
     public void OtherCompressedFormatsUseTheExistingDecoder(bool compressedWav)
     {
-        var old = ConditioningControlPanel.Services.Race.TrackDecoder.DecodeProvider;
+        var old = DeeperWaveformDecoder.Transcode;
         var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + (compressedWav ? ".wav" : ".ogg"));
-        string? decodedPath = null;
+        string? decodedPath = null, temporary = null;
         try
         {
             if (compressedWav)
@@ -268,18 +268,83 @@ public sealed class WindowDropTests
                 w.Write((short)1); w.Write(8000); w.Write(8000); w.Write((short)1); w.Write((short)8);
                 w.Write("data"u8); w.Write(8); w.Write(new byte[8]);
             }
-            ConditioningControlPanel.Services.Race.TrackDecoder.DecodeProvider = (source, _, _) =>
+            DeeperWaveformDecoder.Transcode = (source, dest, _) =>
             {
-                decodedPath = source;
-                return Enumerable.Repeat(0.4f, 16000).ToArray();
+                decodedPath = source; temporary = dest;
+                using var w = new BinaryWriter(File.Create(dest));
+                w.Write("RIFF"u8); w.Write(32036); w.Write("WAVEfmt "u8); w.Write(16); w.Write((short)1);
+                w.Write((short)1); w.Write(16000); w.Write(32000); w.Write((short)2); w.Write((short)16);
+                w.Write("data"u8); w.Write(32000);
+                for (var i = 0; i < 16000; i++) w.Write((short)13107);
             };
             var result = DeeperWaveformDecoder.Decode(path);
             Assert.Equal(path, decodedPath);
             Assert.Equal(1, result.DurationSeconds);
-            Assert.All(result.Peaks, peak => Assert.Equal(0.4f, peak));
+            Assert.All(result.Peaks, peak => Assert.InRange(peak, 0.399f, 0.401f));
+            Assert.False(File.Exists(temporary));
         }
-        finally { ConditioningControlPanel.Services.Race.TrackDecoder.DecodeProvider = old; File.Delete(path); }
+        finally { DeeperWaveformDecoder.Transcode = old; File.Delete(path); }
     }
+
+    [Theory]
+    [InlineData("waveform-opposite.flac")]
+    [InlineData("waveform-surround.flac")]
+    public void OppositePhaseStereoFlacRetainsBothChannels(string fixture)
+    {
+        try { _ = new ConditioningControlPanel.Avalonia.Platform.LibVlcAudio("--aout=dummy"); }
+        catch (Exception e)
+        {
+            if (OperatingSystem.IsLinux() && Environment.GetEnvironmentVariable("CI") == "true") throw;
+            Assert.Skip("libvlc not installed: " + e.Message);
+        }
+        var path = Path.Combine(AppContext.BaseDirectory, "Assets", fixture);
+        var result = DeeperWaveformDecoder.Decode(path);
+        Assert.True(result.DurationSeconds > 0);
+        Assert.Contains(result.Peaks, peak => peak > 0.5f);
+    }
+
+    [Theory]
+    [InlineData("stop")]
+    [InlineData("replace")]
+    [InlineData("close")]
+    public Task PendingTranscodeIsCanceledAndTemporaryFileRemoved(string action) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".ogg");
+        File.WriteAllBytes(path, new byte[] { 1 });
+        var started = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var oldOpen = DeeperLocalAudio.Open; var oldLoad = EnhancementPlayerWindow.LoadWaveform;
+        var oldTranscode = DeeperWaveformDecoder.Transcode;
+        using var release = new System.Threading.ManualResetEvent(false);
+        var audio = new ProbeAudio(); var player = new EnhancementPlayerWindow(null, null);
+        System.Threading.CancellationToken seen = default;
+        try
+        {
+            DeeperLocalAudio.Open = p => Task.FromResult<IDeeperLocalAudio?>(p == path ? audio : new ProbeAudio());
+            EnhancementPlayerWindow.LoadWaveform = DeeperWaveformDecoder.LoadAsync;
+            DeeperWaveformDecoder.Transcode = (_, dest, token) =>
+            {
+                seen = token; File.WriteAllText(dest, "partial"); started.SetResult(dest);
+                System.Threading.WaitHandle.WaitAny(new[] { token.WaitHandle, release });
+                token.ThrowIfCancellationRequested();
+            };
+            player.Show(); player.OpenLocalMediaFile(path);
+            var temporary = await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            if (action == "stop") Click(player, "BtnStop");
+            else if (action == "replace") player.OpenLocalMediaFile("/tmp/replacement.mp3");
+            else player.Close();
+            await WaitFor(() => seen.IsCancellationRequested && !File.Exists(temporary) ? player : null);
+            Assert.Equal(0, audio.Plays);
+        }
+        finally
+        {
+            release.Set(); player.Close(); DeeperLocalAudio.Open = oldOpen;
+            EnhancementPlayerWindow.LoadWaveform = oldLoad; DeeperWaveformDecoder.Transcode = oldTranscode;
+            File.Delete(path);
+        }
+    });
 
     [Fact]
     public Task Mp3WaveformDecodesAndRendersBeforePlayback() => AvaloniaTestDispatcher.RunAsync(async () =>
@@ -320,14 +385,16 @@ public sealed class WindowDropTests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var oldOpen = DeeperLocalAudio.Open; var oldLoad = EnhancementPlayerWindow.LoadWaveform;
         var pending = new TaskCompletionSource<AudioWaveformResult>();
+        System.Threading.CancellationToken token = default;
         var audio = new ProbeAudio(); var player = new EnhancementPlayerWindow(null, null);
         try
         {
             DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
-            EnhancementPlayerWindow.LoadWaveform = _ => pending.Task;
+            EnhancementPlayerWindow.LoadWaveform = (_, ct) => { token = ct; return pending.Task; };
             player.Show(); player.OpenLocalMediaFile("/tmp/pending.mp3");
             Assert.Equal(0, audio.Plays);
             PanicSurfaces.StopAll("test");
+            Assert.False(token.IsCancellationRequested);
             if (resumeBeforeDecode) Click(player, "BtnPlayPause");
             Assert.Equal(0, audio.Plays);
             pending.SetResult(new AudioWaveformResult { Peaks = new[] { 0.3f, 0.4f } });
@@ -358,7 +425,7 @@ public sealed class WindowDropTests
         var pending = new TaskCompletionSource<IDeeperLocalAudio?>();
         var original = DeeperLocalAudio.Open;
         var oldWaveform = EnhancementPlayerWindow.LoadWaveform;
-        EnhancementPlayerWindow.LoadWaveform = _ => Task.FromResult(new AudioWaveformResult());
+        EnhancementPlayerWindow.LoadWaveform = (_, _) => Task.FromResult(new AudioWaveformResult());
         var stale = new ProbeAudio(); var next = new ProbeAudio();
         DeeperLocalAudio.Open = p => p.EndsWith("first.mp3") ? pending.Task : Task.FromResult<IDeeperLocalAudio?>(next);
         var player = new EnhancementPlayerWindow(null, null);
@@ -391,7 +458,7 @@ public sealed class WindowDropTests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var original = DeeperLocalAudio.Open;
         var oldWaveform = EnhancementPlayerWindow.LoadWaveform;
-        EnhancementPlayerWindow.LoadWaveform = _ => Task.FromResult(new AudioWaveformResult());
+        EnhancementPlayerWindow.LoadWaveform = (_, _) => Task.FromResult(new AudioWaveformResult());
         var audio = new ProbeAudio();
         var player = new EnhancementPlayerWindow(null, null);
         try
@@ -626,7 +693,7 @@ public sealed class WindowDropTests
         var assets = Path.Combine(root, "assets");
         var provider = ConditioningControlPanel.CorePaths.EffectiveAssetsProvider;
         var oldWaveform = EnhancementPlayerWindow.LoadWaveform;
-        EnhancementPlayerWindow.LoadWaveform = _ => Task.FromResult(new AudioWaveformResult());
+        EnhancementPlayerWindow.LoadWaveform = (_, _) => Task.FromResult(new AudioWaveformResult());
         ConditioningControlPanel.CorePaths.EffectiveAssetsProvider = () => assets;
         var shell = new MainShellWindow();
         var host = shell.Named<Panel>("NotificationHost")!;

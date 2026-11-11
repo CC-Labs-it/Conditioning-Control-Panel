@@ -24,6 +24,26 @@ public class AudioWaveformCacheTests : IDisposable
         try { Directory.Delete(_dir, true); } catch { }
     }
 
+    [Fact]
+    public async System.Threading.Tasks.Task VersionedLoadsIgnoreOldPeaksAndDoNotCacheCanceledResults()
+    {
+        var path = Audio("versioned.wav");
+        AudioWaveformCache.Decoder = _ => new AudioWaveformResult { Peaks = new[] { 0.1f } };
+        Assert.Equal(0.1f, AudioWaveformCache.Load(path).Peaks[0]);
+        var fresh = await AudioWaveformCache.LoadAsync(path, _ => new AudioWaveformResult { Peaks = new[] { 0.8f } }, System.Threading.CancellationToken.None, 1);
+        Assert.Equal(0.8f, fresh.Peaks[0]);
+        var cached = await AudioWaveformCache.LoadAsync(path, _ => throw new InvalidOperationException("cache missed"), System.Threading.CancellationToken.None, 1);
+        Assert.Equal(0.8f, cached.Peaks[0]);
+        using var cancellation = new System.Threading.CancellationTokenSource();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => AudioWaveformCache.LoadAsync(path, _ =>
+        {
+            cancellation.Cancel();
+            return new AudioWaveformResult { Peaks = new[] { 0.2f } };
+        }, cancellation.Token, 2));
+        var after = await AudioWaveformCache.LoadAsync(path, _ => new AudioWaveformResult { Peaks = new[] { 0.6f } }, System.Threading.CancellationToken.None, 2);
+        Assert.Equal(0.6f, after.Peaks[0]);
+    }
+
     private string Audio(string name, string content = "not really audio")
     {
         var path = Path.Combine(_dir, name);

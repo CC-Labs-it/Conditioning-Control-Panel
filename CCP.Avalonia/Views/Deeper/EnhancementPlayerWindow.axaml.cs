@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using ShapePath = Avalonia.Controls.Shapes.Path;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Collections;
@@ -141,6 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private string? _audioPath;
         private int _audioLoad;
         private int _waveformLoad;
+        private CancellationTokenSource? _waveformCancellation;
         private bool _waveformPending, _waveformPlayRequested;
         private bool _closing;
 
@@ -664,7 +666,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         // ====================================================================================
 
         // WPF EnhancementPlayerWindow.xaml.cs:616-662, 836-859, 2621: replace, play and cancel on close.
-        internal static Func<string, Task<AudioWaveformResult>> LoadWaveform = DeeperWaveformDecoder.LoadAsync;
+        internal static Func<string, CancellationToken, Task<AudioWaveformResult>> LoadWaveform = DeeperWaveformDecoder.LoadAsync;
 
         private async void LoadAudio(string path)
         {
@@ -700,7 +702,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 _durationSec = audio.DurationSeconds;
                 _waveformPending = true;
                 _waveformPlayRequested = true;
-                await LoadWaveformForAudioAsync(path, waveform);
+                var cancellation = new CancellationTokenSource();
+                _waveformCancellation = cancellation;
+                try { await LoadWaveformForAudioAsync(path, waveform, cancellation.Token); }
+                finally
+                {
+                    if (ReferenceEquals(_waveformCancellation, cancellation)) _waveformCancellation = null;
+                    cancellation.Dispose();
+                }
                 if (_closing || waveform != _waveformLoad) return;
                 _waveformPending = false;
                 _txtTotal.Text = FormatTime(_durationSec);
@@ -725,11 +734,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             }
         }
 
-        private async Task LoadWaveformForAudioAsync(string path, int waveform)
+        private async Task LoadWaveformForAudioAsync(string path, int waveform, CancellationToken token)
         {
             try
             {
-                var result = await LoadWaveform(path);
+                var result = await LoadWaveform(path, token);
                 if (_closing || waveform != _waveformLoad) return;
                 _peaks = result.Peaks;
                 RenderWaveform();
@@ -764,6 +773,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             ++_audioLoad; // Invalidate an asynchronous open before it can start sound.
             ++_waveformLoad; _waveformPending = false; _waveformPlayRequested = false;
+            var cancellation = _waveformCancellation;
+            _waveformCancellation = null;
+            cancellation?.Cancel();
             var audio = _localAudio;
             _localAudio = null;
             _isPlaying = false;
