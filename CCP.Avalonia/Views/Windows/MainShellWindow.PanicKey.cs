@@ -142,6 +142,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (rung != PanicPolicy.Rung.DismissSettingsPalette) PanicAftermath.ArmQuiet();
             if (rung == PanicPolicy.Rung.DismissLockCard) { StopLockCards(); StopCameraForPanic(); }
             if (!PanicPolicy.StopsSurfaces(rung)) return;
+            // WPF MainWindow.xaml.cs:1741: DtRH takes the ladder press before the Back Room.
+            if (rung == PanicPolicy.Rung.RunLadder && Games.GameWindow.HandleDtrhPanic()) return;
             // WPF MainWindow.xaml.cs:1763: the Back Room owns its ladder, including Breakout.
             if (rung == PanicPolicy.Rung.RunLadder && Games.GameWindow.HandleBreakoutPanic(now)) return;
             // WPF MainWindow.xaml.cs:1709: close the game surface that owns the screen, then the normal

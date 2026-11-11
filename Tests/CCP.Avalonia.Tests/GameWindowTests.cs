@@ -1285,6 +1285,49 @@ public sealed partial class GameWindowTests
         });
     }
 
+    /// <summary>WPF MainWindow.xaml.cs:1742-1769: DtRH takes an unclaimed ladder press before Breakout.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Dtrh_PanicTakesPriorityOverOpenBreakout(bool ready) => RunDtrh(lab: true, (shell, _, _, _) =>
+    {
+        var s = CoreSettings.Current;
+        var (oldKey, oldEnabled, oldOverride) = (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll);
+        try
+        {
+            (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll) = ("F8", true, false);
+            var breakout = GameWindow.Launch("breakoutdemo")!;
+            var breakoutFrames = new List<JObject>();
+            breakout.Posted += json => breakoutFrames.Add(JObject.Parse(json));
+            var dtrh = GameWindow.Launch("dtrh")!;
+            var dtrhFrames = new List<JObject>();
+            dtrh.Posted += json => dtrhFrames.Add(JObject.Parse(json));
+            if (ready) dtrh.HandleMessage("{\"type\":\"ready\"}");
+            dtrhFrames.Clear();
+            var now = DateTime.Now;
+
+            shell.HandlePanicKeyPress(now);
+            Assert.True(breakout.IsVisible);
+            Assert.DoesNotContain(breakoutFrames, f => (string?)f["type"] == "suspend");
+            Assert.Equal(0, shell.PanicPressCountForTest);
+            if (ready)
+            {
+                var end = Assert.Single(dtrhFrames);
+                Assert.Equal("end-run", (string?)end["type"]);
+                Assert.Equal("host", (string?)end["reason"]);
+                dtrh.HandleMessage("{\"type\":\"exit-done\"}");
+            }
+            Assert.False(dtrh.IsVisible);
+
+            shell.HandlePanicKeyPress(now.AddSeconds(1));
+            var suspend = Assert.Single(breakoutFrames, f => (string?)f["type"] == "suspend");
+            Assert.True((bool)suspend["on"]!);
+            Assert.True(breakout.IsVisible);
+            Assert.Equal(0, shell.PanicPressCountForTest);
+        }
+        finally { (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll) = (oldKey, oldEnabled, oldOverride); }
+    });
+
     [Fact]
     public void Dtrh_PanicRequestsEndAndPageSettlesOnlyOnce() => RunDtrh(lab: true, (shell, xp, runs, _) =>
     {
