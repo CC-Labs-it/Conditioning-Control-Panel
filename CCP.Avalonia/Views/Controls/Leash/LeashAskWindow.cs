@@ -3,6 +3,9 @@
 // arrived offer (LeashSurfaces.OnSnapshot/TryShowWaitingAsk) are wire-views-tab-leash-b-next; here the
 // offer row's Look opens it.
 using System;
+using System.Diagnostics;
+using Avalonia.Threading;
+using ConditioningControlPanel.Models;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -16,6 +19,10 @@ public sealed class LeashAskWindow : Window
 {
     /// <summary>The ask or snap on screen, if any. One at a time: a second one replaces it (WPF Open closes the overlay first).</summary>
     internal static LeashAskWindow? Current { get; private set; }
+    private readonly DispatcherTimer _thudTimer = new() { Interval = TimeSpan.FromMilliseconds(16) };
+    private readonly Stopwatch _thudClock = new();
+    private readonly ScaleTransform _thudScale = new(1, 1);
+    private double _thudAmount;
     internal Control Body { get; }
     internal LeashAskCard Card => (LeashAskCard)Body;
     // RenderProof: a sample ask.
@@ -24,6 +31,8 @@ public sealed class LeashAskWindow : Window
     private LeashAskWindow(Control card, Action? onEscape)
     {
         Body = card;
+        _thudTimer.Tick += (_, _) => AdvanceThud(_thudClock.Elapsed.TotalMilliseconds);
+        Closed += (_, _) => { _thudTimer.Stop(); _thudClock.Stop(); };
         WindowDecorations = WindowDecorations.None;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         Background = Brushes.Transparent;
@@ -49,9 +58,28 @@ public sealed class LeashAskWindow : Window
         w.Card.Answered += (_, _, _) => w.Close();
         w.Card.Dismissed += w.Close;
         if (!Show(w, owner)) return null;
+        w.PlayThud();
         try { service()?.NoteShown(offer.Id); }
         catch (Exception ex) { Serilog.Log.Debug("[Leash] ask seen note failed: {E}", ex.Message); }
         return w;
+    }
+    // WPF LeashSurfaces.cs:308-311 and LeashFx.cs:76-87.
+    private void PlayThud()
+    {
+        var motion = ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level;
+        _thudAmount = motion == MotionLevel.Off ? 0 : motion == MotionLevel.Reduced ? .5 : 1;
+        if (_thudAmount == 0) return;
+        Body.RenderTransformOrigin = RelativePoint.Center;
+        Body.RenderTransform = _thudScale;
+        AdvanceThud(0);
+        _thudClock.Restart();
+        _thudTimer.Start();
+    }
+    internal void AdvanceThud(double ms)
+    {
+        if (_thudAmount == 0) return;
+        _thudScale.ScaleX = _thudScale.ScaleY = 1 + .08 * _thudAmount * (1 - LeashSnapCard.Ease(Math.Clamp(ms / 340, 0, 1)));
+        if (ms >= 340) { _thudTimer.Stop(); _thudClock.Stop(); }
     }
     /// <summary>WPF LeashSurfaces.ShowSnap: the holder and leashed recap in the same overlay; Got it and Escape close it.</summary>
     internal static LeashAskWindow? OpenSnap(LeashPerson holder, LeashPerson leashed, Window? owner)

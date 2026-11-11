@@ -162,7 +162,7 @@ internal sealed class LeashSnapCard : Border
             _particles.Add((dot, Math.Cos(angle) * distance, Math.Sin(angle) * distance, 520 + rng.Next(320)));
         }
     }
-    private static double Ease(double x)
+    internal static double Ease(double x)
     {
         double t = x;
         static double Bez(double p, double a, double b) => 3 * a * p * (1 - p) * (1 - p) + 3 * b * p * p * (1 - p) + p * p * p;
