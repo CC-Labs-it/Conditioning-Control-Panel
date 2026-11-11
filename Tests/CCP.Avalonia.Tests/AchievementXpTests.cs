@@ -1,5 +1,8 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using Newtonsoft.Json.Linq;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -9,6 +12,55 @@ namespace CCP.Avalonia.Tests;
 
 public class AchievementXpTests
 {
+    // The splash yields between account startup and the later achievement hooks. The ordering guard
+    // covers the real startup method; the claim exercises the same early event and saved progress.
+    [Fact]
+    public void RestoredSessionClaimIsCountedBeforeLaterStartupSteps()
+    {
+        var source = File.ReadAllText(Path.GetFullPath(Path.Combine(TestDirectory(), "../../CCP.Avalonia/App.axaml.cs")));
+        var startup = source.IndexOf("private async Task StartDesktop(", StringComparison.Ordinal);
+        var create = source.IndexOf("Achievements = new AchievementEngine(", startup, StringComparison.Ordinal);
+        var wire = source.IndexOf("SeedAchievementXp(Achievements);", startup, StringComparison.Ordinal);
+        var account = source.IndexOf("if (Platform.AccountSeed.Seed())", startup, StringComparison.Ordinal);
+        Assert.True(startup >= 0 && create > startup && wire > create && account > wire);
+
+        var old = (CoreSettings.ServiceProvider, CoreDispatch.PostProvider, CoreAccount.IsLoggedInProvider);
+        var service = new SettingsService { SaveDebounceDueTimeMilliseconds = System.Threading.Timeout.Infinite };
+        var queue = new Queue<Action>();
+        var dir = Directory.CreateTempSubdirectory("ccp-early-xp-").FullName;
+        var path = Path.Combine(dir, "achievements.json");
+        var engine = new AchievementEngine(new AchievementStore(path));
+        var hook = App.SeedAchievementXp(engine);
+        try
+        {
+            CoreSettings.ServiceProvider = () => service;
+            CoreDispatch.PostProvider = queue.Enqueue;
+            CoreAccount.IsLoggedInProvider = () => true;
+            var s = service.Current;
+            s.UnifiedId = "early";
+            s.OfflineMode = false;
+            s.LastWebXpClaimId = null;
+            var sync = new SyncPush(() => null, () => false);
+            sync.MarkLoaded(null);
+            var claim = JObject.Parse("""{"web_xp":{"claim":{"id":"early-claim","amount":7}}}""");
+            sync.ClaimWebXp(s, claim);
+            while (queue.TryDequeue(out var pay)) pay();
+            Assert.Equal("early-claim", s.LastWebXpClaimId);
+            Assert.Equal(7, engine.Progress.TotalXPEarned);
+            engine.Save();
+            Assert.Equal(7, new AchievementStore(path).Load().TotalXPEarned);
+        }
+        finally
+        {
+            ProgressionBank.XPAwarded -= hook;
+            service.SealForReset();
+            (CoreSettings.ServiceProvider, CoreDispatch.PostProvider, CoreAccount.IsLoggedInProvider) = old;
+            Directory.Delete(dir, true);
+        }
+    }
+
+    private static string TestDirectory([CallerFilePath] string path = "") => Path.GetDirectoryName(path)!;
+
     [Theory]
     [InlineData("award", 30)]
     [InlineData("claim", 7)]

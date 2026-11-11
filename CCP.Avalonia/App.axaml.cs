@@ -834,6 +834,11 @@ namespace ConditioningControlPanel.Avalonia
                     // WPF MainWindow.JustDrop.cs:66: the Just Drop door flag, 9 s after startup.
                     Views.Windows.MainShellWindow.JustDropAvailabilityCheck = Services.JustDrop.JustDropService.RefreshAvailabilityAsync;
                 }
+                // A restored profile can pay a web claim during startup, before later splash steps.
+                Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
+                _achievementSaveTimer?.Stop();
+                _achievementSaveTimer = StartAchievementAutosave(Achievements);
+                SeedAchievementXp(Achievements);
                 if (Platform.AccountSeed.Seed())
                 {
                     // Unit 7c, with the logout clear: the push, XP banking and its two triggers (WPF
@@ -1046,11 +1051,7 @@ namespace ConditioningControlPanel.Avalonia
                 // Achievements: the Core engine over the same achievements.json WPF uses, seeded the
                 // way WPF App.xaml.cs:384/:394 seeds the two unlock seams. Unlocked is raised on the
                 // caller's thread; the popup hops to the UI thread as WPF's DispatcherHelper does.
-                Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
-                _achievementSaveTimer?.Stop();
-                _achievementSaveTimer = StartAchievementAutosave(Achievements);
                 WireAchievementUnlocks(Achievements);
-                SeedAchievementXp(Achievements);
                 SeedCompanionRecall();
                 WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
                 // WPF App.xaml.cs:2662: the Spiral rail day log, once Achievements and Settings are up.
