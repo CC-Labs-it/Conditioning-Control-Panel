@@ -131,10 +131,8 @@ public sealed class ChaosAnnouncerOverlayTests
                     Step(clock, 10000); // finish earlier draft/final-loop beats, without advancing run time
                 }
             }
-            Assert.Equal(49, ChaosRunHost.State!.ElapsedSec);
-            Assert.Equal(3, ChaosRunHost.State.WaveIndex);
-            Assert.False(ChaosAnnouncerOverlay.IsShowing);
-            Assert.Null(ChaosAnnouncerOverlay.Active!.Current);
+            Assert.Equal((49d, 3), (ChaosRunHost.State!.ElapsedSec, ChaosRunHost.State.WaveIndex));
+            Assert.Equal((false, (ChaosAnnouncement?)null), (ChaosAnnouncerOverlay.IsShowing, ChaosAnnouncerOverlay.Active!.Current));
             for (int i = 0; i < 8; i++) ChaosRunHostTests.TickRun();         // 51 s: inside T-10 s
             var w = ChaosAnnouncerOverlay.Active!;
             Assert.Equal("the hole is closing…", w.Current!.Text);

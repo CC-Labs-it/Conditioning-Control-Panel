@@ -5,12 +5,12 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services.Chaos;
 using Serilog;
-using ConditioningControlPanel.Avalonia.Controls;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
 {

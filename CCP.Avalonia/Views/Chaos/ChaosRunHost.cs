@@ -5,10 +5,10 @@ using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using Serilog;
-using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
 {
@@ -456,6 +456,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (!_draftPaused || _state == null || _state.RerollsLeft <= 0) return null;
             _state.RerollsLeft--;
+            _state.PushEvent("🎲 tempted fate again"); // WPF :1521
             return (DraftOptions(), _state.RerollsLeft);
         }
 
@@ -465,7 +466,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!_active || !_spawning || !_draftPaused || _state == null) return;
             if (boon == null)
             {
-                _state.Shields++;
+                _state.Shields++; _state.PushEvent("♥ resisted → +1 resistance"); // WPF :1580
                 Pulse(Color.FromRgb(120, 220, 160), 0.22); // WPF :1581
                 ChaosAnnouncerOverlay.Announce(Loc.Get("Chaos_DraftResistance"),
                     ChaosAnnounceKind.Willpower, artKey: "resistance"); // WPF :1583
@@ -482,10 +483,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (boon.Id == "extra_shield") Pulse(Color.FromRgb(120, 220, 160), 0.22); // WPF :1548
                 if (boon.IsCurse)
                 {
-                    if (_state.SinExtraMult > 0) _state.BoonMult += _state.SinExtraMult;
+                    if (_state.SinExtraMult > 0) { _state.BoonMult += _state.SinExtraMult; _state.PushEvent($"🕯 sin embraced (+{_state.SinExtraMult:0.00}x)"); } // WPF :1554
+                    if (shielded) _state.PushEvent("🕯 the candle took the sting (no drawback)"); // WPF :1557
                     if (_state.MaxedBoons.Contains("surrender"))
                     {
-                        _state.Shields++;
+                        _state.Shields++; _state.PushEvent("🕯 you said yes. it gave back (+1 resistance)"); // WPF :1561
                         Pulse(Color.FromRgb(120, 220, 160), 0.22); // WPF :1562
                     }
                     ChaosOverlayWindow.ChaosSfx.Play("sin_accept", 0.6f); // WPF :1565

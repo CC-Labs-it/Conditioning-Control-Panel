@@ -172,8 +172,7 @@ public sealed class ChaosUnlockCardOverlayTests
         ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (p, _, _, _, _) => cues.Add(System.IO.Path.GetFileNameWithoutExtension(p));
         ConditioningControlPanel.CoreSettings.Current.ChaosAnnouncerEnabled = true;
         Begin(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = true, ColorFlashesEnabled = flashes });
-        var overlay = ChaosRunHost.Overlay!;
-        var state = ChaosRunHost.State!;
+        var (overlay, state) = (ChaosRunHost.Overlay!, ChaosRunHost.State!);
         state.WelcomeShowerEnabled = true;
         ChaosMeta.State.LessonsComplete.Remove("silk_touch");
         ChaosMeta.State.LessonProgress["silk_touch"] = ChaosLessons.ById("silk_touch")!.Target - 1;
@@ -192,7 +191,7 @@ public sealed class ChaosUnlockCardOverlayTests
         int shields = state.Shields;
         // Drive the overlay's actual selection callback, including HideDraft.
         Choose(overlay, null);
-        Assert.Equal(shields + 1, state.Shields);
+        Assert.Equal((shields + 1, "♥ resisted → +1 resistance"), (state.Shields, state.RecentEvents[0])); // WPF :1580
         Assert.Equal(flashes, pulses.Contains((0xFF78DCA0u, 0.22)));
         Assert.Equal(("resistance", ChaosAnnounceKind.Willpower, ConditioningControlPanel.Localization.Loc.Get("Chaos_DraftResistance")),
             (ChaosAnnouncerOverlay.Active!.Current!.ArtKey, ChaosAnnouncerOverlay.Active.Current.Kind, ChaosAnnouncerOverlay.Active.Current.Text));
@@ -261,7 +260,7 @@ public sealed class ChaosUnlockCardOverlayTests
         var reroll = overlay.FindControl<Button>("BtnReroll")!;
         Assert.True(reroll.IsVisible);
         reroll.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-        Assert.Equal((0, false), (state.RerollsLeft, reroll.IsVisible));
+        Assert.Equal((0, false, "🎲 tempted fate again"), (state.RerollsLeft, reroll.IsVisible, state.RecentEvents[0])); // WPF :1521
         if (debut) Assert.Equal(((string?)null, ChaosAnnounceKind.Willpower, "you're allowed to refuse now."),
             (ChaosAnnouncerOverlay.Active!.Current!.ArtKey, ChaosAnnouncerOverlay.Active.Current.Kind, ChaosAnnouncerOverlay.Active.Current.Text));
         var boon = curse ? ChaosBoonPool.Draft(true, 3, guaranteeCurse: true).First(b => b.IsCurse)
@@ -274,11 +273,12 @@ public sealed class ChaosUnlockCardOverlayTests
         Choose(overlay, boon);
         Dispatcher.UIThread.RunJobs();
         Assert.Contains(boon, curse ? state.ActiveCurses : state.ActiveBoons);
+        Assert.Equal(curse ? new[] { "🕯 you said yes. it gave back (+1 resistance)", "🕯 the candle took the sting (no drawback)", $"🕯 sin embraced (+{0.2:0.00}x)" }
+            : Array.Empty<string>(), state.RecentEvents.Where(e => e.StartsWith("🕯", StringComparison.Ordinal))); // WPF :1555-1561
         Assert.Equal(mult + boon.RunMultBonus + (curse ? 0.2 : 0), state.BoonMult, 8);
         Assert.Equal((shields + (curse ? 1 : pick == 2 ? 2 : 0), pick != 0, curse),
             (state.Shields, pulses.Contains((0xFF78DCA0u, 0.22)), cues.Contains(debut ? "chime3" : "sin_accept")));
-        if (debut) Assert.Equal(1, ChaosAnnouncerOverlay.QueuedCount);
-        if (debut) { clock.Advance(ChaosAnnounceTiming.TotalMs(ChaosAnnounceTiming.HoldMs)); ChaosAnnouncerOverlay.Active!.Step(); }
+        if (debut) { Assert.Equal(1, ChaosAnnouncerOverlay.QueuedCount); clock.Advance(ChaosAnnounceTiming.TotalMs(ChaosAnnounceTiming.HoldMs)); ChaosAnnouncerOverlay.Active!.Step(); }
         Assert.Equal(0, ChaosAnnouncerOverlay.QueuedCount);
         Assert.Equal((boon.Id, curse ? ChaosAnnounceKind.Temptation : ChaosAnnounceKind.Mantra, boon.Name),
             (ChaosAnnouncerOverlay.Active!.Current!.ArtKey, ChaosAnnouncerOverlay.Active.Current.Kind, ChaosAnnouncerOverlay.Active.Current.Text));
@@ -355,8 +355,7 @@ public sealed class ChaosUnlockCardOverlayTests
         var names = new[] { "_revealTimer", "_autoResumeTimer", "_confirmTimer" };
         var timers = names.Select(Field).OfType<DispatcherTimer>().ToArray();
         var latePick = (Action<ChaosBoon?>)Field("_onBoonPick")!;
-        Assert.Equal((true, true), (timers.Any(t => t.IsEnabled), audio.Count > 0));
-        Assert.Equal(stage > 1 ? 1 : 0, barks);
+        Assert.Equal((true, true, stage > 1 ? 1 : 0), (timers.Any(t => t.IsEnabled), audio.Count > 0, barks));
         audio.Clear(); barks = 0;
         try
         {
@@ -376,8 +375,7 @@ public sealed class ChaosUnlockCardOverlayTests
     public async Task Stop_during_ready_go_cancels_timer_and_callback() => await Run(_ =>
     {
         Begin();
-        ChaosRunHost.State!.ElapsedSec = 20;
-        ChaosRunHost.Tick();
+        ChaosRunHost.State!.ElapsedSec = 20; ChaosRunHost.Tick();
         var window = ChaosRunHost.Overlay!;
         Choose(window, null);
         const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;

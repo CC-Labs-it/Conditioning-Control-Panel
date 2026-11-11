@@ -32,15 +32,13 @@ public sealed class ChaosRunHostTests
 
     private static ChaosRunConfig Cfg() => new() { DurationSec = 60, WaveCount = 3 };
 
-    // Keep drafts enabled. Long-run clock/payout tests now drive the real draft UI callback
-    // and ReadyGo instead of assuming a wave transition resumes without a user choice.
+    // Drafts stay on: long runs drive the real draft callback and ReadyGo, never an automatic resume.
     internal static void TickRun()
     {
         var overlay = ChaosRunHost.Overlay;
         if (overlay?.FindControl<Border>("DraftPanel")?.IsVisible == true)
         {
-            typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", System.Reflection.BindingFlags.NonPublic
-                | System.Reflection.BindingFlags.Instance)!.Invoke(overlay, new object?[] { null });
+            typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(overlay, new object?[] { null });
             overlay.FinishCountdown();
         }
         ChaosRunHost.Tick();
