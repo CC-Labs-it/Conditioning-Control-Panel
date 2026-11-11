@@ -442,7 +442,7 @@ async function boot(course, options, lifetime, isCurrent) {
   if (BOT) Object.defineProperty(debug, 'underwaterAudio', { get: () => audio.underwater });
   if (BOT) Object.defineProperty(debug, 'waterTravelAudio', { get: () => audio.waterTravel });
   if (BOT) Object.defineProperty(debug, 'introSound', { get: () => audio.introSound });
-  for (const name of ['keep-gate-hit', 'keep-chain-hit', 'boudoir-press-hit', 'boudoir-sweeper-hit', 'boudoir-mirror-hit', 'goonworks-hit']) bus.on(name, () => bus.emit('wall', { dv: 12 }));
+  for (const name of ['keep-gate-hit', 'keep-chain-hit', 'boudoir-press-hit', 'boudoir-sweeper-hit', 'boudoir-mirror-hit', 'goonworks-hit']) bus.on(name, () => bus.emit('wall', { dv: 12, trap: true }));   // trap: the payoff already paid it (fx/payoff.js onWall)
   configureLobby({ track: track.id, trackLaps: TRACK_LAPS });
   const hud = createHud({ root: document.getElementById('hud'), card: cardEl }, feel, bus, { photosafe, racers: () => racers?.list });
   const directionWarning = createDirectionWarning(track);
