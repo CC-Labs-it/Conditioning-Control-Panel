@@ -421,6 +421,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _kenBurns.ScaleX = _kenBurns.ScaleY = 1;
                 if (LitPlate != null) LitPlate.Opacity = 1;
             }
+            UpdateSignMotion();
             foreach (var part in _fxParts) Dress(part);
         }
 
@@ -429,6 +430,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (_motion == null) return;
             double t = FxAdorner.Time.GetElapsedTime(_motionStart).TotalSeconds;
+            SignFrame(t);
             _kenBurns.ScaleX = _kenBurns.ScaleY = Breath(t, 26, 1.0, 1.07);
             if (LitPlate != null) LitPlate.Opacity = Breath(t, 3.4, 0.75, 1.0);
             double glow = Breath(t, 3.4, 0.35, 0.9), fade = Breath(t, 1.9, 0.72, 1.0), swell = Breath(t, 1.9, 1.0, 1.06);
