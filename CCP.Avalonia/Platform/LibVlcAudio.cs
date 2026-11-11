@@ -199,12 +199,6 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// (MindWipeService.cs:55): the next copy starts 120 ms before the current one ends, because
         /// LibVLC's own <c>:input-repeat</c> reopens the input and left a measured 64 ms of silence
         /// at every restart.</summary>
-        internal MindWipePlayer.IVoice? PlayVoice(string path, double volume, bool loop, Action onEnded)
-        {
-            var voice = CreateVoice(path, volume, loop, onEnded);
-            return voice?.Play() == true ? voice : null;
-        }
-
         // WPF BrainDrainService.cs:345-387: creation is silent; Play belongs to the stop arbitration.
         internal MindWipePlayer.IVoice? CreateVoice(string path, double volume, bool loop, Action onEnded)
         {
@@ -265,65 +259,155 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         /// <summary>Copies of one clip, each started <see cref="OverlapMs"/> before the previous ends.
-        /// Ends (onEnded) when a copy fails and nothing else is playing.</summary>
-        private sealed class LoopVoice(LibVlcAudio audio, string path, Action onEnded) : MindWipePlayer.IVoice
+        /// Failed copies are retried while the loop remains active.</summary>
+        internal sealed class LoopVoice : MindWipePlayer.IVoice
         {
-            private const int OverlapMs = 120;   // WPF CROSSFADE_OVERLAP_SECONDS
+            private const int OverlapMs = 120;
             private readonly object _gate = new();
-            private readonly List<Voice> _live = new();
-            private Timer? _next;
-            private bool _done;
+            private readonly List<MindWipePlayer.IVoice> _live = new();
+            private readonly Func<Action<long>, Action<bool>, MindWipePlayer.IVoice> _create;
+            private readonly Action _onEnded;
+            private readonly TimeProvider _time;
+            private ITimer? _next;
+            private MindWipePlayer.IVoice? _pending;
+            private bool _done, _building, _waiting;
             private double _vol;
 
-            public double Volume { set { lock (_gate) { _vol = value; foreach (var v in _live) v.Volume = value; } } }
+            internal LoopVoice(LibVlcAudio audio, string path, Action onEnded)
+                : this((started, ended) =>
+                {
+                    Voice v = null!;
+                    v = audio.NewVoice(path, () => ended(v.Failed));
+                    v.Started = started;
+                    return v;
+                }, onEnded, TimeProvider.System) { }
 
-            public bool Play() => Start();
-            public bool Start()
+            internal LoopVoice(Func<Action<long>, Action<bool>, MindWipePlayer.IVoice> create,
+                Action onEnded, TimeProvider time)
+            { _create = create; _onEnded = onEnded; _time = time; }
+
+            public double Volume { set { lock (_gate) { _vol = value; foreach (var v in _live) v.Volume = value; if (_pending != null) _pending.Volume = value; } } }
+
+            public bool Play()
             {
-                Voice v;
                 lock (_gate)
                 {
                     if (_done) return false;
-                    v = null!;
-                    v = audio.NewVoice(path, () => Retire(v));
-                    v.Volume = _vol;
-                    v.Started = Schedule;
-                    _live.Add(v);
+                    _waiting = true;
+                    PrepareLocked();
+                    return true;
                 }
-                return v.Play();
             }
 
-            /// <summary>WPF: interval = length - overlap, at least 100 ms. Unknown length: back to back.</summary>
-            private void Schedule(long lengthMs)
+            private MindWipePlayer.IVoice Build()
+            {
+                MindWipePlayer.IVoice v = null!;
+                v = _create(length => Schedule(v, length), failed => Retire(v, failed));
+                return v;
+            }
+
+            // Play and publication share the stop lock, so a late build cannot start after stop.
+            private bool StartLocked(MindWipePlayer.IVoice v)
+            {
+                v.Volume = _vol;
+                _live.Add(v);
+                try { if (v.Play()) return true; }
+                catch (Exception ex) { Log.Debug(ex, "[Audio] mindwipe loop start"); }
+                _live.Remove(v);
+                v.Dispose();
+                return false;
+            }
+
+            private void PrepareLocked()
+            {
+                if (_done || _building || _pending != null) return;
+                _building = true;
+                Task.Run(() =>
+                {
+                    MindWipePlayer.IVoice? v = null;
+                    try { v = Build(); }
+                    catch (Exception ex) { Log.Debug(ex, "[Audio] mindwipe loop preparation"); }
+                    lock (_gate)
+                    {
+                        _building = false;
+                        if (_done) { v?.Dispose(); return; }
+                        if (v == null)
+                        {
+                            if (_waiting) RetryLocked();
+                            return;
+                        }
+                        // A pending retry timer owns the next start. Park a build that finishes
+                        // before it fires, instead of starting early and leaving a stale timer.
+                        if (_waiting && _next == null)
+                        {
+                            _waiting = false;
+                            if (StartLocked(v)) PrepareLocked();
+                            else RetryLocked();
+                        }
+                        else { v.Volume = _vol; _pending = v; }
+                    }
+                });
+            }
+
+            private void Advance()
+            {
+                lock (_gate)
+                {
+                    if (_done) return;
+                    _next?.Dispose(); _next = null;
+                    if (_pending == null) { _waiting = true; PrepareLocked(); return; }
+                    var v = _pending; _pending = null; _waiting = false;
+                    if (StartLocked(v)) PrepareLocked();
+                    else RetryLocked();
+                }
+            }
+
+            private void RetryLocked()
+            {
+                _waiting = true;
+                _next?.Dispose();
+                _next = _time.CreateTimer(_ => Advance(), null,
+                    TimeSpan.FromMilliseconds(100), Timeout.InfiniteTimeSpan);
+            }
+
+            private void Schedule(MindWipePlayer.IVoice voice, long lengthMs)
             {
                 if (lengthMs <= 0) return;
                 lock (_gate)
                 {
-                    if (_done) return;
+                    if (_done || !_live.Contains(voice)) return;
                     _next?.Dispose();
-                    _next = new Timer(_ => Start(), null, Math.Max(100, lengthMs - OverlapMs), Timeout.Infinite);
+                    _next = _time.CreateTimer(_ => Advance(), null,
+                        TimeSpan.FromMilliseconds(Math.Max(100, lengthMs - OverlapMs)), Timeout.InfiniteTimeSpan);
                 }
             }
 
-            private void Retire(Voice v)
+            private void Retire(MindWipePlayer.IVoice v, bool failed)
             {
-                bool restart = false, dead = false;
+                bool restart = false;
                 lock (_gate)
                 {
-                    _live.Remove(v);
-                    if (_done || _live.Count > 0) return;
-                    if (v.Failed) dead = _done = true; else restart = true;
+                    // A failed start was already removed. Its late completion must not end or
+                    // restart a newer attempt.
+                    if (!_live.Remove(v) || _done || _live.Count > 0) return;
+                    if (failed) RetryLocked();
+                    else if (!_waiting) restart = true;
                 }
-                if (dead) { Fire(onEnded); return; }
-                if (restart && !Start()) { lock (_gate) _done = true; Fire(onEnded); }
+                if (restart) Advance();
             }
 
             public void Dispose()
             {
-                Voice[] live;
-                lock (_gate) { _done = true; _next?.Dispose(); _next = null; live = _live.ToArray(); _live.Clear(); }
+                MindWipePlayer.IVoice[] live;
+                lock (_gate)
+                {
+                    if (_done) return;
+                    _done = true; _next?.Dispose(); _next = null;
+                    live = _live.ToArray(); _live.Clear();
+                    _pending?.Dispose(); _pending = null;
+                }
                 foreach (var v in live) v.Dispose();
-                Fire(onEnded);
+                Fire(_onEnded);
             }
         }
 
