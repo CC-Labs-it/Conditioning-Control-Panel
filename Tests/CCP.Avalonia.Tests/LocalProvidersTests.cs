@@ -66,9 +66,9 @@ public sealed class LocalProvidersTests
         return (listener, baseUrl, hits);
     }
 
-    private static SettingsService FreshSettings()
+    private static SettingsService FreshSettings(SettingsService? service = null)
     {
-        var service = new SettingsService();
+        service ??= new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         CoreSettings.Current.AiChatEnabled = true;
         CoreSettings.Current.OfflineMode = false;
@@ -191,7 +191,9 @@ public sealed class LocalProvidersTests
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
-        var service = FreshSettings();
+        var service = new SettingsService();
+        var originalSettings = Newtonsoft.Json.JsonConvert.SerializeObject(service.Current);
+        FreshSettings(service);
         CoreSettings.Current.Welcomed = true;
         CoreSettings.Current.HasAcceptedAgeVerification = true;
         var (listener, baseUrl, _) = StartFake();
@@ -269,6 +271,8 @@ public sealed class LocalProvidersTests
             memory.Dispose();
             AvApp.Ai?.Dispose();
             (AvApp.Ai, AvApp.Brain) = (previousAi, previousBrain);
+            Newtonsoft.Json.JsonConvert.PopulateObject(originalSettings, service.Current,
+                new Newtonsoft.Json.JsonSerializerSettings { ObjectCreationHandling = Newtonsoft.Json.ObjectCreationHandling.Replace });
             service.SaveImmediate();
             CoreSettings.ServiceProvider = null;
             Directory.Delete(dir, true);
