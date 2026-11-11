@@ -34,7 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>Spark banking (WPF DtrhMetaBridge.AwardRun, real state: ChaosMeta.AwardRunRewards); tests swap it.</summary>
         internal static Func<ChaosMeta.ChaosRunRewardInput, int> RaceBankSparks = input => ChaosMeta.AwardRunRewards(input);
 
-        private bool IsRace => string.Equals(Spec.Id, "race", StringComparison.OrdinalIgnoreCase);
+        private bool IsRace => string.Equals(Spec.Id, "raceclassic", StringComparison.OrdinalIgnoreCase);
         private readonly RaceRunLifecycle _raceRun = new();
         private DispatcherTimer? _raceHeartbeatWatch;
         private DateTime _raceLastHeartbeatUtc;

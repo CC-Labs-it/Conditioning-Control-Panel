@@ -797,14 +797,28 @@ public sealed partial class GameWindowTests
         }
     });
 
-    // Retained 2D bridge regressions run directly, never through a production door.
+    // Exercise the 2D bridge through its registered Classic specification.
     private static GameWindow OpenRetiredRace()
     {
-        var w = new GameWindow(new GameWindow.Game("race", "launcher_game_race_title", "dtrh/race.html"));
+        var w = new GameWindow(GameWindow.Games["raceclassic"]);
         w.Load(GameWindow.Server());
         w.Show();
         return w;
     }
+
+    [Fact]
+    public void ClassicDoor_OpensThe2DHostAndLauncherTile() => RunRace("rt.original.03", (launcher, _, _) =>
+    {
+        launcher.BuildTiles();
+        Assert.Contains(launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Children,
+            c => Equals(c.Tag, "raceclassic"));
+        var w = Assert.IsType<GameWindow>(GameWindow.Launch("raceclassic"));
+        Assert.Equal("dtrh/race.html", w.Spec.Page);
+        Assert.True(w.RaceWatchRunning);
+        Assert.Same(w, GameWindow.Launch("raceclassic"));
+        w.Close();
+        Dispatcher.UIThread.RunJobs();
+    });
 
     /// <summary>WPF OnPageReady :255 (init with the race settings block, then manifest) and OnRunEnded :431:
     /// one payout per run, score / 5 under 250 XP a minute, Sparks banked on score / 5.</summary>
