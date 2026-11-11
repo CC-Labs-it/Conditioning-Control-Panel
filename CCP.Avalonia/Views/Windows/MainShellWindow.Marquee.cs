@@ -25,16 +25,12 @@
 // actually keeps it honest.
 //
 // STILL BLOCKED, each naming what it needs rather than guessing at "when X moves to Core":
-//   ShowOgWelcomePopup / TryPresentSeasonRecap / ShowWhatsNewIfNeeded - App.Achievements,
-//     App.Seasons and the startup dialog queue in ConditioningControlPanel/App.xaml.cs. The
-//     dialogs themselves DO exist here (CCP.Avalonia/Views/Dialogs/WhatsNewDialog.axaml.cs,
-//     Views/Controls/SeasonRecapCard); what is missing is the "has this launch already shown a
-//     modal" arbitration those read from App.
+//   ShowOgWelcomePopup: needs the achievements host. Upgrade notes are wired in
+//     MainShellWindow.UpgradeIntro.cs; automatic season recap is retired (WPF Marquee.cs:271).
 //   (RefreshMarqueeFromSettings / CheckServerUpdateBanner are PORTED: MainShellWindow.ServerBanners.cs over Core
 //     V2AuthService, as CheckServerAnnouncement is in MainShellWindow.Announcement.cs.)
-//   _serverAnnouncementShownThisLaunch - only the intake nudge reads it.
-//   CheckIntakePassNudge / StartIntakeFromNudge - App.Programs (the weekly intake pass); the
-//     accepted nudge then wants ShowTab("gradedintake"), which does exist here.
+//   CheckIntakePassNudge / StartIntakeFromNudge and the shared announcement slot:
+//     MainShellWindow.IntakeNudge.cs.
 //   (BannerWebLink_Click is ported below: the beat's inline SafeHyperlinkButton opens through
 //   ExternalOpener, which has no no-default-browser prompt - WPF BrowserLauncher's fallback.)
 //   LocOr - a Loc.Get with an English literal fallback. Used only by the marquee and takeaway
@@ -44,6 +40,7 @@
 //   Banner message sheens are ported in MainShellWindow.ChromeFx.cs.
 
 using System;
+using ConditioningControlPanel.Avalonia.Platform;
 using System.Linq;
 using System.Collections.Generic;
 using Avalonia.Animation;
@@ -120,7 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void InitializeBannerRotation()
         {
             _bannerBeats = BuildBannerBeats();
-            foreach (var beat in _bannerBeats) EnsureFadeTransition(beat);
+            InitializeBannerDrum();
 
             UpdateBannerWelcomeMessage();
 
@@ -190,13 +187,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
 
-            // ponytail: WPF falls back to App.Patreon/App.Discord DisplayName when the unified
-            // name is blank. Neither provider exists on this head, so a user who linked an
-            // account but has no UserDisplayName written back gets the generic line.
-            var displayName = s.UserDisplayName;
-            secondary.Text = string.IsNullOrEmpty(displayName)
-                ? Loc.Get("label_welcome_consider_logging_in_with_patreon_for")
-                : Loc.GetF("label_welcome_back_0", displayName!);
+            // WPF MainWindow.Marquee.cs:135-154 uses this shared name rule and copy.
+            // AccountSeed.RestoreSession:91-104: a stored id alone is not a session on this head.
+            var displayName = Services.NeedsDisplayNameRule.FirstName(s.UserDisplayName,
+                Platform.AccountSeed.Patreon?.DisplayName, Platform.AccountSeed.Discord?.DisplayName);
+            secondary.Text = displayName is not null
+                ? Loc.GetF("label_welcome_back_0", displayName)
+                : Loc.Get(CoreAccount.IsLoggedIn
+                    ? "banner_signed_in_no_name" : "label_welcome_consider_logging_in_with_patreon_for");
         }
 
         private void BannerRotationTimer_Tick(object? sender, EventArgs e)
@@ -218,10 +216,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// the opacity, for the reason WPF spells out: a link parked at Opacity 0 still eats
         /// clicks.
         /// </summary>
-        private static void Crossfade(TextBlock outgoing, TextBlock incoming)
+        internal void Crossfade(TextBlock outgoing, TextBlock incoming)
         {
-            EnsureFadeTransition(outgoing);
-            EnsureFadeTransition(incoming);
+            ConfigureBannerFade(outgoing);
+            ConfigureBannerFade(incoming);
+            RollBannerDrum(outgoing, incoming);
 
             outgoing.Opacity = 0;
             incoming.Opacity = 1;

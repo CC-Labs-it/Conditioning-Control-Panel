@@ -321,8 +321,8 @@ namespace ConditioningControlPanel.Services
         /// Chips name the CARD, not its kind (owner, 2026-10-07: two chips both read "Waiting").
         /// One short word per known card id; a card not in the table falls back to its kind's label.
         /// </summary>
-        // Card ids spelled out: the WPF providers that own them (Services/Billboard/Providers,
-        // LiveCards/WaitingCards/ResumeCards/EventCards.Card*) read App.* and stay in the head.
+        // Card ids come from the shared Core LiveCards/WaitingCards/ResumeCards/EventCards rules.
+        // Platform-specific adapters read head services and invoke the matching actions.
         public static readonly IReadOnlyDictionary<string, string> ChipNameKeys = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["live.friend"] = "billboard_chip_friend",

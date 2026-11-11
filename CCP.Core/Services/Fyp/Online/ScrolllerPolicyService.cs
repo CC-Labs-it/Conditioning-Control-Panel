@@ -25,6 +25,7 @@ internal static class ScrolllerPolicyService
 
     private static readonly TimeSpan Period = TimeSpan.FromMinutes(30);
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
+    internal static Func<Task<HttpResponseMessage>>? FetchOverride;
     private static Timer? _timer;
     private static int _inFlight;
     private static volatile string? _minVersion;
@@ -55,8 +56,9 @@ internal static class ScrolllerPolicyService
         try
         {
             // Offline mode promises no external connections at all.
-            if (CoreSettings.Service?.Current?.OfflineMode == true) return;
-            using var res = await Http.GetAsync($"{BackRoomApi.BaseUrl}/config/scrolller").ConfigureAwait(false);
+            if (CoreSettings.Current.OfflineMode) return;
+            using var res = await (FetchOverride?.Invoke()
+                ?? Http.GetAsync($"{BackRoomApi.BaseUrl}/config/scrolller")).ConfigureAwait(false);
             if (!res.IsSuccessStatusCode)
             {
                 Log.Debug("ScrolllerPolicy: /config/scrolller returned {Status}; policy unchanged", (int)res.StatusCode);

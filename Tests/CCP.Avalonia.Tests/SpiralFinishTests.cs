@@ -7,9 +7,12 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Platform;
+using System.Runtime.CompilerServices;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using CCP.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;
@@ -45,6 +48,7 @@ public sealed class SpiralFinishTests
             Assert.Null(server.ResolveFile("/__spirals__/not-a-loom.gif"));
             var outside = Path.Combine(root.FullName, "outside.gif");
             File.WriteAllBytes(outside, Convert.FromBase64String(Gif));
+            Symlinks.RequireOrSkip();   // last, so the store and traversal checks above always run
             File.CreateSymbolicLink(link, outside);
             Assert.Null(server.ResolveFile("/__spirals__/loom_link.gif"));
         }
@@ -59,6 +63,7 @@ public sealed class SpiralFinishTests
             using var server = new WebAssetServer(root.FullName);
             var oldServer = GameWindow.Server;
             var oldShell = ExternalOpener.Shell;
+            var oldSelect = ExternalOpener.SelectInFileManager;
             var oldAudio = CoreAudio.PlayOneShotProvider;
             var oldAudioPath = CoreModArt.AudioOverridePathProvider;
             var oldVolume = CoreSettings.Current.MasterVolume;
@@ -68,6 +73,8 @@ public sealed class SpiralFinishTests
             var host = new Window { Content = card };
             var slug = "test-" + Guid.NewGuid().ToString("N")[..12];
             string? revealed = null;
+            string? selected = null;
+            ExternalOpener.SelectInFileManager = path => { selected = path; return true; };
             ExternalOpener.Shell = path => { revealed = path; return true; };
             host.Show();
             try
@@ -100,8 +107,13 @@ public sealed class SpiralFinishTests
                 Assert.True((bool)messages.Last(m => (string?)m["type"] == "loom-result")["ok"]!);
                 Send(new { type = "loom-reveal", slug = "../outside" });
                 Assert.Null(revealed);
+                Assert.Null(selected);
                 Send(new { type = "loom-reveal", slug });
-                Assert.Equal(Path.GetDirectoryName(path), revealed); // portable file manager opens the containing folder
+                Assert.Equal(Path.GetFullPath(path), selected);
+                Assert.Null(revealed);
+                ExternalOpener.SelectInFileManager = _ => false;
+                Send(new { type = "loom-reveal", slug });
+                Assert.Equal(Path.GetDirectoryName(path), revealed);
                 float? cueVolume = null;
                 CoreSettings.Current.MasterVolume = 50;
                 CoreModArt.AudioOverridePathProvider = p => p == "chaos/test.mp3" ? path : null;
@@ -123,11 +135,57 @@ public sealed class SpiralFinishTests
             {
                 GameWindow.CloseAllForPanic(); host.Close();
                 GameWindow.Server = oldServer; ExternalOpener.Shell = oldShell;
+                ExternalOpener.SelectInFileManager = oldSelect;
                 CoreAudio.PlayOneShotProvider = oldAudio; CoreModArt.AudioOverridePathProvider = oldAudioPath;
                 CoreSettings.Current.MasterVolume = oldVolume;
                 DtrhLoomStore.Delete(slug); CoreSettings.Current.SpiralPath = savedPath;
                 root.Delete(true);
             }
+        });
+
+    [Theory]
+    [InlineData("windows")]
+    [InlineData("gtk")]
+    [InlineData("wpe")]
+    public Task Loom_uses_its_own_browser_profile_without_changing_other_games(string engine)
+        => Run(() =>
+        {
+            // Exercise the registered callback without creating a native browser.
+            var type = engine switch
+            {
+                "windows" => typeof(WindowsWebView2EnvironmentRequestedEventArgs),
+                "gtk" => typeof(GtkWebViewEnvironmentRequestedEventArgs),
+                _ => typeof(LinuxWpeWebViewEnvironmentRequestedEventArgs),
+            };
+            var field = typeof(ConditioningControlPanel.Avalonia.Views.Controls.WebHost)
+                .GetField("EnvironmentRequested", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            var loom = new GameWindow(GameWindow.Games["loom"]);
+            var game = new GameWindow();
+            try
+            {
+                var args = (WebViewEnvironmentRequestedEventArgs)RuntimeHelpers.GetUninitializedObject(type);
+                var callback = Assert.IsType<Action<WebViewEnvironmentRequestedEventArgs>>(field.GetValue(loom.Web));
+                callback(args);
+                var folder = Path.Combine(CorePaths.UserData, "browser_data_loom");
+                Assert.True(Directory.Exists(folder));
+                switch (args)
+                {
+                    case WindowsWebView2EnvironmentRequestedEventArgs win:
+                        Assert.Equal(folder, win.UserDataFolder);
+                        break;
+                    case GtkWebViewEnvironmentRequestedEventArgs gtk:
+                        Assert.Equal(folder, gtk.BaseDataDirectory);
+                        Assert.Equal(Path.Combine(folder, "cache"), gtk.BaseCacheDirectory);
+                        break;
+                    case LinuxWpeWebViewEnvironmentRequestedEventArgs wpe:
+                        Assert.Equal(folder, wpe.DataDirectory);
+                        Assert.Equal(Path.Combine(folder, "cache"), wpe.CacheDirectory);
+                        break;
+                }
+                Assert.Null(field.GetValue(game.Web));
+            }
+            finally { loom.Close(); game.Close(); }
+            return Task.CompletedTask;
         });
 
     [Fact]
@@ -351,6 +409,65 @@ public sealed class SpiralFinishTests
                 (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize) = saved;
                 CoreSession.IsEngineRunningProvider = engine;
                 SpiralOverlay.SkipPlatformChecksForTests = checks;
+            }
+        });
+
+    [Theory]
+    [InlineData(false, 1f)]
+    [InlineData(true, 0.5f)]
+    public Task Native_video_applies_gentle_rate_after_start_and_loop(bool gentle, float expected)
+        => Run(async () =>
+        {
+            if (LibVlcAudio.Shared == null) _ = new LibVlcAudio("--aout=dummy");
+            var oldProvider = CoreSettings.ServiceProvider;
+            var service = new SettingsService();
+            CoreSettings.ServiceProvider = () => service;
+            var s = service.Current;
+            var saved = (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize, s.GentleVisuals, s.GentleSpeed);
+            var engine = CoreSession.IsEngineRunningProvider;
+            var checks = SpiralOverlay.SkipPlatformChecksForTests;
+            var host = new Window();
+            try
+            {
+                host.Show();
+                CoreSession.IsEngineRunningProvider = null;
+                SpiralOverlay.SkipPlatformChecksForTests = true;
+                if (SpiralOverlay.Decoding is { } pending) await pending;
+                SpiralOverlay.CloseAll();
+                (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize, s.GentleVisuals, s.GentleSpeed) =
+                    (true, Path.Combine(AppContext.BaseDirectory, "Assets", "bubblecount-2s.mp4"), false, gentle, 0.5);
+                SpiralOverlay.Refresh(host);
+                var deadline = DateTime.UtcNow.AddSeconds(20);
+                long previousTime = -1;
+                var sawStart = false;
+                var framesAtLoop = -1;
+                while (DateTime.UtcNow < deadline && (framesAtLoop < 0 || SpiralOverlay.VideoFrames <= framesAtLoop))
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    await Task.Yield();
+                    var time = SpiralOverlay.VideoTime;
+                    if (!sawStart && time >= 500 && SpiralOverlay.VideoFrames > 0)
+                    {
+                        Assert.Equal(expected, SpiralOverlay.VideoRate, 2);
+                        sawStart = true;
+                    }
+                    // A reset alone is insufficient: an ended player can also return to zero.
+                    if (sawStart && framesAtLoop < 0 && previousTime >= 1000 && time >= 0 && time < previousTime - 500)
+                        framesAtLoop = SpiralOverlay.VideoFrames;
+                    previousTime = time;
+                }
+                Assert.True(sawStart, "video did not start");
+                Assert.True(framesAtLoop >= 0, "video position did not reset");
+                Assert.True(SpiralOverlay.VideoFrames > framesAtLoop, "no frames arrived after the reset");
+                Assert.Equal(expected, SpiralOverlay.VideoRate, 2);
+            }
+            finally
+            {
+                SpiralOverlay.CloseAll(); host.Close();
+                (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize, s.GentleVisuals, s.GentleSpeed) = saved;
+                CoreSession.IsEngineRunningProvider = engine;
+                SpiralOverlay.SkipPlatformChecksForTests = checks;
+                CoreSettings.ServiceProvider = oldProvider;
             }
         });
 

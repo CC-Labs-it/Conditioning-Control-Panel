@@ -1,5 +1,6 @@
 ﻿{
   Type: ModManagerDialog,
+  SizeToContent: Height,
   WindowDecorations: None,
   WindowState: Normal,
   WindowStartupLocation: CenterOwner,
@@ -49,7 +50,7 @@
             Children: [
               {
                 Type: TextBlock,
-                FontSize: 18.0,
+                FontSize: 20.0,
                 FontWeight: Bold,
                 Foreground: {
                   Type: SolidColorBrush,
@@ -88,13 +89,13 @@
               }
             ]
           },
-          Padding: 20,12,20,12,
+          Padding: 22,14,22,14,
           Name: TitleBar
         },
         {
           Type: Grid,
           Row: 1,
-          Margin: 15,
+          Margin: 18,16,18,16,
           Children: [
             {
               Type: Border,
@@ -107,26 +108,62 @@
                   B: 53
                 }
               },
-              CornerRadius: 8,8,8,8,
+              CornerRadius: 12,12,12,12,
               Child: {
                 Type: ListBox,
                 SelectedIndex: 0,
                 SelectedItem: {
                   Type: ListBoxItem,
                   Content: {
-                    Type: StackPanel,
-                    Orientation: Horizontal,
+                    Type: DockPanel,
+                    LastChildFill: true,
                     Children: [
                       {
-                        Type: IconGlyph,
-                        Width: 16.0,
-                        VerticalAlignment: Center,
-                        Opacity: 1.0
+                        Type: TextBlock,
+                        FontSize: 10.0,
+                        FontWeight: Bold,
+                        Foreground: {
+                          Type: SolidColorBrush,
+                          Color: {
+                            A: 255,
+                            R: 127,
+                            G: 240,
+                            B: 203
+                          },
+                          Opacity: 1.0
+                        },
+                        Text: IN USE,
+                        Margin: 6,0,0,0,
+                        VerticalAlignment: Center
                       },
                       {
-                        Type: TextBlock,
-                        Text: CCP Default,
-                        VerticalAlignment: Center
+                        Type: StackPanel,
+                        Orientation: Horizontal,
+                        Children: [
+                          {
+                            Type: Ellipse,
+                            Fill: {
+                              Type: SolidColorBrush,
+                              Color: {
+                                A: 255,
+                                R: 232,
+                                G: 67,
+                                B: 147
+                              },
+                              Opacity: 1.0
+                            },
+                            Width: 10.0,
+                            Height: 10.0,
+                            Margin: 0,0,10,0,
+                            VerticalAlignment: Center
+                          },
+                          {
+                            Type: TextBlock,
+                            Text: CCP Default,
+                            TextTrimming: {},
+                            VerticalAlignment: Center
+                          }
+                        ]
                       }
                     ]
                   },
@@ -137,19 +174,55 @@
                   {
                     Type: ListBoxItem,
                     Content: {
-                      Type: StackPanel,
-                      Orientation: Horizontal,
+                      Type: DockPanel,
+                      LastChildFill: true,
                       Children: [
                         {
-                          Type: IconGlyph,
-                          Width: 16.0,
-                          VerticalAlignment: Center,
-                          Opacity: 1.0
+                          Type: TextBlock,
+                          FontSize: 10.0,
+                          FontWeight: Bold,
+                          Foreground: {
+                            Type: SolidColorBrush,
+                            Color: {
+                              A: 255,
+                              R: 127,
+                              G: 240,
+                              B: 203
+                            },
+                            Opacity: 1.0
+                          },
+                          Text: IN USE,
+                          Margin: 6,0,0,0,
+                          VerticalAlignment: Center
                         },
                         {
-                          Type: TextBlock,
-                          Text: CCP Default,
-                          VerticalAlignment: Center
+                          Type: StackPanel,
+                          Orientation: Horizontal,
+                          Children: [
+                            {
+                              Type: Ellipse,
+                              Fill: {
+                                Type: SolidColorBrush,
+                                Color: {
+                                  A: 255,
+                                  R: 232,
+                                  G: 67,
+                                  B: 147
+                                },
+                                Opacity: 1.0
+                              },
+                              Width: 10.0,
+                              Height: 10.0,
+                              Margin: 0,0,10,0,
+                              VerticalAlignment: Center
+                            },
+                            {
+                              Type: TextBlock,
+                              Text: CCP Default,
+                              TextTrimming: {},
+                              VerticalAlignment: Center
+                            }
+                          ]
                         }
                       ]
                     },
@@ -162,19 +235,55 @@
                     {
                       Type: ListBoxItem,
                       Content: {
-                        Type: StackPanel,
-                        Orientation: Horizontal,
+                        Type: DockPanel,
+                        LastChildFill: true,
                         Children: [
                           {
-                            Type: IconGlyph,
-                            Width: 16.0,
-                            VerticalAlignment: Center,
-                            Opacity: 1.0
+                            Type: TextBlock,
+                            FontSize: 10.0,
+                            FontWeight: Bold,
+                            Foreground: {
+                              Type: SolidColorBrush,
+                              Color: {
+                                A: 255,
+                                R: 127,
+                                G: 240,
+                                B: 203
+                              },
+                              Opacity: 1.0
+                            },
+                            Text: IN USE,
+                            Margin: 6,0,0,0,
+                            VerticalAlignment: Center
                           },
                           {
-                            Type: TextBlock,
-                            Text: CCP Default,
-                            VerticalAlignment: Center
+                            Type: StackPanel,
+                            Orientation: Horizontal,
+                            Children: [
+                              {
+                                Type: Ellipse,
+                                Fill: {
+                                  Type: SolidColorBrush,
+                                  Color: {
+                                    A: 255,
+                                    R: 232,
+                                    G: 67,
+                                    B: 147
+                                  },
+                                  Opacity: 1.0
+                                },
+                                Width: 10.0,
+                                Height: 10.0,
+                                Margin: 0,0,10,0,
+                                VerticalAlignment: Center
+                              },
+                              {
+                                Type: TextBlock,
+                                Text: CCP Default,
+                                TextTrimming: {},
+                                VerticalAlignment: Center
+                              }
+                            ]
                           }
                         ]
                       },
@@ -186,19 +295,55 @@
                     {
                       Type: ListBoxItem,
                       Content: {
-                        Type: StackPanel,
-                        Orientation: Horizontal,
+                        Type: DockPanel,
+                        LastChildFill: true,
                         Children: [
                           {
-                            Type: IconGlyph,
-                            Width: 16.0,
-                            VerticalAlignment: Center,
-                            Opacity: 1.0
+                            Type: TextBlock,
+                            FontSize: 10.0,
+                            FontWeight: Bold,
+                            Foreground: {
+                              Type: SolidColorBrush,
+                              Color: {
+                                A: 255,
+                                R: 127,
+                                G: 240,
+                                B: 203
+                              },
+                              Opacity: 1.0
+                            },
+                            Text: IN USE,
+                            Margin: 6,0,0,0,
+                            VerticalAlignment: Center
                           },
                           {
-                            Type: TextBlock,
-                            Text: CCP Default,
-                            VerticalAlignment: Center
+                            Type: StackPanel,
+                            Orientation: Horizontal,
+                            Children: [
+                              {
+                                Type: Ellipse,
+                                Fill: {
+                                  Type: SolidColorBrush,
+                                  Color: {
+                                    A: 255,
+                                    R: 232,
+                                    G: 67,
+                                    B: 147
+                                  },
+                                  Opacity: 1.0
+                                },
+                                Width: 10.0,
+                                Height: 10.0,
+                                Margin: 0,0,10,0,
+                                VerticalAlignment: Center
+                              },
+                              {
+                                Type: TextBlock,
+                                Text: CCP Default,
+                                TextTrimming: {},
+                                VerticalAlignment: Center
+                              }
+                            ]
                           }
                         ]
                       },
@@ -213,19 +358,55 @@
                   SelectedItem: {
                     Type: ListBoxItem,
                     Content: {
-                      Type: StackPanel,
-                      Orientation: Horizontal,
+                      Type: DockPanel,
+                      LastChildFill: true,
                       Children: [
                         {
-                          Type: IconGlyph,
-                          Width: 16.0,
-                          VerticalAlignment: Center,
-                          Opacity: 1.0
+                          Type: TextBlock,
+                          FontSize: 10.0,
+                          FontWeight: Bold,
+                          Foreground: {
+                            Type: SolidColorBrush,
+                            Color: {
+                              A: 255,
+                              R: 127,
+                              G: 240,
+                              B: 203
+                            },
+                            Opacity: 1.0
+                          },
+                          Text: IN USE,
+                          Margin: 6,0,0,0,
+                          VerticalAlignment: Center
                         },
                         {
-                          Type: TextBlock,
-                          Text: CCP Default,
-                          VerticalAlignment: Center
+                          Type: StackPanel,
+                          Orientation: Horizontal,
+                          Children: [
+                            {
+                              Type: Ellipse,
+                              Fill: {
+                                Type: SolidColorBrush,
+                                Color: {
+                                  A: 255,
+                                  R: 232,
+                                  G: 67,
+                                  B: 147
+                                },
+                                Opacity: 1.0
+                              },
+                              Width: 10.0,
+                              Height: 10.0,
+                              Margin: 0,0,10,0,
+                              VerticalAlignment: Center
+                            },
+                            {
+                              Type: TextBlock,
+                              Text: CCP Default,
+                              TextTrimming: {},
+                              VerticalAlignment: Center
+                            }
+                          ]
                         }
                       ]
                     },
@@ -236,19 +417,55 @@
                     {
                       Type: ListBoxItem,
                       Content: {
-                        Type: StackPanel,
-                        Orientation: Horizontal,
+                        Type: DockPanel,
+                        LastChildFill: true,
                         Children: [
                           {
-                            Type: IconGlyph,
-                            Width: 16.0,
-                            VerticalAlignment: Center,
-                            Opacity: 1.0
+                            Type: TextBlock,
+                            FontSize: 10.0,
+                            FontWeight: Bold,
+                            Foreground: {
+                              Type: SolidColorBrush,
+                              Color: {
+                                A: 255,
+                                R: 127,
+                                G: 240,
+                                B: 203
+                              },
+                              Opacity: 1.0
+                            },
+                            Text: IN USE,
+                            Margin: 6,0,0,0,
+                            VerticalAlignment: Center
                           },
                           {
-                            Type: TextBlock,
-                            Text: CCP Default,
-                            VerticalAlignment: Center
+                            Type: StackPanel,
+                            Orientation: Horizontal,
+                            Children: [
+                              {
+                                Type: Ellipse,
+                                Fill: {
+                                  Type: SolidColorBrush,
+                                  Color: {
+                                    A: 255,
+                                    R: 232,
+                                    G: 67,
+                                    B: 147
+                                  },
+                                  Opacity: 1.0
+                                },
+                                Width: 10.0,
+                                Height: 10.0,
+                                Margin: 0,0,10,0,
+                                VerticalAlignment: Center
+                              },
+                              {
+                                Type: TextBlock,
+                                Text: CCP Default,
+                                TextTrimming: {},
+                                VerticalAlignment: Center
+                              }
+                            ]
                           }
                         ]
                       },
@@ -264,281 +481,210 @@
                 },
                 Background: Transparent,
                 BorderThickness: 0,
-                FontSize: 13.0,
+                FontSize: 14.0,
                 Foreground: White,
                 Name: ModList
               },
-              Padding: 5,
-              Margin: 0,0,10,0
+              Padding: 6,
+              Margin: 0,0,16,0
             },
             {
-              Type: Border,
-              Background: {
-                Type: SolidColorBrush,
-                Color: {
-                  A: 255,
-                  R: 28,
-                  G: 28,
-                  B: 53
-                }
-              },
-              CornerRadius: 8,8,8,8,
-              Child: {
-                Type: ScrollViewer,
-                VerticalScrollBarVisibility: Auto,
-                Content: {
-                  Type: StackPanel,
-                  IsVisible: true,
-                  Name: DetailsPanel,
-                  Children: [
-                    {
-                      Type: TextBlock,
-                      FontSize: 20.0,
-                      FontWeight: Bold,
-                      Foreground: White,
-                      Text: CCP Default,
-                      Margin: 0,0,0,5,
-                      Name: TxtModName
+              Type: ScrollViewer,
+              VerticalScrollBarVisibility: Auto,
+              Content: {
+                Type: StackPanel,
+                IsVisible: true,
+                Name: DetailsPanel,
+                Children: [
+                  {
+                    Type: Border,
+                    Background: {
+                      Type: SolidColorBrush,
+                      Color: {
+                        A: 255,
+                        R: 46,
+                        G: 46,
+                        B: 74
+                      }
                     },
-                    {
-                      Type: TextBlock,
-                      FontSize: 12.0,
-                      Foreground: {
-                        Type: SolidColorBrush,
-                        Color: {
-                          A: 255,
-                          R: 167,
-                          G: 167,
-                          B: 193
-                        }
-                      },
-                      Text: by CC Labs,
-                      Margin: 0,0,0,3,
-                      Name: TxtModAuthor
-                    },
-                    {
-                      Type: TextBlock,
-                      FontSize: 12.0,
-                      Foreground: {
-                        Type: SolidColorBrush,
-                        Color: {
-                          A: 255,
-                          R: 167,
-                          G: 167,
-                          B: 193
-                        }
-                      },
-                      Text: v1.0.0,
-                      Margin: 0,0,0,12,
-                      Name: TxtModVersion
-                    },
-                    {
-                      Type: TextBlock,
-                      FontSize: 13.0,
-                      Foreground: Silver,
-                      Text: The neutral baseline. CCP without any mod skin applied.,
-                      TextWrapping: Wrap,
-                      Margin: 0,0,0,15,
-                      Name: TxtModDescription
-                    },
-                    {
-                      Type: Border,
-                      Background: {
-                        Type: SolidColorBrush,
-                        Color: {
-                          A: 255,
-                          R: 46,
-                          G: 46,
-                          B: 74
-                        }
-                      },
-                      CornerRadius: 8,8,8,8,
-                      Child: {
-                        Type: Image,
-                        Stretch: Uniform,
-                        MaxWidth: 260.0,
-                        MaxHeight: 146.0,
-                        Name: ImgModPreview
-                      },
-                      Padding: 6,
-                      Margin: 0,0,0,10,
-                      HorizontalAlignment: Left,
-                      IsVisible: false,
-                      Name: PreviewImagePanel
-                    },
-                    {
-                      Type: TextBlock,
-                      FontSize: 12.0,
-                      Foreground: {
-                        Type: SolidColorBrush,
-                        Color: {
-                          A: 255,
-                          R: 167,
-                          G: 167,
-                          B: 193
-                        }
-                      },
-                      TextWrapping: Wrap,
-                      Margin: 0,0,0,15,
-                      IsVisible: false,
-                      Name: TxtArtOverrides
-                    },
-                    {
-                      Type: Border,
-                      Background: {
-                        Type: SolidColorBrush,
-                        Color: {
-                          A: 255,
-                          R: 46,
-                          G: 46,
-                          B: 74
-                        }
-                      },
-                      CornerRadius: 8,8,8,8,
-                      Child: {
-                        Type: StackPanel,
-                        Children: [
-                          {
-                            Type: TextBlock,
-                            FontSize: 13.0,
-                            FontWeight: DemiBold,
-                            Foreground: #ffffb347,
-                            TextWrapping: Wrap,
-                            Name: TxtPackState
+                    CornerRadius: 12,12,12,12,
+                    Child: {
+                      Type: Grid,
+                      Children: [
+                        {
+                          Type: Image,
+                          Source: {
+                            Dpi: {
+                              X: 96.0,
+                              Y: 96.0,
+                              Length: 135.7645019878171,
+                              SquaredLength: 18432.0
+                            },
+                            Size: {
+                              AspectRatio: 1.7543859649122806,
+                              Width: 400.0,
+                              Height: 228.0
+                            },
+                            PixelSize: {
+                              AspectRatio: 1.7543859649122806,
+                              Width: 400,
+                              Height: 228
+                            },
+                            Format: {
+                              BitsPerPixel: 32
+                            },
+                            AlphaFormat: Premul
                           },
-                          {
-                            Type: TextBlock,
-                            FontSize: 11.0,
-                            Foreground: {
-                              Type: SolidColorBrush,
-                              Color: {
-                                A: 255,
-                                R: 167,
-                                G: 167,
-                                B: 193
+                          Stretch: UniformToFill,
+                          Name: ImgModPreview
+                        },
+                        {
+                          Type: Rectangle,
+                          Fill: {
+                            Type: LinearGradientBrush,
+                            StartPoint: {},
+                            EndPoint: {
+                              Point: {
+                                Y: 1.0
                               }
                             },
-                            TextWrapping: Wrap,
-                            Margin: 0,5,0,0
-                          },
-                          {
-                            Type: ProgressBar,
-                            Minimum: 0.0,
-                            Maximum: 100.0,
-                            Value: 0.0,
-                            Background: #ff252542,
-                            BorderThickness: 0,
-                            Height: 6.0,
-                            Margin: 0,10,0,0,
-                            IsVisible: false,
-                            Name: PackProgress
-                          },
-                          {
-                            Type: Button,
-                            Background: {
-                              Type: SolidColorBrush,
-                              Color: {
-                                A: 255,
-                                R: 255,
-                                G: 105,
-                                B: 180
+                            GradientStops: [
+                              {
+                                Type: GradientStop,
+                                Offset: 0.0,
+                                Color: {
+                                  A: 48,
+                                  R: 18,
+                                  G: 15,
+                                  B: 28
+                                }
+                              },
+                              {
+                                Type: GradientStop,
+                                Offset: 1.0,
+                                Color: {
+                                  A: 230,
+                                  R: 18,
+                                  G: 15,
+                                  B: 28
+                                }
                               }
-                            },
-                            FontWeight: DemiBold,
-                            Foreground: White,
-                            Margin: 0,10,0,0,
-                            HorizontalAlignment: Left,
-                            Name: BtnDownloadPack,
-                            Theme: {
-                              Type: ControlTheme
-                            }
+                            ]
                           }
-                        ]
-                      },
-                      Padding: 12,
-                      Margin: 0,0,0,15,
-                      IsVisible: false,
-                      Name: PackPanel
-                    },
-                    {
-                      Type: StackPanel,
-                      Orientation: Horizontal,
-                      Margin: 0,0,0,8,
-                      Children: [
-                        {
-                          Type: TextBlock,
-                          FontSize: 12.0,
-                          Foreground: {
-                            Type: SolidColorBrush,
-                            Color: {
-                              A: 255,
-                              R: 167,
-                              G: 167,
-                              B: 193
-                            }
-                          },
-                          Margin: 0,0,8,0,
-                          VerticalAlignment: Center
                         },
                         {
-                          Type: Border,
-                          Background: {
-                            Type: SolidColorBrush,
-                            Color: {
-                              A: 255,
-                              R: 232,
-                              G: 67,
-                              B: 147
+                          Type: Grid,
+                          Margin: 18,14,18,14,
+                          Children: [
+                            {
+                              Type: StackPanel,
+                              Margin: 0,0,12,0,
+                              VerticalAlignment: Bottom,
+                              Children: [
+                                {
+                                  Type: TextBlock,
+                                  FontSize: 28.0,
+                                  FontWeight: Bold,
+                                  Foreground: White,
+                                  Text: CCP Default,
+                                  TextTrimming: {},
+                                  Name: TxtModName
+                                },
+                                {
+                                  Type: TextBlock,
+                                  FontSize: 13.0,
+                                  Foreground: #ffd9d2ea,
+                                  Text: The neutral baseline. CCP without any mod skin applied.,
+                                  TextTrimming: {},
+                                  Margin: 0,4,0,0,
+                                  Name: TxtModDescription
+                                },
+                                {
+                                  Type: TextBlock,
+                                  FontSize: 11.0,
+                                  Foreground: #ffa9a1c0,
+                                  Text: by CC Labs  ·  v1.0.0,
+                                  Margin: 0,2,0,0,
+                                  Name: TxtModAuthor
+                                }
+                              ]
                             },
-                            Opacity: 1.0
-                          },
-                          CornerRadius: 4,4,4,4,
-                          Width: 20.0,
-                          Height: 20.0,
-                          Margin: 0,0,5,0,
-                          Name: ThemeColorPreview
-                        },
-                        {
-                          Type: TextBlock,
-                          FontSize: 12.0,
-                          Foreground: {
-                            Type: SolidColorBrush,
-                            Color: {
-                              A: 255,
-                              R: 167,
-                              G: 167,
-                              B: 193
+                            {
+                              Type: Button,
+                              Content: {
+                                Type: TextBlock
+                              },
+                              Background: {
+                                Type: SolidColorBrush,
+                                Color: {
+                                  A: 255,
+                                  R: 255,
+                                  G: 105,
+                                  B: 180
+                                }
+                              },
+                              FontSize: 15.0,
+                              FontWeight: Bold,
+                              Padding: 22,11,22,11,
+                              VerticalAlignment: Bottom,
+                              IsVisible: false,
+                              Name: BtnActivate,
+                              Theme: {
+                                Type: ControlTheme
+                              }
+                            },
+                            {
+                              Type: Border,
+                              Background: #cc1e3a2a,
+                              BorderBrush: #ff4caf50,
+                              BorderThickness: 1,
+                              CornerRadius: 16,16,16,16,
+                              Child: {
+                                Type: TextBlock,
+                                FontSize: 12.0,
+                                FontWeight: Bold,
+                                Foreground: #ff7ff0cb
+                              },
+                              Padding: 14,7,14,7,
+                              VerticalAlignment: Bottom,
+                              IsVisible: true,
+                              Name: TxtActiveIndicator
                             }
-                          },
-                          Text: #E84393,
-                          VerticalAlignment: Center,
-                          Name: TxtThemeColor
+                          ]
                         }
                       ]
                     },
-                    {
+                    Height: 120.0,
+                    Margin: 0,0,0,14,
+                    ClipToBounds: true,
+                    Name: BannerPanel
+                  },
+                  {
+                    Type: Border,
+                    Background: {
+                      Type: SolidColorBrush,
+                      Color: {
+                        A: 255,
+                        R: 28,
+                        G: 28,
+                        B: 53
+                      }
+                    },
+                    CornerRadius: 12,12,12,12,
+                    Child: {
                       Type: StackPanel,
-                      Orientation: Horizontal,
-                      Margin: 0,0,0,8,
                       Children: [
                         {
                           Type: TextBlock,
-                          FontSize: 12.0,
-                          Foreground: {
-                            Type: SolidColorBrush,
-                            Color: {
-                              A: 255,
-                              R: 167,
-                              G: 167,
-                              B: 193
-                            }
-                          },
-                          Margin: 0,0,8,0,
-                          VerticalAlignment: Center
+                          FontSize: 13.0,
+                          FontWeight: DemiBold,
+                          Foreground: #ffffb347,
+                          TextWrapping: Wrap,
+                          Name: TxtPackState
                         },
                         {
                           Type: TextBlock,
-                          FontSize: 12.0,
+                          FontSize: 11.0,
                           Foreground: {
                             Type: SolidColorBrush,
                             Color: {
@@ -548,31 +694,23 @@
                               B: 193
                             }
                           },
-                          Text: Companion,
-                          VerticalAlignment: Center,
-                          Name: TxtCompanion
-                        }
-                      ]
-                    },
-                    {
-                      Type: TextBlock,
-                      FontSize: 13.0,
-                      FontWeight: DemiBold,
-                      Foreground: #ff4caf50,
-                      Margin: 0,10,0,10,
-                      IsVisible: true,
-                      Name: TxtActiveIndicator
-                    },
-                    {
-                      Type: StackPanel,
-                      Orientation: Horizontal,
-                      Margin: 0,10,0,0,
-                      Children: [
+                          TextWrapping: Wrap,
+                          Margin: 0,5,0,0
+                        },
+                        {
+                          Type: ProgressBar,
+                          Minimum: 0.0,
+                          Maximum: 100.0,
+                          Value: 0.0,
+                          Background: #ff252542,
+                          BorderThickness: 0,
+                          Height: 6.0,
+                          Margin: 0,10,0,0,
+                          IsVisible: false,
+                          Name: PackProgress
+                        },
                         {
                           Type: Button,
-                          Content: {
-                            Type: TextBlock
-                          },
                           Background: {
                             Type: SolidColorBrush,
                             Color: {
@@ -582,85 +720,836 @@
                               B: 180
                             }
                           },
-                          Foreground: White,
-                          Margin: 0,0,10,0,
-                          IsVisible: false,
-                          Name: BtnActivate,
-                          Theme: {
-                            Type: ControlTheme
-                          }
-                        },
-                        {
-                          Type: Button,
-                          Content: {
-                            Type: TextBlock
-                          },
-                          Background: {
-                            Type: SolidColorBrush,
-                            Color: {
-                              A: 255,
-                              R: 46,
-                              G: 46,
-                              B: 74
-                            }
-                          },
-                          Foreground: #ffb084dc,
-                          Margin: 0,0,10,0,
-                          IsVisible: false,
-                          Name: BtnShare,
-                          Theme: {
-                            Type: ControlTheme
-                          }
-                        },
-                        {
-                          Type: Button,
-                          Content: {
-                            Type: TextBlock
-                          },
-                          Background: {
-                            Type: SolidColorBrush,
-                            Color: {
-                              A: 255,
-                              R: 46,
-                              G: 46,
-                              B: 74
-                            }
-                          },
-                          Foreground: #ffb084dc,
-                          Margin: 0,0,10,0,
-                          IsVisible: true,
-                          Name: BtnTubeFit,
-                          Theme: {
-                            Type: ControlTheme
-                          }
-                        },
-                        {
-                          Type: Button,
-                          Content: {
-                            Type: TextBlock
-                          },
-                          Background: {
-                            Type: SolidColorBrush,
-                            Color: {
-                              A: 255,
-                              R: 46,
-                              G: 46,
-                              B: 74
-                            }
-                          },
-                          Foreground: #ffff6b6b,
-                          IsVisible: false,
-                          Name: BtnUninstall,
+                          FontWeight: DemiBold,
+                          Margin: 0,10,0,0,
+                          HorizontalAlignment: Left,
+                          Name: BtnDownloadPack,
                           Theme: {
                             Type: ControlTheme
                           }
                         }
                       ]
-                    }
-                  ]
-                }
+                    },
+                    Padding: 14,
+                    Margin: 0,0,0,14,
+                    IsVisible: false,
+                    Name: PackPanel
+                  },
+                  {
+                    Type: CompanionPickerCard,
+                    Content: {
+                      Type: Border,
+                      Background: {
+                        Type: SolidColorBrush,
+                        Color: {
+                          A: 255,
+                          R: 40,
+                          G: 40,
+                          B: 76
+                        }
+                      },
+                      BorderBrush: {
+                        Type: SolidColorBrush,
+                        Color: {
+                          A: 64,
+                          R: 183,
+                          G: 156,
+                          B: 255
+                        }
+                      },
+                      BorderThickness: 1,
+                      CornerRadius: 12,12,12,12,
+                      Child: {
+                        Type: Grid,
+                        Children: [
+                          {
+                            Type: Border,
+                            Background: {
+                              Type: SolidColorBrush,
+                              Color: {
+                                A: 255,
+                                R: 18,
+                                G: 18,
+                                B: 32
+                              }
+                            },
+                            BorderBrush: {
+                              Type: SolidColorBrush,
+                              Color: {
+                                A: 255,
+                                R: 46,
+                                G: 46,
+                                B: 74
+                              }
+                            },
+                            BorderThickness: 1,
+                            CornerRadius: 10,10,10,10,
+                            Child: {
+                              Type: Grid,
+                              Children: [
+                                {
+                                  Type: IconGlyph,
+                                  HorizontalAlignment: Center,
+                                  VerticalAlignment: Center,
+                                  IsVisible: false,
+                                  Name: TxtPreviewGlyph
+                                },
+                                {
+                                  Type: Image,
+                                  Source: {
+                                    Dpi: {
+                                      X: 96.0,
+                                      Y: 96.0,
+                                      Length: 135.7645019878171,
+                                      SquaredLength: 18432.0
+                                    },
+                                    Size: {
+                                      AspectRatio: 0.6217616580310881,
+                                      Width: 240.0,
+                                      Height: 386.0
+                                    },
+                                    PixelSize: {
+                                      AspectRatio: 0.6217616580310881,
+                                      Width: 240,
+                                      Height: 386
+                                    },
+                                    Format: {
+                                      BitsPerPixel: 32
+                                    },
+                                    AlphaFormat: Premul
+                                  },
+                                  Stretch: Uniform,
+                                  Margin: 4,
+                                  Name: ImgPreview
+                                }
+                              ]
+                            },
+                            Width: 120.0,
+                            Height: 150.0,
+                            Margin: 0,0,18,0,
+                            VerticalAlignment: Top,
+                            ClipToBounds: true
+                          },
+                          {
+                            Type: StackPanel,
+                            Children: [
+                              {
+                                Type: StackPanel,
+                                IsVisible: true,
+                                Name: LivePanel,
+                                Children: [
+                                  {
+                                    Type: TextBlock,
+                                    Text: Companion,
+                                    Margin: 0,0,0,8,
+                                    Name: TxtLiveName,
+                                    Theme: {
+                                      Type: ControlTheme
+                                    }
+                                  },
+                                  {
+                                    Type: Grid,
+                                    Children: [
+                                      {
+                                        Type: StackPanel,
+                                        Children: [
+                                          {
+                                            Type: TextBlock,
+                                            Margin: 0,0,0,3,
+                                            Theme: {
+                                              Type: ControlTheme
+                                            }
+                                          },
+                                          {
+                                            Type: ComboBox,
+                                            SelectedIndex: -1,
+                                            Selection: {
+                                              SingleSelect: true,
+                                              SelectedIndex: -1,
+                                              AnchorIndex: -1
+                                            },
+                                            SelectionMode: Single,
+                                            Foreground: {
+                                              Type: SolidColorBrush,
+                                              Color: {
+                                                A: 255,
+                                                R: 240,
+                                                G: 240,
+                                                B: 245
+                                              }
+                                            },
+                                            IsEnabled: false,
+                                            MinHeight: 30.0,
+                                            HorizontalAlignment: Stretch,
+                                            Name: CmbAvatar,
+                                            Theme: {
+                                              Type: ControlTheme
+                                            }
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        Type: StackPanel,
+                                        Children: [
+                                          {
+                                            Type: TextBlock,
+                                            Margin: 0,0,0,3,
+                                            Theme: {
+                                              Type: ControlTheme
+                                            }
+                                          },
+                                          {
+                                            Type: ComboBox,
+                                            SelectedIndex: 0,
+                                            SelectedItem: {
+                                              Type: ComboBoxItem,
+                                              Content: Lily,
+                                              Tag: ccp-default
+                                            },
+                                            SelectedItems: [
+                                              {
+                                                Type: ComboBoxItem,
+                                                Content: Lily,
+                                                Tag: ccp-default
+                                              }
+                                            ],
+                                            Selection: {
+                                              WritableSelectedItems: [
+                                                {
+                                                  Type: ComboBoxItem,
+                                                  Content: Lily,
+                                                  Tag: ccp-default
+                                                }
+                                              ],
+                                              Source: [
+                                                {
+                                                  Type: ComboBoxItem,
+                                                  Content: Lily,
+                                                  Tag: ccp-default
+                                                },
+                                                {
+                                                  Type: ComboBoxItem,
+                                                  Content: Gentle Trainer,
+                                                  Tag: gentle-trainer
+                                                },
+                                                {
+                                                  Type: ComboBoxItem,
+                                                  Content: Strict Domme,
+                                                  Tag: strict-domme
+                                                },
+                                                {
+                                                  Type: ComboBoxItem,
+                                                  Content: Hypno Guide,
+                                                  Tag: hypno-guide
+                                                }
+                                              ],
+                                              SingleSelect: true,
+                                              SelectedIndexes: [
+                                                0
+                                              ],
+                                              SelectedItem: {
+                                                Type: ComboBoxItem,
+                                                Content: Lily,
+                                                Tag: ccp-default
+                                              },
+                                              SelectedItems: [
+                                                {
+                                                  Type: ComboBoxItem,
+                                                  Content: Lily,
+                                                  Tag: ccp-default
+                                                }
+                                              ],
+                                              Count: 1
+                                            },
+                                            SelectionMode: Single,
+                                            Foreground: {
+                                              Type: SolidColorBrush,
+                                              Color: {
+                                                A: 255,
+                                                R: 240,
+                                                G: 240,
+                                                B: 245
+                                              }
+                                            },
+                                            IsEnabled: true,
+                                            MinHeight: 30.0,
+                                            HorizontalAlignment: Stretch,
+                                            Name: CmbPersonality,
+                                            Theme: {
+                                              Type: ControlTheme
+                                            }
+                                          },
+                                          {
+                                            Type: Button,
+                                            FontSize: 11.5,
+                                            Foreground: {
+                                              Type: SolidColorBrush,
+                                              Color: {
+                                                A: 255,
+                                                R: 203,
+                                                G: 185,
+                                                B: 252
+                                              }
+                                            },
+                                            Margin: 0,5,0,0,
+                                            HorizontalAlignment: Left,
+                                            IsVisible: true,
+                                            Name: BtnMorePersonality,
+                                            Theme: {
+                                              Type: ControlTheme
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    Type: TextBlock,
+                                    Text: The companion is switched off. Turn it on to change the look.,
+                                    Margin: 0,6,0,0,
+                                    IsVisible: true,
+                                    Name: TxtAvatarHint,
+                                    Theme: {
+                                      Type: ControlTheme
+                                    }
+                                  },
+                                  {
+                                    Type: Button,
+                                    FontSize: 11.5,
+                                    Foreground: {
+                                      Type: SolidColorBrush,
+                                      Color: {
+                                        A: 255,
+                                        R: 203,
+                                        G: 185,
+                                        B: 252
+                                      }
+                                    },
+                                    Margin: 0,3,0,0,
+                                    HorizontalAlignment: Left,
+                                    IsVisible: true,
+                                    Name: BtnTurnOn,
+                                    Theme: {
+                                      Type: ControlTheme
+                                    }
+                                  },
+                                  {
+                                    Type: Border,
+                                    Background: {
+                                      Type: SolidColorBrush,
+                                      Color: {
+                                        A: 255,
+                                        R: 46,
+                                        G: 46,
+                                        B: 74
+                                      }
+                                    },
+                                    BorderBrush: {
+                                      Type: SolidColorBrush,
+                                      Color: {
+                                        A: 89,
+                                        R: 183,
+                                        G: 156,
+                                        B: 255
+                                      }
+                                    },
+                                    BorderThickness: 2,0,0,0,
+                                    CornerRadius: 10,10,10,10,
+                                    Child: {
+                                      Type: StackPanel,
+                                      Name: SamplePanel,
+                                      Children: [
+                                        {
+                                          Type: TextBlock,
+                                          FontStyle: Italic,
+                                          Text: “Back already? Good. Drop for me.”,
+                                          Margin: 0,0,0,4,
+                                          Theme: {
+                                            Type: ControlTheme
+                                          }
+                                        },
+                                        {
+                                          Type: TextBlock,
+                                          FontStyle: Italic,
+                                          Text: “Thinking again? Stop that. Empty and obedient suits you, pet.”,
+                                          Margin: 0,0,0,4,
+                                          Theme: {
+                                            Type: ControlTheme
+                                          }
+                                        }
+                                      ]
+                                    },
+                                    Padding: 14,10,14,10,
+                                    Margin: 0,10,0,0
+                                  },
+                                  {
+                                    Type: Button,
+                                    FontSize: 11.5,
+                                    Foreground: {
+                                      Type: SolidColorBrush,
+                                      Color: {
+                                        A: 255,
+                                        R: 203,
+                                        G: 185,
+                                        B: 252
+                                      }
+                                    },
+                                    Margin: 0,8,0,0,
+                                    HorizontalAlignment: Left,
+                                    IsVisible: false,
+                                    Name: BtnTubeFit,
+                                    Theme: {
+                                      Type: ControlTheme
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                Type: StackPanel,
+                                IsVisible: false,
+                                Name: PreviewPanel,
+                                Children: [
+                                  {
+                                    Type: StackPanel,
+                                    Orientation: Horizontal,
+                                    Margin: 0,0,0,6,
+                                    Children: [
+                                      {
+                                        Type: TextBlock,
+                                        VerticalAlignment: Center,
+                                        Name: TxtPreviewName,
+                                        Theme: {
+                                          Type: ControlTheme
+                                        }
+                                      },
+                                      {
+                                        Type: Border,
+                                        Background: {
+                                          Type: SolidColorBrush,
+                                          Color: {
+                                            A: 255,
+                                            R: 46,
+                                            G: 46,
+                                            B: 74
+                                          }
+                                        },
+                                        CornerRadius: 10,10,10,10,
+                                        Child: {
+                                          Type: TextBlock,
+                                          FontSize: 10.0,
+                                          FontWeight: Bold,
+                                          Foreground: {
+                                            Type: SolidColorBrush,
+                                            Color: {
+                                              A: 255,
+                                              R: 167,
+                                              G: 167,
+                                              B: 193
+                                            }
+                                          }
+                                        },
+                                        Padding: 8,3,8,3,
+                                        Margin: 10,0,0,0,
+                                        VerticalAlignment: Center
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    Type: TextBlock,
+                                    Margin: 0,0,0,8,
+                                    Name: TxtPreviewCounts,
+                                    Theme: {
+                                      Type: ControlTheme
+                                    }
+                                  },
+                                  {
+                                    Type: Border,
+                                    Background: {
+                                      Type: SolidColorBrush,
+                                      Color: {
+                                        A: 255,
+                                        R: 46,
+                                        G: 46,
+                                        B: 74
+                                      }
+                                    },
+                                    BorderBrush: {
+                                      Type: SolidColorBrush,
+                                      Color: {
+                                        A: 89,
+                                        R: 183,
+                                        G: 156,
+                                        B: 255
+                                      }
+                                    },
+                                    BorderThickness: 2,0,0,0,
+                                    CornerRadius: 10,10,10,10,
+                                    Child: {
+                                      Type: TextBlock,
+                                      FontStyle: Italic,
+                                      Name: TxtPreviewSample,
+                                      Theme: {
+                                        Type: ControlTheme
+                                      }
+                                    },
+                                    Padding: 14,10,14,10,
+                                    Margin: 0,0,0,8,
+                                    Name: PreviewSampleBorder
+                                  },
+                                  {
+                                    Type: TextBlock,
+                                    Theme: {
+                                      Type: ControlTheme
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                Type: Grid,
+                                Margin: 0,10,0,0,
+                                Name: PerkRow,
+                                Children: [
+                                  {
+                                    Type: Border,
+                                    Background: {
+                                      Type: SolidColorBrush,
+                                      Color: {
+                                        A: 255,
+                                        R: 46,
+                                        G: 46,
+                                        B: 74
+                                      }
+                                    },
+                                    CornerRadius: 11,11,11,11,
+                                    Child: {
+                                      Type: TextBlock,
+                                      FontSize: 11.0,
+                                      Foreground: {
+                                        Type: SolidColorBrush,
+                                        Color: {
+                                          A: 255,
+                                          R: 203,
+                                          G: 185,
+                                          B: 252
+                                        }
+                                      },
+                                      Text: ❀,
+                                      HorizontalAlignment: Center,
+                                      VerticalAlignment: Center,
+                                      Name: TxtPerkGlyph
+                                    },
+                                    Width: 22.0,
+                                    Height: 22.0,
+                                    VerticalAlignment: Top,
+                                    Name: PerkBadge
+                                  },
+                                  {
+                                    Type: TextBlock,
+                                    Margin: 8,0,6,0,
+                                    VerticalAlignment: Center,
+                                    Theme: {
+                                      Type: ControlTheme
+                                    }
+                                  },
+                                  {
+                                    Type: TextBlock,
+                                    Text: Pink Rush: +1% XP per point of pink filter, up to +50%.,
+                                    VerticalAlignment: Center,
+                                    Name: TxtPerk,
+                                    Theme: {
+                                      Type: ControlTheme
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                Type: Button,
+                                FontSize: 11.5,
+                                Foreground: {
+                                  Type: SolidColorBrush,
+                                  Color: {
+                                    A: 255,
+                                    R: 203,
+                                    G: 185,
+                                    B: 252
+                                  }
+                                },
+                                Margin: 30,5,0,0,
+                                HorizontalAlignment: Left,
+                                IsVisible: true,
+                                Name: BtnPerkChange,
+                                Theme: {
+                                  Type: ControlTheme
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      Padding: 16
+                    },
+                    Margin: 0,0,0,14,
+                    Name: CompanionCard
+                  },
+                  {
+                    Type: Border,
+                    Background: {
+                      Type: SolidColorBrush,
+                      Color: {
+                        A: 255,
+                        R: 28,
+                        G: 28,
+                        B: 53
+                      }
+                    },
+                    BorderBrush: {
+                      Type: SolidColorBrush,
+                      Color: {
+                        A: 255,
+                        R: 46,
+                        G: 46,
+                        B: 74
+                      }
+                    },
+                    BorderThickness: 1,
+                    CornerRadius: 12,12,12,12,
+                    Child: {
+                      Type: StackPanel,
+                      Children: [
+                        {
+                          Type: Grid,
+                          Children: [
+                            {
+                              Type: StackPanel,
+                              Children: [
+                                {
+                                  Type: TextBlock,
+                                  FontSize: 11.0,
+                                  Foreground: {
+                                    Type: SolidColorBrush,
+                                    Color: {
+                                      A: 255,
+                                      R: 167,
+                                      G: 167,
+                                      B: 193
+                                    }
+                                  },
+                                  Margin: 0,0,0,3
+                                },
+                                {
+                                  Type: ComboBox,
+                                  SelectedIndex: 0,
+                                  SelectedItem: {
+                                    Type: ComboBoxItem,
+                                    Content: Keep current,
+                                    Tag: 
+                                  },
+                                  SelectedItems: [
+                                    {
+                                      Type: ComboBoxItem,
+                                      Content: Keep current,
+                                      Tag: 
+                                    }
+                                  ],
+                                  Selection: {
+                                    WritableSelectedItems: [
+                                      {
+                                        Type: ComboBoxItem,
+                                        Content: Keep current,
+                                        Tag: 
+                                      }
+                                    ],
+                                    Source: [
+                                      {
+                                        Type: ComboBoxItem,
+                                        Content: Keep current,
+                                        Tag: 
+                                      },
+                                      {
+                                        Type: ComboBoxItem,
+                                        Content: Soft Start,
+                                        Tag: default-gentle
+                                      },
+                                      {
+                                        Type: ComboBoxItem,
+                                        Content: Easy Obedience,
+                                        Tag: default-basics
+                                      },
+                                      {
+                                        Type: ComboBoxItem,
+                                        Content: Soft Sink,
+                                        Tag: default-pink-cloud
+                                      },
+                                      {
+                                        Type: ComboBoxItem,
+                                        Content: Deeper Still,
+                                        Tag: default-deep
+                                      },
+                                      {
+                                        Type: ComboBoxItem,
+                                        Content: Total Surrender,
+                                        Tag: default-surrender
+                                      }
+                                    ],
+                                    SingleSelect: true,
+                                    SelectedIndexes: [
+                                      0
+                                    ],
+                                    SelectedItem: {
+                                      Type: ComboBoxItem,
+                                      Content: Keep current,
+                                      Tag: 
+                                    },
+                                    SelectedItems: [
+                                      {
+                                        Type: ComboBoxItem,
+                                        Content: Keep current,
+                                        Tag: 
+                                      }
+                                    ],
+                                    Count: 1
+                                  },
+                                  SelectionMode: Single,
+                                  Foreground: {
+                                    Type: SolidColorBrush,
+                                    Color: {
+                                      A: 255,
+                                      R: 240,
+                                      G: 240,
+                                      B: 245
+                                    }
+                                  },
+                                  MinHeight: 30.0,
+                                  HorizontalAlignment: Stretch,
+                                  Name: CmbDefaultSettings,
+                                  Theme: {
+                                    Type: ControlTheme
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              Type: StackPanel,
+                              Children: [
+                                {
+                                  Type: TextBlock,
+                                  FontSize: 11.0,
+                                  Foreground: {
+                                    Type: SolidColorBrush,
+                                    Color: {
+                                      A: 255,
+                                      R: 167,
+                                      G: 167,
+                                      B: 193
+                                    }
+                                  },
+                                  Margin: 0,0,0,3
+                                },
+                                {
+                                  Type: ComboBox,
+                                  SelectedIndex: 0,
+                                  SelectedItem: {
+                                    Type: ComboBoxItem,
+                                    Content: Keep current,
+                                    Tag: 
+                                  },
+                                  SelectedItems: [
+                                    {
+                                      Type: ComboBoxItem,
+                                      Content: Keep current,
+                                      Tag: 
+                                    }
+                                  ],
+                                  Selection: {
+                                    WritableSelectedItems: [
+                                      {
+                                        Type: ComboBoxItem,
+                                        Content: Keep current,
+                                        Tag: 
+                                      }
+                                    ],
+                                    Source: [
+                                      {
+                                        Type: ComboBoxItem,
+                                        Content: Keep current,
+                                        Tag: 
+                                      }
+                                    ],
+                                    SingleSelect: true,
+                                    SelectedIndexes: [
+                                      0
+                                    ],
+                                    SelectedItem: {
+                                      Type: ComboBoxItem,
+                                      Content: Keep current,
+                                      Tag: 
+                                    },
+                                    SelectedItems: [
+                                      {
+                                        Type: ComboBoxItem,
+                                        Content: Keep current,
+                                        Tag: 
+                                      }
+                                    ],
+                                    Count: 1
+                                  },
+                                  SelectionMode: Single,
+                                  Foreground: {
+                                    Type: SolidColorBrush,
+                                    Color: {
+                                      A: 255,
+                                      R: 240,
+                                      G: 240,
+                                      B: 245
+                                    }
+                                  },
+                                  MinHeight: 30.0,
+                                  HorizontalAlignment: Stretch,
+                                  Name: CmbDefaultAssets,
+                                  Theme: {
+                                    Type: ControlTheme
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              Type: Button,
+                              Content: {
+                                Type: TextBlock
+                              },
+                              Padding: 14,0,14,0,
+                              IsEnabled: false,
+                              MinHeight: 30.0,
+                              VerticalAlignment: Bottom,
+                              Name: BtnQuickLinkLayout,
+                              Theme: {
+                                Type: ControlTheme
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          Type: TextBlock,
+                          FontSize: 11.0,
+                          Foreground: {
+                            Type: SolidColorBrush,
+                            Color: {
+                              A: 255,
+                              R: 167,
+                              G: 167,
+                              B: 193
+                            }
+                          },
+                          TextWrapping: Wrap,
+                          Margin: 0,6,0,0
+                        }
+                      ]
+                    },
+                    Padding: 14,10,14,10
+                  }
+                ]
               },
-              Padding: 20
+              MaxHeight: 620.0
             }
           ]
         },
@@ -677,118 +1566,164 @@
           },
           CornerRadius: 0,0,12,12,
           Child: {
-            Type: StackPanel,
-            Orientation: Horizontal,
-            HorizontalAlignment: Center,
+            Type: Grid,
             Children: [
               {
-                Type: Button,
-                Content: {
-                  Type: IconLabel,
-                  Spacing: 6.0,
-                  Orientation: Horizontal,
-                  Children: [
-                    {
-                      Type: IconGlyph,
-                      VerticalAlignment: Center
+                Type: StackPanel,
+                Orientation: Horizontal,
+                HorizontalAlignment: Left,
+                Children: [
+                  {
+                    Type: Button,
+                    Content: {
+                      Type: IconLabel,
+                      Spacing: 6.0,
+                      Orientation: Horizontal,
+                      Children: [
+                        {
+                          Type: IconGlyph,
+                          VerticalAlignment: Center
+                        },
+                        {
+                          Type: TextBlock,
+                          Text: Get Mods,
+                          VerticalAlignment: Center,
+                          IsVisible: true
+                        }
+                      ]
                     },
-                    {
-                      Type: TextBlock,
-                      Text: Get Mods,
-                      VerticalAlignment: Center,
-                      IsVisible: true
+                    FontSize: 13.0,
+                    Padding: 16,9,16,9,
+                    Margin: 0,0,10,0,
+                    Name: BtnBrowseCatalogue,
+                    Theme: {
+                      Type: ControlTheme
                     }
-                  ]
-                },
-                Background: {
-                  Type: SolidColorBrush,
-                  Color: {
-                    A: 255,
-                    R: 46,
-                    G: 46,
-                    B: 74
+                  },
+                  {
+                    Type: Button,
+                    Content: {
+                      Type: TextBlock
+                    },
+                    Background: Transparent,
+                    BorderBrush: {
+                      Type: SolidColorBrush,
+                      Color: {
+                        A: 255,
+                        R: 255,
+                        G: 105,
+                        B: 180
+                      }
+                    },
+                    BorderThickness: 1,
+                    FontSize: 13.0,
+                    FontWeight: Bold,
+                    Foreground: {
+                      Type: SolidColorBrush,
+                      Color: {
+                        A: 255,
+                        R: 255,
+                        G: 105,
+                        B: 180
+                      }
+                    },
+                    Padding: 16,9,16,9,
+                    Name: BtnCreate,
+                    Theme: {
+                      Type: ControlTheme
+                    }
                   }
-                },
-                Foreground: #ffb084dc,
-                Margin: 0,0,10,0,
-                Name: BtnBrowseCatalogue,
-                Theme: {
-                  Type: ControlTheme
-                }
+                ]
               },
               {
                 Type: Button,
                 Content: {
-                  Type: TextBlock
+                  Type: TextBlock,
+                  Text: ...
                 },
-                Background: {
-                  Type: SolidColorBrush,
-                  Color: {
-                    A: 255,
-                    R: 46,
-                    G: 46,
-                    B: 74
-                  }
+                FontSize: 14.0,
+                Padding: 14,6,14,6,
+                ContextMenu: {
+                  Type: ContextMenu,
+                  Placement: Top,
+                  SelectedIndex: -1,
+                  Selection: {
+                    Source: [
+                      {
+                        Type: MenuItem,
+                        SelectedIndex: -1,
+                        Selection: {
+                          SingleSelect: true,
+                          SelectedIndex: -1,
+                          AnchorIndex: -1
+                        },
+                        SelectionMode: Single,
+                        Name: BtnInstall
+                      },
+                      {
+                        Type: MenuItem,
+                        SelectedIndex: -1,
+                        Selection: {
+                          SingleSelect: true,
+                          SelectedIndex: -1,
+                          AnchorIndex: -1
+                        },
+                        SelectionMode: Single,
+                        Name: BtnExport
+                      },
+                      {
+                        Type: Separator,
+                        IsVisible: false,
+                        Name: SepModActions
+                      },
+                      {
+                        Type: MenuItem,
+                        SelectedIndex: -1,
+                        Selection: {
+                          SingleSelect: true,
+                          SelectedIndex: -1,
+                          AnchorIndex: -1
+                        },
+                        SelectionMode: Single,
+                        IsVisible: false,
+                        Name: BtnShare
+                      },
+                      {
+                        Type: MenuItem,
+                        SelectedIndex: -1,
+                        Selection: {
+                          SingleSelect: true,
+                          SelectedIndex: -1,
+                          AnchorIndex: -1
+                        },
+                        SelectionMode: Single,
+                        IsVisible: false,
+                        Name: BtnUninstall
+                      }
+                    ],
+                    SingleSelect: true,
+                    SelectedIndex: -1,
+                    AnchorIndex: -1
+                  },
+                  SelectionMode: Single,
+                  Name: MoreMenu
                 },
-                Foreground: White,
-                Margin: 0,0,10,0,
-                Name: BtnInstall,
-                Theme: {
-                  Type: ControlTheme
-                }
-              },
-              {
-                Type: Button,
-                Content: {
-                  Type: TextBlock
-                },
-                Background: {
-                  Type: SolidColorBrush,
-                  Color: {
-                    A: 255,
-                    R: 46,
-                    G: 46,
-                    B: 74
-                  }
-                },
-                Foreground: White,
-                Margin: 0,0,10,0,
-                Name: BtnExport,
-                Theme: {
-                  Type: ControlTheme
-                }
-              },
-              {
-                Type: Button,
-                Content: {
-                  Type: TextBlock
-                },
-                Background: {
-                  Type: SolidColorBrush,
-                  Color: {
-                    A: 255,
-                    R: 255,
-                    G: 105,
-                    B: 180
-                  }
-                },
-                FontWeight: DemiBold,
-                Foreground: White,
-                Margin: 0,0,10,0,
-                Name: BtnCreate,
+                HorizontalAlignment: Right,
+                Name: BtnMore,
                 Theme: {
                   Type: ControlTheme
                 }
               }
             ]
           },
-          Padding: 15,10,15,10
+          Padding: 18,12,18,12
         }
       ]
     }
   },
   Background: Transparent,
-  Width: 700.0,
-  Height: 500.0,
+  Width: 860.0,
+  Height: 698.0,
+  MinHeight: 580.0,
   IsVisible: true
 }
