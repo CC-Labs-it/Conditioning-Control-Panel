@@ -42,6 +42,17 @@ public sealed class SheListeningCommandRowsTests
             Assert.DoesNotContain(unavailable, PhraseText(phrases));
         });
 
+    [Fact]
+    public void WakeStatusDoesNotPromiseUnsupportedModel()
+        => AvaloniaTestDispatcher.Run(() =>
+        {
+            var tab = new SheListeningTabView();
+            Assert.Equal("The optional wake engine is not available in this version. Using the built-in recognizer.",
+                tab.TxtSL_WakeEngineStatus.Text);
+            var tooltip = ToolTip.GetTip(tab.TxtSL_WakeEngineStatus.Parent!.Parent as Control);
+            Assert.Contains("not available", Assert.IsType<string>(tooltip));
+        });
+
     private static string PhraseText(TextBlock block) => block.Inlines?.Count > 0
         ? string.Concat(block.Inlines.OfType<Run>().Select(r => r.Text)) : block.Text ?? "";
 
