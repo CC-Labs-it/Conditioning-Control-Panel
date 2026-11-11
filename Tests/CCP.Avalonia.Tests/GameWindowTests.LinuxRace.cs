@@ -70,16 +70,16 @@ public sealed partial class GameWindowTests
     }, room: "abcdef123456");
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void LinuxShell_StartFailureShowsTheCardSayingSo(bool diesBeforeLoading) => RunGlassroad((_, _, _) =>
+    [InlineData(0)]
+    [InlineData(1)] [InlineData(2)]
+    public void LinuxShell_StartFailureShowsTheCardSayingSo(int mode) => RunGlassroad((_, _, _) =>
     {
         if (!OperatingSystem.IsLinux()) return;
-        var oldLaunch = GameWindow.LaunchRaceShell;
+        var oldLaunch = GameWindow.LaunchRaceShell; LinuxRaceHost ClosedInput(GameWindow w) { var p = Process.Start(new ProcessStartInfo("/usr/bin/setsid", "/bin/sleep 60") { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true })!; p.StandardInput.Close(); var host = new LinuxRaceHost(w, p); host.Send(new { type = "launch" }); return host.StartReading(); }
         try
         {
             GameWindow.UseLinuxRaceCard = () => true;
-            GameWindow.LaunchRaceShell = (w, _) => diesBeforeLoading ? new LinuxRaceHost(w, LinuxRaceHostTests.StartCat("/bin/true")).StartReading()
+            GameWindow.LaunchRaceShell = (w, _) => mode == 2 ? ClosedInput(w) : mode == 1 ? new LinuxRaceHost(w, LinuxRaceHostTests.StartCat("/bin/true")).StartReading()
                 : throw new System.ComponentModel.Win32Exception("setsid unavailable");
             GameWindow.Launch(GameWindow.GlassroadId);
             GameWindow? card = null;

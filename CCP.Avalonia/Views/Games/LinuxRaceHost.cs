@@ -25,7 +25,7 @@ internal sealed class LinuxRaceHost : IDisposable
     private readonly object _writeLock = new();
     private Task _writes = Task.CompletedTask;
     private int _closed; private long _lastEscape; private bool _escapeHeld, _disposed;
-    private volatile string? _displayBackend; private volatile bool _backendKnown, _loaded;
+    private volatile string? _displayBackend; private volatile bool _backendKnown, _loaded, _startFailed;
     private readonly Func<bool> _x11Listening;
     internal bool InFront { get; private set; }
     internal bool IsAlive => Volatile.Read(ref _closed) == 0;
@@ -86,7 +86,7 @@ internal sealed class LinuxRaceHost : IDisposable
             finally
             {
                 // Ended on its own before any page loaded: the engine did not start (B2 section 1), not a closed race.
-                bool startFailed = IsAlive && !_loaded;
+                bool startFailed = (IsAlive || _startFailed) && !_loaded;
                 Kill(); Dispatcher.UIThread.Post(() => Dispose(startFailed));
             }
         });
@@ -156,7 +156,7 @@ internal sealed class LinuxRaceHost : IDisposable
         lock (_writeLock) _writes = _writes.ContinueWith(_ =>
         {
             try { if (IsAlive) { _process.StandardInput.WriteLine(json.ToString(Formatting.None)); _process.StandardInput.Flush(); } }
-            catch { Kill(); Dispatcher.UIThread.Post(Dispose); }
+            catch { _startFailed = IsAlive && !_loaded; Kill(); Dispatcher.UIThread.Post(() => Dispose(_startFailed)); }
         });
     }
     [DllImport("libc", SetLastError = true)] private static extern int kill(int pid, int signal);
