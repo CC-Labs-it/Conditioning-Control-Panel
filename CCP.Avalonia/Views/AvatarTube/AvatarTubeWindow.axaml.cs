@@ -1202,16 +1202,20 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// </summary>
         public void GigglePriority(string text, bool playSound = true, bool aiGenerated = true,
                                    string? phraseAudioPath = null, bool barkVoice = false,
-                                   string? mood = null, Action? onSpoken = null, bool unprompted = false)
+                                   string? mood = null, Action? onSpoken = null, bool unprompted = false,
+                                   [System.Runtime.CompilerServices.CallerFilePath] string callerFile = "",
+                                   [System.Runtime.CompilerServices.CallerMemberName] string callerMember = "")
         {
             // onSpoken: fires once her voiced clip has finished (at once when nothing plays) - the
             // spoken mantra holds the mic shut on it so the recognizer never hears her (SpokenMantra).
             if (_isPlayingUninterruptibleClip) { onSpoken?.Invoke(); return; }
+            var who = ConditioningControlPanel.Services.Audio.RecentSounds.DuckCaller(callerFile, callerMember);
             RunOnAvatar(() =>
             {
+                Log.Debug("Priority speech, queue cleared ({Chars} chars, from {Caller}, unprompted={Unprompted})", (text ?? "").Length, who, unprompted);
                 ClearSpeechQueue();   // WPF Speech.cs:345-350: the priority line drops the queue
                 _isGiggling = false;
-                ShowSpeech(text, playSound, aiGenerated, phraseAudioPath, barkVoice, preset: false, onSpoken, unprompted);
+                ShowSpeech(text, playSound, aiGenerated, phraseAudioPath, barkVoice, preset: false, onSpoken, unprompted, soundCaller: who);
             });
         }
 
@@ -1299,7 +1303,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal bool NextPresetGiggleSound() => ++_presetGiggleCounter % 5 == 0;
 
         private void ShowSpeech(string text, bool playSound, bool aiGenerated, string? phraseAudioPath,
-                                bool barkVoice, bool preset, Action? onSpoken = null, bool unprompted = false, bool trigger = false)
+                                bool barkVoice, bool preset, Action? onSpoken = null, bool unprompted = false, bool trigger = false, string? soundCaller = null)
         {
             RestartIdleTimer();
                 if (!trigger) CancelTriggerAnimation(); // a newer line owns the bubble
@@ -1344,7 +1348,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
                     // Mute silences her VOICE and keeps the text (#445) - a muted companion that
                     // also stopped showing bubbles read as completely broken.
-                    if (!IsMuted && MayVoice(unprompted)) { (SpeechAudioPlayer ?? PlaySpeechAudio)(playSound, phraseAudioPath, barkVoice, spoken); spokenHandled = true; }
+                    if (!IsMuted && MayVoice(unprompted)) { if (SpeechAudioPlayer is { } player) player(playSound, phraseAudioPath, barkVoice, spoken); else PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, spoken, soundCaller); spokenHandled = true; }
 
                     SyncAskButtonsFor(text);
                     _txtSpeech.Text = text;
@@ -1497,7 +1501,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 App.Sessions?.IsPaused == true || CoreSession.IsSessionPaused, CoreSettings.Current.CompanionSpeaksIdleWhenEngineOff,
                 ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced());
 
-        private void PlaySpeechAudio(bool playSound, string? phraseAudioPath, bool barkVoice, Action? onSpoken = null)
+        private void PlaySpeechAudio(bool playSound, string? phraseAudioPath, bool barkVoice, Action? onSpoken = null, string? soundCaller = null)
         {
             var handedOff = false;
             try
@@ -1510,7 +1514,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 {
                     if (barkVoice && CoreSettings.Current.CompanionVoiceLinesMuted)
                     {
-                        PlayGiggleSound(curved);
+                        PlayGiggleSound(curved, soundCaller);
                         return;
                     }
                     if (!File.Exists(phraseAudioPath)) return;
@@ -1523,7 +1527,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     return;
                 }
 
-                if (playSound) PlayGiggleSound(curved);
+                if (playSound) PlayGiggleSound(curved, soundCaller);
             }
             catch (Exception ex) { Log.Debug("AvatarTube speech audio failed: {Error}", ex.Message); }
             finally { if (!handedOff) onSpoken?.Invoke(); }
@@ -1538,7 +1542,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// than a bogus path handed to the audio service, which is WPF's own behaviour for
         /// giggle6 (it ships as .wav, and the shipped-file lookup only ever asks for .mp3).</para>
         /// </summary>
-        private void PlayGiggleSound(float curvedVolume)
+        private void PlayGiggleSound(float curvedVolume, string? soundCaller)
         {
             if (CoreMods.ActiveModId.Contains("bambi", StringComparison.OrdinalIgnoreCase)) return;
 
@@ -1547,7 +1551,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                        ?? System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "sounds", name);
             if (!File.Exists(path)) return;
             _stopSpoken();   // as above: one clip at a time, so panic's single stop reaches it
-            _stopSpoken = CoreAudio.PlayStoppable(path, curvedVolume * 0.7f, "giggle");
+            _stopSpoken = CoreAudio.PlayStoppable(path, curvedVolume * 0.7f, string.IsNullOrEmpty(soundCaller) ? "giggle" : "giggle (" + soundCaller + ")");
         }
 
         // =========================================================================================
