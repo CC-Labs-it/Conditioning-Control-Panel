@@ -584,11 +584,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 bmp => { if (ReferenceEquals(player, _player)) foreach (var w in _allWindows) w._videoImage.Source = bmp; },
                 () => { if (ReferenceEquals(player, _player)) foreach (var w in _allWindows) w._videoImage.InvalidateVisual(); });
             // LibVLC raises these on its own thread; the game is torn down only on the UI thread.
-            player.Playing += (_, _) => MarkWatchPlaying();
-            player.TimeChanged += (_, a) => NoteWatchPosition(a.Time / 1000.0);
+            BindPlaybackEvents(new VlcBubbleCountEvents(player), () => ReferenceEquals(player, _player));
             player.LengthChanged += (_, a) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) AdoptRealDuration(a.Length / 1000.0); });
-            player.EndReached += (_, _) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) OnVideoEnded(); });
-            player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) OnVideoEnded(); });
             var onPlaying = NativePlayingHandler(player);
             player.Playing += (_, _) => onPlaying();
             // WPF 7.2.2 a0b6d5779 (#1549): the primary video names itself in the recent-sounds ring;
@@ -737,6 +734,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var player = _player;
                 if (player != null) _ = QueueNativeStop(player, player.Stop);
             }
+        }
+
+        // The real player and the deterministic test source share the same event subscriptions.
+        internal void BindPlaybackEvents(IBubbleCountPlaybackEvents events, Func<bool> isCurrent)
+        {
+            events.Playing += MarkWatchPlaying;
+            events.TimeChanged += NoteWatchPosition;
+            events.Ended += () => Dispatcher.UIThread.Post(() => { if (isCurrent()) OnVideoEnded(); });
         }
 
         private static Task StopPlayer()
@@ -1131,6 +1136,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// above older bubbles and other topmost windows. Windows uses the same native raise here.
     /// X11 keeps its owner-relative restack. Both backends also make the bubble click-through.
     /// </summary>
+    internal interface IBubbleCountPlaybackEvents
+    {
+        event Action? Playing;
+        event Action<double>? TimeChanged;
+        event Action? Ended;
+    }
+
+    internal sealed class VlcBubbleCountEvents : IBubbleCountPlaybackEvents
+    {
+        public event Action? Playing;
+        public event Action<double>? TimeChanged;
+        public event Action? Ended;
+
+        internal VlcBubbleCountEvents(MediaPlayer player)
+        {
+            player.Playing += (_, _) => Playing?.Invoke();
+            player.TimeChanged += (_, args) => TimeChanged?.Invoke(args.Time / 1000.0);
+            player.EndReached += (_, _) => Ended?.Invoke();
+            player.EncounteredError += (_, _) => Ended?.Invoke();
+        }
+    }
+
     internal class CountBubble : IDisposable
     {
         private readonly Window _window;

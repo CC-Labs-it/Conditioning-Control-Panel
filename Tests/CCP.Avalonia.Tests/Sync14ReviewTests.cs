@@ -54,8 +54,8 @@ public class Sync14ReviewTests
         while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "CCP.Avalonia"))) dir = dir.Parent;
         Assert.NotNull(dir);
         var source = File.ReadAllText(Path.Combine(dir!.FullName, "CCP.Avalonia", "Views", "Windows", "BubbleCountWindow.axaml.cs"));
-        Assert.Contains("player.Playing += (_, _) => MarkWatchPlaying()", source);
-        Assert.Contains("player.TimeChanged += (_, a) => NoteWatchPosition", source);
+        Assert.Contains("events.Playing += MarkWatchPlaying", source);
+        Assert.Contains("events.TimeChanged += NoteWatchPosition", source);
         Assert.Matches(@"case ""playing"":\s*MarkWatchPlaying\(\)", source);
         Assert.Contains("if (_isPrimary) CreditWatchTime();", source);
         Assert.Contains("primary?.CreditWatchTime();", source);
