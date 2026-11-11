@@ -104,6 +104,34 @@ public sealed class BrowserMediaTakeoverTests
         finally { CoreSettings.Current.VideoMaxDurationSeconds = oldCap; host.ScriptInvoker = null; }
     });
 
+    [Theory]
+    [InlineData(300, 45)]
+    [InlineData(5, 30)]
+    public void AvatarLinkDurationChangesKeepEarliestHardStop(double nextDuration, int expectedSeconds) => WithDesktopBrowser(host =>
+    {
+        var tab = MainShellWindow.Current!.Named<SettingsTabView>("SettingsTab")!;
+        var clock = new BubbleCountQueueTests.Clock();
+        var scripts = new List<string>();
+        tab.BrowserMediaClock = () => clock.GetUtcNow().UtcDateTime;
+        tab.ScheduleBrowserMediaRecovery = (action, delay) =>
+            clock.CreateTimer(_ => action(), null, delay, System.Threading.Timeout.InfiniteTimeSpan);
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
+        try
+        {
+            tab.ClaimAvatarLink();
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\",\"dur\":30}");
+            clock.Advance(TimeSpan.FromSeconds(10));
+            host.OnWebMessage($"{{\"type\":\"ccpMedia\",\"state\":\"progress\",\"dur\":{nextDuration}}}");
+            clock.Advance(TimeSpan.FromSeconds(expectedSeconds - 10) - TimeSpan.FromTicks(1));
+            Assert.True(tab.BrowserMediaTakeover);
+            Assert.Empty(scripts);
+            clock.Advance(TimeSpan.FromTicks(1));
+            Assert.False(tab.BrowserMediaTakeover);
+            Assert.Equal(new[] { SettingsTabView.BrowserMediaRecoveryScript }, scripts);
+        }
+        finally { host.ScriptInvoker = null; }
+    });
+
     [Fact]
     public void NavigationAndMediaReportsDeferScheduledTakeoverUntilPlaybackStops()
     {

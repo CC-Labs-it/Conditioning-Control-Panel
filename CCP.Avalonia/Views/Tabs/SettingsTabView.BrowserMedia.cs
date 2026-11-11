@@ -20,6 +20,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private DispatcherTimer? _browserMediaWatchdog;
         private double _browserMediaDuration;
         private IDisposable? _browserMediaRecovery;
+        private DateTime? _browserTakeoverDeadline;
         private int _browserMediaRecoveryGeneration;
         private Action? _browserDeferredVideo;
         private bool _waitingForInteractionWindows;
@@ -220,11 +221,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void ArmBrowserMediaRecovery()
         {
-            CancelBrowserMediaRecovery();
             var seconds = BrowserMediaTakeover
                 ? (_browserMediaDuration > 0 ? Math.Min(3600, _browserMediaDuration + 15) : 3600)
                 : (_browserMediaDuration > 0 ? Math.Max(300, _browserMediaDuration + 45) : 3630);
             var delay = TimeSpan.FromSeconds(Math.Min(seconds, TimeSpan.MaxValue.TotalSeconds - 1));
+            // WPF BrowserMediaService.cs:458-490 leaves earlier takeover timers alive.
+            var deadline = BrowserMediaTakeover ? BrowserMediaClock() + delay : (DateTime?)null;
+            if (deadline.HasValue && _browserTakeoverDeadline is DateTime earlier && earlier <= deadline.Value) return;
+            CancelBrowserMediaRecovery();
+            _browserTakeoverDeadline = deadline;
             var generation = _browserMediaRecoveryGeneration;
             _browserMediaRecovery = ScheduleBrowserMediaRecovery(() =>
             {
@@ -244,6 +249,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void CancelBrowserMediaRecovery()
         {
             _browserMediaRecoveryGeneration++;
+            _browserTakeoverDeadline = null;
             _browserMediaRecovery?.Dispose();
             _browserMediaRecovery = null;
         }
