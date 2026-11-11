@@ -15,6 +15,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
@@ -70,9 +71,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     ///   <item><b>The browser preview.</b> Real: the https pre-flight, a per-navigation host
     ///         fence, and the page's own &lt;video&gt; driven and read back through
     ///         <c>WebHost.InvokeScriptAsync</c>, so duration, playhead, play/pause and seek
-    ///         describe the video rather than a free-running timer. One thing WPF had is NOT
-    ///         reproduced and it WIDENS what it allowed: there is no per-instance user-data
-    ///         folder, so the preview shares a cookie jar with every other WebHost. Stubbed because NativeWebView has no counterpart at
+    ///         describe the video rather than a free-running timer. The preview has an isolated
+    ///         user-data folder. Stubbed because NativeWebView has no counterpart at
     ///         all: ZoomFactor, ContainsFullScreenElementChanged (and the fullscreen reparent it
     ///         drove), and AddScriptToExecuteOnDocumentCreatedAsync.</item>
     ///   <item><b>Win32.</b> <c>WindowChromeHelper.ApplyDarkTitleBar</c> (DwmSetWindowAttribute),
@@ -255,6 +255,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         public DeeperEditorWindow(Enhancement enhancement, string? filePath)
         {
             InitializeComponent(); // generated: loads the XAML and fills the x:Name fields
+            BrowserPreview.EnvironmentRequested += ConfigurePreviewEnvironment;
 
             // ponytail: needs WindowChromeHelper.ApplyDarkTitleBar (DwmSetWindowAttribute) and
             // RestoreOwnerOnClose. The title-bar tint has no Linux equivalent short of
@@ -746,18 +747,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// Remote https preview. WPF built a WebView2 environment in its own user-data folder,
         /// gated navigation on <c>DeeperConfig.PreviewHostAllowlist</c>, injected a
         /// document-created script that posted the &lt;video&gt;'s currentTime back over
-        /// WebMessage, and handled fullscreen. Two of those four cross.
+        /// WebMessage, and handled fullscreen. The profile, fence and time source cross.
         ///
         /// <para><b>The fence crosses.</b> <c>WebHost.AllowNavigation</c> runs for every navigation
         /// the engine starts - the first hop and every redirect, link and script-driven hop after
         /// it - which is what NavigationStarting was for, and it applies the same rule
         /// (<see cref="DeeperPreview.IsAllowedPreviewHost"/>).</para>
         ///
-        /// <para><b>The profile does not.</b> WPF gave this preview its own
-        /// <c>browser_data_deeper_editor</c> folder so a hostile page could not read the main
-        /// browser tab's signed-in cookies. NativeWebView takes no per-instance data directory, so
-        /// the preview shares the process cookie jar with every other WebHost on this head. There
-        /// is no line of code here to point at; it is a capability the wrapper does not have.</para>
+        /// <para><b>The profile crosses.</b> The preview has its own
+        /// <c>browser_data_deeper_editor</c> data and cache directories.</para>
         ///
         /// <para><b>The time source crosses.</b> No document-created injection exists, but
         /// <c>WebHost.InvokeScriptAsync</c> does, so <see cref="PollBrowserTimeAsync"/> reads
@@ -3076,14 +3074,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             return true; // discard
         }
 
-        private static string FormatTime(double seconds)
+        // WPF DeeperEditorWindow.xaml.cs:495: isolate the editor's untrusted preview.
+        private static void ConfigurePreviewEnvironment(WebViewEnvironmentRequestedEventArgs e)
         {
-            if (seconds < 0 || double.IsNaN(seconds)) seconds = 0;
-            var ts = TimeSpan.FromSeconds(seconds);
-            return ts.TotalHours >= 1
-                ? $"{(int)ts.TotalHours}:{ts.Minutes:D2}:{ts.Seconds:D2}"
-                : $"{ts.Minutes}:{ts.Seconds:D2}";
+            var folder = System.IO.Path.Combine(CorePaths.UserData, "browser_data_deeper_editor");
+            System.IO.Directory.CreateDirectory(folder);
+            switch (e)
+            {
+                case WindowsWebView2EnvironmentRequestedEventArgs win:
+                    win.UserDataFolder = folder;
+                    break;
+                case GtkWebViewEnvironmentRequestedEventArgs gtk:
+                    gtk.BaseDataDirectory = folder;
+                    gtk.BaseCacheDirectory = System.IO.Path.Combine(folder, "cache");
+                    break;
+                case LinuxWpeWebViewEnvironmentRequestedEventArgs wpe:
+                    wpe.DataDirectory = folder;
+                    wpe.CacheDirectory = System.IO.Path.Combine(folder, "cache");
+                    break;
+            }
         }
+
+        private static string FormatTime(double seconds) => FormatTransportTime(seconds);
 
         // ---------------------------------------------------------------------------------
         // Window lifecycle

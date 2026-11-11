@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
@@ -57,6 +58,43 @@ public sealed class DeeperRowsTests
         return Task.CompletedTask;
     });
 
+    [Theory]
+    [InlineData(typeof(WindowsWebView2EnvironmentRequestedEventArgs))]
+    [InlineData(typeof(GtkWebViewEnvironmentRequestedEventArgs))]
+    [InlineData(typeof(LinuxWpeWebViewEnvironmentRequestedEventArgs))]
+    public Task EditorPreviewUsesIsolatedProfile(Type type) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var editor = new DeeperEditorWindow(new Enhancement(), null);
+        try
+        {
+            var field = typeof(ConditioningControlPanel.Avalonia.Views.Controls.WebHost).GetField("EnvironmentRequested", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            var callback = Assert.IsType<Action<WebViewEnvironmentRequestedEventArgs>>(field.GetValue(editor.BrowserPreview));
+            var args = (WebViewEnvironmentRequestedEventArgs)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(type);
+            callback(args);
+            var folder = Path.Combine(CorePaths.UserData, "browser_data_deeper_editor");
+            Assert.NotEqual(ConditioningControlPanel.Avalonia.Platform.WebViewProfile.Folder, folder);
+            switch (args)
+            {
+                case WindowsWebView2EnvironmentRequestedEventArgs win: Assert.Equal(folder, win.UserDataFolder); break;
+                case GtkWebViewEnvironmentRequestedEventArgs gtk:
+                    Assert.Equal(folder, gtk.BaseDataDirectory); Assert.Equal(Path.Combine(folder, "cache"), gtk.BaseCacheDirectory); break;
+                case LinuxWpeWebViewEnvironmentRequestedEventArgs wpe:
+                    Assert.Equal(folder, wpe.DataDirectory); Assert.Equal(Path.Combine(folder, "cache"), wpe.CacheDirectory); break;
+            }
+        }
+        finally { editor.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public void EditorTransportIncludesTenths()
+    {
+        var format = typeof(DeeperEditorWindow).GetMethod("FormatTime", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        Assert.Equal("1:23.4", format.Invoke(null, new object[] { 83.46 }));
+        Assert.Equal("1:00:00.0", format.Invoke(null, new object[] { 3600.0 }));
+    }
+
     private sealed class FakeAudio : IDeeperLocalAudio
     {
         public bool Playing, Disposed, Rejects;
@@ -89,7 +127,7 @@ public sealed class DeeperRowsTests
             Dispatcher.UIThread.RunJobs();
             await editor._waveformLoad!.WaitAsync(TimeSpan.FromSeconds(10));
             Dispatcher.UIThread.RunJobs();
-            Assert.Equal("1:35", editor.TxtTotalTime.Text);   // duration from the transport
+            Assert.Equal("1:35.0", editor.TxtTotalTime.Text);   // duration from the transport
 
             Click(editor.BtnPlayPause);
             Assert.True(fake.Playing);
@@ -99,8 +137,8 @@ public sealed class DeeperRowsTests
             fake.PositionSeconds = 30;
             fake.DurationSeconds = 100;
             Invoke(editor, "PlayheadTimer_Tick", null, EventArgs.Empty);
-            Assert.Equal("0:30", editor.TxtCurrentTime.Text);
-            Assert.Equal("1:40", editor.TxtTotalTime.Text);
+            Assert.Equal("0:30.0", editor.TxtCurrentTime.Text);
+            Assert.Equal("1:40.0", editor.TxtTotalTime.Text);
             Invoke(editor, "SeekToFraction", 0.5);              // a timeline click seeks the clip
             Assert.Equal(50, fake.PositionSeconds);
 
@@ -113,7 +151,7 @@ public sealed class DeeperRowsTests
             fake.End();
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(IconKind.Play, editor.PlayPauseGlyph.Kind);
-            Assert.Equal("0:00", editor.TxtCurrentTime.Text);
+            Assert.Equal("0:00.0", editor.TxtCurrentTime.Text);
 
             // A start the transport rejects leaves the editor stopped, and the next press tries again.
             fake.Rejects = true;
@@ -181,7 +219,7 @@ public sealed class DeeperRowsTests
             if (playbackAvailable) Assert.Equal(playbackDuration, audio!.DurationSeconds);
             else Assert.Null(audio);
             Assert.Equal(95d, (double)typeof(DeeperEditorWindow).GetField("_totalSeconds", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(editor)!);
-            Assert.Equal("1:35", editor.TxtTotalTime.Text);
+            Assert.Equal("1:35.0", editor.TxtTotalTime.Text);
             if (!decodeFails) Assert.NotEmpty((System.Collections.IEnumerable)typeof(DeeperEditorWindow).GetField("_rulerVisuals", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(editor)!);
         }
         finally
