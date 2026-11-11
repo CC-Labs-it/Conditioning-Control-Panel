@@ -78,7 +78,7 @@ internal abstract class PossessionEffectBase : IPossessionEffect
         }
     }
 
-    protected async Task ChargeAndPossessAsync(Control element, CancellationToken ct)
+    protected async Task ChargeAndPossessAsync(Control element, CancellationToken ct, string? name = null)
     {
         if (_charged || Context == null) return;
         _charged = true;
@@ -86,7 +86,7 @@ internal abstract class PossessionEffectBase : IPossessionEffect
         catch (OperationCanceledException) { throw; }
         catch (Exception ex) { Serilog.Log.Warning("Possession {Id} charge failed: {Error}", Id, ex.Message); }
         ct.ThrowIfCancellationRequested();
-        NameOnce();
+        NameOnce(name);
         try { _outline = Context?.Attribution.Possess(element); }
         catch (Exception ex) { Serilog.Log.Warning("Possession {Id} outline failed: {Error}", Id, ex.Message); }
     }

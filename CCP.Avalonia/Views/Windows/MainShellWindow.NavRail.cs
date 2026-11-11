@@ -256,12 +256,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (sender is not Button { Tag: string from } button ||
                 e.GetCurrentPoint(button).Properties.PointerUpdateKind != PointerUpdateKind.LeftButtonPressed) return;
+            if (string.Equals(from, "lockdown", StringComparison.OrdinalIgnoreCase)) return;
             var hook = PossessionReroute;
             if (hook == null) return;
             string? to;
             try { to = hook(from); }
             catch (Exception ex) { Log.Warning(ex, "Possession rail hook failed; press stands"); return; }
-            if (string.IsNullOrWhiteSpace(to) || string.Equals(to, "webapp", StringComparison.OrdinalIgnoreCase)) return;
+            if (string.IsNullOrWhiteSpace(to) || string.Equals(to, "webapp", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(to, "lockdown", StringComparison.OrdinalIgnoreCase)) return;
             foreach (var row in _navSectionRows)
             {
                 if (row.Button.Tag is not string tag || !string.Equals(tag, to, StringComparison.OrdinalIgnoreCase)) continue;
