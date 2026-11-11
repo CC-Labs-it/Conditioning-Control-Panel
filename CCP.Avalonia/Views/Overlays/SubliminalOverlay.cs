@@ -34,6 +34,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static readonly List<SubliminalOverlayWindow> Active = new();
         private static bool _warnedUnavailable;
 
+        // WPF SubliminalService.cs:1088: exclude the text, not its full-screen host.
+        internal static IReadOnlyList<System.Drawing.Rectangle> ActiveTextRects()
+        {
+            var rects = new List<System.Drawing.Rectangle>();
+            foreach (var w in Active)
+            {
+                if (!w.IsVisible || !w.IsFlashing || w.Content is not Grid grid) continue;
+                foreach (var text in grid.Children.OfType<TextBlock>().TakeLast(1))
+                {
+                    if (string.IsNullOrEmpty(text.Text) || text.Bounds.Width <= 0 || text.Bounds.Height <= 0) continue;
+                    var pos = text.TranslatePoint(new Point(0, 0), w);
+                    if (pos == null) continue;
+                    var k = w.RenderScaling;
+                    const double pad = 40;
+                    var left = w.Position.X + (int)Math.Floor((pos.Value.X - pad) * k);
+                    var top = w.Position.Y + (int)Math.Floor((pos.Value.Y - pad) * k);
+                    var right = w.Position.X + (int)Math.Ceiling((pos.Value.X + text.Bounds.Width + pad) * k);
+                    var bottom = w.Position.Y + (int)Math.Ceiling((pos.Value.Y + text.Bounds.Height + pad) * k);
+                    rects.Add(new System.Drawing.Rectangle(left, top, right - left, bottom - top));
+                }
+            }
+            return rects;
+        }
+
         /// <summary>Draw one card for <paramref name="text"/> on every targeted screen; <paramref name="opacity"/>
         /// (percent) overrides the setting, as WPF FlashSubliminalCustom's does.</summary>
         public static void Show(Visual host, string text, int? opacity = null)
@@ -171,6 +195,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF AnimateSubliminal: 0 -> alpha over 50 ms, hold, alpha -> 0 over 50 ms, then
         /// close. Compositor-side alpha (<see cref="X11Overlay.SetOpacity"/>), so the card renders once.</summary>
+        internal bool IsFlashing { get; set; }
+
         public void Run(double alpha, TimeSpan hold)
         {
             var fade = TimeSpan.FromMilliseconds(SubliminalCard.DefaultFadeMs);
@@ -201,7 +227,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             for (var i = 1; i <= steps; i++)
             {
                 var v = from + (to - from) * i / steps;
-                DispatcherTimer.RunOnce(() => X11Overlay.SetOpacity(this, v), start + span * i / steps);
+                DispatcherTimer.RunOnce(() => { IsFlashing = v > 0.01; X11Overlay.SetOpacity(this, v); }, start + span * i / steps);
             }
         }
     }

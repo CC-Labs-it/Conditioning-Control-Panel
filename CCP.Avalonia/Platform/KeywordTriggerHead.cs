@@ -12,6 +12,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Content;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
@@ -82,12 +83,13 @@ internal static class KeywordTriggerHead
 
     // WPF App.xaml.cs:1600-1720: visible, unminimised windows; one that covers a whole monitor is an
     // overlay container and is skipped (#273).
-    // shortcut: bouncing/subliminal text rects (WPF :1722-1740) are not added, add them when those overlays port.
     internal static IReadOnlyList<System.Drawing.Rectangle> OwnWindowRects()
     {
-        if (global::Avalonia.Application.Current?.ApplicationLifetime is not
-            global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop) return [];
         var rects = new List<System.Drawing.Rectangle>();
+        rects.AddRange(BouncingTextOverlay.ActiveTextRects());
+        rects.AddRange(SubliminalOverlay.ActiveTextRects());
+        if (global::Avalonia.Application.Current?.ApplicationLifetime is not
+            global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop) return rects;
         foreach (var w in desktop.Windows)
         {
             if (!w.IsVisible || w.WindowState == global::Avalonia.Controls.WindowState.Minimized) continue;
