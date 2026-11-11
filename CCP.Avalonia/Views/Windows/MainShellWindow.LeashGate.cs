@@ -60,8 +60,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             CheckLeashGate();
         }
 
+        private ILeashService? _snapService;
+
+        private void BindAcceptSnap()
+        {
+            if (_snapService != null) _snapService.EventArrived -= OnAcceptSnap;
+            _snapService = LeashHead.Service;
+            if (_snapService != null) _snapService.EventArrived += OnAcceptSnap;
+        }
+
+        private void OnAcceptSnap(LeashEvent e)
+        {
+            if (e.Kind != LeashEventKind.Answered || e.Accepted != true) return;
+            var name = CoreAccount.DisplayName;
+            var me = new LeashPerson("me", string.IsNullOrWhiteSpace(name) ? Loc.Get("leash_you") : name.Trim(), null);
+            LeashAskWindow.OpenSnap(me, e.From, this);
+        }
+
         private void InitializeLeashGate()
         {
+            LeashHead.ServiceChanged += BindAcceptSnap;
+            BindAcceptSnap();
+            Closed += (_, _) => { LeashHead.ServiceChanged -= BindAcceptSnap; if (_snapService != null) _snapService.EventArrived -= OnAcceptSnap; };
             try
             {
                 if (Named<Border>("RemoteControlOverlay") is not { Parent: Grid host } overlay) return;

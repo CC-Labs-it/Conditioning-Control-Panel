@@ -17,6 +17,7 @@ public sealed class LeashAskWindow : Window
     /// <summary>The ask or snap on screen, if any. One at a time: a second one replaces it (WPF Open closes the overlay first).</summary>
     internal static LeashAskWindow? Current { get; private set; }
     internal Control Body { get; }
+    internal LeashSnapCard? Snap => Body as LeashSnapCard;
     internal LeashAskCard Card => (LeashAskCard)Body;
     // RenderProof: a sample ask.
     internal LeashAskWindow() : this(new LeashAskCard()) { }
