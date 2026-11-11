@@ -1051,6 +1051,7 @@
     <Setter Property="Padding" Value="8,6"/>
     <Setter Property="Cursor" Value="Hand"/>
     <Setter Property="FocusAdorner" Value="{x:Null}"/>
+    <Setter Property="fx:InputFx.FocusOnPointerEntry" Value="True"/>
     <Setter Property="HorizontalContentAlignment" Value="Left"/>
     <Setter Property="VerticalContentAlignment" Value="Center"/>
     <Setter Property="Template">
@@ -1068,12 +1069,6 @@
         </Border>
       </ControlTemplate>
     </Setter>
-    <Style Selector="^:pointerover">
-      <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
-    </Style>
-    <Style Selector="^:pointerover /template/ Border#Bd">
-      <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
-    </Style>
     <Style Selector="^:focus">
       <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
     </Style>
