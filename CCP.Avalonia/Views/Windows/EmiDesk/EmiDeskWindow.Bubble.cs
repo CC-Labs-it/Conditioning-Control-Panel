@@ -142,6 +142,7 @@ public partial class EmiDeskWindow
         if (PresentationActive) return;
         // WPF :511: one slot, newest wins.
         if (AskLive && !line.Hold) { _parkedLine = line; return; }
+        _holdTimerSlot?.Stop(); // WPF CancelHold (:516, :551): a stale hold must not reset this line's face.
         EmiLineEngine.Instance.Ack(line.Id, spoke: !line.Hold);
         if (line.Hold)
         {
@@ -159,6 +160,7 @@ public partial class EmiDeskWindow
     {
         if (PresentationActive || AskLive) return;
         EnsureSpeech();
+        _holdTimerSlot?.Stop(); // WPF ShowAsk CancelHold (:593)
         _ask = ask;
         _answerChips!.Children.Clear();
         EmiLineEngine.Instance.Ack(ask.Id);
@@ -216,7 +218,13 @@ public partial class EmiDeskWindow
 
     internal void StopMomentBubble()
     {
-        if (AskLive) { EmiLineEngine.Instance.NoteAskIgnored(); _ask = null; }
+        // WPF TearDownBubble (:931) -> EndAskUnanswered(visual: false): bookkeeping and askIgnored, no face.
+        if (AskLive)
+        {
+            _ask = null;
+            EmiLineEngine.Instance.NoteAskIgnored();
+            EmiDeskService.Instance.Fire("askIgnored");
+        }
         _parkedLine = null; StopSpeechTimer(); _holdTimerSlot?.Stop();
         _answerChips?.Children.Clear();
         if (_speech != null) _speech.IsVisible = false;

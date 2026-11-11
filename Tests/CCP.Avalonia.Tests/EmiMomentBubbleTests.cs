@@ -57,6 +57,30 @@ public sealed class EmiMomentBubbleTests
         }
     }
 
+    /// <summary>Moment ids fired on the real service while <paramref name="act"/> runs.</summary>
+    private static List<string> Heard(Action act)
+    {
+        var ids = new List<string>();
+        EventHandler<EmiMoment> heard = (_, m) => ids.Add(m.Id);
+        EmiDeskService.Instance.MomentFired += heard;
+        try { act(); } finally { EmiDeskService.Instance.MomentFired -= heard; }
+        return ids;
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task NewSpeechOrAskCancelsAnEarlierHold(bool ask) => Run(win =>
+    {
+        var clock = new Steps(win);
+        win.SpeakLine(new LineDraw("hold", "test", "", "-_-", null, 2, true, 2000));
+        if (ask) win.ShowAsk(Ask()); else win.SpeakLine(Line("next"));
+        clock.Advance(2400);
+        Assert.Equal("^_^", win.Face);
+        Assert.Equal(ask ? "a question?" : "next", win.MomentBubbleText);
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public void DeskLinesShipBesideTheExe() =>
         Assert.True(File.Exists(Path.Combine(AppContext.BaseDirectory, "Resources", "emi", "desk-lines.json")));
@@ -119,9 +143,9 @@ public sealed class EmiMomentBubbleTests
     {
         var clock = new Steps(win);
         win.ShowAsk(Ask());
-        win.BeginPresentation(() => { });
         try
         {
+            Assert.Contains("askIgnored", Heard(() => win.BeginPresentation(() => { })));
             Assert.False(win.AskLive);
             clock.Advance(10000);
             Assert.DoesNotContain(win.BubbleHost.Children, c => c.IsVisible);
@@ -137,7 +161,8 @@ public sealed class EmiMomentBubbleTests
         win.ShowAsk(Ask());
         EmiDeskService.Instance.Fire("videoRunning");
         Assert.False(win.AskLive);
-        win.StopMomentBubble();
+        win.ShowAsk(Ask());
+        Assert.Contains("askIgnored", Heard(win.StopMomentBubble));
         clock.Advance(1500);
         Assert.False(win.AskLive);
         Assert.DoesNotContain(win.BubbleHost.Children, c => c.IsVisible);
@@ -171,7 +196,8 @@ public sealed class EmiMomentBubbleTests
             finally { service.MomentFired -= heard; }
             var clock = new Steps(service.Window!);
             service.Window!.ShowAsk(Ask());
-            PanicSurfaces.All.Single(s => s.Id == "emi-moment-bubble").Stop(null);
+            Assert.Equal(new[] { "askIgnored", "panicPressed" },
+                Heard(() => PanicSurfaces.All.Single(s => s.Id == "emi-moment-bubble").Stop(null)));
             Assert.False(service.Window.AskLive);
             clock.Advance(1500);
             Assert.DoesNotContain(service.Window.BubbleHost.Children, c => c.IsVisible);
