@@ -71,6 +71,16 @@ namespace ConditioningControlPanel.Avalonia
                 Check("LibVLC plays a clip: started then finished within 2 s", ok, audio);
             }
             catch (Exception ex) { Check("LibVLC plays a clip: started then finished within 2 s", false, ex.Message); }
+            // packaging/linux/smoke-tarball.sh: the tarball's pinned libVLC (not the distro's) loaded and decodes
+            // H.264+AAC (CCP_SMOKE_VLC_CLIP) through vmem/amem, the way VlcFrameSink and the pulse output pull it.
+            if (Environment.GetEnvironmentVariable("CCP_SMOKE_BUNDLED_VLC") == "1")
+            {
+                var loaded = Platform.LibVlcNative.Loaded ?? "none";
+                Check("bundled libVLC loaded from the install folder",
+                    loaded.StartsWith(AppContext.BaseDirectory, StringComparison.Ordinal), $"{loaded}, {Platform.LibVlcAudio.Shared?.Version}");
+                try { var (ok, detail) = DecodeClip(Environment.GetEnvironmentVariable("CCP_SMOKE_VLC_CLIP") ?? ""); Check("bundled libVLC decodes H.264+AAC", ok, detail); }
+                catch (Exception ex) { Check("bundled libVLC decodes H.264+AAC", false, ex.Message); }
+            }
             // The Linux tarball ships the Vosk model in the install folder (packaging/linux/build-tarball.sh);
             // the packaging runs set this so a tarball without a loadable model fails. ModelStatus never touches the mic.
             if (Environment.GetEnvironmentVariable("CCP_SMOKE_BUNDLED_VOSK") == "1")
@@ -85,6 +95,31 @@ namespace ConditioningControlPanel.Avalonia
                 ? "Linux head can produce every value it renders."
                 : $"{failures} assertion(s) failed.");
             return failures == 0 ? 0 : 1;
+        }
+
+        /// <summary>Plays the clip to its end into 320x240 RV32 frames and S16 48 kHz stereo samples (check.sh's probe.py, in-app).</summary>
+        private static (bool, string) DecodeClip(string path)
+        {
+            if (!System.IO.File.Exists(path)) return (false, $"no clip at '{path}'");
+            var frame = System.Runtime.InteropServices.Marshal.AllocHGlobal(320 * 240 * 4);
+            int frames = 0; long samples = 0;
+            var end = new System.Threading.ManualResetEventSlim();
+            try
+            {
+                using var media = new LibVLCSharp.Shared.Media(Platform.LibVlcAudio.Shared!, path, LibVLCSharp.Shared.FromType.FromPath);
+                using var player = new LibVLCSharp.Shared.MediaPlayer(media);
+                player.SetVideoFormat("RV32", 320, 240, 320 * 4);
+                player.SetVideoCallbacks((IntPtr _, IntPtr planes) => { System.Runtime.InteropServices.Marshal.WriteIntPtr(planes, frame); return IntPtr.Zero; },
+                    null, (_, _) => System.Threading.Interlocked.Increment(ref frames));
+                player.SetAudioFormat("S16N", 48000, 2);
+                player.SetAudioCallbacks((_, _, count, _) => System.Threading.Interlocked.Add(ref samples, count), null, null, null, null);
+                player.EndReached += (_, _) => end.Set();
+                player.EncounteredError += (_, _) => end.Set();
+                var ended = player.Play() && end.Wait(15000) && player.State == LibVLCSharp.Shared.VLCState.Ended;
+                var detail = $"{System.IO.Path.GetFileName(path)}: ended={ended}, {frames} frames, {samples / 48000.0:F2} s audio";
+                return (ended && frames >= 25 && samples >= 48000, detail);
+            }
+            finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(frame); }
         }
     }
 }

@@ -2,6 +2,7 @@
 # Proves a runtime built by build.sh is shippable. Exits non-zero on any failure.
 #
 #   packaging/linux/vlc/check.sh [RUNTIME_TAR_GZ]     (default: out/ccp-vlc-runtime-<ver>-linux-x64.tar.gz)
+#   packaging/linux/vlc/check.sh --clips              only make the test clips in out/clips
 #
 # In a clean BUILD_IMAGE (ubuntu:22.04, no VLC, no FFmpeg):
 #   1. ldd -r: the only unresolved libraries are libpulse.so.0 / libasound.so.2 (distro deps);
@@ -64,7 +65,6 @@ if [ "${1:-}" = --inside ]; then
     exit "$fail"
 fi
 
-runtime=$(realpath "${1:-$here/out/$ARTIFACT.tar.gz}")
 engine=${CONTAINER_ENGINE:-$(command -v podman || command -v docker || true)}
 [ -n "$engine" ] || { echo "check.sh: neither podman nor docker found" >&2; exit 1; }
 clips=$here/out/clips
@@ -80,6 +80,8 @@ if [ ! -f "$clips/audio.mp3" ]; then
         ffmpeg -v error -y $a -c:a libmp3lame /clips/audio.mp3
         chown '"$(id -u):$(id -g)"' /clips/*'
 fi
+[ "${1:-}" != --clips ] || exit 0   # smoke-tarball.sh: only the clips
+runtime=$(realpath "${1:-$here/out/$ARTIFACT.tar.gz}")
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 tar xzf "$runtime" -C "$tmp"

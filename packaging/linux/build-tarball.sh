@@ -2,13 +2,23 @@
 # Build the linux-x64 tarball the Flatpak manifest and the AUR PKGBUILD consume
 # (docs/avalonia-linux-install.html). Local only: never uploads anything.
 #   bash packaging/linux/build-tarball.sh [out-dir]   -> prints the tarball path
+#   CCP_VLC_RUNTIME=<ccp-vlc-runtime-*.tar.gz>: the pinned libVLC runtime (default packaging/linux/vlc/out/, built by
+#   packaging/linux/vlc/build.sh when missing); its sha256 must match RUNTIME_SHA256 in packaging/linux/vlc/versions.env.
 # Layout: ConditioningControlPanel/{CCP.Avalonia, conditioning-control-panel.sh, LICENSE, Resources/Models/vosk/<model>,
+#         lib/{libvlc.so.5,libvlccore.so.9,vlc/plugins}, VLC-NOTICES.txt, SOURCES.txt,
 #         share/{applications,icons/hicolor/*/apps,metainfo}/<app-id>.*}  (share/ maps onto /usr/share or /app/share)
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 out=${1:-$root/packaging/linux/out}
 ver=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$root/Version.props")
 pub=$root/CCP.Avalonia/bin/publish/linux-x64
+
+# shellcheck source=vlc/versions.env
+. "$root/packaging/linux/vlc/versions.env"
+vlcrt=${CCP_VLC_RUNTIME:-$root/packaging/linux/vlc/out/$ARTIFACT.tar.gz}
+[ -f "$vlcrt" ] || bash "$root/packaging/linux/vlc/build.sh" "$(dirname "$vlcrt")" >&2
+echo "$RUNTIME_SHA256  $vlcrt" | sha256sum -c --quiet - >&2 \
+  || { echo "build-tarball: $vlcrt is not the pinned runtime (RUNTIME_SHA256, packaging/linux/vlc/versions.env)" >&2; exit 1; }
 
 rm -rf "$pub"
 dotnet publish "$root/CCP.Avalonia/CCP.Avalonia.csproj" -c Release -p:PublishProfile=linux-x64 >&2
@@ -20,6 +30,14 @@ cp -r "$model" "$pub/Resources/Models/vosk/"
 cp -r "$root/packaging/linux/share" "$pub/"
 cp "$root/LICENSE" "$pub/"
 cp "$root/packaging/linux/RT-ENGINE-NOTICES.txt" "$pub/"
+# libVLC loads in-process from lib/ (LibVlcNative), never through LD_LIBRARY_PATH. Sources: LGPL-2.1 s6, owner decision D2.
+test ! -e "$pub/lib"
+tar -xzf "$vlcrt" -C "$pub"
+test -f "$pub/lib/libvlc.so.5"
+cp "$root/packaging/linux/VLC-NOTICES.txt" "$pub/"
+printf '%s\n' "Corresponding source for the bundled libVLC (lib/, see VLC-NOTICES.txt):" \
+  "https://github.com/CC-Labs-it/Conditioning-Control-Panel/releases/download/v$ver/$ARTIFACT-sources.tar" \
+  "sha256 $SOURCES_SHA256" > "$pub/SOURCES.txt"
 cp "$root/packaging/linux/conditioning-control-panel.sh" "$pub/"   # the launcher: OpenSSL 3 hint, then CCP.Avalonia
 mkdir -p "$pub/packaging/linux"
 cp "$root/packaging/linux/rt-engine-check.sh" "$pub/packaging/linux/"
