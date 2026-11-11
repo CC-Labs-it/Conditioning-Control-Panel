@@ -45,7 +45,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
-             x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.PresetsTabView">
+             x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.PresetsTabView"
+             AttachedToVisualTree="OnModLabelsAttached" DetachedFromVisualTree="OnModLabelsDetached">
     <UserControl.Resources>
 
         <!-- ============================ zone furniture ============================ -->
