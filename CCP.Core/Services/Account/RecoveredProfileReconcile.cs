@@ -19,6 +19,13 @@ namespace ConditioningControlPanel.Services
                 settings.PlayerXP = XpCurve.GetCurrentLevelXP(user.Level, user.Xp, ProfileAdopt.Epoch(settings));
                 settings.HighestLevelEver = user.HighestLevelEver;
                 settings.CurrentSeason = user.CurrentSeason;
+                // WPF SkillTreeService.OnSeasonReset: permanent skills and fix charges survive.
+                settings.SeasonalStreakRecoveryUsed = false;
+                settings.CurrentStreak = 0;
+                settings.LastStreakDate = null;
+                settings.DailyQuestStreak = 0;
+                settings.LastDailyQuestDate = null;
+                settings.LastPerfectWeekStreakAwarded = 0;
                 settings.SeasonResetPending = true;
                 ProfileAdopt.ClearXpWatermark(settings, "restore season rollover");
             }

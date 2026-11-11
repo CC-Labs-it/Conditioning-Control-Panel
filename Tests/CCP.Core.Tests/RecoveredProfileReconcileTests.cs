@@ -18,6 +18,7 @@ public class RecoveredProfileReconcileTests
     [InlineData(false, "2025-01", 1, 0, 10, true)]
     [InlineData(true, "2026-01", 1, 0, 1, false)]
     [InlineData(true, "2025-01", 20, 1000000, 20, false)]
+    [InlineData(true, "2025-01", 10, 1000000, 10, false)]
     [InlineData(true, "2025-01", 1, 0, 10, false)]
     public async Task RecoveryGuardsPushAndPersistsBeforeClearing(bool readOk, string season, int serverLevel, int serverXp, int expectedLevel, bool markerExpected)
     {
@@ -33,6 +34,9 @@ public class RecoveredProfileReconcileTests
         s.UnifiedId = "recover-test"; s.AuthToken = "fake"; s.OfflineMode = false;
         s.PlayerLevel = 10; s.PlayerXP = 0; s.CurrentSeason = "2025-01";
         s.LastConfirmedServerXp = 0; s.UnlockedSkills.Add("keep");
+        s.SeasonalStreakRecoveryUsed = true; s.CurrentStreak = 8; s.LastStreakDate = new DateTime(2025, 1, 1);
+        s.DailyQuestStreak = 7; s.LastDailyQuestDate = new DateTime(2025, 1, 2);
+        s.LastPerfectWeekStreakAwarded = 7; s.StreakFixCharges = 3;
         settings.SaveImmediate(true);
         File.WriteAllText(marker, DateTime.UtcNow.ToString("o") + "|backup|2025-01");
         settings = new SettingsService();
@@ -40,20 +44,42 @@ public class RecoveredProfileReconcileTests
         CoreAccount.IsLoggedInProvider = () => true;
         var handler = new Handler(readOk, season, serverLevel, serverXp, path, marker);
         var sync = new SyncPush(() => Array.Empty<string>(), () => false, handler);
+        var notifications = 0;
+        sync.RecoveredProgressionChanged = () => notifications++;
         sync.MarkLoaded(null);
         try
         {
             Assert.Equal(readOk, await sync.PushAsync("test"));
+            Assert.Equal(readOk && (season == "2026-01" || serverXp == 1000000) ? 1 : 0, notifications);
             Assert.Equal(markerExpected, File.Exists(marker));
             Assert.Equal(markerExpected, settings.RestoredFromBackup);
             Assert.Equal(expectedLevel, settings.Current.PlayerLevel);
             Assert.Contains("keep", settings.Current.UnlockedSkills);
+            var rollover = readOk && season == "2026-01";
+            Assert.Equal(!rollover, settings.Current.SeasonalStreakRecoveryUsed);
+            Assert.Equal(rollover ? 0 : 8, settings.Current.CurrentStreak);
+            Assert.Equal(rollover ? null : new DateTime(2025, 1, 1), settings.Current.LastStreakDate);
+            Assert.Equal(rollover ? 0 : 7, settings.Current.DailyQuestStreak);
+            Assert.Equal(rollover ? null : new DateTime(2025, 1, 2), settings.Current.LastDailyQuestDate);
+            Assert.Equal(rollover ? 0 : 7, settings.Current.LastPerfectWeekStreakAwarded);
+            Assert.Equal(3, settings.Current.StreakFixCharges);
             Assert.Equal(readOk ? 1 : 0, handler.Posts);
             if (readOk)
             {
                 Assert.False(handler.MarkerAtPost);
                 Assert.Equal(expectedLevel, handler.LevelAtPost);
                 Assert.Contains("keep", handler.SkillsAtPost!);
+                if (rollover)
+                {
+                    var saved = JObject.Parse(File.ReadAllText(path));
+                    Assert.False(saved.Value<bool>("SeasonalStreakRecoveryUsed"));
+                    Assert.Equal(0, saved.Value<int>("CurrentStreak"));
+                    Assert.True(saved["LastStreakDate"] == null || saved["LastStreakDate"]!.Type == JTokenType.Null);
+                    Assert.Equal(0, saved.Value<int>("DailyQuestStreak"));
+                    Assert.True(saved["LastDailyQuestDate"] == null || saved["LastDailyQuestDate"]!.Type == JTokenType.Null);
+                    Assert.Equal(0, saved.Value<int>("LastPerfectWeekStreakAwarded"));
+                    Assert.Equal(3, saved.Value<int>("StreakFixCharges"));
+                }
             }
         }
         finally

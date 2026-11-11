@@ -131,6 +131,8 @@ namespace ConditioningControlPanel.Services
         public Descent.DescentCountdownService? Countdown { get; set; }
         public Descent.DescentService? DescentReader { get; set; }
         public DateTime? LastSyncTime { get; private set; }
+        /// <summary>Called when recovery changes the level or XP displayed by the head.</summary>
+        public Action? RecoveredProgressionChanged { get; set; }
 
         /// <param name="localAchievements">This install's unlocked achievement ids.</param>
         /// <param name="inSession">The heartbeat's in_session.</param>
@@ -230,7 +232,14 @@ namespace ConditioningControlPanel.Services
                     var user = await new V2AuthService(() => s, _handler).GetUserProfileAsync(idBeforeRead);
                     if (user == null || !string.Equals(user.UnifiedId, idBeforeRead, StringComparison.Ordinal) || !Loaded || !SignedIn(s) || !ReferenceEquals(settings, CoreSettings.Service)
                         || !ReferenceEquals(s, settings.Current) || !string.Equals(idBeforeRead, s.UnifiedId, StringComparison.Ordinal)) return false;
+                    var beforeLevel = s.PlayerLevel;
+                    var beforeXp = s.PlayerXP;
                     RecoveredProfileReconcile.Apply(s, user, settings.RestoredSeason, UtcNow());
+                    if (s.PlayerLevel != beforeLevel || Math.Abs(s.PlayerXP - beforeXp) >= 0.01)
+                    {
+                        try { RecoveredProgressionChanged?.Invoke(); }
+                        catch (Exception ex) { Log.Warning(ex, "Recovered progression notification failed"); }
+                    }
                     if (!settings.TrySaveImmediate(suppressCloudBackup: true)) return false;
                     settings.ClearRestoredFromBackupFlag();
                 }
