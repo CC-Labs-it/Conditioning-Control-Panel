@@ -1,4 +1,4 @@
-/* ui/unlocks/wave2/meta.js - The Guide and the Control Panel. Each is a door in the dock and a sheet in the card host: outside
+/* ui/unlocks/wave2/meta.js - The Guide and the Control Panel. Each has a door beside the audio controls and a sheet: outside
  * the world, so a tilted or warped page never tilts them, and under Wake Up and the pause card. Neither stops the game. */
 
 import { BY_ID } from '../../../data/items.js';
@@ -15,7 +15,7 @@ const PANEL_CSS = `
 #ctl-panel-btn:focus-visible { outline: 2px solid #000; outline-offset: -4px; }
 @media (pointer: coarse) { #ctl-panel-btn { min-width: 44px; min-height: 44px; } }
 body[data-tc-ending] #ctl-panel-btn, body[data-tc-ending] .fz-panel { display: none; }
-.fz-panel { position: fixed; z-index: 1; pointer-events: auto; top: calc(max(8px, env(safe-area-inset-top)) + 44px); right: max(8px, env(safe-area-inset-right)); width: min(340px, calc(100vw - 16px)); max-height: min(560px, calc(100vh - max(8px, env(safe-area-inset-top)) - 60px - var(--dock-h, 0px))); display: flex; flex-direction: column; min-height: 0; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-top: 4px solid var(--niche); box-shadow: 2px 3px 0 rgba(0, 0, 0, .3); font-family: var(--font); transform-origin: calc(100% - 60px) 0; animation: fz-cp-in .16s ease-out; }
+.fz-panel { position: fixed; z-index: 1; pointer-events: auto; top: var(--game-controls-bottom, calc(max(8px, env(safe-area-inset-top)) + 44px)); right: max(8px, env(safe-area-inset-right)); width: min(340px, calc(100vw - 16px)); max-height: min(560px, calc(100vh - var(--game-controls-bottom, 52px) - 16px - var(--dock-h, 0px))); display: flex; flex-direction: column; min-height: 0; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-top: 4px solid var(--niche); box-shadow: 2px 3px 0 rgba(0, 0, 0, .3); font-family: var(--font); transform-origin: calc(100% - 60px) 0; animation: fz-cp-in .16s ease-out; }
 .fz-panel[hidden] { display: none; }
 .fz-panel.out { animation: fz-cp-out .11s ease-in forwards; }
 @keyframes fz-cp-in { from { opacity: 0; transform: translateY(-6px) scale(.96); } }
@@ -52,7 +52,7 @@ body.gentle .fz-panel, body.gentle .fz-panel.out { animation-duration: .3s; anim
 .fz-panel .sw[aria-checked=true] i { background: linear-gradient(90deg, var(--niche), var(--niche-2)); }
 .fz-panel .sw[aria-checked=true] i::after { transform: translateX(18px); background: var(--niche-ink); box-shadow: 0 0 0 1px var(--panel); }
 .fz-panel .cp-foot { flex: none; margin: 0; padding: 4px 8px 6px; font-size: 11px; line-height: 1.2; color: var(--ink-soft); border-top: 1px solid color-mix(in srgb, var(--line) 35%, transparent); }
-@media (max-width: 759px) { .fz-panel { top: calc(max(8px, env(safe-area-inset-top)) + 52px); max-height: calc(100vh - max(8px, env(safe-area-inset-top)) - 68px - var(--dock-h, 0px)); } .fz-panel .sw { min-height: 42px; } }
+@media (max-width: 759px) { .fz-panel { top: var(--game-controls-bottom, calc(max(8px, env(safe-area-inset-top)) + 52px)); max-height: calc(100vh - var(--game-controls-bottom, 60px) - 16px - var(--dock-h, 0px)); } .fz-panel .sw { min-height: 42px; } }
 `;
 
 const COPY = {
@@ -99,11 +99,56 @@ export function panelTabs(groups) {
     .map((t) => ({ ...t, count: t.groups.reduce((n, g) => n + g.rows.length, 0) }));
 }
 
-/** A door in the dock: an icon and a name, and the name goes when the edge is narrow. */
-function door(ctx, label, emoji, onPress) {
-  const host = ctx.dock({ edge: 'left', title: label, icon: emoji, door: onPress });
-  const b = host.dock?.chip;
-  if (b && fresh(ctx)) squish(ctx, b, 1.2);
+const GUIDE_CSS = `
+#guide-btn { display: grid; place-items: center; flex: none; width: 38px; height: 36px; padding: 0; color: #171717; background: #d4d0c8; border: 2px outset #fff; touch-action: manipulation; cursor: pointer; }
+#guide-btn:active { border-style: inset; background: #c1bdb6; }
+#guide-btn svg { width: 28px; height: 28px; pointer-events: none; }
+#guide-btn:focus-visible { outline: 2px solid #000; outline-offset: -4px; }
+#guide-btn:disabled { opacity: .55; cursor: default; }
+body[data-tc-ending] #guide-btn { display: none; }
+@media (pointer: coarse) { #guide-btn { min-width: 44px; min-height: 44px; } }
+@media (max-width: 759px) {
+  #game-controls { display: grid; grid-template-columns: 44px 44px auto auto; gap: 4px; justify-items: end; }
+  #game-controls > #ctl-panel-btn { grid-area: 1 / 1; }
+  #guide-btn { grid-area: 1 / 2; }
+  #audio-controls { grid-area: 1 / 3; }
+  #wake { grid-area: 1 / 4; }
+  #dock-lock { grid-area: 2 / 2; }
+  #usage-ring { grid-area: 2 / 3; }
+  #account-chip { grid-area: 2 / 4; max-width: 44px; padding: 4px 9px; }
+  #account-chip span { display: none; }
+}
+`;
+
+/** A persistent map door; its one arrival runs on the game clock with the rest of the unlock. */
+export function guideButton(ctx, onPress) {
+  const doc = docOf(ctx), controls = doc.getElementById('game-controls');
+  if (!controls) return null;
+  ctx.css(GUIDE_CSS);
+  doc.getElementById('guide-btn')?.remove();
+  const b = doc.createElement('button');
+  b.type = 'button'; b.id = 'guide-btn'; b.title = 'Guide';
+  b.setAttribute('aria-label', 'Guide'); b.setAttribute('aria-haspopup', 'dialog');
+  b.appendChild(iconFor(doc, BY_ID.guide));
+  controls.insertBefore(b, doc.getElementById('audio-controls'));
+  b.addEventListener('click', () => { if (!ctx.paused && !ctx.state.ended) onPress(); });
+  const sync = () => { b.disabled = ctx.paused || !!ctx.state.ended; };
+  for (const event of ['pause', 'resume', 'suspend', 'ending']) ctx.on(event, sync);
+  sync();
+  const inset = () => doc.documentElement.style.setProperty('--game-controls-bottom', `${Math.ceil(controls.getBoundingClientRect().bottom + 8)}px`);
+  const Observer = doc.defaultView.ResizeObserver;
+  const observer = Observer ? new Observer(inset) : null;
+  observer?.observe(controls);
+  doc.defaultView.addEventListener('resize', inset);
+  inset();
+  ctx.cleanup(() => {
+    observer?.disconnect(); doc.defaultView.removeEventListener('resize', inset);
+    doc.documentElement.style.removeProperty('--game-controls-bottom'); b.remove();
+  });
+  if (fresh(ctx)) ctx.anim(b, ctx.gentle || ctx.reduced
+    ? [{ opacity: 0 }, { opacity: 1 }]
+    : [{ opacity: 0, transform: 'translateY(-8px) scale(.65)' }, { opacity: 1, transform: 'translateY(3px) scale(1.12)', offset: .55 }, { opacity: 1, transform: 'none' }],
+  { duration: ctx.gentle || ctx.reduced ? 300 : 620, easing: 'ease-out' });
   return b;
 }
 
@@ -370,7 +415,7 @@ function hudButton(ctx, item, onPress) {
   b.setAttribute('aria-expanded', 'false');
   b.title = COPY.panel;
   try { b.appendChild(iconFor(doc, item)); } catch { b.textContent = '🎛️'; }
-  controls.insertBefore(b, audio && audio.parentElement === controls ? audio : controls.firstChild);
+  controls.insertBefore(b, doc.getElementById('guide-btn') || (audio && audio.parentElement === controls ? audio : controls.firstChild));
   b.addEventListener('click', onPress);
   ctx.cleanup(() => b.remove());
   if (fresh(ctx)) squish(ctx, b, 1.3);
@@ -383,15 +428,15 @@ export default {
     mount(ctx) {
       let sheet = null, opening = false, gone = false;
       const open = async () => {
-        if (opening) return;
+        if (opening || gone || ctx.paused || ctx.state.ended) return;
         opening = true;
         try {
           const { createGuide } = await import('../../guide-map.js');
-          if (!gone && !ctx.state.ended) { sheet ||= createGuide(ctx); sheet.show(); }
+          if (!gone && !ctx.paused && !ctx.state.ended) { sheet ||= createGuide(ctx); sheet.show(); }
         } catch (e) { console.error('guide failed', e); }
         opening = false;
       };
-      door(ctx, 'Guide', '🗺️', open);
+      guideButton(ctx, open);
       return { open, get sheet() { return sheet; }, off() { gone = true; } };
     },
   },

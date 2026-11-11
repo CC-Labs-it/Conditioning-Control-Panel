@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as E from '../sim/economy.js';
-import { createJourney } from '../sim/journey.js';
+import { buildPlan, createJourney } from '../sim/journey.js';
 import { setupJourney, takeActivity, journeyChapter, bankRate, BANK_CAP_S } from '../sim/journey-effects.js';
 import { createLife, parse, serialize } from '../sim/save.js';
 import { measureJourney } from '../dev/journey-timing.mjs';
@@ -15,6 +15,26 @@ test('the new-player shelf keeps original first prices and blocks late purchases
   assert.equal(store.buy('drop').ok, false);
   assert.equal(store.buy('rank_stray_1').ok, false);
   assert.equal(store.buy('stray').ok, true);
+});
+
+test('Journey shows the 3000 theme gate, honors prerequisites, and keeps renewed-run scaling', () => {
+  const gate = (mult = 1) => buildPlan({ f1: 'eyes' }, 90, mult).find(e => e.item.id === 'f5');
+  assert.equal(gate().cost, 3000);
+  assert.equal(gate(2).cost, 6000);
+  const s = E.createRun(), shop = createJourney(s);
+  E.lump(s, 3000);
+  assert.equal(shop.choose('f5', 'bimbo').ok, false, 'earnings alone do not bypass prerequisites');
+  E.grant(s, 'ticker');
+  s.total = 2999;
+  assert.equal(shop.choose('f5', 'bimbo').ok, false);
+  s.total = 3000;
+  assert.equal(shop.price('f5'), 3000);
+  const before = s.fuzz;
+  assert.equal(shop.choose('f5', 'bimbo').ok, true);
+  assert.equal(s.fuzz, before);
+  const restored = parse(serialize(s, createLife())).run;
+  assert.equal(restored.picks.f5, 'bimbo');
+  assert.equal(createJourney(restored).shop(3).goal.id === 'f5', false);
 });
 test('activity ranks cap two active minutes and collect once', () => {
   const s = E.createRun();

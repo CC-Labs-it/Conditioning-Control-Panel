@@ -1,5 +1,5 @@
 /* Short, authored questions for the chosen game theme. Mechanical puzzles keep their own prompts. */
-export const QUIZ_THEMES = Object.freeze({ trance: 'Trance', bimbo: 'Bimbo', drone: 'Drone', sissy: 'Sissy', goon: 'Goon', locked: 'Chastity', censored: 'Censored', infection: 'Infection' });
+export const QUIZ_THEMES = Object.freeze({ trance: 'Trance', bimbo: 'Bambi', drone: 'Drone', sissy: 'Sissy', goon: 'Goon', locked: 'Chastity', censored: 'Censored', infection: 'Infection' });
 const lines = {
   trance: [
     ['The spiral hired a guide. Who leads?', 'The spiral', 'My map', 'A pigeon', 'The manager'],

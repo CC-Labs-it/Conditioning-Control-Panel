@@ -1081,7 +1081,7 @@ export const CLAUSES = Object.freeze({
   "I accept Tap meeting Chastity: refused taps and refused purchases now pay more."
  ],
  "x_listener": [
-  "I accept Listen meeting Bimbo: the podcast gains a second voice, out loud, agreeing."
+  "I accept Listen meeting Bambi: the podcast gains a second voice, out loud, agreeing."
  ],
  "x_compl": [
   "I accept Tap meeting Drone: tasks from the queue now pay twice as much."
@@ -1102,7 +1102,7 @@ export const CLAUSES = Object.freeze({
   "I accept More Ads meeting Infection: ads now spread across the page on their own."
  ],
  "x_what": [
-  "I accept No Pictures meeting Bimbo: the captions give up and go vague. Pretty, or something."
+  "I accept No Pictures meeting Bambi: the captions give up and go vague. Pretty, or something."
  ],
  "audio_mixer": [
   "I accept a volume slider and mute button for each sound. My mix is remembered."

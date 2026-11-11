@@ -19,6 +19,26 @@ const LISTS = {bouncer:COPY_CHOICES, emiPose:EMI_CHOICES, copySize:COPY_SIZES};
 const POSES = {happy:'body-idle',annoyed:'body-smug',rage:'body-shock'};
 export { FACE_CSS };
 
+/** Long triggers keep their wording but share two balanced lines on the DVD face. */
+export function bounceTextLayout(text) {
+  const words = text.split(' ');
+  let lines = [text];
+  if (text.length > 14 && words.length > 1) {
+    let best = Infinity;
+    for (let i = 1; i < words.length; i++) {
+      const pair = [words.slice(0, i).join(' '), words.slice(i).join(' ')];
+      const longest = Math.max(...pair.map(line => line.length));
+      if (longest < best) { best = longest; lines = pair; }
+    }
+  }
+  return {text: lines.join('\n'), columns: Math.max(...lines.map(line => line.length)), rows: lines.length};
+}
+function setBounceLabel(node, text) {
+  const layout = bounceTextLayout(text);
+  node.querySelector('strong').textContent = layout.text;
+  node.dataset.bounceLines = String(layout.rows);
+}
+
 export function copyPrice(field, value) { return COPY_PRICES[field]?.[value] ?? 0; }
 export function ownedCopy(bag, field, value) {
   return Object.hasOwn(LISTS[field] || {}, value) && (copyPrice(field, value) === 0 || bag?.copyOwned?.[field + ':' + value] === true);
@@ -87,8 +107,8 @@ export function renderBounce(node, kind, mood, word, caption = '', button = null
     return;
   }
   const label = doc.createElement('strong');
-  label.textContent = word || caption || 'T&C';
   node.append(label,doc.createElement('i'));
+  setBounceLabel(node, word || caption || 'T&C');
   if (word) {
     const sub = doc.createElement('small');
     sub.textContent = 'V I D E O'; node.append(sub);
@@ -132,6 +152,7 @@ const RECLONE_MS = 150;
 // Apply only on a preference, size or skin change. Wall hits use the same painted bounds.
 export function bindBounce(ctx, node, {index = 0, word = '', scale = 1, caption = ''} = {}) {
   let kind, mood, skin, width, height, k0, measured = false;
+  let textLayout = bounceTextLayout(word || caption || 'T&C');
   let live = null, watch = null, seen = 0, clonedAt = -1e9, pairs = [];
   const size = {w:0,h:0};
   const button = ctx.button.el;
@@ -174,7 +195,7 @@ export function bindBounce(ctx, node, {index = 0, word = '', scale = 1, caption 
     const base = word ? Math.max(20,Math.min(46,ctx.bounds().w * .05))*scale : 1;
     const k = word ? 1 : copyScale(prefs);
     if (k !== k0) { k0 = k; measured = false; }
-    let w, h;
+    let w, h, fontSize = word ? base : 16 * k;
     if (kind === 'face') {
       if (measured) return size;
       const art = node.firstElementChild;
@@ -182,20 +203,27 @@ export function bindBounce(ctx, node, {index = 0, word = '', scale = 1, caption 
       if (art && fit.z) { art.style.transform = 'scale('+fit.z+')'; measured = true; }
       w = fit.w; h = fit.h;
     }
-    else if (kind === 'dvd') { w = word ? Math.ceil(base * Math.max(3,word.length*.77)) : Math.ceil(k * Math.max(52,Math.ceil((caption || 'T&C').length * 12.5))); h = word ? Math.ceil(base * 1.43) : Math.round(22 * k); }
+    else if (kind === 'dvd') {
+      const columns = textLayout.columns, extraLine = textLayout.rows - 1;
+      w = word ? Math.ceil(base * Math.max(3,columns*.77)) : Math.ceil(k * Math.max(52,Math.ceil(columns * 12.5)));
+      h = (word ? Math.ceil(base * 1.43) : Math.round(22 * k)) + Math.ceil(extraLine * fontSize * .92);
+      // Keep the painted phrase and its collision box inside a narrow screen, even at Big size.
+      const fit = Math.min(1, Math.max(1, ctx.bounds().w - 16) / w);
+      w = Math.ceil(w * fit); h = Math.ceil(h * fit); fontSize *= fit;
+    }
     else if (kind === 'bubble') { w = h = word ? Math.round(base * 1.62) : Math.round(26 * k); }
     else { w = h = word ? Math.max(40,Math.round(base * 1.8)) : Math.round(43 * k); }
     if (w !== width || h !== height) {
       width=w; height=h; size.w=w; size.h=h;
       node.style.width = w+'px'; node.style.height = h+'px';
-      node.style.fontSize = (word ? base : 16 * k)+'px';
+      node.style.fontSize = fontSize+'px';
     }
     return size;
   }
   return {
     sync,
-    setWord(value) { word=value; if (kind === 'dvd') node.querySelector('strong').textContent=value; },
+    setWord(value) { word=value; textLayout=bounceTextLayout(value); if (kind === 'dvd') setBounceLabel(node,value); },
     /** The small copies' own word (not the big DVD word): resizes on the next sync. */
-    setCaption(value) { caption=value; width=0; if (kind === 'dvd') node.querySelector('strong').textContent=value; },
+    setCaption(value) { caption=value; textLayout=bounceTextLayout(value); width=0; if (kind === 'dvd') setBounceLabel(node,value); },
   };
 }

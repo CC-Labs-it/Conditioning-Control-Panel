@@ -50,7 +50,7 @@ export const THEMES = Object.freeze({
 
   bimbo: Object.freeze({
     id: 'bimbo',
-    label: 'Bimbo',
+    label: 'Bambi',
     buttonWords: ['pretty', 'giggle', 'gloss', 'blank', 'shiny', 'pink', 'oops', 'mwah', 'so good', 'empty', 'hee', 'yay'],
     ticker: [
       'Reading declared optional, sparkles rally',

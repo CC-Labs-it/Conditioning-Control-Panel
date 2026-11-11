@@ -33,7 +33,7 @@ const CSS = `
 .gr-back { position: fixed; inset: 0; pointer-events: auto; background: rgba(28, 16, 54, .38); }
 .gr { --paper: #fbf6ee; --paper-2: #f3eadb; --stamp: #fffdf8; --ink: #2a2031; --ink-soft: #6d6273; --line: #2a2031; --shade: rgba(42, 28, 36, .28);
   --pink: #ff6fb5; --pink-soft: #ffd3e8; --gold: #f6c544; --gold-ink: #8a5c08; --skip: #e8395f; --ghost: #b9adb4;
-  position: absolute; left: 10px; right: 10px; top: 52px; bottom: 0; display: flex; flex-direction: column; min-height: 0; overflow: hidden; color: var(--ink); background: var(--paper); border: 2.5px solid var(--line); border-bottom: 0; border-radius: 16px 16px 0 0; box-shadow: 0 -4px 0 var(--shade); font: 600 15px/1.25 var(--bubble, "Trebuchet MS", system-ui, sans-serif); }
+  position: absolute; left: 10px; right: 10px; top: var(--game-controls-bottom, 52px); bottom: 0; display: flex; flex-direction: column; min-height: 0; overflow: hidden; color: var(--ink); background: var(--paper); border: 2.5px solid var(--line); border-bottom: 0; border-radius: 16px 16px 0 0; box-shadow: 0 -4px 0 var(--shade); font: 600 15px/1.25 var(--bubble, "Trebuchet MS", system-ui, sans-serif); }
 .gr button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 .gr-head { flex: none; display: flex; align-items: center; gap: 8px; height: 54px; padding: 0 10px 0 14px; background: var(--paper); position: relative; z-index: 5; }
 .gr-head h2 { margin: 0; font-size: 22px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
@@ -51,7 +51,7 @@ const CSS = `
 .gr .chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 .gr .chip .n { font-variant-numeric: tabular-nums; }
 .gr .chip i { width: 16px; height: 16px; border-radius: 6px 5px 7px 4px; border: 2px solid var(--ink); display: inline-block; }
-.gr .chip.own i { background: var(--pink-soft); } .gr .chip.offer i { background: var(--gold); border-color: var(--gold-ink); }
+.gr .chip.own i { background: var(--pink); } .gr .chip.offer i { background: var(--gold); border-color: var(--gold-ink); }
 .gr .chip.skip i { border-color: var(--skip); border-style: dashed; background: var(--gold); } .gr .chip.off i { border-style: dashed; border-color: var(--ghost); background: transparent; }
 .gr .chip.later i { background: var(--paper); } .gr .chip[aria-pressed="true"] i { border-color: var(--paper); }
 .gr .sws { flex: none; display: flex; gap: 5px; align-items: center; margin-left: 8px; padding-left: 10px; border-left: 2px dotted color-mix(in srgb, var(--ink) 35%, transparent); }
@@ -119,18 +119,22 @@ const CSS = `
 .gr .tk.end .ico { width: 64px; height: 64px; }
 .gr .tk.pic { width: 108px; height: 70px; margin: -35px 0 0 -54px; border-radius: 14px 10px 16px 10px; padding: 3px; }
 .gr .tk.pic > img { width: 98px; height: 58px; border-radius: 8px; }
-.gr .tk.own { background: var(--pink-soft); }
+.gr .tk.own { background: color-mix(in srgb, var(--pink) 58%, var(--paper)); box-shadow: 0 0 0 3px var(--paper), 3px 4px 0 var(--ink), inset 0 0 0 2px #fff8; }
 .gr .tk .bd { position: absolute; right: -9px; top: -9px; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--ink); display: none; place-items: center; }
 .gr .tk.own .bd, .gr .tk.offer .bd, .gr .tk.skip .bd { display: grid; }
-.gr .tk.own .bd { background: var(--pink); } .gr .tk .bd svg { width: 12px; height: 12px; stroke: var(--ink); stroke-width: 3; fill: none; display: none; } .gr .tk.own .bd svg { display: block; }
+.gr .tk.own .bd { width: 26px; height: 26px; background: var(--pink); box-shadow: 0 0 0 2px var(--paper); } .gr .tk .bd svg { width: 12px; height: 12px; stroke: var(--ink); stroke-width: 3; fill: none; display: none; } .gr .tk.own .bd svg { display: block; }
 .gr .tk.offer { background: var(--gold); border-color: var(--gold-ink); animation: gr-bob 2.6s ease-in-out infinite; }
 .gr .tk.offer .bd { background: var(--gold); border-color: var(--gold-ink); } .gr .tk.offer .bd::after { content: ""; width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--gold-ink); }
 .gr .tk.skip { background: var(--gold); border-color: var(--skip); border-style: dashed; animation: gr-nudge 2.2s ease-in-out infinite; }
 .gr .tk.skip .bd { background: var(--paper); border-color: var(--skip); } .gr .tk.skip .bd::after { content: ""; width: 10px; height: 3px; background: var(--skip); border-radius: 2px; transform: rotate(-20deg); }
-.gr .tk.later .ico { opacity: .9; }
+.gr .tk:is(.offer, .skip) { opacity: .64; }
+.gr .tk.later { opacity: .42; background: var(--paper-2); border-color: var(--ghost); box-shadow: none; }
+.gr .tk.later .ico, .gr .tk.later > img { filter: grayscale(.85); }
 .gr .tk.off { background: color-mix(in srgb, var(--paper) 55%, transparent); border-style: dashed; border-color: var(--ghost); box-shadow: none; }
 .gr .tk.off .ico, .gr .tk.off > img { filter: grayscale(1) contrast(.8); opacity: .32; }
-.gr .tk.off:hover .ico, .gr .tk.off:hover > img { opacity: .7; }
+.gr .tk.off:is(:hover, :focus-visible, .sel) .ico, .gr .tk.off:is(:hover, :focus-visible, .sel) > img { opacity: .7; }
+.gr .tk:not(.own):is(:hover, :focus-visible, .sel) { opacity: 1; }
+.gr .tk:not(.own):is(:hover, :focus-visible, .sel) .ico, .gr .tk:not(.own):is(:hover, :focus-visible, .sel) > img { filter: none; }
 .gr .tk .dent { position: absolute; left: 50%; top: 50%; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 3px solid var(--pink); pointer-events: none; opacity: 0; }
 @keyframes gr-bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -5px; } }
 @keyframes gr-nudge { 0%, 70%, 100% { rotate: 0deg; } 78% { rotate: -6deg; } 86% { rotate: 6deg; } 93% { rotate: -3deg; } }
@@ -194,7 +198,7 @@ const CSS = `
 .gr-card .buy:disabled { background: var(--paper-2); color: var(--ink-soft); box-shadow: none; cursor: default; }
 
 @media (max-width: 759px) {
-  .gr { left: 0; right: 0; top: 48px; border-left: 0; border-right: 0; border-radius: 14px 14px 0 0; }
+  .gr { left: 0; right: 0; top: var(--game-controls-bottom, 48px); border-left: 0; border-right: 0; border-radius: 14px 14px 0 0; }
   .gr-head { padding: 0 8px 0 10px; gap: 6px; height: 50px; }
   .gr-head h2 { font-size: 19px; } .gr-head h2 .ico { width: 30px; height: 30px; }
   .gr .here { padding: 0 9px; font-size: 13px; }

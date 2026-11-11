@@ -188,7 +188,7 @@ Object.assign(DEMOS, {
   },
 
   f5: (k) => {
-    const T = [['Trance', '#5a3fb5', '#e6e0ff'], ['Bimbo', '#ff4fa8', '#ffe0f0'], ['Drone', '#3a4a5a', '#d8e0e6'], ['Sissy', '#d670b4', '#fbe6f6'], ['Goon', '#b5342a', '#f8dcd8'], ['Chastity', '#8a6d1f', '#f2e8c8'], ['Censored', '#222', '#c8c8c8'], ['Infection', '#4f9a2f', '#e0f4d4']];
+    const T = [['Trance', '#5a3fb5', '#e6e0ff'], ['Bambi', '#ff4fa8', '#ffe0f0'], ['Drone', '#3a4a5a', '#d8e0e6'], ['Sissy', '#d670b4', '#fbe6f6'], ['Goon', '#b5342a', '#f8dcd8'], ['Chastity', '#8a6d1f', '#f2e8c8'], ['Censored', '#222', '#c8c8c8'], ['Infection', '#4f9a2f', '#e0f4d4']];
     k.el.style.transition = 'background .4s';
     basicsLabel(k, 132, 6, 100, 'Pick a Theme', 'text-align:left;');
     k.add(113, 5, 'width:14px;height:14px;background:#7b5cff;border-radius:2px;transform:rotate(45deg);');

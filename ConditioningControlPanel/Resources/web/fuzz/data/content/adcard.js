@@ -57,7 +57,7 @@ export const ADCARD_LINES = Object.freeze({
 });
 
 export const ADCARD_COPY = Object.freeze({
-  themes: Object.freeze({ trance: 'Trance', bimbo: 'Bimbo', drone: 'Drone', sissy: 'Sissy', goon: 'Goon', locked: 'Locked', censored: 'Censored', infection: 'Infection' }),
+  themes: Object.freeze({ trance: 'Trance', bimbo: 'Bambi', drone: 'Drone', sissy: 'Sissy', goon: 'Goon', locked: 'Locked', censored: 'Censored', infection: 'Infection' }),
   terms: 'terms',
   accepted: 'ACCEPTED',
   ad: 'Ad #{n}',

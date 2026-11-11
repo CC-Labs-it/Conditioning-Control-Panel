@@ -252,7 +252,8 @@ export function buildPlan(picks, minutes = T_RUN[0], priceMult = 1, fate = picks
     if (fork) {
       entries.push({
         item: BY_ID[fork],
-        cost: pm(spent),
+        // Pick a Theme keeps its lower catalog threshold; renewed runs still scale it with their prices.
+        cost: pm(fork === 'f5' ? Math.min(spent, E.price(shadow, fork)) : spent),
         occurrence: 1
       });
       if (!picks[fork]) break;

@@ -9,7 +9,7 @@
  * "Everything at once" (state.all) turns the cast off: every effect at full strength. A solo still happens.
  *
  * Ambient = decorative background/overlay layers only. The button, counter, shop, toys, dock objects, picture screens,
- * the theme, Wake Up, cards and endings are never on this list. A `steady` entry (the page wash, which is the theme) is
+ * the theme, Wake Up, cards and endings are never on this list. A `steady` entry (the page wash or cursor feedback) is
  * never dimmed and never takes a seat, but its own buy still gets a solo. */
 
 export const SOLO_MS = 4500;
@@ -35,8 +35,8 @@ export const FAMILIES = Object.freeze({
   heat: Object.freeze(['score_heat']),
   wash: Object.freeze(['colour', 'paint']),
 });
-/** Families that are never dimmed (the page itself, which is the theme). */
-export const STEADY = Object.freeze(new Set(['wash']));
+/** Cursor feedback stays readable while moving; the page wash is the theme itself. Neither is ambient rotation. */
+export const STEADY = Object.freeze(new Set(['wash', 'trail']));
 
 const FAMILY_OF = new Map(Object.entries(FAMILIES).flatMap(([fam, ids]) => ids.map((id) => [id, fam])));
 /** The stage id an item belongs to, or null when it is not ambient. */
@@ -55,7 +55,9 @@ export function ambientOwned(owned = {}) {
 /** A run's first stage state. A save that already owns more than CAST ambient effects starts with everything at once,
  *  so nobody's page changes unasked; a new run starts with the cast. */
 export function initialStage(owned = {}) {
-  return { all: ambientOwned(owned) > CAST, pins: [], at: {} };
+  // Old saves counted the trail as ambient. Keep their original full-strength migration for the other effects too.
+  const legacyTrail = FAMILIES.trail.some(id => owned[id] > 0) ? 1 : 0;
+  return { all: ambientOwned(owned) + legacyTrail > CAST, pins: [], at: {} };
 }
 
 /** The seats: which entries play at full strength right now. `entries` are { id, order, at?, steady?, live? }:

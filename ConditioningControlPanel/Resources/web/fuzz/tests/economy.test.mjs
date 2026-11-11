@@ -81,6 +81,18 @@ test('a fork below its price is refused', () => {
   assert.equal(E.choose(s, 'f1', 'eyes').reason, 'short');
 });
 
+test('Pick a Theme opens at 3000 without spending it or changing the saved Bambi id', () => {
+  const s = E.createRun();
+  E.grant(s, 'ticker');
+  assert.equal(E.price(s, 'f5'), 3000);
+  s.fuzz = 2999;
+  assert.equal(E.choose(s, 'f5', 'bimbo').reason, 'short');
+  s.fuzz = 3000;
+  assert.equal(E.choose(s, 'f5', 'bimbo').ok, true);
+  assert.equal(s.fuzz, 3000);
+  assert.equal(s.picks.f5, 'bimbo');
+});
+
 test('a combo needs both parents, so it only exists when two routes meet', () => {
   const s = E.createRun();
   E.grant(s, 'e_pulse');

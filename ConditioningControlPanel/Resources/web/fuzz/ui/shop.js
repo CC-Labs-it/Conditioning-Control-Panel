@@ -9,7 +9,7 @@ import { setRich } from './rich-text.js';
 import { CONFIG } from '../data/config.js';
 import { whole, fmt } from '../sim/format.js';
 import { iconFor } from './icons.js';
-import { createTip } from './shop-tip.js';
+import { bindReadOnlyTip, createTip } from './shop-tip.js';
 import { hueClass } from './palette.js';
 import { goalState } from './purchase-feel.js';
 import { ridersFor, fateOf } from '../sim/economy.js';
@@ -66,7 +66,7 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
   const rows = new Map();
   let goalRow = null, size = 6, lastHop = -Infinity;
   /* A guest tile (EMI Takeover): one element another module owns, kept last in the grid. Never an engine row. */
-  let guestEl = null;
+  let guestEl = null, guestOff = null;
   if (!doc.getElementById('shop-ready-css')) {
     const st = doc.createElement('style'); st.id = 'shop-ready-css'; st.textContent = SHOP_READY_CSS; doc.head.appendChild(st);
   }
@@ -393,8 +393,15 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     platform,
     /** The press a tile makes. `el` is where the purchase flies from. */
     press(id, el) { tip.hide(); onPress(id, el); },
-    /** Show one guest tile after the rows (or none). The caller owns the element and its presses. */
-    guest(el) { if (guestEl !== el) guestEl?.remove(); guestEl = el || null; if (guestEl && rowsEl.lastElementChild !== guestEl) rowsEl.appendChild(guestEl); },
+    /** Guest upgrades can be inspected like a shop row, but never bought by the player. */
+    guest(el, item = null) {
+      if (guestEl !== el) {
+        guestOff?.(); guestOff = null; guestEl?.remove();
+        guestEl = el || null;
+        if (guestEl && item) guestOff = bindReadOnlyTip(guestEl, item, tip);
+      }
+      if (guestEl && rowsEl.lastElementChild !== guestEl) rowsEl.appendChild(guestEl);
+    },
   };
 
   return { draw, fit, denied, flush, closeTip: tip.hide, get size() { return size; } };

@@ -70,7 +70,7 @@ function bouncer(ctx,index) {
     let n = 0;
     const scramble = () => {
       if (++n > 5 || !label) { art.setCaption(next); return; }
-      label.textContent = Array.from(next, (ch) => (ch === ' ' ? ' ' : GLYPHS[Math.floor(Math.random() * GLYPHS.length)])).join('');
+      art.setCaption(Array.from(next, (ch) => (ch === ' ' ? ' ' : GLYPHS[Math.floor(Math.random() * GLYPHS.length)])).join(''));
       scrambleTimer = setTimeout(scramble, 70);
     };
     scramble();

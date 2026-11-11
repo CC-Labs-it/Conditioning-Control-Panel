@@ -101,7 +101,7 @@ const RAW = [
   add('n_pod', 'play', 'Regular Listener', 'You know their names now.', 'Hear a whole podcast episode.', 'episode:1', clip('headphones')),
 
   add('t_sissy', 'themes', 'First Fitting', 'Picked Sissy. It fits.', 'Pick the Sissy theme.', 'theme:sissy', { k: 'portrait', theme: 'sissy' }),
-  add('t_bimbo', 'themes', 'Bubbly', 'Picked Bimbo. Thinking went optional.', 'Pick the Bimbo theme.', 'theme:bimbo', { k: 'portrait', theme: 'bimbo' }),
+  add('t_bimbo', 'themes', 'Bubbly', 'Picked Bambi. Thinking went optional.', 'Pick the Bambi theme.', 'theme:bimbo', { k: 'portrait', theme: 'bimbo' }),
   add('t_goon', 'themes', 'Edge Case', 'Picked Goon. You stayed for the edges.', 'Pick the Goon theme.', 'theme:goon', { k: 'portrait', theme: 'goon' }),
   add('t_drone', 'themes', 'Unit Online', 'Picked Drone. Serial number assigned.', 'Pick the Drone theme.', 'theme:drone', { k: 'portrait', theme: 'drone' }),
   add('t_trance', 'themes', 'Under', 'Picked Trance. Eyes heavy, page bright.', 'Pick the Trance theme.', 'theme:trance', { k: 'portrait', theme: 'trance' }),

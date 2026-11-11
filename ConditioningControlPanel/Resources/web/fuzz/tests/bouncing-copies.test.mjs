@@ -2,8 +2,27 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  COPY_PRICES, bouncingLook, chosenCopy, copyScale, emiPose, faceFit, grandfatherCopies, ownedCopy,
+  COPY_PRICES, bounceTextLayout, bouncingLook, chosenCopy, copyScale, emiPose, faceFit, grandfatherCopies, ownedCopy,
 } from '../ui/bouncing-art.js';
+import { BAMBI_TRIGGERS } from '../data/content/theme-text.js';
+
+test('long trigger captions keep every word on two compact lines', () => {
+  for (const phrase of BAMBI_TRIGGERS.filter(text => text.length > 14)) {
+    const layout = bounceTextLayout(phrase.toUpperCase());
+    const lines = layout.text.split('\n');
+    assert.equal(lines.length, 2, phrase);
+    assert.equal(lines.join(' '), phrase.toUpperCase(), phrase);
+    assert.ok(lines.every(line => line.length <= 13), phrase);
+    assert.equal(layout.rows, 2);
+    assert.equal(layout.columns, Math.max(...lines.map(line => line.length)));
+  }
+});
+
+test('short bouncing captions stay on one line', () => {
+  for (const phrase of ['DROP', 'BAMBI SLEEP', 'BAMBI FREEZE', 'GOOD GIRL']) {
+    assert.deepEqual(bounceTextLayout(phrase), {text: phrase, rows: 1, columns: phrase.length});
+  }
+});
 
 test('only Match button, Mixed faces and Normal are free; the rest are priced', () => {
   for (const [field, row] of Object.entries(COPY_PRICES)) {
