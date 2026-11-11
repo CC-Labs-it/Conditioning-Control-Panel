@@ -107,6 +107,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         public static void StartRun(ChaosRunConfig? config = null, bool isRestart = false)
         {
             if (_active) return;
+            if (!isRestart) SeasonFeatureTracking.Track(CoreSettings.Current, ConditioningControlPanel.Models.SeasonFeatureKeys.ChaosMode, ev => App.FeatureDayLog?.Note(ev), DateTime.UtcNow);
             var cfg = config ?? ChaosRunConfig.FromSettings();
             try
             {
