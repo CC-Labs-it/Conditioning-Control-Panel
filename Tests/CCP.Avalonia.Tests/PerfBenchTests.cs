@@ -59,6 +59,7 @@ public sealed class PerfBenchTests
                 Dispatcher.UIThread.RunJobs();
                 Thread.Sleep(5);
             }
+            Assert.True(frame.IsCompleted, "the next frame never arrived under headless");   // GetResult would block the UI thread forever
             var (handoff, drawn) = frame.GetAwaiter().GetResult();
             Assert.InRange(handoff, 0, clock.Elapsed.TotalMilliseconds);
             Assert.InRange(drawn, 0, clock.Elapsed.TotalMilliseconds);
