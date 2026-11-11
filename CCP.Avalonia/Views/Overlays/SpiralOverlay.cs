@@ -5,6 +5,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Animation;
+using ConditioningControlPanel.Services.Safety;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -44,6 +46,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static DispatcherTimer? _timer;
         private static int _index;
         private static bool _refused;
+        private static IDisposable? _fadeOut;
 
         /// <summary>The off-thread decode in flight, if any (tests await it).</summary>
         internal static Task? Decoding { get; private set; }
@@ -96,7 +99,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             VoiceOpacity = next;
             return changed;
         }
-        internal static void Stop() { VoiceOpacity = null; CloseAll(); }
+        internal static void Stop() { VoiceOpacity = null; FadeOut(); }
 
         /// <summary>The painted alpha: the slider through WPF's #722 curve. A ramping session's value
         /// holds it instead (WPF _rampSpiralOpacity; SetSustainedOverlayOpacity clamps to 0..1).</summary>
@@ -125,7 +128,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             Refreshes++;
             var s = CoreSettings.Current;
-            if (VoiceOpacity == null && (!s.SpiralEnabled || !ShouldShow())) { CloseAll(); return; }
+            if (VoiceOpacity == null && (!s.SpiralEnabled || !ShouldShow())) { FadeOut(); return; }
+
+            if (_fadeOut != null)
+            {
+                _fadeOut.Dispose();
+                _fadeOut = null;
+                foreach (var window in Windows) window.Opacity = 1;
+            }
 
             var path = SourcePath();
             var video = IsVideo(path);
@@ -185,8 +195,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     CloseAll();
                     return;
                 }
+                if (GentleVisuals.On)
+                {
+                    w.Opacity = 0;
+                    w.Transitions = new Transitions { new DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromSeconds(GentleVisuals.FadeSeconds) } };
+                }
                 w.Show();
                 Windows.Add(w);
+                if (GentleVisuals.On) w.Opacity = 1;
             }
             _shownOn = want;
             QuestMinutes.Follow(Windows.Count > 0);
@@ -218,9 +234,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             for (var i = 0; i < Windows.Count; i++) Windows[i].Spiral.Source = frame;
         }
 
+        private static void FadeOut()
+        {
+            if (_fadeOut != null) return;
+            if (!GentleVisuals.On || Windows.Count == 0) { CloseAll(); return; }
+            var duration = TimeSpan.FromSeconds(GentleVisuals.FadeSeconds);
+            foreach (var window in Windows)
+            {
+                window.Transitions = new Transitions { new DoubleTransition { Property = Visual.OpacityProperty, Duration = duration } };
+                window.Opacity = 0;
+            }
+            _fadeOut = DispatcherTimer.RunOnce(CloseAll, duration);
+        }
+
         /// <summary>WPF StopSpiral: the windows and the clock go; the decoded frames stay cached.</summary>
         public static void CloseAll()
         {
+            _fadeOut?.Dispose();
+            _fadeOut = null;
             _pulseWeight = null;
             _sourcePath = null;
             _configuredPath = null;
