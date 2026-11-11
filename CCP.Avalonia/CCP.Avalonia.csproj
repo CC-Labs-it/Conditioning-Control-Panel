@@ -237,6 +237,7 @@
          (AppFonts.Mono) is the app-wide monospace. Licenses ship
          next to the binary. -->
     <AvaloniaResource Include="..\ConditioningControlPanel\Fonts\Fredoka.ttf" Link="Resources\fonts\Fredoka.ttf" />
+    <AvaloniaResource Include="..\ConditioningControlPanel\assets\Chaos\bubbles\braindrain_melt.png" Link="Resources\chaos\bubbles\braindrain_melt.png" />
     <AvaloniaResource Include="..\ConditioningControlPanel\assets\Chaos\bubbles\htlink.png" Link="Resources\chaos\bubbles\htlink.png" />
     <AvaloniaResource Include="..\ConditioningControlPanel\assets\Chaos\guide\intro.png" Link="Resources\chaos\guide\intro.png" />
     <AvaloniaResource Include="..\Assets\fonts\NotoEmoji-wght.ttf" Link="Resources\fonts\NotoEmoji-wght.ttf" />

@@ -16,6 +16,7 @@ using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.UI;
+using ConditioningControlPanel.Services.Chaos;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
@@ -51,6 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static bool _pending;   // a frame is requested; the loop idles while the field is empty
         internal static Bitmap? Image;
         internal static Bitmap? GifRainImage;
+        internal static Bitmap? BrainDrainImage;
 
         /// <summary>WPF BubbleService.LoadBubbleImage (BubbleService.cs:221, :918-936): every Start re-resolves
         /// the active mod's bubble.png, so a mod switch shows its sprite on the next start (a <c>??=</c>
@@ -63,10 +65,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             try { GifRainImage = File.Exists(path) ? new Bitmap(path) : null; }
             catch (Exception ex) { Log.Debug("Gif Rain art: {E}", ex.Message); GifRainImage = null; }
             GifRainImage ??= Helpers.ModArt.TryLoadBuiltIn("chaos/bubbles/htlink.png");
+            path = Path.Combine(CorePaths.UserData, "assets", "assets", "Chaos", "bubbles", "braindrain_melt.png");
+            try { BrainDrainImage = File.Exists(path) ? new Bitmap(path) : null; }
+            catch (Exception ex) { Log.Debug("Brain Drain art: {E}", ex.Message); BrainDrainImage = null; }
+            BrainDrainImage ??= Helpers.ModArt.TryLoadBuiltIn("chaos/bubbles/braindrain_melt.png");
         }
 
         internal static Bitmap? SpriteFor(AmbientBubble b) =>
-            b.Spec?.VariantId == "htlink" ? GifRainImage ?? Image : Image;
+            b.Spec?.VariantId == "htlink" ? GifRainImage ?? Image :
+            b.Spec?.VariantId == BrainDrainBubble.VariantId ? BrainDrainImage ?? Image : Image;
 
         /// <summary>The "N/300 today" line listens to this (WPF AmbientXpBudgetChanged).</summary>
         internal static event Action? XpBudgetChanged;
@@ -178,7 +185,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // Outside sessions, bubbles are always clickable (no UI toggle exists for the setting).
             var clickable = !CoreSession.IsSessionRunning || s.BubblesClickable;
             var mod = (CoreMods.ActiveModTokenProvider?.Invoke() as ModManifest)?.BubbleScale;
-            var spec = Field.RollGifRain(s);
+            var spec = Field.RollGifRain(s, Platform.PrizeOwnership.BubbleV2Owned());
             var bubble = spec == null
                 ? AmbientBubble.Spawn(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, s, mod, clickable)
                 : AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec);
@@ -508,7 +515,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     var m = Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateRotation(b.Angle * Math.PI / 180)
                           * Matrix.CreateScale(s, s) * Matrix.CreateTranslation(cx, cy);
                     using (dc.PushTransform(m))
-                    using (dc.PushOpacity(Math.Clamp(b.Fade, 0, 1)))
+                    using (dc.PushOpacity(Math.Clamp(b.DisplayFade, 0, 1)))
                     {
                         var img = BubbleOverlay.SpriteFor(b);
                         if (b.Spec != null && !(b.Spec.VariantId == "htlink" && BubbleOverlay.GifRainImage != null))

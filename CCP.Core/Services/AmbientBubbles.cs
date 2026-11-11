@@ -93,6 +93,7 @@ namespace ConditioningControlPanel.Services
         public double DefuseJudgeFuseSec => DefusedViaChannel ? _channelStartFuseSec : FuseSecLeft;
         public double FuseFraction => FuseTotalMs > 0 ? Math.Clamp(FuseRemainingMs / FuseTotalMs, 0, 1) : 0;
         /// <summary>WPF _channelScale: the bubble shrinks under the hold.</summary>
+        public double DisplayFade => Fade * (Spec?.VariantId == BrainDrainBubble.VariantId && !Popping ? BrainDrainBubble.PulseAt(_timeAlive) : 1);
         public double ChannelScale => Channeling
             ? 1.0 - (1.0 - Chaos.ChaosTuning.CHANNEL_MIN_SCALE) * Math.Clamp(_channelMs / Chaos.ChaosTuning.DEFUSE_HOLD_MS, 0, 1)
             : 1.0;
@@ -343,16 +344,23 @@ namespace ConditioningControlPanel.Services
                 if (b.Snap()) ChaosDefused?.Invoke(b);
         }
 
-        /// <summary>WPF BubbleService.RollTriggerSpec: select from the persisted pool. Only Gif Rain
-        /// is wired here; unsupported selections remain plain bubbles until their payloads are ported.</summary>
-        public EffectBubbleSpec? RollGifRain(AppSettings s)
+        /// <summary>WPF BubbleService.RollTriggerSpec: select from the persisted pool. Gif Rain and Brain Drain
+        /// are wired here; unsupported selections remain plain bubbles until their payloads are ported.</summary>
+        public EffectBubbleSpec? RollGifRain(AppSettings s, bool v2Owned = false)
         {
-            if (!s.BubbleTriggersEnabled || s.BubbleTriggerVariants == null) return null;
-            var ids = s.BubbleTriggerVariants.Where(id => id != MagnetBubble.VariantId).ToArray();
+            if (!s.BubbleTriggersEnabled) return null;
+            var selected = (s.BubbleTriggerVariants ?? new()).Where(id => id != MagnetBubble.VariantId && id != BrainDrainBubble.VariantId).ToArray();
+            var ids = BrainDrainBubble.RollPool(selected, v2Owned, s.BubbleBrainDrainEnabled).ToArray();
             if (ids.Length == 0 || Random.Next(100) >= Math.Clamp(s.BubbleTriggerChance, 0, 100)) return null;
-            if (ids[Random.Next(ids.Length)] != "htlink") return null;
+            var id = ids[Random.Next(ids.Length)];
+            if (id != "htlink" && id != BrainDrainBubble.VariantId) return null;
             // WPF :1242 counts live benign treats (IsAmbientTriggerBubble || IsAmbientEffectBubble), not live chaos bubbles.
             if (Bubbles.Count(b => !b.Popping && b.Spec is { IsLive: false, IsDarter: false, IsFreeze: false }) >= 4) return null;
+            if (id == BrainDrainBubble.VariantId) return new EffectBubbleSpec
+            {
+                VariantId = id, Payload = new BrainDrainMeltPayload { Ambient = true }, SizePx = 220,
+                Tint = 0xFF6A22A8u, Label = "◍", IsLive = false, FuseMs = 0, TreatLifeMs = 7000
+            };
             var variant = ChaosBubbleVariants.All.First(v => v.Id == "htlink");
             var spec = ChaosBubbleVariants.Build(variant, intensity: 0.3, ambient: true);
             spec.Payload!.DurationMult = 2.5;

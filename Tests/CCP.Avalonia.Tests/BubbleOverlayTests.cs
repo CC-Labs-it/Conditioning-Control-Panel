@@ -184,6 +184,42 @@ public sealed class BubbleOverlayTests
     }
 
     [Fact]
+    public async Task Brain_drain_pop_fires_once_and_expiry_and_chaos_do_not_fire()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var field = BubbleOverlay.Field;
+            var saved = field.Bubbles.ToArray();
+            var old = ConditioningControlPanel.Services.Chaos.EffectPayload.Firer;
+            var calls = 0;
+            var spec = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec {
+                VariantId = ConditioningControlPanel.Services.Chaos.BrainDrainBubble.VariantId,
+                Payload = new ConditioningControlPanel.Services.Chaos.BrainDrainMeltPayload { Ambient = true }, TreatLifeMs = 7000 };
+            try
+            {
+                ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = p => { if (p is ConditioningControlPanel.Services.Chaos.BrainDrainMeltPayload) calls++; };
+                field.Bubbles.Clear();
+                var b = AmbientBubble.SpawnChaos(new System.Random(1), 0, 0, 0, 1920, 100000, 1, spec);
+                field.Bubbles.Add(b);
+                Assert.Equal(0, BubbleOverlay.ChaosCount);
+                BubbleOverlay.EndChaos();
+                Assert.Contains(b, field.Bubbles);
+                BubbleOverlay.Pop(b);
+                BubbleOverlay.Pop(b);
+                Assert.Equal(1, calls);
+                field.Bubbles.Clear();
+                b = AmbientBubble.SpawnChaos(new System.Random(1), 0, 0, 0, 1920, 100000, 1, spec);
+                field.Bubbles.Add(b);
+                for (int i = 0; i < 219; i++) field.Step();
+                Assert.True(b.Dissolving);
+                Assert.Equal(1, calls);
+            }
+            finally { ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = old; field.Bubbles.Clear(); field.Bubbles.AddRange(saved); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public void Gif_rain_duration_tracks_the_global_multiplier()
     {
         var old = ConditioningControlPanel.Services.Chaos.EffectPayload.GlobalDurationMult;
