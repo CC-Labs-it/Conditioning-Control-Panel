@@ -6,9 +6,11 @@
  xmlns:tabs="clr-namespace:ConditioningControlPanel.Avalonia.Views.Tabs"
  x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.AvailableSubjectsTabView">
  <UserControl.Resources>
+  <LinearGradientBrush x:Key="LobbyGlass" StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#24FFFFFF" Offset="0"/><GradientStop Color="#0CFFFFFF" Offset="1"/></LinearGradientBrush>
+  <LinearGradientBrush x:Key="LobbyRim" StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#55FFFFFF" Offset="0"/><GradientStop Color="#14FFFFFF" Offset="0.5"/><GradientStop Color="#0AFFFFFF" Offset="1"/></LinearGradientBrush>
   <ControlTheme x:Key="LobbyPill" TargetType="Button">
-   <Setter Property="Foreground" Value="White"/><Setter Property="Background" Value="#18FFFFFF"/>
-   <Setter Property="BorderBrush" Value="#33FFFFFF"/><Setter Property="BorderThickness" Value="1"/>
+   <Setter Property="Foreground" Value="White"/><Setter Property="Background" Value="{StaticResource LobbyGlass}"/>
+   <Setter Property="BorderBrush" Value="{StaticResource LobbyRim}"/><Setter Property="BorderThickness" Value="1"/>
    <Setter Property="CornerRadius" Value="18"/><Setter Property="FontFamily" Value="Fredoka, Segoe UI"/>
    <Setter Property="FontSize" Value="14"/><Setter Property="FontWeight" Value="SemiBold"/>
    <Setter Property="Padding" Value="16,8"/><Setter Property="Margin" Value="0,0,10,8"/>
@@ -16,15 +18,18 @@
    <!-- A property-only Button ControlTheme has no Template and draws nothing (CLAUDE.md trap 4). -->
    <Setter Property="Template">
     <ControlTemplate TargetType="Button">
-     <Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-             BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}">
-      <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
-                        Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-     </Border>
+     <Grid x:Name="pillRoot">
+      <Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+              BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}">
+       <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                         Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+      </Border>
+      <Border x:Name="sheen" CornerRadius="18" Background="#1FFF5FA2" Opacity="0" IsHitTestVisible="False"/>
+     </Grid>
     </ControlTemplate>
    </Setter>
-   <Style Selector="^:pointerover /template/ Border#bd"><Setter Property="Background" Value="#28FFFFFF"/></Style>
-   <Style Selector="^:pressed /template/ Border#bd"><Setter Property="Opacity" Value="0.8"/></Style>
+   <Style Selector="^:pointerover /template/ Border#sheen"><Setter Property="Opacity" Value="1"/></Style>
+   <Style Selector="^:pressed /template/ Grid#pillRoot"><Setter Property="RenderTransform"><TranslateTransform Y="2"/></Setter></Style>
    <Style Selector="^:disabled /template/ Border#bd"><Setter Property="Opacity" Value="0.45"/></Style>
   </ControlTheme>
   <ControlTheme x:Key="LobbyJoin" TargetType="Button" x:DataType="tabs:LobbyCardView">
@@ -85,7 +90,7 @@
      </Grid>
      <StackPanel Grid.Column="1" VerticalAlignment="Center">
       <StackPanel Orientation="Horizontal">
-       <TextBlock Text="{Binding Title}" Foreground="{DynamicResource TextLightBrush}" FontWeight="SemiBold" MaxLines="1" TextTrimming="CharacterEllipsis" MaxWidth="190"/>
+       <TextBlock Text="{Binding Title}" Foreground="{DynamicResource TextLightBrush}" FontFamily="Fredoka, Segoe UI" FontSize="15" FontWeight="SemiBold" MaxLines="1" TextTrimming="CharacterEllipsis" MaxWidth="190"/>
        <Ellipse Width="7" Height="7" Margin="7,1,0,0" VerticalAlignment="Center" Fill="#5FFFD0" IsVisible="{Binding Friend}" ToolTip.Tip="{loc:Str lobby_friend_tip}"/>
       </StackPanel>
       <TextBlock Text="{Binding Line}" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" Margin="0,2,0,0" MaxLines="1" TextTrimming="CharacterEllipsis"/>
