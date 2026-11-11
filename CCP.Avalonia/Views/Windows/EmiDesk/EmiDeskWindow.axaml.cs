@@ -921,7 +921,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         public void CancelChain()
         {
             StopPatFeedback();
-            StopBodyMove();
             try { _player.Cancel(); OnBubbleTextCore(null); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] CancelChain failed"); }
         }
@@ -929,6 +928,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>P06: also invalidate an intro that has not reached its wake chain yet.</summary>
         internal void StopChainForPanic()
         {
+            StopBodyMove();
             if (_dismissPending)
             {
                 // Panic must not strand her mid-goodbye: the wink is cut, the dismiss still lands.
@@ -1648,6 +1648,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 {
                     _petCooldownUntil = PatClock.GetUtcNow().UtcDateTime.AddMilliseconds(PetCooldownMs);
                     StartPatFeedback(EmiPatFeedback.Pet);
+                    if (EmiChains.Get("pet")?.Move is { } move) RunBodyMove(move);
                     CountPat();
                 }
                 FireDeskEvent("petted");
@@ -2623,6 +2624,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     _petCooldownUntil = now.AddMilliseconds(PetCooldownMs);
                     EmiSfx.Chime();
                     StartPatFeedback(EmiPatFeedback.Glee);
+                    if (EmiChains.Get("petStreak")?.Move is { } streakMove) RunBodyMove(streakMove);
                     return;
                 }
                 if (now < _petCooldownUntil)
@@ -2633,6 +2635,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 }
                 _petCooldownUntil = now.AddMilliseconds(PetCooldownMs);
                 StartPatFeedback(EmiPatFeedback.Pet);
+                if (EmiChains.Get("pet")?.Move is { } petMove) RunBodyMove(petMove);
                 CountPat();
                 FireDeskEvent("petted");
             }
@@ -2689,6 +2692,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             {
                 _closingForGood = true;
                 _player.Dispose();
+                StopBodyMove();
                 try { OnTearDownCore(); }
                 catch (Exception ex) { Log.Debug(ex, "[EmiDesk] teardown seam threw"); }
                 KillOptionsPanel();

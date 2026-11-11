@@ -126,7 +126,7 @@ public sealed class EmiDeskBodyMoveTests
     });
 
     [Fact]
-    public Task ReplacementCancelDismissAndCloseResetAndInvalidateTheTween() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task ReplacementCancelDismissPanicAndCloseRespectMoveLifetime() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         var desk = Desk();
         try
@@ -141,12 +141,19 @@ public sealed class EmiDeskBodyMoveTests
             stale(0.5); Assert.Equal(0, shift.Y);
             step!(0.25); Assert.Equal(4, shift.Y);
             old = token; stale = step;
-            desk.CancelChain(); Assert.True(old.IsCancellationRequested); Assert.Equal(0, shift.Y);
-            stale(0.25); Assert.Equal(0, shift.Y);
+            desk.CancelChain(); Assert.False(old.IsCancellationRequested); Assert.Equal(4, shift.Y);
+            stale(0.5); Assert.Equal(0, shift.Y);
+            stale(0.75); Assert.Equal(4, shift.Y);
+            stale(1); Assert.Equal(0, shift.Y);
             desk.Show();
+            Play(desk, "shiver"); step!(0.125); old = token;
+            Assert.Equal(2, shift.X);
+            desk.RunDismiss(); Assert.False(old.IsCancellationRequested); Assert.Equal(2, shift.X);
+            Assert.Equal("wink", desk.ChainPlayer.Current?.Id);
+            step!(0.25); Assert.Equal(-2, shift.X);
+            desk.StopChainForPanic(); Assert.True(old.IsCancellationRequested); Assert.Equal(0, shift.X);
             Play(desk, "droop"); step!(0.5); old = token;
-            desk.RunDismiss(); Assert.True(old.IsCancellationRequested); Assert.Equal(0, shift.Y);
-            desk.StopChainForPanic();
+            desk.StopChainForPanic(); Assert.True(old.IsCancellationRequested); Assert.Equal(0, shift.Y);
             Play(desk, "droop"); step!(0.5); old = token;
             desk.Close(); Assert.True(old.IsCancellationRequested); Assert.Equal(0, shift.Y);
         }

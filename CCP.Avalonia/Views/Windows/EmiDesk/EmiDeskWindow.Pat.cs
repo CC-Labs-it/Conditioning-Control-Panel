@@ -15,7 +15,7 @@ public partial class EmiDeskWindow
     private string? _patFaceDrawn;
 
     // Wordless pat frames retain the shared cooldown and poke clock. Full chains take
-    // the face through PlayChain; body art, moves, particles and speech still need hosts.
+    // the face through PlayChain; body art, particles and speech still need hosts.
     private void StartPatFeedback(IReadOnlyList<EmiPatFrame> frames)
     {
         StopPatFeedback();
