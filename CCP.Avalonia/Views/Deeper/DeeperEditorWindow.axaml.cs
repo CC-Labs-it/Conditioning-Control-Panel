@@ -814,7 +814,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 // it took there (Pause() right after Play() was a no-op while still Opening).
                 //
                 // The flag is one-shot, so a later user-driven Play is never undone, and it is
-                // armed only by InitializeVideo, so a REMOTE page keeps WPF's other rule: the site
+                // armed only by InitializeBrowserLocalVideo, so a REMOTE page keeps WPF's other rule: the site
                 // owns its own player.
                 if (_pauseLocalPreviewOnce && dur > 0)
                 {
@@ -865,9 +865,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             catch (Exception ex) { Log.Debug("DeeperEditor: preview blank failed: {Error}", ex.Message); }
         }
 
+        /// <summary>Fallback when LibVLC cannot open the clip: the web engine's media document,
+        /// or the labelled stub when there is no engine or the file is not a video.</summary>
         private void InitializeBrowserLocalVideo(string path)
         {
             WaveformCanvas.IsVisible = false;
+            LocalVideoImage.IsVisible = false;
             PreviewPlaceholder.IsVisible = false;
 
             string? full = null;
@@ -915,7 +918,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// <summary>Local video uses the shared LibVLC transport and frame sink.</summary>
         private async Task InitializeVideoAsync(string path)
         {
-            if (!DeeperPreview.IsLocalVideoFile(path)) { ShowPlaceholder(); return; }
+            if (!DeeperPreview.IsLocalVideoFile(path)) { InitializeBrowserLocalVideo(path); return; }
             await InitializeAudioAsync(path, video: true);
         }
 
@@ -3192,6 +3195,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private bool _browserNavigated;
         private bool _browserPollInFlight;
         private bool _browserPollDisabled;
+        /// <summary>Armed by <see cref="InitializeBrowserLocalVideo"/> only: pause a LOCAL clip's media
+        /// document once, the first time the poll sees it running, so the editor opens on a still
+        /// frame the way WPF's one-shot Playing handler made it.</summary>
         private bool _pauseLocalPreviewOnce;
         private bool _isPreviewFullscreen;
         private bool _fsTransitionInFlight;

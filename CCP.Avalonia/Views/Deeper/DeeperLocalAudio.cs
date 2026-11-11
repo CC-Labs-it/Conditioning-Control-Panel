@@ -200,7 +200,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     _primePlaying = false;
                     _primePauseRequested = false;
                     _playAfterPrime = false;
-                    _primeTimer = new Timer(_ => OnPrimeTimeout(), null, TimeSpan.FromSeconds(2), Timeout.InfiniteTimeSpan);
+                    // A slow open gets the long bound; Playing re-arms the short frame bound.
+                    _primeTimer = new Timer(_ => OnPrimeTimeout(), null, TimeSpan.FromSeconds(10), Timeout.InfiniteTimeSpan);
                     player.Play();
                 }
             }
@@ -226,7 +227,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 {
                     if (IsDisposed) return;
                     if (_pendingMs > 0) { player.Time = _pendingMs; _pendingMs = 0; }
-                    if (_primingVideo) _primePlaying = true;
+                    if (_primingVideo) { _primePlaying = true; _primeTimer?.Change(TimeSpan.FromSeconds(2), Timeout.InfiniteTimeSpan); }
                 }
             }
 

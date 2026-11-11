@@ -111,6 +111,44 @@ public sealed class DeeperRowsTests
         return Task.CompletedTask;
     });
 
+    // WPF DeeperEditorWindow.xaml.cs:1077 hands any local file to VLC; without a player this head
+    // falls back to the browser surface, and a non-video file says so instead of naming a URL.
+    [Theory]
+    [InlineData("txt", false)]
+    [InlineData("mp4", true)]
+    public Task EditorLocalVideoFallsBackWithoutAPlayer(string extension, bool video) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("ccp-deeper-video-").FullName;
+        var path = Path.Combine(dir, "clip." + extension);
+        File.WriteAllBytes(path, new byte[16]);
+        var opened = 0;
+        var original = DeeperLocalAudio.OpenVideo;
+        DeeperLocalAudio.OpenVideo = (_, _) => { opened++; return Task.FromResult<IDeeperLocalAudio?>(null); };
+        var editor = new DeeperEditorWindow(new Enhancement { MediaType = MediaTypes.Video, MediaSource = path }, null);
+        try
+        {
+            editor.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(video ? 1 : 0, opened);
+            Assert.False(editor.LocalVideoImage.IsVisible);
+            Assert.False(editor.PreviewPlaceholder.IsVisible);
+            if (!video || !editor.BrowserPreview.HasEngine)
+            {
+                Assert.True(editor.VideoPreview.IsVisible);
+                Assert.Equal(video, editor.TxtVideoPreviewStub.Text != "This media file is not a video the preview can open.");
+            }
+            else Assert.True(editor.BrowserPreview.IsVisible);
+        }
+        finally
+        {
+            editor.Close();
+            DeeperLocalAudio.OpenVideo = original;
+            Directory.Delete(dir, true);
+        }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task EditorLocalAudioPlaysSeeksEndsAndStopsOnPanic() => AvaloniaTestDispatcher.RunAsync(() =>
     {

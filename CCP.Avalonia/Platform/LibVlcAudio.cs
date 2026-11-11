@@ -574,7 +574,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         // This lets a silent preview switch to the chosen output before audio starts.
         internal static void PreparePreferredDevice(MediaPlayer player)
         {
-            if (!OperatingSystem.IsLinux()) return;
+            if (!OperatingSystem.IsLinux() || string.IsNullOrEmpty(CoreSettings.Current.AudioOutputDeviceId)) return;
             try
             {
                 PreparePreferredDevice(CoreSettings.Current.AudioOutputDeviceId,

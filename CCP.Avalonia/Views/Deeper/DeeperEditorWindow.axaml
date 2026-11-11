@@ -10,7 +10,8 @@
        Image + EmojiToImageSource (x5)     -> plain TextBlock (Avalonia draws colour emoji natively)
        Line X1/X2/Y1/Y2                    -> StartPoint / EndPoint
        wv2:WebView2 x:Name="BrowserPreview"-> controls:WebHost - Microsoft.Web.WebView2 is Windows-only
-       vlc:VideoView x:Name="VideoPreview" -> Image fed by the LibVLC frame sink.
+       vlc:VideoView x:Name="VideoPreview" -> Image LocalVideoImage fed by the LibVLC frame sink. The
+                                              Border named VideoPreview is only the fallback stub.
        ContextMenu x:Shared="False"        -> inlined as <Canvas.ContextMenu> and, for the hero
                                               "+ Effect" button, a <MenuFlyout>. Avalonia has no
                                               x:Shared and no FindResource-a-menu; item names and
