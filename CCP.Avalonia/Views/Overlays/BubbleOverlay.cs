@@ -50,10 +50,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static TimeSpan? _lastStep;
         private static bool _pending;   // a frame is requested; the loop idles while the field is empty
         internal static Bitmap? Image, DarterImage;
-        internal static bool SkipPlatformChecksForTests;
         internal static Func<bool> LiveApplication = () => Application.Current?.ApplicationLifetime is global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
         private static Visual? _chaosHost;
-        private static int _chaosTargetCount;
 
         /// <summary>WPF BubbleService.LoadBubbleImage (BubbleService.cs:221, :918-936): every Start re-resolves
         /// the active mod's bubble.png, so a mod switch shows its sprite on the next start (a <c>??=</c>
@@ -61,10 +59,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void LoadBubbleImage()
         {
             Image = Helpers.ModArt.TryLoad("bubble.png");
+            DarterImage ??= LoadDarterImage();
+        }
+
+        // WPF BubbleService.cs:3415-3422: ChaosArt "bubbles/darter", user art first.
+        private static Bitmap? LoadDarterImage()
+        {
             var user = Path.Combine(CorePaths.UserData, "assets", "assets", "Chaos", "bubbles", "darter.png");
             var bundled = Path.Combine(AppContext.BaseDirectory, "assets", "Chaos", "bubbles", "darter.png");
-            try { DarterImage = File.Exists(user) ? new Bitmap(user) : File.Exists(bundled) ? new Bitmap(bundled) : Helpers.ModArt.TryLoadBuiltIn("chaos/bubbles/darter.png"); }
-            catch (Exception ex) { Log.Debug("Darter art: {E}", ex.Message); try { DarterImage = File.Exists(bundled) ? new Bitmap(bundled) : null; } catch { DarterImage = null; } DarterImage ??= Helpers.ModArt.TryLoadBuiltIn("chaos/bubbles/darter.png"); }
+            foreach (var path in new[] { user, bundled })
+            {
+                try
+                {
+                    if (File.Exists(path)) return new Bitmap(path);
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug("Darter art {Path}: {E}", path, ex.Message);
+                }
+            }
+            return Helpers.ModArt.TryLoadBuiltIn("chaos/bubbles/darter.png");
         }
 
         /// <summary>The "N/300 today" line listens to this (WPF AmbientXpBudgetChanged).</summary>
@@ -96,7 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
             if (_running) return;
-            if (!SkipPlatformChecksForTests && !X11Overlay.IsAvailable) { Log.Warning("Bubbles: this platform cannot show click-through overlays; skipped"); return; }
+            if (!X11Overlay.IsAvailable) { Log.Warning("Bubbles: this platform cannot show click-through overlays; skipped"); return; }
             var screens = ScreenList.Enumerate(host);
             if (screens.Count == 0) return;
             var s = CoreSettings.Current;
@@ -104,23 +118,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             LoadBubbleImage();
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
-                if (!OpenTarget(screens[i])) { Stop(); return; }
+                var sc = screens[i];
+                var w = new BubbleOverlayWindow(Targets.Count, sc.Bounds, sc.Scaling > 0 ? sc.Scaling : 1);
+                if (!X11Overlay.SetInputRects(w, w.Rects, 0) || !X11Overlay.SetOverrideRedirect(w, sc.Bounds))
+                {
+                    Log.Warning("Bubbles: the platform refused a click-through topmost overlay window; skipped");
+                    w.Close();
+                    Stop();
+                    return;
+                }
+                w.Show();
+                Windows.Add(w);
+                Targets.Add(sc);
             }
             _running = true;
             _lastStep = null;
             if (ambient) StartSpawning(frequency);
         }
 
-        private static bool OpenTarget(Screen sc)
-        {
-            var w = new BubbleOverlayWindow(Targets.Count, sc.Bounds, sc.Scaling > 0 ? sc.Scaling : 1);
-            if (!SkipPlatformChecksForTests && (!X11Overlay.SetInputRects(w, w.Rects, 0) || !X11Overlay.SetOverrideRedirect(w, sc.Bounds)))
-            {
-                Log.Warning("Bubbles: the platform refused a click-through topmost overlay window; skipped");
-                w.Close(); return false;
-            }
-            w.Show(); Windows.Add(w); Targets.Add(sc); return true;
-        }
         private static void StartSpawning(int? frequency)
         {
             var s = CoreSettings.Current;
@@ -171,7 +186,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             var s = CoreSettings.Current;
             if (!_running || Targets.Count == 0 || DisplayChangeCoordinator.SpawnsSuppressed || !Field.CanSpawn(s)) return;
-            var i = Field.Random.Next(_chaosPopped != null ? Math.Max(1, _chaosTargetCount) : Targets.Count);
+            var i = Field.Random.Next(Targets.Count);
             var a = Targets[i].WorkingArea;
             // Outside sessions, bubbles are always clickable (no UI toggle exists for the setting).
             var clickable = !CoreSession.IsSessionRunning || s.BubblesClickable;
@@ -238,12 +253,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 onDefuse(b);
             };
             Field.ChaosDetonated = onDetonate == null ? null : b => { AnchorPop(b); onDetonate(b); };
-            if (!_running)
-            {
-                Start(host, null, ambient: false);
-                _chaosOpenedWindows = _running;
-            }
-            _chaosTargetCount = Targets.Count;
+            if (_running) return;
+            Start(host, null, ambient: false);
+            _chaosOpenedWindows = _running;
         }
 
         /// <summary>WPF SetChaosFrozen + SetChaosInputLocked (manual pause): chaos bubbles hold
@@ -258,7 +270,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void EndChaos()
         {
             Field.HoldChaos = false;
-            bool hadChaos = _chaosPopped != null;
             _chaosPopped = null;
             _chaosHost = null;
             _chaosCanChannel = null;
@@ -266,8 +277,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.Held = false;
             Field.Bubbles.RemoveAll(b => b.Spec != null);
             if (_chaosOpenedWindows) { Stop(); return; }
-            for (int i = Windows.Count - 1; hadChaos && i >= _chaosTargetCount; i--)
-            { Windows[i].Close(); Windows.RemoveAt(i); Targets.RemoveAt(i); }
             foreach (var w in Windows) w.Sync();
         }
 
@@ -281,24 +290,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 b = AmbientBubble.SpawnChaos(Field.Random, 0, 0, 0, 1920, 1080, 1, spec);
             else
             {
+                // WPF BubbleService.cs:1580 PickScreenFor: the primary. ponytail: a pinned spawn on
+                // another monitor is the follow-up lane; it lands on the primary target here.
                 var i = Math.Max(0, Targets.FindIndex(sc => sc.IsPrimary));
-                if (_chaosHost != null)
-                {
-                    var screens = ScreenList.Enumerate(_chaosHost);
-                    var point = new PixelPoint((int)(spec.SpawnAtPxX ?? 0), (int)(spec.SpawnAtPxY ?? 0));
-                    var screen = spec.SpawnAtPxX == null || spec.SpawnAtPxY == null ? screens.FirstOrDefault(sc => sc.IsPrimary) : screens.FirstOrDefault(sc => point.X >= sc.Bounds.X && point.X < sc.Bounds.Right && point.Y >= sc.Bounds.Y && point.Y < sc.Bounds.Bottom) ?? screens.OrderBy(sc =>
-                    {
-                        var r = sc.Bounds;
-                        double dx = Math.Max(Math.Max(r.X - (double)point.X, point.X - (double)r.Right), 0);
-                        double dy = Math.Max(Math.Max(r.Y - (double)point.Y, point.Y - (double)r.Bottom), 0);
-                        return dx * dx + dy * dy;
-                    }).FirstOrDefault();
-                    if (screen != null)
-                    {
-                        i = Targets.FindIndex(sc => sc.Bounds == screen.Bounds);
-                        if (i < 0) { if (!OpenTarget(screen)) return null; i = Targets.Count - 1; }
-                    }
-                }
                 var a = Targets[i].WorkingArea;
                 b = AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec);
             }
@@ -311,8 +305,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void PopChaos(AmbientBubble b)
         {
             if (b.Popping || b.Spec == null || Field.HoldChaos) return;   // held: the click is swallowed
-            var power = ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.SpankerPower;
-            if (b.Spec.IsDarter && (power.HasValue || b.Spec.IsSweeper)) { bool first = !b.IsSpanked; b.Spank(Field.Random, power ?? 1); if (first && b.IsSpanked) Services.Chaos.ChaosLessons.Tick("rabbit_caller"); RequestFrame(); return; }
             b.Popping = true;
             ChaosLastPopX = b.CenterX;
             ChaosLastPopY = b.CenterY;
@@ -358,18 +350,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             try { Popped?.Invoke(); } catch (Exception ex) { Log.Debug("bubble popped handler: {E}", ex.Message); }   // WPF OnBubblePopped
         }
 
-        // WPF BubbleService.cs:1897: an allied rabbit mows overlapping chaos bubbles.
-        internal static void SweepSpanked()
-        {
-            if (Field.HoldChaos) return;
-            foreach (var ally in Field.Bubbles.ToArray())
-                if (ally.IsSpanked && !ally.Popping)
-                    foreach (var victim in Field.Bubbles.ToArray())
-                        if (victim.Screen == ally.Screen && victim.Spec is { IsDarter: false, IsFreeze: false } && !victim.Popping
-                            && Math.Abs(victim.CenterX - ally.CenterX) * 2 < victim.Size + ally.Size * ally.SpankGrowth && Math.Abs(victim.CenterY - ally.CenterY) * 2 < victim.Size + ally.Size * ally.SpankGrowth)
-                        { if (victim.IsLiveThreat) { if (victim.Snap()) Field.ChaosDefused?.Invoke(victim); } else PopChaos(victim); }
-        }
-
         internal static void OnFrame(TimeSpan now)
         {
             _pending = false;
@@ -380,7 +360,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 _lastStep = now;
                 var t0 = Stats ? Stopwatch.GetTimestamp() : 0;
-                Field.Step(); SweepSpanked();
+                Field.Step();
                 foreach (var w in Windows) w.Sync();
                 if (Stats) Sample(Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
                 if (Field.Bubbles.Count == 0) { _lastStep = null; return; }   // idle until the next spawn

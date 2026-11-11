@@ -124,6 +124,7 @@ public sealed class AmbientBeatLoopsTests
         "Controls/DescentFuseRailChip.cs", "Controls/Fx/FrameClock.cs",   // FrameClock: its own off-window fallback
         "Controls/HoverPop.cs", "Controls/PremiumSpark.cs", "Controls/TakeoverOrb.cs", "Controls/VatGlassCanvas.cs",
         "Views/Overlays/FlashOverlayWindow.cs",   // its own overlay window: no beat to share, and the exit must close it even unrendered
+        "Views/Chaos/ChaosRunHost.cs",   // Rabbit Caller 16 ms input poll (WPF ChaosModeService.cs:2859): a frame clock misses clicks at 30 Hz
         "Views/AvatarTube/AvatarTubeWindow.Chat.cs", "Views/Chaos/ChaosHudWindow.axaml.cs", "Views/Chaos/ChaosOverlayWindow.axaml.cs",
         "Views/Controls/SeasonRecapCard.axaml.cs", "Views/Lab/GazeMinigame/GazeMinigameWindow.axaml.cs",
         "Views/Overlays/AttentionTestTarget.cs", "Views/Overlays/FlashOverlay.cs", "Views/Overlays/SpiralOverlay.cs",
@@ -135,10 +136,9 @@ public sealed class AmbientBeatLoopsTests
 
     internal static readonly Regex FrameRate = new(@"1000(\.0)?\s*/\s*[A-Za-z0-9_(]|FromMilliseconds\(\s*(16|33|40|41|42|50)\s*\)");
 
-    private static bool HasFrameTimer(string code) => code.Contains("DispatcherTimer") && FrameRate.IsMatch(code.Replace("_rabbitAimTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(16) };", ""));
     [Fact]
     public void NoNewFrameTimerLoop() =>
-        Ratchet(Scan(HasFrameTimer, axaml: false), OwnFrameTimers,
+        Ratchet(Scan(code => code.Contains("DispatcherTimer") && FrameRate.IsMatch(code), axaml: false), OwnFrameTimers,
             "A per-view frame timer composes off the shared beat; use BeatLoop");
 
     private static List<string> Scan(Func<string, bool> hit, bool axaml, bool cs = true)
@@ -168,7 +168,6 @@ public sealed class AmbientBeatLoopsTests
     [Fact]
     public void TheScanSeesEverySpelling()
     {
-        Assert.True(HasFrameTimer("_rabbitAimTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(16) }; new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };"));
         Assert.Matches(Infinite, "IterationCount = IterationCount.Infinite,");
         Assert.Matches(Infinite, "<Animation Duration=\"0:0:4\" IterationCount=\"INFINITE\">");
         Assert.Matches(Infinite, "new IterationCount(0, IterationType.Infinite)");

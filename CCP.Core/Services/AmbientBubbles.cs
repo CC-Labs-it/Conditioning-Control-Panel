@@ -62,7 +62,7 @@ namespace ConditioningControlPanel.Services
         private int _animType;
         // WPF BubbleService.cs:2656,3380-3400,3834-3952: darter state.
         private double _vx, _vy, _left, _right, _upper, _lower;
-        private double _telegraphMs, _darterLifeMs, _darterActiveMs, _throbPhase, _throbPunch;
+        private double _telegraphMs, _darterLifeMs, _throbPhase, _throbPunch;
         private int _bounces;
         private bool _escaping;
 
@@ -85,21 +85,6 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>A live threat the player defuses by holding (WPF NeedsHoldDefuse for the plain lives).</summary>
         public bool IsLiveThreat => Spec is { IsLive: true, IsDarter: false, IsFreeze: false };
-        public bool IsSpanked { get; private set; }
-        public double SpankGrowth { get; private set; } = 1;
-        private double _spankCooldownMs;
-        // WPF BubbleService.cs:4722: redirect and grow only on the first smack.
-        public void Spank(Random random, double growth)
-        {
-            if (_spankCooldownMs > 0) return;
-            _spankCooldownMs = 250;
-            double speed = Math.Min(Math.Max(Math.Sqrt(_vx * _vx + _vy * _vy), 0.01) * 1.18, (Spec?.DarterSpeed ?? 9) * 2.2);
-            double angle = random.NextDouble() * Math.PI * 2;
-            _vx = Math.Cos(angle) * speed; _vy = Math.Sin(angle) * speed; _escaping = false; _bounces = 0; _throbPunch = 0.35;
-            if (!IsSpanked) { SpankGrowth = Math.Max(1, growth); IsSpanked = true; }
-        }
-        // WPF BubbleService.cs:4704-4706: catching during the flare is not quick.
-        public bool WasQuickCatch => Spec is { IsDarter: true } && _telegraphMs <= 0 && _darterActiveMs <= Spec.QuickWindowMs;
         public double DarterFlareFraction => Spec is { IsDarter: true, TelegraphMs: > 0 }
             ? Math.Clamp(_telegraphMs / Spec.TelegraphMs, 0, 1) : 0;
         public double FuseSecLeft => Math.Max(0, FuseRemainingMs) / 1000.0;
@@ -183,7 +168,7 @@ namespace ConditioningControlPanel.Services
         public static AmbientBubble SpawnChaos(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
             double scaling, Chaos.EffectBubbleSpec spec)
         {
-            var b = new AmbientBubble { Screen = screen, Clickable = true, Spec = spec, IsSpanked = spec.IsSweeper, Size = spec.IsDarter ? Math.Max(60, (int)Math.Round(spec.SizePx)) : spec.SizePx };
+            var b = new AmbientBubble { Screen = screen, Clickable = true, Spec = spec, Size = spec.IsDarter ? Math.Max(60, (int)Math.Round(spec.SizePx)) : spec.SizePx };
             if (spec.IsLive) b.FuseTotalMs = b.FuseRemainingMs = Math.Max(1, spec.FuseMs);   // WPF :3362
             b._speed = (1.0 + r.NextDouble()) * Math.Clamp(1.4 - (b.Size - 150) / 220.0, 0.6, 1.4)
                        * Math.Max(0.1, spec.SpeedMult) * Chaos.ChaosTuning.CHAOS_SPEED_MULT;
@@ -237,7 +222,7 @@ namespace ConditioningControlPanel.Services
         {
             get
             {
-                if (Spec?.IsDarter == true) return Scale + (SpankGrowth - 1); // WPF :4255: no second wobble
+                if (Spec?.IsDarter == true) return Scale; // WPF :4255: no second wobble
                 double calm = Spec?.VariantId is "video" or "htlink" ? 0.4 : 1.0, d = DangerFactor;
                 return Scale + (0.06 + d * 0.0225 * calm) * Math.Sin(_timeAlive * (7.5 + d * 9.0 * calm) + _wobbleOffset);
             }
@@ -281,9 +266,8 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>One logical step. <paramref name="held"/> and the cursor (global DIPs) feed a
         /// running defuse channel; a channel pins the bubble and pauses the fuse (WPF :3796).</summary>
-        public Result Step(bool held = false, double cursorX = 0, double cursorY = 0, DateTime nowUtc = default, double timeScale = 1)
+        public Result Step(bool held = false, double cursorX = 0, double cursorY = 0, DateTime nowUtc = default)
         {
-            double ts = Spec == null ? 1 : Math.Clamp(timeScale, 0.05, 1);
             if (Popping)
             {
                 // WPF BubbleService.cs:3777-3788: a darter bursts bigger and slower.
@@ -297,11 +281,11 @@ namespace ConditioningControlPanel.Services
                 return Fade <= 0 ? Result.Done : Result.Alive;
             }
             if (Channeling) return TickChannel(held, cursorX, cursorY, nowUtc);
-            if (Spec?.IsDarter == true) return StepDarter(ts);
+            if (Spec?.IsDarter == true) return StepDarter();
             // WPF :4147-4193: the fuse burns 32 ms a step; fuse-out detonates.
             if (Spec is { IsLive: true } && FuseRemainingMs > 0)
             {
-                FuseRemainingMs -= FuseStepMs * ts;
+                FuseRemainingMs -= FuseStepMs;
                 if (FuseRemainingMs <= 0) return GoOff(null);
             }
             _timeAlive += 0.02;
@@ -313,25 +297,23 @@ namespace ConditioningControlPanel.Services
                 case 2: offset = Math.Cos(_timeAlive * 5.4) * 25; Angle = (Angle - 0.66) % 360; break;
                 case 3: offset = Math.Sin(_timeAlive * 3) * 30 + Math.Cos(_timeAlive * 6) * 15; Angle = (Angle + 0.54) % 360; break;
             }
-            Y -= _speed * ts;
+            Y -= _speed;
             X = _startX + offset;
             if (Y >= _top) return Result.Alive;
             return Spec is { IsLive: true } ? GoOff(null) : Result.Missed;   // WPF :4212: a live that escapes detonates
         }
 
         // WPF BubbleService.cs:3834-3867,3888-3915,3951: flare in place, reflect three
-        // times, then exit or expire harmlessly. Boon steering remains part B.
-        private Result StepDarter(double ts)
+        // times, then exit or expire harmlessly. Field time scaling and boon steering are part B.
+        private Result StepDarter()
         {
-            _spankCooldownMs = Math.Max(0, _spankCooldownMs - 32);
-            _throbPhase += 0.5 * Math.Max(ts, 0.4);
+            _throbPhase += 0.5;
             _throbPunch = Math.Max(0, _throbPunch - 0.05);
             Scale = 1 + 0.10 * Math.Sin(_throbPhase) + _throbPunch;
             if (_telegraphMs > 0) _telegraphMs -= 32;
             else
             {
-                _darterActiveMs += 32 * Math.Max(ts, 0.15);
-                X += _vx * ts; Y += _vy * ts;
+                X += _vx; Y += _vy;
                 if (!_escaping)
                 {
                     bool hit = false;
@@ -352,7 +334,7 @@ namespace ConditioningControlPanel.Services
                         return Result.Done;
                 }
             }
-            _darterLifeMs -= 32 * Math.Max(ts, 0.15);
+            _darterLifeMs -= 32;
             return _darterLifeMs <= 0 ? Result.Done : Result.Alive;
         }
     }
@@ -378,7 +360,6 @@ namespace ConditioningControlPanel.Services
         public readonly Random Random = new();
         /// <summary>WPF SetChaosFrozen: a held Chaos run's live bubbles do not move (a pop burst still plays).</summary>
         public bool HoldChaos;
-        public double ChaosTimeScale = 1;
         /// <summary>WPF ChaosMouseHeld + CursorPx: the player's press, in global DIPs, for a defuse channel.</summary>
         public bool Held;
         public double CursorX, CursorY;
@@ -441,7 +422,7 @@ namespace ConditioningControlPanel.Services
                 if (i >= Bubbles.Count) continue;   // a callback cleared the field
                 var b = Bubbles[i];
                 if (HoldChaos && b.Spec != null && !b.Popping) { b.CancelChannel(); continue; }
-                var r = b.Step(Held, CursorX, CursorY, now, ChaosTimeScale);
+                var r = b.Step(Held, CursorX, CursorY, now);
                 if (r == AmbientBubble.Result.Alive) continue;
                 if (r == AmbientBubble.Result.Detonated) { ChaosDetonated?.Invoke(b); continue; }
                 if (r == AmbientBubble.Result.Defused) { ChaosDefused?.Invoke(b); continue; }

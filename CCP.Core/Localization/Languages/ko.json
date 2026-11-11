@@ -1,7 +1,9 @@
 {
-  "chaos_time_slow": "시간 감속", "chaos_rabbit_extended": "🐇 감속 중에 잡음. +0.8초", "chaos_rabbit_quick": "⚡ 빠른 포획. 시간이 느려집니다",
-  "chaos_rabbit_caught": "🐇 흰 토끼 포획. 시간이 느려집니다", "chaos_rabbit_pointer": "토끼 호출에는 데스크톱 포인터 접근이 필요합니다", "chaos_rabbit_whistle": "🐇 휘파람이 기다립니다. 다음 클릭으로 부릅니다", "chaos_first_play_award": "+{0} ✦ 첫 플레이",
-  "chaos_rabbit_storm": "토끼 폭풍", "chaos_rabbit_summoned_storm": "🐇 손끝에 {0}마리. 굴이 비어 갑니다", "chaos_rabbit_summoned": "🐇 {0}마리가 손끝에 응답했습니다",
+  "chaos_rabbit_pointer": "토끼 호출에는 데스크톱 포인터 접근이 필요합니다",
+  "chaos_rabbit_whistle": "🐇 휘파람이 기다립니다. 다음 클릭으로 부릅니다",
+  "chaos_rabbit_storm": "토끼 폭풍",
+  "chaos_rabbit_summoned": "🐇 {0}마리가 손끝에 응답했습니다",
+  "chaos_rabbit_summoned_storm": "🐇 손끝에 {0}마리. 굴이 비어 갑니다",
   "deeper_submission_badge_published": "게시됨",
   "deeper_submission_badge_published_tip": "이 인핸스먼트는 커뮤니티 카탈로그에 게시되어 있습니다.",
   "deeper_submission_badge_pending": "대기 중",

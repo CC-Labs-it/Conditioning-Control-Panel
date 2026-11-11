@@ -13,8 +13,9 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// WPF hook returned false and let it through. A grab would swallow it, which is why this is not one.
 ///
 /// <para>Only X11/XWayland surfaces report: under Wayland the pointer over a native Wayland window is
-/// invisible to X clients, so click-away there only sees clicks on X windows. Null when there is no
-/// X display at all (headless, Windows, macOS). One owned connection, opened lazily, UI thread only.</para>
+/// invisible to X clients, so click-away there only sees clicks on X windows. <see cref="Read"/> is
+/// null when there is no X display at all (headless, Windows, macOS); <see cref="ReadLeft"/> also
+/// reads Win32 on Windows. One owned connection, opened lazily, UI thread only.</para>
 /// </summary>
 internal static class X11Pointer
 {
