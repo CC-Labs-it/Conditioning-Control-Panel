@@ -27,7 +27,7 @@ package() {
   cp -a ConditioningControlPanel "$pkgdir/opt/conditioning-control-panel"
   install -Dm755 /dev/stdin "$pkgdir/usr/bin/conditioning-control-panel" <<'EOF'
 #!/bin/sh
-exec /opt/conditioning-control-panel/CCP.Avalonia "$@"
+exec /opt/conditioning-control-panel/conditioning-control-panel.sh "$@"
 EOF
   cp -a ConditioningControlPanel/share "$pkgdir/usr/"
   install -Dm644 ConditioningControlPanel/LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"

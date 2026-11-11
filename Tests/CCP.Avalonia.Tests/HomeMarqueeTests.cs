@@ -158,6 +158,40 @@ public sealed class HomeMarqueeTests
         return Task.CompletedTask;
     });
 
+    /// <summary>Lane perf (WSLg on the CPU): the software-render floor takes WPF's Performance tier, which parks every
+    /// other ambient loop, but the marquee keeps scrolling; the user's own Performance mode still parks it.</summary>
+    [Fact]
+    public Task MarqueeKeepsScrollingUnderTheSoftwareRenderFloor() => WithShell((w, dash) =>
+    {
+        var s = CoreSettings.Current;
+        (s.MotionLevel, s.PerformanceMode, s.MarqueeMessage) = (MotionLevel.Full, false, "Good night");
+        global::ConditioningControlPanel.Avalonia.Platform.SoftwareRender.ResetForTests();
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.Platform.SoftwareRender.Report(true);
+            Assert.False(global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowAmbientLoops);
+            dash.StartMarqueeAnimation();
+            Assert.True(dash.Marquee.IsScrolling);
+            Assert.Equal(MarqueeScroller.CpuPathInterval, dash.Marquee.Interval);   // owner: 20 fps on the CPU path
+            s.LighterEffects = LighterEffectsMode.Off;                            // the user's Off beats the probe
+            dash.StartMarqueeAnimation();
+            Assert.Equal(MarqueeScroller.BeatInterval, dash.Marquee.Interval);
+            s.LighterEffects = LighterEffectsMode.On;
+            dash.StartMarqueeAnimation();
+            Assert.Equal(MarqueeScroller.CpuPathInterval, dash.Marquee.Interval);
+            s.PerformanceMode = true;
+            dash.StartMarqueeAnimation();
+            Assert.False(dash.Marquee.IsScrolling);
+        }
+        finally
+        {
+            global::ConditioningControlPanel.Avalonia.Platform.SoftwareRender.ResetForTests();
+            s.PerformanceMode = false;
+            s.LighterEffects = LighterEffectsMode.Auto;
+        }
+        return Task.CompletedTask;
+    });
+
     /// <summary>P01: the shell hides Home with IsVisible, so the strip's clock must stop while another tab is in front.</summary>
     [Fact]
     public Task MarqueeStopsTickingWhileHomeIsHidden() => WithShell((w, dash) =>

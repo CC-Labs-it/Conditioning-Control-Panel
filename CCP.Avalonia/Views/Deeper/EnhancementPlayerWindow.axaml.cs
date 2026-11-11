@@ -117,7 +117,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     ///         first pass assumed: NavigationStarted carries a settable Cancel (so the allowlist
     ///         and the one-shot file:// pin are real) and InvokeScript is ExecuteScriptAsync. What
     ///         genuinely has no counterpart is ZoomFactor, AddScriptToExecuteOnDocumentCreatedAsync
-    ///         and ContainsFullScreenElementChanged. Zoom stays stubbed; fullscreen uses page messages.</item>
+    ///         and ContainsFullScreenElementChanged. Zoom stays stubbed; fullscreen entry reads the engine's
+    ///         own signal through the platform handle (Platform/WebFullscreenSignal), exit uses page messages.</item>
     ///   <item>Dark title bars remain unported. Fullscreen uses Avalonia windows.</item>
     /// </list>
     /// </summary>
@@ -318,6 +319,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             AddHandler(KeyUpEvent, OnPlayerKeyUp, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
             _videoBrowser.NavigationCompleted += OnVideoNavigationCompleted;
             _videoBrowser.WebMessage += OnVideoWebMessage;
+            _videoBrowser.NativeFullscreenEntered += EnterVideoFullscreen;
             _btnPictureInPicture.Click += (_, _) => BtnPictureInPicture_Click();
             _sliderVolume.Value = CoreSettings.Current.DeeperPlayerVolume;
             _sliderVolume.PropertyChanged += SliderVolume_PropertyChanged;
@@ -933,8 +935,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void AdjustVideoZoom(double delta)
         {
             // ponytail: needs a browser zoom factor. NativeWebView genuinely has none — this is one
-            // of the three CoreWebView2 members with no counterpart (the others are
-            // AddScriptToExecuteOnDocumentCreatedAsync and ContainsFullScreenElementChanged), and
+            // of the CoreWebView2 members with no NativeWebView counterpart (another is
+            // AddScriptToExecuteOnDocumentCreatedAsync), and
             // it is NOT a missing script channel: InvokeScript works. CSS `zoom` through that
             // channel was the obvious substitute and is not one — it is per-document, so it is lost
             // on the next navigation, and it does not scale a fullscreened video at all. So the
