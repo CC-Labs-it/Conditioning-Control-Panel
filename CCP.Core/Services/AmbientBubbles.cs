@@ -93,7 +93,7 @@ namespace ConditioningControlPanel.Services
         public AmbientBubble? OrbitTarget { get; private set; }
         private double _orbitSeconds, _roamLeft, _roamRight, _roamTop, _roamBottom, _vx, _vy;
         private int _shimmerSteps;
-        private bool _roaming;
+        private bool _roaming, _dissolving;
         public static double EscortRadius(double liveSize, double escortSize) => Math.Max(
             Chaos.ChaosTuning.CHAPERONE_ORBIT_RADIUS_DIP,
             (liveSize + escortSize) / 2 + Chaos.ChaosTuning.CHAPERONE_ORBIT_GAP_DIP);
@@ -125,7 +125,8 @@ namespace ConditioningControlPanel.Services
         }
         internal bool StepOrbit(bool targetPresent)
         {
-            if (!targetPresent || OrbitTarget!.Popping) { Popping = true; Deflating = true; return false; }
+            _timeAlive += 0.02; // WPF advances breathing before the orbit branch, which skips rotation.
+            if (!targetPresent || OrbitTarget!.Popping) { Popping = true; _dissolving = true; return false; }
             _orbitSeconds += 0.032;
             PlaceOrbit();
             return ++_shimmerSteps % 7 == 0;
@@ -322,6 +323,13 @@ namespace ConditioningControlPanel.Services
             ShieldFlashMs = Math.Max(0, ShieldFlashMs - FuseStepMs);
             if (Popping)
             {
+                // WPF BubbleService.cs:3771: a quiet dissolve shrinks and fades in place.
+                if (_dissolving)
+                {
+                    Scale = Math.Max(0.1, Scale - 0.02);
+                    Fade -= 0.05;
+                    return Fade <= 0 ? Result.Done : Result.Alive;
+                }
                 // Pop animation - expand and fade; lucky pops linger ~50% longer.
                 Scale += Deflating ? -0.03 : 0.04;
                 Fade -= Lucky ? 0.044 : 0.066;

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services.Chaos;
@@ -18,6 +19,8 @@ public class ChaosChaperoneRunTests
     [Fact]
     public Task Spawn_tick_links_pair_and_routes_seventh_shimmer_to_field_fx() => AvaloniaTestDispatcher.RunAsync(() =>
     {
+        var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
+        bool oldAnnouncer = CoreSettings.Current.ChaosAnnouncerEnabled;
         var oldRng = ChaosRunHost.Rng;
         var oldNow = ChaosFieldFxOverlay.NowMs;
         var oldSkia = CoreSettings.Current.ChaosSkiaFxEnabled;
@@ -27,6 +30,8 @@ public class ChaosChaperoneRunTests
         var oldDiscovered = new HashSet<string>(ChaosMeta.State.DiscoveredCodexIds);
         try
         {
+            LocalizationManager.Instance.SetLanguage("es");
+            CoreSettings.Current.ChaosAnnouncerEnabled = true;
             ChaosMeta.State.RunsCompleted = 0;
             ChaosMeta.State.SeenChaperone = false;
             CoreSettings.Current.ChaosSkiaFxEnabled = false;
@@ -35,6 +40,7 @@ public class ChaosChaperoneRunTests
             ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
             ChaosRunHost.Overlay!.FinishCountdown();
             ChaosRunHost.StopTimerForTests();
+            ChaosAnnouncerOverlay.CloseActive();
             ChaosRunHost.Rng = new ZeroRandom();
             ChaosRunHost.SpawnTick();
             Assert.DoesNotContain(BubbleOverlay.Field.Bubbles, b => b.Spec?.IsChaperoneLive == true);
@@ -45,6 +51,9 @@ public class ChaosChaperoneRunTests
             var escort = Assert.Single(BubbleOverlay.Field.Bubbles.Where(b => b.Spec?.IsEscort == true));
             Assert.Same(escort, live.Escort);
             Assert.Same(live, escort.OrbitTarget);
+            Assert.Equal("💞 LA ACOMPAÑANTE", ChaosAnnouncerOverlay.Active!.Current!.Text);
+            Assert.Equal("primero su pequeña escolta", ChaosAnnouncerOverlay.Active!.Current!.SubText);
+            Assert.Contains("💞 llegó acompañada", ChaosRunHost.State!.RecentEvents);
             Assert.True(ChaosMeta.State.SeenChaperone);
             Assert.True(ChaosMeta.IsDiscovered("bubble:chaperone"));
             BubbleOverlay.Press(live, live.CenterX, live.CenterY);
@@ -64,6 +73,8 @@ public class ChaosChaperoneRunTests
         finally
         {
             ChaosRunHost.ForceShutdown();
+            LocalizationManager.Instance.SetLanguage(oldLanguage);
+            CoreSettings.Current.ChaosAnnouncerEnabled = oldAnnouncer;
             ChaosRunHost.Rng = oldRng;
             ChaosFieldFxOverlay.NowMs = oldNow;
             ChaosFieldFxOverlay.SkipPlatformChecksForTests = oldSkip;

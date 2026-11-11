@@ -7,6 +7,47 @@ namespace CCP.Core.Tests;
 
 public class ChaosEscortOrbitTests
 {
+    private static (AmbientBubbleField Field, AmbientBubble Live, AmbientBubble Escort) Pair()
+    {
+        var pair = ChaosBubbleVariants.BuildChaperonePair(0.5);
+        var field = new AmbientBubbleField(new Random(1));
+        var live = AmbientBubble.SpawnChaos(field.Random, 0, 0, 0, 1920, 1080, 1, pair.Live);
+        var escort = AmbientBubble.SpawnChaos(field.Random, 0, 0, 0, 1920, 1080, 1, pair.Escort);
+        live.AttachChaperone(escort, 0, 0, 1920, 1080, field.Random);
+        field.Bubbles.Add(live); field.Bubbles.Add(escort);
+        return (field, live, escort);
+    }
+
+    [Fact]
+    public void Orbit_breathes_without_rotating_or_using_normal_motion()
+    {
+        var (field, _, escort) = Pair();
+        double initial = escort.DrawScale, angle = escort.Angle;
+        for (int i = 0; i < 5; i++) field.Step();
+        Assert.NotEqual(initial, escort.DrawScale);
+        Assert.Equal(angle, escort.Angle);
+        Assert.False(escort.Popping);
+    }
+
+    [Fact]
+    public void Resolving_live_dissolves_escort_in_place_without_spin()
+    {
+        var (field, live, escort) = Pair();
+        live.Popping = true;
+        field.Step();
+        double x = escort.X, y = escort.Y, angle = escort.Angle;
+        for (int i = 1; i <= 19; i++)
+        {
+            Assert.Equal(0, field.Step());
+            Assert.Equal(1 - 0.02 * i, escort.Scale, 6);
+            Assert.Equal(1 - 0.05 * i, escort.Fade, 6);
+            Assert.Equal((x, y, angle), (escort.X, escort.Y, escort.Angle));
+        }
+        Assert.Contains(escort, field.Bubbles);
+        Assert.Equal(0, field.Step());
+        Assert.DoesNotContain(escort, field.Bubbles);
+    }
+
     [Fact]
     public void Escort_clears_rims_orbits_and_dissolves_without_a_miss()
     {

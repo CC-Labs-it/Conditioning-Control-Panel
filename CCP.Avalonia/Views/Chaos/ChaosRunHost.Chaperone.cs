@@ -1,4 +1,5 @@
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Chaos;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
@@ -15,9 +16,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 ChaosMeta.State.SeenChaperone = true;
                 ChaosMeta.Save();
-                ChaosAnnouncerOverlay.Announce("💞 THE CHAPERONE", ChaosAnnounceKind.Item,
-                    artKey: "chaperone", subText: "its little escort first");
-                _state.PushEvent("💞 it brought company");
+                ChaosAnnouncerOverlay.Announce(Loc.Get("chaos_chaperone_title"), ChaosAnnounceKind.Item,
+                    artKey: "chaperone", subText: Loc.Get("chaos_chaperone_subtitle"));
+                _state.PushEvent(Loc.Get("chaos_chaperone_event"));
             }
             var (live, escort) = ChaosBubbleVariants.BuildChaperonePair(intensity, _state.FuseTimeMult,
                 cfg.EffectIntensity, _state.BubbleScale, debut ? ChaosTuning.DEBUT_FUSE_MULT : 1);
