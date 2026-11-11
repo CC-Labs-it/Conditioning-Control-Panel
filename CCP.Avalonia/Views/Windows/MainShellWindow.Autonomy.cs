@@ -321,6 +321,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// already refused the panic before this is reached.</summary>
         internal void StopAutonomyForPanic()
         {
+            System.Threading.Interlocked.Increment(ref _profileLoadGeneration);
             _autonomyTestGeneration++;
             _autonomyTestDialog?.Close();   // registered through PanicSurfaces' takeover entry
             Autonomy.Stop();

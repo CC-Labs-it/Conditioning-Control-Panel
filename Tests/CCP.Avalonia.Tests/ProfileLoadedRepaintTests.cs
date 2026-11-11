@@ -55,4 +55,50 @@ public sealed class ProfileLoadedRepaintTests
             finally { shell.Close(); Dispatcher.UIThread.RunJobs(); }
             return Task.CompletedTask;
         });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PendingProfileLoadCannotRestartAfterPanicOrClose(bool close) =>
+        AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var settings = new SettingsService();
+            CoreSettings.ServiceProvider = () => settings;
+            var s = CoreSettings.Current;
+            s.AutonomyResumeOnStartup = false;
+            s.AutonomyModeEnabled = false;
+            s.AutonomyConsentGiven = true;
+            CoreEntitlement.HasPremiumProvider = () => true;
+            CoreEntitlement.IsFreeTodayProvider = _ => false;
+            var shell = new MainShellWindow();
+            try
+            {
+                shell.Show(); Dispatcher.UIThread.RunJobs();
+                s.AutonomyResumeOnStartup = true;
+                s.AutonomyModeEnabled = true;
+                s.PlayerLevel = 17;
+                var starts = 0;
+                shell.Autonomy.EnabledChanged += (_, on) => { if (on) starts++; };
+                var field = typeof(AccountSeed).GetField("ProfileLoaded", BindingFlags.Static | BindingFlags.NonPublic)!;
+                ((Action?)field.GetValue(null))?.Invoke();
+                if (close) shell.Close();
+                else shell.StopAutonomyForPanic();
+                Assert.True(s.AutonomyModeEnabled);
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(shell.Autonomy.IsEnabled);
+                Assert.Equal(0, starts);
+                if (!close)
+                {
+                    Assert.Equal("LVL 17", shell.FindControl<TextBlock>("TxtLevelLabel")!.Text);
+                    // A later profile load remains eligible; panic invalidates only the queued work.
+                    ((Action?)field.GetValue(null))?.Invoke();
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.True(shell.Autonomy.IsEnabled);
+                    Assert.Equal(1, starts);
+                }
+            }
+            finally { shell.Close(); Dispatcher.UIThread.RunJobs(); }
+            return Task.CompletedTask;
+        });
+
 }
