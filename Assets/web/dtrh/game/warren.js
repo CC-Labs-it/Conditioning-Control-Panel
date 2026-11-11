@@ -23,6 +23,8 @@
  * pending STATION reveals flash in 3D (hubStations.flashStation).
  * ==========================================================================*/
 
+import { artBase } from '../shared/artBase.js';
+
 import {
   UPGRADES, upgradeById, BRANCH_LABEL, BRANCH_COLOR,
   LIFETIME_BOONS, boonDefById, boonsInCat,
@@ -43,7 +45,7 @@ import { S, updateSetting, descentSetup, UNLOCK_LADDER, RANK_NAMES, MOTIONS,
 import { getLevel } from '../engine/audioLevels.js';
 import { isMuted } from '../shared/audioMute.js';
 
-const ART = 'https://ccp.art/';
+const ART = artBase();
 const nfmt = (n) => Math.floor(n).toLocaleString();
 
 // A boon's identity colour: its rarity tier, red for a curse, gold once maxed.

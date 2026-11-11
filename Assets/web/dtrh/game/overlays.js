@@ -6,10 +6,12 @@
  * the payout lines that arrive over the bridge as payout-result.
  * ==========================================================================*/
 
+import { artBase } from '../shared/artBase.js';
+
 import { createMomentFeel } from './momentFeel.js';
 import { planRowFor, buildPlanRow, postFunnel, PLAN_FEATURE, PLAN_ROW_DELAY_MS } from './planCard.js';
 
-const ART = 'https://ccp.art/';
+const ART = artBase();
 
 export function createOverlays(hud) {
   // Feel wave 2: the countdown breath, recap stagger + count-up, edge bloom (game/momentFeel.js).

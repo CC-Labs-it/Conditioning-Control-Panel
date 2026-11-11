@@ -19,6 +19,8 @@
  * are untouched. onPick(boon,false) on a click; onSkip(true) on timeout.
  * ==========================================================================*/
 
+import { artBase } from '../shared/artBase.js';
+
 import * as THREE from 'three';
 import { boonTheme } from '../game/boons.js';
 import { softPulse } from '../shared/softPulse.js';
@@ -38,7 +40,7 @@ function feelMoment(event, data) {
   try { window.dispatchEvent(new CustomEvent('dtrh:feel', { detail: Object.assign({ kind: 'moment', event }, data || {}) })); } catch (_) { /* ignore */ }
 }
 
-const ART = 'https://ccp.art/';       // boon art lives on the CDN (matches overlays.js)
+const ART = artBase();       // boon art lives on the CDN (matches overlays.js)
 
 const CARD_AHEAD = 8;                   // camera-to-card gap (was 13; closer = the Pow lands right on them)
 const STOP_AHEAD = 4;                   // the fall parks this far ahead of where it was (settles motion)

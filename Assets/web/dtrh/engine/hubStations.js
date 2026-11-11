@@ -21,9 +21,11 @@
  * the world glides past, the menu rides with you.
  * ==========================================================================*/
 
+import { artBase } from '../shared/artBase.js';
+
 import * as THREE from 'three';
 
-const ART = 'https://ccp.art/';          // station art on the CDN (boonPick idiom)
+const ART = artBase();          // station art on the CDN (boonPick idiom)
 const AHEAD = 9;                         // depth lead: the menu hangs this far ahead (pulled in from 11 - nearer the POV)
 const CARD_W = 2.1, CARD_H = 2.55;       // station card content size (portrait) - smaller so they float INSIDE the bore, not in the tube wall
 const PORTAL_R = 2.1;                    // FALL IN portal disc radius

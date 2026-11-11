@@ -1,3 +1,5 @@
+import { artBase } from '../shared/artBase.js';
+
 /* ============================================================================
  * variants.js - the FULL DtRH bubble pool as data, ported from
  * ChaosBubbleVariants.cs + ChaosTuning.cs (M4). Every number here mirrors the
@@ -24,8 +26,8 @@ export const GIANT_SIZE_SCALE = 0.70;
 export const MOTION = { FloatUp: 'FloatUp', RainDown: 'RainDown', RoamBounce: 'RoamBounce', SideDrift: 'SideDrift' };
 
 const SPRITE_BASE = '/dtrh/assets/bubbles/effects/';
-const ART_BASE = 'https://ccp.art/bubbles/';   // bundled assets/Chaos/bubbles/{id}.png
-const MAT_ART_BASE = 'https://ccp.art/materials/'; // bundled assets/Chaos/materials/{id}.png (crafting ingredient cutouts)
+const ART_BASE = artBase() + 'bubbles/';   // bundled assets/Chaos/bubbles/{id}.png
+const MAT_ART_BASE = artBase() + 'materials/'; // bundled assets/Chaos/materials/{id}.png (crafting ingredient cutouts)
 const PLAIN_SPRITE = '/dtrh/assets/bubbles/bubble.png'; // the classic dashboard Bubble-Pop soap bubble
 
 // One row per variant: visual band + behaviour + native payload binding.

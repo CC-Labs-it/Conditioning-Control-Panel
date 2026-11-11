@@ -15,6 +15,8 @@
  * stream. Suppressed (setSpawnEnabled(false)) during drafts / junctions / holds.
  * ==========================================================================*/
 
+import { artBase } from '../shared/artBase.js';
+
 import * as THREE from 'three';
 import { LIFETIME_BOONS, boonDefById, RANKS } from '../game/catalog.js';
 import { motionScale } from '../shared/motion.js';
@@ -26,7 +28,7 @@ const GATHER_GLOW = 0.6;      // extra glow at the middle of the gather (light g
 const GATHER_MAX_LIVE = 3;    // cap on cards still gathering at once
 const GATHER_EASE = (t) => t * t * (3 - 2 * t);
 
-const ART = 'https://ccp.art/';          // matches boonPick.js / overlays.js
+const ART = artBase();          // matches boonPick.js / overlays.js
 const CARD_W = 2.4, CARD_H = 3.05;       // portrait, like the boon cards
 const AHEAD = 42;                        // depth lead: spawn this far ahead of the camera
 const CULL_BEHIND = 3;                   // cull once the camera has fallen this far past it

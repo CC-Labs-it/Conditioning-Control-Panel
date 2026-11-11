@@ -16,7 +16,9 @@
  * gates its pane instead; extensions + the_pink_heart wait for later parts).
  * ==========================================================================*/
 
-const ART = 'https://ccp.art/';   // bundled assets/Chaos/<folder>/<id>.png
+import { artBase } from '../shared/artBase.js';
+
+const ART = artBase();   // bundled assets/Chaos/<folder>/<id>.png
 
 // ============================ materials ============================
 // ch = the single-character grid alphabet used by recipe strings below.

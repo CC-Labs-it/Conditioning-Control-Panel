@@ -10,6 +10,8 @@
  * (ccp.art/announce/{key}.png) like the WPF ChaosAnnouncerOverlay.
  * ==========================================================================*/
 
+import { artBase } from '../shared/artBase.js';
+
 import { createHudTips } from './hudTips.js';
 import { HUD_TIPS, upgradeById } from './catalog.js';
 import { motionScale } from '../shared/motion.js';
@@ -21,7 +23,7 @@ const RIPPLE_COST = 30; // the ripple spends this much focus per cast (chaosRun 
 // ---- multiplier readout feel (wave 2) ----
 const HEAT_GLOW_MAX = 0.45;     // the warm glow behind the multiplier at full heat (opacity)
 const TIER_BLOOM_MS = 900;      // a tier change blooms behind the number for this long
-const ART = 'https://ccp.art/';
+const ART = artBase();
 
 // The emotes currency mark: three *different* feeling-faces fanned like a hand
 // of cards - a yellow sad face behind, a blue surprised face, and a pink plain

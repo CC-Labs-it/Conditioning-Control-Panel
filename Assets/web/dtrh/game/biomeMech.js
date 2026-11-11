@@ -30,6 +30,8 @@
  * on entry it restores on exit, so chamber -> chamber is always clean.
  * ==========================================================================*/
 
+import { artBase } from '../shared/artBase.js';
+
 import { blindfoldOpacityFor } from './boonPassives.js';
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -359,7 +361,7 @@ export function createBiomeMech(g) {
         usedFacts.add(fact);
         g.spawner.spawnPickup({
           kind: 'verdict',
-          spriteUrl: 'https://ccp.art/bubbles/gold_droplet.png',
+          spriteUrl: artBase() + 'bubbles/gold_droplet.png',
           w: 1.7, aheadDepth: 42, ttlSec: 13, glowColor: 0xffd700,
           onClick: () => {
             verdicts++;
@@ -581,7 +583,7 @@ export function createBiomeMech(g) {
         contractIn = rand(26, 36);
         g.spawner.spawnPickup({
           kind: 'contract',
-          spriteUrl: 'https://ccp.art/bubbles/gold_droplet.png',
+          spriteUrl: artBase() + 'bubbles/gold_droplet.png',
           w: 1.5, aheadDepth: 42, ttlSec: 12, glowColor: 0xc23b4e,
           onClick: () => {
             g.bankGold(20);
