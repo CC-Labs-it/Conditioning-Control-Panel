@@ -482,7 +482,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void OnBrowserMessage(JsonElement message)
         {
-            if (!_isPrimary || _closed || _gameCompleted || _videoEnded || _browserFailed) return;
+            if (_closed || _gameCompleted || _videoEnded || _browserFailed) return;
+            if (message.GetProperty("type").GetString() == "click") { QueueBubbleRestack(); return; }
+            if (!_isPrimary) return;
             switch (message.GetProperty("type").GetString())
             {
                 case "error":
@@ -533,8 +535,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             player.LengthChanged += (_, a) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) AdoptRealDuration(a.Length / 1000.0); });
             player.EndReached += (_, _) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) OnVideoEnded(); });
             player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) OnVideoEnded(); });
+            var onPlaying = NativePlayingHandler(player);
+            player.Playing += (_, _) => onPlaying();
             player.Play(media);
             return true;
+        }
+
+        // Route on the UI thread, which also owns teardown and the player reference.
+        internal Action<MediaPlayer, int> RouteAudio = (player, volume) =>
+        {
+            LibVlcAudio.ApplyPreferredDevice(player);
+            player.Volume = volume;
+        };
+
+        internal Action NativePlayingHandler(MediaPlayer player)
+        {
+            var routed = 0;
+            return () =>
+            {
+                if (System.Threading.Interlocked.Exchange(ref routed, 1) != 0) return;
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (_closed || _videoEnded || _gameCompleted || _isCleaningUp || !ReferenceEquals(player, _player)) return;
+                    RouteAudio(player, Math.Clamp(CoreSettings.Current.MasterVolume, 0, 100));
+                });
+            };
         }
 
         internal static LibVLC CreateGameEngine()
