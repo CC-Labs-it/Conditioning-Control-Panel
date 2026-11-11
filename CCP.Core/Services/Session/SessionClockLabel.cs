@@ -34,7 +34,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// The Presets tab's stop button. <paramref name="withClock"/> is the resolved
         /// "STOP SESSION ({0}:{1})" template, <paramref name="plain"/> the bare "STOP SESSION".
-        /// <paramref name="pauseIndicator"/> is the paused mark (SessionClockRules.PauseMark): a
+        /// <paramref name="pauseIndicator"/> is the paused mark (SessionClockSafety.PauseMark): a
         /// held clock says so, so it never reads as a stuck one (ccp-bugs #1464).
         /// </summary>
         public static string StopButton(TimeSpan remaining, bool showCountdown, string withClock, string plain,

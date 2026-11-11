@@ -203,7 +203,7 @@
                             <Ellipse Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center"
                                      Fill="{StaticResource SectionHueAccountBrush}"/>
                             <fx:IconGlyph Grid.Column="1" Kind="Heart" Size="13" Margin="0,0,7,0" VerticalAlignment="Center"/>
-                            <TextBlock Grid.Column="2" Text="{loc:Str set2_section_account}" VerticalAlignment="Center"
+                            <TextBlock Grid.Column="2" Text="{loc:Str settings_section_plans}" VerticalAlignment="Center"
                                        TextTrimming="CharacterEllipsis"/>
                         </Grid>
                     </RadioButton>

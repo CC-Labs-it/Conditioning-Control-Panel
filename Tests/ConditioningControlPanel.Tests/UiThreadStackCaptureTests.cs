@@ -1,5 +1,7 @@
 using System;
 using System.Diagnostics;
+using System.Linq;
+using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using ConditioningControlPanel.Services;
@@ -41,14 +43,25 @@ public class UiThreadStackCaptureTests
         // starts at the next explicit frame and every frame above RuntimeMethodHandle.InvokeMethod
         // vanished. That failed twice on loaded Windows runners (flakes.md, 2026-10-13).
         using var release = new ManualResetEvent(false);
-        var parked = new Thread(() => ParkedInAKnownFrame(release)) { IsBackground = true, Name = "ParkedTarget" };
+        using var entered = new ManualResetEvent(false);
+        uint osThreadId = 0;
+        var parked = new Thread(() => ParkedInAKnownFrame(release, entered, ref osThreadId)) { IsBackground = true, Name = "ParkedTarget" };
         parked.Start();
         try
         {
             var deadline = Stopwatch.StartNew();
-            while ((parked.ThreadState & System.Threading.ThreadState.WaitSleepJoin) == 0)
+            Assert.True(entered.WaitOne(10_000), "target never entered the named frame");
+            using var process = Process.GetCurrentProcess();
+            while (true)
             {
-                Assert.True(deadline.ElapsedMilliseconds < 10_000, "target thread never parked");
+                // WaitSleepJoin is set before the native wait transition is complete. It can also
+                // describe startup/JIT waits before our method. Require entry AND an OS kernel wait,
+                // so the DAC never sees a moving transition with an incomplete managed frame chain.
+                process.Refresh();
+                using var native = process.Threads.Cast<ProcessThread>().First(t => t.Id == osThreadId);
+                if ((parked.ThreadState & System.Threading.ThreadState.WaitSleepJoin) != 0
+                    && native.ThreadState == System.Diagnostics.ThreadState.Wait) break;
+                Assert.True(deadline.ElapsedMilliseconds < 10_000, "target thread never parked in the kernel");
                 Thread.Yield();
             }
 
@@ -76,7 +89,16 @@ public class UiThreadStackCaptureTests
 
     // NoInlining: the assertion names this frame, so the JIT must not fold it into the lambda.
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void ParkedInAKnownFrame(ManualResetEvent release) => release.WaitOne();
+    private static void ParkedInAKnownFrame(ManualResetEvent release, ManualResetEvent entered, ref uint osThreadId)
+    {
+        osThreadId = GetCurrentThreadId();
+        entered.Set();
+        release.WaitOne();
+        GC.KeepAlive(entered); // preserve a continuation after the wait, not a tail-call-shaped wrapper
+    }
+
+    [DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
 
     [Fact]
     public void AnUnknownThreadIdDegradesInsteadOfThrowing()

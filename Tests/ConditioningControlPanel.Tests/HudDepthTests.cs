@@ -18,6 +18,7 @@ namespace ConditioningControlPanel.Tests;
 /// one chunky one) that press through <see cref="HudPlank"/>. These pin which brush each element
 /// wears, the travel rule on the planks, and that every other PinkButton draws as before.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class HudDepthTests
 {
     private static string RepoRoot()

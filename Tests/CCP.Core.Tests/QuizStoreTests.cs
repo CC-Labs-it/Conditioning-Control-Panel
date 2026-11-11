@@ -7,6 +7,7 @@ using System.Text;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
 using Newtonsoft.Json;
+using CCP.Testing;
 using Xunit;
 
 namespace CCP.Core.Tests;
@@ -91,6 +92,7 @@ public sealed class QuizStoreTests : IDisposable
     [Fact]
     public void ScoringTrendsAndFallbacksMatchPreMoveGolden() => QuestPersistenceTests.InBerlin(() =>
     {
+        using var culture = new CultureScope("");   // the golden was written with the test's own {pct} in invariant form
         var hist = JsonConvert.DeserializeObject<List<QuizHistoryEntry>>(File.ReadAllText(Fixture("quiz_history_golden.json")))!;
         var cats = JsonConvert.DeserializeObject<List<QuizCategoryDefinition>>(File.ReadAllText(Fixture("custom_quiz_categories_golden.json")))!;
         var t0 = hist[0].TakenAt;

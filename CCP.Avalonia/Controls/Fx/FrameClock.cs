@@ -63,6 +63,9 @@ namespace ConditioningControlPanel.Avalonia.Controls.Fx
 
         public event EventHandler? Tick;
 
+        /// <summary>The visual this clock was made for (CCP_FRAME_STATS names the running clocks by it).</summary>
+        internal Visual? Owner => _owner;
+
         /// <summary>True when the last Start found a window to lock to (tests, bench).</summary>
         internal bool IsFrameLocked => _source is TopLevelFrameSource;
 
@@ -86,6 +89,8 @@ namespace ConditioningControlPanel.Avalonia.Controls.Fx
         private IFrameSource Resolve()
         {
             var top = _owner == null ? null : TopLevel.GetTopLevel(_owner);
+            // The first frame-locked effect on a window asks which Skia backend draws it (lane perf).
+            if (top != null) Platform.SoftwareRender.Probe(top);
             return top != null ? TopLevelFrameSource.For(top) : DispatcherFrameSource.Shared;
         }
 
@@ -124,6 +129,12 @@ namespace ConditioningControlPanel.Avalonia.Controls.Fx
 
         /// <summary>Clocks listening right now (tests).</summary>
         internal int SubscriberCount => _subs.Count;
+
+        /// <summary>The clocks listening right now, as "owner type@interval" (CCP_FRAME_STATS).</summary>
+        internal string DescribeSubscribers() => string.Join(", ",
+            System.Linq.Enumerable.Select(_snapshot, s => s.Target is FrameClock c
+                ? $"{c.Owner?.GetType().Name ?? "?"}{(c.Owner is StyledElement { Name: { } n } ? "#" + n : "")}@{c.Interval.TotalMilliseconds:F0}ms"
+                : s.Target?.GetType().Name ?? "?"));
 
         /// <summary>True while a frame request is outstanding (tests).</summary>
         internal bool IsRequesting => _requested;
@@ -167,7 +178,10 @@ namespace ConditioningControlPanel.Avalonia.Controls.Fx
             if (!_beats.TryGetValue(key, out var beat))
                 beat = (new FrameGate { Interval = own.Interval }, TimeSpan.MinValue, false);
             if (beat.Frame != now)
+            {
                 beat = (beat.Gate, now, beat.Gate.Due(now));
+                if (beat.Due && Platform.SoftwareRender.FrameStats) System.Threading.Interlocked.Increment(ref Platform.SoftwareRender.BeatTicks);
+            }
             _beats[key] = beat;
             return beat.Due;
         }

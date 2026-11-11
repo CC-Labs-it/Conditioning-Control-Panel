@@ -47,7 +47,7 @@ public sealed class HomeMarqueeTests
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var s = CoreSettings.Current;
@@ -155,6 +155,40 @@ public sealed class HomeMarqueeTests
         Assert.Equal(0, strip.Transform.X);
         Assert.Equal("GOOD NIGHT" + MarqueeScroller.Separator + "GOOD NIGHT" + MarqueeScroller.Separator,
             dash.FindControl<TextBlock>("MarqueeText")!.Text);
+        return Task.CompletedTask;
+    });
+
+    /// <summary>Lane perf (WSLg on the CPU): the software-render floor takes WPF's Performance tier, which parks every
+    /// other ambient loop, but the marquee keeps scrolling; the user's own Performance mode still parks it.</summary>
+    [Fact]
+    public Task MarqueeKeepsScrollingUnderTheSoftwareRenderFloor() => WithShell((w, dash) =>
+    {
+        var s = CoreSettings.Current;
+        (s.MotionLevel, s.PerformanceMode, s.MarqueeMessage) = (MotionLevel.Full, false, "Good night");
+        global::ConditioningControlPanel.Avalonia.Platform.SoftwareRender.ResetForTests();
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.Platform.SoftwareRender.Report(true);
+            Assert.False(global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowAmbientLoops);
+            dash.StartMarqueeAnimation();
+            Assert.True(dash.Marquee.IsScrolling);
+            Assert.Equal(MarqueeScroller.CpuPathInterval, dash.Marquee.Interval);   // owner: 20 fps on the CPU path
+            s.LighterEffects = LighterEffectsMode.Off;                            // the user's Off beats the probe
+            dash.StartMarqueeAnimation();
+            Assert.Equal(MarqueeScroller.BeatInterval, dash.Marquee.Interval);
+            s.LighterEffects = LighterEffectsMode.On;
+            dash.StartMarqueeAnimation();
+            Assert.Equal(MarqueeScroller.CpuPathInterval, dash.Marquee.Interval);
+            s.PerformanceMode = true;
+            dash.StartMarqueeAnimation();
+            Assert.False(dash.Marquee.IsScrolling);
+        }
+        finally
+        {
+            global::ConditioningControlPanel.Avalonia.Platform.SoftwareRender.ResetForTests();
+            s.PerformanceMode = false;
+            s.LighterEffects = LighterEffectsMode.Auto;
+        }
         return Task.CompletedTask;
     });
 
@@ -388,11 +422,22 @@ public sealed class HomeMarqueeTests
 
     // ---------------------------------------------------------------- Home actions
 
+    [Fact]
+    public Task DeeperEditorCardOpensDeeperPage() => WithShell((w, dash) =>
+    {
+        var card = dash.FindControl<ConditioningControlPanel.Avalonia.Views.Features.FeatureCard>("CardDeeperEditor")!;
+        card.RaiseEvent(new RoutedEventArgs(ConditioningControlPanel.Avalonia.Views.Features.FeatureCard.ClickEvent, card));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("deeper", w.CurrentTab);
+        return Task.CompletedTask;
+    });
+
     /// <summary>WPF CardMystery_Click (Presets.cs:1084): the ? box goes to today's free feature's page.</summary>
     [Fact]
     public Task MysteryBoxOpensTodaysFreeFeature() => WithShell((w, dash) =>
     {
         CoreEntitlement.IsFreeTodayProvider = k => k == "voice";
+        CoreEntitlement.DailyFreeKeyProvider = () => "voice";
         var box = dash.FindControl<ConditioningControlPanel.Avalonia.Views.Features.FeatureCard>("CardMystery")!;
         box.RaiseEvent(new RoutedEventArgs(ConditioningControlPanel.Avalonia.Views.Features.FeatureCard.ClickEvent, box));
         Dispatcher.UIThread.RunJobs();

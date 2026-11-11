@@ -38,7 +38,11 @@ public sealed class PhrasePoolCustodyTests : IDisposable
         if (_svc != null) { _svc.SaveImmediate(); _svc.SealForReset(); }
         CoreSettings.ServiceProvider = _oldSettings;
         if (_svc != null)
-            foreach (var f in Directory.GetFiles(CorePaths.UserData, "settings*")) File.Delete(f);
+            foreach (var f in Directory.GetFiles(CorePaths.UserData, "settings*"))
+            {
+                // Another test's service in this shared sandbox may still be writing its own .tmp; the next Load reads settings.json only.
+                try { File.Delete(f); } catch (IOException) when (f.EndsWith(".tmp", StringComparison.Ordinal)) { }
+            }
     }
 
     private static Dictionary<string, bool> D(params string[] keys) => keys.ToDictionary(k => k, _ => true);
@@ -154,6 +158,10 @@ public sealed class PhrasePoolCustodyTests : IDisposable
 
     private ModService Launch(bool freshProfile = true, bool backupB = true)
     {
+        // An earlier test's service (default 500 ms debounce, no Core-wide disarm hook) can still publish
+        // ITS settings.json into this shared sandbox between our write and the relaunch Load: CI read a
+        // foreign profile and the relaunch came up without ByMod[A] ("sub: missing Asub", 2026-11-06).
+        SettingsService.DisarmAllPendingSaves();
         Directory.CreateDirectory(CorePaths.UserData);
         if (freshProfile)
         {
@@ -171,7 +179,8 @@ public sealed class PhrasePoolCustodyTests : IDisposable
             }.ToString());
         }
         else { _svc!.SaveImmediate(); _svc.SealForReset(); }
-        var svc = _svc = new SettingsService();
+        // No debounce timer: a timed save still writing its .tmp on its own thread raced the file sweep in Dispose (CI, Windows).
+        var svc = _svc = new SettingsService { SaveDebounceDueTimeMilliseconds = System.Threading.Timeout.Infinite };
         CoreSettings.ServiceProvider = () => svc;
         var mods = new ModService();
         mods.Initialize(svc.Current.ActiveModId);

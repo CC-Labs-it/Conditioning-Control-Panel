@@ -31,6 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     internal sealed partial class MandatoryVideoOverlay
     {
         private volatile bool _userMuted;
+        private bool _revealAudioHeld;
         private bool _mutedAtClose;
         private object? _lockWatchOwner;
 
@@ -42,18 +43,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private bool CloseAllowed => MandatoryVideoControls.ShowClose(_strict, LockdownActive, Chaos.ChaosRunHost.IsActive);
         private bool ControlsAllowed => MandatoryVideoControls.ShowMute(_strict, LockdownActive, Chaos.ChaosRunHost.IsActive);
 
-        // Headless tests can observe the volume sent to a playing video without a native LibVLC player.
-        internal Action<int>? VolumeSink;
+        internal int EffectivePlayerVolume => (_userMuted || _revealAudioHeld) ? 0 :
+            MandatoryVideoScheduler.EffectiveVolume(CoreSettings.Current.MasterVolume, CoreSettings.Current.VideoVolume);
 
-        private void ApplyVolume(LibVLCSharp.Shared.MediaPlayer? p)
+        internal void HoldRevealAudio(bool held)
         {
-            var s = CoreSettings.Current;
-            var volume = PlayerVolume = _userMuted ? 0 : MandatoryVideoScheduler.EffectiveVolume(s.MasterVolume, s.VideoVolume);
-            if (p != null) p.Volume = volume;
-            VolumeSink?.Invoke(volume);
+            _revealAudioHeld = held;
+            UpdateVolume();
         }
 
-        /// <summary>WPF ShowVideoControls: once the first frame is up, on every screen. UI thread.</summary>
+        private void ApplyVolume(LibVLCSharp.Shared.MediaPlayer p) =>
+            p.Volume = PlayerVolume = EffectivePlayerVolume;
+
+        /// <summary>WPF ShowVideoControls: after the picture fade completes, on every screen. UI thread.</summary>
         private void ShowVideoControls()
         {
             if (!Scheduler.IsPlaying || _closing || !ControlsAllowed) return;

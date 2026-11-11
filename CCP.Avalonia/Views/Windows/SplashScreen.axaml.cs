@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Avalonia.Rendering.Composition;
 using Avalonia.Styling;
 using Avalonia.Threading;
 
@@ -26,7 +27,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///  - <c>DragMove()</c> -> <c>BeginMoveDrag</c>, which needs the PointerPressed args.
     ///  - <c>BeginAnimation(OpacityProperty, ...)</c> -> an <see cref="Animation"/> run with
     ///    <c>RunAsync</c>; Avalonia has no per-property BeginAnimation.
-    ///  - The shimmer sweep moved into the XAML as a Style.Animations block.
+    ///  - The shimmer sweep is a composition animation (<see cref="StartShimmer"/>), evaluated on the
+    ///    render thread: it is the part of WPF's own-thread splash this head can keep, since it moves
+    ///    while a startup step holds the UI thread (measured under WSLg: render frames kept coming at
+    ///    under 50 ms through a 5.8 s shell build). The bar and the hint are still UI-thread state.
     ///  - The named <c>ScaleTransform</c> became a field: Avalonia generates fields only for
     ///    named Controls, so the transform is built here and assigned to ProgressFill.
     ///
@@ -62,6 +66,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // seam answers "0.0.0", which is honest rather than a stale literal.
             this.FindControl<TextBlock>("TxtVersion")!.Text = $"v{CoreReleaseContent.AppVersion}";
 
+            Opened += (_, _) => StartShimmer();
+
             // Let impatient clicks do something harmless: drag the splash around.
             PointerPressed += (_, e) => { try { BeginMoveDrag(e); } catch { } };
 
@@ -96,6 +102,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 var splash = new SplashScreen();
+                // WPF CenterScreen: the monitor under the cursor, else the primary (Platform/StartupPlacement.cs).
+                Platform.StartupPlacement.CenterOnPointerScreen(splash);
                 splash.Show();
                 return splash;
             }
@@ -189,6 +197,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         internal double DisplayedProgress => _displayedProgress;
+
+        /// <summary>WPF StartShimmer (SplashScreen.xaml.cs): a band sweeping -90 to 340 px every 1.6 s,
+        /// forever. Started on the composition visual so the render thread moves it, not the UI thread.</summary>
+        internal void StartShimmer()
+        {
+            try
+            {
+                if (ElementComposition.GetElementVisual(this.FindControl<Border>("Shimmer")!) is not { } visual) return;
+                var sweep = visual.Compositor.CreateVector3DKeyFrameAnimation();
+                sweep.InsertKeyFrame(0f, new global::Avalonia.Vector3D(-90, 0, 0), new global::Avalonia.Animation.Easings.LinearEasing());
+                sweep.InsertKeyFrame(1f, new global::Avalonia.Vector3D(340, 0, 0), new global::Avalonia.Animation.Easings.LinearEasing());
+                sweep.Duration = TimeSpan.FromSeconds(1.6);
+                // The splash lives only until startup ends; Close takes the animation with its visual.
+                sweep.IterationBehavior = global::Avalonia.Rendering.Composition.Animations.AnimationIterationBehavior.Forever;
+                visual.StartAnimation("Translation", sweep);
+                ShimmerStarted = true;
+            }
+            catch
+            {
+                // A cosmetic sweep must never take the splash down.
+            }
+        }
+
+        internal bool ShimmerStarted { get; private set; }
 
         /// <summary>A startup step: status plus the bar jumped to (never back from) its value, since
         /// on one UI thread the creep cannot run while the step works.</summary>
