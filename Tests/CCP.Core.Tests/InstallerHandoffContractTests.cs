@@ -135,11 +135,28 @@ public partial class InstallerHandoffContractTests
         Assert.Contains("Name: \"fileassoc\"", wpf);
         Assert.Contains("Tasks: fileassoc", wpf);
         Assert.Contains("if not WizardIsTaskSelected('fileassoc') then", wpf);
-        Assert.DoesNotContain("Name: \"fileassoc\"", ava);
-        Assert.DoesNotContain("Tasks: fileassoc", ava);
-        Assert.DoesNotContain("WizardIsTaskSelected('fileassoc')", ava);
+        Assert.Contains("Name: \"fileassoc\"", ava);
+        Assert.Contains("Tasks: fileassoc", ava);
+        Assert.Contains("WizardIsTaskSelected('fileassoc')", ava);
         Assert.DoesNotContain("Type: files; Name: \"{app}\\WebView2Loader.dll\"", wpf);
         Assert.Matches(@"Type: files;\s+Name: ""\{app\}\\WebView2Loader.dll""", ava);
+    }
+
+    [Fact]
+    public void ExplorerAssociationsMatchWpfRegistryContract()
+    {
+        var wpf = Read("installer.iss");
+        var ava = Read("installer-avalonia.iss");
+        static string[] Rows(string text) => text.Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.StartsWith("Root: HKCU;") && line.Contains("Tasks: fileassoc"))
+            .OrderBy(line => line, StringComparer.Ordinal).ToArray();
+        var expected = Rows(wpf);
+        Assert.Equal(34, expected.Length);
+        Assert.Equal(expected, Rows(ava));
+        var task = ava.Split('\n').Single(line => line.StartsWith("Name: \"fileassoc\""));
+        Assert.Contains("Flags: unchecked", task);
+        Assert.Matches(@"if not WizardIsTaskSelected\('fileassoc'\) then\s+CleanupFileAssociations\(\);", ava);
     }
 
     // Transcribed from origin/main aa9918833722f057079e455167cb3d1b14462340:
