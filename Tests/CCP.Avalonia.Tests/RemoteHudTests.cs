@@ -113,7 +113,8 @@ public class RemoteHudTests
 
     /// <summary>Hard rule 6: the HUD Stop never reaches further than the panic key. Under Lockdown (panic key on,
     /// LockdownDisablePanicKey off) neither the local panic nor the relay's forced stop (session, engine, Chaster
-    /// hold: RemoteCommands.StopEffects(force: true)) runs; the controller is still told.</summary>
+    /// hold: RemoteCommands.StopEffects(force: true)) runs; the controller is still told. The same holds with the
+    /// panic key off, where the HUD gate and the relay's Core gate (VoicePanicReach.PanicKeyRuns) must agree.</summary>
     [Fact]
     public Task Stop_button_is_refused_under_lockdown() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
@@ -134,6 +135,13 @@ public class RemoteHudTests
             (settings.PanicKeyEnabled, settings.PanicKey) = (true, "F8");
             Assert.True(MainShellWindow.LockdownActive);
             var (forced, signals, detail) = await HudStop(shell);
+            Assert.Equal(0, stopped);
+            Assert.Equal(0, forced);
+            Assert.Equal(new[] { "stop" }, signals);
+            Assert.Equal(Loc.GetF("remote_hud_sent", Loc.Get("remote_hud_stop")), detail);
+            // Lockdown with the panic key off: the HUD's local half and the relay's Core gate both refuse.
+            settings.PanicKeyEnabled = false;
+            (forced, signals, detail) = await HudStop(shell);
             Assert.Equal(0, stopped);
             Assert.Equal(0, forced);
             Assert.Equal(new[] { "stop" }, signals);
