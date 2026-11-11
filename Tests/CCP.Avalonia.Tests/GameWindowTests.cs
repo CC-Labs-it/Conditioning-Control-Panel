@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Controls;
 using Avalonia.Skia;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -73,6 +74,74 @@ public sealed partial class GameWindowTests
             }
         });
     }
+
+    [Theory]
+    [InlineData("BtnHostChess")]
+    [InlineData("BtnEmptyHostChess")]
+    public void SignedInLobbyChessHostOpensBoard(string name) => Run((shell, launcher) =>
+    {
+        launcher.Hide();
+        shell.Show();
+        shell.ShowTab("availablesubjects");
+        var page = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.AvailableSubjectsTabView>("AvailableSubjectsTab")!;
+        page.ReadGates = () => ConditioningControlPanel.Services.Lobby.LobbyGates.From(true, false, false);
+        page.FindControl<Button>(name)!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Assert.Contains(GameWindow.OpenWindowsForTests(), w => w.Spec.Id == GameWindow.PbpId);
+    });
+
+    [Theory]
+    [InlineData("BtnHostChess")]
+    [InlineData("BtnEmptyHostChess")]
+    public void LobbyChessHostLogsLaunchFailure(string name) => Run((shell, launcher) =>
+    {
+        launcher.Hide();
+        shell.Show();
+        shell.ShowTab("availablesubjects");
+        var page = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.AvailableSubjectsTabView>("AvailableSubjectsTab")!;
+        page.ReadGates = () => ConditioningControlPanel.Services.Lobby.LobbyGates.From(true, false, false);
+        var failure = new InvalidOperationException("asset server unavailable");
+        var oldServer = GameWindow.Server;
+        var oldLogger = Serilog.Log.Logger;
+        var sink = new LobbyFailureSink();
+        try
+        {
+            Serilog.Log.Logger = new Serilog.LoggerConfiguration().WriteTo.Sink(sink).CreateLogger();
+            GameWindow.Server = () => throw failure;
+            page.FindControl<Button>(name)!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Contains(sink.Events, e => e.Exception == failure && e.Level == Serilog.Events.LogEventLevel.Warning
+                && e.RenderMessage().Contains("[Lobby] host"));
+            Assert.DoesNotContain(GameWindow.OpenWindowsForTests(), w => w.Spec.Id == GameWindow.PbpId);
+        }
+        finally
+        {
+            GameWindow.Server = oldServer;
+            Serilog.Log.Logger = oldLogger;
+        }
+    });
+
+    private sealed class LobbyFailureSink : Serilog.Core.ILogEventSink
+    {
+        public List<Serilog.Events.LogEvent> Events { get; } = new();
+        public void Emit(Serilog.Events.LogEvent e) => Events.Add(e);
+    }
+
+    [Fact]
+    public void LobbyChessHostIntentWaitsForIdentityAndExistingBoardReceivesAnother() => Run((_, launcher) =>
+    {
+        launcher.Hide();
+        var w = GameWindow.Launch(GameWindow.PbpId)!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.IntendPbpHost();
+        Assert.Empty(sent);
+        w.Web.OnNavigationCompleted(w.PageUrl!);
+        w.Web.OnWebMessage("{\"type\":\"ready\"}");
+        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:friend" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal("host", (string?)sent[2]["mode"]);
+        w.IntendPbpHost();
+        Assert.Equal("host", (string?)sent.Last()["mode"]);
+        Assert.Equal(4, sent.Count);
+    });
 
     [Fact]
     public void Play_OpensTheGameHost_AndPanicClosesIt() => Run((shell, launcher) =>
