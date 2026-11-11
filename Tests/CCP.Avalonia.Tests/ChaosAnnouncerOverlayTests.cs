@@ -3,6 +3,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.VisualTree;
+using ConditioningControlPanel.Avalonia.Controls;
+using IconKind = FluentIcons.Common.Symbol;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
@@ -51,6 +54,18 @@ public sealed class ChaosAnnouncerOverlayTests
                 s.ChaosAnnouncerEnabled = was;
             }
             return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Equipped_boon_announcement_draws_diamond_as_an_icon()
+    {
+        await Run(_ =>
+        {
+            ChaosAnnouncerOverlay.Announce("Aftermath", ChaosAnnounceKind.Mantra, artKey: "aftermath");
+            var window = ChaosAnnouncerOverlay.Active!;
+            Assert.Equal("Aftermath", window.Current!.Text);
+            Assert.Contains(window.GetVisualDescendants().OfType<IconGlyph>(), icon => icon.Kind == IconKind.Diamond);
         });
     }
 

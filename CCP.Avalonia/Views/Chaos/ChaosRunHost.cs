@@ -168,7 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 _state.ApplyBoon(boon);
                 ChaosMeta.MarkDiscovered("boon:" + boon.Id);
-                ChaosAnnouncerOverlay.Announce($"◈ {boon.Name}", ChaosAnnounceKind.Mantra, artKey: boon.Id);
+                ChaosAnnouncerOverlay.Announce(boon.Name, ChaosAnnounceKind.Mantra, artKey: boon.Id);
             }
             ChaosRunEffects.ApplyLifetimeBoons(_state);
             _hud?.SetPreRunExpanded(false);
@@ -297,7 +297,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 BubbleOverlay.SnapHazards.Residue(center.X, center.Y, BubbleOverlay.Field.Clock());
                 ChaosFieldFxOverlay.Residue(center, ChaosSnapHazards.ResidueRadius, ChaosSnapHazards.ResidueLifeMs);
-                _state.PushEvent(Loc.Get("chaos_aftermath_event"));
+                _state.PushEvent($"{ChaosGlyphs.Aftermath} {Loc.Get("chaos_aftermath_event")}");
             }
             if (_state.RippleEnabled)
             {

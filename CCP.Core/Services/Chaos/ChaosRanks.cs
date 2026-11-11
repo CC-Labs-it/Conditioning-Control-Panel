@@ -85,6 +85,7 @@ public static class ChaosRanks
 /// </summary>
 public static class ChaosGlyphs
 {
+    public const string Aftermath = "⚡";
     public const string Drops = "✦";
     public const string Gold  = "🪙";   // 🐇 stays the mode's brand mark, never a currency
     public const string Xp    = "🕰";

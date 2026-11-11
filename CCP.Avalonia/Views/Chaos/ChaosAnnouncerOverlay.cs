@@ -6,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services.Chaos;
@@ -181,9 +182,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 VerticalAlignment = VerticalAlignment.Top,
             };
             label.Build();
+            Control content = label;
+            if (a.Kind == ChaosAnnounceKind.Mantra && a.ArtKey != null)
+            {
+                var icon = IconGlyph.Of(IconKind.Diamond, IconVariant.Filled, size: FontSizeDip);
+                icon.Foreground = fill;
+                content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10,
+                    HorizontalAlignment = HorizontalAlignment.Center, Children = { icon, label } };
+            }
             _scale = new ScaleTransform(ChaosAnnounceTiming.PopFrom, ChaosAnnounceTiming.PopFrom);
-            label.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
-            label.RenderTransform = _scale;
+            content.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
+            content.RenderTransform = _scale;
 
             // Anchored just under the effect-banner strip, centred over the primary work area.
             var anchor = new Grid
@@ -194,7 +203,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 IsHitTestVisible = false,
             };
             if (!double.IsNaN(wa.width)) anchor.Width = wa.width;
-            anchor.Children.Add(label);
+            anchor.Children.Add(content);
             _host.Children.Clear();
             _host.Children.Add(anchor);
         }

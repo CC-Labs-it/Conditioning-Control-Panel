@@ -123,8 +123,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             ChaosRunHost.RaiseGameLayerAboveVideo();
             ScheduleGameRestack(ChaosRunHost.RaiseGameLayerAboveVideo, TimeSpan.FromMilliseconds(60));
         }
-        internal static void RestackOnVideoClick() =>
-            ScheduleGameRestack(ChaosRunHost.RaiseGameLayerAboveVideo, TimeSpan.FromMilliseconds(50));
 
         public void Show(string path, bool strict) => Dispatcher.UIThread.Invoke(() =>
         {

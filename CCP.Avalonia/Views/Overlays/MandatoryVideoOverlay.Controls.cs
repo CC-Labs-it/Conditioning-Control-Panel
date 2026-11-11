@@ -30,6 +30,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// </summary>
     internal sealed partial class MandatoryVideoOverlay
     {
+        // WPF VideoService.cs:5818: a one-shot raise after the click activates the video.
+        internal static void RestackOnVideoClick() =>
+            ScheduleGameRestack(Chaos.ChaosRunHost.RaiseGameLayerAboveVideo, TimeSpan.FromMilliseconds(50));
+
         private volatile bool _userMuted;
         private bool _mutedAtClose;
         private object? _lockWatchOwner;
