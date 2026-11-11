@@ -22,6 +22,11 @@ internal sealed class RerunsPainter
     private readonly Rectangle band, under;
     private readonly double ky;
 
+    internal static void ResetCacheForTests()
+    {
+        lock (Gate) { stamp = -1; cached = null; }
+    }
+
     internal static bool HasMaterial() => GetTape() != null;
     internal static Tape? GetTape()
     {
