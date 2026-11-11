@@ -35,6 +35,8 @@ public class EmiDeskGlassTests
         var language = LocalizationManager.Instance.CurrentLanguage;
         var section = new EmiDeskSettingsSection();
         var host = new Window { Content = section };
+        var oldChoice = EmiDeskWindow.GlassChooseShop;
+        EmiDeskWindow.GlassChooseShop = () => false;
         var desk = new EmiDeskWindow();
         try
         {
@@ -72,6 +74,7 @@ public class EmiDeskGlassTests
         }
         finally
         {
+            EmiDeskWindow.GlassChooseShop = oldChoice;
             desk.ShutDown(); host.Close(); EmiState.Current.BedtimeUntil = savedBedtime;
             LocalizationManager.Instance.SetLanguage(language);
             CoreSettings.ServiceProvider = old;
@@ -91,6 +94,8 @@ public class EmiDeskGlassTests
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
         var savedBedtime = EmiState.Current.BedtimeUntil;
+        var oldChoice = EmiDeskWindow.GlassChooseShop;
+        EmiDeskWindow.GlassChooseShop = () => false;
         var desk = new EmiDeskWindow();
         try
         {
@@ -117,6 +122,7 @@ public class EmiDeskGlassTests
         }
         finally
         {
+            EmiDeskWindow.GlassChooseShop = oldChoice;
             desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
             CoreSettings.ServiceProvider = old;
         }
@@ -134,6 +140,8 @@ public class EmiDeskGlassTests
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
         var savedBedtime = EmiState.Current.BedtimeUntil;
+        var oldChoice = EmiDeskWindow.GlassChooseShop;
+        EmiDeskWindow.GlassChooseShop = () => false;
         var desk = new EmiDeskWindow();
         try
         {
@@ -155,6 +163,7 @@ public class EmiDeskGlassTests
         }
         finally
         {
+            EmiDeskWindow.GlassChooseShop = oldChoice;
             desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
             CoreSettings.ServiceProvider = old;
         }
@@ -172,6 +181,8 @@ public class EmiDeskGlassTests
         CoreSettings.ServiceProvider = () => settings;
         var language = LocalizationManager.Instance.CurrentLanguage;
         var savedBedtime = EmiState.Current.BedtimeUntil;
+        var oldChoice = EmiDeskWindow.GlassChooseShop;
+        EmiDeskWindow.GlassChooseShop = () => false;
         var desk = new EmiDeskWindow();
         try
         {
@@ -200,6 +211,7 @@ public class EmiDeskGlassTests
         }
         finally
         {
+            EmiDeskWindow.GlassChooseShop = oldChoice;
             desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
             LocalizationManager.Instance.SetLanguage(language);
             CoreSettings.ServiceProvider = old;
