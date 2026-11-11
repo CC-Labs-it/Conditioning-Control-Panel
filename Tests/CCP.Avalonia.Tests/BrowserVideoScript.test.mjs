@@ -3,21 +3,22 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 const source = readFileSync(process.env.CCP_BROWSER_SCRIPT_SOURCE || new URL('../../CCP.Avalonia/Platform/BrowserVideoSurface.cs', import.meta.url), 'utf8');
 const script = source.slice(source.indexOf('"""') + 3, source.lastIndexOf('"""'));
-function page(play = () => Promise.resolve()) {
+function page(play = () => Promise.resolve(), primary = true) {
   let now = 0, nextId = 0;
   const timers = new Map(), messages = [], listeners = new Map();
-  const video = { paused: false, ended: false, currentTime: 0, play };
+  const video = { paused: false, ended: false, currentTime: 0, play, pause() { this.paused = true; } };
+  const window = { invokeCSharpAction: s => messages.push(JSON.parse(s)), addEventListener: (type, listener) => listeners.set(type, listener) };
   const schedule = (f, ms, repeat) => {
     const id = ++nextId;
     timers.set(id, { f, due: now + ms, period: repeat ? ms : 0 });
     return id;
   };
   new Function('c', 'document', 'window', 'performance', 'setTimeout', 'setInterval', 'clearInterval', script)(
-    { url: 'http://localhost/video.mp4', volume: 0.5, id: 'test' },
+    { url: 'http://localhost/video.mp4', volume: primary ? 0.5 : 0, id: 'test', primary },
     { body: { replaceChildren() {} }, createElement: () => video },
-    { invokeCSharpAction: s => messages.push(JSON.parse(s)), addEventListener: (type, listener) => listeners.set(type, listener) },
+    window,
     { now: () => now }, (f, ms) => schedule(f, ms, false), (f, ms) => schedule(f, ms, true), id => timers.delete(id));
-  return { video, messages, listeners, advance(ms) {
+  return { video, messages, listeners, controls: window.ccpVideo, advance(ms) {
     const end = now + ms;
     for (;;) {
       const due = [...timers].filter(([, t]) => t.due <= end).sort((a, b) => a[1].due - b[1].due)[0];
@@ -80,4 +81,35 @@ test('context menu is cancelled before native playback controls appear', () => {
   let cancelled = false;
   p.listeners.get('contextmenu')({ preventDefault() { cancelled = true; } });
   assert.equal(cancelled, true);
+});
+
+test('controls pause, resume, seek, and change primary volume', () => {
+  let plays = 0;
+  const p = page(() => { plays++; return Promise.resolve(); });
+  p.controls.pause();
+  assert.equal(p.video.paused, true);
+  p.controls.resume();
+  assert.equal(plays, 2);
+  p.controls.seek(2500);
+  assert.equal(p.video.currentTime, 2.5);
+  p.controls.seek(-1);
+  assert.equal(p.video.currentTime, 0);
+  p.controls.volume(2);
+  assert.equal(p.video.volume, 1);
+  assert.equal(p.video.muted, false);
+  p.controls.volume(0);
+  assert.equal(p.video.muted, true);
+});
+test('mirror stays muted when volume is changed', () => {
+  const p = page(() => Promise.resolve(), false);
+  p.controls.volume(1);
+  assert.equal(p.video.volume, 0);
+  assert.equal(p.video.muted, true);
+});
+test('a rejected resume reports an error to the host', async () => {
+  let plays = 0;
+  const p = page(() => ++plays === 1 ? Promise.resolve() : Promise.reject(new Error('resume failed')));
+  p.controls.resume();
+  await Promise.resolve();
+  assert.deepEqual(p.messages.at(-1), { type: 'error', code: 0, session: 'test' });
 });
