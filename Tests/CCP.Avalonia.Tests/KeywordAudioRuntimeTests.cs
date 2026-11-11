@@ -71,6 +71,72 @@ public sealed class KeywordAudioRuntimeTests
     });
 
     [Fact]
+    public void KeywordBubbleFiresOnceAndPanicQuietSuppressesIt() => Run((engine, s, _) =>
+    {
+        var count = 0;
+        engine.BubbleEffect = () => count++;
+        s.AwarenessLoopProtectionEnabled = false;
+        s.KeywordTriggers[0].Actions = new() { new VisualEffectAction { Effect = KeywordVisualEffect.Bubbles } };
+        try
+        {
+            Type(engine, "sit"); Assert.Equal(1, count);
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            var now = engine.Now(); engine.Now = () => now.AddMinutes(10);
+            Type(engine, "sit"); Assert.Equal(1, count);
+        }
+        finally { ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
+    });
+
+    [Fact]
+    public void TriggerBubbleHonoursCapDisplayChangeAndIdleLifetime() => Run((_, s, _) =>
+    {
+        var oldPrepare = BubbleOverlay.PrepareWindowOverride;
+        var oldSession = CoreSession.IsSessionRunningProvider;
+        var oldHost = s.BubbleSharedHost;
+        var oldClickable = s.BubblesClickable;
+        var host = new Window();
+        var opened = 0;
+        try
+        {
+            BubbleOverlay.Stop();
+            BubbleOverlay.PrepareWindowOverride = (_, _) => { opened++; return true; };
+            CoreSession.IsSessionRunningProvider = () => false;
+            s.BubbleSharedHost = false; s.BubblesClickable = false;
+            host.Show();
+            BubbleOverlay.SpawnOnce(host);
+            Assert.False(BubbleOverlay.SpawnTimerRunning);
+            Assert.Single(BubbleOverlay.Field.Bubbles);
+            Assert.True(BubbleOverlay.Field.Bubbles[0].Clickable);
+            Assert.False(BubbleOverlay.IsRunning);
+            BubbleOverlay.BeginChaos(host, _ => { });
+            BubbleOverlay.EndChaos();
+            Assert.Single(BubbleOverlay.Field.Bubbles);
+            BubbleOverlay.SpawnOnce(host); BubbleOverlay.SpawnOnce(host);
+            Assert.Equal(3, BubbleOverlay.Field.Bubbles.Count);
+            BubbleOverlay.SpawnOnce(host);
+            Assert.Equal(3, BubbleOverlay.Field.Bubbles.Count);
+            BubbleOverlay.Field.Bubbles.Clear();
+            ConditioningControlPanel.Services.UI.DisplayChangeCoordinator.NotifyDisplayChange("test");
+            BubbleOverlay.SpawnOnce(host);
+            Assert.Empty(BubbleOverlay.Field.Bubbles);
+            ConditioningControlPanel.Services.UI.DisplayChangeCoordinator.ResetForTests();
+            BubbleOverlay.OnFrame(TimeSpan.FromSeconds(1));
+            Assert.False(BubbleOverlay.IsRunning);
+            Assert.False(BubbleOverlay.SpawnTimerRunning);
+            BubbleOverlay.SpawnOnce(host);
+            Assert.Equal(2, opened);
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.UI.DisplayChangeCoordinator.ResetForTests();
+            BubbleOverlay.Stop(); host.Close();
+            BubbleOverlay.PrepareWindowOverride = oldPrepare;
+            CoreSession.IsSessionRunningProvider = oldSession;
+            s.BubbleSharedHost = oldHost; s.BubblesClickable = oldClickable;
+        }
+    });
+
+    [Fact]
     public void VisualChoicesReachExistingRenderersAndExactEchoWaitsThreeSeconds() => Run((engine, s, _) =>
     {
         var shown = new List<string>();

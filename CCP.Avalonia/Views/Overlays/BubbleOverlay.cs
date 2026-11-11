@@ -47,6 +47,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static readonly List<Screen> Targets = new();
         private static DispatcherTimer? _spawnTimer;
         private static bool _running;
+        internal static Func<BubbleOverlayWindow, PixelRect, bool>? PrepareWindowOverride;
+        internal static bool SpawnTimerRunning => _spawnTimer?.IsEnabled == true;
         private static TimeSpan? _lastStep;
         private static bool _pending;   // a frame is requested; the loop idles while the field is empty
         internal static Bitmap? Image;
@@ -68,14 +70,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static double _statMax, _statSum;
         private static int _statN, _statBubbles;
 
-        /// <summary>The ambient game is running (windows opened only for a Chaos run do not count).</summary>
+        /// <summary>The ambient game is running (windows opened for Chaos or a trigger do not count).</summary>
         public static bool IsRunning => _running && !_chaosOpenedWindows;
         internal static bool IsFrameOwner(BubbleOverlayWindow w) => Windows.Count > 0 && Windows[0] == w;
 
         /// <summary><paramref name="frequency"/> per minute overrides the setting (WPF Start's).</summary>
         public static void Start(Visual host, int? frequency = null) => Start(host, frequency, ambient: true);
 
-        /// <param name="ambient">False opens the windows for a Chaos run only: no ambient spawn timer.</param>
+        /// <param name="ambient">False opens temporary windows without an ambient spawn timer.</param>
         private static void Start(Visual host, int? frequency, bool ambient)
         {
             if (_running && ambient && _chaosOpenedWindows)
@@ -85,7 +87,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
             if (_running) return;
-            if (!X11Overlay.IsAvailable) { Log.Warning("Bubbles: this platform cannot show click-through overlays; skipped"); return; }
+            if (PrepareWindowOverride == null && !X11Overlay.IsAvailable) { Log.Warning("Bubbles: this platform cannot show click-through overlays; skipped"); return; }
             var screens = ScreenList.Enumerate(host);
             if (screens.Count == 0) return;
             var s = CoreSettings.Current;
@@ -95,7 +97,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var sc = screens[i];
                 var w = new BubbleOverlayWindow(Targets.Count, sc.Bounds, sc.Scaling > 0 ? sc.Scaling : 1);
-                if (!X11Overlay.SetInputRects(w, w.Rects, 0) || !X11Overlay.SetOverrideRedirect(w, sc.Bounds))
+                if (!(PrepareWindowOverride?.Invoke(w, sc.Bounds) ??
+                    (X11Overlay.SetInputRects(w, w.Rects, 0) && X11Overlay.SetOverrideRedirect(w, sc.Bounds))))
                 {
                     Log.Warning("Bubbles: the platform refused a click-through topmost overlay window; skipped");
                     w.Close();
@@ -154,6 +157,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (_spawnTimer == null) return;
             _spawnTimer.Interval = AmbientBubbleField.SpawnInterval(CoreSettings.Current.BubblesFrequency);
+        }
+
+        /// <summary>WPF BubbleService.SpawnOnce: one trigger bubble without starting the ambient timer.</summary>
+        internal static void SpawnOnce(Visual host)
+        {
+            if (DisplayChangeCoordinator.SpawnsSuppressed || !Field.CanSpawn(CoreSettings.Current)) return;
+            if (!_running)
+            {
+                Start(host, null, ambient: false);
+                _chaosOpenedWindows = _running;
+            }
+            Spawn();
         }
 
         /// <summary>WPF SpawnBubble: under the cap, not during a display change, on a random target.</summary>
@@ -249,7 +264,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.ChaosDefused = Field.ChaosDetonated = null;
             Field.Held = false;
             Field.Bubbles.RemoveAll(b => b.Spec != null);
-            if (_chaosOpenedWindows) { Stop(); return; }
+            if (_chaosOpenedWindows && Field.Bubbles.Count == 0) { Stop(); return; }
             foreach (var w in Windows) w.Sync();
         }
 
@@ -333,7 +348,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Field.Step();
                 foreach (var w in Windows) w.Sync();
                 if (Stats) Sample(Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
-                if (Field.Bubbles.Count == 0) { _lastStep = null; return; }   // idle until the next spawn
+                if (Field.Bubbles.Count == 0)
+                {
+                    _lastStep = null;
+                    if (_chaosOpenedWindows && _chaosPopped == null) Stop();
+                    return;
+                }
             }
             RequestFrame();
         }

@@ -124,6 +124,13 @@ internal sealed class KeywordAudioRuntime
     internal Func<int, CancellationToken, Task> Delay = Task.Delay;
     internal Func<long> Clock = () => Environment.TickCount64;
     internal Func<string, CancellationToken, Task<double?>>? DurationProbe;
+    internal Action BubbleEffect = () =>
+    {
+        if (global::Avalonia.Application.Current?.ApplicationLifetime is
+            global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop &&
+            desktop.MainWindow is { } host)
+            Views.Overlays.BubbleOverlay.SpawnOnce(host);
+    };
     internal bool IsActive { get; private set; }
     internal void Start() { IsActive = true; _input.Clear(); }
     internal void Stop() { IsActive = false; _input.Clear(); StopAudio(); }
@@ -288,6 +295,9 @@ internal sealed class KeywordAudioRuntime
                     break;
                 case KeywordVisualEffect.ImageFlash:
                     CoreFlash.ShowProvider?.Invoke();
+                    break;
+                case KeywordVisualEffect.Bubbles:
+                    BubbleEffect();
                     break;
                 case KeywordVisualEffect.MindWipe:
                     // WPF :1795-1798: it is audio, so hold it while idle and skip an empty pool.
