@@ -118,7 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF StopFromRemoteHud: the local half is exactly what the panic key would do now (Core
         /// VoicePanicReach), so Lockdown or panic off refuses it and a leash alone gets the leash-only stop. True when
-        /// the full panic ran: only then may the relay add its forced stop (RemoteRelay.SendSignalAsync actLocally).</summary>
+        /// the full panic ran; RemoteRelay.SendSignalAsync applies the same rule to its forced stop.</summary>
         internal bool StopFromRemoteHud()
         {
             var full = VoicePanicReach.PanicKeyRuns(LockdownActive, CoreSettings.Current.PanicKeyEnabled);

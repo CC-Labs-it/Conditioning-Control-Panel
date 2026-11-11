@@ -42,8 +42,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Clock for elapsed time, the 1.6 s confirmation and the Stop debounce; tests step it.</summary>
         internal TimeProvider Clock = TimeProvider.System;
 
-        /// <param name="onLocalStop">The local half of Stop; true only when the panic key's full reach ran, which
-        /// alone lets the relay add its forced stop (Core VoicePanicReach: never more than the panic key).</param>
+        /// <param name="onLocalStop">The local half of Stop; true only when the panic key's full reach ran (Core
+        /// VoicePanicReach), so the pill says "Stopped" only when something stopped here.</param>
         public RemoteHudWindow(Func<RemoteRelay?> relay, Func<bool> onLocalStop, Func<Window?> anchor)
         {
             (_relay, _onLocalStop, _anchor) = (relay, onLocalStop, anchor);
@@ -209,8 +209,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 try { stoppedHere = _onLocalStop(); } catch (Exception ex) { Serilog.Log.Warning("RemoteHud: local stop failed: {E}", ex.Message); }
             }
             bool sent = false;
-            // A refused local stop (Lockdown, panic off) still tells the controller, without the relay's forced stop.
-            try { sent = _relay() is { } r && await r.SendSignalAsync(kind, actLocally: !isStop || stoppedHere); }
+            // A refused local stop (Lockdown, panic off) still tells the controller; RemoteRelay.SendSignalAsync gates
+            // its own forced stop on the same VoicePanicReach.PanicKeyRuns, so it stops the remote's effects only.
+            try { sent = _relay() is { } r && await r.SendSignalAsync(kind); }
             catch (Exception ex) { Serilog.Log.Debug("RemoteHud: signal {Kind} failed: {E}", kind, ex.Message); }
             if (_disposed) return;
             _confirm = isStop && stoppedHere

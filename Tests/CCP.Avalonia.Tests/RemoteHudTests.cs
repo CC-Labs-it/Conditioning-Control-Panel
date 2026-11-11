@@ -57,6 +57,9 @@ public class RemoteHudTests
     [Fact]
     public Task Confirmation_holds_stop_debounces_and_close_ends_the_tick() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        var settings = CoreSettings.Current;
+        var oldEnabled = settings.PanicKeyEnabled;
+        settings.PanicKeyEnabled = true;   // the relay forces only when the panic key would run
         var server = new FakeRelay();
         var stops = new List<string>();
         using var relay = await Connected(server, force => { if (force) stops.Add("relay"); });
@@ -88,7 +91,7 @@ public class RemoteHudTests
             hud.Refresh();
             Assert.False(hud.IsVisible);
         }
-        finally { hud.Dispose(); await relay.StopAsync(); Dispatcher.UIThread.RunJobs(); }
+        finally { hud.Dispose(); await relay.StopAsync(); Dispatcher.UIThread.RunJobs(); settings.PanicKeyEnabled = oldEnabled; }
     });
 
     /// <summary>One HUD Stop click through the production wiring (shell.StopFromRemoteHud), on a fresh pill so
