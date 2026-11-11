@@ -36,9 +36,11 @@ public sealed class BubbleMotionPickerTests
         Window? host = null;
         try
         {
-            // The offer is visible without ownership.
+            // Exercise the future offer configuration while it is gated on this head.
             PrizeOwnership.IsGranted = _ => false;
             var bare = new BubblePopFeatureControl();
+            Assert.False(bare.FindControl<Border>("V2Box")!.IsVisible);
+            bare.FindControl<V2GetItRow>("RowGetBubblesV2")!.Configure(V2PurchaseRule.BubblesPrizeId, "v2_get_bubble_blurb", "label_bubbles_v2_box");
             Assert.True(bare.FindControl<Border>("V2Box")!.IsVisible);
             Assert.False(bare.FindControl<Control>("MotionRow")!.IsVisible);
 
@@ -122,7 +124,7 @@ public sealed class BubbleMotionPickerTests
             Task.Run(() => PrizeOwnership.ApplySnapshot("bubble-owner", 1, new[] { PrizeOwnership.BubbleRain })).GetAwaiter().GetResult();
             Dispatcher.UIThread.RunJobs();
             Assert.True(box.IsVisible);
-            Assert.True(panel.FindControl<CheckBox>("ChkBrainDrainBubble")!.IsVisible);
+            Assert.False(panel.FindControl<CheckBox>("ChkBrainDrainBubble")!.IsVisible);
             Assert.Equal(new[] { BubbleMotionStyle.FloatUp, BubbleMotionStyle.Rain, BubbleMotionStyle.Mix },
                 picker.Items.OfType<ComboBoxItem>().Select(i => (BubbleMotionStyle)i.Tag!).ToArray());
             Assert.Equal(BubbleMotionStyle.SpiralIn, settings.BubbleMotionStyle); // repaint must not save fallback

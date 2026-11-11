@@ -103,6 +103,68 @@ public sealed class V2GetItRowTests
     }
 
     [Fact]
+    public Task OwnedBrainDrainToggleRemainsHiddenUntilEffectExists() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        BubbleMotionPickerTests.Setup();
+        var seam = PrizeOwnership.IsGranted;
+        Window? host = null;
+        try
+        {
+            PrizeOwnership.IsGranted = id => id == PrizeOwnership.BubbleRain;
+            var panel = new BubblePopFeatureControl();
+            host = new Window { Content = panel };
+            host.Show();
+            Assert.True(panel.FindControl<Control>("MotionRow")!.IsVisible);
+            Assert.False(panel.FindControl<CheckBox>("ChkBrainDrainBubble")!.IsVisible);
+        }
+        finally
+        {
+            host?.Close();
+            PrizeOwnership.IsGranted = seam;
+            Dispatcher.UIThread.RunJobs();
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task BubbleOfferAndBrainDrainToggleAreUnavailableUntilEffectExists() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        BubbleMotionPickerTests.Setup();
+        var seam = PrizeOwnership.IsGranted;
+        Window? host = null;
+        try
+        {
+            PrizeOwnership.IsGranted = _ => false;
+            var panel = new BubblePopFeatureControl();
+            host = new Window { Content = panel };
+            host.Show();
+            var row = panel.FindControl<V2GetItRow>("RowGetBubblesV2")!;
+            var brain = panel.FindControl<CheckBox>("ChkBrainDrainBubble")!;
+            Assert.False(row.IsVisible);
+            Assert.False(brain.IsVisible);
+            var confirms = 0;
+            row.Confirm = (_, _) => { confirms++; return Task.FromResult(true); };
+            row.FindControl<Button>("BtnGet")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(0, confirms);
+            Assert.Null(row.LastBuy);
+
+            PrizeOwnership.IsGranted = id => id == PrizeOwnership.BubbleRain;
+            Task.Run(() => ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged()).GetAwaiter().GetResult();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(row.IsVisible);
+            Assert.False(brain.IsVisible);
+            Assert.True(panel.FindControl<Control>("MotionRow")!.IsVisible);
+        }
+        finally
+        {
+            host?.Close();
+            PrizeOwnership.IsGranted = seam;
+            Dispatcher.UIThread.RunJobs();
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task BubbleOfferIsVisibleAndCanStartPurchase() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         BubbleMotionPickerTests.Setup();
@@ -130,6 +192,15 @@ public sealed class V2GetItRowTests
             host = new Window { Content = panel };
             host.Show();
             var row = panel.FindControl<V2GetItRow>("RowGetBubblesV2")!;
+            Assert.False(row.IsVisible);
+            var blockedConfirms = 0;
+            row.Confirm = (_, _) => { blockedConfirms++; return Task.FromResult(true); };
+            row.FindControl<Button>("BtnGet")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(0, blockedConfirms);
+            Assert.Null(row.LastBuy);
+            Assert.Single(proxy.Seen);
+            // Keep the purchase flow covered for when the effect becomes available.
+            row.Configure(V2PurchaseRule.BubblesPrizeId, "v2_get_bubble_blurb", "label_bubbles_v2_box");
             Assert.True(row.IsVisible);
             Assert.True(panel.FindControl<Border>("V2Box")!.IsVisible);
             var confirms = 0;
@@ -365,6 +436,9 @@ public sealed class V2GetItRowTests
             host = new Window { Content = panel };
             host.Show();
             var row = panel.FindControl<V2GetItRow>("RowGetBubblesV2")!;
+            Assert.False(row.IsVisible);
+            // Exercise the sign-in flow under the future enabled configuration.
+            row.Configure(V2PurchaseRule.BubblesPrizeId, "v2_get_bubble_blurb", "label_bubbles_v2_box");
             var box = panel.FindControl<Border>("V2Box")!;
             var motion = panel.FindControl<Control>("MotionRow")!;
             Assert.True(box.IsVisible);
