@@ -11,10 +11,11 @@ namespace CCP.Avalonia.Tests;
 
 public class ChaosHubMusicTests
 {
-    private sealed class Voice : MindWipePlayer.IVoice
+    private sealed class Voice : LibVlcAudio.IPausableVoice
     {
         public double Last;
-        public bool Disposed;
+        public bool Disposed, Paused;
+        public void SetPaused(bool paused) => Paused = paused;
         public double Volume { set => Last = value; }
         public void Dispose() => Disposed = true;
     }
@@ -74,7 +75,7 @@ public class ChaosHubMusicTests
     }
 
     [Fact]
-    public void Leaving_menu_fades_to_zero_and_releases_voice()
+    public void Leaving_menu_pauses_and_return_resumes_the_same_voice()
     {
         AvaloniaTestDispatcher.Run(() =>
         {
@@ -84,15 +85,31 @@ public class ChaosHubMusicTests
             var voice = new Voice();
             try
             {
-                hub.MenuMusicPlay = (_, _, _, _) => voice;
+                int starts = 0;
+                hub.MenuMusicPlay = (_, _, _, _) => { starts++; return voice; };
                 hub.StartMenuMusic();
                 for (int i = 0; i < 40; i++) hub.MenuMusicTick();
                 hub.FindControl<Grid>("MenuView")!.IsVisible = false;
                 for (int i = 0; i < 39; i++) hub.MenuMusicTick();
                 Assert.False(voice.Disposed);
+                Assert.False(voice.Paused);
                 hub.MenuMusicTick();
-                Assert.True(voice.Disposed);
+                Assert.True(voice.Paused);
+                Assert.False(voice.Disposed);
                 Assert.Equal(0, voice.Last, 5);
+                hub.FindControl<Grid>("MenuView")!.IsVisible = true;
+                Assert.False(voice.Paused);
+                Assert.Equal(1, starts);
+                for (int i = 0; i < 40; i++) hub.MenuMusicTick();
+                Assert.True(voice.Last > 0);
+                hub.FindControl<Grid>("MenuView")!.IsVisible = false;
+                for (int i = 0; i < 10; i++) hub.MenuMusicTick();
+                hub.FindControl<Grid>("MenuView")!.IsVisible = true;
+                for (int i = 0; i < 40; i++) hub.MenuMusicTick();
+                Assert.False(voice.Paused);
+                Assert.Equal(1, starts);
+                hub.DisposeMenuMusic();
+                Assert.True(voice.Disposed);
             }
             finally { hub.DisposeMenuMusic(); LibVlcAudio.Instance = priorAudio; }
         });

@@ -11,15 +11,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 {
     public partial class ChaosHubWindow
     {
-        // WPF ChaosHubWindow.xaml.cs:2789-2913. The loop voice cannot pause yet, so leaving
-        // the menu releases it after the fade and returning starts the track from the beginning.
-        private MindWipePlayer.IVoice? _menuMusic;
+        // WPF ChaosHubWindow.xaml.cs:2789-2913.
+        private LibVlcAudio.IPausableVoice? _menuMusic;
         private DispatcherTimer? _menuMusicTimer;
         private AppSettings? _menuMusicSettings;
         private double _menuMusicVolume, _menuMusicFrom, _menuMusicTo, _menuMusicLevel;
         private int _menuMusicStep, _menuMusicSteps;
         private bool _menuMusicLeaving, _menuMusicInitialized, _menuMusicClosed;
-        internal Func<string, double, bool, Action, MindWipePlayer.IVoice?>? MenuMusicPlay;
+        internal Func<string, double, bool, Action, LibVlcAudio.IPausableVoice?>? MenuMusicPlay;
 
         private void InitializeMenuMusic()
         {
@@ -47,13 +46,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                         ContentLocator.Resolve(Path.Combine("Resources", "sounds", "chaos", "menu_theme.mp3"));
                     if (MenuMusicPlay == null && !File.Exists(path)) return;
                     var play = MenuMusicPlay;
-                    if (play == null && LibVlcAudio.Instance is { } audio) play = audio.PlayVoice;
+                    if (play == null && LibVlcAudio.Instance is { } audio)
+                        play = (p, volume, loop, ended) => audio.PlayVoice(p, volume, loop, ended) as LibVlcAudio.IPausableVoice;
                     _menuMusic = play?.Invoke(path, 0, true, () => { });
                     if (_menuMusic == null) return;
                     _menuMusicVolume = 0;
                     _menuMusicSettings = CoreSettings.Current;
                     _menuMusicSettings.PropertyChanged += MenuMusicSettingsChanged;
                 }
+                _menuMusic.SetPaused(false);
                 FadeMenuMusic(CoreSettings.Current.ChaosMenuMusicMuted ? 0 : 0.5, 40, false);
             }
             catch (Exception ex) { Serilog.Log.Debug("ChaosHub.StartMenuMusic: {E}", ex.Message); }
@@ -86,7 +87,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _menuMusic.Volume = _menuMusicVolume;
             if (t < 1) return;
             _menuMusicTimer?.Stop();
-            if (_menuMusicLeaving) ReleaseMenuMusic();
+            if (_menuMusicLeaving) _menuMusic.SetPaused(true);
         }
 
         private void MenuMusicSettingsChanged(object? sender, PropertyChangedEventArgs e)
