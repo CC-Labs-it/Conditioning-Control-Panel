@@ -28,6 +28,7 @@ document.addEventListener('fullscreenchange',change);document.addEventListener('
 document.addEventListener('dblclick',function(e){if(window._ccpForcedFs){e.preventDefault();e.stopImmediatePropagation();post('ccp_exit_fullscreen');}},true);
 window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='Escape'||e.key==='F11')){e.preventDefault();post('ccp_exit_fullscreen');}},true);
 })();";
+    private double _browserPreFullscreenZoom = 1.0;
     private Window? _browserFullscreenWindow;
     private Window? _browserFullscreenPopout;
     private DisplayMirror? _browserFullscreenMirror;
@@ -94,6 +95,8 @@ window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='
                 Position = new global::Avalonia.PixelPoint(screen.X + 100, screen.Y + 100), Width = 400, Height = 300 };
             _browserFullscreenWindow = host;
             _browserFullscreenActive = true;
+            _browserPreFullscreenZoom = browser.Zoom;
+            browser.SetZoom(1.0);
             _browserFullscreenHostClosed = false;
             host.Closed += (_, _) => { _browserFullscreenHostClosed = true; if (!_browserFullscreenTransition) ExitBrowserFullscreen(false); };
             _browserFullscreenPopout = _browserPopoutWindow;
@@ -157,6 +160,7 @@ window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='
         if (_browserFullscreenTransition || host == null || browser == null || container == null) return;
         _browserFullscreenTransition = true;
         _browserFullscreenActive = false;
+        browser.SetZoom(_browserPreFullscreenZoom);
         try
         {
             host.Topmost = false;

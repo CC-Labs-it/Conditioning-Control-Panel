@@ -331,6 +331,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     // The Scrolller licence on pages that load Scrolller themselves (WPF ScrolllerWebGate on every core):
                     // the WebView2 gate on Windows, a WebKitGTK block filter on Linux. The first navigation waits for it.
                     Platform.ScrolllerWebHostGate.Attach(_web, NewScrolllerEngine);
+                    AttachZoom(_web);
                     _webSlot.Children.Add(_web);
                 }
                 catch (Exception ex)

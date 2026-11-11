@@ -108,6 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var host = BrowserView;
                 if (host == null) return false;
+                if (!_browserFullscreenActive) host.SetZoom(0.5);
                 host.Navigate(new Uri(url));   // even when equal: WPF #867, re-click goes home
                 Log.Information("Browser navigated to {Url}", url);
                 return true;
