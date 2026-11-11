@@ -25,7 +25,9 @@
 // actually keeps it honest.
 //
 // STILL BLOCKED, each naming what it needs rather than guessing at "when X moves to Core":
-//   ShowOgWelcomePopup / TryPresentSeasonRecap / ShowWhatsNewIfNeeded - App.Achievements,
+//   (TryPresentSeasonRecap's silent startup bookkeeping is PORTED: Core SeasonRollover, run from
+//     MainShellWindow.FirstRun.cs. Only its Part B server nudges are still missing.)
+//   ShowOgWelcomePopup / ShowWhatsNewIfNeeded - App.Achievements,
 //     App.Seasons and the startup dialog queue in ConditioningControlPanel/App.xaml.cs. The
 //     dialogs themselves DO exist here (CCP.Avalonia/Views/Dialogs/WhatsNewDialog.axaml.cs,
 //     Views/Controls/SeasonRecapCard); what is missing is the "has this launch already shown a

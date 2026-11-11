@@ -27,6 +27,7 @@ public sealed class FirstRunGateDeadClickTests
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();
+        var oldSettings = CoreSettings.ServiceProvider;
         CoreSettings.ServiceProvider = () => service;
         MainShellWindow? shell = null;
         try
@@ -46,7 +47,7 @@ public sealed class FirstRunGateDeadClickTests
             shell?.RequestExit();
             Dispatcher.UIThread.RunJobs();
             service.SaveImmediate();
-            CoreSettings.ServiceProvider = null;
+            CoreSettings.ServiceProvider = oldSettings;
         }
         return Task.CompletedTask;
     });
@@ -63,11 +64,14 @@ public sealed class FirstRunGateDeadClickTests
             System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
         var oldAchievements = achievementProperty.GetValue(null);
         var path = System.IO.Path.Combine(CorePaths.UserData, "season-recaps", "2098-07.json");
+        var achievementsPath = System.IO.Path.Combine(CorePaths.UserData, "recap-test-achievements.json");
+        var oldSettings = CoreSettings.ServiceProvider;
+        var (oldName, oldPremium) = (CoreAccount.DisplayNameProvider, CoreAccount.HasPremiumAccessProvider);
         CoreSettings.ServiceProvider = () => service;
         MainShellWindow? shell = null;
         try
         {
-            var engine = new AchievementEngine(new AchievementStore(System.IO.Path.Combine(CorePaths.UserData, "recap-test-achievements.json")));
+            var engine = new AchievementEngine(new AchievementStore(achievementsPath));
             engine.Progress.LifetimeSkillPointsSpent = 12345;
             achievementProperty.SetValue(null, engine);
             CoreAccount.DisplayNameProvider = () => "Tester";
@@ -96,10 +100,12 @@ public sealed class FirstRunGateDeadClickTests
             shell?.RequestExit();
             Dispatcher.UIThread.RunJobs();
             service.SaveImmediate();
-            CoreSettings.ServiceProvider = null;
+            CoreSettings.ServiceProvider = oldSettings;
+            (CoreAccount.DisplayNameProvider, CoreAccount.HasPremiumAccessProvider) = (oldName, oldPremium);
             achievementProperty.SetValue(null, oldAchievements);
             MainShellWindow.NoteLeaderboardPage(new LeaderboardPage<LeaderboardEntryData>());
             System.IO.File.Delete(path);
+            System.IO.File.Delete(achievementsPath);
         }
         return Task.CompletedTask;
     });
