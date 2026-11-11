@@ -3,6 +3,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
 using System.Security.Cryptography;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -37,7 +38,7 @@ public sealed class RaceEngineFetcher(HttpClient http, string userData)
             var receipt = Path.Combine(target, ".verified-sha256");
             NoLinks(executable);
             NoLinks(receipt);
-            if (File.Exists(executable) && File.Exists(receipt) && File.ReadAllText(receipt) == package.Sha256)
+            if (File.Exists(executable) && File.Exists(receipt) && File.ReadAllText(receipt) == package.Sha256 && HasLicences(target))
                 return executable;
             staging = Path.Combine(root, ".fetch-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(staging);
@@ -93,6 +94,7 @@ public sealed class RaceEngineFetcher(HttpClient http, string userData)
                 }
             }
             if (!File.Exists(Path.Combine(unpack, "electron"))) throw new InvalidDataException("Race engine executable missing.");
+            if (!HasLicences(unpack)) throw new InvalidDataException("Race engine licences missing or invalid.");
             if (!OperatingSystem.IsWindows())
                 File.SetUnixFileMode(Path.Combine(unpack, "electron"), UnixFileMode.UserRead | UnixFileMode.UserWrite |
                     UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
@@ -115,6 +117,27 @@ public sealed class RaceEngineFetcher(HttpClient http, string userData)
             finally { Gate.Release(); }
         }
     }
+
+    private static bool HasLicences(string directory)
+    {
+        foreach (var name in new[] { "LICENSE", "LICENSES.chromium.html" })
+        {
+            var file = new FileInfo(Path.Combine(directory, name));
+            if (!file.Exists || (file.Attributes & (FileAttributes.ReparsePoint | FileAttributes.Directory | FileAttributes.Device)) != 0 ||
+                (OperatingSystem.IsLinux() && (Statx(-100, file.FullName, 0x100, 1, out var stat) != 0 || (stat.Mode & 0xf000) != 0x8000)) || file.Length == 0)
+                return false;
+        }
+        return true;
+    }
+
+    [StructLayout(LayoutKind.Explicit, Size = 256)]
+    private struct LinuxStatx
+    {
+        [FieldOffset(28)] public ushort Mode;
+    }
+
+    [DllImport("libc", EntryPoint = "statx", SetLastError = true)]
+    private static extern int Statx(int dirfd, string path, int flags, uint mask, out LinuxStatx stat);
 
     private static void SafeName(string value)
     {
