@@ -49,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Menu = BuildTrayMenu(),
                 IsVisible = true,
             };
+            TrayIcon.SetIcons(Application.Current!, new TrayIcons { Tray });
             // SNI Activate (left click) arrives as Clicked; WPF restores on single and double click.
             Tray.Clicked += (_, _) => ShowFromTray();
             AttachFeedTooltip(Platform.FriendsHead.Feed, Platform.FriendsHead.Service);
