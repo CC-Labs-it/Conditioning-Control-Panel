@@ -154,6 +154,27 @@ internal static class AccountSeed
         }
     }
 
+    // WPF MainWindow.Login.cs:155-187. Keep the fallback behind SyncPush's loaded gate.
+    internal static async Task PostLoginAsync(Func<Task<bool>>? load = null, AchievementEngine? achievements = null)
+    {
+        var uid = CoreSettings.Current.UnifiedId;
+        Sync?.StartHeartbeat();
+        await Task.Delay(500);
+        if (CoreSettings.Current.UnifiedId != uid || string.IsNullOrEmpty(uid)) return;
+        achievements ??= App.Achievements;
+        if (achievements != null) achievements.SuppressPopups = true;
+        try
+        {
+            load ??= () => LoadProfileAsync();
+            if (!await load() && CoreSettings.Current.UnifiedId == uid)
+                await load();
+        }
+        finally
+        {
+            if (achievements != null) achievements.SuppressPopups = false;
+        }
+    }
+
     /// <summary>The sync configuration used by desktop startup and account tests.</summary>
     internal static SyncPush NewSync(Func<IEnumerable<string>?> unlocked, Func<bool> running, HttpMessageHandler? http = null)
         => new(unlocked, running, http, Views.Windows.MainShellWindow.SanitizeOwnWardrobe)

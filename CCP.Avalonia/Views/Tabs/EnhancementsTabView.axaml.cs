@@ -143,7 +143,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         /// <summary>RefreshEnhancementsUI: hidden named fields, tree, secret rail, active bonuses.</summary>
-        private void Repaint()
+        internal void Repaint()
         {
             _dirty = false;
             var settings = CoreSettings.Current;
