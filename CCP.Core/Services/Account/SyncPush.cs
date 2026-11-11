@@ -266,6 +266,8 @@ namespace ConditioningControlPanel.Services
                 if (watermark > 0 && totalXp < watermark)
                 {
                     Log.Error("[XP watermark] Sync REFUSED — would push {Xp} XP, below the {Watermark} XP last agreed", (int)totalXp, (int)watermark);
+                    ConsecutiveSyncFailures++;
+                    SyncHealthChanged?.Invoke(this, ConsecutiveSyncFailures);
                     return false;
                 }
                 var id = s.UnifiedId!;

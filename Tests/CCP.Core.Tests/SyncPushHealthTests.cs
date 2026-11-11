@@ -60,4 +60,40 @@ public class SyncPushHealthTests
             CoreAccount.IsLoggedInProvider = oldLogin;
         }
     }
+    [Fact]
+    public async Task WatermarkRefusalsCountWithoutBackoffAndSuccessClearsHealth()
+    {
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldLogin = CoreAccount.IsLoggedInProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        CoreAccount.IsLoggedInProvider = () => true;
+        var sync = new SyncPush(() => Array.Empty<string>(), () => false, new Wire { Succeed = true });
+        var events = new List<int>();
+        sync.SyncHealthChanged += (_, count) => events.Add(count);
+        try
+        {
+            var s = settings.Current;
+            s.UnifiedId = "watermark-health-test";
+            s.AuthToken = "fake";
+            s.OfflineMode = false;
+            s.PendingDescentMigrationChoice = null;
+            s.LastConfirmedServerXpAccount = s.UnifiedId;
+            s.LastConfirmedServerXpSeason = s.CurrentSeason;
+            s.LastConfirmedServerXp = ProfileAdopt.TotalXp(s) + 1000;
+            sync.MarkLoaded(null);
+            for (var i = 0; i < 3; i++) Assert.False(await sync.PushAsync("watermark"));
+            Assert.Equal(new[] { 1, 2, 3 }, events);
+            s.LastConfirmedServerXp = 0;
+            Assert.True(await sync.PushAsync("watermark cleared"));
+            Assert.Equal(new[] { 1, 2, 3, 0 }, events);
+        }
+        finally
+        {
+            sync.Reset();
+            CoreSettings.ServiceProvider = oldSettings;
+            CoreAccount.IsLoggedInProvider = oldLogin;
+        }
+    }
+
 }

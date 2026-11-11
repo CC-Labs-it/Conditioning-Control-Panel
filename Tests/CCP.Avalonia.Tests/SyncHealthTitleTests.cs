@@ -64,4 +64,46 @@ public class SyncHealthTitleTests
             CoreAccount.IsLoggedInProvider = oldLogin;
         }
     });
+    [Fact]
+    public Task WatermarkRefusalsShowTitleAtThreeAndClearAfterSuccess() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var oldSync = AccountSeed.Sync;
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldLogin = CoreAccount.IsLoggedInProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        CoreAccount.IsLoggedInProvider = () => true;
+        var sync = new SyncPush(() => Array.Empty<string>(), () => false, new Wire { Succeed = true });
+        AccountSeed.Sync = sync;
+        var s = settings.Current;
+        s.UnifiedId = "watermark-title-test";
+        s.AuthToken = "fake";
+        s.OfflineMode = false;
+        s.PendingDescentMigrationChoice = null;
+        s.LastConfirmedServerXpAccount = s.UnifiedId;
+        s.LastConfirmedServerXpSeason = s.CurrentSeason;
+        s.LastConfirmedServerXp = ProfileAdopt.TotalXp(s) + 1000;
+        sync.MarkLoaded(null);
+        var window = new MainShellWindow();
+        try
+        {
+            Assert.False(await sync.PushAsync("watermark"));
+            Assert.False(await sync.PushAsync("watermark"));
+            Assert.DoesNotContain("Cloud sync issue", window.Title);
+            Assert.False(await sync.PushAsync("watermark"));
+            Assert.EndsWith(" - Cloud sync issue", window.Title);
+            s.LastConfirmedServerXp = 0;
+            Assert.True(await sync.PushAsync("watermark cleared"));
+            Assert.DoesNotContain("Cloud sync issue", window.Title);
+        }
+        finally
+        {
+            window.Close();
+            sync.Reset();
+            AccountSeed.Sync = oldSync;
+            CoreSettings.ServiceProvider = oldSettings;
+            CoreAccount.IsLoggedInProvider = oldLogin;
+        }
+    });
+
 }
