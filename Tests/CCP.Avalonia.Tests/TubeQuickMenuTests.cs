@@ -68,6 +68,26 @@ public sealed class TubeQuickMenuTests
     });
 
     [Fact]
+    public async Task MenuBrushesStayUsableAfterBackgroundTypeAccess()
+    {
+        // A geometry-only test may touch the tube type on an xUnit thread before any window opens.
+        var brushes = await Task.Run(() => new[] { "MenuRed", "MenuGreen", "MenuPatreon", "MenuLocked" }
+            .Select(name => typeof(AvatarTubeWindow).GetField(name,
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null))
+            .ToArray());
+        Assert.All(brushes, brush => Assert.IsType<global::Avalonia.Media.Immutable.ImmutableSolidColorBrush>(brush));
+
+        await WithShell((shell, tube) =>
+        {
+            var menu = tube.FindControl<ContextMenu>("AvatarContextMenu")!;
+            menu.Open(tube.FindControl<Border>("AvatarBorder") ?? (Control)tube);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(menu.IsOpen);
+            menu.Close();
+        });
+    }
+
+    [Fact]
     public Task EngineItemStartsAndPanicStopsWhatItStarted() => WithShell((shell, tube) =>
     {
         CoreSettings.Current.FlashEnabled = true;
