@@ -23,11 +23,13 @@ public sealed class MindWipeTests
 {
     private sealed class Voice : MindWipePlayer.IVoice
     {
-        public bool Loop, Disposed;
+        public bool Loop;
+        public volatile bool Disposed;
+        public int Plays;
         public double Vol;
         public Action Ended = () => { };
         public double Volume { set => Vol = value; }
-        public bool Play() => true;
+        public bool Play() { Interlocked.Increment(ref Plays); return true; }
         public void Dispose() => Disposed = true;
     }
 
@@ -213,6 +215,61 @@ public sealed class MindWipeTests
         Assert.False(player.IsLooping);
         clock.Advance(TimeSpan.FromSeconds(61));
         Assert.Null(cleanSlate);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Stop_during_first_loop_build_disposes_late_voice_without_playing(bool panic) => Run((_, voices, clock) =>
+    {
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        Voice? built = null;
+        var player = new MindWipePlayer((path, vol, loop, ended) =>
+            new LibVlcAudio.LoopVoice((started, finished) =>
+            {
+                entered.Set();
+                release.Wait();
+                return built = new Voice();
+            }, ended, clock), clock);
+        player.Seed();
+        var start = Task.Run(() => player.StartLoop(0.5));
+        try
+        {
+            Assert.True(entered.Wait(5000));
+            Assert.True(start.Wait(2000), "Starting must not wait for the first voice build");
+            Assert.True(player.IsLooping);
+            if (panic) CoreEngine.Stop(); else player.StopLoop();
+            Assert.False(player.IsLooping);
+            release.Set();
+            Assert.True(SpinWait.SpinUntil(() => built?.Disposed == true, 5000));
+            Assert.Equal(0, built!.Plays);
+        }
+        finally { release.Set(); start.Wait(5000); player.Stop(); }
+    });
+
+    [Fact]
+    public void Stop_during_loop_factory_discards_the_stale_result() => Run((_, voices, clock) =>
+    {
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var built = new Voice();
+        var player = new MindWipePlayer((path, vol, loop, ended) =>
+        {
+            entered.Set(); release.Wait(); return built;
+        }, clock);
+        var start = Task.Run(() => player.StartLoop(0.5));
+        try
+        {
+            Assert.True(entered.Wait(5000));
+            player.StopLoop();
+            release.Set();
+            Assert.True(start.Wait(5000));
+            Assert.False(player.IsLooping);
+            Assert.True(built.Disposed);
+            Assert.Equal(0, built.Plays);
+        }
+        finally { release.Set(); start.Wait(5000); player.Stop(); }
     });
 
     [Fact]

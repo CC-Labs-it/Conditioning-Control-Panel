@@ -11,15 +11,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// <see cref="CoreMindWipe"/>. The deciding half (tick interval, per-tick probability, clip
     /// discovery) is <see cref="MindWipeSchedule"/> in Core; this is the playing half.
     ///
-    /// <para>The loop is one player on LibVLC's own repeat instead of WPF's two-player 120 ms
-    /// crossfade: the clip restarts in the decoder, so there is no rebuild between cycles to hide.</para>
+    /// <para>Loop voices overlap by 120 ms, as in WPF.</para>
     /// </summary>
     internal sealed class MindWipePlayer
     {
         /// <summary>A prepared or playing clip; Play starts it, volume is 0..1.</summary>
         internal interface IVoice : IDisposable { double Volume { set; } bool Play(); }
 
-        private readonly Func<string, double, bool, Action, IVoice?> _play;
+        private readonly Func<string, double, bool, Action, IVoice?> _create;
         private readonly TimeProvider _time;
         private readonly Func<double> _roll;
         private readonly Random _random = new();
@@ -28,6 +27,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private ITimer? _tick, _cleanSlate;
         private IVoice? _oneShot, _loop;
         private bool _running, _sessionMode;
+        private long _loopGeneration;
         private int _sessionBase;
         private DateTime _sessionStart;
         private double _frequency = 6, _volume = 0.5;
@@ -35,11 +35,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Raised with the loop's length in seconds once it has played 60 s (WPF Clean Slate).</summary>
         internal Action<double>? CleanSlate;
 
-        /// <param name="play">Starts a clip (path, 0..1 volume, loop, called once when it ends or errors)
-        /// or returns null when it cannot.</param>
-        internal MindWipePlayer(Func<string, double, bool, Action, IVoice?> play, TimeProvider? time = null, Func<double>? roll = null)
+        /// <param name="create">Creates a silent voice, or returns null when it cannot.</param>
+        internal MindWipePlayer(Func<string, double, bool, Action, IVoice?> create, TimeProvider? time = null, Func<double>? roll = null)
         {
-            _play = play;
+            _create = create;
             _time = time ?? TimeProvider.System;
             _roll = roll ?? _random.NextDouble;
             ReloadClips();
@@ -171,7 +170,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 volume = _volume;
             }
             IVoice? voice = null;
-            voice = _play(clip, volume, false, () => { lock (_lock) if (ReferenceEquals(_oneShot, voice)) _oneShot = null; });
+            voice = _create(clip, volume, false, () => { lock (_lock) if (ReferenceEquals(_oneShot, voice)) _oneShot = null; });
+            if (voice == null) return;
+            if (!voice.Play()) { voice.Dispose(); return; }
             IVoice? displaced;
             lock (_lock) { displaced = _oneShot; _oneShot = voice; }
             displaced?.Dispose();
@@ -180,30 +181,50 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         internal void StartLoop(double volume)
         {
-            StopLoop();
-            string clip;
+            string? clip;
+            long generation;
+            IVoice? old;
+            ITimer? oldCheck;
             lock (_lock)
             {
-                if (_clips.Length == 0) { Log.Warning("MindWipe: No audio files available for loop"); return; }
-                clip = _clips[_random.Next(_clips.Length)];
-                _volume = MindWipeSchedule.ClampVolume(volume);
+                generation = ++_loopGeneration;
+                old = _loop; _loop = null;
+                oldCheck = _cleanSlate; _cleanSlate = null;
+                clip = _clips.Length == 0 ? null : _clips[_random.Next(_clips.Length)];
+                _volume = volume = MindWipeSchedule.ClampVolume(volume);
             }
+            oldCheck?.Dispose();
+            old?.Dispose();
+            if (clip == null) { Log.Warning("MindWipe: No audio files available for loop"); return; }
+
             IVoice? voice = null;
-            // A loop that dies (decode error, device gone) is no longer looping: IsLooping says so.
-            voice = _play(clip, _volume, true, () =>
+            voice = _create(clip, volume, true, () =>
             {
                 ITimer? dead = null;
                 lock (_lock) if (ReferenceEquals(_loop, voice)) { _loop = null; dead = _cleanSlate; _cleanSlate = null; }
                 dead?.Dispose();
             });
             if (voice == null) return;
-            var started = _time.GetTimestamp();
-            var check = _time.CreateTimer(_ =>
+            bool started = false;
+            lock (_lock)
             {
-                lock (_lock) if (!ReferenceEquals(_loop, voice)) return;
-                CleanSlate?.Invoke(_time.GetElapsedTime(started).TotalSeconds);
-            }, null, TimeSpan.FromSeconds(60), Timeout.InfiniteTimeSpan);
-            lock (_lock) { _loop = voice; _cleanSlate = check; }
+                if (generation == _loopGeneration)
+                {
+                    // Publish before Play queues the first build. Stop can now dispose it even
+                    // while that build is blocked, and generation rejects an older factory result.
+                    _loop = voice;
+                    voice.Volume = _volume;
+                    var start = _time.GetTimestamp();
+                    _cleanSlate = _time.CreateTimer(_ =>
+                    {
+                        lock (_lock) if (!ReferenceEquals(_loop, voice)) return;
+                        CleanSlate?.Invoke(_time.GetElapsedTime(start).TotalSeconds);
+                    }, null, TimeSpan.FromSeconds(60), Timeout.InfiniteTimeSpan);
+                    started = voice.Play();
+                    if (!started) { _loop = null; _cleanSlate?.Dispose(); _cleanSlate = null; }
+                }
+            }
+            if (!started) { voice.Dispose(); return; }
             Log.Information("MindWipe: Loop started with {File} at {Vol}% volume", Path.GetFileName(clip), volume * 100);
         }
 
@@ -211,7 +232,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             IVoice? loop;
             ITimer? check;
-            lock (_lock) { loop = _loop; _loop = null; check = _cleanSlate; _cleanSlate = null; }
+            lock (_lock) { ++_loopGeneration; loop = _loop; _loop = null; check = _cleanSlate; _cleanSlate = null; }
             check?.Dispose();
             loop?.Dispose();
         }

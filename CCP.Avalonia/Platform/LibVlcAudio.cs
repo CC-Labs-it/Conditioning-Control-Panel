@@ -199,12 +199,6 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// (MindWipeService.cs:55): the next copy starts 120 ms before the current one ends, because
         /// LibVLC's own <c>:input-repeat</c> reopens the input and left a measured 64 ms of silence
         /// at every restart.</summary>
-        internal MindWipePlayer.IVoice? PlayVoice(string path, double volume, bool loop, Action onEnded)
-        {
-            var voice = CreateVoice(path, volume, loop, onEnded);
-            return voice?.Play() == true ? voice : null;
-        }
-
         // WPF BrainDrainService.cs:345-387: creation is silent; Play belongs to the stop arbitration.
         internal MindWipePlayer.IVoice? CreateVoice(string path, double volume, bool loop, Action onEnded)
         {
@@ -299,8 +293,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 lock (_gate)
                 {
                     if (_done) return false;
-                    var v = Build();
-                    if (!StartLocked(v)) return false;
+                    _waiting = true;
                     PrepareLocked();
                     return true;
                 }

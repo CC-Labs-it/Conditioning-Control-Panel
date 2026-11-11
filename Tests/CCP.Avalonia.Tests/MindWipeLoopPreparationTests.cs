@@ -43,6 +43,20 @@ public sealed class MindWipeLoopPreparationTests
     }
 
     [Fact]
+    public void Failed_first_build_is_retried_and_starts()
+    {
+        using var failed = new ManualResetEventSlim(); var count = 0; var clock = new Clock();
+        var voices = new ConcurrentQueue<Voice>();
+        using var loop = new LibVlcAudio.LoopVoice((started, ended) => {
+            if (Interlocked.Increment(ref count) == 1) { failed.Set(); throw new InvalidOperationException(); }
+            var v = new Voice(started); voices.Enqueue(v); return v;
+        }, () => { }, clock);
+        Assert.True(loop.Play()); Assert.True(failed.Wait(5000));
+        Assert.True(SpinWait.SpinUntil(() => { clock.Fire(); return voices.Count >= 1; }, 5000));
+        Assert.True(SpinWait.SpinUntil(() => voices.ToArray()[0].Plays == 1, 5000));
+    }
+
+    [Fact]
     public void Failed_preparation_is_retried_at_overlap()
     {
         using var failed = new ManualResetEventSlim(); var count = 0; var clock = new Clock();
@@ -66,7 +80,7 @@ public sealed class MindWipeLoopPreparationTests
 
     private sealed class Clock : TimeProvider
     {
-        private TimerCallback? _callback;
+        private volatile TimerCallback? _callback;
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
         { _callback = callback; return new FakeTimer(); }
         public void Fire() => _callback?.Invoke(null);
