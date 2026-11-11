@@ -239,7 +239,7 @@ namespace ConditioningControlPanel.Services.Awareness
             // isLocalTransport stays in the signature because the projection choice remains the
             // caller's to override; it is answered inside the reaction service now, which is the one
             // place that assembles the prompt. Passing null keeps that service's own default.
-            _reactions = reactions ?? new AwarenessReactionService(isMachineLocal: isLocalTransport);
+            _reactions = reactions ?? new AwarenessReactionService(() => App.Ai, () => AwarenessObserver.IsEnabled, isMachineLocal: isLocalTransport);
         }
 
         /// <inheritdoc />

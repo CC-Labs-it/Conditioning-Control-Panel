@@ -43,9 +43,9 @@ namespace ConditioningControlPanel.Services.Awareness
 
     /// <summary>
     /// Where an awareness line comes from. Implemented in production by
-    /// <see cref="BrainAwarenessLineSource"/>.
+    /// <c>BrainAwarenessLineSource</c>.
     ///
-    /// <para>It does NOT route through <c>App.Brain.ReactAsync</c> — the reaction prompt is its own
+    /// <para>It does NOT route through <c>CompanionBrain.ReactAsync</c> — the reaction prompt is its own
     /// small one, sent straight to <c>IAiService.SendAsync</c>, which is where the moderation spine
     /// lives and therefore still applies unchanged. What that path does not give it for free is the
     /// brain's single-flight gate and its turn log, so it asks <c>CompanionBrain.IsBusy</c> itself and

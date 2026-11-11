@@ -79,7 +79,7 @@ namespace ConditioningControlPanel.Services.Awareness
         private readonly Func<bool> _isMachineLocal;
         private readonly Func<bool> _isEnabled;
 
-        /// <param name="transport">Defaults to <c>App.Ai</c>, resolved per call so a provider switch takes effect live.</param>
+        /// <param name="transport">Resolved per call so a provider switch takes effect live.</param>
         /// <param name="builder">Prompt builder. Defaults to a fresh one (it caches its own prefixes).</param>
         /// <param name="isMachineLocal">
         /// Whether the active provider runs on this machine, which is what licenses the fuller
@@ -88,22 +88,21 @@ namespace ConditioningControlPanel.Services.Awareness
         /// layer does not get to guess (addendum D — when privacy cannot answer, take the narrow path).
         /// </param>
         /// <param name="isEnabled">
-        /// The v2 kill switch / awareness toggle / consent gate, defaulting to
-        /// <see cref="AwarenessObserver.IsEnabled"/>. The observer and the arbiter already refuse to
+        /// The v2 kill switch / awareness toggle / consent gate. The observer and the arbiter already refuse to
         /// reach here when awareness is off, so this is defence in depth for future callers (a privacy
         /// panel preview, say) rather than the primary gate — but a "no consent" that only holds in
         /// one of three places is not a consent gate.
         /// </param>
         public AwarenessReactionService(
-            Func<IAiService?>? transport = null,
+            Func<IAiService?> transport,
+            Func<bool> isEnabled,
             AwarenessPromptBuilder? builder = null,
-            Func<bool>? isMachineLocal = null,
-            Func<bool>? isEnabled = null)
+            Func<bool>? isMachineLocal = null)
         {
-            _transport = transport ?? (() => App.Ai);
+            _transport = transport ?? throw new ArgumentNullException(nameof(transport));
             _builder = builder ?? new AwarenessPromptBuilder();
             _isMachineLocal = isMachineLocal ?? DefaultIsMachineLocal;
-            _isEnabled = isEnabled ?? (() => AwarenessObserver.IsEnabled);
+            _isEnabled = isEnabled ?? throw new ArgumentNullException(nameof(isEnabled));
         }
 
         /// <summary>The prompt builder in use. Exposed so the privacy panel can show the real prompt.</summary>
@@ -130,11 +129,11 @@ namespace ConditioningControlPanel.Services.Awareness
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "[AWARE] prompt build failed");
+                Serilog.Log.Warning(ex, "[AWARE] prompt build failed");
                 return AwarenessReaction.None("prompt-failed");
             }
 
-            App.Logger?.Debug("{Line}", prompt.LogLine);
+            Serilog.Log.Debug("{Line}", prompt.LogLine);
 
             AiReplyResult result;
             try
@@ -152,7 +151,7 @@ namespace ConditioningControlPanel.Services.Awareness
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "[AWARE] reaction call failed");
+                Serilog.Log.Warning(ex, "[AWARE] reaction call failed");
                 return AwarenessReaction.None("transport-failed");
             }
 
@@ -160,7 +159,7 @@ namespace ConditioningControlPanel.Services.Awareness
 
             if (result.Refusal != null)
             {
-                App.Logger?.Debug("[AWARE] reaction refused by the moderation spine");
+                Serilog.Log.Debug("[AWARE] reaction refused by the moderation spine");
                 return new AwarenessReaction(string.Empty, null, Passed: false, IsAiGenerated: false,
                     Refusal: result.Refusal, Reason: "refused");
             }
@@ -168,7 +167,7 @@ namespace ConditioningControlPanel.Services.Awareness
             if (!result.IsAiGenerated) return AwarenessReaction.None("no-ai");
 
             var parsed = Parse(result.Text);
-            App.Logger?.Debug("[AWARE] reaction key={Key} tier={Tier} outcome={Outcome} len={Len}",
+            Serilog.Log.Debug("[AWARE] reaction key={Key} tier={Tier} outcome={Outcome} len={Len}",
                 AwarenessText.SanitizeId(prompt.CardKey), prompt.Tier, parsed.Reason, parsed.Line.Length);
             return parsed;
         }
@@ -191,7 +190,7 @@ namespace ConditioningControlPanel.Services.Awareness
         internal static AwarenessReaction Parse(string? raw)
         {
             string? speaker;
-            try { speaker = App.Mods?.GetCompanionName(); } catch { speaker = null; }
+            try { speaker = CoreMods.Service?.GetCompanionName(); } catch { speaker = null; }
             var cleaned = AiTextHygiene.StripMetadataTags(
                 AiTextHygiene.UnwrapSpokenSigil(AiTextHygiene.Clean(raw), speaker));
             if (cleaned.Length == 0) return AwarenessReaction.None("empty");
@@ -294,7 +293,7 @@ namespace ConditioningControlPanel.Services.Awareness
         {
             try
             {
-                return App.Settings?.Current?.CompanionPrompt?.AiProvider == AiProviderType.Local;
+                return CoreSettings.Service?.Current?.CompanionPrompt?.AiProvider == AiProviderType.Local;
             }
             catch { return false; }
         }
