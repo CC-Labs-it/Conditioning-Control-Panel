@@ -89,6 +89,25 @@ public sealed class PresetsFocalFxTests
     });
 
     [Fact]
+    public Task TurningMotionOffCancelsActiveEntrancesBeforeRowHover() => WithPresets((host, view) =>
+    {
+        view.IsVisible = false; Settle();
+        view.IsVisible = true;
+        var field = typeof(PresetsTabView).GetField("_entranceCancellation",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var source = Assert.IsType<System.Threading.CancellationTokenSource>(field.GetValue(view));
+        var token = source.Token;
+        Assert.False(token.IsCancellationRequested);
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.True(token.IsCancellationRequested);
+        Settle(); // The newly visible rack must be laid out before pointer hit testing.
+        var row = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
+        host.MouseMove(Center(host, row)); Settle();
+        Assert.Equal(-2, Assert.IsType<TransformGroup>(row.RenderTransform).Children.OfType<TranslateTransform>().Single().Y);
+    });
+
+    [Fact]
     public Task ArrivalStaggersBothZonesAndSelectionDoesNotReplayTheRail() => WithPresets((host, view) =>
     {
         view.IsVisible = false; Settle();

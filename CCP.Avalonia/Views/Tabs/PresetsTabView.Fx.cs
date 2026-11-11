@@ -45,7 +45,7 @@ public partial class PresetsTabView
             _fxWindow.PropertyChanged += OnFxWindowProperty;
         }
         CoreMods.ModChanged += OnFxModChanged;
-        Env.MotionGateChanged += RefreshCardSheen;
+        Env.MotionGateChanged += OnFxMotionGateChanged;
         RefreshCardSheen();
     }
 
@@ -60,10 +60,17 @@ public partial class PresetsTabView
         }
         _fxWindow = null;
         CoreMods.ModChanged -= OnFxModChanged;
-        Env.MotionGateChanged -= RefreshCardSheen;
+        Env.MotionGateChanged -= OnFxMotionGateChanged;
         CancelEntrances();
         DetachCardSheen();
         DetachRowSweep();
+    }
+
+    private void OnFxMotionGateChanged()
+    {
+        // WPF LiftSessionRow clears the active animation when transitions are disabled.
+        if (!Env.AllowTransitions) CancelEntrances();
+        RefreshCardSheen();
     }
 
     private void OnFxWindowChanged(object? sender, EventArgs e) => RefreshCardSheen();
