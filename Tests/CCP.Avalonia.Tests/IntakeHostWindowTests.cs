@@ -21,6 +21,57 @@ namespace CCP.Avalonia.Tests;
 public sealed class IntakeHostWindowTests
 {
     [Fact]
+    public async Task BootErrorClosesThenWarnsOnce()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var previous = IntakeHostWindow.ShowWarning;
+            var host = new IntakeHostWindow();
+            var calls = 0;
+            try
+            {
+                host.Show();
+                IntakeHostWindow.ShowWarning = (_, message) =>
+                {
+                    calls++;
+                    Assert.Empty(IntakeHostWindow.Snapshot());
+                    Assert.Equal("Graded Intake could not start on this machine.\n\npage failed", message);
+                };
+                host.HandleMessage("{\"type\":\"boot-error\",\"msg\":\"page failed\"}");
+                Assert.Equal(1, calls);
+            }
+            finally { host.Close(); IntakeHostWindow.ShowWarning = previous; }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task LaunchFailureClosesAndWarnsOnce()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var previous = IntakeHostWindow.ShowWarning;
+            var load = GradedIntakeTabView.LoadAndShowIntake;
+            var calls = 0;
+            try
+            {
+                IntakeHostWindow.ShowWarning = (_, message) =>
+                {
+                    calls++;
+                    Assert.Empty(IntakeHostWindow.Snapshot());
+                    Assert.Equal("Couldn't start Graded Intake:\n\nshow failed", message);
+                };
+                GradedIntakeTabView.LoadAndShowIntake = host => { host.Show(); throw new InvalidOperationException("show failed"); };
+                GradedIntakeTabView.LaunchIntake(null, false);
+                Assert.Equal(1, calls);
+                Assert.Empty(IntakeHostWindow.Snapshot());
+            }
+            finally { IntakeHostWindow.ShowWarning = previous; GradedIntakeTabView.LoadAndShowIntake = load; }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task LiveIntakeWinsOverTheSpentPassGate()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
@@ -91,6 +142,8 @@ public sealed class IntakeHostWindowTests
             var previousCard = AvApp.IntakePunchCard;
             using var card = new IntakePunchCardService(Path.Combine(dir, "card.json"));
             AvApp.IntakePunchCard = card;
+            var oldWarning = IntakeHostWindow.ShowWarning;
+            IntakeHostWindow.ShowWarning = (_, _) => { };
             var host = new IntakeHostWindow { SessionsFolder = dir };
             var drafted = 0;
             host.Drafted += (_, path) => { drafted++; Assert.True(File.Exists(path)); };
@@ -136,6 +189,7 @@ public sealed class IntakeHostWindowTests
             finally
             {
                 host.Close();
+                IntakeHostWindow.ShowWarning = oldWarning;
                 card.Save();
                 AvApp.IntakePunchCard = previousCard;
                 Directory.Delete(dir, true);
