@@ -469,7 +469,7 @@ namespace ConditioningControlPanel.Services
                     return;
                 }
                 Dispose(ref _preroll);
-                CoreBubbles.Pause();   // WPF StartVideoPlayback: App.Bubbles?.PauseAndClear(), until the run ends
+                if (!_host.IsFloating(strict)) CoreBubbles.Pause(); // WPF VideoFlashRule.ClearsBubbles
                 CoreDiscord.Service?.SetVideoActivity(); // WPF StartVideoPlayback:3133
                 // WPF StartVideoPlayback: presentation can change during the pre-roll.
                 if (!_host.IsFloating(strict) && CoreFlash.IsRunning) CoreFlash.Stop();
