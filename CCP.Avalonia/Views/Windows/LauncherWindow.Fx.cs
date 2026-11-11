@@ -209,6 +209,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void FxPark()
         {
             _fxClock.Stop();
+            StopSpTween();
             StopSheens();
             try
             {
@@ -255,6 +256,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     }
                 }
                 if (Env.AllowTransitions) { busy = true; StepEdge(dt); }
+                if (_spTween.On)
+                {
+                    if (!Env.AllowTransitions) StopSpTween();
+                    else { SpReadout.Text = _spTween.Step(dt).ToString("N0"); busy |= _spTween.On; }
+                }
                 if (_fade.On) { busy = true; RootGrid.Opacity = _fade.Step(dt); if (!_fade.On) FinishFade(); }
                 if (_glow.On) { busy = true; GlowLayer.Opacity = _glow.Step(dt); }
                 if (_shakeT >= 0) { busy = true; StepShake(dt); }

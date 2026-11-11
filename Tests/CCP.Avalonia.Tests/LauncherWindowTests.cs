@@ -587,6 +587,38 @@ public sealed class LauncherWindowTests
     });
 
     [Fact]
+    public void WalletReadout_AnimatesOnShowAndChange_AndParks() => Run(shell =>
+    {
+        CoreAccount.IsLoggedInProvider = () => true;
+        CoreSettings.Current.SkillPoints = 1000;
+        LauncherWindow.BackToLauncher(shell);
+        var w = LauncherWindow.Instance!;
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        w.Hide();
+        w.Show();
+        Assert.Equal(0.ToString("N0"), Text(w, "SpReadout"));
+        w.StepFx(0.45);
+        Assert.Equal(750.ToString("N0"), Text(w, "SpReadout"));
+        w.StepFx(0.45);
+        Assert.Equal(1000.ToString("N0"), Text(w, "SpReadout"));
+        CoreSettings.Current.SkillPoints = 2000;
+        w.RefreshAccount();
+        w.StepFx(0.3);
+        Assert.Equal(1750.ToString("N0"), Text(w, "SpReadout"));
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        w.StepFx(0.01);
+        Assert.Equal(2000.ToString("N0"), Text(w, "SpReadout"));
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        CoreSettings.Current.SkillPoints = 3000;
+        w.RefreshAccount();
+        w.StepFx(0.3);
+        Assert.Equal(2750.ToString("N0"), Text(w, "SpReadout"));
+        w.Hide();
+        Assert.Equal(3000.ToString("N0"), Text(w, "SpReadout"));
+        Assert.False(w.FxTicking);
+    }, pumpUntilIdle: false);
+
+    [Fact]
     public void PanelCard_ShowsStatsAndRunningStatus_StopLinkStopsTheEngine() => Run(shell =>
     {
         var s = CoreSettings.Current;
