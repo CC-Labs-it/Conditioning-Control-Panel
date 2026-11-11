@@ -42,6 +42,7 @@
         MinHeight="672" MinWidth="980"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource DarkerBgBrush}"
+        KeyDown="TimelineZoom_KeyDown"
         DragDrop.AllowDrop="True">
 
     <Window.Resources>

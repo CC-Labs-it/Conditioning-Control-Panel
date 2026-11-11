@@ -120,6 +120,17 @@ public sealed class DeeperEditorInteractionTests
         Assert.Equal(delete ? 0 : 1, model.Rules.Count);
     });
 
+    [Theory]
+    [InlineData(global::Avalonia.Input.Key.D0)]
+    [InlineData(global::Avalonia.Input.Key.NumPad0)]
+    public Task ControlZeroResetsTimelineZoom(global::Avalonia.Input.Key key) => Run((w, _) =>
+    {
+        Call(w, "SetZoom", 2d, null);
+        Assert.Equal(2d, Field(w, "_zoomFactor"));
+        Key(w, key, KeyModifiers.Control);
+        Assert.Equal(1d, Field(w, "_zoomFactor"));
+    });
+
     [Fact]
     public Task EndSeeksToMediaEnd() => Run((w, _) =>
     {

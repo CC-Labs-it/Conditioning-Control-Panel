@@ -62,6 +62,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 [EffectTypes.Speak]      = "#FF8A5C",
             };
 
+        private void TimelineZoom_KeyDown(object? sender, KeyEventArgs e)
+        {
+            if ((e.KeyModifiers & KeyModifiers.Control) != 0 &&
+                (e.Key == Key.D0 || e.Key == Key.NumPad0))
+            {
+                SetZoom(1.0);
+                e.Handled = true;
+            }
+        }
+
         // -- Right-click context menu --------------------------------------------
 
         /// <summary>
