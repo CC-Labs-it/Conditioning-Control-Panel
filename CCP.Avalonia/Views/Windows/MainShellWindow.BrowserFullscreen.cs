@@ -1,9 +1,14 @@
 // WPF MainWindow.Browser.cs:2814-2860, 2889-3135; BrowserService.cs:255,562.
 using System;
+using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Features;
+using ConditioningControlPanel.Services;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows;
@@ -23,6 +28,9 @@ window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='
 })();";
     private Window? _browserFullscreenWindow;
     private Window? _browserFullscreenPopout;
+    private DisplayMirror? _browserFullscreenMirror;
+    private int _browserStopGeneration;
+    private bool _browserStopPending, _browserEntering;
     private bool _browserFullscreenTransition, _browserFullscreenStopped, _browserFullscreenClosed, _browserFullscreenHostClosed, _browserFullscreenActive;
     internal Window? BrowserFullscreenWindow => _browserFullscreenWindow;
 
@@ -57,9 +65,21 @@ window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='
         var container = BrowserPage?.FindControl<Grid>("BrowserContainer");
         if (_browserFullscreenTransition || _browserFullscreenWindow != null || browser == null || container == null) return;
         _browserFullscreenTransition = true;
+        _browserEntering = true;
         bool entered = false;
         try
         {
+            // WPF MainWindow.Browser.cs:2829-2836: only All selects multiple screens.
+            var screens = ScreenList.Enumerate(this);
+            var settings = CoreSettings.Current;
+            var primary = screens.ToList().FindIndex(s => s.IsPrimary);
+            var selected = Overlays.PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal,
+                settings.GlobalTargetMonitor, settings.DualMonitorEnabled, screens.Count, primary);
+            if (selected.Count() > 1)
+            {
+                var mirror = _browserFullscreenMirror ?? ScreenMirrorHead.For(this);
+                if (mirror?.EnableMirror() == true) _browserFullscreenMirror = mirror;
+            }
             var screen = Screens.ScreenFromWindow(_browserPopoutWindow ?? this)?.Bounds ?? default;
             var host = new Window { WindowDecorations = WindowDecorations.None, CanResize = false,
                 ShowInTaskbar = false, Topmost = true, Background = Brushes.Black,
@@ -86,8 +106,8 @@ window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='
             entered = true;
         }
         catch (Exception ex) { Log.Warning(ex, "Browser fullscreen entry failed"); }
-        finally { _browserFullscreenTransition = false; }
-        if (!entered) ExitBrowserFullscreen();
+        finally { _browserFullscreenTransition = false; _browserEntering = false; }
+        if (!entered || _browserStopPending) { _browserStopPending = false; ExitBrowserFullscreen(); }
     }
 
     private void BrowserFullscreenActivated(object? sender, EventArgs e) { if (_browserFullscreenActive && sender == _browserFullscreenWindow) ((Window)sender).Topmost = true; }
@@ -108,6 +128,8 @@ window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='
     }
     internal void ExitBrowserFullscreen(bool closeHost = true)
     {
+        if (_browserFullscreenTransition) return;
+        if (_browserFullscreenMirror?.DisableMirror() == true) _browserFullscreenMirror = null;
         var host = _browserFullscreenWindow;
         var browser = BrowserView;
         var container = BrowserPage?.FindControl<Grid>("BrowserContainer");
@@ -146,5 +168,13 @@ window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='
         catch (Exception ex) { Log.Warning(ex, "Browser fullscreen return failed"); host.Topmost = false; host.Hide(); }
         finally { _browserFullscreenTransition = false; }
     }
-    internal void StopBrowserFullscreen() { _browserFullscreenStopped = true; ExitBrowserFullscreen(); }
+    internal void StopBrowserFullscreen()
+    {
+        _browserFullscreenStopped = true;
+        var generation = ++_browserStopGeneration;
+        if (_browserFullscreenTransition) { if (_browserEntering) _browserStopPending = true; }
+        else ExitBrowserFullscreen();
+        // Drain late page events from this teardown without blocking the next user entry.
+        Dispatcher.UIThread.Post(() => { if (generation == _browserStopGeneration) _browserFullscreenStopped = false; }, DispatcherPriority.Background);
+    }
 }
