@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
+using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -12,6 +13,43 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class CompanionLinkLauncherTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task RefusedGateFallsBackWithoutRetainingTheRequest(bool reportBeforeClick) =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            ChatThresholdLinksTests.Setup();
+            var web = new WebHost();
+            var navigations = 0;
+            web.NavigationInvoker = _ => { navigations++; return true; };
+            var report = web.NewScrolllerEngine();
+            if (reportBeforeClick) report(false);
+            var oldNavigate = CompanionLinkLauncher.Navigate;
+            var oldOpen = AppUpdater.OpenUrl;
+            var oldRelay = RemoteControlTabView.Relay;
+            var external = new List<string>();
+            try
+            {
+                RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => throw new InvalidOperationException());
+                CompanionLinkLauncher.Navigate = url => web.Navigate(new Uri(url), requireReadyGate: true);
+                AppUpdater.OpenUrl = (_, url) => { external.Add(url); return Task.CompletedTask; };
+                const string url = "https://127.0.0.1/video";
+                await CompanionLinkLauncher.OpenAsync(url);
+                Assert.Equal(new[] { url }, external);
+                Assert.Equal(0, navigations);
+                Assert.Null(web.Source);
+                report(false);
+                Assert.Null(web.Source);
+            }
+            finally
+            {
+                CompanionLinkLauncher.Navigate = oldNavigate;
+                AppUpdater.OpenUrl = oldOpen;
+                RemoteControlTabView.Relay = oldRelay;
+            }
+        });
+
     [Theory]
     [InlineData(false, true, "https://127.0.0.1/video", 1, 0)]
     [InlineData(false, false, "https://127.0.0.1/video", 1, 1)]

@@ -103,13 +103,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Points the web view at a URL. A missing host (the tab is not in the tree, as in
         /// a single-view render) is a no-op that returns false, never a throw.</summary>
-        private bool NavigateBrowser(string url)
+        private bool NavigateBrowser(string url, bool requireReadyGate = false)
         {
             try
             {
                 var host = BrowserView;
                 if (host == null) return false;
-                if (!host.Navigate(new Uri(url))) return false;   // even when equal: WPF #867, re-click goes home
+                if (!host.Navigate(new Uri(url), requireReadyGate)) return false;   // even when equal: WPF #867, re-click goes home
                 Log.Information("Browser navigated to {Url}", url);
                 return true;
             }
@@ -190,7 +190,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (autoPlayFullscreen)
                 Log.Warning("Auto-play/fullscreen requested but WebHost has no script channel - takeover skipped: {Url}", url);
 
-            return NavigateBrowser(url);
+            return NavigateBrowser(url, requireReadyGate: autoPlayFullscreen);
         }
 
         // ============================== the profile viewer ==============================

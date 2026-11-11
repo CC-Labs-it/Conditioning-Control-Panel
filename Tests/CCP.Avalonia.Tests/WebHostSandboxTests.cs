@@ -15,6 +15,7 @@ public sealed class WebHostSandboxTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             var web = new WebHost();
+            web.NewScrolllerEngine()(true);
             Assert.False(web.Navigate(new Uri("https://hypnotube.com/")));
             Assert.Equal(1, web.RefusedNavigations);
             Assert.False(web.Navigate(new Uri("http://127.0.0.1:3001/"))); // no native engine

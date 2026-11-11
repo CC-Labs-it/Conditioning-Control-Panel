@@ -395,17 +395,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// the site you are on takes you home and Reload reloads. Assigning an equal Source raises no
         /// change, so it would do nothing. Source is kept in step (the fallback panel names it).
         /// </summary>
-        public bool Navigate(Uri url)
+        public bool Navigate(Uri url, bool requireReadyGate = false)
         {
-            _explicitNavigate = true;
-            try { Source = url; } finally { _explicitNavigate = false; }
             NavigationRequests++;
             if (RefusesScrolller(url)) { RefusedNavigations++; return false; }
-            // A sandbox never loads a real site (as ApplySource): the panel may name it, the engine never gets it.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(url)) { RefusedNavigations++; return false; }
-            if (_web is null) return false;
-            if (_scrolllerGate is null) return true;   // held: the gate's report loads Source
-            try { _web.Navigate(url); return true; }
+            // Do not retain a rejected request: a later gate report must not load it after fallback.
+            if ((_scrolllerGate is null && requireReadyGate) ||
+                (_scrolllerGate is not null && !ScrolllerGateAllows(_scrolllerGate, url))) return false;
+            _explicitNavigate = true;
+            try { Source = url; } finally { _explicitNavigate = false; }
+            if (_web is null && NavigationInvoker is null) return false;
+            if (_scrolllerGate is null) return true; // held until the gate reports
+            try
+            {
+                if (NavigationInvoker is { } navigate) return navigate(url);
+                _web!.Navigate(url);
+                return true;
+            }
             catch (Exception ex) { Log.Debug("WebHost: Navigate failed: {Error}", ex.Message); return false; }
         }
 
@@ -423,6 +430,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>Count of <see cref="Navigate"/> calls the sandbox kept from the engine.</summary>
         internal int RefusedNavigations { get; private set; }
 
+        // Headless tests supply an engine without loading a native web view.
+        internal Func<Uri, bool>? NavigationInvoker { get; set; }
         private bool _explicitNavigate;
 
         /// <summary>The Scrolller gate on this engine: null = not reported yet (every navigation held), true = gated,
