@@ -78,7 +78,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF ChaosEStimOverlay.cs:100,397: re-stack live windows without unhiding them.</summary>
         public static void RaiseActive()
         {
-            if (_active is { IsVisible: true } w) RaiseWindow(w);
+            if (_active is { } w)
+            {
+                if (!CoreSettings.Current.ChaosPinOnTop) w.Topmost = false;
+                else if (w.IsVisible) RaiseWindow(w);
+            }
             ChaosEStimGlow.RaiseActive();
         }
 
@@ -94,7 +98,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     var w = Create();
                     if (w == null) return;
                     if (!w.IsVisible) w.Show();
-                    RaiseWindow(w);   // un-hiding doesn't re-stack (WPF RaiseAboveVideo)
+                    if (CoreSettings.Current.ChaosPinOnTop) RaiseWindow(w);   // un-hiding doesn't re-stack
+                    else w.Topmost = false;
                     w.BeginStrike(boltsPx);
                 }
                 catch (Exception ex) { Log.Debug("ChaosEStim.Strike: {E}", ex.Message); }
@@ -135,7 +140,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             SystemDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Background = Brushes.Transparent;
-            Topmost = true;
+            Topmost = CoreSettings.Current.ChaosPinOnTop;
             ShowInTaskbar = false;
             ShowActivated = false;
             CanResize = false;
