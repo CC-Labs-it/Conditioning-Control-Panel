@@ -148,6 +148,81 @@ public sealed class AwarenessPrivacyCardTests
         }
     });
 
+    /// <summary>Live S23: a declined consent must snap the RENDERED dial back to Off, and a second real
+    /// click must ask again (WPF AwarenessPrivacyRuntimeVm.cs:84-119 re-syncs and raises Intensity).
+    /// Drives the RadioButtons with the mouse, because the bug lived in the TwoWay binding, not the VM.</summary>
+    [Fact]
+    public Task DeclinedConsentSnapsTheClickedDialBackToOff() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = CoreSettings.Current;
+        s.Welcomed = true;
+        s.HasAcceptedAgeVerification = true;
+        s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+        s.AwarenessModeEnabled = false;
+        s.AwarenessConsentGiven = false;
+        s.AwarenessConsentShownV2 = false;
+        s.AwarenessTitleAllowList = new();
+        var oldPremium = CoreEntitlement.HasPremiumProvider;
+        CoreEntitlement.HasPremiumProvider = () => true;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("awareness");
+            Dispatcher.UIThread.RunJobs();
+            var card = shell.GetLogicalDescendants().OfType<AwarenessPrivacyView>().Single();
+            var vm = card.ViewModel!;
+            var dial = card.GetLogicalDescendants().OfType<RadioButton>()
+                .Where(r => r.GroupName == "CmpAwarenessDial").ToList();
+            Assert.Equal(3, dial.Count);
+            RadioButton off = dial[0], broad = dial[1];
+
+            async Task ClickAndDecline(RadioButton segment)
+            {
+                segment.BringIntoView();
+                Dispatcher.UIThread.RunJobs();
+                var at = segment.TranslatePoint(new Point(segment.Bounds.Width / 2, segment.Bounds.Height / 2), shell)!.Value;
+                shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
+                shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                await Until(() => shell.OwnedWindows.OfType<AwarenessConsentDialog>().Any());
+                var dialog = Assert.Single(shell.OwnedWindows.OfType<AwarenessConsentDialog>());
+                dialog.FindControl<Button>("BtnDecline")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await vm.Pending;
+                Dispatcher.UIThread.RunJobs();
+            }
+
+            Assert.True(off.IsChecked);
+            await ClickAndDecline(broad);
+            Assert.False(s.AwarenessModeEnabled);
+            Assert.Equal(AwarenessIntensity.Off, vm.Intensity);
+            Assert.True(off.IsChecked, "declined consent must snap the dial back to Off");
+            Assert.False(broad.IsChecked, "the clicked segment must not stay selected after a decline");
+
+            // A second click on the same segment asks again rather than doing nothing.
+            await ClickAndDecline(broad);
+            Assert.False(s.AwarenessModeEnabled);
+            Assert.True(off.IsChecked);
+            Assert.False(broad.IsChecked);
+        }
+        finally
+        {
+            CoreEntitlement.HasPremiumProvider = oldPremium;
+            s.AwarenessModeEnabled = false;
+            s.AwarenessConsentGiven = false;
+            foreach (var w in shell.OwnedWindows.ToList()) w.Close();
+            shell.RequestExit();
+            Dispatcher.UIThread.RunJobs();
+            service.SaveImmediate();
+            CoreSettings.ServiceProvider = null;
+        }
+    });
+
     [Fact]
     public Task PanicKeepsHostedReadoutRefreshingAndDisarmsWipe() => AvaloniaTestDispatcher.RunAsync(async () =>
     {

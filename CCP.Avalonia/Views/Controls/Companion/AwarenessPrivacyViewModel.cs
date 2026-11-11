@@ -117,6 +117,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             {
                 if (_intensity == value) return;
                 if (_preview) { _intensity = value; Raise(); Raise(nameof(DialHint)); return; }
+                // Take the pressed stop first, so the Sync() after a declined consent is a real change
+                // (Off != pressed) and every TwoWay segment re-reads; re-raising an unchanged Off left the
+                // clicked RadioButton checked and dead (live S23). WPF AwarenessPrivacyRuntimeVm.cs:116-117.
+                _intensity = value;
+                Raise();
                 Pending = ApplyIntensityAsync(value);
             }
         }
