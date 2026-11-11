@@ -91,6 +91,30 @@ public sealed class ChaosSkiaFxOverlayTests
     });
 
     [Fact]
+    public Task RestackDelayDispatchesOnceOnTheUiThread() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        int calls = 0;
+        bool onUi = false;
+        long elapsedMs = 0;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var work = MandatoryVideoOverlay.RestackAfterDelay(() =>
+        {
+            elapsedMs = clock.ElapsedMilliseconds;
+            onUi = Dispatcher.UIThread.CheckAccess();
+            calls++;
+        }, 50);
+        Assert.Equal(0, calls);
+        await work.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(elapsedMs >= 40, $"callback fired after {elapsedMs} ms");
+        Assert.True(onUi);
+        Assert.Equal(1, calls);
+    });
+
+    [Fact]
     public Task VideoShowAndPointerPressScheduleRestacks() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
@@ -109,7 +133,7 @@ public sealed class ChaosSkiaFxOverlayTests
         // The show path creates its windows before checking LibVLC. Avoid a real decoder in this test.
         var shared = typeof(ConditioningControlPanel.Avalonia.Platform.LibVlcAudio).GetField("<Shared>k__BackingField", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
         var vlc = shared.GetValue(null);
-        var pending = new List<(Action Work, TimeSpan Delay)>();
+        var pending = new List<(Action Work, int DelayMs)>();
         var calls = 0;
         try
         {
@@ -129,7 +153,7 @@ public sealed class ChaosSkiaFxOverlayTests
             Assert.True(window.IsVisible);
             Assert.Equal(1, calls); // show raises immediately
             Assert.Single(pending);
-            Assert.Equal(TimeSpan.FromMilliseconds(50), pending[0].Delay);
+            Assert.Equal(50, pending[0].DelayMs);
             pending[0].Work();
             pending.Clear();
             Assert.Equal(2, calls);
@@ -138,7 +162,7 @@ public sealed class ChaosSkiaFxOverlayTests
             window.MouseUp(new Point(20, 20), MouseButton.Left);
             Assert.Equal(2, calls); // activation must settle first
             Assert.Single(pending);
-            Assert.Equal(TimeSpan.FromMilliseconds(50), pending[0].Delay);
+            Assert.Equal(50, pending[0].DelayMs);
             pending[0].Work();
             pending.Clear();
             Assert.Equal(3, calls);

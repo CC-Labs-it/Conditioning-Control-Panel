@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -103,7 +104,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static Func<bool> PanicListenerLive = () => PanicListeners.Live;
 
         // WPF VideoService.BringTargetsToFront: wait for video activation to settle.
-        internal static Action<Action, TimeSpan> ScheduleRestack = (action, delay) => DispatcherTimer.RunOnce(action, delay);
+        internal static Action<Action, int> ScheduleRestack = (action, delayMs) => _ = RestackAfterDelay(action, delayMs);
+
+        internal static async Task RestackAfterDelay(Action action, int delayMs)
+        {
+            await Task.Delay(delayMs).ConfigureAwait(false);
+            await Dispatcher.UIThread.InvokeAsync(action);
+        }
 
         internal IReadOnlyList<Window> Windows => _surfaces.Select(s => s.Window).ToList();
         internal IReadOnlyList<Surface> Surfaces => _surfaces;
@@ -318,7 +325,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     case VideoKeyAction.Swallow: e.Handled = true; break;
                 }
             }
-            w.AddHandler(InputElement.PointerPressedEvent, (_, _) => ScheduleRestack(ChaosRunHost.RaiseSparklesAboveVideo, TimeSpan.FromMilliseconds(50)),
+            w.AddHandler(InputElement.PointerPressedEvent, (_, _) => ScheduleRestack(ChaosRunHost.RaiseSparklesAboveVideo, 50),
                 global::Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
             w.KeyDown += (_, e) => OnKey(e);
             // The panic key always wins: tunnel it so a focused Resume button cannot take it as a click
@@ -340,7 +347,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.Activate();
             }
             ChaosRunHost.RaiseSparklesAboveVideo();
-            ScheduleRestack(ChaosRunHost.RaiseSparklesAboveVideo, TimeSpan.FromMilliseconds(50));
+            ScheduleRestack(ChaosRunHost.RaiseSparklesAboveVideo, 50);
             return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons);
         }
 
