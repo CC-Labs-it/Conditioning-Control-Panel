@@ -10,6 +10,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Native SMTC integration fixture uses the same WinRT projection as the head. -->
+    <PackageDownload Include="Microsoft.Windows.SDK.NET.Ref" Version="[10.0.19041.57]" />
+    <Reference Include="Microsoft.Windows.SDK.NET">
+      <HintPath>$(NuGetPackageRoot)microsoft.windows.sdk.net.ref/10.0.19041.57/lib/net8.0/Microsoft.Windows.SDK.NET.dll</HintPath>
+    </Reference>
+    <Reference Include="WinRT.Runtime">
+      <HintPath>$(NuGetPackageRoot)microsoft.windows.sdk.net.ref/10.0.19041.57/lib/net8.0/WinRT.Runtime.dll</HintPath>
+    </Reference>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
     <PackageReference Include="xunit.v3" Version="3.2.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
