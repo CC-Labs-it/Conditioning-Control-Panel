@@ -19,6 +19,77 @@ namespace CCP.Avalonia.Tests;
 public sealed class ChaosVideoRestackTests
 {
     [Fact]
+    public async Task Cursor_halo_is_restacked_between_announcer_and_estim_when_pinned()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var settings = CoreSettings.Current;
+            var pin = settings.ChaosPinOnTop;
+            var announcerEnabled = settings.ChaosAnnouncerEnabled;
+            var oldRaise = ChaosRunHost.RaiseGameWindow;
+            var oldMake = ChaosCursorGlowOverlay.MakeClickThrough;
+            var oldRead = ChaosCursorGlowOverlay.ReadPointer;
+            var oldCanShow = ChaosEStimOverlay.CanShow;
+            var oldSkip = ChaosEStimOverlay.SkipPlatformChecksForTests;
+            var raises = new List<Window>();
+            try
+            {
+                settings.ChaosPinOnTop = true;
+                settings.ChaosAnnouncerEnabled = true;
+                ChaosRunHost.RaiseGameWindow = raises.Add;
+                ChaosCursorGlowOverlay.MakeClickThrough = _ => true;
+                ChaosCursorGlowOverlay.ReadPointer = () => (new PixelPoint(100, 100), false, false);
+                ChaosEStimOverlay.CanShow = () => true;
+                ChaosEStimOverlay.SkipPlatformChecksForTests = true;
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                ChaosAnnouncerOverlay.Announce("test", ChaosAnnounceKind.Mantra);
+                ChaosCursorGlowOverlay.Arm();
+                ChaosEStimOverlay.Strike(new[] { (new PixelPoint(0, 0), new PixelPoint(10, 10)) });
+                var announcer = Assert.IsType<ChaosAnnouncerOverlay>(ChaosAnnouncerOverlay.Active);
+                var halo = Assert.IsType<ChaosCursorGlowOverlay>(ChaosCursorGlowOverlay.Active);
+                var estim = Assert.IsType<ChaosEStimOverlay>(ChaosEStimOverlay.Active);
+                ChaosRunHost.RaiseGameLayerAboveVideo();
+                Assert.Contains(announcer, raises);
+                Assert.Contains(halo, raises);
+                Assert.Contains(estim, raises);
+                Assert.True(raises.IndexOf(announcer) < raises.IndexOf(halo));
+                Assert.True(raises.IndexOf(halo) < raises.IndexOf(estim));
+                raises.Clear();
+                settings.ChaosPinOnTop = false;
+                ChaosRunHost.RaiseGameLayerAboveVideo();
+                Assert.Empty(raises);
+                settings.ChaosPinOnTop = true;
+                ChaosCursorGlowOverlay.CloseActive();
+                ChaosRunHost.RaiseGameLayerAboveVideo();
+                Assert.DoesNotContain(halo, raises);
+                Assert.Contains(announcer, raises);
+                Assert.Contains(estim, raises);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ChaosAnnouncerOverlay.CloseActive();
+                ChaosCursorGlowOverlay.CloseActive();
+                ChaosEStimOverlay.CloseActive();
+                settings.ChaosPinOnTop = pin;
+                settings.ChaosAnnouncerEnabled = announcerEnabled;
+                ChaosRunHost.RaiseGameWindow = oldRaise;
+                ChaosCursorGlowOverlay.MakeClickThrough = oldMake;
+                ChaosCursorGlowOverlay.ReadPointer = oldRead;
+                ChaosEStimOverlay.CanShow = oldCanShow;
+                ChaosEStimOverlay.SkipPlatformChecksForTests = oldSkip;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task Video_start_settle_and_click_restack_only_a_pinned_run_in_order()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>

@@ -112,6 +112,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Raise(ChaosDvdOverlay.Window);
             Raise(ChaosEffectBannerOverlay.Active);
             Raise(ChaosAnnouncerOverlay.Active);
+            Raise(ChaosCursorGlowOverlay.Active);
             Raise(ChaosEStimOverlay.Active);
             Raise(ChaosVibeTrailOverlay.Active);
             Raise(_fx);
