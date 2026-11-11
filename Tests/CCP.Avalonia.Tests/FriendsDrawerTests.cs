@@ -66,6 +66,32 @@ public sealed partial class FriendsDrawerTests
         finally { saved.Restore(); }
     });
 
+    [Fact]
+    public Task NoticesBellPlaysClick() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        using var svc = Service().Svc;
+        var d = new FriendsDrawer(svc);
+        var cues = new List<string>();
+        var saved = new CueState();
+        var old = CoreSettings.Current.FriendNotificationsEnabled;
+        saved.Quiet();
+        CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => cues.Add(tag);
+        CoreSettings.Current.MasterVolume = 50;
+        try
+        {
+            FriendsLanding.SfxGate = new();
+            Click(d, "friends-notices");
+            Assert.Equal(new[] { "friends-click" }, cues);
+        }
+        finally
+        {
+            CoreSettings.Current.FriendNotificationsEnabled = old;
+            CoreSettings.Save();
+            saved.Restore();
+        }
+        return Task.CompletedTask;
+    });
+
     /// <summary>WPF FriendsDrawer.Platforms + :558: an online row wears one mark per platform, desktop / phone / web
     /// order whatever the wire said, each with its tooltip; an offline row wears none.</summary>
     [Fact]
