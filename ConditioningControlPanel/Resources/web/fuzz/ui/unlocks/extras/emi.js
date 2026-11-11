@@ -29,18 +29,25 @@ const CSS = `
 ${FACE_CSS}
 .xe-h{position:absolute;left:0;right:0;bottom:79%;text-align:center;line-height:1;font-family:"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif;pointer-events:auto;}
 .xe-s{position:absolute;z-index:4;width:max-content;max-width:min(230px,70vw);padding:4px 8px;background:#fff;color:#111;border:1px solid #333;border-radius:7px;font:600 14px/1.2 ${FONT};pointer-events:none;box-shadow:1px 2px 0 rgba(0,0,0,.25);}
-.xe-c{position:absolute;display:flex;gap:4px;pointer-events:auto;}
+.xe-c{position:absolute;display:flex;gap:4px;pointer-events:auto;transition:opacity .18s ease-out;}
+.xe:has(.xe-h:not(:empty)){--emi-hat-gap:calc(21% + 24px);}
 .xe .xe-c,.xe .xe-s,.xe .xe-t{left:0;}
 .xe[data-align-right] :is(.xe-c,.xe-s,.xe-t){left:auto;right:0;}
 .xe-c{top:100%;}
-.xe[data-above] .xe-c{top:auto;bottom:100%;}
+.xe[data-above] .xe-c{top:auto;bottom:calc(100% + var(--emi-hat-gap,0px));}
 .xe-s,.xe-t{top:calc(100% + var(--emi-gap,4px));transform-origin:left top;}
-.xe[data-above] :is(.xe-s,.xe-t){top:auto;bottom:calc(100% + var(--emi-gap,4px));transform-origin:left bottom;}
+.xe[data-above] :is(.xe-s,.xe-t){top:auto;bottom:calc(100% + var(--emi-gap,4px) + var(--emi-hat-gap,0px));transform-origin:left bottom;}
 .xe[data-align-right] .xe-s{transform-origin:right top;}
 .xe[data-align-right][data-above] .xe-s{transform-origin:right bottom;}
 .xe-t{--emi-gap:34px;}
 .xe-b{min-height:30px;padding:2px 8px;background:#fff;color:#111;border:1px solid #333;border-radius:5px;font:600 13px ${FONT};touch-action:manipulation;white-space:nowrap;}
 .xe-t{position:absolute;left:0;font:600 12px ${FONT};color:var(--ink-soft);white-space:nowrap;pointer-events:none;}
+@media(hover:hover) and (pointer:fine){
+  .xe-c{opacity:.3;}
+  .xe:hover>.xe-c,.xe-c:has(:focus-visible){opacity:1;}
+}
+@media(prefers-reduced-motion:reduce){.xe-c{transition:none;}}
+body.gentle .xe-c{transition:none;}
 .xe[data-borrowed]{pointer-events:none;cursor:auto;}
 .xe[data-borrowed]>:is(.xe-sprite,.xe-c,.xe-s,.xe-t){visibility:hidden!important;pointer-events:none!important;}
 `;
