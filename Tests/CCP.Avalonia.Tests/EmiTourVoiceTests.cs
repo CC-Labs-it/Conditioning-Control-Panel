@@ -20,64 +20,50 @@ public class EmiTourVoiceTests
     [Fact]
     public void TickIsDeterministicAndUsesTheWpfWave()
     {
-        var first = EmiTypingTick.Render();
-        Assert.Equal(first, EmiTypingTick.Render());
+        var first = EmiVox.WriteWav(EmiVox.RenderTick());
+        Assert.Equal(first, EmiVox.WriteWav(EmiVox.RenderTick()));
         Assert.Equal(4470, first.Length);
         Assert.Equal("RIFF", System.Text.Encoding.ASCII.GetString(first, 0, 4));
         Assert.Contains(first[44..], b => b != 0);
     }
 
     [Fact]
-    public void TickObeysVolumeBreakerHoldAndPanicAndStops()
+    public void HeadOutputPlaysAtMasterGainAndStopsTheLine()
     {
         int volume = CoreSettings.Current.MasterVolume;
         var play = CoreAudio.PlayStoppableProvider;
         var breaker = CoreAudio.IsOutputSuppressedProvider;
-        var field = typeof(EmiLineEngine).GetField("_heldBy", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        int plays = 0, stops = 0;
-        float playedVolume = 0;
+        int stops = 0;
+        var played = new System.Collections.Generic.List<(float Gain, string Tag)>();
         object? oldUntil = HoldUntil.GetValue(EmiLineEngine.Instance);
         try
         {
             HoldUntil.SetValue(EmiLineEngine.Instance, DateTime.MinValue);
-            PanicAftermath.EndQuiet();
             CoreSettings.Current.MasterVolume = 50;
             CoreAudio.IsOutputSuppressedProvider = () => false;
-            CoreAudio.PlayStoppableProvider = (_, v, _, _, _) => { plays++; playedVolume = v; return () => stops++; };
-            using var tick = new EmiTypingTick();
-            Assert.True(tick.Tick());
-            Assert.Equal(.5f, playedVolume);
-            tick.Stop();
+            CoreAudio.PlayStoppableProvider = (_, v, tag, _, _) => { played.Add((v, tag)); return () => stops++; };
+            using var vox = new EmiVox(new EmiVoxOutput());
+            Assert.True(vox.Tick());
+            Assert.True(vox.Speak("hi again", "idle"));
+            Assert.Equal(new[] { (.5f, "emi-vox-tick"), (.5f, "emi-vox") }, played);
+            vox.Stop();
             Assert.Equal(1, stops);
-            CoreSettings.Current.MasterVolume = 0;
-            Assert.False(tick.Tick());
-            CoreSettings.Current.MasterVolume = 50;
-            CoreAudio.IsOutputSuppressedProvider = () => true;
-            Assert.False(tick.Tick());
-            CoreAudio.IsOutputSuppressedProvider = () => false;
-            field.SetValue(EmiLineEngine.Instance, "test");
-            Assert.False(tick.Tick());
-            field.SetValue(EmiLineEngine.Instance, null);
-            PanicAftermath.ArmQuiet();
-            Assert.False(tick.Tick());
-            Assert.Equal(1, plays);
         }
         finally
         {
-            field.SetValue(EmiLineEngine.Instance, null);
             HoldUntil.SetValue(EmiLineEngine.Instance, oldUntil);
-            PanicAftermath.EndQuiet();
             CoreSettings.Current.MasterVolume = volume;
             CoreAudio.PlayStoppableProvider = play;
             CoreAudio.IsOutputSuppressedProvider = breaker;
         }
     }
 
+    // WPF EmiVox.cs:500-523: volume, breaker, a held moment and a timed hold (the panicPressed tail).
     [Theory]
     [InlineData("volume")]
     [InlineData("breaker")]
     [InlineData("hold")]
-    [InlineData("panic")]
+    [InlineData("panicTail")]
     public void EachSilenceGatePreventsPlayback(string gate)
     {
         int volume = CoreSettings.Current.MasterVolume;
@@ -88,22 +74,20 @@ public class EmiTourVoiceTests
         object? oldUntil = HoldUntil.GetValue(EmiLineEngine.Instance);
         try
         {
-            HoldUntil.SetValue(EmiLineEngine.Instance, DateTime.MinValue);
-            PanicAftermath.EndQuiet();
+            HoldUntil.SetValue(EmiLineEngine.Instance, gate == "panicTail" ? DateTime.UtcNow.AddMinutes(5) : DateTime.MinValue);
             CoreSettings.Current.MasterVolume = gate == "volume" ? 0 : 50;
             CoreAudio.IsOutputSuppressedProvider = () => gate == "breaker";
             CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { plays++; return () => { }; };
             if (gate == "hold") field.SetValue(EmiLineEngine.Instance, "test");
-            if (gate == "panic") PanicAftermath.ArmQuiet();
-            using var tick = new EmiTypingTick();
-            Assert.False(tick.Tick());
+            using var vox = new EmiVox(new EmiVoxOutput());
+            Assert.False(vox.Tick());
+            Assert.False(vox.Speak("hi again", "idle"));
             Assert.Equal(0, plays);
         }
         finally
         {
             field.SetValue(EmiLineEngine.Instance, null);
             HoldUntil.SetValue(EmiLineEngine.Instance, oldUntil);
-            PanicAftermath.EndQuiet();
             CoreSettings.Current.MasterVolume = volume;
             CoreAudio.PlayStoppableProvider = play;
             CoreAudio.IsOutputSuppressedProvider = breaker;
@@ -137,7 +121,7 @@ public class EmiTourVoiceTests
             CoreAudio.IsOutputSuppressedProvider = () => false;
             CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { plays++; return () => { }; };
             shell.Show();
-            using var tick = new EmiTypingTick();
+            using var tick = new EmiVox(new EmiVoxOutput());
             foreach (bool card in new[] { false, true })
             {
                 until.SetValue(engine, DateTime.MinValue);
@@ -168,8 +152,10 @@ public class EmiTourVoiceTests
         return Task.CompletedTask;
     });
 
+    /// <summary>WPF EmiDeskWindow.Bubble.cs:168-184: dots tick, the landed line is babbled in the
+    /// face's mood, and a cleared bubble, a cancel, a dismiss or a teardown cuts the line.</summary>
     [Fact]
-    public Task BubbleDotsTickAndCancellationCutsPlayback() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task BubbleDotsTickLinesSpeakAndCancellationCutsPlayback() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
@@ -177,38 +163,50 @@ public class EmiTourVoiceTests
         int volume = CoreSettings.Current.MasterVolume;
         var play = CoreAudio.PlayStoppableProvider;
         var breaker = CoreAudio.IsOutputSuppressedProvider;
-        int plays = 0, stops = 0;
+        int stops = 0;
+        var played = new System.Collections.Generic.List<(string Path, string Tag)>();
         var desk = new EmiDeskWindow();
         object? oldUntil = HoldUntil.GetValue(EmiLineEngine.Instance);
+        void Land(EmiDeskWindow w) { w.AdvanceTourSpeech(); w.AdvanceTourSpeech(); w.AdvanceTourSpeech(); }
         try
         {
             HoldUntil.SetValue(EmiLineEngine.Instance, DateTime.MinValue);
-            PanicAftermath.EndQuiet();
             CoreSettings.Current.MasterVolume = 50;
             CoreAudio.IsOutputSuppressedProvider = () => false;
-            CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { plays++; return () => stops++; };
+            CoreAudio.PlayStoppableProvider = (path, _, tag, _, _) => { played.Add((path, tag)); return () => stops++; };
             desk.Show();
-            desk.Say("hello");
-            Assert.Equal(1, plays);
+            desk.Say("hello", "<3");
+            Assert.Equal(new[] { "emi-vox-tick" }, played.ConvertAll(p => p.Tag));
             desk.AdvanceTourSpeech(); desk.AdvanceTourSpeech();
-            Assert.Equal(3, plays);
+            Assert.Equal(3, played.Count);
             desk.AdvanceTourSpeech();
-            Assert.Equal(3, plays);
-            Assert.Equal(3, stops);
-            desk.Say("again");
+            Assert.Equal("hello", desk.TourSpeechText);
+            Assert.Equal("emi-vox", played[3].Tag);
+            Assert.Equal(0, stops);
+            desk.AdvanceTourSpeech();
+            Assert.Equal(1, stops);
+            desk.AdvanceTourSpeech();
+            Assert.Equal(1, stops);
+            Assert.Equal(4, played.Count);
+            desk.Say("hello", "zz");
+            Land(desk);
+            Assert.Equal("emi-vox", played[7].Tag);
+            Assert.NotEqual(played[3].Path, played[7].Path);
             desk.CancelChain();
-            Assert.Equal(4, stops);
+            Assert.Equal(2, stops);
             desk.Say("dismiss");
+            Land(desk);
             desk.RunDismiss();
-            Assert.Equal(5, stops);
+            Assert.Equal(3, stops);
             desk.ShutDown();
             var other = new EmiDeskWindow();
             try
             {
                 other.Show();
                 other.Say("teardown");
+                Land(other);
                 other.ShutDown();
-                Assert.Equal(6, stops);
+                Assert.Equal(4, stops);
             }
             finally { other.ShutDown(); }
         }
@@ -218,7 +216,6 @@ public class EmiTourVoiceTests
             CoreSettings.Current.MasterVolume = volume;
             CoreAudio.PlayStoppableProvider = play;
             CoreAudio.IsOutputSuppressedProvider = breaker;
-            PanicAftermath.EndQuiet();
             HoldUntil.SetValue(EmiLineEngine.Instance, oldUntil);
         }
         return Task.CompletedTask;
