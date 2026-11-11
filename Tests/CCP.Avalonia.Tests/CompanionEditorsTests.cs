@@ -189,6 +189,11 @@ public sealed class CompanionEditorsTests
         Setup();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
+        // This is a navigation test, not a first-run or age-gate test.
+        var settings = CoreSettings.Current;
+        settings.Welcomed = true;
+        settings.HasAcceptedAgeVerification = true;
+        settings.WhatMovedCardShown = 1;
         var shell = new MainShellWindow();
         try
         {
@@ -197,6 +202,8 @@ public sealed class CompanionEditorsTests
             // WPF v2: Companion > Personality adopts Make-her-yours (Pages/PersonalityPage.xaml.cs:43).
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            // Settle the real tab entrance before measuring pointer coordinates.
+            shell.CompleteTabTransition();
             Dispatcher.UIThread.RunJobs();
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
