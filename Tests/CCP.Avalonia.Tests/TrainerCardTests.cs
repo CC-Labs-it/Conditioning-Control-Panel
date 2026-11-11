@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Input.Raw;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -164,11 +166,23 @@ public sealed partial class AccountSeedTests
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                for (var i = 0; i < 2; i++)
+                // Headless MouseDown/Up drain render jobs around every event. Under load,
+                // wall-clock timestamps can turn a double-click into two single clicks.
+                // Send raw pointer input with a controlled interval through the window.
+                // Avalonia marks the raw input constructors and window input hook as private APIs.
+                using var mouse = (IDisposable)Activator.CreateInstance(typeof(MouseDevice), new object?[] { null })!;
+                var input = (Delegate)w.PlatformImpl!.GetType().GetProperty("Input")!.GetValue(w.PlatformImpl)!;
+                var root = w.PlatformImpl.GetType().GetProperty("InputRoot")!.GetValue(w.PlatformImpl)!;
+                void Mouse(RawPointerEventType type, ulong time)
                 {
-                    w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                    w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                    var raw = Activator.CreateInstance(typeof(RawPointerEventArgs), mouse, time, root, type, at, RawInputModifiers.None)!;
+                    input.DynamicInvoke(raw);
                 }
+                Mouse(RawPointerEventType.LeftButtonDown, 1000);
+                Mouse(RawPointerEventType.LeftButtonUp, 1010);
+                Assert.False(w.ProfilePage!.IsEffectivelyVisible); // one click must not open the card
+                Mouse(RawPointerEventType.LeftButtonDown, 1020);
+                Mouse(RawPointerEventType.LeftButtonUp, 1030);
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
