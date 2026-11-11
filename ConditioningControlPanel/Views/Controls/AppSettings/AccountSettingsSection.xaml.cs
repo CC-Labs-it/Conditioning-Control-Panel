@@ -245,6 +245,11 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
             if (Window.GetWindow(this) is MainWindow mw) mw.BtnDiscordLogin_Click(sender, e);
         }
 
+        private void BtnRedeemCode_Click(object sender, RoutedEventArgs e)
+        {
+            PostCodeDialog.Present(Window.GetWindow(this), passDoor: true);
+        }
+
         private void BtnLinkPatreon_Click(object sender, RoutedEventArgs e)
         {
             if (Window.GetWindow(this) is MainWindow mw) mw.BtnLinkPatreon_Click(sender, e);
