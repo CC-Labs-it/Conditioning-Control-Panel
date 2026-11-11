@@ -12,6 +12,7 @@ using Avalonia.Media.Immutable;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -389,6 +390,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             GradientStops = { new GradientStop(Color.FromArgb(180, 200, 220, 255), 0), new GradientStop(Color.FromArgb(80, 255, 255, 255), 1) },
         };
+        // WPF BubbleService.cs:2485,3503: the glass highlight on plain chaos art.
+        private static readonly IBrush Shine = new RadialGradientBrush
+        {
+            Center = new RelativePoint(0.34, 0.27, RelativeUnit.Relative),
+            GradientOrigin = new RelativePoint(0.34, 0.27, RelativeUnit.Relative),
+            RadiusX = new RelativeScalar(0.32, RelativeUnit.Relative),
+            RadiusY = new RelativeScalar(0.32, RelativeUnit.Relative),
+            GradientStops = { new GradientStop(Color.FromArgb(190, 255, 255, 255), 0),
+                new GradientStop(Color.FromArgb(70, 255, 255, 255), 0.5),
+                new GradientStop(Color.FromArgb(0, 255, 255, 255), 1) },
+        }.ToImmutable();
         private static readonly IPen FallbackPen = new Pen(Brushes.White, 2);
         private static readonly DropShadowEffect DarterGlow = new() { Color = Color.FromRgb(255, 77, 196), BlurRadius = 26, OffsetX = 0, OffsetY = 0, Opacity = 0.9 };
         private static readonly Dictionary<uint, IPen> FuseCache = new();
@@ -538,6 +550,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         }
                         else if (img != null) dc.DrawImage(img, rect);
                         else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                        if (b.Spec != null && sprite == null && ChaosSkiaFxOverlay.Enabled)
+                            dc.DrawEllipse(Shine, null, new Point(cx, cy), size / 2, size / 2);
                         if (b.DarterFlareFraction > 0 && !b.Popping) // WPF BubbleService.cs:3853-3859,5104-5120
                         {
                             var fraction = b.DarterFlareFraction;

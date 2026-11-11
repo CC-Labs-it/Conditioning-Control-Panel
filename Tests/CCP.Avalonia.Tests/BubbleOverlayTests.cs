@@ -66,6 +66,51 @@ public sealed class BubbleOverlayTests
     }
 
     [Fact]
+    public Task Shine_only_lights_plain_chaos_bubbles_when_enabled() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        HeadlessApp();
+        var s = CoreSettings.Current;
+        var oldFlag = s.ChaosSkiaFxEnabled;
+        var (oldImage, oldDarter) = (BubbleOverlay.Image, BubbleOverlay.DarterImage);
+        var w = new BubbleOverlayWindow(0, new PixelRect(0, 0, 400, 300), 1) { Width = 400, Height = 300 };
+        try
+        {
+            BubbleOverlay.LoadBubbleImage();
+            Assert.NotNull(BubbleOverlay.DarterImage);
+            var b = new AmbientBubble { Screen = 0, X = 100, Y = 100, Size = 100,
+                Spec = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec() };
+            BubbleOverlay.Field.Bubbles.Add(b);
+            w.Show();
+            byte[] Capture(bool enabled)
+            {
+                s.ChaosSkiaFxEnabled = enabled;
+                w.Sync();
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                using var frame = w.CaptureRenderedFrame()!;
+                return PixelAt(frame, 134, 127);
+            }
+            var plainOff = Capture(false);
+            var plainOn = Capture(true);
+            Assert.True(plainOn[0] > plainOff[0] && plainOn[1] > plainOff[1] && plainOn[2] > plainOff[2],
+                $"off {string.Join(",", plainOff)}, on {string.Join(",", plainOn)}");
+            b.Spec = ConditioningControlPanel.Services.Chaos.ChaosBubbleVariants.BuildDarter(0);
+            var darterOff = Capture(false);
+            var darterOn = Capture(true);
+            Assert.Equal(darterOff, darterOn);
+            b.Spec = null;
+            Assert.Equal(Capture(false), Capture(true));
+        }
+        finally
+        {
+            BubbleOverlay.Field.Bubbles.Clear(); w.Close();
+            s.ChaosSkiaFxEnabled = oldFlag;
+            BubbleOverlay.Image = oldImage; BubbleOverlay.DarterImage = oldDarter;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task Darter_sprite_and_glow_are_visible_in_the_rendered_field() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         HeadlessApp();
