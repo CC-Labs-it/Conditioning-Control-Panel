@@ -49,18 +49,81 @@ public sealed class TabAmbientRegistryTests
             Assert.Same(room, Assert.Single(registry["premium"]));
             Assert.True(room.IsTicking);
             Assert.False(mosaic.IsTicking);
+            Assert.True(room.Layers.HasFlag(AmbientFxLayers.VaultMotes));
+            view.UpdateVaultZones();
+            var zones = (VaultZone[])typeof(AmbientFxCanvas).GetField("_vaultZones", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(room)!;
+            Assert.NotEmpty(zones);
+            Assert.All(zones, z => Assert.True(z.Bounds.Bottom >= 0 && z.Bounds.Top <= room.Bounds.Height));
+            var card = view.GetVisualDescendants().OfType<Control>().First(c => c.Name == "ExCard" &&
+                c.TranslatePoint(default, room) is { Y: >= 0 } at && at.Y <= room.Bounds.Height);
+            var cardRect = new Rect(card.TranslatePoint(default, room)!.Value, card.Bounds.Size);
+            Assert.Equal(((ExclusiveCardRow)card.DataContext!).IsLocked ? 1 : 2, zones.Count(z => z.Bounds == cardRect));
+            Assert.Contains(zones, z => !z.Diamond && z.Color == global::Avalonia.Media.Color.Parse("#FFC85A"));
 
+            int updates = view.VaultZoneUpdates;
+            view.QueueVaultZones(); view.QueueVaultZones(); view.QueueVaultZones();
+            Assert.Equal(updates, view.VaultZoneUpdates); // queued, never synchronous
+            Settle(); Assert.Equal(updates + 1, view.VaultZoneUpdates);
+            updates = view.VaultZoneUpdates;
+            shell.InvalidateArrange(); Settle();
+            Assert.Equal(updates, view.VaultZoneUpdates); // unrelated window layout
+            var scroll = view.FindControl<ScrollViewer>("ContentScroll")!;
+            scroll.Offset = new Vector(0, 60); scroll.Offset = new Vector(0, 90);
+            Settle(); Assert.True(view.VaultZoneUpdates > updates);
+            updates = view.VaultZoneUpdates;
+            double roomHeight = room.Bounds.Height;
+            view.Height = view.Bounds.Height - 20; Settle();
+            Assert.NotEqual(roomHeight, room.Bounds.Height);
+            Assert.True(view.VaultZoneUpdates > updates); // actual viewport, not Viewbox scaling
+            view.Height = double.NaN; Settle();
+            // Headless does not transfer activation between windows. Use Avalonia's real
+            // platform notification handlers so the window and ambient gate change together.
+            typeof(WindowBase).GetMethod("HandleDeactivated", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(shell, null);
+            Assert.False(shell.IsActive);
+            Assert.False(room.IsTicking);
+            Assert.True(view.IsEffectivelyVisible);
+            updates = view.VaultZoneUpdates;
+            double oldOffset = scroll.Offset.Y;
+            scroll.Offset = new Vector(0, oldOffset + 60); Settle();
+            Assert.NotEqual(oldOffset, scroll.Offset.Y);
+            view.Height = view.Bounds.Height - 20; Settle();
+            Assert.Equal(updates, view.VaultZoneUpdates); // inactive work stays pending
+            typeof(WindowBase).GetMethod("HandleActivated", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(shell, null);
+            Assert.True(shell.IsActive);
+            Assert.True(room.IsTicking);
+            Settle(); Assert.Equal(updates + 1, view.VaultZoneUpdates);
+            cardRect = new Rect(card.TranslatePoint(default, room)!.Value, card.Bounds.Size);
+            zones = (VaultZone[])typeof(AmbientFxCanvas).GetField("_vaultZones", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(room)!;
+            Assert.Contains(zones, z => z.Bounds == cardRect); // refreshed to the new scroll position
+            view.Height = double.NaN; Settle();
+            updates = view.VaultZoneUpdates;
+            view.QueueVaultZones(); // queued while shown, executed after leaving
             shell.ShowTab("settings"); Settle();
             Assert.False(room.IsTicking);
+            Assert.Equal(updates, view.VaultZoneUpdates);
+            view.UpdateVaultZones(); view.QueueVaultZones();
+            shell.InvalidateArrange(); Settle();
+            Assert.Equal(updates, view.VaultZoneUpdates);
             Assert.True(mosaic.IsTicking);
+            settings.MotionLevel = MotionLevel.Reduced;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
             // The registry pause survives another visibility change until navigation resumes it.
             view.IsVisible = true; Settle();
             Assert.False(room.IsTicking);
+            view.UpdateVaultZones(); view.QueueVaultZones(); Settle();
+            Assert.Equal(updates, view.VaultZoneUpdates); // visible but registry-paused
+            AmbientFxCanvas.Env.RaiseMotionGateChanged(); Settle();
+            Assert.False(room.IsTicking); // recomposition also preserves the registry pause
             shell.ShowTab("premium"); Settle();
+            Assert.Equal(AmbientFxLayers.VaultMotes, room.Layers);
             Assert.True(room.IsTicking);
             Assert.Single(registry["premium"]);
 
             settings.MotionLevel = MotionLevel.Reduced;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.True(room.IsTicking); // Reduced runs only the few slow vault motes.
+            Assert.Equal(AmbientFxLayers.VaultMotes, room.Layers);
+            settings.MotionLevel = MotionLevel.Off;
             AmbientFxCanvas.Env.RaiseMotionGateChanged();
             Assert.False(room.IsTicking);
             settings.MotionLevel = MotionLevel.Full;

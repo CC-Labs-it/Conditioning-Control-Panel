@@ -47,6 +47,7 @@ namespace ConditioningControlPanel.Avalonia
         [DllImport(LibX11)] private static extern IntPtr XOpenDisplay(IntPtr name);
         [DllImport(LibX11)] private static extern int XCloseDisplay(IntPtr display);
         [DllImport(LibX11)] private static extern int XSync(IntPtr display, bool discard);
+        [DllImport(LibX11)] private static extern int XGetInputFocus(IntPtr display, out IntPtr focus, out int revertTo);
         [DllImport(LibX11)] private static extern int XFree(IntPtr data);
         [DllImport(LibX11)] private static extern int XGetGeometry(IntPtr display, IntPtr drawable,
             out IntPtr root, out int x, out int y, out uint width, out uint height, out uint borderWidth, out uint depth);
@@ -114,6 +115,67 @@ namespace ConditioningControlPanel.Avalonia
             other.Show();
             overlay.Show();
             lifetime.Start(Array.Empty<string>());
+            return exit;
+        }
+
+        private sealed class ManagedRaiseProbeApp : Application { }
+
+        /// <summary>Test the managed-window raise with a reparenting WM; compare root frames and focus.</summary>
+        public static int RunManagedRaise(bool direct)
+        {
+            var lifetime = new ClassicDesktopStyleApplicationLifetime { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            AppBuilder.Configure<ManagedRaiseProbeApp>().UsePlatformDetect().UseX11().SetupWithLifetime(lifetime);
+            var first = new Window { Title = "managed-raise-one", Width = 300, Height = 200,
+                Topmost = true, ShowActivated = false, Background = Brushes.DarkRed };
+            var second = new Window { Title = "managed-raise-two", Width = 300, Height = 200,
+                Topmost = true, ShowActivated = false, Background = Brushes.DarkGreen };
+            var overlay = new Window { Title = "override-raise", Width = 100, Height = 100,
+                ShowActivated = false, Background = Brushes.DarkBlue };
+            if (!X11Overlay.SetOverrideRedirect(overlay, new PixelRect(0, 0, 100, 100)))
+                throw new InvalidOperationException("override-redirect unavailable");
+            var exit = 1;
+            first.Opened += (_, _) => DispatcherTimer.RunOnce(() =>
+            {
+                var display = XOpenDisplay(IntPtr.Zero);
+                try
+                {
+                    if (display == IntPtr.Zero) throw new InvalidOperationException("no X11 display");
+                    var root = XDefaultRootWindow(display);
+                    var a = Xid(first); var b = Xid(second);
+                    if (a == IntPtr.Zero || b == IntPtr.Zero) throw new InvalidOperationException("no X11 handles");
+                    XQueryTree(display, a, out _, out var parentA, out var childrenA, out _);
+                    if (childrenA != IntPtr.Zero) XFree(childrenA);
+                    XQueryTree(display, b, out _, out var parentB, out var childrenB, out _);
+                    if (childrenB != IntPtr.Zero) XFree(childrenB);
+                    var a0 = IndexOf(display, root, a); var b0 = IndexOf(display, root, b);
+                    if (parentA == root || parentB == root || a0 < 0 || b0 < 0 || a0 == b0)
+                        throw new InvalidOperationException("WM did not reparent both windows or establish an order");
+                    var lower = a0 < b0 ? first : second;
+                    var higher = a0 < b0 ? second : first;
+                    XGetInputFocus(display, out var focusBefore, out _);
+                    bool Raise(Window w) => direct ? X11Overlay.Raise(w) : X11Overlay.RaiseManaged(w);
+                    if (!Raise(lower)) throw new InvalidOperationException("raise request failed");
+                    System.Threading.Thread.Sleep(700);
+                    var a1 = IndexOf(display, root, a); var b1 = IndexOf(display, root, b);
+                    var flipped = a1 >= 0 && b1 >= 0 && (a1 > b1) != (a0 > b0);
+                    if (!Raise(higher)) throw new InvalidOperationException("second raise request failed");
+                    System.Threading.Thread.Sleep(700);
+                    var a2 = IndexOf(display, root, a); var b2 = IndexOf(display, root, b);
+                    XGetInputFocus(display, out var focusAfter, out _);
+                    var restored = a2 >= 0 && b2 >= 0 && (a2 > b2) == (a0 > b0);
+                    var focusPreserved = focusBefore == focusAfter;
+                    // Match the run tick: WM-managed chrome, then an override-redirect bubble.
+                    Raise(lower);
+                    X11Overlay.Raise(overlay);
+                    System.Threading.Thread.Sleep(700);
+                    var overlayAbove = IndexOf(display, root, Xid(overlay)) > IndexOf(display, root, Xid(lower));
+                    Console.WriteLine($"reparented=True first-raise={flipped} second-raise={restored} focus-preserved={focusPreserved} overlay-above={overlayAbove}");
+                    exit = flipped && restored && focusPreserved && overlayAbove ? 0 : 1;
+                }
+                catch (Exception e) { Console.Error.WriteLine("managed raise probe failed: " + e.Message); }
+                finally { if (display != IntPtr.Zero) XCloseDisplay(display); lifetime.Shutdown(); }
+            }, TimeSpan.FromMilliseconds(1200));
+            second.Show(); first.Show(); overlay.Show(); lifetime.Start(Array.Empty<string>());
             return exit;
         }
 

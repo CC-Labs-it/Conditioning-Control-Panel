@@ -18,7 +18,7 @@ namespace ConditioningControlPanel.Services
     /// The cloud settings backup for a head that is not WPF: "Backup now" and "Restore from cloud"
     /// (WPF ProfileSyncService.cs:4545-4890 + MainWindow.CloudBackup.cs). Same endpoints and bodies.
     /// <para>The exclusion list, <see cref="IsExcludedFromBackup"/> and <see cref="PreserveLocalOnlyFields"/>
-    /// are copies of WPF's, unchanged; WPF is frozen and keeps its own (P118), so this class has a new
+    /// follow WPF, with the old port lane's stricter secret and safety filtering. WPF keeps its own (P118), so this class has a new
     /// name (P25). <see cref="SettingsBackupBudget"/> moved here as is.</para>
     /// <para>On top of WPF (docs/avalonia-decisions.html, cloud settings backup): <see cref="AbsolutePathFields"/>
     /// are never uploaded and a restore always keeps this machine's values, because one account has one
@@ -34,6 +34,44 @@ namespace ConditioningControlPanel.Services
         /// <param name="handler">Tests only; null is the real network.</param>
         public CloudSettingsBackup(HttpMessageHandler? handler = null) =>
             _http = handler == null ? Shared.Value : V2AuthService.Configure(new HttpClient(handler));
+
+        /// <summary>WPF ProfileSyncService.cs:4257-4325: GDPR export, including one retry
+        /// after genuine auth recovery. The caller saves the pretty JSON only after consent.</summary>
+        public async Task<(bool success, string? error, string? jsonData)> ExportDataAsync(AppSettings settings)
+        {
+            if (string.IsNullOrEmpty(settings.UnifiedId))
+                return (false, Localization.Loc.Get("msg_export_login_required"), null);
+            try
+            {
+                using var first = await PostAsync("/v2/user/export-data", settings, new { unified_id = settings.UnifiedId });
+                var response = first;
+                var json = await response.Content.ReadAsStringAsync();
+                HttpResponseMessage? retry = null;
+                try
+                {
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        if (V2AuthService.MergedRecovery is { } merged && await merged(response, json))
+                            return (false, Localization.Loc.Get("account_merged_retry_hint"), null);
+                        if (await AuthRecovery.HandleUnauthorizedAsync(response) && !string.IsNullOrEmpty(settings.AuthToken))
+                        {
+                            retry = await PostAsync("/v2/user/export-data", settings, new { unified_id = settings.UnifiedId });
+                            response = retry;
+                            json = await response.Content.ReadAsStringAsync();
+                        }
+                    }
+                    if (!response.IsSuccessStatusCode)
+                        return (false, (string?)JsonConvert.DeserializeObject<JObject>(json)?["error"] ?? Localization.Loc.GetF("msg_export_server_error_0", response.StatusCode), null);
+                    return (true, null, JToken.Parse(json).ToString(Formatting.Indented));
+                }
+                finally { retry?.Dispose(); }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Data export request failed");
+                return (false, Localization.Loc.Get("msg_export_connection_required"), null);
+            }
+        }
 
         // ---- copied unchanged from WPF ProfileSyncService.cs:4553-4635 ----
 
@@ -55,6 +93,7 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.UserDisplayName),
             nameof(AppSettings.PatreonTier),
             nameof(AppSettings.PatreonPremiumValidUntil),
+            nameof(AppSettings.PatreonLabValidUntil),
             nameof(AppSettings.InviteGrantUntil),
             nameof(AppSettings.LastPatreonVerification),
             nameof(AppSettings.AuthToken),
@@ -63,10 +102,16 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.LastSeenUtc), // Local-only greeting timestamp — must never leave the device.
             // Documented local only: a restore on another PC must not switch presence sharing on.
             nameof(AppSettings.FriendsPresenceShared),
+            // Same reason: a restore must not switch the always-on wallpaper on without its warning.
+            nameof(AppSettings.CollageRunWithCcp),
+            // A path on this PC: means nothing elsewhere, and names the user's folders.
+            nameof(AppSettings.CollageOwnImagePath),
             nameof(AppSettings.ModPersonalityPreset),
             // Conversion rows (C9): machine-local stamps and the last server tier reading.
             // A restore must not bring back a stale reading or re-open a once-ever row.
             nameof(AppSettings.ServerTierSeen),
+            nameof(AppSettings.GraceClosedTier),
+            nameof(AppSettings.GraceClosedAtUtc),
             nameof(AppSettings.InboxStamps),
             nameof(AppSettings.LastKnownEffectiveTier),
             // Free member fields mirror the server profile; the next profile read refills them.
@@ -75,6 +120,15 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.ServerPaidUntil),
             // Names a baked Rain clip pack folder on this PC; another PC has no such folder.
             nameof(AppSettings.RainPackHash),
+            // Frame and avatar equip state: what THIS PC owes the server and last saw of it.
+            nameof(AppSettings.ProfileEquipAccount),
+            nameof(AppSettings.ProfileEquipUpdatedMs),
+            nameof(AppSettings.ProfileEquipPushOwed),
+            // Rain look sync state: what THIS PC owes the server and last agreed with it (WPF ProfileSyncService).
+            nameof(AppSettings.RainLookPushOwed),
+            nameof(AppSettings.RainLookAgreedUtc),
+            // What THIS PC last saw of each account's wallet net: on another PC it would invent or hide a spend.
+            nameof(AppSettings.WalletNetSeen),
             // The one-time "online media is official" note: this PC saw it, not the account.
             nameof(AppSettings.ScrolllerOfficialNoteSeen),
             // ---- not in WPF (no WPF reader): which privacy switches this install owns (SyncPush) ----
@@ -95,9 +149,12 @@ namespace ConditioningControlPanel.Services
                             && !Attribute.IsDefined(p, typeof(JsonIgnoreAttribute)))
                 .ToArray();
 
+        private static readonly string[] SecretMarkers = { "Token", "ApiKey", "Secret", "Password", "Webhook", "Credential" };
+
         /// <summary>True when a backup must not carry this property.</summary>
         internal static bool IsExcludedFromBackup(string name) =>
             ExcludedBackupProperties.Contains(name)
+            || SecretMarkers.Any(marker => name != null && name.IndexOf(marker, StringComparison.OrdinalIgnoreCase) >= 0)
             || (name != null && name.StartsWith("Chaster", StringComparison.OrdinalIgnoreCase))
             // The audio player's playlist is file paths on this machine: never uploaded.
             || (name != null && name.StartsWith("AudioPlaylist", StringComparison.OrdinalIgnoreCase));
@@ -127,16 +184,27 @@ namespace ConditioningControlPanel.Services
             restored.DiscordWebhookUrl = current.DiscordWebhookUrl;
             restored.LastSeenUtc = current.LastSeenUtc;
             restored.FriendsPresenceShared = current.FriendsPresenceShared;
+            restored.CollageRunWithCcp = current.CollageRunWithCcp;
+            restored.CollageOwnImagePath = current.CollageOwnImagePath;
             // Conversion state lives on this PC only (it is left out of the backup): a restore must
             // not wipe it, or the once-ever rows post again and a post-code grant goes missing.
             restored.InboxStamps = current.InboxStamps;
             restored.ServerTierSeen = current.ServerTierSeen;
+            restored.LastKnownEffectiveTier = current.LastKnownEffectiveTier;
+            restored.GraceClosedTier = current.GraceClosedTier;
+            restored.GraceClosedAtUtc = current.GraceClosedAtUtc;
             restored.PatreonMember = current.PatreonMember;
             restored.PostGrants = current.PostGrants;
             restored.ServerPaidUntil = current.ServerPaidUntil;
             restored.ModPersonalityPreset = current.ModPersonalityPreset; // the setter copies
             restored.ScrolllerOfficialNoteSeen = current.ScrolllerOfficialNoteSeen;
             restored.RainPackHash = current.RainPackHash;
+            restored.ProfileEquipAccount = current.ProfileEquipAccount;
+            restored.ProfileEquipUpdatedMs = current.ProfileEquipUpdatedMs;
+            restored.ProfileEquipPushOwed = current.ProfileEquipPushOwed;
+            restored.RainLookPushOwed = current.RainLookPushOwed;
+            restored.RainLookAgreedUtc = current.RainLookAgreedUtc;
+            restored.WalletNetSeen = current.WalletNetSeen;
             restored.ConsentOwnedAccount = current.ConsentOwnedAccount;
             restored.ConsentOwnedFields = current.ConsentOwnedFields;
             // A backup over budget leaves out the per-file asset lists (SettingsBackupBudget), so
@@ -157,24 +225,20 @@ namespace ConditioningControlPanel.Services
 
         // ---- new: absolute paths are machine-local ----
 
-        /// <summary>Settings that hold an absolute path, a list of them, or list items carrying one
-        /// (AudioLayerTrack.Path, CornerGifOverlaySetting.GifPath, PlayAudioAction.FilePath). This machine's values are
-        /// never uploaded: the upload carries the SLOT's values unchanged (<see cref="CarryPathFields"/>), so a Windows
-        /// restore of a backup made here keeps its own paths. A restore keeps this machine's values, whatever the backup
-        /// carries (frozen WPF still uploads its Windows paths). Whole lists, so a restore never drops this machine's file from an item.
-        /// The asset lists are NOT here: they are relative and forward-slashed, so they travel.</summary>
+        /// <summary>Whole machine-local path settings. Portable lists retain their non-path fields;
+        /// rooted item paths stay local on restore and carry existing slot paths on upload; relative paths travel.</summary>
         public static readonly IReadOnlyList<string> AbsolutePathFields = new[]
         {
             nameof(AppSettings.CustomAssetsPath), nameof(AppSettings.StartupVideoPath), nameof(AppSettings.SpiralPath),
             nameof(AppSettings.MindWipeAudioPath), nameof(AppSettings.WallpaperOriginalPath), nameof(AppSettings.WallpaperSourceFolder),
             nameof(AppSettings.BlinkTrainerFolders), nameof(AppSettings.DeeperRecentFiles), nameof(AppSettings.DeeperLastDirectory),
-            nameof(AppSettings.AudioLayers), nameof(AppSettings.CornerGifOverlays), nameof(AppSettings.KeywordTriggers),
         };
 
         private static readonly System.Reflection.PropertyInfo[] PathProperties =
             AbsolutePathFields.Select(n => typeof(AppSettings).GetProperty(n)!).ToArray();
 
-        /// <summary>The upload JSON: the settings minus WPF's exclusions minus <see cref="AbsolutePathFields"/>.</summary>
+        /// <summary>WPF ProfileSyncService.cs:4561-4570 carries portable list fields. Strip rooted item paths here
+        /// for cross-OS use; CarryPathFields restores the slot's paths for frozen WPF.</summary>
         internal static JObject StripForUpload(AppSettings settings)
         {
             var obj = JObject.Parse(JsonConvert.SerializeObject(settings, Formatting.None));
@@ -188,7 +252,49 @@ namespace ConditioningControlPanel.Services
                     || AbsolutePathFields.Contains(name, StringComparer.OrdinalIgnoreCase))
                     obj.Remove(key);
             }
+            foreach (var item in Items(obj, nameof(AppSettings.AudioLayers)))
+            {
+                DropRooted(item, nameof(AudioLayerTrack.Path));
+                Drop(item, nameof(AudioLayerTrack.DisplayName)); // computed from Path, not persisted meaningfully
+            }
+            foreach (var item in Items(obj, nameof(AppSettings.CornerGifOverlays)))
+                DropRooted(item, nameof(CornerGifOverlaySetting.GifPath));
+            var triggers = Items(obj, nameof(AppSettings.KeywordTriggers))
+                .Concat(Items(obj, nameof(AppSettings.KeywordTriggerPresets)).SelectMany(p => Items(p, "triggers")));
+            foreach (var item in triggers)
+            {
+                DropRooted(item, nameof(KeywordTrigger.AudioFilePath)); // legacy dispatch fallback
+                foreach (var action in Items(item, nameof(KeywordTrigger.Actions)))
+                    if (string.Equals((string?)action.GetValue("type", StringComparison.OrdinalIgnoreCase), "PlayAudio", StringComparison.OrdinalIgnoreCase))
+                        DropRooted(action, "filePath");
+            }
             return obj;
+        }
+
+        // Case-insensitive: a serializer naming policy must not let a path slip through.
+        private static IEnumerable<JObject> Items(JObject? o, string list) =>
+            (o?.GetValue(list, StringComparison.OrdinalIgnoreCase) as JArray)?.OfType<JObject>() ?? Enumerable.Empty<JObject>();
+        private static void Drop(JObject o, string name) => o.Property(name, StringComparison.OrdinalIgnoreCase)?.Remove();
+
+
+        // OS-independent: a Windows drive or rooted backslash is local even on Linux.
+        private static bool IsRootedPath(string? path) => !string.IsNullOrEmpty(path)
+            && (path[0] is '/' or '\\' || (path.Length >= 2 && char.IsAsciiLetter(path[0]) && path[1] == ':'));
+
+        private static void DropRooted(JObject item, string name)
+        {
+            if (IsRootedPath((string?)item.GetValue(name, StringComparison.OrdinalIgnoreCase))) Drop(item, name);
+        }
+
+        private static JObject? ItemAt(JObject? parent, string list, int index) =>
+            (parent?.GetValue(list, StringComparison.OrdinalIgnoreCase) as JArray)?.ElementAtOrDefault(index) as JObject;
+
+        // Relative values, including an explicit empty path, travel. A stripped/omitted path
+        // or a foreign rooted path takes the matched local path, or blank when unmatched.
+        private static string KeepPath(JObject? item, string name, string? local)
+        {
+            var path = (string?)item?.GetValue(name, StringComparison.OrdinalIgnoreCase);
+            return path != null && !IsRootedPath(path) ? path : local ?? "";
         }
 
         private static readonly Lazy<Dictionary<string, string>> JsonKeyToProperty = new(() =>
@@ -205,9 +311,13 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// What a restore keeps from this machine: WPF's manual-restore identity/progression list
         /// (MainWindow.CloudBackup.cs:138-157), <see cref="PreserveLocalOnlyFields"/>, then every
-        /// <see cref="AbsolutePathFields"/> value.
+        /// <see cref="AbsolutePathFields"/> value and matched list-item paths.
+        /// <para>The manual restore runs this a second time after its awaited download (#3294): that pass has no
+        /// backup JSON and skips the list-item paths, which <see cref="DownloadAsync"/> already matched.</para>
         /// </summary>
-        internal static void KeepLocal(AppSettings current, AppSettings restored)
+        internal static void KeepLocal(AppSettings current, AppSettings restored) => KeepLocal(current, restored, null);
+
+        internal static void KeepLocal(AppSettings current, AppSettings restored, JObject? backup)
         {
             restored.UnifiedId = current.UnifiedId;
             restored.PlayerLevel = current.PlayerLevel;
@@ -232,21 +342,110 @@ namespace ConditioningControlPanel.Services
                 if (v is List<string> list) v = new List<string>(list);
                 p.SetValue(restored, v);
             }
+            if (backup != null) KeepListPaths(current, restored, backup);
+        }
+
+        private static void KeepListPaths(AppSettings current, AppSettings restored, JObject backup)
+        {
+            // No stable id/name on tracks or corner slots: their persisted order is the key.
+            // Check JSON presence: a missing old list keeps local items; an explicit [] clears it.
+            bool Missing(string name) => backup.GetValue(name, StringComparison.OrdinalIgnoreCase) == null;
+            if (Missing(nameof(AppSettings.AudioLayers))) restored.AudioLayers = new(current.AudioLayers);
+            else for (var i = 0; i < restored.AudioLayers.Count; i++)
+                restored.AudioLayers[i].Path = KeepPath(ItemAt(backup, nameof(AppSettings.AudioLayers), i),
+                    nameof(AudioLayerTrack.Path), current.AudioLayers.ElementAtOrDefault(i)?.Path);
+            if (Missing(nameof(AppSettings.CornerGifOverlays))) restored.CornerGifOverlays = new(current.CornerGifOverlays);
+            else for (var i = 0; i < restored.CornerGifOverlays.Count; i++)
+                restored.CornerGifOverlays[i].GifPath = KeepPath(ItemAt(backup, nameof(AppSettings.CornerGifOverlays), i),
+                    nameof(CornerGifOverlaySetting.GifPath), current.CornerGifOverlays.ElementAtOrDefault(i)?.GifPath);
+            if (Missing(nameof(AppSettings.KeywordTriggers))) restored.KeywordTriggers = new(current.KeywordTriggers);
+            else RestoreTriggerPaths(restored.KeywordTriggers, current.KeywordTriggers, Items(backup, nameof(AppSettings.KeywordTriggers)).ToList());
+            if (Missing(nameof(AppSettings.KeywordTriggerPresets))) restored.KeywordTriggerPresets = new(current.KeywordTriggerPresets);
+            else for (var i = 0; i < restored.KeywordTriggerPresets.Count; i++)
+                RestoreTriggerPaths(restored.KeywordTriggerPresets[i].Triggers ??= new(),
+                    ById(restored.KeywordTriggerPresets, i, current.KeywordTriggerPresets, p => p.Id)?.Triggers ?? new(),
+                    Items(ItemAt(backup, nameof(AppSettings.KeywordTriggerPresets), i), "triggers").ToList());
+        }
+
+        private static void RestoreTriggerPaths(List<KeywordTrigger> restored, List<KeywordTrigger> current, List<JObject> json)
+        {
+            for (var i = 0; i < restored.Count; i++)
+            {
+                var trigger = restored[i];
+                var local = ById(restored, i, current, t => t.Id);
+                var source = json.ElementAtOrDefault(i);
+                trigger.AudioFilePath = KeepPath(source, nameof(KeywordTrigger.AudioFilePath), local?.AudioFilePath);
+                // Action ids are not stable (every edit runs RebuildActionsFromFlatFields, which mints new
+                // ones), so a miss falls back to the local PlayAudio at the same position, then AudioFilePath.
+                var localAudio = local?.Actions.OfType<PlayAudioAction>().ToList() ?? new();
+                var restoredAudio = trigger.Actions.OfType<PlayAudioAction>().ToList();
+                var jsonAudio = Items(source, nameof(KeywordTrigger.Actions)).Where(a =>
+                    string.Equals((string?)a.GetValue("type", StringComparison.OrdinalIgnoreCase), "PlayAudio", StringComparison.OrdinalIgnoreCase)).ToList();
+                for (var j = 0; j < restoredAudio.Count; j++)
+                    restoredAudio[j].FilePath = KeepPath(jsonAudio.ElementAtOrDefault(j), "filePath", local == null ? null
+                        : (ById(restoredAudio, j, localAudio, a => a.Id) ?? localAudio.ElementAtOrDefault(j))?.FilePath
+                          ?? local.AudioFilePath);
+            }
+        }
+
+        /// <summary>The local twin of restored[i] by id. A duplicated id is ambiguous on either side, so it
+        /// only matches the local item at the same position carrying the same id.</summary>
+        private static T? ById<T>(IList<T> restored, int i, IList<T> local, Func<T, string?> id) where T : class
+        {
+            var key = id(restored[i]);
+            if (string.IsNullOrEmpty(key)) return null;
+            if (restored.Count(x => id(x) == key) == 1 && local.Count(x => id(x) == key) == 1)
+                return local.First(x => id(x) == key);
+            var same = local.ElementAtOrDefault(i);
+            return same != null && id(same) == key ? same : null;
+        }
+
+        // Stricter than WPF MainWindow.CloudBackup.cs:138-160, reused from the old port lane.
+        public static void HoldSafetyFloor(AppSettings? current, AppSettings? restored)
+        {
+            if (current == null || restored == null) return;
+            foreach (var p in typeof(AppSettings).GetProperties())
+            {
+                if (p.PropertyType != typeof(bool) || !p.CanRead || !p.CanWrite) continue;
+                if (p.Name.IndexOf("StrictLock", StringComparison.Ordinal) < 0) continue;
+                if (!(bool)p.GetValue(current)! && (bool)p.GetValue(restored)!) p.SetValue(restored, false);
+            }
+            if (current.PanicKeyEnabled) restored.PanicKeyEnabled = true;
+            if (!current.ScreenOcrEnabled)
+            {
+                restored.ScreenOcrEnabled = false;
+            }
+        }
+
+        // The old lane normalizes asset-relative paths for Linux. Absolute paths stay local above.
+        internal static void NormalizeRelativePaths(AppSettings restored)
+        {
+            static HashSet<string> Slash(HashSet<string> set) => new(set.Select(p => p.Replace('\\', '/')), set.Comparer);
+            restored.ActiveAssetPaths = Slash(restored.ActiveAssetPaths);
+            foreach (var preset in restored.AssetPresets)
+            {
+                preset.DisabledAssetPaths = Slash(preset.DisabledAssetPaths);
+                preset.DisabledAssetFolders = Slash(preset.DisabledAssetFolders);
+            }
         }
 
         // ---- the server (WPF BackupSettingsAsync / GetSettingsBackupInfoAsync / RestoreSettingsFromCloudAsync) ----
 
         /// <summary>The "Backup now" upload (WPF BackupSettingsAsync with force: true). False when there is
         /// no account, no token, offline, over budget, or the server refused.</summary>
-        public async Task<bool> BackupAsync(AppSettings settings)
+        public async Task<bool> BackupAsync(AppSettings settings) => (await BackupWithStatusAsync(settings)).Ok;
+
+        /// <summary><see cref="BackupAsync"/> plus the refusing status (413 = too large: the automatic backup
+        /// stops for the session, WPF ProfileSyncService.cs:4582-4588); null status when nothing was sent.</summary>
+        internal async Task<(bool Ok, HttpStatusCode? Refused)> BackupWithStatusAsync(AppSettings settings)
         {
-            if (settings.OfflineMode) return false;
+            if (settings.OfflineMode) return (false, null);
             var unifiedId = settings.UnifiedId;
-            if (string.IsNullOrEmpty(unifiedId)) return false;
+            if (string.IsNullOrEmpty(unifiedId)) return (false, null);
             if (string.IsNullOrEmpty(settings.AuthToken))
             {
                 Log.Debug("Settings backup skipped (no auth token)");
-                return false;
+                return (false, null);
             }
             try
             {
@@ -257,7 +456,7 @@ namespace ConditioningControlPanel.Services
                 if (!slot.Ok)
                 {
                     Log.Warning("Settings backup skipped: the current backup could not be read, so its file paths could not be kept");
-                    return false;
+                    return (false, null);
                 }
                 CarryPathFields(obj, SlotSettings(slot.Backup));
                 var encoded = SettingsBackupBudget.Encode(obj);
@@ -266,21 +465,21 @@ namespace ConditioningControlPanel.Services
                     Log.Warning("Settings backup skipped: {Size} bytes encoded is over the {Max} budget even after trimming [{Trimmed}]. Largest: {Largest}",
                         encoded.Base64.Length, SettingsBackupBudget.MaxEncodedBytes, string.Join(",", encoded.Trimmed),
                         string.Join(", ", SettingsBackupBudget.LargestProperties(obj).Select(x => $"{x.Name}={x.Bytes}")));
-                    return false;
+                    return (false, null);
                 }
                 if (encoded.Trimmed.Count > 0)
                     Log.Information("Settings backup trimmed to fit: left out {Trimmed}", string.Join(",", encoded.Trimmed));
 
                 var body = new { unified_id = unifiedId, settings_data = encoded.Base64, app_version = CoreReleaseContent.AppVersion };
                 using var response = await PostAsync("/v2/user/backup-settings", settings, body);
-                if (!await SucceededAsync(response, "Settings backup")) return false;
+                if (!await SucceededAsync(response, "Settings backup")) return (false, response.StatusCode);
                 Log.Information("Settings backed up to cloud ({Size} bytes compressed)", encoded.Compressed.Length);
-                return true;
+                return (true, null);
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "Settings backup failed");
-                return false;
+                return (false, null);
             }
         }
 
@@ -310,11 +509,16 @@ namespace ConditioningControlPanel.Services
             {
                 var data = (string?)(await FetchAsync(current))?["settings_data"];
                 if (data == null) return null;
-                var json = Unpack(data);
-                var restored = JsonConvert.DeserializeObject<AppSettings>(json,
+                var obj = JObject.Parse(Unpack(data));
+                foreach (var key in obj.Properties().Select(p => p.Name).ToList())
+                    if (IsExcludedFromBackup(PropertyNameOfJsonKey(key))) obj.Remove(key);
+                var restored = JsonConvert.DeserializeObject<AppSettings>(obj.ToString(),
                     new JsonSerializerSettings { ObjectCreationHandling = ObjectCreationHandling.Replace });
                 if (restored == null) return null;
-                KeepLocal(current, restored);
+                // Normalize downloaded presets before KeepLocal can share this machine's preset objects.
+                NormalizeRelativePaths(restored);
+                KeepLocal(current, restored, obj);
+                HoldSafetyFloor(current, restored);
                 Log.Information("Settings restored from cloud");
                 return restored;
             }
@@ -326,7 +530,7 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>The slot's <see cref="AbsolutePathFields"/> keys, copied into <paramref name="upload"/> as they are
-        /// (WPF's Windows paths, or nothing when the last backup came from this head). This head's own paths never go up.</summary>
+        /// (WPF's Windows paths, or nothing when the last backup came from this head). This head's rooted paths never go up.</summary>
         internal static void CarryPathFields(JObject upload, JObject? slotSettings)
         {
             if (slotSettings == null) return;
@@ -334,6 +538,51 @@ namespace ConditioningControlPanel.Services
                 if (AbsolutePathFields.Contains(p.Name, StringComparer.OrdinalIgnoreCase)
                     || AbsolutePathFields.Contains(PropertyNameOfJsonKey(p.Name), StringComparer.OrdinalIgnoreCase))
                     upload[p.Name] = p.Value.DeepClone();
+            // Keep portable fields and relative paths; use slot paths for rooted/omitted item paths.
+            // Reuse the restore matching rules, including preset/trigger ids and edited action ids.
+            var serializer = JsonSerializer.Create(new JsonSerializerSettings { ObjectCreationHandling = ObjectCreationHandling.Replace });
+            var listNames = new[] { nameof(AppSettings.AudioLayers), nameof(AppSettings.CornerGifOverlays),
+                nameof(AppSettings.KeywordTriggers), nameof(AppSettings.KeywordTriggerPresets) };
+            JObject ListsOnly(JObject source) => new(source.Properties()
+                .Where(p => listNames.Contains(PropertyNameOfJsonKey(p.Name), StringComparer.OrdinalIgnoreCase))
+                .Select(p => new JProperty(p.Name, p.Value.DeepClone())));
+            var slotLists = ListsOnly(slotSettings);
+            // Only Windows-rooted slot paths may fill omitted paths; old relative values must not undo local choices.
+            foreach (var p in slotLists.Descendants().OfType<JProperty>().Where(p => p.Value.Type == JTokenType.String
+                && !(IsRootedPath((string?)p.Value) && ((string?)p.Value)?.StartsWith('/') == false)
+                && (p.Name.ToLowerInvariant() is "path" or "gifpath" or "audiofilepath" or "filepath")).ToList())
+                p.Remove();
+            var local = slotLists.ToObject<AppSettings>(serializer)!;
+            var portable = ListsOnly(upload).ToObject<AppSettings>(serializer)!;
+            KeepListPaths(local, portable, upload);
+            var merged = JObject.FromObject(portable);
+            foreach (var name in listNames)
+            {
+                var key = upload.Properties().First(p => PropertyNameOfJsonKey(p.Name).Equals(name, StringComparison.OrdinalIgnoreCase)).Name;
+                var list = merged.GetValue(name, StringComparison.OrdinalIgnoreCase)!.DeepClone();
+                PreserveOmittedPaths(upload[key], list);
+                upload[key] = list;
+            }
+            foreach (var item in Items(upload, nameof(AppSettings.AudioLayers)))
+                Drop(item, nameof(AudioLayerTrack.DisplayName));
+        }
+
+        // Model defaults must not turn stripped paths into explicit empty choices on a later restore.
+        // Keep a carried slot path, but omit generated blanks unless the upload explicitly carried one.
+        private static void PreserveOmittedPaths(JToken? source, JToken target)
+        {
+            if (target is JObject obj)
+                foreach (var property in obj.Properties().ToList())
+                {
+                    var original = (source as JObject)?.GetValue(property.Name, StringComparison.OrdinalIgnoreCase);
+                    if (original == null && property.Value.Type == JTokenType.String && (string?)property.Value == ""
+                        && (property.Name.ToLowerInvariant() is "path" or "gifpath" or "audiofilepath" or "filepath"))
+                        property.Remove();
+                    else PreserveOmittedPaths(original, property.Value);
+                }
+            else if (target is JArray array)
+                for (var i = 0; i < array.Count; i++)
+                    PreserveOmittedPaths((source as JArray)?.ElementAtOrDefault(i), array[i]);
         }
 
         /// <summary>The slot's settings JSON; null when there is none or it cannot be read (nothing to carry then).</summary>
@@ -380,13 +629,14 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>409 merged goes to contract D when the head seeded it (<see cref="V2AuthService.MergedRecovery"/>);
-        /// everything else non-2xx is a logged failure. ponytail: WPF's 401 token recovery has no twin on this
-        /// head yet (SyncPush has none either), so a 401 is a plain failure here.</summary>
+        /// WPF ProfileSyncService.cs:4623/4668/4715 recovers a 401 for the next attempt, without retrying
+        /// a backup or restore. Shared AuthRecovery owns cooldowns, provider validation and heartbeat.</summary>
         private static async Task<bool> SucceededAsync(HttpResponseMessage response, string what)
         {
             if (response.IsSuccessStatusCode) return true;
             var error = await response.Content.ReadAsStringAsync();
             if (V2AuthService.MergedRecovery is { } merged && await merged(response, error)) return false;
+            await AuthRecovery.HandleUnauthorizedAsync(response);
             Log.Warning("{What} failed: {Status} (body {Bytes} bytes)", what, (int)response.StatusCode, error?.Length ?? 0);
             return false;
         }

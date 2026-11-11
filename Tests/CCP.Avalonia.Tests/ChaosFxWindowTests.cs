@@ -17,7 +17,7 @@ public sealed class ChaosFxWindowTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -97,6 +97,168 @@ public sealed class ChaosFxWindowTests
             Assert.False(ChaosRunHost.Fx!.IsAnimating);
             Assert.Null(ChaosRunHost.Fx.HeatLayer.Background);
         });
+    }
+
+    [Theory]
+    [InlineData("bare", 255, 50, 50, 0.575)]
+    [InlineData("shield", 80, 160, 255, 0.28)]
+    [InlineData("chain", 122, 224, 255, 0.22)]
+    [InlineData("collar", 255, 215, 0, 0.32)]
+    [InlineData("unleashed", 255, 215, 0, 0.50)]
+    public async Task Detonation_pulses_match_the_protection_that_paid(string protection, int r, int g, int b, double strength)
+    {
+        await Run(clock =>
+        {
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+            ChaosRunHost.Overlay!.FinishCountdown();
+            var state = ChaosRunHost.State!;
+            state.Shields = protection == "shield" ? 1 : 0;
+            state.CollarSaves = protection is "collar" or "unleashed" ? 1 : 0;
+            state.UnleashedEnabled = protection == "unleashed";
+            var bubble = ConditioningControlPanel.Avalonia.Views.Overlays.BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                { VariantId = "pink", IsLive = true, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload { Strength = 50 } });
+            if (protection == "chain")
+            {
+                state.DefuseInvulnMs = 1000;
+                ChaosRunHost.OnDefused(bubble);
+            }
+            ChaosRunHost.OnDetonated(bubble);
+            AssertPulse(clock, Color.FromRgb((byte)r, (byte)g, (byte)b), strength);
+        });
+    }
+
+    [Theory]
+    [InlineData(false, false, 1)]
+    [InlineData(true, false, 10)]
+    [InlineData(false, true, 25)]
+    [InlineData(false, false, 50)]
+    [InlineData(false, false, 100)]
+    public async Task Pops_and_defuses_end_with_the_WPF_combo_pulse(bool prism, bool defuse, int combo)
+    {
+        await Run(clock =>
+        {
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+            ChaosRunHost.Overlay!.FinishCountdown();
+            ChaosRunHost.State!.Combo = combo - 1;
+            var bubble = ConditioningControlPanel.Avalonia.Views.Overlays.BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                { VariantId = "pink", IsPrism = prism, IsLive = defuse, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() });
+            var pulses = new System.Collections.Generic.List<(Color Color, double Strength)>();
+            var observer = ChaosRunHost.PulseFx;
+            ChaosRunHost.PulseFx = (color, strength) => pulses.Add((color, strength));
+            try
+            {
+                if (defuse) ChaosRunHost.OnDefused(bubble);
+                else ChaosRunHost.OnBubblePopped(bubble);
+            }
+            finally { ChaosRunHost.PulseFx = observer; }
+            Assert.Equal(prism ? (Color.FromRgb(200, 168, 255), 0.40)
+                : defuse ? (Color.FromRgb(90, 255, 150), 0.16)
+                : (Color.FromRgb(255, 200, 235), 0.10), pulses[0]);
+            int crossings = combo >= 100 ? 3 : combo >= 50 ? 2 : combo >= 25 ? 1 : 0;
+            Assert.Equal(2 + crossings, pulses.Count);
+            for (int i = 1; i <= crossings; i++)
+                Assert.Equal((Color.FromRgb(255, 230, 120), 0.55), pulses[i]);
+            AssertPulse(clock, combo % 10 == 0 ? Color.FromRgb(255, 200, 60) : Color.FromRgb(255, 170, 80),
+                combo % 10 == 0 ? 0.4 : 0.04 + 0.08 * ((combo % 10) / 10.0));
+        });
+    }
+
+    [Fact]
+    public async Task Colour_flashes_off_and_manual_pause_suppress_bubble_pulses()
+    {
+        await Run(clock =>
+        {
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, ColorFlashesEnabled = false });
+            ChaosRunHost.Overlay!.FinishCountdown();
+            var bubble = ConditioningControlPanel.Avalonia.Views.Overlays.BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                { VariantId = "pink", FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() });
+            ChaosRunHost.OnBubblePopped(bubble);
+            ChaosRunHost.OnDefused(bubble);
+            ChaosRunHost.OnDetonated(bubble);
+            Assert.Null(ChaosRunHost.Fx!.VignetteLayer.Background);
+            ChaosRunHost.State!.Config.ColorFlashesEnabled = true;
+            ChaosRunHost.ToggleManualPause();
+            ChaosRunHost.OnBubblePopped(bubble);
+            ChaosRunHost.OnDefused(bubble);
+            ChaosRunHost.OnDetonated(bubble);
+            Assert.Null(ChaosRunHost.Fx.VignetteLayer.Background);
+        });
+    }
+
+    [Fact]
+    public async Task Big_combo_crossings_fire_once_per_streak_and_reset_after_a_bare_hit()
+    {
+        await Run(clock =>
+        {
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+            ChaosRunHost.Overlay!.FinishCountdown();
+            var state = ChaosRunHost.State!;
+            var bubble = ConditioningControlPanel.Avalonia.Views.Overlays.BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                { VariantId = "pink", FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() });
+            state.Combo = 24;
+            ChaosRunHost.OnBubblePopped(bubble);
+            Assert.Contains("STREAK x25", state.RecentEvents);
+            state.RecentEvents.Clear();
+            state.Combo = 24;
+            ChaosRunHost.OnBubblePopped(bubble);
+            Assert.DoesNotContain("STREAK x25", state.RecentEvents);
+            state.Shields = state.CollarSaves = 0;
+            ChaosRunHost.OnDetonated(bubble);
+            state.Combo = 24;
+            ChaosRunHost.OnBubblePopped(bubble);
+            Assert.Contains("STREAK x25", state.RecentEvents);
+            ChaosRunHost.ForceShutdown();
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+            ChaosRunHost.Overlay!.FinishCountdown();
+            var next = ConditioningControlPanel.Avalonia.Views.Overlays.BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                { VariantId = "pink", FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() });
+            ChaosRunHost.State!.Combo = 24;
+            ChaosRunHost.OnBubblePopped(next);
+            Assert.Contains("STREAK x25", ChaosRunHost.State.RecentEvents);
+        });
+    }
+
+    [Fact]
+    public async Task Gentle_pulse_uses_the_live_setting_and_keeps_the_fade()
+    {
+        await Run(clock =>
+        {
+            var service = new ConditioningControlPanel.Services.SettingsService();
+            var provider = ConditioningControlPanel.CoreSettings.ServiceProvider;
+            ConditioningControlPanel.CoreSettings.ServiceProvider = () => service;
+            var settings = service.Current;
+            bool before = settings.GentleVisuals;
+            var fx = new ChaosFxWindow();
+            try
+            {
+                settings.GentleVisuals = true;
+                fx.Show();
+                fx.Pulse(Colors.Red, 0.5);
+                clock.Advance(TimeSpan.FromMilliseconds(150));
+                fx.Frame();
+                Assert.Equal(0.235, fx.VignetteLayer.Opacity, 6);
+                clock.Advance(TimeSpan.FromMilliseconds(150));
+                fx.Frame();
+                Assert.Equal(0.47, fx.VignetteLayer.Opacity, 6);
+                clock.Advance(TimeSpan.FromMilliseconds(260));
+                fx.Frame();
+                Assert.Equal(0, fx.VignetteLayer.Opacity);
+            }
+            finally { fx.Close(); settings.GentleVisuals = before; ConditioningControlPanel.CoreSettings.ServiceProvider = provider; }
+        });
+    }
+
+    private static void AssertPulse(SteppedTime clock, Color color, double strength)
+    {
+        var fx = ChaosRunHost.Fx!;
+        var stops = ((IRadialGradientBrush)fx.VignetteLayer.Background!).GradientStops;
+        Assert.Equal(color, stops[2].Color);
+        clock.Advance(TimeSpan.FromMilliseconds(40));
+        fx.Frame();
+        Assert.Equal(Math.Clamp(0.22 + strength * 0.5, 0.15, 0.72), fx.VignetteLayer.Opacity, 6);
+        clock.Advance(TimeSpan.FromMilliseconds(260));
+        fx.Frame();
+        Assert.Equal(0, fx.VignetteLayer.Opacity);
     }
 
     [Fact]

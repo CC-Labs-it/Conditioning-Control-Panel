@@ -82,7 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// head's services: a service that is not up (null) leaves its provider silent. A provider's
         /// Changed may come from any thread; the deck is marked dirty on the UI thread (WPF
         /// MainWindow.DashboardBillboard ProvidersChanged). Everything holds the shell weakly.</summary>
-        private static IBillboardProvider[] BillboardProviders(WeakReference<MainShellWindow> weak)
+        internal static IBillboardProvider[] BillboardProviders(WeakReference<MainShellWindow> weak)
         {
             MainShellWindow? Shell() => weak.TryGetTarget(out var s) ? s : null;
             var head = new BillboardHead
@@ -110,6 +110,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF ShowcaseArtRegistration.Register, once per process.</summary>
         private static readonly Lazy<bool> ShowcaseArt = new(() =>
         {
+            // WPF BuiltInArt.Register: posters (house scenes), tables, wheel, spiral, calendar, tips,
+            // invite and quests.
+            BuiltInArt.Register();
+            // WPF BoardArtRegistration.Register (BillboardWiring): the Tonight Board's tiles.
+            BillboardArt.Register(BoardTileView.ArtKey, data => new BoardTileView(data));
             BillboardArt.Register(ShowcaseRules.ArtKey, data => new ClipArtView(data as ShowcaseClipArt));
             return true;
         });
@@ -117,6 +122,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF new ShowcaseProvider(): the manifest and clips cached under user data (seam).
         /// It holds no service subscription, so a closed shell has nothing to detach from it.</summary>
         internal static Func<IBillboardProvider> MakeShowcase = () => new ShowcaseProvider();
+
+        // WPF MainWindow/MainWindow.CompanionAsks.cs:22-37 reads plain data and returns empty on failure.
+        // This head's rack lookup uses a UI name scope, including after a contended brain await.
+        internal IReadOnlyList<ConditioningControlPanel.Services.Companion.Asks.AskOption> CompanionSessionOptions()
+        {
+            try
+            {
+                if (!Dispatcher.UIThread.CheckAccess())
+                    return Dispatcher.UIThread.Invoke(CompanionSessionOptions);
+                return Named<Tabs.PresetsTabView>("PresetsTab")?.CompanionSessionOptions()
+                    ?? Array.Empty<ConditioningControlPanel.Services.Companion.Asks.AskOption>();
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("Companion session options failed: {Error}", ex.Message);
+                return Array.Empty<ConditioningControlPanel.Services.Companion.Asks.AskOption>();
+            }
+        }
 
         /// <summary>WPF MainWindow.StartSessionFromCompanion: the Sessions page's own Start path (it
         /// asks first). False while a session runs or when the session is gone.</summary>

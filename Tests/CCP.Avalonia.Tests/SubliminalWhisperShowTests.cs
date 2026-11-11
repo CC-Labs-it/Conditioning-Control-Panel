@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Xunit;
 
@@ -13,6 +14,40 @@ namespace CCP.Avalonia.Tests;
 /// no Reset. Uses the shipped neutral freeze/reset clips linked into the output (no mod layer here).</summary>
 public sealed class SubliminalWhisperShowTests
 {
+    // WPF SubliminalService :543 MarkWhisperAudio: the companion never talks over an audible whisper (from #3272).
+    [Fact]
+    public void AudibleWhisperStartHoldsTheBarkFloor() => With(true, 0.5, _ =>
+    {
+        var saved = (ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine, CoreSettings.Current.AvatarEnabled);
+        try
+        {
+            CoreSettings.Current.AvatarEnabled = true;
+            var rule = new ConditioningControlPanel.Services.Bark.BarkRule
+            {
+                Id = "whisper-floor", Trigger = "AttentionCheckFail",
+                VariantPool = new() { new("look") },
+            };
+            var engine = new ConditioningControlPanel.Services.Bark.BarkEngine(() =>
+                new ConditioningControlPanel.Services.Bark.BarkRuleSet(new[] { rule })) { Speak = _ => { } };
+            engine.Start();
+            ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine = engine;
+            CoreAudio.PlayStoppableProvider = (_, _, _, started, _) =>
+            {
+                started?.Invoke(TimeSpan.FromSeconds(10));
+                return () => { };
+            };
+            SubliminalWhisperShow.Phrase("reset");
+            Assert.True(engine.IsWhisperAudioPlaying);
+            Assert.False(engine.Raise("AttentionCheckFail"));
+            Assert.True(engine.Raise("AttentionCheckFail", guaranteed: true));
+        }
+        finally
+        {
+            SubliminalWhisperShow.StopAll();
+            (ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine, CoreSettings.Current.AvatarEnabled) = saved;
+        }
+    });
+
     private sealed record Run(List<string> Log, List<(int Ms, Action Then)> Timers);
 
     private static void With(bool audible, double roll, Action<Run> body)
@@ -43,6 +78,26 @@ public sealed class SubliminalWhisperShowTests
         }
     }
 
+    // WPF SubliminalService.PlayTriggerAudio: voice only, no duplicate haptic/card/reset.
+    [Fact]
+    public void Tube_trigger_audio_uses_linked_clip_without_a_card()
+    {
+        With(audible: true, roll: 0.5, run =>
+        {
+            SubliminalWhisperShow.PlayTriggerAudio("freeze");
+            Assert.Equal(new[] { "duck 70", "play freeze.mp3 whisper" }, run.Log);
+            Fire(run, 500);
+            Assert.Empty(run.Timers); // fail-proof: routing through Whisper schedules the card
+            Assert.DoesNotContain(run.Log, l => l.StartsWith("card"));
+        });
+        With(audible: false, roll: 0.5, run =>
+        {
+            SubliminalWhisperShow.PlayTriggerAudio("freeze");
+            Assert.Empty(run.Log);
+            Assert.Empty(run.Timers);
+        });
+    }
+
     private static void Fire(Run run, int ms)
     {
         var i = run.Timers.FindIndex(t => t.Ms == ms);
@@ -50,6 +105,50 @@ public sealed class SubliminalWhisperShowTests
         var t = run.Timers[i];
         run.Timers.RemoveAt(i);
         t.Then();
+    }
+
+    [Fact]
+    public void Video_reset_waits_for_teardown_is_consumed_once_and_stop_cancels_it()
+    {
+        With(audible: true, roll: 0.5, run =>
+        {
+            SubliminalWhisperShow.FreezeForVideo();
+            Assert.DoesNotContain(run.Timers, t => t.Ms >= 1000);
+            SubliminalWhisperShow.FinishVideoFreeze(cancelled: false);
+            Assert.Single(run.Timers, t => t.Ms >= 1000 && t.Ms < 2000);
+            SubliminalWhisperShow.FinishVideoFreeze(cancelled: false);
+            Assert.Single(run.Timers, t => t.Ms >= 1000);
+            var reset = run.Timers.Find(t => t.Ms >= 1000);
+            reset.Then();
+            Assert.Equal("play reset.mp3 whisper", run.Log[^1]);
+            SubliminalWhisperShow.FreezeForVideo();
+            SubliminalWhisperShow.FinishVideoFreeze(cancelled: true);
+            run.Timers.Clear();
+            SubliminalWhisperShow.FinishVideoFreeze(cancelled: false);
+            Assert.Empty(run.Timers);
+            SubliminalWhisperShow.FreezeForVideo();
+            SubliminalWhisperShow.FinishVideoFreeze(cancelled: false);
+            var cancelled = run.Timers.FindLast(t => t.Ms >= 1000);
+            SubliminalWhisperShow.FinishVideoFreeze(cancelled: true);
+            var count = run.Log.Count; cancelled.Then(); Assert.Equal(count, run.Log.Count);
+            SubliminalWhisperShow.FreezeForVideo();
+            SubliminalWhisperShow.StopAll();
+            run.Timers.Clear();
+            SubliminalWhisperShow.FinishVideoFreeze(cancelled: false);
+            Assert.Empty(run.Timers);
+        });
+        With(audible: false, roll: 0.5, run =>
+        {
+            SubliminalWhisperShow.FreezeForVideo();
+            SubliminalWhisperShow.FinishVideoFreeze(cancelled: false);
+            Assert.Empty(run.Timers);
+        });
+        With(audible: true, roll: 0.95, run =>
+        {
+            SubliminalWhisperShow.FreezeForVideo();
+            SubliminalWhisperShow.FinishVideoFreeze(cancelled: false);
+            Assert.DoesNotContain(run.Timers, t => t.Ms >= 1000);
+        });
     }
 
     [Fact]
@@ -68,6 +167,29 @@ public sealed class SubliminalWhisperShowTests
         Fire(run, 50); Fire(run, 250);
         Assert.Equal("card Reset", run.Log[^1]);
         Assert.Empty(run.Timers);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void VideoFreezeDefersResetAndCancellationDropsPendingEffects(bool cancel) => With(true, 0.9, run =>
+    {
+        MandatoryVideoOverlay.Instance.Freeze();
+        Assert.Empty(run.Timers.FindAll(t => t.Ms >= 1000));
+        MandatoryVideoOverlay.Instance.FinishFreeze(cancel);
+        if (cancel)
+        {
+            foreach (var timer in run.Timers.ToArray()) timer.Then();
+            foreach (var timer in run.Timers.ToArray()) timer.Then();
+            Assert.DoesNotContain("card Freeze", run.Log);
+            Assert.Empty(run.Timers.FindAll(t => t.Ms >= 1000));
+        }
+        else
+        {
+            var reset = Assert.Single(run.Timers.FindAll(t => t.Ms >= 1000));
+            Assert.InRange(reset.Ms, 1000, 1999); Fire(run, reset.Ms);
+            Assert.Contains("play reset.mp3 whisper", run.Log);
+        }
     });
 
     [Fact]
@@ -135,6 +257,51 @@ public sealed class SubliminalWhisperShowTests
             Assert.DoesNotContain(run.Log, l => l.StartsWith("card") || l.StartsWith("play"));
         });
         return Task.CompletedTask;
+    });
+
+    [Fact]
+    public void Custom_card_keeps_wpf_sanitization_opacity_haptic_lead_and_stop_guard() => With(audible: true, roll: 0.5, run =>
+    {
+        var old = (CoreHaptics.Service, CoreEntitlement.HasPremiumProvider, CoreProgression.AddXPProvider,
+            SubliminalWhisperShow.DrawWithOpacity);
+        var settings = new ConditioningControlPanel.Models.HapticSettings { Enabled = true };
+        settings.EnsureV2Migrated();
+        settings.V2.Provider("mock").Enabled = true;
+        settings.V2.Provider("buttplug").Enabled = false;
+        settings.V2.Provider("lovense").Enabled = false;
+        CoreEntitlement.HasPremiumProvider = () => true;
+        using var haptics = new HapticService(settings);
+        CoreHaptics.Service = haptics;
+        Assert.True(haptics.ConnectAsync().GetAwaiter().GetResult());
+        var triggered = 0;
+        haptics.HapticTriggered += (_, _) => triggered++;
+        var xp = new List<double>();
+        CoreProgression.AddXPProvider = (amount, _) => xp.Add(amount);
+        SubliminalWhisperShow.DrawWithOpacity = (text, opacity) => run.Log.Add($"custom {text} {opacity}");
+        try
+        {
+            Assert.True(haptics.SubliminalAnticipationMs > 0);
+            SubliminalWhisperShow.Custom("  <b>Relax</b>  ", 42);
+            Assert.Empty(run.Log);                       // silent custom card, no whisper
+            Assert.Equal(1, triggered);
+            Fire(run, haptics.SubliminalAnticipationMs);
+            Assert.Equal("custom Relax 42", Assert.Single(run.Log));
+            SubliminalWhisperShow.Custom("queued", 30);
+            SubliminalWhisperShow.StopAll();
+            Fire(run, haptics.SubliminalAnticipationMs);
+            Assert.Single(run.Log);                     // panic during anticipation drops it
+            CoreHaptics.Service = null;
+            SubliminalWhisperShow.Custom(" ");
+            SubliminalWhisperShow.Custom(new string('x', 205), 12);
+            Assert.Equal($"custom {new string('x', 200)} 12", run.Log[^1]);
+            Assert.Equal(new[] { 10.0, 10.0, 10.0 }, xp);
+        }
+        finally
+        {
+            haptics.PanicStop();
+            (CoreHaptics.Service, CoreEntitlement.HasPremiumProvider, CoreProgression.AddXPProvider,
+                SubliminalWhisperShow.DrawWithOpacity) = old;
+        }
     });
 
     /// <summary>A Stop that lands while the whisper is starting still silences it and drops its card.</summary>
