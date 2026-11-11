@@ -190,6 +190,24 @@
                     </ComboBox>
                 </Grid>
 
+                <!-- Lighter effects (Avalonia head only, lane perf 2026-11-06; WPF has no software tier).
+                     Item order IS the LighterEffectsMode ordinal (Auto=0, On=1, Off=2) - never reorder.
+                     Auto takes WPF's Performance-mode FX tier when Skia draws on the CPU (no GPU). -->
+                <Grid MinHeight="34" Margin="0,2,0,0" ColumnDefinitions="*,Auto"
+                      ToolTip.Tip="{loc:Str tooltip_lighter_effects}">
+                    <TextBlock Grid.Column="0" Theme="{StaticResource SettingLabel}"
+                               Text="{loc:Str setting_lighter_effects}"
+                               Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                    <ComboBox Grid.Column="1" x:Name="CmbLighterEffects"
+                              Theme="{StaticResource DarkComboBoxStyle}" FontSize="11"
+                              Width="110" MinHeight="28" VerticalAlignment="Center" SelectedIndex="0"
+                              SelectionChanged="CmbLighterEffects_SelectionChanged">
+                        <ComboBoxItem Content="{loc:Str label_lighter_effects_auto}"/>
+                        <ComboBoxItem Content="{loc:Str label_lighter_effects_on}"/>
+                        <ComboBoxItem Content="{loc:Str label_lighter_effects_off}"/>
+                    </ComboBox>
+                </Grid>
+
                 <!-- THE BACK ROOM effects intensity. Item order IS the BackRoomFxIntensity ordinal
                      (Calm=0, Normal=1, Full=2) - never reorder. Motion caps it: below Full plays Calm. -->
                 <Grid MinHeight="34" Margin="0,2,0,0" ColumnDefinitions="*,Auto"
