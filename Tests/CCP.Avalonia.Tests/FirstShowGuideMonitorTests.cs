@@ -54,6 +54,19 @@ public sealed partial class FirstShowStageTests
             stage.GuideScreenOverride = () => shell.Position.X < 0 ? second : first;
             stage.GuideScreenFromPointOverride = _ => shell.Position.X < 0 ? second : first;
             double t = S.GreetAfter + .1; stage.Clock = () => t; stage.Frame();
+            async Task WaitForSpeech()
+            {
+                // Showing the card can itself change layout. Require four settled frames.
+                var deadline = DateTime.UtcNow.AddSeconds(10);
+                int visible = 0;
+                while (visible < 4 && DateTime.UtcNow < deadline)
+                {
+                    t += .05; stage.Frame(); Dispatcher.UIThread.RunJobs();
+                    visible = stage.GuideSpeechWindow.IsVisible ? visible + 1 : 0;
+                    await Task.Yield();
+                }
+                Assert.Equal(4, visible);
+            }
             stage.Start(); t += S.Length + .1; stage.Frame();
             Click(stage, 0); Click(stage, 0);
             await Until(() => { t += .05; stage.Frame(); return stage.HighlightTarget != null; });
@@ -71,7 +84,14 @@ public sealed partial class FirstShowStageTests
             Assert.Equal(targetScreen.Bounds.Position, stage.Position);
             Assert.NotNull(stage.HighlightTarget);
             Assert.InRange(stage.GuideBodyCenter.X, targetScreen.Bounds.X, targetScreen.Bounds.Right);
-            t += 1; stage.Frame(); Dispatcher.UIThread.RunJobs();
+            // A target can finish layout after the screen changes. Simulate that late movement.
+            stage.GuidePointToScreenOverride = (control, point) =>
+            {
+                var pixel = control.PointToScreen(point);
+                return new PixelPoint(pixel.X, pixel.Y + 100);
+            };
+            // Each frame can discover movement; allow the speech card's settle interval to elapse.
+            await WaitForSpeech();
             Assert.True(stage.GuideSpeechWindow.IsVisible);
             Assert.InRange(stage.GuideSpeechWindow.Position.X, targetScreen.Bounds.X, targetScreen.Bounds.Right);
             stage.GuideScreenFromPointOverride = _ => shell.Position.X < 0 ? second : first;
@@ -92,7 +112,7 @@ public sealed partial class FirstShowStageTests
             Assert.NotNull(stage.HighlightTarget);
             Assert.InRange(stage.GuideBodyCenter.X, -1920, 0);
             Assert.InRange(stage.GuideBodyCenter.Y, -200, 1000);
-            t += 1; stage.Frame(); Dispatcher.UIThread.RunJobs();
+            await WaitForSpeech();
             Assert.True(stage.GuideSpeechWindow.IsVisible);
             Assert.InRange(stage.GuideSpeechWindow.Position.X, -1920, 0);
             Assert.InRange(stage.GuideSpeechWindow.Position.Y, -200, 1000);
