@@ -8,6 +8,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -67,7 +70,7 @@ public sealed class KnockCardTests
     private static Task Run(Action<FakeFriends, Window, Action<DateTimeOffset>, Func<LandingWorld, LandingWorld>> body) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (global::Avalonia.Application.Current is null)
-            global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var s = CoreSettings.Current;
         var (motion, bell, volume) = (s.MotionLevel, s.FriendNotificationsEnabled, s.MasterVolume);
@@ -112,6 +115,67 @@ public sealed class KnockCardTests
     private static void Press(Button b) => b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
     private static string Text(Control c) => string.Join("|", global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(c).OfType<TextBlock>().Select(t => t.Text));
+
+    /// <summary>WPF FriendsLanding.cs:313,457: opening the filed request shows the panel and its drawer.</summary>
+    [Fact]
+    public Task OpeningARequestFromTheInboxOpensTheRealShellDrawer() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var app = Application.Current!;
+        // The shared headless app is already initialized; temporarily supply the desktop lifetime
+        // that the real shell lookup reads, then put the shared app back as it was.
+        var lifetimeField = typeof(Application).GetField("_applicationLifetime", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var oldLifetime = app.ApplicationLifetime;
+        var oldService = FriendsLanding.Service;
+        var oldHead = FriendsHead.Service;
+        var oldBell = CoreSettings.Current.FriendNotificationsEnabled;
+        var lifetime = new ClassicDesktopStyleApplicationLifetime { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        MainShellWindow? shell = null;
+        try
+        {
+            lifetimeField.SetValue(app, lifetime);
+            StartupLadder.ResetForTests();
+            var svc = new FakeFriends();
+            FriendsHead.Service = svc;
+            FriendsLanding.Service = () => svc;
+            CoreSettings.Current.FriendNotificationsEnabled = false;
+            shell = new MainShellWindow();
+            lifetime.MainWindow = shell;
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            FriendsLanding.Tick();
+            FriendsLanding.Router!.OnRequestArrived(new FriendRequest("r-inbox", "Mia", null, null, T0));
+            Assert.Contains(StartupLadder.Inbox.Items, row => row.Key == "friends-request:r-inbox");
+            var chip = Assert.IsType<FriendsRailChip>(shell.FindControl<FriendsRailChip>("FriendsChip"));
+            Assert.False(chip.IsOpen);
+
+            Press(shell.Named<Button>("BtnInbox")!);
+            Dispatcher.UIThread.RunJobs();
+            var flyout = shell.GetVisualDescendants().OfType<InboxFlyout>().Single();
+            flyout.UpdateLayout();
+            Press(flyout.GetVisualDescendants().OfType<Button>().First(button => button.Classes.Contains("open")));
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.DoesNotContain(StartupLadder.Inbox.Items, row => row.Key == "friends-request:r-inbox");
+            Assert.True(shell.IsVisible);
+            Assert.True(chip.IsOpen);
+        }
+        finally
+        {
+            FriendsLanding.Stop();
+            FriendsLanding.Service = oldService;
+            FriendsHead.Service = oldHead;
+            CoreSettings.Current.FriendNotificationsEnabled = oldBell;
+            shell?.Close();
+            lifetime.MainWindow = null;
+            lifetimeField.SetValue(app, oldLifetime);
+            StartupLadder.ResetForTests();
+            Dispatcher.UIThread.RunJobs();
+        }
+        return Task.CompletedTask;
+    });
 
     [Theory]
     [InlineData(false)]
