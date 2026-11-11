@@ -500,6 +500,8 @@ public sealed class LockdownVeilTests
         var card = shell.Named<LockdownTabView>("LockdownTab")!.LockdownCardBorder;
         var root = shell.Named<Grid>("RootGrid")!;
         Assert.Null(shell.LockdownFlash);
+        // Frame pumps real timers: keep this animation at its first frame until driven below.
+        shell.LockdownFlashElapsedMilliseconds = () => 0;
 
         ld.Activate(TimeSpan.FromMinutes(30));
         Frame();

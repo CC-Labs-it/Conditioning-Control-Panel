@@ -170,6 +170,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private global::Avalonia.Controls.Border? _lockdownFlash;
         private global::Avalonia.Threading.DispatcherTimer? _lockdownFlashTimer;
         internal global::Avalonia.Controls.Border? LockdownFlash => _lockdownFlash;
+        internal System.Func<double>? LockdownFlashElapsedMilliseconds { get; set; }
 
         private void PlayLockdownActivationAnimation()
         {
@@ -189,7 +190,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 root.Children.Add(_lockdownFlash);
                 var clock = System.Diagnostics.Stopwatch.StartNew();
                 _lockdownFlashTimer = new global::Avalonia.Threading.DispatcherTimer(System.TimeSpan.FromMilliseconds(33),
-                    global::Avalonia.Threading.DispatcherPriority.Render, (_, _) => PaintLockdownFlash(clock.Elapsed.TotalMilliseconds));
+                    global::Avalonia.Threading.DispatcherPriority.Render, (_, _) => PaintLockdownFlash(LockdownFlashElapsedMilliseconds?.Invoke() ?? clock.Elapsed.TotalMilliseconds));
                 _lockdownFlashTimer.Start();
             }
             catch (System.Exception ex)

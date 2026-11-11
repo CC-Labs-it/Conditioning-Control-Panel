@@ -14,6 +14,7 @@ namespace ConditioningControlPanel.Tests;
 /// from the row's own wire (<c>cosmetics</c>, server-clamped) when present, else from the friends state for a friend;
 /// strangers on a server that sends nothing draw as before.
 /// </summary>
+[Collection("PlayerLookProvider")]
 public class LobbyLookTests
 {
     private const long Now = 1_000_000_000L;
@@ -66,11 +67,18 @@ public class LobbyLookTests
         Assert.Same(PlayerLook.None, chess.Open.Single().Look);
         var junk = PbpLobbyApi.Parse("{\"players\":[{\"id\":\"p_1\",\"name\":\"ann\",\"time_control\":{\"initial_ms\":600000,\"increment_ms\":0},\"since_ms\":1,\"cosmetics\":[1]}]}");
         Assert.Same(PlayerLook.None, junk.Open.Single().Look);
-        if (ShopCosmetics.FrameIds()?.Contains("profile.frame.lace") == true)
+        // The test does not start App, which normally connects Core to the WPF catalogue.
+        var oldProvider = PlayerLook.KnownIdsProvider;
+        try
         {
-            var worn = PbpLobbyApi.Parse("{\"players\":[{\"id\":\"p_1\",\"name\":\"ann\",\"time_control\":{\"initial_ms\":600000,\"increment_ms\":0},\"since_ms\":1,\"cosmetics\":{\"frame_id\":\"profile.frame.lace\"}}]}");
-            Assert.Equal("profile.frame.lace", worn.Open.Single().Look.FrameId);
+            PlayerLook.KnownIdsProvider = () => (CosmeticsCatalog.AllAvatarIds(), ShopCosmetics.FrameIds());
+            if (ShopCosmetics.FrameIds()?.Contains("profile.frame.lace") == true)
+            {
+                var worn = PbpLobbyApi.Parse("{\"players\":[{\"id\":\"p_1\",\"name\":\"ann\",\"time_control\":{\"initial_ms\":600000,\"increment_ms\":0},\"since_ms\":1,\"cosmetics\":{\"frame_id\":\"profile.frame.lace\"}}]}");
+                Assert.Equal("profile.frame.lace", worn.Open.Single().Look.FrameId);
+            }
         }
+        finally { PlayerLook.KnownIdsProvider = oldProvider; }
     }
 
     [Fact]
@@ -105,3 +113,6 @@ public class LobbyLookTests
         return dir?.FullName ?? throw new InvalidOperationException("repo root not found");
     }
 }
+
+[CollectionDefinition("PlayerLookProvider", DisableParallelization = true)]
+public sealed class PlayerLookProviderCollection { }
