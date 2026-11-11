@@ -75,6 +75,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ChkFlashDodge.IsChecked = CoreSettings.Current.ChasterFlashDodge;
                 SliderNatashaTriggerWeight.Value = CoreSettings.Current.ChasterNatashaTriggerWeight;
                 TxtNatashaTriggerWeight.Text = $"{CoreSettings.Current.ChasterNatashaTriggerWeight}x";
+                if (CoreSettings.Current.ChasterNatashaTriggerWeight != 1) NatashaFold.IsOpen = true;
             }
             finally { _loading = false; }
             PaintStamps();

@@ -116,8 +116,14 @@ public sealed class ChasterMenuTests
         var old = s.ChasterNatashaTriggerWeight;
         try
         {
+            var fold = tab.FindControl<ConditioningControlPanel.Avalonia.Views.Features.MoreFold>("NatashaFold")!;
+            fold.IsOpen = false;
+            s.ChasterNatashaTriggerWeight = 1;
+            tab.ApplyPriceToggles();
+            Assert.False(fold.IsOpen);
             s.ChasterNatashaTriggerWeight = 4;
             tab.ApplyPriceToggles();
+            Assert.True(fold.IsOpen);
             var slider = tab.FindControl<Slider>("SliderNatashaTriggerWeight")!;
             Assert.Equal(4, slider.Value);
             slider.Value = 7;
