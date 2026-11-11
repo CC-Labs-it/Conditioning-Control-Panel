@@ -174,7 +174,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             });
         }
 
-        internal void UpdateBannerWelcomeMessage()
+        private void UpdateBannerWelcomeMessage()
         {
             var secondary = BannerSecondary;
             if (secondary is null) return;

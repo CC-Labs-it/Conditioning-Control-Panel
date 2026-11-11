@@ -6,8 +6,6 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using Avalonia;
-using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -17,7 +15,6 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Newtonsoft.Json;
 using Xunit;
-using App = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
@@ -48,14 +45,8 @@ public class MergedAccountRecoveryReloadTests
 
     private static Task Exercise(bool failProfile) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<App>().WithInterFont().With(AppFonts.Options())
-                .ConfigureFonts(AppFonts.Register).UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        StartupLadder.ResetForTests();
+        MergedAccountRecoveryReviewTests.Setup();
         WelcomeBackOffer.ResetForTests();
-        InvitePanel.CancelExpiry();
-        MergedAccountRecovery.ResetForTest();
         using var saved = new MergedRecoveryState();
         var directory = Directory.CreateTempSubdirectory("ccp-merge-reload-");
         var secrets = new Dictionary<string, string?>
@@ -66,12 +57,8 @@ public class MergedAccountRecoveryReloadTests
         CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key);
         CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
         var settings = CoreSettings.Current;
-        settings.UnifiedId = "u_tombstone1";
-        settings.AuthToken = "old-token";
-        settings.PlayerLevel = 7;
-        settings.PlayerXP = 42;
-        settings.OfflineMode = false;
-        settings.InviteGrantUntil = null;
+        (settings.UnifiedId, settings.AuthToken, settings.PlayerLevel, settings.PlayerXP, settings.OfflineMode, settings.InviteGrantUntil)
+            = ("u_tombstone1", "old-token", 7, 42, false, null);
         var wire = new Wire(failProfile);
         var sync = new SyncPush(() => null, () => false, wire);
         AccountSeed.NewV2 = () => new V2AuthService(() => settings, wire);

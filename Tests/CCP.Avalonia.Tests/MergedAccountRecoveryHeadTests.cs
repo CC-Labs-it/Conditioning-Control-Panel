@@ -2,8 +2,6 @@ using System;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
-using Avalonia;
-using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -20,10 +18,7 @@ public class MergedAccountRecoveryHeadTests
     [Fact]
     public void MergedResponsePreservesProgressAndDefersSignIn() => AvaloniaTestDispatcher.Run(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<App>().WithInterFont().With(AppFonts.Options())
-                .ConfigureFonts(AppFonts.Register).UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        MergedAccountRecoveryReviewTests.Setup();
         var settings = new AppSettings { UnifiedId = "u_tombstone1", PlayerLevel = 7, PlayerXP = 42 };
         using var saved = new MergedRecoveryState();
         string? token = "old";
@@ -40,9 +35,7 @@ public class MergedAccountRecoveryHeadTests
             App.Quests = quests;
             AccountSeed.Sync = sync;
             sync.MarkLoaded(null);
-            MergedAccountRecovery.ResetForTest();
             MergedAccountRecovery.SettingsForTest = () => settings;
-            StartupLadder.ResetForTests();
             MergedAccountRecoveryHead.Seed();
             using var response = new HttpResponseMessage(HttpStatusCode.Conflict)
             { Content = new StringContent("{\"error\":\"merged\",\"canonical_unified_id\":\"u_canon123\"}") };

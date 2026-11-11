@@ -30,9 +30,9 @@ internal static class MergedAccountRecoveryHead
         MergedAccountRecovery.Finished = (canonical, reauthed) => Dispatcher.UIThread.Post(() =>
         {
             var shell = MainShellWindow.Current;
-            // WPF MainWindow.Login.cs:51-58; Account settings repaint remains unported.
+            // WPF MainWindow.Login.cs:51-58: UpdateQuickLoginUI also repaints the banner; the section repaints provider and linking rows.
             shell?.UpdateQuickLoginUI();
-            shell?.UpdateBannerWelcomeMessage();
+            shell?.AppSettingsPage?.SectionAccount.Refresh();
             if (reauthed)
             {
                 InvitePanel.ArmExpiry();
@@ -59,7 +59,7 @@ internal static class MergedAccountRecoveryHead
     }
 
     // WPF App.xaml.cs:4615: try the signed-in providers in order until one mints a V2 token.
-    private static async Task<bool> ReauthenticateAsync()
+    internal static async Task<bool> ReauthenticateAsync()
     {
         if (AccountSeed.Patreon?.IsAuthenticated == true &&
             await ExchangeAsync(AccountSeed.Patreon.GetAccessToken, (v, t) => v.AuthenticateWithPatreonAsync(t))) return true;

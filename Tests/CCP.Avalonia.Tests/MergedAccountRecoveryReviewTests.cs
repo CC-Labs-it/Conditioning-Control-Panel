@@ -3,10 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -14,6 +17,8 @@ using CCP.Tests.Shared;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Invites;
+using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.BackRoom;
@@ -27,7 +32,7 @@ public class MergedAccountRecoveryReviewTests
 {
     private const string Body = "{\"error\":\"merged\",\"canonical_unified_id\":\"u_canon123\"}";
 
-    private static void Setup()
+    internal static void Setup()
     {
         if (Application.Current is null)
             AppBuilder.Configure<App>().WithInterFont().With(AppFonts.Options())
@@ -77,12 +82,8 @@ public class MergedAccountRecoveryReviewTests
         CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key);
         CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
         var settings = CoreSettings.Current;
-        settings.UnifiedId = "u_tombstone1";
-        settings.AuthToken = "old";
-        settings.PlayerLevel = 7;
-        settings.PlayerXP = 42;
-        settings.OfflineMode = false;
-        settings.InviteGrantUntil = null;
+        (settings.UnifiedId, settings.AuthToken, settings.PlayerLevel, settings.PlayerXP, settings.OfflineMode, settings.InviteGrantUntil)
+            = ("u_tombstone1", "old", 7, 42, false, null);
         var wire = new Wire(provider);
         AccountSeed.NewV2 = () => new V2AuthService(() => settings, wire);
         AccountSeed.Sync = null;
@@ -116,6 +117,13 @@ public class MergedAccountRecoveryReviewTests
             Assert.Equal(provider != null ? wire.GrantUntil : null, settings.InviteGrantUntil);
             Assert.Equal(provider != null, InvitePanel.ExpiryArmed);
             Assert.Equal(provider == null, StartupLadder.Inbox.Contains("merged-account-signin:u_canon123"));
+            // A restart forgets PendingSignIn: a tokenless restore rebuilds it, the startup exchange clears it.
+            (settings.AuthToken, MergedAccountRecoveryHead.PendingSignIn, CoreAccount.UnifiedUserId) = (null, false, null);
+            AccountSeed.RestoreSession();
+            Assert.False(CoreAccount.IsLoggedIn);
+            await AccountSeed.ValidateRestoredSessionAsync();
+            Assert.Equal(provider != null, CoreAccount.IsLoggedIn);
+            Assert.Equal(provider != null ? "canonical-token" : null, settings.AuthToken);
         }
         finally
         {
@@ -135,18 +143,27 @@ public class MergedAccountRecoveryReviewTests
         CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key);
         CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
         var settings = CoreSettings.Current;
-        settings.UnifiedId = "u_tombstone1";
-        settings.AuthToken = "old";
-        settings.OfflineMode = false;
+        (settings.UnifiedId, settings.AuthToken, settings.OfflineMode, settings.HasLinkedDiscord) = (null, "old", false, false);
         CoreAccount.UnifiedUserId = "u_tombstone1";
+        Assert.True(AccountSeed.Seed(p => new ProviderSubscription(p, () => settings), p => new DiscordAccount(() => p, () => settings)));
+        CoreSession.IsSessionRunningProvider = () => true; // the visible shell files the offer instead of opening it
         MergedAccountRecovery.SettingsForTest = () => settings;
         MergedAccountRecoveryHead.Seed();
         using var server = new FakeServer();
         server.Handle = ctx => FakeServer.Send(ctx, Encoding.UTF8.GetBytes(Body), 409);
         using var ai = new AiService(server.Prefix);
         using var http = new HttpClient();
+        var lifetimeField = typeof(Application).GetField("_applicationLifetime", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var lifetime = lifetimeField.GetValue(Application.Current);
+        var shell = new MainShellWindow();
         try
         {
+            lifetimeField.SetValue(Application.Current, new ClassicDesktopStyleApplicationLifetime { MainWindow = shell });
+            shell.Show();
+            shell.ShowTab("appsettings");
+            Dispatcher.UIThread.RunJobs();
+            var discord = shell.AppSettingsPage!.SectionAccount.FindControl<TextBlock>("TxtBtnDiscordLogin")!;
+            Assert.Equal(Loc.Get("btn_login"), discord.Text);
 #pragma warning disable CS0618
             if (purchase)
                 await new BackRoomApi(http, () => ("u_tombstone1", "old"), null, baseUrl: server.Prefix.TrimEnd('/'))
@@ -159,9 +176,12 @@ public class MergedAccountRecoveryReviewTests
             Assert.Equal("u_canon123", settings.UnifiedId);
             Assert.Null(settings.AuthToken);
             Assert.True(StartupLadder.Inbox.Contains("merged-account-signin:u_canon123"));
+            Assert.Equal(Loc.Get("btn_link_discord"), discord.Text); // WPF MainWindow.Login.cs:56 UpdateDiscordUI
         }
         finally
         {
+            shell.Close();
+            lifetimeField.SetValue(Application.Current, lifetime);
             StartupLadder.ResetForTests();
             InvitePanel.CancelExpiry();
         }

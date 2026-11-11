@@ -107,6 +107,7 @@ internal static class AccountSeed
             return;
         }
         CoreAccount.UnifiedUserId = id;
+        if (string.IsNullOrEmpty(CoreSettings.Current.AuthToken)) MergedAccountRecoveryHead.PendingSignIn = true; // a tokenless merged swap, restarted
         Log.Information("Restored UnifiedUserId from settings: {Id}", id);
     }
 
@@ -118,6 +119,7 @@ internal static class AccountSeed
     {
         var id = CoreAccount.UnifiedUserId;
         if (string.IsNullOrEmpty(id) || CoreSettings.Current.OfflineMode) return;
+        if (MergedAccountRecoveryHead.PendingSignIn && !await MergedAccountRecoveryHead.ReauthenticateAsync()) return; // WPF App.xaml.cs:4690,4757
         v2 ??= NewV2();
         // If a provider already authenticated, it validated the session (and owns the load in WPF).
         if (Patreon?.IsAuthenticated != true && Discord?.IsAuthenticated != true)
