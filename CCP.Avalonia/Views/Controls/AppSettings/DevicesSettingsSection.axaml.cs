@@ -105,8 +105,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         private void RefreshQuickRecalHint()
         {
             var text = Loc.Get("tooltip_devices_quick_recal");
-            var hint = WebcamQuickRecalWindow.HotkeyHint();
-            ToolTip.SetTip(BtnWebcamDebugQuickRecal, hint == null ? text : text + "\n\n" + hint);
+            var hint = Loc.GetF("webcam_quick_recal_hotkey_hint", "Ctrl+Alt+G", MainShellWindow.CameraShortcutChord);
+            ToolTip.SetTip(BtnWebcamDebugQuickRecal, text + "\n\n" + hint);
         }
 
         private void OnLanguageChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(RefreshQuickRecalHint);
