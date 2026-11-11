@@ -244,17 +244,18 @@ public class LauncherBootTests
         Assert.NotNull(dir);
         var app = Path.Combine(dir!.FullName, "ConditioningControlPanel");
         var catalogue = File.ReadAllText(Path.Combine(app, "Services", "Launcher", "LauncherCatalogue.cs"));
-        int at = catalogue.IndexOf("G(\"raceclassic\"", StringComparison.Ordinal);
+        // The head's catalogue is a host table over Core's LauncherCards since the port: one entry per id, ending "null),".
+        int at = catalogue.IndexOf("[\"raceclassic\"] = (", StringComparison.Ordinal);
         Assert.True(at >= 0);
-        var entry = catalogue.Substring(at, catalogue.IndexOf(");", at, StringComparison.Ordinal) - at);
+        var entry = catalogue.Substring(at, catalogue.IndexOf("null),", at, StringComparison.Ordinal) - at);
         Assert.Contains("Chaos.CaucusHostService.Launch()", entry);
         Assert.DoesNotContain("Glassroad", entry);
-        int race = catalogue.IndexOf("G(\"race\"", StringComparison.Ordinal);
-        var raceEntry = catalogue.Substring(race, catalogue.IndexOf(");", race, StringComparison.Ordinal) - race);
+        int race = catalogue.IndexOf("[\"race\"] = (", StringComparison.Ordinal);
+        var raceEntry = catalogue.Substring(race, catalogue.IndexOf("null),", race, StringComparison.Ordinal) - race);
         Assert.Contains("Glassroad.GlassroadHostService.Launch()", raceEntry);
         Assert.Contains("PrimeAllowed", raceEntry);
         // The key art is a real picture, not an LFS pointer.
-        var png = File.ReadAllBytes(Path.Combine(app, "Resources", "features", "race_classic.png"));
+        var png = File.ReadAllBytes(Path.Combine(SourceRoots.RepoRoot, "Assets", "features", "race_classic.png"));   // the art lives in Assets/
         Assert.True(png.Length > 1000 && png[0] == 0x89 && png[1] == (byte)'P' && png[2] == (byte)'N' && png[3] == (byte)'G');
     }
 

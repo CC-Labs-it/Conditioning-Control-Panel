@@ -25,14 +25,14 @@ public sealed class PinkRushTests
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var s = CoreSettings.Current;
-            var saved = (s.PlayerLevel, s.PlayerXP, s.OfflineMode, s.OfflineUsername, s.SuppressPerkNotifications,
+            var saved = (s.PlayerLevel, s.PlayerXP, s.OfflineMode, s.OfflineUsername, s.PerkEffects,
                 s.PanicKeyEnabled, s.PanicKey, s.UnlockedSkills, s.FlashEnabled);
             var (now, roll) = (PinkRushHost.Now, PinkRushHost.Roll);
             var t0 = new DateTime(2026, 1, 1, 12, 0, 0);
             var clock = t0;
             PinkRushHost.Now = () => clock;
             (s.PlayerLevel, s.PlayerXP, s.OfflineMode, s.OfflineUsername) = (1, 0, true, "pink-rush-test");
-            (s.SuppressPerkNotifications, s.PanicKeyEnabled, s.PanicKey, s.FlashEnabled) = (false, true, "F8", true);
+            (s.PerkEffects, s.PanicKeyEnabled, s.PanicKey, s.FlashEnabled) = (ConditioningControlPanel.Models.PerkEffectsMode.Full, true, "F8", true);
             s.UnlockedSkills = new() { };
             var shell = new MainShellWindow();
             shell.Show();
@@ -93,11 +93,11 @@ public sealed class PinkRushTests
                 Assert.Equal(1.0, PinkRushRules.XpFactor(s));
 
                 // Suppressed perk announcements: the rush runs, the popup does not show.
-                s.SuppressPerkNotifications = true;
+                s.PerkEffects = ConditioningControlPanel.Models.PerkEffectsMode.NoCards;
                 PinkRushHost.CheckTick();
                 Assert.True(s.PinkRushActive);
                 Assert.Null(PinkRushHost.Popup);
-                s.SuppressPerkNotifications = false;
+                s.PerkEffects = ConditioningControlPanel.Models.PerkEffectsMode.Full;
                 PinkRushHost.End();
 
                 // An engine stop ends a running rush and disarms the check.
@@ -122,7 +122,7 @@ public sealed class PinkRushTests
                 CoreEngine.Stop();
                 PinkRushHost.Stop();
                 (PinkRushHost.Now, PinkRushHost.Roll) = (now, roll);
-                (s.PlayerLevel, s.PlayerXP, s.OfflineMode, s.OfflineUsername, s.SuppressPerkNotifications,
+                (s.PlayerLevel, s.PlayerXP, s.OfflineMode, s.OfflineUsername, s.PerkEffects,
                     s.PanicKeyEnabled, s.PanicKey, s.UnlockedSkills, s.FlashEnabled) = saved;
                 shell.Close();
             }

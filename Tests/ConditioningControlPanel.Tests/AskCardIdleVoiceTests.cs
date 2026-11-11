@@ -21,18 +21,21 @@ public class AskCardIdleVoiceTests
         Assert.Contains("internal void ShowAskCard(AskCard card, bool unprompted = false)", tube);
         Assert.Contains("GigglePriority(card.Question, playSound: true, aiGenerated: false, unprompted: unprompted);", tube);
 
-        var svc = Src("ConditioningControlPanel", "Services", "Companion", "Asks", "CompanionAskService.cs");
-        Assert.Contains("ShowAskCard(card, unprompted)", svc);
+        // The service is in Core; the head's seam (App.SeedAskSeams) hands the flag to the tube.
+        var svc = SourceRoots.ReadProductFile("Services", "Companion", "Asks", "CompanionAskService.cs");
+        Assert.Contains("ShowCardSurface?.Invoke(card, unprompted);", svc);
+        Assert.Contains("ShowAskCard(card, unprompted)", Src("ConditioningControlPanel", "App.xaml.cs"));
         Assert.Contains("if (card != null) Show(card, unprompted: true);", svc);   // the timer's own card
-        Assert.Contains("if (card != null) Show(card, unprompted: false);", svc);  // ShowNow: the player asked
+        Assert.Contains("if (BuildFor(kind) is { } card) Show(card, unprompted: false);", svc);  // ShowNow: the player asked
     }
 
     [Fact]
     public void Deeper_and_a_running_Takeover_action_count_as_busy()
     {
-        var svc = Src("ConditioningControlPanel", "Services", "Companion", "Asks", "CompanionAskService.cs");
-        Assert.Contains("App.DeeperHost?.IsRunning == true", svc);
-        Assert.Contains("App.Autonomy?.IsActionInProgress == true", svc);
+        // IsBusy is the head's BusyProvider seam since the service moved to Core.
+        var app = Src("ConditioningControlPanel", "App.xaml.cs");
+        Assert.Contains("if (DeeperHost?.IsRunning == true) return true;", app);
+        Assert.Contains("if (Autonomy?.IsActionInProgress == true) return true;", app);
     }
 
     [Fact]

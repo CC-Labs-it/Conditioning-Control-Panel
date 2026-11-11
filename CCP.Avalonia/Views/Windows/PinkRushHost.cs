@@ -61,7 +61,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _expiry.Start();
             Log.Information("Pink Rush activated! 60 seconds of 3x XP");
 
-            Wash();
+            // Perk effects Off (WPF 7.2.3 296207d57) drops the wash; the 3x still pays.
+            if (PerkEffectsRules.ShowsVisuals(s.PerkEffects)) Wash();
             ClosePopup();
             // Perk-announcement opt-out: only the popup goes; the 3x and the wash stay (WPF :2160).
             if (s.SuppressPerkNotifications)

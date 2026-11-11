@@ -42,7 +42,7 @@ public sealed class FlashLuckyTests
                     .ConfigureFonts(AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var s = CoreSettings.Current;
-            var saved = (s.FlashGlowEnabled, s.PerformanceMode, s.FlashRoundedCorners, s.SuppressPerkNotifications, s.FlashMotionStyle,
+            var saved = (s.FlashGlowEnabled, s.PerformanceMode, s.FlashRoundedCorners, s.PerkEffects, s.FlashMotionStyle,
                 Skills: s.UnlockedSkills.ToList());
             var beatWas = BeatLoop.Time;
             var (clockWas, present, chime, granted, xpWas) = (FlashOverlay.Clock, FlashOverlay.Present, FlashOverlay.LuckyChime,
@@ -56,7 +56,7 @@ public sealed class FlashLuckyTests
                 FlashOverlay.LuckyChime = _ => { };
                 CoreProgression.AddXPProvider = (_, _) => { };
                 PrizeOwnership.IsGranted = _ => false;
-                (s.PerformanceMode, s.FlashRoundedCorners, s.SuppressPerkNotifications, s.FlashMotionStyle) = (false, false, false, FlashMotionStyle.Still);
+                (s.PerformanceMode, s.FlashRoundedCorners, s.PerkEffects, s.FlashMotionStyle) = (false, false, ConditioningControlPanel.Models.PerkEffectsMode.Full, FlashMotionStyle.Still);
                 s.UnlockedSkills.Clear();
                 body(s, clock);
             }
@@ -67,8 +67,8 @@ public sealed class FlashLuckyTests
                 (FlashOverlay.Clock, FlashOverlay.Present, FlashOverlay.LuckyChime, PrizeOwnership.IsGranted,
                     CoreProgression.AddXPProvider) =
                     (clockWas, present, chime, granted, xpWas);
-                (s.FlashGlowEnabled, s.PerformanceMode, s.FlashRoundedCorners, s.SuppressPerkNotifications, s.FlashMotionStyle) =
-                    (saved.FlashGlowEnabled, saved.PerformanceMode, saved.FlashRoundedCorners, saved.SuppressPerkNotifications, saved.FlashMotionStyle);
+                (s.FlashGlowEnabled, s.PerformanceMode, s.FlashRoundedCorners, s.PerkEffects, s.FlashMotionStyle) =
+                    (saved.FlashGlowEnabled, saved.PerformanceMode, saved.FlashRoundedCorners, saved.PerkEffects, saved.FlashMotionStyle);
                 s.UnlockedSkills.Clear();
                 s.UnlockedSkills.AddRange(saved.Skills);
             }
