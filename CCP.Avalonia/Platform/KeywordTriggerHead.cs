@@ -249,6 +249,7 @@ internal sealed class KeywordAudioRuntime
         if (!IsActive || !(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return false;
         if (words.Count == 0 || !KeywordMatchRules.AppAllowed(s, process, own)) { ClearOcr(); return false; }
         if (!s.KeywordTriggersEnabled || !s.ScreenOcrEnabled) return false;
+        if (s.KeywordTriggers is not { Count: > 0 }) return false; // WPF :741-742 keeps the guards
         var now = Now();
         if ((now - _cooldowns.LastGlobal).TotalSeconds < s.KeywordGlobalCooldownSeconds) return false;
         var matched = new List<ScreenOcrService.Word>();

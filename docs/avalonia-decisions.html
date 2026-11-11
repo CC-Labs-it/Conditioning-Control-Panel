@@ -1693,6 +1693,7 @@ padlock never covers a running lockdown, and an unreadable recovery file fails o
 <h2 id="2026-11-04-ocr-engine-deferred">2026-11-04: OCR engine on the Avalonia head deferred (routine; supervisor)</h2>
 <ul>
 <li>Options: (A) wire the Screen OCR lifecycle behind a nullable <code>KeywordTriggerHead.OcrSource</code> and ship no engine, (B) shell out to a tesseract CLI plus an X11 capture tool, (C) leave OCR blocked. Chose A: this head is plain net10.0 (no Windows TFM) so WinRT <code>Windows.Media.Ocr</code> is out of reach, Linux has no OCR engine, Wayland capture is interactive only, and B adds runtime dependencies. The scanner never starts while the source is null.</li>
+<li>When an engine lands: <code>ScreenOcrService.Word</code> has no screen, so a regex match unions word rectangles across monitors; WPF <code>KeywordTriggerService.cs:1102</code> unions only words on the first word's screen. Add the screen to <code>Word</code> then.</li>
 </ul>
 
 <script>

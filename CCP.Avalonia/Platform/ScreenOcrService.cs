@@ -35,13 +35,15 @@ internal sealed class ScreenOcrService : IDisposable
         lock (_gate)
         {
             if (!master || !ocr) { StopLocked(); return; }
-            IntervalMs = Math.Max(1, intervalMs);
+            var interval = Math.Max(1, intervalMs);
             if (_run == null)
             {
+                IntervalMs = interval;
                 _run = new CancellationTokenSource();
                 _timer = new Timer(_ => _ = TickAsync(), null, IntervalMs, IntervalMs);
             }
-            else _timer?.Change(IntervalMs, IntervalMs);
+            // A running scanner is left alone (WPF Start no-ops while running); only a new interval re-times it.
+            else if (interval != IntervalMs) { IntervalMs = interval; _timer?.Change(IntervalMs, IntervalMs); }
         }
     }
 
