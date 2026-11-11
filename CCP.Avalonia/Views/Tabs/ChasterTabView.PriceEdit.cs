@@ -19,6 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     public partial class ChasterTabView
     {
         private readonly Dictionary<string, TextBlock> _stamps = new();
+        private readonly Dictionary<string, (Control Where, TextBlock Warn)> _warnings = new();
         private TextBox? _stampEditor;
         private string? _editingId;
         private static Cursor? _ibeam;   // lazy: a Cursor needs the platform (P26)
@@ -60,12 +61,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             stamp.Text = TabPageText.Price(TabPriceEdit.Shown(price, overrides), Loc.Get("chaster_each"));
             stamp.FontStyle = TabPriceEdit.IsEdited(id, overrides) ? FontStyle.Italic : FontStyle.Normal;
             if (!TabPriceEdit.Editable(id)) return;
+            if (_editingId != id) PaintWarning(id, TabPriceEdit.Effective(price, overrides));
             var open = FiguresEditable();
             stamp.Cursor = open ? _ibeam ??= new Cursor(StandardCursorType.Ibeam) : null;
             stamp.TextDecorations = open ? TextDecorations.Underline : null;
             ToolTip.SetTip(stamp, open
                 ? Loc.Get("chaster_price_edit_tip").Replace("{0}", CircesTab.Format(price.Seconds, signed: false))
                 : Loc.Get("chaster_price_edit_locked"));
+        }
+
+        private void PaintWarning(string id, int seconds)
+        {
+            if (!_warnings.TryGetValue(id, out var line)) return;
+            var day = (ChasterHead.Service?.Caps ?? TabLimits.Default).DailySeconds;
+            var text = TabPriceEdit.WarningText(TabPriceEdit.WarningFor(seconds, day), day, Loc.Get);
+            line.Warn.Text = text;
+            ToolTip.SetTip(line.Warn, text.Length > 0 ? text : null);
+            line.Warn.IsVisible = text.Length > 0;
+            line.Where.IsVisible = text.Length == 0;
+        }
+
+        internal string? WarningFor(string id) =>
+            _warnings.TryGetValue(id, out var line) && line.Warn.IsVisible ? line.Warn.Text : null;
+
+        private void PaintWarnings()
+        {
+            foreach (var id in _warnings.Keys)
+                PaintWarning(id, id == _editingId && _stampEditor is { } box
+                    ? TabPriceEdit.Preview(id, box.Text, Overrides)
+                    : TabPriceEdit.Effective(id, Overrides));
         }
 
         /// <summary>Open the box on a row's figure. False when this row or this moment does not allow it.</summary>
@@ -98,6 +122,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // Esc here drops the edit, it is not the panic key's press (WPF TAB-8).
             EscapeClaim.Mark(box);
             box.AddHandler(KeyDownEvent, PriceBox_KeyDown, RoutingStrategies.Tunnel);
+            box.TextChanged += (_, _) => { if (ReferenceEquals(_stampEditor, box)) PaintWarning(id, TabPriceEdit.Preview(id, box.Text, Overrides)); };
             box.LostFocus += (_, _) => { if (ReferenceEquals(_stampEditor, box)) CommitPriceEdit(); };
             stamp.IsVisible = false;
             grid.Children.Add(box);

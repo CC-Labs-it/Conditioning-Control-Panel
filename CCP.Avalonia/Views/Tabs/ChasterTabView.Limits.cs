@@ -43,6 +43,7 @@ public partial class ChasterTabView
             var settings = CoreSettings.Current;
             PaintPending(TxtDayPending, settings?.ChasterDayLimit);
             PaintPending(TxtBacklogPending, settings?.ChasterBacklogLimit);
+            PaintWarnings();
         }
 
         private static void PaintPending(TextBlock line, LimitSetting? setting)
