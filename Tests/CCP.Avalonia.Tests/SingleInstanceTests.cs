@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -251,6 +252,31 @@ namespace CCP.Avalonia.Tests
             t.Start();
             Assert.True(t.Join(TimeSpan.FromSeconds(20)));
             Assert.Equal(payload, got);
+        }
+
+        /// <summary>Launches racing each other (several files opened at once) each reach a primary that is busy
+        /// showing: none is lost and none reads the busy primary as wedged and kills it.</summary>
+        [Fact]
+        public void ConcurrentLaunchesAllReachABusyPrimaryAndNoneKillsIt()
+        {
+            var savedKill = SingleInstance.KillStale;
+            int kills = 0;
+            SingleInstance.KillStale = () => { Interlocked.Increment(ref kills); return 0; };
+            try
+            {
+                var suffix = "_test_" + Guid.NewGuid().ToString("N");
+                var received = new System.Collections.Concurrent.ConcurrentBag<string?>();
+                using var primary = SingleInstance.Claim(suffix, p => Task.Run(() => { Thread.Sleep(400); received.Add(p); }));
+                primary!.EndStartupPhase();
+                var payloads = new[] { "deeper:play\n/a.mp4", "deeper:edit\n/b.mp3", "game:race", "panel" };
+                var threads = Array.ConvertAll(payloads, p => new Thread(() =>
+                    SingleInstance.Claim(suffix, _ => Task.CompletedTask, p)?.Dispose()));
+                foreach (var t in threads) t.Start();
+                foreach (var t in threads) Assert.True(t.Join(TimeSpan.FromSeconds(60)));
+                Assert.Equal(0, Volatile.Read(ref kills));
+                Assert.Equal(payloads.OrderBy(p => p), received.OrderBy(p => p));
+            }
+            finally { SingleInstance.KillStale = savedKill; }
         }
 
         /// <summary>A sandbox profile (CCP_USERDATA_DIR, as kc and the tests use) never wakes or blocks the

@@ -212,8 +212,17 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             var bytes = Encoding.UTF8.GetBytes(payload ?? "");
             if (bytes.Length > 65536) bytes = Array.Empty<byte>();   // unreadable reads as a bare relaunch
+            // One sender at a time. The listener serves one request at a time, so a launch racing another
+            // (several files opened at once) timed out connecting and its request was lost.
+            using var gate = CreateMutex(pipe + "_send", out bool ownsGate);
             try
             {
+                if (!ownsGate)
+                {
+                    try { ownsGate = gate.WaitOne(ShowAckTimeoutMs + 2000); }
+                    catch (AbandonedMutexException) { ownsGate = true; }
+                    if (!ownsGate) return null;
+                }
                 using var c = new NamedPipeClientStream(".", pipe, PipeDirection.InOut,
                     PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
                 c.Connect(1000);
@@ -234,6 +243,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             catch (TimeoutException) { return null; }
             catch (OperationCanceledException) { return false; }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Single-instance show request failed"); return null; }
+            finally { if (ownsGate) gate.ReleaseMutex(); }
         }
 
         static async Task ListenAsync(string pipe, Func<string?, Task> show, Func<bool> startupPhase, CancellationToken ct)

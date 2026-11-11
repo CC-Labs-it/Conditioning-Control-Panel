@@ -243,14 +243,10 @@ namespace ConditioningControlPanel.Avalonia
 
             // WPF's single-instance gate: a second launch hands its surface (or none) to the running app
             // and exits; the primary routes it (WPF RouteSurfaceHandoff / LauncherHost.OnBareRelaunch).
-            using var instance = Platform.SingleInstance.Claim(Platform.SingleInstance.SandboxSuffix(), payload =>
-                global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    var w = (global::Avalonia.Application.Current?.ApplicationLifetime as
-                        global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-                    if (w is Views.Windows.MainShellWindow shell) Views.Windows.LauncherWindow.RouteHandoff(shell, payload);
-                    else w?.Activate();
-                }).GetTask(), Services.Deeper.DeeperFileOpen.Encode(args) ?? Services.Launcher.LauncherHandoff.Encode(args));
+            // A handoff that arrives before the shell has opened waits for it (Platform/HandoffQueue).
+            var handoffs = new Platform.HandoffQueue();
+            using var instance = Platform.SingleInstance.Claim(Platform.SingleInstance.SandboxSuffix(), handoffs.Enqueue,
+                Services.Deeper.DeeperFileOpen.Encode(args) ?? Services.Launcher.LauncherHandoff.Encode(args));
             if (instance is null)
             {
                 Serilog.Log.Information("Another instance is running; asked it to show its window");
@@ -259,6 +255,7 @@ namespace ConditioningControlPanel.Avalonia
 
             // WPF App.xaml.cs:4069: end protection after initialization, not an intermediate splash frame.
             App.DesktopStartupCompleted = instance.EndStartupPhase;
+            App.Handoffs = handoffs;
             var app = BuildAvaloniaApp();
 #if DEBUG
             // Keincheck MCP server on http://127.0.0.1:3001, Debug builds only. Kept out of
