@@ -101,9 +101,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (rung != PanicPolicy.Rung.DismissSettingsPalette) PanicAftermath.ArmQuiet();
             if (rung == PanicPolicy.Rung.DismissLockCard) { StopLockCards(); StopCameraForPanic(); }
             if (!PanicPolicy.StopsSurfaces(rung)) return;
-            // WPF :1776: the legacy feed hand-off consumes the key; override still stops all surfaces.
+            // WPF :1776: the legacy feed ladder (ghost off, then close) consumes the key; override still stops all.
             if (rung == PanicPolicy.Rung.RunLadder && !Chaos.ChaosRunHost.IsDescending
-                && Games.GameWindow.CloseForYouForPanicKey())
+                && Games.GameWindow.ForYouTakesPanicKey())
             {
                 StopCameraForPanic();
                 return;

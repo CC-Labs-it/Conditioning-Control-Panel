@@ -23,31 +23,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// the library through the asset gate every game uses, the rules in Core <see cref="FypRules"/> (shared
     /// with WPF). BRIGHT LINE: batches and probes go straight to the provider, media only when RemoteAllowed.
     /// <para>ponytail: not on this head yet - eye control (init says off; a toggle gets eyeStatus "unsupported"),
-    /// ghost mode (WPF's own unavailable answer), calibrate and EMI's fypOpened/fypClosed.</para>
+    /// calibrate and EMI's fypOpened/fypClosed. Ghost mode: GameWindow.FypGhost.cs.</para>
     /// </summary>
     internal sealed partial class GameWindow
     {
         internal const string FypId = "fyp";
 
-        // WPF FeedOwnsTheScreen. Ghost mode is unavailable on this head, so every visible feed counts.
+        // WPF FeedOwnsTheScreen (BubbleCountService.cs:225): a visible feed that is not a ghost.
         internal static bool IsForYouOnScreen()
         {
-            lock (Open) return Open.Any(w => w.Spec.Id == FypId && w.IsVisible);
-        }
-
-        // WPF MainWindow.xaml.cs:1776: a solid feed consumes the legacy panic-key rung.
-        internal static bool CloseForYouForPanicKey()
-        {
-            GameWindow? feed;
-            lock (Open)
-            {
-                // WPF hands an active DtRH off before the feed (:1734).
-                if (Open.Any(w => w.Spec.Id == DtrhId)) return false;
-                feed = Open.FirstOrDefault(w => w.Spec.Id == FypId);
-            }
-            if (feed == null) return false;
-            feed.Close();
-            return true;
+            lock (Open) return Open.Any(w => w.Spec.Id == FypId && w.IsVisible && !w._fypGhosted);
         }
 
         private FypMetaStore? _fypMeta;
@@ -77,6 +62,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             try
             {
+                // WPF PostInit (:170): the page rebooted under the ghost, so give the window back.
+                ExitFypGhost();
                 _fypMeta ??= new FypMetaStore();
                 if (!_fypHooked)
                 {
@@ -202,10 +189,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var s = CoreSettings.Current;
             switch (FypRules.ApplySetting(s, key, value))
             {
-                case FypRules.SettingEffect.GhostOn:
-                    // WPF EnterGhost's refusal (:864-866): the toggle snaps back off, then the page says why.
-                    Post(new { type = "clickThrough", on = false });
-                    Post(new { type = "ghost-unavailable", reason = "unsupported" });
+                case FypRules.SettingEffect.GhostOn: EnterFypGhost(); break;
+                case FypRules.SettingEffect.GhostOff: ExitFypGhost(); break;
+                case FypRules.SettingEffect.OpacityChanged:   // WPF :294: the live ghost follows the slider
+                    if (_fypGhosted) FypGhostOpacity(this, s.FypWindowOpacity);
                     break;
                 case FypRules.SettingEffect.EyeControlOn:
                     // WPF FailEyeControl (:1278): stored off again, and the page told the truth - the camera

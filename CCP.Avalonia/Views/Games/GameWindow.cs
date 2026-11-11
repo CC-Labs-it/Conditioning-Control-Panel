@@ -106,6 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Closing += (_, _) => _closing = true;
             Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); };
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
+            if (spec.Id == FypId) Closed += (_, _) => ExitFypGhost();   // WPF Close (:138): never outlive the feed
             if (spec.Id == JustDropId) Closed += (_, _) =>
             {
                 JustDropOrdersService.Invalidate();
