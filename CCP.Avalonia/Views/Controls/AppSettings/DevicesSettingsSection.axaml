@@ -167,7 +167,6 @@
                                             BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1"
                                             FontSize="11" FontWeight="SemiBold" Cursor="Hand" CornerRadius="8"/>
                                     <Button x:Name="BtnWebcamDebugQuickRecal" Content="{loc:Str btn_devices_quick_recal}"
-                                            ToolTip.Tip="{loc:Str tooltip_devices_quick_recal}"
                                             Padding="11,6" Margin="0,0,6,0" VerticalAlignment="Center"
                                             Background="Transparent" Foreground="{DynamicResource PinkBrush}"
                                             BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1"

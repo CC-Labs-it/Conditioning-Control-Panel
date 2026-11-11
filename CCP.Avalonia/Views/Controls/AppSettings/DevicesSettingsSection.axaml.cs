@@ -80,6 +80,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
+            LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
             Platform.WebcamTracker.Instance.StateChanged += RefreshWebcamStatus;
             SubscribeWebcamDiagnostics(true);
             RefreshWebcamStatus();
@@ -98,7 +99,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             PopulateMicDevices();
             PopulateWebcamDevices();
             PopulateWebcamMonitors();
+            RefreshQuickRecalHint();
         }
+
+        private void RefreshQuickRecalHint()
+        {
+            var text = Loc.Get("tooltip_devices_quick_recal");
+            var hint = WebcamQuickRecalWindow.HotkeyHint();
+            ToolTip.SetTip(BtnWebcamDebugQuickRecal, hint == null ? text : text + "\n\n" + hint);
+        }
+
+        private void OnLanguageChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(RefreshQuickRecalHint);
 
         private LockdownService? _lockdown;
         private void OnLockdownChanged() => Dispatcher.UIThread.Post(ApplyLockdownHold);
@@ -110,6 +121,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
+            LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
             Platform.WebcamTracker.Instance.StateChanged -= RefreshWebcamStatus;
             SubscribeWebcamDiagnostics(false);
             if (_lockdown != null) { _lockdown.LockdownActivated -= OnLockdownChanged; _lockdown.LockdownDeactivated -= OnLockdownChanged; _lockdown = null; }
