@@ -471,6 +471,9 @@ namespace ConditioningControlPanel.Avalonia
             splash.FadeOutAndClose(() => { if (window is { IsVisible: true }) window.Activate(); });
         }
 
+        internal static void InstallSpeakPromptRuntime(Platform.Deeper.SpeakPromptRuntime runtime) =>
+            global::ConditioningControlPanel.Services.Deeper.EnhancementHostService.DispatcherFactory = runtime.CreateDispatcher;
+
         private async Task StartDesktop(Func<double, string, Task> step)
         {
             await step(0.0, "Starting...");
@@ -960,6 +963,8 @@ namespace ConditioningControlPanel.Avalonia
                 TierGate.ReconnectIsTheAnswerProvider = Views.Windows.MainShellWindow.ReconnectIsTheAnswerNow;
                 // Dropped: WPF's EmiDesk "premiumTeaseSeen" fire - no EmiDesk service on this head.
                 var shell = (Views.Windows.MainShellWindow)desktop.MainWindow;
+                var speakRuntime = Platform.Deeper.SpeakPromptRuntime.CreateProduction(() => desktop.MainWindow as Views.Windows.MainShellWindow);
+                InstallSpeakPromptRuntime(speakRuntime);
                 CoreEngine.StoppedHook = shell.OnEngineStopped;
                 Sessions.Ticked += shell.OnSessionTick;
                 Sessions.SessionLog.LogReady += shell.OnSessionLogReady;
