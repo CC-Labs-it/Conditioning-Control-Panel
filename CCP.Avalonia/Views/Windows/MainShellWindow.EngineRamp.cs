@@ -41,8 +41,16 @@ public partial class MainShellWindow
 
     internal void TickEngineRamp()
     {
-        bool complete = Ramp.Tick(CoreSettings.Current, EngineNow(), App.Sessions?.IsRunning == true);
+        var s = CoreSettings.Current;
+        bool sessionActive = App.Sessions?.IsRunning == true;
+        bool complete = Ramp.Tick(s, EngineNow(), sessionActive);
         RefreshRampAudio(); // WPF StartStop.cs:749-754 and :676-680 drive SliderMaster_Changed.
+        // WPF OverlayService.cs:780-809 repaints pink and spiral every 500 ms; OnSessionTick covers sessions.
+        if (!sessionActive && (s.RampLinkPinkFilterOpacity || s.RampLinkSpiralOpacity))
+        {
+            Views.Overlays.PinkFilterOverlay.Refresh(this);
+            Views.Overlays.SpiralOverlay.Refresh(this);
+        }
         if (!complete) return;
         Platform.OsNotifications.Show(ConditioningControlPanel.Localization.Loc.Get("dialog_session_complete"),
             ConditioningControlPanel.Localization.Loc.Get("ramp_complete_stopping")); // WPF :785, before stop

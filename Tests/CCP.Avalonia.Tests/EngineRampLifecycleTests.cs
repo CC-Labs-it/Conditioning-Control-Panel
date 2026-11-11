@@ -38,8 +38,8 @@ public sealed class EngineRampLifecycleTests
             var service = new SettingsService();
             CoreSettings.ServiceProvider = () => service;
             var s = service.Current;
-            s.IntensityRampEnabled = true; s.RampLinkFlashOpacity = true;
-            s.FlashOpacity = 30; s.SchedulerMultiplier = 2;
+            s.IntensityRampEnabled = true; s.RampLinkFlashOpacity = true; s.RampLinkSpiralOpacity = true;
+            s.FlashOpacity = 30; s.SpiralOpacity = 20; s.SchedulerMultiplier = 2;
             s.RampDurationMinutes = 10; s.EndSessionOnRampComplete = true;
             var shell = new MainShellWindow(); shell.Show();
             var now = new DateTime(2026, 10, 19, 17, 0, 0);
@@ -76,7 +76,9 @@ public sealed class EngineRampLifecycleTests
                 shell.StartEngineFromUser(); Dispatcher.UIThread.RunJobs();
                 Assert.True(CoreEngine.IsRunning); Assert.True(shell.Ramp.IsActive);
                 Assert.True(File.Exists(journal));
+                var refreshes = SpiralOverlay.Refreshes;
                 now = now.AddMinutes(5); shell.TickEngineRamp(); Assert.Equal(45, s.FlashOpacity);
+                Assert.Equal(30, s.SpiralOpacity); Assert.True(SpiralOverlay.Refreshes > refreshes); // linked overlay repaints
                 AssertAudio(60); Assert.Empty(notices);
                 MainShellWindow.StopEngine();
                 Assert.False(shell.Ramp.IsActive); Assert.Equal(30, s.FlashOpacity);
