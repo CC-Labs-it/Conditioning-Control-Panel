@@ -45,7 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static Func<bool> Composited = () => X11Overlay.IsAvailable && X11Overlay.IsCompositing;
         /// <summary>Tests step frames (P08); the live source is the window's animation frame.</summary>
         internal static IFrameSource? FramesForTests;
-        internal static IReadOnlyList<PixelRect>? MonitorBoundsForTests;
+        internal static IReadOnlyList<PixelRect>? AvailableMonitorBoundsForTests;
         internal static double? MonitorScaleForTests;
         internal static ChaosSkiaFxOverlay? Active { get; private set; }
         private static bool _refused;
@@ -159,11 +159,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }, DispatcherPriority.Background);
         }
 
+        // Inject the available screens, before the host selection that must cover all of them.
+        private IReadOnlyList<PixelRect> AvailableMonitorBounds() =>
+            AvailableMonitorBoundsForTests ?? Screens.All.Select(s => s.Bounds).ToArray();
+
         private bool ReconcileScreens()
         {
             var primary = Screens.Primary ?? Screens.All.FirstOrDefault();
             if (primary == null) return _hosts.Count > 0; // WPF keeps hosts while no screens are reported.
-            var screens = MonitorBoundsForTests ?? Screens.All.Select(s => s.Bounds).ToArray();
+            var screens = AvailableMonitorBounds();
             if (screens.Count == 0) return _hosts.Count > 0;
             var scale = MonitorScaleForTests ?? primary.Scaling;
             _scale = scale > 0 ? scale : 1;
