@@ -153,14 +153,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 HydraGeneration = hydraGeneration, Ambient = ambient, Lifetime = lifetime,
                 SpawnedAt = Clock.GetTimestamp(), SpawnScreen = screen, InheritMotion = inheritMotion,
             };
-            try
-            {
-                if (!Spawn(w, rect, screen.Bounds, screen.Scaling, glow, alpha, fade, lifetime, clickable))
-                { w.ReleasePictures(); return false; }
-                Paid(path, s, hydraGeneration, multiplier);
-                return true;
-            }
+            bool shown;
+            try { shown = Spawn(w, rect, screen.Bounds, screen.Scaling, glow, alpha, fade, lifetime, clickable); }
             catch { w.ReleasePictures(); w.Close(); throw; }
+            if (!shown) { w.ReleasePictures(); return false; }
+            Paid(path, s, hydraGeneration, multiplier);
+            return true;
         }
 
         /// <summary>What a shown flash pays (WPF FlashService.cs:1608, 1834-1877, 2165-2172): session
@@ -570,6 +568,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             catch (Exception ex) { Log.Debug("Flash: still decode failed for {Path}: {E}", path, ex.Message); }
             return (frames, TimeSpan.FromMilliseconds(100));
         }
+        // ponytail: SpiralOverlay.Decode and the corner GIF still have their own decoder; switch them to this one.
         private static TimeSpan? DecodeAnimation(SKCodec codec, int maxDim, List<Bitmap> frames)
         {
             int frameCount = codec.FrameCount;
