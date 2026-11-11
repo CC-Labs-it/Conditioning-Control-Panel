@@ -37,7 +37,7 @@ public sealed class LeashGateCardTests
         public bool DropUnpushedLeashBookings() => false;
     }
 
-    internal static void Run(bool punished, Action<MainShellWindow, LauncherWindow, LeashService> body) => AvaloniaTestDispatcher.Run(() =>
+    internal static void Run(bool punished, Action<MainShellWindow, LauncherWindow, LeashService> body, bool tickBeforeLauncher = false) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
@@ -66,6 +66,19 @@ public sealed class LeashGateCardTests
             Dispatcher.UIThread.RunJobs();
             var launcher = LauncherWindow.Instance!;
             launcher.Hide();                             // off screen: no exit beat to wait out
+            if (tickBeforeLauncher)
+            {
+                // Reproduce a tick on the visible panel immediately before it goes away.
+                shell.Show();
+                shell.CheckLeashGate();
+                Assert.True(shell.LeashGate!.IsUp);
+                shell.Hide();
+            }
+            Assert.False(shell.IsVisible);
+            // The periodic gate check may already have run while the visible shell was opening.
+            // Drive its next check with the panel away before testing the launcher's tile.
+            shell.CheckLeashGate();
+            Assert.False(shell.LeashGate!.IsUp);
             body(shell, launcher, svc);
         }
         finally
@@ -108,6 +121,14 @@ public sealed class LeashGateCardTests
         Assert.True(Find(shell, "leash-gate-cut").IsEffectivelyEnabled);
         Assert.True(Find(shell, "leash-gate-pardon").IsEffectivelyEnabled);   // one pardon held
     });
+
+    [Fact]
+    public void GateTickBeforeLauncher_IsClearedAndTileShowsItAgain() => Run(punished: true, (shell, launcher, _) =>
+    {
+        Assert.False(shell.LeashGate!.IsUp);
+        PressTile(launcher);
+        Assert.True(shell.LeashGate.IsUp);
+    }, tickBeforeLauncher: true);
 
     [Fact]
     public void Panic_ClosesTheGate_RunsThePanicStop_AndSnoozesUntilTheNextTile() => Run(punished: true, (shell, launcher, _) =>
