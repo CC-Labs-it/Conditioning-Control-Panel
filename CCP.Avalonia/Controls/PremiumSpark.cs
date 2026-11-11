@@ -197,7 +197,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
         {
             var text = Loc.Get("premium_spark_label");
             if (string.IsNullOrWhiteSpace(text) || text == "premium_spark_label") text = "PREMIUM";
-            var typeface = new Typeface(new FontFamily("Segoe UI Black, Segoe UI"), FontStyle.Normal, FontWeight.Black);
+            // WPF Controls/Header/PremiumSpark.xaml.cs:450 prefers Segoe; bundled Inter covers hosts without it.
+            var typeface = new Typeface(new FontFamily("Segoe UI Black, Segoe UI, avares://Avalonia.Fonts.Inter/Assets#Inter"), FontStyle.Normal, FontWeight.Black);
             var group = new GeometryGroup { FillRule = FillRule.NonZero };
             double x = 0;
             foreach (var ch in text.ToUpper(CultureInfo.CurrentCulture))
@@ -392,6 +393,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             if (_window != null) _window.PropertyChanged += OnWindowProperty;
             _visibilityWatch = EffectiveVisibility.Watch(this, UpdateParking);
             AmbientFxCanvas.Env.MotionGateChanged += OnGate;
+            Platform.AccountSeed.TierRaised += OnTierRaised;
             if (Platform.AccountSeed.Patreon is { } p) p.TierChanged += OnTierChanged;
             if (Platform.AccountSeed.SubscribeStar is { } s) s.TierChanged += OnTierChanged;
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
@@ -408,6 +410,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             _window = null;
             _visibilityWatch?.Dispose(); _visibilityWatch = null;
             AmbientFxCanvas.Env.MotionGateChanged -= OnGate;
+            Platform.AccountSeed.TierRaised -= OnTierRaised;
             if (Platform.AccountSeed.Patreon is { } p) p.TierChanged -= OnTierChanged;
             if (Platform.AccountSeed.SubscribeStar is { } s) s.TierChanged -= OnTierChanged;
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
@@ -425,6 +428,13 @@ namespace ConditioningControlPanel.Avalonia.Controls
         {
             if (e.Property == Window.WindowStateProperty) UpdateParking();
         }
+
+        private void OnTierRaised(int tier) => Dispatcher.UIThread.Post(() =>
+        {
+            if (!_attached) return;
+            Refresh();
+            Burst();
+        });
 
         private void OnGate() => Dispatcher.UIThread.Post(Refresh);
         private void OnTierChanged(object? sender, PatreonTier tier) => Dispatcher.UIThread.Post(Refresh);

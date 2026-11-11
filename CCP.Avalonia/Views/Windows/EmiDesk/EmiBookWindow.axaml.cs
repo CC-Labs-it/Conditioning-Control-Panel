@@ -37,23 +37,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// header lists the markup deviations; these are the code ones, and every one is forced:</para>
     ///
     /// <list type="bullet">
-    ///   <item><b>The Win32 goes, and one behaviour goes with it.</b>
-    ///     <c>SetWindowLong(GWL_EXSTYLE, WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE)</c> becomes
-    ///     <c>ShowInTaskbar="False"</c> plus <c>ShowActivated="False"</c> in the markup.
-    ///     <b>WS_EX_NOACTIVATE is only half covered.</b> On Windows it meant the book could NEVER
-    ///     take the keyboard, at any point in its life - which is why the original has no key
-    ///     handling at all. <c>ShowActivated="False"</c> only governs the first Show, so on X11 a
-    ///     click on a chip WILL focus this window and pull focus off whatever the reader was doing.
-    ///     There is no property for the permanent form; it needs
-    ///     <c>_NET_WM_STATE_SKIP_TASKBAR</c>/input-hint work on the X11 shim, which is its own
-    ///     layer. Nothing here fakes it.
-    ///     <c>NativeStyle()</c> (<c>GWL_STYLE</c>/<c>WS_VISIBLE</c>) is dropped outright: it existed
-    ///     to catch a WPF-specific bug where <c>Window.IsVisible</c> lied, and the native style word
-    ///     it printed has no X11 twin worth inventing. The log line keeps the geometry.</item>
+    ///   <item><b>The passive window recipe</b> uses the existing platform seam before
+    ///     geometry and Show: WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE on Windows and
+    ///     override-redirect on X11. Unsupported backends retain ShowActivated=False.
+    ///     WPF: ConditioningControlPanel/Windows/EmiDesk/EmiBookWindow.xaml.cs:139.</item>
     ///   <item><b>No web view anywhere.</b> This window never hosted one - the original's header
     ///     explains at length why it could not - so nothing here touches <c>controls:WebHost</c>.</item>
-    ///   <item><b>No X11Overlay call.</b> Nothing in this window was click-through or restacked
-    ///     against a sibling; <c>Topmost</c> in the markup is the whole z-order story.</item>
+    ///   <item>The passive recipe preserves mouse input; Topmost retains the stacking intent.</item>
     ///   <item><b>The deck and the demos are the real ones</b>: <c>EmiBookCards</c>,
     ///     <c>EmiBookDemos</c> and <c>EmiPixelCanvas</c> live in Core; this window blits the buffer
     ///     into its own <c>WriteableBitmap</c>. Core rail painters and the bundled fonts
@@ -325,6 +315,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>WPF BtnCompleteGuide: the website manual (EmiCodex.OpenManualInBrowser). Test seam.</summary>
         internal static Action OpenManual = ConditioningControlPanel.Avalonia.Views.Windows.Codex.OpenManualInBrowser;
 
+        // WPF EmiBookWindow.xaml.cs:139: permanent no-activate, retaining mouse input.
+        // Apply before placement: the X11 window manager must not queue stale geometry.
+        internal static Action<EmiBookWindow> ApplyPassive = w => Platform.X11Overlay.SetOverrideRedirect(w, passive: true);
+
         private void WireControls()
         {
             _btnClose.Click += (_, _) => CloseBook();
@@ -385,10 +379,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             if (_closingForGood) return;
             try
             {
-                SelectCard(EmiBookCards.IndexOf(cardId) is var i and >= 0 ? i : 0, speak: false);
+                SelectCard(AvaloniaEmiBookCards.IndexOf(cardId) is var i and >= 0 ? i : 0, speak: false);
 
+                bool first = !IsVisible;
+                if (first) ApplyPassive(this);
                 PlaceWindow();
-                if (!IsVisible)
+                if (first)
                 {
                     Show();
                     // The window has no scaling of its own until it is up, so the first placement is
@@ -414,7 +410,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             try
             {
-                int i = EmiBookCards.IndexOf(cardId);
+                int i = AvaloniaEmiBookCards.IndexOf(cardId);
                 if (i < 0) return;
                 SelectCard(i, speak: true);
             }
@@ -673,7 +669,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 StopClock();
-                int i = EmiBookCards.IndexOf(cardId);
+                int i = AvaloniaEmiBookCards.IndexOf(cardId);
                 if (i >= 0) SelectCard(i, speak: false);
                 var p = _painter;
                 if (p == null) return;
@@ -688,7 +684,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>Move to a card by index, redraw everything, and remember where we are.</summary>
         private void SelectCard(int index, bool speak, bool note = true)
         {
-            var cards = EmiBookCards.All;
+            var cards = AvaloniaEmiBookCards.All;
             if (cards.Count == 0) return;
 
             _index = Math.Max(0, Math.Min(cards.Count - 1, index));
@@ -711,7 +707,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private void Step(int delta)
         {
-            var cards = EmiBookCards.All;
+            var cards = AvaloniaEmiBookCards.All;
             if (cards.Count == 0) return;
             int next = _index + delta;
             if (next < 0 || next >= cards.Count) return;
@@ -720,7 +716,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private void PickTab(int tab)
         {
-            int first = EmiBookCards.FirstOnTab(tab);
+            int first = AvaloniaEmiBookCards.FirstOnTab(tab);
             if (first < 0) return;
             if (first == _index && _tab == tab) return;
             SelectCard(first, speak: true);
@@ -894,7 +890,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private void Go()
         {
-            var cards = EmiBookCards.All;
+            var cards = AvaloniaEmiBookCards.All;
             if (_index < 0 || _index >= cards.Count) return;
             var card = cards[_index];
             // WPF wraps the detour the same way (EmiBookWindow.xaml.cs:834); this head has no
@@ -930,7 +926,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     tabs[i].Content = new TextBlock { Text = EmiBookCards.TabName(i) };
                     // A tab with nothing behind it is drawn and dead, not hidden: the shape of the
                     // book is honest from day one.
-                    tabs[i].IsEnabled = EmiBookCards.TabHasCards(i);
+                    tabs[i].IsEnabled = AvaloniaEmiBookCards.TabHasCards(i);
                     tabs[i].Classes.Set("on", i == _tab);
                 }
                 catch (Exception ex) { Log.Debug(ex, "[EmiDesk] book tab {Tab} render failed", i); }
@@ -967,7 +963,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
                 Resources.TryGetResource("RailChip", null, out var themeRes);
                 var chipTheme = themeRes as ControlTheme;
-                var cards = EmiBookCards.All;
+                var cards = AvaloniaEmiBookCards.All;
                 for (int i = 0; i < cards.Count; i++)
                 {
                     if (cards[i].Tab != _tab) continue;
@@ -1010,7 +1006,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 _dotsPanel.Children.Clear();
                 _dots.Clear();
 
-                var cards = EmiBookCards.All;
+                var cards = AvaloniaEmiBookCards.All;
                 for (int i = 0; i < cards.Count; i++)
                 {
                     if (cards[i].Tab != _tab) continue;
@@ -1059,7 +1055,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             try
             {
-                var cards = EmiBookCards.All;
+                var cards = AvaloniaEmiBookCards.All;
                 if (_index < 0 || _index >= cards.Count) return;
                 var card = cards[_index];
                 if (string.IsNullOrWhiteSpace(card.MarginEn)) return;

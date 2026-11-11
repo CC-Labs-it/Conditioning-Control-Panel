@@ -130,7 +130,8 @@
                                 Theme="{StaticResource HelpButtonStyle}" VerticalAlignment="Center"
                                 Margin="6,0,0,0" Tag="ScreenOcr" ZIndex="1"/>
                     </StackPanel>
-                    <TextBlock Text="{loc:Str label_scans_your_screen_for_trigger_keywords_using}"
+                    <!-- Off Windows the code-behind swaps in the _linux line: there is no Windows OCR there. -->
+                    <TextBlock x:Name="TxtScreenOcrBlurb" Text="{loc:Str label_scans_your_screen_for_trigger_keywords_using}"
                                Foreground="{DynamicResource TextMutedBrush}" FontSize="10"
                                TextWrapping="Wrap" Margin="0,0,0,4"/>
 

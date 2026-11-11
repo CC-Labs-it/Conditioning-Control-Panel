@@ -1,6 +1,5 @@
 // PORTED from ConditioningControlPanel/Services/Glassroad/GlassroadHostService.cs (feat/glassroad-a 5121933ee):
-// GLASSROAD, the 3D race (Assets/web/glassroad/index.html), private preview behind CCP_GLASSROAD=1. With the switch
-// on, the Racing Thoughts door opens this page instead (GameWindow.Launch); without it nothing changes for anyone.
+// GLASSROAD, the 3D race (Assets/web/glassroad/index.html), Prime only including solo (WPF #3126, #3132).
 // INIT GOES OUT BEFORE READY: the page awaits init at boot (3 s, then defaults with no net) but says ready only once
 // shaders are warm, so init is posted at the page's load (NavigationCompleted, this engine's nearest seam to WPF's
 // DOMContentLoaded), on the first message and on ready (a repeat is harmless). The relay signs as the player, so it
@@ -14,7 +13,10 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Friends;
+using ConditioningControlPanel.Services.Haptics;
 using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
@@ -26,24 +28,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     {
         internal const string GlassroadId = "glassroad";
 
-        /// <summary>The door switch's raw value; tests swap it rather than the process env.</summary>
-        internal static Func<string?> GlassroadDoorEnv { get; set; } =
-            () => Environment.GetEnvironmentVariable(GlassroadHostRules.DoorEnv);
-
-        /// <summary>The live read of the door switch. Never throws.</summary>
-        internal static bool GlassroadDoorOpen() { try { return GlassroadHostRules.DoorOpen(GlassroadDoorEnv()); } catch { return false; } }
-
-        /// <summary>WPF LauncherCatalogue "race": with the switch on, every Racing Thoughts door opens Glassroad.</summary>
+        /// <summary>All Racing Thoughts doors resolve here. The Linux host lane can replace this routing seam.</summary>
         internal static string ResolveDoor(string id) =>
-            string.Equals(id, "race", StringComparison.OrdinalIgnoreCase) && GlassroadDoorOpen() ? GlassroadId : id;
+            string.Equals(id, "race", StringComparison.OrdinalIgnoreCase) ? GlassroadId : id;
 
-        /// <summary>A direct launch of the page needs the switch too.</summary>
-        internal static bool GlassroadGate()
-        {
-            if (GlassroadDoorOpen()) return true;
-            Log.Information("GlassroadHost: launch refused, {Env} is not 1", GlassroadHostRules.DoorEnv);
-            return false;
-        }
+        /// <summary>WPF 7.2 GlassroadHostService.PrimeAllowed: tier 2, solo included, no daily-free bypass.</summary>
+        internal static bool GlassroadLocked() => !TierGate.RequiresLab(Loc.Get("launcher_game_race_title")).Allowed;
+
+        internal static bool GlassroadGate() => TierGate.DemandLab(Loc.Get("launcher_game_race_title"));
+
+        internal static Action<string> GlassroadNoteEvent { get; set; } = key => App.FeatureDayLog?.Note(key);
 
         private bool IsGlassroad => string.Equals(Spec.Id, GlassroadId, StringComparison.OrdinalIgnoreCase);
         private bool _grOpen, _grEarlyInitSent, _grPinged;
@@ -54,11 +48,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>Test seam: the last net relay; done once its reply is queued on the UI thread.</summary>
         internal Task GlassroadPending { get; private set; } = Task.CompletedTask;
 
+        // The settings object the race watches; a cloud restore/reset swaps CoreSettings.Current (Breakout's rebind).
+        private AppSettings? _grSettings;
+        private SettingsService? _grSettingsService;
+
+        private void HookGlassroadSettings()
+        {
+            if (_grSettings != null) _grSettings.PropertyChanged -= OnGlassroadSettingsChanged;
+            _grSettings = CoreSettings.Current;
+            _grSettings.PropertyChanged += OnGlassroadSettingsChanged;
+        }
+
+        private void OnGlassroadSettingsReplaced() => Dispatcher.UIThread.Post(() => { if (_grOpen) HookGlassroadSettings(); });
+
         /// <summary>WPF Launch after the window exists: watchdog, presence, the load-time init.</summary>
         private void OpenGlassroad()
         {
             if (_grOpen) return;
             _grOpen = true;
+            _grSettingsService = CoreSettings.Service;
+            if (_grSettingsService != null) _grSettingsService.CurrentReplaced += OnGlassroadSettingsReplaced;
+            HookGlassroadSettings();
             _grEarlyInitSent = _grPinged = false;
             _grLastBeatUtc = _grLastProgressUtc = DateTime.UtcNow;
             _grLastLoadingUtc = null;
@@ -67,6 +77,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _grWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             _grWatch.Tick += (_, _) => CheckGlassroadWatch(DateTime.UtcNow);
             _grWatch.Start();
+            PrizeOwnership.Changed += OnGlassroadOwned;
+            _grHaptics = CoreHaptics.Service;
+            if (_grHaptics != null) _grHaptics.ConnectionChanged += OnGlassroadToys;
+            try { GlassroadNoteEvent(ConditioningControlPanel.Models.SeasonFeatureKeys.ToDayLogEvent(
+                ConditioningControlPanel.Models.SeasonFeatureKeys.Race3d)!); } catch (Exception ex) { Diag.Swallowed(ex); }
             try { FriendsHead.Service?.EnterActivity(PresenceActivity.Race); } catch (Exception ex) { Diag.Swallowed(ex); }
             Log.Information("GlassroadHost: launched");
         }
@@ -76,11 +91,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (!_grOpen) return;
             _grOpen = false;
+            PrizeOwnership.Changed -= OnGlassroadOwned;
+            if (_grHaptics != null) _grHaptics.ConnectionChanged -= OnGlassroadToys;
+            _grHaptics = null;
+            GlassroadHapticDirector.Stop();
+            if (_grSettings != null) _grSettings.PropertyChanged -= OnGlassroadSettingsChanged;
+            if (_grSettingsService != null) _grSettingsService.CurrentReplaced -= OnGlassroadSettingsReplaced;
+            _grSettings = null;
+            _grSettingsService = null;
             try { _grWatch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _grWatch = null;
+            DisposeGlassroadPictures();
             try { FriendsHead.Service?.LeaveActivity(PresenceActivity.Race); } catch (Exception ex) { Diag.Swallowed(ex); }
             Log.Information("GlassroadHost: closed");
         }
+
+        private HapticService? _grHaptics;
+        private static bool GlassroadToysConnected => CoreSettings.Current.Haptics is { Enabled: true }
+            && CoreHaptics.Service is { IsConnected: true };
+        private void OnGlassroadOwned() => Dispatcher.UIThread.Post(() =>
+        {
+            if (_grOpen && !_closing) Post(GlassroadHostRules.OwnedFrame(PrizeOwnership.Grants));
+        });
+        private void OnGlassroadToys(object? sender, bool connected) => Dispatcher.UIThread.Post(() =>
+        {
+            if (_grOpen && !_closing) Post(new { type = "toys", connected = GlassroadToysConnected });
+        });
 
         /// <summary>The init frame, straight out (this head has no ready queue).</summary>
         internal void PostGlassroadInit()
@@ -91,7 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 var uid = CoreAccount.UnifiedUserId;
                 bool online = !string.IsNullOrEmpty(uid) && !string.IsNullOrEmpty(PbpAuthToken());
                 Post(GlassroadHostRules.InitFrame(online ? uid : null, s.UserDisplayName, GlassroadTier(),
-                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed));
+                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed, GlassroadPicturesOn(), PrizeOwnership.Grants, GlassroadToysConnected));
             }
             catch (Exception ex) { Log.Debug("Glassroad: init post failed: {E}", ex.Message); }
         }
@@ -107,6 +143,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF OnPageMessage. True = claimed; boot-error and log fall through to the shell frames.</summary>
         private bool HandleGlassroad(JObject o)
         {
+            if (_closing) return true;
             _grLastProgressUtc = DateTime.UtcNow;
             var type = (string?)o["type"];
             try
@@ -122,7 +159,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         IsReady = true;
                         _grLastBeatUtc = DateTime.UtcNow;
                         _grPinged = false;
-                        PostGlassroadInit();
+                        PostGlassroadInit(); FlushRaceRooms();
                         try { Web.Focus(); } catch (Exception ex) { Diag.Swallowed(ex); }
                         return true;
                     case "heartbeat":
@@ -134,8 +171,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         // The page's loading bar moved (glassroad CONTRACT.md): a long build may follow.
                         _grLastLoadingUtc = DateTime.UtcNow;
                         break;   // unclaimed, as before: the shell frames still see it
+                    case "toy":
+                    case "toy-bed":
+                    case "toy-stop":
+                        GlassroadHapticDirector.OnPageMessage(o);
+                        return true;
+                    case "open-prize-counter":
+                        return true; // B3: no shop on this head.
+                    case "set-setting":
+                        _ = SetGlassroadPicturesAsync(o);
+                        return true;
+                    case "scrolller-niches":
+                        SetGlassroadNiches(o);
+                        return true;
                     case "net":
                         OnGlassroadNet(o);
+                        return true;
+                    case "friends-list":
+                        Post(new { type = "friends-list-reply", id = (string?)o["id"] ?? "",
+                            friends = GlassroadInviteRules.FriendRows(FriendsHead.Service?.Snapshot.Friends) });
+                        return true;
+                    case "invite-friend":
+                        GlassroadPending = OnGlassroadInviteAsync(o);
                         return true;
                     case "exit":
                     case "menu-back":
@@ -150,6 +207,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 return true;
             }
             return false;
+        }
+
+        private async Task OnGlassroadInviteAsync(JObject frame)
+        {
+            var id = (string?)frame["id"] ?? "";
+            var uid = (string?)frame["friendUid"];
+            var room = (string?)frame["roomId"];
+            var service = FriendsHead.Service;
+            var outcome = new SendOutcome(SendResult.Refused, null);
+            try
+            {
+                if (service != null && GlassroadInviteRules.CanInvite(service.Snapshot.Friends, uid, room))
+                    outcome = await service.InviteToRaceAsync(uid!, room!);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("Glassroad: invite failed: {E}", ex.Message);
+                outcome = new SendOutcome(SendResult.TryLater, null);
+            }
+            var note = GlassroadInviteRules.Sentence(Loc.Get(GlassroadInviteRules.NoteKey(outcome)));
+            if (!_closing) Post(new { type = "invite-friend-reply", id,
+                sent = GlassroadInviteRules.IsGood(outcome), note });
         }
 
         /// <summary><c>net { id, method, path, body }</c> -&gt; <c>net-reply { id, status, body }</c>. A refusal or

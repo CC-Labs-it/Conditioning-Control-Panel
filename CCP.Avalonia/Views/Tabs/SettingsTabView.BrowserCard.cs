@@ -6,11 +6,13 @@
 // Mute rides the WebHost script channel (Views/Controls/WebHostMedia.cs) and is re-applied after every navigation,
 // since a new document has no flag. The load prompt: WPF builds the WebView2 on that click; here the engine exists
 // from the start but loads nothing until asked, so the prompt stands in the slot until the first page.
-// ponytail: Pop out (WPF re-parents the WebView2 into a 1024x768 window; NativeWebView cannot be re-parented live)
-// and "Enhance if possible" (no BrowserEnhanceBridge on this head) are greyed with the "not on this build" line.
+// Pop out preserves the native adapter with BeginReparenting.
+// "Enhance if possible" remains disabled without BrowserEnhanceBridge.
 
 using System;
 using Avalonia.Controls;
+using Avalonia.Data;
+using ConditioningControlPanel.Avalonia.Localization;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
@@ -31,6 +33,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void HookBrowserCard()
         {
             BrowserWebHost.NavigationCompleted += _ => ApplyBrowserMute();
+            BrowserWebHost.NavigationFinished += (url, success) =>
+                _ = Browser.BrowserAdCss.ApplyAsync(url, success, BrowserWebHost.InvokeScriptAsync);
             BrowserWebHost.PropertyChanged += (_, e) => { if (e.Property == WebHost.SourceProperty) SyncBrowserPrompt(); };
             AttachedToVisualTree += (_, _) =>
             {
@@ -45,7 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Platform.WebcamTracker.Instance.StateChanged -= OnBrowserCardTrackerChanged;
                 CoreMods.ModChanged -= OnBrowserCardModChanged;
             };
-            foreach (Control c in new Control[] { ToggleEnhanceIfPossible, BtnPopOutBrowser })
+            foreach (Control c in new Control[] { ToggleEnhanceIfPossible })
             {
                 c.IsEnabled = false;
                 c.Bind(ToolTip.TipProperty, LocBinding("exclusives_not_on_this_build"));
@@ -55,7 +59,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private void OnBrowserCardTrackerChanged() => Dispatcher.UIThread.Post(RefreshBrowserWebcamButton);
-        private void OnBrowserCardModChanged(object? sender, ModPackage? mod) => Dispatcher.UIThread.Post(SyncBrowserCard);
+        private void OnBrowserCardModChanged(object? sender, ModPackage? mod) => Dispatcher.UIThread.Post(OnBrowserModSwitched);
+
+        /// <summary>WPF MainWindow/MainWindow.xaml.cs:3244-3262: the radios follow the new mod, and a mod that does not offer
+        /// BambiCloud also sends an open page to its own default, even when the override reveals the radio. Only a
+        /// page that was ever loaded moves (WPF: _browserInitialized), and never offline (#867).</summary>
+        internal void OnBrowserModSwitched()
+        {
+            SyncBrowserCard();
+            if (App.Mods is { } mods && !mods.ShowBambiCloudOption() && BrowserWebHost.Source != null
+                && !CoreSettings.Current.OfflineMode)
+                BrowserWebHost.Navigate(new Uri(mods.GetDefaultBrowserUrl()));
+        }
 
         /// <summary>The saved state into the row: the mute glyph, the webcam pill, the BambiCloud override and the prompt.</summary>
         internal void SyncBrowserCard()
@@ -156,14 +171,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// HypnoTube and, on a user change, the page follows (WPF SyncSiteRadiosToActiveMod(navigateIfChanged: true)).</summary>
         private void ApplyBambiCloudVisibility(bool navigateIfHidden)
         {
-            bool modWants = true;
-            try { modWants = App.Mods?.ShowBambiCloudOption() ?? true; }
-            catch (Exception ex) { Log.Debug("ShowBambiCloudOption: {E}", ex.Message); }
-            bool show = modWants || CoreSettings.Current.ForceShowBambiCloud;
-            RbBambiCloud.IsVisible = show;
-            if (show || RbBambiCloud.IsChecked != true) return;
-            RbHypnoTube.IsChecked = true;
-            if (navigateIfHidden) Shell?.BrowserSiteToggle_Click(RbHypnoTube, new RoutedEventArgs());
+            var modWants = App.Mods?.ShowBambiCloudOption() ?? true;
+            RbBambiCloud.IsVisible = modWants || CoreSettings.Current.ForceShowBambiCloud;
+            SyncBrowserSite(modWants, App.Mods?.GetDefaultBrowserUrl() ?? "https://bambicloud.com/", navigateIfHidden);
+        }
+
+        // WPF MainWindow/MainWindow.Browser.cs:547-580, SyncSiteRadiosToActiveMod: visibility is not the site's default. In particular,
+        // revealing BambiCloud with the override must not change a HypnoTube mod's default.
+        internal void SyncBrowserSite(bool modWantsBambiCloud, string defaultUrl, bool navigateIfChanged)
+        {
+            var current = BrowserWebHost.CurrentUrl?.AbsoluteUri;
+            var known = current != null && (current.Contains("bambicloud.com", StringComparison.OrdinalIgnoreCase)
+                || current.Contains("hypnotube.com", StringComparison.OrdinalIgnoreCase));
+            if (modWantsBambiCloud && known) return;
+            var onBambi = modWantsBambiCloud && defaultUrl.Contains("bambicloud.com", StringComparison.OrdinalIgnoreCase);
+            var target = onBambi ? RbBambiCloud : RbHypnoTube;
+            var moved = target.IsChecked != true;
+            target.IsChecked = true;
+            if (moved && navigateIfChanged && !CoreSettings.Current.OfflineMode)
+                Shell?.BrowserSiteToggle_Click(target, new RoutedEventArgs());
         }
 
         // ------------------------------------------------------------------ the load prompt
@@ -174,10 +200,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         internal void SyncBrowserPrompt()
         {
-            bool prompt = BrowserPromptShown(BrowserWebHost.HasEngine, BrowserWebHost.Source != null);
+            bool popped = Shell?.IsBrowserPoppedOut == true;
+            bool offline = CoreSettings.Current.OfflineMode;
+            bool prompt = popped || offline || BrowserPromptShown(BrowserWebHost.HasEngine, BrowserWebHost.Source != null);
             BrowserLoadingText.IsVisible = prompt;
+            BrowserLoadingText.Bind(TextBlock.TextProperty, (Binding)new StrBareExtension(offline
+                ? "label_browser_disabled_in_offline_mode" : popped   // WPF MainWindow.Browser.cs:2737
+                ? "label_browser_popped_out_nclick_to_focus_window" : "label_click_to_load_browser").ProvideValue(null!));
             // A native web view draws over anything laid on it, so the prompt only shows with the host hidden.
-            BrowserWebHost.IsVisible = !prompt;
+            // The placeholder belongs to the card; the popped-out host stays visible in its window.
+            BrowserWebHost.IsVisible = popped || !prompt;
             // Replace only a stuck Loading: Offline/Ready (UpdateOfflineModeUI, whose about:blank park and reload
             // land here too) own the line, as WPF writes them whether or not the engine is up.
             if (!BrowserWebHost.HasEngine && BrowserStatusLoading()) SetBrowserFailure(BrowserWebHost.FailureStatusKey);
@@ -192,11 +224,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtBrowserStatus.Foreground = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.FromRgb(255, 107, 107));
         }
 
-        /// <summary>WPF BrowserLoadingText_Click: load the selected site. The shell's reload is exactly that, behind the
-        /// offline gate (WPF #867).</summary>
-        internal void OnBrowserPromptClick() => Shell?.BtnReloadBrowser_Click(this, new RoutedEventArgs());
+        /// <summary>WPF BrowserLoadingText_Click: initially load the mod's default. Subsequent Reload uses the selected
+        /// site's home, behind the offline gate (WPF #867).</summary>
+        internal void OnBrowserPromptClick()
+        {
+            if (Shell?.IsBrowserPoppedOut == true) Shell.BtnPopOutBrowser_Click(this, new RoutedEventArgs());
+            else if (BrowserWebHost.Source == null) Shell?.LoadInitialBrowserHome();
+            else Shell?.BtnReloadBrowser_Click(this, new RoutedEventArgs());
+        }
 
-        private void BtnPopOutBrowser_Click(object? sender, RoutedEventArgs e) { }          // greyed: see the header
+        internal void SyncBrowserPopout()
+        {
+            // WPF MainWindow.Browser.cs:2790-2800: label and tooltip follow the hosting window.
+            bool popped = Shell?.IsBrowserPoppedOut == true;
+            if (BtnPopOutBrowser.Content is TextBlock label)
+                label.Bind(TextBlock.TextProperty, (Binding)new StrBareExtension(
+                    popped ? "btn_focus" : "btn_pop_out").ProvideValue(null!));
+            BtnPopOutBrowser.Bind(ToolTip.TipProperty, LocBinding(popped
+                ? "tooltip_browser_is_popped_out_click_to_focus" : "tooltip_pop_out_browser_to_resizable_window"));
+            SyncBrowserPrompt();
+        }
+
+        private void BtnPopOutBrowser_Click(object? sender, RoutedEventArgs e) => Shell?.BtnPopOutBrowser_Click(sender, e);
         private void ToggleEnhanceIfPossible_Changed(object? sender, RoutedEventArgs e) { } // greyed: see the header
     }
 }

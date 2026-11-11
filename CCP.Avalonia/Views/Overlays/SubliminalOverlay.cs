@@ -12,6 +12,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services;   // SubliminalCard
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using Serilog;
+using ConditioningControlPanel.Services.Safety;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
 {
@@ -27,12 +28,76 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>Whisper audio, ducking, XP and the Bambi Freeze/Reset pair: <see cref="SubliminalWhisperShow"/>.
     /// SubliminalStealsFocus opts into activation after a passive show, still click-through.
-    /// ponytail: the solid-mode shared host remains a separate follow-up.</para>
+    /// Solid mode uses the shared passive host; focus requests stay on classic cards.</para>
     /// </summary>
     internal static class SubliminalOverlay
     {
         private static readonly List<SubliminalOverlayWindow> Active = new();
+        // WPF SubliminalService.cs:609-629: notify only after the delayed show is admitted.
+        internal static event Action? Displayed;
         private static bool _warnedUnavailable;
+        private static readonly Dictionary<PixelRect, SharedOverlayHost.Lease> Hosts = new();
+        private static readonly List<Action> RetireHosted = new();
+
+        /// <summary>Solid mode goes to the shared stage unless focus is requested or a mandatory video owns the screen.</summary>
+        internal static bool UseSolidHost(bool solidMode, bool stealsFocus, int liveVideoWindows) =>
+            solidMode && !stealsFocus && liveVideoWindows == 0;
+
+        internal static bool ShowHosted(PixelRect bounds, string text, double alpha, TimeSpan hold)
+        {
+            if (!Hosts.TryGetValue(bounds, out var lease))
+            {
+                lease = SharedOverlayHost.Acquire(bounds);
+                if (lease == null) return false;
+                Hosts.Add(bounds, lease);
+            }
+            var card = SubliminalOverlayWindow.Build(text, CoreSettings.Current);
+            card.Opacity = 0;
+            card.ZIndex = 1200; // WPF: above hosted image flashes
+            lease.Canvas.Children.Add(card);
+            lease.Raise();
+            var retired = false;
+            Action retire = () =>
+            {
+                if (retired) return;
+                retired = true;
+                lease.Canvas.Children.Remove(card);
+            };
+            RetireHosted.Add(retire);
+            void Step(double value, TimeSpan at) => DispatcherTimer.RunOnce(() =>
+            {
+                if (!retired) card.Opacity = Math.Clamp(value, 0, 1);
+            }, at);
+            // Gentle Visuals scales the fade here as on the classic path (FadeDuration/Ramp) and WPF
+            // SubliminalService.cs:636-637, which scales it before choosing host or classic.
+            var fade = SubliminalOverlayWindow.FadeDuration;
+            var steps = Math.Max(3, (int)Math.Ceiling(fade.TotalMilliseconds / 17));
+            for (var i = 1; i <= steps; i++)
+            {
+                Step(alpha * i / steps, fade * i / steps);
+                Step(alpha * (1 - (double)i / steps), fade + hold + fade * i / steps);
+            }
+            DispatcherTimer.RunOnce(() =>
+            {
+                retire();
+                RetireHosted.Remove(retire);
+                if (!CoreSubliminal.IsRunning && RetireHosted.Count == 0) ReleaseHosts();
+            }, fade + hold + fade);
+            return true;
+        }
+
+        private static void ClearCards()
+        {
+            foreach (var retire in RetireHosted) retire();
+            RetireHosted.Clear();
+            foreach (var w in Active.ToList()) w.Close();
+        }
+
+        private static void ReleaseHosts()
+        {
+            foreach (var lease in Hosts.Values) lease.Dispose();
+            Hosts.Clear();
+        }
 
         /// <summary>Draw one card for <paramref name="text"/> on every targeted screen; <paramref name="opacity"/>
         /// (percent) overrides the setting, as WPF FlashSubliminalCustom's does.</summary>
@@ -47,7 +112,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var screens = ScreenList.Enumerate(host);
             if (screens.Count == 0) return;
 
-            CloseAll();
+            ClearCards();
             var s = CoreSettings.Current;
             var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
             var hold = TimeSpan.FromMilliseconds(SubliminalCard.HoldMs(s.SubliminalDuration));
@@ -55,6 +120,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             bool barkRaised = false;
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
+                if (UseSolidHost(s.SubliminalSolidMode, s.SubliminalStealsFocus, MandatoryVideoOverlay.Instance.Windows.Count) &&
+                    ShowHosted(screens[i].Bounds, text, alpha, hold))
+                {
+                    // WPF raises the bark and Displayed on every path; Present (which does it) is skipped here.
+                    if (!barkRaised)
+                    {
+                        Platform.BarkHead.Engine?.Raise("SubliminalDisplayed");
+                        Displayed?.Invoke();
+                    }
+                    barkRaised = true;
+                    continue;
+                }
                 var w = new SubliminalOverlayWindow(text);
                 if (!X11Overlay.SetClickThrough(w, true) || !X11Overlay.SetOpacity(w, 0) || !X11Overlay.SetOverrideRedirect(w, screens[i].Bounds))
                 {
@@ -102,7 +179,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Active.Add(overlay);
             }
             card.Show();
-            if (raiseBark) Platform.BarkHead.Engine?.Raise("SubliminalDisplayed");
+            // One bark and one Displayed per subliminal, however many screens carry it.
+            if (raiseBark)
+            {
+                Platform.BarkHead.Engine?.Raise("SubliminalDisplayed");
+                Displayed?.Invoke();
+            }
             if (!stealsFocus) return;
             try { ActivateCard(card); }
             catch (Exception ex) { Log.Debug("Subliminal: focus steal refused: {E}", ex.Message); }
@@ -111,7 +193,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Take every card off screen now (WPF <c>TearDownSurfaces</c> on Stop).</summary>
         public static void CloseAll()
         {
-            foreach (var w in Active.ToList()) w.Close();
+            ClearCards();
+            ReleaseHosts();
         }
     }
 
@@ -148,10 +231,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static Grid Build(string text, Models.AppSettings s)
         {
             var grid = new Grid { IsHitTestVisible = false };
-            if (!s.SubBackgroundTransparent)
+            if (!s.SubBackgroundTransparent && !s.GentleVisuals)
                 grid.Children.Add(new Rectangle { Fill = new SolidColorBrush(Parse(s.SubBackgroundColor, Colors.Black)) });
 
-            var family = new FontFamily(string.IsNullOrWhiteSpace(s.SubliminalFont) ? "Arial" : s.SubliminalFont + ", Arial");
+            var family = new FontFamily(s.SubliminalFont == "Fredoka (bundled)" ? Platform.AppFonts.Fredoka :
+                string.IsNullOrWhiteSpace(s.SubliminalFont) ? "Arial" : s.SubliminalFont + ", Arial");
             TextBlock Text(Color c, double x, double y) => new()
             {
                 Text = text,
@@ -176,18 +260,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// close. Compositor-side alpha (<see cref="X11Overlay.SetOpacity"/>), so the card renders once.</summary>
         public void Run(double alpha, TimeSpan hold)
         {
-            var fade = TimeSpan.FromMilliseconds(SubliminalCard.DefaultFadeMs);
+            var fade = FadeDuration;
             var closed = false;
             Closed += (_, _) => closed = true;   // a newer card may have closed this one already
             // The envelope starts at the card's first frame, not at Show(): mapping and the first
             // full-screen paint take time a 100 ms hold cannot spare. A backstop from Show() caps the
             // lifetime anyway, so a late first frame shortens the card instead of stranding it.
-            DispatcherTimer.RunOnce(() => { if (!closed) Close(); }, MaxLifetime(hold));
+            DispatcherTimer.RunOnce(() => { if (!closed) Close(); }, MaxLifetime(hold, fade));
             RequestFrame(this, _ =>
             {
                 if (closed) return;
-                Ramp(0, alpha, TimeSpan.Zero, fade);
-                Ramp(alpha, 0, fade + hold, fade);
+                Ramp(0, alpha, TimeSpan.Zero, fade, () => closed);
+                Ramp(alpha, 0, fade + hold, fade, () => closed);
                 DispatcherTimer.RunOnce(() => { if (!closed) Close(); }, fade + hold + fade + TimeSpan.FromMilliseconds(1));
             });
         }
@@ -196,15 +280,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static Action<TopLevel, Action<TimeSpan>> RequestFrame = (t, a) => t.RequestAnimationFrame(a);
 
         /// <summary>Show() to forced close: the whole envelope plus 100 ms of first-frame slack.</summary>
-        internal static TimeSpan MaxLifetime(TimeSpan hold) => hold + TimeSpan.FromMilliseconds(4 * SubliminalCard.DefaultFadeMs);
+        internal static TimeSpan FadeDuration => TimeSpan.FromMilliseconds(GentleVisuals.FadeMs(SubliminalCard.DefaultFadeMs));
 
-        private void Ramp(double from, double to, TimeSpan start, TimeSpan span)
+        internal static TimeSpan MaxLifetime(TimeSpan hold) => MaxLifetime(hold, FadeDuration);
+        private static TimeSpan MaxLifetime(TimeSpan hold, TimeSpan fade) => hold + fade * 2 + TimeSpan.FromMilliseconds(100);
+
+        private void Ramp(double from, double to, TimeSpan start, TimeSpan span, Func<bool> closed)
         {
-            const int steps = 3;   // ~one step per 60 Hz frame across 50 ms
+            var steps = Math.Max(3, (int)Math.Ceiling(span.TotalMilliseconds / 17));
             for (var i = 1; i <= steps; i++)
             {
                 var v = from + (to - from) * i / steps;
-                DispatcherTimer.RunOnce(() => X11Overlay.SetOpacity(this, v), start + span * i / steps);
+                DispatcherTimer.RunOnce(() => { if (!closed()) X11Overlay.SetOpacity(this, v); }, start + span * i / steps);
             }
         }
     }

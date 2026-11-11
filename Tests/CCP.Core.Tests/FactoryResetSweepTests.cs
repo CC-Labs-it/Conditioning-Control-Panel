@@ -75,9 +75,10 @@ public sealed class FactoryResetSweepTests
         int sealEnd = src.IndexOf("public void UnsealAfterFailedReset()", seal, StringComparison.Ordinal);
         Assert.Contains("lock (_saveLock) { }", src.Substring(seal, sealEnd - seal));
 
-        int save = src.IndexOf("public void SaveImmediate(", StringComparison.Ordinal);
+        Assert.Contains("public void SaveImmediate(bool suppressCloudBackup = false) => TrySaveImmediate(suppressCloudBackup);", src);
+        int save = src.IndexOf("public bool TrySaveImmediate(", StringComparison.Ordinal);
         int writeLock = src.IndexOf("lock (_saveLock)", save, StringComparison.Ordinal);
-        int recheck = src.IndexOf("if (_sealed) return;", writeLock, StringComparison.Ordinal);
+        int recheck = src.IndexOf("if (_sealed) return false;", writeLock, StringComparison.Ordinal);
         int write = src.IndexOf("File.Move(", writeLock, StringComparison.Ordinal);
         Assert.True(writeLock > save && recheck > writeLock && write > recheck, "the write re-checks the seal inside the lock");
     }

@@ -44,13 +44,14 @@
     <Window.Styles>
         <!-- Fluent paints PART_BorderElement itself, and that setter sits on the template child, so
              it outranks the TextBox's own Background/BorderBrush/BorderThickness in every state.
-             The values below are the WPF original's, verbatim.
+             The values below are the WPF original's, verbatim; CornerRadius 8 is the implicit
+             TextBox template's Bd (WPF Resources/Theme/Inputs.xaml:325).
              ponytail: local copy, hoist to Theme/Styles.xaml when a second view needs it. -->
         <Style Selector="TextBox.answer /template/ Border#PART_BorderElement">
             <Setter Property="Background" Value="#40FFFFFF"/>
             <Setter Property="BorderBrush" Value="{StaticResource PinkBrush}"/>
             <Setter Property="BorderThickness" Value="3"/>
-            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="CornerRadius" Value="8"/>
         </Style>
     </Window.Styles>
 
@@ -113,7 +114,8 @@
                            TextAlignment="Center"
                            Margin="0,0,0,30"/>
 
-                <!-- Number Input -->
+                <!-- Number Input. MinHeight: WPF's 48px Comic Sans line plus the implicit template
+                     measures 115px tall; Avalonia's text line is shorter, so pin the WPF height. -->
                 <TextBox x:Name="TxtAnswer"
                          Classes="answer"
                          FontSize="48"
@@ -125,6 +127,7 @@
                          Padding="20,10"
                          HorizontalAlignment="Center"
                          MinWidth="200"
+                         MinHeight="115"
                          TextAlignment="Center"
                          MaxLength="3"/>
 

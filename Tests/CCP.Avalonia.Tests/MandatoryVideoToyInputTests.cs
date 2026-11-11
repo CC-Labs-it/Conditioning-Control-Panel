@@ -45,7 +45,7 @@ public sealed class MandatoryVideoToyInputTests
             var w = new Window { Content = layer, Width = 800, Height = 600 };
             w.Show();
             var buttons = new MandatoryVideoOverlay.VideoButtons(o.ToggleUserMute, o.CloseFromButton);
-            ((List<MandatoryVideoOverlay.Surface>)o.Surfaces).Add(new(w, new Image(), new Border(), new Image(), layer, new Border(), new TextBlock(), buttons));
+            ((List<MandatoryVideoOverlay.Surface>)o.Surfaces).Add(new(w, new Image(), new Border(), new Image(), layer, new Border(), new TextBlock(), buttons, new Panel()));
             void Drain() { while (pending.TryDequeue(out var work)) work(); Dispatcher.UIThread.RunJobs(); }
             try
             {

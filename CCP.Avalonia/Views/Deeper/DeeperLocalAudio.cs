@@ -6,15 +6,15 @@ using LibVLCSharp.Shared;
 
 namespace ConditioningControlPanel.Avalonia.Views.Deeper
 {
-    /// <summary>The editor/player local-audio transport: WPF's WaveOutEvent + AudioFileReader pair
+    /// <summary>The editor's local-audio transport: WPF's WaveOutEvent + AudioFileReader pair
     /// (DeeperEditorWindow.xaml.cs:1214) on the process's shared LibVLC. One seam so tests can
     /// drive the editor's play/seek/end path without a sound card.</summary>
     internal interface IDeeperLocalAudio : IDisposable
     {
+        int Volume { get; set; }
         double DurationSeconds { get; }
         double PositionSeconds { get; set; }
-        int Volume { get; set; }
-        bool Play();
+        void Play();
         void Pause();
         /// <summary>Raised off the UI thread once the clip has played to its end and rewound.</summary>
         event Action? Ended;
@@ -56,10 +56,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// tested without libvlc or real time.</summary>
         internal interface IEngine
         {
+            int Volume { get; set; }
             VLCState State { get; }
             long Time { get; set; }
             long Length { get; }
-            int Volume { get; set; }
             bool Play();
             void SetPause(bool pause);
             void Stop();
@@ -67,10 +67,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private sealed class VlcEngine(MediaPlayer p) : IEngine
         {
+            public int Volume { get => p.Volume; set => p.Volume = value; }
             public VLCState State => p.State;
             public long Time { get => p.Time; set => p.Time = value; }
             public long Length => p.Length;
-            public int Volume { get => p.Volume; set => p.Volume = value; }
             public bool Play() => p.Play();
             public void SetPause(bool pause) => p.SetPause(pause);
             public void Stop() => p.Stop();
@@ -83,9 +83,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             internal readonly object Gate = new();
             private long _pendingMs;   // a seek made before playback could take it; consumed once
             private int _disposed;
-            private int _volume = 100; // keep the editor's existing native default
             internal bool IsDisposed => _disposed != 0;
 
+            private int _volume = 100;
+            public int Volume { get => _volume; set { lock (Gate) { _volume = Math.Clamp(value, 0, 100); if (Live) player.Volume = LibVlcAudio.VlcVolume(_volume / 100f); } } }
             public event Action? Ended;
             public event Action? Failed;
 
@@ -123,19 +124,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 }
             }
 
-            public int Volume
-            {
-                get => _volume;
-                set { lock (Gate) { _volume = Math.Clamp(value, 0, 100); player.Volume = _volume; } }
-            }
-
-            public bool Play()
+            public void Play()
             {
                 lock (Gate)
                 {
-                    if (IsDisposed) return false;
-                    if (player.State == VLCState.Paused) { player.SetPause(false); return true; }
-                    return player.Play();
+                    if (player.State == VLCState.Paused) player.SetPause(false);
+                    else if (!player.Play()) throw new InvalidOperationException("Audio transport could not start");
                 }
             }
 
@@ -156,8 +150,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 lock (Gate)
                 {
                     if (IsDisposed) return;
-                    player.Volume = _volume; // libvlc can ignore a volume set before Playing
-                    if (_pendingMs <= 0) return;
+                    player.Volume = LibVlcAudio.VlcVolume(_volume / 100f); if (_pendingMs <= 0) return;
                     player.Time = _pendingMs;
                     _pendingMs = 0;
                 }
@@ -179,8 +172,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             public void Dispose()
             {
                 if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-                Ended = null;
-                Failed = null;
+                Ended = null; Failed = null;
                 // Never dispose a player from inside its own libvlc event: that deadlocks.
                 ThreadPool.QueueUserWorkItem(_ => { lock (Gate) release(); });
             }

@@ -13,6 +13,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.Platform.Storage;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -35,6 +36,100 @@ namespace CCP.Avalonia.Tests;
 /// fake providers (in-memory secrets, no keyring, no server), Settings door, the card buttons.</summary>
 public sealed class AccountSettingsSectionTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Signed_out_account_entries_open_sign_in(bool card) => Run((shell, section, s, _) =>
+    {
+        CoreAccount.IsLoggedInProvider = () => false;
+        if (card)
+            ClickTierCard(shell, section);
+        else
+            shell.FindControl<Button>("BtnAccountChip")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        var dialog = Assert.Single(shell.OwnedWindows.OfType<LoginDialog>());
+        dialog.Close(false);
+    });
+
+    [Fact]
+    public void Signed_in_tier_card_is_information_only() => Run((shell, section, s, _) =>
+    {
+        CoreAccount.IsLoggedInProvider = () => true;
+        ClickTierCard(shell, section);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(shell.OwnedWindows.OfType<LoginDialog>());
+    });
+
+    private static void ClickTierCard(MainShellWindow shell, AccountSettingsSection section)
+    {
+        shell.OpenAppSettingsSection("account");
+        var card = section.FindControl<Border>("AccountTierCard")!;
+        card.BringIntoView();
+        Dispatcher.UIThread.RunJobs();
+        shell.UpdateLayout();
+        var at = card.TranslatePoint(new Point(card.Bounds.Width / 2, card.Bounds.Height / 2), shell)!.Value;
+        shell.MouseMove(at);
+        shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
+        shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+    }
+
+    [Theory]
+    [InlineData("save")]
+    [InlineData("cancel")]
+    [InlineData("server-error")]
+    [InlineData("picker-error")]
+    public Task ExportButtonDownloadsBeforePickingAndAlwaysRestoresItsState(string outcome) => RunAsync(async (shell, section, settings, _) =>
+    {
+        settings.UnifiedId = "u_export";
+        section.Refresh();
+        var button = section.FindControl<Button>("BtnExportData")!;
+        Assert.True(button.IsVisible);
+        var oldPick = AccountSettingsSection.PickExportFile;
+        var oldTell = AccountSettingsSection.Tell;
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json");
+        var messages = new List<string>();
+        var picked = 0;
+        AccountSettingsSection.NewBackup = () => new CloudSettingsBackup(new CannedBackup(
+            outcome == "server-error" ? "invalid json" : "{\"profile\":{\"name\":\"sample\"}}"));
+        AccountSettingsSection.Tell = (_, title, _) => { messages.Add(title); return Task.CompletedTask; };
+        AccountSettingsSection.PickExportFile = async owner =>
+        {
+            picked++;
+            Assert.False(button.IsEnabled);
+            Assert.Equal(Loc.Get("btn_exporting"), Text(section, "TxtBtnExportData"));
+            if (outcome == "cancel") return null;
+            if (outcome == "picker-error") throw new IOException("picker failed");
+            await File.WriteAllTextAsync(path, new string('x', 1000));
+            return await shell.StorageProvider.TryGetFileFromPathAsync(new Uri(path));
+        };
+        try
+        {
+            Click(section, "BtnExportData");
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (!button.IsEnabled && DateTime.UtcNow < deadline)
+            {
+                Dispatcher.UIThread.RunJobs();
+                await Task.Delay(10);
+            }
+            Assert.True(button.IsEnabled);
+            Assert.Equal(Loc.Get("btn_export_my_data"), Text(section, "TxtBtnExportData"));
+            Assert.Equal(outcome == "server-error" ? 0 : 1, picked);
+            if (outcome == "save")
+            {
+                Assert.Equal(Newtonsoft.Json.Linq.JObject.Parse("{\"profile\":{\"name\":\"sample\"}}").ToString(), await File.ReadAllTextAsync(path));
+                Assert.Equal(new[] { Loc.Get("title_export_complete") }, messages);
+            }
+            else if (outcome == "cancel") Assert.Empty(messages);
+            else Assert.Equal(new[] { Loc.Get(outcome == "server-error" ? "title_export_failed" : "title_export_error") }, messages);
+        }
+        finally
+        {
+            AccountSettingsSection.PickExportFile = oldPick;
+            AccountSettingsSection.Tell = oldTell;
+            File.Delete(path);
+        }
+    });
+
     private static void Run(Action<MainShellWindow, AccountSettingsSection, AppSettings, Dictionary<string, string?>> body) =>
         RunAsync((shell, section, s, secrets) => { body(shell, section, s, secrets); return Task.CompletedTask; }).GetAwaiter().GetResult();
 
@@ -91,12 +186,13 @@ public sealed class AccountSettingsSectionTests
             }
         });
 
-    private sealed class CannedBackup(string body) : HttpMessageHandler
+    private sealed class CannedBackup(string body, Action? beforeReply = null) : HttpMessageHandler
     {
         public readonly List<string> Paths = new();
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             lock (Paths) Paths.Add(r.RequestUri!.AbsolutePath);
+            beforeReply?.Invoke();
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
         }
     }
@@ -169,6 +265,158 @@ public sealed class AccountSettingsSectionTests
             AccountSettingsSection.NewBackup = oldBackup;
             AccountSettingsSection.Tell = oldTell;
             AccountSettingsSection.Confirm = oldConfirm;
+        }
+    });
+
+    [Fact]
+    public Task CloudRestoreRefusesIfSessionStartsWhileAwaitingConfirmation() => RunAsync(async (_, _, s, _) =>
+    {
+        s.UnifiedId = "u-test";
+        s.AuthToken = "TOK";
+        var section = new AccountSettingsSection();
+        var oldConfirm = AccountSettingsSection.Confirm;
+        var oldSession = CoreSession.IsSessionRunningProvider;
+        try
+        {
+            CoreSession.IsSessionRunningProvider = () => false;
+            AccountSettingsSection.Confirm = (_, _, _) =>
+            {
+                CoreSession.IsSessionRunningProvider = () => true;
+                return Task.FromResult(true);
+            };
+            AccountSettingsSection.NewBackup = () => new CloudSettingsBackup(new CannedBackup(
+                new Newtonsoft.Json.Linq.JObject { ["backup"] = new Newtonsoft.Json.Linq.JObject
+                    { ["settings_data"] = Packed(new AppSettings { FlashEnabled = !s.FlashEnabled }) } }.ToString()));
+            await section.RestoreAsync();
+            Assert.Same(s, CoreSettings.Current);
+            Assert.True(section.FindControl<Button>("BtnRestoreSettings")!.IsEnabled);
+        }
+        finally
+        {
+            AccountSettingsSection.Confirm = oldConfirm;
+            CoreSession.IsSessionRunningProvider = oldSession;
+        }
+    });
+
+    [Fact]
+    public Task CloudBackupCardSerializesRequestsAndRecoversAfterCompletion() => RunAsync(async (_, section, s, _) =>
+    {
+        s.UnifiedId = "u-test";
+        s.AuthToken = "TOK";
+        var oldTell = AccountSettingsSection.Tell;
+        var oldConfirm = AccountSettingsSection.Confirm;
+        var release = new TaskCompletionSource();
+        var dialogs = 0;
+        var confirms = 0;
+        AccountSettingsSection.Tell = (_, _, _) => { dialogs++; return dialogs == 1 ? release.Task : Task.CompletedTask; };
+        AccountSettingsSection.Confirm = (_, _, _) => { confirms++; return Task.FromResult(false); };
+        try
+        {
+            var pending = section.BackupNowAsync();
+            while (dialogs == 0) await Task.Yield();
+            await section.BackupNowAsync();
+            await section.RestoreAsync();
+            Assert.Equal(1, dialogs);
+            Assert.Equal(0, confirms);
+            release.SetResult();
+            await pending;
+            await section.RestoreAsync();
+            Assert.Equal(1, confirms);
+        }
+        finally
+        {
+            release.TrySetResult();
+            AccountSettingsSection.Tell = oldTell;
+            AccountSettingsSection.Confirm = oldConfirm;
+        }
+    });
+
+    [Fact]
+    public Task CloudRestoreKeepsTheLocalStatePresentWhenTheDownloadFinishes() => RunAsync(async (_, section, s, _) =>
+    {
+        s.UnifiedId = "u-test";
+        s.AuthToken = "TOK";
+        s.PlayerLevel = 3;
+        var oldConfirm = AccountSettingsSection.Confirm;
+        var oldTell = AccountSettingsSection.Tell;
+        AccountSettingsSection.Confirm = (_, _, _) => Task.FromResult(true);
+        AccountSettingsSection.Tell = (_, _, _) => Task.CompletedTask;
+        var latest = new AppSettings { PlayerLevel = 8, PanicKeyEnabled = true, StrictLockEnabled = false };
+        AccountSettingsSection.NewBackup = () => new CloudSettingsBackup(new CannedBackup(
+            new Newtonsoft.Json.Linq.JObject { ["backup"] = new Newtonsoft.Json.Linq.JObject
+                { ["settings_data"] = Packed(new AppSettings { FlashEnabled = false }) } }.ToString(),
+            () => CoreSettings.Service!.RestoreFrom(latest)));
+        try
+        {
+            await section.RestoreAsync();
+            Assert.Equal(8, CoreSettings.Current.PlayerLevel);
+            Assert.True(CoreSettings.Current.PanicKeyEnabled);
+            Assert.False(CoreSettings.Current.StrictLockEnabled);
+            Assert.False(CoreSettings.Current.FlashEnabled);
+        }
+        finally
+        {
+            AccountSettingsSection.Confirm = oldConfirm;
+            AccountSettingsSection.Tell = oldTell;
+        }
+    });
+
+    // WPF MainWindow.CloudBackup.cs:138-162 preserves local state before applying a restore.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task RefusedCloudRestoreLeavesLocalPresetsUntouched(bool hasEmptyPresetList) => RunAsync(async (_, _, s, _) =>
+    {
+        s.UnifiedId = "u-test";
+        s.AuthToken = "TOK";
+        var preset = new AssetPreset
+        {
+            Name = "local",
+            DisabledAssetPaths = new HashSet<string> { @"images\local.png" },
+            DisabledAssetFolders = new HashSet<string> { @"videos\local" }
+        };
+        s.AssetPresets = new List<AssetPreset> { preset };
+        var paths = preset.DisabledAssetPaths;
+        var folders = preset.DisabledAssetFolders;
+        var before = JsonConvert.SerializeObject(s.AssetPresets);
+        var backup = new Newtonsoft.Json.Linq.JObject();
+        if (hasEmptyPresetList) backup["AssetPresets"] = new Newtonsoft.Json.Linq.JArray();
+        using var output = new MemoryStream();
+        using (var gzip = new System.IO.Compression.GZipStream(output, System.IO.Compression.CompressionLevel.Optimal, leaveOpen: true))
+            gzip.Write(System.Text.Encoding.UTF8.GetBytes(backup.ToString()));
+        var response = new Newtonsoft.Json.Linq.JObject { ["backup"] = new Newtonsoft.Json.Linq.JObject
+            { ["settings_data"] = Convert.ToBase64String(output.ToArray()) } }.ToString();
+        var section = new AccountSettingsSection();
+        var oldTell = AccountSettingsSection.Tell;
+        var dialogs = new List<string>();
+        var oldConfirm = AccountSettingsSection.Confirm;
+        var oldSession = CoreSession.IsSessionRunningProvider;
+        var fetched = false;
+        try
+        {
+            AccountSettingsSection.Tell = (_, title, body) => { dialogs.Add(title + ": " + body); return Task.CompletedTask; };
+            CoreSession.IsSessionRunningProvider = () => false;
+            AccountSettingsSection.Confirm = (_, _, _) => Task.FromResult(true);
+            AccountSettingsSection.NewBackup = () => new CloudSettingsBackup(new CannedBackup(response, () =>
+            {
+                fetched = true;
+                CoreSession.IsSessionRunningProvider = () => true;
+            }));
+            Assert.False(fetched);
+            await section.RestoreAsync();
+            Assert.True(fetched);
+            Assert.Empty(dialogs);
+            Assert.Same(s, CoreSettings.Current);
+            Assert.Same(preset, Assert.Single(s.AssetPresets));
+            Assert.Equal(before, JsonConvert.SerializeObject(s.AssetPresets));
+            Assert.Same(paths, preset.DisabledAssetPaths);
+            Assert.Same(folders, preset.DisabledAssetFolders);
+        }
+        finally
+        {
+            AccountSettingsSection.Tell = oldTell;
+            AccountSettingsSection.Confirm = oldConfirm;
+            CoreSession.IsSessionRunningProvider = oldSession;
         }
     });
 
@@ -262,7 +510,7 @@ public sealed class AccountSettingsSectionTests
             Assert.True(Shown(section, "BtnLinkDiscord"));
             Assert.False(Shown(section, "BtnLinkPatreon"));         // the grant works
             Assert.True(Shown(section, "DataPrivacySection"));
-            Assert.False(Shown(section, "BtnExportData"));          // not ported: hidden, not inert
+            Assert.True(Shown(section, "BtnExportData"));           // live GDPR export
 
             Click(section, "BtnPatreonLogin");     // the only provider: the whole account goes
 

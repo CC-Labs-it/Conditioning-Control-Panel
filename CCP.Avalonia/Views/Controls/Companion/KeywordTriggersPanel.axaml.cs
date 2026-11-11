@@ -55,6 +55,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             _screenOcrIntervalPanel = this.FindControl<StackPanel>("ScreenOcrIntervalPanel")!;
             _txtHighlightOffHint = this.FindControl<TextBlock>("TxtHighlightOffHint")!;
             _highlightDurationPanel = this.FindControl<StackPanel>("HighlightDurationPanel")!;
+            // WPF's line names Windows OCR; elsewhere the same sentence without the engine.
+            if (!OperatingSystem.IsWindows())
+                this.FindControl<TextBlock>("TxtScreenOcrBlurb")!.Bind(TextBlock.TextProperty,
+                    (global::Avalonia.Data.Binding)new global::ConditioningControlPanel.Avalonia.Localization.StrExtension(
+                        "label_scans_your_screen_for_trigger_keywords_using_linux").ProvideValue(null!));
 
             this.FindControl<Button>("BtnAddKeywordTrigger")!.Click += (_, _) => AddTrigger();
             this.FindControl<Button>("BtnImportFromCustomTriggers")!.Click += async (_, _) => await ImportFromCustomTriggersAsync();

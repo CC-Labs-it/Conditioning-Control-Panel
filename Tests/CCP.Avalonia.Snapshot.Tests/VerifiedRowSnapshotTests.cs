@@ -90,7 +90,7 @@ public sealed class VerifiedRowSnapshotTests
     {
         SetUpOnce();
         var fm = FontManager.Current;
-        Assert.Equal("Inter", fm.DefaultFontFamily.Name);
+        Assert.Equal(new FontFamily(AppFonts.Default).Name, fm.DefaultFontFamily.Name);
         Assert.True(fm.TryGetGlyphTypeface(new Typeface("Fredoka, Segoe UI"), out var face));
         Assert.StartsWith("Fredoka", face!.FamilyName);
         Assert.True(fm.TryGetGlyphTypeface(new Typeface("Consolas, Courier New"), out var mono));

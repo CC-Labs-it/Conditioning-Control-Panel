@@ -12,9 +12,27 @@ namespace ConditioningControlPanel.Services.Chaos;
 public static class ChaosRunLessons
 {
     private static bool _loopDirty;   // silk_touch: a detonation landed this loop
+    private static int _loopDefuses;  // snap_field: snaps this loop
+
+    /// <summary>last_breath: the channel must have STARTED with at most this much fuse left
+    /// (the same brink signal "playing with fire" judges - DefuseJudgeFuseSec).</summary>
+    public const double LAST_BREATH_BRINK_SEC = 0.8;
 
     /// <summary>Fresh descent: nothing leaks across runs.</summary>
-    public static void OnRunStarted() => _loopDirty = false;
+    public static void OnRunStarted() { _loopDirty = false; _loopDefuses = 0; }
+
+    /// <summary>A defuse completed (WPF ChaosLessonHooks.OnDefuseCompleted): a channel started on
+    /// the brink teaches last_breath; every snap raises this loop's snap_field count.</summary>
+    public static void OnDefuseCompleted(double fuseSecLeft, bool viaChannel)
+    {
+        try
+        {
+            if (viaChannel && fuseSecLeft <= LAST_BREATH_BRINK_SEC) ChaosLessons.Tick("last_breath");
+            _loopDefuses++;
+            ChaosLessons.RaiseTo("snap_field", _loopDefuses);
+        }
+        catch (Exception ex) { Log.Debug("ChaosRunLessons.OnDefuseCompleted: {E}", ex.Message); }
+    }
 
     /// <summary>A detonation (or a touched Tease) landed: this loop is no longer clean.</summary>
     public static void OnDetonation() => _loopDirty = true;
@@ -24,6 +42,7 @@ public static class ChaosRunLessons
     {
         try
         {
+            _loopDefuses = 0;
             if (!_loopDirty) ChaosLessons.Tick("silk_touch");
             _loopDirty = false;
         }

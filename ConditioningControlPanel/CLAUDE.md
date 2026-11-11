@@ -60,13 +60,13 @@ Why: this is a multi-person codebase now, and a 2k-line PR cannot be reviewed.
 |------|------|
 | `../Version.props` | `<Version>` tag (shared by WPF, Avalonia and Core) |
 | `Services/Update/UpdateService.cs:~23` | `AppVersion` constant |
-| `../CCP.Core/ReleaseNotes.cs:~6` | `ReleaseNotes.Current` (canonical notes for both heads; WPF `CurrentPatchNotes` stays an alias) |
+| `../CCP.Core/ReleaseNotes.cs` | `ReleaseNotes.Current`, the only copy of the patch notes (`UpdateService.CurrentPatchNotes` aliases it) |
 | `../installer.iss:16` | `MyAppVersion` |
 | `../build-installer.bat:10` | `VERSION` |
 | `MainWindow/MainWindow.xaml:~1985` | `BtnUpdateAvailable` Content + ToolTip loc keys |
 | `Localization/Languages/*.json` (9 files) | `btn_vX_Y_Z_is_out` + `tooltip_vX_Y_Z_*` keys |
 
-Use `/release X.Y.Z "Subtitle"` to automate this. Update patch notes only in `../CCP.Core/ReleaseNotes.cs`; leave `UpdateService.CurrentPatchNotes` as the const alias. Also write `../notes-vX.Y.Z.txt` (plain-text notes for the GitHub release body; gitignored, never committed; no em-dashes). After signing: push main, tag `vX.Y.Z`, create the GitHub release (mark Latest), POST server marquee + update-banner (`x-admin-token`), update download links + version badge in `C:\Projects\cclabs-site` (index.html + guide-getting-started.html, then commit+push and `vercel deploy --prod`), announce on Discord. The language files are strict-JSON clean as of 2026-07-29 - see **Localization** under Known Issues before editing them.
+Use `/release X.Y.Z "Subtitle"` to automate this. Also write `../notes-vX.Y.Z.txt` (plain-text notes for the GitHub release body; gitignored, never committed; no em-dashes). After signing: push main, tag `vX.Y.Z`, create the GitHub release (mark Latest), POST server marquee + update-banner (`x-admin-token`), update download links + version badge in `C:\Projects\cclabs-site` (index.html + guide-getting-started.html, then commit+push and `vercel deploy --prod`), announce on Discord. The language files are strict-JSON clean as of 2026-07-29 - see **Localization** under Known Issues before editing them.
 
 ### Important Paths
 | Path | Purpose |

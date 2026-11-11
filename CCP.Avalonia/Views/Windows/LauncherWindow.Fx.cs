@@ -4,8 +4,7 @@
 // Services/Launcher/LauncherSfx.cs (the cues; the melody is Core's LauncherMelody).
 // WPF runs one storyboard per tween; here ONE frame clock steps every tween, and only while the launcher is shown
 // and not minimised (P01) and something is moving. It stops the moment nothing is. No allocation per frame.
-// ponytail: not ported (docs/avalonia-parity.html win-launcher): cursor parallax, Ken-Burns art drift, sparkle trail,
-// wordmark sheen, wordmark drift, running-dot breath, title tint, embers layer.
+// Not ported (docs/avalonia-parity.html win-launcher): sparkle trail, wordmark sheen, running-dot breath, embers layer.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -18,6 +17,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Launcher;
 using Serilog;
@@ -75,14 +75,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             public Border Tile = null!;
             public ScaleTransform Scale = new(1, 1);
             public RotateTransform Tilt = new();
-            public DropShadowEffect? Glow;
+            public Border? Glow;
+            public SolidColorBrush? Title;
+            public Color TitleRest;
+            public TranslateTransform? ArtSlide;
+            public Tween ArtX, ArtY, Tint;
             public Color Hue;
             public Tween Lift, Lean, Shine, Dim;
             public double PopT = -1, PopPeak;
-            public bool Busy => Lift.On || Lean.On || Shine.On || Dim.On || PopT >= 0;
+            public bool Busy => ArtX.On || ArtY.On || Tint.On || Lift.On || Lean.On || Shine.On || Dim.On || PopT >= 0;
         }
 
-        private readonly DispatcherTimer _fxClock = new(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(1000.0 / 30) };
+        private FrameClock _fxClock = null!;
         private readonly DispatcherTimer _fadeGuard = new() { Interval = TimeSpan.FromSeconds(1) };
         private readonly List<TileFx> _tileFx = new();
         private bool _fxActive = true;
@@ -113,9 +117,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Called once from the constructor, after the first BuildTiles.</summary>
         private void HookFx()
         {
+            // WPF storyboards render with the window. A Render-priority dispatcher timer
+            // can refill the queue faster than software painting drains it, starving input.
+            _fxClock = new FrameClock(this) { Interval = TimeSpan.FromSeconds(1d / 30) };
             HookSheens();
             AmbientFxCanvas.Env.MotionGateChanged += RefreshCometGate;
             Closed += (_, _) => AmbientFxCanvas.Env.MotionGateChanged -= RefreshCometGate;
+            HookBadgeMotion();
             _fxClock.Tick += (_, _) =>
             {
                 long now = Stopwatch.GetTimestamp();
@@ -123,8 +131,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _fxLast = now;
                 StepFx(dt);
             };
-            SpiralLayer.RenderTransform = SpiralTurn;
-            SpiralSmall.RenderTransform = SpiralSmallTurn;
+            HookDepth();
+            SpiralLayer.RenderTransform = new TransformGroup { Children = { SpiralTurn, _depth[3].Shift } };
+            SpiralSmall.RenderTransform = new TransformGroup { Children = { SpiralSmallTurn, _depth[4].Shift } };
             ContentRoot.RenderTransform = ShakeSlide;
             if (EdgeGlint.BorderBrush is LinearGradientBrush glint) glint.Transform = EdgeGlintRel;
             _cardFx = new TileFx { Tile = PanelCard };
@@ -214,6 +223,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             ParkComets();
             _fxClock.Stop();
             StopSheens();
+            SettleStats();
+            ParkBadgeMotion();
             try
             {
                 _edgeFlareT = _glintT = -1;
@@ -223,6 +234,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ShakeSlide.X = ShakeSlide.Y = 0;
                 foreach (var r in _rings) r.Opacity = 0;
                 foreach (var t in _tileFx) SettleTile(t);
+                ParkDepth();
                 _fade.On = false;
                 RootGrid.Opacity = 1;
                 FinishExit();
@@ -258,7 +270,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         SpiralSmallTurn.Angle = _spiralSmall;
                     }
                 }
-                if (Env.AllowTransitions) { busy = true; StepEdge(dt); }
+                busy |= StepDepth(dt);
+                // WPF Edge.cs:124 gates the breath on transitions only. On the CPU path it repaints the whole
+                // launcher 30 times a second (render thread pinned, lane perf): between flares and glints the
+                // edge holds at rest there (Env.SoftwareFloorHoldsIdleLoops).
+                if (Env.AllowTransitions && (!Env.SoftwareFloorHoldsIdleLoops || _edgeFlareT >= 0 || _glintT >= 0))
+                { busy = true; StepEdge(dt); }
                 if (_fade.On) { busy = true; RootGrid.Opacity = _fade.Step(dt); if (!_fade.On) FinishFade(); }
                 if (_glow.On) { busy = true; GlowLayer.Opacity = _glow.Step(dt); }
                 if (_shakeT >= 0) { busy = true; StepShake(dt); }
@@ -267,6 +284,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (_echoIn >= 0) busy = true;
                 if (_exitIn >= 0) { busy = true; if ((_exitIn -= dt) < 0) BeginFadeOut(); }
                 busy |= StepPanelRim(dt);
+                busy |= StepStats(dt);
+                busy |= StepBadgeMotion(dt);
                 StepTile(_cardFx, dt);
                 busy |= _cardFx.Busy;
                 foreach (var t in _tileFx) { StepTile(t, dt); busy |= t.Busy; }
@@ -288,6 +307,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                      : EdgeGlowRest;
                 if (ms >= 900) { _edgeFlareT = -1; _edgeBreathT = 0; }
             }
+            else if (Env.SoftwareFloorHoldsIdleLoops) glow = EdgeGlowRest;   // held at rest on the CPU path
             else
             {
                 // StartEdgeBreath: 0.30..0.44, 3.2 s each way, sine in-out, auto-reverse.
@@ -330,6 +350,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             RefreshPanelComet();
             if (active) StartSheens(); else StopSheens();
             if (active) { EnsureFxClock(); OnEdgeActivated(); }
+            else
+            {
+                ResetWordmarkDrift();
+                // WPF Backdrop.cs:246-275: ease home while visible with transitions, otherwise snap.
+                TargetDepth(0, 0);
+            }
         }
 
         /// <summary>WPF OnEdgeActivated: focus coming back runs the shimmer and the glint, at most every 4 s.</summary>
@@ -376,18 +402,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF CreateTile's hover rig (Tiles.cs:72-88, 228-244): lift, tilt toward the pointer, glow, the
         /// hover note, and the hue bleeding into the backdrop (Choreo.cs ChoreoTileHover).</summary>
-        private void DecorateTileFx(Border tile, Color hue)
+        private void DecorateTileFx(Border tile, Color hue, Border shadow, SolidColorBrush title, TranslateTransform artSlide, Image? art)
         {
             _tileFx.RemoveAll(t => t.Tile.Parent == null);   // BuildTiles cleared the grid
-            var fx = new TileFx { Tile = tile, Hue = hue };
+            var fx = new TileFx { Tile = tile, Hue = hue, Title = title, TitleRest = title.Color, ArtSlide = artSlide };
+            if (art != null) DecorateArt(art);
             tile.RenderTransformOrigin = RelativePoint.Center;
             tile.RenderTransform = new TransformGroup { Children = { fx.Scale, fx.Tilt } };
             if (Env.AllowGlow(Env.CurrentTier))
-                tile.Effect = fx.Glow = new DropShadowEffect
-                {
-                    Color = hue, OffsetX = 0, OffsetY = 0, Opacity = TileGlowRest,
-                    BlurRadius = Math.Min(20, Env.MaxGlowBlurRadius(Env.CurrentTier)),
-                };
+            {
+                fx.Glow = shadow;
+                fx.Shine.Go(TileGlowRest, TileGlowRest, 0);
+                PaintTileShadow(fx, TileGlowRest);
+            }
             _tileFx.Add(fx);
             tile.PointerEntered += (_, _) => TileHover(fx, true);
             tile.PointerExited += (_, _) => TileHover(fx, false);
@@ -407,8 +434,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (on) LauncherSfx.Hover();
                 bool anim = Env.AllowTransitions;
                 t.Lift.Go(t.Scale.ScaleX, on ? HoverLiftScale : 1, anim ? HoverLiftSeconds : 0);
-                t.Shine.Go(t.Glow?.Opacity ?? 0, on ? TileGlowHover : TileGlowRest, anim ? TileHoverSeconds : 0, Ease.Linear);   // TintTile: no easing
-                if (!on) t.Lean.Go(t.Tilt.Angle, 0, anim ? TileHoverSeconds : 0);
+                t.Shine.Go(t.Shine.Step(0), on ? TileGlowHover : TileGlowRest, anim ? TileHoverSeconds : 0, Ease.Linear);   // TintTile: no easing
+                t.Tint.Go(t.Tint.Step(0), on ? 1 : 0, anim ? TileHoverSeconds : 0, Ease.Linear);
+                if (!on)
+                {
+                    t.Lean.Go(t.Tilt.Angle, 0, anim ? TileHoverSeconds : 0);
+                    t.ArtX.Go(t.ArtSlide?.X ?? 0, 0, anim ? TileHoverSeconds : 0);
+                    t.ArtY.Go(t.ArtSlide?.Y ?? 0, 0, anim ? TileHoverSeconds : 0);
+                }
                 if (!anim) StepTile(t, 0);
                 if (on) BleedGlow(t.Hue); else RestoreGlow();
                 EnsureFxClock();
@@ -422,7 +455,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var b = t.Tile.Bounds;
             if (!TiltAllowed || b.Width <= 0 || b.Height <= 0) return;
             double nx = Math.Clamp(at.X / b.Width * 2 - 1, -1, 1), ny = Math.Clamp(at.Y / b.Height * 2 - 1, -1, 1);
-            t.Lean.Go(t.Tilt.Angle, nx * -ny * TileTiltDegrees, TileTiltSeconds, Ease.Linear);   // TiltToward: no easing
+            t.Lean.Go(t.Tilt.Angle, nx * -ny * TileTiltDegrees, TileTiltSeconds, Ease.Linear);
+            t.ArtX.Go(t.ArtSlide?.X ?? 0, -nx * 7, TileTiltSeconds, Ease.Linear);
+            t.ArtY.Go(t.ArtSlide?.Y ?? 0, -ny * 7, TileTiltSeconds, Ease.Linear);   // TiltToward: no easing
             EnsureFxClock();
         }
 
@@ -430,7 +465,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (t.Lift.On || dt == 0) t.Scale.ScaleX = t.Scale.ScaleY = t.Lift.Step(dt);
             if (t.Lean.On || dt == 0) t.Tilt.Angle = t.Lean.Step(dt);
-            if (t.Glow != null && (t.Shine.On || dt == 0)) t.Glow.Opacity = t.Shine.Step(dt);
+            if (t.Glow != null && (t.Shine.On || dt == 0)) PaintTileShadow(t, t.Shine.Step(dt));
+            if (t.ArtSlide != null)
+            {
+                if (t.ArtX.On || dt == 0) t.ArtSlide.X = t.ArtX.Step(dt);
+                if (t.ArtY.On || dt == 0) t.ArtSlide.Y = t.ArtY.Step(dt);
+            }
+            if (t.Title != null && (t.Tint.On || dt == 0))
+            {
+                double u = t.Tint.Step(dt);
+                var to = Lighten(t.Hue, 0.35);
+                t.Title.Color = Color.FromRgb((byte)(t.TitleRest.R + (to.R - t.TitleRest.R) * u),
+                    (byte)(t.TitleRest.G + (to.G - t.TitleRest.G) * u), (byte)(t.TitleRest.B + (to.B - t.TitleRest.B) * u));
+            }
             if (t.Dim.On) t.Tile.Opacity = t.Dim.Step(dt);
             if (t.PopT >= 0)
             {
@@ -444,10 +491,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
+        private static void PaintTileShadow(TileFx t, double opacity)
+        {
+            if (t.Glow == null) return;
+            t.Glow.BoxShadow = new BoxShadows(new BoxShadow
+            {
+                Color = Color.FromArgb((byte)(255 * Math.Clamp(opacity, 0, 1)), t.Hue.R, t.Hue.G, t.Hue.B),
+                Blur = Math.Min(20, Env.MaxGlowBlurRadius(Env.CurrentTier)),
+            });
+        }
+
         private static void SettleTile(TileFx t)
         {
             t.Lift.Go(1, 1, 0); t.Lean.Go(0, 0, 0); t.Shine.Go(TileGlowRest, TileGlowRest, 0);
             t.PopT = -1;
+            t.ArtX.Go(0, 0, 0); t.ArtY.Go(0, 0, 0); t.Tint.Go(0, 0, 0);
             StepTile(t, 0);
         }
 
@@ -583,7 +641,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                if (anchor == null || !Env.AllowParticles || !anchor.IsEffectivelyVisible || anchor.Bounds.Width <= 0) return;
+                if (anchor == null || !Env.AllowFeedbackParticles || !anchor.IsEffectivelyVisible || anchor.Bounds.Width <= 0) return;   // a press: kept on the CPU path (fix3 pop 1b)
                 if (anchor.TranslatePoint(new Point(anchor.Bounds.Width / 2, anchor.Bounds.Height / 2), BurstLayer) is not { } p) return;
                 if (p.X < 0 || p.Y < 0 || p.X > BurstLayer.Bounds.Width || p.Y > BurstLayer.Bounds.Height) return;
                 BurstLayer.Burst(p.X, p.Y, color, count);
@@ -655,14 +713,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // ------------------------------------------------------------------ the cues
 
         /// <summary>WPF LauncherSfx: one-shots through the head's CoreAudio, silent when the launcher's speaker is
-        /// off, the master volume is 0 or the file is missing. ponytail: CoreAudio returns no handle, so WPF's
-        /// three-voice hover cap and the IsOutputSuppressed probe have nothing to call here.</summary>
+        /// off, output is suppressed, the master volume is 0 or the file is missing.
+        /// WPF Services/Launcher/LauncherSfx.cs: hover voices are capped at three.</summary>
         internal static class LauncherSfx
         {
             /// <summary>The hover throttle's and edge cue gate's clock (P08: tests step it).</summary>
             internal static TimeProvider Clock = TimeProvider.System;
             private static readonly LauncherMelody Melody = new();
             private static DateTime _lastHover = DateTime.MinValue;
+            private sealed class Voice { public Action Stop = () => { }; public volatile bool Finished; }
+            private static readonly Queue<Voice> Ringing = new();
 
             public static void Open() { Melody.Reset(); Play("chaos/reveal_chime.mp3", 0.18f, "launcher-open"); }
             public static void Click() => Play("chaos/ui_click.mp3", 0.16f, "launcher-click");
@@ -687,10 +747,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 try
                 {
                     var s = CoreSettings.Current;
-                    if (!s.LauncherSoundEnabled || s.MasterVolume <= 0) return;
+                    if (!s.LauncherSoundEnabled || s.MasterVolume <= 0 || CoreAudio.IsOutputSuppressed) return;
                     var path = Resolve(rel) ?? (fallback == null ? null : Resolve(fallback));
                     if (path == null) return;
-                    CoreAudio.PlayOneShot(path, Math.Clamp(s.MasterVolume / 100f * scale, 0f, 1f), tag);
+                    float volume = Math.Clamp(s.MasterVolume / 100f * scale, 0f, 1f);
+                    if (tag != "launcher-hover") { CoreAudio.PlayOneShot(path, volume, tag); return; }
+                    var voice = new Voice();
+                    voice.Stop = CoreAudio.PlayStoppable(path, volume, tag, onFinished: () => voice.Finished = true);
+                    Voice? oldest = null;
+                    lock (Ringing)
+                    {
+                        Ringing.Enqueue(voice);
+                        while (Ringing.Count > 0 && Ringing.Peek().Finished) Ringing.Dequeue();
+                        if (Ringing.Count > 3) oldest = Ringing.Dequeue();
+                    }
+                    oldest?.Stop();
                 }
                 catch (Exception ex) { Log.Debug(ex, "[Launcher] sfx {Tag} failed", tag); }
             }

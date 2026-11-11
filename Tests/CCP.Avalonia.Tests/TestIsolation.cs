@@ -1,3 +1,7 @@
+using Avalonia;
+using Avalonia.Headless;
+using Avalonia.Skia;
+using ConditioningControlPanel.Avalonia.Platform;
 using System;
 using Avalonia;
 using Avalonia.Headless;
@@ -11,6 +15,8 @@ using System.Text.RegularExpressions;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using Newtonsoft.Json;
+using Avalonia;
+using Avalonia.Headless;
 using Xunit;
 using Xunit.Sdk;
 using Xunit.v3;
@@ -84,13 +90,20 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
             // window a test left open holds the next test's startup surfaces, so close it first.
             OpenWindows.CloseLeftovers();
             ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
+            // Panic now arms EMI's panic silence on the shared line engine (WPF EmiDeskService.cs:677-689);
+            // left running it holds HoldActive for the next tests and mutes e.g. the Friends drawer cues.
+            ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance.ResetForTests();
             // A Ctrl+K a test pressed and never released would swallow the next test's press (P02).
             ConditioningControlPanel.Avalonia.Views.Windows.SettingsPaletteWindow.ChordReleased();
             // The shell paints the section ink into the app resources (PaintSectionInk); drop the
             // overrides so the next test sees the authored (Home) ink (P02).
             if (global::Avalonia.Application.Current?.Resources is { } res)
+            {
+                foreach (var palette in res.MergedDictionaries.OfType<ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.SectionInkResources>().ToArray())
+                    res.MergedDictionaries.Remove(palette);
                 foreach (var k in new[] { "SectionInk", "SectionTint", "SectionRule", "SectionOutline" })
                 { res.Remove(k); res.Remove(k + "Brush"); }
+            }
             Current?.Restore();
             Current = null;
             // A closed window's Skia surfaces and render targets are native, freed by finalizers, and
@@ -255,11 +268,19 @@ internal sealed class ProcessStateSnapshot
             .Where(t => !t.ContainsGenericParameters).ToList();
         var byName = types.ToLookup(t => t.Name);
         var found = new HashSet<MemberInfo>();
+        foreach (var field in typeof(ConditioningControlPanel.Services.Safety.PanicAftermath).GetFields(AnyStatic).Where(f => !f.IsInitOnly && !f.IsLiteral))
+            found.Add(field);
 
         // Whole seam classes: the head's service locator and Core's static Core* seams.
         foreach (var t in types.Where(t => t == typeof(ConditioningControlPanel.Avalonia.App)
+                     || t == typeof(ConditioningControlPanel.Services.RemoteCommands)
                      || (t.Assembly == core && t.IsAbstract && t.IsSealed && t.Name.StartsWith("Core", StringComparison.Ordinal))))
             foreach (var m in t.GetMembers(AnyStatic).Where(Settable)) found.Add(m);
+
+        // Panic is raised through methods, so the assignment scanner cannot see its private state.
+        // Restore the quiet deadline, engine hold and count together after every test.
+        foreach (var f in typeof(ConditioningControlPanel.Services.Safety.PanicAftermath).GetFields(AnyStatic)
+                     .Where(f => !f.IsInitOnly && !f.IsLiteral)) found.Add(f);
 
         // Every `Type.Member =` a test writes, through `using Alias = ...;` too.
         var alias = new Regex(@"^using\s+(\w+)\s*=\s*(?:global::)?([\w.]+)\s*;", RegexOptions.Multiline);

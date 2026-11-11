@@ -45,17 +45,54 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             return X11PanicKey.Start(() => CoreSettings.Current.PanicKey, OnX11PanicPress);
         }
 
-        /// <summary>One X11 raw press of the panic key (listener thread): the panic, then the leash hold.</summary>
+        /// <summary>One X11 raw press of the panic key (listener thread): the panic, then the leash hold,
+        /// unless the portal's report of this press already ran both.</summary>
         internal void OnX11PanicPress()
         {
             Serilog.Log.Information("Panic trigger: XInput2 key press");
+            if (!AdmitPanicRoute(PanicRouteGate.Route.X11)) return;
+            QueuePanic(() => HandlePanicKeyPress(DateTime.Now));
+            Dispatcher.UIThread.Post(OnX11HoldPressed);   // after the panic: hold-to-cut (MainShellWindow.LeashHold.cs)
+        }
+
+        /// <summary>One portal Activated (D-Bus thread): a press of its own, or the XInput2 press again.
+        /// The echo adds no panic, but the hold still has to become a portal hold.</summary>
+        internal void OnPortalPanicActivated()
+        {
+            try
+            {
+                if (AdmitPanicRoute(PanicRouteGate.Route.Portal)) QueuePanic(OnPortalPanicPressed);
+                else Dispatcher.UIThread.Post(OnPortalEchoPressed);
+            }
+            catch (Exception ex)   // as the X11 listener does: nothing may throw into the D-Bus reader
+            {
+                Serilog.Log.Error(ex, "Panic: portal report failed");
+            }
+        }
+
+        // Either route can win the race, so both are watched (#919b): if the UI thread never runs the
+        // press, the watchdog still stops things. A panic that is off or capturing has nothing to tear down.
+        private void QueuePanic(Action handler)
+        {
             var s = CoreSettings.Current;
             if (!s.PanicKeyEnabled || CapturingPanicKey || LockdownActive || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey)
-                Dispatcher.UIThread.Post(() => HandlePanicKeyPress(DateTime.Now));
+                Dispatcher.UIThread.Post(handler);
             else
-                PanicWatchdog.QueueWatched(() => HandlePanicKeyPress(DateTime.Now));   // #919b
-            Dispatcher.UIThread.Post(LeashHoldPressed);   // after the panic: hold-to-cut (MainShellWindow.LeashHold.cs)
+                PanicWatchdog.QueueWatched(handler);
         }
+
+        // Asked on the listener threads, where a report arrives: the first press's stop pass holds the UI
+        // thread for longer than the echo window, so a check after the post would miss the echo.
+        private bool AdmitPanicRoute(PanicRouteGate.Route route)
+        {
+            if (PanicRoutes.Admit(route, PanicRouteClock())) return true;
+            Serilog.Log.Information("Panic: {Route} report dropped, the other route already took this press", route);
+            return false;
+        }
+
+        internal PanicRouteGate PanicRoutes { get; } = new();
+        internal Func<long> PanicRouteClock = () => Environment.TickCount64;
+        internal int PanicPressCountForTest => _panicPressCount;
 
         /// <summary>One press of the configured key (UI thread). A foreground board or DTRH may keep the first
         /// Escape as pause; unclaimed presses stop everything. A second
@@ -81,8 +118,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             // WPF MainWindow.xaml.cs:1557: a game's pause, BEFORE everything below: a pause is not a panic.
             if (TryGamePauseOnEscape(now)) return;
-            IntakeHostWindow.StopMicsForPanic();   // every press, before the lock-card stop or the capture abort reads as silence
+            // Every press, before the lock-card stop or the capture abort reads as silence.
+            try { IntakeHostWindow.StopMicsForPanic(); } catch (Exception ex) { Serilog.Log.Warning(ex, "Panic: stopping the mics failed"); }
             CancelPendingAi();   // every press, even one a lock card or the palette consumes
+            try { EmiDesk.EmiDeskService.Instance.PanicSilence(); } catch (Exception ex) { Serilog.Log.Warning(ex, "EMI panic silence failed"); } // WPF MainWindow.xaml.cs:1620
             // WPF MainWindow.xaml.cs:1620: Circe's Tab safety hold, armed up here because the lock-card, palette and
             // grace-pause rungs below return before the stop pass ("chaster-hold"). A game's pause above is no panic.
             PanicChasterHold.Open("panic key");
@@ -121,7 +160,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // after the grace pause and before the stop pass: her calm safety line, then 6 s of no other bark.
             if (rung == PanicPolicy.Rung.RunLadder && !gameOwnedTheScreen) Platform.BarkHead.Engine?.Raise("Panic");
             bool wasRunning = CoreEngine.IsRunning;
-            PanicSurfaces.StopAll("panic key", this);
+            if (wasRunning) App.Achievements?.TrackPanicPressed(now);
+            PanicSurfaces.StopAll("panic key", this, aftermathArmed: true);   // armed above (WPF :1662), before any teardown
+            NoteLocalPanicPause();   // WPF RunPanicStopTail :1898; remote/voice panic never marks.
             if (wasRunning) ShowFromTray();   // WPF: Show + Activate the main window after a running stop
 
             if ((now - _lastPanicTime).TotalMilliseconds > 2000) _panicPressCount = 0;
@@ -341,7 +382,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 () =>
                 {
                     Serilog.Log.Information("Panic trigger: GlobalShortcuts portal Activated");
-                    Dispatcher.UIThread.Post(() => Current?.OnPortalPanicPressed());
+                    Current?.OnPortalPanicActivated();
                 },
                 () => Dispatcher.UIThread.Post(() => Current?.OnPortalPanicReleased()));
             Dispatcher.UIThread.Post(() =>
@@ -366,13 +407,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         // Shared with the headless tests so they exercise the real idle-release poll.
-        internal static void ReleasePortalWhenUnused()
+        internal static void ReleasePortalWhenUnused(MainShellWindow? shell = null)
         {
             if (KeepPortalBound) return;
             _portalWatch?.Stop();
             _portalWatch = null;
             _portalBind = null;
             _ = PortalPanicShortcut.UnbindAsync();
+            (shell ?? Current)?.PanicRoutes.Forget();   // the next press reaches XInput2 alone, inside a fast double press
         }
 
         /// <summary>WPF LockCardService.Stop(dismissOpenCards: true).</summary>

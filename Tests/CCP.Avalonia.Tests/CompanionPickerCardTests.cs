@@ -135,6 +135,90 @@ public sealed class CompanionPickerCardTests
         }
     });
 
+    [Fact]
+    public Task AnimatedModPreviewsUseIdleAndMissingClipFallsBackToPose() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ccp-preview-" + Guid.NewGuid());
+        var resources = System.IO.Path.Combine(root, "resources");
+        var emotes1 = System.IO.Path.Combine(resources, "emotes", "set1");
+        var emotes2 = System.IO.Path.Combine(resources, "emotes", "set2");
+        System.IO.Directory.CreateDirectory(emotes1);
+        System.IO.Directory.CreateDirectory(emotes2);
+        var assets = System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Here())!, "..", "..", "Assets"));
+        var bundledPath = System.IO.Path.Combine(assets, "avatar0_emotes", "idle.gif");
+        var local1Path = System.IO.Path.Combine(emotes1, "idle.gif");
+        var local2Path = System.IO.Path.Combine(emotes2, "idle.gif");
+        System.IO.File.Copy(System.IO.Path.Combine(assets, "avatar0_emotes", "idle2.gif"), local1Path);
+        System.IO.File.Copy(System.IO.Path.Combine(assets, "avatar0_emotes", "idle3.gif"), local2Path);
+        System.IO.File.WriteAllText(System.IO.Path.Combine(emotes1, "emotes.json"), "{}");
+        System.IO.File.WriteAllText(System.IO.Path.Combine(emotes2, "emotes.json"), "{}");
+        var posePath = System.IO.Path.Combine(resources, "avatar_pose1.png");
+        System.IO.File.Copy(System.IO.Path.Combine(assets, "avatar_pose1.png"), posePath);
+        var mod = new ModPackage(new ModManifest { Id = BuiltInMods.CCPDefaultId, Name = "Preview" }, root, false);
+        var old = (CoreMods.ActiveModPackageProvider, CoreMods.ActiveModIdProvider, CoreSettings.Current.SelectedAvatarSet);
+        try
+        {
+            CoreMods.ActiveModPackageProvider = () => mod;
+            CoreMods.ActiveModIdProvider = () => mod.Id;
+            CoreSettings.Current.SelectedAvatarSet = 1;
+            var card = new CompanionPickerCard();
+            using var local1 = Decode(local1Path);
+            using var local2 = Decode(local2Path);
+            using var bundled = Decode(bundledPath);
+            using var pose = Decode(posePath);
+            Assert.Equal(local1.PixelSize, bundled.PixelSize);
+            Assert.False(Pixels(local1).SequenceEqual(Pixels(bundled))); // Same size, different art.
+            Assert.False(Pixels(local1).SequenceEqual(Pixels(local2)));
+            global::Avalonia.Media.Imaging.Bitmap Picture() => Assert.IsType<global::Avalonia.Media.Imaging.Bitmap>(card.FindControl<Image>("ImgPreview")!.Source);
+            void Matches(global::Avalonia.Media.Imaging.Bitmap expected)
+            {
+                var actual = Picture();
+                Assert.Equal(expected.PixelSize, actual.PixelSize);
+                Assert.Equal(Pixels(expected), Pixels(actual));
+            }
+            Matches(local1); // active set 1: local overrides bundled
+            card.ShowPreview(mod, global::Avalonia.Media.Colors.HotPink);
+            Matches(local1); // inactive set 1: local overrides bundled
+            CoreSettings.Current.SelectedAvatarSet = 2;
+            card.Refresh();
+            Matches(local2); // active selected set 2
+            System.IO.File.Delete(local1Path);
+            card.ShowPreview(mod, global::Avalonia.Media.Colors.HotPink);
+            Matches(bundled); // bundled registry after local clip is removed
+            var unregistered = new ModPackage(new ModManifest { Id = "preview-test", Name = "Preview" }, root, false);
+            card.ShowPreview(unregistered, global::Avalonia.Media.Colors.HotPink);
+            Matches(pose); // no local clip or registry entry
+        }
+        finally
+        {
+            (CoreMods.ActiveModPackageProvider, CoreMods.ActiveModIdProvider, CoreSettings.Current.SelectedAvatarSet) = old;
+            System.IO.Directory.Delete(root, true);
+        }
+        return Task.CompletedTask;
+    });
+
+    private static global::Avalonia.Media.Imaging.Bitmap Decode(string path)
+    {
+        using var stream = System.IO.File.OpenRead(path);
+        return global::Avalonia.Media.Imaging.Bitmap.DecodeToWidth(stream, 240);
+    }
+
+    private static byte[] Pixels(global::Avalonia.Media.Imaging.Bitmap bitmap)
+    {
+        var size = bitmap.PixelSize;
+        var pixels = new byte[size.Width * size.Height * 4];
+        var handle = System.Runtime.InteropServices.GCHandle.Alloc(pixels, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try { bitmap.CopyPixels(new PixelRect(size), handle.AddrOfPinnedObject(), pixels.Length, size.Width * 4); }
+        finally { handle.Free(); }
+        return pixels;
+    }
+
+    private static string Here([System.Runtime.CompilerServices.CallerFilePath] string path = "") => path;
+
     /// <summary>WPF AvatarSetTitle (AvatarTubeWindow.Avatar.cs:940-941): the Look label is the
     /// companion's name, not the tube's upper-cased caption.</summary>
     [Fact]
@@ -150,4 +234,87 @@ public sealed class CompanionPickerCardTests
         }
         finally { CoreSettings.ServiceProvider = null; }
     }
+
+    /// <summary>The async void link handler must not crash the app when the editor throws: WPF's
+    /// sync handler reaches App.xaml.cs:2425 (log + msg_unexpected_error dialog), so the port shows it.</summary>
+    [Fact]
+    public Task MorePersonalityFailureShowsErrorInsteadOfCrashing() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var oldProvider = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var host = new Window { Width = 900, Height = 500 };
+        try
+        {
+            var card = new CompanionPickerCard { MorePersonalityOptions = _ => throw new InvalidOperationException("boom") };
+            host.Content = card;
+            host.Show();
+            Dispatcher.UIThread.RunJobs();
+            card.FindControl<Button>("BtnMorePersonality")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await WaitFor(() => host.OwnedWindows.Any());
+            var dialog = Assert.IsType<MessageDialog>(Assert.Single(host.OwnedWindows));
+            Assert.Equal(global::ConditioningControlPanel.Localization.Loc.Get("title_unexpected_error"), dialog.Title);
+            Assert.Contains("boom", dialog.FindControl<TextBlock>("TxtMessage")!.Text);
+        }
+        finally
+        {
+            foreach (var w in host.OwnedWindows.ToList()) w.Close();
+            host.Close();
+            Dispatcher.UIThread.RunJobs();
+            CoreSettings.ServiceProvider = oldProvider;
+        }
+    });
+
+    /// <summary>The combo's async void handler, same guard: WPF CmbPersonality_SelectionChanged
+    /// (CompanionPickerCard.xaml.cs:315) is sync, so a throw from the switch reaches App.xaml.cs:2425.</summary>
+    [Fact]
+    public Task PersonalitySwitchFailureShowsErrorInsteadOfCrashing() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var oldProvider = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = CoreSettings.Current;
+        var oldPreset = s.ActivePersonalityPresetId;
+        var oldSlut = s.SlutModeEnabled;
+        s.ActivePersonalityPresetId = PersonalityPresets.NeutralDefaultId;
+        s.SlutModeEnabled = false;
+        EventHandler<PersonalityPreset> boom = (_, _) => throw new InvalidOperationException("boom");
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            var host = new Window { Width = 900, Height = 500 };
+            var card = new CompanionPickerCard();
+            host.Content = card;
+            host.Show(shell);
+            Dispatcher.UIThread.RunJobs();
+            var plain = PersonalityService.Shared.GetAllPresets().First(p => p.Id != PersonalityPresets.NeutralDefaultId
+                                                                            && !ExplicitContentGate.RequiresAcknowledgement(p, false));
+            PersonalityService.Shared.PersonalityChanged += boom;
+            var combo = card.FindControl<ComboBox>("CmbPersonality")!;
+            combo.SelectedItem = combo.Items.OfType<ComboBoxItem>().Single(i => (string)i.Tag! == plain.Id);
+            await WaitFor(() => host.OwnedWindows.Any());
+            var dialog = Assert.IsType<MessageDialog>(Assert.Single(host.OwnedWindows));
+            Assert.Equal(global::ConditioningControlPanel.Localization.Loc.Get("title_unexpected_error"), dialog.Title);
+            Assert.Contains("boom", dialog.FindControl<TextBlock>("TxtMessage")!.Text);
+        }
+        finally
+        {
+            PersonalityService.Shared.PersonalityChanged -= boom;
+            s.ActivePersonalityPresetId = oldPreset;
+            s.SlutModeEnabled = oldSlut;
+            foreach (var w in shell.OwnedWindows.SelectMany(o => o.OwnedWindows.Prepend(o)).Reverse().ToList()) w.Close();
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+            CoreSettings.ServiceProvider = oldProvider;
+        }
+    });
 }

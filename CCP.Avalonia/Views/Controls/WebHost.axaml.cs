@@ -61,7 +61,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal event Action? BrowserProcessFailed;
         private IDisposable? _failureWatch;
         internal void OnBrowserProcessFailed() => BrowserProcessFailed?.Invoke();
+        /// <summary>The engine granted a page's fullscreen request (WPF ContainsFullScreenElementChanged).
+        /// Native only: a page message can never raise it.</summary>
+        internal event Action? NativeFullscreenEntered;
+        private IDisposable? _fullscreenWatch;
+        internal void OnNativeFullscreenEntered() => NativeFullscreenEntered?.Invoke();
         internal IDisposable? PreserveForMove() => _web?.BeginReparenting();
+
+        /// <summary>Per-host WebView2 options, set before attachment. Other adapters ignore these.</summary>
+        public string? WindowsBrowserArguments { get; set; }
+        public string? WindowsUserDataFolder { get; set; }
+
+        // WPF JustDropHostService.cs:111,132-135. Keep custom arguments off shared profiles.
+        internal void ApplyWindowsOptions(object? args)
+        {
+            if (args is not WindowsWebView2EnvironmentRequestedEventArgs windows) return;
+            if (WindowsBrowserArguments is { } arguments) windows.AdditionalBrowserArguments = arguments;
+            if (WindowsUserDataFolder is { } folder) windows.UserDataFolder = folder;
+        }
 
         /// <summary>
         /// The URL the page actually sits on after its last completed navigation: redirects,
@@ -89,7 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         internal void OnNavigationCompleted(Uri? url, bool success = true)
         {
-            if (url is null) return;
+            if (url is null || _panicBlank) return;
             CurrentUrl = url;
             if (InjectCarrier) _ = InvokeScriptAsync(CarrierShim);
             NavigationCompleted?.Invoke(url);
@@ -240,6 +257,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// probe; the constructor can still fail after it passes, and a caller about to drive the
         /// page through script needs to know about this control, not about the machine.
         /// </summary>
+        // WPF MainWindow.Browser.cs:2740-2818 moves the existing page without reloading.
         internal IDisposable? BeginReparenting() => _web?.BeginReparenting();
 
         public bool HasEngine => _web is not null || ScriptInvoker != null;
@@ -311,6 +329,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         public WebHost()
         {
+            TrackScrolllerHost();
             AvaloniaXamlLoader.Load(this);
             _webSlot = this.FindControl<Panel>("WebSlot")!;
             _fallback = this.FindControl<Border>("Fallback")!;
@@ -334,18 +353,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                         if (preferGtk && e is LinuxWpeWebViewEnvironmentRequestedEventArgs wpe) wpe.PreferWebKitGtkInstead = true;
                         // Windows: the WebView2 profile under UserData, never beside the exe (Platform/WebViewProfile).
                         Platform.WebViewProfile.Apply(e);
+                        ApplyWindowsOptions(e);
                     };
                     // Subscribed once, here, rather than when a caller sets AllowNavigation: the
                     // gate has to be live for the FIRST navigation too, and a caller that assigns
                     // the predicate and the Source in that order would otherwise race the engine.
                     _web.EnvironmentRequested += (_, e) => EnvironmentRequested?.Invoke(e);
-                    _web.AdapterDestroyed += (_, _) => { try { _failureWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Trailer failure cleanup failed"); } finally { _failureWatch = null; } };
+                    _web.AdapterDestroyed += (_, _) => { try { _failureWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Trailer failure cleanup failed"); } finally { _failureWatch = null; }
+                        try { _fullscreenWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Fullscreen signal cleanup failed"); } finally { _fullscreenWatch = null; } };
                     _web.NavigationStarted += OnNavigationStarted;
                     _web.NavigationCompleted += (_, e) => {
                         // The native core exists now; subscribe before observers can reveal a scene.
                         if (BrowserProcessFailed != null && _failureWatch == null)
                             try { _failureWatch = Platform.TrailerBrowserPolicy.Attach(_web.TryGetPlatformHandle(), OnBrowserProcessFailed); }
                             catch (Exception ex) { Log.Debug(ex, "Trailer failure subscription failed"); OnBrowserProcessFailed(); }
+                        if (NativeFullscreenEntered != null && _fullscreenWatch == null)
+                            try { _fullscreenWatch = Platform.WebFullscreenSignal.Attach(_web.TryGetPlatformHandle(), OnNativeFullscreenEntered); }
+                            catch (Exception ex) { Log.Debug(ex, "Fullscreen signal subscription failed"); }
                         OnNavigationCompleted(e.Request ?? _web?.Source, e.IsSuccess);
                     };
                     _web.NewWindowRequested += (_, e) => { if (SuppressNewWindows) e.Handled = true; };
@@ -392,6 +416,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
         {
             var target = e.Request;
+            // Panic teardown must pass a caller's page allowlist, including on reattachment.
+            // Late redirects from the stopped document must not replace the blank page.
+            if (_panicBlank) { e.Cancel = target != PanicBlank; return; }
+            _scrolllerPanicTarget = target;
             if (RefusesScrolller(target)) { e.Cancel = true; return; }
             // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(target)) { e.Cancel = true; return; }
@@ -423,6 +451,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public void Navigate(Uri url)
         {
+            _panicBlank = false;
             _explicitNavigate = true;
             try { Source = url; } finally { _explicitNavigate = false; }
             NavigationRequests++;
@@ -468,6 +497,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             _scrolllerGate = null;
             _loadedOnThisEngine = false;
+            if (_panicBlank) NavigatePanicBlank();
             var engine = ++_scrolllerEngine;
             return gated => OnScrolllerGate(engine, gated);
         }
@@ -502,7 +532,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
             base.OnPropertyChanged(change);
-            if (change.Property == SourceProperty) ApplySource();
+            if (change.Property == SourceProperty)
+            {
+                if (Source != null) _panicBlank = false; // a new explicit request may load normally
+                ApplySource();
+            }
         }
 
         private void ApplySource()

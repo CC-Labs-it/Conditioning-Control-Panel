@@ -29,7 +29,7 @@ public sealed class DeeperPlayerAudioTests
         public bool Playing, Disposed;
         public event Action? Ended;
         public bool StartSucceeds = true;
-        public bool Play() { Playing = StartSucceeds; return Playing; }
+        public void Play() { if (!StartSucceeds) throw new InvalidOperationException("Audio transport could not start"); Playing = true; }
         public event Action? Failed;
         public void Error() => Failed?.Invoke();
         public void Pause() => Playing = false;
@@ -64,14 +64,13 @@ public sealed class DeeperPlayerAudioTests
             var web = win.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.WebHost>("VideoBrowser")!;
             var pending = new TaskCompletionSource<string?>();
             web.ScriptInvoker = _ => navigated ? Task.FromException<string?>(new InvalidOperationException()) : pending.Task;
-            win.OpenLocalMediaFile("/tmp/pending.mp4");
+            win.OpenLocalMediaFile(Path.Combine(Path.GetTempPath(), "pending.mp4"));
             if (navigated) Assert.Null(await web.InvokeScriptAsync("throw new Error()"));
             else Invoke(win, "PollVideoTimeAsync");
             typeof(EnhancementPlayerWindow).GetField("_videoNavigated", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(win, navigated);
-            var cleared = false;
-            web.PropertyChanged += (_, e) => { if (e.Property == ConditioningControlPanel.Avalonia.Views.Controls.WebHost.SourceProperty && e.NewValue is null) cleared = true; };
+            var previousPage = web.Source;
             win.OpenLocalMediaFile("audio.mp3");
-            Assert.True(cleared);
+            Assert.NotEqual(previousPage, web.Source);
             Assert.Equal(new Uri("about:blank"), web.Source);
             Assert.True(web.NavigationRequests > 0);
             Assert.False(web.AllowNavigation!(new Uri("https://hypnotube.com/video/late")));
@@ -105,7 +104,8 @@ public sealed class DeeperPlayerAudioTests
             Assert.True(audio.Disposed);
             Assert.False(audio.Playing);
             Assert.Equal(Loc.Get("deeper_player_status_audio_failed"), win.FindControl<TextBlock>("TxtStatus")!.Text);
-            Assert.Equal("0:00", win.FindControl<TextBlock>("TxtTotal")!.Text);
+            // WPF keeps the previous total when playback fails (player.xaml.cs:648-652).
+            Assert.Equal(laterError ? "1:35" : "0:00", win.FindControl<TextBlock>("TxtTotal")!.Text);
             Assert.Equal(IconKind.Play, win.FindControl<ConditioningControlPanel.Avalonia.Controls.IconGlyph>("TxtPlayPauseGlyph")!.Kind);
             var replacement = new Audio();
             DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(replacement);
@@ -137,7 +137,7 @@ public sealed class DeeperPlayerAudioTests
         var endedReplay = new Audio();
         var count = 0;
         DeeperLocalAudio.Open = p => Task.FromResult<IDeeperLocalAudio?>(p == path ? (++count == 1 ? first : count == 2 ? replay : endedReplay) : null);
-        var win = new EnhancementPlayerWindow(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*" }, "test");
+        var win = new EnhancementPlayerWindow(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*", Regions = { new Region { End = 200 } } }, "test");
         try
         {
             win.Show();
@@ -156,18 +156,22 @@ public sealed class DeeperPlayerAudioTests
             Invoke(win, "UiTimer_Tick", null, EventArgs.Empty);
             Assert.Equal("0:30", win.FindControl<TextBlock>("TxtCurrent")!.Text);
             Assert.Equal("1:40", win.FindControl<TextBlock>("TxtTotal")!.Text);
-            Invoke(win, "SeekAudio", 50d);
-            Assert.Equal(50, first.PositionSeconds);
             win.UpdateLayout();
             var waveform = win.FindControl<Canvas>("WaveformCanvas")!;
+            var halfway = waveform.TranslatePoint(new Point(waveform.Bounds.Width * 0.5, 20), win)!.Value;
+            win.MouseDown(halfway, global::Avalonia.Input.MouseButton.Left);
+            win.MouseUp(halfway, global::Avalonia.Input.MouseButton.Left);
+            Assert.Equal(50, first.PositionSeconds, 3);
             var point = waveform.TranslatePoint(new Point(waveform.Bounds.Width * 0.25, 20), win)!.Value;
             win.MouseDown(point, global::Avalonia.Input.MouseButton.Left);
             win.MouseUp(point, global::Avalonia.Input.MouseButton.Left);
             Assert.Equal(25, first.PositionSeconds, 3);
             var miniWidth = win.FindControl<Canvas>("MiniTimelineCanvas")!.Bounds.Width;
             Assert.True(miniWidth > 0);
-            Invoke(win, "SeekToMiniPosition", miniWidth * 0.75);
+            Invoke(win, "SeekToMiniPosition", miniWidth * 0.375);
             Assert.Equal(75, first.PositionSeconds, 3);
+            Invoke(win, "SeekToMiniPosition", miniWidth * 0.75);
+            Assert.Equal(100, first.PositionSeconds, 3);
             win.FindControl<Slider>("SliderVolume")!.Value = 23;
             Assert.Equal(23, first.Volume);
             Assert.Equal(23, CoreSettings.Current.DeeperPlayerVolume);
@@ -178,9 +182,15 @@ public sealed class DeeperPlayerAudioTests
             Dispatcher.UIThread.RunJobs();
             Assert.True(replay.Playing);
             Assert.Equal(2, count); // sticky path opens a fresh transport after Stop
-            PanicSurfaces.All.Single(s => s.Id == "deeper-player-audio").Stop(null);
-            Assert.True(replay.Disposed);
+            replay.PositionSeconds = 41;
+            PanicSurfaces.All.Single(s => s.Id == "deeper-player").Stop(null);
+            Assert.False(replay.Disposed);
             Assert.False(replay.Playing);
+            Assert.Equal(41, replay.PositionSeconds);
+            Click(win, "BtnPlayPause");
+            Assert.True(replay.Playing);
+            Click(win, "BtnStop");
+            Assert.True(replay.Disposed);
             Click(win, "BtnPlayPause");
             Dispatcher.UIThread.RunJobs();
             Assert.True(endedReplay.Playing);
@@ -231,15 +241,17 @@ public sealed class DeeperPlayerAudioTests
             Assert.True(current.Playing);
             win.OpenLocalMediaFile("unavailable.mp3");
             Dispatcher.UIThread.RunJobs();
+            Invoke(win, "UiTimer_Tick", null, EventArgs.Empty); // WPF refreshes the pill on its 100 ms tick.
             Assert.True(current.Disposed);
-            Assert.Equal("0:00", win.FindControl<TextBlock>("TxtTotal")!.Text);
+            // WPF leaves the previous total in place if the replacement cannot open.
+            Assert.Equal("1:35", win.FindControl<TextBlock>("TxtTotal")!.Text);
             Assert.Equal(IconKind.Play, win.FindControl<ConditioningControlPanel.Avalonia.Controls.IconGlyph>("TxtPlayPauseGlyph")!.Kind);
             Assert.Equal(Loc.Get("deeper_player_pill_loaded"), win.FindControl<TextBlock>("StatusPillText")!.Text);
             var videoSwap = new Audio();
             DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(videoSwap);
             win.OpenLocalMediaFile("swap.mp3");
             Assert.True(videoSwap.Playing);
-            Invoke(win, "ShowMediaPaneFor", MediaTypes.Video);
+            win.OpenLocalMediaFile(Path.Combine(Path.GetTempPath(), "swap.mp4"));
             Assert.True(videoSwap.Disposed);
             Assert.False(videoSwap.Playing);
         }
@@ -262,7 +274,7 @@ public sealed class DeeperPlayerAudioTests
         {
             win.OpenLocalMediaFile("pending.mp3");
             if (action == "stop") Click(win, "BtnStop");
-            else if (action == "panic") PanicSurfaces.All.Single(s => s.Id == "deeper-player-audio").Stop(null);
+            else if (action == "panic") PanicSurfaces.All.Single(s => s.Id == "deeper-player").Stop(null);
             else win.Close();
             var late = new Audio();
             pending.SetResult(late);

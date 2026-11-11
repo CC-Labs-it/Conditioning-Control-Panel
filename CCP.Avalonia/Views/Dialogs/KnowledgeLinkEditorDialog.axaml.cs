@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using ConditioningControlPanel.Localization;
@@ -15,9 +17,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         /// </summary>
         public KnowledgeBaseLink? Result { get; private set; }
 
+        private static readonly HashSet<KnowledgeLinkEditorDialog> OpenDialogs = new();
+        internal static void CloseForPanic()
+        {
+            foreach (var dialog in OpenDialogs.ToArray()) dialog.Close();
+        }
+
         public KnowledgeLinkEditorDialog()
         {
             AvaloniaXamlLoader.Load(this);
+            Opened += (_, _) => OpenDialogs.Add(this);
+            Closed += (_, _) => OpenDialogs.Remove(this);
             DataContext = new KnowledgeLinkEditorViewModel();
 
             var add = this.FindControl<Button>("BtnAdd")!;

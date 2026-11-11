@@ -12,38 +12,22 @@
 // Dispatcher.UIThread and the setting has no meaning on this head. There is nothing to port,
 // so InitializeAvatarTube is the else-branch alone.
 //
-// STILL HEAD-SIDE, each with the exact symbol and where it lives today:
-//   OnCompanionXPAwarded   - App.Companion's XPAwarded / LevelUp / XPDrained / CompanionSwitched
-//   OnCompanionLevelUp       events (ConditioningControlPanel/Services/Companion/CompanionService.cs)
-//   OnCompanionXPDrained     and UpdateCompanionCardsUI, which is itself blocked twice over -
-//   OnCompanionSwitched      see MainShellWindow.CompanionTab.cs. The level-up half also needs
-//                            _trayIcon.ShowNotification (here: Platform.OsNotifications.Show), PlayLevelUpSound (WPF MainWindow.xaml.cs, not ported) and
-//                            UpdateLevelDisplay (MainShellWindow.Progression.cs), both stubs.
-//   FlashXpBarOnDrain      - restored for the HEADER bar only. Its second overlay,
-//                            CompanionTab.PrgCompanion0FlashOverlay, lives inside
-//                            CCP.Avalonia/Views/Controls/Companion/CompanionHeroCard.axaml and
-//                            CompanionTabView re-publishes none of the room's cell controls
-//                            (MainShellWindow.CompanionTab.cs says why), so there is no accessor
-//                            path to it. A future wiring reaches it through the hero card.
-//   the mute half         - AvatarTubeWindow.SetMuteAvatar and Giggle are in the WPF Speech.cs
-//                            partial that did not cross. Detach/Attach did (the tube's
-//                            Windowing.cs partial), and OnShellStateForTube below drives them.
-//
-// _avatarTubeWindow IS DECLARED HERE. WPF declares it in MainWindow.xaml.cs:179, whose twin
-// (MainShellWindow.axaml.cs) already lists it in its dropped ledger and is not this layer's to
-// own. A partial-class field can be declared exactly once, so whoever restores that file must
-// take the field from here rather than re-declare it.
-//
-// NO CALLER YET for any of it: the tray menu's "Wake Bambi Up!", the companion room's avatar
-// toggle (MainShellWindow.CompanionRoom.cs, this layer) and the shell's minimise/restore path
-// (MainShellWindow.axaml.cs) are the three call sites, and only the second is on this head.
+// XP events now originate in CompanionCore and are released when the shell closes. The existing
+// live mute setting, speech pipeline and quick menu are reused; no second mute flag is introduced.
 
 using System;
+using System.IO;
+using System.Linq;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Styling;
+using Avalonia.LogicalTree;
+using Avalonia.Threading;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Companion;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
 using Serilog;
 
@@ -59,6 +43,63 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// its Opened work runs (App.axaml.cs). Nobody sees the panel then, so the tube stays put.</summary>
         internal bool BuildingHiddenForBoot { get; set; }
 
+        private bool _companionEventsClosed;
+
+        /// <summary>WPF MainWindow.Companion.cs:35-140 event handlers; a closed shell must never receive another reward.</summary>
+        private void HookCompanionEvents()
+        {
+            CompanionCore.XPAwarded += OnCompanionXPAwarded;
+            CompanionCore.LevelUp += OnCompanionLevelUp;
+            CompanionCore.XPDrained += OnCompanionXPDrained;
+            CompanionCore.Switched += OnCompanionSwitched;
+            Closed += (_, _) =>
+            {
+                _companionEventsClosed = true;
+                CompanionCore.XPAwarded -= OnCompanionXPAwarded;
+                CompanionCore.LevelUp -= OnCompanionLevelUp;
+                CompanionCore.XPDrained -= OnCompanionXPDrained;
+                CompanionCore.Switched -= OnCompanionSwitched;
+                // The milestone sound shares the hero's level-up handle, which HeroMoments stops on close.
+            };
+        }
+
+        private void DispatchCompanionEvent(Action action)
+        {
+            void Apply() { if (!_companionEventsClosed) action(); }
+            if (Dispatcher.UIThread.CheckAccess()) Apply();
+            else Dispatcher.UIThread.Post(Apply);
+        }
+
+        private bool CompanionRoomVisible => Named<Control>("CompanionTab")?.IsVisible == true;
+
+        private void RefreshCompanionCards()
+        {
+            SyncHero();
+            RoomView()?.RefreshRoster();
+        }
+
+        // WPF MainWindow.Companion.cs:35-45: only ordinary awards require the room to be visible.
+        private void OnCompanionXPAwarded(CompanionId id, double amount, double modifier) =>
+            DispatchCompanionEvent(() => { if (CompanionRoomVisible) RefreshCompanionCards(); });
+
+        private void OnCompanionLevelUp(CompanionId id, int level) => DispatchCompanionEvent(() =>
+        {
+            RefreshCompanionCards();
+            var name = CoreMods.MakeModAware(CompanionDefinition.GetById(id).Name);
+            if (CompanionCore.MilestoneNotification(name, level) is not { } notice) return;
+            Platform.OsNotifications.Show(notice.Title, notice.Body);
+            PlayHeroLevelSound();   // WPF PlayLevelUpSound (MainWindow.xaml.cs:784-831): one handle with the player's level-up
+        });
+
+        private void OnCompanionXPDrained(double amount) => DispatchCompanionEvent(() =>
+        {
+            UpdateLevelDisplay();
+            FlashXpBarOnDrain();
+            if (CompanionRoomVisible) RefreshCompanionCards();
+        });
+
+        private void OnCompanionSwitched(CompanionId id) => DispatchCompanionEvent(RefreshCompanionCards);
+
         // ============================== the XP-drain flash ==============================
 
         /// <summary>
@@ -69,27 +110,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             Log.Information("XP drain flash fired");
             FlashOverlay(Named<Border>("XPBarFlashOverlay"));
+            foreach (var hero in this.GetLogicalDescendants().OfType<CompanionHeroCard>())
+                FlashOverlay(hero.FindControl<Border>("PrgCompanion0FlashOverlay"));
         }
 
         /// <summary>
-        /// One 0 -> 1 -> 0 opacity pulse. WPF ran a 250ms DoubleAnimation with AutoReverse; the
-        /// Avalonia twin is one 500ms keyframe animation with the peak at the halfway cue, which
-        /// is the same curve and leaves the overlay back at its XAML opacity afterwards (FillMode
-        /// None) rather than pinned by a local value.
+        /// WPF MainWindow.Companion.cs:116-130: 250 ms EaseOut forward, then auto-reverse.
+        /// Ease each leg independently so the peak is at 250 ms; leave the overlay at its XAML
+        /// opacity afterwards (FillMode.None).
         /// </summary>
         private static void FlashOverlay(Border? overlay)
         {
             if (overlay == null) return;
             var anim = new Animation
             {
-                Duration = TimeSpan.FromMilliseconds(500),
+                Duration = TimeSpan.FromMilliseconds(250),
+                IterationCount = new IterationCount(2),
+                PlaybackDirection = PlaybackDirection.Alternate,
                 Easing = new QuadraticEaseOut(),
                 FillMode = FillMode.None,
                 Children =
                 {
                     new KeyFrame { Cue = new Cue(0d),   Setters = { new Setter(Visual.OpacityProperty, 0d) } },
-                    new KeyFrame { Cue = new Cue(0.5d), Setters = { new Setter(Visual.OpacityProperty, 1d) } },
-                    new KeyFrame { Cue = new Cue(1d),   Setters = { new Setter(Visual.OpacityProperty, 0d) } },
+                    new KeyFrame { Cue = new Cue(1d),   Setters = { new Setter(Visual.OpacityProperty, 1d) } },
                 },
             };
             _ = anim.RunAsync(overlay);
@@ -119,8 +162,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _avatarTubeWindow = new AvatarTubeWindow(this);
                 PropertyChanged += (_, e) => { if (e.Property == WindowStateProperty) OnShellStateForTube(); };
 
-                // WPF SetMuteAvatar(AvatarMuted) at build: this tube reads the setting live
-                // (AvatarTubeWindow.IsMuted), so the room's mute toggle needs no push here.
+                _avatarTubeWindow.UpdateQuickMenuState(); // IsMuted already reads the saved setting live.
 
                 if (showNow)
                 {
@@ -226,7 +268,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _avatarTubeWindow.ShowSafe();
                 _avatarTubeWindow.StartPoseAnimation();
                 _avatarTubeWindow.Detach();
-                // ponytail: WPF also has her Giggle("Good morning~!") - Speech.cs has not crossed.
+                _avatarTubeWindow.Giggle(ConditioningControlPanel.Localization.Loc.Get("companion_wake_greeting"));
             }
             SyncHero();   // WPF CompanionRoom?.SyncHero(): every on/off label follows the switch
         }
