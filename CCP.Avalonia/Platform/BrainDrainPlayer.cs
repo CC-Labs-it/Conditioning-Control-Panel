@@ -88,7 +88,11 @@ internal sealed class BrainDrainPlayer
                 if (generation == _generation) _busy = _voice != null;
             }
             // WPF BrainDrainService.cs:405-411: only a clip that actually started enters Media Log.
-            if (started) App.MediaHistory?.RecordAudio(path);
+            if (started)
+            {
+                App.NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureBrainDrain);
+                App.MediaHistory?.RecordAudio(path);
+            }
         }
         catch { lock (_gate) if (generation == _generation) _busy = false; }
         finally { voice?.Dispose(); }

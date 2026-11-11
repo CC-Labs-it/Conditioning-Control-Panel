@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using App = ConditioningControlPanel.Avalonia.App;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -132,6 +133,9 @@ public class BrainDrainAudioTests
         Task? tick = null;
         var history = new ConditioningControlPanel.Services.MediaHistoryService(Path.Combine(root, "history.json"));
         var oldHistory = global::ConditioningControlPanel.Avalonia.App.MediaHistory;
+        var features = new System.Collections.Generic.List<string>();
+        void OnFeature(string feature) => features.Add(feature);
+        App.FeatureUsed += OnFeature;
         try
         {
             global::ConditioningControlPanel.Avalonia.App.MediaHistory = history;
@@ -148,9 +152,11 @@ public class BrainDrainAudioTests
             Assert.Equal(0, voice.Plays);
             Assert.True(voice.Disposed);
             Assert.Empty(history.GetSnapshot());
+            Assert.Empty(features);
         }
         finally
         {
+            App.FeatureUsed -= OnFeature;
             release.Set();
             try { tick?.GetAwaiter().GetResult(); }
             finally
@@ -175,6 +181,9 @@ public class BrainDrainAudioTests
         var path = Path.Combine(root, "braindrain", "clip.wav"); File.WriteAllText(path, "");
         var history = new ConditioningControlPanel.Services.MediaHistoryService(Path.Combine(root, "history.json"));
         var oldHistory = global::ConditioningControlPanel.Avalonia.App.MediaHistory;
+        var features = new System.Collections.Generic.List<string>();
+        void OnFeature(string feature) => features.Add(feature);
+        App.FeatureUsed += OnFeature;
         var voice = new Voice { PlaySucceeds = outcome != "failed-play" };
         var player = new BrainDrainPlayer((_, _) => outcome switch
         { "throws" => throw new IOException("decoder failed"), "null" => null, _ => voice }, new Clock(), () => 0);
@@ -191,9 +200,12 @@ public class BrainDrainAudioTests
                 player.Tick(TimeSpan.FromSeconds(5)); Assert.Single(history.GetSnapshot());
             }
             else Assert.Empty(history.GetSnapshot());
+            if (outcome == "success") Assert.Equal(new[] { "braindrain" }, features);
+            else Assert.Empty(features);
         }
         finally
         {
+            App.FeatureUsed -= OnFeature;
             player.Stop(); global::ConditioningControlPanel.Avalonia.App.MediaHistory = oldHistory;
             state.Dispose(); history.Dispose(); Directory.Delete(root, true);
         }
