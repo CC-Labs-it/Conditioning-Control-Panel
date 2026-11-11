@@ -50,6 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             HeroZone.ViewModel?.Sync();
             ChatZone.ViewModel?.Sync();
             AttentionZone.ViewModel?.Sync();
+            (EngineZone.DataContext as EngineRoomVm)?.Sync();
         }
 
         /// <summary>The preview harness's page state: WPF MockCompanionRoomVm's zone bag plus its

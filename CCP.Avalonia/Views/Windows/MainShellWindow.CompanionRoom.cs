@@ -279,10 +279,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>
         /// "Clear conversation" (WPF MainWindow.CompanionRoom.cs:353): drops the thread, leaves what she
         /// knows. ForgetThread, not ForgetConversation, for the reason WPF gives (pinned and Boundary facts).
-        /// The bark echo is not here: this head has no bark engine (CoreBark is a doorbell).
         /// </summary>
         internal async System.Threading.Tasks.Task ClearCompanionConversationAsync()
         {
+            CoreBark.NotifyUiAction("reset_memory");
             var message = string.Join(Environment.NewLine + Environment.NewLine,
                 Loc.Get("companion_engine_clear_conversation_confirm"),
                 Loc.Get("companion_engine_clear_conversation_confirm_body"),
@@ -302,6 +302,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (App.Brain == null)
                     (App.Ai as ConditioningControlPanel.Services.AIService.AiServiceStrategy)?.ClearLocalHistory();
                 _avatarTubeWindow?.ChatHistory.Clear();
+                RoomView()?.SyncBrain();
                 Log.Information("Companion conversation cleared from the Engine Room");
             }
             catch (Exception ex)
