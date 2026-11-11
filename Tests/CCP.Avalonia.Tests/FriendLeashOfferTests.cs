@@ -7,6 +7,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
+using ConditioningControlPanel.Models;
 using Avalonia.LogicalTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -192,6 +196,65 @@ public sealed class FriendLeashOfferTests
         Assert.Equal(Loc.Get("leash_explain_title"), intro.Title);
         Assert.Null(intro.GetLogicalDescendants().OfType<Button>().FirstOrDefault(b => (string?)b.Tag == "leash-explain-offer"));
         Click(intro, "leash-explain-not-now"); Assert.Equal(0, wire.Calls);
+    });
+
+    [Fact]
+    public void EscapeCancelsFirstOfferWithoutConsent() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup(); var wire = new Wire(); var card = new FriendLeashOffer(Friend(), new LeashService(wire, () => "me"), new HashSet<string>());
+        Click(card, "leash-offer"); var intro = card.Intro!;
+        var key = new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape };
+        intro.RaiseEvent(key);
+        Assert.True(key.Handled); Assert.Null(card.Intro); Assert.False(CoreSettings.Current.LeashIntroSeenHolder); Assert.Equal(0, wire.Calls);
+    });
+
+    [Fact]
+    public void IntroMotionUsesPreferenceAndAnimatesTheActualParts() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup(); var settings = CoreSettings.Current; var prior = settings.MotionLevel;
+        try
+        {
+            settings.MotionLevel = MotionLevel.Off;
+            var still = new LeashHolderIntro("Mia", null); still.Show();
+            Assert.False(still.MotionActive);
+            Assert.All(still.GetLogicalDescendants().OfType<Border>().Where(b => ((string?)b.Tag)?.StartsWith("leash-explain-panel:") == true), p => Assert.Equal(1, p.Opacity));
+            still.Close();
+            settings.MotionLevel = MotionLevel.Reduced;
+            var reduced = new LeashHolderIntro("Mia", null); reduced.Show(); Assert.True(reduced.MotionActive);
+            reduced.MotionFrame(1100); Assert.All(reduced.GetLogicalDescendants().OfType<global::Avalonia.Controls.Shapes.Ellipse>(), bit => Assert.False(bit.IsVisible)); reduced.Close();
+            settings.MotionLevel = MotionLevel.Full;
+            var moving = new LeashHolderIntro("Mia", null); moving.Show(); Assert.True(moving.MotionActive);
+            var parts = moving.GetLogicalDescendants().OfType<global::Avalonia.Controls.Shapes.Path>().ToArray();
+            T Transform<T>(string tag) where T : Transform => (T)parts.Single(p => (string?)p.Tag == tag).RenderTransform!;
+            var panels = moving.GetLogicalDescendants().OfType<Border>().Where(b => ((string?)b.Tag)?.StartsWith("leash-explain-panel:") == true).ToArray();
+            moving.MotionFrame(80); Assert.True(panels[0].Opacity > panels[3].Opacity);
+            moving.MotionFrame(260); Assert.Equal(0.2, Transform<ScaleTransform>("leash-bar:0").ScaleY, 3);
+            Assert.Equal(new RelativePoint(0.5, 53.0 / 70, RelativeUnit.Relative), parts.Single(p => (string?)p.Tag == "leash-bar:0").RenderTransformOrigin);
+            moving.MotionFrame(630); Assert.Equal(0.1, Transform<ScaleTransform>("leash-eye").ScaleY, 3);
+            moving.MotionFrame(920); Assert.Equal(-18, Transform<RotateTransform>("leash-blade-a").Angle, 3); Assert.Equal(18, Transform<RotateTransform>("leash-blade-b").Angle, 3);
+            Assert.Equal(5, Transform<TranslateTransform>("leash-explain-art:4").X, 3); Assert.Equal(-5, Transform<TranslateTransform>("leash-cut-right").X, 3);
+            moving.MotionFrame(1100); Assert.True(Transform<TranslateTransform>("leash-cut-right").X > -5);
+            Assert.All(moving.GetLogicalDescendants().OfType<global::Avalonia.Controls.Shapes.Ellipse>(), bit => Assert.Equal(ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowParticles, bit.IsVisible));
+            moving.MotionFrame(2000); Assert.Equal(1, Transform<ScaleTransform>("leash-bar:0").ScaleY, 3); Assert.Equal(1, Transform<ScaleTransform>("leash-eye").ScaleY, 3); Assert.Equal(0, Transform<RotateTransform>("leash-blade-a").Angle, 3);
+            moving.Close(); Assert.False(moving.MotionActive);
+        }
+        finally { settings.MotionLevel = prior; }
+    });
+
+    [Fact]
+    public void IntroDragStartsOnlyOnLeftPress() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup(); var settings = CoreSettings.Current; var old = settings.MotionLevel; settings.MotionLevel = MotionLevel.Off;
+        var calls = 0; var w = new LeashHolderIntro("Mia", null) { DragOverride = _ => calls++ };
+        try
+        {
+            w.Show(); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var title = w.GetLogicalDescendants().OfType<TextBlock>().First(t => t.Text == Loc.Get("leash_explain_title"));
+            var point = title.TranslatePoint(new Point(5, 5), w)!.Value;
+            w.MouseDown(point, MouseButton.Right); w.MouseUp(point, MouseButton.Right); Assert.Equal(0, calls);
+            w.MouseDown(point, MouseButton.Left); w.MouseUp(point, MouseButton.Left); Assert.Equal(1, calls);
+        }
+        finally { w.Close(); settings.MotionLevel = old; }
     });
 
 }
