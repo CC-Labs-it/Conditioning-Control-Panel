@@ -181,7 +181,7 @@ public class FlashVoiceTests
         if (Application.Current is null) AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var old = FlashOverlay.Clock; var clock = new VoiceClock { Ticks = TimeSpan.FromSeconds(5).Ticks }; FlashOverlay.Clock = clock;
         var window = new FlashOverlayWindow { SpawnedAt = clock.Ticks }; window.Run(0, TimeSpan.Zero, TimeSpan.FromSeconds(3));
-        try { clock.Ticks += TimeSpan.FromSeconds(2).Ticks; window.SetVoiceLifetime(TimeSpan.FromSeconds(7)); Assert.Equal(TimeSpan.FromSeconds(12).Ticks, window.ExpiresAt); window.BoostLifetime(9000); window.SetVoiceLifetime(TimeSpan.FromSeconds(7)); Assert.Equal(TimeSpan.FromSeconds(16).Ticks, window.ExpiresAt); Assert.Equal(TimeSpan.FromSeconds(7), window.Lifetime); }
+        try { window.BoostLifetime(2500); window.SetVoiceLifetime(TimeSpan.FromSeconds(1)); Assert.Equal(TimeSpan.FromSeconds(7.5).Ticks, window.ExpiresAt); clock.Ticks += TimeSpan.FromSeconds(2).Ticks; window.SetVoiceLifetime(TimeSpan.FromSeconds(7)); Assert.Equal(TimeSpan.FromSeconds(12).Ticks, window.ExpiresAt); window.BoostLifetime(9000); window.SetVoiceLifetime(TimeSpan.FromSeconds(7)); Assert.Equal(TimeSpan.FromSeconds(16).Ticks, window.ExpiresAt); Assert.Equal(TimeSpan.FromSeconds(7), window.Lifetime); }
         finally { window.Close(); FlashOverlay.Clock = old; }
         return Task.CompletedTask;
     });

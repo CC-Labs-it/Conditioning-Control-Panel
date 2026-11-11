@@ -54,8 +54,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (extraMs <= 0 || IsFadingOut || Exit != null || _lifetimeTimer == null) return;
             var deadline = FlashOverlay.Clock.GetTimestamp() + (long)(extraMs / 1000.0 * FlashOverlay.Clock.TimestampFrequency);
+            _gazeExpiresAt = Math.Max(_gazeExpiresAt, deadline);
             if (deadline <= _expiresAt) return; // WPF: never shorten a stay-until-popped lifetime
-            _expiresAt = _gazeExpiresAt = deadline;
+            _expiresAt = deadline;
             ScheduleExpiry();
         }
         internal void SetVoiceLifetime(TimeSpan lifetime)
