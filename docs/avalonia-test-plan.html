@@ -940,6 +940,10 @@ not correctness or a test pass; wildcards and checkbox inventories do not count.
 <ol start="15">
 <li>Awareness on (consent given), play then pause a track in a desktop media player (Spotify, a browser tab, VLC), wait 10 s each time. WPF's Awareness observer reads the Windows media session every 3 s and the companion can react to the playing track. Linux has no observer consumer yet (no MPRIS reader), so expect no media reaction; report only a crash, a stuck CPU or a reaction to a stale track. The shared 3 s polling loop itself is automated-only (<code>MediaSessionWatcherTests</code>). WPF <code>Services/Awareness/SmtcMediaWatcher.cs</code>, <code>Services/Awareness/AwarenessObserver.cs:176</code>. Rows: <code>svc-media-session-watcher</code>.</li>
 </ol>
+<h3>Install date</h3>
+<ol>
+<li>With a disposable profile, start with no InstallDate in settings.json and check that startup records a date, then restart and confirm it stays unchanged. Compare WPF on a disposable profile; use only copies of settings and logs. Sending install_date is not wired on this build. WPF <code>App.xaml.cs:2596,6237-6335</code>, <code>Services/Settings/ProfileSyncService.cs:1647</code>. Rows: <code>server-sync-contract</code>.</li>
+</ol>
 <h3 id="dead-wpf-paths-p122-audit">Dead WPF paths (P122 audit)</h3>
 <ul>
 <li>Render-only: <code>dialogs-username-picker</code>. no live WPF caller; the unhooked quick-login handlers would reach it, but normal registration uses LoginDialog's own name panel. Inspect its render only; do not wait for a login trigger.</li>

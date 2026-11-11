@@ -480,6 +480,8 @@ public sealed class LanguageSelectorTests
         settings.Current.Language = "ja";
         settings.Current.SessionRackSourceFilter = "all";
         settings.Current.Welcomed = true;
+        // Returning profile: an absent install date is legitimately stamped and saved at startup.
+        settings.Current.InstallDate = "2021-02-03";
         // A current-version profile has no upgrade bookkeeping (WPF MainWindow.Marquee.cs:311-325).
         // Versionless startup is separately exercised by FeatureIntroUpgradeTests.
         var version = typeof(App).Assembly.GetName().Version!; // the provider is seeded only by StartApp
