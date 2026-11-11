@@ -1074,6 +1074,12 @@
     <Style Selector="^:pointerover /template/ Border#Bd">
       <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
     </Style>
+    <Style Selector="^:focus">
+      <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    </Style>
+    <Style Selector="^:focus /template/ Border#Bd">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
+    </Style>
     <Style Selector="^:selected">
       <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
     </Style>
@@ -1118,7 +1124,8 @@
         <Grid ColumnDefinitions="*,Auto">
           <Border x:Name="Background" Grid.ColumnSpan="2" CornerRadius="{TemplateBinding CornerRadius}"
                   Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                  BorderThickness="{TemplateBinding BorderThickness}"/>
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  fx:InputFx.GlowColor="{DynamicResource PinkColor}" fx:InputFx.GlowBlur="10"/>
           <Panel x:Name="ArrowHost" Grid.Column="1">
             <Path x:Name="Arrow" HorizontalAlignment="Right" VerticalAlignment="Center"
                   Stroke="{DynamicResource TextSecondaryBrush}" StrokeLineCap="Round" StrokeJoin="Round"/>
@@ -1169,6 +1176,7 @@
     </Style>
     <Style Selector="^:dropdownopen /template/ Border#Background">
       <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+      <Setter Property="fx:InputFx.GlowOpacity" Value="0.35"/>
     </Style>
     <Style Selector="^:dropdownopen /template/ Path#Arrow">
       <Setter Property="Stroke" Value="{DynamicResource PinkBrush}"/>
