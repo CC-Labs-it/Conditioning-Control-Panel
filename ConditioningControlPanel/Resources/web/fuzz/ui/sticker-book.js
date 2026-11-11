@@ -34,8 +34,10 @@ const CSS = `
 .sb-ph p { flex-basis: 100%; margin: 0; font-size: 14px; }
 .sb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 14px 8px; }
 .sb-grid.big { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); }
-.sb-tabs { display: flex; flex-direction: column; gap: 3px; padding: 14px 4px 4px 0; margin-left: -16px; min-height: 0; overflow-y: auto; scrollbar-width: none; }
-.sb-tab { writing-mode: vertical-rl; transform: rotate(180deg); border: 2px solid var(--ink); border-radius: 8px 0 0 8px; padding: 8px 4px; background: var(--tab); font-size: 12.5px; position: relative; white-space: nowrap; flex: none; }
+.sb-tabs { display: flex; flex-direction: column; gap: 3px; padding: 14px 4px 4px; margin-left: -16px; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.sb-tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; writing-mode: vertical-rl; transform: rotate(180deg); border: 2px solid var(--ink); border-radius: 8px 0 0 8px; padding: 5px 3px; background: var(--tab); position: relative; white-space: nowrap; flex: none; }
+.sb .sb-tab { font-size: 12.5px; }
+.sb-tab small { font-size: 10px; line-height: 1; }
 .sb-tab[aria-selected="true"] { background: var(--paper); padding-right: 9px; margin-left: -3px; }
 .sb-tab.foil { background: linear-gradient(160deg, #fff6c9, #f5c64a 30%, #fffbe8 48%, #e7b33a 66%, #fff1b0) 0 0 / 100% 300%; }
 .sb-tab.foil:not(.still) { animation: sb-foil 3.2s ease-in-out infinite alternate; }
@@ -74,12 +76,12 @@ const CSS = `
 .sb-card .st { justify-self: start; padding: 2px 9px; border: 1.5px solid currentColor; border-radius: 999px; font-size: 12px; color: var(--ink-soft); }
 .sb-card .st.now { color: var(--pink); }
 .sb-card .close { display: none; }
-@media (max-width: 760px), (max-height: 640px) {
+@media (max-width: 760px), (max-height: 700px) {
   #sticker-book { padding: 8px; padding-top: 48px; align-items: stretch; }
   .sb-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
-  .sb-tabs { order: -1; flex-direction: row; overflow-x: auto; padding: 0 0 0 4px; margin: 0; }
-  .sb-tab { writing-mode: horizontal-tb; transform: none; border-radius: 8px 8px 0 0; border-bottom: 0; padding: 6px 10px; white-space: nowrap; margin: 0 0 -2px; }
-  .sb-tab[aria-selected="true"] { margin: 0 0 -2px; padding: 8px 10px 6px; }
+  .sb-tabs { order: -1; flex-direction: row; flex-wrap: wrap; overflow: visible; padding: 4px 4px 0; margin: 0; }
+  .sb-tab { flex-direction: row; gap: 4px; writing-mode: horizontal-tb; transform: none; border-radius: 8px 8px 0 0; padding: 6px 10px; white-space: nowrap; margin: 0; }
+  .sb-tab[aria-selected="true"] { margin: 0; padding: 6px 10px; }
   .sb-page { border-radius: 0 6px 6px 6px; padding: 14px 10px 18px 30px; }
   .sb-page::before { left: 6px; }
   .sb-grid { grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 10px 4px; }
@@ -214,7 +216,10 @@ function buildBook(doc, engine, stars, gentle) {
     for (const p of STICKER_PAGES) {
       const list = inBook(engine.life).filter((s) => s.page === p.id);
       const got = list.filter((s) => runOf(s.id)).length;
-      const t = mk('button', `sb-tab${got === list.length ? ' foil' : ''}${gentle() ? ' still' : ''}`, tabs, `${p.name} ${got}/${list.length}`);
+      const t = mk('button', `sb-tab${got === list.length ? ' foil' : ''}${gentle() ? ' still' : ''}`, tabs);
+      mk('span', '', t, p.name);
+      mk('small', '', t, `${got}/${list.length}`);
+      t.setAttribute('aria-label', `${p.name} ${got}/${list.length}`);
       t.type = 'button';
       t.setAttribute('role', 'tab');
       t.setAttribute('aria-selected', String(p.id === pageId));

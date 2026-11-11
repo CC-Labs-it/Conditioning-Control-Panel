@@ -14,6 +14,8 @@ const read = (n) => JSON.parse(readFileSync(join(DESIGN, n), 'utf8'));
 
 /** The currency name is a token: only data/brand.js says what it is called. */
 const cur = (s) => String(s ?? '').replace(/\bFuzz\b/g, '{cur}');
+/* The theme is Bambi; the bimbo id still addresses saved choices and existing media. */
+const themeCopy = (s) => cur(s).replace(/\bBimbo\b/g, 'Bambi');
 
 /* Stacking rows. Same curve as the design sim: 3 x 1.5^owned, 12 at most. */
 const GROW = { stray: { ratio: 1.5, max: 12 } };
@@ -171,7 +173,7 @@ const LATE_FROM = 20000, LATE_PAY = 0.82;
  * minute 10. Measured on the real game: dev/measure.mjs. A row that moves keeps its value for money: pay follows price along
  * the design's own curve. */
 const TRUNK_MOVES = {
-  f5: 2300, f3: 3300, depth: 3600, f2: 4200, banner: 5000, f4: 6500, glossy: 8000, taste2: 45000, overlay: 150000, takeover: 230000,
+  f5: 2000, f3: 3300, depth: 3600, f2: 4200, banner: 5000, f4: 6500, glossy: 8000, taste2: 45000, overlay: 150000, takeover: 230000,
   /* The picture lanes, whichever fork: first screen, then a slot each. */
   v_frame: 3500, v_frame2: 5500, v_frame3: 8000, v_gif: 12000, v_wall: 22000, v_fav: 40000, v_video: 65000,
   d_scroll: 3500, d_like: 5500, d_clips: 8000, d_foryou: 12000, d_streak: 22000, d_refresh: 40000, d_end: 65000,
@@ -323,7 +325,7 @@ export function buildItems() {
   const items = rows.map((r) => {
     const c = copy.items[r.id] || r;   // the design rows carry old names too: copy.json wins, and only the rows it does not know speak for themselves
     if (!c) throw new Error(`copy.json has no ${r.id}`);
-    const it = { id: r.id, emoji: r.emoji, name: NAME_OVERRIDE[r.id] || BUTTON_NAMES[r.id] || (r.id === 'trail' ? 'Stardust' : cur(c.name)), what: cur(WHAT_OVERRIDE[r.id] || c.what), line: cur(r.line), cost: r.cost, lane: r.lane, req: REQ_OVERRIDE[r.id] || r.req, pay: r.pay };
+    const it = { id: r.id, emoji: r.emoji, name: NAME_OVERRIDE[r.id] || BUTTON_NAMES[r.id] || (r.id === 'trail' ? 'Stardust' : themeCopy(c.name)), what: themeCopy(WHAT_OVERRIDE[r.id] || c.what), line: cur(r.line), cost: r.cost, lane: r.lane, req: REQ_OVERRIDE[r.id] || r.req, pay: r.pay };
     const fps = r.fps || EXTRA_PAY[r.id]?.fps;
     if (fps) it.fps = planPay(fps, r.lane, r.cost);
     if (r.click) it.click = planPay(r.click, r.lane, r.cost);
@@ -345,13 +347,13 @@ export function buildItems() {
   fateRows(items);
   const outLanes = lanes.map((l) => {
     const c = copy.lanes[l.id] || {};
-    const o = { id: l.id, name: cur(c.name || l.name), what: cur(c.what || l.note || '') };
+    const o = { id: l.id, name: themeCopy(c.name || l.name), what: themeCopy(c.what || l.note || '') };
     if (l.fork) o.fork = l.fork;
     return o;
   });
   if (!outLanes.some((l) => l.id === FATE_LANE.id)) outLanes.push({ ...FATE_LANE });
   const forks = {};
-  for (const [id, f] of Object.entries(copy.forks)) forks[id] = { name: cur(f.name), ask: cur(f.ask), opts: Object.fromEntries(Object.entries(f.opts).map(([k, v]) => [k, { name: cur(v.name), what: cur(v.what) }])) };
+  for (const [id, f] of Object.entries(copy.forks)) forks[id] = { name: cur(f.name), ask: cur(f.ask), opts: Object.fromEntries(Object.entries(f.opts).map(([k, v]) => [k, { name: themeCopy(v.name), what: themeCopy(v.what) }])) };
   return { items, lanes: outLanes, forks };
 }
 
@@ -395,7 +397,7 @@ function dropDemos(src) {
 
 function demoCur(src) {
   // Every use in the source sits inside a single-quoted string or a comment.
-  return src.replace(/\bFuzz\b/g, "' + CUR + '");
+  return src.replace(/\bFuzz\b/g, "' + CUR + '").replace(/'Bimbo( Theme)?'/g, "'Bambi$1'");
 }
 
 export function demoSources() {

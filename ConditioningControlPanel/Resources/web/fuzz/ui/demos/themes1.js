@@ -164,7 +164,7 @@ Object.assign(DEMOS, {
   },
 
   /* ---------- BIMBO: hot pink, gloss, fewer and fewer words ---------- */
-  bi_head: (k) => themes1Pack(k, 'bi', 'Bimbo Theme', (p) => {
+  bi_head: (k) => themes1Pack(k, 'bi', 'Bambi Theme', (p) => {
     [['pink', 26], ['heels', 92], ['gloss', 158]].forEach(([n, x]) => k.pic(x, 34, 56, 62, n, p.tile));
     k.ad(52, 104, 136, 18, 'Bambi mod', true);
     themes1Rate(k, p, '+130/s', 94, 128);

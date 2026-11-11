@@ -133,7 +133,7 @@ export const ENDING_STARS = Object.freeze([
   ['o_out', 'Living Button', 'billboard', 'Ads pay double.', 'the ending behind the glass'],
   ['p_life', 'Lifetime Plan', 'card', 'Every run starts with the Prize Wheel.', 'the subscription ending'],
   ['tr_end', 'Count Up', 'spiral', 'Spirals pay 10% more.', 'the Trance theme ending'],
-  ['bi_end', 'Bimbodoll', 'bubbles', 'The button starts as a bubble.', 'the Bimbo theme ending'],
+  ['bi_end', 'Bimbodoll', 'bubbles', 'The button starts as a bubble.', 'the Bambi theme ending'],
   ['dr_end', 'Unit Complete', 'robot', 'The ticker starts at rank 2.', 'the Drone theme ending'],
   ['si_end', 'The Debut', 'dress', 'Looks cost half.', 'the Sissy theme ending'],
   ['go_end', 'Taken Over', 'sunrise', 'The Golden Button stays longer.', 'the Goon theme ending'],

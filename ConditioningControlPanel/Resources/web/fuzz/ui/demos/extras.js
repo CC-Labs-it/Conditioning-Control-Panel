@@ -57,7 +57,7 @@ const extrasRing = (k, s, x, y, color, ms) => { const r = k.sound(x, y, color); 
 /* Two ingredients slide together into the result, then build(s) plays the result below y = 38. */
 const extrasI = {
   watch: ['👁️', 'Watch'], listen: ['🎧', 'Listen'], rest: ['🛋️', 'Rest'], tap: ['👆', 'Tap'], nopic: ['🚫', 'No Pictures'], slides: ['🖼️', 'Slideshow'],
-  feed: ['📱', 'Swipe Feed'], more: ['💰', 'More Ads'], fewer: ['✨', 'Fewer Ads'], censored: ['⬛', 'Censored'], locked: ['🔒', 'Chastity'], bimbo: ['💄', 'Bimbo'],
+  feed: ['📱', 'Swipe Feed'], more: ['💰', 'More Ads'], fewer: ['✨', 'Fewer Ads'], censored: ['⬛', 'Censored'], locked: ['🔒', 'Chastity'], bimbo: ['💄', 'Bambi'],
   drone: ['🐝', 'Drone'], goon: ['🥴', 'Goon'], sissy: ['🎀', 'Sissy'], trance: ['🌀', 'Trance'], infection: ['🦠', 'Infection'],
 };
 const extrasMerge = (k, a, b, res, build) => extrasLoop(k, 5400, (s) => {
