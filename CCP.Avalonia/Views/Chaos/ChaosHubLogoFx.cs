@@ -9,9 +9,9 @@ using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Rendering.SceneGraph;
 using Avalonia.Skia;
-using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Helpers;
 using SkiaSharp;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos;
@@ -27,7 +27,7 @@ internal sealed class ChaosHubLogoFx : Control
     private float _glowI = 1, _glowF = 1, _twinkleI = 1, _twinkleF = 1, _sheenI = 1, _sheenF = 1;
     private float _clock, _sweep, _accum;
     private int _logoWidth, _logoHeight;
-    private readonly DispatcherTimer _timer;
+    private readonly BeatLoop _beat;
     internal int TwinkleCount => _twinkles.Count;
     internal int SpotCount => _spots.Length;
 
@@ -40,20 +40,22 @@ internal sealed class ChaosHubLogoFx : Control
     public ChaosHubLogoFx()
     {
         IsHitTestVisible = false;
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
-        _timer.Tick += (_, _) => { if (IsEffectivelyVisible) { Step(); InvalidateVisual(); } };
+        _beat = new BeatLoop(this, elapsed =>
+        {
+            if (elapsed > 0 && IsEffectivelyVisible) { Step(); InvalidateVisual(); }
+        });
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
         if (_mask == null) Load();
-        _timer.Start();
+        _beat.Start();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
-        _timer.Stop();
+        _beat.Stop();
         _mask?.Dispose(); _mask = null;
         _bloom?.Dispose(); _bloom = null;
         _twinkles.Clear();

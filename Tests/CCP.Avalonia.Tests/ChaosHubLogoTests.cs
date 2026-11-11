@@ -9,6 +9,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Helpers;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -69,6 +70,60 @@ public class ChaosHubLogoTests
             Assert.Equal(1, fx.TwinkleCount);
         }
         finally { host?.Close(); CoreSettings.Current.ChaosSkiaFxEnabled = enabled; ChaosArt.ResetForTest(); }
+    });
+
+    [Fact]
+    public void Animation_uses_shared_beat_and_parks_with_its_visual() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var previousTime = BeatLoop.Time;
+        var enabled = CoreSettings.Current.ChaosSkiaFxEnabled;
+        var time = new SteppedTime();
+        BeatLoop.Time = time;
+        ChaosArt.RootsOverride = () => new[] { Path.Combine(AppContext.BaseDirectory, "assets", "Chaos") };
+        var fx = new ChaosHubLogoFx { Width = 314, Height = 224 };
+        var parent = new Border { Child = fx };
+        var host = new Window { Width = 314, Height = 224, Content = parent };
+        try
+        {
+            CoreSettings.Current.ChaosSkiaFxEnabled = true;
+            Assert.DoesNotContain(BeatLoop.Running, l => ReferenceEquals(l.Owner, fx));
+            host.Show();
+            Dispatcher.UIThread.RunJobs();
+            var loop = Assert.Single(BeatLoop.Running, l => ReferenceEquals(l.Owner, fx));
+            Assert.True(loop.OnFrameBeat);
+            Assert.Equal(TimeSpan.FromSeconds(1.0 / 30), loop.Interval);
+            time.Advance(TimeSpan.FromMilliseconds(34));
+            BeatLoop.StepAll();
+            Assert.Equal(1, fx.TwinkleCount);
+
+            parent.IsVisible = false;
+            Assert.False(loop.IsTicking);
+            time.Advance(TimeSpan.FromSeconds(2));
+            BeatLoop.StepAll();
+            Assert.Equal(1, fx.TwinkleCount);
+            parent.IsVisible = true;
+            Assert.True(loop.OnFrameBeat);
+            host.WindowState = WindowState.Minimized;
+            Assert.False(loop.IsTicking);
+            host.WindowState = WindowState.Normal;
+            Assert.True(loop.IsTicking);
+            parent.Child = null;
+            Assert.False(loop.IsRunning);
+            Assert.DoesNotContain(BeatLoop.Running, l => ReferenceEquals(l.Owner, fx));
+            parent.Child = fx;
+            Assert.Same(loop, Assert.Single(BeatLoop.Running, l => ReferenceEquals(l.Owner, fx)));
+            Assert.True(loop.OnFrameBeat);
+            host.Close();
+            Assert.False(loop.IsRunning);
+            Assert.DoesNotContain(BeatLoop.Running, l => ReferenceEquals(l.Owner, fx));
+        }
+        finally
+        {
+            host.Close();
+            BeatLoop.Time = previousTime;
+            CoreSettings.Current.ChaosSkiaFxEnabled = enabled;
+            ChaosArt.ResetForTest();
+        }
     });
 
     [Fact]
