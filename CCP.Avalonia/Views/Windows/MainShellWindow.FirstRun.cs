@@ -61,7 +61,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // mods are offered by the first-run wizard and the Mod Manager only.
                 else if (CoreSettings.Service != null && CoreSettings.Current.Welcomed
                          && !CoreSettings.Current.HasAcceptedAgeVerification)
+                {
+                    IsAgeGatePending = true;
+                    Closed += (_, _) => IsAgeGatePending = false;
                     Opened += OnAgeGateShellOpened;
+                }
             }
             catch (Exception ex)
             {
@@ -80,15 +84,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             "By clicking \"OK\", you confirm that you are at least 18 years old and that viewing adult content is legal in your jurisdiction.\n\n" +
             "Do you wish to continue?";
 
+        // Raised when the prompt is armed, before Opened can flush startup offers.
+        internal static bool IsAgeGatePending { get; private set; }
+
         private void OnAgeGateShellOpened(object? sender, EventArgs e)
         {
             Opened -= OnAgeGateShellOpened;
             Dispatcher.UIThread.Post(async () =>
             {
-                var ok = IsVisible && await Dialogs.MessageDialog.ConfirmAsync(this, "Age Verification", AgeGateBody, defaultToCancel: true);
-                if (!ok) { ExitWithoutBill(); return; }   // WPF App.xaml.cs:3835 Shutdown, no bill
-                CoreSettings.Current.HasAcceptedAgeVerification = true;
-                CoreSettings.Save();
+                var accepted = false;
+                try
+                {
+                    var ok = IsVisible && await Dialogs.MessageDialog.ConfirmAsync(this, "Age Verification", AgeGateBody, defaultToCancel: true);
+                    if (!ok) { ExitWithoutBill(); return; }   // WPF App.xaml.cs:4169 Shutdown
+                    CoreSettings.Current.HasAcceptedAgeVerification = true;
+                    CoreSettings.Save();
+                    accepted = true;
+                }
+                finally
+                {
+                    IsAgeGatePending = false;
+                    if (accepted && IsVisible) Platform.RemoteMediaOffer.FlushPending(this);
+                }
             }, DispatcherPriority.Normal);
         }
 

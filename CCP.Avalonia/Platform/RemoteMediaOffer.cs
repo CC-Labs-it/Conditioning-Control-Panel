@@ -23,7 +23,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         // WPF's one slot (App.xaml.cs:890): a dead end behind a modal and one hit before any window
         // (App.xaml.cs:229) share it, the first wins, and a flush always empties it.
         private static Tuple<string, Window?>? _pending;
-        private static bool ModalUp => AppUpdater.IsUpdateDialogActive || MainShellWindow.IsStartupDialogShowing;
+        private static bool ModalUp => AppUpdater.IsUpdateDialogActive || MainShellWindow.IsStartupDialogShowing || MainShellWindow.IsAgeGatePending;
 
         /// <summary>Test seam: what opening the card does (default: the intro popup).</summary>
         internal static Action<Window?> ShowCard = owner => FeatureIntroPopup.ShowIfFirstTime(IntroKey, owner);

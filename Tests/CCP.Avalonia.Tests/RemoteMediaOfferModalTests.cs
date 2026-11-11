@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Interactivity;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -204,6 +205,52 @@ public sealed class RemoteMediaOfferModalTests
             Assert.Same(shell, owner);
             RemoteMediaOffer.FlushPending();
             Assert.Equal(1, opened());
+        }
+        finally
+        {
+            if (shell != null) { foreach (var w in shell.OwnedWindows.ToArray()) w.Close(); shell.Close(); }
+            Dispatcher.UIThread.RunJobs();
+            service.SealForReset();
+            settingsProp.SetValue(null, old.App);
+            CoreSettings.ServiceProvider = old.ServiceProvider;
+        }
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task A_parked_offer_waits_for_the_age_gate(bool accept) => WithOffer(opened =>
+    {
+        var settingsProp = typeof(App).GetProperty(nameof(App.Settings))!;
+        var old = (App: settingsProp.GetValue(null), CoreSettings.ServiceProvider);
+        var service = new SettingsService { SaveDebounceDueTimeMilliseconds = Timeout.Infinite };
+        MainShellWindow? shell = null;
+        try
+        {
+            var s = service.Current;
+            s.Welcomed = true;
+            s.HasAcceptedAgeVerification = false;
+            s.MediaSource = "local";
+            s.LastSeenVersion = CoreReleaseContent.AppVersion;
+            foreach (var key in FeatureIntros.All.Keys) if (!s.SeenFeatureIntros.Contains(key)) s.SeenFeatureIntros.Add(key);
+            settingsProp.SetValue(null, service);
+            CoreSettings.ServiceProvider = () => service;
+            RemoteMediaOffer.Park("custom-assets-path-missing");
+            shell = new MainShellWindow();
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            var dialog = Assert.Single(shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>());
+            Assert.True(dialog.IsVisible);
+            Assert.Equal(0, opened());
+            RemoteMediaOffer.Offer("flashes", shell);
+            Assert.Equal(0, opened());
+            // Other startup cards can occupy the passive settle window; isolate this offer's release.
+            StartupLadder.ResetForTests();
+
+            dialog.FindControl<Button>(accept ? "BtnOk" : "BtnCancel")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(accept, s.HasAcceptedAgeVerification);
+            Assert.Equal(accept ? 1 : 0, opened());
         }
         finally
         {
