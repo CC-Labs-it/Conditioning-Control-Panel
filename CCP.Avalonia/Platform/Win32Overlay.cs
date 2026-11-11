@@ -41,6 +41,15 @@ internal static class Win32Overlay
     [DllImport("user32.dll")] private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint colorKey, byte alpha, uint flags);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
 
+    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hwnd, int command);
+
+    // The window owner is wedged: post the z-order request and hide without the dispatcher.
+    internal static void ReleaseWedgedWindow(IntPtr hwnd)
+    {
+        SetWindowPos(hwnd, new IntPtr(-2), 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate | 0x4000);
+        ShowWindow(hwnd, 0);
+    }
+
     // Native call seam: tests verify HWND_NOTOPMOST and the no-activation flags on Linux too.
     internal static Func<IntPtr, IntPtr, int, int, int, int, uint, bool> PositionWindow = SetWindowPos;
 
