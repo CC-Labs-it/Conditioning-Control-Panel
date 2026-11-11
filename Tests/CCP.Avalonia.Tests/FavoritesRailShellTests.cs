@@ -123,13 +123,17 @@ public sealed class FavoritesRailShellTests
             var frame = new ModArtFraming { CenterX = 0.7, CenterY = 0.5, Zoom = 2 };
             var manifest = new ModManifest { ArtFraming = new() { ["FEATURES\\VIBE.PNG"] = new() { ["RAILCHIP"] = frame } } };
             var s = CoreSettings.Current;
-            s.RailFavorites.Clear(); s.RailFavorites.Add("tab.haptics");
-            s.RailRecent.Clear(); s.RailRecent.Add("tab.haptics");
-            CoreMods.ActiveModPackageProvider = () => new ModPackage(manifest, null, false);
-            CoreModArt.OverridePathProvider = p => p == "features/vibe.png" ? png : null;
+            var favorites = s.RailFavorites.ToList();
+            var recentBefore = s.RailRecent.ToList();
+            var packageProvider = CoreMods.ActiveModPackageProvider;
+            var artProvider = CoreModArt.OverridePathProvider;
             MainShellWindow? w = null;
             try
             {
+                s.RailFavorites.Clear(); s.RailFavorites.Add("tab.haptics");
+                s.RailRecent.Clear(); s.RailRecent.Add("tab.haptics");
+                CoreMods.ActiveModPackageProvider = () => new ModPackage(manifest, null, false);
+                CoreModArt.OverridePathProvider = p => p == "features/vibe.png" ? png : null;
                 w = new MainShellWindow(); w.Show(); Dispatcher.UIThread.RunJobs();
                 var dash = w.Named<SettingsTabView>("SettingsTab")!;
                 var favs = dash.FindControl<StackPanel>("FavoritesList")!;
@@ -150,10 +154,59 @@ public sealed class FavoritesRailShellTests
                 var image = (Bitmap)builtIn.Source!; var aspect = image.Size.Width / image.Size.Height;
                 Check(builtIn.SourceRect, ModArtFramingRegistry.ResolveViewbox("features/vibe.png", ModArtFramingRegistry.SurfaceRailChip, false, aspect, null));
             }
-            finally { w?.Close(); dir.Delete(true); }
+            finally
+            {
+                try { w?.Close(); }
+                finally
+                {
+                    CoreMods.ActiveModPackageProvider = packageProvider;
+                    CoreModArt.OverridePathProvider = artProvider;
+                    s.RailFavorites.Clear(); s.RailFavorites.AddRange(favorites);
+                    s.RailRecent.Clear(); s.RailRecent.AddRange(recentBefore);
+                    dir.Delete(true);
+                }
+            }
             return Task.CompletedTask;
         });
     }
+
+    [Theory]
+    [InlineData("package")]
+    [InlineData("art")]
+    [InlineData("favorites")]
+    [InlineData("recent")]
+    public Task FramingTestRestoresProvidersAndRailLists(string member) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var s = CoreSettings.Current;
+        var favorites = s.RailFavorites.ToList();
+        var recent = s.RailRecent.ToList();
+        var packageProvider = CoreMods.ActiveModPackageProvider;
+        var artProvider = CoreModArt.OverridePathProvider;
+        System.Func<ModPackage?> sentinelPackage = () => null;
+        System.Func<string, string?> sentinelArt = _ => null;
+        try
+        {
+            s.RailFavorites.Clear(); s.RailFavorites.Add("tab.settings");
+            s.RailRecent.Clear(); s.RailRecent.Add("tab.play");
+            CoreMods.ActiveModPackageProvider = sentinelPackage;
+            CoreModArt.OverridePathProvider = sentinelArt;
+            await FavoriteAndRecentCoverChipsHonorModFramingAndFallbacks();
+            switch (member)
+            {
+                case "package": Assert.Same(sentinelPackage, CoreMods.ActiveModPackageProvider); break;
+                case "art": Assert.Same(sentinelArt, CoreModArt.OverridePathProvider); break;
+                case "favorites": Assert.Equal(new[] { "tab.settings" }, s.RailFavorites); break;
+                case "recent": Assert.Equal(new[] { "tab.play" }, s.RailRecent); break;
+            }
+        }
+        finally
+        {
+            CoreMods.ActiveModPackageProvider = packageProvider;
+            CoreModArt.OverridePathProvider = artProvider;
+            s.RailFavorites.Clear(); s.RailFavorites.AddRange(favorites);
+            s.RailRecent.Clear(); s.RailRecent.AddRange(recent);
+        }
+    });
 
     /// <summary>WPF MainWindow.Marquee.cs:464 BannerWebLink_Click: the One Account beat's link opens
     /// the web app through the one opener and retires the beat. Driven by the keyboard (P17).</summary>
