@@ -92,8 +92,21 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         static StartupLadder()
         {
-            Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) => { if (w is IPassiveStartupSurface) _passiveUp.Add(w); });
+            Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) =>
+            {
+                if (w is IPassiveStartupSurface) _passiveUp.Add(w);
+                w.Activated += OnWindowActivated;
+                w.Closed += OnWindowClosed;
+            });
             Window.WindowClosedEvent.AddClassHandler<Window>((w, _) => _passiveUp.Remove(w));
+        }
+
+        private static void OnWindowActivated(object? sender, EventArgs e) => AccountSeed.OnCheckoutFocus();
+        private static void OnWindowClosed(object? sender, EventArgs e)
+        {
+            if (sender is not Window w) return;
+            w.Activated -= OnWindowActivated;
+            w.Closed -= OnWindowClosed;
         }
 
         /// <summary>A feature card or an announcement is on screen.</summary>

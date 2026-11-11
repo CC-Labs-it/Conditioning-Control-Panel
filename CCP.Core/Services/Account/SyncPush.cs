@@ -346,11 +346,16 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>WPF's four fields (Core <see cref="SyncBody.Heartbeat"/>); is_active true, as WPF with no idle tracker.</summary>
+        public Action<string, string?, int?>? HeartbeatTier { get; set; }
+
         public Task<bool> HeartbeatAsync()
         {
             var s = CoreSettings.Current;
             if (!SignedIn(s)) return Task.FromResult(false);
-            return new V2AuthService(() => s, _handler).SendHeartbeatAsync(s.UnifiedId!, true, _inSession());
+            var id = s.UnifiedId!;
+            var token = s.AuthToken;
+            return new V2AuthService(() => s, _handler).SendHeartbeatAsync(id, true, _inSession(),
+                tier => HeartbeatTier?.Invoke(id, token, tier));
         }
     }
 }

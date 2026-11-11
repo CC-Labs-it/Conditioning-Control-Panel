@@ -18,7 +18,7 @@ internal sealed class InboxNoticeCard : Window, IPassiveStartupSurface
 {
     internal static InboxNoticeCard? Open { get; private set; }
     internal InboxNoticeCard() : this("CC Labs", Loc.Get("conv_gallery_body"), Loc.Get("conv_get_basic"), () => { }) { }
-    private InboxNoticeCard(string heading, string body, string primary, Action onPrimary)
+    private InboxNoticeCard(string heading, string body, string primary, Action onPrimary, string? secondary = null)
     {
         Title = "CC Labs";
         Width = 400;
@@ -58,7 +58,7 @@ internal sealed class InboxNoticeCard : Window, IPassiveStartupSurface
         var quiet = new Button
         {
             Name = "Quiet", FontSize = 12, Cursor = new Cursor(StandardCursorType.Hand),
-            Content = new TextBlock { Text = Loc.Get("vaultgate_close"), TextDecorations = TextDecorations.Underline },
+            Content = new TextBlock { Text = secondary ?? Loc.Get("vaultgate_close"), TextDecorations = TextDecorations.Underline },
             Padding = new Thickness(0), BorderThickness = new Thickness(0),
             Foreground = Brush.Parse("#B8B1CC"), Background = Brushes.Transparent,
             HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 10, 0, 0),
@@ -83,9 +83,9 @@ internal sealed class InboxNoticeCard : Window, IPassiveStartupSurface
         Content = card;
     }
 
-    internal static void Present(Window? owner, string heading, string body, string primary, Action onPrimary)
+    internal static void Present(Window? owner, string heading, string body, string primary, Action onPrimary, string? secondary = null)
     {
-        var card = new InboxNoticeCard(heading, body, primary, onPrimary);
+        var card = new InboxNoticeCard(heading, body, primary, onPrimary, secondary);
         Open?.Close();
         Open = card;
         card.Closed += (_, _) => { if (ReferenceEquals(Open, card)) Open = null; };

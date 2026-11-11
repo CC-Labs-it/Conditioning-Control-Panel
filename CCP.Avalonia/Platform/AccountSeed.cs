@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using ConditioningControlPanel.Services;
 using Serilog;
 
@@ -154,6 +155,77 @@ internal static class AccountSeed
         && !string.IsNullOrEmpty(CoreSettings.Current.UnifiedId)
         && TierAnswerAccount == CoreSettings.Current.UnifiedId;
 
+    internal static event Action? TierReadingApplied;
+    internal static DateTime LastFocusUtc = DateTime.MinValue;
+    internal static DateTime CheckoutUntilUtc = DateTime.MinValue;
+    internal static DateTime LastCheckoutUtc = DateTime.MinValue;
+    private static int _refreshInFlight;
+
+    // WPF EntitlementTierSync.cs:180, 224: focus reads the tier without pushing a profile.
+    internal static void OnFocus()
+    {
+        var now = DateTime.UtcNow;
+        var s = CoreSettings.Current;
+        if (s.OfflineMode || string.IsNullOrEmpty(s.UnifiedId) || string.IsNullOrEmpty(s.AuthToken)) return;
+        var checkout = now <= CheckoutUntilUtc && (now < LastCheckoutUtc || now - LastCheckoutUtc >= TimeSpan.FromSeconds(20));
+        if (!checkout && now - LastFocusUtc < TimeSpan.FromSeconds(20)) return;
+        if (checkout) LastCheckoutUtc = now;
+        LastFocusUtc = now;
+        _ = RefreshTierAsync();
+        if (checkout && Patreon?.IsAuthenticated == true)
+            _ = Patreon.ValidateSubscriptionAsync(forceRefresh: true);
+    }
+
+    // WPF Application.Activated also checks a checkout when another app window comes forward.
+    internal static void OnCheckoutFocus()
+    {
+        var now = DateTime.UtcNow;
+        if (now <= CheckoutUntilUtc && (now < LastCheckoutUtc || now - LastCheckoutUtc >= TimeSpan.FromSeconds(20)))
+            OnFocus();
+    }
+
+    internal static void NoteCheckout() => CheckoutUntilUtc = DateTime.UtcNow.AddMinutes(30);
+
+    private static async Task RefreshTierAsync()
+    {
+        if (System.Threading.Interlocked.Exchange(ref _refreshInFlight, 1) != 0) return;
+        try
+        {
+            var s = CoreSettings.Current;
+            var id = s.UnifiedId;
+            var token = s.AuthToken;
+            if (s.OfflineMode || string.IsNullOrEmpty(id) || string.IsNullOrEmpty(token)) return;
+            var user = await NewV2().GetUserProfileAsync(id);
+            OfferTier(id, token, EntitlementTierRule.ParseTier(user?.EffectiveTierRaw));
+        }
+        catch (Exception ex) { Log.Debug("[Entitlement] focus refresh: {Error}", ex.Message); }
+        finally { System.Threading.Interlocked.Exchange(ref _refreshInFlight, 0); }
+    }
+
+    internal static void OfferTier(string id, string? token, int? tier)
+    {
+        if (tier != null) Dispatcher.UIThread.Post(() => ApplyTier(id, token, tier));
+    }
+
+    internal static void ApplyTier(string id, string? token, int? tier)
+    {
+        var s = CoreSettings.Current;
+        if (s.UnifiedId != id || string.IsNullOrEmpty(token) || token != s.AuthToken || tier is < 0 or > 2 || tier == null) return;
+        TierAnswerAccount = id;
+        var verdict = EntitlementTierRule.Decide(s.PatreonTier, tier);
+        s.ServerTierSeen = EntitlementTierRule.ServerTierSeenAfter(verdict, tier, s.ServerTierSeen);
+        var rose = EntitlementTierRule.ApplyRise(s, tier, DateTime.UtcNow);
+        if (rose) CheckoutUntilUtc = DateTime.MinValue;
+        CoreSettings.Save();
+        try { TierReadingApplied?.Invoke(); }
+        catch (Exception ex) { Log.Debug("[Entitlement] reading listener: {Error}", ex.Message); }
+        if (rose)
+        {
+            try { Patreon?.NotifyEntitlementRaised(tier >= 2 ? Models.PatreonTier.Level2 : Models.PatreonTier.Level1); }
+            catch (Exception ex) { Log.Debug("[Entitlement] rise listener: {Error}", ex.Message); }
+        }
+    }
+
     /// <summary>The push, seeded by the app at startup only: unseeded nothing is pushed.</summary>
     internal static SyncPush? Sync;
 
@@ -180,10 +252,7 @@ internal static class AccountSeed
         var tier = EntitlementTierRule.ParseTier(user.EffectiveTierRaw);
         if (s.UnifiedId == id && !string.IsNullOrEmpty(token) && token == s.AuthToken && tier.HasValue)
         {
-            TierAnswerAccount = id;
-            var verdict = EntitlementTierRule.Decide(s.PatreonTier, tier);
-            s.ServerTierSeen = EntitlementTierRule.ServerTierSeenAfter(verdict, tier, s.ServerTierSeen);
-            EntitlementTierRule.ApplyRise(s, tier, DateTime.UtcNow);
+            ApplyTier(id, token, tier);
         }
         ProfileAdopt.AdoptReadBeforeWrite(s, user);
         CoreSettings.Save();

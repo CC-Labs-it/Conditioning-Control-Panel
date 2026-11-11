@@ -108,6 +108,24 @@ public sealed class V2AuthServiceWireTests : IDisposable
         Assert.Equal(expected, _fake.Seen);
     }
 
+    [Theory]
+    [InlineData("{\"effective_tier\":1}", 1)]
+    [InlineData("{\"effective_tier\":0}", 0)]
+    [InlineData("{\"effective_tier\":\"1\"}", null)]
+    [InlineData("{}", null)]
+    public async Task HeartbeatOffersOnlyParsedSuccessfulTier(string body, int? expected)
+    {
+        _fake.Body = body;
+        var calls = 0;
+        int? seen = -1;
+        Assert.True(await Client().SendHeartbeatAsync("u_abc123", onTier: tier => { calls++; seen = tier; }));
+        Assert.Equal(1, calls);
+        Assert.Equal(expected, seen);
+        _fake.Status = HttpStatusCode.ServiceUnavailable;
+        Assert.False(await Client().SendHeartbeatAsync("u_abc123", onTier: _ => calls++));
+        Assert.Equal(1, calls);
+    }
+
     [Fact]
     public async Task NoTokenMeansNoAuthHeader()
     {

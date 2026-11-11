@@ -145,6 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (s.AwarenessModeEnabled && s.AwarenessConsentGiven && ConditioningControlPanel.Services.WindowAwarenessService.HasEntitlement
                     && !App.WindowAwareness.IsRunning)
                     App.WindowAwareness.Start();
+                MaybePostLapseRow();
                 if (cleared.Count == 0) return;
                 Named<Tabs.BambiTakeoverTabView>("BambiTakeoverTab")?.SyncFromSettings();
                 Named<Tabs.AwarenessTabView>("AwarenessTab")?.SyncAwarenessTabUi();

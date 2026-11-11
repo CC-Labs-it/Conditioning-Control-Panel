@@ -739,7 +739,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Send heartbeat to update online status
         /// </summary>
-        public async Task<bool> SendHeartbeatAsync(string unifiedId, bool isActive = true, bool inSession = false)
+        public async Task<bool> SendHeartbeatAsync(string unifiedId, bool isActive = true, bool inSession = false, Action<int?>? onTier = null)
         {
             try
             {
@@ -749,6 +749,11 @@ namespace ConditioningControlPanel.Services
                 var response = await _http.SendAsync(request);
 
                 if (await TryHandleMergedAsync(response)) return false;
+                if (response.IsSuccessStatusCode && onTier != null)
+                {
+                    try { onTier(EntitlementTierRule.ParseHeartbeatTier(await response.Content.ReadAsStringAsync())); }
+                    catch { /* A notice listener cannot turn a successful heartbeat into a failure. */ }
+                }
                 return response.IsSuccessStatusCode;
             }
             catch
