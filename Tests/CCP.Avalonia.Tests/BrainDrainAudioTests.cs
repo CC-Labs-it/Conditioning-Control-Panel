@@ -53,6 +53,33 @@ public class BrainDrainAudioTests
         Assert.False(CoreSettings.Current.BrainDrainEnabled);
     }
     [Fact]
+    public void TriggeredOnlyWhenAWinningRollSelectsAClip()
+    {
+        using var state = new BrainDrainTestState();
+        var root = Directory.CreateTempSubdirectory("ccp-drain-trigger-").FullName;
+        var folder = Directory.CreateDirectory(Path.Combine(root, "braindrain")).FullName;
+        var path = Path.Combine(folder, "clip.wav");
+        double roll = 1; int triggered = 0;
+        var player = new BrainDrainPlayer((_, _) => new Voice(), new Clock(), () => roll);
+        player.Triggered += (_, _) => triggered++;
+        try
+        {
+            CorePaths.EffectiveAssetsProvider = () => root;
+            CoreSettings.Current.BrainDrainEnabled = true;
+            player.Tick(TimeSpan.FromSeconds(5)); // stopped
+            player.Start(); player.Tick(TimeSpan.FromSeconds(5)); // losing roll
+            roll = 0; player.Tick(TimeSpan.FromSeconds(5)); // empty library
+            Assert.Equal(0, triggered);
+            File.WriteAllText(path, "");
+            player.Tick(TimeSpan.FromSeconds(5));
+            Assert.Equal(1, triggered);
+            player.Tick(TimeSpan.FromSeconds(5)); // busy
+            player.Stop(); player.Tick(TimeSpan.FromSeconds(5));
+            Assert.Equal(1, triggered);
+        }
+        finally { player.Stop(); Directory.Delete(root, true); }
+    }
+    [Fact]
     public void ClipsFinishLiveGainFollowsRestoreAndPanicStops()
     {
         var state = new BrainDrainTestState();

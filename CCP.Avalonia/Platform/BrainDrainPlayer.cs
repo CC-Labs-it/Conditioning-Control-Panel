@@ -11,6 +11,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 internal sealed class BrainDrainPlayer
 {
     internal static BrainDrainPlayer? Instance;
+    internal event EventHandler? Triggered;
     private readonly Func<string, Action, LibVlcAudio.IPreparedVoice?> _prepare;
     private readonly TimeProvider _time;
     private readonly Func<double> _roll;
@@ -74,6 +75,7 @@ internal sealed class BrainDrainPlayer
             {
                 lock (_gate) if (generation == _generation) { _voice = null; _busy = false; ++_generation; }
             });
+            if (path != null) Triggered?.Invoke(this, EventArgs.Empty);
             bool started = false;
             lock (_gate)
             {
