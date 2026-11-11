@@ -15,6 +15,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal bool BrowserMediaOwnsSlot { get; private set; }
         internal Func<DateTime> BrowserMediaClock = () => DateTime.UtcNow;
         private DateTime _browserMediaBeat;
+        private DateTime _browserMediaEnded = DateTime.MinValue;
+        private IDisposable? _browserTakeoverStop;
+        private int _browserTakeoverStopGeneration, _browserTakeoverCap;
+        private bool _browserTakeover;
+        private bool _browserAutoPlayPending;
         private DispatcherTimer? _browserMediaWatchdog;
         private double _browserMediaDuration;
         private IDisposable? _browserMediaRecovery;
@@ -102,6 +107,87 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal Func<Action, TimeSpan, IDisposable> ScheduleBrowserMediaRecovery =
             (action, delay) => DispatcherTimer.RunOnce(action, delay);
 
+        // WPF BrowserMediaService.ShouldDeferNewVideo: only fresh videos get the cool-off.
+        internal bool BrowserMediaCooling => CoreSettings.Current.ProtectBrowserVideoPlayback
+            && _browserMediaEnded != DateTime.MinValue
+            && (BrowserMediaClock() - _browserMediaEnded).TotalSeconds < CoreSettings.Current.BrowserVideoGraceSeconds;
+
+        // WPF BrowserMediaService.BeginTakeover: claim before navigation, with no queue.
+        internal bool TryBeginBrowserTakeover()
+        {
+            if (BrowserMediaPlaying || BrowserMediaOwnsSlot || BrowserMediaCooling || _browserDeferredVideo != null
+                || CoreEngine.Video?.IsPlaying == true || CoreEngine.BubbleCount?.IsBusy == true
+                || Windows.BubbleCountWindow.IsAnyOpen() || Windows.BubbleCountResultWindow.OpenWindows.Count > 0
+                || Windows.LockCardWindow.IsAnyOpen()
+                || Windows.PopQuizWindow.IsAnyOpen()) return false;
+            _browserTakeover = true;
+            BrowserMediaOwnsSlot = true;
+            _browserMediaBeat = BrowserMediaClock();
+            _browserMediaWatchdog ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+            _browserMediaWatchdog.Tick -= BrowserMediaWatchdogTick;
+            _browserMediaWatchdog.Tick += BrowserMediaWatchdogTick;
+            _browserMediaWatchdog.Start();
+            ArmBrowserMediaRecovery();
+            return true;
+        }
+
+        internal void EndBrowserTakeover() => StopBrowserMediaTracking();
+
+        internal void ArmBrowserAutoPlay() => _browserAutoPlayPending = true;
+        internal void CancelBrowserAutoPlay() => _browserAutoPlayPending = false;
+
+        internal void ReplaceBrowserTakeover()
+        {
+            if (!_browserTakeover) { CancelBrowserAutoPlay(); return; }
+            _ = BrowserWebHost.InvokeScriptAsync(BrowserMediaRecoveryScript);
+            StopBrowserMediaTracking();
+        }
+
+        private void OnBrowserTakeoverNavigation(Uri url, bool success)
+        {
+            if (!_browserAutoPlayPending) return;
+            _browserAutoPlayPending = false;
+            if (!success) { if (_browserTakeover) EndBrowserTakeover(); return; }
+            _ = BrowserWebHost.InvokeScriptAsync(BrowserTakeoverScript);
+        }
+
+        // WPF MainWindow.Browser.cs:838: wait for the player, play, request fullscreen, exit on end.
+        internal const string BrowserTakeoverScript = """
+            (async function() {
+                window._ccpTakeoverStopped = false;
+                let video = document.querySelector('video');
+                for (let i = 0; !video && i < 20; i++) {
+                    await new Promise(r => setTimeout(r, 500));
+                    if (window._ccpTakeoverStopped) return;
+                    video = document.querySelector('video');
+                }
+                if (!video || window._ccpTakeoverStopped) return;
+                const exit = () => { if (document.fullscreenElement && document.exitFullscreen)
+                    document.exitFullscreen().catch(() => {}); };
+                video.addEventListener('ended', exit, { once: true });
+                video.addEventListener('dblclick', exit);
+                let entered = false, reported = false;
+                document.addEventListener('fullscreenchange', () => {
+                    if (document.fullscreenElement || document.webkitFullscreenElement) { entered = true; return; }
+                    if (!entered || reported) return;
+                    reported = true;
+                    try {
+                        const msg = JSON.stringify({ type: 'ccpFsExit' });
+                        if (typeof window.invokeCSharpAction === 'function') window.invokeCSharpAction(msg);
+                        else if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage(msg);
+                    } catch (_) {}
+                });
+                const fullscreen = () => {
+                    if (!window._ccpTakeoverStopped && video.requestFullscreen) {
+                        const request = video.requestFullscreen();
+                        if (request && request.catch) request.catch(() => {});
+                    }
+                };
+                video.muted = false;
+                video.play().then(fullscreen).catch(() => video.addEventListener('playing', fullscreen, { once: true }));
+            })();
+            """;
+
         private void StartBrowserMediaReporter() => _ = BrowserWebHost.InvokeScriptAsync(BrowserMediaReporter);
 
         internal void OnBrowserMediaMessage(string message)
@@ -113,15 +199,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     message = JsonSerializer.Deserialize<string>(message) ?? "";
                 using var json = JsonDocument.Parse(message);
                 var root = json.RootElement;
-                if (root.ValueKind != JsonValueKind.Object
-                    || !root.TryGetProperty("type", out var type) || type.GetString() != "ccpMedia"
-                    || !root.TryGetProperty("state", out var state)) return;
+                if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("type", out var type)) return;
+                if (type.GetString() == "ccpFsExit")
+                {
+                    _browserTakeover = false;
+                    CancelBrowserTakeoverStop();
+                    return;
+                }
+                if (type.GetString() != "ccpMedia" || !root.TryGetProperty("state", out var state)) return;
                 switch (state.GetString())
                 {
                     case "playing":
+                        if (_browserTakeover && !BrowserMediaPlaying) _browserTakeoverCap = CoreSettings.Current.VideoMaxDurationSeconds;
                         // WPF BrowserMediaService.cs:248-257 tries once per user session.
                         // This head has no shared queue, so use its currently exposed owners.
-                        if (!BrowserMediaPlaying)
+                        if (!BrowserMediaPlaying && !_browserTakeover)
                         {
                             _browserMediaDuration = 0;
                             BrowserMediaOwnsSlot = CoreEngine.Video?.IsPlaying != true
@@ -129,7 +221,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                                 && !Windows.BubbleCountWindow.IsAnyOpen()
                                 && !Windows.LockCardWindow.IsAnyOpen() && !Windows.PopQuizWindow.IsAnyOpen();
                         }
-                        if (MediaDuration(root) is double duration) _browserMediaDuration = duration;
+                        if (MediaDuration(root) is double duration)
+                        {
+                            _browserMediaDuration = duration;
+                            if (_browserTakeover) ArmBrowserTakeoverStop(duration);
+                        }
                         BrowserMediaPlaying = true;
                         if (BrowserMediaOwnsSlot) ArmBrowserMediaRecovery();
                         _browserMediaBeat = BrowserMediaClock();
@@ -142,11 +238,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                         if (BrowserMediaPlaying)
                         {
                             _browserMediaBeat = BrowserMediaClock();
+                            if (_browserTakeover && root.TryGetProperty("played", out var played) && played.TryGetDouble(out var seconds)
+                                && double.IsFinite(seconds) && VideoMaxCap.CapLeft(_browserTakeoverCap, seconds) == 0)
+                            { ForceEndBrowserTakeover(); break; }
                             if (MediaDuration(root) is double reportedDuration && Math.Abs(reportedDuration - _browserMediaDuration) > 1)
+                            {
                                 _browserMediaDuration = reportedDuration;
+                                if (_browserTakeover) ArmBrowserTakeoverStop(reportedDuration);
+                            }
                         }
                         break;
-                    case "stopped": StopBrowserMediaTracking(); break;
+                    case "stopped":
+                        // WPF BrowserMediaService.cs:348: outgoing pagehide is not the new session ending.
+                        if (_browserTakeover && !BrowserMediaPlaying && root.TryGetProperty("reason", out var reason)
+                            && reason.GetString() == "navigated") { _browserMediaBeat = BrowserMediaClock(); break; }
+                        StopBrowserMediaTracking();
+                        break;
                 }
             }
             catch (JsonException) { }
@@ -157,8 +264,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         internal void CheckBrowserMediaHeartbeat()
         {
-            if (BrowserMediaPlaying && (BrowserMediaClock() - _browserMediaBeat).TotalSeconds >= 20)
-                StopBrowserMediaTracking();
+            var timeout = BrowserMediaPlaying ? 20 : 60;
+            if ((BrowserMediaPlaying || BrowserMediaOwnsSlot) && (BrowserMediaClock() - _browserMediaBeat).TotalSeconds >= timeout)
+            {
+                if (_browserTakeover) ForceEndBrowserTakeover();
+                else StopBrowserMediaTracking();
+            }
         }
 
         // WPF BrowserMediaService.cs:436-450 and InteractionQueueService.cs:284-298:
@@ -166,6 +277,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private static double? MediaDuration(JsonElement root) =>
             root.TryGetProperty("dur", out var value) && value.ValueKind == JsonValueKind.Number
             && value.TryGetDouble(out var duration) && double.IsFinite(duration) && duration > 0 ? duration : null;
+
+        // WPF BrowserMediaService.cs:459: end an autonomous clip at its duration plus 15 s.
+        private void ArmBrowserTakeoverStop(double duration)
+        {
+            CancelBrowserTakeoverStop();
+            var generation = _browserTakeoverStopGeneration;
+            _browserTakeoverStop = ScheduleBrowserMediaRecovery(() =>
+            {
+                if (generation == _browserTakeoverStopGeneration && _browserTakeover)
+                    ForceEndBrowserTakeover();
+            }, TimeSpan.FromSeconds(Math.Min(duration + 15, 3600)));
+        }
+
+        private void CancelBrowserTakeoverStop()
+        {
+            _browserTakeoverStopGeneration++;
+            _browserTakeoverStop?.Dispose();
+            _browserTakeoverStop = null;
+        }
+
+        private void ForceEndBrowserTakeover()
+        {
+            try { _ = BrowserWebHost.InvokeScriptAsync(BrowserMediaRecoveryScript); }
+            finally { StopBrowserMediaTracking(); }
+        }
 
         private void ArmBrowserMediaRecovery()
         {
@@ -199,21 +335,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void ClearBrowserMediaClaim()
         {
             BrowserMediaOwnsSlot = false;
+            _browserTakeover = false;
+            _browserAutoPlayPending = false;
+            CancelBrowserTakeoverStop();
             CancelBrowserMediaRecovery();
             CancelBrowserDeferredVideo();
+            if (!BrowserMediaPlaying && _browserMediaWatchdog != null)
+            {
+                _browserMediaWatchdog.Stop();
+                _browserMediaWatchdog.Tick -= BrowserMediaWatchdogTick;
+                _browserMediaWatchdog = null;
+            }
         }
 
         // WPF MainWindow.xaml.cs:2045,2113 and BrowserMediaService.cs:400-415.
         internal void StopBrowserMediaForPanic()
         {
             CancelBrowserDeferredVideo();
-            try { _ = BrowserWebHost.InvokeScriptAsync(BrowserMediaRecoveryScript); }
-            finally { StopBrowserMediaTracking(); }
+            ForceEndBrowserTakeover();
         }
 
         private void StopBrowserMediaTracking()
         {
+            if (BrowserMediaPlaying || BrowserMediaOwnsSlot || _browserTakeover) _browserMediaEnded = BrowserMediaClock();
+            CancelBrowserTakeoverStop();
             BrowserMediaPlaying = false;
+            _browserTakeover = false;
+            _browserAutoPlayPending = false;
             _browserMediaDuration = 0;
             BrowserMediaOwnsSlot = false;
             CancelBrowserMediaRecovery();
@@ -247,6 +395,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     var d = m.duration;
                     return (isFinite(d) && d > 0) ? d : 0;
                 }
+                function played(m) {
+                    try { let n = 0; for (let i = 0; i < m.played.length; i++) n += m.played.end(i) - m.played.start(i); return n; }
+                    catch (_) { return 0; }
+                }
                 var active = null, beat = null, pauseTimer = null;
                 function stopBeat() { if (beat) { clearInterval(beat); beat = null; } }
                 function report(reason) {
@@ -261,7 +413,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     post({ type: 'ccpMedia', state: 'playing', dur: duration(m) });
                     if (!beat) beat = setInterval(function() {
                         if (active && !active.paused && !active.ended)
-                            post({ type: 'ccpMedia', state: 'progress', dur: duration(active) });
+                            post({ type: 'ccpMedia', state: 'progress', dur: duration(active), played: played(active) });
                     }, 1000);
                 }
                 function ended(e) {

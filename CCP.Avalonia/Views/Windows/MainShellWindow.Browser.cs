@@ -9,15 +9,9 @@
 // "BrowserWebHost"/>, which wraps Avalonia's NativeWebView and draws a legible fallback panel
 // naming the page where no engine is installed. Setting its Source IS the navigation, and its
 // NavigationCompleted carries the live URL (OnBrowserNavigationCompleted). What WebHost does NOT
-// expose is a document-script channel, a mute or a fullscreen signal - and
-// every member that needed one of those is still a note, not a half-port.
-//
-// TWO DELIBERATE DEVIATIONS, both because WebHost is narrower than CoreWebView2:
-//   1. autoPlayFullscreen is ACCEPTED AND IGNORED by NavigateToUrlInBrowser, and logged. The WPF
-//      path injects JS from a NavigationCompleted hook; returning false for that flag alone would
-//      break the plain-navigation half of the same call for every caller.
-//   2. (Resolved) the offline-block toast now shows through App.Notifications, as WPF
-//      NotifyBrowserBlockedOffline does (MainWindow.Browser.cs:489-494).
+// does not expose a document-created script channel or a fullscreen-element signal. Video
+// autoplay uses the script channel after navigation; native fullscreen handling is still missing.
+// Offline-block toast now shows through App.Notifications (MainWindow.Browser.cs:489-494).
 //
 // THE MUTE PAIR is ported onto the card itself (Views/Tabs/SettingsTabView.BrowserCard.cs) over the WebHost
 // script channel (Views/Controls/WebHostMedia.cs), re-applied after each navigation. There is still no ENGINE
@@ -34,8 +28,7 @@
 //   * WebView2 itself (36): the init/teardown chain (InitializeBrowserAsync, InitAndNavigateAsync,
 //     TearDownBrowserForReinit, NavigateWhenBrowserReadyAsync, BrowserLoadingText_Click,
 //     OpenUrlExternallyAfterBrowserFailure, _browserInitializing, _browserCorePending); the
-//     script channel (AutoPlayAndFullscreenVideoAsync,
-//     AutoPlayBambiCloudPlaylistAsync, EndWebVideoTakeover, OnBrowserWebMessageReceived,
+//     remaining script paths (AutoPlayBambiCloudPlaylistAsync, OnBrowserWebMessageReceived,
 //     HandleBrowserMediaMessage, the four HandleAudioSync* members, HookHapticAudioSyncRearm,
 //     OnHapticConnectionChangedForAudioSync, _hapticAudioSyncConnHooked); the pop-out and
 //     fullscreen rig (BtnPopOutBrowser_Click, FocusBrowserSurface's pop-out half,
@@ -112,13 +105,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Points the web view at a URL. A missing host (the tab is not in the tree, as in
         /// a single-view render) is a no-op that returns false, never a throw.</summary>
-        private bool NavigateBrowser(string url)
+        private bool NavigateBrowser(string url, bool requireEngine = false)
         {
             try
             {
                 var host = BrowserView;
                 if (host == null) return false;
-                host.Navigate(new Uri(url));   // even when equal: WPF #867, re-click goes home
+                var accepted = host.Navigate(new Uri(url));   // even when equal: WPF #867, re-click goes home
+                if (requireEngine && !accepted) return false;
                 Log.Information("Browser navigated to {Url}", url);
                 return true;
             }
@@ -173,9 +167,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Navigates the embedded browser and brings its tab forward. Public because
         /// the callers live elsewhere on WPF (speech-bubble links, the remote controller).</summary>
-        /// <param name="autoPlayFullscreen">ACCEPTED AND IGNORED - see deviation 2 in the header.
-        /// WebHost has no script channel, so the video takeover cannot be requested. The plain
-        /// navigation still happens, which is what every caller needs first.</param>
+        /// <param name="autoPlayFullscreen">Requests playback and fullscreen after navigation.</param>
         public bool NavigateToUrlInBrowser(string url, bool autoPlayFullscreen = false, bool userInitiated = true)
         {
             if (string.IsNullOrWhiteSpace(url)) return false;
@@ -196,10 +188,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (bambi != null) bambi.IsChecked = lower.Contains("bambicloud.com");
             if (hypno != null) hypno.IsChecked = lower.Contains("hypnotube.com");
 
-            if (autoPlayFullscreen)
-                Log.Warning("Auto-play/fullscreen requested but WebHost has no script channel - takeover skipped: {Url}", url);
-
-            return NavigateBrowser(url);
+            var page = BrowserPage;
+            if (autoPlayFullscreen && (page == null || BrowserView?.HasEngine != true)) return false;
+            if (autoPlayFullscreen) page!.ArmBrowserAutoPlay();
+            else page?.ReplaceBrowserTakeover();
+            if (NavigateBrowser(url, requireEngine: autoPlayFullscreen)) return true;
+            page?.CancelBrowserAutoPlay();
+            return false;
         }
 
         // ============================== the profile viewer ==============================

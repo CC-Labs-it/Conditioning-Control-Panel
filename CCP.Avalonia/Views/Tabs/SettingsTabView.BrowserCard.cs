@@ -32,6 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             BrowserWebHost.NavigationCompleted += _ => { ApplyBrowserMute(); StartBrowserMediaReporter(); };
             BrowserWebHost.WebMessage += OnBrowserMediaMessage;
+            BrowserWebHost.NavigationFinished += OnBrowserTakeoverNavigation;
             BrowserWebHost.PropertyChanged += (_, e) => { if (e.Property == WebHost.SourceProperty) SyncBrowserPrompt(); };
             AttachedToVisualTree += (_, _) =>
             {
