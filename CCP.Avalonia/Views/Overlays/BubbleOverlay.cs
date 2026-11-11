@@ -244,6 +244,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void EndChaos()
         {
             Field.HoldChaos = false;
+            Field.FreezeChaos = false;
             _chaosPopped = null;
             _chaosCanChannel = null;
             Field.ChaosDefused = Field.ChaosDetonated = null;
