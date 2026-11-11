@@ -99,6 +99,17 @@ internal static class ChasterHead
         };
     }
 
+    /// <summary>WPF RemoteControlService.cs:1280,1401: book only commands that ran.</summary>
+    internal static RemoteRelay WireRemoteNotes(RemoteRelay relay)
+    {
+        relay.CommandReceived += (_, action) => Safe(() =>
+        {
+            if (action == "trigger_flash") Service?.Note("remote_media");
+            else if (action == "trigger_video") Service?.Note("remote_video");
+        });
+        return relay;
+    }
+
     private static readonly HashSet<ChasterService> Attached = new();
 
     /// <summary>WPF ChasterHooks.cs:65-69: a finished program day pays back, a missed one costs. Reads
