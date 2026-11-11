@@ -97,25 +97,7 @@ namespace ConditioningControlPanel.Avalonia
                 return LockCardWindow.IsAnyOpen();
             });
             SpiralCommand.Surface = (on, opacity) => ApplySpiral(Host, on, opacity);
-            // Without WPF's BypassLevelCheck the tint shows only while the engine does; refused otherwise.
-            // Null opacity for "off" (and an "on" with no intensity): the saved opacity is the user's.
-            PinkCommand.Surface = (on, opacity) => Start(() =>
-            {
-                var s = CoreSettings.Current;
-                var (oldOpacity, oldEnabled) = (s.PinkFilterOpacity, s.PinkFilterEnabled);
-                if (opacity is int o) s.PinkFilterOpacity = o;
-                s.PinkFilterEnabled = on;
-                if (Host is { } host) PinkFilterOverlay.Refresh(host);
-                if (on && !PinkFilterOverlay.IsShowing)
-                {
-                    // Refused: nothing showed, so the user's saved Pink filter settings stay as they were.
-                    (s.PinkFilterOpacity, s.PinkFilterEnabled) = (oldOpacity, oldEnabled);
-                    if (Host is { } h) PinkFilterOverlay.Refresh(h);
-                    return false;
-                }
-                CoreSettings.Save();
-                return true;
-            });
+            PinkCommand.Surface = (on, opacity) => ApplyPink(Host, on, opacity);
             MediaCommand.VideoSurface = path => Start(() =>
                 CoreEngine.Video?.Trigger(path == null ? null : false, path) == true);
             MediaCommand.AudioSurface = PlayAudio;
@@ -124,6 +106,24 @@ namespace ConditioningControlPanel.Avalonia
                 Views.AvatarTube.AvatarTubeWindow.Live?.RunOnAvatar(() =>
                     Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(text, playSound: true, aiGenerated: aiGenerated));
         }
+
+        internal static bool ApplyPink(Window? host, bool on, int? opacity) => Start(() =>
+        {
+            if (host is null) return false;
+            var s = CoreSettings.Current;
+            var (oldOpacity, oldEnabled) = (s.PinkFilterOpacity, s.PinkFilterEnabled);
+            if (opacity is int value) s.PinkFilterOpacity = value;
+            s.PinkFilterEnabled = on;
+            if (!PinkFilterOverlay.StartForAi(host))
+            {
+                (s.PinkFilterOpacity, s.PinkFilterEnabled) = (oldOpacity, oldEnabled);
+                PinkFilterOverlay.Refresh(host);
+                return false;
+            }
+            SpiralOverlay.StartForAi(host);
+            CoreSettings.Save();
+            return true;
+        });
 
         /// <summary>WPF App.AiEffects.cs:63,128-150: set, start the overlay even with the engine off,
         /// refresh and save. Refuse an unsafe or absent host before changing the user's settings.</summary>

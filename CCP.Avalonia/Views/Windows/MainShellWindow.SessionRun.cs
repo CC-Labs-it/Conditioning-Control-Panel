@@ -127,6 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!confirmed || !runner.IsRunning) return;
             InvalidateOverlayStart();   // invalidate starts waiting for the portal bind
             runner.Pause();
+            PinkFilterOverlay.StopForAi();
             SpiralOverlay.CloseAll();   // WPF PauseSession stops OverlayService, including an AI start
             PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Stop()
             SpiralOverlay.Refresh(this);
