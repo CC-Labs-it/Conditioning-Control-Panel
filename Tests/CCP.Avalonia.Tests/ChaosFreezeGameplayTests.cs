@@ -101,6 +101,26 @@ public sealed class ChaosFreezeGameplayTests
         Assert.Equal(2, state.Defused);
     });
 
+    [Fact]
+    public Task Freeze_shakes_screen_and_shudders_field_then_cleanup_clears_it() => WithRun(state =>
+    {
+        var shakes = new List<(double, int)>();
+        var oldShake = ChaosRunHost.ShakeFx;
+        try
+        {
+            ChaosRunHost.ShakeFx = (i, ms) => shakes.Add((i, ms));
+            var bubble = Live();
+            Fire();
+            Assert.Equal(new[] { (0.3 * state.Config.ShakeIntensity, 200) }, shakes);
+            Assert.Equal(200, BubbleOverlay.Field.FreezeShudderMs);
+            BubbleOverlay.Field.Step();
+            Assert.True(bubble.FreezeAura > 0);
+            ChaosRunHost.ForceShutdown();
+            Assert.Equal((0d, false), (BubbleOverlay.Field.FreezeShudderMs, BubbleOverlay.Field.FreezeChaos));
+        }
+        finally { ChaosRunHost.ShakeFx = oldShake; }
+    });
+
     private static AmbientBubble Live() => BubbleOverlay.SpawnChaos(new EffectBubbleSpec
         { VariantId = "pink", IsLive = true, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() });
 

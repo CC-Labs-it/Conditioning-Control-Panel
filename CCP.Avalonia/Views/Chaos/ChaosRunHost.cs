@@ -691,6 +691,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!_spawning) return;
             _freezeRemainingSec = 3.5;
             BubbleOverlay.Field.FreezeChaos = true;
+            BubbleOverlay.Field.FreezeShudderMs = 200;
             EffectPayload.GlobalDurationMult = 2.5;
             ChaosEffectBannerOverlay.Show("freeze", Loc.Get("chaos_freeze_banner"), Color.FromRgb(0x96, 0xD2, 0xFF));
             if (_state?.Config.ColorFlashesEnabled == true)
@@ -698,6 +699,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _fx?.FreezeBurst(Color.FromRgb(0x96, 0xD2, 0xFF));
                 _fx?.BeginEdgeHold(Color.FromRgb(0x96, 0xD2, 0xFF), 0.5);
             }
+            Shake(0.3, 200);
         }
 
         private static void EndFreeze()

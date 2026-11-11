@@ -60,6 +60,10 @@ namespace ConditioningControlPanel.Services
         public Chaos.EffectBubbleSpec? Spec;
         private double _startX, _top, _speed, _wobbleOffset, _timeAlive;
         private int _animType;
+        /// <summary>Freeze aura opacity (0 when not frozen) and the freeze shudder offset in DIPs.</summary>
+        public double FreezeAura { get; private set; }
+        public double JitterX, JitterY;
+        private double _freezePhase;
 
         // ---- live chaos bubble (WPF Bubble _fuseRemainingMs / _isChanneling / TickChannel) ----
         /// <summary>WPF's fuse tick: 32 ms per logical step (BubbleService.cs:4149).</summary>
@@ -240,6 +244,9 @@ namespace ConditioningControlPanel.Services
         /// running defuse channel; a channel pins the bubble and pauses the fuse (WPF :3796).</summary>
         public Result Step(bool held = false, double cursorX = 0, double cursorY = 0, DateTime nowUtc = default, bool frozen = false)
         {
+            // WPF BubbleService.cs:4282-4290: a frozen chaos bubble pulses its blue aura.
+            if (Spec != null && frozen) FreezeAura = 0.1125 + 0.0875 * Math.Sin(_freezePhase += 0.18);
+            else FreezeAura = 0;
             if (Popping)
             {
                 // Pop animation - expand and fade; lucky pops linger ~50% longer.
@@ -295,6 +302,8 @@ namespace ConditioningControlPanel.Services
         public bool HoldChaos;
         /// <summary>A freeze power-up holds motion and fuses but permits input and channels.</summary>
         public bool FreezeChaos;
+        /// <summary>WPF VibrateAllForFreeze: whole-field shudder left, 32 ms a step (BubbleService.cs:516).</summary>
+        public double FreezeShudderMs;
         /// <summary>WPF ChaosMouseHeld + CursorPx: the player's press, in global DIPs, for a defuse channel.</summary>
         public bool Held;
         public double CursorX, CursorY;
@@ -352,10 +361,15 @@ namespace ConditioningControlPanel.Services
         {
             var missed = 0;
             var now = Clock();
+            if (FreezeShudderMs > 0) FreezeShudderMs -= AmbientBubble.FuseStepMs;
             for (var i = Bubbles.Count - 1; i >= 0; i--)
             {
                 if (i >= Bubbles.Count) continue;   // a callback cleared the field
                 var b = Bubbles[i];
+                // WPF BubbleService.cs:4321-4327: a chaos bubble jitters up to 4 DIPs while the shudder runs.
+                bool shudder = b.Spec != null && FreezeShudderMs > 0;
+                b.JitterX = shudder ? (Random.NextDouble() - 0.5) * 8 : 0;
+                b.JitterY = shudder ? (Random.NextDouble() - 0.5) * 8 : 0;
                 if (HoldChaos && b.Spec != null && !b.Popping) { b.CancelChannel(); continue; }
                 var r = b.Step(Held, CursorX, CursorY, now, FreezeChaos);
                 if (r == AmbientBubble.Result.Alive) continue;

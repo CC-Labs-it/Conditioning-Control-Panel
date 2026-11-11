@@ -33,4 +33,28 @@ public sealed class ChaosFreezeFieldTests
         field.Step();
         Assert.True(next.FuseRemainingMs < 5000);
     }
+
+    [Fact]
+    public void Freeze_pulses_chaos_aura_and_shudders_only_for_200ms()
+    {
+        var field = new AmbientBubbleField { FreezeChaos = true, FreezeShudderMs = 200 };
+        var chaos = AmbientBubble.SpawnChaos(new Random(1), 0, 0, 0, 1920, 1080, 1,
+            new EffectBubbleSpec { IsLive = true, FuseMs = 5000 });
+        var plain = new AmbientBubble { Size = 100 };
+        field.Bubbles.Add(chaos);
+        field.Bubbles.Add(plain);
+        int shudders = 0;
+        for (int i = 0; i < 10; i++)
+        {
+            field.Step();
+            Assert.InRange(chaos.FreezeAura, 0.025, 0.2);
+            Assert.Equal((0d, 0d, 0d), (plain.FreezeAura, plain.JitterX, plain.JitterY));
+            if (chaos.JitterX != 0 || chaos.JitterY != 0) shudders++;
+            Assert.InRange(Math.Abs(chaos.JitterX), 0, 4);
+        }
+        Assert.Equal(6, shudders); // WPF: 200 ms less 32 ms a frame, checked after the decrement
+        field.FreezeChaos = false;
+        field.Step();
+        Assert.Equal(0, chaos.FreezeAura);
+    }
 }
