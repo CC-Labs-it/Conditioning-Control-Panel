@@ -130,13 +130,34 @@ public sealed class FlashVoiceTests
     [Fact]
     public async Task ZeroVoiceLevelProducesNoSamplesFromRealPlayback()
     {
+        var (voice, control) = await RecordVoice(0);
+        Assert.Empty(voice);
+        Assert.Contains(control, v => v != 0);   // the recording output can detect this same tone
+    }
+
+    [Fact]
+    public async Task LowVoiceLevelIsQuietFromTheFirstRecordedSample()
+    {
+        // Level 4 of 100 at full master: 0.85 x 0.05, about 680 of the tone's 16000 peak.
+        var (voice, control) = await RecordVoice(4);
+        Assert.True(voice.Length > 4000, "the low voice recorded nothing");
+        Assert.InRange(voice.Take(4410).Max(v => Math.Abs((int)v)), 300, 900);   // first 100 ms included
+        Assert.InRange(voice.Max(v => Math.Abs((int)v)), 300, 900);
+        Assert.True(control.Max(v => Math.Abs((int)v)) > 15000, "the control was not at full scale");
+    }
+
+    /// <summary>A two-second tone through FlashVoice and real LibVLC into a recording output, then the same
+    /// tone at full gain as a control: the samples of each.</summary>
+    private static async Task<(short[] Voice, short[] Control)> RecordVoice(int level)
+    {
         if (!OperatingSystem.IsLinux()) Assert.Skip("The recording output check runs on Linux.");
-        var root = Path.Combine(Path.GetTempPath(), "ccp-flash-silence-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(Path.GetTempPath(), "ccp-flash-gain-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         var wav = Path.Combine(root, "tone.wav");
-        var output = Path.Combine(root, "recorded.wav");
         var oldPlay = CoreAudio.PlayStoppableProvider;
         var oldLater = FlashVoice.Later;
+        static short[] Samples(string f) => !File.Exists(f) ? Array.Empty<short>()
+            : File.ReadAllBytes(f).Skip(44).Chunk(2).Where(b => b.Length == 2).Select(b => BitConverter.ToInt16(b)).ToArray();
         try
         {
             // A non-silent two-second tone exposes even a short leak at player startup.
@@ -148,26 +169,29 @@ public sealed class FlashVoiceTests
                 w.Write((short)2); w.Write((short)16); w.Write("data"u8.ToArray()); w.Write(count * 2);
                 for (var n = 0; n < count; n++) w.Write((short)(16000 * Math.Sin(2 * Math.PI * 440 * n / rate)));
             }
-            LibVlcAudio audio;
-            try { audio = new LibVlcAudio("--aout=file", "--audiofile-file=" + output, "--audiofile-format=s16"); }
-            catch (Exception ex) { Assert.Skip("LibVLC unavailable: " + ex.Message); throw; }
-            var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            CoreAudio.PlayStoppableProvider = (path, gain, tag, started, finished) => audio.PlayOneShot(path, gain, tag, started,
-                () => { finished?.Invoke(); ended.TrySetResult(); });
-            FlashVoice.Later = (_, _) => { };
-            var ready = new TaskCompletionSource<double?>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var settings = Voiced(false); settings.CompanionVoiceLevel = 0;
-            FlashVoice.Play(settings, new[] { wav }, value => ready.TrySetResult(value));
-            Assert.Equal(2.0, (await ready.Task.WaitAsync(TimeSpan.FromSeconds(8)))!.Value, 1);
-            await ended.Task.WaitAsync(TimeSpan.FromSeconds(8));
-            Assert.True(!File.Exists(output) || new FileInfo(output).Length <= 44, "silent voice emitted samples");
-
-            // Prove the recording output can detect this same tone.
-            var controlEnded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            audio.PlayOneShot(wav, 1f, "control", null, () => controlEnded.TrySetResult());
-            await controlEnded.Task.WaitAsync(TimeSpan.FromSeconds(8));
-            Assert.True(File.Exists(output) && new FileInfo(output).Length > 44, "recording output did not capture the control");
-            Assert.Contains(File.ReadAllBytes(output).Skip(44), b => b != 0);
+            async Task<short[]> Record(string name, Func<LibVlcAudio, Action, Task> play)
+            {
+                var output = Path.Combine(root, name);
+                LibVlcAudio audio;
+                try { audio = new LibVlcAudio("--aout=file", "--audiofile-file=" + output, "--audiofile-format=s16"); }
+                catch (Exception ex) { Assert.Skip("LibVLC unavailable: " + ex.Message); throw; }
+                var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                await play(audio, () => ended.TrySetResult());
+                await ended.Task.WaitAsync(TimeSpan.FromSeconds(8));
+                return Samples(output);
+            }
+            var voice = await Record("voice.wav", async (audio, end) =>
+            {
+                CoreAudio.PlayStoppableProvider = (path, gain, tag, started, finished) => audio.PlayOneShot(path, gain, tag, started,
+                    () => { finished?.Invoke(); end(); });
+                FlashVoice.Later = (_, _) => { };
+                var ready = new TaskCompletionSource<double?>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var settings = Voiced(false); settings.CompanionVoiceLevel = level;
+                FlashVoice.Play(settings, new[] { wav }, value => ready.TrySetResult(value));
+                Assert.Equal(2.0, (await ready.Task.WaitAsync(TimeSpan.FromSeconds(8)))!.Value, 1);
+            });
+            var control = await Record("control.wav", (audio, end) => { audio.PlayOneShot(wav, 1f, "control", null, end); return Task.CompletedTask; });
+            return (voice, control);
         }
         finally
         {
@@ -232,6 +256,23 @@ public sealed class FlashVoiceTests
         Assert.Equal(new double?[] { 5, 5, 5 }, rig.Ready);
         rig.RunLater(6500);
         Assert.Equal(new long[] { 7, 7, 7 }, rig.Unducks);
+    }
+
+    [Fact]
+    public void AClipThatMissesTheStartTimeoutIsStoppedSoItCannotOutliveItsFiveSeconds()
+    {
+        using var rig = new Rig();
+        rig.Play(Voiced(), "slow.mp3");
+        rig.RunLater(FlashVoice.StartTimeoutMs);
+        Assert.Equal(1, rig.Stops);
+        rig.Clips[0].Started!(TimeSpan.FromSeconds(30));   // a late start changes nothing
+        Assert.Equal(new double?[] { 5 }, rig.Ready);
+
+        rig.Play(Voiced(), "quick.mp3");                    // stops the first clip's handle again
+        rig.Clips[1].Started!(TimeSpan.FromSeconds(3));
+        var stops = rig.Stops;
+        rig.RunLater(FlashVoice.StartTimeoutMs);             // a started clip is left playing
+        Assert.Equal(stops, rig.Stops);
     }
 
     [Fact]

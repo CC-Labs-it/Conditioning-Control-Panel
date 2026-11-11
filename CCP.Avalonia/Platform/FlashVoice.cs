@@ -60,12 +60,13 @@ internal static class FlashVoice
         {
             try
             {
-                // The library merges content roots; include category subfolders as WPF does.
+                // The library merges content roots; include category subfolders as WPF does. An unreadable
+                // subfolder is skipped (IgnoreInaccessible), not the whole pool (WPF skips per folder).
                 files = CompanionVoiceLines.GetRows(s).Where(p => p.IsEnabled)
                     .Select(p => p.AudioFilePath).Where(p => p != null).Cast<string>().ToList();
                 var folder = CompanionVoiceLines.ResolveFolder().Absolute;
                 if (Directory.Exists(folder))
-                    files.AddRange(Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
+                    files.AddRange(Directory.EnumerateFiles(folder, "*", new EnumerationOptions { RecurseSubdirectories = true })
                         .Where(p => new[] { ".mp3", ".wav", ".ogg" }.Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase)));
                 files = Filter(s, files);
             }
@@ -84,19 +85,23 @@ internal static class FlashVoice
         long? duckGen = null;
         if (s.AudioDuckingEnabled) { CoreAudio.Duck(s.DuckingLevel); duckGen = CoreAudio.DuckGeneration; }
         var settled = 0;
-        void Settle(double seconds)
+        bool Settle(double seconds)
         {
-            if (Interlocked.Exchange(ref settled, 1) != 0) return;
+            if (Interlocked.Exchange(ref settled, 1) != 0) return false;
             if (duckGen is { } g) Later((int)(seconds * 1000) + UnduckAfterMs, () => CoreAudio.Unduck(g));
             ready(seconds);
+            return true;
         }
 
         var master = s.MasterVolume / 100f;
         var gain = CompanionVoiceGain.ApplyLevel(Math.Max(0.05f, (float)Math.Pow(master, 1.5))
             * CompanionVoiceGain.BarkTrim, s.CompanionVoiceLevel);
         gain = Math.Max(gain, 1e-7f);   // level 0 runs the clip silent so it keeps its length (WPF :4702); VlcVolume rounds it to 0
-        Later(StartTimeoutMs, () => Settle(FailedSeconds));
-        _stop = CoreAudio.PlayStoppable(path, gain, "flash-voice",
+        // A clip that has not started by the timeout is stopped, so a late start cannot outlive the 5 s
+        // the burst and the duck were given (WPF reads the NAudio length synchronously, FlashService.cs:4717).
+        Action? clip = null;
+        Later(StartTimeoutMs, () => { if (Settle(FailedSeconds)) clip?.Invoke(); });
+        clip = _stop = CoreAudio.PlayStoppable(path, gain, "flash-voice",
             onStarted: len => Settle(len > TimeSpan.Zero ? len.TotalSeconds : FailedSeconds),
             onFinished: () => Settle(FailedSeconds));
     }

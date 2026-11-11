@@ -77,9 +77,34 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (OperatingSystem.IsWindows() && bundled != null) Core.Initialize(bundled);
             else { if (OperatingSystem.IsLinux()) LibVlcNative.Install(); Core.Initialize(); }
             // No global --no-video: video shares this instance. Audio media opt out per item instead.
-            _vlc = new LibVLC(WithOutput(options, OperatingSystem.IsWindows()).Append("--quiet").ToArray());
+            _options = WithOutput(options, OperatingSystem.IsWindows()).Append("--quiet").ToArray();
+            _vlc = new LibVLC(_options);
             Shared ??= _vlc;
             _vlc.SetUserAgent("Conditioning Control Panel", "CCP"); // the name pactl shows for our streams
+        }
+
+        private readonly string[] _options = Array.Empty<string>();
+        private readonly object _gainLock = new();
+        private LibVLC? _gainVlc;
+        private float _gainOf = -1;
+
+        /// <summary>A LibVLC whose software <c>--gain</c> scales every decoded sample before any output
+        /// exists, as WPF sets AudioFileReader.Volume before Play (FlashService.cs:4706-4709); a player's
+        /// Volume only lands once Playing, after the first samples. One gain is kept at a time; a
+        /// released instance lives on natively until its last player is gone.</summary>
+        private LibVLC GainVlc(float gain)
+        {
+            lock (_gainLock)
+            {
+                if (_gainVlc == null || _gainOf != gain)
+                {
+                    _gainVlc?.Dispose();
+                    _gainVlc = new LibVLC(_options.Append("--gain=" + gain.ToString("0.########", System.Globalization.CultureInfo.InvariantCulture)).ToArray());
+                    _gainVlc.SetUserAgent("Conditioning Control Panel", "CCP");
+                    _gainOf = gain;
+                }
+                return _gainVlc;
+            }
         }
 
         /// <summary>This instance's LibVLC (the Windows session test plays through the real output).</summary>
@@ -165,11 +190,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             if (volume <= 0f || string.IsNullOrWhiteSpace(path) || !File.Exists(path)) { Fire(onFinished); return static () => { }; }
 
-            var media = new Media(_vlc, path, FromType.FromPath);
-            media.AddOption(NoVideo);
-            var player = new MediaPlayer(media);
             // WPF's volume is linear sample gain; LibVLC's is cubic, so 0.5 must land at ~-6 dB, not -18.
             var vol = VlcVolume(volume);
+            // An audible flash voice takes its gain in the samples, so it never starts at the output's default.
+            var preGain = tag == "flash-voice" && vol > 0;
+            var media = new Media(preGain ? GainVlc(volume) : _vlc, path, FromType.FromPath);
+            media.AddOption(NoVideo);
+            var player = new MediaPlayer(media);
+            if (preGain) vol = 100;
             // The audio callback overrides every hardware output, including its first buffer.
             // Volume applied in Playing is too late for a zero-level flash.
             var silent = tag == "flash-voice" && vol == 0;
