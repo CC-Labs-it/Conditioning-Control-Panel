@@ -14,11 +14,16 @@ internal static class LoginStreakHead
     private static string? _loadedId;
     private static JObject? _loadedStats;
     private static AchievementEngine? _questXpEngine;
+    private static DispatcherTimer? _rolloverTimer;
     internal static int ProfileGeneration { get; private set; }
 
     internal static void Start(AchievementEngine engine, AppSettings settings)
     {
         _questXpEngine = null;
+        _rolloverTimer?.Stop();
+        _rolloverTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _rolloverTimer.Tick += (_, _) => Rollover(engine, settings, DateTime.Today);
+        _rolloverTimer.Start();
         Update(engine.Progress, settings, DateTime.Today, false);
         SaveAndPay(engine, settings);
         if (engine.Progress.PendingStreakBreak)
@@ -35,6 +40,7 @@ internal static class LoginStreakHead
     internal static bool Update(AchievementProgress p, AppSettings s, DateTime today, bool resolveGap)
     {
         today = today.Date;
+        MarkSeason(s, p.ConsecutiveDays, DateTime.UtcNow);
         var last = p.LastLaunchDate.Date;
         if (p.PendingStreakBreak && !resolveGap) return false;
         if (resolveGap) p.PendingStreakBreak = false;
@@ -78,7 +84,30 @@ internal static class LoginStreakHead
         p.LastLaunchDate = today;
         s.CurrentStreak = p.ConsecutiveDays;
         s.LastStreakDate = today;
+        MarkSeason(s, p.ConsecutiveDays, DateTime.UtcNow);
         return true;
+    }
+
+    // WPF SeasonRecapService.cs:146 and :159 use UTC for the season day.
+    internal static void MarkSeason(AppSettings s, int streak, DateTime utcNow)
+    {
+        if (string.IsNullOrEmpty(s.SeasonStatsSeason))
+            s.SeasonStatsSeason = EnhancementAnalytics.CurrentSeasonKey(s, utcNow);
+        var key = utcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        if (!s.SeasonActiveDays.Contains(key)) s.SeasonActiveDays.Add(key);
+        s.SeasonPeakStreak = Math.Max(s.SeasonPeakStreak, streak);
+    }
+
+    internal static bool Rollover(AchievementEngine engine, AppSettings settings, DateTime today)
+    {
+        var p = engine.Progress;
+        if (p.PendingStreakBreak || !AchievementProgress.ShouldBankDayRollover(p.LastLaunchDate, today)) return false;
+        var wasPending = p.PendingStreakBreak;
+        var banked = Update(p, settings, today, false);
+        if (!wasPending && p.PendingStreakBreak) _ = Timeout(engine, settings, settings.UnifiedId);
+        SaveAndPay(engine, settings);
+        if (banked && App.Quests is { } quests) App.CreditBankedLoginStreak(quests, p, today);
+        return banked;
     }
 
     private static async Task SyncInsurance(AppSettings settings, string id, DateTime today, int generation)
@@ -92,7 +121,7 @@ internal static class LoginStreakHead
         }
     }
 
-    internal static void ClearProfile() { ProfileGeneration++; _loadedId = null; _loadedStats = null; }
+    internal static void ClearProfile() { _rolloverTimer?.Stop(); _rolloverTimer = null; _questXpEngine = null; ProfileGeneration++; _loadedId = null; _loadedStats = null; }
 
     internal static void ProfileLoaded(string id, JObject? stats)
     {
@@ -124,6 +153,7 @@ internal static class LoginStreakHead
         }
         if (p.PendingStreakBreak) Update(p, s, today, true);
         else { s.CurrentStreak = p.ConsecutiveDays; s.LastStreakDate = p.LastLaunchDate; }
+        MarkSeason(s, p.ConsecutiveDays, DateTime.UtcNow);
         SaveAndPay(engine, s);
         if (App.Quests is { } quests) App.CreditBankedLoginStreak(quests, p, today);
     }
@@ -179,5 +209,7 @@ internal static class LoginStreakHead
         p.PendingStreakBonus = false;
         var xp = p.ConsecutiveDays switch { <= 0 => 0, <= 3 => 50, <= 6 => 100, <= 13 => 150, <= 29 => 200, _ => 300 };
         if (xp > 0) ProgressionBank.Add(xp, "Other");
+        engine.Save();
+        CoreSettings.SaveImmediate();
     }
 }
