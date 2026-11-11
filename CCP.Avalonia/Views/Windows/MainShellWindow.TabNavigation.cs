@@ -104,6 +104,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             ["personality"] = "CompanionPersonalityTab", ["permissions"] = "CompanionPermissionsTab", ["companionlinks"] = "CompanionLinksTab",
         };
 
+        internal Control? TabRoot(string tab) => TabPanels.TryGetValue(tab, out var name) ? Named<Control>(name) : null;
+
         /// <summary>Keys that open a window or a service rather than a tab. ShowTab leaves the
         /// current tab alone for them, as WPF does; the launch itself is not on this head yet.</summary>
         private static readonly HashSet<string> WindowKeys = new(StringComparer.Ordinal)

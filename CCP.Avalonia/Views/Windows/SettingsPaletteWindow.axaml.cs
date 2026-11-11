@@ -426,8 +426,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Dispatcher.UIThread.Post(() =>
                 {
                     // Name lookup across namescopes: every tab owns its own, so walk the tree.
+                    var root = shell.TabRoot(entry.TabKey);
                     var target = entry.ElementNames
-                        .Select(n => shell.GetVisualDescendants().OfType<Control>().FirstOrDefault(c => c.Name == n))
+                        .Select(n => root?.GetVisualDescendants().OfType<Control>().FirstOrDefault(c => c.Name == n))
                         .FirstOrDefault(c => c != null);
                     if (target == null)
                     {
