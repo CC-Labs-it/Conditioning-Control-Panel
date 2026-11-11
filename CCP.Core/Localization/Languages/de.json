@@ -8338,5 +8338,8 @@
   "chaos_dvd_title": "Porno-DVD",
   "chaos_dvd_loading": "wird geladen",
   "chaos_inescapable_unlock_tip": "eine tiefere tür. sie verkauft den schlüssel in der Toybox: schließe {0} abstiege auf Relentless ab, erreiche Devoted ({1} abstiege) und trainiere es dann für ✦{2}.",
-  "chaos_resistance_regrows": "Widerstand regeneriert sich"
+  "chaos_resistance_regrows": "Widerstand regeneriert sich",
+  "she_wake_unavailable_tooltip": "Die optionale sherpa-onnx-Weckerkennung ist in dieser Version nicht verfügbar. Die integrierte Erkennung wird verwendet.",
+  "she_wake_unavailable_status": "Die optionale Weckerkennung ist in dieser Version nicht verfügbar. Die integrierte Erkennung wird verwendet.",
+  "she_wake_calibration_unavailable": "Die Kalibrierung des Weckworts ist in dieser Version nicht verfügbar."
 }

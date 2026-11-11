@@ -8338,5 +8338,8 @@
   "chaos_dvd_title": "ポルノDVD",
   "chaos_dvd_loading": "読み込み中",
   "chaos_inescapable_unlock_tip": "さらに深くへ続く扉。鍵はToyboxで買える。Relentlessで{0}回の降下を終え、Devoted（{1}回の降下）に到達してから、✦{2}で習得。",
-  "chaos_resistance_regrows": "抵抗力が回復"
+  "chaos_resistance_regrows": "抵抗力が回復",
+  "she_wake_unavailable_tooltip": "オプションの sherpa-onnx 起動エンジンはこのバージョンでは利用できません。内蔵の認識機能を使用します。",
+  "she_wake_unavailable_status": "オプションの起動エンジンはこのバージョンでは利用できません。内蔵の認識機能を使用します。",
+  "she_wake_calibration_unavailable": "起動ワードの調整はこのバージョンでは利用できません。"
 }

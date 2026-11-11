@@ -8338,5 +8338,8 @@
   "chaos_dvd_title": "Порно-DVD",
   "chaos_dvd_loading": "загрузка",
   "chaos_inescapable_unlock_tip": "дверь глубже. она продаёт ключ в Toybox: заверши {0} спусков на Relentless, достигни Devoted ({1} спусков), затем обучись за ✦{2}.",
-  "chaos_resistance_regrows": "сопротивление восстанавливается"
+  "chaos_resistance_regrows": "сопротивление восстанавливается",
+  "she_wake_unavailable_tooltip": "Дополнительный движок активации sherpa-onnx недоступен в этой версии. Используется встроенное распознавание.",
+  "she_wake_unavailable_status": "Дополнительный движок активации недоступен в этой версии. Используется встроенное распознавание.",
+  "she_wake_calibration_unavailable": "Калибровка слова активации недоступна в этой версии."
 }

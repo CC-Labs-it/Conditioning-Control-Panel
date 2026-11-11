@@ -8338,5 +8338,8 @@
   "chaos_dvd_title": "포르노 DVD",
   "chaos_dvd_loading": "불러오는 중",
   "chaos_inescapable_unlock_tip": "더 깊은 곳으로 가는 문. 열쇠는 Toybox에서 판다. Relentless 하강 {0}회를 마치고 Devoted(하강 {1}회)에 도달한 뒤 ✦{2}로 훈련하자.",
-  "chaos_resistance_regrows": "저항력 회복"
+  "chaos_resistance_regrows": "저항력 회복",
+  "she_wake_unavailable_tooltip": "선택 사항인 sherpa-onnx 호출 엔진은 이 버전에서 사용할 수 없습니다. 내장 인식기를 사용합니다.",
+  "she_wake_unavailable_status": "선택 사항인 호출 엔진은 이 버전에서 사용할 수 없습니다. 내장 인식기를 사용합니다.",
+  "she_wake_calibration_unavailable": "호출어 보정은 이 버전에서 사용할 수 없습니다."
 }
