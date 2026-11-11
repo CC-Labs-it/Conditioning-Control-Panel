@@ -8999,5 +8999,11 @@
   "webcam_capture_retry_fmt": "摄像头响应缓慢。正在尝试其他方法（{0}/{1}）。",
   "installer_fileassoc_task": "在媒体文件 (.mp4、.mp3 等) 的右键菜单中添加“用 CCP 打开”",
   "installer_fileassoc_group": "文件关联:",
-  "installer_avalonia_upgrade_notice": "升级到 Avalonia\n\n从 WPF 升级时，内置浏览器的登录状态会重置。请重新登录在 CCP 中打开的网站。\n\n新的浏览器配置文件 browser_data_avalonia 位于 CCP 用户数据文件夹中。旧的 browser_data 配置文件会保留。\n\n此浏览器更改不会清除 CCP 账户令牌、设置或进度。"
+  "installer_avalonia_upgrade_notice": "升级到 Avalonia\n\n从 WPF 升级时，内置浏览器的登录状态会重置。请重新登录在 CCP 中打开的网站。\n\n新的浏览器配置文件 browser_data_avalonia 位于 CCP 用户数据文件夹中。旧的 browser_data 配置文件会保留。\n\n此浏览器更改不会清除 CCP 账户令牌、设置或进度。",
+  "possession_doki_title_1": "面板不再假装了",
+  "possession_doki_title_2": "封锁没有回应你",
+  "possession_doki_message": "你想离开。",
+  "possession_doki_progress": "正在删除你的出路...",
+  "possession_doki_done": "什么也没发生。没有东西需要删除。",
+  "possession_doki_ok": "确定"
 }

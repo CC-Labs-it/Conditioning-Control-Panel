@@ -8495,5 +8495,11 @@
   "webcam_capture_retry_fmt": "カメラの応答が遅いため、別の方法を試しています（{0}/{1}）。",
   "installer_fileassoc_task": "メディアファイル (.mp4、.mp3 など) の右クリックメニューに「CCP で開く」を追加",
   "installer_fileassoc_group": "ファイルの関連付け:",
-  "installer_avalonia_upgrade_notice": "Avalonia へのアップグレード\n\nWPF からアップグレードすると、内蔵ブラウザーのログイン状態がリセットされます。CCP 内で開くサイトに再度ログインしてください。\n\n新しいブラウザープロファイル browser_data_avalonia は CCP のユーザーデータフォルダーにあります。古い browser_data プロファイルは保持されます。\n\nこの変更によって CCP のアカウントトークン、設定、進行状況が消去されることはありません。"
+  "installer_avalonia_upgrade_notice": "Avalonia へのアップグレード\n\nWPF からアップグレードすると、内蔵ブラウザーのログイン状態がリセットされます。CCP 内で開くサイトに再度ログインしてください。\n\n新しいブラウザープロファイル browser_data_avalonia は CCP のユーザーデータフォルダーにあります。古い browser_data プロファイルは保持されます。\n\nこの変更によって CCP のアカウントトークン、設定、進行状況が消去されることはありません。",
+  "possession_doki_title_1": "パネルはもう演じない",
+  "possession_doki_title_2": "ロックダウンは応答しない",
+  "possession_doki_message": "出て行こうとしたね。",
+  "possession_doki_progress": "出口を削除中...",
+  "possession_doki_done": "何も起きなかった。削除するものはなかった。",
+  "possession_doki_ok": "ok"
 }

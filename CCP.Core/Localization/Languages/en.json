@@ -9237,5 +9237,11 @@
   "webcam_capture_retry_fmt": "Camera slow to respond. Trying another method ({0}/{1}).",
   "installer_fileassoc_task": "Add 'Open with CCP' to right-click menu for media files (.mp4, .mp3, etc.)",
   "installer_fileassoc_group": "File associations:",
-  "installer_avalonia_upgrade_notice": "Avalonia upgrade\n\nEmbedded browser logins reset when upgrading from WPF. Sign in again to websites opened inside CCP.\n\nThe new browser profile is browser_data_avalonia under your CCP user data folder. The old browser_data profile is kept.\n\nThis browser change does not clear CCP account tokens, settings or progress."
+  "installer_avalonia_upgrade_notice": "Avalonia upgrade\n\nEmbedded browser logins reset when upgrading from WPF. Sign in again to websites opened inside CCP.\n\nThe new browser profile is browser_data_avalonia under your CCP user data folder. The old browser_data profile is kept.\n\nThis browser change does not clear CCP account tokens, settings or progress.",
+  "possession_doki_title_1": "the panel has stopped pretending",
+  "possession_doki_title_2": "lockdown is not responding to you",
+  "possession_doki_message": "you tried to leave.",
+  "possession_doki_progress": "deleting your way out...",
+  "possession_doki_done": "nothing happened. there was nothing to delete.",
+  "possession_doki_ok": "ok"
 }

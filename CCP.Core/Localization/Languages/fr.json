@@ -8495,5 +8495,11 @@
   "webcam_capture_retry_fmt": "La caméra répond lentement. Essai d’une autre méthode ({0}/{1}).",
   "installer_fileassoc_task": "Ajouter 'Ouvrir avec CCP' au menu contextuel des fichiers multimédias (.mp4, .mp3, etc.)",
   "installer_fileassoc_group": "Associations de fichiers :",
-  "installer_avalonia_upgrade_notice": "Mise à niveau vers Avalonia\n\nLa mise à niveau depuis WPF réinitialise les connexions du navigateur intégré. Reconnectez-vous aux sites ouverts dans CCP.\n\nLe nouveau profil browser_data_avalonia se trouve dans le dossier de données utilisateur de CCP. L’ancien profil browser_data est conservé.\n\nCe changement n’efface pas les jetons du compte CCP, les paramètres ni la progression."
+  "installer_avalonia_upgrade_notice": "Mise à niveau vers Avalonia\n\nLa mise à niveau depuis WPF réinitialise les connexions du navigateur intégré. Reconnectez-vous aux sites ouverts dans CCP.\n\nLe nouveau profil browser_data_avalonia se trouve dans le dossier de données utilisateur de CCP. L’ancien profil browser_data est conservé.\n\nCe changement n’efface pas les jetons du compte CCP, les paramètres ni la progression.",
+  "possession_doki_title_1": "le panneau ne fait plus semblant",
+  "possession_doki_title_2": "lockdown ne te répond pas",
+  "possession_doki_message": "tu as essayé de partir.",
+  "possession_doki_progress": "suppression de ta sortie...",
+  "possession_doki_done": "rien ne s’est passé. il n’y avait rien à supprimer.",
+  "possession_doki_ok": "ok"
 }

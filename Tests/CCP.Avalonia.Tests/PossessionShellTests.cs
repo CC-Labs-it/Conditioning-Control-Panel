@@ -9,6 +9,7 @@ using Avalonia.Headless;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using ConditioningControlPanel.Localization;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -374,13 +375,98 @@ public sealed class PossessionShellTests
         sb.Clear();
         LockdownTabView.AppendPossessionConsent(sb, cfg, fullDokiScares: true);
         Assert.Contains("- Full Doki adds themed fake-crash scares. They are theatre.", sb.ToString());
-        // No Doki dialog is ported yet, so the real text does not promise one.
-        Assert.False(PossessionAvaloniaHead.HasFullDokiEffects());
-        Assert.DoesNotContain("fake-crash", LockdownTabView.LockdownWarning(20, cfg, windows: false));
+        // The catalog now carries the themed dialog.
+        Assert.True(PossessionAvaloniaHead.HasFullDokiEffects());
+        Assert.Contains("fake-crash", LockdownTabView.LockdownWarning(20, cfg, windows: false));
 
         cfg.LockdownPossessionEnabled = false;
         Assert.DoesNotContain("Possession", LockdownTabView.LockdownWarning(20, cfg, windows: false));
     }
+
+    private sealed class ImmediateAttribution : IPossessionAttribution
+    {
+        public System.Threading.Tasks.Task ChargeAsync(object target, CancellationToken ct, int durationMs = 400) => System.Threading.Tasks.Task.CompletedTask;
+        public IDisposable Possess(object target) => new CancellationTokenSource();
+        public void EdgePulse(double strength) { }
+        public bool AnyPossessed => false;
+        public void ReleaseAll() { }
+    }
+
+    private static PossessionContext DokiContext(Rig rig, PossessionRung rung, PossessionIntensity intensity) => new()
+    {
+        Host = rig.Shell, Attribution = new ImmediateAttribution(), Rung = rung, Intensity = intensity,
+        Photosafe = false, Rng = new Random(1), ElapsedFraction = 0.9,
+        Remaining = TimeSpan.FromMinutes(1), Name = (_, _) => { }
+    };
+
+    [Theory]
+    [InlineData(PossessionRung.Collapse, PossessionIntensity.FullDoki)]
+    [InlineData(PossessionRung.ItKnows, PossessionIntensity.Eerie)]
+    public void DokiDialog_RefusesBelowBothGates(PossessionRung rung, PossessionIntensity intensity) => Run(rig =>
+    {
+        var effect = new DokiDialogEffect();
+        Assert.False(effect.CanApply(DokiContext(rig, rung, intensity), null));
+        Assert.True(effect.CanApply(DokiContext(rig, PossessionRung.ItKnows, PossessionIntensity.FullDoki), null));
+    });
+
+    [Fact]
+    public void DokiDialog_RendersLocalizedTextAndClosesOnUndo() => Run(rig =>
+    {
+        var effect = new DokiDialogEffect();
+        effect.ApplyAsync(DokiContext(rig, PossessionRung.ItKnows, PossessionIntensity.FullDoki), null, CancellationToken.None).GetAwaiter().GetResult();
+        var dialog = Assert.IsType<Window>(effect.Dialog);
+        Frame();
+        Assert.True(dialog.IsVisible);
+        Assert.Equal(WindowDecorations.None, dialog.SystemDecorations);
+        Assert.NotEqual("possession_doki_message", Loc.Get("possession_doki_message"));
+        Assert.NotEqual("possession_doki_progress", Loc.Get("possession_doki_progress"));
+        Assert.Contains(dialog.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("possession_doki_message"));
+        Assert.Contains(dialog.GetVisualDescendants().OfType<TextBlock>(), t => t.Text != null && (t.Text.StartsWith(Loc.Get("possession_doki_progress"), StringComparison.Ordinal) || t.Text == Loc.Get("possession_doki_done")));
+        Assert.DoesNotContain("possession_doki_", dialog.Title);
+        Assert.NotNull(dialog.CaptureRenderedFrame());
+        effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+        Assert.False(dialog.IsVisible);
+        Assert.Null(effect.Dialog);
+    });
+
+    [Fact]
+    public void DokiDialog_ProgressAdmitsNothingHappened_AndFailsafeCloses() => Run(rig =>
+    {
+        var effect = new DokiDialogEffect();
+        effect.ApplyAsync(DokiContext(rig, PossessionRung.ItKnows, PossessionIntensity.FullDoki), null, CancellationToken.None).GetAwaiter().GetResult();
+        var dialog = Assert.IsType<Window>(effect.Dialog);
+        effect.StepProgress(2200);
+        Assert.Contains(dialog.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("possession_doki_done"));
+        effect.StepProgress(6000);
+        Assert.False(dialog.IsVisible);
+        Assert.Null(effect.Dialog);
+        effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+    });
+
+    [Fact]
+    public void DokiDialog_DirectorUndoAllClosesTheWindow() => Run(rig =>
+    {
+        rig.Lockdown.Activate(TimeSpan.FromMinutes(30));
+        Frame();
+        typeof(PossessionDirector).GetField("_nextDue", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(rig.Director, DateTime.MaxValue);
+        rig.Clock += TimeSpan.FromMinutes(27);
+        Tick(rig.Lockdown);
+        Frame();
+        Assert.Equal(PossessionRung.ItKnows, rig.Director.CurrentRung);
+        var effect = new DokiDialogEffect();
+        var effects = (System.Collections.Generic.List<IPossessionEffect>)typeof(PossessionDirector).GetField("_effects", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(rig.Director)!;
+        effects.Clear(); effects.Add(effect);
+        rig.Director.RequestReactive("dokidialog", null);
+        Dispatcher.UIThread.RunJobs();
+        rig.Frames.Frame(TimeSpan.FromMilliseconds(1000));
+        rig.Frames.Frame(TimeSpan.FromMilliseconds(1500));
+        Dispatcher.UIThread.RunJobs();
+        var dialog = Assert.IsType<Window>(effect.Dialog);
+        Assert.True(dialog.IsVisible);
+        rig.Director.UndoAll();
+        Assert.False(dialog.IsVisible);
+        Assert.Null(effect.Dialog);
+    }, s => s.LockdownPossessionIntensity = 2);
 
     [Fact]
     public void ARepeatedTripwire_PulsesTheEdges_AndShakesUnlessPhotosafe() => Run(rig =>
