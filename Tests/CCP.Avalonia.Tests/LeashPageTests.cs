@@ -191,6 +191,8 @@ public sealed class LeashPageTests
             service.ApplyBlock(block);
             Assert.Empty(seen);
             shell.Show(); shell.ShowTab("leash"); Dispatcher.UIThread.RunJobs();
+            // The gate tick's pop-up bind, now rather than racing the 2 s timer: it pops this offer, Look replaces it.
+            shell.OfferSurfaces!.Rebind();
             var page = shell.Named<LeashTabView>("LeashTab")!;
             Assert.False(page.ShowingEmpty);
             Assert.Equal(new[] { id }, seen);
@@ -283,6 +285,9 @@ public sealed class LeashPageTests
                 var snap = LeashAskWindow.Snap!;
                 Assert.True(snap.IsVisible);
                 Assert.Equal(10, snap.GetLogicalDescendants().OfType<Canvas>().Single(c => c.Tag as string == "leash-snap-chain").Children.Count);
+                var snapCard = snap.GetLogicalDescendants().OfType<LeashSnapCard>().Single();
+                Assert.Equal("u_a", snapCard.Holder.Id); // the offer's LeashPerson, look and all (WPF ShowSnap(o.From, Me()))
+                Assert.Single(snap.GetLogicalDescendants().OfType<Control>(), c => c.Tag as string == "leash-tag");
                 Assert.Contains(snap.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == ConditioningControlPanel.Localization.Loc.GetF("leash_snap_leashed", "Mira"));
                 shell.CheckLeashGate();
                 Assert.Null(LeashAskWindow.Current); Assert.Single(seen);

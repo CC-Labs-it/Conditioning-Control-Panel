@@ -75,7 +75,7 @@ public sealed class LeashAskWindow : Window
         var w = new LeashAskWindow(new LeashAskCard(offer, service));
         w.Card.Answered += (o, accepted, _) =>
         {
-            if (accepted) ShowSnap(o.From.Name, owner); // closes this ask in the same step
+            if (accepted) ShowSnap(o.From, owner); // closes this ask in the same step
             else w.Close();
         };
         w.Card.Dismissed += w.Close;
@@ -93,10 +93,10 @@ public sealed class LeashAskWindow : Window
         return w;
     }
     /// <summary>WPF ShowSnap from ShowAsk's accept: holder on the left, this account (display name, else "you") on the right.</summary>
-    internal static void ShowSnap(string holder, Window? owner)
+    internal static void ShowSnap(LeashPerson holder, Window? owner)
     {
         var me = string.IsNullOrWhiteSpace(CoreAccount.DisplayName) ? Loc.Get("leash_you") : CoreAccount.DisplayName!.Trim();
-        var card = new LeashSnapCard(holder, me);
+        var card = new LeashSnapCard(holder, new LeashPerson("me", me, null)); // WPF LeashSurfaces.Me (:188-194)
         var w = new Window();
         Overlay(w, card, () => w.Close());
         card.Closed += w.Close;

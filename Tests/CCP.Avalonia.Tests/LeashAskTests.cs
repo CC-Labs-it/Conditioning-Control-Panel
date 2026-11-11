@@ -64,6 +64,9 @@ public sealed class LeashAskTests
                 try
                 {
                     shell.Show(); shell.ShowTab("leash"); Dispatcher.UIThread.RunJobs();
+                    // Bind the offer pop-up now and close the ask it opens: left to the 2 s gate tick it could
+                    // queue this offer behind a Look-opened ask and pop it up again mid-test.
+                    shell.OfferSurfaces!.Rebind(); LeashAskWindow.CloseCurrent();
                     body(shell, shell.Named<LeashTabView>("LeashTab")!, wire, seen);
                 }
                 finally { LeashAskWindow.CloseCurrent(); }
