@@ -102,7 +102,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         private static readonly (string Plate, string Art, Stretch Fit)[] HeroPlates =
         {
-            ("PlayWebAppHeroPlate",   "billboard/webapp.png",      Stretch.UniformToFill),
             ("PlayGoonHeroPlate",     "features/goon_game_tile.png",    Stretch.UniformToFill),
             ("PlayChessHeroPlate",    "features/piecebypiece.png",      Stretch.UniformToFill),
             ("PlayDtrhHeroPlate",     "features/dtrh.png",              Stretch.UniformToFill),

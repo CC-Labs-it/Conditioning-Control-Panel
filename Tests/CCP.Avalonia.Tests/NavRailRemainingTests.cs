@@ -62,9 +62,10 @@ public sealed class NavRailRemainingTests
         Assert.Equal("THE NEST", home.Text);
         Assert.Equal("Seek", w.Named<TextBlock>("TxtNavSearchLabel")!.Text);
         Assert.Equal("Retreat", w.Named<TextBlock>("TxtNavBackLabel")!.Text);
-        Assert.Equal("Hive", w.Named<ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView>("PlayTab")!.FindControl<TextBlock>("TxtNavWebAppLabel")!.Text);
+        Assert.Equal(loc.Get("nav_door_webapp"), w.Named<ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView>("PlayTab")!.FindControl<TextBlock>("TxtNavWebAppLabel")!.Text);
 
         loc.SetLanguage("de"); Dispatcher.UIThread.RunJobs();
+        Assert.Equal(loc.Get("nav_door_webapp"), w.Named<ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView>("PlayTab")!.FindControl<TextBlock>("TxtNavWebAppLabel")!.Text);
         Assert.Equal("THE NEST", home.Text); // a changed English label overrides localization
         Assert.Equal(loc.Get(NavSections.Find(NavSections.Studio)!.LabelKey).ToUpper(System.Globalization.CultureInfo.CurrentUICulture), studio.Text);
         CoreMods.MakeModAwareProvider = text => text;

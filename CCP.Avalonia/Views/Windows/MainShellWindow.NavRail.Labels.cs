@@ -23,7 +23,6 @@ public partial class MainShellWindow
                 BindNavLabel(row.Label, section.LabelKey, caps: true);
         BindNavLabel(Named<TextBlock>("TxtNavBackLabel"), "nav_back_label");
         BindNavLabel(Named<TextBlock>("TxtNavSearchLabel"), "nav_search_label");
-        BindNavLabel(Named<Views.Tabs.PlayTabView>("PlayTab")?.FindControl<TextBlock>("TxtNavWebAppLabel"), "nav_door_webapp");
     }
 
     private void BindNavLabel(TextBlock? label, string key, bool caps = false)
