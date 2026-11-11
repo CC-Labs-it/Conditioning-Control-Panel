@@ -85,6 +85,7 @@ namespace ConditioningControlPanel.Avalonia
         /// Local-only: no sync, no streak writes, no ResetProgress on this head (oracle-achievements.md).</summary>
         internal static AchievementEngine? Achievements { get; private set; }
         private DispatcherTimer? _achievementSaveTimer;
+        private DispatcherTimer? _seasonRolloverTimer;
 
         /// <summary>WPF AchievementService.cs:99-107: periodically save dirty progress off the UI thread.</summary>
         internal static DispatcherTimer StartAchievementAutosave(AchievementEngine engine)
@@ -138,12 +139,33 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The presence switch moved (either surface): the other one repaints from the setting.</summary>
         internal static event Action? RichPresenceChanged;
 
-        internal static void RecordSeasonActivity()
+        internal static void RecordSeasonActivity() => RecordSeasonActivity(DateTime.UtcNow);
+
+        private static void RecordSeasonActivity(DateTime utcNow)
         {
             if (Achievements == null || CoreSettings.Service == null) return;
-            var now = DateTime.UtcNow;
-            SeasonActivity.MarkActiveToday(CoreSettings.Current, now, () => CoreSettings.Save());
-            SeasonActivity.TrackStreakPeak(CoreSettings.Current, Achievements.Progress.ConsecutiveDays, now);
+            SeasonActivity.MarkActiveToday(CoreSettings.Current, utcNow, () => CoreSettings.Save());
+            SeasonActivity.TrackStreakPeak(CoreSettings.Current, Achievements.Progress.ConsecutiveDays, utcNow);
+        }
+
+        // AchievementService.cs:107-117,146: check while the application is open, even when idle.
+        internal static DispatcherTimer StartSeasonRollover(Action<DateTime> record, Func<DateTimeOffset> now, TimeSpan interval, DateTime? initialDay = null)
+        {
+            var lastDay = (initialDay ?? now().Date).Date;
+            var timer = new DispatcherTimer { Interval = interval };
+            timer.Tick += (_, _) =>
+            {
+                var current = now();
+                if (current.Date <= lastDay) return;
+                try
+                {
+                    record(current.UtcDateTime);
+                    lastDay = current.Date;
+                }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Season activity rollover failed"); }
+            };
+            timer.Start();
+            return timer;
         }
 
         /// <summary>WPF ProfileSyncService.ApplyServerCurveEpoch -> RaiseProfileLoadedIfProgressionChanged: follow the
@@ -1055,7 +1077,10 @@ namespace ConditioningControlPanel.Avalonia
                 // way WPF App.xaml.cs:384/:394 seeds the two unlock seams. Unlocked is raised on the
                 // caller's thread; the popup hops to the UI thread as WPF's DispatcherHelper does.
                 Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
-                RecordSeasonActivity();
+                var activityStart = DateTimeOffset.Now;
+                RecordSeasonActivity(activityStart.UtcDateTime);
+                _seasonRolloverTimer?.Stop();
+                _seasonRolloverTimer = StartSeasonRollover(RecordSeasonActivity, () => DateTimeOffset.Now, TimeSpan.FromSeconds(1), activityStart.Date);
                 Platform.AccountSeed.ProfileLoaded -= RecordSeasonActivity;
                 Platform.AccountSeed.ProfileLoaded += RecordSeasonActivity;
                 _achievementSaveTimer?.Stop();
@@ -1535,6 +1560,7 @@ namespace ConditioningControlPanel.Avalonia
             SaveSettingsOnExit(shell, () => Settings?.SaveImmediate());
 
             // WPF AchievementService.Dispose always saves synchronously, including a queued autosave.
+            _seasonRolloverTimer?.Stop();
             try { SaveAchievementsOnExit(_achievementSaveTimer, Achievements); } catch { /* the store logs write failures */ }
             try { IntakePunchCard?.Dispose(); } catch { /* flush pending intake credit */ }
             try { Quests?.Dispose(); } catch { /* WPF App.OnExit:6104; saves only when dirty */ }
