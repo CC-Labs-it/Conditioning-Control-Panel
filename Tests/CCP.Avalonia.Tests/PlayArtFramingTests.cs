@@ -42,54 +42,78 @@ public sealed class PlayArtFramingTests
             var stock = new ModPackage(new ModManifest { Id = "stock" }, null, true);
             var active = mod;
             bool brokenImage = false;
-            CoreMods.ActiveModPackageProvider = () => active;
-            CoreModArt.OverridePathProvider = path => active == mod && Array.IndexOf(paths, path) >= 0 ? (brokenImage ? Path.Combine(dir.FullName, "missing.png") : png) : null;
-            var play = new PlayTabView();
-            var window = new Window { Content = play };
+            var previousModProvider = CoreMods.ActiveModPackageProvider;
+            var previousArtProvider = CoreModArt.OverridePathProvider;
+            void Exercise(bool failBeforeView)
+            {
+                Window? window = null;
+                try
+                {
+                    CoreMods.ActiveModPackageProvider = () => active;
+                    CoreModArt.OverridePathProvider = path => active == mod && Array.IndexOf(paths, path) >= 0 ? (brokenImage ? Path.Combine(dir.FullName, "missing.png") : png) : null;
+                    if (failBeforeView) throw new InvalidOperationException("Simulated view construction failure");
+                    var play = new PlayTabView();
+                    window = new Window { Content = play };
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
+                    RelativeRect Crop(int i) => ((ImageBrush)play.FindControl<Border>(names[i])!.Background!).SourceRect;
+                    void Check(int i, double x, double y, double width, double height)
+                    {
+                        var rect = Crop(i);
+                        Assert.Equal(RelativeUnit.Relative, rect.Unit);
+                        Assert.Equal(x, rect.Rect.X, 5);
+                        Assert.Equal(y, rect.Rect.Y, 5);
+                        Assert.Equal(width, rect.Rect.Width, 5);
+                        Assert.Equal(height, rect.Rect.Height, 5);
+                    }
+                    // WPF ResolveViewbox for a 2:1 image, each surface and the author's focal point.
+                    Check(0, 0.05, 0.2248731, 0.5, 0.3502538);
+                    Check(1, 0.05, 0.1868020, 0.5, 0.4263959);
+                    Check(2, 0.0711864, 0.15, 0.4576271, 0.5);
+
+                    active = stock;
+                    CoreMods.RaiseModChanged(null, stock);
+                    Dispatcher.UIThread.RunJobs();
+                    for (int i = 0; i < names.Length; i++) Check(i, 0, 0, 1, 1);
+
+                    active = mod;
+                    CoreMods.RaiseModChanged(null, mod);
+                    Dispatcher.UIThread.RunJobs();
+                    Check(0, 0.05, 0.2248731, 0.5, 0.3502538);
+
+                    // An override that cannot be decoded falls back to the shipped image and crop.
+                    brokenImage = true;
+                    CoreMods.RaiseModChanged(null, mod);
+                    Dispatcher.UIThread.RunJobs();
+                    for (int i = 0; i < names.Length; i++) Check(i, 0, 0, 1, 1);
+
+                    // A switch while detached is observed when the view returns.
+                    window.Content = null;
+                    brokenImage = false;
+                    CoreMods.RaiseModChanged(null, mod);
+                    window.Content = play;
+                    Dispatcher.UIThread.RunJobs();
+                    Check(1, 0.05, 0.1868020, 0.5, 0.4263959);
+                }
+                finally
+                {
+                    CoreMods.ActiveModPackageProvider = previousModProvider;
+                    CoreModArt.OverridePathProvider = previousArtProvider;
+                    window?.Close();
+                }
+            }
+
             try
             {
-                window.Show();
-                Dispatcher.UIThread.RunJobs();
-                RelativeRect Crop(int i) => ((ImageBrush)play.FindControl<Border>(names[i])!.Background!).SourceRect;
-                void Check(int i, double x, double y, double width, double height)
-                {
-                    var rect = Crop(i);
-                    Assert.Equal(RelativeUnit.Relative, rect.Unit);
-                    Assert.Equal(x, rect.Rect.X, 5);
-                    Assert.Equal(y, rect.Rect.Y, 5);
-                    Assert.Equal(width, rect.Rect.Width, 5);
-                    Assert.Equal(height, rect.Rect.Height, 5);
-                }
-                // WPF ResolveViewbox for a 2:1 image, each surface and the author's focal point.
-                Check(0, 0.05, 0.2248731, 0.5, 0.3502538);
-                Check(1, 0.05, 0.1868020, 0.5, 0.4263959);
-                Check(2, 0.0711864, 0.15, 0.4576271, 0.5);
-
-                active = stock;
-                CoreMods.RaiseModChanged(null, stock);
-                Dispatcher.UIThread.RunJobs();
-                for (int i = 0; i < names.Length; i++) Check(i, 0, 0, 1, 1);
-
-                active = mod;
-                CoreMods.RaiseModChanged(null, mod);
-                Dispatcher.UIThread.RunJobs();
-                Check(0, 0.05, 0.2248731, 0.5, 0.3502538);
-
-                // An override that cannot be decoded falls back to the shipped image and crop.
-                brokenImage = true;
-                CoreMods.RaiseModChanged(null, mod);
-                Dispatcher.UIThread.RunJobs();
-                for (int i = 0; i < names.Length; i++) Check(i, 0, 0, 1, 1);
-
-                // A switch while detached is observed when the view returns.
-                window.Content = null;
-                brokenImage = false;
-                CoreMods.RaiseModChanged(null, mod);
-                window.Content = play;
-                Dispatcher.UIThread.RunJobs();
-                Check(1, 0.05, 0.1868020, 0.5, 0.4263959);
+                Assert.Throws<InvalidOperationException>(() => Exercise(true));
+                Assert.Multiple(
+                    () => Assert.Same(previousModProvider, CoreMods.ActiveModPackageProvider),
+                    () => Assert.Same(previousArtProvider, CoreModArt.OverridePathProvider));
+                Exercise(false);
+                Assert.Same(previousModProvider, CoreMods.ActiveModPackageProvider);
+                Assert.Same(previousArtProvider, CoreModArt.OverridePathProvider);
             }
-            finally { window.Close(); dir.Delete(true); }
+            finally { dir.Delete(true); }
         });
     }
 }
