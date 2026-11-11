@@ -4,7 +4,7 @@
 // DtrhRunWire), run-started / run-progress / run-ended with the one-payout latch (:360, :583) and the
 // close-mid-run booking (:1002 DtrhRunCloseRule). The kept Escape (:119) is posted by the panic key's pause
 // claim (MainShellWindow.PanicKey.cs, Core PanicPolicy.KeptEscapePage.Dtrh); a full panic closes it with
-// every other game (PanicSurfaces "games"). Shell frames (boot-error, exit's 1200 ms close, exit-done)
+// every other game (PanicSurfaces "games"). Shell frames (exit's 1200 ms close, exit-done)
 // stay in GameWindow.HandleMessage.
 // Slice B: the manifest's online half (Core DtrhRemoteMedia: online media copied to this machine, re-posted as
 // copies land, loops lane, loops-dry back-off) and root-relative asset urls the page's WebGL layer may draw.
@@ -67,6 +67,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             switch ((string?)o["type"])
             {
+                case "boot-error":
+                    Close();
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (Chaos.ChaosRunHost.IsActive) return;
+                        if (ChaosMeta.State.RunsCompleted == 0) Chaos.ChaosRunHost.StartRun(DtrhRunWire.FirstRunConfig());
+                        else new Chaos.ChaosHubWindow().Show();
+                    });
+                    return true;
                 case "ready":
                     IsReady = true;
                     OnDtrhPageReady();

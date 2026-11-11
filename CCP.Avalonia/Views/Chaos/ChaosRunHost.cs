@@ -485,7 +485,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     ChaosAnnouncerOverlay.Announce(Loc.Get("chaos_first_sin_demo"), ChaosAnnounceKind.Temptation, holdMs: ChaosAnnounceTiming.TeachHoldMs);
                 }
             }
-            else if (rig && _draftsThisRun == 1 && options.Count > 0 && !ChaosMeta.State.SeenDuoDemo && ChaosMeta.IsBoonActive("the_spanker") && ChaosMeta.IsBoonActive("e_stim")) { var duo = ChaosBoonPool.All.FirstOrDefault(b => b.Id == "electrified_rabbits"); if (duo != null) { if (!options.Any(b => b.Id == duo.Id)) options[options.Count - 1] = duo; ChaosMeta.State.SeenDuoDemo = true; ChaosMeta.Save(); } }
+            else if (rig && _draftsThisRun == 1 && options.Count > 0 && !ChaosMeta.State.SeenDuoDemo
+                && ChaosMeta.IsBoonActive("the_spanker") && ChaosMeta.IsBoonActive("e_stim"))
+            {
+                var duo = ChaosBoonPool.All.FirstOrDefault(b => b.Id == "electrified_rabbits");
+                if (duo != null)
+                {
+                    if (!options.Any(b => b.Id == duo.Id)) options[options.Count - 1] = duo;
+                    ChaosMeta.State.SeenDuoDemo = true; ChaosMeta.Save();
+                    ChaosAnnouncerOverlay.Announce(Loc.Get("chaos_duo_demo"), ChaosAnnounceKind.Item, holdMs: ChaosAnnounceTiming.TeachHoldMs);
+                    BarkHead.Engine?.Raise("ChaosDuoDemo");
+                }
+            }
             foreach (var option in options) ChaosMeta.MarkDiscovered("boon:" + option.Id);
             return options;
         }
