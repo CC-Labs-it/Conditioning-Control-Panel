@@ -81,6 +81,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (TryGamePauseOnEscape(now)) return;
             // WPF MainWindow.xaml.cs:1620: EMI's panicPressed hold (five-minute tail) first, so every rung keeps her quiet.
             try { ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance.Draw("panicPressed"); } catch { }
+            // WPF HoldFace cancels the sounding chain before any panic rung returns.
+            try { EmiDesk.EmiDeskService.Instance.Window?.StopFeedbackForPanic(); }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "[EmiDesk] panic feedback stop failed"); }
             IntakeHostWindow.StopMicsForPanic();   // every press, before the lock-card stop or the capture abort reads as silence
             CancelPendingAi();   // every press, even one a lock card or the palette consumes
             // WPF MainWindow.xaml.cs:1620: Circe's Tab safety hold, armed up here because the lock-card, palette and

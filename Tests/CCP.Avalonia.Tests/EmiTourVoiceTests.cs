@@ -70,10 +70,12 @@ public class EmiTourVoiceTests
         var play = CoreAudio.PlayStoppableProvider;
         var breaker = CoreAudio.IsOutputSuppressedProvider;
         var field = typeof(EmiLineEngine).GetField("_heldBy", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        object? oldHeld = field.GetValue(EmiLineEngine.Instance);
         int plays = 0;
         object? oldUntil = HoldUntil.GetValue(EmiLineEngine.Instance);
         try
         {
+            field.SetValue(EmiLineEngine.Instance, null);
             HoldUntil.SetValue(EmiLineEngine.Instance, gate == "panicTail" ? DateTime.UtcNow.AddMinutes(5) : DateTime.MinValue);
             CoreSettings.Current.MasterVolume = gate == "volume" ? 0 : 50;
             CoreAudio.IsOutputSuppressedProvider = () => gate == "breaker";
@@ -86,13 +88,107 @@ public class EmiTourVoiceTests
         }
         finally
         {
-            field.SetValue(EmiLineEngine.Instance, null);
+            field.SetValue(EmiLineEngine.Instance, oldHeld);
             HoldUntil.SetValue(EmiLineEngine.Instance, oldUntil);
             CoreSettings.Current.MasterVolume = volume;
             CoreAudio.PlayStoppableProvider = play;
             CoreAudio.IsOutputSuppressedProvider = breaker;
         }
     }
+
+    [Fact]
+    public void SilenceGateTestRestoresAnExistingHold()
+    {
+        var engine = EmiLineEngine.Instance;
+        var held = typeof(EmiLineEngine).GetField("_heldBy", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var previous = held.GetValue(engine);
+        try
+        {
+            held.SetValue(engine, "existing-hold");
+            EachSilenceGatePreventsPlayback("volume");
+            Assert.Equal("existing-hold", held.GetValue(engine));
+        }
+        finally { held.SetValue(engine, previous); }
+    }
+
+    // WPF MainWindow.xaml.cs:1620 and EmiDeskWindow.Bubble.cs:545-559: the hold cuts
+    // a sounding line before the lock-card and palette rungs can return.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task PanicEarlyRungStopsThePlayingLine(bool lockCard) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var settings = CoreSettings.Current;
+        var engine = EmiLineEngine.Instance;
+        var service = EmiDeskService.Instance;
+        var windowField = typeof(EmiDeskService).GetField("_window", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var held = typeof(EmiLineEngine).GetField("_heldBy", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var previousWindow = windowField.GetValue(service);
+        var previousHeld = held.GetValue(engine);
+        var previousUntil = HoldUntil.GetValue(engine);
+        var previousPlay = CoreAudio.PlayStoppableProvider;
+        var previousBreaker = CoreAudio.IsOutputSuppressedProvider;
+        var (enabled, key, volume) = (settings.PanicKeyEnabled, settings.PanicKey, settings.MasterVolume);
+        int lines = 0, stops = 0;
+        var shell = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+        var desk = new EmiDeskWindow();
+        try
+        {
+            held.SetValue(engine, null);
+            HoldUntil.SetValue(engine, DateTime.MinValue);
+            settings.PanicKeyEnabled = true;
+            settings.PanicKey = "Escape";
+            settings.MasterVolume = 50;
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreAudio.PlayStoppableProvider = (_, _, tag, _, _) =>
+            {
+                if (tag == "emi-vox") { lines++; return () => stops++; }
+                return () => { };
+            };
+            windowField.SetValue(service, desk);
+            shell.Show();
+            desk.Show();
+            desk.Say("This line is playing.");
+            desk.AdvanceTourSpeech(); desk.AdvanceTourSpeech(); desk.AdvanceTourSpeech();
+            Assert.Equal(1, lines);
+            Assert.Equal(0, stops);
+            if (lockCard)
+            {
+                global::ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.ShowOnAllMonitors("good girl", 1, strictMode: true);
+                Assert.True(global::ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.IsAnyOpen());
+            }
+            else
+            {
+                global::ConditioningControlPanel.Avalonia.Views.Windows.SettingsPaletteWindow.Toggle(shell);
+                var instance = typeof(global::ConditioningControlPanel.Avalonia.Views.Windows.SettingsPaletteWindow)
+                    .GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic)!;
+                Assert.NotNull(instance.GetValue(null));
+            }
+            shell.HandlePanicKeyPress(new DateTime(2026, 1, 1));
+            Assert.Equal(1, stops);
+            Assert.Null(desk.TourSpeechText);
+            if (lockCard) Assert.False(global::ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.IsAnyOpen());
+            else Assert.False(global::ConditioningControlPanel.Avalonia.Views.Windows.SettingsPaletteWindow.TryConsumeEscape());
+        }
+        finally
+        {
+            global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.StopLockCards();
+            global::ConditioningControlPanel.Avalonia.Views.Windows.SettingsPaletteWindow.CloseIfOpen();
+            windowField.SetValue(service, previousWindow);
+            desk.ShutDown();
+            shell.Close();
+            held.SetValue(engine, previousHeld);
+            HoldUntil.SetValue(engine, previousUntil);
+            PanicAftermath.EndQuiet();
+            (settings.PanicKeyEnabled, settings.PanicKey, settings.MasterVolume) = (enabled, key, volume);
+            CoreAudio.PlayStoppableProvider = previousPlay;
+            CoreAudio.IsOutputSuppressedProvider = previousBreaker;
+        }
+        return Task.CompletedTask;
+    });
 
     /// <summary>WPF MainWindow.xaml.cs:1620: the panicPressed hold is armed before any rung, and START
     /// (PanicAftermath.EndQuiet) never ends it, so typing ticks stay silent for the tail.</summary>
