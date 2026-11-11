@@ -300,7 +300,7 @@ namespace ConditioningControlPanel.Avalonia
                     _ => null,
                 });
             // The override wins; else a machine whose only adapter is WARP (no GPU) renders in software,
-            // which beats ANGLE on WARP (Platform/RenderBudget.cs). Win32Options runs once, so this logs once.
+            // which beats ANGLE on WARP (Platform/RenderBudget.cs). This logs once per app start.
             var dxgi = rend == null && OperatingSystem.IsWindows()
                 ? Platform.DxgiAdapters.List() : new System.Collections.Generic.List<Platform.RenderBudget.DxgiAdapter>();
             var modes = Platform.RenderBudget.ChooseRendering(dxgi, rend);

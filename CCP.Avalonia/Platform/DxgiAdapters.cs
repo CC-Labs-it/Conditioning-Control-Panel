@@ -14,6 +14,7 @@ internal static class DxgiAdapters
 {
     private const int EnumAdapters1Slot = 12;   // IUnknown 3 + IDXGIObject 4 + IDXGIFactory 5
     private const int GetDesc1Slot = 10;        // IUnknown 3 + IDXGIObject 4 + IDXGIAdapter 3
+    private const int DxgiErrorNotFound = unchecked((int)0x887A0002);
     private static readonly Guid IidFactory1 = new("770aae78-f26f-4dba-a829-253c83d1b387");
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -42,12 +43,15 @@ internal static class DxgiAdapters
         {
             if (CreateDXGIFactory1(IidFactory1, out factory) < 0 || factory == IntPtr.Zero) return list;
             var enumAdapters = Slot<EnumAdapters1Fn>(factory, EnumAdapters1Slot);
-            for (uint i = 0; i < 16 && enumAdapters(factory, i, out var adapter) >= 0; i++)   // DXGI_ERROR_NOT_FOUND ends it
+            // Partial failure counts as failure: DXGI lists WARP last, so a skipped GPU would leave [WARP].
+            for (uint i = 0; i < 16; i++)
             {
+                int hr = enumAdapters(factory, i, out var adapter);
+                if (hr < 0) { if (hr != DxgiErrorNotFound) list.Clear(); break; }
                 try
                 {
-                    if (Slot<GetDesc1Fn>(adapter, GetDesc1Slot)(adapter, out var d) >= 0)
-                        list.Add(new RenderBudget.DxgiAdapter(d.Description ?? "", d.VendorId, d.DeviceId, d.Flags));
+                    if (Slot<GetDesc1Fn>(adapter, GetDesc1Slot)(adapter, out var d) < 0) { list.Clear(); break; }
+                    list.Add(new RenderBudget.DxgiAdapter(d.Description ?? "", d.VendorId, d.DeviceId, d.Flags));
                 }
                 finally { Marshal.Release(adapter); }
             }
