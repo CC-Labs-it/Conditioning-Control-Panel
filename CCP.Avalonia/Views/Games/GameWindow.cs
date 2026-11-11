@@ -10,6 +10,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.JustDrop;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Fyp.Online;
+using ConditioningControlPanel.Services.PrizeCounter;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
@@ -56,6 +57,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             [DtrhId] = new(DtrhId, "launcher_game_dtrh_title", "dtrh/index.html", DtrhGate),
             // WPF GlassroadHostService (feat/glassroad-a): the 3D race behind CCP_GLASSROAD=1 (GameWindow.Glassroad.cs).
             [GlassroadId] = new(GlassroadId, "launcher_game_race_title", "glassroad/index.html", GlassroadGate),
+            // WPF PrizeCounterHostService.cs:28 StartUrl; no tile, its doors call LaunchPrizeCounter (GameWindow.PrizeCounter.cs).
+            [PrizeCounterId] = new(PrizeCounterId, "shop_title", "prizecounter/index.html"),
         };
 
         private static readonly List<GameWindow> Open = new();
@@ -112,6 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Windows.MainShellWindow.Current?.RefreshTakeawayShelf();
             };
             if (spec.Id == GlassroadId) Opened += (_, _) => OpenGlassroad();
+            if (spec.Id == PrizeCounterId) WireCounter();
         }
 
         private WebAssetServer? _server;
@@ -122,6 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (Spec.Id == JustDropId) { LoadJustDrop(); return; }
             _server = server;
             if (Spec.Id == "loom") DirectoryForLoom();
+            if (Spec.Id == PrizeCounterId) StartCounter(FriendsHead.Identity()?.UnifiedId);
             PageUrl = new Uri(server.Url(Spec.Page, Spec.Query));
             Web.Navigate(PageUrl);
         }
@@ -145,6 +150,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (Spec.Id == "loom") { HandleLoom(o); return; } // only the Loom bridge subset
             if (Spec.Id == FypId && HandleFyp(o)) return;
             if (Spec.Id == JustDropId) { HandleJustDrop(o); return; }   // the remote site never gets the games' frames
+            if (Spec.Id == PrizeCounterId) { HandleCounter(o); return; }   // the counter speaks only its own seam (CONTRACT.md)
             if (Spec.Id == PbpId && HandlePbp(o)) return;
             if (IsRace && HandleRace(o)) return;
             if (IsDtrh && HandleDtrh(o)) return;
@@ -268,7 +274,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             lock (Open) all = Open.ToArray();
             foreach (var w in all)
             {
-                try { w.Close(); }
+                try { w.CloseFor(PrizeCounterRules.ClosePanic); }
                 catch (Exception ex) { Log.Warning(ex, "[Game] panic close of {Id} failed", w.Spec.Id); }
             }
         }
