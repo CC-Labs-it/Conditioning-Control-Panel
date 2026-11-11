@@ -31,10 +31,7 @@ public sealed class ProgramTodayCardTests
     [Fact]
     public void DashboardCardShowsTodayForAnActiveRunAndItsLoopsStopWhenHidden() => AvaloniaTestDispatcher.Run(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        AmbientBeatLoopsTests.Setup(); // Includes bundled fallback for Windows-only font names on Linux.
 
         var program = BuiltInPrograms.All().First(p => p.Id == "first_week");
         var savedDay = DateTime.Today;
@@ -186,10 +183,20 @@ public sealed class ProgramTodayCardTests
         Assert.True(art.IsVisible, "no banner art - the nudge test proves nothing");
         double Nudged(double seconds)
         {
+            var slide = (TranslateTransform)art.RenderTransform!;
+            var before = slide.X;
             time.Advance(TimeSpan.FromSeconds(seconds));
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-            Dispatcher.UIThread.RunJobs();
-            return ((TranslateTransform)art.RenderTransform!).X;
+            // Headless uses a real Stopwatch for render ticks. On Windows consecutive forced
+            // ticks can share a timestamp, so the next requested frame may not be delivered yet.
+            var deadline = System.Diagnostics.Stopwatch.StartNew();
+            do
+            {
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                Dispatcher.UIThread.RunJobs();
+                if (slide.X != before) break;
+                System.Threading.Thread.Sleep(1);
+            } while (deadline.Elapsed < TimeSpan.FromSeconds(2));
+            return slide.X;
         }
         var p = 0.13 / 0.26;
         Assert.Equal(-10 * (1 - (1 - p) * (1 - p)), Nudged(0.13), 3);       // halfway in time, 75% of the way
