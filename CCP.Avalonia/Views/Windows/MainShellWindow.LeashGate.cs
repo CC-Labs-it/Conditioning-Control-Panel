@@ -82,8 +82,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
                 OfferSurfaces = new LeashOfferSurfaces(() => IsVisible && WindowState != WindowState.Minimized ? this :
                     LauncherWindow.Instance is { IsVisible: true, WindowState: not WindowState.Minimized } launcher ? launcher : null);
-                OfferSurfaces.Rebind();
                 Closed += (_, _) => OfferSurfaces.Dispose();
+                RebindOfferSurfaces();
                 var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
                 timer.Tick += (_, _) => CheckLeashGate();
                 timer.Start();
@@ -92,11 +92,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Serilog.Log.Debug("Leash gate init failed: {E}", ex.Message); }
         }
 
+        // WPF LeashSurfaces.Rebind (:73) wraps its own snapshot pass: an offer pop-up that throws must not
+        // stop the gate check or its timer.
+        private void RebindOfferSurfaces()
+        {
+            try { OfferSurfaces?.Rebind(); }
+            catch (Exception ex) { Serilog.Log.Debug("Leash offer pop-up failed: {E}", ex.Message); }
+        }
+
         internal void CheckLeashGate()
         {
+            RebindOfferSurfaces();
             try
             {
-                OfferSurfaces?.Rebind();
                 var svc = LeashHead.Service;
                 BindLeashRunner();
                 GuardLeashRunner(svc);

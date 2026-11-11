@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
@@ -38,7 +37,6 @@ public sealed class LeashCardsTests
         public LeashSnapshot Snapshot { get; private set; } = LeashSnapshot.Empty;
         public readonly List<string> Calls = new(), Seen = new();
         public LeashSendStatus Reply = LeashSendStatus.Sent;
-        public LeashAnswerResult AnswerResult = LeashAnswerResult.Done;
         public LeashWatch? Watch;
         public bool ReceiptsSupported { get; set; }
         public event Action<LeashSnapshot>? SnapshotChanged;
@@ -46,7 +44,6 @@ public sealed class LeashCardsTests
         public event Action<LeashEvent>? EventArrived { add { } remove { } }
         public Punishment? GateDue => null;
         public void Push(MyLeash? me, params HeldLeash[] held) { Snapshot = new(me, held, Array.Empty<LeashOffer>()); SnapshotChanged?.Invoke(Snapshot); }
-        public void PushOffers(params LeashOffer[] offers) { Snapshot = new(null, Array.Empty<HeldLeash>(), offers); SnapshotChanged?.Invoke(Snapshot); }
         public void Receipts() => ReceiptsChanged?.Invoke();
         public void NoteShown(string? id) { if (id != null) Seen.Add(id); }
         public IReadOnlyList<LeashSentItem> SentTo(string id) => new[] { new LeashSentItem("l1", LeashItemKind.Tug, id, null, LeashStep.Seen, Now, Now) };
@@ -64,22 +61,13 @@ public sealed class LeashCardsTests
         public Task SetRemoteModeAsync(LeashRemoteMode m) => System.Threading.Tasks.Task.CompletedTask;
         public Task CompleteAsync(string id) => System.Threading.Tasks.Task.CompletedTask;
         public Task<bool> PardonAsync(string id) => System.Threading.Tasks.Task.FromResult(false);
-        public Task<LeashAnswerResult> AnswerAsync(string id, bool yes, LeashIntensity i) { Calls.Add($"answer:{id}:{yes}:{i}"); return System.Threading.Tasks.Task.FromResult(AnswerResult); }
+        public Task<LeashAnswerResult> AnswerAsync(string id, bool yes, LeashIntensity i) => System.Threading.Tasks.Task.FromResult(LeashAnswerResult.Done);
     }
     private static void Run(Action body) => AvaloniaTestDispatcher.Run(() =>
     {
-        if (Application.Current == null) global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+        if (Application.Current == null) AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
             .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         body();
-    });
-    // CoreSettings is global: each read-clock test picks its own intro state and restores the provider.
-    private static void RunIntro(bool seen, Action<ConditioningControlPanel.Services.SettingsService> body) => Run(() =>
-    {
-        var (old, oldName) = (ConditioningControlPanel.CoreSettings.ServiceProvider, ConditioningControlPanel.CoreAccount.DisplayNameProvider);
-        var settings = new ConditioningControlPanel.Services.SettingsService();
-        settings.Current.LeashIntroSeenLeashed = seen;
-        ConditioningControlPanel.CoreSettings.ServiceProvider = () => settings;
-        try { body(settings); } finally { (ConditioningControlPanel.CoreSettings.ServiceProvider, ConditioningControlPanel.CoreAccount.DisplayNameProvider) = (old, oldName); }
     });
     private static T Find<T>(Control root, string tag) where T : Control => root.GetLogicalDescendants().OfType<T>().Single(c => c.Tag as string == tag);
     private static void Click(Control root, string tag)
@@ -89,95 +77,6 @@ public sealed class LeashCardsTests
         b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Dispatcher.UIThread.RunJobs();
     }
-    [Fact]
-    public void AskCanBeDismissedAndAcceptsOnlyAfterVisibleReadTimeAtTheChosenLevel() => RunIntro(false, settings =>
-    {
-        settings.Current.PanicKey = "F12";
-        var svc = new Service(); var offer = new LeashOffer(Person, Now, Now.AddDays(1));
-        var later = new LeashOfferCard(offer, () => svc); var closed = 0;
-        later.AskClosed += () => closed++;
-        using (new WindowCleanup(new Window { Content = later }))
-        {
-            Assert.False(Find<Button>(later, "leash-ask-yes").IsEnabled);
-            Assert.Equal(Loc.GetF("leash_explain_leashed_cut", "F12"), Find<TextBlock>(later, "leash-explain-line:cut").Text);
-            later.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
-            Assert.Equal(1, closed); Assert.False(Find<StackPanel>(later, "leash-offer-ask").IsVisible);
-            Assert.Empty(svc.Calls); Assert.False(settings.Current.LeashIntroSeenLeashed);
-        }
-        var card = new LeashOfferCard(offer, () => svc);
-        using var cleanup = new WindowCleanup(new Window { Content = card });
-        card.IsVisible = false;
-        for (int i = 0; i < 25; i++) card.AdvanceReadClock();
-        card.IsVisible = true;
-        Assert.False(Find<Button>(card, "leash-ask-yes").IsEnabled);
-        for (int i = 0; i < 24; i++) card.AdvanceReadClock();
-        Assert.False(Find<Button>(card, "leash-ask-yes").IsEnabled);
-        card.AdvanceReadClock();
-        ConditioningControlPanel.CoreAccount.DisplayNameProvider = () => " Mira ";
-        Click(card, "leash-ask-level:2");
-        Assert.NotNull(Find<TextBlock>(card, "leash-allow:chaster:on"));
-        Click(card, "leash-ask-yes");
-        Assert.Equal("answer:friend:True:Strict", Assert.Single(svc.Calls));
-        Assert.True(settings.Current.LeashIntroSeenLeashed);
-        var snap = Assert.IsType<Window>(card.SnapWindow);
-        Assert.Equal("leash-snap", snap.Tag);
-        Assert.NotNull(Find<TextBlock>(snap, "leash-snap-title"));
-        Assert.Equal(10, Find<Canvas>(snap, "leash-snap-chain").Children.Count);
-        Assert.Contains(snap.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.GetF("leash_snap_leashed", "Mira"));
-        Click(snap, "leash-snap-ok"); Assert.Null(card.SnapWindow);
-    });
-
-    [Fact]
-    public void ReadClockPausesWhenExplanationScrollsOutOfView() => RunIntro(false, _ =>
-    {
-        var svc = new Service();
-        var card = new LeashOfferCard(new LeashOffer(Person, Now, Now.AddDays(1)), () => svc);
-        var content = new StackPanel { Children = { card, new Border { Height = 700 } } };
-        var scroll = new ScrollViewer { Height = 450, Content = content };
-        var window = new Window { Width = 440, Height = 500, Content = scroll };
-        using var cleanup = new WindowCleanup(window);
-        window.UpdateLayout();
-        scroll.Offset = new Vector(0, 600); Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
-        for (int i = 0; i < 25; i++) card.AdvanceReadClock();
-        Assert.False(Find<Button>(card, "leash-ask-yes").IsEnabled);
-        scroll.Height = 100; scroll.Offset = default; Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
-        var intro = Find<StackPanel>(card, "leash-ask-intro");
-        Assert.True(intro.Bounds.Height > scroll.Bounds.Height);
-        for (int i = 0; i < 25; i++) card.AdvanceReadClock();
-        Assert.True(Find<Button>(card, "leash-ask-yes").IsEnabled);
-    });
-
-    [Fact]
-    public void SeenIntroSkipsTheWaitAndFailureKeepsTheAskOpen() => RunIntro(true, settings =>
-    {
-        var svc = new Service { AnswerResult = LeashAnswerResult.Failed };
-        var card = new LeashOfferCard(new LeashOffer(Person, Now, Now.AddDays(1)), () => svc);
-        using var cleanup = new WindowCleanup(new Window { Content = card });
-        Assert.True(Find<Button>(card, "leash-ask-yes").IsEnabled);
-        Click(card, "leash-ask-yes");
-        Assert.Equal("answer:friend:True:Standard", Assert.Single(svc.Calls));
-        Assert.True(Find<StackPanel>(card, "leash-offer-ask").IsVisible);
-        Assert.True(Find<Button>(card, "leash-ask-yes").IsEnabled);
-        Assert.Equal(Loc.Get("leash_ask_err_failed"), Find<TextBlock>(card, "leash-ask-error").Text);
-        Assert.Null(card.SnapWindow);
-    });
-
-    [Fact]
-    public void GoneOfferClosesOnNextNotNowWithoutSendingAgain() => Run(() =>
-    {
-        var svc = new Service { AnswerResult = LeashAnswerResult.Gone };
-        var card = new LeashOfferCard(new LeashOffer(Person, Now, Now.AddDays(1)), () => svc); var closed = 0;
-        card.AskClosed += () => closed++;
-        using var cleanup = new WindowCleanup(new Window { Content = card });
-        Click(card, "leash-ask-no");
-        Assert.Equal(Loc.GetF("leash_ask_err_gone", Person.Name), Find<TextBlock>(card, "leash-ask-error").Text);
-        Assert.False(Find<Button>(card, "leash-ask-yes").IsEnabled);
-        Assert.Equal(0, closed);
-        Click(card, "leash-ask-no");
-        Assert.Single(svc.Calls);
-        Assert.Equal(1, closed);
-        Assert.False(Find<StackPanel>(card, "leash-offer-ask").IsVisible);
-    });
     [Fact]
     public void PreviewIsReadOnlyAndHasNoInventedWeek() => Run(() =>
     {

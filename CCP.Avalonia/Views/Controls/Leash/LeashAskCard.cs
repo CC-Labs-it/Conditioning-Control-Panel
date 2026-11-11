@@ -1,7 +1,7 @@
 // WPF Controls/Leash/LeashAskCard.cs:70-138 (layout), :141-240 (levels), :244-278 (answer).
 // WPF Controls/Leash/Explain/LeashExplainCard.cs:70-225 (grid), :232-246 (visible read clock).
 // WPF Controls/Leash/Explain/LeashExplainer.cs:278-282 (remember the answered intro).
-// Missing: drawn art, entrance, LeashFx and help. WPF cut copy: Explain/LeashExplainCard.cs:91.
+// Missing: drawn art, entrance, LeashFx motion and help (the Denied cue is wired). WPF cut copy: Explain/LeashExplainCard.cs:91.
 using System;
 using System.Threading.Tasks;
 using Avalonia;
@@ -12,6 +12,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Leash;
 using F = ConditioningControlPanel.Avalonia.Views.Controls.FriendsDrawer;
@@ -192,6 +193,7 @@ public sealed class LeashAskCard : Border
             _gone = result == LeashAnswerResult.Gone;
             _error.Text = Loc.GetF(key, _offer.From.Name);
             _error.IsVisible = true;
+            LeashSound.Denied(DateTime.UtcNow); // WPF LeashAskCard.cs:265
             return;
         }
         // WPF LeashAskIntro.Answered: the leashed side has now had its look.

@@ -34,7 +34,12 @@ public sealed class LeashPageTests
             if (Application.Current is null)
                 global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-            LeashGateCardTests.Run(punished, body);
+            LeashGateCardTests.Run(punished, (shell, launcher, svc) =>
+            {
+                try { body(shell, launcher, svc); }
+                // Unhook the shell's pop-up queue first, so closing the overlay does not open the next waiting ask.
+                finally { shell.OfferSurfaces?.Dispose(); LeashAskWindow.CloseCurrent(); }
+            });
         });
 
     private static Button Find(Control page, string tag) =>
@@ -181,8 +186,7 @@ public sealed class LeashPageTests
             var seen = new List<string>();
             var service = new LeashService(wire, () => "u_me", cutSafety: () => { }, reportSeen: seen.Add);
             const string id = "abcdef0123456789";
-            var block = new JObject { ["me"] = null, ["holding"] = new JArray(), ["events"] = new JArray(),
-                ["offers"] = new JArray { new JObject { ["id"] = id, ["from"] = new JObject { ["id"] = "u_vex", ["name"] = "Vex" }, ["at"] = DateTimeOffset.UtcNow.ToString("o") } } };
+            var block = Block(("u_vex", "Vex", id));
             LeashHead.Service = service;
             service.ApplyBlock(block);
             Assert.Empty(seen);
@@ -193,11 +197,11 @@ public sealed class LeashPageTests
             service.ApplyBlock(block); Dispatcher.UIThread.RunJobs();
             Assert.Equal(new[] { id }, seen);
             LeashGateCardTests.Click(Find(page, "leash-offer-look"));
-            var ask = Assert.IsType<Window>(shell.OfferSurfaces!.AskWindow);
-            Assert.Empty(page.GetLogicalDescendants().OfType<LeashOfferCard>());
+            var ask = LeashAskWindow.Current!;
             LeashGateCardTests.Click(Find(ask, "leash-ask-no"));
             Assert.Equal("answer", wire.Calls.Last().Op);
             Assert.Equal(false, (bool?)wire.Calls.Last().Body["accept"]);
+            Assert.Null(LeashAskWindow.Current);
             shell.ShowTab("friends");
             block["offers"]![0]!["id"] = "0123456789abcdef";
             service.ApplyBlock(block); Dispatcher.UIThread.RunJobs();
@@ -206,69 +210,95 @@ public sealed class LeashPageTests
             Assert.Equal(new[] { id, "0123456789abcdef" }, seen);
         });
 
+    private static JObject Block(params (string From, string Name, string Id)[] offers) => new()
+    {
+        ["me"] = null, ["holding"] = new JArray(), ["events"] = new JArray(),
+        ["offers"] = new JArray(offers.Select(o => new JObject { ["id"] = o.Id,
+            ["from"] = new JObject { ["id"] = o.From, ["name"] = o.Name }, ["at"] = DateTimeOffset.UtcNow.ToString("o") })),
+    };
+
+    // WPF LeashSurfaces.OnSnapshot/TryShowWaitingAsk (:104-124) and Open (:232): one ask at a time, Look replaces it.
     [Fact]
-    public void LookReplacesTheOpenAskAndAReorderedOfferKeepsItsReadClock() =>
+    public void ANewOfferPopsUpAsTheOneAskAndLookReplacesIt() =>
         Run(false, (shell, _, _) =>
         {
             var service = new LeashService(new Wire(), () => "u_me", cutSafety: () => { });
             LeashHead.Service = service;
             shell.Show(); shell.ShowTab("leash"); shell.CheckLeashGate(); Dispatcher.UIThread.RunJobs();
-            var at = DateTimeOffset.UtcNow.ToString("o");
-            var block = new JObject { ["me"] = null, ["holding"] = new JArray(), ["events"] = new JArray(),
-                ["offers"] = new JArray {
-                    new JObject { ["id"] = "abcdef0123456789", ["from"] = new JObject { ["id"] = "u_a", ["name"] = "A" }, ["at"] = at },
-                    new JObject { ["id"] = "0123456789abcdef", ["from"] = new JObject { ["id"] = "u_b", ["name"] = "B" }, ["at"] = at } } };
-            service.ApplyBlock(block); Dispatcher.UIThread.RunJobs();
-            var auto = Assert.IsType<Window>(shell.OfferSurfaces!.AskWindow);
-            Assert.Equal("leash-ask:u_a", auto.GetLogicalDescendants().OfType<LeashOfferCard>().Single().Tag);
+            var block = Block(("u_a", "A", "abcdef0123456789"), ("u_b", "B", "0123456789abcdef"));
+            var (oldPlay, oldArt, oldMuted) = (ConditioningControlPanel.CoreAudio.PlayOneShotProvider,
+                ConditioningControlPanel.CoreModArt.AudioOverridePathProvider, ConditioningControlPanel.CoreAudio.IsOutputSuppressedProvider);
+            var cue = System.IO.Path.GetTempFileName();
+            var played = new List<string>();
+            try
+            {
+                ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => played.Add(tag);
+                ConditioningControlPanel.CoreModArt.AudioOverridePathProvider = _ => cue;
+                ConditioningControlPanel.CoreAudio.IsOutputSuppressedProvider = () => false;
+                ConditioningControlPanel.CoreSettings.Current.MasterVolume = 50;
+                service.ApplyBlock(block); Dispatcher.UIThread.RunJobs();
+            }
+            finally
+            {
+                (ConditioningControlPanel.CoreAudio.PlayOneShotProvider, ConditioningControlPanel.CoreModArt.AudioOverridePathProvider,
+                    ConditioningControlPanel.CoreAudio.IsOutputSuppressedProvider) = (oldPlay, oldArt, oldMuted);
+                System.IO.File.Delete(cue);
+            }
+            Assert.Equal("leash-ask", Assert.Single(played)); // WPF LeashSurfaces.cs:213 LeashFx.Ask().
+            var auto = LeashAskWindow.Current!;
+            Assert.Equal("leash-ask:u_a", auto.Card.Tag);
             var page = shell.Named<LeashTabView>("LeashTab")!;
             var row = page.GetLogicalDescendants().OfType<Border>().Single(b => b.Tag as string == "leash-offer-row:u_b");
             LeashGateCardTests.Click(Find(row, "leash-offer-look"));
-            var ask = Assert.IsType<Window>(shell.OfferSurfaces.AskWindow);
+            var ask = LeashAskWindow.Current!;
             Assert.NotSame(auto, ask); Assert.False(auto.IsVisible);
-            ask.UpdateLayout();
-            var card = ask.GetLogicalDescendants().OfType<LeashOfferCard>().Single();
-            Assert.Equal("leash-ask:u_b", card.Tag); Assert.True(card.ReadClockRunning);
+            Assert.Equal("leash-ask:u_b", ask.Card.Tag);
             block["offers"] = new JArray(((JArray)block["offers"]!).Reverse().Select(o => o.DeepClone()));
             service.ApplyBlock(block); shell.CheckLeashGate(); Dispatcher.UIThread.RunJobs();
-            Assert.Same(ask, shell.OfferSurfaces.AskWindow); Assert.True(card.ReadClockRunning);
-            for (int i = 0; i < 25; i++) card.AdvanceReadClock();
-            Assert.True(Find(ask, "leash-ask-yes").IsEnabled);
+            Assert.Same(ask, LeashAskWindow.Current);
         });
 
     [Fact]
-    public void OffersQueueWhileHiddenAndOpenOverAnotherTabWhenTheShellReturns() =>
+    public void OffersQueueWhileHiddenAndTheSnapHoldsTheNextAskUntilItCloses() =>
         Run(false, (shell, _, _) =>
         {
             var seen = new List<string>(); var wire = new Wire();
             var service = new LeashService(wire, () => "u_me", cutSafety: () => { }, reportSeen: seen.Add);
-            LeashHead.Service = service; shell.CheckLeashGate();
-            shell.Hide();
-            var at = DateTimeOffset.UtcNow.ToString("o");
-            var block = new JObject { ["me"] = null, ["holding"] = new JArray(), ["events"] = new JArray(),
-                ["offers"] = new JArray {
-                    new JObject { ["id"] = "abcdef0123456789", ["from"] = new JObject { ["id"] = "u_a", ["name"] = "A" }, ["at"] = at },
-                    new JObject { ["id"] = "0123456789abcdef", ["from"] = new JObject { ["id"] = "u_b", ["name"] = "B" }, ["at"] = at } } };
-            service.ApplyBlock(block); Dispatcher.UIThread.RunJobs();
-            Assert.Empty(seen); Assert.Null(shell.OfferSurfaces!.AskWindow);
-            shell.Show(); shell.ShowTab("friends"); shell.CheckLeashGate(); Dispatcher.UIThread.RunJobs();
-            var first = Assert.IsType<Window>(shell.OfferSurfaces.AskWindow);
-            Assert.Equal("leash-auto-ask", first.Tag); Assert.Equal(new[] { "abcdef0123456789" }, seen);
-            first.UpdateLayout();
-            var card = first.GetLogicalDescendants().OfType<LeashOfferCard>().Single();
-            for (int i = 0; i < 25; i++) card.AdvanceReadClock();
-            wire.AnswerStatus = "on";
-            LeashGateCardTests.Click(Find(first, "leash-ask-yes"));
-            var snap = Assert.IsType<Window>(shell.OfferSurfaces.AskWindow);
-            Assert.Equal("leash-snap", snap.Tag); Assert.Single(seen);
-            LeashGateCardTests.Click(Find(snap, "leash-snap-ok"));
-            var second = Assert.IsType<Window>(shell.OfferSurfaces.AskWindow);
-            Assert.NotSame(first, second); Assert.Equal(new[] { "abcdef0123456789", "0123456789abcdef" }, seen);
-            second.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
-            Dispatcher.UIThread.RunJobs();
-            block["offers"] = new JArray(((JArray)block["offers"]!).Reverse().Select(o => o.DeepClone()));
-            service.ApplyBlock(block); shell.CheckLeashGate(); Dispatcher.UIThread.RunJobs();
-            Assert.Null(shell.OfferSurfaces.AskWindow); Assert.Equal(2, seen.Count);
+            var oldName = ConditioningControlPanel.CoreAccount.DisplayNameProvider;
+            ConditioningControlPanel.CoreAccount.DisplayNameProvider = () => " Mira ";
+            try
+            {
+                LeashHead.Service = service; shell.CheckLeashGate();
+                ConditioningControlPanel.CoreSettings.Current.LeashIntroSeenLeashed = true;
+                shell.Hide();
+                var block = Block(("u_a", "A", "abcdef0123456789"), ("u_b", "B", "0123456789abcdef"));
+                service.ApplyBlock(block); Dispatcher.UIThread.RunJobs();
+                Assert.Empty(seen); Assert.Null(LeashAskWindow.Current);
+                shell.Show(); shell.ShowTab("friends"); shell.CheckLeashGate(); Dispatcher.UIThread.RunJobs();
+                var first = LeashAskWindow.Current!;
+                Assert.Equal("leash-ask:u_a", first.Card.Tag); Assert.Equal(new[] { "abcdef0123456789" }, seen);
+                wire.AnswerStatus = "on";
+                LeashGateCardTests.Click(first.Card.PutItOnButton);
+                Assert.Null(LeashAskWindow.Current); Assert.False(first.IsVisible);
+                var snap = LeashAskWindow.Snap!;
+                Assert.True(snap.IsVisible);
+                Assert.Equal(10, snap.GetLogicalDescendants().OfType<Canvas>().Single(c => c.Tag as string == "leash-snap-chain").Children.Count);
+                Assert.Contains(snap.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == ConditioningControlPanel.Localization.Loc.GetF("leash_snap_leashed", "Mira"));
+                shell.CheckLeashGate();
+                Assert.Null(LeashAskWindow.Current); Assert.Single(seen);
+                LeashGateCardTests.Click(Find(snap, "leash-snap-ok"));
+                Assert.Null(LeashAskWindow.Snap);
+                var second = LeashAskWindow.Current!;
+                Assert.Equal("leash-ask:u_b", second.Card.Tag);
+                Assert.Equal(new[] { "abcdef0123456789", "0123456789abcdef" }, seen);
+                second.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current);
+                block["offers"] = new JArray(((JArray)block["offers"]!).Reverse().Select(o => o.DeepClone()));
+                service.ApplyBlock(block); shell.CheckLeashGate(); Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current); Assert.Equal(2, seen.Count);
+            }
+            finally { ConditioningControlPanel.CoreAccount.DisplayNameProvider = oldName; }
         });
 
     private sealed class Runner : ILeashTaskRunner
