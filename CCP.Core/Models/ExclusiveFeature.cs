@@ -233,11 +233,12 @@ namespace ConditioningControlPanel.Models
             },
             new()
             {
-                Key = "haptics", Emoji = "💜", Tier = 1,
+                // Free for everyone since 2026-11-11 (owner): no livery, no veil, no rail star,
+                // and no daily-free key, since a free feature is no gift (HapticsAccess).
+                Key = "haptics", Emoji = "💜", Tier = 0,
                 TitleLocKey = "tab_haptics", TaglineLocKey = "exclusives_tag_haptics",
                 ArtResource = "Resources/features/vibe.png",
-                // Benched from the wheel, but a server override can still hand it out.
-                DailyFreeKey = "haptics",
+                Gate = () => ExclusiveGateState.Unlocked,
             },
             new()
             {

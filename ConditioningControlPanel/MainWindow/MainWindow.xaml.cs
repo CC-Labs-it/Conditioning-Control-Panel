@@ -88,7 +88,6 @@ namespace ConditioningControlPanel
         // to suppress. A flag that is only cleared by the handler is a trap once the handler
         // stops running - the next real click gets eaten instead.
         private Window? _browserPopoutWindow = null;
-        private bool _isDualMonitorPlaybackActive = false;
         private bool _isBrowserFullscreen = false;
         private bool _browserFullscreenWasPopout = false;
         private double _browserPreFullscreenZoom = 1.0;

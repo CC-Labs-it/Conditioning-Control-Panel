@@ -1262,7 +1262,8 @@ namespace ConditioningControlPanel
         /// </summary>
         private static int MysteryFeatureTier(string? key) => key switch
         {
-            "dtrh" or "takeover" or "awareness" or "haptics" or "voice" or "fyp" or "remote" => 1,
+            // Haptics is free since 2026-11-11 and the server can no longer name it.
+            "dtrh" or "takeover" or "awareness" or "voice" or "fyp" or "remote" => 1,
             _ => 0,
         };
 

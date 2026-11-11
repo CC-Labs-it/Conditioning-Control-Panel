@@ -94,6 +94,16 @@
             </Grid>
         </Border>
 
+        <!-- A prepaid pass code (bought with crypto on the website, or a gift) is redeemed here.
+             One quiet link under the tier card; the box it opens also takes the weekly post code. -->
+        <Button x:Name="BtnRedeemCode" x:FieldModifier="internal"
+                Content="{loc:Str pass_redeem_door}"
+                Background="Transparent" Foreground="{DynamicResource TextSecondaryBrush}"
+                BorderThickness="0" Padding="4,2" Margin="0,-4,0,12"
+                FontSize="12" HorizontalAlignment="Left"
+                Cursor="Hand"
+                Click="BtnRedeemCode_Click"/>
+
         <!-- ==== PLANS (nav rework 2026-10-06, REHOME lane) ====
              The retired Premium / Exclusives page lives here now: the vault header
              with the tier plates, the spotlight (its veil pill is the upgrade door)

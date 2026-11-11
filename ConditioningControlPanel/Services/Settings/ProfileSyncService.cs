@@ -4366,6 +4366,7 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.PatreonMember),
             nameof(AppSettings.PostGrants),
             nameof(AppSettings.ServerPaidUntil),
+            nameof(AppSettings.PassEndsUtc),
             // Names a baked Rain clip pack folder on this PC; another PC has no such folder.
             nameof(AppSettings.RainPackHash),
             // Frame and avatar equip state: what THIS PC owes the server and last saw of it.
@@ -4439,6 +4440,7 @@ namespace ConditioningControlPanel.Services
             restored.PatreonMember = current.PatreonMember;
             restored.PostGrants = current.PostGrants;
             restored.ServerPaidUntil = current.ServerPaidUntil;
+            restored.PassEndsUtc = current.PassEndsUtc;
             restored.ModPersonalityPreset = current.ModPersonalityPreset; // the setter copies
             restored.ScrolllerOfficialNoteSeen = current.ScrolllerOfficialNoteSeen;
             restored.RainPackHash = current.RainPackHash;
