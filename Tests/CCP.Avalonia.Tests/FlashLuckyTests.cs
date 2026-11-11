@@ -117,6 +117,18 @@ public sealed class FlashLuckyTests
         Assert.False(w.Pulsing);
     });
 
+    // WPF FlashService.cs:1903-1908: Perk effects Off drops the Sparkle Boost glow; NoCards keeps it.
+    [Fact]
+    public Task Perk_effects_off_drops_the_sparkle_glow_and_no_cards_keeps_it() => OnUi((s, _) =>
+    {
+        s.FlashGlowEnabled = true;
+        s.UnlockedSkills.Add("sparkle_boost_1");
+        s.PerkEffects = ConditioningControlPanel.Models.PerkEffectsMode.Off;
+        Assert.Equal(0, ShowOne().GlowShadow.Count);
+        s.PerkEffects = ConditioningControlPanel.Models.PerkEffectsMode.NoCards;
+        Assert.True(ShowOne().GlowShadow.Count > 0);
+    });
+
     [Fact]
     public Task Rounded_corners_clip_the_picture_and_a_glow_card_rounds_at_12() => OnUi((s, _) =>
     {

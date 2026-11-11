@@ -1249,7 +1249,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             var path = ConditioningControlPanel.Services.Companion.IdleVoiceLines.Pick(clips, _lastOwnVoiceLine, _random);
             if (path == null) return false;
             var file = System.IO.Path.GetFileName(path);
-            var text = phrases.FirstOrDefault(p => p?.AudioFileName == file)?.Text;
+            // WPF GetVoiceLineDisplayText (CompanionPhraseService.cs:473-482): a VoiceLine phrase only, any case.
+            var text = phrases.FirstOrDefault(p => p?.Category == ConditioningControlPanel.Services.CompanionPhraseIds.VoiceLineCategory
+                && string.Equals(p.AudioFileName, file, StringComparison.OrdinalIgnoreCase))?.Text;
             if (string.IsNullOrWhiteSpace(text)) text = System.IO.Path.GetFileNameWithoutExtension(path);
             _lastOwnVoiceLine = path;
             GigglePriority(text, playSound: true, aiGenerated: false, phraseAudioPath: path, barkVoice: true, unprompted: true);
