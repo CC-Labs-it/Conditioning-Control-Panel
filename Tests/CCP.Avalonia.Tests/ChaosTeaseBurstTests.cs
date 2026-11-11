@@ -76,6 +76,9 @@ public sealed class ChaosTeaseBurstTests
         var runs = ChaosMeta.State.RunsCompleted;
         var firer = EffectPayload.Firer;
         var image = BubbleOverlay.Image;
+        var clock = BubbleOverlay.Field.Clock;
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var language = loc.CurrentLanguage;
         try
         {
             ChaosSkiaFxOverlay.CloseActive();
@@ -183,16 +186,53 @@ public sealed class ChaosTeaseBurstTests
             state.Focus = 20;
             double beforeScore = state.Score, beforeFocus = state.Focus;
             int beforeGold = ChaosMeta.State.Gold;
+            loc.SetLanguage("es");
+            var words = new System.Collections.Generic.List<string>();
+            ChaosRunHost.PopText = (_, _, word, _) => words.Add(word);
             for (int i = 0; i < 188; i++) BubbleOverlay.Field.Step();
+            ChaosRunHost.PopText = null;
+            Assert.Contains("DENEGADA", words);
             Assert.True(denied.Popping);
             Assert.True(state.Score > beforeScore);
             Assert.Equal(beforeFocus + ChaosTuning.FOCUS_PER_DENIED, state.Focus);
             Assert.True(ChaosMeta.State.Gold > beforeGold);
             Assert.Contains("tease", ChaosMeta.State.BubbleHintsLearned);
             Assert.Equal(1, fires);
+
+            // WPF ChaosModeService.cs:1349 -> :2275: an unshielded touch takes the detonation path.
+            var now = new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            BubbleOverlay.Field.Clock = () => now;
+            EffectPayload? fired = null;
+            EffectPayload.Firer = p => { fires++; fired = p; };
+            void Touch(EffectPayload payload)
+            {
+                state.Shields = 0;
+                var t = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { VariantId = "tease", Payload = payload, IsTease = true, SizePx = 100 });
+                BubbleOverlay.Press(t, t.CenterX, t.CenterY);
+                Assert.True(t.Popping);
+            }
+            Assert.True(state.Config.AmbientMode); // WPF :316-326, every run is Free Desktop
+            var link = new HtLinkPayload { Strength = 40 };
+            Touch(link); // Ambient remap: zero roll and no heavy effect = rain
+            Assert.Equal(2, fires);
+            Assert.Equal(40, Assert.IsType<GifCascadePayload>(fired).Strength);
+            var rain = new GifCascadePayload();
+            Touch(rain); // the remapped rain holds the one-heavy gate
+            Assert.Equal(2, fires);
+            Assert.Equal(3, state.EffectsFired);
+            Assert.Contains("fizzles", state.RecentEvents[0]);
+            Touch(link); // remap under a heavy effect lands on text
+            Assert.Equal(3, fires);
+            Assert.IsType<BouncingTextPayload>(fired);
+            now = now.AddSeconds(GifCascadePayload.DURATION_SEC + 5);
+            Touch(rain);
+            Assert.Equal(4, fires);
+            Assert.Same(rain, fired);
         }
         finally
         {
+            BubbleOverlay.Field.Clock = clock;
+            loc.SetLanguage(language);
             ChaosRunHost.ForceShutdown();
             ChaosSkiaFxOverlay.CloseActive();
             ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;

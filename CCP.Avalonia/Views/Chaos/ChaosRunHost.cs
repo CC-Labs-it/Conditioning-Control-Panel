@@ -99,6 +99,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (_active) return;
             var cfg = config ?? ChaosRunConfig.FromSettings();
+            // WPF ChaosModeService.cs:316-326 (StoryModeEnabled is false, :37): every run resolves to
+            // Free Desktop, which softens intrusive payloads.
+            cfg.AmbientMode = true;
             try
             {
                 _state = new ChaosRunState(cfg);
@@ -140,7 +143,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _state.StartShields = _state.Shields;
             StartToys();
             _waveDetonatedAt = _state.Detonated;
-            _invulnUntilUtc = DateTime.MinValue;
+            _invulnUntilUtc = _heavyUntilUtc = DateTime.MinValue;
             ChaosRunLessons.OnRunStarted();   // WPF :399
             // ponytail: NotifyChaosRunStarted bark (WPF :389) -> chaos-payout-barks.
             _spawning = true;
@@ -260,7 +263,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
             else
             {
-                FireScaledPayload(spec.Payload);
+                FirePayloadForDetonation(spec);
                 _state.EffectsFired++;
                 ChaosOverlayWindow.ChaosSfx.Play("trigger", 0.55f);
                 Shake(0.3 + spec.Strength / 100.0 * 0.4, 320);
@@ -274,7 +277,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static void OnTeaseDenied(AmbientBubble b)
         {
             if (_state == null || _manualPaused || _lessonCardPaused) return;
-            Label(b, "DENIED", Color.FromRgb(0xFF, 0xD7, 0x00));
+            Label(b, Loc.Get("chaos_tease_denied"), Color.FromRgb(0xFF, 0xD7, 0x00));
             if (ChaosMeta.State.BubbleHintsLearned.Add("tease")) ChaosMeta.Save();
             int gold = ChaosRunEngine.GoldScaled(_state, Rng.Next(ChaosTuning.TEASE_GOLD_MIN, ChaosTuning.TEASE_GOLD_MAX + 1));
             BankGold(gold);
@@ -340,10 +343,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 case "click": _state.PushEvent("💥 a tap isn't a hold"); break;
                 case "release": _state.PushEvent("💥 you let go"); break;
             }
-            // ponytail: WPF FirePayloadForDetonation's ambient remap and one-heavy-at-a-time gate
-            // land with the real payload firer (the Avalonia firer is a logging no-op).
             EffectLabel(b);   // WPF Detonate :4862
-            FireScaledPayload(spec.Payload);
+            FirePayloadForDetonation(spec);   // WPF :2064
             ChaosRunLessons.OnDetonation();   // silk_touch: the loop is no longer clean
             string name = spec.Payload.DisplayName;
             double s = spec.Strength / 100.0;
@@ -417,6 +418,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!ChaosFieldMath.ShowsPopScore(_state?.ShowPopScores == true, pts)) return;
             PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY + 30,
                 "+" + ((long)pts).ToString("N0"), Color.FromRgb(0xFF, 0xE9, 0xA0));
+        }
+
+        private static DateTime _heavyUntilUtc = DateTime.MinValue;
+
+        private static bool HeavyEffectActive =>   // WPF :2155
+            CoreEngine.Video?.IsPlaying == true || ChaosGifCascadeOverlay.IsRaining || BubbleOverlay.Field.Clock() < _heavyUntilUtc;
+
+        /// <summary>WPF FirePayloadForDetonation (:2275): Free Desktop softens an HT link to rain or
+        /// text, and a heavy payload (video, rain) is dropped while another one runs.
+        /// ponytail: the video ownership token (WPF :2310) lands with the chaos video runner.</summary>
+        internal static void FirePayloadForDetonation(EffectBubbleSpec spec)
+        {
+            var now = BubbleOverlay.Field.Clock();
+            if (_state?.Config.AmbientMode == true && spec.Payload.Kind == EffectBubblePayloadKind.HtLink)
+            {
+                bool cascade = !HeavyEffectActive && Rng.NextDouble() < 0.5;
+                EffectPayload soft = cascade ? new GifCascadePayload() : new BouncingTextPayload();
+                soft.Strength = spec.Payload.Strength;
+                if (cascade) _heavyUntilUtc = now.AddSeconds(GifCascadePayload.DURATION_SEC + 5);
+                ChaosOverlayWindow.ChaosSfx.Play(cascade ? "fx_rain_start" : "fx_text", 0.45f);
+                FireScaledPayload(soft);
+                return;
+            }
+            var kind = spec.Payload.Kind;
+            if ((kind is EffectBubblePayloadKind.Video or EffectBubblePayloadKind.GifCascade) && HeavyEffectActive)
+            {
+                _state?.PushEvent($"▶ the deep is busy: {spec.Payload.DisplayName} fizzles");
+                return;
+            }
+            if (kind == EffectBubblePayloadKind.Video) _heavyUntilUtc = now.AddSeconds(15 + 3);   // VIDEO_HARD_CAP_SEC + slack
+            else if (kind == EffectBubblePayloadKind.GifCascade) _heavyUntilUtc = now.AddSeconds(GifCascadePayload.DURATION_SEC + 5);
+            string stinger = spec.VariantId switch { "braindrain" => "fx_drain", "bambifreeze" => "fx_freeze", "htlink" => "fx_rain_start", _ => "" };
+            if (stinger.Length > 0) ChaosOverlayWindow.ChaosSfx.Play(stinger, 0.45f);
+            FireScaledPayload(spec.Payload);
         }
 
         /// <summary>WPF FireScaledPayload (:2267) minus the lesson hook.</summary>
