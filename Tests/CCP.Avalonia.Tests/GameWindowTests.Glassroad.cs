@@ -9,6 +9,7 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Launcher;
 using ConditioningControlPanel.Services.Race;
+using ConditioningControlPanel.Services.BackRoom;
 using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
 using Xunit;
@@ -43,11 +44,13 @@ public sealed partial class GameWindowTests
         var (oldUid, oldSecret, oldGate) = (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider);
         var settings = CoreSettings.Current;
         var (oldSettingsId, oldOffline) = (settings.UnifiedId, settings.OfflineMode);
+        var oldOwnershipRelay = GameWindow.GlassroadOwnershipRelay;
         var fake = new GrHttp();
         using var http = new System.Net.Http.HttpClient(fake);
         try
         {
             GameWindow.GlassroadDoorEnv = () => door;
+            GameWindow.GlassroadOwnershipRelay = () => null;
             RacingAccess.IsGrantedProvider = _ => false;
             GameWindow.PbpHttpClient = () => http;
             GameWindow.PbpServerBase = () => GrBase;
@@ -62,11 +65,79 @@ public sealed partial class GameWindowTests
         }
         finally
         {
+            GameWindow.GlassroadOwnershipRelay = oldOwnershipRelay;
             PrizeOwnership.ResetHeld();
             (settings.UnifiedId, settings.OfflineMode) = (oldSettingsId, oldOffline);
             (GameWindow.GlassroadDoorEnv, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase) = (oldDoor, oldOwns, oldHttp, oldBase);
             (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider) = (oldUid, oldSecret, oldGate);
         }
+    });
+
+    private sealed class OwnedHttp : System.Net.Http.HttpMessageHandler
+    {
+        public string? Path;
+        protected override System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage> SendAsync(
+            System.Net.Http.HttpRequestMessage request, System.Threading.CancellationToken ct)
+        {
+            Path = request.RequestUri!.PathAndQuery;
+            return System.Threading.Tasks.Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            { Content = new System.Net.Http.StringContent("{\"ok\":true,\"prizes\":{\"revision\":3,\"grants\":[\"cos.kart.body.petal\",\"cos.rain.hair.ink\"]}}") });
+        }
+    }
+
+    [Fact]
+    public void Glassroad_FreshLaunchLoadsExistingPurchasesBeforeInit() => RunGlassroad("1", (_, _, _) =>
+    {
+        PrizeOwnership.ResetHeld();
+        var handler = new OwnedHttp();
+        using var http = new System.Net.Http.HttpClient(handler);
+        GameWindow.GlassroadOwnershipRelay = () => new BackRoomApi(http, FriendsHead.Identity, null, PrizeOwnership.ApplySnapshot, "http://race.test");
+        var w = GameWindow.Launch(GameWindow.GlassroadId)!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.Web.OnNavigationCompleted(w.PageUrl);
+        var init = Assert.Single(sent);
+        Assert.Equal("/v2/backroom/counter/state?unified_id=discord%3A12", handler.Path);
+        Assert.Equal(new[] { "cos.kart.body.petal" }, ((JArray)init["identity"]!["grants"]!).Values<string>().ToArray());
+        w.Close();
+    });
+
+    private sealed class SlowOwnedHttp : System.Net.Http.HttpMessageHandler
+    {
+        public readonly System.Threading.Tasks.TaskCompletionSource<System.Net.Http.HttpResponseMessage> Reply =
+            new(System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
+        protected override System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage> SendAsync(
+            System.Net.Http.HttpRequestMessage request, System.Threading.CancellationToken ct) => Reply.Task;
+    }
+
+    [Fact]
+    public void Glassroad_SlowOwnershipReadBootsAndPushesAfterReady() => RunGlassroad("1", (_, _, _) =>
+    {
+        PrizeOwnership.ResetHeld();
+        var handler = new SlowOwnedHttp();
+        using var http = new System.Net.Http.HttpClient(handler);
+        GameWindow.GlassroadOwnershipRelay = () => new BackRoomApi(http, FriendsHead.Identity, null, PrizeOwnership.ApplySnapshot, "http://race.test");
+        var w = GameWindow.Launch(GameWindow.GlassroadId)!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.Web.OnNavigationCompleted(w.PageUrl);
+        Assert.Empty(sent);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (sent.Count == 0 && clock.Elapsed < TimeSpan.FromSeconds(8))
+        { System.Threading.Thread.Sleep(20); Dispatcher.UIThread.RunJobs(); }
+        Assert.Equal("init", (string?)Assert.Single(sent)["type"]);
+        handler.Reply.SetResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        { Content = new System.Net.Http.StringContent("{\"ok\":true,\"prizes\":{\"revision\":3,\"grants\":[\"cos.kart.body.petal\"]}}") });
+        while (PrizeOwnership.Grants().Length == 0 && clock.Elapsed < TimeSpan.FromSeconds(8))
+        { System.Threading.Thread.Sleep(20); Dispatcher.UIThread.RunJobs(); }
+        Assert.Single(PrizeOwnership.Grants());
+        System.Threading.Thread.Sleep(100);
+        Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain(sent, o => (string?)o["type"] == "owned");
+        w.Web.OnWebMessage("{\"type\":\"ready\"}");
+        var owned = Assert.Single(sent.Where(o => (string?)o["type"] == "owned"));
+        Assert.Equal(new[] { "cos.kart.body.petal" }, ((JArray)owned["grants"]!).Values<string>().ToArray());
+        w.Close();
     });
 
     // ---- pure rules ----

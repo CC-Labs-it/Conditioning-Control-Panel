@@ -15,6 +15,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
+using ConditioningControlPanel.Services.BackRoom;
 using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
@@ -49,6 +50,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private bool _grOpen, _grEarlyInitSent, _grPinged;
         private DateTime _grLastBeatUtc = DateTime.UtcNow, _grLastProgressUtc = DateTime.UtcNow;
         private DispatcherTimer? _grWatch;
+        private Task _grOwnershipLoad = Task.CompletedTask;
+        private bool _grLateOwnedScheduled;
+        private string? _grLateOwnedAccount;
+
+        // Use the same sandbox-checked counter state feed as the Get it row.
+        internal static Func<BackRoomApi?> GlassroadOwnershipRelay { get; set; } = () =>
+        {
+            var url = FriendsHead.BaseUrl(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"),
+                Environment.GetEnvironmentVariable(V2PurchaseHead.EnvVar));
+            return url == null ? null : new BackRoomApi(null, FriendsHead.Identity, null, PrizeOwnership.ApplySnapshot, url);
+        };
+
+        private static async Task LoadGlassroadOwnership()
+        {
+            try
+            {
+                var relay = GlassroadOwnershipRelay();
+                if (relay != null) await relay.RelayAsync("counter", "state", null, null).ConfigureAwait(false);
+            }
+            catch (Exception ex) { Log.Debug("Glassroad: ownership read failed: {E}", ex.Message); }
+        }
 
         /// <summary>Test seam: the last net relay; done once its reply is queued on the UI thread.</summary>
         internal Task GlassroadPending { get; private set; } = Task.CompletedTask;
@@ -58,6 +80,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (_grOpen) return;
             _grOpen = true;
+            _grLateOwnedScheduled = false;
+            _grOwnershipLoad = LoadGlassroadOwnership();
             _grEarlyInitSent = _grPinged = false;
             _grLastBeatUtc = _grLastProgressUtc = DateTime.UtcNow;
             Closed += (_, _) => CloseGlassroad();
@@ -81,8 +105,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         }
 
         /// <summary>The init frame, straight out (this head has no ready queue).</summary>
-        internal void PostGlassroadInit()
+        internal async void PostGlassroadInit()
         {
+            // The page waits only three seconds for init. If the read is slow, boot with the held
+            // snapshot and deliver the result through the page's owned message when it is ready.
+            if (!_grOwnershipLoad.IsCompleted)
+            {
+                try { await _grOwnershipLoad.WaitAsync(TimeSpan.FromSeconds(2)); }
+                catch (TimeoutException)
+                {
+                    if (!_grLateOwnedScheduled)
+                    {
+                        _grLateOwnedScheduled = true;
+                        _grLateOwnedAccount = FriendsHead.Identity()?.UnifiedId;
+                        PostGlassroadOwnedWhenLoaded();
+                    }
+                }
+            }
+            if (!_grOpen || _closing) return;
             try
             {
                 var s = CoreSettings.Current;
@@ -92,6 +132,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed, PrizeOwnership.Grants()));
             }
             catch (Exception ex) { Log.Debug("Glassroad: init post failed: {E}", ex.Message); }
+        }
+
+        private async void PostGlassroadOwnedWhenLoaded()
+        {
+            await _grOwnershipLoad;
+            SendGlassroadLateOwned();
+        }
+
+        private void SendGlassroadLateOwned()
+        {
+            if (!_grLateOwnedScheduled || !_grOpen || _closing || !IsReady || !_grOwnershipLoad.IsCompleted) return;
+            _grLateOwnedScheduled = false;
+            if (_grLateOwnedAccount == null || FriendsHead.Identity()?.UnifiedId != _grLateOwnedAccount) return;
+            Post(new JObject { ["type"] = "owned", ["grants"] = GlassroadHostRules.KartGrants(PrizeOwnership.Grants()) });
         }
 
         /// <summary>The server's last effective tier, else the entitlement this head knows (display only: the
@@ -118,6 +172,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 {
                     case "ready":
                         IsReady = true;
+                        SendGlassroadLateOwned();
                         _grLastBeatUtc = DateTime.UtcNow;
                         _grPinged = false;
                         PostGlassroadInit();
