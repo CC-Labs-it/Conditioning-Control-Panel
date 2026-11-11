@@ -3547,6 +3547,16 @@ namespace ConditioningControlPanel.Models
             set { _serverPaidUntil = value; OnPropertyChanged(); }
         }
 
+        private DateTime? _passEndsUtc;
+        /// <summary>When the account's prepaid pass (a redeemed code) ends, from the server's
+        /// <c>crypto_pass.ends_at</c>. Feeds the "pass ends in N days" inbox row, never a gate.</summary>
+        [JsonProperty("pass_ends_utc")]
+        public DateTime? PassEndsUtc
+        {
+            get => _passEndsUtc;
+            set { _passEndsUtc = value; OnPropertyChanged(); }
+        }
+
         #endregion
 
         #region Scheduler
