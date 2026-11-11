@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.RemoteHud;
@@ -41,9 +42,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Clock for elapsed time, the 1.6 s confirmation and the Stop debounce; tests step it.</summary>
         internal TimeProvider Clock = TimeProvider.System;
+        // Per-window test seam for a second monitor; production asks Avalonia for the anchor's screen.
+        internal Func<Window, Screen?>? ScreenForAnchor;
 
-        /// <param name="onLocalStop">The local half of Stop; true only when the panic key's full reach ran (Core
-        /// VoicePanicReach), so the pill says "Stopped" only when something stopped here.</param>
+        /// <param name="onLocalStop">Runs local Stop and reports whether local panic was enabled.</param>
         public RemoteHudWindow(Func<RemoteRelay?> relay, Func<bool> onLocalStop, Func<Window?> anchor)
         {
             (_relay, _onLocalStop, _anchor) = (relay, onLocalStop, anchor);
@@ -172,7 +174,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!IsVisible) return;
             try
             {
-                var screen = (_anchor() is { } a ? Screens.ScreenFromWindow(a) : null) ?? Screens.Primary;
+                var screen = (_anchor() is { } a ? (ScreenForAnchor?.Invoke(a) ?? Screens.ScreenFromWindow(a)) : null) ?? Screens.Primary;
                 if (screen == null) return;
                 var wa = screen.WorkingArea;
                 double w = Bounds.Width > 0 ? Bounds.Width : 360;
@@ -209,8 +211,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 try { stoppedHere = _onLocalStop(); } catch (Exception ex) { Serilog.Log.Warning("RemoteHud: local stop failed: {E}", ex.Message); }
             }
             bool sent = false;
-            // A refused local stop (Lockdown, panic off) still tells the controller; RemoteRelay.SendSignalAsync gates
-            // its own forced stop on the same VoicePanicReach.PanicKeyRuns, so it stops the remote's effects only.
+            // A refused local stop still tells the controller; the relay gates its forced stop separately.
             try { sent = _relay() is { } r && await r.SendSignalAsync(kind); }
             catch (Exception ex) { Serilog.Log.Debug("RemoteHud: signal {Kind} failed: {E}", kind, ex.Message); }
             if (_disposed) return;

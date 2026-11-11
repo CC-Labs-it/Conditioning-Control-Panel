@@ -66,20 +66,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow.xaml.cs:914: a Pause-key capture takes the press before the panic branch, so the
             // Escape that unbinds Pause (the default panic key) is never also a panic.
             if (!fromStopButton && (CapturingPanicKey || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey)) return;
-            // WPF MainWindow.xaml.cs:888: Lockdown ignores every GLOBAL key, whatever LockdownDisablePanicKey
-            // says. Only this listener layer: window and TextBox input (the secret phrase) are untouched.
-            // Panic off is the same refusal. Both share Core VoicePanicReach.PanicKeyRuns with the voice
-            // panic and the blink stop (hard rule 6: no stop is more permissive than this key). The Remote HUD
-            // Stop goes through it too: WPF HandlePanicFromStopButton (MainWindow.xaml.cs:1597) skips the hook's
-            // Lockdown check, against its own RemoteHudRules.LocalPanicAllowed (avalonia-decisions.html 2026-11-04).
+            // WPF blocks the global key under Lockdown, but the HUD button calls the panic
+            // handler directly when the panic key is enabled (MainWindow.RemoteHud.cs:48-60).
             if (!VoicePanicReach.PanicKeyRuns(LockdownActive, s.PanicKeyEnabled))
             {
-                if (LockdownActive) Serilog.Log.Information("Panic key ignored under Lockdown");
-                // WPF LeashPanicKeyWhilePanicOff: panic always works on a leash. The leash part alone runs
-                // (the task parks, a lines card it opened closes, its window closes, the gate stands back);
-                // the session, effects and exit ladder are untouched. The hold-to-cut rides LeashHoldPressed.
-                if (LeashHoldLeashed) PanicKeyLeashOnly(fromKey: !fromStopButton);
-                return;
+                if (!fromStopButton || !s.PanicKeyEnabled)
+                {
+                    if (LockdownActive) Serilog.Log.Information("Panic key ignored under Lockdown");
+                    // Panic off still reaches the leash safety path, for either input.
+                    if (LeashHoldLeashed) PanicKeyLeashOnly(fromKey: !fromStopButton);
+                    return;
+                }
             }
             // WPF MainWindow.xaml.cs:1557: a game's pause, BEFORE everything below: a pause is not a panic.
             // A Stop button click is never a game's Escape (WPF MainWindow.xaml.cs:1548,1597-1607).

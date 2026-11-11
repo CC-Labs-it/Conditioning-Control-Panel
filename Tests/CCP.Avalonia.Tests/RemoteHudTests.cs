@@ -8,6 +8,7 @@ using Avalonia;
 using Avalonia.Threading;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Platform;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -94,6 +95,33 @@ public class RemoteHudTests
         finally { hud.Dispose(); await relay.StopAsync(); Dispatcher.UIThread.RunJobs(); settings.PanicKeyEnabled = oldEnabled; }
     });
 
+    [Fact]
+    public Task Hud_uses_the_anchor_monitor_and_does_not_activate() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var server = new FakeRelay();
+        using var relay = await Connected(server, _ => { });
+        var anchor = new Window();
+        var hud = new RemoteHudWindow(() => relay, () => true, () => anchor);
+        try
+        {
+            anchor.Show();
+            var primary = anchor.Screens.Primary!;
+            var secondary = (Screen)typeof(object).GetMethod("MemberwiseClone", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(primary, null)!;
+            var area = new PixelRect(1920, 40, 2560, 1400);
+            typeof(Screen).GetProperty(nameof(Screen.WorkingArea))!.SetValue(secondary, area);
+            typeof(Screen).GetProperty(nameof(Screen.Scaling))!.SetValue(secondary, 1.5);
+            Window? requested = null;
+            hud.ScreenForAnchor = window => { requested = window; return secondary; };
+            hud.Refresh();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(anchor, requested);
+            Assert.False(hud.ShowActivated);
+            Assert.Equal(area.X + (int)((area.Width - hud.Bounds.Width * secondary.Scaling) / 2), hud.Position.X);
+            Assert.Equal(area.Y + (int)((10 - 12) * secondary.Scaling), hud.Position.Y);
+        }
+        finally { hud.Dispose(); anchor.Close(); await relay.StopAsync(); }
+    });
+
     /// <summary>One HUD Stop click through the production wiring (shell.StopFromRemoteHud), on a fresh pill so
     /// the 2.5 s debounce never hides a press. Returns the relay's forced stops and the pill's confirmation.</summary>
     private static async Task<(int Forced, List<string> Signals, string? Detail)> HudStop(MainShellWindow shell)
@@ -111,12 +139,50 @@ public class RemoteHudTests
         return (forced, server.Signals, detail);
     }
 
-    /// <summary>Hard rule 6: the HUD Stop never reaches further than the panic key. Under Lockdown (panic key on,
-    /// LockdownDisablePanicKey off) neither the local panic nor the relay's forced stop (session, engine, Chaster
-    /// hold: RemoteCommands.StopEffects(force: true)) runs; the controller is still told. The same holds with the
-    /// panic key off, where the HUD gate and the relay's Core gate (VoicePanicReach.PanicKeyRuns) must agree.</summary>
+    // WPF MainWindow.RemoteHud.cs:48 and MainWindow.xaml.cs:1602: the button bypasses
+    // the global-key Lockdown check when the panic key is enabled.
     [Fact]
-    public Task Stop_button_is_refused_under_lockdown() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task Hud_stop_runs_local_panic_under_lockdown_when_panic_key_is_enabled() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var settings = CoreSettings.Current;
+        var saved = (settings.PanicKeyEnabled, settings.PanicKey, settings.StrictLockEnabled,
+            settings.LockdownDisablePanicKey, settings.LockdownForceStrictLock);
+        var (oldSurfaces, oldLockdown) = (PanicSurfaces.All, LockdownService.Current);
+        var ld = new LockdownService();
+        var stopped = 0;
+        PanicSurfaces.All = new[] { new PanicSurfaces.Surface("probe", _ => stopped++) };
+        var shell = new MainShellWindow();
+        try
+        {
+            (settings.LockdownDisablePanicKey, settings.LockdownForceStrictLock) = (false, false);
+            LockdownService.Current = ld;
+            ld.Activate(TimeSpan.FromMinutes(30));
+            (settings.PanicKeyEnabled, settings.PanicKey) = (true, "F8");
+            Assert.True(MainShellWindow.LockdownActive);
+            shell.HandlePanicKeyPress(new DateTime(2026, 1, 1));
+            Assert.Equal(0, stopped); // a global key still cannot run
+            var (forced, signals, detail) = await HudStop(shell);
+            Assert.Equal(1, stopped);
+            Assert.Equal(0, forced); // the Core relay's independent gate is unchanged
+            Assert.Equal(new[] { "stop" }, signals);
+            Assert.Equal(Loc.Get("remote_hud_stopped"), detail);
+            Assert.True(ld.IsActive);
+        }
+        finally
+        {
+            shell.Close();
+            ld.Deactivate();
+            LockdownService.Current = oldLockdown;
+            PanicSurfaces.All = oldSurfaces;
+            (settings.PanicKeyEnabled, settings.PanicKey, settings.StrictLockEnabled,
+                settings.LockdownDisablePanicKey, settings.LockdownForceStrictLock) = saved;
+        }
+    });
+
+    /// <summary>WPF HUD Stop runs local panic with the key on, even under Lockdown. With the key off
+    /// it does not. The Core relay's forced-stop gate remains unchanged in both cases.</summary>
+    [Fact]
+    public Task Stop_button_respects_the_panic_setting_under_lockdown() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var settings = CoreSettings.Current;
         var (enabled, key, strict, ldPanic, ldStrict) = (settings.PanicKeyEnabled, settings.PanicKey, settings.StrictLockEnabled,
@@ -135,22 +201,23 @@ public class RemoteHudTests
             (settings.PanicKeyEnabled, settings.PanicKey) = (true, "F8");
             Assert.True(MainShellWindow.LockdownActive);
             var (forced, signals, detail) = await HudStop(shell);
-            Assert.Equal(0, stopped);
+            Assert.Equal(1, stopped);
             Assert.Equal(0, forced);
             Assert.Equal(new[] { "stop" }, signals);
-            Assert.Equal(Loc.GetF("remote_hud_sent", Loc.Get("remote_hud_stop")), detail);
+            Assert.Equal(Loc.Get("remote_hud_stopped"), detail);
             // Lockdown with the panic key off: the HUD's local half and the relay's Core gate both refuse.
             settings.PanicKeyEnabled = false;
             (forced, signals, detail) = await HudStop(shell);
-            Assert.Equal(0, stopped);
+            Assert.Equal(1, stopped);
             Assert.Equal(0, forced);
             Assert.Equal(new[] { "stop" }, signals);
             Assert.Equal(Loc.GetF("remote_hud_sent", Loc.Get("remote_hud_stop")), detail);
             Assert.True(ld.IsActive);
             ld.Deactivate();   // restores the pre-Lockdown panic flag
+            await Task.Delay(2100); // a second real panic within two seconds would exit the app
             settings.PanicKeyEnabled = true;
             (forced, signals, detail) = await HudStop(shell);
-            Assert.Equal(1, stopped);
+            Assert.Equal(2, stopped);
             Assert.Equal(1, forced);
             Assert.Equal(new[] { "stop" }, signals);
             Assert.Equal(Loc.Get("remote_hud_stopped"), detail);
