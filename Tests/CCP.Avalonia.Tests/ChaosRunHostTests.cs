@@ -154,6 +154,21 @@ public sealed class ChaosRunHostTests
             Ticks(35);   // the final 1.25 s spawn ends the ten-second storm
             Assert.Equal(11, BubbleOverlay.ChaosCount);
             Assert.False(toy.IsEffectActive);
+            state.Focus = 0;
+            foreach (var (rabbit, steps) in rabbits.Take(2).Select((b, i) => (b, i == 0 ? 13 : 30)))
+            {
+                var score = state.Score;
+                var focus = state.Focus;
+                var combo = state.Combo;
+                var heat = state.Heat;
+                var multiplier = state.TotalMult;
+                for (int i = 0; i < steps; i++) rabbit.Step();
+                BubbleOverlay.PopChaos(rabbit);
+                Assert.Equal(score + (ChaosBubbleVariants.DARTER_BASE_POINTS + (steps == 13 ? ChaosBubbleVariants.DARTER_QUICK_BONUS : 0)) * multiplier, state.Score, 6);
+                Assert.Equal(focus + ChaosTuning.FOCUS_PER_RABBIT, state.Focus);
+                Assert.Equal(combo + 1, state.Combo);
+                Assert.Equal(Math.Min(1, heat + 0.05), state.Heat, 6);
+            }
             toy.CooldownRemainingSec = 0;
             ChaosRunHost.UseToyById("rabbit_caller");
             Assert.True(ChaosCursorGlowOverlay.Active!.HaloVisible);

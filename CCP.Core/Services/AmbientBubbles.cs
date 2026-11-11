@@ -87,6 +87,7 @@ namespace ConditioningControlPanel.Services
         public bool IsLiveThreat => Spec is { IsLive: true, IsDarter: false, IsFreeze: false };
         public double DarterFlareFraction => Spec is { IsDarter: true, TelegraphMs: > 0 }
             ? Math.Clamp(_telegraphMs / Spec.TelegraphMs, 0, 1) : 0;
+        public bool WasQuickCatch => Spec is { IsDarter: true } && _telegraphMs <= 0 && Spec.LifetimeMs - _darterLifeMs - Math.Ceiling(Spec.TelegraphMs / 32.0) * 32 <= Spec.QuickWindowMs;
         public double FuseSecLeft => Math.Max(0, FuseRemainingMs) / 1000.0;
         /// <summary>WPF DefuseJudgeFuseSec: a held snap is judged at the channel's start (the fuse pauses).</summary>
         public double DefuseJudgeFuseSec => DefusedViaChannel ? _channelStartFuseSec : FuseSecLeft;

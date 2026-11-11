@@ -215,9 +215,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             var spec = b.Spec;
             if (_state == null || spec == null || _manualPaused || _lessonCardPaused) return;
-            // ponytail: the catch reward and slow motion (WPF ChaosModeService.cs:2351-2376) are the
-            // follow-up lane; a caught rabbit is not a treat, so it pays nothing here yet.
-            if (spec.IsDarter) return;
+            if (spec.IsDarter) {
+                _state.Score += (ChaosBubbleVariants.DARTER_BASE_POINTS + (b.WasQuickCatch ? ChaosBubbleVariants.DARTER_QUICK_BONUS : 0)) * _state.TotalMult;
+                _state.Focus += ChaosTuning.FOCUS_PER_RABBIT;
+                _state.Combo++;
+                _state.Heat = Math.Min(1.0, _state.Heat + 0.05);
+                ChaosLessons.Tick("rabbit_caller"); return;
+            }
             EffectLabel(b);   // WPF Bubble.Pop: ShowChaosEffectLabel before onBenignPop (:4685)
             if (spec.IsPrism)
             {
