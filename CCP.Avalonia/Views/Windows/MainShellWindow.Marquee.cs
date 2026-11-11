@@ -208,6 +208,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 : Loc.GetF("label_welcome_back_0", displayName!);
         }
 
+        // Reserve link space even when a translated lead is wider than the narrow banner.
+        private void HeaderBannerSlot_SizeChanged(object? sender, SizeChangedEventArgs e)
+        {
+            if (Named<Grid>("HeaderBannerSlot") is not { } slot || Named<Border>("HeaderBannerHost") is not { } host
+                || Named<TextBlock>("BannerSupportLead") is not { } lead || slot.Bounds.Width <= 0) return;
+            double width = Math.Max(0, Math.Min(slot.Bounds.Width, host.MaxWidth) - 28);
+            lead.MaxWidth = width * .7;
+        }
+
         private void BannerRotationTimer_Tick(object? sender, EventArgs e)
         {
             var banners = _bannerBeats;

@@ -120,3 +120,7 @@ Platform/FriendsLanding.cs :: ? "✨" : item.Kind == SendKind.Invite ? "🚪" : 
 
 # --- verbatim imports (Stack rule 4); each follow-up converts the file and deletes its entry ---
 Tours/TutorialService.cs :: * :: verbatim: import (Stack rule 4, trunk 557d9aac3c0aabdedc9280218757373970439ed4); step Icon strings are data mapped via IconMap at render; follow-up tutorials-icons converts the data and removes this exemption
+
+# Decorative sparkle sprite, not an icon. WPF MainWindow.BannerFx.cs:115.
+Views/Windows/MainShellWindow.BannerFx.cs :: new Path { Width = size * .72 :: path: decorative sparkle shape, not an icon
+Views/Windows/MainShellWindow.BannerFx.cs :: Data = Geometry.Parse("M .5,0 :: path: decorative sparkle geometry, not an icon

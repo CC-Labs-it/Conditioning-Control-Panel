@@ -40,14 +40,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void ApplyBannerAmbient()
         {
             var host = this.FindControl<Border>("HeaderBannerGlowHost");
-            var glow = host?.Effect as DropShadowEffect;
-            if (host is null || glow is null) return;
+            if (host is null) return;
             if (!Pr4aAmbientAllowed || !IsVisible || !host.IsEffectivelyVisible)
             {
                 ++_bannerAmbientRun;
                 _bannerAmbient?.Stop();
                 _bannerAmbient = null;
-                glow.Opacity = .35;
+                host.Opacity = .35;
                 ClearBannerSparkles();
                 return;
             }
@@ -58,7 +57,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (run != _bannerAmbientRun) return;
                 if (!Pr4aAmbientAllowed || !IsVisible) { ApplyBannerAmbient(); return; }
-                glow.Opacity = .25 + .35 * BeatLoop.Breath(seconds, 3.2);
+                host.Opacity = .25 + .35 * BeatLoop.Breath(seconds, 3.2);
                 if (BeatLoop.Time.GetElapsedTime(_bannerRepeatStart).TotalSeconds < 12) return;
                 _bannerRepeatStart = BeatLoop.Time.GetTimestamp();
                 if (_bannerCurrentIndex >= 0 && _bannerCurrentIndex < _bannerBeats.Length
@@ -70,6 +69,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void InitializeChromeFx()
         {
             // Message sheen is finite. The sibling glow and repeat use the ambient gate.
+            // Paint the sibling shadow once per theme change; only its opacity breathes.
+            if (this.FindControl<Border>("HeaderBannerGlowHost") is { } glowHost)
+            {
+                void PaintGlow()
+                {
+                    var color = glowHost.Tag is Color c ? c : Color.FromRgb(255, 105, 180);
+                    glowHost.BoxShadow = new BoxShadows(new BoxShadow { Blur = 12, Color = color });
+                }
+                glowHost.PropertyChanged += (_, e) => { if (e.Property == Control.TagProperty) PaintGlow(); };
+                PaintGlow();
+            }
             Activated += (_, _) => ApplyBannerAmbient();
             Deactivated += (_, _) => { ParkBannerSheen(); ApplyBannerAmbient(); };
             // Opened fires again after every tray Hide/Show; never stack the static subscription.

@@ -174,6 +174,41 @@ public sealed class BannerMotionTests
         }
     });
 
+    [Fact]
+    public Task BannerGlowTracksTheBannerThroughResize() => InShell(w =>
+    {
+        var host = w.Named<Border>("HeaderBannerHost")!;
+        var glow = w.Named<Border>("HeaderBannerGlowHost")!;
+        foreach (double cap in new[] { 440.0, 260.0, 440.0 })
+        {
+            host.MaxWidth = cap;
+            w.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+            Assert.InRange(host.Bounds.Width, 1, cap);
+            Assert.Equal(host.Bounds.Width, glow.Bounds.Width, 1);
+        }
+    });
+
+    [Fact]
+    public Task SupportLinkKeepsRoomWhenLeadIsLong() => InShell(w =>
+    {
+        w.Width = 1131; w.Height = 700;
+        w.Named<Border>("HeaderBannerHost")!.MaxWidth = 440;
+        var primary = w.Named<TextBlock>("TxtBannerPrimary")!;
+        var lead = primary.GetVisualDescendants().OfType<DockPanel>().First().Children.OfType<TextBlock>().First();
+        lead.Inlines = null;
+        lead.Text = new string('W', 90);
+        Dispatcher.UIThread.RunJobs();
+        var link = w.Named<SafeLink>("BannerSupportLink")!;
+        var text = Assert.IsType<TextBlock>(link.Content);
+        Assert.InRange(w.Named<Border>("HeaderBannerHost")!.Bounds.Width, 1, 440);
+        Assert.Contains(lead.TextLayout.TextLines, line => line.HasCollapsed);
+        Assert.True(lead.Bounds.Width <= primary.Bounds.Width * .72,
+            $"A long lead must leave room for the link: lead {lead.Bounds.Width}, banner {primary.Bounds.Width}.");
+        Assert.True(text.Bounds.Width > 0, "A long localized lead must leave room for the support link.");
+        Assert.Contains(text.TextLayout.TextLines, line => line.HasCollapsed);
+        Assert.InRange(text.TranslatePoint(new Point(text.Bounds.Width, 0), primary)!.Value.X, 1, primary.Bounds.Width + .5);
+    });
+
     [Theory]
     [InlineData("unified")]
     [InlineData("provider")]
@@ -476,7 +511,14 @@ public sealed class BannerMotionTests
             void Advance(double seconds) { clock.Now += TimeSpan.FromSeconds(seconds).Ticks; ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll(); }
             var layer = w.Named<Canvas>("BannerSparkleLayer")!;
             var glowHost = w.Named<Border>("HeaderBannerGlowHost")!;
-            var glow = Assert.IsType<global::Avalonia.Media.DropShadowEffect>(glowHost.Effect);
+            Assert.Null(glowHost.Effect);
+            Assert.Equal(1, glowHost.BoxShadow.Count);
+            Assert.Equal(12, glowHost.BoxShadow[0].Blur);
+            var oldTag = glowHost.Tag;
+            glowHost.Tag = global::Avalonia.Media.Colors.LimeGreen;
+            Assert.Equal(global::Avalonia.Media.Colors.LimeGreen, glowHost.BoxShadow[0].Color);
+            glowHost.Tag = oldTag;
+            var glow = glowHost;
             Assert.Equal(w.Named<Border>("HeaderBannerHost")!.Bounds.Width, glowHost.Bounds.Width, 1);
             Gate(MotionLevel.Reduced); Assert.Equal(.35, glow.Opacity, 3);
             Gate(MotionLevel.Full); Assert.Equal(.25, glow.Opacity, 3);
