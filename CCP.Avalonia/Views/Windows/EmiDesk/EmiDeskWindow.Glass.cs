@@ -25,6 +25,7 @@ public partial class EmiDeskWindow
     private TextBlock? _glassSignal;
     private bool _glassLive, _glassLanded, _glassMotion;
     private double _glassScale;
+    private RerunsPainter? _reruns;
 
     private DispatcherTimer? _holdFaceTimer;
 
@@ -138,10 +139,18 @@ public partial class EmiDeskWindow
             if (elapsed < 220) { PaintGlassGlitch(); return; } // WPF EmiChannels.cs:85-86
             _glassLanded = true;
             _glassPhase = now;
-            PaintOffAir();
+            var tape = RerunsPainter.GetTape();
+            if (tape != null && GlassRng.Next(2) == 0 && _glassLayer != null)
+            {
+                _glassLayer.Children.Clear();
+                _reruns = new RerunsPainter(_glassLayer, tape);
+                _reruns.Tick(0);
+            }
+            else PaintOffAir();
             return;
         }
         if (elapsed >= 10_000) { CloseGlass(); return; } // WPF EmiChannels.cs:58-59
+        _reruns?.Tick(elapsed);
         if (_glassMotion && _glassSignal != null && _glassDim != null)
         {
             Canvas.SetLeft(_glassSignal, (10 + (int)(elapsed / 1000) % 6 * 4) * _glassScale);
@@ -198,6 +207,7 @@ public partial class EmiDeskWindow
         _glassLive = _glassLanded = false;
         _glassFrames?.Stop(); _glassFrames = null;
         if (_glassLayer != null) GlassHost.Children.Remove(_glassLayer);
+        _reruns = null;
         _glassLayer = null; _glassDim = null; _glassSignal = null;
         _glassActivity = DateTime.UtcNow;
         _glassIdle = NextGlassIdle();
