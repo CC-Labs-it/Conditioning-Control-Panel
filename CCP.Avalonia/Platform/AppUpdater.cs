@@ -41,7 +41,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
             try { if (top?.Clipboard is { } c) await c.SetTextAsync(url); } catch { }
         };
 
-        internal static UpdateInfo? Latest { get; private set; }
+        private static UpdateInfo? _latest;
+        internal static event Action? LatestChanged;
+        internal static UpdateInfo? Latest
+        {
+            get => _latest;
+            set { _latest = value; LatestChanged?.Invoke(); }
+        }
+        internal static bool _offered;
         private static bool _busy;
         private static bool _offering;
 
@@ -180,7 +187,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 shell.Closed += (_, _) => closed = true;
                 while (!closed && (!CoreSettings.Current.HasAcceptedAgeVerification || !shell.IsVisible || StartupModalOpen()))
                     await Task.Delay(500);
-                if (!closed && !_busy) await OfferAsync(shell, info);
+                if (!closed && !_busy && !_offered) await OfferAsync(shell, info);
             }
             catch (Exception ex)
             {
@@ -193,8 +200,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 .Any(w => w is FirstRunWizard or MessageDialog && w.IsVisible) == true;
 
         /// <summary>The notification dialog: Install (Windows) / Download (elsewhere), or Later = quiet for 24h.</summary>
-        private static async Task OfferAsync(Window owner, UpdateInfo info)
+        internal static async Task OfferAsync(Window owner, UpdateInfo info)
         {
+            if (_busy) return;
+            _offered = true;
             _busy = _offering = true;
             try
             {

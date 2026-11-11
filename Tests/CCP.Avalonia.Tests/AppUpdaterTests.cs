@@ -140,6 +140,56 @@ public sealed class AppUpdaterTests
         });
     }
 
+    [Fact]
+    public async Task LauncherChipOffersOnceBeforeStartupAndFollowsLockdown()
+    {
+        if (OperatingSystem.IsWindows()) Assert.Skip("Requires the Linux feed path.");
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            AppUpdater._offered = false;
+            AppUpdater.Latest = null;
+            AppUpdater.Handler = new FakeFeed();
+            Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", "http://127.0.0.1:9/api");
+            CoreReleaseContent.AppVersionProvider = () => "6.11.3";
+            CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
+            CoreSettings.Current.HasAcceptedAgeVerification = false;
+            ReleaseFeed.ClearSkippedUpdateVersion(CorePaths.UserData);
+            var ld = LockdownService.Current = new LockdownService();
+            var shell = new MainShellWindow();
+            var launcher = new LauncherWindow();
+            try
+            {
+                shell.Show();
+                launcher.Show();
+                var chip = launcher.FindControl<Button>("UpdateChip")!;
+                Assert.False(chip.IsVisible);
+                var startup = AppUpdater.StartupAsync(shell);
+                for (var i = 0; i < 100 && !chip.IsVisible; i++) await Task.Delay(50);
+                Assert.True(chip.IsVisible);
+                Assert.Equal(Loc.GetF("launcher_update_tooltip", "99.1.0"), ToolTip.GetTip(chip));
+                ld.Activate(TimeSpan.FromMinutes(30));
+                Assert.False(chip.IsVisible);
+                ld.Deactivate();
+                Assert.True(chip.IsVisible);
+                chip.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                for (var i = 0; i < 100 && AppUpdater.OpenDialog is null; i++) await Task.Delay(50);
+                Assert.NotNull(AppUpdater.OpenDialog);
+                AppUpdater.OpenDialog!.FindControl<Button>("BtnLater")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                CoreSettings.Current.HasAcceptedAgeVerification = true;
+                Assert.Same(startup, await Task.WhenAny(startup, Task.Delay(3000)));
+                Assert.Null(AppUpdater.OpenDialog);
+            }
+            finally
+            {
+                if (ld.IsActive) ld.Deactivate();
+                launcher.Close(); shell.Close();
+                AppUpdater.Handler = null;
+                ReleaseFeed.ClearSkippedUpdateVersion(CorePaths.UserData);
+                Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", null);
+            }
+        });
+    }
+
     /// <summary>
     /// WPF ddc9dd047 on this head: a loopback server sends the installer's headers and 1000 bytes, then
     /// goes quiet. Each attempt fails on the stall window, is retried as transient, and the third

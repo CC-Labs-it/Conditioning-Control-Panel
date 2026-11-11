@@ -94,6 +94,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 else _statusTimer.Stop();
             };
             BuildTiles();
+            HookUpdateChip();
             HookVeil();
             HookFx();
             HookLinks();

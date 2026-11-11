@@ -80,6 +80,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 Bind(LockdownService.Current);
                 var on = MainShellWindow.LockdownActive;
+                RefreshUpdateChip();
                 var rising = on && !LockdownVeil.IsVisible;
                 LockdownVeil.IsVisible = on;
                 if (rising) LockdownVeil.Focus();   // nothing under the veil keeps focus
