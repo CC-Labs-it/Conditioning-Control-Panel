@@ -9,6 +9,15 @@ namespace ConditioningControlPanel.Services.Video
     /// </summary>
     internal static class MandatoryVideoPresentation
     {
+        /// <summary>Floating video's gentle rise from black, starting at the first decoded frame.
+        /// Videos keep normal playback speed, as on the current WPF head.</summary>
+        public static double PictureOpacity(bool hasFrame, double sinceFrameSeconds, double fadeSeconds)
+        {
+            if (fadeSeconds <= 0) return 1;
+            if (!hasFrame) return 0;
+            return Math.Clamp(sinceFrameSeconds / fadeSeconds, 0, 1);
+        }
+
         /// <summary>
         /// Floating is a comfort option for an ordinary video only. Anything that covers the screen
         /// ON PURPOSE keeps covering it: a strict video (Strict Lock, Lock Card, Possession, a
@@ -22,6 +31,14 @@ namespace ConditioningControlPanel.Services.Video
         /// <summary>The most floating windows that may be up at once (AppSettings.MandatoryVideoFloatingCount).
         /// One trigger opens ONE window; this is only the limit.</summary>
         public const int MaxWindows = 4;
+
+        public enum FirstFrameVerdict { Wait, Reveal, Skip }
+
+        /// <summary>WPF FloatingFirstFrame: reveal a playing clip at the four-second budget even
+        /// without a frame; skip only a clip that never started playing.</summary>
+        public static FirstFrameVerdict DecideFirstFrame(double readySeconds, bool frameSeen, bool playing) =>
+            frameSeen ? FirstFrameVerdict.Reveal : readySeconds < 4 ? FirstFrameVerdict.Wait :
+            playing ? FirstFrameVerdict.Reveal : FirstFrameVerdict.Skip;
 
         public const int MinSizePercent = 15, MaxSizePercent = 60, DefaultSizePercent = 33;
         public const int MinSpeedPercent = 10, MaxSpeedPercent = 100, DefaultSpeedPercent = 35;

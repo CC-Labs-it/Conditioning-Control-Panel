@@ -27,6 +27,8 @@ internal static class CompanionLinkLauncher
             // ponytail: browser media-session ownership and the native autoplay/fullscreen hook
             // still belong to the browser follow-up. Plain navigation is already hosted here.
             if (Navigate(url!)) return;
+            // WPF MainWindow/MainWindow.Browser.cs:657-667: offline also blocks external fallback.
+            if (CoreSettings.Current.OfflineMode) return;
             if (CompanionLinkNavigation.CanOpenExternally(uri!))
                 await AppUpdater.OpenUrl(MainShellWindow.Current, url!);
         }

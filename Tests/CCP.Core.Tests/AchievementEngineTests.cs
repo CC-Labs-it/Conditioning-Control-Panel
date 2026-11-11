@@ -30,6 +30,59 @@ public sealed class AchievementEngineTests : IDisposable
         new AchievementStore(path).Load().IsUnlocked(id);
 
     [Fact]
+    public void CompanionMessagesUnlockAtWpfThresholdAndKeepCounting()
+    {
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        engine.TrackCompanionMessage();
+        Assert.Equal(1, engine.Progress.CompanionMessages);
+        Assert.True(engine.Progress.IsUnlocked("pleased_to_meet_you"));
+        Assert.False(engine.Progress.IsUnlocked("pillow_talk"));
+        engine.Progress.CompanionMessages = AchievementRules.PillowTalkMessages - 1;
+        engine.TrackCompanionMessage();
+        Assert.True(engine.Progress.IsUnlocked("pillow_talk"));
+        engine.IsDirty = false;
+        engine.TrackCompanionMessage();
+        Assert.Equal(AchievementRules.PillowTalkMessages + 1, engine.Progress.CompanionMessages);
+        Assert.True(engine.IsDirty);
+    }
+
+    [Fact]
+    public void Pop_credit_unlocks_at_1000_awards_points_and_flushes_every_50()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-bubble-credit-");
+        var s = CoreSettings.Current; var points = s.SkillPoints;
+        try
+        {
+            var path = Path.Combine(dir.FullName, "achievements.json");
+            var engine = new AchievementEngine(new AchievementStore(path));
+            engine.Progress.TotalBubblesPopped = 949;
+            engine.TrackBubblePopped();
+            Assert.Equal(950, new AchievementStore(path).Load().TotalBubblesPopped);
+            Assert.Equal(points, s.SkillPoints);
+            for (var i = 0; i < 50; i++) engine.TrackBubblePopped();
+            Assert.True(engine.Progress.IsUnlocked("pop_the_thought"));
+            Assert.Equal(points + 1, s.SkillPoints);
+        }
+        finally { s.SkillPoints = points; dir.Delete(true); }
+    }
+
+    [Fact]
+    public void BubbleBatchCrossesEveryMilestoneAndPersists()
+    {
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        engine.Progress.TotalBubblesPopped = 95;
+        Assert.Equal(3, engine.TrackBubblesPopped(255));
+        Assert.Equal(350, new AchievementStore(MainPath).Load().TotalBubblesPopped);
+        Assert.Equal(0, engine.TrackBubblesPopped(0));
+        Assert.Equal(0, engine.TrackBubblesPopped(-5));
+        Assert.Equal(350, engine.Progress.TotalBubblesPopped);
+        Assert.Equal(1, engine.TrackBubblesPopped(50));
+        Assert.Equal(6, engine.TrackBubblesPopped(600));
+        Assert.True(engine.Progress.IsUnlocked("pop_the_thought"));
+        Assert.True(new AchievementStore(MainPath).Load().IsUnlocked("pop_the_thought"));
+    }
+
+    [Fact]
     public void AttentionTrackersCountAndUnlockAtWpfThresholds()
     {
         var engine = new AchievementEngine(new AchievementStore(MainPath));
@@ -51,6 +104,102 @@ public sealed class AchievementEngineTests : IDisposable
         Assert.False(p.IsUnlocked("eyes_front"));
         engine.TrackAttentionCheckPassed();                  // 100th pass
         Assert.True(OnDisk(MainPath, "eyes_front"));
+    }
+
+    /// <summary>WPF AchievementService.TrackTimeBasedProgress :226-275.</summary>
+    [Fact]
+    public void PinkMinutesUnlockAtWpfThreshold()
+    {
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        var p = engine.Progress;
+        p.TotalPinkFilterMinutes = 599.5;
+        engine.TrackPinkFilterMinutes(0.4);
+        Assert.False(p.IsUnlocked("rose_tinted_reality"));
+        engine.TrackPinkFilterMinutes(0.1);
+        Assert.True(OnDisk(MainPath, "rose_tinted_reality"));
+    }
+
+    [Fact]
+    public void SpiralMinutesUnlockAtWpfThresholdsAndContinuousRunResets()
+    {
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        var p = engine.Progress;
+        engine.TrackSpiralMinutes(19.9);
+        engine.ResetContinuousSpiral();                     // spiral went off screen
+        engine.TrackSpiralMinutes(0.2);
+        Assert.False(p.IsUnlocked("spiral_eyes"));
+        Assert.Equal(20.1, p.TotalSpiralMinutes, 6);
+        engine.TrackSpiralMinutes(19.8);
+        Assert.True(OnDisk(MainPath, "spiral_eyes"));
+
+        p.TotalSpiralMinutes = 599.9;
+        Assert.False(p.IsUnlocked("threadbare"));
+        engine.TrackSpiralMinutes(0.1);
+        Assert.True(OnDisk(MainPath, "threadbare"));
+    }
+
+    [Fact]
+    public async Task LoadingSavedSpiralStartsANewContinuousRun()
+    {
+        var prior = new AchievementEngine(new AchievementStore(MainPath));
+        prior.TrackSpiralMinutes(15);
+        prior.Save();
+        Assert.Equal(15, new AchievementStore(MainPath).Load().ContinuousSpiralMinutes);
+
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        Assert.Equal(0, engine.Progress.ContinuousSpiralMinutes);
+        Assert.True(engine.IsDirty);
+        await engine.SaveIfDirtyAsync();
+        Assert.Equal(0, new AchievementStore(MainPath).Load().ContinuousSpiralMinutes);
+        engine.TrackSpiralMinutes(5);
+        Assert.False(engine.Progress.IsUnlocked("spiral_eyes"));
+        Assert.Equal(20, engine.Progress.TotalSpiralMinutes); // lifetime total survives startup
+        engine.TrackSpiralMinutes(15);
+        Assert.True(OnDisk(MainPath, "spiral_eyes"));
+    }
+
+    [Fact]
+    public async Task ResettingASavedSpiralPersistsWithoutAnotherAchievementEvent()
+    {
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        engine.TrackSpiralMinutes(15);
+        engine.Save();
+        Assert.False(engine.IsDirty);
+        engine.ResetContinuousSpiral();
+        Assert.True(engine.IsDirty);
+        await engine.SaveIfDirtyAsync();
+        Assert.Equal(0, new AchievementStore(MainPath).Load().ContinuousSpiralMinutes);
+        Assert.False(engine.IsDirty);
+        engine.ResetContinuousSpiral(); // an idle reset need not rewrite the file
+        Assert.False(engine.IsDirty);
+    }
+
+    /// <summary>WPF AchievementService.TrackLockCardCompletion :508-544.</summary>
+    [Fact]
+    public void LockCardCompletionCountsSavesAndUnlocksLikeWpf()
+    {
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        var p = engine.Progress;
+        engine.TrackLockCardCompletion(seconds: 20, errors: 2, phrases: 3);
+        Assert.Equal(1, new AchievementStore(MainPath).Load().TotalLockCardsCompleted);   // saved at once
+        Assert.False(p.IsUnlocked("typing_tutor"));
+        Assert.False(p.IsUnlocked("obedience_reflex"));
+
+        engine.TrackLockCardCompletion(seconds: 14, errors: 0, phrases: 2);   // perfect, but 2 phrases
+        Assert.True(p.HasPerfectLockCard);
+        Assert.True(OnDisk(MainPath, "typing_tutor"));
+        Assert.False(p.IsUnlocked("obedience_reflex"));
+
+        engine.TrackLockCardCompletion(seconds: 15, errors: 1, phrases: 3);
+        Assert.False(p.IsUnlocked("obedience_reflex"));
+        engine.TrackLockCardCompletion(seconds: 12, errors: 1, phrases: 3);
+        Assert.Equal(12, p.FastestLockCardSeconds);
+        Assert.True(OnDisk(MainPath, "obedience_reflex"));
+
+        p.TotalLockCardsCompleted = 49;
+        Assert.False(p.IsUnlocked("word_perfect"));
+        engine.TrackLockCardCompletion(seconds: 60, errors: 1, phrases: 3);   // the 50th card
+        Assert.True(OnDisk(MainPath, "word_perfect"));
     }
 
     [Fact]
@@ -283,5 +432,22 @@ public sealed class AchievementEngineTests : IDisposable
             Assert.True(engine.IsDirty);
         }
         finally { CoreEntitlement.HasPremiumProvider = previous; }
+    }
+
+    /// <summary>WPF AchievementService.TrackAvatarClick (:610): 20 rapid clicks unlock neon_obsession,
+    /// 150 within 60 s unlock needy_doll; both persist.</summary>
+    [Fact]
+    public void AvatarClicksUnlockAtWpfThresholds()
+    {
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        for (int i = 0; i < 19; i++) engine.TrackAvatarClick();
+        Assert.False(engine.Progress.IsUnlocked("neon_obsession"));
+        engine.TrackAvatarClick();
+        Assert.True(OnDisk(MainPath, "neon_obsession"));
+        for (int i = 20; i < 149; i++) engine.TrackAvatarClick();
+        Assert.False(engine.Progress.IsUnlocked("needy_doll"));
+        engine.TrackAvatarClick();
+        Assert.True(OnDisk(MainPath, "needy_doll"));
+        Assert.True(engine.IsDirty);
     }
 }

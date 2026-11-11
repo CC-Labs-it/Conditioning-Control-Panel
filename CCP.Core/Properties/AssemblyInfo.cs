@@ -19,3 +19,5 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("CCP.Avalonia")]
 [assembly: InternalsVisibleTo("CCP.Avalonia.Tests")]
 [assembly: InternalsVisibleTo("CCP.Avalonia.Language.Tests")]
+
+[assembly: InternalsVisibleTo("CCP.Avalonia.Migration.Tests")]

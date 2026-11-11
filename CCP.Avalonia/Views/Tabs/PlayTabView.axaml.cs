@@ -23,8 +23,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///
     /// <para><b>This file is the host, the painter (WPF MainWindow.PlayTab.cs RefreshPlayCards)
     /// and the shims.</b> Every click WPF answers with <c>ShowTab</c> is the shell's <c>ShowTab</c>
-    /// here. Motion budget: nothing, as on WPF since the 2026-09-18 relayout took the descent hero
-    /// (and its ember canvas) to the launcher.</para>
+    /// here. Section entrances follow MainWindow/MainWindow.ChromeFx.cs:248; no ambient loop
+    /// runs on this wall.</para>
     /// </summary>
     public partial class PlayTabView : UserControl
     {
@@ -79,7 +79,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
             base.OnPropertyChanged(change);
-            if (change.Property == IsVisibleProperty && IsVisible && VisualRoot != null) RefreshPlayCards();
+            if (change.Property == IsVisibleProperty && IsVisible && VisualRoot != null)
+            {
+                RefreshPlayCards();
+                RefreshWebcamStatus();
+            }
         }
 
         internal void RefreshWebcamStatus()
@@ -93,26 +97,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // The pass is spent (or entitlement lands) off the UI thread.
         private void OnIntakePassStateChanged(object? sender, EventArgs e) =>
-            Dispatcher.UIThread.Post(RefreshPlayCards);
+            Dispatcher.UIThread.Post(() => { RefreshPlayCards(); RefreshWebcamStatus(); });
+
+        // The shell owns the one entrance: WPF MainWindow/MainWindow.ChromeFx.cs:248,375.
+        // MainShellWindow.TabTransitions.cs keeps delayed sections at base values until BeginTime.
 
         /// <summary>
         /// Every card hero, WPF's <c>PlayTabView.xaml</c> table restated: the Border that owns the
         /// plate, the Resources-relative art, and the Stretch each one was authored with.
         /// <c>lockdown_icon.png</c> sits at the RESOURCE ROOT, the path a mod keys its override against.
         /// </summary>
-        private static readonly (string Plate, string Art, Stretch Fit)[] HeroPlates =
+        // WPF MainWindow/MainWindow.xaml.cs:2933 sizes Play hero decodes.
+        // Chess stays full size as in WPF Views/Tabs/PlayTabView.xaml:447.
+        private static readonly (string Plate, string Art, Stretch Fit, int? DecodeWidth)[] HeroPlates =
         {
-            ("PlayGoonHeroPlate",     "features/goon_game_tile.png",    Stretch.UniformToFill),
-            ("PlayChessHeroPlate",    "features/piecebypiece.png",      Stretch.UniformToFill),
-            ("PlayDtrhHeroPlate",     "features/dtrh.png",              Stretch.UniformToFill),
-            ("PlayRemoteHeroPlate",   "features/remote_control.png",    Stretch.UniformToFill),
-            ("PlayGazeHeroPlate",     "features/lab_gaze_hero.png",     Stretch.UniformToFill),
-            ("PlayFocusHeroPlate",    "features/lab_focusgaze_hero.png",Stretch.UniformToFill),
-            ("PlayBlinkHeroPlate",    "features/blink_trainer.png",     Stretch.UniformToFill),
-            ("PlayIntakeHeroPlate",   "features/lab_quiz_hero.png",     Stretch.UniformToFill),
-            ("PlayFypHeroPlate",      "features/fyp.png",               Stretch.UniformToFill),
-            ("PlayLockdownHeroPlate", "lockdown_icon.png",              Stretch.UniformToFill),
-            ("PlayLoomHeroPlate",     "features/loom.png",              Stretch.UniformToFill),
+            ("PlayBackRoomHeroPlate", "features/backroom.png", Stretch.UniformToFill, null),
+            ("PlayDtrhHeroPlate", "features/dtrh.png", Stretch.UniformToFill, null),
+            ("PlayArcademyHeroPlate", "features/arcademy.png", Stretch.UniformToFill, null),
+            ("PlayRacingThoughtsHeroPlate", "features/race.png", Stretch.UniformToFill, null),
+            ("PlayWebAppHeroPlate", "billboard/webapp.png", Stretch.UniformToFill, null),
+            ("PlayGoonHeroPlate",     "features/goon_game_tile.png",    Stretch.UniformToFill, 512),
+            ("PlayChessHeroPlate",    "features/piecebypiece.png",      Stretch.UniformToFill, null),
+            ("PlayRemoteHeroPlate",   "features/remote_control.png",    Stretch.UniformToFill, 768),
+            ("PlayGazeHeroPlate",     "features/lab_gaze_hero.png",     Stretch.UniformToFill, 512),
+            ("PlayFocusHeroPlate",    "features/lab_focusgaze_hero.png",Stretch.UniformToFill, 512),
+            ("PlayBlinkHeroPlate",    "features/blink_trainer.png",     Stretch.UniformToFill, 512),
+            ("PlayIntakeHeroPlate",   "features/lab_quiz_hero.png",     Stretch.UniformToFill, 512),
+            ("PlayFypHeroPlate",      "features/fyp.png",               Stretch.UniformToFill, 512),
+            ("PlayLockdownHeroPlate", "lockdown_icon.png",              Stretch.UniformToFill, 1024),
+            ("PlayLoomHeroPlate",     "features/loom.png",              Stretch.UniformToFill, 512),
         };
 
         private void OnModChangedRepaintArt(object? sender, ModPackage? mod) =>
@@ -124,12 +137,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         private void RefreshHeroArt()
         {
-            foreach (var (plateName, art, fit) in HeroPlates)
+            foreach (var (plateName, art, fit, decodeWidth) in HeroPlates)
             {
                 try
                 {
                     if (this.FindControl<Border>(plateName) is not { } plate) continue;
-                    if (ModArt.TryLoad(art) is not { } bmp) continue;
+                    if (ModArt.TryLoad(art, decodeWidth) is not { } bmp) continue;
                     plate.Background = new ImageBrush(bmp) { Stretch = fit };
                 }
                 catch (Exception ex)
@@ -182,6 +195,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 // BreakoutAccess.FullAllowed (WPF Services/BackRoom/BreakoutAccess.cs:9).
                 PlayLockBreakout.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_breakout_title")).Allowed;
+                PlayLockArcademy.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_arcademy_title")).Allowed;
+                // WPF MainWindow.PlayTab.cs:132: Racing Thoughts requires Lab, with no daily-free key.
+                PlayLockRacingThoughts.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_race_title")).Allowed;
                 PlayLockGaze.IsVisible = !TierGate.RequiresLab(Loc.Get("label_gaze_minigame")).Allowed;
                 PlayLockFocusGaze.IsVisible = !TierGate.RequiresLab(Loc.Get("label_focus_gaze")).Allowed;
                 PlayLockRemote.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed;
@@ -195,6 +211,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 PlayBadgeRemote.FreeToday = !premium && CoreEntitlement.IsFreeToday("remote");
                 PlayBadgeFyp.FreeToday = !premium && CoreEntitlement.IsFreeToday("fyp");
                 PlayBadgeDtrh.FreeToday = !premium && CoreEntitlement.IsFreeToday("dtrh");
+
 
                 RefreshPlayIntakeCard();
             }
@@ -223,27 +240,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // ==================================================================================
         // Launch shims (WPF PlayTabView.Cards.cs). Every name below is the MainWindow handler the
-        // WPF card forwards to. GAMES: the Breakout demo and Piece by Piece open their GameWindow
-        // as the launcher does (LauncherWindow.Destinations); the full Breakout and Goon have no
-        // host on this head, so their buttons stay disabled in the markup with the
-        // exclusives_not_on_this_build tooltip and carry no shim.
+        // WPF card forwards to. GAMES: the Breakout demo, Piece by Piece, DtRH and Racing Thoughts open their
+        // GameWindow as the launcher does (LauncherWindow.Destinations). Full Breakout uses the same host
+        // with a Lab gate. Goon has no host on this head, so its button stays disabled in the markup with the
+        // exclusives_not_on_this_build tooltip and carries no shim.
         // ==================================================================================
+
+        // WPF MainWindow.PlayTab.cs:79-86.
+        private void BtnPlayWebApp_Click(object? sender, RoutedEventArgs e) => Owner?.OpenPlayWebApp();
 
         // ---- GAMES -----------------------------------------------------------------------
 
         /// <summary>How a games card opens its game: the launcher's own door. Tests capture it.</summary>
         internal static Action<string> LaunchGame { get; set; } = id => Games.GameWindow.Launch(id);
 
-        /// <summary>WPF LaunchPlayBreakoutDemo (BreakoutHostService.LaunchDemo): free, no account.</summary>
+        /// <summary>WPF MainWindow.PlayTab.cs:56, BreakoutHostService.cs:14-17: Lab gate.</summary>
+        private void BtnPlayBreakout_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayBreakout();
+
         private void BtnPlayBreakoutDemo_Click(object? sender, RoutedEventArgs e) => LaunchGame("breakoutdemo");
 
         /// <summary>WPF LaunchPlayChess (PieceByPieceHostService.Launch): free for everyone.</summary>
         private void BtnPlayChess_Click(object? sender, RoutedEventArgs e) => LaunchGame(Games.GameWindow.PbpId);
 
-        private void BtnPlayDtrh_Click(object? sender, RoutedEventArgs e)
-        {
-            if (Owner is { } owner) LauncherWindow.LaunchGame(owner, Games.GameWindow.DtrhId);
-        }
+        // WPF PlayTabView.Cards.cs:59-66 -> LaunchExclusiveGame: sign-in first, then DtRH's Basic gate, before any focus.
+        private void BtnPlayDtrh_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayLauncherGame(Games.GameWindow.DtrhId);
+
+        private void BtnPlayRacingThoughts_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayLauncherGame("race");
 
         // ---- TOGETHER --------------------------------------------------------------------
 

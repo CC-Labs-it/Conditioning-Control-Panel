@@ -70,6 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static IReadOnlyCollection<int> ShownSlots => Windows.Keys;
         /// <summary>The session's slot: outside the standalone range, never in settings.</summary>
         internal const int SessionSlot = 99;
+        private static bool EngineRunning => CoreEngine.IsRunning || App.Sessions?.IsRunning == true;
         private static bool Standalone(int slot) => slot != SessionSlot;
 
         /// <summary>A STANDALONE slot is up, queued or decoding (WPF CornerGifService.HasActiveOverlays).</summary>
@@ -88,7 +89,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF App.xaml.cs:480: the <see cref="CoreCornerGif"/> surface seam, on the UI thread.</summary>
         internal static void Seed(Func<Visual?> host)
         {
-            CoreCornerGif.RefreshHandler = index => Dispatcher.UIThread.Post(() =>
+            // Session startup reads StandaloneActive immediately after refreshing on the UI thread.
+            CoreCornerGif.RefreshHandler = index => OnUi(() =>
             {
                 if (host() is { } h) Refresh(h, index);
             });
@@ -102,6 +104,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (Dispatcher.UIThread.CheckAccess()) act();
             else Dispatcher.UIThread.Post(act);
+        }
+
+        /// <summary>The host window closed: forget it, or this static keeps the closed shell alive
+        /// (StartEngine refreshes the slots with the shell as host; ShellMemoryTests).</summary>
+        internal static void ReleaseHost(Visual host)
+        {
+            if (ReferenceEquals(_host, host)) _host = null;
         }
 
         /// <summary>WPF SessionEngine.ShowCornerGif: replaces whatever the session slot shows.</summary>
@@ -142,7 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     var o = overlays[i];
                     if (o is not { Enabled: true }) continue;
-                    if (!CornerGifPlanner.AllowStandaloneCornerGif(o.Enabled, SessionActive)) continue;
+                    if (!CornerGifPlanner.AllowStandaloneCornerGif(o.Enabled, SessionActive, EngineRunning)) continue;
                     if (queued >= CornerGifPlanner.MaxOverlays)
                     {
                         Log.Warning("CornerGif: more than {Max} enabled corner-GIF slots - ignoring the rest", CornerGifPlanner.MaxOverlays);
@@ -156,7 +165,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             CloseSlot(index);
             if (overlays == null || index >= overlays.Count || index >= CornerGifPlanner.MaxOverlays) return;
-            if (overlays[index] is { Enabled: true } setting && CornerGifPlanner.AllowStandaloneCornerGif(true, SessionActive))
+            if (overlays[index] is { Enabled: true } setting && CornerGifPlanner.AllowStandaloneCornerGif(true, SessionActive, EngineRunning))
                 QueueShow(index, setting);
         }
 
@@ -249,6 +258,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static void Realize(int index, CornerGifOverlaySetting setting)
         {
             if (_host is not { } host) return;
+            if (Standalone(index) && !CornerGifPlanner.AllowStandaloneCornerGif(setting.Enabled, SessionActive, EngineRunning)) return;
             if (!SkipPlatformChecksForTests && (_refused || !X11Overlay.IsAvailable || !X11Overlay.IsCompositing))
             {
                 Log.Debug("CornerGif: no composited click-through overlay on this platform, so no corner GIF");
@@ -275,7 +285,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 index == SessionSlot ? 0 : CornerGifPlanner.CountEarlierSlotsInCorner(CoreSettings.Current.CornerGifOverlays, index, setting.Position));
             if (place is not { } p)
             {
-                Log.Warning("CornerGif: unreadable or degenerate GIF {W}x{H} ({Path}) for slot {Index} - skipping overlay", srcW, srcH, path, index);
+                Log.Warning("CornerGif: unreadable or degenerate GIF {W}x{H} ({Path}) for slot {Index} - skipping overlay", srcW, srcH, CornerGifPlanner.LogWhere(path), index);
                 return;
             }
             var bounds = new PixelRect(screen.Bounds.X + (int)Math.Round(p.Left * scale), screen.Bounds.Y + (int)Math.Round(p.Top * scale),
@@ -291,7 +301,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var (frames, delay) = await Task.Run(() => SpiralOverlay.Decode(path, Math.Max(bounds.Width, bounds.Height)));
             if (Seq.GetValueOrDefault(index) != seq || frames.Count == 0)
             {
-                if (frames.Count == 0) Log.Warning("CornerGif: no frames decoded from {Path}", path);
+                if (frames.Count == 0) Log.Warning("CornerGif: no frames decoded from {Path}", CornerGifPlanner.LogWhere(path));
                 foreach (var f in frames) f.Dispose();
                 if (Seq.GetValueOrDefault(index) == seq) { Decoding.Remove(index); SyncSentinel(); }
                 return;
@@ -327,7 +337,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 shown.Timer.Start();
             }
             SyncSentinel();
-            Log.Information("CornerGif: overlay {Index} shown ({Path}, {W}x{H}px, {Opacity:P0})", index, path, bounds.Width, bounds.Height, opacity);
+            Log.Information("CornerGif: overlay {Index} shown ({Path}, {W}x{H}px, {Opacity:P0})", index, CornerGifPlanner.LogWhere(path), bounds.Width, bounds.Height, opacity);
         }
 
         /// <summary>One animation frame. Allocation-free.</summary>

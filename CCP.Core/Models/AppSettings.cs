@@ -131,6 +131,18 @@ namespace ConditioningControlPanel.Models
     }
 
     /// <summary>
+    /// Settings ▸ Performance ▸ Lighter effects (Avalonia head only; WPF has no software tier).
+    /// Auto = take WPF's Performance-mode FX tier when Skia draws on the CPU (no GPU: WSLg, VMs, old
+    /// laptops); On = always take it; Off = never. The ordinal is the combo's item index: never reorder.
+    /// </summary>
+    public enum LighterEffectsMode
+    {
+        Auto,
+        On,
+        Off
+    }
+
+    /// <summary>
     /// Studio › Wallpaper mode. Static = the composed still-image collage; Dynamic = the same collage
     /// with its gifs moving, live behind the desktop icons (not in performance mode); OwnImage = one
     /// picture the user picked. Only one runs.
@@ -5372,6 +5384,15 @@ namespace ConditioningControlPanel.Models
             set { _pinkFilterColor = value ?? ""; OnPropertyChanged(); }
         }
 
+        // ccp-bugs #1546: draw the tint UNDER spirals, subliminals, bubbles and bouncing text so it
+        // stops washing them out. Off = today's order (tint over every session effect). Compositor only.
+        private bool _pinkFilterUnderEffects = false;
+        public bool PinkFilterUnderEffects
+        {
+            get => _pinkFilterUnderEffects;
+            set { _pinkFilterUnderEffects = value; OnPropertyChanged(); }
+        }
+
         #endregion
 
         #region Attention Game
@@ -5568,6 +5589,19 @@ namespace ConditioningControlPanel.Models
         {
             get => _autoPerformanceMode;
             set { _autoPerformanceMode = value; OnPropertyChanged(); }
+        }
+
+        private LighterEffectsMode _lighterEffects = LighterEffectsMode.Auto;
+        /// <summary>
+        /// Avalonia head only (CCP.Avalonia Platform/SoftwareRender.cs): whether the lighter FX tier for
+        /// machines without a GPU applies. Auto follows the renderer probe; On forces it; Off never applies it.
+        /// The WPF head ignores it.
+        /// </summary>
+        [JsonProperty("LighterEffects")]
+        public LighterEffectsMode LighterEffects
+        {
+            get => _lighterEffects;
+            set { _lighterEffects = value; OnPropertyChanged(); }
         }
 
         private MotionLevel _motionLevel = MotionLevel.Full;
@@ -6189,7 +6223,7 @@ namespace ConditioningControlPanel.Models
         /// <summary>
         /// ccp-bugs #1468: false (default) keeps the idle-timer lines quiet while neither the engine
         /// nor a session runs; the bubble and text still show. True speaks them as before. Lines that
-        /// answer a player action are never affected. Rule: Services.Companion.CompanionIdleVoice.
+        /// answer a player action are never affected. Rule: Services.Companion.CompanionVoicePolicy.
         /// </summary>
         [JsonProperty]
         public bool CompanionSpeaksIdleWhenEngineOff

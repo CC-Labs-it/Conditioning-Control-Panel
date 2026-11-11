@@ -13,6 +13,7 @@
 // Banner, countdown, event audio and diagnostic Test are wired. Force Start is a collapsed WPF
 // debug control. Voice/PTT/wake word: MainShellWindow.VoiceCommands.cs.
 using System;
+using ConditioningControlPanel.Services.Autonomy;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Services.Companion;
 using Avalonia.Controls;
@@ -89,7 +90,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _avatarTubeWindow?.GigglePriority(phrase, audio != null, aiGenerated: false, phraseAudioPath: audio);
             });
             Closed += (_, _) => { CancelAutonomyPulses(); Autonomy.Stop(); TakeoverAnnouncerOverlay.CloseActive(); _takeoverQuestTick?.Stop(); StopVoiceInput(); };
-            Opened += (_, _) => { ResumeAutonomyOnStartup(); RefreshVoiceInputModes(); };
+            OnceOpened(ResumeAutonomyOnStartup);
+            Opened += (_, _) => RefreshVoiceInputModes();
         }
 
         private bool CanPerformAutonomy(AutonomyActionType a) => a switch
@@ -142,7 +144,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 case AutonomyActionType.PinkFilterPulse: PulsePinkFilter(); break;
                 // WPF: TriggerGame(forceTest: true) - runs with the engine stopped and the card off.
                 case AutonomyActionType.BubbleCount: CoreEngine.BubbleCount?.Trigger(forceTest: true); break;
-                case AutonomyActionType.Comment: MakeAutonomyComment(); break;
+                case AutonomyActionType.Comment: _ = MakeAutonomyCommentAsync(); break;
                 // WPF #1458's "switched off during the announcement" recheck is AutonomyScheduler.Run's.
                 case AutonomyActionType.MindWipe: CoreMindWipe.TriggerOnce(); break;
                 case AutonomyActionType.SpokenMantra: _ = RequestVoiceCommandAsync(allowCommands: false); break;
@@ -178,7 +180,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (cancelled || s.PinkFilterOpacity == _pinkAppliedOpacity)
                 s.PinkFilterOpacity = _pinkBaseOpacity;
             PinkFilterOverlay.PulseHold = false;
-            PinkFilterOverlay.Refresh(this);
+            // WPF AutonomyService.cs:574,1604: give an idle pulse's overlay service back.
+            if (!CoreEngine.IsRunning) { SpiralOverlay.Stop(); PinkFilterOverlay.Stop(); }
+            else PinkFilterOverlay.Refresh(this);
         }
 
         private static readonly string[] CommentPhrases =
@@ -189,7 +193,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF MakeComment / MakeAICommentAsync: AI through GigglePriority, a preset through
         /// the low-priority Giggle (dropped under an AI request or bubble).</summary>
-        private async void MakeAutonomyComment()
+        internal async Task MakeAutonomyCommentAsync()
         {
             var tube = _avatarTubeWindow;
             if (tube == null) return;
@@ -197,16 +201,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 try
                 {
-                    var r = await App.Ai.GetBambiReplyExAsync("Say something random and teasing to get attention. Be playful.");
+                    if (ConditioningControlPanel.Services.AIService.BrainAdapter.ShouldRouteAmbient(App.Brain,
+                        ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.IsEnabled, App.Ai.IsAvailable, null))
+                    {
+                        var line = await ConditioningControlPanel.Services.AIService.BrainAdapter.ReactAsync(App.Brain!,
+                            ConditioningControlPanel.Services.AIService.FrameFormatter.TakeoverCommentEvent());
+                        ShowAutonomyComment(line, true);
+                        return;
+                    }
+                    var r = await App.Ai.GetBambiReplyExAsync(TakeoverComment.Prompt);
                     // Refusals are dropped silently on this surface (WPF R2-NEW-H-1).
-                    if (r.Refusal == null && !string.IsNullOrEmpty(r.Text) && Autonomy.IsEnabled)
-                        _avatarTubeWindow?.GigglePriority(r.Text, false, aiGenerated: r.IsAiGenerated);
+                    if (r.Refusal == null) ShowAutonomyComment(r.Text, r.IsAiGenerated);
                 }
                 catch (Exception ex) { Log.Warning("Autonomy: AI comment failed: {Error}", ex.Message); }
                 return;
             }
             var phrase = CommentPhrases[Random.Shared.Next(CommentPhrases.Length)];
             tube.Giggle(ConditioningControlPanel.Localization.VocabTokens.Apply(phrase));
+        }
+
+        private string? _lastAICommentLine;
+        private void ShowAutonomyComment(string? text, bool aiGenerated)
+        {
+            if (!Autonomy.IsEnabled || string.IsNullOrWhiteSpace(text)
+                || TakeoverComment.IsRepeat(_lastAICommentLine, text)) return;
+            _lastAICommentLine = text;
+            _avatarTubeWindow?.GigglePriority(text, false, aiGenerated: aiGenerated);
         }
 
         /// <summary>The 30 s pulse clock; tests step it by hand.</summary>
