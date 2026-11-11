@@ -1354,8 +1354,10 @@ GStreamer's registry scan). The panel and the startup toast say to restart CCP a
 to another element; bundling libgstautodetect ties us to the host's GStreamer; turning off WebAudio/media in WebKit settings
 would make <code>new AudioContext()</code> throw in our pages and stop video.</li>
 <li>Wayland: Avalonia is pinned to X11 (XWayland), and the GTK adapter's <code>ForceX11GdkBackend</code> (default true) forces GDK_BACKEND=x11
-around GTK init. Untested: NVIDIA's proprietary driver is widely reported to give blank WebKitGTK views; <code>WEBKIT_DISABLE_DMABUF_RENDERER=1</code>
-is the user-side switch. Fractional/HiDPI scale between GTK and Avalonia is not measured.</li>
+around GTK init. NVIDIA (live-safety S18, RTX 4080, WebKitGTK 2.54.2): blank views, "Failed to create GBM buffer", until
+<code>WEBKIT_DISABLE_DMABUF_RENDERER=1</code>. The launcher and <code>Program.Main</code> (libc <code>setenv</code>: .NET's own copy is invisible to WebKit)
+set it when <code>/proc/driver/nvidia/version</code> or <code>/sys/module/nvidia</code> exists and the user has not set it (<code>LinuxWebKitEnv</code>).
+Not unconditional: with it WebKit turns off GPU acceleration for every web view, which the WebGL pages would pay for on Mesa. Fractional/HiDPI scale between GTK and Avalonia is not measured.</li>
 <li>Residuals: airspace (Avalonia popups under the X11 child), a shutdown-only SIGABRT seen once, and Avalonia 12.1 surfaces no
 web-process-terminated event, so a future web-process crash would again freeze a page silently.</li>
 <li>Follow-up: drop the WPE <code>LinuxDependencies</code> entry, <code>linux_dep_wpe_unavailable</code> and the Flatpak WPE line once WPEPlatform lands or WPE is retired.</li>
