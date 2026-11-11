@@ -1,5 +1,12 @@
 using System;
 using System.Net;
+using System.Net.Http;
+using System.Threading;
+using Avalonia.Threading;
+using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Services.Companion;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -7,6 +14,58 @@ namespace CCP.Avalonia.Tests;
 
 public sealed partial class AccountSeedTests
 {
+    private sealed class RainReceiptWire : HttpMessageHandler
+    {
+        internal int Calls;
+        internal bool HeldAtRequest;
+        internal HttpMethod? Method;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+        {
+            Calls++;
+            Method = request.Method;
+            HeldAtRequest = PrizeOwnership.Held("cos.rain.dress.rose-flare");
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Sync_receipt_queues_one_pull_after_any_snapshot(bool snapshot)
+        => WithFreshInstall(() => AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            var (wire, sync, _) = SignIn("u1", null);
+            var s = CoreSettings.Current;
+            var saved = (s.RainLook, s.RainLookPushOwed, s.RainLookAgreedUtc);
+            var client = RainLookSyncHead.Client;
+            using var rain = new RainReceiptWire();
+            using var http = new HttpClient(rain);
+            try
+            {
+                PrizeOwnership.ResetHeld(); RainLookSyncHead.Stop();
+                s.RainLook = ""; s.RainLookPushOwed = false; s.RainLookAgreedUtc = null;
+                RainLookSyncHead.Client = new RainLookSync(http, RainLookSyncHead.AppHooks);
+                wire.SyncReply = snapshot ? "{\"success\":true,\"prizes\":{\"revision\":7,\"grants\":[\"cos.rain.dress.rose-flare\"]}}" : "{\"success\":true}";
+                sync.PrizesReceived = RainLookSyncHead.ApplySyncPrizes;
+                sync.MarkLoaded(Array.Empty<string>());
+                Assert.True(await sync.PushAsync("receipt"));
+                await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+                Assert.Equal(1, rain.Calls);
+                Assert.Equal(HttpMethod.Get, rain.Method);
+                Assert.Equal(snapshot, rain.HeldAtRequest);
+                Assert.Equal(snapshot, PrizeOwnership.HasSnapshot("u1"));
+                sync.UtcNow = () => T0.AddMinutes(2);
+                Assert.True(await sync.PushAsync("receipt again"));
+                await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+                Assert.Equal(1, rain.Calls);
+            }
+            finally
+            {
+                RainLookSyncHead.Stop(); RainLookSyncHead.Client = client; PrizeOwnership.ResetHeld();
+                (s.RainLook, s.RainLookPushOwed, s.RainLookAgreedUtc) = saved;
+            }
+        }));
+
     [Theory]
     [InlineData(true, HttpStatusCode.OK, 1)]
     [InlineData(false, HttpStatusCode.OK, 1)]

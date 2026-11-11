@@ -127,7 +127,6 @@ public sealed class RainLookSyncHeadTests : IDisposable
             RainLookSyncHead.ApplyPrizes("rain-test", "other", prizes, "test");
             RainLookSyncHead.ApplyPrizes("other", "other", prizes, "test");
             RainLookSyncHead.ApplyPrizes(null, null, prizes, "test");
-            RainLookSyncHead.ApplySyncPrizes("rain-test", null);
             await Drain();
             Assert.Equal(0, http.Calls);
             RainLookSyncHead.ApplyPrizes("rain-test", "rain-test", prizes, "test");

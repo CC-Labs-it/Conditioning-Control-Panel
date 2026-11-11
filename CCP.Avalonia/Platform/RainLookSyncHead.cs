@@ -85,7 +85,7 @@ internal static class RainLookSyncHead
         }
     }
 
-    internal static void ApplySyncPrizes(string account, PrizesBlock? prizes) => ApplyPrizes(account, account, prizes, "V2 sync", queueReady: false);
+    internal static void ApplySyncPrizes(string account, PrizesBlock? prizes) => ApplyPrizes(account, account, prizes, "V2 sync");
 
     internal static void ApplyPrizes(string? requested, string? answered, PrizesBlock? prizes, string source, bool queueReady = true)
     {
