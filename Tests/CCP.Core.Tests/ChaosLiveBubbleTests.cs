@@ -260,4 +260,14 @@ public class ChaosLiveBubbleTests
         b.FuseRemainingMs = 1300;
         Assert.Equal(0, b.DangerFactor);
     }
+
+    [Theory, InlineData(false), InlineData(true)] // WPF BubbleService.cs:3340 top minus size, :4095 bottom plus 50, :4212 a live detonates
+    public void RainDown_falls_from_above_the_top_and_escapes_below_the_bottom(bool live)
+    {
+        var b = AmbientBubble.SpawnChaos(new Random(3), 0, 0, 0, 1920, 1080, 1, new EffectBubbleSpec { SizePx = 150, Motion = ChaosMotion.RainDown, IsLive = live, FuseMs = 600_000 });
+        Assert.Equal(-b.Size, b.Y);
+        var r = AmbientBubble.Result.Alive;
+        while (r == AmbientBubble.Result.Alive && b.Y < 5000) r = b.Step();
+        Assert.Equal((live ? AmbientBubble.Result.Detonated : AmbientBubble.Result.Missed, true), (r, b.Y > 1080 + 50));
+    }
 }

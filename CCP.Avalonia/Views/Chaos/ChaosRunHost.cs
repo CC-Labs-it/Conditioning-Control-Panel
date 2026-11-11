@@ -39,16 +39,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// <para>ponytail: still NOT here: darters, the Brittle,
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
     /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns treats and plain live variants; every
-    /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
+    /// motion but FloatUp/RainDown, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
     /// milestones, lessons/first-times, the announcer and the achievement credit; slow-mo,
     /// the perf backoff on the cadence; the payload firer is a logging no-op; the
     /// pop text is the <see cref="PopText"/> hook (chaos-pop-text lane). The wave draft and lesson handoff are wired;
     /// chaos barks (run started/completed, gold-first, defuse/detonate) still need their callers
     /// wired to CoreBark (chaos-payout-barks). NO FOCUS TO DEFUSE, last breath and UNLEASHED
     /// announcer callers remain missing even though the announcer overlay is now present.
-    /// The FX window drives heat tint; colour pulse and screen shake calls retain WPF's values
-    /// through the unseeded <see cref="PulseFx"/>/<see cref="ShakeFx"/> hooks
-    /// (chaos-payout-fallin-d). The freeze pickup's aura and shudder are drawn by BubbleOverlay.
+    /// The FX window drives heat tint and colour pulses; screen shake keeps WPF's values via the unseeded <see cref="ShakeFx"/> hook
+    /// (chaos-payout-fallin-d). The freeze pickup's FreezeBurst, edge hold, aura and shudder are wired.
     /// The hold and the Snap Chain window run on wall time (<c>BubbleOverlay.Field.Clock</c>),
     /// as WPF does (:4531, ChaosModeService :2000).</para>
     ///
@@ -443,12 +442,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _draftPaused = true;
             _spawnTimer?.Stop();
             ChaosWaveTimerWindow.Clear();
-            BubbleOverlay.Field.Bubbles.RemoveAll(b => b.Spec != null);
+            BubbleOverlay.ClearField();
             // WPF ChaosModeService.cs:1465-1467; Pulse retains the colour-flash gate (:1672).
             ChaosOverlayWindow.ChaosSfx.PlayWaveClear();
             Pulse(Color.FromRgb(150, 200, 255), 0.30);
             _pendingWave = newWave;
-            ShowDraft();
+            _overlay?.ShowBoonDraft(_state.WaveIndex, DraftOptions(), OnBoonChosen,
+                _state.Config.DraftAutoResumeSec, _state.RerollsLeft, RerollDraft);
         }
 
         private static List<ChaosBoon> DraftOptions()
@@ -461,9 +461,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             return options;
         }
 
-        private static void ShowDraft() => _overlay?.ShowBoonDraft(_state!.WaveIndex, DraftOptions(),
-            OnBoonChosen, _state.Config.DraftAutoResumeSec, _state.RerollsLeft, RerollDraft);
-
         // WPF ChaosModeService.cs:1516-1526.
         private static (List<ChaosBoon> options, int rerollsLeft)? RerollDraft()
         {
@@ -475,7 +472,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         // WPF ChaosModeService.cs:1529-1611; the overlay owns click/timeout selection.
         private static void OnBoonChosen(ChaosBoon? boon)
         {
-            if (!_active || !_draftPaused || _state == null) return;
+            if (!_active || !_spawning || !_draftPaused || _state == null) return;
             if (boon == null)
             {
                 _state.Shields++;
@@ -522,6 +519,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _lessonCardPaused = true;
                 _lessonCardsAfterDraft = true;
                 BubbleOverlay.HoldChaos(true);
+                ChaosOverlayWindow.ChaosSfx.Play("ui_unlock", 0.55f); // WPF :1609
                 foreach (var card in PendingLessonCards)
                     ChaosUnlockCardOverlay.Show(card, ResumeAfterLessonCard, autoDismiss: false);
                 PendingLessonCards.Clear();
@@ -535,10 +533,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void AfterDraft()
         {
             if (_state?.WelcomeShowerEnabled == true)
+            {
                 for (int i = 0; i < 6; i++)
                     BubbleOverlay.SpawnChaos(ChaosBubbleVariants.Build(ChaosBubbleVariants.All[Rng.Next(2)],
                         _state.RunIntensity, _state.FuseTimeMult, ChaosMotion.RainDown,
                         _state.Config.EffectIntensity, _state.BubbleScale));
+                BubbleOverlay.PlayChime(0.25f); // WPF :1658
+            }
             AnnounceFinalLoopIfEntering();
         }
 
@@ -718,6 +719,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // WPF :3211: final-loop + end-of-descent lessons (a quit didn't run the full course).
             ChaosRunLessons.OnRunCompleted(_state.Shields, _state.Config.Difficulty, ranFullCourse);
             _spawning = false;
+            _overlay?.CancelDraft();
             _runTimer?.Stop();
             EndField();
             StopToys();
