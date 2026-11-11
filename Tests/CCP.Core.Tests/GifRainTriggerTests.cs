@@ -72,4 +72,33 @@ public class GifRainTriggerTests
         Assert.Empty(field.Bubbles);
     }
 
+    /// <summary>WPF BubbleService.cs:4229: the treat breathes faster over its last 1500 ms.</summary>
+    [Fact]
+    public void Gif_rain_telegraphs_its_last_one_and_a_half_seconds()
+    {
+        var variant = System.Linq.Enumerable.First(ChaosBubbleVariants.All, v => v.Id == "htlink");
+        var bubble = AmbientBubble.SpawnChaos(new System.Random(1), 0, 0, 0, 1920, 100000, 1,
+            ChaosBubbleVariants.Build(variant, intensity: 0.3, ambient: true));
+        for (int i = 0; i < 171; i++) bubble.Step(false, 0, 0, System.DateTime.UtcNow);
+        Assert.Equal(0, bubble.DangerFactor);   // 1528 ms left
+        bubble.Step(false, 0, 0, System.DateTime.UtcNow);
+        Assert.InRange(bubble.DangerFactor, 0.001, 0.01);   // 1496 ms left
+        for (int i = 0; i < 46; i++) bubble.Step(false, 0, 0, System.DateTime.UtcNow);
+        Assert.InRange(bubble.DangerFactor, 0.98, 0.99);   // 24 ms left
+    }
+
+    /// <summary>WPF BubbleService.cs:1242 counts live benign treats only: live chaos bubbles and
+    /// popping ones do not hold the four-trigger ceiling.</summary>
+    [Fact]
+    public void Trigger_ceiling_ignores_live_chaos_and_popping_bubbles()
+    {
+        var s = new AppSettings { BubbleTriggersEnabled = true, BubbleTriggerChance = 100,
+            BubbleTriggerVariants = new List<string> { "htlink" } };
+        var field = new AmbientBubbleField();
+        for (int i = 0; i < 4; i++) field.Bubbles.Add(new AmbientBubble { Spec = new EffectBubbleSpec { IsLive = true } });
+        for (int i = 0; i < 4; i++) field.Bubbles.Add(new AmbientBubble { Spec = new EffectBubbleSpec(), Popping = true });
+        EffectBubbleSpec? spec = null;
+        for (int i = 0; i < 100 && spec == null; i++) spec = field.RollGifRain(s);
+        Assert.NotNull(spec);
+    }
 }

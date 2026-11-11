@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
@@ -141,6 +142,43 @@ public sealed class BubbleOverlayTests
                 Assert.Same(BubbleOverlay.Image, BubbleOverlay.SpriteFor(rain));
             }
             finally { BubbleOverlay.Image = oldImage; BubbleOverlay.GifRainImage = oldRainImage; }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>A dashboard Gif Rain is not part of a Chaos run: the run neither counts nor clears it.</summary>
+    [Fact]
+    public async Task Chaos_run_counts_and_clears_only_its_own_bubbles()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var saved = BubbleOverlay.Field.Bubbles.ToArray();
+            var held = BubbleOverlay.Field.HoldChaos;
+            var trigger = new AmbientBubble { Spec = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec
+                { VariantId = "htlink", Payload = new ConditioningControlPanel.Services.Chaos.GifCascadePayload { Ambient = true } } };
+            var run = new AmbientBubble { Spec = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec
+                { VariantId = "htlink", Payload = new ConditioningControlPanel.Services.Chaos.GifCascadePayload() } };
+            try
+            {
+                BubbleOverlay.Field.Bubbles.Clear();
+                BubbleOverlay.Field.Bubbles.Add(trigger);
+                BubbleOverlay.Field.Bubbles.Add(run);
+                BubbleOverlay.Field.Bubbles.Add(new AmbientBubble());
+                Assert.Equal(1, BubbleOverlay.ChaosCount);
+                BubbleOverlay.EndChaos();
+                Assert.Equal(2, BubbleOverlay.Field.Bubbles.Count);
+                Assert.Contains(trigger, BubbleOverlay.Field.Bubbles);
+                Assert.DoesNotContain(run, BubbleOverlay.Field.Bubbles);
+                // Stopping the ambient game mid-run drops the plain and trigger bubbles, keeps the run's.
+                Assert.False(trigger.IsRunBubble);
+                Assert.True(run.IsRunBubble);
+            }
+            finally
+            {
+                BubbleOverlay.Field.Bubbles.Clear();
+                BubbleOverlay.Field.Bubbles.AddRange(saved);
+                BubbleOverlay.Field.HoldChaos = held;
+            }
             return Task.CompletedTask;
         });
     }

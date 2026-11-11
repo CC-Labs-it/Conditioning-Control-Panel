@@ -61,6 +61,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>A Chaos run's bubble (WPF Bubble with a spec); null for a plain ambient one.</summary>
         public Chaos.EffectBubbleSpec? Spec;
         public bool IsAmbientTrigger => Spec?.Payload?.Ambient == true;
+        /// <summary>A Chaos run's own bubble: the run pauses, counts and clears these, never a dashboard trigger.</summary>
+        public bool IsRunBubble => Spec != null && !IsAmbientTrigger;
         private double _startX, _top, _speed, _wobbleOffset, _timeAlive;
         private int _animType;
 
@@ -183,6 +185,8 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>WPF DANGER_TELEGRAPH_MS: the last stretch of a live fuse breathes faster and deeper.</summary>
         public const double DangerTelegraphMs = 1200;
+        /// <summary>WPF TREAT_FADE_TELEGRAPH_MS (BubbleService.cs:2592).</summary>
+        public const double TreatTelegraphMs = 1500;
 
         /// <summary>WPF _dangerFactor (BubbleService.cs:4155): 0 until the last DangerTelegraphMs of a
         /// live fuse, then ramps to 1 at fuse-out. Visual only.</summary>
@@ -190,6 +194,9 @@ namespace ConditioningControlPanel.Services
         {
             get
             {
+                // WPF :4229: an ambient treat breathes faster over its last TreatTelegraphMs.
+                if (IsAmbientTrigger && !Popping)
+                    return _treatLifeRemainingMs < TreatTelegraphMs ? Math.Clamp(1.0 - _treatLifeRemainingMs / TreatTelegraphMs, 0, 1) : 0;
                 if (Spec is not { IsLive: true } || FuseTotalMs <= 0) return 0;
                 double dangerMs = Math.Min(FuseTotalMs, DangerTelegraphMs);
                 return FuseRemainingMs < dangerMs ? Math.Clamp(1.0 - FuseRemainingMs / Math.Max(1, dangerMs), 0, 1) : 0;
@@ -344,7 +351,8 @@ namespace ConditioningControlPanel.Services
             var ids = s.BubbleTriggerVariants.Where(id => id != MagnetBubble.VariantId).ToArray();
             if (ids.Length == 0 || Random.Next(100) >= Math.Clamp(s.BubbleTriggerChance, 0, 100)) return null;
             if (ids[Random.Next(ids.Length)] != "htlink") return null;
-            if (Bubbles.Count(b => b.Spec != null) >= 4) return null;
+            // WPF :1242 counts live benign treats (IsAmbientTriggerBubble || IsAmbientEffectBubble), not live chaos bubbles.
+            if (Bubbles.Count(b => !b.Popping && b.Spec is { IsLive: false, IsDarter: false, IsFreeze: false }) >= 4) return null;
             var variant = ChaosBubbleVariants.All.First(v => v.Id == "htlink");
             var spec = ChaosBubbleVariants.Build(variant, intensity: 0.3, ambient: true);
             spec.Payload!.DurationMult = 2.5;
@@ -387,7 +395,7 @@ namespace ConditioningControlPanel.Services
             {
                 if (i >= Bubbles.Count) continue;   // a callback cleared the field
                 var b = Bubbles[i];
-                if (HoldChaos && b.Spec != null && !b.IsAmbientTrigger && !b.Popping) { b.CancelChannel(); continue; }
+                if (HoldChaos && b.IsRunBubble && !b.Popping) { b.CancelChannel(); continue; }
                 var r = b.Step(Held, CursorX, CursorY, now);
                 if (r == AmbientBubble.Result.Alive) continue;
                 if (r == AmbientBubble.Result.Detonated) { ChaosDetonated?.Invoke(b); continue; }

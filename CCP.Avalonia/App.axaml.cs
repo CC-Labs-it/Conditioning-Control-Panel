@@ -422,7 +422,7 @@ namespace ConditioningControlPanel.Avalonia
         /// (tests, PanicCheck, VideoCheck) starts synchronously without one, as before.</summary>
         internal static bool SplashOnStartup;
 
-        internal static double GifRainDuration => Services.Chaos.GifCascade.PayloadDurationSec * Services.Chaos.EffectPayload.GlobalDurationMult;
+        internal static double GifRainDuration => Services.Chaos.GifCascadePayload.DURATION_SEC * Services.Chaos.EffectPayload.GlobalDurationMult;
 
         public override void OnFrameworkInitializationCompleted()
         {
@@ -526,9 +526,9 @@ namespace ConditioningControlPanel.Avalonia
                 {
                     if (p is Services.Chaos.GifCascadePayload)
                         Views.Chaos.ChaosGifCascadeOverlay.Show(
-                            Services.Chaos.GifCascade.PayloadSpawnRatePerSec, GifRainDuration,
-                            Services.Chaos.GifCascade.PayloadGifSize, Services.Chaos.GifCascade.PayloadFallSpeed,
-                            Services.Chaos.GifCascade.PayloadOpacity, Services.Chaos.GifCascade.PayloadStartScale);
+                            Services.Chaos.GifCascadePayload.SPAWN_RATE_PER_SEC, GifRainDuration,
+                            Services.Chaos.GifCascadePayload.GIF_SIZE, Services.Chaos.GifCascadePayload.FALL_SPEED,
+                            Services.Chaos.GifCascadePayload.OPACITY, Services.Chaos.GifCascadePayload.START_SCALE);
                     else Serilog.Log.Information("Chaos payload {Payload} not fired: no effect runner on this head yet", p.DisplayName);
                 };
                 LocalizationManager.Instance.SetLanguage(Settings.Current.Language);
