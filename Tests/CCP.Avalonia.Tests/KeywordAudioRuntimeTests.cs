@@ -62,6 +62,42 @@ public sealed class KeywordAudioRuntimeTests
         }
     });
 
+    [Fact] // WPF BarkService.cs:1942,1978; KeywordTriggerService.cs:92-102
+    public void SpokenBarkMutesItsExactLineForEightSeconds() => Run((_, s, played) =>
+    {
+        var saved = (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessLoopProtectionEnabled,
+            s.AvatarEnabled, s.BarkChatSuppressionMs, KeywordTriggerHead.Engine.Now);
+        var clock = new DateTime(2026, 10, 14, 12, 0, 0);
+        var engine = KeywordTriggerHead.Engine;
+        try
+        {
+            s.ScreenOcrEnabled = true; s.OcrConfirmationScans = 1; s.OcrHighlightAll = true;
+            s.AwarenessLoopProtectionEnabled = false; s.AvatarEnabled = true; s.BarkChatSuppressionMs = 0;
+            engine.Now = () => clock; engine.Start();
+            var rule = new ConditioningControlPanel.Services.Bark.BarkRule { Id = "echo", Trigger = "T",
+                VariantPool = [new ConditioningControlPanel.Services.Bark.BarkVariant("sit")] };
+            var bark = new ConditioningControlPanel.Services.Bark.BarkEngine(
+                () => new ConditioningControlPanel.Services.Bark.BarkRuleSet([rule]), new Random(7)) { Speak = _ => { } };
+            BarkHead.AttachEcho(bark); bark.Start();
+            Assert.True(bark.Raise("T"));
+            var words = new[] { new ScreenOcrService.Word("sit", new System.Drawing.Rectangle(0, 0, 20, 10)) };
+            var fired = 0; engine.TriggerFired += OnFire;
+            void OnFire(KeywordTrigger _) => fired++;
+            try
+            {
+                engine.CheckOcrWords(words); Assert.Equal(0, fired);
+                clock = clock.AddSeconds(7.999); engine.CheckOcrWords(words); Assert.Equal(0, fired);
+                clock = new DateTime(2026, 10, 14, 12, 0, 8); engine.CheckOcrWords(words); Assert.Equal(1, fired);
+            }
+            finally { engine.TriggerFired -= OnFire; }
+        }
+        finally
+        {
+            (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessLoopProtectionEnabled,
+                s.AvatarEnabled, s.BarkChatSuppressionMs, engine.Now) = saved;
+        }
+    });
+
     [Fact] // WPF KeywordTriggerService.cs:193-200,712-739,842-862,913-943
     public void OcrRequiresConsecutivePositionsKeepsThemThroughALapseAndStopAndClearsOnScopeLoss() => Run((engine, s, played) =>
     {

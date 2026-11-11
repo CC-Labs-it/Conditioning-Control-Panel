@@ -22,6 +22,7 @@ internal static class BarkHead
         if (Engine != null) return;
         var e = Engine = new BarkEngine();
         Seed(e);
+        AttachEcho(e);
         e.Start();
         App.Brain?.AttachBarkSource(h => e.BarkSpoken += h, h => e.BarkSpoken -= h);   // App.xaml.cs:2826, the echo
         // The two WireSubscriptions the engine's own state needs: chat suppression (:806) and, on a mod switch,
@@ -36,6 +37,9 @@ internal static class BarkHead
             };
     }
 
+    internal static void AttachEcho(BarkEngine e) => e.BarkSpoken += OnBarkSpoken;
+    private static void OnBarkSpoken(BarkRule _, string line) => KeywordTriggerHead.Engine.MuteKeywordEcho(line, 8000);
+
     private static Action? _onUserMessage;
     private static EventHandler<ModPackage>? _onModChanged;
     private static ModService? _mods;
@@ -43,6 +47,7 @@ internal static class BarkHead
     /// <summary>Drops the engine and the two subscriptions Start made (tests; the seams are the caller's to restore).</summary>
     internal static void Stop()
     {
+        if (Engine != null) Engine.BarkSpoken -= OnBarkSpoken;
         App.UserMessageSent -= _onUserMessage;
         if (_mods != null) _mods.ModChanged -= _onModChanged;
         (_onUserMessage, _onModChanged, _mods, Engine) = (null, null, null, null);
