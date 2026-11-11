@@ -29,12 +29,15 @@ public sealed class BillboardAppProvidersTests
 {
     private static void Click(Control c) => c.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
-    [Fact]
-    public Task WaitingAndResumeCardsComeFromTheShellsServices() => AvaloniaTestDispatcher.RunAsync(async () =>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task WaitingAndResumeCardsComeFromTheShellsServices(bool hiddenDuringUpdate) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<AvApp>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .WithInterFont().With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var dir = Directory.CreateTempSubdirectory("ccp-billboard-providers-").FullName;
         var service = new SettingsService();
@@ -71,13 +74,30 @@ public sealed class BillboardAppProvidersTests
             Assert.Equal(string.Format(Loc.Get("billboard_card_quests_line"), 1, 3), quest.Line);
             Assert.DoesNotContain(board.Deck.Cards, c => c.Spec.Kind == BillboardCardKind.Event);
 
-            // A session ends: the log's LogReady marks the deck dirty (posted to the UI thread) and
-            // the next dot press rebuilds it with the Resume card.
+            var currentId = board.CurrentCard!.Spec.Id;
+            int chipsBefore = board.ChipButtons.Count;
+            Assert.DoesNotContain(board.Deck.Cards, c => c.Spec.Id == ResumeCards.CardSession);
+            board.IsVisible = !hiddenDuringUpdate;
+            Dispatcher.UIThread.RunJobs();
+
+            // LogReady reaches the real shell wiring. Visible decks refresh immediately; hidden
+            // decks retain their dots and dirty flag until they become visible again (WPF 58e0c8532).
             runner.SessionLog.BeginSession(new Session { Id = "gone-session", Name = "Gone Session" });
             runner.SessionLog.EndSession(false, TimeSpan.FromSeconds(5), 0);
             Dispatcher.UIThread.RunJobs();
-            Assert.True(board.Deck.IsDirty);
-            Click((Button)board.ChipButtons[1]);   // not the card on screen: that only pauses
+            if (hiddenDuringUpdate)
+            {
+                Assert.True(board.Deck.IsDirty);
+                Assert.DoesNotContain(board.Deck.Cards, c => c.Spec.Id == ResumeCards.CardSession);
+                Assert.Equal(chipsBefore, board.ChipButtons.Count);
+                board.IsVisible = true;
+                Dispatcher.UIThread.RunJobs();
+            }
+            Assert.False(board.Deck.IsDirty);
+            Assert.Equal(currentId, board.CurrentCard!.Spec.Id);
+            Assert.Equal(currentId, board.Deck.Current!.Spec.Id);
+            Assert.Equal(chipsBefore + 1, board.ChipButtons.Count);
+            Assert.Equal(board.Deck.Cards.Count, board.ChipButtons.Count);
             int at = board.Deck.Cards.ToList().FindIndex(c => c.Spec.Id == ResumeCards.CardSession);
             Assert.True(at >= 0, "the Resume card joins the deck");
             Click((Button)board.ChipButtons[at]);
@@ -109,7 +129,7 @@ public sealed class BillboardAppProvidersTests
         (Delegate?)typeof(WaitingSignals).GetField("InvitesChanged",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null);
 
-    /// <summary>The hold never moves on its own: the deck changes only when the test presses.</summary>
+    /// <summary>The hold never advances on its own; provider updates still use the real UI wiring.</summary>
     private sealed class FrozenClock : TimeProvider
     {
         public override long GetTimestamp() => 0;

@@ -388,13 +388,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             Log.Information("Awareness: page titles hidden again for every app");
         }
 
-        private static IReadOnlyList<string> Candidates(IEnumerable<string> listed)
+        // WPF Services/Awareness/AwarenessAppCandidates.cs:38-88. The trigger ring is
+        // not available on this head; the ledger sources do work even with triggers disabled.
+        internal static IReadOnlyList<string> Candidates(IEnumerable<string> listed)
         {
-            // WPF AwarenessAppCandidates.Gather source 1 (the window in front); the ledger and trigger
-            // ring sources do not exist on this head.
-            var current = AwarenessText.SanitizeRuleEntry(AvApp.WindowAwareness.CurrentServiceName);
-            return current == null || listed.Contains(current, StringComparer.OrdinalIgnoreCase)
-                ? Array.Empty<string>() : new[] { current };
+            var ordered = new List<string>();
+            void Add(Func<IEnumerable<string>> source)
+            {
+                try { ordered.AddRange(source()); }
+                catch (Exception ex) { Log.Debug("Awareness candidates: source unavailable ({E})", ex.Message); }
+            }
+            Add(() => new[] { AvApp.WindowAwareness.CurrentServiceName });
+            Add(() => AwarenessLive.Ledger?.RecentTransitions.Select(t => t.AppId) ?? Enumerable.Empty<string>());
+            Add(() => AwarenessLive.Ledger?.KnownAppIds ?? Enumerable.Empty<string>());
+
+            var skip = new HashSet<string>(listed.Select(AwarenessText.SanitizeRuleEntry)
+                .OfType<string>(), StringComparer.OrdinalIgnoreCase);
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            return ordered.Select(AwarenessText.SanitizeRuleEntry).OfType<string>()
+                .Where(clean => !skip.Contains(clean) && seen.Add(clean)).Take(40).ToArray();
         }
 
         private async Task<List<string>?> PickAsync(AwarenessListKind kind, IReadOnlyList<string> listed)

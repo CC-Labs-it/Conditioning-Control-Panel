@@ -40,6 +40,7 @@ public sealed class EngineAudioLifecycleTests
             var oldLayers = LayeredAudio.Instance;
             var oldAudio = LibVlcAudio.Instance;
             var oldHook = CoreEngine.StoppedHook;
+            var oldStartHook = CoreEngine.StartedHook;
             var opened = new List<Player>();
             var layers = LayeredAudio.Instance = new LayeredAudio((_, _) => { var p = new Player(); opened.Add(p); return p; });
             var audio = LibVlcAudio.Instance = new LibVlcAudio(_ => "[]");
@@ -54,6 +55,7 @@ public sealed class EngineAudioLifecycleTests
                 shell = new MainShellWindow();
                 shell.Show();
                 CoreEngine.StoppedHook = shell.OnEngineStopped;
+                CoreEngine.StartedHook = shell.OnEngineStarted;   // as App.axaml.cs:1162 wires it
                 shell.StartEngine();
                 Assert.True(CoreEngine.IsRunning);
                 Assert.Equal(audioOnly, layers.IsPlaying);
@@ -69,6 +71,7 @@ public sealed class EngineAudioLifecycleTests
             finally
             {
                 CoreEngine.StoppedHook = oldHook;
+                CoreEngine.StartedHook = oldStartHook;
                 CoreEngine.Stop();
                 shell?.Close();
                 layers.Dispose();
@@ -95,6 +98,7 @@ public sealed class EngineAudioLifecycleTests
             var file = Path.GetTempFileName();
             var oldLayers = LayeredAudio.Instance;
             var oldHook = CoreEngine.StoppedHook;
+            var oldStartHook = CoreEngine.StartedHook;
             var oldRunner = AvApp.Sessions;
             var opened = new List<Player>();
             var layers = LayeredAudio.Instance = new LayeredAudio((_, _) => { var p = new Player(); opened.Add(p); return p; });
@@ -110,6 +114,7 @@ public sealed class EngineAudioLifecycleTests
                 shell = new MainShellWindow();
                 shell.Show();
                 CoreEngine.StoppedHook = shell.OnEngineStopped;
+                CoreEngine.StartedHook = shell.OnEngineStarted;   // as App.axaml.cs:1162 wires it
                 if (alreadyRunning) shell.StartEngine();
                 shell.StartSession(new Session { Id = "audio_lifecycle", Name = "Audio", DurationMinutes = 10 });
                 Assert.True(runner.IsRunning);
@@ -124,6 +129,7 @@ public sealed class EngineAudioLifecycleTests
             {
                 runner.Stop();
                 CoreEngine.StoppedHook = oldHook;
+                CoreEngine.StartedHook = oldStartHook;
                 CoreEngine.Stop();
                 shell?.Close();
                 layers.Dispose();
@@ -152,6 +158,7 @@ public sealed class EngineAudioLifecycleTests
             var oldLayers = LayeredAudio.Instance;
             var oldAudio = LibVlcAudio.Instance;
             var oldHook = CoreEngine.StoppedHook;
+            var oldStartHook = CoreEngine.StartedHook;
             var player = new Player();
             var layers = LayeredAudio.Instance = new LayeredAudio((_, _) => player);
             var audio = LibVlcAudio.Instance = new LibVlcAudio(_ => "[]");
@@ -165,6 +172,7 @@ public sealed class EngineAudioLifecycleTests
                 shell = new MainShellWindow();
                 shell.Show();
                 CoreEngine.StoppedHook = shell.OnEngineStopped;
+                CoreEngine.StartedHook = shell.OnEngineStarted;   // as App.axaml.cs:1162 wires it
                 Assert.False(CoreEngine.IsRunning);
                 layers.Start(ignoreMasterToggle: true);
                 audio.Duck(80);
@@ -180,6 +188,7 @@ public sealed class EngineAudioLifecycleTests
             finally
             {
                 CoreEngine.StoppedHook = oldHook;
+                CoreEngine.StartedHook = oldStartHook;
                 CoreEngine.Stop();
                 shell?.Close();
                 layers.Dispose();

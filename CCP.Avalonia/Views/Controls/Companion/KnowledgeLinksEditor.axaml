@@ -1,0 +1,56 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:models="clr-namespace:ConditioningControlPanel.Models;assembly=CCP.Core"
+             x:Class="ConditioningControlPanel.Avalonia.Views.Controls.Companion.KnowledgeLinksEditor">
+    <!-- PORTED from ConditioningControlPanel/Views/Controls/Companion/KnowledgeLinksEditor.xaml:
+         the global knowledge base links ("Links it knows"). Hosted by Companion > Links (saves at
+         once). The Description DataTriggers become IsVisible on IsNotNullOrEmpty. -->
+    <UserControl.Resources>
+        <ControlTheme x:Key="KbButton" TargetType="Button">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="#33FFFFFF"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^:pointerover /template/ Border#Bd"><Setter Property="Background" Value="#55FF69B4"/></Style>
+            <Style Selector="^:pressed /template/ Border#Bd"><Setter Property="Background" Value="#77FF69B4"/></Style>
+        </ControlTheme>
+    </UserControl.Resources>
+    <StackPanel>
+        <Border Background="#1AFFFFFF" CornerRadius="6" Padding="8" Margin="0,0,0,8">
+            <Grid>
+                <ListBox x:Name="LstKnowledgeLinks" MinHeight="120" MaxHeight="320"
+                         Background="Transparent" BorderThickness="0"
+                         Foreground="White" FontSize="12" SelectionMode="Single"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="models:KnowledgeBaseLink">
+                            <StackPanel Margin="0,3">
+                                <TextBlock Text="{Binding Title}" Foreground="#FF69B4" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding Url}" Foreground="#909090" FontSize="10.5" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding Description}" Foreground="#B0B0C0" FontSize="11" TextWrapping="Wrap"
+                                           IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock x:Name="TxtKnowledgeLinksEmpty" Text="{loc:Str companion_page_links_known_empty}"
+                           Foreground="#909090" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Center"
+                           IsHitTestVisible="False"/>
+            </Grid>
+        </Border>
+        <StackPanel Orientation="Horizontal">
+            <Button x:Name="BtnAddKnowledgeLink" Theme="{StaticResource KbButton}"><TextBlock Text="{loc:Str btn_add_link}"/></Button>
+            <Button x:Name="BtnRemoveKnowledgeLink" Theme="{StaticResource KbButton}" Margin="8,0,0,0"><TextBlock Text="{loc:Str btn_remove_selected}"/></Button>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

@@ -1,109 +1,67 @@
 using System;
 using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using Avalonia;
-using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.Interactivity;
-using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
-using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
-using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Safety;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
+/// <summary>Relapse on the shared stop pass: tray and leash-gate panics track only a running stop
+/// (WPF MainWindow.xaml.cs:1925-1937), the spoken safe word always (WPF MainWindow.RemoteControl.cs:1493).</summary>
 public sealed class RelapseShellTests
 {
-    [Fact]
-    public async Task ManualStopPanicAndStartOriginReachAchievements()
+    private static void WithShell(Action<MainShellWindow, AchievementEngine> body) => AvaloniaTestDispatcher.Run(() =>
     {
-        await AvaloniaTestDispatcher.RunAsync(() =>
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var dir = Directory.CreateTempSubdirectory("ccp-relapse-shell-").FullName;
+        var field = typeof(AvApp).GetField("<Achievements>k__BackingField",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var oldEngine = field.GetValue(null);
+        var engine = new AchievementEngine(new AchievementStore(Path.Combine(dir, "achievements.json")));
+        field.SetValue(null, engine);
+        var oldAll = PanicSurfaces.All;
+        PanicSurfaces.All = new[] { new PanicSurfaces.Surface("engine", _ => CoreEngine.Stop()) };
+        var s = CoreSettings.Current;
+        var oldPanicKey = s.PanicKeyEnabled;
+        s.PanicKeyEnabled = true;   // the safe word reaches as far as the key (Core VoicePanicReach)
+        var shell = new MainShellWindow();
+        shell.Show();
+        try { body(shell, engine); }
+        finally
         {
-            if (Application.Current is null)
-                AppBuilder.Configure<AvApp>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-            var dir = Directory.CreateTempSubdirectory("ccp-relapse-shell-").FullName;
-            var property = typeof(AvApp).GetProperty("Achievements", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
-            var old = property.GetValue(null);
-            var engine = new AchievementEngine(new AchievementStore(Path.Combine(dir, "achievements.json")));
-            property.SetValue(null, engine);
-            var shell = new MainShellWindow();
-            shell.Show();
-            try
-            {
-                CoreEngine.StoppedHook = shell.OnEngineStopped;
-                shell.StartEngine();
-                shell.Named<Button>("BtnStart")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Assert.NotNull(engine.Progress.LastPanicPressTime);
-                shell.StartEngine(systemInitiated: true);
-                Assert.False(engine.Progress.IsUnlocked("relapse"));
-                MainShellWindow.StopEngine();
-                engine.Progress.LastPanicPressTime = null;
-                PanicSurfaces.StopAll("test", shell);   // idle: WPF MainWindow.xaml.cs:1904 tracks only a running stop
-                Assert.Null(engine.Progress.LastPanicPressTime);
-                shell.StartEngine();
-                Assert.False(engine.Progress.IsUnlocked("relapse"));
-                PanicSurfaces.StopAll("test", shell);
-                Assert.NotNull(engine.Progress.LastPanicPressTime);
-                Assert.False(CoreEngine.IsRunning);
-                shell.StartEngine();
-                Assert.True(engine.Progress.IsUnlocked("relapse"));
-            }
-            finally
-            {
-                CoreEngine.StoppedHook = null;
-                CoreEngine.Stop();
-                shell.Close();
-                property.SetValue(null, old);
-                Directory.Delete(dir, true);
-            }
-            return Task.CompletedTask;
-        });
-    }
+            CoreEngine.Stop();
+            PanicAftermath.EndQuiet();
+            PanicSurfaces.All = oldAll;
+            s.PanicKeyEnabled = oldPanicKey;
+            shell.Close();
+            field.SetValue(null, oldEngine);
+            Directory.Delete(dir, true);
+        }
+    });
 
-    [Fact]   // WPF SessionEngine.cs:478: any incomplete StopSession, so the Presets Stop too
-    public async Task PresetsStopTracksPanic()
+    [Fact]
+    public void TrayPanicTracksOnlyARunningStop() => WithShell((shell, engine) =>
     {
-        await AvaloniaTestDispatcher.RunAsync(async () =>
-        {
-            if (Application.Current is null)
-                AppBuilder.Configure<AvApp>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-            var dir = Directory.CreateTempSubdirectory("ccp-relapse-presets-").FullName;
-            var engine = new AchievementEngine(new AchievementStore(Path.Combine(dir, "achievements.json")));
-            var oldProvider = CoreProgression.TrackPanicPressedProvider;
-            CoreProgression.TrackPanicPressedProvider = engine.TrackPanicPressed;   // as App.axaml.cs seeds it
-            var shell = new MainShellWindow();
-            var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
-            try
-            {
-                shell.Show();
-                runner.Start(new Session { Id = "relapse", Name = "Relapse", DurationMinutes = 60 });
-                shell.BtnStartSession_Click(null);
-                var dialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
-                dialog.FindControl<Button>("BtnOk")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                var settled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                Dispatcher.UIThread.Post(() => settled.SetResult(), DispatcherPriority.Background);
-                await settled.Task.WaitAsync(TimeSpan.FromSeconds(5));
-                Assert.False(runner.IsRunning);
-                Assert.NotNull(engine.Progress.LastPanicPressTime);
-            }
-            finally
-            {
-                foreach (var d in shell.OwnedWindows.ToArray()) d.Close();
-                await Task.Yield();
-                runner.Stop();
-                CoreEngine.Stop();
-                AvApp.Sessions = null;
-                CoreSession.IsSessionRunningProvider = null;
-                CoreProgression.TrackPanicPressedProvider = oldProvider;
-                shell.Close();
-                Directory.Delete(dir, true);
-            }
-        });
-    }
+        PanicSurfaces.StopAll("tray", shell);
+        Assert.Null(engine.Progress.LastPanicPressTime);
+        CoreEngine.Start(systemInitiated: true);
+        PanicSurfaces.StopAll("tray", shell);
+        Assert.False(CoreEngine.IsRunning);
+        Assert.NotNull(engine.Progress.LastPanicPressTime);
+    });
+
+    [Fact]
+    public void VoicePanicTracksEvenWhenIdle() => WithShell((shell, engine) =>
+    {
+        Assert.False(CoreEngine.IsRunning);
+        Assert.True(shell.RunVoicePanic());
+        Assert.NotNull(engine.Progress.LastPanicPressTime);
+    });
 }

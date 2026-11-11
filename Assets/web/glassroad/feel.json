@@ -334,8 +334,8 @@
     "cornerMargin": 0.9
   },
   "contact": {
-    "radiusM": 0.54,
-    "maxHeightM": 1.05,
+    "radiusM": 0.62,
+    "maxHeightM": 1.21,
     "pushMps": 3.5,
     "pushPerDv": 0.5,
     "maxPushMps": 7,
@@ -366,5 +366,21 @@
     "creep": 0.1, "creepS": 0.9, "punch": 0.2, "punchS": 0.45, "shakeM": 0.11, "shakeS": 0.42, "shakeHz": 19,
     "flash": 0.55, "flashS": 0.22, "glowS": 0.7, "wordS": 0.75, "contactDelayS": 0.12 },
   "audio": { "hitThumpMin": 0.35, "hitDuckWall": 0.55, "hitDuckItem": 0.45, "hitDuckBump": 0.8, "thumpHz": 72, "thumpGain": 0.22, "thumpDurS": 0.09, "squealGain": 0.03, "squealLowHz": 1500, "squealOct": 0.75, "windFromPct": 0.3, "windGain": 0.03, "windTopHz": 3200, "revGain": 0.045, "finalPercGain": 0.07, "finalPercInS": 1.5 },
-  "music": { "finalLapRate": 1.0 }
+  "music": { "finalLapRate": 1.0 },
+  "karts": {
+    "default": "lovebomb",
+    "maxTopMul": 1.024,
+    "bodies": {
+      "lovebomb":    { "type": "allround", "topMul": 1,     "accelMul": 1,    "gripMul": 1,    "driftMul": 1,    "wallMul": 1,    "bumpMul": 1 },
+      "pendulum":    { "type": "allround", "topMul": 1.005, "accelMul": 0.98, "gripMul": 1,    "driftMul": 1,    "wallMul": 1,    "bumpMul": 1 },
+      "petal":       { "type": "easy",     "topMul": 0.98,  "accelMul": 1.2,  "gripMul": 0.8,  "driftMul": 0.95, "wallMul": 0.6,  "bumpMul": 0.85 },
+      "trinket":     { "type": "easy",     "topMul": 0.984, "accelMul": 1.15, "gripMul": 0.85, "driftMul": 1,    "wallMul": 0.7,  "bumpMul": 0.9 },
+      "feedback":    { "type": "drifter",  "topMul": 0.99,  "accelMul": 1,    "gripMul": 1.1,  "driftMul": 1.2,  "wallMul": 1.05, "bumpMul": 1 },
+      "reverie":     { "type": "drifter",  "topMul": 0.995, "accelMul": 1.05, "gripMul": 1.1,  "driftMul": 1.15, "wallMul": 1,    "bumpMul": 1.05 },
+      "checkmate":   { "type": "heavy",    "topMul": 1.01,  "accelMul": 0.8,  "gripMul": 0.95, "driftMul": 0.9,  "wallMul": 0.75, "bumpMul": 0.6 },
+      "house-edge":  { "type": "heavy",    "topMul": 1.005, "accelMul": 0.85, "gripMul": 0.95, "driftMul": 0.95, "wallMul": 0.8,  "bumpMul": 0.65 },
+      "undertow":    { "type": "fast",     "topMul": 1.024, "accelMul": 0.8,  "gripMul": 1.25, "driftMul": 0.9,  "wallMul": 1.35, "bumpMul": 1.2 },
+      "velvet-lock": { "type": "fast",     "topMul": 1.02,  "accelMul": 0.85, "gripMul": 1.2,  "driftMul": 0.95, "wallMul": 1.25, "bumpMul": 1.15 }
+    }
+  }
 }

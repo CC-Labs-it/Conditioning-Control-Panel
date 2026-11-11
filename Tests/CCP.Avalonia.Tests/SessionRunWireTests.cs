@@ -100,6 +100,132 @@ public sealed class SessionRunWireTests
             }
         });
     }
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task Bottom_bar_projection_restores_caller_state(bool countdown) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var previousSessions = AvApp.Sessions;
+        var previousCountdown = CoreSettings.Current.ShowSessionCountdown;
+        var sentinel = new SessionRunner(new SessionLogService());
+        try
+        {
+            AvApp.Sessions = sentinel;
+            CoreSettings.Current.ShowSessionCountdown = countdown;
+            // No isolation hook runs between this call and the assertions.
+            await Bottom_bar_projection_uses_the_runner_clock_without_a_shell();
+            Assert.Equal(countdown, CoreSettings.Current.ShowSessionCountdown);
+            Assert.Same(sentinel, AvApp.Sessions);
+        }
+        finally
+        {
+            AvApp.Sessions = previousSessions;
+            CoreSettings.Current.ShowSessionCountdown = previousCountdown;
+        }
+    });
+
+    [Fact]
+    public Task Bottom_bar_projection_uses_the_runner_clock_without_a_shell() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var previousSessions = AvApp.Sessions;
+        var previousCountdown = CoreSettings.Current.ShowSessionCountdown;
+        var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+        var status = new TextBlock { IsVisible = false };
+        try
+        {
+            CoreEngine.Start();
+            MainShellWindow.RefreshBarStatus(status);
+            Assert.True(status.IsVisible);
+            Assert.Equal(Loc.Get("label_running"), status.Text);
+            CoreSettings.Current.ShowSessionCountdown = true;
+            runner.Start(new Session { Id = "bar-projection", Name = "Clock", DurationMinutes = 10 });
+            runner.Pause(); // Freeze the clock for deterministic label comparisons.
+            MainShellWindow.RefreshBarStatus(status);
+            var mark = " [" + Loc.Get("label_paused") + "]";
+            Assert.StartsWith("Clock - 09:", status.Text);
+            Assert.EndsWith(" left" + mark, status.Text);
+            runner.CurrentSession!.DurationMinutes = 0;
+            MainShellWindow.RefreshBarStatus(status);
+            Assert.EndsWith(" elapsed" + mark, status.Text);
+            CoreSettings.Current.ShowSessionCountdown = false;
+            MainShellWindow.RefreshBarStatus(status);
+            Assert.Equal("Clock" + mark, status.Text);
+            runner.Resume();
+            MainShellWindow.RefreshBarStatus(status);
+            Assert.Equal("Clock", status.Text);
+            runner.Stop();
+            MainShellWindow.RefreshBarStatus(status);
+            Assert.Equal("", status.Text);
+        }
+        finally
+        {
+            runner.Stop();
+            CoreEngine.Stop();
+            AvApp.Sessions = previousSessions;
+            CoreSettings.Current.ShowSessionCountdown = previousCountdown;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task Bottom_bar_tracks_session_pause_countdown_preference_and_stop() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var previousSessions = AvApp.Sessions;
+        var previousStopped = CoreEngine.StoppedHook;
+        var previousCountdown = CoreSettings.Current.ShowSessionCountdown;
+        var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+        var shell = new MainShellWindow();
+        try
+        {
+            CoreEngine.StoppedHook = shell.OnEngineStopped;
+            // WPF Presets.cs:1899: the engine alone (no session) shows the running label; Stop clears it.
+            CoreEngine.Start();
+            shell.UpdateStartButton();
+            Assert.Equal(Loc.Get("label_running"), shell.Named<TextBlock>("TxtPresetsStatus")!.Text);
+            CoreEngine.Stop();
+            Assert.Equal("", shell.Named<TextBlock>("TxtPresetsStatus")!.Text);
+            CoreSettings.Current.ShowSessionCountdown = true;
+            shell.StartSession(new Session { Id = "bar-clock", Name = "Bar clock", DurationMinutes = 10 });
+            var status = shell.Named<TextBlock>("TxtPresetsStatus")!;
+            Assert.StartsWith("Bar clock - ", status.Text);
+            Assert.EndsWith(" left", status.Text);
+            status.IsVisible = false;
+            runner.CurrentSession!.DurationMinutes = 0;
+            shell.OnSessionTick();
+            Assert.True(status.IsVisible);
+            Assert.EndsWith(" elapsed", status.Text);
+            runner.CurrentSession!.DurationMinutes = 10;
+            runner.Pause();
+            shell.SetPauseButton(true); // A held tick must still repaint the mark immediately.
+            Assert.EndsWith(" [" + Loc.Get("label_paused") + "]", status.Text);
+            CoreSettings.Current.ShowSessionCountdown = false;
+            shell.OnSessionTick();
+            Assert.Equal("Bar clock [" + Loc.Get("label_paused") + "]", status.Text);
+            runner.Resume();
+            shell.SetPauseButton(false);
+            Assert.Equal("Bar clock", status.Text);
+            runner.Stop();
+            Assert.Equal("", status.Text);
+        }
+        finally
+        {
+            runner.Stop();
+            CoreEngine.Stop();
+            CoreEngine.StoppedHook = previousStopped;
+            AvApp.Sessions = previousSessions;
+            CoreSettings.Current.ShowSessionCountdown = previousCountdown;
+            shell.Close();
+        }
+        return Task.CompletedTask;
+    });
 
     [Theory]
     [InlineData(false)]
@@ -213,6 +339,7 @@ public sealed class SessionRunWireTests
             {
                 CoreEngine.StoppedHook = shell.OnEngineStopped;
                 var session = new Session { Id = "wire_test", Name = "Wire Test", Icon = "🧪", DurationMinutes = 1 };
+                var startBackground = shell.Named<Button>("BtnStart")!.Background;
                 shell.StartSession(session);
 
                 Assert.True(runner.IsRunning);
@@ -234,10 +361,34 @@ public sealed class SessionRunWireTests
                 Assert.Equal("\u25B6", shell.Named<TextBlock>("TxtPauseIcon")!.Text);
                 Assert.Equal(Loc.Get("tooltip_resume_session"), ToolTip.GetTip(pause));
 
+                Assert.Equal(Loc.Get("label_start"), shell.Named<TextBlock>("TxtStartLabel")!.Text);
+                Assert.Equal("▶", shell.Named<TextBlock>("TxtStartIcon")!.Text);
+                Assert.Same(startBackground, shell.Named<Button>("BtnStart")!.Background);
+                Assert.Contains(Loc.Get("label_paused"), Assert.IsType<TextBlock>(presets.BtnStartSession.Content).Text);
                 pause.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));   // Resume
+                Assert.True(CoreEngine.IsRunning);
                 Assert.False(runner.IsPaused);
                 Assert.Equal("\u23F8", shell.Named<TextBlock>("TxtPauseIcon")!.Text);
                 Assert.Equal(Loc.GetF("tooltip_pause_session_100_xp_penalty_per_pause_npause", 1), ToolTip.GetTip(pause));
+
+                MainShellWindow.StopEverything();
+                var runs = CoreSettings.Current.TotalSessions;
+                shell.Named<Button>("BtnStart")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                Assert.True(CoreEngine.IsRunning);
+                Assert.False(runner.IsPaused);
+                Assert.Equal(runs, CoreSettings.Current.TotalSessions);
+
+                System.Action? pendingResume = null;
+                shell.ResumeEffect = start => pendingResume = start;
+                MainShellWindow.StopEverything();
+                pause.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                Assert.NotNull(pendingResume);
+                MainShellWindow.StopEverything(); // a newer panic overtakes the queued Resume
+                pendingResume!();
+                Assert.False(CoreEngine.IsRunning || CoreFlash.IsRunning);
+                Assert.True(runner.IsPaused && ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced());
+                shell.ResumeEffect = MainShellWindow.StartEffect;
+                shell.StartEngineFromUser();
 
                 runner.Stop(completed: false);   // the stop-session confirm's OK
                 Assert.False(runner.IsRunning || CoreEngine.IsRunning || pause.IsVisible);
@@ -271,4 +422,118 @@ public sealed class SessionRunWireTests
             return Task.CompletedTask;
         });
     }
+    private sealed class NoVideoHost : IMandatoryVideoHost
+    {
+        public void Show(string path, bool strict) { }
+        public double CloseAll() => 0;
+        public void ShowMessage(AttentionVerdict verdict, int ms, System.Action then) { }
+    }
+
+    /// <summary>WPF MainWindow.Presets.cs:1756-1793: short video finishes before a modal recap;
+    /// playback surviving the 3s wait gets a passive recap.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RecapWaitsForVideoThenRechecksPlayback(bool survivesTimeout)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+
+            var shell = new MainShellWindow();
+            shell.Show();
+            var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+            runner.SessionLog.LogReady += shell.OnSessionLogReady;
+            var previousVideo = CoreEngine.Video;
+            var video = new MandatoryVideoScheduler(new NoVideoHost(), library: () => new[] { "a.mp4" });
+            try
+            {
+                var session = new Session { Id = "wire_video", Name = "Wire Video", Icon = "🧪", DurationMinutes = 1 };
+                shell.StartSession(session);
+
+                CoreEngine.Video = video;
+                runner.Stop(completed: true);
+                Assert.True(video.Trigger(path: "a.mp4"));   // a new clip, before the recap posts
+                int retries = 0;
+                shell.SessionSummaryDelay = interval =>
+                {
+                    Assert.Equal(System.TimeSpan.FromMilliseconds(200), interval);
+                    Assert.Empty(shell.OwnedWindows.OfType<SessionCompleteWindow>());
+                    retries++;
+                    if (!survivesTimeout) video.ForceCleanup();
+                    return Task.CompletedTask;
+                };
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(survivesTimeout ? 15 : 1, retries);
+                var recap = Assert.Single(shell.OwnedWindows.OfType<SessionCompleteWindow>());
+                Assert.Equal(!survivesTimeout, recap.Topmost);
+                Assert.Equal(!survivesTimeout, recap.ShowActivated);
+                // Avalonia modal ownership disables the backend, not Window.IsEnabled.
+                Assert.Equal(!survivesTimeout, recap.IsDialog);
+                recap.Close();
+            }
+            finally
+            {
+                runner.Stop();
+                video.ForceCleanup();
+                CoreEngine.Video = previousVideo;
+                CoreSession.IsSessionRunningProvider = null;
+                AvApp.Sessions = null;
+                CoreEngine.Stop();
+                shell.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>WPF MainWindow.Presets.cs:1745,1777 rejects a recap during shutdown.
+    /// Both the event entry and its queued callback must respect the shell lifetime.</summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task ShutdownNeverOpensARecap(bool queuedBeforeShutdown, bool exitRequested)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<AvApp>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+
+            var shell = new MainShellWindow();
+            shell.Show();
+            var opened = new System.Collections.Generic.List<SessionCompleteWindow>();
+            using var hook = Window.WindowOpenedEvent.AddClassHandler<SessionCompleteWindow>((w, _) => opened.Add(w));
+            var log = new SessionLogReadyEventArgs(new SessionLog { SessionName = "Lifecycle Test" });
+            try
+            {
+                // Positive control: the event and window observer really work on this head.
+                shell.OnSessionLogReady(null, log);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Single(opened).Close();
+                opened.Clear();
+
+                if (queuedBeforeShutdown) shell.OnSessionLogReady(null, log);
+                if (exitRequested)
+                    shell.MarkExitRequestedForTest();
+                else shell.Close();
+                if (!queuedBeforeShutdown) shell.OnSessionLogReady(null, log);
+                Dispatcher.UIThread.RunJobs();
+                // Observe all recaps, including an orphan shown without the closed owner.
+                Assert.Empty(opened);
+            }
+            finally
+            {
+                foreach (var recap in opened) recap.Close();
+                shell.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
 }
