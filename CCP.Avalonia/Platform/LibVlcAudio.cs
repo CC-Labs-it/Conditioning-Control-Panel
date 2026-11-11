@@ -66,7 +66,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static LibVLC? Shared { get; private set; }
 
         /// <summary>Throws when libvlc is not installed; the caller then leaves CoreAudio unseeded.</summary>
-        public LibVlcAudio(params string[] options)
+        public LibVlcAudio(params string[] options) : this(true, options) { }
+
+        internal LibVlcAudio(bool registerShared, params string[] options)
         {
             // Windows ships libvlc beside the exe; a single-file publish has no
             // assembly location for LibVLCSharp to probe from, so point it there as WPF's VideoService does. Linux: system libvlc.
@@ -79,7 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             // No global --no-video: video shares this instance. Audio media opt out per item instead.
             _options = WithOutput(options, OperatingSystem.IsWindows()).Append("--quiet").ToArray();
             _vlc = new LibVLC(_options);
-            Shared ??= _vlc;
+            if (registerShared) Shared ??= _vlc;
             _vlc.SetUserAgent("Conditioning Control Panel", "CCP"); // the name pactl shows for our streams
         }
 
@@ -105,6 +107,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 }
                 return _gainVlc;
             }
+        }
+
+        /// <summary>Release an isolated instance after its players have stopped.</summary>
+        internal void DisposeUnshared()
+        {
+            if (ReferenceEquals(Shared, _vlc)) throw new InvalidOperationException("Cannot dispose shared audio");
+            lock (_gainLock) { _gainVlc?.Dispose(); _vlc.Dispose(); }
         }
 
         /// <summary>This instance's LibVLC (the Windows session test plays through the real output).</summary>

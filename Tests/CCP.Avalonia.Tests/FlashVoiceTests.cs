@@ -146,6 +146,25 @@ public sealed class FlashVoiceTests
         Assert.True(control.Max(v => Math.Abs((int)v)) > 15000, "the control was not at full scale");
     }
 
+    [Fact]
+    public async Task RecordingKeepsSharedInstanceUnchanged()
+    {
+        var shared = typeof(LibVlcAudio).GetProperty("Shared", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var previous = shared.GetValue(null);
+        LibVlcAudio? existing = null;
+        try
+        {
+            shared.SetValue(null, null);
+            await RecordVoice(4);
+            Assert.Null(LibVlcAudio.Shared);
+            existing = new LibVlcAudio(false, "--aout=dummy");
+            shared.SetValue(null, existing.Vlc);
+            await RecordVoice(0);
+            Assert.Same(existing.Vlc, LibVlcAudio.Shared);
+        }
+        finally { shared.SetValue(null, previous); existing?.DisposeUnshared(); }
+    }
+
     /// <summary>A two-second tone through FlashVoice and real LibVLC into a recording output, then the same
     /// tone at full gain as a control: the samples of each.</summary>
     private static async Task<(short[] Voice, short[] Control)> RecordVoice(int level)
@@ -173,12 +192,24 @@ public sealed class FlashVoiceTests
             {
                 var output = Path.Combine(root, name);
                 LibVlcAudio audio;
-                try { audio = new LibVlcAudio("--aout=file", "--audiofile-file=" + output, "--audiofile-format=s16"); }
+                try { audio = new LibVlcAudio(false, "--aout=file", "--audiofile-file=" + output, "--audiofile-format=s16"); }
                 catch (Exception ex) { Assert.Skip("LibVLC unavailable: " + ex.Message); throw; }
-                var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                await play(audio, () => ended.TrySetResult());
-                await ended.Task.WaitAsync(TimeSpan.FromSeconds(8));
-                return Samples(output);
+                try
+                {
+                    var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    await play(audio, () => ended.TrySetResult());
+                    await ended.Task.WaitAsync(TimeSpan.FromSeconds(8));
+                    return Samples(output);
+                }
+                finally
+                {
+                    FlashVoice.Stop();
+                    var gain = typeof(LibVlcAudio).GetField("_gainVlc", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(audio);
+                    audio.DisposeUnshared();
+                    var disposed = audio.Vlc.GetType().BaseType!.GetField("IsDisposed", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public)!;
+                    Assert.True((bool)disposed.GetValue(audio.Vlc)!);
+                    if (gain != null) Assert.True((bool)disposed.GetValue(gain)!);
+                }
             }
             var voice = await Record("voice.wav", async (audio, end) =>
             {
