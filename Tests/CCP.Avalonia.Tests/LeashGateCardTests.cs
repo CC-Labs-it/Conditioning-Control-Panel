@@ -51,7 +51,6 @@ public sealed class LeashGateCardTests
         var (oldSvc, oldDue, oldPresent) = (LeashHead.Service, MainShellWindow.LeashGateDueProvider, MainShellWindow.PresentLeashGateProvider);
         (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider) = (() => true, () => true);
         var svc = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
-        if (punished) svc.ApplyBlock(LeashHeadTests.BlockWithPunishment());
         // What LeashHead.Start publishes (LeashHeadTests proves Start sets them).
         LeashHead.Service = svc;
         MainShellWindow.LeashGateDueProvider = () => LeashHead.Service?.GateDue != null;
@@ -66,6 +65,8 @@ public sealed class LeashGateCardTests
             Dispatcher.UIThread.RunJobs();
             var launcher = LauncherWindow.Instance!;
             launcher.Hide();                             // off screen: no exit beat to wait out
+            // Seed after startup: the real two-second gate timer can fire while the shell opens.
+            if (punished) svc.ApplyBlock(LeashHeadTests.BlockWithPunishment());
             body(shell, launcher, svc);
         }
         finally
