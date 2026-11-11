@@ -23,6 +23,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Services.Haptics;
 using Newtonsoft.Json.Linq;
 using Serilog;
 
@@ -46,7 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal static Func<DateTime> DtrhUtcNow = () => DateTime.UtcNow;
 
         private bool IsDtrh => string.Equals(Spec.Id, DtrhId, StringComparison.OrdinalIgnoreCase);
-        private bool _dtrhRunActive, _dtrhExiting;
+        private bool _dtrhRunActive, _dtrhExiting, _dtrhPanicStopping;
         private IDisposable? _dtrhExitWatchdog;
         private JObject? _dtrhLastProgress;
         private DateTime _dtrhRunStartedUtc = DateTime.MinValue;
@@ -108,6 +109,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     if (_dtrhRunActive) _dtrhLastProgress = o;
                     return true;
                 case "run-started":
+                    if (_dtrhPanicStopping) return true;
+                    try { DtrhHapticDirector.OnRunStarted(); } catch (Exception ex) { Log.Debug(ex, "DtRH haptics start"); }
                     _dtrhRunActive = true;
                     _dtrhLastProgress = null;
                     _dtrhRunStartedUtc = DtrhUtcNow();
@@ -129,6 +132,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// A booting page, or a second close while exiting, closes immediately.</summary>
         private void CloseDtrhForPanic()
         {
+            _dtrhPanicStopping = true;
+            try { DtrhHapticDirector.OnRunEnded(playFarewell: false); }
+            catch (Exception ex) { Log.Debug(ex, "DtRH haptics panic stop"); }
             try
             {
                 if (DtrhReady)
@@ -244,6 +250,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private void OnDtrhRunEnded(JObject o, bool fromTeardown)
         {
             bool wasActive = _dtrhRunActive;
+            if (wasActive) { try { DtrhHapticDirector.OnRunEnded(playFarewell: !fromTeardown && !_dtrhPanicStopping); } catch (Exception ex) { Log.Debug(ex, "DtRH haptics end"); } }
             double? hostElapsed = _dtrhRunStartedUtc == DateTime.MinValue ? null : (DtrhUtcNow() - _dtrhRunStartedUtc).TotalSeconds;
             _dtrhRunActive = false;
             _dtrhLastProgress = null;
@@ -280,6 +287,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF DtrhHostService.cs:959-981 StartHeartbeatWatch: the page beats only after ready, every ~2 s.</summary>
         private void StartDtrh()
         {
+            try { DtrhHapticDirector.OnLaunch(false, cancellableFarewell: true); } catch (Exception ex) { Log.Debug(ex, "DtRH haptics launch"); }
             _dtrhLastHeartbeatUtc = DtrhUtcNow();
             _dtrhHeartbeatWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(DtrhHeartbeatRule.PollSeconds) };
             _dtrhHeartbeatWatch.Tick += (_, _) => CheckDtrhHeartbeat(DtrhUtcNow());
@@ -329,6 +337,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 snapshot["abandoned"] = true;
                 OnDtrhRunEnded(snapshot, fromTeardown: true);
             }
+            try { DtrhHapticDirector.OnClosed(); } catch (Exception ex) { Log.Debug(ex, "DtRH haptics close"); }
             _dtrhRunActive = false;
             _dtrhExiting = false;
             Log.Information("DtrhHostService: closed");
