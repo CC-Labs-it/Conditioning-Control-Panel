@@ -83,7 +83,7 @@ public sealed class DashboardDecorationTests
             tab.ApplyDashboardDecoration(false, false);
             Assert.Equal("Down the Rabbit Hole", tab.FindControl<TextBlock>("MysteryRevealName")!.Text);
             var badge = tab.FindControl<TierBadge>("MysteryRevealBadge")!;
-            Assert.Equal(2, badge.Tier); Assert.True(badge.FreeToday);
+            Assert.Equal(1, badge.Tier); Assert.True(badge.FreeToday);
             CoreEntitlement.HasPremiumProvider = () => true;
             tab.ApplyDashboardDecoration(false, false);
             Assert.Equal(0, badge.Tier); Assert.False(badge.FreeToday);
@@ -107,7 +107,7 @@ public sealed class DashboardDecorationTests
         tab.ApplyDashboardDecoration(false, false);
         Assert.Equal("Down the Rabbit Hole", tab.FindControl<TextBlock>("MysteryRevealName")!.Text);
         var badge = tab.FindControl<TierBadge>("MysteryRevealBadge")!;
-        Assert.Equal(2, badge.Tier);
+        Assert.Equal(1, badge.Tier);
         Assert.True(badge.FreeToday);
         Assert.Contains("features/dtrh.png", artRequests);
         Assert.DoesNotContain("features/takeover.png", artRequests);
@@ -116,6 +116,17 @@ public sealed class DashboardDecorationTests
             ConditioningControlPanel.Avalonia.Views.Features.FeatureCard.ClickEvent, box));
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("play", shell.CurrentTab);
+    });
+
+    [Fact]
+    public Task ClosingAppInfoRestoresMinimizedShell() => WithShell((shell, tab, time) =>
+    {
+        tab.VelvetBtnAppInfo_Click(null, new global::Avalonia.Interactivity.RoutedEventArgs());
+        var popup = Assert.IsType<ConditioningControlPanel.Avalonia.Views.Features.FeaturePopupWindow>(tab.AppInfoPopup);
+        shell.WindowState = WindowState.Minimized;
+        popup.Close();
+        Assert.Equal(WindowState.Normal, shell.WindowState);
+        Assert.Null(tab.AppInfoPopup);
     });
 
     [Fact]

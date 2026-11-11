@@ -473,7 +473,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             AppInfoPopup?.Close();
             var popup = new Features.FeaturePopupWindow(new Features.AppInfoFeatureControl(),
                 ConditioningControlPanel.Localization.Loc.Get("label_app_info"), glyph: IconKind.Info);
-            popup.Closed += (_, _) => { if (ReferenceEquals(AppInfoPopup, popup)) AppInfoPopup = null; };
+            var shell = Shell;
+            popup.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(AppInfoPopup, popup)) AppInfoPopup = null;
+                try
+                {
+                    if (shell?.WindowState == WindowState.Minimized) shell.WindowState = WindowState.Normal;
+                    shell?.Activate();
+                }
+                catch { /* window may be shutting down */ }
+            };
             AppInfoPopup = popup;
             if (TopLevel.GetTopLevel(this) is Window { IsVisible: true } owner) popup.Show(owner);
             else popup.Show();

@@ -99,7 +99,7 @@ public partial class SettingsTabView
             "dtrh" => "Down the Rabbit Hole", _ => Loc.Get("mosaic_daily_gift"),
         };
         int tier = CoreEntitlement.HasPremium ? 0 : key switch
-        { "dtrh" => 2, "takeover" or "awareness" or "haptics" or "voice" or "fyp" or "remote" => 1, _ => 0 };
+        { "dtrh" or "takeover" or "awareness" or "haptics" or "voice" or "fyp" or "remote" => 1, _ => 0 };
         MysteryRevealBadge.Tier = tier;
         MysteryRevealBadge.FreeToday = tier > 0;
         // Repaint on mod changes as well as day/override changes; no decoding on a beat.
