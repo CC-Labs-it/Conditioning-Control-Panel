@@ -141,13 +141,15 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public List<string> PendingPresetReinstalls { get; } = new();
 
-        public SettingsService()
-        {
-            // Store settings in user data folder (persists across updates)
-            _settingsPath = Path.Combine(CorePaths.UserData, "settings.json");
+        public SettingsService() : this(Path.Combine(CorePaths.UserData, "settings.json"), true) { }
 
-            // Migrate settings from old location if needed
-            MigrateSettingsFromOldLocation();
+        // A private file for tests that exercise real persistence without changing process-wide paths.
+        internal SettingsService(string settingsPath) : this(settingsPath, false) { }
+
+        private SettingsService(string settingsPath, bool migrate)
+        {
+            _settingsPath = settingsPath;
+            if (migrate) MigrateSettingsFromOldLocation();
 
             Current = Load();
 

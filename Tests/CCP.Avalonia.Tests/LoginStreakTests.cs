@@ -112,6 +112,7 @@ public class LoginStreakTests
         }
         finally
         {
+            LoginStreakHead.Stop();
             ProgressionBank.Awarded -= Awarded;
             ProgressionBank.Awarded -= AvApp.TrackQuestXp;
             AvApp.Quests = oldQuests;
@@ -338,6 +339,7 @@ public class LoginStreakTests
         }
         finally
         {
+            LoginStreakHead.Stop();
             ProgressionBank.Awarded -= AvApp.TrackQuestXp;
             AvApp.Quests = oldQuests;
             CoreAccount.IsLoggedInProvider = oldLogin;

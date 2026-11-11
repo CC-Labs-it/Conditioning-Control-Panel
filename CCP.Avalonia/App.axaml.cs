@@ -1277,7 +1277,7 @@ namespace ConditioningControlPanel.Avalonia
         {
             if (Interlocked.Exchange(ref _exitHandled, 1) != 0) return;
             _exiting = true;
-            Platform.LoginStreakHead.ClearProfile();
+            Platform.LoginStreakHead.Stop();
 
             // WPF App.OnExit:5965: haptics FIRST and synchronously (bounded ~2 s). A Lovense level has no
             // server-side watchdog, so a toy not countermanded here keeps running after the app is gone.

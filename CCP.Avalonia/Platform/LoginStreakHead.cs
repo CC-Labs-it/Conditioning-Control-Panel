@@ -22,7 +22,11 @@ internal static class LoginStreakHead
         _questXpEngine = null;
         _rolloverTimer?.Stop();
         _rolloverTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _rolloverTimer.Tick += (_, _) => Rollover(engine, settings, DateTime.Today);
+        _rolloverTimer.Tick += (_, _) =>
+        {
+            try { TickCurrent(DateTime.Today); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Login streak rollover failed"); }
+        };
         _rolloverTimer.Start();
         Update(engine.Progress, settings, DateTime.Today, false);
         SaveAndPay(engine, settings);
@@ -121,7 +125,25 @@ internal static class LoginStreakHead
         }
     }
 
-    internal static void ClearProfile() { _rolloverTimer?.Stop(); _rolloverTimer = null; _questXpEngine = null; ProfileGeneration++; _loadedId = null; _loadedStats = null; }
+    internal static bool TimerRunning => _rolloverTimer?.IsEnabled == true;
+
+    internal static bool TickCurrent(DateTime today)
+    {
+        var engine = App.Achievements;
+        return engine != null && Rollover(engine, CoreSettings.Current, today);
+    }
+
+    // Logout resets the existing engine, but does not tear down the quest XP listener.
+    // The timer resolves the current profile on each tick instead of capturing the old one.
+    internal static void ClearProfile() { ProfileGeneration++; _loadedId = null; _loadedStats = null; }
+
+    internal static void Stop()
+    {
+        _rolloverTimer?.Stop();
+        _rolloverTimer = null;
+        _questXpEngine = null;
+        ClearProfile();
+    }
 
     internal static void ProfileLoaded(string id, JObject? stats)
     {
