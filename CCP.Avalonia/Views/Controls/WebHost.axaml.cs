@@ -48,6 +48,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         public double ZoomFactor { get; set; } = 1.0;
         internal Func<double, Task<bool>>? NativeZoomInvoker { get; set; }
 
+        /// <summary>Reapply the host zoom before an explicit navigation, as Home does on WPF.</summary>
+        public bool ResetZoomOnNavigate { get; set; }
+        internal Action<Uri>? NativeNavigateInvoker { get; set; }
+        private int _navigationGeneration;
+        private bool _zoomNavigationPending;
+
         /// <summary>
         /// Per-navigation gate. Return false to cancel. Runs for EVERY navigation the engine
         /// starts — the first one and every redirect, in-page link and script-driven hop after it —
@@ -430,6 +436,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public void Navigate(Uri url)
         {
+            var navigation = ++_navigationGeneration;
+            _zoomNavigationPending = false;
             _explicitNavigate = true;
             try { Source = url; } finally { _explicitNavigate = false; }
             NavigationRequests++;
@@ -439,7 +447,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(url)) { RefusedNavigations++; return; }
             if (_web is null) return;
             if (_scrolllerGate is null) return;   // held: the gate's report loads Source
-            try { _web.Navigate(url); }
+            if (ResetZoomOnNavigate)
+            {
+                _zoomNavigationPending = true;
+                _ = NavigateAfterZoomAsync(url, navigation, _scrolllerEngine, _web);
+            }
+            else NavigateNative(url);
+        }
+
+        private async Task NavigateAfterZoomAsync(Uri url, int navigation, int engine, NativeWebView web)
+        {
+            await ApplyZoomAsync();
+            if (navigation != _navigationGeneration || engine != _scrolllerEngine || _web != web) return;
+            _zoomNavigationPending = false;
+            if (_scrolllerGate is not null) NavigateNative(url);
+        }
+
+        private void NavigateNative(Uri url)
+        {
+            try
+            {
+                if (NativeNavigateInvoker is { } invoke) invoke(url);
+                else _web?.Navigate(url);
+            }
             catch (Exception ex) { Log.Debug("WebHost: Navigate failed: {Error}", ex.Message); }
         }
 
@@ -482,6 +512,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _loadedOnThisEngine = false;
             _carrierInstall = null;
             _zoomInstall = null;
+            _zoomNavigationPending = false;
             _gateReport = 0;
             var engine = ++_scrolllerEngine;
             return gated => OnScrolllerGate(engine, gated);
@@ -508,6 +539,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             else if (ConfinePageFullscreen) return;
             if (engine != _scrolllerEngine || report != _gateReport) return;
             _scrolllerGate = gated;
+            if (_zoomNavigationPending) return;
             var src = Source;
             if (ReloadAfterGate(_web?.Source, src, _loadedOnThisEngine) && ConditioningControlPanel.Services.SandboxNet.Allows(src))
             {
@@ -548,7 +580,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
             base.OnPropertyChanged(change);
-            if (change.Property == SourceProperty) ApplySource();
+            if (change.Property == SourceProperty)
+            {
+                if (!_explicitNavigate) { _navigationGeneration++; _zoomNavigationPending = false; }
+                ApplySource();
+            }
         }
 
         private void ApplySource()
