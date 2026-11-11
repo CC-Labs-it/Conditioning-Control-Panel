@@ -276,6 +276,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void Press(AmbientBubble b, double x, double y)
         {
             if (!b.IsLiveThreat) { Pop(b); return; }
+            if (b.Spec is { IsChaperoneLive: true } && b.Escort is { Popping: false } escort && Field.Bubbles.Contains(escort)) return;
             Field.PressLive(b, _chaosCanChannel?.Invoke(b) ?? true, x, y);
             RequestFrame();
         }
@@ -404,6 +405,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 // WPF BubbleService.cs:4652-4660: instant sweeps cannot end Tease or Brittle.
                 if (b.Popping || b.Spec == null || b.Spec.IsDarter || b.Spec.IsFreeze || b.Spec.IsTease || b.Spec.IsBrittle) continue;
                 if (!rect.Intersects(new Rect(b.X, b.Y, b.Size, b.Size))) continue;
+                if (b.Spec.IsChaperoneLive && b.Escort is { Popping: false } escort && Field.Bubbles.Contains(escort)) continue;
                 if (b.IsLiveThreat)
                 {
                     if (b.Snap()) { Field.ChaosDefused?.Invoke(b); RequestFrame(); }
@@ -471,13 +473,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 _lastStep = now;
                 var t0 = Stats ? Stopwatch.GetTimestamp() : 0;
-                Field.Step();
+                StepChaosField();
                 TickChaosRipples();
                 foreach (var w in Windows) w.Sync();
                 if (Stats) Sample(Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
                 if (Field.Bubbles.Count == 0 && ChaosRipples.Count == 0) { _lastStep = null; return; }   // idle until the next spawn
             }
             RequestFrame();
+        }
+
+        internal static void StepChaosField()
+        {
+            Field.Step();
+            if (Field.HoldChaos) return;
+            foreach (var b in Field.Bubbles)
+            {
+                if (b.Spec is not { IsEscort: true } || b.Popping || b.OrbitFrames == 0 || b.OrbitFrames % 7 != 0 || b.OrbitTarget is not { Popping: false } live) continue;
+                double t = Field.Random.NextDouble();
+                var a = CenterPx(b);
+                var z = CenterPx(live);
+                var p = new Point(a.X + (z.X - a.X) * t, a.Y + (z.Y - a.Y) * t);
+                if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.TrailDot(p, 0.35);
+                else ChaosFieldFxOverlay.TrailDot(p, 0.35);
+            }
         }
 
         private static void Sample(double ms)

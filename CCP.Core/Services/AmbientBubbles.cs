@@ -87,6 +87,9 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>The linked shield-bearer (WPF BubbleService.cs:2708-2709,2730).</summary>
         public AmbientBubble? Escort { get; set; }
+        public AmbientBubble? OrbitTarget { get; set; }
+        public int OrbitFrames { get; private set; }
+        private double _orbitPhase;
         /// <summary>A live threat the player defuses by holding (WPF NeedsHoldDefuse for the plain lives).</summary>
         public bool IsLiveThreat => Spec is { IsLive: true, IsDarter: false, IsFreeze: false };
         public double FuseSecLeft => Math.Max(0, FuseRemainingMs) / 1000.0;
@@ -277,6 +280,22 @@ namespace ConditioningControlPanel.Services
                 Angle += 2;
                 return Fade <= 0 ? Result.Done : Result.Alive;
             }
+            if (Spec is { IsEscort: true })
+            {
+                var target = OrbitTarget;
+                if (target == null || target.Popping)
+                {
+                    Popping = Deflating = true;
+                    return Result.Alive;
+                }
+                _orbitPhase += 2 * Math.PI * 0.032 / Chaos.ChaosTuning.CHAPERONE_ORBIT_PERIOD_SEC;
+                double radius = Math.Max(Chaos.ChaosTuning.CHAPERONE_ORBIT_RADIUS_DIP,
+                    (target.Size + Size) / 2 + Chaos.ChaosTuning.CHAPERONE_ORBIT_GAP_DIP);
+                X = target.CenterX + Math.Cos(_orbitPhase) * radius - Size / 2;
+                Y = target.CenterY + Math.Sin(_orbitPhase) * radius - Size / 2;
+                OrbitFrames++;
+                return Result.Alive;
+            }
             if (Channeling) return TickChannel(held, cursorX, cursorY, nowUtc);
             // WPF :4147-4193: the fuse burns 32 ms a step; fuse-out detonates.
             if (Spec is { IsLive: true } && FuseRemainingMs > 0)
@@ -366,7 +385,10 @@ namespace ConditioningControlPanel.Services
         public void DefuseAllLive()
         {
             foreach (var b in Bubbles.ToArray())
+            {
+                if (b.Spec is { IsChaperoneLive: true } && b.Escort is { Popping: false } escort && Bubbles.Contains(escort)) continue;
                 if (b.Snap()) ChaosDefused?.Invoke(b);
+            }
         }
 
         public bool CanSpawn(AppSettings s) => Bubbles.Count < Cap(s);
@@ -407,6 +429,8 @@ namespace ConditioningControlPanel.Services
                 if (i >= Bubbles.Count) continue;   // a callback cleared the field
                 var b = Bubbles[i];
                 if (HoldChaos && b.Spec != null && !b.Popping) { b.CancelChannel(); continue; }
+                if (b.Spec is { IsEscort: true } && b.OrbitTarget != null && !Bubbles.Contains(b.OrbitTarget))
+                    b.OrbitTarget = null;
                 var r = b.Step(Held, CursorX, CursorY, now);
                 if (r == AmbientBubble.Result.Alive) continue;
                 if (r == AmbientBubble.Result.Detonated) { ChaosDetonated?.Invoke(b); continue; }
