@@ -63,7 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         /// <summary>The process's one LibVLC, shared with video (MiniPlayerWindow), as WPF shares
         /// VideoService.SharedLibVLC. Null when libvlc did not load.</summary>
-        internal static LibVLC? Shared { get; private set; }
+        internal static LibVLC? Shared { get; set; }
 
         /// <summary>Throws when libvlc is not installed; the caller then leaves CoreAudio unseeded.</summary>
         public LibVlcAudio(params string[] options)
