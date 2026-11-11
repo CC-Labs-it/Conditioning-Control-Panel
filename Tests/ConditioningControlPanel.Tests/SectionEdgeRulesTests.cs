@@ -5,6 +5,7 @@ using ConditioningControlPanel.Controls.NavRail;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.UI;
 using Xunit;
+using EdgeSide = ConditioningControlPanel.Controls.EdgeSide;
 
 namespace ConditioningControlPanel.Tests;
 
