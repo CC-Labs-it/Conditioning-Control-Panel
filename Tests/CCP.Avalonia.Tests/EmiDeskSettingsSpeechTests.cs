@@ -47,6 +47,50 @@ public sealed class EmiDeskSettingsSpeechTests
             CoreSettings.ServiceProvider = previous;
         }
     });
+    [Theory]
+    [InlineData("hotkey", "hotkey 3 False")]
+    [InlineData("tour", "rail 3 True")]
+    [InlineData("rail", "rail 3 False")]
+    public Task SummonGreetingCarriesRouteAndElapsedMinutes(string why, string expected) => InDesk(async desk =>
+    {
+        desk.Window!.ShutDown();
+        var oldClock = desk.UtcNow;
+        var now = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        desk.UtcNow = () => now;
+        desk.LineEngine = EmiLineEngine.FromJson("""{"version":1,"moments":{"firstContact":{"priority":3,"pools":["g"]}},"pools":{"g":[{"id":"g","t":"{via} {minutes} {touring}","spice":0}]}}""");
+        try
+        {
+            await desk.Summon(why);
+            now = now.AddMinutes(3);
+            desk.GreetingDue();
+            for (int i = 0; i < 3; i++) desk.Window!.AdvanceSpeech();
+            Assert.Equal(expected, desk.Window!.BubbleText);
+        }
+        finally { desk.UtcNow = oldClock; }
+    });
+
+    [Fact]
+    public Task RegisteredHotkeySummonsWithHotkeyContext() => InDesk(async desk =>
+    {
+        desk.Window!.ShutDown();
+        var oldRegister = desk.RegisterChord;
+        Action? press = null;
+        desk.RegisterChord = (_, _, callback) => { press = callback; return true; };
+        desk.LineEngine = EmiLineEngine.FromJson("""{"version":1,"moments":{"firstContact":{"priority":3,"pools":["g"]}},"pools":{"g":[{"id":"g","t":"{via}","spice":0}]}}""");
+        try
+        {
+            desk.ApplyHotkey();
+            Assert.NotNull(press);
+            press!();
+            Dispatcher.UIThread.RunJobs();
+            await Task.Yield();
+            desk.GreetingDue();
+            for (int i = 0; i < 3; i++) desk.Window!.AdvanceSpeech();
+            Assert.Equal("hotkey", desk.Window!.BubbleText);
+        }
+        finally { desk.RegisterChord = oldRegister; }
+    });
+
     [Fact]
     public Task SpicePickerChangesWhichLinesReachTheWidget() => InDesk(desk =>
     {

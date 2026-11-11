@@ -47,10 +47,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private bool WindowOnScreen => _window?.IsVisible == true;
 
         /// <summary>Summon her if she is away, send her away if she is out. A widget ON SCREEN wins over the flag.</summary>
-        public void Toggle()
+        public void Toggle(string? why = null)
         {
             if (IsOut || WindowOnScreen) Dismiss();
-            else _ = Summon();
+            else _ = Summon(why);
         }
 
         /// <summary>Bring her out. No-op when she is out or the feature is off.</summary>
@@ -91,7 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 win.RunSummon();
                 bool first = !EmiState.Current.FirstBootSeen;
                 int summons = EmiState.NoteSummon();
-                ScheduleGreeting();
+                ScheduleGreeting(why);
                 RaiseOutChanged();
                 Log.Information("[EmiDesk] summoned ({Why}), firstBoot={First}, summon #{N}", why ?? "user", first, summons);
             }
@@ -266,7 +266,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     return;
                 }
                 // X delivers the press on the listener thread: marshal before touching UI.
-                HotkeyArmed = RegisterChord(parsed.Mods, parsed.Key, () => Dispatcher.UIThread.Post(Toggle));
+                HotkeyArmed = RegisterChord(parsed.Mods, parsed.Key, () => Dispatcher.UIThread.Post(() => Toggle("hotkey")));
                 if (HotkeyArmed) Log.Information("[EmiDesk] summon hotkey armed: {Chord}", chord);
                 else Log.Warning("[EmiDesk] summon hotkey {Chord} could not be grabbed: another client holds it. " +
                                  "The dock chip in the nav rail still summons her.", chord);
