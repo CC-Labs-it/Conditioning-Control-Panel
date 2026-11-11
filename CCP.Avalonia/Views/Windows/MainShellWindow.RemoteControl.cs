@@ -52,10 +52,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             r.SessionsProvider = () => ConditioningControlPanel.Models.Session.GetAllSessions()
                 .Concat(Named<Tabs.PresetsTabView>("PresetsTab")?.RemoteSessionManager?.CustomSessions ?? Enumerable.Empty<ConditioningControlPanel.Models.Session>());
             r.SessionRunnerProvider = () => App.Sessions;
-            string? ResumeRemoteSession()
+            string? ResumeRemoteSession(Func<bool> stillCurrent)
             {
                 if (LocalPanicHoldsSession) return "panic";
-                ResumeSessionFromRemote();
+                ResumeSessionFromRemote(stillCurrent);
                 return null;
             }
             r.ResumeSession = ResumeRemoteSession;

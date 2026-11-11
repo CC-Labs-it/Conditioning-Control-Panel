@@ -337,7 +337,7 @@ public sealed class RemoteRelayTests
         using var r = Relay(f);
         string? refusal = "panic";
         var calls = 0;
-        r.ResumeSession = () => { calls++; return refusal; };
+        r.ResumeSession = _ => { calls++; return refusal; };
         await r.StartAsync("full");
         Poll(f, "{\"controller_connected\":true,\"commands\":[{\"id\":\"1\",\"action\":\"resume_session\"}]}");
         await r.PollOnceAsync();

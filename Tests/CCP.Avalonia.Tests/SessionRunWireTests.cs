@@ -36,11 +36,11 @@ public sealed class SessionRunWireTests
             runner.Start(new Session { Id = "remote_resume", Name = "Resume", DurationMinutes = 60 });
             runner.Pause();
             shell.NoteLocalPanicPause();
-            Assert.Equal("panic", relay.ResumeSession!());
+            Assert.Equal("panic", relay.ResumeSession!(() => true));
             Assert.True(runner.IsPaused);
             runner.Resume();
             runner.Pause();
-            Assert.Null(relay.ResumeSession!());
+            Assert.Null(relay.ResumeSession!(() => true));
             Assert.False(runner.IsPaused);
         }
         finally
