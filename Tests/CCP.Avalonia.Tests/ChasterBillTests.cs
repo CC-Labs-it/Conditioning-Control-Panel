@@ -290,10 +290,58 @@ public sealed class ChasterBillTests
             Assert.StartsWith("NETTO ", receipt.StampText);
 
             Click(w, tab.FindControl<Border>("StatRun")!);
+            await Task.Delay(500);
             Assert.False(host.IsVisible);
         }
         finally { LocalizationManager.Instance.SetLanguage("en"); w.Close(); }
         await Task.CompletedTask;
+    }));
+
+    [Fact]
+    public Task ReceiptPrintsAndAReversalCannotReopenIt() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, _) =>
+    {
+        var settings = CoreSettings.Current;
+        var old = settings.MotionLevel;
+        var tab = new ConditioningControlPanel.Avalonia.Views.Tabs.ChasterTabView();
+        var w = new Window { Width = 1200, Height = 900, Content = tab };
+        try
+        {
+            settings.MotionLevel = MotionLevel.Full;
+            w.Show(); Dispatcher.UIThread.RunJobs();
+            var host = tab.FindControl<Border>("ReceiptHost")!;
+            var arrow = tab.FindControl<ConditioningControlPanel.Avalonia.Controls.IconGlyph>("TxtRunChevron")!;
+            tab.ToggleBill();
+            Assert.True(host.IsVisible);
+            Assert.Equal(0, host.Height);
+            var measured = host.DesiredSize.Height;
+            Assert.True(measured > 0);
+            await Task.Delay(120);
+            Assert.InRange(host.Bounds.Height, 0.01, measured);
+            await Task.Delay(530);
+            Assert.True(double.IsNaN(host.Height));
+            Assert.InRange(host.Bounds.Height, measured - 1, measured + 1);
+            Assert.Equal(180, ((RotateTransform)arrow.RenderTransform!).Angle, 1);
+            tab.ToggleBill();
+            await Task.Delay(400);
+            Assert.False(host.IsVisible);
+            Assert.Equal(0, ((RotateTransform)arrow.RenderTransform!).Angle, 1);
+            tab.ToggleBill();
+            var openingGeneration = tab.BillGeneration;
+            tab.ToggleBill();
+            await Task.Delay(650);
+            Assert.False(host.IsVisible);
+            tab.FinishBill(openingGeneration, true); // delayed completion from the earlier open
+            Assert.False(host.IsVisible);
+            settings.MotionLevel = MotionLevel.Off;
+            tab.ToggleBill();
+            Assert.True(host.IsVisible);
+            Assert.True(double.IsNaN(host.Height));
+            Assert.Equal(180, ((RotateTransform)arrow.RenderTransform!).Angle);
+            tab.ToggleBill();
+            Assert.False(host.IsVisible);
+            Assert.Equal(0, ((RotateTransform)arrow.RenderTransform!).Angle);
+        }
+        finally { settings.MotionLevel = old; w.Close(); }
     }));
 
     [Fact]
