@@ -5,6 +5,8 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
+using Avalonia;
+using Avalonia.Headless;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using Newtonsoft.Json;
@@ -54,6 +56,11 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
     public override void Before(MethodInfo methodUnderTest, IXunitTest test) =>
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
         {
+            // Initialize the shared app before an individual fixture can omit font mappings.
+            if (Application.Current == null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            EnsureInter();
             Current = ProcessStateSnapshot.Take();
             OpenWindows.Mark();
             // P76: a held startup card opens only when a test steps the ladder clock, never by wall time.
@@ -64,6 +71,13 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
             // P52: no shell arms the real 2 s pending-registration check; PendingRegistrationTests arm it themselves.
             ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.PendingRegistrationDelay = null;
         });
+    internal static void EnsureInter()
+    {
+        if (global::Avalonia.Application.Current == null) return;
+        var fonts = global::Avalonia.Media.FontManager.Current;
+        var face = new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter), global::Avalonia.Media.FontStyle.Normal, global::Avalonia.Media.FontWeight.Bold);
+        if (!fonts.TryGetGlyphTypeface(face, out _)) fonts.AddFontCollection(new global::Avalonia.Fonts.Inter.InterFontCollection());
+    }
     public override void After(MethodInfo methodUnderTest, IXunitTest test) =>
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
         {
