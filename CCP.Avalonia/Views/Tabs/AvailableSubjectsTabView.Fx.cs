@@ -167,9 +167,10 @@ public partial class AvailableSubjectsTabView
         {
             var p = _pops[i];
             double ms = FxTime.GetElapsedTime(p.Start).TotalMilliseconds;
-            double t = Math.Clamp(ms / 320, 0, 1) - 1;
-            double scale = 1 + 0.1 * (1.5 * t * t * t + 0.5 * t * t);
-            p.Scale.ScaleX = p.Scale.ScaleY = scale;
+            // WPF BackEase amplitude 0.5, EaseOut (MainWindow.Lobby.cs:196).
+            double progress = Math.Clamp(ms / 320, 0, 1), u = 1 - progress;
+            double eased = 1 - (u * u * u - 0.5 * u * Math.Sin(Math.PI * u));
+            p.Scale.ScaleX = p.Scale.ScaleY = 0.9 + 0.1 * eased;
             double r = Math.Clamp(ms / 520, 0, 1);
             if (p.Ring != null && p.RingScale != null)
             {

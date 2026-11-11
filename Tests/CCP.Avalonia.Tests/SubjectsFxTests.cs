@@ -103,6 +103,9 @@ public sealed class SubjectsFxTests
             window = new Window { Width = 1300, Height = 700, Content = view };
             window.Show();
             Dispatcher.UIThread.RunJobs();
+            view.PaintSnapshot(new LobbySnapshot(Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), false),
+                LobbyGates.From(false, false, false));
+            Dispatcher.UIThread.RunJobs();
             var row = new LobbyRow { Game = LobbyGame.Remote, Key = "one", HostName = "Host" };
             view.PaintSnapshot(new LobbySnapshot(new[] { row }, new[] { row }, new[] { row }, true),
                 LobbyGates.From(true, false, false));
@@ -213,8 +216,10 @@ public sealed class SubjectsFxTests
             if (motion != MotionLevel.Off)
             {
                 var scale = Assert.IsType<ScaleTransform>(grid.RenderTransform);
-                Step(view, clock, 160);
-                Assert.Equal(0.99375, scale.ScaleX, 5);
+                Step(view, clock, 80);
+                Assert.Equal(0.984329, scale.ScaleX, 6);
+                Step(view, clock, 80);
+                Assert.Equal(1.0125, scale.ScaleX, 5);
                 Assert.Equal(scale.ScaleX, scale.ScaleY, 5);
                 if (motion == MotionLevel.Full)
                 {
@@ -224,7 +229,9 @@ public sealed class SubjectsFxTests
                     Assert.Equal(0.6230769, ringBorder.Opacity, 6);
                 }
                 else Assert.Equal(0, ringBorder.Opacity);
-                Step(view, clock, 160);
+                Step(view, clock, 80);
+                Assert.Equal(1.007276, scale.ScaleX, 6);
+                Step(view, clock, 80);
                 Assert.Equal(1, scale.ScaleX, 6);
                 Assert.Equal(1, scale.ScaleY, 6);
                 Assert.Equal(motion == MotionLevel.Full, view.SubjectsFxRunning);
