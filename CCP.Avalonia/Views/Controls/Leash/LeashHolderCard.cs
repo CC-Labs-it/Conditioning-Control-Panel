@@ -287,8 +287,15 @@ public sealed class LeashHolderCard : Border
     }
     internal async Task<LeashSendStatus> TugAsync()
     {
-        var r = !TugThrottle.TryTug(_held.Who.Id, DateTime.UtcNow) ? new LeashSendResult(LeashSendStatus.TooFast)
-            : await Guarded(s => s.TugAsync(_held.Who.Id));
+        if (!TugThrottle.TryTug(_held.Who.Id, DateTime.UtcNow))
+        {
+            Cue(LeashCue.Denied);
+            var slow = new LeashSendResult(LeashSendStatus.TooFast);
+            Word(slow, Honest("leash_done_tug"));
+            return slow.Status;
+        }
+        Cue(LeashCue.Jingle);
+        var r = await Guarded(s => s.TugAsync(_held.Who.Id), false);
         Word(r, Honest("leash_done_tug")); return r.Status;
     }
     private void CloseGoodSheet(LeashSendResult r, bool video)
@@ -297,10 +304,18 @@ public sealed class LeashHolderCard : Border
         _sheet = null; if (video) _videoFor = null;
     }
     private string Honest(string key) => ReceiptsOn ? Loc.Get("leash_res_sent") : Loc.GetF(key, _held.Who.Name);
-    private async Task<LeashSendResult> Guarded(Func<ILeashService, Task<LeashSendResult>> call)
+    private void Cue(LeashCue cue) { try { PlayCue(cue); } catch { } }
+    private async Task<LeashSendResult> Guarded(Func<ILeashService, Task<LeashSendResult>> call, bool sentCue = true)
     {
-        try { return _service() is { } s ? await call(s) : new LeashSendResult(LeashSendStatus.Off); }
-        catch { return new LeashSendResult(LeashSendStatus.Failed); }
+        try
+        {
+            if (_service() is not { } s) return new LeashSendResult(LeashSendStatus.Off);
+            var r = await call(s);
+            if (LeashUiRules.IsGood(r.Status)) { if (sentCue) Cue(LeashCue.Sent); }
+            else if (r.Status is LeashSendStatus.TooFast or LeashSendStatus.Dnd or LeashSendStatus.Failed) Cue(LeashCue.Denied);
+            return r;
+        }
+        catch { Cue(LeashCue.Denied); return new LeashSendResult(LeashSendStatus.Failed); }
     }
     private void Word(LeashSendResult r, string goodText)
     {

@@ -18,6 +18,8 @@ internal static class LeashSound
     {
         var (rel, scale) = cue switch
         {
+            LeashCue.Sent => ("chaos/chip_pop.mp3", 0.16f),
+            LeashCue.Jingle => ("chaos/chain_pop.mp3", 0.22f),
             LeashCue.Tick => ("chaos/countdown_tick.mp3", 0.10f),
             LeashCue.Cut => ("chaos/snap.mp3", 0.22f),
             LeashCue.Denied => ("chaos/ui_denied.mp3", 0.16f),

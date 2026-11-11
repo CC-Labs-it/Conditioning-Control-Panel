@@ -302,6 +302,29 @@ public sealed class LeashHolderTests
         svc.ReceiptsSupported = false; svc.Publish(held); Assert.DoesNotContain("leash-sent", Tags(card));
     });
     [Fact]
+    public void HolderSendAndTugCuesFollowTheResult() => Run((page, svc, held) =>
+    {
+        var card = Assert.Single(page.HolderCards.Values);
+        var cues = new List<LeashCue>();
+        card.PlayCue = cues.Add;
+        card.SendAssignAsync(AssignKind.Quests, 1, null).GetAwaiter().GetResult();
+        Assert.Equal(new[] { LeashCue.Sent }, cues); cues.Clear();
+        foreach (var status in new[] { LeashSendStatus.TooFast, LeashSendStatus.Dnd, LeashSendStatus.Failed })
+        {
+            svc.Reply = new(status);
+            card.SendRewardAsync(RewardKind.Pardon, null, null).GetAwaiter().GetResult();
+            Assert.Equal(new[] { LeashCue.Denied }, cues); cues.Clear();
+        }
+        svc.ThrowSend = true;
+        card.SendPunishAsync(PunishKind.Lines, 1, null).GetAwaiter().GetResult();
+        Assert.Equal(new[] { LeashCue.Denied }, cues); cues.Clear();
+        svc.ThrowSend = false; svc.Reply = new(LeashSendStatus.Sent);
+        card.TugAsync().GetAwaiter().GetResult();
+        Assert.Equal(new[] { LeashCue.Jingle }, cues); cues.Clear();
+        card.TugAsync().GetAwaiter().GetResult();
+        Assert.Equal(new[] { LeashCue.Denied }, cues);
+    });
+    [Fact]
     public void TugThrottlesBeforeTheService() => Run((page, svc, held) =>
     {
         var card = Assert.Single(page.HolderCards.Values);
