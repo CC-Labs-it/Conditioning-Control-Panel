@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -111,6 +112,70 @@ public sealed class FlashVoiceTests
         Assert.Equal(0, LibVlcAudio.VlcVolume(rig.Volumes[0]));
         rig.Clips[0].Started!(TimeSpan.FromSeconds(3));
         Assert.Equal(new double?[] { 3.0 }, rig.Ready);
+    }
+
+    [Fact]
+    public void ThrowingPlaybackProviderFallsBackAndReleasesDucking()
+    {
+        using var rig = new Rig();
+        CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => throw new InvalidOperationException("player failure");
+        rig.Play(Voiced(), "bad.mp3");
+        Assert.Equal(new double?[] { 5 }, rig.Ready);
+        rig.RunLater(FlashVoice.StartTimeoutMs);
+        Assert.Equal(new double?[] { 5 }, rig.Ready);
+        rig.RunLater(6500);
+        Assert.Equal(new long[] { 7 }, rig.Unducks);
+    }
+
+    [Fact]
+    public async Task ZeroVoiceLevelProducesNoSamplesFromRealPlayback()
+    {
+        if (!OperatingSystem.IsLinux()) Assert.Skip("The recording output check runs on Linux.");
+        var root = Path.Combine(Path.GetTempPath(), "ccp-flash-silence-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var wav = Path.Combine(root, "tone.wav");
+        var output = Path.Combine(root, "recorded.wav");
+        var oldPlay = CoreAudio.PlayStoppableProvider;
+        var oldLater = FlashVoice.Later;
+        try
+        {
+            // A non-silent two-second tone exposes even a short leak at player startup.
+            const int rate = 22050, count = rate * 2;
+            using (var w = new BinaryWriter(File.Create(wav)))
+            {
+                w.Write("RIFF"u8.ToArray()); w.Write(36 + count * 2); w.Write("WAVEfmt "u8.ToArray());
+                w.Write(16); w.Write((short)1); w.Write((short)1); w.Write(rate); w.Write(rate * 2);
+                w.Write((short)2); w.Write((short)16); w.Write("data"u8.ToArray()); w.Write(count * 2);
+                for (var n = 0; n < count; n++) w.Write((short)(16000 * Math.Sin(2 * Math.PI * 440 * n / rate)));
+            }
+            LibVlcAudio audio;
+            try { audio = new LibVlcAudio("--aout=file", "--audiofile-file=" + output, "--audiofile-format=s16"); }
+            catch (Exception ex) { Assert.Skip("LibVLC unavailable: " + ex.Message); throw; }
+            var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            CoreAudio.PlayStoppableProvider = (path, gain, tag, started, finished) => audio.PlayOneShot(path, gain, tag, started,
+                () => { finished?.Invoke(); ended.TrySetResult(); });
+            FlashVoice.Later = (_, _) => { };
+            var ready = new TaskCompletionSource<double?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var settings = Voiced(false); settings.CompanionVoiceLevel = 0;
+            FlashVoice.Play(settings, new[] { wav }, value => ready.TrySetResult(value));
+            Assert.Equal(2.0, (await ready.Task.WaitAsync(TimeSpan.FromSeconds(8)))!.Value, 1);
+            await ended.Task.WaitAsync(TimeSpan.FromSeconds(8));
+            Assert.True(!File.Exists(output) || new FileInfo(output).Length <= 44, "silent voice emitted samples");
+
+            // Prove the recording output can detect this same tone.
+            var controlEnded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            audio.PlayOneShot(wav, 1f, "control", null, () => controlEnded.TrySetResult());
+            await controlEnded.Task.WaitAsync(TimeSpan.FromSeconds(8));
+            Assert.True(File.Exists(output) && new FileInfo(output).Length > 44, "recording output did not capture the control");
+            Assert.Contains(File.ReadAllBytes(output).Skip(44), b => b != 0);
+        }
+        finally
+        {
+            FlashVoice.Stop();
+            CoreAudio.PlayStoppableProvider = oldPlay;
+            FlashVoice.Later = oldLater;
+            Directory.Delete(root, true);
+        }
     }
 
     [Fact]

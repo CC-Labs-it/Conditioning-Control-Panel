@@ -154,6 +154,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
             CoreAudio.DuckGenerationProvider = () => { lock (_duckLock) return _duckGeneration; };
         }
 
+        // Keep the native callback rooted for every silent player. LibVLC discards its samples.
+        private static readonly MediaPlayer.LibVLCAudioPlayCb DiscardSamples = (_, _, _, _) => { };
+
         /// <summary>Same contract as WPF's AudioService.PlayOneShot: onStarted gets the clip length
         /// once playing; onFinished fires exactly once - off the UI thread when the clip ends or
         /// errors, synchronously on the caller's thread when it is refused (muted, missing file).
@@ -167,6 +170,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
             var player = new MediaPlayer(media);
             // WPF's volume is linear sample gain; LibVLC's is cubic, so 0.5 must land at ~-6 dB, not -18.
             var vol = VlcVolume(volume);
+            // The audio callback overrides every hardware output, including its first buffer.
+            // Volume applied in Playing is too late for a zero-level flash.
+            var silent = tag == "flash-voice" && vol == 0;
+            if (silent)
+            {
+                player.SetAudioCallbacks(DiscardSamples, null, null, null, null);
+                player.SetAudioFormat("S16N", 44100, 2);
+            }
             var done = 0;
             void Finish()
             {
@@ -182,7 +193,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 // Setting volume before Play, or inside this libvlc event, is lost: the pulse
                 // output only takes it once it exists, from a thread that is not libvlc's own.
-                ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) { ApplyPreferredDevice(player); player.Volume = vol; } });
+                ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) { if (!silent) ApplyPreferredDevice(player); player.Volume = vol; } });
                 if (onStarted is null) return;
                 try { onStarted(TimeSpan.FromMilliseconds(Math.Max(0, player.Length))); }
                 catch (Exception ex) { Log.Debug(ex, "[Audio] {Tag}: onStarted threw", tag); }
