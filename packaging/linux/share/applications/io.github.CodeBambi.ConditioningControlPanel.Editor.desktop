@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=CCP Editor
+Exec=conditioning-control-panel --edit %f
+Icon=io.github.CodeBambi.ConditioningControlPanel
+Terminal=false
+NoDisplay=true
+MimeType=video/mp4;video/webm;video/x-matroska;video/quicktime;video/x-msvideo;video/x-m4v;audio/mpeg;audio/x-wav;audio/mp4;audio/aac;audio/flac;audio/ogg;

@@ -119,7 +119,7 @@ if [ $uninstall = 1 ]; then
   app_running && die "CCP is running from $APP; close it first"
   [ -e "$APP" ] || [ -e "$LAUNCHER" ] || warn "nothing installed at $APP"
   T rm -rf "$APP" "$APP.new" "$APP.old"
-  T rm -f "$LAUNCHER" "$SHARE/applications/$APP_ID.desktop" "$SHARE/metainfo/$APP_ID.metainfo.xml"
+  T rm -f "$LAUNCHER" "$SHARE/applications/$APP_ID.desktop" "$SHARE/applications/$APP_ID.Player.desktop" "$SHARE/applications/$APP_ID.Editor.desktop" "$SHARE/metainfo/$APP_ID.metainfo.xml"
   T find "$SHARE/icons/hicolor" -path "*/apps/$APP_ID.*" -delete 2>/dev/null || true
   refresh_desktop
   ok "app, launcher and menu entry removed"
@@ -324,7 +324,21 @@ ok "launcher $LAUNCHER"
 # Released tarballs were built on Windows runners, so the .desktop/metainfo arrive with CRLF endings -
 # desktop-file-validate rejects them and some environments then hide the menu entry. Normalize on install.
 T mkdir -p "$SHARE/applications" "$SHARE/metainfo"
-sed -e 's/\r$//' -e "s|^Exec=.*|Exec=$LAUNCHER|" "$APP/share/applications/$APP_ID.desktop" | T tee "$SHARE/applications/$APP_ID.desktop" >/dev/null
+# Quote the executable for desktop-entry syntax and escape sed replacement characters.
+exec_path=${LAUNCHER//\\/\\\\}
+exec_path=${exec_path//\"/\\\"}
+exec_path=${exec_path//\$/\\\$}
+exec_path=${exec_path//\`/\\\`}
+exec_path=${exec_path//%/%%}
+exec_path=${exec_path//&/\\&}
+exec_path=${exec_path//|/\\|}
+for entry in "" .Player .Editor; do
+  source="$APP/share/applications/$APP_ID$entry.desktop"
+  [ -f "$source" ] || { [ -n "$entry" ] && continue; die "missing desktop entry: $source"; } # Older tarballs lack the handlers.
+  args=
+  case $entry in .Player) args=' --play %f';; .Editor) args=' --edit %f';; esac
+  sed -e 's/\r$//' -e "s|^Exec=.*|Exec=\"$exec_path\"$args|" "$source" | T tee "$SHARE/applications/$APP_ID$entry.desktop" >/dev/null
+done
 sed 's/\r$//' "$APP/share/metainfo/$APP_ID.metainfo.xml" | T tee "$SHARE/metainfo/$APP_ID.metainfo.xml" >/dev/null
 for icon in "$APP"/share/icons/hicolor/*/apps/$APP_ID.png; do
   rel=${icon#"$APP/share/"}; T mkdir -p "$SHARE/$(dirname "$rel")"; T cp "$icon" "$SHARE/$rel"
