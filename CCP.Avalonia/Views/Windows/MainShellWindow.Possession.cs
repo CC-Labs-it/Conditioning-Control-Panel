@@ -45,7 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private bool _possessionHostHooked;
         private bool _possessionAttached;
         private PossessionRuntime? _possessionRuntime;
-        private Point _possessionPointer;
+        private readonly PossessionPointer _possessionPointer = new();
 
         /// <summary>Live target objects, keyed by the control they describe: the director hangs cooldowns and
         /// the "currently possessed" flag off these, so they must outlive every rebuilt list.</summary>
@@ -74,16 +74,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     try
                     {
+                        _possessionPointer.Detach();
                         if (_possessionAttached) Director?.DetachHost(this);
                         _possessionAttached = false;
                     }
                     catch (Exception ex) { Serilog.Log.Warning(ex, "Possession: failed to detach the main window host"); }
                 };
-                // WPF PossessionPointer.Attach: the last pointer position, for the A5 proximity pick.
-                AddHandler(PointerMovedEvent, (_, e) =>
-                {
-                    try { _possessionPointer = e.GetPosition(_possessionGhostLayer ?? (Visual)this); } catch { }
-                }, RoutingStrategies.Tunnel, handledEventsToo: true);
                 LayoutUpdated += (_, _) =>
                 {
                     var now = DateTime.Now;
@@ -103,6 +99,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 EnsurePossessionLayers();
                 if (_possessionAttached || Director is not { } director) return;
+                _possessionPointer.Attach(this);
                 director.AttachHost(this);
                 _possessionAttached = true;
             }
@@ -144,7 +141,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         PossessionRuntime IAvaloniaPossessionHost.PossessionEffectRuntime =>
             _possessionRuntime ??= new PossessionRuntime(((IAvaloniaPossessionHost)this).PossessionFrames);
 
-        Point IAvaloniaPossessionHost.PointerPosition => _possessionPointer;
+        Point IAvaloniaPossessionHost.PointerPosition => _possessionPointer.Position;
 
         Rect? IAvaloniaPossessionHost.BoundsOnGhostLayer(Control element)
         {
@@ -245,7 +242,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                var origin = _possessionPointer;
+                var origin = _possessionPointer.Position;
                 bool haveCursor = origin.X > 0 || origin.Y > 0;
                 double Score(PossessionTarget t)
                 {
