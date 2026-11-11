@@ -22,7 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// game that does not pause on Escape.</summary>
         internal PanicPolicy.KeptEscapePage KeptEscapePage => Spec.Id.ToLowerInvariant() switch
         {
-            "race" => PanicPolicy.KeptEscapePage.Race,
+            "raceclassic" => PanicPolicy.KeptEscapePage.Race,
             PbpId => PanicPolicy.KeptEscapePage.Board,
             "breakoutdemo" or "breakout" => PanicPolicy.KeptEscapePage.Breakout,
             DtrhId => PanicPolicy.KeptEscapePage.Dtrh,

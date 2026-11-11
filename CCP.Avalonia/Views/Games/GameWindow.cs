@@ -362,7 +362,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             lock (Open) all = Open.ToArray();
             foreach (var w in all)
             {
-                try { if (w.IsDtrh) w.CloseDtrhForPanic(); else w.Close(); }
+                try { if (w.IsDtrh) w.CloseDtrhForPanic(); else if (w.IsRace) w.CloseRaceForPanic(); else w.Close(); }
                 catch (Exception ex) { Log.Warning(ex, "[Game] panic close of {Id} failed", w.Spec.Id); }
             }
         }

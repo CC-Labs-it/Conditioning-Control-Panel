@@ -689,6 +689,7 @@ public sealed class PlayWallTests
     [Theory]
     [InlineData("BtnPlayDtrh", "game.dtrh")]
     [InlineData("BtnPlayRacingThoughts", "game.race")]
+    [InlineData("BtnPlayRacingThoughtsClassic", "game.raceclassic")]
     public void GameCardsPinAndUnpinThroughTheirContextMenu(string buttonName, string id)
     {
         AvaloniaTestDispatcher.Run(() =>
@@ -722,6 +723,7 @@ public sealed class PlayWallTests
                 menu.Close();
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal(new[] { id }, settings.RailFavorites);
+                Assert.Equal(id.Substring("game.".Length), SettingsPaletteIndex.All.Single(e => e.Id == id).GameId);
 
                 button.RaiseEvent(new ContextRequestedEventArgs());
                 Dispatcher.UIThread.RunJobs();

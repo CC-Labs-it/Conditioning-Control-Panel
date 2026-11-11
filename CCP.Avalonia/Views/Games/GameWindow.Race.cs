@@ -37,6 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private bool IsRace => string.Equals(Spec.Id, "raceclassic", StringComparison.OrdinalIgnoreCase);
         private readonly RaceRunLifecycle _raceRun = new();
         private DispatcherTimer? _raceHeartbeatWatch;
+        private IDisposable? _raceExitWatchdog;
         private DateTime _raceLastHeartbeatUtc;
         private int[] _raceOwnedTracks = Array.Empty<int>();
         private bool _racePinged, _raceExiting, _raceStarted, _raceDisposed;
@@ -117,11 +118,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     OnRaceRunEnded(o);
                     return true;
                 case "exit":
-                    _raceExiting = true;   // the shell arms the 1200 ms close (WPF ArmExitWatchdog)
-                    return false;
+                    _raceExiting = true;
+                    RaceStopTrack();
+                    ArmRaceExitWatchdog();
+                    return true;
                 default:
                     return false;
             }
+        }
+
+        // WPF CaucusHostService.CloseActive: a ready page gets time to settle its run.
+        private void CloseRaceForPanic()
+        {
+            try
+            {
+                if (IsReady && !_raceExiting)
+                {
+                    _raceExiting = true;
+                    Post(new { type = "exit-request" });
+                    ArmRaceExitWatchdog();
+                }
+                else Close();
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("RaceHost: exit-request failed: {E}", ex.Message);
+                Close();
+            }
+        }
+
+        private void ArmRaceExitWatchdog()
+        {
+            _raceExitWatchdog?.Dispose();
+            _raceExitWatchdog = DispatcherTimer.RunOnce(Close, TimeSpan.FromMilliseconds(1200));
         }
 
         /// <summary>WPF OnPageReady (:255): init with the race's settings block, then the manifest.</summary>
@@ -287,6 +316,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF DisposeAll (:686): the one funnel every exit reaches (Closed). Idempotent.</summary>
         private void DisposeRace()
         {
+            _raceExitWatchdog?.Dispose();
+            _raceExitWatchdog = null;
             DtrhLoomStore.Changed -= OnRaceLoomChanged;
             RaceMilestonePopup?.Close();
             if (!_raceStarted || _raceDisposed) return;
