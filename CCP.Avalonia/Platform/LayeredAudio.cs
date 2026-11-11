@@ -323,8 +323,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
 
             /// <summary>Per pass: pulse drops a volume set too soon after the stream opens, so retry the newest
-            /// target off the caller (the mantra ramp is on the UI thread), bounded at 20 x 25 ms, then unmute
-            /// anyway. It only ever unmutes: a set that reads back late never silences an audible pass.</summary>
+            /// target off the caller (the mantra ramp is on the UI thread), bounded at 20 x 25 ms. Unmutes only on a
+            /// confirmed gain (WPF sets it before Play); unconfirmed stays muted until a later set sticks.</summary>
             internal sealed class GainWorker(Func<int?> target, Func<int, bool> trySet, Action unmute)
             {
                 private int _busy;
@@ -338,9 +338,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 {
                     while (true)
                     {
-                        int? v = null;
-                        for (var i = 0; i < 20 && (v = target()) is { } want && !trySet(want); i++) Thread.Sleep(25);
-                        if (v != null) unmute();
+                        int? v = null; var ok = false;
+                        for (var i = 0; i < 20 && (v = target()) is { } want && !(ok = trySet(want)); i++) Thread.Sleep(25);
+                        if (ok) unmute();
                         Volatile.Write(ref _busy, 0);
                         // A target set while we held _busy skipped its own Kick: take it on unless another did.
                         if (v == null || target() == v || Interlocked.Exchange(ref _busy, 1) != 0) return;

@@ -32,25 +32,27 @@ public sealed class LayeredAudioTests
     }
 
     [Fact]
-    public void UnresponsiveOutputRetriesOffTheCallerThenUnmutesOnce()
+    public void UnresponsiveOutputRetriesOffTheCallerAndStaysMutedUntilAGainSticks()
     {
         var caller = Environment.CurrentManagedThreadId;
-        int attempts = 0, thread = caller, unmutes = 0;
+        int attempts = 0, thread = caller, unmutes = 0, sticks = 0;
         var gain = new LayeredAudio.VlcLayerPlayer.GainWorker(() => 40, _ =>
         {
             Volatile.Write(ref thread, Environment.CurrentManagedThreadId);
             Interlocked.Increment(ref attempts);
-            return false;                                        // the output never reports the gain
+            return Volatile.Read(ref sticks) == 1;               // the output drops every gain until it recovers
         }, () => Interlocked.Increment(ref unmutes));
         var clock = Stopwatch.StartNew();
         gain.Kick();
         gain.Kick();                                             // a second set joins the running worker
         Assert.True(clock.Elapsed < TimeSpan.FromMilliseconds(200), "the caller (mantra ramp, UI thread) never waits on the output");
-        Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref unmutes) > 0, 5000), "bounded: unmuted after 20 tries");
+        Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref attempts) >= 20, 5000), "bounded: 20 tries");
         Thread.Sleep(200);
         Assert.Equal(20, Volatile.Read(ref attempts));
-        Assert.Equal(1, Volatile.Read(ref unmutes));
+        Assert.Equal(0, Volatile.Read(ref unmutes));             // unconfirmed gain: never unmuted at an unknown volume
         Assert.NotEqual(caller, Volatile.Read(ref thread));
+        Volatile.Write(ref sticks, 1); gain.Kick();              // the next set that sticks unmutes, once
+        Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref unmutes) == 1, 5000));
     }
 
     [Fact]
@@ -124,8 +126,8 @@ public sealed class LayeredAudioTests
             layers.SetMasterVolumeLive();
             Assert.True(layers.VolumeUpdates.Wait(TimeSpan.FromSeconds(5)));
             Assert.Equal(79, opened[0].Volume);
-            layers.ApplyDuck(0.8f);
-            Assert.True(layers.VolumeUpdates.Wait(TimeSpan.FromSeconds(5)));                              // 0.5 x 0.2 = 0.1
+            layers.ApplyDuck(0.8f);                              // 0.5 x 0.2 = 0.1
+            Assert.True(layers.VolumeUpdates.Wait(TimeSpan.FromSeconds(5)));
             Assert.Equal(46, opened[0].Volume);
             layers.ReleaseDuck();
             Assert.True(layers.VolumeUpdates.Wait(TimeSpan.FromSeconds(5)));
