@@ -6,6 +6,34 @@ using Xunit;
 public class SeasonRolloverTests
 {
     [Fact]
+    public void SyncResponseReportsSeasonAdvance()
+    {
+        var s = new AppSettings { CurrentSeason = "2026-07" };
+        var reply = Newtonsoft.Json.Linq.JObject.Parse("""{"user":{"level":1,"xp":0,"current_season":"2026-08"}}""");
+        Assert.True(ProfileAdopt.ApplySyncResponse(s, reply, new System.DateTime(2026, 8, 1)));
+        Assert.Equal("2026-08", s.CurrentSeason);
+        Assert.False(ProfileAdopt.ApplySyncResponse(s, reply, new System.DateTime(2026, 8, 1)));
+    }
+
+    [Fact]
+    public void AcceptedResetSetsPendingAndRequestsBookkeeping()
+    {
+        var s = new AppSettings { CurrentSeason = "2026-08" };
+        var reply = Newtonsoft.Json.Linq.JObject.Parse("""{"level_reset":true,"user":{"level":1,"xp":0,"current_season":"2026-08"}}""");
+        Assert.True(ProfileAdopt.ApplySyncResponse(s, reply, new System.DateTime(2026, 8, 1)));
+        Assert.True(s.SeasonResetPending);
+    }
+
+    [Fact]
+    public void DescentRefusedResetDoesNotSetPendingOrRequestBookkeeping()
+    {
+        var s = new AppSettings { CurrentSeason = "2026-08", DescentMigrationCompleted = true };
+        var reply = Newtonsoft.Json.Linq.JObject.Parse("""{"level_reset":true,"user":{"level":1,"xp":0,"current_season":"2026-08"}}""");
+        Assert.False(ProfileAdopt.ApplySyncResponse(s, reply, new System.DateTime(2026, 8, 1)));
+        Assert.False(s.SeasonResetPending);
+    }
+
+    [Fact]
     public void CoreDoesNotExportWpfSeasonRecapService()
     {
         Assert.Null(typeof(CoreSettings).Assembly.GetType("ConditioningControlPanel.Services.SeasonRecapService"));

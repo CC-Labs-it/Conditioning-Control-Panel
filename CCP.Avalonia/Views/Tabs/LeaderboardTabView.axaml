@@ -508,8 +508,7 @@
                             ToolTip.Tip="{loc:Str btn_jump_to_me}">
                         <TextBlock Text="&#x25CE;"/>
                     </Button>
-                    <!-- Seasons are retired (WPF feda9c907): the recap button stays for its callers,
-                         its host never shows. -->
+                    <!-- The shell reveals the recap host when a saved snapshot exists. -->
                     <Border x:Name="SeasonRecapHost" IsVisible="False">
                         <Button x:Name="BtnViewSeasonRecap" Theme="{StaticResource LbTextButton}"
                                 IsVisible="False">

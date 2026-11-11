@@ -49,16 +49,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// </summary>
         private void HookFirstRun()
         {
-            // WPF MainWindow.Marquee.cs:290 catches bookkeeping errors independently.
-            try
-            {
-                if (CoreSettings.Service != null && Services.SeasonRollover.UpdateBookkeeping(CoreSettings.Current,
-                    handle: CoreAccount.DisplayName, isSupporter: CoreAccount.HasPremiumAccess,
-                    lifetimePointsSpent: App.Achievements?.Progress?.LifetimeSkillPointsSpent ?? 0,
-                    fallbackPercentile: _lbPercentile))
-                    CoreSettings.Save();
-            }
-            catch (Exception ex) { Log.Warning(ex, "Failed to update monthly bookkeeping"); }
+            Platform.AccountSeed.SeasonChanged += NudgeSeasonBookkeeping;
+            Closed += (_, _) => { _seasonNudgeClosed = true; Platform.AccountSeed.SeasonChanged -= NudgeSeasonBookkeeping; };
+            RunSeasonBookkeeping();
 
             try
             {
@@ -77,6 +70,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // A first-run screen must never be the reason a fresh install fails to start.
                 Log.Warning(ex, "[FirstRun] Could not arm the first-run wizard");
             }
+        }
+
+        private void NudgeSeasonBookkeeping()
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_seasonNudgeClosed) return;
+                RunSeasonBookkeeping();
+                RefreshSeasonRecapReview();
+            });
+        }
+
+        private bool _seasonNudgeClosed;
+
+        private void RunSeasonBookkeeping()
+        {
+            try
+            {
+                if (CoreSettings.Service != null && Services.SeasonRollover.UpdateBookkeeping(CoreSettings.Current,
+                    handle: CoreAccount.DisplayName, isSupporter: CoreAccount.HasPremiumAccess,
+                    lifetimePointsSpent: App.Achievements?.Progress?.LifetimeSkillPointsSpent ?? 0,
+                    fallbackPercentile: _lbPercentile))
+                    CoreSettings.Save();
+            }
+            catch (Exception ex) { Log.Warning(ex, "Failed to update monthly bookkeeping"); }
+
         }
 
         /// <summary>

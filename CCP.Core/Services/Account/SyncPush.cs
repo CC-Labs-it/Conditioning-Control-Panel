@@ -291,7 +291,7 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var reply = JObject.Parse(json);
-                    ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
+                    if (ProfileAdopt.ApplySyncResponse(s, reply, UtcNow())) SeasonNudge?.Invoke();
                     // WPF HandleDescentMigrationAck: settle/heal an account migrated on any device. This head never
                     // takes the offer (no descent_auto), so only the ack half runs here.
                     Descent.DescentMigrationAck.Apply(s, reply);
@@ -332,6 +332,9 @@ namespace ConditioningControlPanel.Services
         /// <summary>A heartbeat reply's body, off the UI thread. It carries the server's effective_tier
         /// (WPF ProfileSyncService hands the same body to EntitlementTierSync.Offer).</summary>
         public Action<string>? HeartbeatBody;
+
+        /// <summary>Server season changes need the head to run silent bookkeeping.</summary>
+        public Action? SeasonNudge;
 
         /// <summary>WPF StartHeartbeat: one now, then every 120 s.</summary>
         public void StartHeartbeat()

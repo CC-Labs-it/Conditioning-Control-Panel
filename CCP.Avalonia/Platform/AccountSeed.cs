@@ -128,7 +128,7 @@ internal static class AccountSeed
     /// WPF ProfileSyncService.LoadProfileAsync's V2 read-before-write (ReadServerProfileBeforePushAsync), READ-ONLY:
     /// GET /v2/user/profile, follow the curve epoch, offer a tier rise, adopt take-higher (Core <see cref="ProfileAdopt"/>).
     /// Then, as WPF LoadProfileAsync does after the read, the heartbeat and the push (<see cref="Sync"/>; unseeded = none).
-    /// ponytail: no season-recap nudge - the next layer.
+    /// Season advances nudge the shell for silent bookkeeping.
     /// </summary>
     /// <param name="v2">Tests only.</param>
     internal static async Task<bool> LoadProfileAsync(V2AuthService? v2 = null)
@@ -152,6 +152,9 @@ internal static class AccountSeed
 
     /// <summary>WPF ProfileSyncService.ProfileLoaded: a profile load succeeded (the welcome-back sheet's second look).</summary>
     internal static event Action? ProfileLoaded;
+
+    internal static event Action? SeasonChanged;
+    internal static void NudgeSeason() => SeasonChanged?.Invoke();
 
     /// <summary>Tests only: the client every default-path load and restore uses.</summary>
     internal static Func<V2AuthService> NewV2 = () => new V2AuthService();
@@ -221,7 +224,7 @@ internal static class AccountSeed
         }
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);
         ApplyTierReading(EntitlementTierRule.ParseTier(user.EffectiveTierRaw), "profile");
-        ProfileAdopt.AdoptReadBeforeWrite(s, user);
+        if (ProfileAdopt.AdoptReadBeforeWrite(s, user)) NudgeSeason();
         CoreSettings.Save();
         Log.Information("Profile load: Level {Level} ({Xp} XP into level) after adopt", s.PlayerLevel, (int)s.PlayerXP);
         if (Sync is { } sync)

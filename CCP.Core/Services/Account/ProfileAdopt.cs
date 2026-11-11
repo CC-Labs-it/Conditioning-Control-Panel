@@ -158,15 +158,16 @@ namespace ConditioningControlPanel.Services
         /// The <c>/v2/user/sync</c> response rules a head that only knows level/xp/season acts on, in WPF's order
         /// (ProfileSyncService.SyncProfileAsync): curve epoch, season forward, then <c>level_reset</c> (with the
         /// Descent refusal) or the server-ahead adopt, then the agreed watermark. Everything else is ignored.
-        /// ponytail: no anti-cheat clamp (a downward write; skipping it errs safe), no skills union, recap or
-        /// SeasonResetPending on level_reset - add each with its feature. Does not save.
+        /// ponytail: no anti-cheat clamp (a downward write; skipping it errs safe), no skills union.
+        /// Returns true when silent season bookkeeping should run. Does not save.
         /// </summary>
-        public static void ApplySyncResponse(AppSettings settings, JObject response, DateTime nowUtc)
+        public static bool ApplySyncResponse(AppSettings settings, JObject response, DateTime nowUtc)
         {
-            if (response["user"] is not JObject node) return;
+            if (response["user"] is not JObject node) return false;
             var user = node.ToObject<V2User>()!;
             ApplyCurveEpoch(settings, user.CurveEpoch);
-            if (ShouldAdoptServerSeason(user.CurrentSeason, settings.CurrentSeason))
+            var seasonNudge = ShouldAdoptServerSeason(user.CurrentSeason, settings.CurrentSeason);
+            if (seasonNudge)
             {
                 Log.Information("V2 Sync: season key advanced {Old} -> {New}", settings.CurrentSeason ?? "(none)", user.CurrentSeason);
                 settings.CurrentSeason = user.CurrentSeason;
@@ -179,6 +180,8 @@ namespace ConditioningControlPanel.Services
                         settings.PlayerLevel, user.Level, user.Xp);
                 else
                 {
+                    settings.SeasonResetPending = true;
+                    seasonNudge = true;
                     ClearXpWatermark(settings, "admin level_reset");
                     Log.Information("V2 Sync: Level reset by admin — forcing Level {Level}, XP {Xp}", user.Level, user.Xp);
                     settings.PlayerLevel = user.Level;
@@ -198,6 +201,7 @@ namespace ConditioningControlPanel.Services
                 }
             }
             RecordAgreedServerXp(settings, user.Xp, TotalXp(settings), "V2 sync");
+            return seasonNudge;
         }
 
         /// <summary>
