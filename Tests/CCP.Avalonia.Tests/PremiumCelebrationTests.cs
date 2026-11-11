@@ -40,6 +40,7 @@ public sealed class PremiumCelebrationTests
             var s = CoreSettings.Current;
             s.Welcomed = true;                      // no first-run wizard holding the presenter
             s.HasAcceptedAgeVerification = true;
+            s.WhatMovedCardShown = 1;             // no upgrade card occupying the passive presenter
             // Every card spent except the tier celebrations, so no other launch card holds the presenter.
             foreach (var k in FeatureIntros.All.Keys) if (!s.SeenFeatureIntros.Contains(k)) s.SeenFeatureIntros.Add(k);
             s.SeenFeatureIntros.Remove(TierCelebration.KeyT1);
