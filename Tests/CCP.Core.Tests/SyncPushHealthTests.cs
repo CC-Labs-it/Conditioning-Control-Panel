@@ -1,0 +1,63 @@
+using System;
+using System.Collections.Generic;
+using System.Net;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Services;
+using Xunit;
+
+namespace CCP.Core.Tests;
+
+[Collection(CoreSecretsStatics.Name)]
+public class SyncPushHealthTests
+{
+    private sealed class Wire : HttpMessageHandler
+    {
+        public bool Succeed;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(Succeed ? HttpStatusCode.OK : HttpStatusCode.InternalServerError) { Content = new StringContent("{}") });
+    }
+
+    [Fact]
+    public async Task FailuresAndSuccessReportHealthButSkipsDoNot()
+    {
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldLogin = CoreAccount.IsLoggedInProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        CoreAccount.IsLoggedInProvider = () => true;
+        var wire = new Wire();
+        var sync = new SyncPush(() => Array.Empty<string>(), () => false, wire);
+        var now = DateTime.UtcNow;
+        sync.UtcNow = () => now;
+        var events = new List<int>();
+        sync.SyncHealthChanged += (_, count) => events.Add(count);
+        try
+        {
+            settings.Current.UnifiedId = "health-test";
+            settings.Current.AuthToken = "fake";
+            settings.Current.OfflineMode = false;
+            settings.Current.LastConfirmedServerXp = 0;
+            sync.MarkLoaded(null);
+            for (var i = 0; i < 3; i++)
+            {
+                Assert.False(await sync.PushAsync("failure"));
+                Assert.False(await sync.PushAsync("backoff skip"));
+                now += TimeSpan.FromMinutes(20);
+            }
+            Assert.Equal(new[] { 1, 2, 3 }, events);
+            wire.Succeed = true;
+            Assert.True(await sync.PushAsync("success"));
+            Assert.False(await sync.PushAsync("cooldown skip"));
+            Assert.Equal(new[] { 1, 2, 3, 0 }, events);
+        }
+        finally
+        {
+            sync.Reset();
+            CoreSettings.ServiceProvider = oldSettings;
+            CoreAccount.IsLoggedInProvider = oldLogin;
+        }
+    }
+}

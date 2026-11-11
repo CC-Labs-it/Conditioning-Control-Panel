@@ -115,6 +115,9 @@ namespace ConditioningControlPanel.Services
         public Func<DateTime> UtcNow = () => DateTime.UtcNow;
 
         // Failure backoff (release/6.11.5, WPF ProfileSyncService.NoteSyncFailureForBackoff). Touched only inside _gate.
+        public event EventHandler<int>? SyncHealthChanged;
+        public int ConsecutiveSyncFailures { get; private set; }
+
         private int _backoffFailures;
         private DateTime? _blockedUntilUtc;
         private string? _backoffToken;
@@ -127,6 +130,8 @@ namespace ConditioningControlPanel.Services
 
         private void NoteFailureForBackoff(int? status, string? tokenUsed)
         {
+            ConsecutiveSyncFailures++;
+            SyncHealthChanged?.Invoke(this, ConsecutiveSyncFailures);
             _backoffFailures++;
             var wait = SyncFailureBackoff.Delay(_backoffFailures);
             _blockedUntilUtc = UtcNow() + wait;
@@ -320,6 +325,11 @@ namespace ConditioningControlPanel.Services
                 LastSyncTime = UtcNow();
                 Interlocked.Increment(ref _syncSuccesses);
                 (_backoffFailures, _blockedUntilUtc) = (0, null);
+                if (ConsecutiveSyncFailures > 0)
+                {
+                    ConsecutiveSyncFailures = 0;
+                    SyncHealthChanged?.Invoke(this, 0);
+                }
                 // The clear has reached the server; an empty loadout goes back to meaning "no change" (WPF).
                 if (clearing && cosmetics?.IsEmpty == true) _pendingCosmeticsClear = false;
                 Log.Information("V2 Profile synced successfully ({Bytes} bytes)", json.Length);
