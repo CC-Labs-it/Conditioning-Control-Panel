@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using Newtonsoft.Json.Linq;
 using Xunit;
@@ -30,7 +31,7 @@ public sealed partial class GameWindowTests
     private static void RunCounter(Action<ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow, ShopWire, List<JObject>> body) => Run((shell, launcher) =>
     {
         var s = CoreSettings.Current;
-        var (oldHttp, oldBase, oldSignIn, oldSecret) = (GameWindow.CounterHttp, GameWindow.CounterServerBase, GameWindow.CounterSignIn, CoreSecrets.RetrieveProvider);
+        var (oldHttp, oldBase, oldSignIn, oldSecret, oldProbe) = (GameWindow.CounterHttp, GameWindow.CounterServerBase, GameWindow.CounterSignIn, CoreSecrets.RetrieveProvider, UiMotionPreference.OsProbe);
         var (oldId, oldKey, oldEnabled) = (s.UnifiedId, s.PanicKey, s.PanicKeyEnabled);
         var wire = new ShopWire();
         launcher.Hide();
@@ -44,7 +45,8 @@ public sealed partial class GameWindowTests
         }
         finally
         {
-            (GameWindow.CounterHttp, GameWindow.CounterServerBase, GameWindow.CounterSignIn, CoreSecrets.RetrieveProvider) = (oldHttp, oldBase, oldSignIn, oldSecret);
+            (GameWindow.CounterHttp, GameWindow.CounterServerBase, GameWindow.CounterSignIn, CoreSecrets.RetrieveProvider, UiMotionPreference.OsProbe) = (oldHttp, oldBase, oldSignIn, oldSecret, oldProbe);
+            UiMotionPreference.CacheStamp = long.MinValue;   // drop a cached probe from this test
             (s.UnifiedId, s.PanicKey, s.PanicKeyEnabled) = (oldId, oldKey, oldEnabled);
         }
     });
@@ -77,7 +79,7 @@ public sealed partial class GameWindowTests
         Assert.Equal("acct-1", (string?)init["identity"]!["unifiedId"]);
         Assert.Equal(("kart", "glassroad"), ((string?)init["tab"], (string?)init["from"]));
         Assert.Equal("Prize Counter", (string?)init["lexicon"]!["shop_title"]);
-        Assert.Empty((JArray)init["wears"]!);
+        Assert.Empty((JArray)init["wears"]!); Assert.False((bool)init["reducedMotion"]!);
         Assert.DoesNotContain("tok", init.ToString());
 
         w.HandleMessage("{\"type\":\"request\",\"reqId\":\"r1\",\"op\":\"shop-state\"}");
@@ -91,9 +93,10 @@ public sealed partial class GameWindowTests
         Assert.Single(wire.Urls);
 
         Assert.Same(w, GameWindow.LaunchPrizeCounter("", "chess"));   // another tab reloads; a blank door keeps the source (WPF :320)
+        UiMotionPreference.OsProbe = () => false; UiMotionPreference.CacheStamp = long.MinValue;   // OS animations off (WPF :535)
         sent.Clear(); w.HandleMessage("{\"type\":\"ready\"}");
         var again = sent.Single(o => (string?)o["type"] == "init");
-        Assert.Equal(("chess", "glassroad"), ((string?)again["tab"], (string?)again["from"]));
+        Assert.Equal(("chess", "glassroad", true), ((string?)again["tab"], (string?)again["from"], (bool)again["reducedMotion"]!));
     });
 
     /// <summary>WPF SignInFromPage: signed out answers signed_out; signin opens the sign-in, then pins and reloads.</summary>

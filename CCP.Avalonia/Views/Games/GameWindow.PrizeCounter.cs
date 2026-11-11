@@ -3,7 +3,7 @@
 // WPF GameSurfaces.cs:66), app exit closes it (WPF App.xaml.cs:6433), a first Escape is the page's back
 // (PanicPolicy.KeptEscapePage.Counter, WPF MainWindow.xaml.cs:1531). Openers hear the close once, with its reason.
 // ponytail: part B (row game-prize-counter): wear routing (init.wears stays empty, so no Wear), the doors that
-// call LaunchPrizeCounter, Rain price cache, boot wallet read, SeasonRecap e_shop, OS reducedMotion.
+// call LaunchPrizeCounter, Rain price cache, boot wallet read, SeasonRecap e_shop.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -57,9 +57,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 w = new GameWindow(Games[PrizeCounterId]) { _counterFrom = string.IsNullOrWhiteSpace(from) ? "wallet" : from, _counterTab = tab };
                 if (onClosed != null) w._counterOnClosed.Add(onClosed);
-                w.Load(Server());
-                w.Show();
-                return w;
+                w.Load(Server()); w.Show(); return w;
             }
             catch (Exception ex)
             {
@@ -93,8 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF :335 identity pin: a fresh relay for the opener and a new generation (a late reply reaches no new page).</summary>
         private void StartCounter(string? opener)
         {
-            _counterOpener = opener;
-            ++_counterGeneration;
+            _counterOpener = opener; ++_counterGeneration;
             var baseUrl = CounterServerBase();
             _counterRelay = new PrizeCounterRelay(CounterHttp(),
                 () => FriendsHead.Identity() is { } id && id.UnifiedId == _counterOpener ? id : null,
@@ -173,7 +170,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 lexicon = LocalizationManager.Instance.KeysWithPrefix("shop_").Distinct(StringComparer.Ordinal)
                     .ToDictionary(k => k, k => Loc.Get(k), StringComparer.Ordinal),
                 motion = PrizeCounterRules.MotionWire(s.MotionLevel, GentleVisuals.On),
-                gentle = GentleVisuals.On, reducedMotion = false,
+                gentle = GentleVisuals.On, reducedMotion = !UiMotionPreference.AnimationsEnabled,   // WPF :535 ClientAreaAnimation
                 tab = !RainV2Gate.On && PrizeCounterRules.IsRainId(_counterTab) ? null : _counterTab,
                 from = _counterFrom, wears = Array.Empty<string>(), platform = "desktop",
                 companion = CompanionName.ForActiveMod(), rainV2 = RainV2Gate.On,
