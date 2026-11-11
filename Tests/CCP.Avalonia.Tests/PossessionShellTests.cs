@@ -176,14 +176,14 @@ public sealed class PossessionShellTests
         var targets = host.Targets;
         Assert.NotEmpty(targets);
         Assert.Contains(targets, t => t.Role == PossessionRole.Button);
-        // The never-names (the timer value, the readout, the XP odometer...) are never offered while visible.
+        // Hand-tagged timer is offered; the other never-names remain excluded.
         var page = rig.Shell.Named<LockdownTabView>("LockdownTab")!;
         Assert.True(page.TxtLockdownTimer.IsEffectivelyVisible);
         Assert.True(page.PossessionPips.IsEffectivelyVisible);
         foreach (var t in targets)
         {
             var name = ((Control)t.Visual).Name;
-            Assert.False(name != null && MainShellWindow.PossessionNeverNames.Contains(name), $"never-name {name} was offered");
+            Assert.False(name != "TxtLockdownTimer" && name != null && MainShellWindow.PossessionNeverNames.Contains(name), $"never-name {name} was offered");
             Assert.False(t.Visual is Border b && ReferenceEquals(b, rig.Shell.PossessionGhostLayer));
             Assert.False(string.IsNullOrEmpty(t.Key));
             Assert.False(string.IsNullOrEmpty(t.DisplayName));
@@ -198,6 +198,24 @@ public sealed class PossessionShellTests
         rig.Shell.InvalidatePossessionTargets();
         var again = host.Targets;
         Assert.Contains(first, again);
+    });
+
+    [Fact]
+    public void HandTagsOfferDoorsAndTheLockdownTimer() => Run(rig =>
+    {
+        rig.Lockdown.Activate(TimeSpan.FromMinutes(30));
+        rig.Shell.ShowTab("lockdown");
+        Frame();
+        var targets = ((IPossessionHost)rig.Shell).Targets;
+        foreach (var name in new[] { "Home", "Studio", "Companion", "Play", "Social", "You", "Library", "Settings" })
+        {
+            var door = Assert.Single(targets.Where(t => t.Key == "Door" + name));
+            Assert.Equal(PossessionRole.TabHeader, door.Role);
+            Assert.Equal("the " + name + " door", door.DisplayName);
+        }
+        var timer = Assert.Single(targets.Where(t => t.Key == "TxtLockdownTimer"));
+        Assert.Equal(PossessionRole.Timer, timer.Role);
+        Assert.Equal("the timer", timer.DisplayName);
     });
 
     [Fact]

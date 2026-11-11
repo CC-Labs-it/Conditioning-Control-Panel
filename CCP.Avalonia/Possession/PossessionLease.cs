@@ -158,7 +158,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
 
         /// <summary>Off limits when the control IS excluded, CONTAINS anything excluded, or it or any
         /// ancestor is named for a room the user must be able to leave (lockdown/emergency/secret).</summary>
-        public static bool IsOffLimits(Control? el)
+        public static bool IsOffLimits(Control? el, bool timerWobble = false)
         {
             if (el == null) return true;
             try
@@ -168,7 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
                 {
                     if (node is not Control c) continue;
                     if (GetExclude(c)) return true;
-                    if (PossessionOffLimits.IsReservedName(c.Name)) return true;
+                    if (!timerWobble && PossessionOffLimits.IsReservedName(c.Name)) return true;
                 }
             }
             catch { return true; }
