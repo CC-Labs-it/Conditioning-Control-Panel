@@ -577,6 +577,9 @@ namespace ConditioningControlPanel.Avalonia
 
         public override void OnFrameworkInitializationCompleted()
         {
+            Views.Games.GameWindow.RaceEngineFetch = Platform.RaceEngineFetchAdapter.Seed(
+                OperatingSystem.IsLinux(), System.IO.File.Exists(System.IO.Path.Combine(
+                    AppContext.BaseDirectory, "Resources", "web", "glassroad-shell", "main.js")));
             // "[SANDBOX] " on every window title of a CCP_USERDATA_DIR run. Desktop only: offscreen renders/snapshots
             // reach this callback too and must keep the real titles.
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime) Platform.SandboxMarker.Install();

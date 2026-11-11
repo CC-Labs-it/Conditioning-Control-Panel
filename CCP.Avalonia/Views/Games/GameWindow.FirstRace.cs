@@ -77,7 +77,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var progress = new Progress<double>(value =>
             {
                 if (_raceFetch == cancel && !cancel.IsCancellationRequested && !_closing)
-                    RaceStatus.Text = Loc.GetF("rt_engine_progress", (int)Math.Clamp(value, 0, 100));
+                    RaceStatus.Text = double.IsNaN(value) ? Loc.Get("rt_engine_downloading") : Loc.GetF("rt_engine_progress", (int)Math.Clamp(value, 0, 100));
             });
             try
             {
