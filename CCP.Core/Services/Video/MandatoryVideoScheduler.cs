@@ -92,6 +92,9 @@ namespace ConditioningControlPanel.Services
         /// <summary>A clip is on screen (WPF VideoService.VideoStarted, VideoService.cs:3370).</summary>
         public event Action? VideoStarted;
 
+        /// <summary>Raised once after each playing clip is closed, including retries and forced cleanup.</summary>
+        public event Action? VideoEnded;
+
         /// <summary>The clip <see cref="VideoStarted"/> announced (WPF VideoService.LastVideoPath).</summary>
         public string? LastVideoPath { get; private set; }
 
@@ -642,6 +645,8 @@ namespace ConditioningControlPanel.Services
             _ = CoreHaptics.Service?.StopVideoBackgroundVibeAsync();
             try { CoreHaptics.Service?.FunScript.OnVideoStopped(); }
             catch (Exception ex) { Log.Debug("FunScript stop hook failed: {Error}", ex.Message); }
+            try { VideoEnded?.Invoke(); }
+            catch (Exception ex) { Log.Debug("VideoEnded handler failed: {Error}", ex.Message); }
             return true;
         }
 

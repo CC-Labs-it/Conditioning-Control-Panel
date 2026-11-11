@@ -170,6 +170,34 @@ public sealed class MandatoryVideoSchedulerTests
         }
     });
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void VideoEnded_fires_once_for_each_teardown(int kind)
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.AttentionChecksEnabled, s.MandatoryVideoReplayAfterFailedCheck, s.MercySystemEnabled);
+        var v = new MandatoryVideoScheduler(new Host(), new FakeClock(), () => Clips);
+        int ended = 0;
+        v.VideoEnded += () => ended++;
+        try
+        {
+            (s.AttentionChecksEnabled, s.MandatoryVideoReplayAfterFailedCheck, s.MercySystemEnabled) = (kind == 1, true, false);
+            Assert.True(v.Trigger(true));
+            if (kind == 1) { v.NoteSpawn(); v.Ended(); }
+            else if (kind == 2) v.ForceCleanup();
+            else v.Ended();
+            v.End(); v.ForceCleanup();
+            Assert.Equal(1, ended);
+        }
+        finally
+        {
+            v.ForceCleanup();
+            (s.AttentionChecksEnabled, s.MandatoryVideoReplayAfterFailedCheck, s.MercySystemEnabled) = saved;
+        }
+    }
+
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
 
     [Fact]

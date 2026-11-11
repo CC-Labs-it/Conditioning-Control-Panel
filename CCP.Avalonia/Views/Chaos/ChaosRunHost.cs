@@ -171,6 +171,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _regenPopCount = 0;
             ChaosRunLessons.OnRunStarted();   // WPF :399
             // ponytail: NotifyChaosRunStarted bark (WPF :389) -> chaos-payout-barks.
+            SubscribeVideo();
             _spawning = true;
             _chromeTicks = 0;
             _fx = ChaosFxWindow.Open();   // WPF BeginRun :500, one impact-vignette window per run
@@ -459,6 +460,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         private static DateTime _heavyUntilUtc = DateTime.MinValue;
+        private static MandatoryVideoScheduler? _subscribedVideo;
+
+        private static void SubscribeVideo()
+        {
+            UnsubscribeVideo();
+            _subscribedVideo = CoreEngine.Video;
+            if (_subscribedVideo != null) _subscribedVideo.VideoEnded += OnVideoEnded;
+        }
+
+        private static void UnsubscribeVideo()
+        {
+            if (_subscribedVideo != null) _subscribedVideo.VideoEnded -= OnVideoEnded;
+            _subscribedVideo = null;
+        }
+
+        private static void OnVideoEnded()
+        {
+            var until = BubbleOverlay.Field.Clock().AddSeconds(3);
+            if (until > _heavyUntilUtc) _heavyUntilUtc = until;
+        }
 
         // WPF ChaosModeService.cs:2155-2156,2295-2322: drop overlapping heavy
         // detonations, including during the off-thread pool pick, without queuing.
@@ -624,6 +645,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosAnnouncerOverlay.CloseActive();   // WPF :3177; also clears a queue left by an idle caller
             ChaosCursorGlowOverlay.CloseActive();   // WPF ForceShutdown :3183
             ChaosSkiaFxOverlay.CloseActive();   // WPF ChaosModeService.ForceShutdown; before the idle return
+            UnsubscribeVideo();
             _heavyUntilUtc = DateTime.MinValue;
             ChaosGifCascadeOverlay.CloseActive(); // also cancel a pending pick before the idle return
             if (!_active && _hud == null && _overlay == null && _fx == null) return;
@@ -677,6 +699,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (ranFullCourse) AwardLoopTip();   // a quit forfeits it
             // WPF :3211: final-loop + end-of-descent lessons (a quit didn't run the full course).
             ChaosRunLessons.OnRunCompleted(_state.Shields, _state.Config.Difficulty, ranFullCourse);
+            UnsubscribeVideo();
             _spawning = false;
             _runTimer?.Stop();
             EndField();
@@ -822,6 +845,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF CleanupAfterRun :3322 (also reached by ForceShutdown / panic).</summary>
         private static void CleanupAfterRun()
         {
+            UnsubscribeVideo();
             ChaosUnlockCardOverlay.CloseActive();
             _lessonCardPaused = false;
             StopToys();
