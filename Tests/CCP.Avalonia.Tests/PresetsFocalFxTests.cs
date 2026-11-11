@@ -175,11 +175,31 @@ public sealed class PresetsFocalFxTests
             // A draft written behind the manager's back joins on arrival, before the stagger runs.
             view.IsVisible = false; Settle();
             Write("sync_c", 1);
+            // Capture scheduling synchronously: Avalonia's render clock is wall time, so waiting
+            // for a frame can let the 220 ms fade finish on a busy CI runner.
+            var arrivals = new System.Collections.Generic.List<(string id, string[] order, global::Avalonia.Animation.Animation animation)>();
+            view.EntranceStarted = (card, animation) =>
+            {
+                if (card is Border b && b.Tag is Session session && session.Id.StartsWith("sync_")
+                    && animation.Duration == TimeSpan.FromMilliseconds(220))
+                    arrivals.Add((session.Id, Ids(), animation));
+            };
             view.IsVisible = true; Settle();
             Assert.Equal(new[] { "sync_c", "sync_a", "sync_b" }, Ids());
             Assert.Contains(manager.AllSessions, s => s.Id == "sync_c");
             Assert.Equal(0, added);
-            Assert.Contains(rack.Children.OfType<Border>(), c => c.Opacity < 1);
+            Assert.Equal(new[] { "sync_c", "sync_a", "sync_b" }, arrivals.Select(a => a.id));
+            Assert.All(arrivals, a =>
+            {
+                Assert.Equal(new[] { "sync_c", "sync_a", "sync_b" }, a.order);
+                Assert.Equal(2, a.animation.Children.Count);
+                var first = Assert.Single(a.animation.Children[0].Setters.Cast<global::Avalonia.Styling.Setter>());
+                var last = Assert.Single(a.animation.Children[1].Setters.Cast<global::Avalonia.Styling.Setter>());
+                Assert.Equal(Visual.OpacityProperty, first.Property);
+                Assert.Equal(0d, first.Value);
+                Assert.Equal(Visual.OpacityProperty, last.Property);
+                Assert.Equal(1d, last.Value);
+            });
             Assert.Contains(view.FindControl<StackPanel>("RackSourceChips")!.Children.OfType<ToggleButton>(),
                 chip => chip.Content is TextBlock t && t.Text!.EndsWith("  3"));
         }

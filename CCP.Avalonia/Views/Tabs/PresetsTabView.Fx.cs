@@ -25,6 +25,7 @@ public partial class PresetsTabView
     private Control? _sheenHost;
     private Window? _fxWindow;
     private CancellationTokenSource? _entranceCancellation;
+    internal Action<Control, Animation>? EntranceStarted { get; set; } // test observes the scheduled animation
 
     private void InitializeFocalFx()
     {
@@ -201,12 +202,12 @@ public partial class PresetsTabView
             }
         }
     }
-    private static async Task EnterAsync(Control card, TimeSpan delay, int ms, AvaloniaProperty property,
+    private async Task EnterAsync(Control card, TimeSpan delay, int ms, AvaloniaProperty property,
                                          double from, double to, CancellationToken cancellation)
     {
         try
         {
-            await new Animation
+            var animation = new Animation
             {
                 Delay = delay, Duration = TimeSpan.FromMilliseconds(ms), Easing = new QuadraticEaseOut(), FillMode = FillMode.Backward,
                 Children =
@@ -214,7 +215,10 @@ public partial class PresetsTabView
                     new KeyFrame { Cue = new Cue(0), Setters = { new Setter(property, from) } },
                     new KeyFrame { Cue = new Cue(1), Setters = { new Setter(property, to) } },
                 },
-            }.RunAsync(card, cancellation); // Visual target, never Animation.RunAsync on a Transform
+            };
+            var running = animation.RunAsync(card, cancellation); // Visual target, never Animation.RunAsync on a Transform
+            EntranceStarted?.Invoke(card, animation);
+            await running;
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { Serilog.Log.Debug(ex, "Preset card entrance"); }
