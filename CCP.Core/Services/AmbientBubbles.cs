@@ -81,9 +81,10 @@ namespace ConditioningControlPanel.Services
         /// <summary>The bubble deflates (a snap) instead of bursting.</summary>
         public bool Deflating { get; private set; }
         private double _channelMs, _channelStartFuseSec;
+        private double _brittleArmMs = Chaos.ChaosTuning.BRITTLE_ARM_MS;
         private DateTime _channelStartUtc;
 
-        public enum Result { Alive, Missed, Done, Detonated, Defused }
+        public enum Result { Alive, Missed, Done, Detonated, Defused, Shattered }
 
         /// <summary>The linked shield-bearer (WPF BubbleService.cs:2708-2709,2730).</summary>
         public AmbientBubble? Escort { get; set; }
@@ -277,6 +278,12 @@ namespace ConditioningControlPanel.Services
                 Angle += 2;
                 return Fade <= 0 ? Result.Done : Result.Alive;
             }
+            if (Spec?.IsBrittle == true)
+            {
+                // WPF BubbleService.cs:4156-4170: the natural disc is touch-only.
+                if (_brittleArmMs > 0) _brittleArmMs -= FuseStepMs;
+                else if (Contains(cursorX, cursorY)) { Popping = true; return Result.Shattered; }
+            }
             if (Channeling) return TickChannel(held, cursorX, cursorY, nowUtc);
             // WPF :4147-4193: the fuse burns 32 ms a step; fuse-out detonates.
             if (Spec is { IsLive: true } && FuseRemainingMs > 0)
@@ -346,7 +353,8 @@ namespace ConditioningControlPanel.Services
         public bool HoldChaos;
         /// <summary>WPF ChaosMouseHeld + CursorPx: the player's press, in global DIPs, for a defuse channel.</summary>
         public bool Held;
-        public double CursorX, CursorY;
+        public double CursorX = double.PositiveInfinity, CursorY = double.PositiveInfinity;
+        public Action<AmbientBubble>? ChaosBrittleShattered;
         /// <summary>The wall clock a defuse hold is measured on (WPF DateTime.UtcNow); tests step it.</summary>
         public Func<DateTime> Clock = () => DateTime.UtcNow;
         /// <summary>A live chaos bubble went off (fuse-out, escape, or a broken hold: see BrokenReason).</summary>
@@ -409,6 +417,7 @@ namespace ConditioningControlPanel.Services
                 if (HoldChaos && b.Spec != null && !b.Popping) { b.CancelChannel(); continue; }
                 var r = b.Step(Held, CursorX, CursorY, now);
                 if (r == AmbientBubble.Result.Alive) continue;
+                if (r == AmbientBubble.Result.Shattered) { ChaosBrittleShattered?.Invoke(b); continue; }
                 if (r == AmbientBubble.Result.Detonated) { ChaosDetonated?.Invoke(b); continue; }
                 if (r == AmbientBubble.Result.Defused) { ChaosDefused?.Invoke(b); continue; }
                 if (r == AmbientBubble.Result.Missed) missed++;
