@@ -28,7 +28,8 @@ public sealed class BubbleCountSchedulerTests
         public Func<bool>? FeedState;
         public bool FeedOwnsTheScreen => FeedState?.Invoke() ?? Feed;
         public bool Other;
-        public bool OtherInteractionActive => Other;
+        public Func<bool>? OtherState;
+        public bool OtherInteractionActive => OtherState?.Invoke() ?? Other;
     }
 
     private static void With(bool enabled, bool strict, bool mercy, Action body)
@@ -212,6 +213,39 @@ public sealed class BubbleCountSchedulerTests
         Assert.False(b.IsQueued);
         Assert.Single(host.Shown);
         b.Stop();
+    });
+
+    [Fact]
+    public void Starting_a_queued_game_directly_consumes_its_pending_request() => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { Other = true };
+        var game = new BubbleCountScheduler(host, clock, () => Clips);
+        game.Trigger(forceTest: true);
+        Assert.True(game.IsQueued);
+        host.Other = false;
+        game.Trigger(forceTest: true);
+        Assert.True(game.IsBusy);
+        Assert.False(game.IsQueued);
+        game.ForceCleanup();
+    });
+
+    [Fact]
+    public void A_queued_game_keeps_its_turn_if_an_interaction_returns_during_replay() => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { Other = true };
+        var game = new BubbleCountScheduler(host, clock, () => Clips);
+        game.Trigger(forceTest: true);
+        var first = game.QueuedGeneration;
+        var checks = 0;
+        host.OtherState = () => ++checks > 1;
+        clock.Advance(BubbleCountScheduler.QueuePoll);
+        Assert.True(game.IsQueued);
+        Assert.Equal(first, game.QueuedGeneration);
+        host.OtherState = null;
+        host.Other = false;
+        clock.Advance(BubbleCountScheduler.QueuePoll);
+        Assert.True(game.IsBusy);
+        game.ForceCleanup();
     });
 
     /// <summary>WPF TriggerGame :260/:277: a queued game replayed after Stop, or after the card
