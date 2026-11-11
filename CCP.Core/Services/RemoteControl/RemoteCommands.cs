@@ -147,9 +147,17 @@ namespace ConditioningControlPanel.Services
         public static void StopEffects(bool force, bool leashCut = false)
         {
             // A leave and the session end both arrive here unforced; RemoteRelay.Cleanup adds the session-end reset.
-            var localRun = LeavesLocalRun(force, leashCut);
+            if (LeavesLocalRun(force, leashCut))
+            {
+                // WPF ReleaseRemoteHoldings (RemoteControlService.cs:964, :1125, :1154): the wearer's run keeps its
+                // services, autonomy and cards; only what the controller holds goes back.
+                RemoteHaptics.Stop();
+                Remote.RemoteWearer.HandBackAllButStrict();
+                Remote.RemoteWearer.ReleaseSafetyState();
+                return;
+            }
             if (force) ResetAutonomy();
-            else if (!localRun) try { CancelAutonomyPulses?.Invoke(); } catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] autonomy pulse cancel failed"); }
+            else try { CancelAutonomyPulses?.Invoke(); } catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] autonomy pulse cancel failed"); }
             if (force) Commands.AiCommandService.CancelAll();   // a remote panic cancels pending AI follow-ups too
             // A controller's panic is a way out like the key: Circe's Tab opens its safety hold (PanicChasterHold).
             if (force) Safety.PanicChasterHold.Open("remote panic");
@@ -165,7 +173,7 @@ namespace ConditioningControlPanel.Services
                 CoreFlash.Stop(); CoreSubliminal.Stop(); CoreBubbles.Stop(); CoreBouncingText.Stop();
                 CoreEngine.Video?.Stop(); CoreEngine.BubbleCount?.Stop(); LockCardScheduler.Instance.Stop();
             }
-            if (!localRun) CoreLockCard.CloseAll();   // WPF LockCardWindow.ForceCloseAll (:1020, :1179), a card still posted included
+            CoreLockCard.CloseAll();   // WPF LockCardWindow.ForceCloseAll (:1020, :1179), a card still posted included
             // WPF (main 4adc4c476, 2a712d9da): never a blanket strict-off. The strict lock goes back to the
             // wearer's own (a running Lockdown keeps the one it forced, its record corrected), the panic key
             // comes back on except while a running Lockdown holds it off; its own end restores it.

@@ -25,7 +25,7 @@ public sealed class RemoteRelayTests
         var s = CoreSettings.Current;
         var saved = (RemoteCommands.AutonomyCommand, RemoteCommands.CancelAutonomyPulses, CoreLockCard.ShowHandler,
             CoreLockCard.CloseAllHandler, s.AutonomyModeEnabled, s.StrictLockEnabled, s.PanicKeyEnabled,
-            RemoteCommands.AutonomyRunning, s.AudioOnlySession, s.TotalSessions);
+            RemoteCommands.AutonomyRunning, s.AudioOnlySession, s.TotalSessions, s.FlashEnabled, s.LockCardEnabled);
         var log = new List<string>();
         try
         {
@@ -72,9 +72,12 @@ public sealed class RemoteRelayTests
             Assert.False(r.IsActive);
             Assert.Equal(new[] { "pulses", "stop", "start" }, log);
 
-            // The wearer's own run (WPF LeavesLocalRun): a leave and a session end leave autonomy and cards alone.
-            s.AudioOnlySession = true;
+            // The wearer's own run (WPF LeavesLocalRun, ReleaseRemoteHoldings :1125): a leave and a session end
+            // leave its services, autonomy and cards alone. Flash off: armed, but never ticks.
+            (s.AudioOnlySession, s.FlashEnabled, s.LockCardEnabled) = (true, false, true);
             CoreEngine.Start();
+            CoreFlash.Start();
+            LockCardScheduler.Instance.Start();
             log.Clear();
             RemoteCommands.StopEffects(false);
             var f2 = new FakeRelay();
@@ -84,6 +87,8 @@ public sealed class RemoteRelayTests
             await r2.PollOnceAsync();
             Assert.False(r2.IsActive);
             Assert.Empty(log);
+            Assert.True(CoreFlash.IsRunning);
+            Assert.True(LockCardScheduler.Instance.IsRunning);
             Assert.Null(RemoteCommands.Execute("trigger_panic", null));   // panic still tears it all down
             Assert.Equal(new[] { "pulses", "stop", "start", "close" }, log);
 
@@ -93,10 +98,12 @@ public sealed class RemoteRelayTests
         finally
         {
             CoreEngine.Stop();
+            CoreFlash.Stop();
+            LockCardScheduler.Instance.Stop();
             ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
             (RemoteCommands.AutonomyCommand, RemoteCommands.CancelAutonomyPulses, CoreLockCard.ShowHandler,
                 CoreLockCard.CloseAllHandler, s.AutonomyModeEnabled, s.StrictLockEnabled, s.PanicKeyEnabled,
-                RemoteCommands.AutonomyRunning, s.AudioOnlySession, s.TotalSessions) = saved;
+                RemoteCommands.AutonomyRunning, s.AudioOnlySession, s.TotalSessions, s.FlashEnabled, s.LockCardEnabled) = saved;
         }
     }
 
