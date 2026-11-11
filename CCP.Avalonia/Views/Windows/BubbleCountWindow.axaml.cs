@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -71,6 +72,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     public partial class BubbleCountWindow : Window
     {
         private bool _closed, _useBrowser, _browserFailed;
+        private readonly BubbleCountWatchCredit _watch = new();
+        internal Func<double> WatchNow = () => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
+        internal Action<double> WatchCredit = seconds => Dispatcher.UIThread.Post(() => CoreProgression.TrackVideoWatched(seconds));
+
+        internal void MarkWatchPlaying() { lock (_watch) _watch.MarkPlaying(WatchNow()); }
+        internal void NoteWatchPosition(double seconds) { lock (_watch) _watch.NotePosition(seconds); }
+        internal void CreditWatchTime()
+        {
+            try
+            {
+                double seconds;
+                lock (_watch) seconds = _watch.Take(WatchNow(), _videoDurationSeconds);
+                if (seconds >= 1) WatchCredit(seconds);
+            }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "Bubble Count watch credit failed"); }
+        }
         private BrowserVideoSurface? _browser;
         private static BubbleCountWindow? _browserOwner;
         internal BrowserVideoSurface? Browser => _browser;
@@ -322,6 +339,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             try
             {
+                var primary = _allWindows.FirstOrDefault(w => w._isPrimary);
+                primary?.CreditWatchTime();
                 StopPlayer();
                 var windowsCopy = _allWindows.ToList();
                 _allWindows.Clear();
@@ -469,6 +488,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!_isPrimary || _closed || _gameCompleted || _videoEnded || _browserFailed) return;
             switch (message.GetProperty("type").GetString())
             {
+                case "playing":
+                    MarkWatchPlaying();
+                    break;
                 case "error":
                     if (message.TryGetProperty("code", out var error) && error.TryGetInt32(out var code)
                         && (code is >= 1 and <= 4 or 100 or 101))
@@ -511,6 +533,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 bmp => { foreach (var w in _allWindows) w._videoImage.Source = bmp; },
                 () => { foreach (var w in _allWindows) w._videoImage.InvalidateVisual(); });
             // LibVLC raises these on its own thread; the game is torn down only on the UI thread.
+            player.Playing += (_, _) => MarkWatchPlaying();
+            player.TimeChanged += (_, a) => NoteWatchPosition(a.Time / 1000.0);
             player.LengthChanged += (_, a) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) AdoptRealDuration(a.Length / 1000.0); });
             player.EndReached += (_, _) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) OnVideoEnded(); });
             player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) OnVideoEnded(); });
@@ -749,7 +773,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
 
             // WPF :1399. The XP the game earns is awarded by the result window, not here.
-            if (_isPrimary) CoreProgression.TrackVideoWatched(_videoDurationSeconds);
+            if (_isPrimary) CreditWatchTime();
 
             // Show result window (only from primary)
             if (_isPrimary)
@@ -813,6 +837,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             try
             {
+                var primary = _allWindows.FirstOrDefault(w => w._isPrimary) ?? (_isPrimary ? this : null);
+                primary?.CreditWatchTime();
                 StopPlayer();
                 var windowsCopy = _allWindows.ToList();
                 _allWindows.Clear();
@@ -841,6 +867,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         protected override void OnClosed(EventArgs e)
         {
+            if (_isPrimary) CreditWatchTime();
             _allWindows.Remove(this);
             if (_isPrimary && !_gameCompleted && !_isCleaningUp) CloseAllWindows(false);
             _closed = true;

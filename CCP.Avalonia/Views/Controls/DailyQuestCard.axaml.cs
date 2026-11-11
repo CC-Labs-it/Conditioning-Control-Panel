@@ -287,6 +287,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             catch (Exception ex) { Log.Debug("DailyQuestCard bar: {E}", ex.Message); }
         }
 
+        internal void SetNavigable(bool value)
+        {
+            _canNavigate = value;
+            if (!value)
+            {
+                _lift.Active = _glow.Active = false;
+                SetLift(1.0);
+                SetGlow(0);
+            }
+        }
+
+        private bool _canNavigate = true; // The constructor paints a navigable design sample.
+
         // ---- INTERACTION ---------------------------------------------------------
 
         // WPF: MotionFx.HoverLift(Root) - scale to 1.02 over 150 ms QuadraticEase-out, snapped (not
@@ -296,6 +309,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         // layer), cleared once the fade lands so nothing is drawn at rest - the same contract.
         private void OnCardPointerEntered(object? sender, PointerEventArgs e)
         {
+            if (!_canNavigate) return;
             try
             {
                 if (!AllowTransitions()) { _lift.Active = false; SetLift(HoverLiftScale); return; }
