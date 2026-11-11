@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Localization;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
@@ -664,13 +665,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ChaosOverlayWindow.ChaosSfx.Play("estim_zap", 0.6f);
                 Pulse(Color.FromRgb(0x9C, 0x5C, 0xFF), 0.25);
                 if (left == 0) ChaosEffectBannerOverlay.End("estim");
-                _state?.PushEvent(left > 0 ? $"⚡ the current arcs ({left} left)" : "⚡ the charge is spent");
+                _state?.PushEvent(left > 0 ? Loc.GetF("Chaos_EStim_Arc", left) : Loc.Get("Chaos_EStim_Spent"));
             };
             BubbleOverlay.ArmEStim(charges, fork);
             ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.5f);
             ChaosEffectBannerOverlay.Show("estim", "E-Stim", Color.FromRgb(0x9C, 0x5C, 0xFF));
             Pulse(Color.FromRgb(0x9C, 0x5C, 0xFF), 0.25);
-            _state.PushEvent(fork ? $"⚡ charged - your next {charges} pops chain-react" : $"⚡ charged - your next {charges} pops conduct");
+            _state.PushEvent(Loc.GetF(fork ? "Chaos_EStim_Chain" : "Chaos_EStim_Conduct", charges));
         }
 
         private static void RunAgain()

@@ -1,4 +1,8 @@
 {
+  "Chaos_EStim_Conduct": "⚡ заряд готов - следующие {0} пузырей проводят ток",
+  "Chaos_EStim_Chain": "⚡ заряд готов - следующие {0} пузырей вызовут цепь",
+  "Chaos_EStim_Arc": "⚡ ток перескочил (осталось {0})",
+  "Chaos_EStim_Spent": "⚡ заряд израсходован",
   "deeper_submission_badge_published": "Опубликовано",
   "deeper_submission_badge_published_tip": "Это улучшение доступно в каталоге сообщества.",
   "deeper_submission_badge_pending": "На проверке",

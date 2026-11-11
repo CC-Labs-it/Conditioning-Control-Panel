@@ -1,4 +1,8 @@
 {
+  "Chaos_EStim_Conduct": "⚡ carregado - seus próximos {0} estouros conduzem",
+  "Chaos_EStim_Chain": "⚡ carregado - seus próximos {0} estouros criam correntes",
+  "Chaos_EStim_Arc": "⚡ a corrente salta (restam {0})",
+  "Chaos_EStim_Spent": "⚡ carga esgotada",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Este aprimoramento está publicado no catálogo da comunidade.",
   "deeper_submission_badge_pending": "Pendente",

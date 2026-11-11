@@ -285,13 +285,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             ChaosEStimOverlay.Disarm();
         }
 
+        private static bool ChaperoneShielded(AmbientBubble b) => b.Spec?.IsChaperoneLive == true
+            && b.ChaperoneEscort is { Popping: false } escort && Field.Bubbles.Contains(escort);
+
         private static void EStimClick(AmbientBubble source)
         {
             if (_estimCharges <= 0 || source.Spec is not { IsLive: false, IsDarter: false, IsFreeze: false }) return;
             static double Distance(AmbientBubble a, AmbientBubble b) =>
                 Math.Pow(a.CenterX - b.CenterX, 2) + Math.Pow(a.CenterY - b.CenterY, 2);
             var pool = Field.Bubbles.Where(b => !ReferenceEquals(b, source) && !b.Popping &&
-                b.Spec is { IsDarter: false, IsFreeze: false, IsTease: false, IsBrittle: false, IsChaperoneLive: false }).ToList();
+                b.Spec is { IsDarter: false, IsFreeze: false, IsTease: false, IsBrittle: false } && !ChaperoneShielded(b)).ToList();
             var hits = new List<(AmbientBubble From, AmbientBubble To, int Delay)>();
             if (!_estimFork)
             {
@@ -326,7 +329,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 timer.Tick += (_, _) =>
                 {
                     timer.Stop();
-                    if (generation != _estimGeneration || !Field.Bubbles.Contains(hit.To) || hit.To.Popping) return;
+                    if (generation != _estimGeneration || Field.HoldChaos || !Field.Bubbles.Contains(hit.To) ||
+                        hit.To.Popping || ChaperoneShielded(hit.To)) return;
                     if (hit.To.IsLiveThreat)
                     {
                         if (hit.To.Snap()) Field.ChaosDefused?.Invoke(hit.To);

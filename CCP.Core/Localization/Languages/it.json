@@ -1,4 +1,8 @@
 {
+  "Chaos_EStim_Conduct": "⚡ carico - le prossime {0} bolle conducono",
+  "Chaos_EStim_Chain": "⚡ carico - le prossime {0} bolle creano catene",
+  "Chaos_EStim_Arc": "⚡ la corrente scocca (restano {0})",
+  "Chaos_EStim_Spent": "⚡ carica esaurita",
   "Sparkles_Slip_Paid": "Pagato",
   "Sparkles_Slip_Place": "Posto {0} su {1}",
   "Sparkles_Slip_Gold": "Oro",

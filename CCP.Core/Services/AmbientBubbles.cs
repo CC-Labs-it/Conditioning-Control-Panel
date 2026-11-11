@@ -58,6 +58,8 @@ namespace ConditioningControlPanel.Services
         public bool Clickable, Popping, Lucky;
         /// <summary>A Chaos run's bubble (WPF Bubble with a spec); null for a plain ambient one.</summary>
         public Chaos.EffectBubbleSpec? Spec;
+        /// <summary>The Chaperone's escort, when linked by the pair spawner (WPF BubbleService.cs:2708).</summary>
+        public AmbientBubble? ChaperoneEscort;
         private double _startX, _top, _speed, _wobbleOffset, _timeAlive;
         private int _animType;
 

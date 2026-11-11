@@ -1,4 +1,8 @@
 {
+  "Chaos_EStim_Conduct": "⚡ 已充能 - 接下来戳破的{0}个气泡会导电",
+  "Chaos_EStim_Chain": "⚡ 已充能 - 接下来戳破的{0}个气泡会引发连锁",
+  "Chaos_EStim_Arc": "⚡ 电流跃动（剩余{0}次）",
+  "Chaos_EStim_Spent": "⚡ 充能已用完",
   "deeper_submission_badge_published": "已发布",
   "deeper_submission_badge_published_tip": "此增强已在社区目录中上线。",
   "deeper_submission_badge_pending": "待审核",

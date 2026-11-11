@@ -1,4 +1,8 @@
 {
+  "Chaos_EStim_Conduct": "⚡ cargado - tus próximos {0} estallidos conducen",
+  "Chaos_EStim_Chain": "⚡ cargado - tus próximos {0} estallidos crean cadenas",
+  "Chaos_EStim_Arc": "⚡ salta la corriente (quedan {0})",
+  "Chaos_EStim_Spent": "⚡ carga agotada",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Esta mejora está publicada en el catálogo de la comunidad.",
   "deeper_submission_badge_pending": "Pendiente",

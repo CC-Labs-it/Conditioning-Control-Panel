@@ -1,4 +1,8 @@
 {
+  "Chaos_EStim_Conduct": "⚡ geladen - deine nächsten {0} Treffer leiten",
+  "Chaos_EStim_Chain": "⚡ geladen - deine nächsten {0} Treffer lösen Ketten aus",
+  "Chaos_EStim_Arc": "⚡ der Strom springt über (noch {0})",
+  "Chaos_EStim_Spent": "⚡ die Ladung ist verbraucht",
   "deeper_submission_badge_published": "Veröffentlicht",
   "deeper_submission_badge_published_tip": "Diese Erweiterung ist im Community-Katalog live.",
   "deeper_submission_badge_pending": "Ausstehend",

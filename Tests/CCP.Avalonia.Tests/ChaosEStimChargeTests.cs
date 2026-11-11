@@ -97,6 +97,65 @@ public sealed class ChaosEStimChargeTests
     });
 
     [Fact]
+    public Task Delayed_live_snap_is_suppressed_while_field_is_held() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var oldCanShow = ChaosEStimOverlay.CanShow;
+        ChaosEStimOverlay.CanShow = () => false;
+        try
+        {
+            var source = Bubble(0); var live = Bubble(100, true); int paid = 0;
+            BubbleOverlay.Field.ChaosDefused = _ => paid++;
+            BubbleOverlay.Field.Bubbles.AddRange(new[] { source, live });
+            BubbleOverlay.ArmEStim(1, false);
+            BubbleOverlay.Press(source, 0, 0);
+            BubbleOverlay.HoldChaos(true);
+            await Task.Delay(180);
+            Assert.False(live.Popping);
+            Assert.Equal(0, paid);
+            BubbleOverlay.HoldChaos(false);
+            await Task.Delay(100);
+            Assert.False(live.Popping);
+        }
+        finally { BubbleOverlay.EndChaos(); ChaosEStimOverlay.CloseActive(); ChaosEStimOverlay.CanShow = oldCanShow; }
+    });
+
+    [Fact]
+    public Task Chaperone_conducts_only_after_its_escort_is_gone() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var oldCanShow = ChaosEStimOverlay.CanShow;
+        ChaosEStimOverlay.CanShow = () => false;
+        try
+        {
+            var source = Bubble(0); var escort = Bubble(1000);
+            var live = Bubble(100, true);
+            live.Spec = new EffectBubbleSpec { IsLive = true, IsChaperoneLive = true };
+            live.ChaperoneEscort = escort;
+            BubbleOverlay.Field.Bubbles.AddRange(new[] { source, live, escort });
+            BubbleOverlay.ArmEStim(1, false);
+            BubbleOverlay.Press(source, 0, 0);
+            Assert.Equal(1, BubbleOverlay.EStimCharges);
+            Assert.False(live.Popping);
+            escort.Popping = true;
+            source = Bubble(0); BubbleOverlay.Field.Bubbles.Add(source);
+            BubbleOverlay.Press(source, 0, 0);
+            Assert.Equal(0, BubbleOverlay.EStimCharges);
+            await Task.Delay(180);
+            Assert.True(live.Deflating);
+            source = Bubble(0); live = Bubble(100, true); escort = Bubble(1000);
+            live.Spec = new EffectBubbleSpec { IsLive = true, IsChaperoneLive = true };
+            BubbleOverlay.Field.Bubbles.AddRange(new[] { source, live, escort });
+            BubbleOverlay.ArmEStim(1, false);
+            BubbleOverlay.Press(source, 0, 0);
+            live.ChaperoneEscort = escort;
+            await Task.Delay(180);
+            Assert.False(live.Popping);
+        }
+        finally { BubbleOverlay.EndChaos(); ChaosEStimOverlay.CloseActive(); ChaosEStimOverlay.CanShow = oldCanShow; }
+    });
+
+    [Fact]
     public Task Capstone_reaches_beyond_first_hop_and_cleanup_cancels_pending_hits() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
