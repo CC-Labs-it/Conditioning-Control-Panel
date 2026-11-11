@@ -17,6 +17,8 @@ using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.UI;
+using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Services.Chaster;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
@@ -35,8 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para>Chaos runs share the field: ChaosRunHost spawns treat bubbles here (BeginChaos/
     /// SpawnChaos/EndChaos) and gets their pops; they draw tinted and pay no ambient XP.</para>
     ///
-    /// <para>ponytail: ambient trigger bubbles, Bubbles v2 motions (Rain/Spiral In),
-    /// Brain Drain, Natasha's red bubble, the avatar egg, lucky gold glow/sparkles
+    /// <para>ponytail: some ambient trigger payload runners, the avatar egg, lucky gold glow/sparkles
     /// and the milestone popup remain unported.
     /// Gaze pops, pop haptics, mod pop audio and achievement credit are wired.
     /// See the feat-bubble-pop ledger row for the current parity evidence.</para>
@@ -55,11 +56,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static TimeSpan? _lastStep;
         private static bool _pending;   // a frame is requested; the loop idles while the field is empty
         internal static Bitmap? Image;
+        private static readonly Dictionary<string, Bitmap?> TriggerArt = new();
+        internal static Bitmap? TriggerImage(string id)
+        {
+            if (id == "flash") return Image;
+            if (!TriggerArt.TryGetValue(id, out var image))
+                TriggerArt[id] = image = ChaosBoonArt.Resolve("bubbles", id) as Bitmap;
+            return image ?? Image;
+        }
 
         /// <summary>WPF BubbleService.LoadBubbleImage (BubbleService.cs:221, :918-936): every Start re-resolves
         /// the active mod's bubble.png, so a mod switch shows its sprite on the next start (a <c>??=</c>
         /// cache kept the first mod's art for the life of the process).</summary>
-        internal static void LoadBubbleImage() => Image = Helpers.ModArt.TryLoad("bubble.png");
+        internal static void LoadBubbleImage() { TriggerArt.Clear(); Image = Helpers.ModArt.TryLoad("bubble.png"); }
 
         /// <summary>The "N/300 today" line listens to this (WPF AmbientXpBudgetChanged).</summary>
         internal static event Action? XpBudgetChanged;
@@ -143,7 +152,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 // The ambient game stops mid-run: its bubbles go, the run keeps the windows.
                 _spawnTimer?.Stop();
                 _spawnTimer = null;
-                Field.Bubbles.RemoveAll(b => b.Spec == null);
+                Field.Bubbles.RemoveAll(b => b.Spec == null || b.IsAmbientTrigger);
                 _chaosOpenedWindows = true;
                 foreach (var w in Windows) w.Sync();
                 if (wasRunning) App.DiscordRpc?.SetIdleActivity();   // WPF BubbleService.cs:853
@@ -152,6 +161,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _chaosOpenedWindows = false;
             ChaosRipples.Clear();
             _running = false;
+            _resisting = null; Field.Held = false;
             _pending = false;
             _spawnTimer?.Stop();
             _spawnTimer = null;
@@ -184,8 +194,45 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 PrizeOwnership.IsGranted(PrizeOwnership.BubbleRain),
                 PrizeOwnership.IsGranted(PrizeOwnership.BubbleSpiralIn),
                 level, Field.Random.NextDouble());
-            Field.Bubbles.Add(AmbientBubble.Spawn(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, s, mod, clickable, level, motion));
+            var spec = RollAmbientTrigger(s, Field.Random, PrizeOwnership.BubbleV2Owned(),
+                Field.Bubbles.Count(b => b.Spec != null && !b.Popping));
+            var b = spec == null
+                ? AmbientBubble.Spawn(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, s, mod, clickable, level, motion)
+                : AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec);
+            b.Clickable = clickable;
+            b.IsAmbientTrigger = spec != null;
+            MarkNatasha(b, s, Field.Random, ChasterHead.Service?.CanBook(NatashasFavourite.EventId) == true);
+            Field.Bubbles.Add(b);
             RequestFrame();
+        }
+
+        // WPF BubbleService.cs:1154-1247: opt-in pool, ownership and four-effect cap.
+        internal static EffectBubbleSpec? RollAmbientTrigger(AppSettings s, Random random, bool v2Owned, int effectCount)
+        {
+            if (!s.BubbleTriggersEnabled || effectCount >= 4) return null;
+            var ids = BrainDrainBubble.RollPool(s.BubbleTriggerVariants, v2Owned, s.BubbleBrainDrainEnabled)
+                .Where(id => id != MagnetBubble.VariantId).ToArray();
+            if (ids.Length == 0 || random.Next(100) >= s.BubbleTriggerChance) return null;
+            var id = ids[random.Next(ids.Length)];
+            EffectBubbleSpec? spec;
+            if (id == "glitch")
+                spec = new EffectBubbleSpec { VariantId = id, Payload = new OverlayPayload("braindrain", braindrainOpacity: 0.30) { Strength = 60, DurationMult = 1.2 }, SizePx = 200, Tint = 0xFF9A40FF, Label = "GLITCH", TreatLifeMs = 7000 };
+            else if (id == BrainDrainBubble.VariantId)
+                spec = new EffectBubbleSpec { VariantId = id, Payload = new BrainDrainMeltPayload(), SizePx = 220, Tint = 0xFF000000u | ((uint)BrainDrainBubble.TintR << 16) | ((uint)BrainDrainBubble.TintG << 8) | BrainDrainBubble.TintB, TreatLifeMs = 7000 };
+            else
+            {
+                var variant = ChaosBubbleVariants.All.FirstOrDefault(v => v.Id == id);
+                spec = variant == null ? null : ChaosBubbleVariants.Build(variant, intensity: 0.3, ambient: true);
+                if (spec != null) spec.Payload.DurationMult = 2.5;
+            }
+            if (spec != null) spec.Payload.Ambient = true;
+            return spec;
+        }
+
+        // WPF MarkIfNatasha: never deal a chargeable cue unless the row can book now.
+        internal static void MarkNatasha(AmbientBubble bubble, AppSettings settings, Random random, bool canBook)
+        {
+            bubble.IsNatasha = canBook && NatashasFavourite.Roll(random, bubble.IsAmbientTrigger, settings.ChasterNatashaTriggerWeight);
         }
 
         /// <summary>WPF StartAnimationDriver/StopAnimationTimerIfIdle: one chain, parked while empty.</summary>
@@ -227,7 +274,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 double radius = 430 * Math.Min(1, age / 550);
                 foreach (var b in Field.Bubbles.ToArray())
                 {
-                    if (b.Popping || b.Spec == null || b.Spec.IsLive || b.Spec.IsDarter || b.Spec.IsFreeze) continue;
+                    if (b.Popping || b.Spec == null || b.IsAmbientTrigger || b.Spec.IsLive || b.Spec.IsDarter || b.Spec.IsFreeze) continue;
                     if (b.Spec.IsTease || b.Spec.IsBrittle) continue; // WPF BubbleService.cs:4653-4659
                     var point = CenterPx(b);
                     double dx = point.X - center.X, dy = point.Y - center.Y;
@@ -275,7 +322,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// focus gate allows) at the press point (global DIPs); every other bubble pops.</summary>
         internal static void Press(AmbientBubble b, double x, double y)
         {
-            if (!b.IsLiveThreat) { Pop(b); return; }
+            if (b.IsNatasha && !b.Popping)
+            {
+                _resisting = b;
+                _resistStarted = Field.Clock();
+                Field.Held = true; Field.CursorX = x; Field.CursorY = y;
+                RequestFrame();
+                return;
+            }
+            if (!b.IsLiveThreat) { PopByPlayer(b); return; }
             Field.PressLive(b, _chaosCanChannel?.Invoke(b) ?? true, x, y);
             RequestFrame();
         }
@@ -286,6 +341,44 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.Held = held;
             Field.CursorX = x; Field.CursorY = y;
         }
+        private static AmbientBubble? _resisting;
+        private static DateTime _resistStarted;
+        internal static double ResistProgress => _resisting == null ? 0 : NatashasFavourite.HoldProgress((Field.Clock() - _resistStarted).TotalMilliseconds);
+        internal static bool IsResisting(AmbientBubble bubble) => ReferenceEquals(_resisting, bubble);
+
+        internal static void TickNatashaHold()
+        {
+            var b = _resisting;
+            if (b == null) return;
+            if (b.Popping || !Field.Bubbles.Contains(b)) { _resisting = null; Field.Held = false; return; }
+            var step = NatashasFavourite.StepHold((Field.Clock() - _resistStarted).TotalMilliseconds,
+                !Field.Held, b.Contains(Field.CursorX, Field.CursorY));
+            if (step == NatashasFavourite.HoldStep.Holding) return;
+            _resisting = null; Field.Held = false;
+            if (step == NatashasFavourite.HoldStep.Popped) PopByPlayer(b);
+            else if (step == NatashasFavourite.HoldStep.Resisted)
+            {
+                b.Deflate();
+                NoteNatasha(b, NatashasFavourite.PopCause.Resisted);
+            }
+        }
+
+        internal static void PopByPlayer(AmbientBubble b)
+        {
+            if (b.Popping || IsResisting(b)) return;
+            Pop(b);
+            if (b.Popping) NoteNatasha(b, NatashasFavourite.PopCause.Player);
+        }
+
+        internal static Action<string, ScreenPoint> BookNatasha = (row, origin) => ChasterHead.Service?.NoteAt(row, origin);
+
+        private static void NoteNatasha(AmbientBubble b, NatashasFavourite.PopCause cause)
+        {
+            var row = NatashasFavourite.RowFor(b.IsNatasha, cause);
+            if (row == null) return;
+            var center = CenterPx(b);
+            BookNatasha(row, new ScreenPoint(center.X, center.Y));
+        }
         private static bool _chaosOpenedWindows;
         /// <summary>WPF BubbleService.ChaosLastPopXDip/YDip: the last chaos pop's centre, global DIPs.</summary>
         internal static double ChaosLastPopX, ChaosLastPopY;
@@ -293,7 +386,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Live (not popping) chaos bubbles: WPF ActiveBubbles during a run.</summary>
         internal static int ChaosCount
         {
-            get { var n = 0; foreach (var b in Field.Bubbles) if (b.Spec != null && !b.Popping) n++; return n; }
+            get { var n = 0; foreach (var b in Field.Bubbles) if (b.Spec != null && !b.IsAmbientTrigger && !b.Popping) n++; return n; }
         }
 
         /// <summary>WPF BeginChaosMode: chaos pops go to <paramref name="onPop"/>; opens the windows
@@ -336,7 +429,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _chaosCanChannel = null;
             Field.ChaosDefused = Field.ChaosDetonated = null;
             Field.Held = false;
-            Field.Bubbles.RemoveAll(b => b.Spec != null);
+            Field.Bubbles.RemoveAll(b => b.Spec != null && !b.IsAmbientTrigger);
             if (_chaosOpenedWindows) { Stop(); return; }
             foreach (var w in Windows) w.Sync();
         }
@@ -362,7 +455,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF Bubble.Pop with a spec: anchor the pop point, start the burst, hand it to the run.</summary>
         internal static void PopChaos(AmbientBubble b)
         {
-            if (b.Popping || b.Spec == null || Field.HoldChaos) return;   // held: the click is swallowed
+            if (b.Popping || b.Spec == null || b.IsAmbientTrigger || Field.HoldChaos) return;   // held: the click is swallowed
             // WPF BubbleService.cs:4645-4669: instant pops preserve touch-only and escort immunity.
             if (b.Spec.IsTease || b.Spec.IsBrittle) return;
             if (b.Spec.IsChaperoneLive && b.Escort is { Popping: false } escort && Field.Bubbles.Contains(escort)) return;
@@ -402,7 +495,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (i >= Field.Bubbles.Count) continue;
                 var b = Field.Bubbles[i];
                 // WPF BubbleService.cs:4652-4660: instant sweeps cannot end Tease or Brittle.
-                if (b.Popping || b.Spec == null || b.Spec.IsDarter || b.Spec.IsFreeze || b.Spec.IsTease || b.Spec.IsBrittle) continue;
+                if (b.Popping || b.Spec == null || b.IsAmbientTrigger || b.Spec.IsDarter || b.Spec.IsFreeze || b.Spec.IsTease || b.Spec.IsBrittle) continue;
                 if (!rect.Intersects(new Rect(b.X, b.Y, b.Size, b.Size))) continue;
                 if (b.IsLiveThreat)
                 {
@@ -431,7 +524,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void Pop(AmbientBubble b)
         {
             if (b.Popping) return;   // WPF BubbleService.cs:4647 rejects an already popping bubble.
-            if (b.Spec != null) { PopChaos(b); return; }
+            if (b.Spec != null && !b.IsAmbientTrigger) { PopChaos(b); return; }
             var s = CoreSettings.Current;
             var paid = Field.Pop(b, s);
             if (paid > 0) CoreProgression.AddXP(paid, "Bubble");
@@ -445,7 +538,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             App.Achievements?.TrackBubblePopped();   // WPF BubbleService.cs:1117
             try { App.Quests?.TrackBubblePopped(); } catch (Exception ex) { Log.Debug("bubble quest credit: {E}", ex.Message); }
             _ = CoreHaptics.Service?.BubblePopAsync();   // WPF BubbleService.cs:1089
+            if (b.IsAmbientTrigger && b.Spec?.Payload is { } payload)
+                Dispatcher.UIThread.Post(() => FireAmbientPayload(payload), DispatcherPriority.Background);
             try { Popped?.Invoke(); } catch (Exception ex) { Log.Debug("bubble popped handler: {E}", ex.Message); }   // WPF OnBubblePopped
+        }
+
+        // WPF EffectPayloadFiring: use the head's existing one-shot surfaces where available.
+        internal static void FireAmbientPayload(EffectPayload payload)
+        {
+            if (payload is FlashPayload) { CoreFlash.ShowProvider?.Invoke(); return; }
+            if (payload is VideoPayload) { CoreEngine.Video?.Trigger(userEarned: true, silentIfEmpty: true); return; }
+            if (payload is SubliminalPayload or AudioPayload)
+            {
+                var phrase = CoreSubliminal.PickPhrase();
+                if (phrase != null) CoreSubliminal.ShowProvider?.Invoke(phrase);
+                return;
+            }
+            payload.Fire();
         }
 
         // WPF BubbleService.cs:2191-2236: mod audio, perk opt-out and missing-chime fallback.
@@ -471,7 +580,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 _lastStep = now;
                 var t0 = Stats ? Stopwatch.GetTimestamp() : 0;
-                Field.Step();
+                TickNatashaHold();
+                Field.Step(_resisting);
                 TickChaosRipples();
                 foreach (var w in Windows) w.Sync();
                 if (Stats) Sample(Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
@@ -509,6 +619,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static readonly IPen FallbackPen = new Pen(Brushes.White, 2);
         private static readonly Dictionary<uint, IPen> FuseCache = new();
         private static readonly Dictionary<uint, (IBrush, IPen)> TintCache = new();
+        private static readonly IBrush?[] NatashaWashes = new IBrush[256];
+        private static readonly IPen NatashaPen = new Pen(new SolidColorBrush(Color.FromRgb(NatashasFavourite.R, NatashasFavourite.G, NatashasFavourite.B), NatashasFavourite.HaloOpacity), 2);
+        private static readonly IPen ResistPen = new Pen(new SolidColorBrush(Color.FromRgb(NatashasFavourite.MintR, NatashasFavourite.MintG, NatashasFavourite.MintB)), 4);
+        private static IBrush NatashaWash(double opacity)
+        {
+            var alpha = (byte)Math.Clamp((int)Math.Round(opacity * 255), 0, 255);
+            return NatashaWashes[alpha] ??= new ImmutableSolidColorBrush(Color.FromArgb(alpha, NatashasFavourite.R, NatashasFavourite.G, NatashasFavourite.B));
+        }
 
         /// <summary>One pen per ring colour+opacity (a few hundred at most), so the render pass stays allocation-free.</summary>
         internal static IPen FusePen(uint argb)
@@ -675,6 +793,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     var b = bubbles[i];
                     if (b.Screen != _w.Index) continue;
                     double cx = (b.CenterX - ox) * k, cy = (b.CenterY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale;
+                    if (BubbleOverlay.IsResisting(b)) s *= 1 - NatashasFavourite.HoldShrink * BubbleOverlay.ResistProgress;
                     var m = Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateRotation(b.Angle * Math.PI / 180)
                           * Matrix.CreateScale(s, s) * Matrix.CreateTranslation(cx, cy);
                     using (dc.PushTransform(m))
@@ -685,8 +804,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                             var (fill, pen) = TintPaint(b.Spec.Tint);
                             dc.DrawEllipse(fill, pen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
                         }
-                        if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
+                        var sprite = b.IsAmbientTrigger && b.Spec != null ? BubbleOverlay.TriggerImage(b.Spec.VariantId) : img;
+                        if (sprite != null) dc.DrawImage(sprite, new Rect(cx - size / 2, cy - size / 2, size, size));
                         else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                        if (b.IsNatasha && !b.Popping)
+                        {
+                            var opacity = NatashasFavourite.BubbleWashAt(b.TimeAlive, global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowAmbientLoops);
+                            dc.DrawEllipse(NatashaWash(opacity), NatashaPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                            if (BubbleOverlay.IsResisting(b))
+                            {
+                                var count = (int)(48 * BubbleOverlay.ResistProgress);
+                                for (int j = 0; j < count; j++)
+                                {
+                                    double a1 = 2 * Math.PI * j / 48 - Math.PI / 2, a2 = 2 * Math.PI * (j + 1) / 48 - Math.PI / 2, r = size / 2;
+                                    dc.DrawLine(ResistPen, new Point(cx + r * Math.Cos(a1), cy + r * Math.Sin(a1)), new Point(cx + r * Math.Cos(a2), cy + r * Math.Sin(a2)));
+                                }
+                            }
+                        }
                         if (b.FuseTotalMs > 0 && !b.Popping)   // WPF fuse ring: shrinks 1 -> 0.45; yellow, flash, red brink
                         {
                             double rr = (size / 2 - 2) * (0.45 + 0.55 * b.FuseFraction);

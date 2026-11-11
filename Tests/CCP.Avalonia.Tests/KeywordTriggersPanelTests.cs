@@ -95,6 +95,9 @@ public sealed class KeywordTriggersPanelTests
             view.SyncAwarenessTabUi();
             var toggle = Find<CheckBox>(view, "ChkAwarenessStartOnLaunch");
             Assert.True(toggle.IsChecked);
+            var container = Assert.IsType<StackPanel>(toggle.Parent);
+            Assert.Equal(Loc.Get("tooltip_awareness_start_on_launch"), ToolTip.GetTip(container));
+            Assert.Contains(container.Children.OfType<TextBlock>(), t => t.Text == Loc.Get("label_awareness_start_on_launch"));
             toggle.IsChecked = false;
             Assert.False(s.AwarenessStartOnLaunch);
         }

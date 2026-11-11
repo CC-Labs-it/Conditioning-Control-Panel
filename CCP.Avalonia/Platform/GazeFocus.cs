@@ -37,7 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                                            && WebcamTracker.Instance.Calibration != null
                                            && WebcamConsent.IsCurrent(CoreSettings.Current);
         /// <summary>The bubble's own pop (WPF Bubble.PopByGaze -> Pop). Tests swap it.</summary>
-        internal Action<AmbientBubble> PopBubble = BubbleOverlay.Pop;
+        internal Action<AmbientBubble> PopBubble = BubbleOverlay.PopByPlayer;
 
         private DispatcherTimer? _timer;
         private Point? _lastGazePoint;
@@ -279,7 +279,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 for (int i = BubbleOverlay.Field.Bubbles.Count - 1; i >= 0; i--)
                 {
                     var b = BubbleOverlay.Field.Bubbles[i];
-                    if (b.Clickable && !b.Popping) Consider(b, new Rect(b.X, b.Y, b.Size, b.Size), false, ReferenceEquals(_currentBubble, b));
+                    if (b.Clickable && !b.Popping && !BubbleOverlay.IsResisting(b)) Consider(b, new Rect(b.X, b.Y, b.Size, b.Size), false, ReferenceEquals(_currentBubble, b));
                 }
             if (s.VideoGazeClickEnabled)
                 foreach (var t in MandatoryVideoOverlay.Instance.GazeTargets)

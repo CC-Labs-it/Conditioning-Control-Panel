@@ -58,7 +58,11 @@ namespace ConditioningControlPanel.Services
         public bool Clickable, Popping, Lucky;
         /// <summary>A Chaos run's bubble (WPF Bubble with a spec); null for a plain ambient one.</summary>
         public Chaos.EffectBubbleSpec? Spec;
-        private double _startX, _top, _bottom, _speed, _wobbleOffset, _timeAlive;
+        // A dashboard trigger is an ambient bubble with a benign payload, not a Chaos run bubble.
+        public bool IsAmbientTrigger, IsNatasha;
+        public double TimeAlive => _timeAlive;
+        public void Deflate() { Popping = Deflating = true; }
+        private double _startX, _top, _bottom, _speed, _wobbleOffset, _timeAlive, _ambientLifeMs;
         private int _animType;
 
         /// <summary>The concrete Bubbles v2 motion this bubble flies (never Mix).</summary>
@@ -284,6 +288,11 @@ namespace ConditioningControlPanel.Services
                 FuseRemainingMs -= FuseStepMs;
                 if (FuseRemainingMs <= 0) return GoOff(null);
             }
+            if (IsAmbientTrigger && Spec is { TreatLifeMs: > 0 } && (_ambientLifeMs += FuseStepMs) >= Spec.TreatLifeMs)
+            {
+                Deflate();
+                return Result.Alive;
+            }
             _timeAlive += 0.02;
             double offset = 0;
             switch (_animType)
@@ -398,7 +407,7 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>One logical step. Missed and finished bubbles are removed; returns the misses.
         /// Allocation-free.</summary>
-        public int Step()
+        public int Step(AmbientBubble? heldNatasha = null)
         {
             var missed = 0;
             var now = Clock();
@@ -406,7 +415,8 @@ namespace ConditioningControlPanel.Services
             {
                 if (i >= Bubbles.Count) continue;   // a callback cleared the field
                 var b = Bubbles[i];
-                if (HoldChaos && b.Spec != null && !b.Popping) { b.CancelChannel(); continue; }
+                if (ReferenceEquals(b, heldNatasha) && !b.Popping) continue;
+                if (HoldChaos && b.Spec != null && !b.IsAmbientTrigger && !b.Popping) { b.CancelChannel(); continue; }
                 var r = b.Step(Held, CursorX, CursorY, now);
                 if (r == AmbientBubble.Result.Alive) continue;
                 if (r == AmbientBubble.Result.Detonated) { ChaosDetonated?.Invoke(b); continue; }
