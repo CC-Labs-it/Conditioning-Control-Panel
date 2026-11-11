@@ -244,6 +244,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void EndChaos()
         {
             Field.HoldChaos = Field.FreezeChaos = false;
+            Field.FreezeVibrateMs = 0;
             _chaosPopped = null;
             _chaosCanChannel = null;
             Field.ChaosDefused = Field.ChaosDetonated = null;
@@ -278,7 +279,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             b.Popping = true;
             ChaosLastPopX = b.CenterX;
             ChaosLastPopY = b.CenterY;
-            PlayChaosCue(null, 1f);   // WPF onBenignPop: PlayPopSound(false)
+            if (b.Spec.IsFreeze) PlayChaosCue("freeze_catch", 0.6f);   // WPF onFreezeCaught (:1611)
+            else PlayChaosCue(null, 1f);   // WPF onBenignPop: PlayPopSound(false)
             _chaosPopped?.Invoke(b);
             RequestFrame();
         }
@@ -360,6 +362,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             GradientStops = { new GradientStop(Color.FromArgb(180, 200, 220, 255), 0), new GradientStop(Color.FromArgb(80, 255, 255, 255), 1) },
         };
         private static readonly IPen FallbackPen = new Pen(Brushes.White, 2);
+        /// <summary>WPF BuildFreezeAuraBrush (BubbleService.cs:2512): icy blue ring, clear centre and rim.</summary>
+        private static readonly IBrush FreezeAura = new RadialGradientBrush
+        {
+            GradientStops =
+            {
+                new GradientStop(Color.FromArgb(0, 150, 210, 255), 0.30),
+                new GradientStop(Color.FromArgb(190, 150, 210, 255), 0.66),
+                new GradientStop(Color.FromArgb(0, 150, 210, 255), 1.0),
+            },
+        };
         private static readonly Dictionary<uint, IPen> FuseCache = new();
         private static readonly Dictionary<uint, (IBrush, IPen)> TintCache = new();
 
@@ -486,7 +498,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     var b = bubbles[i];
                     if (b.Screen != _w.Index) continue;
-                    double cx = (b.CenterX - ox) * k, cy = (b.CenterY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale;
+                    double cx = (b.CenterX + b.JitterX - ox) * k, cy = (b.CenterY + b.JitterY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale;
+                    if (b.FreezeAuraOpacity > 0)   // WPF: the halo sits under the art, outside its scale/rotation
+                        using (dc.PushOpacity(Math.Clamp(b.FreezeAuraOpacity * b.Fade, 0, 1)))
+                            dc.DrawEllipse(FreezeAura, null, new Point(cx, cy), size / 2 + 3 * k, size / 2 + 3 * k);
                     var m = Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateRotation(b.Angle * Math.PI / 180)
                           * Matrix.CreateScale(s, s) * Matrix.CreateTranslation(cx, cy);
                     using (dc.PushTransform(m))

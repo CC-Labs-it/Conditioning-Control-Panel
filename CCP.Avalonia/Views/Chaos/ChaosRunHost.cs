@@ -48,7 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// announcer callers remain missing even though the announcer overlay is now present.
     /// The FX window drives heat tint; colour pulse and screen shake calls retain WPF's values
     /// through the unseeded <see cref="PulseFx"/>/<see cref="ShakeFx"/> hooks
-    /// (chaos-payout-fallin-d). Freeze pickup shudder and per-bubble auras remain missing.
+    /// (chaos-payout-fallin-d). The freeze pickup's aura and shudder are drawn by BubbleOverlay.
     /// The hold and the Snap Chain window run on wall time (<c>BubbleOverlay.Field.Clock</c>),
     /// as WPF does (:4531, ChaosModeService :2000).</para>
     ///
@@ -210,7 +210,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             var spec = b.Spec;
             if (_state == null || spec == null || _manualPaused || _lessonCardPaused || _draftPaused) return;
-            if (spec.IsFreeze) { OnFreezeCaught(); return; }
+            if (spec.IsFreeze) { EffectLabel(b); OnFreezeCaught(); return; }   // WPF Bubble.Pop :4710
             EffectLabel(b);   // WPF Bubble.Pop: ShowChaosEffectLabel before onBenignPop (:4685)
             if (spec.IsPrism)
             {
@@ -560,6 +560,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosLessons.Tick("freeze_trigger");
             FreezeRemainingSec = 3.5;
             BubbleOverlay.Field.FreezeChaos = true;
+            BubbleOverlay.Field.FreezeVibrateMs = 200;   // WPF FREEZE_VIBRATE_MS (ChaosModeService.cs:3033)
             EffectPayload.GlobalDurationMult = 2.5;
             var color = Color.FromRgb(150, 210, 255);
             ChaosEffectBannerOverlay.Show("freeze", Loc.Get("Chaos_PickupFreeze"), color);

@@ -231,6 +231,21 @@ namespace ConditioningControlPanel.Services
         public double CenterX => X + Size / 2;
         public double CenterY => Y + Size / 2;
 
+        /// <summary>WPF _freezeAura (BubbleService.cs:4281-4290): the blue halo, pulsed while the field is frozen.</summary>
+        public double FreezeAuraOpacity { get; private set; }
+        /// <summary>WPF freeze-impact shudder (:4321-4327): up to 4 DIPs each way, drawn only.</summary>
+        public double JitterX { get; private set; }
+        public double JitterY { get; private set; }
+        private double _freezePulsePhase;
+
+        internal void StepFreezeFx(bool frozen, bool vibrating, Random r)
+        {
+            if (frozen) FreezeAuraOpacity = 0.1125 + 0.0875 * Math.Sin(_freezePulsePhase += 0.18);
+            else FreezeAuraOpacity = 0;
+            JitterX = vibrating ? (r.NextDouble() - 0.5) * 8 : 0;
+            JitterY = vibrating ? (r.NextDouble() - 0.5) * 8 : 0;
+        }
+
         /// <summary>WPF ContainsPx: inside the hit disc (the sprite's own size for a plain bubble).</summary>
         public bool Contains(double x, double y)
         {
@@ -298,6 +313,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF pickup freeze: motion/fuses stop, but input and held defuses still work
         /// (BubbleService.cs:3796,4531). A manual/card hold takes priority.</summary>
         public bool FreezeChaos;
+        /// <summary>WPF VibrateAllForFreeze: the field shudders while this runs down, 32 ms a step (:516).</summary>
+        public double FreezeVibrateMs;
         /// <summary>WPF ChaosMouseHeld + CursorPx: the player's press, in global DIPs, for a defuse channel.</summary>
         public bool Held;
         public double CursorX, CursorY;
@@ -355,10 +372,13 @@ namespace ConditioningControlPanel.Services
         {
             var missed = 0;
             var now = Clock();
+            if (FreezeVibrateMs > 0) FreezeVibrateMs -= 32;
             for (var i = Bubbles.Count - 1; i >= 0; i--)
             {
                 if (i >= Bubbles.Count) continue;   // a callback cleared the field
                 var b = Bubbles[i];
+                // WPF _chaosFrozen is set by holds and the pickup alike (ChaosModeService.cs:174,267,3042).
+                if (b.Spec != null) b.StepFreezeFx(HoldChaos || FreezeChaos, FreezeVibrateMs > 0, Random);
                 if (HoldChaos && b.Spec != null && !b.Popping) { b.CancelChannel(); continue; }
                 if (FreezeChaos && b.Spec != null && !b.Popping && !b.Channeling) continue;
                 var r = b.Step(Held, CursorX, CursorY, now);

@@ -46,6 +46,35 @@ public class ChaosLiveBubbleTests
     }
 
     [Fact]
+    public void Pickup_freeze_pulses_the_aura_and_shudders_for_200ms_while_motion_holds()
+    {
+        // WPF BubbleService.cs:516,4281-4290,4321-4327: the halo pulses at +0.18 rad a step; the
+        // 200 ms shudder (ChaosModeService.cs:3033) jitters up to 4 DIPs for the steps it covers.
+        var (f, b, _) = Field(Live(5000));
+        f.Step();
+        Assert.Equal(0, b.FreezeAuraOpacity);
+        f.FreezeChaos = true;
+        f.FreezeVibrateMs = 200;
+        var (x, y) = (b.X, b.Y);
+        for (int i = 1; i <= 8; i++)
+        {
+            f.Step();
+            Assert.Equal(0.1125 + 0.0875 * Math.Sin(0.18 * i), b.FreezeAuraOpacity, 9);
+            bool shaking = i <= 6;   // 168, 136, 104, 72, 40, 8 ms left; then -24
+            Assert.Equal(shaking, b.JitterX != 0 || b.JitterY != 0);
+            Assert.InRange(b.JitterX, -4, 4);
+            Assert.InRange(b.JitterY, -4, 4);
+        }
+        Assert.Equal((x, y), (b.X, b.Y));
+        f.FreezeChaos = false;
+        f.Step();
+        Assert.Equal(0, b.FreezeAuraOpacity);
+        f.HoldChaos = true;   // WPF manual/card holds set the same _chaosFrozen
+        f.Step();
+        Assert.True(b.FreezeAuraOpacity > 0);
+    }
+
+    [Fact]
     public void The_fuse_burns_32ms_a_step_and_fuse_out_detonates_once()
     {
         var (f, b, log) = Field(Live(320));

@@ -394,7 +394,18 @@ public sealed class ChaosUnlockCardOverlayTests
         ChaosMeta.State.LessonProgress["freeze_trigger"] = ChaosLessons.ById("freeze_trigger")!.Target - 1;
         ChaosRunHost.SpawnTick();
         var bubble = Assert.Single(BubbleOverlay.Field.Bubbles, b => b.Spec?.IsFreeze == true);
+        var labels = new System.Collections.Generic.List<string>();
+        var cues = new System.Collections.Generic.List<(string, float, string)>();
+        ChaosRunHost.PopText = (_, _, word, _) => labels.Add(word);
+        ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (p, v, tag, _, _) =>
+            cues.Add((System.IO.Path.GetFileNameWithoutExtension(p), v, tag));
+        var s = ConditioningControlPanel.CoreSettings.Current;
+        float vol = (float)Math.Pow(s.MasterVolume / 100f * (s.BubblesVolume / 100f), 1.5);
         BubbleOverlay.Pop(bubble);
+        // WPF BubbleService.cs:1611,4710: the pickup shows its word and plays freeze_catch at 0.6.
+        Assert.Equal(new[] { "FREEZE" }, labels);
+        Assert.Equal(("freeze_catch", Math.Min(vol * 0.6f, 1f), "chaos-cue"), cues[0]);
+        Assert.Equal(200, BubbleOverlay.Field.FreezeVibrateMs);
         Dispatcher.UIThread.RunJobs();
         Assert.True(ChaosLessons.IsComplete("freeze_trigger"));
         Assert.Equal(3.5, ChaosRunHost.FreezeRemainingSec);
@@ -466,10 +477,12 @@ public sealed class ChaosUnlockCardOverlayTests
             (ChaosMeta.State.RunsCompleted, ChaosMeta.State.SeenSkipDebut) = (0, false);
             ChaosAnnouncerOverlay.Clock = clock;
             var pulse = ChaosRunHost.PulseFx;
+            var popText = ChaosRunHost.PopText;
             var audio = ConditioningControlPanel.CoreAudio.PlayOneShotProvider;
             try { body(clock); }
             finally { ChaosRunHost.ForceShutdown(); ChaosUnlockCardOverlay.Clock = TimeProvider.System;
-                ChaosRunHost.PulseFx = pulse; ConditioningControlPanel.CoreAudio.PlayOneShotProvider = audio;
+                ChaosRunHost.PulseFx = pulse; ChaosRunHost.PopText = popText;
+                ConditioningControlPanel.CoreAudio.PlayOneShotProvider = audio;
                 ChaosAnnouncerOverlay.Clock = announcerTime;
                 (ChaosMeta.State.RunsCompleted, ChaosMeta.State.SeenSkipDebut) = progression; }
             return Task.CompletedTask;
