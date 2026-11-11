@@ -13,6 +13,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel;
@@ -23,6 +24,7 @@ namespace CCP.Avalonia.Tests;
 
 public class FriendCornerNoticeTests
 {
+    private sealed class NoticeClock : TimeProvider { internal long Now; public override long GetTimestamp() => Now; public override long TimestampFrequency => 1000; }
     private static FriendNotice Notice(string id, object payload) => new(NoticeKind.Poke, id, id, DateTimeOffset.UtcNow, 6000, payload);
 
     [Fact]
@@ -33,12 +35,15 @@ public class FriendCornerNoticeTests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var missed = "";
         var acted = "";
+        var clock = new NoticeClock(); var priorTime = BeatLoop.Time; BeatLoop.Time = clock;
         Action<object?> miss = p => missed += p;
         Action<object?> act = p => acted += p;
         try
         {
             FriendNotices.ShowPoke(null, Notice("a", "old"), act, miss);
             var w = FriendNotices.Current!;
+            Assert.Contains(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, w));
+            clock.Now += 250; BeatLoop.StepAll(); Assert.Equal(1 - 250.0 / 6000, w.Notices[0].Fraction, 2);
             Assert.False(w.ShowActivated);
             Assert.False(w.Focusable);
             Assert.False(w.ShowInTaskbar);
@@ -66,8 +71,9 @@ public class FriendCornerNoticeTests
             Assert.Contains("b", missed);
             Assert.Contains("c", missed);
             Assert.False(FriendNotices.AnyUp);
+            Assert.DoesNotContain(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, w));
         }
-        finally { FriendNotices.CloseAll(); }
+        finally { FriendNotices.CloseAll(); BeatLoop.Time = priorTime; }
         return Task.CompletedTask;
     });
 

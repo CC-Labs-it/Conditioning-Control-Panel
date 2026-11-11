@@ -30,9 +30,9 @@ internal sealed class FriendNotices : Window
     private readonly Dictionary<FriendNotice, (Action<object?> Act, Action<object?> Missed, Action<object?>? Open)> _actions = new();
     private readonly StackPanel _column = new();
     private readonly Dictionary<FriendNotice, (ProgressBar Bar, TextBlock Ago)> _drawn = new();
-    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(50) };
+    private readonly global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop _timer;
     private Window? _anchor;
-    private DateTime _last = DateTime.UtcNow;
+    private long _last;
 
     internal FriendNotices()
     {
@@ -48,7 +48,7 @@ internal sealed class FriendNotices : Window
         PointerEntered += (_, _) => Pause(true);
         PointerExited += (_, _) => Pause(false);
         SizeChanged += (_, _) => Place();
-        _timer.Tick += (_, _) => { var now = DateTime.UtcNow; Tick((now - _last).TotalMilliseconds); _last = now; };
+        _timer = new global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop(this, _ => { var now = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time.GetTimestamp(); Tick(global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time.GetElapsedTime(_last, now).TotalMilliseconds); _last = now; });
         Closed += (_, _) => { _timer.Stop(); if (ReferenceEquals(_current, this)) _current = null; };
     }
 
@@ -65,7 +65,7 @@ internal sealed class FriendNotices : Window
         foreach (var evicted in w._stack.TakeEvicted()) w.Leave(evicted, true);
         w._actions[up] = (act, missed, open);
         w.Draw();
-        if (!w.IsVisible) { w.Show(); w._last = DateTime.UtcNow; w._timer.Start(); }
+        if (!w.IsVisible) { w.Show(); w._last = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time.GetTimestamp(); w._timer.Start(); }
         w.Enter(up, folded);
         w.Place();
     }
@@ -80,7 +80,7 @@ internal sealed class FriendNotices : Window
         w.Close();
     }
 
-    internal void Pause(bool paused) { _stack.Paused = paused; _last = DateTime.UtcNow; }
+    internal void Pause(bool paused) { _stack.Paused = paused; _last = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time.GetTimestamp(); }
     internal void Tick(double elapsed)
     {
         var gone = _stack.Tick(elapsed);
@@ -163,7 +163,7 @@ internal sealed class FriendNotices : Window
             line.Inlines.Add(new Run(FriendNoticeRules.CountSuffix(n.Count)) { FontWeight = FontWeight.SemiBold, Foreground = FriendsDrawer.Gold }); body.Children.Add(line);
             var back = FriendsDrawer.Pill(Loc.Get("friends_notice_poke_back"), FriendsDrawer.Mint, new SolidColorBrush(Color.FromRgb(0x10, 0x2A, 0x22)), "notice-back"); back.Focusable = false; back.HorizontalAlignment = HorizontalAlignment.Left; back.FontWeight = FontWeight.SemiBold; back.Padding = new Thickness(12, 4); back.Margin = new Thickness(0, 7, 0, 0);
             back.Click += (_, _) => Dismiss(n, true);
-            var close = FriendsDrawer.Pill(new IconGlyph { Kind = FluentIcons.Common.Symbol.Dismiss, Size = 10 }, Brushes.Transparent, FriendsDrawer.Muted, "notice-close");
+            var close = FriendsDrawer.Pill(new IconGlyph { Kind = IconKind.Dismiss, Size = 10 }, Brushes.Transparent, FriendsDrawer.Muted, "notice-close");
             close.Focusable = false; close.Padding = new Thickness(5); close.VerticalAlignment = VerticalAlignment.Top; ToolTip.SetTip(close, Loc.Get("friends_notice_close"));
             close.Click += (_, _) => Dismiss(n, false); Grid.SetColumn(close, 2); grid.Children.Add(close); body.Children.Add(back);
             var bar = new ProgressBar { Minimum = 0, Maximum = 1, Value = n.Fraction, Height = 2, Margin = new Thickness(0, 9, 0, 0), Foreground = LandingRules.PokeIsPink(item?.PokeId) ? FriendsDrawer.Pink : FriendsDrawer.Lilac, Tag = "notice-bar" };
