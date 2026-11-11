@@ -46,7 +46,7 @@ public partial class MainShellWindow
         catch (Exception ex) { Log.Warning(ex, "Failed to load Home feature images"); }
     }
 
-    private static Bitmap? ModTileVariant(string baseName, int width)
+    internal static Bitmap? ModTileVariant(string baseName, int width)
     {
         foreach (var path in ModTileArt.Candidates(baseName, CoreMods.ActiveModId))
             if (ModArt.TryLoad(path, width) is { } image) return image;

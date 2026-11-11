@@ -44,6 +44,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF ApplyModFeatureNames, mosaic part. The Vault's title uses the Exclusives tab's own key.</summary>
         internal void ApplyTileTitles()
         {
+            RefreshMysteryFace();
             CardFlash.Title = MLCard("Flash Images", "section_flash_images");
             CardSubliminal.Title = MLCard("Subliminals", "section_subliminals_2");
             CardBouncingText.Title = MLCard("Bouncing Text", "label_bouncing_text");

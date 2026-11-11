@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -83,7 +84,7 @@ public sealed class DashboardDecorationTests
             tab.ApplyDashboardDecoration(false, false);
             Assert.Equal("Down the Rabbit Hole", tab.FindControl<TextBlock>("MysteryRevealName")!.Text);
             var badge = tab.FindControl<TierBadge>("MysteryRevealBadge")!;
-            Assert.Equal(2, badge.Tier); Assert.True(badge.FreeToday);
+            Assert.Equal(1, badge.Tier); Assert.True(badge.FreeToday);
             CoreEntitlement.HasPremiumProvider = () => true;
             tab.ApplyDashboardDecoration(false, false);
             Assert.Equal(0, badge.Tier); Assert.False(badge.FreeToday);
@@ -92,6 +93,130 @@ public sealed class DashboardDecorationTests
         {
             CoreEntitlement.DailyFreeKeyProvider = oldDaily;
             CoreEntitlement.HasPremiumProvider = oldPremium;
+        }
+    });
+
+    [Fact]
+    public Task MysteryRepaintsOnLanguageChangeWithoutMotionChange() => WithShell((shell, _, time) =>
+    {
+        var oldDaily = CoreEntitlement.DailyFreeKeyProvider;
+        var language = LocalizationManager.Instance.CurrentLanguage;
+        var tab = new SettingsTabView();
+        var window = new Window { Content = tab };
+        try
+        {
+            window.Show(); Dispatcher.UIThread.RunJobs();
+            string key = "takeover";
+            CoreEntitlement.DailyFreeKeyProvider = () => key;
+            tab.RefreshMysteryFace();
+            var name = tab.FindControl<TextBlock>("MysteryRevealName")!;
+            Assert.Equal(Loc.Get("tab_takeover"), name.Text);
+            key = "dtrh";
+            LocalizationManager.Instance.SetLanguage("fr");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Down the Rabbit Hole", name.Text);
+            Assert.Equal(Loc.Get("mosaic_free_today"), tab.CardMystery.Title);
+        }
+        finally
+        {
+            window.Close();
+            CoreEntitlement.DailyFreeKeyProvider = oldDaily;
+            LocalizationManager.Instance.SetLanguage(language);
+            Dispatcher.UIThread.RunJobs();
+        }
+    });
+
+    [Fact]
+    public Task MysteryRepaintsOnModChangeWithoutMotionChange() => WithShell((shell, tab, time) =>
+    {
+        var oldDaily = CoreEntitlement.DailyFreeKeyProvider;
+        var oldId = CoreMods.ActiveModIdProvider;
+        var oldArt = CoreModArt.OverridePathProvider;
+        string key = "takeover", mod = "first";
+        var requests = new List<string>();
+        try
+        {
+            CoreEntitlement.DailyFreeKeyProvider = () => key;
+            CoreMods.ActiveModIdProvider = () => mod;
+            CoreModArt.OverridePathProvider = path => { requests.Add(path); return null; };
+            tab.ApplyDashboardDecoration(false, false);
+            var art = tab.FindControl<Border>("MysteryRevealFace")!.GetLogicalDescendants()
+                .OfType<Border>().Select(b => b.Background).OfType<ImageBrush>().First();
+            var previousArt = art.Source;
+            Assert.NotNull(previousArt);
+            requests.Clear();
+            key = "dtrh"; mod = "second";
+            CoreMods.RaiseModChanged(null, new ConditioningControlPanel.Models.ModPackage(
+                ConditioningControlPanel.Models.BuiltInMods.CCPDefault, null, isBuiltIn: true));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Down the Rabbit Hole", tab.FindControl<TextBlock>("MysteryRevealName")!.Text);
+            Assert.Contains("features/dtrh.png", requests);
+            Assert.NotSame(previousArt, art.Source);
+        }
+        finally
+        {
+            CoreEntitlement.DailyFreeKeyProvider = oldDaily;
+            CoreMods.ActiveModIdProvider = oldId;
+            CoreModArt.OverridePathProvider = oldArt;
+        }
+    });
+
+    [Fact]
+    public Task MysteryRepaintsWhenTodayChanges() => WithShell((shell, tab, time) =>
+    {
+        var oldDaily = CoreEntitlement.DailyFreeKeyProvider;
+        var oldPremium = CoreEntitlement.HasPremiumProvider;
+        var daily = new DailyFreeService(fetchOverride: false);
+        string key = "unknown";
+        var repaint = ConditioningControlPanel.Avalonia.App.WireDailyRepaints(daily, shell);
+        try
+        {
+            CoreEntitlement.DailyFreeKeyProvider = () => key;
+            CoreEntitlement.HasPremiumProvider = () => false;
+            tab.ApplyDashboardDecoration(false, false);
+            Dispatcher.UIThread.RunJobs();
+            // RefreshNavPremiumTags normally reruns the dashboard FX gate. Park that gate so
+            // this checks the daily event's own repaint rather than the incidental FX pass.
+            typeof(MainShellWindow).GetField("_dashboardFxInitialized",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(shell, false);
+            var badge = tab.FindControl<TierBadge>("MysteryRevealBadge")!;
+            Assert.Equal(0, badge.Tier);
+            key = "dtrh";
+            daily.NotifyInputsChanged();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Down the Rabbit Hole", tab.FindControl<TextBlock>("MysteryRevealName")!.Text);
+            Assert.Equal(1, badge.Tier);
+            Assert.True(badge.FreeToday);
+        }
+        finally
+        {
+            daily.TodayChanged -= repaint;
+            CoreEntitlement.DailyFreeKeyProvider = oldDaily;
+            CoreEntitlement.HasPremiumProvider = oldPremium;
+        }
+    });
+
+    [Fact]
+    public Task MysteryFallbackUsesThemedBoxArt() => WithShell((shell, tab, time) =>
+    {
+        var oldDaily = CoreEntitlement.DailyFreeKeyProvider;
+        var oldId = CoreMods.ActiveModIdProvider;
+        var oldArt = CoreModArt.OverridePathProvider;
+        var requests = new List<string>();
+        try
+        {
+            CoreEntitlement.DailyFreeKeyProvider = () => "voice";
+            CoreMods.ActiveModIdProvider = () => ConditioningControlPanel.Models.BuiltInMods.DronificationId;
+            CoreModArt.OverridePathProvider = path => { requests.Add(path); return null; };
+            tab.RefreshMysteryFace();
+            Assert.Contains("features/mysterybox_drone.png", requests);
+            Assert.DoesNotContain("features/mysterybox.png", requests);
+        }
+        finally
+        {
+            CoreEntitlement.DailyFreeKeyProvider = oldDaily;
+            CoreMods.ActiveModIdProvider = oldId;
+            CoreModArt.OverridePathProvider = oldArt;
         }
     });
 
@@ -107,7 +232,7 @@ public sealed class DashboardDecorationTests
         tab.ApplyDashboardDecoration(false, false);
         Assert.Equal("Down the Rabbit Hole", tab.FindControl<TextBlock>("MysteryRevealName")!.Text);
         var badge = tab.FindControl<TierBadge>("MysteryRevealBadge")!;
-        Assert.Equal(2, badge.Tier);
+        Assert.Equal(1, badge.Tier);
         Assert.True(badge.FreeToday);
         Assert.Contains("features/dtrh.png", artRequests);
         Assert.DoesNotContain("features/takeover.png", artRequests);
