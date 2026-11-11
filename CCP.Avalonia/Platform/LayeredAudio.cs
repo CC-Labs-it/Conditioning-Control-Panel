@@ -22,7 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     internal sealed class LayeredAudio : IDisposable
     {
         /// <summary>One looping track. The seam exists so the state machine is testable without libvlc.</summary>
-        internal interface ILayerPlayer : IDisposable { int Volume { set; } }
+        internal interface ILayerPlayer : IDisposable { int Volume { set; } void Publish(int volume) { } }
 
         private readonly Func<string, int, ILayerPlayer> _open;
         private readonly object _lock = new();
@@ -108,6 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             foreach (var (_, player, volume) in updates)
             {
+                player.Publish(volume);   // non-blocking: a pass still confirming its gain unmutes at this one
                 _pendingVolume[player] = volume;
                 if (!_volumeWriters.ContainsKey(player)) _volumeWriters[player] = Task.Run(() => WriteVolumes(player));
             }
@@ -187,7 +188,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             private readonly TimeProvider _time;
             private ITimer? _next;
             private volatile int _volume;
-            private bool _volumeConfigured;
+            private volatile bool _volumeConfigured, _published;
             private volatile bool _disposed;
 
             public Task Closing => _closed.Task;
@@ -314,13 +315,17 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     lock (_gate)
                     {
                         if (_disposed) return;
-                        _volume = value;
+                        if (!_published) _volume = value;   // a queued write may be older than the published gain
                         _volumeConfigured = true;
                         playing = _live.Where(c => c.Playing).ToArray();
                     }
                     foreach (var c in playing) c.Gain.Kick();
                 }
             }
+
+            /// <summary>The newest layer gain, lock-free, before its queued write: a pass that confirms the
+            /// older gain then sees a different target and stays muted.</summary>
+            public void Publish(int volume) { _volume = volume; _volumeConfigured = _published = true; }
 
             /// <summary>Per pass: pulse drops a volume set too soon after the stream opens, so retry the newest
             /// target off the caller until it sticks or the pass retires. Unmute only at the current confirmed gain.</summary>

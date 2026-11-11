@@ -26,13 +26,8 @@ public sealed class EngineAudioTeardownTests
         {
             set
             {
-                if (value == 100 && BlockRestore)
-                {
-                    Restoring.Set();
-                    Release.Wait(TimeSpan.FromSeconds(10));
-                }
-                Volatile.Write(ref _volume, value);
-                Interlocked.Increment(ref _writes);
+                if (value == 100 && BlockRestore) { Restoring.Set(); Release.Wait(TimeSpan.FromSeconds(10)); }
+                Volatile.Write(ref _volume, value); Interlocked.Increment(ref _writes);
             }
         }
         public void Dispose() { }
@@ -92,12 +87,7 @@ public sealed class EngineAudioTeardownTests
             if (stopping != null) await stopping.WaitAsync(TimeSpan.FromSeconds(10));
             audio.ForceUnduck();
             await layers.VolumeUpdates.WaitAsync(TimeSpan.FromSeconds(5));
-            await AvaloniaTestDispatcher.RunAsync(() =>
-            {
-                CoreEngine.Stop();
-                shell?.Close();
-                return Task.CompletedTask;
-            });
+            await AvaloniaTestDispatcher.RunAsync(() => { CoreEngine.Stop(); shell?.Close(); return Task.CompletedTask; });
             layers.Dispose();
             audio.Shutdown();
             File.Delete(file);

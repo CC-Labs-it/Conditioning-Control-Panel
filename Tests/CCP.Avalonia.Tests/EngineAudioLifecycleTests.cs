@@ -49,19 +49,16 @@ public sealed class EngineAudioLifecycleTests
             MainShellWindow? shell = null;
             try
             {
-                s.AudioOnlySession = audioOnly;
-                s.AudioLayersEnabled = master;
+                s.AudioOnlySession = audioOnly; s.AudioLayersEnabled = master;
                 s.AudioLayers = new() { new AudioLayerTrack { Path = file } };
-                s.PanicKeyEnabled = false;
-                s.OfflineMode = true;
+                s.PanicKeyEnabled = false; s.OfflineMode = true;
                 shell = new MainShellWindow();
                 shell.Show();
                 CoreEngine.StoppedHook = shell.OnEngineStopped;
                 shell.StartEngine();
                 Assert.True(CoreEngine.IsRunning);
                 Assert.Equal(audioOnly, layers.IsPlaying);
-                if (audioOnly) Assert.Single(opened);
-                else Assert.Empty(opened);
+                Assert.Equal(audioOnly ? 1 : 0, opened.Count);
                 audio.Duck(80);
                 Assert.True(audio.IsDucked);
                 MainShellWindow.StopEngine();
@@ -71,8 +68,7 @@ public sealed class EngineAudioLifecycleTests
             }
             finally
             {
-                CoreEngine.Stop();
-                shell?.Close();
+                CoreEngine.Stop(); shell?.Close();
                 layers.Dispose();
                 audio.Shutdown();
                 File.Delete(file);
@@ -96,11 +92,9 @@ public sealed class EngineAudioLifecycleTests
             MainShellWindow? shell = null;
             try
             {
-                s.AudioOnlySession = true;
-                s.AudioLayersEnabled = false;
+                s.AudioOnlySession = true; s.AudioLayersEnabled = false;
                 s.AudioLayers = new() { new AudioLayerTrack { Path = file } };
-                s.PanicKeyEnabled = false;
-                s.OfflineMode = true;
+                s.PanicKeyEnabled = false; s.OfflineMode = true;
                 shell = new MainShellWindow();
                 shell.Show();
                 CoreEngine.StoppedHook = shell.OnEngineStopped;
@@ -117,8 +111,7 @@ public sealed class EngineAudioLifecycleTests
             finally
             {
                 runner.Stop();
-                CoreEngine.Stop();
-                shell?.Close();
+                CoreEngine.Stop(); shell?.Close();
                 layers.Dispose();
                 File.Delete(file);
             }
@@ -144,8 +137,7 @@ public sealed class EngineAudioLifecycleTests
             {
                 s.AudioLayersEnabled = master;
                 s.AudioLayers = new() { new AudioLayerTrack { Path = file } };
-                s.PanicKeyEnabled = false;
-                s.OfflineMode = true;
+                s.PanicKeyEnabled = false; s.OfflineMode = true;
                 shell = new MainShellWindow();
                 shell.Show();
                 CoreEngine.StoppedHook = shell.OnEngineStopped;
@@ -155,16 +147,11 @@ public sealed class EngineAudioLifecycleTests
                 Assert.True(layers.IsPlaying && audio.IsDucked);
                 CoreEngine.Stop(); // WPF StopEngineCore also cleans up when already idle.
                 if (checkUnduck) Assert.False(audio.IsDucked);
-                else
-                {
-                    Assert.Equal(master, layers.IsPlaying);
-                    Assert.Equal(!master, player.Disposed);
-                }
+                else { Assert.Equal(master, layers.IsPlaying); Assert.Equal(!master, player.Disposed); }
             }
             finally
             {
-                CoreEngine.Stop();
-                shell?.Close();
+                CoreEngine.Stop(); shell?.Close();
                 layers.Dispose();
                 audio.Shutdown();
                 File.Delete(file);

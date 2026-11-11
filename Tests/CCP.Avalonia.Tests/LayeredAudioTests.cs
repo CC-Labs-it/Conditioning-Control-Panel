@@ -27,6 +27,8 @@ public sealed class LayeredAudioTests
         public readonly ManualResetEventSlim Gate = new(true), Entered = new();
         private int _volume = -1;
         public int Current => Volatile.Read(ref _volume);
+        public volatile int Published = -1;
+        public void Publish(int volume) => Published = volume;
         public int Volume { set { Entered.Set(); Gate.Wait(TimeSpan.FromSeconds(10)); Volatile.Write(ref _volume, value); } }
         public void Dispose() { }
     }
@@ -73,7 +75,10 @@ public sealed class LayeredAudioTests
             a.Volume = 50;                                       // the slider stores it, then pushes it live
             layers.SetTrackVolumeLive(a, 50);                    // layer A's write hangs
             Assert.True(players[0].Entered.Wait(TimeSpan.FromSeconds(5)));
+            var clock = Stopwatch.StartNew();
             layers.ApplyDuck(0.8f);                              // a cue starts while A is stuck
+            Assert.True(clock.Elapsed < TimeSpan.FromMilliseconds(200), "the duck never waits for a layer write");
+            Assert.Equal(46, players[0].Published);              // A's ducked gain is published before its write, cbrt(0.1)
             Assert.True(SpinWait.SpinUntil(() => players[1].Current == 58, 5000), "B ducks during the cue"); // cbrt(0.2)
             layers.ReleaseDuck();
             Assert.True(SpinWait.SpinUntil(() => players[1].Current == 100, 5000));

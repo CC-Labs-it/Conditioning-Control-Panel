@@ -35,7 +35,9 @@ public sealed class LayeredAudioStartupTests
             Assert.True(layers.IsPlaying);
             Assert.Equal(46, initial); // cbrt(0.25 * 0.5 * 0.8)
             Assert.NotNull(player);
-            Assert.True(SpinWait.SpinUntil(() => player!.CurrentPlayback is { Playing: true, Muted: false, Volume: 46 }, 10_000));
+            player!.Publish(20);                                  // a duck queued while the first gain is confirming
+            player.Volume = 46;                                   // its older queued write lands after it
+            Assert.True(SpinWait.SpinUntil(() => player.CurrentPlayback is { Playing: true, Muted: false, Volume: 20 }, 10_000));
         }
         finally
         {
