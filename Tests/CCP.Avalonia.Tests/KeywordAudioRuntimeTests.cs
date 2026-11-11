@@ -15,6 +15,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Safety;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -37,7 +38,8 @@ public sealed class KeywordAudioRuntimeTests
             CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled,
             CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider,
             CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider, s.AudioDuckingEnabled, CoreFlash.ShowProvider);
-        ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+        using var panic = new PanicScope();
+        PanicAftermath.EndQuiet();
         var engine = new KeywordAudioRuntime();
         var played = new List<(string, float)>();
         var file = Path.GetTempFileName();
@@ -68,6 +70,27 @@ public sealed class KeywordAudioRuntimeTests
                 CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider,
                 CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider, s.AudioDuckingEnabled, CoreFlash.ShowProvider) = saved;
         }
+    });
+
+    private sealed class PanicScope : IDisposable
+    {
+        private readonly (System.Reflection.FieldInfo Field, object? Value)[] _saved = new[] { "_quietUntilMs", "_engineHeld", "_panics" }
+            .Select(n => typeof(PanicAftermath).GetField(n, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!)
+            .Select(f => (f, f.GetValue(null))).ToArray();
+        public void Dispose() { foreach (var (field, value) in _saved) field.SetValue(null, value); }
+    }
+
+    [Theory, InlineData(0), InlineData(1), InlineData(2), InlineData(3), InlineData(4)]
+    public Task HelperRestoresExactPanicState(int state) => RunAsync(async (_, _, _) =>
+    {
+        var deadline = typeof(PanicAftermath).GetField("_quietUntilMs", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        if (state != 0) PanicAftermath.ArmQuiet(Environment.TickCount64 - (state >= 3 ? (long)PanicAftermath.QuietWindow.TotalMilliseconds + 100 : 0));
+        if (state == 2 || state == 4) PanicAftermath.ReleaseEngineHold();
+        var before = (deadline.GetValue(null), PanicAftermath.HoldsEngineRestart, PanicAftermath.PanicCount);
+        await RunAsync((_, _, _) => Task.CompletedTask);
+        Assert.Equal(before, (deadline.GetValue(null), PanicAftermath.HoldsEngineRestart, PanicAftermath.PanicCount));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => RunAsync((_, _, _) => { PanicAftermath.ArmQuiet(); throw new InvalidOperationException(); }));
+        Assert.Equal(before, (deadline.GetValue(null), PanicAftermath.HoldsEngineRestart, PanicAftermath.PanicCount));
     });
 
     [Fact]
@@ -185,8 +208,7 @@ public sealed class KeywordAudioRuntimeTests
     public void KeywordHapticAndXpUseConfiguredValuesAndSessionMultiplier(bool legacy) => Run((engine, s, _) =>
     {
         var old = (CoreHaptics.Service, CoreProgression.AddXPProvider, s.KeywordSessionMultiplier, s.AwarenessLoopProtectionEnabled);
-        var hs = new HapticSettings { Enabled = true };
-        hs.EnsureV2Migrated();
+        var hs = new HapticSettings { Enabled = true }; hs.EnsureV2Migrated();
         hs.V2.Rule(ConditioningControlPanel.Services.Haptics.Core.HapticEventKind.KeywordTrigger).Enabled = true;
         hs.V2.Rule(ConditioningControlPanel.Services.Haptics.Core.HapticEventKind.KeywordTrigger).Intensity = 1;
         using var haptics = new ConditioningControlPanel.Services.HapticService(hs);
@@ -194,25 +216,21 @@ public sealed class KeywordAudioRuntimeTests
         haptics.HapticTriggered += (_, message) => { if (message.StartsWith("KeywordTrigger:")) pulses.Add(message); };
         try
         {
-            CoreHaptics.Service = haptics;
-            CoreProgression.AddXPProvider = (amount, source) => xp.Add((amount, source));
+            CoreHaptics.Service = haptics; CoreProgression.AddXPProvider = (amount, source) => xp.Add((amount, source));
             s.KeywordSessionMultiplier = 2; s.AwarenessLoopProtectionEnabled = false;
             var t = s.KeywordTriggers[0];
             t.Actions = legacy ? new() : new() { new HapticAction { Intensity = .4 }, new AddXpAction { Amount = 7 },
                 new HapticAction { Intensity = .8, Enabled = false }, new AddXpAction { Amount = 99, Enabled = false } };
             t.VisualEffect = KeywordVisualEffect.None; t.HapticEnabled = true; t.HapticIntensity = .4; t.XPAward = 7; t.DuckAudio = false;
-            Type(engine, "sit");
-            Assert.Equal(new[] { "KeywordTrigger: 40%" }, pulses);
+            Type(engine, "sit"); Assert.Equal(new[] { "KeywordTrigger: 40%" }, pulses);
             Assert.Equal(new[] { (7d, "KeywordTrigger") }, xp);
             CoreSession.IsSessionRunningProvider = () => true;
             var now = engine.Now(); engine.Now = () => now.AddMinutes(1);
-            Type(engine, "sit");
-            Assert.Equal(2, pulses.Count);
+            Type(engine, "sit"); Assert.Equal(2, pulses.Count);
             Assert.Equal((14d, "KeywordTrigger"), xp.Last());
             if (legacy)
             {
-                t.VisualEffect = KeywordVisualEffect.HighlightOnly;
-                engine.Now = () => now.AddMinutes(2);
+                t.VisualEffect = KeywordVisualEffect.HighlightOnly; engine.Now = () => now.AddMinutes(2);
                 Type(engine, "sit");
                 Assert.Equal(2, pulses.Count); Assert.Equal(2, xp.Count);
             }
@@ -220,19 +238,15 @@ public sealed class KeywordAudioRuntimeTests
         finally { (CoreHaptics.Service, CoreProgression.AddXPProvider, s.KeywordSessionMultiplier, s.AwarenessLoopProtectionEnabled) = old; }
     });
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [Theory, InlineData(false), InlineData(true)]
     public void MindWipeRequiresAClipAndRunningEngineOrSession(bool legacy) => Run((engine, s, _) =>
     {
         var old = (CoreMindWipe.ClipCountProvider, CoreMindWipe.TriggerOnceProvider, s.AwarenessLoopProtectionEnabled);
         var count = 0; var plays = 0; var engineRunning = false; var session = false;
         try
         {
-            CoreMindWipe.ClipCountProvider = () => count;
-            CoreMindWipe.TriggerOnceProvider = () => plays++;
-            CoreSession.IsEngineRunningProvider = () => engineRunning;
-            CoreSession.IsSessionRunningProvider = () => session;
+            CoreMindWipe.ClipCountProvider = () => count; CoreMindWipe.TriggerOnceProvider = () => plays++;
+            CoreSession.IsEngineRunningProvider = () => engineRunning; CoreSession.IsSessionRunningProvider = () => session;
             s.AwarenessLoopProtectionEnabled = false;
             var t = s.KeywordTriggers[0]; t.DuckAudio = false; t.HapticEnabled = false; t.XPAward = 0;
             t.VisualEffect = KeywordVisualEffect.MindWipe;
@@ -251,22 +265,18 @@ public sealed class KeywordAudioRuntimeTests
     [Fact]
     public Task ActionOrderWaitsForRepeatGapsAndKeepsDuplicatesForSingleTrigger() => RunAsync(async (engine, s, played) =>
     {
-        var old = (CoreFlash.ShowProvider, CoreProgression.AddXPProvider);
-        var events = new List<string>(); var gap = new TaskCompletionSource();
+        var old = (CoreFlash.ShowProvider, CoreProgression.AddXPProvider); var events = new List<string>(); var gap = new TaskCompletionSource();
         try
         {
-            CoreFlash.ShowProvider = () => events.Add("flash");
-            CoreProgression.AddXPProvider = (amount, _) => events.Add($"xp:{amount}");
+            CoreFlash.ShowProvider = () => events.Add("flash"); CoreProgression.AddXPProvider = (amount, _) => events.Add($"xp:{amount}");
             var audio = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
             audio.PlayCount = 2; audio.DelayBetweenMs = 250;
             engine.Delay = (ms, _) => { Assert.Equal(250, ms); return gap.Task; };
             s.KeywordTriggers[0].Actions = new() { new VisualEffectAction { Effect = KeywordVisualEffect.ImageFlash }, audio,
                 new AddXpAction { Amount = 3 }, new VisualEffectAction { Effect = KeywordVisualEffect.ImageFlash }, new AddXpAction { Amount = 4 } };
-            Type(engine, "sit");
-            Assert.Equal(new[] { "flash" }, events); Assert.Single(played);
+            Type(engine, "sit"); Assert.Equal(new[] { "flash" }, events); Assert.Single(played);
             gap.SetResult(); await Task.Yield();
-            Assert.Equal(2, played.Count(p => p.Path != "stopped"));
-            Assert.Equal(new[] { "flash", "xp:3", "flash", "xp:4" }, events);
+            Assert.Equal(2, played.Count(p => p.Path != "stopped")); Assert.Equal(new[] { "flash", "xp:3", "flash", "xp:4" }, events);
         }
         finally { (CoreFlash.ShowProvider, CoreProgression.AddXPProvider) = old; }
     });
@@ -293,8 +303,7 @@ public sealed class KeywordAudioRuntimeTests
     public Task OverlappingKeywordAudioKeepsTheFirstFireResponses() => RunAsync(async (engine, s, played) =>
     {
         var old = (CoreHaptics.Service, CoreFlash.ShowProvider, CoreProgression.AddXPProvider, s.AwarenessLoopProtectionEnabled);
-        var settings = new HapticSettings { Enabled = true };
-        settings.EnsureV2Migrated();
+        var settings = new HapticSettings { Enabled = true }; settings.EnsureV2Migrated();
         var rule = settings.V2.Rule(ConditioningControlPanel.Services.Haptics.Core.HapticEventKind.KeywordTrigger);
         rule.Enabled = true; rule.Intensity = 1;
         using var haptics = new ConditioningControlPanel.Services.HapticService(settings);
@@ -313,21 +322,17 @@ public sealed class KeywordAudioRuntimeTests
             s.KeywordTriggers.Add(new KeywordTrigger { Keyword = "stay", Actions = new() {
                 new PlayAudioAction { FilePath = audio.FilePath, DuckSystemAudio = false } } });
             engine.Delay = (_, _) => gap.Task;
-            var now = engine.Now();
-            Type(engine, "sit");
-            engine.Now = () => now.AddSeconds(2);
-            Type(engine, "stay");
+            var now = engine.Now(); Type(engine, "sit");
+            engine.Now = () => now.AddSeconds(2); Type(engine, "stay");
             Assert.Equal(2, played.Count(p => p.Path != "stopped")); Assert.Empty(events);
             gap.SetResult(); await Task.Yield();
-            Assert.Equal(3, played.Count(p => p.Path != "stopped"));
-            Assert.Equal(new[] { "flash", "haptic", "xp:7" }, events);
+            Assert.Equal(3, played.Count(p => p.Path != "stopped")); Assert.Equal(new[] { "flash", "haptic", "xp:7" }, events);
         }
         finally { (CoreHaptics.Service, CoreFlash.ShowProvider, CoreProgression.AddXPProvider, s.AwarenessLoopProtectionEnabled) = old; }
     });
 
     [Theory]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
+    [InlineData(true, false)] [InlineData(false, true)]
     public Task AudioActionsDuckOnceForTheWholeList(bool firstDucks, bool secondDucks) => RunAsync(async (engine, s, _) =>
     {
         var events = new List<string>(); var delays = new List<int>(); var release = new TaskCompletionSource(); var play = 0;
@@ -346,11 +351,9 @@ public sealed class KeywordAudioRuntimeTests
         audio.DuckSystemAudio = firstDucks;
         s.KeywordTriggers[0].Actions.Add(new PlayAudioAction { FilePath = audio.FilePath, DuckSystemAudio = secondDucks });
         Type(engine, "sit");
-        Assert.Equal(new[] { "duck", "play:1", "stop:1", "play:2" }, events);
-        Assert.Equal(new[] { 2500 }, delays);
+        Assert.Equal(new[] { "duck", "play:1", "stop:1", "play:2" }, events); Assert.Equal(new[] { 2500 }, delays);
         release.SetResult(); await Task.Yield();
-        Assert.Equal("unduck:31", events.Last());
-        Assert.Single(events.Where(e => e.StartsWith("unduck:")));
+        Assert.Equal("unduck:31", events.Last()); Assert.Single(events.Where(e => e.StartsWith("unduck:")));
     });
 
     [Fact]
@@ -371,8 +374,7 @@ public sealed class KeywordAudioRuntimeTests
         ((PlayAudioAction)s.KeywordTriggers[0].Actions[0]).DuckSystemAudio = true;
         Type(engine, "sit"); var now = engine.Now(); engine.Now = () => now.AddSeconds(2); Type(engine, "sit");
         Assert.Equal(2, play);
-        firstProbe.SetResult(10);
-        await full.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        firstProbe.SetResult(10); await full.Task.WaitAsync(TimeSpan.FromSeconds(5));
         lock (delays) Assert.Equal(new[] { 900, 10500 }, delays.OrderBy(d => d));
         Assert.False(unducked.Task.IsCompleted);
         release.SetResult(); await unducked.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -391,8 +393,7 @@ public sealed class KeywordAudioRuntimeTests
     });
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [InlineData(false)] [InlineData(true)]
     public Task ParsedDurationSurvivesReplacementBeforePlaybackStarts(bool replace) => RunAsync(async (engine, s, _) =>
     {
         var firstProbe = new TaskCompletionSource<double?>(); var delay = new TaskCompletionSource<int>();
@@ -411,8 +412,7 @@ public sealed class KeywordAudioRuntimeTests
         if (replace) s.KeywordTriggers[0].Actions.Add(new PlayAudioAction { FilePath = audio.FilePath, DuckSystemAudio = false });
         Type(engine, "sit"); Assert.Equal(replace ? 2 : 1, plays);
         firstProbe.SetResult(10);
-        Assert.Equal(10500, await delay.Task.WaitAsync(TimeSpan.FromSeconds(5)));
-        Assert.Equal(replace ? 2 : 1, plays); Assert.False(unducked.Task.IsCompleted);
+        Assert.Equal(10500, await delay.Task.WaitAsync(TimeSpan.FromSeconds(5))); Assert.Equal(replace ? 2 : 1, plays); Assert.False(unducked.Task.IsCompleted);
         release.SetResult(); await unducked.Task.WaitAsync(TimeSpan.FromSeconds(5));
     });
 
