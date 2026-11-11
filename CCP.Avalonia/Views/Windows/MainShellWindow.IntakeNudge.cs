@@ -49,7 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (!IntakeNudgeRule.ShouldOffer(settings.IntakeNudgeEnabled, pass.IsPassAvailable,
                     settings.IntakeNudgeDismissedWeek, week, _serverAnnouncementShownThisLaunch,
                     CoreSession.IsSessionRunning, Chaos.ChaosRunHost.IsActive, Games.GameWindow.IsAnyOpen(),
-                    IntakeHostWindow.Snapshot().Length > 0)) return;
+                    IntakeHostWindow.Snapshot().Length > 0 || EmergencyExitWindow.Current != null)) return;
 
                 _serverAnnouncementShownThisLaunch = true;   // our popup now owns the slot too
 
