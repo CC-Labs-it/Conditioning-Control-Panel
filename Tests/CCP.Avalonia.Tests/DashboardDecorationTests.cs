@@ -1,5 +1,7 @@
 using System;
 using System.Linq;
+using System.IO;
+using Path = System.IO.Path;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia;
@@ -196,27 +198,77 @@ public sealed class DashboardDecorationTests
         }
     });
 
+    // WPF MainWindow.Presets.cs:1211,1274: try the plain box, including mod overrides, first.
     [Fact]
-    public Task MysteryFallbackUsesThemedBoxArt() => WithShell((shell, tab, time) =>
+    public Task MysteryVoiceAndUnknownTryPlainBoxBeforeThemedArt() => WithShell((shell, tab, time) =>
     {
         var oldDaily = CoreEntitlement.DailyFreeKeyProvider;
         var oldId = CoreMods.ActiveModIdProvider;
         var oldArt = CoreModArt.OverridePathProvider;
+        var scratch = Directory.CreateTempSubdirectory("ccp-mystery-box-");
+        var path = Path.Combine(scratch.FullName, "box.png");
+        using (var bitmap = new WriteableBitmap(new PixelSize(12, 6), new Vector(96, 96))) bitmap.Save(path);
         var requests = new List<string>();
         try
         {
-            CoreEntitlement.DailyFreeKeyProvider = () => "voice";
+            string key = "voice";
+            CoreEntitlement.DailyFreeKeyProvider = () => key;
             CoreMods.ActiveModIdProvider = () => ConditioningControlPanel.Models.BuiltInMods.DronificationId;
-            CoreModArt.OverridePathProvider = path => { requests.Add(path); return null; };
-            tab.RefreshMysteryFace();
-            Assert.Contains("features/mysterybox_drone.png", requests);
-            Assert.DoesNotContain("features/mysterybox.png", requests);
+            CoreModArt.OverridePathProvider = name => { requests.Add(name); return name == "features/mysterybox.png" ? path : null; };
+            var art = tab.FindControl<Border>("MysteryRevealFace")!.GetLogicalDescendants()
+                .OfType<Border>().Select(b => b.Background).OfType<ImageBrush>().First();
+            foreach (var current in new[] { "voice", "unknown" })
+            {
+                key = current;
+                requests.Clear();
+                tab.RefreshMysteryFace();
+                Assert.Contains("features/mysterybox.png", requests);
+                Assert.DoesNotContain("features/mysterybox_drone.png", requests);
+                Assert.Equal(2, Assert.IsType<Bitmap>(art.Source).Size.AspectRatio);
+            }
         }
         finally
         {
             CoreEntitlement.DailyFreeKeyProvider = oldDaily;
             CoreMods.ActiveModIdProvider = oldId;
             CoreModArt.OverridePathProvider = oldArt;
+            scratch.Delete(true);
+        }
+    });
+
+    [Fact]
+    public Task MysteryRepaintsUpdatedArtForSameModId() => WithShell((shell, tab, time) =>
+    {
+        var oldDaily = CoreEntitlement.DailyFreeKeyProvider;
+        var oldId = CoreMods.ActiveModIdProvider;
+        var oldArt = CoreModArt.OverridePathProvider;
+        var scratch = Directory.CreateTempSubdirectory("ccp-mystery-update-");
+        var first = Path.Combine(scratch.FullName, "first.png");
+        var second = Path.Combine(scratch.FullName, "second.png");
+        using (var bitmap = new WriteableBitmap(new PixelSize(12, 6), new Vector(96, 96))) bitmap.Save(first);
+        using (var bitmap = new WriteableBitmap(new PixelSize(6, 12), new Vector(96, 96))) bitmap.Save(second);
+        try
+        {
+            var selected = first;
+            CoreEntitlement.DailyFreeKeyProvider = () => "dtrh";
+            CoreMods.ActiveModIdProvider = () => "same-mod";
+            CoreModArt.OverridePathProvider = name => name == "features/dtrh.png" ? selected : null;
+            tab.ApplyDashboardDecoration(false, false);
+            var art = tab.FindControl<Border>("MysteryRevealFace")!.GetLogicalDescendants()
+                .OfType<Border>().Select(b => b.Background).OfType<ImageBrush>().First();
+            Assert.Equal(2, Assert.IsType<Bitmap>(art.Source).Size.AspectRatio);
+            selected = second;
+            CoreMods.RaiseModChanged(null, new ConditioningControlPanel.Models.ModPackage(
+                ConditioningControlPanel.Models.BuiltInMods.CCPDefault, null, isBuiltIn: true));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(.5, Assert.IsType<Bitmap>(art.Source).Size.AspectRatio);
+        }
+        finally
+        {
+            CoreEntitlement.DailyFreeKeyProvider = oldDaily;
+            CoreMods.ActiveModIdProvider = oldId;
+            CoreModArt.OverridePathProvider = oldArt;
+            scratch.Delete(true);
         }
     });
 

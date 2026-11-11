@@ -109,11 +109,11 @@ public partial class SettingsTabView
         string art = key switch
         {
             "takeover" => "takeover", "awareness" => "awareness", "haptics" => "vibe",
-            "fyp" => "fyp", "remote" => "remote_control", "dtrh" => "dtrh", _ => null,
+            "fyp" => "fyp", "remote" => "remote_control", "dtrh" => "dtrh", _ => "mysterybox",
         };
         var brush = MysteryRevealFace.GetLogicalDescendants().OfType<Border>()
             .Select(b => b.Background).OfType<ImageBrush>().First();
-        brush.Source = (art == null ? null : ModArt.TryLoad("features/" + art + ".png", 512))
+        brush.Source = ModArt.TryLoad("features/" + art + ".png", 512)
             ?? Windows.MainShellWindow.ModTileVariant("mysterybox", 512);
     }
 

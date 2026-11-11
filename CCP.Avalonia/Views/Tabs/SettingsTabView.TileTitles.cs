@@ -36,7 +36,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private void OnTileTitlesModChanged(object? sender, ModPackage mod) =>
-            global::Avalonia.Threading.Dispatcher.UIThread.Post(ApplyTileTitles);
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                _mysteryArtKey = null;
+                ApplyTileTitles();
+            });
 
         private void OnTileTitlesLanguageChanged(object? sender, EventArgs e) =>
             global::Avalonia.Threading.Dispatcher.UIThread.Post(ApplyTileTitles);
