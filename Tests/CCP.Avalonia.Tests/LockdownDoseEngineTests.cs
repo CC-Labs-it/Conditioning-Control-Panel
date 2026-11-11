@@ -16,6 +16,7 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Safety;
+using ConditioningControlPanel.Services.Bark;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -245,12 +246,18 @@ public class LockdownDoseEngineTests
             s.LockdownDoseKeeperEnabled = true;
             var ld = LockdownService.Current = new LockdownService();
             var shell = NewDoseShell();
+            var oldBark = BarkHead.Engine; var oldAvatar = s.AvatarEnabled; var oldSuppression = s.BarkChatSuppressionMs; var rotation = s.BarkVariantRotation.ToDictionary(x => x.Key, x => x.Value.ToList());
+            var rule = new BarkRule { Id = "dose-test", Trigger = "LockdownConscript", VariantPool = new() { new BarkVariant("{features}|{round}|{engine}") } };
+            var bark = BarkHead.Engine = new BarkEngine(() => new BarkRuleSet(new[] { rule })) { Speak = _ => { } };
+            string? spoken = null; bark.BarkSpoken += (_, line) => spoken = line; s.AvatarEnabled = true; s.BarkChatSuppressionMs = 0; bark.Start();
             shell.Show();
             try
             {
                 ld.Activate(TimeSpan.FromMinutes(20));
                 shell.EnforceLockdownDoseEngine(true);
                 Assert.True(CoreEngine.IsRunning); Assert.Equal(2, StarterCount(s));
+                var names = new[] { (s.FlashEnabled, "Flash"), (s.SubliminalEnabled, "Subliminals"), (s.SpiralEnabled, "the Spiral"), (s.PinkFilterEnabled, "the Pink Filter"), (s.BouncingTextEnabled, "Bouncing Text"), (s.BubblesEnabled, "Bubbles") }.Where(x => x.Item1).Select(x => x.Item2).ToArray();
+                Assert.NotNull(spoken); Assert.EndsWith("|1|1", spoken); Assert.All(names, name => Assert.Contains(name, spoken));
                 ld.Deactivate(); Assert.False(CoreEngine.IsRunning); Assert.Equal(0, StarterCount(s));
                 s.FlashEnabled = true;
                 s.LockdownDoseKeeperEnabled = false;
@@ -269,7 +276,7 @@ public class LockdownDoseEngineTests
                 ld.Deactivate();
                 Assert.True(CoreEngine.IsRunning);
             }
-            finally { ld.Dispose(); CoreEngine.Stop(); LockdownService.Current = null; shell.RequestExit(); }
+            finally { BarkHead.Engine = oldBark; s.AvatarEnabled = oldAvatar; s.BarkChatSuppressionMs = oldSuppression; s.BarkVariantRotation = rotation; ld.Dispose(); CoreEngine.Stop(); LockdownService.Current = null; shell.RequestExit(); }
             return Task.CompletedTask;
         });
     }

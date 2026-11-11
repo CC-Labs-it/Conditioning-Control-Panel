@@ -19,8 +19,7 @@ public partial class MainShellWindow
     private bool _doseEngineArmed, _doseEngineWasRunning, _doseEngineRequested, _doseEngineStarted, _doseWasEmpty, _doseNoPickLogged;
     private int _doseEngineIdle, _doseEngineGeneration, _doseIdle, _doseRound;
     private DispatcherTimer? _doseEngineKickoff;
-    private readonly HashSet<string> _doseSnapshot = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<string> _doseFlipped = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _doseSnapshot = new(StringComparer.OrdinalIgnoreCase), _doseFlipped = new(StringComparer.OrdinalIgnoreCase);
     private static readonly string[] DoseStarter = { "flash", "subliminal", "spiral", "pinkfilter", "bouncingtext", "bubbles" };
     private static readonly string[] DoseWall = { "flash", "subliminal", "spiral", "pinkfilter", "bouncingtext", "bubbles", "video", "mindwipe", "lockcard", "bubblecount", "braindrain" };
     private static bool _doseRecoveryApplied;
@@ -64,13 +63,11 @@ public partial class MainShellWindow
             _doseEngineKickoff?.Stop();
             if (!_doseEngineArmed) return;
             _doseEngineArmed = false;
-            foreach (var key in _doseFlipped.Where(key => !_doseSnapshot.Contains(key)).ToArray())
-                SetWallFeature(key, false);
+            foreach (var key in _doseFlipped.Where(key => !_doseSnapshot.Contains(key)).ToArray()) SetWallFeature(key, false);
             // SetWallFeature saves on a debounce. Keep the journal until the restored flags reach disk.
             _doseRecoveryApplied = true;
             if (CoreSettings.Service?.TrySaveImmediate() != false) {
-                foreach (var key in _doseFlipped.ToArray())
-                    if (_doseSnapshot.Contains(key) || !IsWallFeatureOn(key)) _doseFlipped.Remove(key);
+                foreach (var key in _doseFlipped.ToArray()) if (_doseSnapshot.Contains(key) || !IsWallFeatureOn(key)) _doseFlipped.Remove(key);
                 WriteDoseRecovery();
             } else Log.Warning("Lockdown dose: settings could not be saved; recovery retained");
             // Stop also invalidates a start waiting for the Wayland portal (StartStop.cs).
@@ -120,43 +117,42 @@ public partial class MainShellWindow
         if (!CoreEngine.IsRunning) {
             if (PanicAftermath.HoldsEngineRestart || _pendingUserEngineGen == _engineGen) { _doseEngineIdle = 0; return; }
             if (!atActivation && ++_doseEngineIdle < 4) return;
-            if (empty) ConscriptLockdownDose();
+            var names = empty ? ConscriptLockdownDose() : null;
             _doseEngineIdle = _doseIdle = 0;
             if (!CanStartLockdownDoseEngine()) return;
             _doseEngineRequested = true;
             StartEngine(systemInitiated: true);
-            _doseEngineGeneration = _engineGen;
+            _doseEngineGeneration = _engineGen; BarkDose(names, true);
             return;
         }
-        _doseEngineIdle = 0;
-        if (!empty) { _doseIdle = 0; return; }
+        _doseEngineIdle = 0; if (!empty) { _doseIdle = 0; return; }
         if (!atActivation && ++_doseIdle < Math.Max(2, 6 - 2 * _doseRound)) return;
-        ConscriptLockdownDose();
-        _doseIdle = 0;
+        var selected = ConscriptLockdownDose();
+        _doseIdle = 0; BarkDose(selected, false);
     }
-    private void ConscriptLockdownDose() {
+    private string? ConscriptLockdownDose() {
         var round = _doseRound + 1; var starter = DoseStarter.Where(DoseFeatureAvailable).ToArray();
         var escalation = DoseFeatureAvailable("video") ? new[] { "video" } : Array.Empty<string>(); var allowed = starter.Concat(escalation).ToArray(); var picks = new List<string>();
-        void Take(IEnumerable<string> keys)
-        {
+        void Take(IEnumerable<string> keys) {
             foreach (var key in keys.OrderBy(_ => Random.Shared.Next()).ToList()) {
                 if (picks.Count >= Math.Clamp(1 + round, 2, 4)) return;
                 if (allowed.Contains(key) && !IsWallFeatureOn(key) && !picks.Contains(key)) picks.Add(key);
             }
         }
-        Take(_doseSnapshot);
-        Take(starter);
+        Take(_doseSnapshot); Take(starter);
         if (round >= 2 || starter.Length == 0) Take(escalation);
-        if (picks.Count == 0) { if (!_doseNoPickLogged) Log.Warning("Lockdown dose: no available feature to pick"); _doseNoPickLogged = true; return; }
-        _doseRound = round;
-        foreach (var key in picks) { _doseFlipped.Add(key); WriteDoseRecovery(); SetWallFeature(key, true); }
-        // WPF DoseKeeper:383-385 and :412-415: the edge pulse and bark are not wired here yet.
+        if (picks.Count == 0) { if (!_doseNoPickLogged) Log.Warning("Lockdown dose: no available feature to pick"); _doseNoPickLogged = true; return null; }
+        _doseRound = round; foreach (var key in picks) { _doseFlipped.Add(key); WriteDoseRecovery(); SetWallFeature(key, true); }
+        var names = picks.Select(key => key switch { "flash" => "Flash", "subliminal" => "Subliminals", "spiral" => "the Spiral", "pinkfilter" => "the Pink Filter", "bouncingtext" => "Bouncing Text", "bubbles" => "Bubbles", _ => "Mandatory Videos" }).ToArray();
+        return names.Length == 1 ? names[0] : string.Join(", ", names.Take(names.Length - 1)) + " and " + names[^1];
+    }
+    // WPF BarkService.cs:421-422; the edge pulse awaits the Possession host.
+    private void BarkDose(string? names, bool engineStarted) {
+        try { BarkHead.Engine?.Raise(PossessionBarkTriggers.Conscript, c => c.Set("features", string.IsNullOrWhiteSpace(names) ? "something" : names).Set("round", (double)_doseRound).Set("engine", engineStarted ? 1.0 : 0.0)); } catch { }
     }
     private bool DoseFeatureAvailable(string key) {
-        if (key == "video") return DoseVideo() == true;
-        if (DoseOverlaySupportForTests is bool supported) return supported;
-        return key switch
-        {
+        if (key == "video") return DoseVideo() == true; if (DoseOverlaySupportForTests is bool supported) return supported;
+        return key switch {
             "spiral" => SpiralOverlay.CanShowSpiral(this),
             "pinkfilter" => PinkFilterOverlay.CanShowTint(this),
             _ => X11Overlay.BackendOf(TryGetPlatformHandle()) != OverlayBackend.None && X11Overlay.IsAvailable,
@@ -165,10 +161,8 @@ public partial class MainShellWindow
     private bool? DoseVideo() => (DoseVideoReadyForTests ?? (LibVlcAudio.Shared != null)) && CoreEngine.Video is { } video ? video.HasPlayableContent() : false;
     private void WriteDoseRecovery() {
         try {
-            var flipped = _doseFlipped.Where(k => !_doseSnapshot.Contains(k)).ToArray();
-            if (flipped.Length == 0) { DeleteDoseRecovery(); return; }
-            Directory.CreateDirectory(CorePaths.UserData);
-            File.WriteAllText(DoseRecoveryPath + ".tmp", JsonConvert.SerializeObject(new { Flipped = flipped })); // rename: never a truncated journal
+            var flipped = _doseFlipped.Where(k => !_doseSnapshot.Contains(k)).ToArray(); if (flipped.Length == 0) { DeleteDoseRecovery(); return; }
+            Directory.CreateDirectory(CorePaths.UserData); File.WriteAllText(DoseRecoveryPath + ".tmp", JsonConvert.SerializeObject(new { Flipped = flipped })); // rename: never a truncated journal
             File.Move(DoseRecoveryPath + ".tmp", DoseRecoveryPath, true);
         } catch (Exception ex) { Log.Warning(ex, "Lockdown dose recovery write failed"); }
     }
@@ -186,19 +180,13 @@ public partial class MainShellWindow
             try { state = JsonConvert.DeserializeObject<Dictionary<string, string[]?>>(File.ReadAllText(DoseRecoveryPath)); } catch (JsonException) { }
             if (state?.GetValueOrDefault("Flipped") is not { } flipped) { Log.Warning("Lockdown dose recovery: unreadable journal discarded"); delete = true; return; }
             var s = CoreSettings.Current;
-            foreach (var key in flipped)
-                switch (key)
-                {
-                    case "flash": s.FlashEnabled = false; break;
-                    case "subliminal": s.SubliminalEnabled = false; break;
-                    case "spiral": s.SpiralEnabled = false; break;
-                    case "pinkfilter": s.PinkFilterEnabled = false; break;
-                    case "bouncingtext": s.BouncingTextEnabled = false; break;
-                    case "bubbles": s.BubblesEnabled = false; break;
+            foreach (var key in flipped) switch (key) {
+                    case "flash": s.FlashEnabled = false; break; case "subliminal": s.SubliminalEnabled = false; break;
+                    case "spiral": s.SpiralEnabled = false; break; case "pinkfilter": s.PinkFilterEnabled = false; break;
+                    case "bouncingtext": s.BouncingTextEnabled = false; break; case "bubbles": s.BubblesEnabled = false; break;
                     case "video": s.MandatoryVideosEnabled = false; break;
                 }
-            _doseRecoveryApplied = true;
-            delete = CoreSettings.Service?.TrySaveImmediate() != false;
+            _doseRecoveryApplied = true; delete = CoreSettings.Service?.TrySaveImmediate() != false;
             if (!delete) Log.Warning("Lockdown dose recovery: settings could not be saved; recovery retained");
         } catch (Exception ex) { Log.Warning(ex, "Lockdown dose recovery failed"); }
         finally { if (delete) DeleteDoseRecovery(); }
