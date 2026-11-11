@@ -22,12 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 if (Named<Tabs.LeaderboardTabView>("LeaderboardTab")?.FindControl<Button>("BtnViewSeasonRecap") is { } btn)
-                {
-                    var hasSnapshot = SeasonRecapStore.HasAnySnapshot();
-                    btn.IsVisible = hasSnapshot;
-                    if (Named<Tabs.LeaderboardTabView>("LeaderboardTab")?.FindControl<Border>("SeasonRecapHost") is { } host)
-                        host.IsVisible = hasSnapshot;
-                }
+                    btn.IsVisible = SeasonRecapStore.HasAnySnapshot();
             }
             catch (Exception ex) { Log.Warning(ex, "SeasonRecap: failed to update re-view button visibility"); }
         }

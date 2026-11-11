@@ -508,7 +508,7 @@
                             ToolTip.Tip="{loc:Str btn_jump_to_me}">
                         <TextBlock Text="&#x25CE;"/>
                     </Button>
-                    <!-- The shell reveals the recap host when a saved snapshot exists. -->
+                    <!-- Seasons are retired: callers can set the button, but the host stays hidden. -->
                     <Border x:Name="SeasonRecapHost" IsVisible="False">
                         <Button x:Name="BtnViewSeasonRecap" Theme="{StaticResource LbTextButton}"
                                 IsVisible="False">
