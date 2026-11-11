@@ -19,8 +19,8 @@ namespace ConditioningControlPanel.Avalonia.Helpers
         /// <summary>A copy of <paramref name="source"/>'s text rendered through <paramref name="effect"/>,
         /// padded by <paramref name="pad"/> DIPs on every side for the spread. Show it as an Image with
         /// <c>Stretch=None</c> and <c>Margin=-pad</c> beside the source so the glyphs line up. Null when
-        /// there is no text.</summary>
-        public static Bitmap? Text(TextBlock source, IBrush foreground, IEffect? effect, double pad)
+        /// there is no text. Pass the arranged text width to preserve trimming and alignment.</summary>
+        public static Bitmap? Text(TextBlock source, IBrush foreground, IEffect? effect, double pad, double? width = null)
         {
             if (string.IsNullOrEmpty(source.Text)) return null;
             var copy = new TextBlock
@@ -34,6 +34,13 @@ namespace ConditioningControlPanel.Avalonia.Helpers
                 Foreground = foreground,
                 Effect = effect,
             };
+            if (width is > 0)
+            {
+                copy.Width = width.Value;
+                copy.TextAlignment = source.TextAlignment;
+                copy.TextTrimming = source.TextTrimming;
+                copy.TextWrapping = source.TextWrapping;
+            }
             return Bake(copy, pad);
         }
 

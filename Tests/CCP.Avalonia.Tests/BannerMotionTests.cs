@@ -105,10 +105,14 @@ public sealed class BannerMotionTests
             var image = w.Named<Image>(imageName)!;
             text.Transitions = null;
             text.Text = "A short line";
+            w.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
             var first = Assert.IsAssignableFrom<global::Avalonia.Media.Imaging.Bitmap>(image.Source);
             Assert.False(image.IsHitTestVisible);
             var firstWidth = first.PixelSize.Width;
             text.Text = "A longer banner line";
+            w.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
             var second = Assert.IsAssignableFrom<global::Avalonia.Media.Imaging.Bitmap>(image.Source);
             Assert.NotSame(first, second);
             Assert.True(second.PixelSize.Width > firstWidth);
@@ -127,6 +131,85 @@ public sealed class BannerMotionTests
             Assert.Equal(0.37, image.Opacity, 2);
             text.Text = "";
             Assert.Null(image.Source);
+        }
+    });
+
+    [Fact]
+    public Task PlainBannerGlowRendersTrimmedTextAtEachWidth() => InShell(w =>
+    {
+        var host = w.Named<Border>("HeaderBannerHost")!;
+        foreach (var (textName, imageName) in new[] { ("TxtBannerSecondary", "BannerSecondaryGlow"), ("TxtBannerPool", "BannerPoolGlow") })
+        {
+            var text = w.Named<TextBlock>(textName)!;
+            var image = w.Named<Image>(imageName)!;
+            text.Text = string.Concat(Enumerable.Repeat("A long welcome line with more words ", 8));
+            int priorWidth = 0;
+            foreach (var width in new[] { 180d, 300d })
+            {
+                host.MaxWidth = width;
+                w.UpdateLayout();
+                Dispatcher.UIThread.RunJobs();
+                w.UpdateLayout();
+                Assert.Contains(text.TextLayout.TextLines, line => line.HasCollapsed);
+                var actual = Assert.IsAssignableFrom<global::Avalonia.Media.Imaging.Bitmap>(image.Source);
+                Assert.InRange(actual.PixelSize.Width, text.Bounds.Width + 15, text.Bounds.Width + 17);
+                Assert.True(actual.PixelSize.Width > priorWidth);
+                priorWidth = actual.PixelSize.Width;
+
+                var copy = new TextBlock
+                {
+                    Text = text.Text, Width = text.Bounds.Width, FontSize = text.FontSize,
+                    FontFamily = text.FontFamily, FontWeight = text.FontWeight, FontStyle = text.FontStyle,
+                    FontFeatures = text.FontFeatures, Foreground = text.Foreground,
+                    TextAlignment = text.TextAlignment, TextTrimming = text.TextTrimming, TextWrapping = text.TextWrapping,
+                    Effect = new global::Avalonia.Media.DropShadowEffect
+                    {
+                        Color = Assert.IsType<global::Avalonia.Media.Color>(image.Tag), BlurRadius = 8, Opacity = 0.6, OffsetX = 0, OffsetY = 0
+                    }
+                };
+                var reference = new Border { Padding = new Thickness(8), Child = copy };
+                reference.Measure(Size.Infinity);
+                reference.Arrange(new Rect(reference.DesiredSize));
+                Assert.Contains(copy.TextLayout.TextLines, line => line.HasCollapsed);
+                using var frame = new global::Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(
+                    (int)Math.Ceiling(reference.DesiredSize.Width), (int)Math.Ceiling(reference.DesiredSize.Height)));
+                frame.Render(reference);
+                using var expectedPng = new System.IO.MemoryStream();
+                using var actualPng = new System.IO.MemoryStream();
+                frame.Save(expectedPng);
+                actual.Save(actualPng);
+                Assert.Equal(expectedPng.ToArray(), actualPng.ToArray());
+            }
+        }
+    });
+
+    [Fact]
+    public Task PlainBannerGlowUsesPinkColorWhenForegroundDiffers() => InShell(w =>
+    {
+        w.Resources["PinkBrush"] = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Colors.Blue);
+        w.Resources["PinkColor"] = global::Avalonia.Media.Colors.Red;
+        Dispatcher.UIThread.RunJobs();
+        foreach (var (textName, imageName) in new[] { ("TxtBannerSecondary", "BannerSecondaryGlow"), ("TxtBannerPool", "BannerPoolGlow") })
+        {
+            var text = w.Named<TextBlock>(textName)!;
+            var image = w.Named<Image>(imageName)!;
+            text.Text = "A test of the banner glow";
+            w.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
+            w.Resources["PinkColor"] = global::Avalonia.Media.Colors.Red;
+            Dispatcher.UIThread.RunJobs();
+            var before = Assert.IsAssignableFrom<global::Avalonia.Media.Imaging.Bitmap>(image.Source);
+            using var red = new System.IO.MemoryStream();
+            before.Save(red);
+            w.Resources["PinkColor"] = global::Avalonia.Media.Colors.Lime;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(global::Avalonia.Media.Colors.Blue, Assert.IsAssignableFrom<global::Avalonia.Media.ISolidColorBrush>(text.Foreground).Color);
+            Assert.Equal(global::Avalonia.Media.Colors.Lime, Assert.IsType<global::Avalonia.Media.Color>(image.Tag));
+            var after = Assert.IsAssignableFrom<global::Avalonia.Media.Imaging.Bitmap>(image.Source);
+            Assert.NotSame(before, after);
+            using var green = new System.IO.MemoryStream();
+            after.Save(green);
+            Assert.False(red.ToArray().SequenceEqual(green.ToArray()));
         }
     });
 

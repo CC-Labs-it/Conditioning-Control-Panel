@@ -985,7 +985,7 @@
                                     </DockPanel>
                                 </InlineUIContainer>
                             </TextBlock>
-                            <Image x:Name="BannerSecondaryGlow" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            <Image x:Name="BannerSecondaryGlow" Tag="{DynamicResource PinkColor}" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center"
                                    IsHitTestVisible="False" Opacity="{Binding #TxtBannerSecondary.Opacity}"/>
                             <TextBlock x:Name="TxtBannerSecondary" Foreground="{DynamicResource PinkBrush}"
                                        FontSize="14" FontStyle="Italic"
@@ -1036,7 +1036,7 @@
                                 </InlineUIContainer>
                             </TextBlock>
                             <!-- WPF's optional authored pool beat: no line means no rotation slot. -->
-                            <Image x:Name="BannerPoolGlow" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            <Image x:Name="BannerPoolGlow" Tag="{DynamicResource PinkColor}" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center"
                                    IsHitTestVisible="False" Opacity="{Binding #TxtBannerPool.Opacity}"/>
                             <TextBlock x:Name="TxtBannerPool" Foreground="{DynamicResource PinkBrush}"
                                        FontSize="14" FontStyle="Italic"
