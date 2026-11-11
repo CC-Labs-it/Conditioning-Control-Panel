@@ -7962,5 +7962,10 @@
   "online_cache_day_line": "Les médias en ligne restent un jour dans un petit cache sur cet ordinateur, jamais envoyés.",
   "chaos_dvd_title": "DVD porno",
   "chaos_dvd_loading": "chargement",
-  "chaos_thought_fallback": "CÈDE"
+  "chaos_thought_fallback": "CÈDE",
+  "chaos_rabbit_storm": "Tempête de lapins",
+  "chaos_rabbit_armed": "le sifflet attend. ton prochain clic les appelle",
+  "chaos_rabbit_answered": "{0} ont répondu au bout de ton doigt",
+  "chaos_rabbit_answered_storm": "{0} ont répondu. le terrier se vide",
+  "chaos_rabbit_pointer_unavailable": "appel des lapins indisponible sur ce bureau"
 }

@@ -12,9 +12,9 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// <c>XQueryKeymap</c> only look, so a click still lands on whatever it was aimed at, exactly as the
 /// WPF hook returned false and let it through. A grab would swallow it, which is why this is not one.
 ///
-/// <para>Only X11/XWayland surfaces report: under Wayland the pointer over a native Wayland window is
-/// invisible to X clients, so click-away there only sees clicks on X windows. Null when there is no
-/// X display at all (headless, Windows, macOS). One owned connection, opened lazily, UI thread only.</para>
+/// <para>Read is X11 only. ReadLeft also polls the Windows desktop. Under Wayland, an X client
+/// cannot see the pointer over native Wayland surfaces. X11 owns one lazy connection on the UI thread;
+/// unsupported or unavailable desktops return null.</para>
 /// </summary>
 internal static class X11Pointer
 {
@@ -35,7 +35,20 @@ internal static class X11Pointer
 
     public static (PixelPoint At, bool Pressed, bool Escape)? Read() => Read(false);
 
-    internal static (PixelPoint At, bool Pressed, bool Escape)? ReadLeft() => Read(true);
+    [StructLayout(LayoutKind.Sequential)] private struct WinPoint { public int X, Y; }
+    [DllImport("user32.dll")] private static extern bool GetCursorPos(out WinPoint point);
+    [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
+
+    internal static (PixelPoint At, bool Pressed, bool Escape)? ReadLeft()
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows())
+                return GetCursorPos(out var p) ? (new PixelPoint(p.X, p.Y), GetAsyncKeyState(1) < 0, false) : null;
+            return Read(true);
+        }
+        catch (Exception ex) { Log.Debug(ex, "[Pointer] desktop pointer unavailable"); return null; }
+    }
 
     private static (PixelPoint At, bool Pressed, bool Escape)? Read(bool leftOnly)
     {

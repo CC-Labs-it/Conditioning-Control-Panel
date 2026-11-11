@@ -7962,5 +7962,10 @@
   "online_cache_day_line": "A mídia online fica um dia em um pequeno cache neste computador e nunca é enviada.",
   "chaos_dvd_title": "DVD pornô",
   "chaos_dvd_loading": "carregando",
-  "chaos_thought_fallback": "CEDA"
+  "chaos_thought_fallback": "CEDA",
+  "chaos_rabbit_storm": "Tempestade de coelhos",
+  "chaos_rabbit_armed": "o apito espera. seu próximo clique os chama",
+  "chaos_rabbit_answered": "{0} responderam na ponta do seu dedo",
+  "chaos_rabbit_answered_storm": "{0} responderam. a toca está esvaziando",
+  "chaos_rabbit_pointer_unavailable": "chamado de coelhos indisponível neste computador"
 }

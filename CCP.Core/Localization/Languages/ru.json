@@ -7962,5 +7962,10 @@
   "online_cache_day_line": "Онлайн-медиа хранятся в небольшом кэше на этом компьютере один день и никуда не загружаются.",
   "chaos_dvd_title": "Порно-DVD",
   "chaos_dvd_loading": "загрузка",
-  "chaos_thought_fallback": "ПОДДАЙСЯ"
+  "chaos_thought_fallback": "ПОДДАЙСЯ",
+  "chaos_rabbit_storm": "Кроличья буря",
+  "chaos_rabbit_armed": "свисток ждёт. следующий щелчок позовёт их",
+  "chaos_rabbit_answered": "{0} ответили у кончика пальца",
+  "chaos_rabbit_answered_storm": "{0} ответили. нора пустеет",
+  "chaos_rabbit_pointer_unavailable": "призыв кроликов недоступен на этом рабочем столе"
 }

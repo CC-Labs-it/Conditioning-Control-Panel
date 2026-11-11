@@ -8710,5 +8710,10 @@
   "online_cache_day_line": "I media online restano un giorno in una piccola cache su questo computer e non vengono mai caricati.",
   "chaos_dvd_title": "DVD porno",
   "chaos_dvd_loading": "caricamento",
-  "chaos_thought_fallback": "CEDI"
+  "chaos_thought_fallback": "CEDI",
+  "chaos_rabbit_storm": "Tempesta di conigli",
+  "chaos_rabbit_armed": "il fischietto aspetta. il prossimo clic li chiama",
+  "chaos_rabbit_answered": "{0} hanno risposto al tuo dito",
+  "chaos_rabbit_answered_storm": "{0} hanno risposto. la tana si svuota",
+  "chaos_rabbit_pointer_unavailable": "richiamo dei conigli non disponibile su questo desktop"
 }

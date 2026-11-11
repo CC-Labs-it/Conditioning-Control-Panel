@@ -20,8 +20,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// on whatever is underneath, exactly like WPF's WS_EX_TRANSPARENT | WS_EX_NOACTIVATE.
     ///
     /// <para>One static seam like WPF (Arm / Disarm / MoveToPx / CloseActive). The difference: WPF's
-    /// cursor poll lives in ChaosModeService's aim timer, which the Avalonia ChaosRunHost does not
-    /// have yet (no Rabbit Caller skill), so the overlay polls the pointer itself on the same 16 ms
+    /// cursor poll lives in ChaosModeService's aim timer. The Avalonia overlay also polls the pointer on a 16 ms
     /// Render-priority timer, only while armed. Hidden = no timer, no work (P07).</para>
     ///
     /// <para>If the platform cannot make the window click-through, or the compositor refuses
@@ -35,7 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static ChaosCursorGlowOverlay? Active => _active;
 
         /// <summary>Desktop-wide pointer in physical pixels. Test seam.</summary>
-        internal static Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadPointer = X11Pointer.Read;
+        internal static Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadPointer = X11Pointer.ReadLeft;
 
         /// <summary>Makes a shown window click-through and confirms it is transparent. Test seam.</summary>
         internal static Func<Window, bool> MakeClickThrough = w =>

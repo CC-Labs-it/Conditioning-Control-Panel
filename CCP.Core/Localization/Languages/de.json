@@ -7962,5 +7962,10 @@
   "online_cache_day_line": "Online-Medien bleiben einen Tag in einem kleinen Cache auf diesem Computer und werden nie hochgeladen.",
   "chaos_dvd_title": "Porno-DVD",
   "chaos_dvd_loading": "wird geladen",
-  "chaos_thought_fallback": "GIB NACH"
+  "chaos_thought_fallback": "GIB NACH",
+  "chaos_rabbit_storm": "Kaninchensturm",
+  "chaos_rabbit_armed": "die Pfeife wartet. dein nächster Klick ruft sie",
+  "chaos_rabbit_answered": "{0} antworteten an deiner Fingerspitze",
+  "chaos_rabbit_answered_storm": "{0} antworteten. der Bau leert sich",
+  "chaos_rabbit_pointer_unavailable": "Kaninchenruf auf diesem Desktop nicht verfügbar"
 }
