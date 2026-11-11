@@ -15,7 +15,10 @@ internal static class WebcamScreens
         (global::Avalonia.Application.Current?.ApplicationLifetime as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow?.Screens.All
         ?? Array.Empty<Screen>();
 
-    internal static string Name(Screen screen) => screen.DisplayName ?? $"{screen.Bounds.X},{screen.Bounds.Y}";
+    // WPF WebcamCalibrationWindow.xaml.cs:427 saves a monitor identity. Some Avalonia backends
+    // return an empty display name, so use the existing position fallback for that case too.
+    internal static string Name(Screen screen) => string.IsNullOrEmpty(screen.DisplayName)
+        ? $"{screen.Bounds.X},{screen.Bounds.Y}" : screen.DisplayName;
 
     internal static Screen? Resolve(IReadOnlyList<Screen> screens, string? saved)
     {
