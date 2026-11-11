@@ -30,6 +30,30 @@ namespace ConditioningControlPanel.Services
         /// <summary>The frozen copy of the user's wallpaper, kept only until the real one is back.</summary>
         internal const string FrozenOriginalName = "ccp_original_wallpaper.jpg";
 
+        /// <summary>Raised (on any thread) when the picture "Save this wallpaper" would copy changes: a new
+        /// collage, an own image going up, a stop.</summary>
+        public event EventHandler? SavableWallpaperChanged;
+
+        private void RaiseSavableWallpaperChanged()
+        {
+            try { SavableWallpaperChanged?.Invoke(this, EventArgs.Empty); }
+            catch (Exception ex) { Diag.Swallowed(ex, "savable wallpaper changed"); }
+        }
+
+        /// <summary>The picture on the desktop right now that "Save this wallpaper" can copy: the current
+        /// Static collage (a temp file the next rotation deletes) or the Own image. Null while nothing of
+        /// ours is up, and always in Dynamic mode (it never writes a file).</summary>
+        public string? CurrentSavableWallpaper()
+        {
+            string? path;
+            lock (_lock)
+            {
+                if (!_collageRunning) return null;
+                path = _ownImageRunning ? App.Settings?.Current?.CollageOwnImagePath : _collageCurrentFile;
+            }
+            return !string.IsNullOrWhiteSpace(path) && File.Exists(path) ? path : null;
+        }
+
         /// <summary>Clamped recompose interval in seconds (10 s to 24 h). Shared with Dynamic mode.</summary>
         internal static int CollageInterval()
             => Math.Clamp(App.Settings?.Current?.CollageWallpaperIntervalSeconds ?? 60, 10, 86400);
@@ -519,6 +543,7 @@ namespace ConditioningControlPanel.Services
                 // Used where it is: never copied, and never held as _collageCurrentFile (Stop deletes that).
                 SetWallpaper(ownImage, "own image", fit);
                 App.Logger?.Information("[Collage] Own image up (fit {Fit})", App.Settings?.Current?.CollageWallpaperFit);
+                RaiseSavableWallpaperChanged();
                 return;
             }
 
@@ -556,6 +581,7 @@ namespace ConditioningControlPanel.Services
             string? held;
             lock (_lock) { held = _collageCurrentFile; _collageCurrentFile = null; }
             TryDeleteCollageFile(held);
+            RaiseSavableWallpaperChanged();
             App.Logger?.Information("[Collage] Stopped; original wallpaper restored");
         }
 
@@ -650,6 +676,7 @@ namespace ConditioningControlPanel.Services
             if (!up) { StartCollage(); return; }
             SetWallpaper(path, "own image", fit);
             App.Logger?.Information("[Collage] Own image changed");
+            RaiseSavableWallpaperChanged();
         }
 
         private static readonly CollageLayout[] AllCollageLayouts =
@@ -712,6 +739,7 @@ namespace ConditioningControlPanel.Services
             if (!string.IsNullOrEmpty(previous) &&
                 !string.Equals(previous, newFile, StringComparison.OrdinalIgnoreCase))
                 TryDeleteCollageFile(previous);
+            RaiseSavableWallpaperChanged();
         }
 
         private static void TryDeleteCollageFile(string? path)

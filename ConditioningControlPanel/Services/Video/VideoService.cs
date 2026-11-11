@@ -5466,6 +5466,8 @@ namespace ConditioningControlPanel.Services
                 // The two roles never overlap because they call different cleanup paths.
                 win.PreviewKeyDown += (s, e) =>
                 {
+                    // #1594 #1595: a floating video leaves Escape alone unless Escape is the panic key.
+                    if (e.Key == Key.Escape && !VideoTakesEscape()) return;
                     // WPF key routing only happens if the dispatcher is draining input, so the PANIC
                     // lines double as proof the UI thread was alive when the user pressed the key
                     // (#616-#623: "I hit escape/panic and nothing happened").
@@ -6217,7 +6219,8 @@ namespace ConditioningControlPanel.Services
         /// which must return well inside LowLevelHooksTimeout, so it is a handful of field reads and
         /// nothing else. False here means the hook leaves the press alone entirely.
         /// </summary>
-        public bool WantsGlobalEscape => _videoPlaying && _playbackStarted && !_isCleaningUp && !IsStrictActive;
+        public bool WantsGlobalEscape => _videoPlaying && _playbackStarted && !_isCleaningUp && !IsStrictActive
+            && VideoTakesEscape();   // #1594 #1595: a floating video never hears another app's Escape
 
         /// <summary>
         /// Focus-independent ESC door for a NON-strict mandatory video — the other half of the

@@ -4540,6 +4540,11 @@ namespace ConditioningControlPanel.Services
                     if (IsExcludedFromBackup(key)) obj.Remove(key);
                 }
 
+                // A session or ramp still running keeps the user's own values in its journal; the
+                // backup carries those, never the session's Hydra / ducking / pink (perly, #1488).
+                try { SessionSettingsJournal.OverlayOnBackup(obj, App.UserDataPath); }
+                catch (Exception ex) { App.Logger?.Debug("Settings backup: session journal overlay failed: {E}", ex.Message); }
+
                 // Gzip + base64 under the server's 1 MB body limit. The unbounded per-file asset
                 // lists are trimmed first; still too big and the backup is skipped rather than sent
                 // to earn a 413 every five minutes (see SettingsBackupBudget).

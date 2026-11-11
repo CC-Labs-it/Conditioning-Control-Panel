@@ -34,7 +34,7 @@ namespace ConditioningControlPanel.Views.Controls.Studio
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
             // The rack keeps this mounted, so "too few images" can go stale while it sits hidden.
-            IsVisibleChanged += (_, e) => { if (e.NewValue is true) RefreshHint(); };
+            IsVisibleChanged += (_, e) => { if (e.NewValue is true) { RefreshHint(); RefreshSaveButton(); } };
         }
 
         private void OnLoaded(object sender, RoutedEventArgs e)
@@ -42,12 +42,91 @@ namespace ConditioningControlPanel.Views.Controls.Studio
             RebindToCurrentSettings();
             ApplyFeatureArt();
             if (App.Mods != null) App.Mods.ModChanged += OnModChanged;
+            if (App.Wallpaper != null)
+            {
+                App.Wallpaper.SavableWallpaperChanged -= OnSavableWallpaperChanged;
+                App.Wallpaper.SavableWallpaperChanged += OnSavableWallpaperChanged;
+            }
+            RefreshSaveButton();
         }
 
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
             _settingsHook?.Unhook();
             if (App.Mods != null) App.Mods.ModChanged -= OnModChanged;
+            if (App.Wallpaper != null) App.Wallpaper.SavableWallpaperChanged -= OnSavableWallpaperChanged;
+        }
+
+        // ---------------------------------------------------------------- Save this wallpaper (#1542)
+
+        private string? _lastSavedFolder;
+
+        // A compose lands off the UI thread.
+        private void OnSavableWallpaperChanged(object? sender, EventArgs e) =>
+            Dispatcher.BeginInvoke(new Action(() => { ResetSaveHint(); RefreshSaveButton(); }));
+
+        private void RefreshSaveButton()
+        {
+            string? current = null;
+            try { current = App.Wallpaper?.CurrentSavableWallpaper(); }
+            catch (Exception ex) { Diag.Swallowed(ex, "wallpaper save state"); }
+            BtnWpSave.IsEnabled = current != null;
+        }
+
+        /// <summary>Back to the plain hint once the picture it named is gone. Rebinds rather than sets, so
+        /// a language switch still repaints it.</summary>
+        private void ResetSaveHint() =>
+            System.Windows.Data.BindingOperations.SetBinding(TxtWpSaveHint, TextBlock.TextProperty,
+                new System.Windows.Data.Binding("[hint_wallpaper_save]") { Source = Localization.LocalizationManager.Instance });
+
+        private void BtnWpSave_Click(object sender, RoutedEventArgs e)
+        {
+            var source = App.Wallpaper?.CurrentSavableWallpaper();
+            if (source == null) { RefreshSaveButton(); return; }
+
+            BtnWpSave.IsEnabled = false;
+            var folder = Services.WallpaperSaver.DefaultFolder();
+            var now = DateTime.Now;
+            // Off the UI thread: Pictures can sit on a slow or synced drive. The collage may rotate away
+            // mid-copy; that lands as the quiet failure line.
+            _ = System.Threading.Tasks.Task.Run(() =>
+            {
+                string? saved = null;
+                try { saved = Services.WallpaperSaver.SaveCopy(source, folder, now); }
+                catch (Exception ex) { App.Logger?.Warning("[Wallpaper] Save copy failed: {E}", ex.Message); }
+
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    TxtWpSaveHint.Text = saved != null
+                        ? Localization.Loc.GetF("wallpaper_saved", Path.GetFileName(saved))
+                        : Localization.Loc.Get("wallpaper_save_failed");
+                    if (saved != null)
+                    {
+                        App.Logger?.Information("[Wallpaper] Saved a copy to {Path}", saved);
+                        _lastSavedFolder = folder;
+                        BtnWpOpenSaved.Visibility = Visibility.Visible;
+                    }
+                    RefreshSaveButton();
+                }));
+            });
+        }
+
+        private void BtnWpOpenSaved_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var folder = _lastSavedFolder ?? Services.WallpaperSaver.DefaultFolder();
+                Directory.CreateDirectory(folder);
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = folder,
+                    UseShellExecute = true,
+                });
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Warning(ex, "Wallpaper: open saved folder failed");
+            }
         }
 
         private void OnModChanged(object? sender, Models.ModPackage mod) =>
