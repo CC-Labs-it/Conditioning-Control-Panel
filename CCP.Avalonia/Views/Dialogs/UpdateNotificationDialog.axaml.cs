@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Input.Platform;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using Serilog;
 
@@ -49,18 +50,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
             var currentVersion = CoreReleaseContent.AppVersion;
 
+            // WPF UpdateNotificationDialog.xaml.cs:19-25: localized, not interpolated - this dialog is
+            // every user's first sentence about a release.
             this.FindControl<TextBlock>("TxtVersionInfo")!.Text =
-                $"Version {updateInfo.Version} is now available.\n" +
-                $"You are currently on version {currentVersion}.";
+                Loc.GetF("msg_update_version_line", updateInfo.Version, currentVersion);
 
-            this.FindControl<TextBlock>("TxtFileSize")!.Text = $"Download size: {updateInfo.FormattedFileSize}";
+            this.FindControl<TextBlock>("TxtFileSize")!.Text = Loc.GetF("msg_update_download_size", updateInfo.FormattedFileSize);
 
             // Use release notes from GitHub (fetched during update check)
             // Don't fallback to CurrentPatchNotes as those are for the CURRENT version, not the new one
             var notes = this.FindControl<TextBlock>("TxtReleaseNotes")!;
             notes.Text = !string.IsNullOrWhiteSpace(updateInfo.ReleaseNotes)
                 ? ConvertMarkdownToPlainText(updateInfo.ReleaseNotes)
-                : $"Version {updateInfo.Version} is available.\n\nRelease notes were not provided for this update.";
+                : Loc.GetF("msg_update_no_notes_for_version", updateInfo.Version);
 
             this.FindControl<HyperlinkButton>("LinkManualDownload")!.Click += (_, _) => LinkManualDownload_Click();
             this.FindControl<Button>("BtnLater")!.Click += (_, _) => BtnLater_Click();

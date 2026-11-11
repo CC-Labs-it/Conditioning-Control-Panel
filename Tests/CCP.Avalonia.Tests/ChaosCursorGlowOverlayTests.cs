@@ -77,13 +77,43 @@ public sealed class ChaosCursorGlowOverlayTests
         ChaosCursorGlowOverlay.MoveToPx(20, 20);
         Assert.Equal(new PixelPoint(900 - half, 100 - half), w.Position);
 
+        clock.Now += TimeSpan.FromMilliseconds(310).Ticks;
         ChaosCursorGlowOverlay.Arm();      // keep-alive: the same window comes back
         Assert.Same(w, ChaosCursorGlowOverlay.Active);
         Assert.True(w.Tracking);
+        Assert.Equal(0.985, w.HaloScale, 6); // phase continues while hidden
 
         PanicSurfaces.All.Single(s => s.Id == "chaos-cursor-glow").Stop(null);
         Assert.Null(ChaosCursorGlowOverlay.Active);
         Assert.False(w.IsVisible || w.Tracking);
+    });
+
+    [Theory]
+    [InlineData("x11", true)]
+    [InlineData("X11", true)]
+    [InlineData("wayland", false)]
+    [InlineData("WAYLAND", false)]
+    [InlineData(null, true)]
+    [InlineData("", true)]
+    public void Non_Wayland_session_can_try_desktop_pointer(string? session, bool expected) =>
+        Assert.Equal(expected, ChaosCursorGlowOverlay.HasDesktopPointer(session));
+
+    [Fact]
+    public Task Pointer_loss_hides_halo_and_rearm_refuses_until_available() => WithSeams(() => true, (_, _) =>
+    {
+        ChaosCursorGlowOverlay.Arm();
+        var w = ChaosCursorGlowOverlay.Active!;
+        ChaosCursorGlowOverlay.ReadPointer = () => null;
+        w.Tick();
+        Assert.False(w.Tracking || w.HaloVisible);
+        ChaosCursorGlowOverlay.Arm();
+        Assert.False(w.Tracking || w.HaloVisible);
+        ChaosCursorGlowOverlay.ReadPointer = () => throw new InvalidOperationException();
+        ChaosCursorGlowOverlay.Arm();
+        Assert.False(w.Tracking || w.HaloVisible);
+        ChaosCursorGlowOverlay.ReadPointer = () => (new PixelPoint(300, 200), false, false);
+        ChaosCursorGlowOverlay.Arm();
+        Assert.True(w.Tracking && w.HaloVisible);
     });
 
     [Fact]

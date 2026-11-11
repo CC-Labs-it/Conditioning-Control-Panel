@@ -12,6 +12,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
+using CCP.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -47,6 +48,7 @@ public sealed class EnhancementsTabTests
     [Fact]
     public Task TreeDrawsWpfStatesHeaderAndSecretRailAndBreathesOnlyOnScreen() => AvaloniaTestDispatcher.RunAsync(() =>
     {
+        using var culture = new CultureScope();   // the "1.10x" bonus label is display text in the user's culture
         Setup();
         var oldSettings = CoreSettings.ServiceProvider;
         var service = new SettingsService();

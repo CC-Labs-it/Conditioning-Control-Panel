@@ -76,6 +76,31 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex) { Diag.Swallowed(ex, "drop frozen wallpaper"); }
         }
 
+        /// <summary>HKCU\Control Panel\Desktop WallpaperStyle as a word: Center, Tile, Stretch, Fit, Fill,
+        /// Span, or the raw value. Read only, for the log; CCP never changes the user's fit.</summary>
+        internal static string ReadWallpaperStyle()
+        {
+            try
+            {
+                using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop");
+                var style = key?.GetValue("WallpaperStyle")?.ToString() ?? "";
+                var tile = key?.GetValue("TileWallpaper")?.ToString() ?? "";
+                return WallpaperStyleName(style, tile);
+            }
+            catch (Exception ex) { Diag.Swallowed(ex, "wallpaper style"); return "unknown"; }
+        }
+
+        internal static string WallpaperStyleName(string style, string tile) => style.Trim() switch
+        {
+            "0" => tile.Trim() == "1" ? "Tile" : "Center",
+            "2" => "Stretch",
+            "6" => "Fit",
+            "10" => "Fill",
+            "22" => "Span",
+            "" => "unknown",
+            var other => "style " + other,
+        };
+
         /// <summary>BackgroundType: 0 picture, 1 solid colour, 2 slideshow, 3 Spotlight. -1 unknown.</summary>
         private static int ReadBackgroundType()
         {
@@ -302,7 +327,10 @@ namespace ConditioningControlPanel.Services
             // Recolour at once when the active mod changes.
             if (App.Mods != null) App.Mods.ModChanged += OnModChanged;
 
-            App.Logger?.Information("[Collage] Started (rotate={Rotate}, every {Sec}s)", RotateOn(), CollageInterval());
+            // Static rides the user's own Windows fit (Fill/Fit/Stretch/Span): CCP never writes it. Logged so a
+            // "stretched on my vertical monitor" report (#1544) shows whether that fit was Stretch.
+            App.Logger?.Information("[Collage] Started (rotate={Rotate}, every {Sec}s, desktop fit {Style})",
+                RotateOn(), CollageInterval(), ReadWallpaperStyle());
             TriggerCollageCompose();   // the first one immediately
             RefreshCollageSchedule();  // the rotation timer only if rotation is on
         }
