@@ -10,6 +10,7 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
@@ -76,6 +77,60 @@ public sealed class ExclusivesSignSheenEntranceTests
             shell?.Close();
             FxAdorner.Time = TimeProvider.System;
             (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode) = old;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task FullSignSweepRunsAtPerformanceTierAndTracksGateChanges() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var clock = new SteppedClock();
+        var settings = CoreSettings.Current;
+        var old = (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals);
+        FxAdorner.Time = clock;
+        MainShellWindow? shell = null;
+        try
+        {
+            (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals) = (MotionLevel.Full, true, false, false);
+            shell = new MainShellWindow { Width = 1400, Height = 900 };
+            shell.Show(); Settle();
+            shell.ShowTab("premium"); Settle();
+            var view = shell.Named<ExclusivesTabView>("ExclusivesTab")!;
+            var band = view.GetVisualDescendants().OfType<Rectangle>().First(r => r.Name == "SignSheen");
+            double X() => ((LinearGradientBrush)band.Fill!).StartPoint.Point.X;
+            Assert.False(view.MotionRunning);
+            Assert.True(view.SignMotionRunning);
+            Assert.Single(BeatLoop.Running.Where(loop => loop.Owner == view));
+            clock.Now += (long)(1.6 * TimeSpan.TicksPerSecond); view.SignTick();
+            Assert.Equal(1.2, X(), 6);
+
+            settings.PerformanceMode = false;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.True(view.MotionRunning);
+            Assert.True(view.SignMotionRunning);
+            Assert.Single(BeatLoop.Running.Where(loop => loop.Owner == view));
+            settings.PerformanceMode = true;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.False(view.MotionRunning);
+            Assert.True(view.SignMotionRunning);
+            Assert.Single(BeatLoop.Running.Where(loop => loop.Owner == view));
+            clock.Now += (long)(1.6 * TimeSpan.TicksPerSecond); view.SignTick();
+            Assert.Equal(1.2, X(), 6);
+            shell.ShowTab("settings"); Settle();
+            Assert.False(view.SignMotionRunning);
+            Assert.DoesNotContain(BeatLoop.Running, loop => loop.Owner == view);
+            Assert.Equal(-1.2, X(), 6);
+            shell.ShowTab("premium"); Settle();
+            Assert.True(view.SignMotionRunning);
+            settings.MotionLevel = MotionLevel.Off;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.False(view.SignMotionRunning);
+        }
+        finally
+        {
+            shell?.Close();
+            FxAdorner.Time = TimeProvider.System;
+            (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals) = old;
         }
         return Task.CompletedTask;
     });

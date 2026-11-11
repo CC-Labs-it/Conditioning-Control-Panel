@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     public partial class ExclusivesTabView
     {
         private readonly Dictionary<Grid, (Rectangle Band, LinearGradientBrush Brush, int Index)> _signBands = new();
-        private BeatLoop? _reducedSignMotion;
+        private BeatLoop? _standaloneSignMotion;
         private long _signStart;
 
         // WPF MainWindow.Exclusives.Flair.cs:67-98: the mask uses the same sign art.
@@ -39,7 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             host.Children.Add(band);
             _signBands.Add(host, (band, brush, row.Group == PremiumGroup.Basic ? 0 : 1));
             PaintSign(brush, -1.2);
-            if (_motion != null || _reducedSignMotion != null)
+            if (_motion != null || _standaloneSignMotion != null)
                 SignFrame(FxAdorner.Time.GetElapsedTime(_signStart).TotalSeconds);
         }
 
@@ -51,24 +51,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void UpdateSignMotion()
         {
             bool visible = IsVisible && _plansActive && !_plansMode && this.IsAttachedToVisualTree();
-            bool reduced = visible && AmbientFxCanvas.Env.Level == MotionLevel.Reduced;
-            if (reduced && _reducedSignMotion == null)
+            // WPF starts sign sheens independently of the ambient performance gate.
+            bool standalone = visible && AmbientFxCanvas.Env.Level != MotionLevel.Off && _motion == null;
+            if (standalone && _standaloneSignMotion == null)
             {
                 _signStart = FxAdorner.Time.GetTimestamp();
-                _reducedSignMotion = new BeatLoop(this, _ => SignTick());
-                _reducedSignMotion.Start();
+                _standaloneSignMotion = new BeatLoop(this, _ => SignTick());
+                _standaloneSignMotion.Start();
             }
-            else if (!reduced && _reducedSignMotion != null)
+            else if (!standalone && _standaloneSignMotion != null)
             {
-                _reducedSignMotion.Stop();
-                _reducedSignMotion = null;
+                _standaloneSignMotion.Stop();
+                _standaloneSignMotion = null;
             }
             if (_motion != null && visible) _signStart = _motionStart;
-            if (!visible || (_motion == null && _reducedSignMotion == null))
+            if (!visible || (_motion == null && _standaloneSignMotion == null))
                 foreach (var part in _signBands.Values) PaintSign(part.Brush, -1.2);
         }
 
-        internal bool SignMotionRunning => _motion != null || _reducedSignMotion != null;
+        internal bool SignMotionRunning => _motion != null || _standaloneSignMotion != null;
 
         internal void SignTick() => SignFrame(FxAdorner.Time.GetElapsedTime(_signStart).TotalSeconds);
 
