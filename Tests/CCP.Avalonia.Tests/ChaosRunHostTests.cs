@@ -375,6 +375,60 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    /// <summary>The countdown skip and the panic key ride separate hooks in no fixed order: a skip that
+    /// lands while the panic is still queued must never start the run (no boons, HUD clock or toys).</summary>
+    [Fact]
+    public async Task A_skip_landing_before_a_queued_panic_never_starts_the_run()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var s = CoreSettings.Current;
+            (bool pe, string pk) = (s.PanicKeyEnabled, s.PanicKey);
+            var oldTeardown = ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.Teardown;
+            ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.Teardown = () => { };
+            s.PanicKeyEnabled = true;
+            s.PanicKey = "F8";
+            var shell = new MainShellWindow();
+            shell.Show();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                var overlay = ChaosRunHost.Overlay!;
+                // Win32Input.OnPanicPress: the hook thread queues the panic...
+                ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.QueueWatched(
+                    () => shell.HandlePanicKeyPress(new DateTime(2026, 1, 1, 12, 0, 0)));
+                overlay.FinishCountdown();   // ...and the skip runs first
+                Assert.True(ChaosRunHost.IsActive);
+                Assert.False(ChaosRunHost.IsDescending);
+                Assert.Null(ConditioningControlPanel.Avalonia.Platform.X11PanicKey.ToyKeys);   // StartToys never ran
+                Assert.Null(ChaosRunHost.BoonBar);
+
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();   // the panic, then the deferred BeginRun
+                Assert.False(ChaosRunHost.IsActive || ChaosRunHost.IsDescending);
+                Assert.Null(ConditioningControlPanel.Avalonia.Platform.X11PanicKey.ToyKeys);
+                Assert.Null(ChaosRunHost.BoonBar);
+                Assert.False(ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.PanicPending);
+
+                // A queued press that stops nothing (a lock card took it) only delays the start.
+                ChaosRunHost.StartRun(Cfg());
+                ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.QueueWatched(() => { });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                Assert.False(ChaosRunHost.IsDescending);
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.True(ChaosRunHost.IsDescending);
+                ChaosRunHost.StopTimerForTests();
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown(); shell.Close();
+                ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.Teardown = oldTeardown;
+                (s.PanicKeyEnabled, s.PanicKey) = (pe, pk);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     /// <summary>WPF MainWindow.xaml.cs:1621,1626: the press that ends a descent does not arm the
     /// double-press exit, so a reflexive double tap mid-run ends the run and keeps the app up.</summary>
     [Fact]

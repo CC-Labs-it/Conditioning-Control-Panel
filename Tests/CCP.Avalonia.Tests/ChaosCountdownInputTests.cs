@@ -99,4 +99,22 @@ public sealed class ChaosCountdownInputTests
         Assert.False(Win32OptionsDismiss.AcceptKey(false, 0x41));
         Assert.True(Win32OptionsDismiss.AcceptKey(false, 0x1b));
     }
+
+    [Fact]
+    public void Windows_countdown_never_skips_on_the_panic_key()
+    {
+        var saved = Win32OptionsDismiss.PanicVirtualKey;
+        try
+        {
+            Win32OptionsDismiss.PanicVirtualKey = () => 0x7B;   // F12 bound as the panic key
+            Assert.False(Win32OptionsDismiss.AcceptKey(true, 0x7B));   // panic alone handles it
+            Assert.True(Win32OptionsDismiss.AcceptKey(true, 0x41));    // every other key still skips
+            Win32OptionsDismiss.PanicVirtualKey = () => 0x1B;   // Escape as the panic key
+            Assert.False(Win32OptionsDismiss.AcceptKey(true, 0x1B));
+            Assert.True(Win32OptionsDismiss.AcceptKey(false, 0x1B));   // EmiDesk options: Esc still folds them
+            Win32OptionsDismiss.PanicVirtualKey = () => 0;      // no panic hook: nothing excluded
+            Assert.True(Win32OptionsDismiss.AcceptKey(true, 0x7B));
+        }
+        finally { Win32OptionsDismiss.PanicVirtualKey = saved; }
+    }
 }

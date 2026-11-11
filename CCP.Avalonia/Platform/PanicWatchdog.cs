@@ -46,9 +46,11 @@ internal static class PanicWatchdog
     {
         HookShutdown();
         DispatcherOperation op;
-        try { op = Dispatcher.UIThread.InvokeAsync(handler); }
+        Interlocked.Increment(ref _pending);
+        try { op = Dispatcher.UIThread.InvokeAsync(() => { try { handler(); } finally { Interlocked.Decrement(ref _pending); } }); }
         catch (Exception ex)
         {
+            Interlocked.Decrement(ref _pending);
             // The dispatcher refused the post (shutting down or broken): the press must still stop things.
             Log.Error(ex, "Panic: could not queue the handler; tearing down off-thread");
             _ = Task.Run(RunGuarded);   // this can be the hook or the D-Bus reader, which must never wait
@@ -56,6 +58,12 @@ internal static class PanicWatchdog
         }
         Arm(op.GetTask());
     }
+
+    private static int _pending;
+
+    /// <summary>A panic press is queued on the UI thread and has not run yet. Whatever would start
+    /// something on the same thread meanwhile (the Chaos countdown's BeginRun) waits for it.</summary>
+    internal static bool PanicPending => Volatile.Read(ref _pending) > 0;
 
     /// <summary>WPF ArmPanicWatchdog: a background watcher, never a wait on the calling thread.</summary>
     internal static Task Arm(Task handler, TimeSpan? timeout = null)
