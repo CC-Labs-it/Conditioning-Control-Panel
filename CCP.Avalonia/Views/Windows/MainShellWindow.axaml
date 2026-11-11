@@ -963,11 +963,12 @@
                             <Border x:Name="BannerDrumShade" CornerRadius="15" IsHitTestVisible="False"/>
                             <Border x:Name="BannerDrumLip" CornerRadius="15" IsHitTestVisible="False"/>
                             <Border x:Name="BannerDrumFoot" CornerRadius="15" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DepthWellFoot}" IsHitTestVisible="False"/>
+                            <Border x:Name="BannerFlashRing" CornerRadius="15" BorderThickness="1.5" BorderBrush="{DynamicResource PinkButtonHoveredBrush}" Opacity="0" IsHitTestVisible="False"/>
                             <Grid x:Name="BannerDrum" ClipToBounds="True" Margin="2,0">
                             <Grid Margin="12,0">
                             <!-- WPF MainWindow.xaml:1137-1146 trims the hyperlink with the lead.
                                  Match the web beat's measured DockPanel workaround for Avalonia inlines. -->
-                            <TextBlock x:Name="TxtBannerPrimary" SizeChanged="HeaderBannerSlot_SizeChanged" Foreground="{DynamicResource PinkBrush}"
+                            <TextBlock x:Name="TxtBannerPrimary" SizeChanged="HeaderBannerSlot_SizeChanged" Foreground="{DynamicResource PinkButtonHoveredBrush}"
                                        FontSize="14" FontStyle="Italic"
                                        HorizontalAlignment="Stretch" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
@@ -975,10 +976,10 @@
                                 <TextBlock.Effect><DropShadowEffect Color="{DynamicResource PinkColor}" BlurRadius="8" OffsetX="0" OffsetY="0" Opacity="0.6"/></TextBlock.Effect>
                                 <InlineUIContainer BaselineAlignment="Center">
                                     <DockPanel>
-                                        <TextBlock x:Name="BannerSupportLead" DockPanel.Dock="Left" FontSize="14" FontStyle="Italic"
-                                                   Foreground="{DynamicResource PinkBrush}" TextTrimming="CharacterEllipsis">
-                                            <Run Text="{loc:Str label_if_you_love_the_project_please}"/>
-                                            <Run Text="{loc:Str label_consider_supporting_it}" FontWeight="Bold"/>
+                                        <TextBlock x:Name="BannerSupportLead" DockPanel.Dock="Left" FontSize="14" FontStyle="Normal"
+                                                   Foreground="{DynamicResource PinkButtonHoveredBrush}" TextTrimming="CharacterEllipsis">
+                                            <Run Text="{loc:Str label_if_you_love_the_project_please}" FontStyle="Italic"/>
+                                            <Run Text="{loc:Str label_consider_supporting_it}" FontWeight="Bold" FontStyle="Normal" Foreground="White"/>
                                             <Run Text=" "/>
                                         </TextBlock>
                                         <fx:SafeHyperlinkButton x:Name="BannerSupportLink" NavigateUri="https://linktr.ee/CodeBambi"
@@ -990,7 +991,7 @@
                                     </DockPanel>
                                 </InlineUIContainer>
                             </TextBlock>
-                            <TextBlock x:Name="TxtBannerSecondary" Foreground="{DynamicResource PinkBrush}"
+                            <TextBlock x:Name="TxtBannerSecondary" Foreground="{DynamicResource PinkButtonHoveredBrush}"
                                        FontSize="14" FontStyle="Italic"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
@@ -1008,7 +1009,7 @@
                             <!-- Stretch, not Center: a Center TextBlock sizes itself from the inline
                                  button's first measure (4 DIP short), clipping "app" to "ap".
                                  TextAlignment centres the line just the same. -->
-                            <TextBlock x:Name="TxtBannerWeb" Foreground="{DynamicResource PinkBrush}"
+                            <TextBlock x:Name="TxtBannerWeb" Foreground="{DynamicResource PinkButtonHoveredBrush}"
                                        FontSize="14" FontStyle="Italic"
                                        HorizontalAlignment="Stretch" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
@@ -1025,7 +1026,7 @@
                                 <InlineUIContainer BaselineAlignment="Center">
                                     <DockPanel>
                                         <TextBlock DockPanel.Dock="Left" FontSize="14" FontStyle="Italic"
-                                                   Foreground="{DynamicResource PinkBrush}" TextTrimming="CharacterEllipsis">
+                                                   Foreground="{DynamicResource PinkButtonHoveredBrush}" TextTrimming="CharacterEllipsis">
                                             <Run Text="{loc:Str label_banner_web_xp}"/>
                                             <Run Text=" "/>
                                         </TextBlock>
@@ -1041,7 +1042,7 @@
                                 </InlineUIContainer>
                             </TextBlock>
                             <!-- WPF's optional authored pool beat: no line means no rotation slot. -->
-                            <TextBlock x:Name="TxtBannerPool" Foreground="{DynamicResource PinkBrush}"
+                            <TextBlock x:Name="TxtBannerPool" Foreground="{DynamicResource PinkButtonHoveredBrush}"
                                        FontSize="14" FontStyle="Italic"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"

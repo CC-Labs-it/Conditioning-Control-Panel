@@ -81,7 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 PaintGlow();
             }
             Activated += (_, _) => ApplyBannerAmbient();
-            Deactivated += (_, _) => { ParkBannerSheen(); ApplyBannerAmbient(); };
+            Deactivated += (_, _) => { ParkBannerFlash(); ParkBannerSheen(); ApplyBannerAmbient(); };
             // Opened fires again after every tray Hide/Show; never stack the static subscription.
             Opened += (_, _) =>
             {
@@ -90,12 +90,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ApplyBannerAmbient();
             };
             Closed += (_, _) => { AmbientFxCanvas.Env.MotionGateChanged -= ApplyBannerAmbient; ++_bannerAmbientRun; _bannerAmbient?.Stop(); _bannerAmbient = null; ClearBannerSparkles(); };
-            Closed += (_, _) => ParkBannerSheen();
+            Closed += (_, _) => { ParkBannerFlash(); ParkBannerSheen(); };
             PropertyChanged += (_, e) =>
             {
                 if (e.Property == WindowStateProperty || e.Property == IsVisibleProperty) ApplyBannerAmbient();
                 if ((e.Property == WindowStateProperty && WindowState == WindowState.Minimized)
-                    || (e.Property == IsVisibleProperty && !IsVisible)) ParkBannerSheen();
+                    || (e.Property == IsVisibleProperty && !IsVisible)) { ParkBannerFlash(); ParkBannerSheen(); }
             };
         }
 

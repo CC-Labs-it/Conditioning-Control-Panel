@@ -571,6 +571,38 @@ public sealed class BannerMotionTests
         Assert.Equal(0, Mine());
     });
 
+    [Fact]
+    public Task FlashAndBrightBeatTextFollowTheGate() => InShell(w =>
+    {
+        var previous = ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time;
+        var clock = new BannerClock();
+        ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = clock;
+        try
+        {
+            CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+            var ring = w.Named<Border>("BannerFlashRing")!;
+            var glow = w.Named<Border>("HeaderBannerGlowHost")!;
+            var beat = w.Named<TextBlock>("TxtBannerSecondary")!;
+            Assert.True(w.TryFindResource("PinkButtonHoveredBrush", out var bright));
+            Assert.Equal(bright, beat.Foreground);
+            var lead = w.Named<TextBlock>("BannerSupportLead")!;
+            Assert.Equal(bright, lead.Foreground);
+            var run = lead.Inlines!.OfType<global::Avalonia.Controls.Documents.Run>().Single(r => r.Text == ConditioningControlPanel.Localization.Loc.Get("label_consider_supporting_it"));
+            Assert.Equal(global::Avalonia.Media.FontStyle.Normal, run.FontStyle);
+            Assert.Equal(global::Avalonia.Media.Brushes.White, run.Foreground);
+            void Pop() => typeof(MainShellWindow).GetMethod("PopBannerBeat", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(w, new object[] { beat });
+            void Advance(double ms) { clock.Now += TimeSpan.FromMilliseconds(ms).Ticks; ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll(); }
+            Pop(); Advance(70); Assert.Equal(.95, ring.Opacity, 3);
+            Advance(20); Assert.Equal(22, glow.BoxShadow[0].Blur, 3);
+            Advance(310); Assert.Equal(0, ring.Opacity, 3); Assert.Equal(12, glow.BoxShadow[0].Blur, 3);
+            CoreSettings.Current.MotionLevel = MotionLevel.Off; Pop(); Advance(70); Assert.Equal(0, ring.Opacity);
+            CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+            typeof(WindowBase).GetMethod("HandleDeactivated", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(w, null);
+            Pop(); Advance(70); Assert.Equal(0, ring.Opacity); Assert.Equal(12, glow.BoxShadow[0].Blur);
+        }
+        finally { ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = previous; }
+    });
+
     private sealed class BannerClock : TimeProvider
     {
         public long Now;

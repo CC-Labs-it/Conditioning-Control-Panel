@@ -19,6 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             ParkBannerPop();
             if (!IsActive || WindowState == WindowState.Minimized || CoreSettings.Current.MotionLevel == MotionLevel.Off) return;
+            FlashBannerRing();
             if (ReferenceEquals(incoming, BannerPrimary))
             {
                 SweepBannerSheen(force: true);
