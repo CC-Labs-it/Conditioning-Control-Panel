@@ -20,7 +20,14 @@ public sealed class WindowsAudioSessionTests
     {
         Assert.Equal("--aout=directsound,any", LibVlcAudio.WithOutput(Array.Empty<string>(), windows: true)[0]);
         Assert.Equal(new[] { "--aout=dummy" }, LibVlcAudio.WithOutput(new[] { "--aout=dummy" }, windows: true));
-        Assert.Empty(LibVlcAudio.WithOutput(Array.Empty<string>(), windows: false));   // Linux: pulse is per stream
+    }
+
+    [Fact]
+    public void LinuxNamesItsOutputsSoPipeWireIsNeverPickedUnlessTheCallerPicksAnOutput()
+    {
+        // "any" reached vlc-plugin-pipewire 3-7.fc44, which segfaults when volume is set before the output starts.
+        Assert.Equal("--aout=pulse,alsa,jack,none", LibVlcAudio.WithOutput(Array.Empty<string>(), windows: false).Single());
+        Assert.Equal(new[] { "--aout=dummy" }, LibVlcAudio.WithOutput(new[] { "--aout=dummy" }, windows: false));
     }
 
     [Fact]

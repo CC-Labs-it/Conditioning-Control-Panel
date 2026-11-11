@@ -86,7 +86,7 @@ namespace ConditioningControlPanel.Controls.Depth
         /// <summary>Tilt is the one motion of this pass and is allowed only where the launcher
         /// allows it: transitions on and a tier above Performance. Rail coins and Home tiles only.</summary>
         internal static bool TiltAllowed(MotionLevel level, PerformanceTier tier) =>
-            level != MotionLevel.Off && tier != PerformanceTier.Performance;
+            DepthLaw.TiltAllowed(level, tier);
 
         // ---- the shadow colour ------------------------------------------------------------------
 

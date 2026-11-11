@@ -50,6 +50,16 @@ namespace ConditioningControlPanel
             catch { try { onFinished?.Invoke(); } catch { } return Noop; }
         }
 
+        // WPF AudioService.cs:889: zero stays silent; positive levels use the 1.5 curve and 5% floor.
+        public static float SoundGain(int volumePercent, int masterVolume)
+        {
+            var level = Math.Clamp(volumePercent, 0, 100) / 100f * (Math.Clamp(masterVolume, 0, 100) / 100f);
+            return level <= 0f ? 0f : Math.Max(0.05f, (float)Math.Pow(level, 1.5));
+        }
+
+        public static volatile Action? StopSoundProvider;
+        public static void StopSound() { try { StopSoundProvider?.Invoke(); } catch { } }
+
         private static void Noop() { }
 
         public static void Duck(int strength = 80) { try { DuckProvider?.Invoke(strength); } catch { } }

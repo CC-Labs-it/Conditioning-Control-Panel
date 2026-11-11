@@ -6,7 +6,7 @@ namespace ConditioningControlPanel.Services
     /// advances, and when a window hides a monitor. Apart so tests never need a GPU.</summary>
     internal static class DynamicFrameBudget
     {
-        /// <summary>GPU memory one collage's moving frames may take. A rotation holds two collages for the
+        /// <summary>GPU memory one build's moving frames may take, shared by every monitor's collage. A rotation holds two builds for the
         /// length of the crossfade, so double this at the peak.</summary>
         public const long Bytes = 512L * 1024 * 1024;
 
@@ -15,6 +15,37 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>A longer source stays a still: every frame has to be decoded even when few are kept.</summary>
         public const int MaxSourceFrames = 900;
+
+        /// <summary>Fill one monitor with a collage planned for another size (only between a display change and
+        /// its rebuild; every monitor normally gets its own): one uniform scale, centred, the overflow cropped. Scaling each axis on its own squashed a landscape collage onto a portrait monitor
+        /// (ccp-bugs #1544); this keeps every picture's shape on any monitor.</summary>
+        public static (float Scale, float OffsetX, float OffsetY) CoverFit(float monW, float monH, float refW, float refH)
+        {
+            if (monW <= 0 || monH <= 0 || refW <= 0 || refH <= 0) return (1f, 0f, 0f);
+            float k = Math.Max(monW / refW, monH / refH);
+            return (k, (monW - refW * k) / 2f, (monH - refH * k) / 2f);
+        }
+
+        /// <summary>Which planned monitor collage belongs to the monitor at this rect: the one planned for
+        /// exactly this rect, else the one it overlaps most (a display change since the build; the restart
+        /// that follows builds new ones), else the first. -1 only when nothing was planned.</summary>
+        public static int MatchMonitor(System.Collections.Generic.IReadOnlyList<(int X, int Y, int W, int H)> planned,
+            int x, int y, int w, int h)
+        {
+            if (planned == null || planned.Count == 0) return -1;
+            int best = 0;
+            long bestArea = -1;
+            for (int i = 0; i < planned.Count; i++)
+            {
+                var p = planned[i];
+                if (p.X == x && p.Y == y && p.W == w && p.H == h) return i;
+                long ow = Math.Min(p.X + p.W, x + w) - Math.Max(p.X, x);
+                long oh = Math.Min(p.Y + p.H, y + h) - Math.Max(p.Y, y);
+                long area = ow > 0 && oh > 0 ? ow * oh : 0;
+                if (area > bestArea) { bestArea = area; best = i; }
+            }
+            return best;
+        }
 
         /// <summary>Keep every Nth frame so that at most <see cref="MaxFramesKept"/> remain.</summary>
         public static int Stride(int frameCount)

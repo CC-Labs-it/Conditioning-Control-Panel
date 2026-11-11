@@ -8,7 +8,7 @@
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         x:Class="ConditioningControlPanel.Avalonia.Views.Dialogs.OfflineUsernameDialog"
         Title="{loc:Str dialog_choose_your_offline_username}"
-        Height="300" Width="450"
+        Height="320" Width="450"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource DarkerBgBrush}"
         CanResize="False"

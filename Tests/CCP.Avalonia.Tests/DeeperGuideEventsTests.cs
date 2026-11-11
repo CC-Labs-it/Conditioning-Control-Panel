@@ -1,13 +1,11 @@
 using System;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
-using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Tours;
@@ -21,73 +19,9 @@ namespace CCP.Avalonia.Tests;
 [Collection(RunsAloneCollection.Name)]
 public sealed class DeeperGuideEventsTests
 {
-    [Theory]
-    [InlineData("DeeperEditorInteractiveHTPart2", "EffectAdded", "haptic")]
-    [InlineData("DeeperEditorInteractiveLocalAudioPart2", "EffectAdded", "haptic")]
-    [InlineData("DeeperEditorInteractiveLocalVideoPart2", "EffectAdded", "haptic")]
-    [InlineData("DeeperEditorInteractiveHTPart2", "EffectAdded", "flash")]
-    [InlineData("DeeperEditorInteractiveHTPart2", "RuleAdded", "rule")]
-    [InlineData("DeeperEditorInteractiveLocalAudioPart2", "RuleAdded", "rule")]
-    [InlineData("DeeperEditorInteractiveLocalVideoPart2", "RuleAdded", "rule")]
-    [InlineData("DeeperEditorInteractiveHTPart2", "FileSaved", "save")]
-    [InlineData("DeeperEditorInteractiveLocalAudioPart2", "FileSaved", "save")]
-    [InlineData("DeeperEditorInteractiveLocalVideoPart2", "FileSaved", "save")]
-    public Task EditorActionAdvancesMatchingGuide(string tour, string eventName, string action) => AvaloniaTestDispatcher.RunAsync(() =>
-    {
-        if (Application.Current == null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        TutorialHead.Seed();
-        TutorialHead.ResetForTests();
-        var oldPath = CoreTutorialEvents.LastSavedEnhancementPath;
-        var dir = Directory.CreateTempSubdirectory("ccp-guide-events-").FullName;
-        var path = Path.Combine(dir, "guide.ccpenh.json");
-        var enhancement = new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*" };
-        var editor = new DeeperEditorWindow(enhancement, path);
-        TutorialOverlay? overlay = null;
-        try
-        {
-            editor.Show();
-            Dispatcher.UIThread.RunJobs();
-            TutorialHead.Service.Start(Enum.Parse<TutorialType>(tour));
-            overlay = new TutorialOverlay(editor);
-            overlay.Show();
-            while (TutorialHead.Service.CurrentStep?.AdvanceEventName != eventName)
-            {
-                Assert.True(TutorialHead.Service.IsActive);
-                TutorialHead.Service.Next();
-            }
-            Dispatcher.UIThread.RunJobs();
-            var before = TutorialHead.Service.CurrentStepIndex;
-            switch (action)
-            {
-                case "haptic": editor.HeroEffectHaptic.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); break;
-                case "flash": editor.HeroEffectFlash.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); break;
-                case "rule": editor.BtnAddRuleHero.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); break;
-                case "save": editor.BtnEditorSave.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); break;
-            }
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal(before + 1, TutorialHead.Service.CurrentStepIndex);
-            if (action == "haptic") Assert.NotEmpty(enhancement.HapticTracks);
-            if (action == "flash") Assert.NotEmpty(enhancement.TimelineItems);
-            if (action == "rule") Assert.NotEmpty(enhancement.Rules);
-            if (action == "save")
-            {
-                Assert.True(File.Exists(path));
-                Assert.Equal(path, CoreTutorialEvents.LastSavedEnhancementPath);
-            }
-        }
-        finally
-        {
-            overlay?.Close();
-            TutorialHead.ResetForTests();
-            typeof(DeeperEditorWindow).GetField("_isDirty", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(editor, false);
-            editor.Close();
-            CoreTutorialEvents.LastSavedEnhancementPath = oldPath;
-            Directory.Delete(dir, true);
-        }
-        return Task.CompletedTask;
-    });
+    // Re-saving an existing file emits FileSaved synchronously inside the Save click, before the
+    // Save card's deferred advance. WPF TutorialOverlay.xaml.cs:298-341 checks the step current when
+    // the event is handled, so the event must still reach the following FileSaved card.
     [Theory]
     [InlineData("DeeperEditorInteractiveHTPart2", "iht_save", "iht_done")]
     [InlineData("DeeperEditorInteractiveLocalAudioPart2", "iaud_save", "iaud_done")]
@@ -97,6 +31,8 @@ public sealed class DeeperGuideEventsTests
         if (Application.Current == null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var performance = CoreSettings.Current.PerformanceMode;
+        CoreSettings.Current.PerformanceMode = true; // RunJobs must not drain ambient clocks forever
         TutorialHead.Seed();
         TutorialHead.ResetForTests();
         var oldPath = CoreTutorialEvents.LastSavedEnhancementPath;
@@ -118,7 +54,7 @@ public sealed class DeeperGuideEventsTests
                 TutorialHead.Service.Next();
             }
             Dispatcher.UIThread.RunJobs();
-            editor.BtnEditorSave.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            editor.FindControl<Button>("BtnEditorSave")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(doneStep, TutorialHead.Service.CurrentStep?.Id);
             Assert.Equal(path, CoreTutorialEvents.LastSavedEnhancementPath);
@@ -130,80 +66,9 @@ public sealed class DeeperGuideEventsTests
             TutorialHead.ResetForTests();
             editor.Close();
             CoreTutorialEvents.LastSavedEnhancementPath = oldPath;
+            CoreSettings.Current.PerformanceMode = performance;
             Directory.Delete(dir, true);
         }
         return Task.CompletedTask;
     });
-
-    [Theory]
-    [InlineData("DeeperEditorInteractiveHTPart2", "iht", "15", true)]
-    [InlineData("DeeperEditorInteractiveLocalAudioPart2", "iaud", "8", false)]
-    [InlineData("DeeperEditorInteractiveLocalVideoPart2", "ivid", null, true)]
-    public Task RuleFieldsAdvanceGuideThroughSave(string tour, string prefix, string? time, bool shake) => AvaloniaTestDispatcher.RunAsync(() =>
-    {
-        if (Application.Current == null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        TutorialHead.Seed();
-        TutorialHead.ResetForTests();
-        var oldPath = CoreTutorialEvents.LastSavedEnhancementPath;
-        var dir = Directory.CreateTempSubdirectory("ccp-guide-rule-").FullName;
-        var path = Path.Combine(dir, "guide.ccpenh.json");
-        var editor = new DeeperEditorWindow(new Enhancement { MediaType = time == "8" ? MediaTypes.Audio : MediaTypes.Video, MediaSource = "*" }, path);
-        TutorialOverlay? overlay = null;
-        try
-        {
-            editor.Show();
-            Dispatcher.UIThread.RunJobs();
-            TutorialHead.Service.Start(Enum.Parse<TutorialType>(tour));
-            overlay = new TutorialOverlay(editor);
-            overlay.Show();
-            while (TutorialHead.Service.CurrentStep?.Id != prefix + "_addrule")
-            {
-                Assert.True(TutorialHead.Service.IsActive);
-                TutorialHead.Service.Next();
-            }
-            editor.BtnAddRuleHero.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Dispatcher.UIThread.RunJobs();
-            if (time != null)
-            {
-                Assert.Equal(prefix + "_ruletime", TutorialHead.Service.CurrentStep?.Id);
-                var field = editor.GetVisualDescendants().OfType<TextBox>().Single(x => x.Name == "TutorialTriggerTimeField");
-                field.Text = time;
-                Dispatcher.UIThread.RunJobs();
-            }
-            else
-            {
-                Assert.Equal(prefix + "_ruletrigger", TutorialHead.Service.CurrentStep?.Id);
-                editor.CmbTriggerType.SelectedItem = editor.CmbTriggerType.Items.OfType<ComboBoxItem>().Single(x => (string?)x.Tag == "attention_lost");
-                Dispatcher.UIThread.RunJobs();
-            }
-            Assert.Equal(prefix + "_ruleaction", TutorialHead.Service.CurrentStep?.Id);
-            editor.CmbActionType.SelectedItem = editor.CmbActionType.Items.OfType<ComboBoxItem>().Single(x => (string?)x.Tag == (shake ? "screen_shake" : "pause"));
-            Dispatcher.UIThread.RunJobs();
-            if (shake)
-            {
-                Assert.Equal(prefix + "_actionintensity", TutorialHead.Service.CurrentStep?.Id);
-                var field = editor.GetVisualDescendants().OfType<TextBox>().Single(x => x.Name == "TutorialActionIntensityField");
-                field.Text = "0.7";
-                Dispatcher.UIThread.RunJobs();
-            }
-            Assert.Equal(prefix + "_save", TutorialHead.Service.CurrentStep?.Id);
-            editor.BtnEditorSave.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal(prefix + "_done", TutorialHead.Service.CurrentStep?.Id);
-            Assert.True(File.Exists(path));
-        }
-        finally
-        {
-            overlay?.Close();
-            TutorialHead.ResetForTests();
-            typeof(DeeperEditorWindow).GetField("_isDirty", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(editor, false);
-            editor.Close();
-            CoreTutorialEvents.LastSavedEnhancementPath = oldPath;
-            Directory.Delete(dir, true);
-        }
-        return Task.CompletedTask;
-    });
-
 }

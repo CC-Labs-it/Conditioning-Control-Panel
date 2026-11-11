@@ -28,6 +28,7 @@ namespace ConditioningControlPanel.Services.Deeper
 
         /// <summary>The head's decoder: audio path -> peaks. Throws on decode failure.</summary>
         public static Func<string, AudioWaveformResult>? Decoder { get; set; }
+        public static string DecoderCacheTag { get; set; } = "";
 
         /// <summary>
         /// Loads peaks for the given audio file, using a disk cache when available.
@@ -127,10 +128,60 @@ namespace ConditioningControlPanel.Services.Deeper
             return new AudioWaveformResult { Peaks = peaks, DurationSeconds = durationSec };
         }
 
+        /// <summary>LibVLC PCM16 WAV, preserving channel maxima and the source sample clock.
+        /// WPF MediaDurationProbe.cs:37 feeds those same source dimensions to BucketPeaks.</summary>
+        public static AudioWaveformResult FromPcm16Wave(Stream wav)
+        {
+            using var reader = new BinaryReader(wav, Encoding.UTF8, leaveOpen: true);
+            if (reader.ReadUInt32() != 0x46464952) throw new InvalidDataException("Expected RIFF");
+            reader.ReadUInt32();
+            if (reader.ReadUInt32() != 0x45564157) throw new InvalidDataException("Expected WAVE");
+            int channels = 0, rate = 0;
+            while (wav.Position + 8 <= wav.Length)
+            {
+                uint id = reader.ReadUInt32(), size = reader.ReadUInt32();
+                long start = wav.Position;
+                if (id == 0x20746d66 && size >= 16 && size <= wav.Length - start)
+                {
+                    int format = reader.ReadUInt16(); channels = reader.ReadUInt16(); rate = reader.ReadInt32();
+                    uint byteRate = reader.ReadUInt32(); int align = reader.ReadUInt16(), bits = reader.ReadUInt16();
+                    if (format == 0xfffe)
+                    {
+                        if (size < 40) throw new InvalidDataException("Truncated extensible format");
+                        int extra = reader.ReadUInt16(), validBits = reader.ReadUInt16();
+                        uint mask = reader.ReadUInt32();
+                        var subtype = new Guid(reader.ReadBytes(16));
+                        if (extra < 22 || extra > size - 18 || validBits != 16 ||
+                            subtype != new Guid("00000001-0000-0010-8000-00aa00389b71") ||
+                            (mask != 0 && System.Numerics.BitOperations.PopCount(mask) != channels))
+                            throw new InvalidDataException("Expected extensible PCM16");
+                        format = 1;
+                    }
+                    if (format != 1 || channels < 1 || rate < 1 || bits != 16 || align != channels * 2 || byteRate != (long)rate * align)
+                        throw new InvalidDataException("Expected PCM16");
+                }
+                else if (id == 0x61746164 && channels > 0)
+                {
+                    long bytes = size == 0 ? wav.Length - start : Math.Min(size, wav.Length - start);
+                    long samples = bytes / (channels * 2) * channels;
+                    return BucketPeaks(channels, rate, samples / (double)channels / rate, buffer =>
+                    {
+                        int count = (int)Math.Min(samples, buffer.Length / channels * channels);
+                        for (int i = 0; i < count; i++) buffer[i] = reader.ReadInt16() / 32768f;
+                        samples -= count;
+                        return count;
+                    });
+                }
+                if (size > wav.Length - start) break;
+                wav.Position = start + size + (size & 1);
+            }
+            throw new InvalidDataException("Missing PCM data");
+        }
+
         private static string ComputeCacheKey(string audioPath)
         {
             var info = new FileInfo(audioPath);
-            var key = $"{audioPath.ToLowerInvariant()}|{info.Length}|{info.LastWriteTimeUtc.Ticks}";
+            var key = $"{audioPath.ToLowerInvariant()}|{info.Length}|{info.LastWriteTimeUtc.Ticks}" + DecoderCacheTag;
             using var sha = SHA1.Create();
             var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(key));
             var sb = new StringBuilder(bytes.Length * 2);

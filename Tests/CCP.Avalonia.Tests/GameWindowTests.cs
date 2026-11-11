@@ -75,6 +75,45 @@ public sealed partial class GameWindowTests
         });
     }
 
+    /// <summary>WPF ChaosWebViewHost.cs:222-225,1704: query/fragment changes are the same document;
+    /// a different path, origin or scheme cannot drive the game bridge.</summary>
+    [Fact]
+    public void PageFrames_OnlyTheLoadedDocumentCanDriveTheBridge() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var root = Directory.CreateTempSubdirectory("game-document-").FullName;
+        using var server = new WebAssetServer(root);
+        var w = new GameWindow(GameWindow.Games["breakoutdemo"]);
+        try
+        {
+            w.Load(server);
+            w.Show();
+            var sent = new List<string>();
+            w.Posted += sent.Add;
+            var page = w.PageUrl!;
+            foreach (var other in new[]
+            {
+                new Uri(page, "/intake/index.html"),
+                new UriBuilder(page) { Port = page.Port + 1 }.Uri,
+                new UriBuilder(page) { Scheme = "https" }.Uri,
+            })
+            {
+                w.Web.OnNavigationCompleted(other);
+                w.Web.OnWebMessage("{\"type\":\"ready\"}");
+                w.Web.OnWebMessage("{\"type\":\"exit-done\"}");
+                Assert.Empty(sent);
+                Assert.False(w.IsReady);
+                Assert.Contains(w, GameWindow.OpenWindowsForTests());
+            }
+            w.Web.OnNavigationCompleted(new UriBuilder(page) { Query = "changed=1", Fragment = "dock" }.Uri);
+            w.Web.OnWebMessage("{\"type\":\"ready\"}");
+            Assert.True(w.IsReady);
+            Assert.Equal("init", (string?)JObject.Parse(Assert.Single(sent))["type"]);
+            w.Web.OnWebMessage("{\"type\":\"exit-done\"}");
+            Assert.DoesNotContain(w, GameWindow.OpenWindowsForTests());
+        }
+        finally { w.Close(); Directory.Delete(root, true); }
+    });
+
     [Fact]
     public void Play_OpensTheGameHost_AndPanicClosesIt() => Run((shell, launcher) =>
     {
@@ -197,6 +236,61 @@ public sealed partial class GameWindowTests
         finally { Directory.Delete(root, true); }
     }
 
+    /// <summary>WPF PieceByPieceHostService.cs:164-168 and SeasonRecapService.cs:182-197.
+    /// One day event per fresh attempt, including failed setup; no recap Catalog entry or refocus credit.</summary>
+    [Fact]
+    public void PieceByPiece_FreshLaunchCreditsDayLog_RefocusDoesNot() => Run((shell, launcher) =>
+    {
+        var property = typeof(ConditioningControlPanel.Avalonia.App).GetProperty("FeatureDayLog",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var previous = property.GetValue(null);
+        var folder = Directory.CreateTempSubdirectory("pbp-credit-").FullName;
+        using var log = new FeatureDayLogService(() => null, Path.Combine(folder, "day.json"));
+        try
+        {
+            property.SetValue(null, log);
+            int Uses() => log.BuildWirePayload(10).Sum(d => d.TryGetValue("e_pb", out var n) ? Convert.ToInt32(n) : 0);
+            var bucket = CoreSettings.Current.SeasonStatsSeason;
+            var counts = CoreSettings.Current.SeasonFeatureUse.ToArray();
+            launcher.Hide();
+            MainShellWindow.LeashGateDueProvider = () => true;
+            MainShellWindow.PresentLeashGateProvider = _ => { };
+            launcher.Play(LauncherCards.Find(GameWindow.PbpId)!);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, Uses());
+            MainShellWindow.LeashGateDueProvider = () => false;
+            var first = GameWindow.Launch(GameWindow.PbpId)!;
+            Assert.Equal(1, Uses());
+            Assert.Same(first, GameWindow.Launch(GameWindow.PbpId));
+            Assert.Equal(1, Uses());
+            first.Close();
+            Dispatcher.UIThread.RunJobs();
+            var second = GameWindow.Launch(GameWindow.PbpId)!;
+            Assert.NotSame(first, second);
+            Assert.Equal(2, Uses());
+            Assert.Equal(bucket, CoreSettings.Current.SeasonStatsSeason);
+            Assert.Equal(counts, CoreSettings.Current.SeasonFeatureUse.ToArray());
+            second.Close();
+            Dispatcher.UIThread.RunJobs();
+            var server = GameWindow.Server;
+            try
+            {
+                GameWindow.Server = () => throw new InvalidOperationException("setup failed");
+                var error = Assert.Throws<InvalidOperationException>(() => GameWindow.Launch(GameWindow.PbpId));
+                Assert.Equal("setup failed", error.Message);
+                Assert.Equal(3, Uses()); // WPF :168 runs before ChaosWebViewHost construction (:197).
+                Assert.False(GameWindow.IsAnyOpen());
+            }
+            finally { GameWindow.Server = server; }
+        }
+        finally
+        {
+            property.SetValue(null, previous);
+            log.Dispose();
+            Directory.Delete(folder, true);
+        }
+    });
+
     private sealed class FakeHttp : System.Net.Http.HttpMessageHandler
     {
         public System.Net.Http.HttpRequestMessage? Seen;
@@ -257,7 +351,7 @@ public sealed partial class GameWindowTests
             w.Posted += json => sent.Add(JObject.Parse(json));
             w.Web.OnNavigationCompleted(w.PageUrl);
             w.Web.OnWebMessage("\"{\\\"type\\\":\\\"ready\\\"}\"");   // the string carrier's JSON-quoted frame
-            Assert.Equal(new[] { "pbp:settings", "pbp:identity" }, sent.Select(o => (string?)o["type"]));
+            Assert.Equal(new[] { "pbp:settings", "pbp:identity", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
             Assert.Equal(15, (int)sent[0]["videoHoldSec"]!);
             Assert.Equal("tok", (string?)sent[1]["net"]!["authToken"]);
 
@@ -324,6 +418,42 @@ public sealed partial class GameWindowTests
             Environment.SetEnvironmentVariable(FriendsHead.EnvVar, oldLoopback);
             Directory.Delete(lib, true);
         }
+    });
+
+    /// <summary>WPF PieceByPieceHostService.cs:165,230-232,284: opening, ready and a repeat
+    /// launch all return keyboard focus. The headless WebHost fallback is focusable for this probe;
+    /// the same FocusPage call targets NativeWebView when an engine is attached.</summary>
+    [Theory]
+    [InlineData("open")]
+    [InlineData("ready")]
+    [InlineData("reopen")]
+    public void PieceByPiece_ReturnsKeyboardToPage(string path) => RunBoard(() =>
+    {
+        var board = new GameWindow(GameWindow.Games[GameWindow.PbpId]);
+        board.Web.Focusable = true;
+        board.Load(GameWindow.Server());
+        board.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            if (path != "open")
+            {
+                var other = new global::Avalonia.Controls.Button { Content = "Focus probe" };
+                // A sibling can take focus without replacing the page or its native host.
+                var panel = new global::Avalonia.Controls.StackPanel();
+                board.Content = null;
+                panel.Children.Add(board.Web);
+                panel.Children.Add(other);
+                board.Content = panel;
+                Assert.True(other.Focus());
+                Assert.False(board.Web.IsFocused);
+                if (path == "ready") board.HandleMessage("{\"type\":\"ready\"}");
+                else Assert.Same(board, GameWindow.Launch(GameWindow.PbpId));
+                Dispatcher.UIThread.RunJobs();
+            }
+            Assert.True(board.Web.IsFocused);
+        }
+        finally { board.Close(); }
     });
 
     [Theory]
@@ -421,7 +551,8 @@ public sealed partial class GameWindowTests
         w.Posted += json => sent.Add(JObject.Parse(json));
         w.HandleMessage("{\"type\":\"ready\"}");
         w.HandleMessage("{\"type\":\"ready\"}");
-        Assert.Equal(new[] { "pbp:settings", "pbp:identity" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal(false, (bool?)sent[0]["prizeCounter"]);
         Assert.Equal(reduced, (bool)sent[0]["reducedMotion"]!);
         Assert.Equal(speed, (double)sent[0]["gentleIntroSpeed"]!);
     });
@@ -487,10 +618,40 @@ public sealed partial class GameWindowTests
         Dispatcher.UIThread.RunJobs();
         Assert.True(w.PbpPending.IsCompletedSuccessfully);
         if (close) Assert.Empty(sent);
-        else Assert.Equal(new[] { "pbp:settings", "pbp:identity" }, sent.Select(o => (string?)o["type"]));
+        else Assert.Equal(new[] { "pbp:settings", "pbp:identity", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
     });
 
     // These tests exercise the real board and settings bridge, without the unrelated main shell FX.
+    [Fact]
+    public void PieceByPiece_LobbyIntentsFollowIdentityAndFreshSpectateUsesSettings() => RunBoard(() =>
+    {
+        Assert.Null(GameWindow.OpenChessLobby("join", "invalid"));
+        Assert.Null(GameWindow.OpenChessLobby("spectate", "invalid"));
+        var window = GameWindow.OpenChessLobby("host")!;
+        window.PbpOsAnimations = () => Task.FromResult(true);
+        var sent = new List<JObject>();
+        window.Posted += json => sent.Add(JObject.Parse(json));
+        Assert.Empty(sent);
+        window.HandleMessage("{\"type\":\"ready\"}");
+        // WPF OnPageReady: the lobby intent, then the wardrobe (owned + look).
+        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:friend", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal("host", (string?)sent.Last(o => (string?)o["type"] == "pbp:friend")["mode"]);
+        Assert.Same(window, GameWindow.OpenChessLobby("join", "p_table"));
+        Assert.Equal("p_table", (string?)sent.Last()["target"]);
+        GameWindow.OpenChessLobby("spectate", "m_0123456789abcdef");
+        Assert.Equal("spectate", (string?)sent.Last()["mode"]);
+        Assert.Equal("m_0123456789abcdef", (string?)sent.Last()["matchId"]);
+        window.Close();
+        window = GameWindow.OpenChessLobby("spectate", "m_fedcba9876543210")!;
+        window.PbpOsAnimations = () => Task.FromResult(true);
+        sent.Clear(); window.Posted += json => sent.Add(JObject.Parse(json));
+        window.HandleMessage("{\"type\":\"ready\"}");
+        Assert.Equal("m_fedcba9876543210", (string?)sent.First()["spectateMatchId"]);
+        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
+        window.HandleMessage("{\"type\":\"ready\"}"); Assert.Equal(4, sent.Count);
+        GameWindow.CloseAllForPanic();
+        Assert.Empty(GameWindow.OpenWindowsForTests());
+    });
     private static void RunBoard(Action body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
@@ -636,36 +797,13 @@ public sealed partial class GameWindowTests
         }
     });
 
-    /// <summary>WPF CaucusHostService.Launch :132 + LauncherCatalogue :234: no track, no race (and no tile here,
-    /// where WPF draws the mystery card); an owned track opens it from the launcher after the leash check; panic closes it.</summary>
-    [Fact]
-    public void Race_DoorAndLauncher_LeashGate_AndPanic()
+    // Retained 2D bridge regressions run directly, never through a production door.
+    private static GameWindow OpenRetiredRace()
     {
-        RunRace(null, (launcher, _, _) =>
-        {
-            Assert.DoesNotContain(LauncherWindow.VisibleCards, c => c.Id == "race");
-            Assert.Null(GameWindow.Launch("race"));
-            Assert.False(GameWindow.IsAnyOpen());
-        });
-        RunRace("rt.original.03", (launcher, _, _) =>
-        {
-            Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
-            launcher.Hide();
-            int gates = 0;
-            MainShellWindow.LeashGateDueProvider = () => true;
-            MainShellWindow.PresentLeashGateProvider = _ => gates++;
-            launcher.Play(LauncherCards.Find("race")!);
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal(1, gates);
-            Assert.False(GameWindow.IsAnyOpen());
-            MainShellWindow.LeashGateDueProvider = () => false;
-            launcher.Play(LauncherCards.Find("race")!);
-            Dispatcher.UIThread.RunJobs();
-            Assert.True(GameWindow.IsAnyOpen());
-            PanicSurfaces.All.Single(x => x.Id == "games").Stop(MainShellWindow.Current!);
-            Dispatcher.UIThread.RunJobs();
-            Assert.False(GameWindow.IsAnyOpen());
-        });
+        var w = new GameWindow(new GameWindow.Game("race", "launcher_game_race_title", "dtrh/race.html"));
+        w.Load(GameWindow.Server());
+        w.Show();
+        return w;
     }
 
     /// <summary>WPF OnPageReady :255 (init with the race settings block, then manifest) and OnRunEnded :431:
@@ -673,12 +811,12 @@ public sealed partial class GameWindowTests
     [Fact]
     public void Race_BootAndOnePayoutPerRun() => RunRace("rt.original.03", (_, xp, sparks) =>
     {
-        var w = GameWindow.Launch("race")!;
+        var w = OpenRetiredRace();
         Assert.Contains("dtrh/race.html", w.PageUrl!.AbsolutePath);
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
         w.HandleMessage("{\"type\":\"ready\"}");
-        Assert.Equal(new[] { "init", "manifest" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal(new[] { "init", "manifest", "loom-list" }, sent.Select(o => (string?)o["type"]));
         Assert.Equal(new[] { 3 }, sent[0]["settings"]!["racingTracks"]!.Values<int>());
         Assert.False((bool)sent[0]["settings"]!["cloud"]!);
         sent.Clear();
@@ -697,6 +835,58 @@ public sealed partial class GameWindowTests
         Assert.Equal((40, 40), GameWindow.RacePayout(200, 60, 1.0));
     });
 
+    [Fact]
+    public void Race_and_launcher_follow_grant_additions_and_close_on_any_revocation() => RunRace("rt.original.03", (launcher, _, _) =>
+    {
+        var tracks = new HashSet<string> { "rt.original.03" };
+        RacingAccess.IsGrantedProvider = tracks.Contains;
+        launcher.BuildTiles();
+        // WPF #3126: no production door opens the 2D bridge; its grant regressions run on it directly.
+        var w = OpenRetiredRace();
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        tracks.Add("rt.original.04");
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        var update = Assert.Single(sent);
+        Assert.Equal("race-ownership", (string?)update["type"]);
+        Assert.Equal(new[] { 3, 4 }, update["tracks"]!.Values<int>());
+        sent.Clear();
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(sent); // An unrelated grant cannot restage the race menu.
+        tracks.Remove("rt.original.03");
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.False(w.RaceWatchRunning);
+        // WPF 7.2 LauncherCatalogue.cs:238: the Racing Thoughts tile is always revealed (Prime padlock), owned tracks or not.
+        tracks.Clear();
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Children,
+            c => Equals(c.Tag, "race"));
+        tracks.Add("rt.original.00");
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Children,
+            c => Equals(c.Tag, "race"));
+    });
+
+    [Fact]
+    public void Race_revocation_then_regrant_without_dispatching_closes_the_host() => RunRace("rt.original.03", (_, _, _) =>
+    {
+        var granted = true;
+        RacingAccess.IsGrantedProvider = id => granted && id == "rt.original.03";
+        var w = OpenRetiredRace();
+        granted = false;
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        granted = true;
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.False(w.RaceWatchRunning);
+    });
     /// <summary>WPF StartHeartbeatWatch :595: idle until ready; silent past 20 s on the menu (10 s mid-run)
     /// gets one ping, a pong resets it, still silent on the next tick closes the window.</summary>
     [Fact]
@@ -705,7 +895,7 @@ public sealed partial class GameWindowTests
         var t0 = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var now = t0;
         GameWindow.RaceUtcNow = () => now;                // stepped clock (P08); RunRace restores it
-        var w = GameWindow.Launch("race")!;
+        var w = OpenRetiredRace();
         Assert.True(w.RaceWatchRunning);                // WPF Launch arms the watch
         Assert.Equal("idle", w.CheckRaceHeartbeat(t0.AddSeconds(60)));
         w.HandleMessage("{\"type\":\"ready\"}");
@@ -784,7 +974,7 @@ public sealed partial class GameWindowTests
         WithTrackFiles((_, _) => { decodes++; return Tone(4); }, files =>
         {
             var player = new FakeTrackPlayer();
-            var w = GameWindow.Launch("race")!;
+            var w = OpenRetiredRace();
             using (var real = w.RaceNewPlayer!()) Assert.IsType<RaceTrackPlayer>(real);   // this head's own player
             w.RaceNewPlayer = () => player;
             w.RacePickFile = () => Task.FromResult<string?>(files[0]);
@@ -832,7 +1022,7 @@ public sealed partial class GameWindowTests
     {
         WithTrackFiles(null, files =>
         {
-            var w = GameWindow.Launch("race")!;
+            var w = OpenRetiredRace();
             w.RaceNewPlayer = null;   // a build with no player
             var sent = new List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));
@@ -867,7 +1057,7 @@ public sealed partial class GameWindowTests
             return Tone(3);
         }, files =>
         {
-            var w = GameWindow.Launch("race")!;
+            var w = OpenRetiredRace();
             w.RaceNewPlayer = () => new FakeTrackPlayer();
             var sent = new List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));
@@ -897,6 +1087,8 @@ public sealed partial class GameWindowTests
         var (oldLab, oldPremium, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock) = (CoreEntitlement.HasLabProvider, CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider,
             CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow);
         var (oldRuns, oldForce) = (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun);
+        var oldRelaunched = GameWindow.DtrhRelaunchedOnce;
+        GameWindow.DtrhRelaunchedOnce = false;
         var lib = Directory.CreateTempSubdirectory("dtrh-lib-").FullName;
         var xp = new List<double>();
         var runs = new List<bool>();
@@ -925,7 +1117,55 @@ public sealed partial class GameWindowTests
                 CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow) = (oldLab, oldPremium, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock);
             (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun) = (oldRuns, oldForce);
             GameWindow.CloseAllForPanic();
+            GameWindow.DtrhRelaunchedOnce = oldRelaunched;
             Directory.Delete(lib, true);
+        }
+    });
+
+    /// <summary>WPF DtrhHostService.cs:925-954: an actual page boot failure opens the
+    /// classic first run or the Warren. The Warren's FALL IN then opens the bound HUD.</summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void Dtrh_BootError_reaches_the_classic_Hud(int completed) => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var oldIntro = ChaosMeta.State.SeenIntroGuide;
+        ChaosMeta.State.RunsCompleted = completed;
+        ChaosMeta.State.SeenIntroGuide = true;
+        ConditioningControlPanel.Avalonia.Views.Chaos.ChaosHubWindow? hub = null;
+        void Opened(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            if (sender is ConditioningControlPanel.Avalonia.Views.Chaos.ChaosHubWindow h) hub = h;
+        }
+        using var subscription = Window.WindowOpenedEvent.AddClassHandler<Window>(Opened);
+        try
+        {
+            var web = GameWindow.Launch("dtrh")!;
+            Assert.True(web.IsVisible);
+            web.HandleMessage("{\"type\":\"boot-error\",\"msg\":\"renderer failed\"}");
+            Assert.False(web.IsVisible);
+            if (completed == 1)
+            {
+                Assert.NotNull(hub);
+                Assert.False(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsActive);
+                hub.FallIn();
+                Dispatcher.UIThread.RunJobs();
+            }
+            var host = ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.Hud;
+            Assert.NotNull(host);
+            Assert.True(host.IsVisible);
+            Assert.Same(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.State, host.DataContext);
+            Assert.Equal(completed == 0,
+                ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.State!.Config.ScriptedFirstRun);
+            var state = host.DataContext;
+            web.HandleMessage("{\"type\":\"boot-error\"}");
+            Assert.Same(state, ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.State);
+        }
+        finally
+        {
+            ChaosMeta.State.SeenIntroGuide = oldIntro;
+            hub?.Close();
+            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.ForceShutdown();
         }
     });
 
@@ -997,6 +1237,56 @@ public sealed partial class GameWindowTests
             Assert.Equal(new[] { true, true }, runs);
         });
     }
+
+    [Fact]
+    public void Dtrh_PanicRequestsEndAndPageSettlesOnlyOnce() => RunDtrh(lab: true, (shell, xp, runs, _) =>
+    {
+        var w = GameWindow.Launch("dtrh")!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.HandleMessage("{\"type\":\"ready\"}");
+        w.HandleMessage("{\"type\":\"run-started\"}");
+        w.HandleMessage("{\"type\":\"run-progress\",\"score\":100,\"durationSec\":180}");
+        sent.Clear();
+        PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
+        var end = Assert.Single(sent);
+        Assert.Equal("end-run", (string?)end["type"]);
+        Assert.Equal("host", (string?)end["reason"]);
+        Assert.True(w.IsVisible);
+        w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");
+        w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");
+        w.HandleMessage("{\"type\":\"exit-done\"}");
+        Assert.False(w.IsVisible);
+        Assert.Single(xp);
+        Assert.Single(runs);
+    });
+
+    /// <summary>WPF LauncherCatalogue.cs:243-248: the Play door asks DtRH's gate before Launch, so lapsed access with
+    /// a descent still open is refused instead of refocusing it.</summary>
+    [Fact]
+    public void Dtrh_PlayDoor_LapsedAccessRefusesBeforeFocusingTheLiveHost() => RunDtrh(lab: true, (shell, _, _, denied) =>
+    {
+        var live = GameWindow.Launch("dtrh")!;
+        var oldLaunch = global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView.LaunchGame;
+        var launches = new List<string>();
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView.LaunchGame = launches.Add;
+            // DtRH is a Basic door now (DtrhGate demands premium), so a lapse drops Basic too.
+            CoreEntitlement.HasLabProvider = () => false;   // RunDtrh restores it
+            CoreEntitlement.HasPremiumProvider = () => false;   // RunDtrh restores it
+            shell.ShowTab("play");
+            Dispatcher.UIThread.RunJobs();
+            shell.Named<global::Avalonia.Controls.Control>("PlayTab")!
+                .FindControl<global::Avalonia.Controls.Button>("BtnPlayDtrh")!
+                .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(launches);
+            Assert.Single(denied);
+            Assert.Same(live, Assert.Single(GameWindow.OpenWindowsForTests()));
+        }
+        finally { global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView.LaunchGame = oldLaunch; }
+    });
 
     [Fact]
     public void Dtrh_BasicAndDailyGiftAgreeAcrossDoorsAndPayout() => RunDtrh(lab: false, (shell, _, _, denied) =>
@@ -1205,10 +1495,81 @@ public sealed partial class GameWindowTests
 
             shell.HandlePanicKeyPress(t0.AddSeconds(1));                          // again within 2 s: panic
             Dispatcher.UIThread.RunJobs();
+            Assert.True(GameWindow.IsAnyOpen()); // WPF gives the page its settlement window
+            Assert.Equal("end-run", (string?)sent.Last()["type"]);
+            Assert.Equal("host", (string?)sent.Last()["reason"]);
+            Assert.False(w.KeptEscapeReady);
+            w.HandleMessage("{\"type\":\"exit-done\"}");
             Assert.False(GameWindow.IsAnyOpen());
             Assert.False(shellClosed);                                            // a game owned the screen: no exit rung
         }
         finally { (s.PanicKey, s.PanicKeyEnabled) = (oldKey, oldEnabled); }
+    });
+
+    /// <summary>WPF DtrhHostService.cs:250-266,1017-1028: final page booking wins over
+    /// the older progress snapshot; no response forces close after 1200 ms.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Dtrh_PanicSettlesOrTimesOut(bool responds) => RunDtrh(lab: true, (_, xp, _, _) =>
+    {
+        var w = GameWindow.Launch("dtrh")!;
+        w.HandleMessage("{\"type\":\"ready\"}");
+        w.HandleMessage("{\"type\":\"run-started\"}");
+        w.HandleMessage("{\"type\":\"run-progress\",\"score\":10,\"durationSec\":180}");
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        GameWindow.CloseAllForPanic();
+        Assert.True(GameWindow.IsAnyOpen());
+        Assert.False(w.DtrhReady);
+        Assert.Equal("end-run", (string?)Assert.Single(sent)["type"]);
+        Assert.Equal("host", (string?)sent[0]["reason"]);
+        Assert.Empty(xp);
+        if (responds)
+        {
+            w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");
+            w.HandleMessage("{\"type\":\"exit-done\"}");
+            Assert.Equal(300.0, Assert.Single(xp));
+        }
+        else
+        {
+            // RunJobs drains queued work but does not service native dispatcher timers.
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            w.Closed += (_, _) => deadline.Cancel();
+            Dispatcher.UIThread.MainLoop(deadline.Token);
+            Assert.InRange(clock.ElapsedMilliseconds, 1100, 2999);
+            Assert.Single(xp); // forced close still banks the last snapshot
+        }
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.Single(xp);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Dtrh_PanicClosesBootingOrAlreadyExitingPage(bool ready) => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var w = GameWindow.Launch("dtrh")!;
+        if (ready)
+        {
+            w.HandleMessage("{\"type\":\"ready\"}");
+            GameWindow.CloseAllForPanic();
+            Assert.True(GameWindow.IsAnyOpen());
+        }
+        GameWindow.CloseAllForPanic();
+        Assert.False(GameWindow.IsAnyOpen());
+    });
+
+    /// <summary>WPF DtrhHostService.cs:266: a failed end-run post must still close the window.</summary>
+    [Fact]
+    public void Dtrh_PanicClosesIfTheBridgeThrows() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var w = GameWindow.Launch("dtrh")!;
+        w.HandleMessage("{\"type\":\"ready\"}");
+        w.Posted += _ => throw new InvalidOperationException("bridge failed");
+        GameWindow.CloseAllForPanic();
+        Assert.False(GameWindow.IsAnyOpen());
     });
 
     /// <summary>WPF TryRacePauseOnEscape (owner 2026-10-12: Escape only pauses a game) on every game this head
@@ -1257,7 +1618,7 @@ public sealed partial class GameWindowTests
     /// <summary>Each hosted game's kept-Escape page and frame (WPF KeptEscapeType per host: the board reads
     /// pbp:escape, the race / Breakout / DtRH pages kept-escape). FYP and Just Drop do not pause on Escape.</summary>
     [Theory]
-    [InlineData("race", "Race", "kept-escape")]
+    [InlineData("race", "Glassroad", "kept-escape")]
     [InlineData(GameWindow.PbpId, "Board", "pbp:escape")]
     [InlineData("breakoutdemo", "Breakout", "kept-escape")]
     [InlineData(GameWindow.DtrhId, "Dtrh", "kept-escape")]
@@ -1279,5 +1640,131 @@ public sealed partial class GameWindowTests
             Assert.Equal(frame, (string?)Assert.Single(sent)["type"]);
         }
         finally { w.Close(); }
+    });
+    [Fact]
+    public void Dtrh_Heartbeat_RelaunchesOnceAndStopsWatching() => RunDtrh(lab: true, (_, xp, _, _) =>
+    {
+        var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        GameWindow.DtrhUtcNow = () => now;
+        var w = GameWindow.Launch("dtrh")!;
+        Assert.True(w.DtrhWatchRunning);
+        Assert.Equal("idle", w.CheckDtrhHeartbeat(now.AddMinutes(1))); // loading is not a vanished page
+        w.Web.OnNavigationCompleted(w.PageUrl);
+        w.Web.OnWebMessage("{\"type\":\"ready\"}");
+        Assert.Equal("ok", w.CheckDtrhHeartbeat(now.AddSeconds(20))); // the hub's strict deadline
+        w.Web.OnWebMessage("{\"type\":\"run-started\"}");
+        Assert.Equal("ok", w.CheckDtrhHeartbeat(now.AddSeconds(10)));
+        w.HandleMessage("{\"type\":\"run-progress\",\"score\":100,\"durationSec\":120}");
+        now = now.AddSeconds(11);
+        Assert.Equal("recovering", w.CheckDtrhHeartbeat(now));
+        Assert.Equal("recovering", w.CheckDtrhHeartbeat(now)); // no second queued recovery
+        Dispatcher.UIThread.RunJobs();
+        var replacement = GameWindow.OpenForTests("dtrh");
+        Assert.NotNull(replacement);
+        Assert.NotSame(w, replacement);
+        Assert.Single(xp); // recovery uses the existing abandoned-run booking exactly once
+        Assert.False(w.DtrhWatchRunning);
+        Assert.True(replacement.DtrhWatchRunning);
+        replacement.Web.OnNavigationCompleted(replacement.PageUrl);
+        replacement.Web.OnWebMessage("{\"type\":\"ready\"}");
+        replacement.Web.OnWebMessage("{\"type\":\"heartbeat\"}");
+        Assert.Equal("ok", replacement.CheckDtrhHeartbeat(now.AddSeconds(20)));
+        now = now.AddSeconds(21);
+        Assert.Equal("recovering", replacement.CheckDtrhHeartbeat(now));
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.False(replacement.DtrhWatchRunning);
+        Assert.True(GameWindow.DtrhRelaunchedOnce);
+
+        // The once-per-session budget is not refilled by manually reopening the game.
+        var reopened = GameWindow.Launch("dtrh")!;
+        reopened.Web.OnNavigationCompleted(reopened.PageUrl);
+        reopened.Web.OnWebMessage("{\"type\":\"ready\"}");
+        Assert.Equal("recovering", reopened.CheckDtrhHeartbeat(now.AddSeconds(21)));
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+    });
+
+    [Theory]
+    [InlineData("heartbeat")]
+    [InlineData("pong")]
+    public void Dtrh_Heartbeat_BeatsRefreshDeadline_ExitAndQueuedPanicCannotRelaunch(string frame) => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        GameWindow.DtrhUtcNow = () => now;
+        var w = GameWindow.Launch("dtrh")!;
+        w.Web.OnNavigationCompleted(w.PageUrl);
+        w.Web.OnWebMessage("{\"type\":\"ready\"}");
+        now = now.AddSeconds(19);
+        w.Web.OnWebMessage(new JObject { ["type"] = frame }.ToString());
+        Assert.Equal("ok", w.CheckDtrhHeartbeat(now.AddSeconds(20)));
+        w.Web.OnWebMessage("{\"type\":\"exit\"}");
+        Assert.Equal("idle", w.CheckDtrhHeartbeat(now.AddMinutes(1)));
+        w.Web.OnWebMessage("{\"type\":\"exit-done\"}");
+        Assert.False(w.DtrhWatchRunning);
+
+        w = GameWindow.Launch("dtrh")!;
+        w.Web.OnNavigationCompleted(w.PageUrl);
+        w.Web.OnWebMessage("{\"type\":\"ready\"}");
+        Assert.Equal("recovering", w.CheckDtrhHeartbeat(now.AddSeconds(21)));
+        GameWindow.CloseAllForPanic(); // recovery is queued, not permitted to resurrect this surface
+        Dispatcher.UIThread.RunJobs();
+        // WPF DtrhHostService.cs:250-266: panic asks the ready page to settle; its exit-done closes the window.
+        w.Web.OnWebMessage("{\"type\":\"exit-done\"}");
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.False(w.DtrhWatchRunning);
+        Assert.False(GameWindow.DtrhRelaunchedOnce);
+        Assert.Equal("idle", w.CheckDtrhHeartbeat(now.AddMinutes(2)));
+    });
+
+    [Fact]
+    public void Dtrh_Heartbeat_SlowReadyRestartsTheClock() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        // WPF OnPageReady (DtrhHostService.cs:275): a 25 s page load must not spend the hub's 20 s deadline.
+        var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        GameWindow.DtrhUtcNow = () => now;
+        var w = GameWindow.Launch("dtrh")!;
+        now = now.AddSeconds(25);
+        w.Web.OnNavigationCompleted(w.PageUrl);
+        w.Web.OnWebMessage("{\"type\":\"ready\"}");
+        Assert.Equal("ok", w.CheckDtrhHeartbeat(now));
+        Assert.True(GameWindow.IsAnyOpen());
+    });
+
+    [Fact]
+    public void Dtrh_Heartbeat_PanicDuringRecoveryCloseCannotRelaunch() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        GameWindow.DtrhUtcNow = () => now;
+        var w = GameWindow.Launch("dtrh")!;
+        w.Web.OnNavigationCompleted(w.PageUrl);
+        w.Web.OnWebMessage("{\"type\":\"ready\"}");
+        w.Closed += (_, _) => GameWindow.CloseAllForPanic();
+        Assert.Equal("recovering", w.CheckDtrhHeartbeat(now.AddSeconds(21)));
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.False(w.DtrhWatchRunning);
+    });
+
+    [Fact]
+    public void Dtrh_Heartbeat_FailedRelaunchDoesNotEscapeTheDispatcher() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        GameWindow.DtrhUtcNow = () => now;
+        var w = GameWindow.Launch("dtrh")!;
+        w.Web.OnNavigationCompleted(w.PageUrl);
+        w.Web.OnWebMessage("{\"type\":\"ready\"}");
+        var oldServer = GameWindow.Server;
+        try
+        {
+            GameWindow.Server = () => throw new IOException("test recovery server failure");
+            Assert.Equal("recovering", w.CheckDtrhHeartbeat(now.AddSeconds(21)));
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(GameWindow.IsAnyOpen());
+            Assert.False(w.DtrhWatchRunning);
+            Assert.True(GameWindow.DtrhRelaunchedOnce);
+        }
+        finally { GameWindow.Server = oldServer; }
     });
 }

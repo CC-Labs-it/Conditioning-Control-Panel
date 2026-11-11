@@ -1401,7 +1401,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             host.Children.Add(NewEditorLabel(label));
             var tb = NewEditorTextBox(value.ToString("0.###", CultureInfo.InvariantCulture));
-            tb.Name = name;
+            if (name != null) tb.Name = name;
             tb.TextChanged += (_, _) =>
             {
                 if (_suppressRuleSync) return;

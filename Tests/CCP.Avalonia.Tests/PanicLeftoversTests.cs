@@ -22,6 +22,21 @@ public sealed class PanicLeftoversTests
     private static readonly DateTime T0 = new(2026, 10, 9, 12, 0, 0, DateTimeKind.Utc);
 
     [Fact]
+    public async Task WatchdogLeavesAThrownHandlerAlone()
+    {
+        // WPF's watchdog only observes a fault, and the fallback is for a UI thread that never answered.
+        var old = PanicWatchdog.Teardown;
+        var fired = 0;
+        PanicWatchdog.Teardown = () => Interlocked.Increment(ref fired);
+        try
+        {
+            await PanicWatchdog.Arm(Task.FromException(new InvalidOperationException("test")), TimeSpan.FromSeconds(30));
+            Assert.Equal(0, fired);
+        }
+        finally { PanicWatchdog.Teardown = old; }
+    }
+
+    [Fact]
     public async Task WatchdogTearsDownOnlyWhenTheHandlerNeverRuns()
     {
         var old = PanicWatchdog.Teardown;
@@ -37,6 +52,36 @@ public sealed class PanicLeftoversTests
             Assert.Equal(1, fired);
         }
         finally { PanicWatchdog.Teardown = old; }
+    }
+
+    [Fact]
+    public async Task AHandlerThatThrowsAfterTheFallbackIsStillLogged()
+    {
+        var old = PanicWatchdog.Teardown;
+        PanicWatchdog.Teardown = () => { };
+        var previous = Serilog.Log.Logger;
+        var logged = new TaskCompletionSource();
+        Serilog.Log.Logger = new Serilog.LoggerConfiguration().WriteTo.Sink(new FaultSink(logged)).CreateLogger();
+        try
+        {
+            var handler = new TaskCompletionSource();
+            await PanicWatchdog.Arm(handler.Task, TimeSpan.FromMilliseconds(50));
+            handler.SetException(new InvalidOperationException("late"));
+            Assert.Same(logged.Task, await Task.WhenAny(logged.Task, Task.Delay(TimeSpan.FromSeconds(5))));
+        }
+        finally
+        {
+            Serilog.Log.Logger = previous;
+            PanicWatchdog.Teardown = old;
+        }
+    }
+
+    private sealed class FaultSink(TaskCompletionSource logged) : Serilog.Core.ILogEventSink
+    {
+        public void Emit(Serilog.Events.LogEvent entry)
+        {
+            if (entry.Exception?.ToString().Contains("late") == true) logged.TrySetResult();
+        }
     }
 
     [Fact]
