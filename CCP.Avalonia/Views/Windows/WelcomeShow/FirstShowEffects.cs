@@ -14,13 +14,14 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Compositor;
 using ConditioningControlPanel.Services.FirstShow;
 using S = ConditioningControlPanel.Services.FirstShow.FirstShowScript;
+using SkiaSharp;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 
 /// <summary>PORTED from ConditioningControlPanel/Services/FirstShow/FirstShowEffects.cs: the show's private, disposable
 /// effect layer; never registers a session or writes a setting. Timeline, slots and gather spiral (Tick :106, Spawn
 /// :167, Animate :211) are WPF's, timings from <see cref="S"/>. WPF stepped the production compositor layers, none of
-/// which exist on this head, so <see cref="Render"/> draws with plain calls (no Effect: P82): pictures, bubbles,
+/// which exist on this head, so <see cref="Render"/> draws pictures with Skia and plain calls for bubbles,
 /// pink tint, spiral, floating words, subliminal flash, gather, cues. The sparks (burst, ripple, trail) are WPF's own
 /// Core <see cref="ChaosFxLayer"/> (WPF ChaosFxLayerWpf.Create :55), so counts, colours, additive bloom, the electric
 /// ripple and timing are WPF's by construction; it is recorded into an SKPicture the render thread replays, as
@@ -42,6 +43,7 @@ internal sealed class FirstShowEffects : Control, IDisposable
     private readonly List<Media> _media = new();
     private readonly List<Actor> _actors = new();
     private readonly Dictionary<(string, double), Geometry> _glyphs = new();
+    private readonly Dictionary<Bitmap, SKImage> _pictureImages = new();
     private readonly Action<string> _cue;
     private FirstShowDeck? _deck;
     private Media? _spiral;
@@ -285,8 +287,7 @@ internal sealed class FirstShowEffects : Control, IDisposable
                 }
                 else
                 {
-                    using (dc.PushClip(new RoundedRect(box, 14))) dc.DrawImage(a.Media!.Frames[a.Frame], box);
-                    dc.DrawRectangle(null, new Pen(Brushes.HotPink, 4), new RoundedRect(box, 14));
+                    DrawPicture(dc, a.Media!.Frames[a.Frame], box);
                 }
             }
         }
@@ -300,6 +301,31 @@ internal sealed class FirstShowEffects : Control, IDisposable
             Fx.Render(canvas, new SkiaSharp.SKRectI(0, 0, (int)W, (int)H), 1, TimeSpan.Zero);
             dc.Custom(new PictureOp(rec.EndRecording(), all));
         }
+    }
+    // WPF FlashLayer.Render: a 4 px inset, uniform fit, and a sigma-6 halo behind the clipped image.
+    private void DrawPicture(DrawingContext dc, Bitmap frame, Rect box)
+    {
+        if (!_pictureImages.TryGetValue(frame, out var image))
+        {
+            var size = frame.PixelSize;
+            using var pixels = new SKBitmap(new SKImageInfo(size.Width, size.Height, SKColorType.Bgra8888, SKAlphaType.Premul));
+            frame.CopyPixels(new PixelRect(size), pixels.GetPixels(), pixels.ByteCount, pixels.RowBytes);
+            _pictureImages[frame] = image = SKImage.FromBitmap(pixels);
+        }
+        var inner = box.Deflate(4);
+        float scale = Math.Min((float)inner.Width / image.Width, (float)inner.Height / image.Height);
+        float w = image.Width * scale, h = image.Height * scale;
+        float x = (float)inner.Center.X, y = (float)inner.Center.Y;
+        var fit = new SKRect(x - w / 2, y - h / 2, x + w / 2, y + h / 2);
+        using var recorder = new SKPictureRecorder();
+        var canvas = recorder.BeginRecording(new SKRect((float)box.X - 24, (float)box.Y - 24, (float)box.Right + 24, (float)box.Bottom + 24));
+        using var blur = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, 6);
+        using var glow = new SKPaint { IsAntialias = true, Color = HotPink.WithAlpha((byte)(.65 * 255)), MaskFilter = blur };
+        canvas.DrawRoundRect(new SKRoundRect(fit, 14), glow);
+        canvas.ClipRoundRect(new SKRoundRect(fit, 14), antialias: true);
+        using var paint = new SKPaint { IsAntialias = true };
+        canvas.DrawImage(image, fit, paint);
+        dc.Custom(new PictureOp(recorder.EndRecording(), box.Inflate(24)));
     }
     /// <summary>The recorded spark field, replayed on the render thread's Skia canvas (ChaosSkiaFxOverlay.PictureOp).</summary>
     private sealed class PictureOp : global::Avalonia.Rendering.SceneGraph.ICustomDrawOperation
@@ -338,7 +364,9 @@ internal sealed class FirstShowEffects : Control, IDisposable
     public void Dispose()
     {
         if (_disposed) return; _disposed = true;
-        _actors.Clear(); Fx.Clear(); _glyphs.Clear(); Free(_media); _media.Clear();
+        _actors.Clear(); Fx.Clear(); _glyphs.Clear();
+        foreach (var image in _pictureImages.Values) image.Dispose(); _pictureImages.Clear();
+        Free(_media); _media.Clear();
         if (_spiral != null) Free(new[] { _spiral }); _spiral = null;
         InvalidateVisual();
     }
