@@ -27,7 +27,7 @@ internal static class ScrolllerWebHostGate
 
     /// <summary><paramref name="newEngine"/> runs on the UI thread for every engine the view builds (and when one is
     /// destroyed: the view is held again) and returns that engine's report.</summary>
-    public static void Attach(NativeWebView web, Func<Action<bool>> newEngine)
+    public static void Attach(NativeWebView web, Func<Action<bool>> newEngine, Func<bool> blockAds, Func<string?, string?, bool> shouldBlockAds)
     {
         static void OnUi(Action go) { if (Dispatcher.UIThread.CheckAccess()) go(); else Dispatcher.UIThread.Post(go); }
         web.AdapterDestroyed += (_, _) => OnUi(() => newEngine());
@@ -35,7 +35,7 @@ internal static class ScrolllerWebHostGate
         {
             IPlatformHandle? handle = null;
             try { handle = e.TryGetPlatformHandle() ?? web.TryGetPlatformHandle(); } catch { }
-            OnUi(() => OnAdapter(handle, () => { try { return web.TryGetPlatformHandle(); } catch { return null; } }, newEngine()));
+            OnUi(() => OnAdapter(handle, () => { try { return web.TryGetPlatformHandle(); } catch { return null; } }, newEngine(), blockAds(), shouldBlockAds));
         };
     }
 
@@ -56,19 +56,19 @@ internal static class ScrolllerWebHostGate
 
     /// <summary>One adapter's handle onto its gate (UI thread: WebView2 objects are bound to it). A Windows core that is not
     /// there yet is asked for again (<paramref name="handleAgain"/>) until it is, or until the retries run out.</summary>
-    internal static void OnAdapter(IPlatformHandle? handle, Func<IPlatformHandle?> handleAgain, Action<bool> ready)
+    internal static void OnAdapter(IPlatformHandle? handle, Func<IPlatformHandle?> handleAgain, Action<bool> ready, bool blockAds = false, Func<string?, string?, bool>? shouldBlockAds = null)
     {
         try
         {
             switch (handle)
             {
                 case IWindowsWebView2PlatformHandle when OperatingSystem.IsWindows():
-                    AttachWindows(handle, handleAgain, ready, CoreRetries);
+                    AttachWindows(handle, handleAgain, ready, CoreRetries, blockAds, shouldBlockAds);
                     return;
                 case IGtkWebViewPlatformHandle g:
                     var deadline = new Deadline(ready);
                     DispatcherTimer.RunOnce(deadline.Expire, LinuxGateWait);
-                    ScrolllerWebKitFilter.Attach(g.WebKitWebView, ok => Dispatcher.UIThread.Post(() => deadline.Report(ok)));
+                    AttachLinuxFilter(g.WebKitWebView, blockAds, ok => Dispatcher.UIThread.Post(() => deadline.Report(ok)), (view, ads, done) => ScrolllerWebKitFilter.Attach(view, ads, done));
                     return;
                 default:
                     Log.Warning("ScrolllerWebHostGate: no Scrolller gate for a {Engine} web view; only this head's own pages load in it",
@@ -83,6 +83,9 @@ internal static class ScrolllerWebHostGate
             ready(false);
         }
     }
+
+    internal static void AttachLinuxFilter(IntPtr view, bool blockAds, Action<bool> ready,
+        Action<IntPtr, bool, Action<bool>> attach) => attach(view, blockAds, ready);
 
     internal static string? CurrentDocumentUrl(IPlatformHandle? handle)
     {
@@ -99,10 +102,10 @@ internal static class ScrolllerWebHostGate
     }
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static string? ReadWebView2Url(IntPtr core) => ScrolllerWebView2Gate.CurrentDocumentUrl(core);
-    private static void AttachWindows(IPlatformHandle? handle, Func<IPlatformHandle?> handleAgain, Action<bool> ready, int left)
+    private static void AttachWindows(IPlatformHandle? handle, Func<IPlatformHandle?> handleAgain, Action<bool> ready, int left, bool blockAds, Func<string?, string?, bool>? shouldBlockAds)
     {
         var core = handle is IWindowsWebView2PlatformHandle w ? w.CoreWebView2 : IntPtr.Zero;
-        if (core != IntPtr.Zero) { ready(AttachWebView2(core)); return; }
+        if (core != IntPtr.Zero) { ready(AttachWebView2(core) && (!blockAds || AttachAdWebView2(core, shouldBlockAds!))); return; }
         if (left == CoreRetries) Log.Warning("ScrolllerWebHostGate: the adapter has no CoreWebView2 yet; waiting for it");
         if (left <= 0)
         {
@@ -110,10 +113,12 @@ internal static class ScrolllerWebHostGate
             ready(false);
             return;
         }
-        DispatcherTimer.RunOnce(() => AttachWindows(handleAgain(), handleAgain, ready, left - 1), CoreRetry);
+        DispatcherTimer.RunOnce(() => AttachWindows(handleAgain(), handleAgain, ready, left - 1, blockAds, shouldBlockAds), CoreRetry);
     }
 
     /// <summary>Its own method, so the WebView2 SDK is only ever loaded on Windows.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static bool AttachWebView2(IntPtr core) => ScrolllerWebView2Gate.Attach(core);
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static bool AttachAdWebView2(IntPtr core, Func<string?, string?, bool> shouldBlockAds) => ScrolllerWebView2Gate.AttachAds(core, shouldBlockAds);
 }
