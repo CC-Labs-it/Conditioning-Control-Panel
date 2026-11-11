@@ -9087,5 +9087,11 @@
   "chaos_dvd_title": "Porn DVD",
   "chaos_dvd_loading": "now loading",
   "chaos_inescapable_unlock_tip": "a deeper door. she sells the key in the Toybox: finish {0} relentless descents, reach Devoted ({1} descents), then train it for ✦{2}.",
-  "chaos_resistance_regrows": "resistance regrows"
+  "chaos_resistance_regrows": "resistance regrows",
+  "possession_doki_title_1": "the panel has stopped pretending",
+  "possession_doki_title_2": "lockdown is not responding to you",
+  "possession_doki_message": "you tried to leave.",
+  "possession_doki_progress": "deleting your way out...",
+  "possession_doki_done": "nothing happened. there was nothing to delete.",
+  "possession_doki_ok": "ok"
 }

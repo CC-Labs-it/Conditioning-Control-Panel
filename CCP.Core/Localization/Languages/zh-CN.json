@@ -8844,5 +8844,11 @@
   "chaos_dvd_title": "色情DVD",
   "chaos_dvd_loading": "正在加载",
   "chaos_inescapable_unlock_tip": "通往更深处的门。她在Toybox出售钥匙：完成{0}次Relentless下降，达到Devoted（{1}次下降），然后花✦{2}训练。",
-  "chaos_resistance_regrows": "抵抗力恢复"
+  "chaos_resistance_regrows": "抵抗力恢复",
+  "possession_doki_title_1": "面板不再假装了",
+  "possession_doki_title_2": "封锁没有回应你",
+  "possession_doki_message": "你想离开。",
+  "possession_doki_progress": "正在删除你的出路...",
+  "possession_doki_done": "什么也没发生。没有东西需要删除。",
+  "possession_doki_ok": "确定"
 }

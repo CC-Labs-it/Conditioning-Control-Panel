@@ -8338,5 +8338,11 @@
   "chaos_dvd_title": "DVD porno",
   "chaos_dvd_loading": "cargando",
   "chaos_inescapable_unlock_tip": "una puerta más profunda. vende la llave en la Toybox: completa {0} descensos en Relentless, alcanza Devoted ({1} descensos) y entrénalo por ✦{2}.",
-  "chaos_resistance_regrows": "la resistencia se regenera"
+  "chaos_resistance_regrows": "la resistencia se regenera",
+  "possession_doki_title_1": "el panel ha dejado de fingir",
+  "possession_doki_title_2": "lockdown no te responde",
+  "possession_doki_message": "intentaste irte.",
+  "possession_doki_progress": "borrando tu salida...",
+  "possession_doki_done": "no pasó nada. no había nada que borrar.",
+  "possession_doki_ok": "vale"
 }
