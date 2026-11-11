@@ -259,7 +259,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static readonly System.Collections.Generic.Queue<Action> PortalStartQueue = new();
         internal static void StartEffect(Action start)
         {
-            if (_portalStarts == 0 && (!_portalAllowed || (PortalPanicShortcut.IsBound && _portalBind is not { IsCompleted: false }) || _portalFailed || !CoreSettings.Current.PanicKeyEnabled
+            if (PortalStartQueue.Count == 0 && (!_portalAllowed || (PortalPanicShortcut.IsBound && _portalBind is not { IsCompleted: false }) || _portalFailed || !CoreSettings.Current.PanicKeyEnabled
                 || !OperatingSystem.IsLinux() || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"))))
             {
                 start();

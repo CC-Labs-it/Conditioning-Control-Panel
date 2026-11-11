@@ -664,6 +664,8 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
             {
                 allowed.SetValue(null, true); failed.SetValue(null, false); bind.SetValue(null, tcs.Task);
                 Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", "ccp-test");
+                CoreSettings.Current.PanicKeyEnabled = false; bool cardRan = false;
+                MainShellWindow.QueueCardEffect(() => cardRan = true); Assert.True(cardRan);
                 CoreSettings.Current.PanicKeyEnabled = true;
                 PortalPanicShortcut.SetSessionForTests("/pending", null);
                 MainShellWindow.StartEffect(() => ran = true);
