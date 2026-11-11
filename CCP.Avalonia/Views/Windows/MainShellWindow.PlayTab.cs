@@ -6,7 +6,7 @@
 //                         MainShellWindow.Patreon.cs, which is WPF's three call sites).
 //   StartMantraSession    PORTED below. Its one caller is the Programs Mantra-task door.
 //   LaunchPlayBreakoutDemo / LaunchPlayChess reuse the launcher's existing GameWindow hosts.
-//   LaunchPlayBreakout uses the shared game host and its Lab gate. Goon remains unported.
+//   LaunchPlayBreakout uses the shared game host and its Lab gate.
 
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
@@ -21,6 +21,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void LaunchPlayBreakout() => Games.GameWindow.Launch("breakout");
 
         internal void LaunchPlayChess() => Games.GameWindow.Launch("piecebypiece");
+
+        // WPF MainWindow.PlayTab.cs:60-64: Goon asks for an account first.
+        internal void LaunchPlayGoon()
+        {
+            if (!CoreAccount.IsLoggedIn) { _ = OpenUnifiedLoginDialog(); return; }
+            Tabs.PlayTabView.LaunchGame("goon");
+        }
+
+        // WPF MainWindow.Lab.cs:302-313: Back Room is free and reports launch failures.
+        internal void LaunchPlayBackRoom()
+        {
+            try { Tabs.PlayTabView.LaunchGame("backroom"); }
+            catch (System.Exception ex)
+            {
+                Serilog.Log.Error(ex, "BtnStartBackRoom_Click failed");
+                _ = Dialogs.MessageDialog.ShowAsync(this, Loc.Get("launcher_game_backroom_title"),
+                    Loc.GetF("play_backroom_open_failed_body", ex.Message));
+            }
+        }
 
         // WPF MainWindow.Exclusives.cs:217-222: sign-in precedes the game's own gate.
         internal void LaunchPlayLauncherGame(string id)

@@ -283,7 +283,7 @@
                 </Border>
                 <TextBlock Grid.Row="1" Text="{loc:Str launcher_game_goon_title}" Theme="{StaticResource PlayCardTitle}" Margin="0,0,0,6"/>
                 <TextBlock Grid.Row="2" Text="{loc:Str launcher_game_goon_blurb}" Theme="{StaticResource PlayCardBlurb}" Margin="0,0,0,14"/>
-                <Button Grid.Row="3" x:Name="BtnPlayGoon" IsEnabled="False" HorizontalAlignment="Left" Padding="16,8" CornerRadius="10" Background="{DynamicResource AccentGradientBrush}" Foreground="White" BorderThickness="0" FontWeight="Bold" FontSize="13"
+                <Button Grid.Row="3" x:Name="BtnPlayGoon" Click="BtnPlayGoon_Click" IsEnabled="False" HorizontalAlignment="Left" Padding="16,8" CornerRadius="10" Background="{DynamicResource AccentGradientBrush}" Foreground="White" BorderThickness="0" FontWeight="Bold" FontSize="13"
                         ToolTip.Tip="{loc:Str exclusives_not_on_this_build}" ToolTip.ShowOnDisabled="True">
                   <TextBlock Text="{loc:Str launcher_play}"/>
                 </Button>
@@ -321,7 +321,7 @@
                   </Border>
                   <TextBlock Grid.Row="1" Text="{loc:Str launcher_game_backroom_title}" Theme="{StaticResource PlayCardTitle}" Margin="0,0,0,6"/>
                   <TextBlock Grid.Row="2" Text="{loc:Str launcher_game_backroom_blurb}" Theme="{StaticResource PlayCardBlurb}" Margin="0,0,0,14"/>
-                  <Button Grid.Row="3" x:Name="BtnPlayBackRoom" IsEnabled="False" ToolTip.Tip="{loc:Str exclusives_not_on_this_build}" ToolTip.ShowOnDisabled="True"
+                  <Button Grid.Row="3" x:Name="BtnPlayBackRoom" Click="BtnPlayBackRoom_Click" IsEnabled="False" ToolTip.Tip="{loc:Str exclusives_not_on_this_build}" ToolTip.ShowOnDisabled="True"
                           HorizontalAlignment="Left" Padding="16,8" CornerRadius="10"
                           Background="{DynamicResource AccentGradientBrush}" Foreground="White"
                           BorderThickness="0" FontWeight="Bold" FontSize="13">
@@ -365,7 +365,7 @@
                   </Border>
                   <TextBlock Grid.Row="1" Text="{loc:Str launcher_game_arcademy_title}" Theme="{StaticResource PlayCardTitle}" Margin="0,0,0,6"/>
                   <TextBlock Grid.Row="2" Text="{loc:Str launcher_game_arcademy_blurb}" Theme="{StaticResource PlayCardBlurb}" Margin="0,0,0,14"/>
-                  <Button Grid.Row="3" x:Name="BtnPlayArcademy" IsEnabled="False" ToolTip.Tip="{loc:Str exclusives_not_on_this_build}" ToolTip.ShowOnDisabled="True"
+                  <Button Grid.Row="3" x:Name="BtnPlayArcademy" Click="BtnPlayArcademy_Click" IsEnabled="False" ToolTip.Tip="{loc:Str exclusives_not_on_this_build}" ToolTip.ShowOnDisabled="True"
                           HorizontalAlignment="Left" Padding="16,8" CornerRadius="10"
                           Background="{DynamicResource AccentGradientBrush}" Foreground="White"
                           BorderThickness="0" FontWeight="Bold" FontSize="13">
