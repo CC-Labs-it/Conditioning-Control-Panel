@@ -10,7 +10,9 @@ using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Services;
 namespace ConditioningControlPanel.Avalonia.Views.Deeper;
 public partial class EnhancementPlayerWindow {
-    internal const string BrowserFullscreenOnMessage = "ccp_fullscreen_on", BrowserFullscreenOffMessage = "ccp_fullscreen_off", BrowserExitFullscreenMessage = "ccp_exit_fullscreen";
+    // No "on" message: entry needs the engine's native signal (WebHost.NativeFullscreenEntered), so a
+    // page script cannot take the screen Topmost or clone the displays without a user gesture.
+    internal const string BrowserFullscreenOffMessage = "ccp_fullscreen_off", BrowserExitFullscreenMessage = "ccp_exit_fullscreen";
     // WPF player:1530-1702, 2782-2999. Capture relays beat page shortcuts; editable inputs keep their keys.
     internal const string BrowserFullscreenScript = @"(function() {
     if(window.__ccpFsBound)return; window.__ccpFsBound=true;
@@ -23,7 +25,7 @@ public partial class EnhancementPlayerWindow {
     document.addEventListener('dblclick',dbl,true);document.addEventListener('dblclick',dbl,false);window.addEventListener('dblclick',dbl,true);
     function bind(){document.querySelectorAll('video').forEach(function(v){if(v._ccpBound)return;v._ccpBound=true;v.addEventListener('dblclick',dbl,true);v.addEventListener('dblclick',dbl,false);});}
     bind();setInterval(function(){if(any())bind();},1000);
-    var last=!!fs();function change(){var f=!!fs();if(f!==last){last=f;post(f?'ccp_fullscreen_on':'ccp_fullscreen_off');}if(!f&&window._ccpForcedFs)post('ccp_exit_fullscreen');}
+    var last=!!fs();function change(){var f=!!fs();if(f!==last){last=f;if(!f)post('ccp_fullscreen_off');}if(!f&&window._ccpForcedFs)post('ccp_exit_fullscreen');}
     document.addEventListener('fullscreenchange',change);document.addEventListener('webkitfullscreenchange',change);
     function key(e){return e.code==='Space'||e.key===' '?'Space':({ArrowLeft:'Left',ArrowRight:'Right',ArrowUp:'Up',ArrowDown:'Down',Escape:'Escape',F11:'F11',m:'M',M:'M',f:'F',F:'F'})[e.key];}
     window.addEventListener('keydown',function(e){var k=key(e);if(e.target&&(e.target.isContentEditable||/^(INPUT|TEXTAREA)$/.test(e.target.tagName))){if((k==='Escape'||k==='F11')&&any())post('ccp_exit_fullscreen');return;}if(!k)return;
@@ -49,12 +51,12 @@ public partial class EnhancementPlayerWindow {
         message = message.Trim().Trim('"');
         if (message.StartsWith("ccp_key:", StringComparison.Ordinal)) {
             var p = message.Split(':');
-            if (p.Length == 4 && Enum.TryParse<Key>(p[1], out var key)) PlayerKey(key, p[2] == "1", p[3] == "1");
+            // A relayed F may leave fullscreen, never enter it: the page's F enters through requestFullscreen.
+            if (p.Length == 4 && Enum.TryParse<Key>(p[1], out var key) && (key != Key.F || _videoFullscreenWindow != null)) PlayerKey(key, p[2] == "1", p[3] == "1");
         }
         if (message == "ccp_keyup:Escape") EscapeUp();
         if (message == "ccp_pointer") ArmCursor();
         switch (message) {
-            case BrowserFullscreenOnMessage: EnterVideoFullscreen(); break;
             case BrowserFullscreenOffMessage:
                 if (!_videoTransition) ExitVideoFullscreen();
                 break;
@@ -152,11 +154,15 @@ public partial class EnhancementPlayerWindow {
             _ = _videoBrowser.InvokeScriptAsync("document.documentElement.style.cursor='none';"); } }
     }
     // WPF player:2182,2256,2383; OverlayService:121-148. Reassert on entry, focus, ticks and exit, without activation.
+    // Only the windows WPF ReassertZOrder sweeps (OverlayService.cs:3115-3200): tint, spiral and corner GIFs,
+    // then flashes, subliminals, bubbles and the shared stage. Toasts, cards and other interactive windows stay put.
+    private static readonly Type[] ReassertedEffects = { typeof(Overlays.TintOverlayWindow), typeof(Overlays.SpiralOverlayWindow),
+        typeof(Overlays.FlashOverlayWindow), typeof(Overlays.SubliminalOverlayWindow), typeof(Overlays.BubbleOverlayWindow), typeof(Overlays.SharedOverlayStageWindow) };
     internal Func<IEnumerable<Window>> EffectWindows = () => (global::Avalonia.Application.Current?.ApplicationLifetime as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.Windows ?? Array.Empty<Window>();
     internal Action<Window> RaiseEffect = w => X11Overlay.Raise(w);
     private void ReassertEffects() {
         if (CoreEngine.Video?.IsPlaying == true) return; // WPF OverlayService:3050-3120: keep the mandatory video anchor above ambient effects.
-        foreach (var w in EffectWindows().Where(w => w.IsVisible && w.GetType().Namespace == typeof(Overlays.TintOverlayWindow).Namespace).OrderBy(w => w is Overlays.TintOverlayWindow ? 0 : w is Overlays.SpiralOverlayWindow ? 1 : 2).ToArray())
+        foreach (var w in EffectWindows().Where(w => w.IsVisible && Array.IndexOf(ReassertedEffects, w.GetType()) >= 0).OrderBy(w => Array.IndexOf(ReassertedEffects, w.GetType())).ToArray())
             try { RaiseEffect(w); } catch (Exception ex) { Serilog.Log.Debug(ex, "Effect raise failed"); }
     }
     private void OnVideoHostDeactivated(object? sender, EventArgs e) { _pressed.Clear(); ((Window)sender!).Topmost = false; }

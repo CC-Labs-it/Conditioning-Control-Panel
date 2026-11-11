@@ -133,3 +133,5 @@ Views/Windows/MainShellWindow.IntakeNudge.cs :: Glyph = "🎟️" :: InboxItem.G
 Platform/FontGuard.cs :: "Segoe MDL2 Assets", "Segoe UI Emoji" :: font: not an icon site - WPF Services/UI/FontGuard.cs probes these installed families for an unreadable file; nothing renders with them
 Theme/Styles.xaml :: <Path x:Name="Arrow" :: path: ComboBox drop-arrow template chrome, WPF Inputs.xaml ComboBoxToggleButton (parity 2026-11-06)
 Theme/Styles.xaml :: <Path x:Name="arrow" :: path: Expander chevron template chrome, WPF Aero2 ExpanderToggleButton (parity 2026-11-06)
+Views/AvatarTube/AvatarTubeWindow.axaml :: <Path x:Name="SpeechTail" :: path: speech-bubble tail chrome, WPF AvatarTube/AvatarTubeWindow.xaml:96 (fix2 bubble window 2026-11-06)
+Controls/Billboard/BillboardVectorArt.cs :: Geometry.Parse("M 0,-1 Q 0.12,-0.12 1,0 Q 0.12,0.12 0,1 Q -0.12,0.12 -1,0 Q -0.12,-0.12 0,-1 Z") :: path: billboard spark particle shape, not an icon; WPF Controls/Billboard/BillboardVectorArt.cs (fix2 billboard art 2026-11-06)

@@ -12,6 +12,7 @@ using System.Runtime.CompilerServices;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using CCP.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;
@@ -47,6 +48,7 @@ public sealed class SpiralFinishTests
             Assert.Null(server.ResolveFile("/__spirals__/not-a-loom.gif"));
             var outside = Path.Combine(root.FullName, "outside.gif");
             File.WriteAllBytes(outside, Convert.FromBase64String(Gif));
+            Symlinks.RequireOrSkip();   // last, so the store and traversal checks above always run
             File.CreateSymbolicLink(link, outside);
             Assert.Null(server.ResolveFile("/__spirals__/loom_link.gif"));
         }

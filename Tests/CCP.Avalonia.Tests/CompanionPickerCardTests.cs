@@ -234,4 +234,87 @@ public sealed class CompanionPickerCardTests
         }
         finally { CoreSettings.ServiceProvider = null; }
     }
+
+    /// <summary>The async void link handler must not crash the app when the editor throws: WPF's
+    /// sync handler reaches App.xaml.cs:2425 (log + msg_unexpected_error dialog), so the port shows it.</summary>
+    [Fact]
+    public Task MorePersonalityFailureShowsErrorInsteadOfCrashing() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var oldProvider = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var host = new Window { Width = 900, Height = 500 };
+        try
+        {
+            var card = new CompanionPickerCard { MorePersonalityOptions = _ => throw new InvalidOperationException("boom") };
+            host.Content = card;
+            host.Show();
+            Dispatcher.UIThread.RunJobs();
+            card.FindControl<Button>("BtnMorePersonality")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await WaitFor(() => host.OwnedWindows.Any());
+            var dialog = Assert.IsType<MessageDialog>(Assert.Single(host.OwnedWindows));
+            Assert.Equal(global::ConditioningControlPanel.Localization.Loc.Get("title_unexpected_error"), dialog.Title);
+            Assert.Contains("boom", dialog.FindControl<TextBlock>("TxtMessage")!.Text);
+        }
+        finally
+        {
+            foreach (var w in host.OwnedWindows.ToList()) w.Close();
+            host.Close();
+            Dispatcher.UIThread.RunJobs();
+            CoreSettings.ServiceProvider = oldProvider;
+        }
+    });
+
+    /// <summary>The combo's async void handler, same guard: WPF CmbPersonality_SelectionChanged
+    /// (CompanionPickerCard.xaml.cs:315) is sync, so a throw from the switch reaches App.xaml.cs:2425.</summary>
+    [Fact]
+    public Task PersonalitySwitchFailureShowsErrorInsteadOfCrashing() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var oldProvider = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = CoreSettings.Current;
+        var oldPreset = s.ActivePersonalityPresetId;
+        var oldSlut = s.SlutModeEnabled;
+        s.ActivePersonalityPresetId = PersonalityPresets.NeutralDefaultId;
+        s.SlutModeEnabled = false;
+        EventHandler<PersonalityPreset> boom = (_, _) => throw new InvalidOperationException("boom");
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            var host = new Window { Width = 900, Height = 500 };
+            var card = new CompanionPickerCard();
+            host.Content = card;
+            host.Show(shell);
+            Dispatcher.UIThread.RunJobs();
+            var plain = PersonalityService.Shared.GetAllPresets().First(p => p.Id != PersonalityPresets.NeutralDefaultId
+                                                                            && !ExplicitContentGate.RequiresAcknowledgement(p, false));
+            PersonalityService.Shared.PersonalityChanged += boom;
+            var combo = card.FindControl<ComboBox>("CmbPersonality")!;
+            combo.SelectedItem = combo.Items.OfType<ComboBoxItem>().Single(i => (string)i.Tag! == plain.Id);
+            await WaitFor(() => host.OwnedWindows.Any());
+            var dialog = Assert.IsType<MessageDialog>(Assert.Single(host.OwnedWindows));
+            Assert.Equal(global::ConditioningControlPanel.Localization.Loc.Get("title_unexpected_error"), dialog.Title);
+            Assert.Contains("boom", dialog.FindControl<TextBlock>("TxtMessage")!.Text);
+        }
+        finally
+        {
+            PersonalityService.Shared.PersonalityChanged -= boom;
+            s.ActivePersonalityPresetId = oldPreset;
+            s.SlutModeEnabled = oldSlut;
+            foreach (var w in shell.OwnedWindows.SelectMany(o => o.OwnedWindows.Prepend(o)).Reverse().ToList()) w.Close();
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+            CoreSettings.ServiceProvider = oldProvider;
+        }
+    });
 }

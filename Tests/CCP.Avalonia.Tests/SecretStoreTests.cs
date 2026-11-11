@@ -98,6 +98,101 @@ public sealed class SecretStoreTests
         Assert.Null(Libsecret.Lookup("authtoken"));
     }
 
+    /// <summary>Owner WSLg run: no org.freedesktop.secrets, ~200 "Secret lookup failed" warnings in 10 s
+    /// (patreon_auth / discord_auth / substar_auth asked again and again). One warning, then the gate answers.</summary>
+    [Fact]
+    public void AnUnreachableServiceWarnsOnceAndStopsAsking()
+    {
+        // Windows has no libsecret at all; Linux runs this only with no bus (scripts/secrets-roundtrip.sh), never a keyring.
+        if (!OperatingSystem.IsWindows() && Environment.GetEnvironmentVariable("CCP_SECRETS_NOBUS") != "1")
+            Assert.Skip("Run by scripts/secrets-roundtrip.sh with DBUS_SESSION_BUS_ADDRESS pointing at nothing.");
+        var saved = Libsecret.Gate;
+        long now = 0;
+        Libsecret.Gate = new SecretServiceGate(() => now);
+        try
+        {
+            for (int i = 0; i < 200; i++) Assert.Equal((false, (string?)null), Libsecret.Read(i % 2 == 0 ? "patreon_auth" : "discord_auth"));
+            Assert.False(Libsecret.Write("substar_auth", Json));
+            Assert.Equal(1, Libsecret.Gate.Failures);   // one real attempt; the gate answered the rest
+            Assert.Equal(1, Libsecret.Gate.Warnings);
+
+            now += (long)SecretServiceGate.RetryAfter.TotalMilliseconds + 1;
+            Assert.Null(Libsecret.Lookup("patreon_auth"));
+            // A minute on, one quiet retry over D-Bus; without libsecret there is nothing to retry.
+            Assert.Equal(OperatingSystem.IsWindows() ? 1 : 2, Libsecret.Gate.Failures);
+            Assert.Equal(1, Libsecret.Gate.Warnings);
+        }
+        finally { Libsecret.Gate = saved; }
+    }
+
+    /// <summary>Owner WSLg log: a startup logout over a keyring that was never there said "logout not complete".
+    /// Nothing reached the store this run, so the memory clear is the clear; a service that answered keeps the notice.</summary>
+    [Fact]
+    public void AClearOverAServiceNeverReachedThisRunIsNotAFailedLogout()
+    {
+        var (gate, sandboxed, write) = (Libsecret.Gate, SecretStore.Sandboxed, SecretStore.OsWriteOverride);
+        try
+        {
+            SecretStore.Sandboxed = false;
+            SecretStore.NotRemembered = SecretStore.ClearFailed = false;
+            SecretStore.OsWriteOverride = (_, _) => false;   // every OS write fails, as with no Secret Service
+            Libsecret.Gate = new SecretServiceGate(() => 0);
+            Libsecret.Gate.Down("lookup", "patreon_auth", "The name org.freedesktop.secrets was not provided", permanent: false);
+
+            SecretStore.Store("patreon_cache", null);
+            Assert.False(SecretStore.ClearFailed);
+
+            Libsecret.Gate.Answered();   // it is there (a locked keyring): a failed clear may have left a token behind
+            SecretStore.Store("patreon_cache", null);
+            Assert.True(SecretStore.ClearFailed);
+        }
+        finally
+        {
+            (Libsecret.Gate, SecretStore.Sandboxed, SecretStore.OsWriteOverride) = (gate, sandboxed, write);
+            SecretStore.NotRemembered = SecretStore.ClearFailed = false;
+        }
+    }
+
+    [Fact]
+    public void TheGateRetriesAMinuteOnAndReopensWhenTheServiceAnswers()
+    {
+        long now = 1000;
+        var gate = new SecretServiceGate(() => now);
+        Assert.False(gate.Closed);
+        gate.Down("lookup", "patreon_auth", "The name org.freedesktop.secrets was not provided by any .service files", permanent: false);
+        Assert.True(gate.Closed);
+        now += (long)SecretServiceGate.RetryAfter.TotalMilliseconds - 1;
+        Assert.True(gate.Closed);
+        now += 2;
+        Assert.False(gate.Closed);   // a keyring started since gets its chance
+        gate.Down("lookup", "patreon_auth", "still nothing", permanent: false);
+        Assert.True(gate.Closed);
+        Assert.Equal(1, gate.Warnings);   // the retry failed quietly
+
+        now += (long)SecretServiceGate.RetryAfter.TotalMilliseconds + 1;
+        gate.Up();                        // it answered
+        Assert.False(gate.Closed);
+        gate.Down("lookup", "patreon_auth", "gone again", permanent: false);
+        Assert.Equal(2, gate.Warnings);   // lost after coming back: worth one more line
+
+        var missing = new SecretServiceGate(() => now);
+        missing.Down("lookup", "authtoken", "libsecret-1.so.0 not found", permanent: true);
+        now += 10 * (long)SecretServiceGate.RetryAfter.TotalMilliseconds;
+        Assert.True(missing.Closed);      // no library: never retried this run
+    }
+
+    [Theory]
+    [InlineData("g-dbus-error-quark", 2, true)]    // ServiceUnknown: "not provided by any .service files"
+    [InlineData("g-dbus-error-quark", 9, true)]    // AccessDenied (a sandbox without the permission)
+    [InlineData("g-io-error-quark", 1, true)]      // no bus socket: "Could not connect: No such file or directory"
+    [InlineData("g-io-error-quark", 0, true)]      // "Cannot autolaunch D-Bus without X11 $DISPLAY"
+    [InlineData("g-io-error-quark", 19, false)]    // cancelled prompt: the user's answer
+    [InlineData("g-io-error-quark", 36, false)]    // the service's own error
+    [InlineData("secret-error-quark", 2, false)]   // IsLocked: unlock and it works
+    [InlineData(null, 0, false)]
+    public void OnlyAnUnreachableServiceClosesTheGate(string? domain, int code, bool unreachable) =>
+        Assert.Equal(unreachable, Libsecret.IsUnreachable(domain, code));
+
     [Fact]
     public void NoBusReadsNullAndWritesNoFile()
     {

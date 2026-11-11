@@ -119,7 +119,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private async void Perk_Click(object? sender, RoutedEventArgs e)
         {
             if (TopLevel.GetTopLevel(this) is not Window owner) return;
-            await PerkPicker.Show(owner);
+            await GuardAsync("perk picker", () => PerkPicker.Show(owner));
             Refresh();
         }
 
@@ -273,7 +273,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private async void CmbPersonality_SelectionChanged(object? sender, SelectionChangedEventArgs e)
         {
             if (_syncing || CmbPersonality.SelectedItem is not ComboBoxItem { Tag: string id }) return;
-            await ActivateAsync(id);
+            await GuardAsync("personality switch", () => ActivateAsync(id));
         }
 
         /// <summary>The gate lives on the shell; a refusal or a failed switch puts the combo back
@@ -338,8 +338,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private async void BtnMorePersonality_Click(object? sender, RoutedEventArgs e)
         {
             if (_morePersonalityOptions == null || TopLevel.GetTopLevel(this) is not Window owner) return;
-            await _morePersonalityOptions(owner);
+            await GuardAsync("personality editor", () => _morePersonalityOptions(owner));
             if (!_previewing) Refresh();
+        }
+
+        /// <summary>For the async void handlers: a throw there would end the app. WPF's handlers are
+        /// sync, so the same throw reaches App.xaml.cs:2425 DispatcherUnhandledException (log +
+        /// msg_unexpected_error); the Avalonia head has no such hook, so do both here.</summary>
+        private async Task GuardAsync(string what, Func<Task> work)
+        {
+            try { await work(); }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[CompanionPicker] {What} failed", what);
+                if (TopLevel.GetTopLevel(this) is not Window owner) return;
+                try
+                {
+                    await MessageDialog.ShowAsync(owner, Loc.Get("title_unexpected_error"),
+                        Loc.GetF("msg_unexpected_error", ex.Message));
+                }
+                catch (Exception dialogEx) { Log.Warning(dialogEx, "[CompanionPicker] error dialog failed"); }
+            }
         }
     }
 }

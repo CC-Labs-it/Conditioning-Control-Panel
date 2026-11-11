@@ -54,6 +54,20 @@ namespace ConditioningControlPanel.Avalonia
                 return PerfBench.Run(args[pb + 1], pbt >= 0 && pbt + 1 < args.Length ? args[pbt + 1].Split(',') : null);
             }
 
+            // --fx-bench <out.json> [--fx-bench-size WxH] times one CPU-Skia frame of each Home effect,
+            // headless (FxBench.cs): the render cost a machine without a GPU pays, with no window shown.
+            var fb = Array.IndexOf(args, "--fx-bench");
+            if (fb >= 0)
+            {
+                if (fb + 1 >= args.Length)
+                {
+                    Console.Error.WriteLine("usage: --fx-bench <out.json> [--fx-bench-size WxH]");
+                    return 2;
+                }
+                var fbs = Array.IndexOf(args, "--fx-bench-size");
+                return FxBench.Run(args[fb + 1], fbs >= 0 && fbs + 1 < args.Length ? args[fbs + 1] : null);
+            }
+
             // --click-through <dir> dispatches REAL pointer clicks at real controls and saves a
             // frame per step. The only proof here that can see a button which draws but does not
             // take a click - which is what the nav doors were doing.
@@ -128,6 +142,12 @@ namespace ConditioningControlPanel.Avalonia
             if (Array.IndexOf(args, "--x11-probe") >= 0)
                 return X11OverlayProbe.Run();
 
+            // --tube-shape-probe [holdSeconds]: a real avatar tube beside a stand-in shell; reads the
+            // tube's input shape and WM_TRANSIENT_FOR back from the X server (TubeShapeProbe.cs).
+            var tsp = Array.IndexOf(args, "--tube-shape-probe");
+            if (tsp >= 0)
+                return TubeShapeProbe.Run(tsp + 1 < args.Length && int.TryParse(args[tsp + 1], out var hold) ? hold : 0);
+
             // Private native KWin regression: opens a real fullscreen video surface and watch.
             if (Array.IndexOf(args, "--wave-timer-check") >= 0)
                 return OverlayCheck.RunWaveTimer();
@@ -141,13 +161,16 @@ namespace ConditioningControlPanel.Avalonia
             if (Array.IndexOf(args, "--overlay-check") >= 0)
                 return OverlayCheck.Run();
 
-            // --tray-probe: prints whether a StatusNotifierWatcher owns its name (X hides to tray only then).
+            // --tray-probe: prints whether a StatusNotifierWatcher owns its name. --tray-check asks whether it took the item.
             if (Array.IndexOf(args, "--tray-probe") >= 0)
             {
                 var present = Views.Windows.MainShellWindow.ProbeTrayHost();
                 Console.WriteLine($"tray host present: {present}");
                 return present ? 0 : 1;
             }
+
+            // --tray-check: runs the app until the icon has had time to register, then asks the watcher.
+            if (Array.IndexOf(args, "--tray-check") >= 0) Views.Windows.MainShellWindow.TrayCheck = true;
 
             // --notify-check: org.freedesktop.Notifications Notify -> id -> CloseNotification, live.
             if (Array.IndexOf(args, "--notify-check") >= 0)
@@ -231,7 +254,7 @@ namespace ConditioningControlPanel.Avalonia
             if (instance is null)
             {
                 Serilog.Log.Information("Another instance is running; asked it to show its window");
-                return 0;
+                return Views.Windows.MainShellWindow.TrayCheck ? 2 : 0;   // the check proved nothing
             }
 
             // WPF App.xaml.cs:4069: end protection after initialization, not an intermediate splash frame.
@@ -252,10 +275,13 @@ namespace ConditioningControlPanel.Avalonia
                         (global::Avalonia.Application.Current?.ApplicationLifetime
                             as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.Shutdown());
                 });
+            // A cold WSLg / on-demand Xwayland first reports a 640x480 placeholder screen; Avalonia would keep it all run.
+            Platform.X11ScreenSettle.WaitForRealMonitors();
             App.SplashOnStartup = true;
+            Platform.SoftwareRender.Armed = true;   // a CPU-only Skia backend takes WPF's Performance-mode FX tier
             app.StartWithClassicDesktopLifetime(args);
             App.StartupFailure?.Throw();   // a failed startup crashes non-zero, as it did before the splash
-            return 0;
+            return Views.Windows.MainShellWindow.TrayCheck ? Views.Windows.MainShellWindow.TrayCheckExit : 0;
         }
 
         public static AppBuilder BuildAvaloniaApp()
