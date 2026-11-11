@@ -8,6 +8,9 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Controls.Primitives;
+using Avalonia.Interactivity;
+using ConditioningControlPanel.Localization;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -42,6 +45,85 @@ public sealed class LobbyNavigationTests
         lobby.FetchDirectory = _ => Task.FromResult<IReadOnlyList<RemoteSeat>>(Array.Empty<RemoteSeat>());
         lobby.ReadFriends = () => Array.Empty<ConditioningControlPanel.Services.Friends.Friend>();
     }
+
+    [Fact]
+    public void LauncherShowsLiveCountSharesLeaseAndStopsOnHide() => Run(() =>
+    {
+        NavBadges.ResetForTests();
+        var shell = new MainShellWindow();
+        Seed(shell.Lobby);
+        int calls = 0;
+        shell.Lobby.FetchChess = () => { calls++; return Task.FromResult(new PbpLobbyReply(
+            Enumerable.Range(0, 7).Select(i => new PbpOpenSeat("p_" + i, "Host " + i, 300000, 0, 0)).ToArray(),
+            Array.Empty<PbpPlayingGame>(), true)); };
+        LauncherWindow? launcher = null;
+        try
+        {
+            shell.Show();
+            launcher = LauncherWindow.OpenFor(shell);
+            var chip = launcher.FindControl<Button>("LobbyChip")!;
+            var popup = launcher.FindControl<Popup>("LobbyDrop")!;
+            var rows = launcher.FindControl<StackPanel>("LobbyDropRows")!;
+            Assert.True(calls >= 2);
+            Assert.Equal(Loc.GetF("launcher_lobby_open", 7), chip.Content);
+            Assert.Equal(1, chip.Opacity);
+            var timer = (DispatcherTimer)typeof(LauncherWindow).GetField("_lobbyRefresh", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(launcher)!;
+            Assert.True(timer.IsEnabled);
+            Assert.Equal(TimeSpan.FromSeconds(60), timer.Interval);
+            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.True(popup.IsOpen);
+            Assert.Equal(2, shell.Lobby.Watchers);
+            Assert.Equal(7, rows.Children.Count); // six rows and Open Lobby
+            Assert.All(rows.Children.OfType<Grid>(), row => Assert.False(row.Children.OfType<Button>().Single().IsEnabled));
+            Assert.Equal(7, NavBadges.Seen(NavSections.Social));
+            Assert.Equal(0.60, chip.Opacity, 2);
+            popup.IsOpen = false;
+            Assert.Equal(1, shell.Lobby.Watchers);
+            shell.Lobby.FetchChess = () => Task.FromResult(new PbpLobbyReply(
+                Enumerable.Range(0, 8).Select(i => new PbpOpenSeat("p_" + i, "Host", 300000, 0, 0)).ToArray(), Array.Empty<PbpPlayingGame>(), true));
+            shell.Lobby.RefreshAsync().GetAwaiter().GetResult();
+            Assert.Equal(1, chip.Opacity);
+            Assert.Equal(Loc.GetF("launcher_lobby_open", 8), chip.Content);
+            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(2, shell.Lobby.Watchers);
+            launcher.Hide();
+            Assert.False(popup.IsOpen);
+            Assert.Equal(1, shell.Lobby.Watchers);
+            Assert.False(timer.IsEnabled);
+            shell.Lobby.SignedIn = () => false;
+            shell.Lobby.RefreshAsync().GetAwaiter().GetResult();
+            Assert.Equal(Loc.GetF("launcher_lobby_open", 8), chip.Content);
+            launcher.Show();
+            Assert.Equal(Loc.Get("launcher_lobby"), chip.Content);
+            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(Loc.Get("lobby_signed_out"), Assert.IsType<TextBlock>(rows.Children.First()).Text);
+        }
+        finally { launcher?.Close(); shell.Close(); NavBadges.ResetForTests(); }
+    });
+
+    [Fact]
+    public void LauncherOpenLobbyClosesDropAndNavigates() => Run(() =>
+    {
+        var shell = new MainShellWindow();
+        Seed(shell.Lobby);
+        LauncherWindow? launcher = null;
+        try
+        {
+            launcher = LauncherWindow.OpenFor(shell);
+            var chip = launcher.FindControl<Button>("LobbyChip")!;
+            var popup = launcher.FindControl<Popup>("LobbyDrop")!;
+            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.True(popup.IsOpen);
+            var rows = launcher.FindControl<StackPanel>("LobbyDropRows")!;
+            Assert.Equal(Loc.Get("launcher_lobby_open_page"), Assert.IsType<Button>(rows.Children.Last()).Content);
+            Assert.IsType<Button>(rows.Children.Last()).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            launcher.FinishExit();
+            Assert.False(popup.IsOpen);
+            Assert.Equal("availablesubjects", shell.CurrentTab);
+            Assert.True(shell.IsVisible);
+        }
+        finally { launcher?.Close(); shell.Close(); NavBadges.ResetForTests(); }
+    });
 
     [Fact]
     public void ShellSharesLeasesPaintsAndStopsOnLeaveHideAndClose() => Run(() =>

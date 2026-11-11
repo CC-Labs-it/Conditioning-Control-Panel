@@ -375,10 +375,18 @@
         <!-- ================= bottom row ================= -->
         <!-- ponytail: the friends chip and the What's New link (WPF left side) are not here yet. -->
         <Border Grid.Row="2" BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="0,1,0,0" Margin="28,0,28,0">
+            <Grid>
+                <Button x:Name="LobbyChip" Theme="{StaticResource LauncherBarPill}" Background="#335FB0FF" BorderBrush="#665FB0FF" HorizontalAlignment="Left" VerticalAlignment="Center" Click="LobbyChip_Click"/>
+                <Popup x:Name="LobbyDrop" PlacementTarget="LobbyChip" Placement="Top" VerticalOffset="-8" IsLightDismissEnabled="True" Opened="LobbyDrop_Opened" Closed="LobbyDrop_Closed">
+                    <Border Width="380" Padding="12" CornerRadius="16" Background="#F2160B22" BorderBrush="#40FFFFFF" BorderThickness="1">
+                        <StackPanel x:Name="LobbyDropRows"/>
+                    </Border>
+                </Popup>
             <CheckBox x:Name="SkipToPanel" HorizontalAlignment="Right" VerticalAlignment="Center"
                       Click="SkipToPanel_Click">
                 <TextBlock Text="{loc:Str launcher_skip_to_panel}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
             </CheckBox>
+            </Grid>
         </Border>
 
         <!-- Lockdown veil (WPF LauncherWindow.xaml:597): the launcher waits, it never argues. Over every

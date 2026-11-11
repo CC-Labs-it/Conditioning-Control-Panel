@@ -14,7 +14,7 @@ using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
-// The shell's two leases share one poll. The launcher does not yet consume this service.
+// The shell and launcher share one service and coalesce concurrent refreshes.
 internal sealed class LobbyService : IDisposable
 {
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };

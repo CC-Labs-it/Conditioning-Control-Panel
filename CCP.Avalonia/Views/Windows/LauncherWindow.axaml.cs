@@ -83,6 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (ReferenceEquals(_window, this)) _window = null;
                 _statusTimer.Stop();
+                StopLobbyChip();
                 CoreMods.ModChanged -= OnModChanged;
             };
             // WPF OnIsVisibleChanged -> OnShown / OnHidden.
@@ -90,7 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (e.Property != IsVisibleProperty) return;
                 if (IsVisible) OnShown();
-                else _statusTimer.Stop();
+                else { _statusTimer.Stop(); StopLobbyChip(); }
             };
             BuildTiles();
             HookVeil();
@@ -110,6 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 RefreshStatus();
                 RefreshStats();
                 _statusTimer.Start();
+                StartLobbyChip();
             }
             catch (Exception ex) { Log.Warning(ex, "[Launcher] OnShown failed"); }
         }
@@ -151,7 +153,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The launcher goes with its panel: hidden, it would keep a trayless process alive UI-less.</summary>
         private LauncherWindow Link(MainShellWindow panel)
         {
-            if (!ReferenceEquals(_panel, panel)) { _panel = panel; panel.Closed += (_, _) => Close(); }
+            if (!ReferenceEquals(_panel, panel)) { StopLobbyChip(); _panel = panel; panel.Closed += (_, _) => Close(); if (IsVisible) StartLobbyChip(); }
             return this;
         }
 
