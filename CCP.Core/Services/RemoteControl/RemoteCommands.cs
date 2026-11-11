@@ -8,7 +8,7 @@ namespace ConditioningControlPanel.Services
     /// WPF RemoteControlService.ExecuteCommand's dispatch table for the features Core drives. Runs on the
     /// UI thread (RemoteRelay marshals). Returns null when the verb ran, else the refusal the controller
     /// sees: a verb with no surface on this head says so rather than reporting "ok" and doing nothing.
-    /// ponytail: HypnoTube, autonomy, Melt (start/stop_brain_drain),
+    /// ponytail: HypnoTube, autonomy,
     /// wallpaper and the session verbs have no Core entry point yet; they refuse until their services move.
     /// </summary>
     public static class RemoteCommands
@@ -124,6 +124,16 @@ namespace ConditioningControlPanel.Services
                     if (string.IsNullOrWhiteSpace(customText)) return null;   // WPF: blank text is a no-op
                     if (CoreSubliminal.CustomShowProvider is not { } custom) return NotOnThisBuild;
                     custom(customText);
+                    return null;
+                case "start_brain_drain":
+                case "stop_brain_drain":
+                    var on = action == "start_brain_drain";
+                    if (on && CoreEngine.StartBrainDrain == null) return NotOnThisBuild;
+                    Remote.RemoteWearer.NoteWrite(Remote.RemoteHeld.BrainDrain, on ? 1 : 0);
+                    s.BrainDrainEnabled = on;
+                    if (on) CoreEngine.StartBrainDrain?.Invoke(); else CoreEngine.StopBrainDrain?.Invoke();
+                    RefreshOverlays?.Invoke();
+                    CoreSettings.Save();
                     return null;
                 case "start_flash": s.FlashEnabled = true; CoreFlash.Start(); return null;
                 case "stop_flash": CoreFlash.Stop(); return null;
