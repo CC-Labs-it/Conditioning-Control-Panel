@@ -51,6 +51,7 @@ internal static partial class FlashOverlay
 
     internal static async Task<bool> TryShowRemix(AppSettings s, IReadOnlyList<Screen> screens, int? durationMs, bool ambient, int generation)
     {
+        if (!ambient) return false;
         var director = EnsureRemix();
         var path = director.TakeForFlash();
         if (path == null) return false;

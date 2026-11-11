@@ -56,6 +56,7 @@ public class JackpotRemixFlowTests
                 () => s.JackpotRemixEnabled, dir, () => true, () => MotionLevel.Full, () => false,
                 (_, _, _) => Task.FromResult<string?>(null), () => ulong.MaxValue, odds: 1);
             var screen = shell.Screens.All[0];
+            Assert.False(await FlashOverlay.TryShowRemix(s, new[] { screen }, null, false, FlashOverlay.Generation)); Assert.True(File.Exists(cached));
             Assert.True(await FlashOverlay.TryShowRemix(s, new[] { screen }, null, true, FlashOverlay.Generation));
             Assert.False(File.Exists(cached));
             var window = Assert.Single(FlashOverlay.Active).Window;
