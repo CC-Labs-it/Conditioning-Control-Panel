@@ -14,10 +14,12 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Launcher;
 using ConditioningControlPanel.Services.Race;
+using ConditioningControlPanel.Services.Startup;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -89,6 +91,44 @@ public sealed partial class GameWindowTests
         games.Stop(shell);
         Dispatcher.UIThread.RunJobs();
         Assert.False(GameWindow.IsAnyOpen());
+    });
+
+    [Fact]
+    public void GameBoot_TrayRestoreReleasesHold_AndGameStillRoutesToInbox() => Run((shell, launcher) =>
+    {
+        StartupLadder.ResetForTests();
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        LauncherWindow.Boot = BootDecision.GameFirst("breakoutdemo");
+        try
+        {
+            Assert.True(LauncherWindow.PrepareBoot(LauncherWindow.Boot, false));
+            launcher.Hide();
+            LauncherWindow.RouteBoot(shell);
+            Dispatcher.UIThread.RunJobs();
+            var game = Assert.Single(GameWindow.OpenWindowsForTests());
+            Assert.False(shell.IsVisible);
+            Assert.True(StartupLadder.LauncherHeld);
+
+            shell.ShowFromTray();
+            Assert.True(shell.IsVisible);
+            Assert.False(StartupLadder.LauncherHeld);
+            int opened = 0;
+            StartupLadder.PresentOrInbox(new InboxItem { Key = "during-game", Open = () => opened++ });
+            Assert.True(StartupLadder.Inbox.Contains("during-game"));
+            Assert.Equal(0, opened);
+
+            game.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(launcher.IsVisible);
+            StartupLadder.PresentOrInbox(new InboxItem { Key = "after-game", Open = () => opened++ });
+            Assert.Equal(1, opened);
+            Assert.False(StartupLadder.Inbox.Contains("after-game"));
+        }
+        finally
+        {
+            LauncherWindow.Boot = BootDecision.PanelFirst;
+            StartupLadder.ResetForTests();
+        }
     });
 
     /// <summary>WPF LauncherHost.cs:360-366: a pending leash punishment sends the tile to the gate, not the game.</summary>
