@@ -50,7 +50,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             var original = (settings.CustomTriggers ?? new List<string>())
                 .Where(t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(t => t, _ => true);
-            var dialog = new TextEditorDialog("Trigger Phrases", original);
+            var dialog = new TextEditorDialog(Loc.Get("title_trigger_phrases"), original);
+            dialog.MarkSilentLines(text =>
+            {
+                try { return Views.Overlays.SubliminalWhisperShow.FindLinkedAudio(text) != null; }
+                catch { return false; }
+            });
             if (await dialog.ShowDialog<bool?>(owner) != true || dialog.ResultData == null) return;
             var enabled = dialog.ResultData.Where(pair => pair.Value).Select(pair => pair.Key).ToList();
             var defaults = new HashSet<string>(App.Mods?.GetDefaultCustomTriggers() ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
