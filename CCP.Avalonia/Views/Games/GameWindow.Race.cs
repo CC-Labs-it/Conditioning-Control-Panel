@@ -182,6 +182,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 masterVolume = RaceSafe(() => CoreSettings.Current.MasterVolume, 100),
                 // Reduced and Off both read as reduced motion: the page has no third state.
                 reducedMotion = RaceSafe(() => CoreSettings.Current.MotionLevel != MotionLevel.Full, false),
+                // The page plays the bundled host cues when this host does not handle sfx.
+                hostSfx = false,
                 // WPF sends true (:278): only a host that owns the levels browser offers it; not yet here.
                 cloud = false,
                 racingTracks = RacingAccess.OwnedTracks,

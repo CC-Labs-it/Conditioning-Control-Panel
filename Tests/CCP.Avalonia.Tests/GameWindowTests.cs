@@ -896,6 +896,7 @@ public sealed partial class GameWindowTests
         // WPF 7.2.3: the door is open, so init hands every track, not just the one owned.
         Assert.Equal(Enumerable.Range(0, ConditioningControlPanel.Services.Prizes.PrizeGrants.RacingTrackMax + 1), sent[0]["settings"]!["racingTracks"]!.Values<int>());
         Assert.False((bool)sent[0]["settings"]!["cloud"]!);
+        Assert.False((bool)sent[0]["settings"]!["hostSfx"]!);
         sent.Clear();
         w.HandleMessage("{\"type\":\"run-ended\",\"score\":5000,\"durationSec\":60}");   // no run-started: nothing
         Assert.Empty(sent);
