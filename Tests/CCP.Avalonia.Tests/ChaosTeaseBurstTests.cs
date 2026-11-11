@@ -63,13 +63,13 @@ public sealed class ChaosTeaseBurstTests
     });
 
     [Fact]
-    public Task Tease_spawn_touch_and_off_switch_follow_the_run_path() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task Tease_spawn_touch_and_off_switch_follow_the_run_path() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
-        var enabled = CoreSettings.Current.ChaosSkiaFxEnabled;
+        var enabled = CoreSettings.Current.ChaosSkiaFxEnabled; var performanceMode = CoreSettings.Current.PerformanceMode;
         var announcerEnabled = CoreSettings.Current.ChaosAnnouncerEnabled;
         var composited = ChaosSkiaFxOverlay.Composited;
         var rng = ChaosRunHost.Rng;
@@ -80,12 +80,17 @@ public sealed class ChaosTeaseBurstTests
         var clock = BubbleOverlay.Field.Clock;
         var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
         var language = loc.CurrentLanguage;
+        var assets = System.IO.Directory.CreateTempSubdirectory("ccp-tease-face-").FullName;
+        System.IO.Directory.CreateDirectory(System.IO.Path.Combine(assets, "teasebubble"));
+        System.IO.File.WriteAllBytes(System.IO.Path.Combine(assets, "teasebubble", "face.gif"), Convert.FromBase64String("R0lGODlhBAAEAIEAAP8AAAAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQAAwAAACwAAAAABAAEAAAICQABCBxIsCCAgAAh+QQBAwABACwAAAAABAAEAIEA/wAAAAAAAAAAAAAICQABCBxIsCCAgAAh+QQBAwABACwAAAAABAAEAIEAAP8AAAAAAAAAAAAICQABCBxIsCCAgAA7"));
+        var assetProvider = CorePaths.EffectiveAssetsProvider;
+        CorePaths.EffectiveAssetsProvider = () => assets;
         try
         {
             ChaosSkiaFxOverlay.CloseActive();
             ChaosSkiaFxOverlay.Composited = () => true;
             ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
-            CoreSettings.Current.ChaosSkiaFxEnabled = true;
+            CoreSettings.Current.ChaosSkiaFxEnabled = true; CoreSettings.Current.PerformanceMode = true;
             ChaosMeta.State.RunsCompleted = 0;
             ChaosRunHost.Rng = new ZeroRandom();
             var config = new ChaosRunConfig { DurationSec = 60, WaveCount = 3, Difficulty = ChaosDifficulty.Medium };
@@ -105,7 +110,19 @@ public sealed class ChaosTeaseBurstTests
             ChaosRunHost.SpawnTick();
             var bubble = Assert.Single(BubbleOverlay.Field.Bubbles);
             Assert.True(bubble.Spec!.IsTease);
-            bubble.X = 150; bubble.Y = 150; bubble.Size = 100;
+            await BubbleOverlay.LastTeaseLoad!; Dispatcher.UIThread.RunJobs();
+            Assert.True(BubbleOverlay.TeaseFaces[bubble].Frames.Count > 1);
+            var second = BubbleOverlay.SpawnChaos(bubble.Spec);
+            await BubbleOverlay.LastTeaseLoad!; Dispatcher.UIThread.RunJobs();
+            var third = BubbleOverlay.SpawnChaos(bubble.Spec);
+            await BubbleOverlay.LastTeaseLoad!; Dispatcher.UIThread.RunJobs();
+            Assert.True(BubbleOverlay.TeaseFaces[second].Frames.Count > 1);
+            Assert.Single(BubbleOverlay.TeaseFaces[third].Frames);
+            BubbleOverlay.Field.Bubbles.Remove(second); BubbleOverlay.Field.Bubbles.Remove(third);
+            CorePaths.EffectiveAssetsProvider = () => System.IO.Path.Combine(assets, "missing");
+            bubble.X = 150; bubble.Y = 150; bubble.Size = 100; bubble.Angle = 0;
+            var face = BubbleOverlay.TeaseFaces[bubble];
+            BubbleOverlay.TeaseFaces[bubble] = (face.Frames, TimeSpan.FromHours(1), Environment.TickCount64);
             BubbleOverlay.Image = null;
             var window = new BubbleOverlayWindow(0, new PixelRect(0, 0, 400, 400), 1) { Width = 400, Height = 400 };
             try
@@ -114,12 +131,26 @@ public sealed class ChaosTeaseBurstTests
                 AvaloniaHeadlessPlatform.ForceRenderTimerTick();
                 Dispatcher.UIThread.RunJobs();
                 using var frame = window.CaptureRenderedFrame()!;
-                var px = new byte[4];
+                var px = new byte[4]; var outside = new byte[4];
                 int pxX = (int)(200 * frame.PixelSize.Width / window.Bounds.Width);
                 int pxY = (int)(200 * frame.PixelSize.Height / window.Bounds.Height);
                 using (var fb = frame.Lock())
                     System.Runtime.InteropServices.Marshal.Copy(fb.Address + pxY * fb.RowBytes + pxX * 4, px, 0, 4);
                 Assert.True(px[0] > 180 && px[0] > px[1] * 2, $"the Tease must show its red cross: {string.Join(",", px)} at {pxX},{pxY}");
+                using (var fb = frame.Lock()) { System.Runtime.InteropServices.Marshal.Copy(fb.Address + (pxY - 20) * fb.RowBytes + (pxX - 20) * 4, px, 0, 4); System.Runtime.InteropServices.Marshal.Copy(fb.Address + (pxY - 31) * fb.RowBytes + (pxX - 31) * 4, outside, 0, 4); }
+                Assert.True(px[1] >= 20, $"the face must show its shimmer: {string.Join(",", px)}");
+                Assert.True(outside[1] > outside[0] * 0.20, $"the face must be clipped: {string.Join(",", outside)}");
+                using (var fb = frame.Lock())
+                    System.Runtime.InteropServices.Marshal.Copy(fb.Address + pxY * fb.RowBytes + (pxX + 20) * 4, px, 0, 4);
+                Assert.True(Math.Max(px[0], Math.Max(px[1], px[2])) - Math.Min(px[0], Math.Min(px[1], px[2])) > 80, "the media face must be drawn inside the bubble");
+                var firstFrame = (px[0], px[1], px[2]);
+                BubbleOverlay.TeaseFaces[bubble] = (face.Frames, TimeSpan.FromHours(1), Environment.TickCount64 - 3600000);
+                ((global::Avalonia.Controls.Control)window.Content!).InvalidateVisual();
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs();
+                using var nextFrame = window.CaptureRenderedFrame()!;
+                using (var fb = nextFrame.Lock())
+                    System.Runtime.InteropServices.Marshal.Copy(fb.Address + pxY * fb.RowBytes + (pxX + 20) * 4, px, 0, 4);
+                Assert.NotEqual(firstFrame, (px[0], px[1], px[2]));
             }
             finally { window.Close(); }
             BubbleOverlay.PopChaos(bubble); // sweep is immune
@@ -241,17 +272,19 @@ public sealed class ChaosTeaseBurstTests
             BubbleOverlay.Field.Clock = clock;
             loc.SetLanguage(language);
             ChaosRunHost.ForceShutdown();
+            CorePaths.EffectiveAssetsProvider = assetProvider;
+            System.IO.Directory.Delete(assets, true);
             ChaosSkiaFxOverlay.CloseActive();
             ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;
             ChaosSkiaFxOverlay.Composited = composited;
-            CoreSettings.Current.ChaosSkiaFxEnabled = enabled;
+            CoreSettings.Current.ChaosSkiaFxEnabled = enabled; CoreSettings.Current.PerformanceMode = performanceMode;
             CoreSettings.Current.ChaosAnnouncerEnabled = announcerEnabled;
             ChaosRunHost.Rng = rng;
             ChaosRunHost.PopText = popText;
             EffectPayload.Firer = firer;
             BubbleOverlay.Image = image;
             ChaosMeta.State.RunsCompleted = runs;
+            Assert.Empty(BubbleOverlay.TeaseFaces);
         }
-        return Task.CompletedTask;
     });
 }

@@ -143,7 +143,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _state.StartShields = _state.Shields;
             StartToys();
             _waveDetonatedAt = _state.Detonated;
-            _invulnUntilUtc = _heavyUntilUtc = DateTime.MinValue;
+            _invulnUntilUtc = DateTime.MinValue;
+            _heavyUntilUtc = DateTime.MinValue;
             ChaosRunLessons.OnRunStarted();   // WPF :399
             // ponytail: NotifyChaosRunStarted bark (WPF :389) -> chaos-payout-barks.
             _spawning = true;
@@ -181,39 +182,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     }
                     ChaosMeta.MarkDiscovered("bubble:tease");
                     BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildTease(effIntensity, cfg.EffectIntensity, _state.BubbleScale));
+                    if (_spawnTimer != null) _spawnTimer.Interval = TimeSpan.FromMilliseconds(ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult));
+                    return;
                 }
+                // Treats and plain lives; the freeze pickup waits for its lane (see the ponytail note).
+                IReadOnlyCollection<string> enabled = (cfg.EnabledVariants ?? ChaosBubbleVariants.AllIds())
+                    .Where(id => ChaosBubbleVariants.All.Any(v => v.Id == id
+                                 && v.PayloadKind != EffectBubblePayloadKind.BambiFreeze)).ToList();
+                double waveLen = (double)_state.RunDurationSec / _state.WaveCount;
+                double waveLeft = waveLen - (_state.ElapsedSec % waveLen);
+                double runLeft = _state.RunDurationSec - _state.ElapsedSec;
+                if (enabled.Contains("video") && (waveLeft < 14 || runLeft < 18))
+                    enabled = enabled.Where(id => id != "video").ToList();
+
+                EffectBubbleSpec spec;
+                if (_state.HeavyDropEvery > 0 && ++_spawnSerial % _state.HeavyDropEvery == 0)
+                    spec = ChaosBubbleVariants.BuildHeavy(effIntensity, cfg.EffectIntensity, _state.BubbleScale);
                 else
                 {
-                    // Treats and plain lives; the freeze pickup waits for its lane (see the ponytail note).
-                    IReadOnlyCollection<string> enabled = (cfg.EnabledVariants ?? ChaosBubbleVariants.AllIds())
-                        .Where(id => ChaosBubbleVariants.All.Any(v => v.Id == id
-                                     && v.PayloadKind != EffectBubblePayloadKind.BambiFreeze)).ToList();
-                    double waveLen = (double)_state.RunDurationSec / _state.WaveCount;
-                    double waveLeft = waveLen - (_state.ElapsedSec % waveLen);
-                    double runLeft = _state.RunDurationSec - _state.ElapsedSec;
-                    if (enabled.Contains("video") && (waveLeft < 14 || runLeft < 18))
-                        enabled = enabled.Where(id => id != "video").ToList();
+                    double sideDrift = _ordinarySpawns < ChaosTuning.SIDE_DRIFT_GRACE_SPAWNS ? 0 : ChaosTuning.SIDE_DRIFT_CHANCE;
+                    spec = ChaosBubbleVariants.Pick(effIntensity, _state.FuseTimeMult, cfg.MotionOverride,
+                        enabled.Count > 0 ? enabled : new[] { ChaosBubbleVariants.All[0].Id },
+                        cfg.EffectIntensity, _state.BubbleScale, sideDrift);
+                }
+                _ordinarySpawns++;
+                ChaosMeta.MarkDiscovered("bubble:" + spec.VariantId);
+                BubbleOverlay.SpawnChaos(spec);
 
-                    EffectBubbleSpec spec;
-                    if (_state.HeavyDropEvery > 0 && ++_spawnSerial % _state.HeavyDropEvery == 0)
-                        spec = ChaosBubbleVariants.BuildHeavy(effIntensity, cfg.EffectIntensity, _state.BubbleScale);
-                    else
-                    {
-                        double sideDrift = _ordinarySpawns < ChaosTuning.SIDE_DRIFT_GRACE_SPAWNS ? 0 : ChaosTuning.SIDE_DRIFT_CHANCE;
-                        spec = ChaosBubbleVariants.Pick(effIntensity, _state.FuseTimeMult, cfg.MotionOverride,
-                            enabled.Count > 0 ? enabled : new[] { ChaosBubbleVariants.All[0].Id },
-                            cfg.EffectIntensity, _state.BubbleScale, sideDrift);
-                    }
-                    _ordinarySpawns++;
-                    ChaosMeta.MarkDiscovered("bubble:" + spec.VariantId);
-                    BubbleOverlay.SpawnChaos(spec);
-
-                    if (_state.PrismChance > 0 && Rng.NextDouble() < _state.PrismChance)
-                    {
-                        ChaosMeta.MarkDiscovered("bubble:prism");
-                        BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildPrism(effIntensity, cfg.EffectIntensity,
-                            treatOnly: _state.PrismTreatOnly));
-                    }
+                if (_state.PrismChance > 0 && Rng.NextDouble() < _state.PrismChance)
+                {
+                    ChaosMeta.MarkDiscovered("bubble:prism");
+                    BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildPrism(effIntensity, cfg.EffectIntensity,
+                        treatOnly: _state.PrismTreatOnly));
                 }
             }
             if (_spawnTimer != null)

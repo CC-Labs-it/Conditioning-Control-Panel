@@ -51,6 +51,54 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static TimeSpan? _lastStep;
         private static bool _pending;   // a frame is requested; the loop idles while the field is empty
         internal static Bitmap? Image;
+        internal static readonly Dictionary<AmbientBubble, (List<Bitmap> Frames, TimeSpan Delay, long Start)> TeaseFaces = new();
+        private static readonly HashSet<AmbientBubble> TeaseAnimated = new();
+        private static readonly List<AmbientBubble> TeaseGone = new();
+        private static readonly object TeaseDecodeGate = new();
+        internal static System.Threading.Tasks.Task? LastTeaseLoad;
+
+        private static void LoadTeaseFace(AmbientBubble b)
+        {
+            bool slot = TeaseAnimated.Count < (ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier switch { PerformanceTier.Performance => Services.Chaos.ChaosTuning.TEASE_MAX_ANIMATED, PerformanceTier.Balanced => 6, _ => 10 }) && TeaseAnimated.Add(b);
+            string dir = Path.Combine(CorePaths.EffectiveAssets, "teasebubble");
+            int decodeSize = Math.Clamp((int)b.Size, 64, 256);
+            LastTeaseLoad = System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    var paths = Directory.GetFiles(dir).Where(p => new[] { ".gif", ".png", ".jpg", ".jpeg", ".webp", ".bmp" }.Contains(Path.GetExtension(p).ToLowerInvariant())).ToArray();
+                    if (paths.Length == 0) return (new List<Bitmap>(), TimeSpan.Zero);
+                    string path = paths[Random.Shared.Next(paths.Length)];
+                    using var probe = SkiaSharp.SKCodec.Create(path); if (probe is null || probe.Info.Width <= 0 || probe.Info.Height <= 0 || (long)probe.Info.Width * probe.Info.Height > 4096L * 4096 || probe.FrameCount > 600) return (new List<Bitmap>(), TimeSpan.Zero);
+                    bool animate = slot && (path.EndsWith(".gif", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".webp", StringComparison.OrdinalIgnoreCase)) && new FileInfo(path).Length <= Services.Chaos.ChaosTuning.TEASE_ANIMATED_MAX_BYTES;
+                    lock (TeaseDecodeGate) return SpiralOverlay.Decode(path, decodeSize, animate ? Math.Clamp(6 * 1024 * 1024 / (decodeSize * decodeSize * 4), 1, 60) : 1);
+                }
+                catch (Exception ex) { Log.Debug("Tease face: {E}", ex.Message); return (new List<Bitmap>(), TimeSpan.Zero); }
+            }).ContinueWith(t => Dispatcher.UIThread.Post(() =>
+            {
+                var (frames, delay) = t.Result;
+                if (!Field.Bubbles.Contains(b) || b.Popping || frames.Count == 0)
+                {
+                    TeaseAnimated.Remove(b);
+                    foreach (var frame in frames) frame.Dispose();
+                    return;
+                }
+                if (frames.Count < 2) TeaseAnimated.Remove(b);
+                TeaseFaces[b] = (frames, delay, Environment.TickCount64);
+                RequestFrame();
+            }));
+        }
+
+        private static void PruneTeaseFaces()
+        {
+            foreach (var b in TeaseFaces.Keys) if (!Field.Bubbles.Contains(b)) TeaseGone.Add(b);
+            foreach (var b in TeaseGone)
+            {
+                foreach (var frame in TeaseFaces[b].Frames) frame.Dispose();
+                TeaseFaces.Remove(b); TeaseAnimated.Remove(b);
+            }
+            TeaseGone.Clear();
+        }
 
         /// <summary>WPF BubbleService.LoadBubbleImage (BubbleService.cs:221, :918-936): every Start re-resolves
         /// the active mod's bubble.png, so a mod switch shows its sprite on the next start (a <c>??=</c>
@@ -145,6 +193,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _spawnTimer?.Stop();
             _spawnTimer = null;
             Field.Bubbles.Clear();   // WPF PopAllBubbles: force-destroy, no animation
+            PruneTeaseFaces();
             foreach (var w in Windows) w.Close();
             Windows.Clear();
             Targets.Clear();
@@ -268,6 +317,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.ChaosDefused = Field.ChaosDetonated = null;
             Field.Held = false;
             Field.Bubbles.RemoveAll(b => b.Spec != null);
+            PruneTeaseFaces();
+            LastTeaseLoad = null;
             if (_chaosOpenedWindows) { Stop(); return; }
             foreach (var w in Windows) w.Sync();
         }
@@ -286,6 +337,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 b = AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec);
             }
             Field.Bubbles.Add(b);
+            if (spec.IsTease) LoadTeaseFace(b);
             RequestFrame();
             return b;
         }
@@ -355,6 +407,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _lastStep = now;
                 var t0 = Stats ? Stopwatch.GetTimestamp() : 0;
                 Field.Step();
+                PruneTeaseFaces();
                 foreach (var w in Windows) w.Sync();
                 if (Stats) Sample(Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
                 if (Field.Bubbles.Count == 0) { _lastStep = null; return; }   // idle until the next spawn
@@ -385,6 +438,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         };
         private static readonly IPen FallbackPen = new Pen(Brushes.White, 2);
         private static readonly IPen TeasePen = new Pen(new SolidColorBrush(Color.FromRgb(0xFF, 0x3D, 0x5A)), 6);
+        private static readonly IBrush TeaseBackdrop = new SolidColorBrush(Color.FromRgb(0x14, 0x07, 0x0C));
+        private static readonly IBrush TeaseShine = new LinearGradientBrush { StartPoint = RelativePoint.TopLeft, EndPoint = RelativePoint.BottomRight,
+            GradientStops = { new GradientStop(Color.FromArgb(150, 255, 255, 255), 0), new GradientStop(Colors.Transparent, 1) } };
         private static readonly Dictionary<uint, IPen> FuseCache = new();
         private static readonly Dictionary<uint, (IBrush, IPen)> TintCache = new();
 
@@ -524,6 +580,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         }
                         if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
                         else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                        if (b.Spec?.IsTease == true && BubbleOverlay.TeaseFaces.TryGetValue(b, out var face))
+                        {
+                            double d = size * 0.86;
+                            var rect = new Rect(cx - d / 2, cy - d / 2, d, d);
+                            var image = face.Frames[(int)((Environment.TickCount64 - face.Start) / Math.Max(1, face.Delay.TotalMilliseconds)) % face.Frames.Count];
+                            var side = Math.Min(image.Size.Width, image.Size.Height);
+                            using (dc.PushGeometryClip(new EllipseGeometry(rect)))
+                            {
+                                dc.DrawEllipse(TeaseBackdrop, null, new Point(cx, cy), d / 2, d / 2);
+                                using (dc.PushOpacity(0.92)) dc.DrawImage(image, new Rect((image.Size.Width - side) / 2, (image.Size.Height - side) / 2, side, side), rect);
+                                using (dc.PushOpacity(0.23 + 0.7 * (b.DrawScale - b.Scale))) dc.DrawEllipse(TeaseShine, null, new Point(cx, cy), d / 2, d / 2);
+                            }
+                        }
                         if (b.Spec?.IsTease == true && !b.Popping)
                         {
                             // WPF BubbleService.cs:4959: the Tease wears a visible red cross.
