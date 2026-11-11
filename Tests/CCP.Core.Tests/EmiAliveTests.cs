@@ -1,7 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Windows;
 using ConditioningControlPanel.Services.EmiDesk;
 using Xunit;
 
@@ -24,6 +23,13 @@ namespace ConditioningControlPanel.Tests;
 /// </summary>
 public class EmiAliveTests
 {
+    private readonly record struct Point(double X, double Y);
+    private readonly record struct Rect(double X, double Y, double Width, double Height);
+    private static (double X, double Y) GazeTarget(Point cursor, Rect body, double width)
+        => EmiAlive.GazeTarget(cursor.X, cursor.Y, body.X, body.Y, body.Width, body.Height, width);
+    private static bool WithinApproach(Point cursor, Rect body)
+        => EmiAlive.WithinApproach(cursor.X, cursor.Y, body.X, body.Y, body.Width, body.Height);
+
     private static Rect Body(double w = 220.0)
         => new(1000, 600, w, w * 869.0 / 859.0);
 
@@ -35,8 +41,16 @@ public class EmiAliveTests
         var body = Body();
         var centre = new Point(body.X + body.Width / 2, body.Y + body.Height / 2);
 
-        var (x, y) = EmiAlive.GazeTarget(centre, body, body.Width);
+        var (x, y) = GazeTarget(centre, body, body.Width);
 
+        Assert.Equal(0, x, 6);
+        Assert.Equal(0, y, 6);
+    }
+
+    [Fact]
+    public void GazeUsesRectangleCentreIndependentlyOfScaleWidth()
+    {
+        var (x, y) = EmiAlive.GazeTarget(110, 220, 100, 200, 20, 40, 220);
         Assert.Equal(0, x, 6);
         Assert.Equal(0, y, 6);
     }
@@ -47,8 +61,8 @@ public class EmiAliveTests
         var body = Body();
         var centre = new Point(body.X + body.Width / 2, body.Y + body.Height / 2);
 
-        var (rx, ry) = EmiAlive.GazeTarget(new Point(centre.X + 40, centre.Y + 40), body, body.Width);
-        var (lx, ly) = EmiAlive.GazeTarget(new Point(centre.X - 40, centre.Y - 40), body, body.Width);
+        var (rx, ry) = GazeTarget(new Point(centre.X + 40, centre.Y + 40), body, body.Width);
+        var (lx, ly) = GazeTarget(new Point(centre.X - 40, centre.Y - 40), body, body.Width);
 
         Assert.True(rx > 0 && ry > 0, "she should lean toward a cursor below and right of her");
         Assert.True(lx < 0 && ly < 0, "she should lean toward a cursor above and left of her");
@@ -64,7 +78,7 @@ public class EmiAliveTests
         foreach (double w in new[] { EmiAliveWidths.Min, 220.0, EmiAliveWidths.Max })
         {
             var body = Body(w);
-            var (x, y) = EmiAlive.GazeTarget(far, body, w);
+            var (x, y) = GazeTarget(far, body, w);
             double cap = EmiAlive.GazeMaxDip * EmiAlive.GazeScale(w);
 
             Assert.True(Math.Abs(x) <= cap + 1e-9, $"x lean {x} passed the {cap} cap at width {w}");
@@ -85,8 +99,8 @@ public class EmiAliveTests
             var centre = new Point(body.X + body.Width / 2, body.Y + body.Height / 2);
             double cap = EmiAlive.GazeMaxDip * EmiAlive.GazeScale(w);
 
-            var (justUnder, _) = EmiAlive.GazeTarget(new Point(centre.X + 1.19 * w, centre.Y), body, w);
-            var (justOver, _) = EmiAlive.GazeTarget(new Point(centre.X + 1.30 * w, centre.Y), body, w);
+            var (justUnder, _) = GazeTarget(new Point(centre.X + 1.19 * w, centre.Y), body, w);
+            var (justOver, _) = GazeTarget(new Point(centre.X + 1.30 * w, centre.Y), body, w);
 
             Assert.True(justUnder < cap - 1e-9, $"width {w} was already capped at 1.19 body widths");
             Assert.Equal(cap, justOver, 6);
@@ -110,7 +124,7 @@ public class EmiAliveTests
     public void GazeSurvivesJunkInput()
     {
         var body = Body();
-        var (x, y) = EmiAlive.GazeTarget(new Point(double.NaN, double.NaN), body, double.NaN);
+        var (x, y) = GazeTarget(new Point(double.NaN, double.NaN), body, double.NaN);
         Assert.Equal(0, x, 6);
         Assert.Equal(0, y, 6);
         Assert.Equal(1.0, EmiAlive.GazeScale(0), 6);
@@ -140,8 +154,8 @@ public class EmiAliveTests
             var justInside = new Point(centre.X + w / 2 + EmiAlive.ApproachDip - 2, centre.Y);
             var justOutside = new Point(centre.X + w / 2 + EmiAlive.ApproachDip + 2, centre.Y);
 
-            Assert.True(EmiAlive.WithinApproach(justInside, body));
-            Assert.False(EmiAlive.WithinApproach(justOutside, body));
+            Assert.True(WithinApproach(justInside, body));
+            Assert.False(WithinApproach(justOutside, body));
         }
     }
 
