@@ -17,6 +17,17 @@ namespace ConditioningControlPanel.Avalonia
     {
         internal static Action? PostCodeInputsChanged;
 
+        internal static void RecordInstallDate(SettingsService settings)
+        {
+            try
+            {
+                if (InstallDateEvidence.Record(settings.Current, CorePaths.UserData, AppContext.BaseDirectory))
+                    settings.SaveImmediate();
+            }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "Install date recording failed"); }
+        }
+
+
         /// <summary>The settings service, or null on the headless render path.</summary>
         public static SettingsService? Settings { get; private set; }
 
@@ -666,6 +677,7 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.BrowserVideoSurface.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
+                RecordInstallDate(Settings);
                 // WPF App.xaml.cs:2928: launch only sweeps retention on disk (creates nothing, arms no timer);
                 // the ledger starts when awareness turns on. No observer feeds it on this head yet.
                 InstallPrivacyLedger(new ConditioningControlPanel.Services.Awareness.ActivityLedger());
