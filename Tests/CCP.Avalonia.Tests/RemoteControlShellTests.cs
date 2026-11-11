@@ -195,10 +195,15 @@ public sealed class RemoteControlShellTests
                 .SetupWithoutStarting();
         var (oldRelay, oldTime, oldProvider) = (RemoteControlTabView.Relay, MainShellWindow.RemoteOverlayTime, CoreSettings.ServiceProvider);
         var (oldSink, oldPlay, oldStop) = (global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink, RemoteCommands.PlayHypnotube, RemoteCommands.StopBrowserVideo);
+        var oldSettle = MainShellWindow.TakeoverSettle;
+        MainShellWindow.TakeoverSettle = TimeSpan.Zero;
         global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = (_, _) => { };
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         var f = new FakeRelay();
+        // A completed video page asks the catalogue about it: answered by the fake, never the real server.
+        var oldLookup = global::ConditioningControlPanel.Avalonia.App.CatalogueLookup;
+        global::ConditioningControlPanel.Avalonia.App.CatalogueLookup = new CatalogueLookup(() => null, "test", null, f);
         // Leave runs only the browser stop: the rest of StopEffects is covered in Core (RemoteHypnotubeTests).
         var relay = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, _ => RemoteCommands.StopBrowserVideo?.Invoke(), f) { AutoPoll = false };
         RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
@@ -220,9 +225,24 @@ public sealed class RemoteControlShellTests
             await Poll("{\"controller_connected\":true}");
             Assert.False(browser.IsVisible);
 
+            // No web engine (headless): refused, never an "ok" for a video that cannot play; the blindfold stays (WPF :698, :3209).
+            Assert.False(web.HasEngine);
+            Assert.Equal("the browser could not open it", RemoteCommands.Execute("play_hypnotube", new Newtonsoft.Json.Linq.JObject { ["url"] = video }));
+            Assert.False(browser.IsVisible);
+            Assert.Equal(0, web.NavigationRequests);
+
+            // A page engine from here on: the takeover script is what reaches it.
+            var scripts = new List<string>();
+            web.ScriptInvoker = js => { scripts.Add(js); return Task.FromResult<string?>("armed"); };
             await Poll(play.Replace("ID", "1"));
             Assert.True(browser.IsVisible);
             Assert.Equal(new Uri(video), web.Source);
+            // WPF AutoPlayAndFullscreenVideoAsync (:823): once the page loads, play and request fullscreen.
+            int Takeovers() => scripts.Count(js => js == global::ConditioningControlPanel.Avalonia.Views.Controls.WebHostMedia.TakeoverScript);
+            Assert.Equal(0, Takeovers());
+            web.OnNavigationCompleted(new Uri(video));
+            for (var i = 0; i < 50 && Takeovers() == 0; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(5); }
+            Assert.Equal(1, Takeovers());
 
             // Leave without the stop (the subject's choice), back before the fade ends: still visible.
             service.Current.StopEffectsOnRemoteDisconnect = false;
@@ -234,6 +254,7 @@ public sealed class RemoteControlShellTests
             await Poll("{\"controller_connected\":true,\"commands\":[{\"id\":\"2\",\"action\":\"stop_video\"}]}");
             Assert.False(browser.IsVisible);
             Assert.Equal(new Uri("https://hypnotube.com/"), web.Source);
+            Assert.Contains(global::ConditioningControlPanel.Avalonia.Views.Controls.WebHostMedia.EndTakeoverScript, scripts);
 
             // A leave with the stop on: the video goes, then the fade hands the browser back (WPF :1164, :915).
             service.Current.StopEffectsOnRemoteDisconnect = true;
@@ -242,6 +263,10 @@ public sealed class RemoteControlShellTests
             await Poll("{\"controller_connected\":false}");
             Assert.Equal(new Uri("https://hypnotube.com/"), web.Source);
             Assert.False(browser.IsVisible);
+            // The home page completing starts no takeover: the leave's stop retired the takeover armed for play 3.
+            web.OnNavigationCompleted(new Uri("https://hypnotube.com/"));
+            for (var i = 0; i < 10; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(5); }
+            Assert.Equal(1, Takeovers());
             clock.Step(MainShellWindow.RemoteOverlayFadeOut);
             shell.RemoteOverlayTick();
             Assert.True(browser.IsVisible);
@@ -280,6 +305,8 @@ public sealed class RemoteControlShellTests
             (RemoteControlTabView.Relay, MainShellWindow.RemoteOverlayTime, CoreSettings.ServiceProvider) = (oldRelay, oldTime, oldProvider);
             (RemoteCommands.PlayHypnotube, RemoteCommands.StopBrowserVideo) = (oldPlay, oldStop);
             global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = oldSink;
+            MainShellWindow.TakeoverSettle = oldSettle;
+            global::ConditioningControlPanel.Avalonia.App.CatalogueLookup = oldLookup;
         }
         Assert.Null(hookAfterClose);   // the shell lets go of the hook on close
     });

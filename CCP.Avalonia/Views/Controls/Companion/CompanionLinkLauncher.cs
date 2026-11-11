@@ -24,8 +24,8 @@ internal static class CompanionLinkLauncher
             if (RemoteControlTabView.Relay.IsValueCreated && RemoteControlTabView.Relay.Value.ControllerConnected)
                 return;
             if (!CompanionLinkNavigation.TryBrowserUri(url, out var uri)) return;
-            // ponytail: browser media-session ownership and the native autoplay/fullscreen hook
-            // still belong to the browser follow-up. Plain navigation is already hosted here.
+            // ponytail: browser media-session ownership still belongs to the browser follow-up. The page's
+            // autoplay/fullscreen takeover runs inside NavigateToUrlInBrowser.
             if (Navigate(url!)) return;
             if (CompanionLinkNavigation.CanOpenExternally(uri!))
                 await AppUpdater.OpenUrl(MainShellWindow.Current, url!);

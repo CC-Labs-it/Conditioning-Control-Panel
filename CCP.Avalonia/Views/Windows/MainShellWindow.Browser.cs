@@ -13,9 +13,9 @@
 // every member that needed one of those is still a note, not a half-port.
 //
 // TWO DELIBERATE DEVIATIONS, both because WebHost is narrower than CoreWebView2:
-//   1. autoPlayFullscreen is ACCEPTED AND IGNORED by NavigateToUrlInBrowser, and logged. The WPF
-//      path injects JS from a NavigationCompleted hook; returning false for that flag alone would
-//      break the plain-navigation half of the same call for every caller.
+//   1. autoPlayFullscreen injects the WPF takeover (play, then requestFullscreen on the video) from
+//      WebHost's NavigationCompleted. Not here: the BambiCloud playlist click, the audio-sync script,
+//      the fsExit/metadata messages and the window-level fullscreen rig (no consumer on this head).
 //   2. (Resolved) the offline-block toast now shows through App.Notifications, as WPF
 //      NotifyBrowserBlockedOffline does (MainWindow.Browser.cs:489-494).
 //
@@ -54,6 +54,7 @@
 //     SyncSiteRadiosToActiveMod, so write it with that caller.
 
 using System;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using ConditioningControlPanel.Avalonia.Views.Controls;
@@ -141,6 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void NavigateBrowserToCurrentSiteHome()
         {
             RevealDashboardBrowser("reload");   // WPF Browser.cs:3153 / :603 (site-toggle)
+            ++_browserRequestGeneration;   // the home page is not the video a pending takeover was armed for
             NavigateBrowser(SiteHomeUrl());
         }
 
@@ -164,9 +166,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Navigates the embedded browser and brings its tab forward. Public because
         /// the callers live elsewhere on WPF (speech-bubble links, the remote controller).</summary>
-        /// <param name="autoPlayFullscreen">ACCEPTED AND IGNORED - see deviation 2 in the header.
-        /// WebHost has no script channel, so the video takeover cannot be requested. The plain
-        /// navigation still happens, which is what every caller needs first.</param>
+        /// <param name="autoPlayFullscreen">Play the page's video and request fullscreen once it loads
+        /// (deviation 1 in the header lists what is left out).</param>
         public bool NavigateToUrlInBrowser(string url, bool autoPlayFullscreen = false, bool userInitiated = true)
         {
             if (string.IsNullOrWhiteSpace(url)) return false;
@@ -187,10 +188,49 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (bambi != null) bambi.IsChecked = lower.Contains("bambicloud.com");
             if (hypno != null) hypno.IsChecked = lower.Contains("hypnotube.com");
 
-            if (autoPlayFullscreen)
-                Log.Warning("Auto-play/fullscreen requested but WebHost has no script channel - takeover skipped: {Url}", url);
+            // WPF :737-754: arm the video takeover before navigating, disarm if the navigation never starts.
+            // BambiCloud playlists (WPF AutoPlayBambiCloudPlaylistAsync) are not ported, so they open plain.
+            var request = ++_browserRequestGeneration;
+            Action? disarm = null;
+            if (autoPlayFullscreen && BrowserView is { HasEngine: true } web && !lower.Contains("bambicloud.com/playlist/"))
+                disarm = ArmVideoAutoPlay(web, request);
+            else if (autoPlayFullscreen)
+                Log.Warning("Auto-play/fullscreen requested but the web view has no engine - takeover skipped: {Url}", url);
 
-            return NavigateBrowser(url);
+            if (NavigateBrowser(url)) return true;
+            disarm?.Invoke();
+            return false;
+        }
+
+        // WPF _browserRequestGeneration: a takeover armed for an older navigation, or one a stop ended, never fires.
+        private int _browserRequestGeneration;
+
+        /// <summary>WPF settle delay before the takeover script (Browser.cs:836). Tests set zero.</summary>
+        internal static TimeSpan TakeoverSettle = TimeSpan.FromMilliseconds(1500);
+
+        /// <summary>WPF ArmVideoAutoPlay (Browser.cs:793) on the one signal WebHost has, NavigationCompleted
+        /// (no DOMContentLoaded). One shot; returns the disarm.</summary>
+        private Action ArmVideoAutoPlay(WebHost web, int request)
+        {
+            void Fire(Uri page)
+            {
+                web.NavigationCompleted -= Fire;
+                if (request == _browserRequestGeneration) _ = AutoPlayAndFullscreenVideoAsync(web, request);
+            }
+            web.NavigationCompleted += Fire;
+            return () => web.NavigationCompleted -= Fire;
+        }
+
+        /// <summary>WPF AutoPlayAndFullscreenVideoAsync (Browser.cs:823): play the page's video and ask for fullscreen.</summary>
+        private async Task AutoPlayAndFullscreenVideoAsync(WebHost web, int request)
+        {
+            try
+            {
+                await Task.Delay(TakeoverSettle);
+                if (request != _browserRequestGeneration) return;
+                await web.InvokeScriptAsync(WebHostMedia.TakeoverScript);
+            }
+            catch (Exception ex) { Log.Warning(ex, "Failed to auto-play/fullscreen video"); }
         }
 
         // ============================== the remote controller's video ==============================
@@ -213,7 +253,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (ownedBy != null) return ownedBy + " is on screen";
             _remoteBrowserVideoActive = true;
             RevealBrowserForRemoteVideo(true);
-            if (NavigateToUrlInBrowser(url, autoPlayFullscreen: true)) return null;
+            // WPF NavigateToUrlInBrowser returns false with no browser (:698): a web view with no engine draws only
+            // its fallback panel, so the controller is refused instead of told "ok" for a video that cannot play.
+            if (BrowserView is { HasEngine: true } && NavigateToUrlInBrowser(url, autoPlayFullscreen: true)) return null;
             _remoteBrowserVideoActive = false;
             RevealBrowserForRemoteVideo(false);
             return "the browser could not open it";
@@ -225,6 +267,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (!_remoteBrowserVideoActive) return;
             _remoteBrowserVideoActive = false;
+            // WPF EndWebVideoTakeover (:981): a pending takeover never fires, the page pauses and leaves fullscreen.
+            ++_browserRequestGeneration;
+            _ = BrowserView?.InvokeScriptAsync(WebHostMedia.EndTakeoverScript);   // never throws: WebHost logs
             try { NavigateBrowserToCurrentSiteHome(); }
             finally { RevealBrowserForRemoteVideo(false); }
         }
