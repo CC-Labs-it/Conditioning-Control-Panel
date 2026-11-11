@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -24,11 +26,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para><b>The fade is the compositor's, not ours</b> (<see cref="X11Overlay.SetOpacity"/>):
     /// animating the Image's Opacity re-renders the window every frame, and on the default GLX
     /// renderer under XWayland that stalled the UI dispatcher ~1.7 s per burst (staggers and
-    /// timers late). With the property the app renders each flash exactly once.</para>
+    /// timers late). With the property a still flash renders once; GIFs render each frame.</para>
     /// </summary>
     internal sealed class FlashOverlayWindow : Window
     {
         private readonly Image _image;
+        private List<Bitmap>? _gifFrames;
+        private DispatcherTimer? _gifTimer;
+        private bool _closed;
+        private int _gifIndex;
+        internal Task? GifDecoding { get; private set; }
+        internal int GifFrameCount => _gifFrames?.Count ?? 0;
+        internal bool GifAnimating => _gifTimer?.IsEnabled == true;
+        internal object? PictureSource => _image.Source;
+
+        // WPF FlashService.cs:1244 decodes GIF frames. Reuse the bounded spiral decoder;
+        // 350px and 60 frames cap decoded frame storage below 30 MB per flash.
+        internal void StartGif(string path) => GifDecoding = DecodeGif(path);
+
+        private async Task DecodeGif(string path)
+        {
+            var (frames, delay) = await Task.Run(() => SpiralOverlay.Decode(path, fitLongSide: 350, maxFrames: 60));
+            if (_closed || frames.Count < 2)
+            {
+                foreach (var frame in frames) frame.Dispose();
+                return;
+            }
+            _gifFrames = frames;
+            _gifIndex = 0;
+            _image.Source = frames[0];
+            _gifTimer = new DispatcherTimer { Interval = delay };
+            _gifTimer.Tick += (_, _) => NextGifFrame();
+            _gifTimer.Start();
+        }
+
+        internal void NextGifFrame()
+        {
+            if (_gifFrames is null) return;
+            _gifIndex = (_gifIndex + 1) % _gifFrames.Count;
+            _image.Source = _gifFrames[_gifIndex];
+        }
         // The picture, its glow card and the TvOff whiten move together on an exit; the sparks do not.
         private readonly Panel _card, _root;
         private readonly Border _glow, _whiten;
@@ -345,7 +382,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             };
             _root = new Panel { Children = { _card } };
             Content = _root;
-            Closed += (_, _) => { _lifetimeTimer?.Stop(); _lifetimeTimer = null; picture.Dispose(); };
+            Closed += (_, _) =>
+            {
+                _closed = true;
+                _lifetimeTimer?.Stop(); _lifetimeTimer = null;
+                _gifTimer?.Stop(); _gifTimer = null;
+                _image.Source = null;
+                if (_gifFrames != null) foreach (var frame in _gifFrames) frame.Dispose();
+                _gifFrames = null;
+                picture.Dispose();
+            };
         }
 
         /// <summary>
