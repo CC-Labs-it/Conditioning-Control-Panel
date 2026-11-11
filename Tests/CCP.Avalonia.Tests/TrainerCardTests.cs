@@ -164,10 +164,25 @@ public sealed partial class AccountSeedTests
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                for (var i = 0; i < 2; i++)
+                // Headless MouseDown/MouseUp render between events and stamp wall-clock time.
+                // On a loaded runner that work can exceed the double-click interval. Feed the
+                // headless platform's own mouse events through its normal input callback with
+                // controlled timestamps, keeping hit testing and gesture recognition in the path.
+                var impl = w.PlatformImpl!;
+                var implType = impl.GetType();
+                var mouse = implType.GetProperty("MouseDevice")!.GetValue(impl)!;
+                var inputRoot = implType.GetProperty("InputRoot")!.GetValue(impl)!;
+                var input = (Action<global::Avalonia.Input.Raw.RawInputEventArgs>)implType.GetProperty("Input")!.GetValue(impl)!;
+                var rawCtor = typeof(global::Avalonia.Input.Raw.RawPointerEventArgs)
+                    .GetConstructors(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                    .Single(c => c.GetParameters().Length == 6 && c.GetParameters()[4].ParameterType == typeof(Point));
+                void Send(global::Avalonia.Input.Raw.RawPointerEventType type, ulong time) => input(
+                    (global::Avalonia.Input.Raw.RawInputEventArgs)rawCtor.Invoke(new object[]
+                        { mouse, time, inputRoot, type, at, global::Avalonia.Input.RawInputModifiers.None }));
+                for (ulong i = 0; i < 2; i++)
                 {
-                    w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                    w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                    Send(global::Avalonia.Input.Raw.RawPointerEventType.LeftButtonDown, 1000 + i * 100);
+                    Send(global::Avalonia.Input.Raw.RawPointerEventType.LeftButtonUp, 1050 + i * 100);
                 }
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
