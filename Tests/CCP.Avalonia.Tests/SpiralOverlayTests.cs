@@ -748,6 +748,36 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
         $"enabled={CoreSettings.Current.SpiralEnabled} path={CoreSettings.Current.SpiralPath} exists={File.Exists(CoreSettings.Current.SpiralPath)}";
     }
 
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public async Task WithShell_restores_previous_globals(bool checkHook, bool throwFromBody)
+    {
+        var previousHook = CoreEngine.StoppedHook;
+        var previousSkip = SpiralOverlay.SkipPlatformChecksForTests;
+        var calls = 0;
+        Action hook = () => calls++;
+        try
+        {
+            CoreEngine.StoppedHook = hook;
+            SpiralOverlay.SkipPlatformChecksForTests = true;
+            async Task Run() => await WithShell((shell, settings, gif) =>
+                throwFromBody ? Task.FromException(new InvalidOperationException("test body")) : Task.CompletedTask);
+            if (throwFromBody) await Assert.ThrowsAsync<InvalidOperationException>(Run);
+            else await Run();
+            if (checkHook) Assert.Same(hook, CoreEngine.StoppedHook);
+            else Assert.True(SpiralOverlay.SkipPlatformChecksForTests);
+            Assert.Equal(0, calls);
+        }
+        finally
+        {
+            CoreEngine.StoppedHook = previousHook;
+            SpiralOverlay.SkipPlatformChecksForTests = previousSkip;
+        }
+    }
+
     private static async Task WithShell(Func<MainShellWindow, AppSettings, string, Task> body)
     {
         var dir = Directory.CreateTempSubdirectory("ccp-spiral-").FullName;
@@ -763,6 +793,8 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
             var s = CoreSettings.Current;
             var saved = (s.SpiralEnabled, s.SpiralPath, s.SpiralOpacity, s.SpiralTargetMonitor, s.SkipPauseXpWarning);
             var provider = CoreSession.IsEngineRunningProvider;
+            var stoppedHook = CoreEngine.StoppedHook;
+            var skipChecks = SpiralOverlay.SkipPlatformChecksForTests;
             var shell = new MainShellWindow();
             shell.Show();
             try
@@ -776,14 +808,21 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
             }
             finally
             {
-                CoreEngine.StoppedHook = null;
-                CoreEngine.Stop();
-                SpiralOverlay.CloseAll();
-                SpiralOverlay.SkipPlatformChecksForTests = false;
-                CoreSession.IsEngineRunningProvider = provider;
-                (s.SpiralEnabled, s.SpiralPath, s.SpiralOpacity, s.SpiralTargetMonitor, s.SkipPauseXpWarning) = saved;
-                shell.Close();
-                Directory.Delete(dir, true);
+                CoreEngine.StoppedHook = null;   // stop this shell without invoking the previous hook
+                try
+                {
+                    CoreEngine.Stop();
+                    SpiralOverlay.CloseAll();
+                    CoreSession.IsEngineRunningProvider = provider;
+                    (s.SpiralEnabled, s.SpiralPath, s.SpiralOpacity, s.SpiralTargetMonitor, s.SkipPauseXpWarning) = saved;
+                    shell.Close();
+                    Directory.Delete(dir, true);
+                }
+                finally
+                {
+                    CoreEngine.StoppedHook = stoppedHook;
+                    SpiralOverlay.SkipPlatformChecksForTests = skipChecks;
+                }
             }
         });
     }
