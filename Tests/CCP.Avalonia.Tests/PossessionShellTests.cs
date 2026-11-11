@@ -321,10 +321,10 @@ public sealed class PossessionShellTests
         Assert.DoesNotContain("fake-crash", sb.ToString());
         sb.Clear();
         LockdownTabView.AppendPossessionConsent(sb, cfg, fullDokiScares: true);
-        Assert.Contains("- Full Doki adds themed fake-crash scares. They are theatre.", sb.ToString());
-        // No Doki dialog is ported yet, so the real text does not promise one.
-        Assert.False(PossessionAvaloniaHead.HasFullDokiEffects());
-        Assert.DoesNotContain("fake-crash", LockdownTabView.LockdownWarning(20, cfg, windows: false));
+        Assert.Contains("- Full Doki adds themed fake deletion scares. They are theatre.", sb.ToString());
+        // The delete dialog is now in the catalog and is named in the real consent text.
+        Assert.True(PossessionAvaloniaHead.HasFullDokiEffects());
+        Assert.Contains("fake deletion", LockdownTabView.LockdownWarning(20, cfg, windows: false));
 
         cfg.LockdownPossessionEnabled = false;
         Assert.DoesNotContain("Possession", LockdownTabView.LockdownWarning(20, cfg, windows: false));
