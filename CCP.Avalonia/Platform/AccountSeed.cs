@@ -168,6 +168,10 @@ internal static class AccountSeed
             load ??= () => LoadProfileAsync();
             if (!await load() && CoreSettings.Current.UnifiedId == uid)
                 await load();
+            // WPF Login.cs:170-181 calls sync after the load, even on failure.
+            // PushAsync retains the loaded, cooldown and failure-backoff gates.
+            if (CoreSettings.Current.UnifiedId == uid && Sync is { } sync)
+                await sync.PushAsync("after login");
         }
         finally
         {

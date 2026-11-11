@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using ConditioningControlPanel;
@@ -23,6 +24,40 @@ public sealed partial class AccountSeedTests
         lock (wire.Seen)
             Assert.Equal(2, wire.Seen.Count(r => r.Path == "GET /v2/user/profile"));
         Assert.Empty(wire.Syncs);
+    });
+
+    [Fact]
+    public void FailedReadsStillAttemptSyncWhenAnEarlierReadOpenedTheGate() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", null);
+        sync.MarkLoaded(null); // This account was already read in this session.
+        await AccountSeed.PostLoginAsync();
+        lock (wire.Seen)
+            Assert.Equal(2, wire.Seen.Count(r => r.Path == "GET /v2/user/profile"));
+        Assert.Single(wire.Syncs);
+    });
+
+    [Fact]
+    public void FailedFirstPushGetsPostLoginSyncAttempt() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
+        wire.Next.Enqueue((HttpStatusCode.InternalServerError, "{}"));
+        wire.Next.Enqueue((HttpStatusCode.OK, "{\"success\":true}"));
+        // Let the real failure backoff expire before the subsequent sync attempt.
+        var now = T0;
+        sync.UtcNow = () => { now = now.AddHours(1); return now; };
+        await AccountSeed.PostLoginAsync();
+        Assert.True(sync.Loaded);
+        Assert.Equal(2, wire.Syncs.Count());
+    });
+
+    [Fact]
+    public void FailedFirstPushStillHonorsFailureBackoff() => WithFreshInstall(async () =>
+    {
+        var (wire, _, _) = SignIn("u1", L40Profile("u1"));
+        wire.Next.Enqueue((HttpStatusCode.InternalServerError, "{}"));
+        await AccountSeed.PostLoginAsync();
+        Assert.Single(wire.Syncs);
     });
 
     [Theory]
