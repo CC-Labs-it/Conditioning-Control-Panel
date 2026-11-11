@@ -1,21 +1,20 @@
 // WPF Controls/Leash/LeashSurfaces.cs:203-219 (ask and seen), :222-255 (snap, replace/close), :287-310 (window and Escape).
-// ponytail: LeashFx ask sound and the app-wide pop-up of a newly arrived offer (LeashSurfaces.OnSnapshot/
-// TryShowWaitingAsk) are wire-views-tab-leash-b-next; here the offer row's Look and the holder menu's Replay open it.
+// ponytail: the snap after an accepted ask, LeashFx ask sound and the app-wide pop-up of a newly
+// arrived offer (LeashSurfaces.OnSnapshot/TryShowWaitingAsk) are wire-views-tab-leash-b-next; here the
+// offer row's Look opens it.
 using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
-using Avalonia.Threading;
-using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Leash;
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Leash;
-/// <summary>WPF LeashOverlayWindow: a borderless, see-through window holding one leash card (an ask or a
-/// snap) over its owner. Escape is the card's own "later": an offer stays.</summary>
+/// <summary>A borderless, see-through window holding one ask (or snap) card over its owner. Escape is the
+/// card's own "later": the offer stays.</summary>
 public sealed class LeashAskWindow : Window
 {
-    /// <summary>The card on screen, if any. One at a time: a second ask or snap replaces it (WPF Open closes the overlay first).</summary>
+    /// <summary>The ask or snap on screen, if any. One at a time: a second one replaces it (WPF Open closes the overlay first).</summary>
     internal static LeashAskWindow? Current { get; private set; }
     internal Control Body { get; }
     internal LeashAskCard Card => (LeashAskCard)Body;
@@ -49,7 +48,7 @@ public sealed class LeashAskWindow : Window
         var w = new LeashAskWindow(new LeashAskCard(offer, service));
         w.Card.Answered += (_, _, _) => w.Close();
         w.Card.Dismissed += w.Close;
-        if (!w.ShowOver(owner)) return null;
+        if (!Show(w, owner)) return null;
         try { service()?.NoteShown(offer.Id); }
         catch (Exception ex) { Serilog.Log.Debug("[Leash] ask seen note failed: {E}", ex.Message); }
         return w;
@@ -58,28 +57,28 @@ public sealed class LeashAskWindow : Window
     internal static LeashAskWindow? OpenSnap(LeashPerson holder, LeashPerson leashed, Window? owner)
     {
         CloseCurrent();
-        var card = new LeashSnapCard(holder, leashed, AmbientFxCanvas.Env.Level);
+        var card = new LeashSnapCard(holder, leashed, ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level);
         var w = new LeashAskWindow(card, null);
         card.Closed += w.Close;
-        if (!w.ShowOver(owner)) return null;
-        Dispatcher.UIThread.Post(() => { if (ReferenceEquals(Current, w) && w.IsVisible) card.Play(); });
+        if (!Show(w, owner)) return null;
+        global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (ReferenceEquals(Current, w) && w.IsVisible) card.Play(); });
         return w;
     }
-    private bool ShowOver(Window? owner)
+    private static bool Show(LeashAskWindow w, Window? owner)
     {
-        Closed += (_, _) => { if (ReferenceEquals(Current, this)) Current = null; };
+        w.Closed += (_, _) => { if (ReferenceEquals(Current, w)) Current = null; };
         try
         {
-            if (owner is { IsVisible: true }) Show(owner);
-            else { WindowStartupLocation = WindowStartupLocation.CenterScreen; Show(); }
-            Activate();
+            if (owner is { IsVisible: true }) w.Show(owner);
+            else { w.WindowStartupLocation = WindowStartupLocation.CenterScreen; w.Show(); }
+            w.Activate();
         }
         catch (Exception ex)
         {
-            Serilog.Log.Debug("[Leash] overlay window failed: {E}", ex.Message);
+            Serilog.Log.Debug("[Leash] ask window failed: {E}", ex.Message);
             return false;
         }
-        Current = this;
+        Current = w;
         return true;
     }
     internal static void CloseCurrent()

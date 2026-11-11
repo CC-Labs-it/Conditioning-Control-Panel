@@ -83,17 +83,14 @@ public sealed class LeashCardsTests
     [InlineData(false, "leash-denied", "leash_release_failed")]
     public void ReleaseFeedbackMatchesReply(bool ok, string cue, string message) => Run(() =>
     {
-        var audio = ConditioningControlPanel.CoreAudio.PlayOneShotProvider;
-        var suppressed = ConditioningControlPanel.CoreAudio.IsOutputSuppressedProvider;
-        var art = ConditioningControlPanel.CoreModArt.AudioOverridePathProvider;
-        var settings = ConditioningControlPanel.CoreSettings.Current;
-        var volume = settings.MasterVolume;
+        var (audio, suppressed, art) = (ConditioningControlPanel.CoreAudio.PlayOneShotProvider,
+            ConditioningControlPanel.CoreAudio.IsOutputSuppressedProvider, ConditioningControlPanel.CoreModArt.AudioOverridePathProvider);
+        var settings = ConditioningControlPanel.CoreSettings.Current; var volume = settings.MasterVolume;
         var notifications = global::ConditioningControlPanel.Avalonia.App.Notifications;
         var hostField = notifications.GetType().GetField("_host", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
         var oldHost = hostField.GetValue(notifications);
-        var host = new StackPanel();
+        var (host, sounds) = (new StackPanel(), new List<string>());
         var path = System.IO.Path.GetTempFileName();
-        var sounds = new List<string>();
         var oldRules = LeashSound.Rules;
         try
         {
@@ -117,9 +114,8 @@ public sealed class LeashCardsTests
             LeashSound.Rules = oldRules;
             hostField.SetValue(notifications, oldHost);
             settings.MasterVolume = volume;
-            ConditioningControlPanel.CoreAudio.PlayOneShotProvider = audio;
-            ConditioningControlPanel.CoreAudio.IsOutputSuppressedProvider = suppressed;
-            ConditioningControlPanel.CoreModArt.AudioOverridePathProvider = art;
+            (ConditioningControlPanel.CoreAudio.PlayOneShotProvider, ConditioningControlPanel.CoreAudio.IsOutputSuppressedProvider,
+                ConditioningControlPanel.CoreModArt.AudioOverridePathProvider) = (audio, suppressed, art);
             System.IO.File.Delete(path);
         }
     });
@@ -128,8 +124,7 @@ public sealed class LeashCardsTests
     {
         var (audio, suppressed, art) = (ConditioningControlPanel.CoreAudio.PlayOneShotProvider,
             ConditioningControlPanel.CoreAudio.IsOutputSuppressedProvider, ConditioningControlPanel.CoreModArt.AudioOverridePathProvider);
-        var settings = ConditioningControlPanel.CoreSettings.Current;
-        var volume = settings.MasterVolume;
+        var settings = ConditioningControlPanel.CoreSettings.Current; var volume = settings.MasterVolume;
         var path = System.IO.Path.GetTempFileName();
         string? cue = null;
         var oldRules = LeashSound.Rules;
@@ -149,9 +144,8 @@ public sealed class LeashCardsTests
         {
             LeashSound.Rules = oldRules;
             settings.MasterVolume = volume;
-            ConditioningControlPanel.CoreAudio.PlayOneShotProvider = audio;
-            ConditioningControlPanel.CoreAudio.IsOutputSuppressedProvider = suppressed;
-            ConditioningControlPanel.CoreModArt.AudioOverridePathProvider = art;
+            (ConditioningControlPanel.CoreAudio.PlayOneShotProvider, ConditioningControlPanel.CoreAudio.IsOutputSuppressedProvider,
+                ConditioningControlPanel.CoreModArt.AudioOverridePathProvider) = (audio, suppressed, art);
             System.IO.File.Delete(path);
         }
     });
@@ -252,24 +246,15 @@ public sealed class LeashCardsTests
     });
 
     [Fact]
-    public void SnapImpactSettlesAfterLanding() => Run(() =>
+    public void SnapImpactSettlesAfterLandingAndSparksExpire() => Run(() =>
     {
         var card = new LeashSnapCard(new("me", "Holder", null), Person, ConditioningControlPanel.Models.MotionLevel.Full);
-        var face = Find<Grid>(card, "leash-snap-avatar:friend");
-        var scale = Assert.IsType<global::Avalonia.Media.ScaleTransform>(face.RenderTransform);
-        card.Advance(340);
-        Assert.Equal(1.18, scale.ScaleX, 5);
-        card.Advance(680);
-        Assert.Equal(1, scale.ScaleX, 5);
-    });
-
-    [Fact]
-    public void SnapSparksAppearAndExpire() => Run(() =>
-    {
-        var card = new LeashSnapCard(new("me", "Holder", null), Person, ConditioningControlPanel.Models.MotionLevel.Full);
+        var scale = Assert.IsType<global::Avalonia.Media.ScaleTransform>(Find<Grid>(card, "leash-snap-avatar:friend").RenderTransform);
         var sparks = Find<Canvas>(card, "leash-snap-sparks");
         card.Advance(340);
-        Assert.Equal(22, sparks.Children.Count);
+        Assert.Equal(1.18, scale.ScaleX, 5); Assert.Equal(22, sparks.Children.Count);
+        card.Advance(680);
+        Assert.Equal(1, scale.ScaleX, 5);
         card.Advance(1200);
         Assert.Empty(sparks.Children);
     });
@@ -345,8 +330,7 @@ public sealed class LeashCardsTests
             Assert.False(old.IsVisible);
             Assert.Equal(Loc.GetF("leash_snap_leashed", "Second"), Find<TextBlock>(current, "leash-snap-leashed").Text);
             // WPF LeashSurfaces.Open closes whatever card is up: an ask and a snap never share the screen.
-            var at = DateTimeOffset.UtcNow;
-            var ask = LeashAskWindow.Open(new LeashOffer(Person, at, at.AddDays(7)), () => null, host)!;
+            var ask = LeashAskWindow.Open(new LeashOffer(Person, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(7)), () => null, host)!;
             Assert.False(current.IsVisible);
             Assert.Same(ask, LeashAskWindow.Current);
             ((MenuItem)Find<Button>(first, "leash-holder-more").ContextMenu!.Items[0]!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));

@@ -130,17 +130,13 @@ public sealed class LeashHolderCard : Border
             ReleaseHelpTimer = tipTimer;
             tipTimer.Tick += (_, _) => { tipTimer.Stop(); ToolTip.SetIsOpen(release, false); };
             release.PropertyChanged += (_, e) =>
-            {
-                if (e.Property != ToolTip.IsOpenProperty) return;
-                if (ToolTip.GetIsOpen(release)) tipTimer.Start(); else tipTimer.Stop();
-            };
+            { if (e.Property == ToolTip.IsOpenProperty) { if (ToolTip.GetIsOpen(release)) tipTimer.Start(); else tipTimer.Stop(); } };
             release.DetachedFromVisualTree += (_, _) => tipTimer.Stop();
             release.Click += (_, _) => LeashCutConfirmWindow.Confirm(
                 Loc.GetF("leash_release_confirm_title", h.Who.Name), Loc.GetF("leash_release_confirm_body", h.Who.Name),
                 Loc.Get("leash_release_confirm_yes"), Loc.Get("leash_cut_confirm_no"), "leash-release-confirm", () => _ = Release(h.Who));
             var menu = new ContextMenu { Placement = PlacementMode.Bottom }; // WPF LeashHolderCard.cs:277
-            menu.Items.Add(replay);
-            menu.Items.Add(release);
+            menu.Items.Add(replay); menu.Items.Add(release);
             var more = LeashCardUi.Action("…", "leash-holder-more", () => Task.CompletedTask);
             more.ContextMenu = menu;
             more.Click += (_, _) => menu.Open(more);
@@ -283,9 +279,7 @@ public sealed class LeashHolderCard : Border
         return panel;
     }
     // WPF LeashDrawerSection.cs:139, :153-156: replay the holder (me) and leashed recap.
-    private static LeashPerson Me() =>
-        new("me", string.IsNullOrWhiteSpace(CoreAccount.DisplayName) ? Loc.Get("leash_you") : CoreAccount.DisplayName!.Trim(), null);
-
+    private static LeashPerson Me() => new("me", string.IsNullOrWhiteSpace(CoreAccount.DisplayName) ? Loc.Get("leash_you") : CoreAccount.DisplayName!.Trim(), null);
     private async Task Release(LeashPerson who)
     {
         var ok = false;
