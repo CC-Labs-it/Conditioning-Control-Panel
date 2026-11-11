@@ -21,8 +21,20 @@ public class NavModTwinArtTests
         if (Application.Current is null)
             AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        body();
+        WithRestoredProviders(body);
     });
+
+    private static void WithRestoredProviders(Action body)
+    {
+        var mod = CoreMods.ActiveModIdProvider;
+        var art = CoreModArt.OverridePathProvider;
+        try { body(); }
+        finally
+        {
+            CoreMods.ActiveModIdProvider = mod;
+            CoreModArt.OverridePathProvider = art;
+        }
+    }
 
     private static byte[] Bytes(Bitmap? bitmap)
     {
@@ -31,6 +43,23 @@ public class NavModTwinArtTests
         bitmap.Save(stream);
         return stream.ToArray();
     }
+
+    [Fact]
+    public void ProvidersAreRestoredWhenTheBodyThrows() => Run(() =>
+    {
+        Func<string?> mod = () => "before";
+        Func<string, string?> art = _ => "before";
+        CoreMods.ActiveModIdProvider = mod;
+        CoreModArt.OverridePathProvider = art;
+        Assert.Throws<InvalidOperationException>(() => WithRestoredProviders(() =>
+        {
+            CoreMods.ActiveModIdProvider = () => "temporary";
+            CoreModArt.OverridePathProvider = _ => "temporary";
+            throw new InvalidOperationException();
+        }));
+        Assert.Same(mod, CoreMods.ActiveModIdProvider);
+        Assert.Same(art, CoreModArt.OverridePathProvider);
+    });
 
     [Theory]
     [InlineData("builtin-locked")]
