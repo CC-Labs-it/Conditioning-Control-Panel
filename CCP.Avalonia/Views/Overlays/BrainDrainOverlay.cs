@@ -14,6 +14,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 // WPF OverlayService.cs:456-465,2232-2250,2598-2610,3199-3248,3760-3764: passive blur hosts.
@@ -23,6 +24,16 @@ internal static class BrainDrainOverlay
     private static readonly List<Window> Hosts = new();
     private static readonly Dictionary<Window, (BrainDrainCapturePump Pump, Image Image, WriteableBitmap? Bitmap, double Scale)> Frames = new();
     private static BeatLoop? FrameBeat;
+    private static readonly DispatcherTimer FirstFrameWatchdog = new() { Interval = TimeSpan.FromSeconds(3) };
+    private static bool _receivedFrame;
+    internal static DateTime LastNoticeUtc = DateTime.MinValue;
+    private static void NotifyNoFrames()
+    {
+        var now = DateTime.UtcNow;
+        if (now - LastNoticeUtc < TimeSpan.FromMinutes(5)) return;
+        LastNoticeUtc = now;
+        OsNotifications.Show(Loc.Get("app_title"), Loc.Get("brain_drain_capture_failed"));
+    }
     internal static Func<PixelRect, BrainDrainCapturePump?> CreatePump = bounds => OperatingSystem.IsWindows()
         ? new BrainDrainCapturePump(bounds, TimeSpan.FromSeconds(1.0 / 30)) : null;
     private static Window? _owner;
@@ -49,6 +60,10 @@ internal static class BrainDrainOverlay
     static BrainDrainOverlay()
     {
         Timer.Tick += (_, _) => Reconcile();
+        FirstFrameWatchdog.Tick += (_, _) => {
+            FirstFrameWatchdog.Stop();
+            if (Frames.Count > 0 && !_receivedFrame) NotifyNoFrames();
+        };
 
     }
     internal static void Start(Window owner)
@@ -117,11 +132,12 @@ internal static class BrainDrainOverlay
                                 var image = new Image { Stretch = Stretch.Fill, IsHitTestVisible = false };
                                 w.Content = image; Frames.Add(w, (pump, image, null, scale));
                                 FrameBeat ??= new BeatLoop(image, _ => PresentFrames()); FrameBeat.Start();
+                                if (!FirstFrameWatchdog.IsEnabled) FirstFrameWatchdog.Start();
                             }
                             continue;
                         }
                     }
-                    w.Close(); CloseHosts(); Serilog.Log.Warning("Brain Drain: capture protection or compositor blur unavailable"); return;
+                    w.Close(); CloseHosts(); Serilog.Log.Warning("Brain Drain: capture protection or compositor blur unavailable"); NotifyNoFrames(); return;
                 }
                 catch { w.Close(); CloseHosts(); return; }
             }
@@ -152,6 +168,7 @@ internal static class BrainDrainOverlay
         {
             var state = Frames[w]; var frame = state.Pump.Take();
             if (frame == null) continue;
+            _receivedFrame = true;
             try
             {
                 var bitmap = state.Bitmap;
@@ -172,6 +189,7 @@ internal static class BrainDrainOverlay
     }
     private static void CloseHosts()
     {
+        FirstFrameWatchdog.Stop(); _receivedFrame = false;
         FrameBeat?.Stop(); FrameBeat = null;
         foreach (var state in Frames.Values)
         {
