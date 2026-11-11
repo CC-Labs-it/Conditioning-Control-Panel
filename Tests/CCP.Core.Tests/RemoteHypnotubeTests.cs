@@ -49,6 +49,25 @@ public class RemoteHypnotubeTests
         finally { RemoteCommands.PlayHypnotube = oldPlay; }
     }
 
+    [Fact]
+    public void Start_flash_stops_the_controller_browser_video()
+    {
+        var oldStop = RemoteCommands.StopBrowserVideo;
+        var enabled = CoreSettings.Current.FlashEnabled;
+        var stops = 0;
+        RemoteCommands.StopBrowserVideo = () => stops++;
+        try
+        {
+            Assert.Null(RemoteCommands.Execute("start_flash", null));
+            Assert.Equal(1, stops);
+        }
+        finally
+        {
+            RemoteCommands.StopBrowserVideo = oldStop;
+            CoreSettings.Current.FlashEnabled = enabled;
+        }
+    }
+
     // WPF RemoteControlService.cs:1410 (stop_video), :1001 (panic, session end) and :1164 (controller left).
     [Fact]
     public void Stop_video_panic_and_leave_stop_the_browser_video()

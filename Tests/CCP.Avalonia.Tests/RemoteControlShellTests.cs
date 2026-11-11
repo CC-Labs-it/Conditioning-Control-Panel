@@ -230,6 +230,18 @@ public sealed class RemoteControlShellTests
             await Poll("{\"controller_connected\":true}");
             Assert.True(browser.IsVisible);
 
+            // A landed start_flash ends the remote page, restoring the blindfold and site home.
+            await Poll("{\"controller_connected\":true,\"commands\":[{\"id\":\"flash1\",\"action\":\"start_flash\"}]}");
+            Assert.False(browser.IsVisible);
+            Assert.Equal(new Uri("https://hypnotube.com/"), web.Source);
+
+            // With no remote video, start_flash leaves the user's page alone.
+            web.Source = new Uri("https://example.com/");
+            await Poll("{\"controller_connected\":true,\"commands\":[{\"id\":\"flash2\",\"action\":\"start_flash\"}]}");
+            Assert.Equal(new Uri("https://example.com/"), web.Source);
+            Assert.False(browser.IsVisible);
+            await Poll(play.Replace("ID", "again"));
+
             // stop_video: back to the site home and under the overlay again (WPF :1410, :995).
             await Poll("{\"controller_connected\":true,\"commands\":[{\"id\":\"2\",\"action\":\"stop_video\"}]}");
             Assert.False(browser.IsVisible);
