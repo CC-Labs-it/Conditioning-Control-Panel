@@ -26,6 +26,46 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
     private const string TinyGif =
         "R0lGODlhBAAEAIEAAP8AAAAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQAAwAAACwAAAAABAAEAAAICQABCBxIsCCAgAAh+QQBAwABACwAAAAABAAEAIEA/wAAAAAAAAAAAAAICQABCBxIsCCAgAAh+QQBAwABACwAAAAABAAEAIEAAP8AAAAAAAAAAAAICQABCBxIsCCAgAA7";
 
+    [Fact]
+    public async Task DecodeFinishingAfterStopDoesNotRefresh()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-late-spiral-").FullName;
+        var gif = Path.Combine(dir, "tiny.gif");
+        File.WriteAllBytes(gif, Convert.FromBase64String(TinyGif));
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (Application.Current is null)
+                    AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                var s = CoreSettings.Current;
+                var saved = (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize, CoreSession.IsEngineRunningProvider);
+                try
+                {
+                    s.SpiralEnabled = true; s.SpiralPath = gif; s.SpiralRandomize = false;
+                    CoreSession.IsEngineRunningProvider = () => true;
+                    var host = new Window();
+                    SpiralOverlay.Refresh(host);
+                    var pending = SpiralOverlay.Decoding;
+                    Assert.NotNull(pending);
+                    SpiralOverlay.Stop();
+                    var refreshes = SpiralOverlay.Refreshes;
+                    await pending;
+                    Assert.Equal(refreshes, SpiralOverlay.Refreshes);
+                }
+                finally
+                {
+                    SpiralOverlay.Stop();
+                    (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize, CoreSession.IsEngineRunningProvider) = saved;
+                }
+            });
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
     [Theory]
     [InlineData(0.0, 0.0)]
     [InlineData(0.3, 0.03)]     // bottom half: the old flat tenth, unchanged

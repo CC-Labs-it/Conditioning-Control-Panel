@@ -47,6 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>The off-thread decode in flight, if any (tests await it).</summary>
         internal static Task? Decoding { get; private set; }
+        private static bool _decodeWanted;
 
         /// <summary>Refresh calls so far (tests: the session tick only refreshes on a change).</summary>
         internal static int Refreshes { get; private set; }
@@ -221,6 +222,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF StopSpiral: the windows and the clock go; the decoded frames stay cached.</summary>
         public static void CloseAll()
         {
+            _decodeWanted = false;
             _pulseWeight = null;
             _sourcePath = null;
             _configuredPath = null;
@@ -261,6 +263,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static void BeginDecode(Visual host, string path)
         {
+            _decodeWanted = true;
             if (Decoding is { IsCompleted: false }) return;   // the landing Refresh picks up any newer path
             Decoding = DecodeThenRefresh(host, path);
         }
@@ -272,7 +275,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var old in _frames) old.Dispose();
             (_frames, _framesKey, _delay, _index) = (frames, path, delay, 0);
             Decoding = null;   // or the Refresh below, still inside this task, cannot start a newer path's decode
-            Refresh(host);   // the user may have stopped the engine or unticked it mid-decode
+            if (_decodeWanted) Refresh(host);   // Stop may have invalidated the pending decode
         }
 
         /// <summary>WPF DecodeGifFrames on SkiaSharp: every frame composited in order (so partial GIF
