@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using Avalonia;
 using Avalonia.Controls;
@@ -121,35 +123,87 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             }
         }
 
-        // WPF Speech.cs:1277-1296,1417-1455,2975-3033: after typing, restore
-        // the original markdown as inline links. The shared launcher owns the remote guard,
-        // embedded browser and HTTPS-only fallback (WPF Speech.cs:1490-1532).
+        // WPF Speech.cs:1270-1455: markdown first, then longest known titles,
+        // fuzzy candidates and raw URLs. The launcher owns the click guard.
         private void RenderSpeechLinks(TextBlock target, string text)
         {
-            var matches = Regex.Matches(text, @"\[([^\]]+)\]\(([^)]+)\)");
-            if (matches.Count == 0) { target.Text = text; return; }
-            var inlines = new InlineCollection();
-            var last = 0;
-            foreach (Match match in matches)
+            var hadMarkdown = Regex.IsMatch(text, @"\[([^\]]+)\]\(([^)]+)\)");
+            var markdown = new List<(string Label, string Url)>();
+            text = Regex.Replace(text, @"\[([^\]]+)\]\(([^)]+)\)", m =>
             {
-                if (match.Index > last) inlines.Add(new Run(text.Substring(last, match.Index - last)));
-                var label = match.Groups[1].Value;
-                var url = match.Groups[2].Value.Trim();
+                var label = m.Groups[1].Value;
+                var url = m.Groups[2].Value.Trim();
                 if (Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
                     (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+                    markdown.Add((label, url));
+                return label;
+            });
+            text = Regex.Replace(text, @"\s*\[Url\]|\s*\(url\)", "", RegexOptions.IgnoreCase);
+
+            var table = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var pool = CoreMods.Service?.GetVideoLinks();
+            if (pool != null)
+                foreach (var pair in pool)
+                    if (!string.IsNullOrEmpty(pair.Key) && Uri.TryCreate(pair.Value, UriKind.Absolute, out var uri) &&
+                        uri.Scheme == Uri.UriSchemeHttps)
+                        table[pair.Key] = pair.Value;
+            foreach (var pair in Services.HypnotubeDefaultLinks.KnownVideoTitles)
+                table.TryAdd(pair.Key, pair.Value);
+
+            var positions = new List<(int Start, int Length, string Name, string Url)>();
+            bool Overlaps(int start, int length) => positions.Any(p =>
+                start < p.Start + p.Length && start + length > p.Start);
+            foreach (var (label, url) in markdown)
+            {
+                var start = text.IndexOf(label, StringComparison.Ordinal);
+                if (start >= 0 && !Overlaps(start, label.Length))
+                    positions.Add((start, label.Length, label, url));
+            }
+            foreach (var pair in table.OrderByDescending(p => p.Key.Length))
+            {
+                var start = text.IndexOf(pair.Key, StringComparison.OrdinalIgnoreCase);
+                if (start >= 0 && !Overlaps(start, pair.Key.Length))
+                    positions.Add((start, pair.Key.Length, pair.Key, pair.Value));
+            }
+            var entries = table.Select(p => (Title: p.Key, Url: p.Value)).ToList();
+            foreach (var (start, length, _) in Services.Companion.CompanionTitleMatcher.CandidateSpans(text))
+            {
+                if (length < Services.Companion.CompanionTitleMatcher.MinSpanLength || Overlaps(start, length)) continue;
+                var match = Services.Companion.CompanionTitleMatcher.BestFuzzy(text.Substring(start, length), entries);
+                if (match != null) positions.Add((start, length, match.Value.Title, match.Value.Url));
+            }
+            foreach (Match match in Regex.Matches(text, @"https?://[^\s,""'<>]+", RegexOptions.IgnoreCase))
+                if (!Overlaps(match.Index, match.Length) && Uri.TryCreate(match.Value, UriKind.Absolute, out _))
+                    positions.Add((match.Index, match.Length, match.Value, match.Value));
+
+            if (positions.Count == 0)
+            {
+                if (!hadMarkdown) target.Text = text;
+                else { target.Text = null; target.Inlines = new InlineCollection { new Run(text) }; }
+                return;
+            }
+            var inlines = new InlineCollection();
+            var last = 0;
+            foreach (var (start, length, name, url) in positions.OrderBy(p => p.Start))
+            {
+                if (start > last) inlines.Add(new Run(text.Substring(last, start - last)));
+                var actual = text.Substring(start, length);
+                var label = actual;
+                if (actual.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                    label = table.FirstOrDefault(p => string.Equals(p.Value, url, StringComparison.OrdinalIgnoreCase)).Key
+                        ?? global::ConditioningControlPanel.Helpers.HtUrlHelper.DeriveTitleFromUrl(url);
+                else if (!string.Equals(name, actual, StringComparison.OrdinalIgnoreCase))
+                    label = name;
+                var link = new Button
                 {
-                    var link = new Button
-                    {
-                        Theme = (ControlTheme)Resources["SpeechInlineLink"]!,
-                        Content = new TextBlock { Text = label, FontSize = target.FontSize,
-                            FontWeight = target.FontWeight, Foreground = new SolidColorBrush(Color.FromRgb(255, 176, 224)),
-                            TextDecorations = TextDecorations.Underline },
-                        Command = CompanionLinkLauncher.CommandFor(url)
-                    };
-                    inlines.Add(new InlineUIContainer(link) { BaselineAlignment = BaselineAlignment.Baseline });
-                }
-                else inlines.Add(new Run(label));
-                last = match.Index + match.Length;
+                    Theme = (ControlTheme)Resources["SpeechInlineLink"]!,
+                    Content = new TextBlock { Text = label, FontSize = target.FontSize,
+                        FontWeight = target.FontWeight, Foreground = new SolidColorBrush(Color.FromRgb(255, 176, 224)),
+                        TextDecorations = TextDecorations.Underline },
+                    Command = CompanionLinkLauncher.CommandFor(url)
+                };
+                inlines.Add(new InlineUIContainer(link) { BaselineAlignment = BaselineAlignment.Baseline });
+                last = start + length;
             }
             if (last < text.Length) inlines.Add(new Run(text.Substring(last)));
             target.Text = null;
