@@ -189,7 +189,9 @@ public sealed class CompanionEditorsTests
         Setup();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
-        var shell = new MainShellWindow();
+        service.Current.MotionLevel = MotionLevel.Full;
+        service.Current.GentleVisuals = false;
+        var shell = new MainShellWindow { TabClock = new SteppedClock() };
         try
         {
             shell.Show();
@@ -197,6 +199,11 @@ public sealed class CompanionEditorsTests
             // WPF v2: Companion > Personality adopts Make-her-yours (Pages/PersonalityPage.xaml.cs:43).
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal("personality", shell.CurrentTab);
+            // Re-entry rises vertically. Settle the entrance before measuring pointer coordinates.
+            shell.ShowTab("personality");
+            Assert.NotNull(shell.EnteringTab);
+            shell.CompleteTabTransition();
             Dispatcher.UIThread.RunJobs();
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
@@ -207,6 +214,8 @@ public sealed class CompanionEditorsTests
                 button.BringIntoView();
                 Dispatcher.UIThread.RunJobs();
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
+                // A frame after measuring must not move the link away from the pointer.
+                shell.StepTabTransition(620);
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
                 Dispatcher.UIThread.RunJobs();
