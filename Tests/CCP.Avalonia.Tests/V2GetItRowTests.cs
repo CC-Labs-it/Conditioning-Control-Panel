@@ -103,7 +103,7 @@ public sealed class V2GetItRowTests
     }
 
     [Fact]
-    public Task BubbleOfferIsHiddenAndCannotSpendUntilTheEffectIsAvailable() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task BubbleOfferIsVisibleAndCanStartPurchase() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         BubbleMotionPickerTests.Setup();
         var s = CoreSettings.Current;
@@ -130,14 +130,19 @@ public sealed class V2GetItRowTests
             host = new Window { Content = panel };
             host.Show();
             var row = panel.FindControl<V2GetItRow>("RowGetBubblesV2")!;
-            Assert.False(row.IsVisible);
-            Assert.False(panel.FindControl<Border>("V2Box")!.IsVisible);
+            Assert.True(row.IsVisible);
+            Assert.True(panel.FindControl<Border>("V2Box")!.IsVisible);
             var confirms = 0;
             row.Confirm = (_, _) => { confirms++; return Task.FromResult(false); };
             row.FindControl<Button>("BtnGet")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.Equal(0, confirms);
+            Assert.Equal(1, confirms);
             Assert.Null(row.LastBuy);
-            Assert.Single(proxy.Seen); // the scripted state read, no buy
+            Assert.Single(proxy.Seen); // declining sends no buy
+            row.Confirm = (_, _) => Task.FromResult(true);
+            proxy.Reply("{\"ok\":true,\"sp\":20,\"prizes\":{\"revision\":7,\"grants\":[\"fx.bubble.rain\"]}}");
+            proxy.Reply("{\"ok\":true,\"open\":true,\"catalogVersion\":4,\"catalog\":[]}");
+            row.FindControl<Button>("BtnGet")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.True(await row.LastBuy!.WaitAsync(TimeSpan.FromSeconds(10)));
 
             PrizeOwnership.IsGranted = id => id == PrizeOwnership.BubbleRain;
             ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
@@ -149,6 +154,7 @@ public sealed class V2GetItRowTests
         finally
         {
             host?.Close();
+            PrizeOwnership.ResetHeld();
             s.AuthToken = null;
             (s.UnifiedId, s.OfflineMode, s.SkillPoints, CoreAccount.UnifiedUserId,
                 CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, PrizeOwnership.IsGranted, V2PurchaseHead.Service) = old;
@@ -359,9 +365,6 @@ public sealed class V2GetItRowTests
             host = new Window { Content = panel };
             host.Show();
             var row = panel.FindControl<V2GetItRow>("RowGetBubblesV2")!;
-            Assert.False(row.IsVisible); // default offer is withheld until the effect exists
-            // Retain the original WPF offer-flow coverage for when the effect is implemented.
-            row.Configure(V2PurchaseRule.BubblesPrizeId, "v2_get_bubble_blurb", "label_bubbles_v2_box");
             var box = panel.FindControl<Border>("V2Box")!;
             var motion = panel.FindControl<Control>("MotionRow")!;
             Assert.True(box.IsVisible);
