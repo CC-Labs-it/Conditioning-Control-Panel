@@ -116,6 +116,55 @@ public sealed class FirstShowStageTests
         return Task.CompletedTask;
     });
 
+    // WPF Presentation.cs:26 releases capture when the show takes over.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PresentationReleasesCapturedGesture(bool resize) => Run(stage =>
+    {
+        var emi = EmiDeskService.Instance.Window!;
+        Assert.True(FirstShowService.Stop());
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var control = (Control)typeof(EmiDeskWindow).GetField(resize ? "_resizeGrip" : "_bodyRoot", flags)!.GetValue(emi)!;
+        IPointer? pointer = null;
+        emi.AddHandler(InputElement.PointerPressedEvent, (_, e) => pointer = e.Pointer, RoutingStrategies.Tunnel);
+        Dispatcher.UIThread.RunJobs();
+        var point = control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), emi)!.Value;
+        emi.MouseDown(point, MouseButton.Left);
+        Assert.NotNull(pointer);
+        Assert.Same(control, pointer!.Captured);
+        Assert.True(FirstShowService.Open());
+        Assert.Null(pointer.Captured);
+        emi.MouseUp(point, MouseButton.Left);
+        Assert.True(FirstShowService.Stop());
+        Assert.False(emi.PresentationActive);
+        return Task.CompletedTask;
+    });
+
+    // WPF Presentation.cs:25 stops the alive lifecycle before the show draws her face.
+    [Fact]
+    public Task PresentationStopsPendingPatFeedback() => Run(stage =>
+    {
+        var emi = EmiDeskService.Instance.Window!;
+        Assert.True(FirstShowService.Stop());
+        var clock = new PresentationPatClock();
+        emi.PatClock = clock;
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var type = typeof(EmiDeskWindow);
+        type.GetMethod("StartPatFeedback", flags)!.Invoke(emi, new object[] { EmiPatFeedback.Flick });
+        var timer = (DispatcherTimer)type.GetField("_patFeedbackTimer", flags)!.GetValue(emi)!;
+        Assert.True(timer.IsEnabled);
+        Assert.Equal("^_~", emi.Face);
+        Assert.True(FirstShowService.Open());
+        Assert.False(timer.IsEnabled);
+        Assert.Null(type.GetField("_patFeedbackTimer", flags)!.GetValue(emi));
+        var showFace = emi.Face;
+        clock.Advance(350);
+        type.GetMethod("OnPatFeedbackTick", flags)!.Invoke(emi, new object?[] { timer, EventArgs.Empty });
+        Assert.Equal(showFace, emi.Face);
+        return Task.CompletedTask;
+    });
+
     private sealed class PresentationPatClock : TimeProvider
     {
         private DateTimeOffset _now = DateTimeOffset.UtcNow;

@@ -261,6 +261,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private PixelPoint _dragStartPosition;
         private bool _dragging, _dragMoved;
         private bool _resizing;
+        private IPointer? _dragPointer, _resizePointer;
         private PixelPoint _resizeStartScreen;
         private double _resizeStartWidth;
 
@@ -1191,6 +1192,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 _dragStartScreen = this.PointToScreen(e.GetPosition(this));
                 _dragStartPosition = Position;
                 BeginWobble();
+                _dragPointer = e.Pointer;
                 e.Pointer.Capture(_bodyRoot);
                 e.Handled = true;
             }
@@ -1245,6 +1247,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
                 _dragging = false;
                 ChromeHold(EmiChromeHold.Drag, false);
+                _dragPointer = null;
                 e.Pointer.Capture(null);
                 EndWobble();
                 e.Handled = true;
@@ -1333,6 +1336,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private void EndDragHold()
         {
+            var pointer = _dragPointer;
+            _dragPointer = null;
+            if (pointer?.Captured == _bodyRoot) pointer.Capture(null);
             if (!_dragging) return;
             _dragging = false;
             ChromeHold(EmiChromeHold.Drag, false);
@@ -1541,6 +1547,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>Clear the resize hold, whichever way the drag ended.</summary>
         private void EndResizeHold()
         {
+            var pointer = _resizePointer;
+            _resizePointer = null;
+            if (pointer?.Captured == _resizeGrip) pointer.Capture(null);
             _resizing = false;
             ChromeHold(EmiChromeHold.Resize, false);
         }
@@ -1660,6 +1669,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 _resizing = true;
                 _resizeStartScreen = this.PointToScreen(e.GetPosition(this));
                 _resizeStartWidth = _bodyWidth;
+                _resizePointer = e.Pointer;
                 e.Pointer.Capture(_resizeGrip);
                 e.Handled = true;
             }
@@ -1693,7 +1703,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 EndResizeHold();
-                e.Pointer.Capture(null);
                 e.Handled = true;
                 ClampIntoWorkArea();
                 SavePlacement();
