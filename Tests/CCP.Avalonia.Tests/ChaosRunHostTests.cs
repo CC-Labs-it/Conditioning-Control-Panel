@@ -42,6 +42,69 @@ public sealed class ChaosRunHostTests
     }
 
     [Fact]
+    public async Task Live_bubble_hover_lights_focus_and_clears_on_exit_and_teardown()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                var bar = ChaosRunHost.Hud!.FindControl<StackPanel>("FocusStripBlock")!;
+                var bubble = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                    { IsLive = true, FuseMs = 5000, SizePx = 200 });
+                BubbleOverlay.SetHover(bubble.Screen, bubble.CenterX, bubble.CenterY);
+                ChaosRunHost.Tick();
+                Assert.NotNull(bar.Effect);
+                BubbleOverlay.SetHover(bubble.Screen, bubble.CenterX + 1000, bubble.CenterY);
+                ChaosRunHost.Tick();
+                Assert.Null(bar.Effect);
+                BubbleOverlay.SetHover(bubble.Screen, bubble.CenterX, bubble.CenterY);
+                ChaosRunHost.Tick();
+                Assert.NotNull(bar.Effect);
+                BubbleOverlay.EndChaos();
+                ChaosRunHost.Tick();
+                Assert.Null(bar.Effect);
+            }
+            finally { ChaosRunHost.ForceShutdown(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Focus_cue_finds_a_live_bubble_under_an_overlapping_treat()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                var bar = ChaosRunHost.Hud!.FindControl<StackPanel>("FocusStripBlock")!;
+                var live = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                    { IsLive = true, FuseMs = 5000, SizePx = 200 });
+                var treat = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { SizePx = 200 });
+                treat.Screen = live.Screen;
+                treat.X = live.X;
+                treat.Y = live.Y;
+                BubbleOverlay.SetHover(live.Screen, live.CenterX, live.CenterY);
+                Assert.Same(treat, BubbleOverlay.Field.HitTest(live.Screen, live.CenterX, live.CenterY));
+                ChaosRunHost.Tick();
+                Assert.NotNull(bar.Effect);
+                live.Popping = true;
+                ChaosRunHost.Tick();
+                Assert.Null(bar.Effect);
+            }
+            finally { ChaosRunHost.ForceShutdown(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task A_run_counts_down_ticks_and_ends_on_the_recap()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
@@ -49,6 +112,8 @@ public sealed class ChaosRunHostTests
             Setup();
             FreshMeta();
             var meta = ChaosMeta.State;
+            var fieldNow = ChaosFieldFxOverlay.NowMs;
+            var fieldChecks = ChaosFieldFxOverlay.SkipPlatformChecksForTests;
             try
             {
                 ChaosRunHost.StartRun(Cfg());
@@ -76,16 +141,34 @@ public sealed class ChaosRunHostTests
                 Assert.Equal(21, state.ElapsedSec, 3);
                 ChaosRunHost.ToggleManualPause();
 
+                // WPF ChaosModeService.cs:3236: EndRun closes field FX before results.
+                // Freeze the FX clock so natural expiry cannot hide a missing EndRun close.
+                ChaosFieldFxOverlay.SkipPlatformChecksForTests = true;
+                ChaosFieldFxOverlay.NowMs = () => 0;
+                ChaosFieldFxOverlay.Ripple(new Point(100, 100), 430, 550);
+                var fieldFx = Assert.IsType<ChaosFieldFxOverlay>(ChaosFieldFxOverlay.Active);
+                Assert.True(fieldFx.IsVisible && fieldFx.Clock.IsEnabled);
+
                 Ticks(160);   // to 61 s: past the 60 s run
                 Assert.False(ChaosRunHost.IsDescending);
                 Assert.Null(ChaosRunHost.Hud);
                 Assert.True(overlay.FindControl<Border>("ResultsPanel")!.IsVisible);
+                Assert.Null(ChaosFieldFxOverlay.Active); // before ForceShutdown in finally
+                Assert.False(fieldFx.IsVisible);
+                Assert.False(fieldFx.Clock.IsEnabled);
+                Assert.True(fieldFx.Model.IsIdle(0, 0));
                 overlay.UpdateLayout();
                 Assert.Contains(overlay.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "BEST STREAK");
                 Assert.Equal(1, meta.RunsCompleted);   // the run counted (payout: see the FALL IN test)
                 Assert.Same(meta, ChaosMeta.State);
             }
-            finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ChaosFieldFxOverlay.NowMs = fieldNow;
+                ChaosFieldFxOverlay.SkipPlatformChecksForTests = fieldChecks;
+                FreshMeta();
+            }
             return Task.CompletedTask;
         });
     }
@@ -100,6 +183,8 @@ public sealed class ChaosRunHostTests
         {
             Setup();
             var meta = ChaosMeta.State;
+            var oldPointer = ChaosRunHost.ReadToyPointer;
+            ChaosRunHost.ReadToyPointer = () => null;
             int pockets = meta.ToyPockets;
             bool hadActive = meta.ActiveLifetimeBoons.Contains("vibe_popping");
             bool hadLevel = meta.LifetimeBoonLevels.TryGetValue("vibe_popping", out int level);
@@ -154,6 +239,7 @@ public sealed class ChaosRunHostTests
             finally
             {
                 ChaosRunHost.ForceShutdown(); shell.Close();
+                ChaosRunHost.ReadToyPointer = oldPointer;
                 meta.ToyPockets = pockets;
                 if (!hadActive) meta.ActiveLifetimeBoons.Remove("vibe_popping");
                 if (hadLevel) meta.LifetimeBoonLevels["vibe_popping"] = level; else meta.LifetimeBoonLevels.Remove("vibe_popping");
@@ -285,6 +371,60 @@ public sealed class ChaosRunHostTests
                 Assert.Equal(at, state.ElapsedSec);
             }
             finally { ChaosRunHost.ForceShutdown(); shell.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>The countdown skip and the panic key ride separate hooks in no fixed order: a skip that
+    /// lands while the panic is still queued must never start the run (no boons, HUD clock or toys).</summary>
+    [Fact]
+    public async Task A_skip_landing_before_a_queued_panic_never_starts_the_run()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var s = CoreSettings.Current;
+            (bool pe, string pk) = (s.PanicKeyEnabled, s.PanicKey);
+            var oldTeardown = ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.Teardown;
+            ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.Teardown = () => { };
+            s.PanicKeyEnabled = true;
+            s.PanicKey = "F8";
+            var shell = new MainShellWindow();
+            shell.Show();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                var overlay = ChaosRunHost.Overlay!;
+                // Win32Input.OnPanicPress: the hook thread queues the panic...
+                ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.QueueWatched(
+                    () => shell.HandlePanicKeyPress(new DateTime(2026, 1, 1, 12, 0, 0)));
+                overlay.FinishCountdown();   // ...and the skip runs first
+                Assert.True(ChaosRunHost.IsActive);
+                Assert.False(ChaosRunHost.IsDescending);
+                Assert.Null(ConditioningControlPanel.Avalonia.Platform.X11PanicKey.ToyKeys);   // StartToys never ran
+                Assert.Null(ChaosRunHost.BoonBar);
+
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();   // the panic, then the deferred BeginRun
+                Assert.False(ChaosRunHost.IsActive || ChaosRunHost.IsDescending);
+                Assert.Null(ConditioningControlPanel.Avalonia.Platform.X11PanicKey.ToyKeys);
+                Assert.Null(ChaosRunHost.BoonBar);
+                Assert.False(ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.PanicPending);
+
+                // A queued press that stops nothing (a lock card took it) only delays the start.
+                ChaosRunHost.StartRun(Cfg());
+                ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.QueueWatched(() => { });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                Assert.False(ChaosRunHost.IsDescending);
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.True(ChaosRunHost.IsDescending);
+                ChaosRunHost.StopTimerForTests();
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown(); shell.Close();
+                ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.Teardown = oldTeardown;
+                (s.PanicKeyEnabled, s.PanicKey) = (pe, pk);
+            }
             return Task.CompletedTask;
         });
     }
@@ -624,11 +764,14 @@ public sealed class ChaosRunHostTests
     }
 
     /// <summary>The run's juice hooks recorded in order: labels (PopText), cues (CoreAudio), pulses, shakes.</summary>
+    private static Action<double, double, string, global::Avalonia.Media.Color>? _previousPopText;
+
     private static System.Collections.Generic.List<string> Juice()
     {
         var log = new System.Collections.Generic.List<string>();
+        _previousPopText = ChaosRunHost.PopText;
         ChaosRunHost.PopText = (_, y, w, _) => log.Add("label:" + w);
-        ChaosRunHost.PulseFx = (c, s) => log.Add($"pulse:{c.R},{c.G},{c.B}@{s:0.00}");
+        ChaosRunHost.PulseFx = (c, s) => log.Add(FormattableString.Invariant($"pulse:{c.R},{c.G},{c.B}@{s:0.00}"));   // invariant: the expected strings use a dot on every culture
         ChaosRunHost.ShakeFx = (i, ms) => log.Add($"shake:{i:0.000}/{ms}");
         CoreAudio.PlayOneShotProvider = (p, _, _, _, _) => log.Add("sfx:" + System.IO.Path.GetFileNameWithoutExtension(p));
         return log;
@@ -636,8 +779,17 @@ public sealed class ChaosRunHostTests
 
     private static void Unjuice()
     {
-        ChaosRunHost.PopText = null; ChaosRunHost.PulseFx = null; ChaosRunHost.ShakeFx = null;
+        ChaosRunHost.PopText = _previousPopText; ChaosRunHost.PulseFx = null; ChaosRunHost.ShakeFx = null;
         CoreAudio.PlayOneShotProvider = null;
+    }
+
+    [Fact]
+    public void Juice_restores_the_previous_pop_text_sink()
+    {
+        var previous = ChaosRunHost.PopText;
+        try { Juice(); }
+        finally { Unjuice(); }
+        Assert.Same(previous, ChaosRunHost.PopText);
     }
 
     /// <summary>WPF CompleteDefuse (SNAP, :4577) + the hiss (:1571) + OnDefused's green confirm (:2049);
@@ -664,7 +816,8 @@ public sealed class ChaosRunHostTests
                 var b = BubbleOverlay.SpawnChaos(LiveSpec());
                 BubbleOverlay.Press(b, b.CenterX, b.CenterY);
                 for (int i = 0; i < 40 && !b.Popping; i++) BubbleOverlay.Field.Step();
-                Assert.Equal(new[] { "sfx:defuse_hiss", "label:SNAP", "pulse:90,255,150@0.16" }, log.Where(e => !e.StartsWith("label:+")));
+                Assert.Equal(new[] { "sfx:defuse_hiss", "label:SNAP", "pulse:90,255,150@0.16",
+                    "pulse:255,170,80@0.05" }, log.Where(e => !e.StartsWith("label:+")));
 
                 string[] Press(int shields, int collars)
                 {
@@ -681,7 +834,7 @@ public sealed class ChaosRunHostTests
                 Assert.Equal("sfx:resist_crumble", Press(1, 0)[4]);   // the last point has its own cue
                 Assert.Equal(noFocus.Concat(new[] { "sfx:collar_save", "pulse:255,215,0@0.32",
                     $"shake:{(0.25 + s * 0.3) * 0.5:0.000}/280" }), Press(0, 1));
-                Assert.Equal(noFocus.Concat(new[] { "sfx:trigger", $"pulse:255,50,50@{0.4 + s * 0.35:0.00}",
+                Assert.Equal(noFocus.Concat(new[] { "sfx:trigger", FormattableString.Invariant($"pulse:255,50,50@{0.4 + s * 0.35:0.00}"),
                     $"shake:{(0.4 + s * 0.5) * 0.5:0.000}/380" }), Press(0, 0));
             }
             finally { Unjuice(); ChaosRunHost.ForceShutdown(); BubbleOverlay.Field.Clock = () => DateTime.UtcNow; FreshMeta(); }
@@ -707,10 +860,195 @@ public sealed class ChaosRunHostTests
                 var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
                     { VariantId = "spiral", SizePx = 200, Payload = new FlashPayload() });
                 BubbleOverlay.Press(b, b.CenterX, b.CenterY);
-                Assert.Equal(new[] { "sfx:", "label:SPIRAL" },
+                Assert.Equal(new[] { "sfx:", "label:SPIRAL", "pulse:255,200,235@0.10", "pulse:255,170,80@0.05" },   // + WPF benign pulse, combo micro pulse
                     log.Where(e => !e.StartsWith("label:+")).Select(e => e.StartsWith("sfx:Pop") ? "sfx:" : e));
             }
             finally { Unjuice(); ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>WPF CheckComboMilestone (:3081-3084): crossing ×25 plays streak_milestone, announces
+    /// "STREAK ×25" and fires the big gold pulse once.</summary>
+    [Fact]
+    public async Task Crossing_a_big_combo_threshold_plays_the_cue_and_announces_the_streak()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            var log = Juice();
+            var s = CoreSettings.Current;
+            bool was = s.ChaosAnnouncerEnabled;
+            s.ChaosAnnouncerEnabled = true;
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosAnnouncerOverlay.CloseActive();
+                ChaosRunHost.State!.Combo = 24;
+                log.Clear();
+                var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                    { VariantId = "spiral", SizePx = 200, Payload = new FlashPayload() });
+                BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                Assert.Equal(new[] { "sfx:streak_milestone", "pulse:255,230,120@0.55" },
+                    log.SkipWhile(e => e != "sfx:streak_milestone").Take(2));
+                Assert.Equal("STREAK ×25", ChaosAnnouncerOverlay.Active?.Current?.Text);
+            }
+            finally
+            {
+                ChaosAnnouncerOverlay.CloseActive();
+                s.ChaosAnnouncerEnabled = was;
+                Unjuice(); ChaosRunHost.ForceShutdown(); FreshMeta();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>WPF OnDefused (:1984-2052): the first snap banks its first-time bonus with a feed line
+    /// (OnFirstTimeAwarded :209), each snap raises this loop's snap_field (ChaosLessonHooks :161) and
+    /// feeds Slow Recovery (CountRegenPop :2427); last_breath counts only a held brink snap.
+    /// Combo milestones are lane fin2-chaos-fx-window's.</summary>
+    [Fact]
+    public async Task Snaps_bank_the_first_time_raise_snap_field_and_regrow_resistance()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            var log = Juice();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                var state = ChaosRunHost.State!;
+                state.ShieldRegenPops = 2;
+                state.StartShields = 3; state.Shields = 2;
+                long sparks0 = ChaosMeta.State.Sparks;
+                void Snap() { log.Clear(); BubbleOverlay.SpawnChaos(LiveSpec()); BubbleOverlay.Field.DefuseAllLive(); }
+
+                Snap();
+                Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Snap));
+                Assert.Equal(sparks0 + ChaosFirstTimes.Amounts[ChaosFirstTimes.Snap], ChaosMeta.State.Sparks);
+                Assert.Contains($"+10 {ChaosGlyphs.Drops} first snap", state.RecentEvents);
+                Assert.Equal(1, ChaosLessons.Progress("snap_field"));
+                Assert.Equal(2, state.Shields);
+                Snap();
+                Assert.Equal(sparks0 + 10, ChaosMeta.State.Sparks);   // once
+                Assert.Equal(2, ChaosLessons.Progress("snap_field"));
+                Assert.Equal(3, state.Shields);   // the second pop regrows one
+                Assert.Contains("pulse:120,220,160@0.18", log);
+                Assert.Contains("\u2665 resistance regrows", state.RecentEvents);
+
+                // last_breath (ChaosLessonHooks :159): only a HELD snap started with <= 0.8 s of fuse.
+                Assert.Equal(0, ChaosLessons.Progress("last_breath"));   // free snaps never count
+                state.Focus = 100;
+                var t = DateTime.UnixEpoch;
+                BubbleOverlay.Field.Clock = () => t = t.AddMilliseconds(32);
+                var brink = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                    { VariantId = "pink", IsLive = true, FuseMs = 700, SizePx = 200, Payload = new FlashPayload() });
+                BubbleOverlay.Press(brink, brink.CenterX, brink.CenterY);
+                for (int i = 0; i < 40 && !brink.Popping; i++) BubbleOverlay.Field.Step();
+                Assert.True(brink.DefusedViaChannel);
+                Assert.Equal(1, ChaosLessons.Progress("last_breath"));
+            }
+            finally { Unjuice(); ChaosRunHost.ForceShutdown(); BubbleOverlay.Field.Clock = () => DateTime.UtcNow; FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    // WPF ChaosModeService :1768/:1844/:2427: treats share the snap counter,
+    // full resistance clears partial credit, and a fresh run starts at zero.
+    [Fact]
+    public async Task Treats_bank_once_and_regen_discards_full_shield_and_previous_run_credit()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            var log = Juice();
+            try
+            {
+                void Start()
+                {
+                    ChaosRunHost.StartRun(Cfg());
+                    ChaosRunHost.Overlay!.FinishCountdown();
+                    ChaosRunHost.State!.ShieldRegenPops = 2;
+                    ChaosRunHost.State.StartShields = 3;
+                    ChaosRunHost.State.Shields = 2;
+                }
+                void Pop() => BubbleOverlay.PopChaos(BubbleOverlay.SpawnChaos(
+                    new EffectBubbleSpec { VariantId = "flash", SizePx = 200, Payload = new FlashPayload() }));
+                Start();
+                long before = ChaosMeta.State.Sparks;
+                Pop();
+                Assert.Equal(before + 5, ChaosMeta.State.Sparks);
+                Assert.Contains("label:+5 " + ChaosGlyphs.Drops + " first taste", log);
+                var state = ChaosRunHost.State!;
+                Assert.Equal(2, state.Shields);
+                state.Shields = 3;
+                Pop();  // full clears partial credit
+                state.Shields = 2;
+                Pop();
+                Assert.Equal(2, state.Shields);
+                Pop();
+                Assert.Equal(3, state.Shields);
+                Assert.Equal(before + 5, ChaosMeta.State.Sparks);
+                state.Shields = 2;
+                Pop();  // leave one credit behind
+                ChaosRunHost.ForceShutdown();
+                Start();
+                Pop();
+                Assert.Equal(2, ChaosRunHost.State!.Shields);
+                Pop();
+                Assert.Equal(3, ChaosRunHost.State.Shields);
+            }
+            finally { Unjuice(); ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    // WPF ChaosModeService :2434: preserve English and localize the same regen event.
+    [Theory]
+    [InlineData("en", "♥ resistance regrows")]
+    [InlineData("de", "♥ Widerstand regeneriert sich")]
+    [InlineData("es", "♥ la resistencia se regenera")]
+    [InlineData("fr", "♥ la résistance se régénère")]
+    [InlineData("it", "♥ la resistenza si rigenera")]
+    [InlineData("ja", "♥ 抵抗力が回復")]
+    [InlineData("ko", "♥ 저항력 회복")]
+    [InlineData("pt-BR", "♥ a resistência se regenera")]
+    [InlineData("ru", "♥ сопротивление восстанавливается")]
+    [InlineData("zh-CN", "♥ 抵抗力恢复")]
+    public async Task Regen_feed_uses_the_selected_language(string language, string expected)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            var localization = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+            string previousLanguage = localization.CurrentLanguage;
+            try
+            {
+                localization.SetLanguage(language);
+                Assert.Equal(expected.Substring(2), localization.Get("chaos_resistance_regrows"));
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                var state = ChaosRunHost.State!;
+                state.ShieldRegenPops = 1;
+                state.StartShields = 3;
+                state.Shields = 2;
+                BubbleOverlay.PopChaos(BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                    { VariantId = "flash", SizePx = 200, Payload = new FlashPayload() }));
+                Assert.Equal(3, state.Shields);
+                Assert.Contains(expected, state.RecentEvents);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                FreshMeta();
+                localization.SetLanguage(previousLanguage);
+            }
             return Task.CompletedTask;
         });
     }
@@ -748,4 +1086,79 @@ public sealed class ChaosRunHostTests
             return Task.CompletedTask;
         });
     }
+    [Theory]
+    [InlineData(1, 1, 0.7, 0.8, "en", "Porn DVD", "📀 now loading")]
+    [InlineData(2, 1, 0.85, 0.9, "fr", "DVD porno", "📀 chargement")]
+    [InlineData(4, 2, 1.0, 1.0, "ja", "ポルノDVD", "📀 読み込み中")]
+    public async Task DvdToyKeyLaunchesRankedLogosAndGlowFollowsTheirLifetime(int level, int count, double speed, double scale, string language, string banner, string loading)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx, ChaosEffectBannerOverlay.SkipPlatformChecksForTests, CoreSettings.Current.ChaosAccessoryKey1, CoreSettings.Current.PanicKey);
+            var previousLanguage = ConditioningControlPanel.Localization.LocalizationManager.Instance.CurrentLanguage;
+            var snapshot = ProcessStateSnapshot.Take();
+            try
+            {
+                Setup();
+                ConditioningControlPanel.Localization.LocalizationManager.Instance.SetLanguage(language);
+                FreshMeta();
+                var meta = ChaosMeta.State;
+                meta.ToyPockets = 1;
+                meta.ActiveLifetimeBoons.Add("porn_dvd");
+                meta.LifetimeBoonLevels["porn_dvd"] = level;
+                CoreSettings.Current.ChaosAccessoryKey1 = "Q";
+                CoreSettings.Current.PanicKey = "F8";
+                ChaosDvdOverlay.CanOverlay = () => true;
+                ChaosDvdOverlay.PrepareWindow = (_, _) => true;
+                ChaosDvdOverlay.PlaySfx = (_, _) => { };
+                ChaosEffectBannerOverlay.SkipPlatformChecksForTests = true;
+                try
+                {
+                    ChaosRunHost.StartRun(Cfg());
+                    ChaosRunHost.Overlay!.FinishCountdown();
+                    ChaosRunHost.StopTimerForTests();
+                    var toy = Assert.Single(ChaosRunHost.ToyButtons).Toy;
+                    ChaosRunHost.ToggleManualPause();
+                    ChaosRunHost.OnToyKey("Q");
+                    Assert.False(ChaosDvdOverlay.AnyActive);
+                    ChaosRunHost.ToggleManualPause();
+                    ChaosRunHost.OnToyKey("Q");
+                    Assert.Equal(count, ChaosDvdOverlay.Flock.Active.Count);
+                    foreach (var logo in ChaosDvdOverlay.Flock.Active)
+                    {
+                        Assert.Equal(scale, logo.FontScale);
+                        Assert.Equal(230 * speed, Math.Sqrt(logo.Vx * logo.Vx + logo.Vy * logo.Vy), 6);
+                        Assert.Equal(ChaosRunHost.State!.ToyPower["porn_dvd"], logo.RemainingSec);
+                    }
+                    Assert.True(ChaosEffectBannerOverlay.Active!.Strip.IsLive("dvd"));
+                    Assert.Equal(banner, ChaosEffectBannerOverlay.Active.Strip.Row.Single(e => e.Id == "dvd").Text);
+                    Assert.Contains(loading, ChaosRunHost.State!.RecentEvents);
+                    Assert.Equal(60, toy.CooldownRemainingSec);
+                    ChaosRunHost.OnToyKey("Q"); // cooldown must not spawn more
+                    Assert.Equal(count, ChaosDvdOverlay.Flock.Active.Count);
+                    ChaosRunHost.Tick();
+                    Assert.True(toy.IsEffectActive);
+                    ChaosDvdOverlay.Advance(30);
+                    ChaosDvdOverlay.Advance(0.3);
+                    ChaosRunHost.Tick();
+                    Assert.False(toy.IsEffectActive);
+                    Assert.False(ChaosEffectBannerOverlay.Active!.Strip.IsLive("dvd"));
+                    Assert.NotNull(ChaosDvdOverlay.Window);
+                    ChaosRunHost.ForceShutdown();
+                    Assert.Null(ChaosDvdOverlay.Window);
+                }
+                finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            }
+            finally
+            {
+                snapshot.Restore();
+                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx, ChaosEffectBannerOverlay.SkipPlatformChecksForTests, CoreSettings.Current.ChaosAccessoryKey1, CoreSettings.Current.PanicKey) = saved;
+                ConditioningControlPanel.Localization.LocalizationManager.Instance.SetLanguage(previousLanguage);
+            }
+            Assert.Equal(saved, (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx, ChaosEffectBannerOverlay.SkipPlatformChecksForTests, CoreSettings.Current.ChaosAccessoryKey1, CoreSettings.Current.PanicKey));
+            Assert.Equal(previousLanguage, ConditioningControlPanel.Localization.LocalizationManager.Instance.CurrentLanguage);
+            return Task.CompletedTask;
+        });
+    }
+
 }

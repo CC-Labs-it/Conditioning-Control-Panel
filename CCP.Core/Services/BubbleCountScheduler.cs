@@ -26,6 +26,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>The game can play at all (Avalonia: the shared LibVLC loaded). False skips it,
         /// as WPF skips before counting it started (BubbleCountService.cs:373).</summary>
         bool CanPlay => true;
+        bool CanPlayPath(string path) => CanPlay;
         /// <summary>WPF For You guard: only the visible, non-ghosted feed owns the screen.</summary>
         bool FeedOwnsTheScreen => false;
         /// <summary>WPF #1418: take/release the mandatory video's bouncing-text hold.</summary>
@@ -44,7 +45,7 @@ namespace ConditioningControlPanel.Services
     /// (WPF TriggerGame :321 queueing on InteractionQueue), re-checked every <see cref="QueuePoll"/>.
     /// Pack clips come through <see cref="PackVideos"/>; an on-screen feed defers one game for at most 90 s.
     /// </summary>
-    public sealed class BubbleCountScheduler
+    public sealed class BubbleCountScheduler : IDisposable
     {
         public enum Difficulty { Easy, Medium, Hard }
 
@@ -62,7 +63,7 @@ namespace ConditioningControlPanel.Services
         private Queue<string> _queue = new();
         private ITimer? _scheduler, _leadIn, _queued, _feedDefer;
         private DateTimeOffset? _feedDeadline;
-        private bool _toldNoVideos, _heldFlashes, _packCleanupPending, _packHostOpen; // Failed host closure keeps cleanup deferred.
+        private bool _toldNoVideos, _heldFlashes;
         private DateTimeOffset _lastXp = DateTimeOffset.MinValue;
         private int _retryCount;
 
@@ -126,7 +127,14 @@ namespace ConditioningControlPanel.Services
             Dispose(ref _scheduler);
             Dispose(ref _feedDefer);
             _feedDeadline = null;
-            RequestPackCleanup();   // WPF BubbleCountService.Stop :186
+            // A game already on screen plays out. Its completion/force-close retries after release.
+            if (!IsBusy) PackVideos?.CleanupTemps();
+        }
+
+        public void Dispose()
+        {
+            Stop();
+            ForceCleanup();
         }
 
         /// <summary>WPF RefreshSchedule: a live schedule picks up a new frequency.</summary>
@@ -140,9 +148,12 @@ namespace ConditioningControlPanel.Services
             Dispose(ref _feedDefer);
             _feedDeadline = null;
             var wasBusy = IsBusy;
-            Idle(resumeFlashes: false);   // WPF ForceCleanup: App.Bubbles.Resume()
             _retryCount = 0;
-            try { _host.CloseAll(); _packHostOpen = false; if (_packCleanupPending) RequestPackCleanup(); } catch (Exception ex) { Log.Warning(ex, "BubbleCountService: close failed"); }
+            // Drop the busy state before closing: a close callback must not start a strict retry.
+            // Defer temp cleanup until the host has released its players, even on Unix.
+            Idle(resumeFlashes: false, cleanupTemps: false);
+            try { _host.CloseAll(); } catch (Exception ex) { Log.Warning(ex, "BubbleCountService: close failed"); }
+            PackVideos?.CleanupTemps();
             if (wasBusy) Log.Information("BubbleCountService: ForceCleanup called");
         }
 
@@ -251,7 +262,7 @@ namespace ConditioningControlPanel.Services
         {
             var path = PickNext();
             if (path == null) return false;
-            if (!_host.CanPlay)
+            if (!_host.CanPlayPath(path))
             {
                 // WPF's skip: not a loss - a failed count would start the strict WRONG! WATCH AGAIN loop.
                 Log.Warning("BubbleCountService: skipping game - video playback is not available");
@@ -260,7 +271,6 @@ namespace ConditioningControlPanel.Services
                 return true;
             }
             CoreProgression.TrackBubbleCountGameStarted();
-            _packHostOpen = true;
             try { _host.Show(path, CoreSettings.Current.BubbleCountDifficulty, strict, OnComplete); }
             catch (Exception ex) { Log.Error(ex, "Failed to start bubble count game"); Idle(); _retryCount = 0; }
             return true;
@@ -269,9 +279,6 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF OnGameComplete.</summary>
         internal void OnComplete(bool success)
         {
-            if (!success && _packCleanupPending && _packHostOpen) { if (!IsBusy) return;
-                try { _host.CloseAll(); } catch (Exception ex) { Log.Warning(ex, "BubbleCountService: close failed"); Idle(); return; } }
-            _packHostOpen = false; if (_packCleanupPending) FlushPackCleanup();
             if (!IsBusy) return;   // panic got there first
             if (success)
             {
@@ -317,10 +324,9 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex) { Log.Warning(ex, "BubbleCountService: effects hold failed"); }
         }
 
-        private void Idle(bool resumeFlashes = true)
+        private void Idle(bool resumeFlashes = true, bool cleanupTemps = true)
         {
             IsBusy = false;
-            if (_packCleanupPending && !_packHostOpen) FlushPackCleanup();
             if (HoldsEffects)
             {
                 HoldsEffects = false;
@@ -330,14 +336,16 @@ namespace ConditioningControlPanel.Services
                 _heldFlashes = false;
             }
             CoreBubbles.Resume();
+            if (cleanupTemps && !IsRunning) PackVideos?.CleanupTemps();
         }
 
         /// <summary>WPF BubbleCountService.ReloadAssets: drop the dealt queue so the next game re-reads
         /// the enabled library (#130).</summary>
-        public void ReloadAssets() { _queue = new Queue<string>(); RequestPackCleanup(); }
-
-        private void RequestPackCleanup() { if (IsBusy || _packHostOpen) _packCleanupPending = true; else FlushPackCleanup(); }
-        private void FlushPackCleanup() { PackVideos?.CleanupTemps(); _packCleanupPending = PackVideos?.TempCount > 0; }
+        public void ReloadAssets()
+        {
+            _queue = new Queue<string>();
+            PackVideos?.CleanupTemps();
+        }
 
         internal string? PickNext()
         {

@@ -31,10 +31,13 @@ namespace ConditioningControlPanel.Services
         /// <param name="type"><see cref="ContentPackStore.ImageType"/> or <see cref="ContentPackStore.VideoType"/>.</param>
         public PackMediaPool(string type, Random? rng = null, Func<ContentPackStore?>? store = null)
         {
-            _temps = new MediaTempFileLedger(TempCap, path => { _store()?.DeleteTempFile(path); return MediaTempFileLedger.TryDeleteFile(path); });
+            _store = store ?? (() => ContentPackStore.Current);
+            // The store keeps a refused decrypt's identity and says whether the file really went;
+            // File.Exists alone reads a directory left at the path as deleted.
+            _temps = new MediaTempFileLedger(TempCap, path =>
+                _store() is { } owner ? owner.TryDeleteTempFile(path) : MediaTempFileLedger.TryDeleteFile(path));
             _type = type;
             _rng = rng ?? new Random();
-            _store = store ?? (() => ContentPackStore.Current);
             _bag = new ShuffleBag<(string PackId, PackFileEntry File)>(e => ContentPackStore.SourceKey(e.PackId, e.File), _rng);
         }
 

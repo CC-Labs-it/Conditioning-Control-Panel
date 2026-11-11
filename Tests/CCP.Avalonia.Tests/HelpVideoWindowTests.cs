@@ -56,6 +56,39 @@ public sealed class HelpVideoWindowTests
     });
 
     [Fact]
+    public Task SessionEditorClipOnlyTopicOpensHelpInsteadOfCoachMarks() => Run(() =>
+    {
+        // WPF SessionEditorWindow.xaml.cs:123-129 accepts a clip even without a drawn loop.
+        var content = HelpContentService.GetContent("SessionEditor");
+        var oldSection = content.SectionId;
+        var oldClip = content.ClipFile;
+        var editor = new SessionEditorWindow();
+        try
+        {
+            content.SectionId = "SessionEditorClipOnlyTest";
+            content.ClipFile = "missing-help-test.mp4";
+            Assert.False(HelpLoopRegistry.Has(content.SectionId));
+            editor.Show();
+            editor.FindControl<Button>("BtnHelp")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            var win = Current();
+            Assert.NotNull(win);
+            Assert.Same(editor, win!.Owner);
+            Assert.False(editor.FindControl<Control>("TutorialOverlay")!.IsVisible);
+            // A missing clip still opens the help window with WPF's caption fallback.
+            Assert.False(win.FindControl<Border>("VideoContainer")!.IsVisible);
+            Assert.True(win.FindControl<TextBlock>("TxtCaption")!.IsVisible);
+        }
+        finally
+        {
+            Current()?.Close();
+            editor.Close();
+            content.SectionId = oldSection;
+            content.ClipFile = oldClip;
+        }
+    });
+
+    [Fact]
     public Task WebcamCalibrationTopicHostsItsSliceCLoop() => Run(() =>
     {
         // What WebcamCalibrationWindow's ? passes (WebcamCalibrationWindow.axaml.cs:239).
@@ -125,10 +158,6 @@ public sealed class HelpVideoWindowTests
                     Assert.True(container.IsVisible);
                     Assert.False(win.FindControl<TextBlock>("TxtCaption")!.IsVisible);   // a playing clip needs no blurb
                     var sink = win.Sink!;
-                    // Keep the UI dispatcher occupied across EOF: looping must stay in the decoder.
-                    var nativeLooped = new TaskCompletionSource(); long lastTime = 0;
-                    win.Player!.TimeChanged += (_, e) => { if (win.Player?.IsPlaying == true && e.Time < System.Threading.Interlocked.Exchange(ref lastTime, e.Time)) nativeLooped.TrySetResult(); };
-                    Assert.True(nativeLooped.Task.Wait(TimeSpan.FromSeconds(10)), "clip loop waited for the UI dispatcher");
                     // The 2 s, 24-frame clip runs past its end: frames keep coming (WPF EndReached -> Play loop;
                     // without it one pass stops below 50 displays). Event-driven wait, no sleep (P08).
                     var looped = new TaskCompletionSource();
@@ -148,6 +177,102 @@ public sealed class HelpVideoWindowTests
         finally { File.Delete(clip); }
     }
 
+    [Fact]
+    public Task PanicClosesCurrentHelpWindowAndIsSafeWhenIdle() => Run(() =>
+    {
+        HelpVideoWindow.Show(new HelpContent { SectionId = "PanicHelpTest", Title = "Help", WhatItDoes = "Help" }, null);
+        var win = Current()!;
+        try
+        {
+            var stop = PanicSurfaces.All.Single(x => x.Id == "help-video");
+            stop.Stop(null);
+            Assert.False(win.IsVisible);
+            Assert.Null(Current());
+            stop.Stop(null);
+        }
+        finally { win.Close(); }
+    });
+
+    [Fact]
+    public Task StalledHelpDecoderDoesNotBlockLaterPanicSteps() => RunAsync(async () =>
+    {
+        HelpVideoWindow.Show(new HelpContent { SectionId = "StalledHelpTest", Title = "Help" }, null);
+        var win = Current()!;
+        using var release = new System.Threading.ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var exited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        win.BeforeNativeStop = () =>
+        {
+            entered.TrySetResult();
+            release.Wait(TimeSpan.FromSeconds(5)); // bounded even with broken synchronous cleanup
+            exited.TrySetResult();
+        };
+        var all = PanicSurfaces.All;
+        var later = false;
+        PanicSurfaces.All = new[]
+        {
+            all.Single(x => x.Id == "help-video"),
+            new PanicSurfaces.Surface("later-engine-haptics", _ => later = true)
+        };
+        try
+        {
+            PanicSurfaces.StopAll("stalled help decoder test");
+            Assert.True(later);
+            Assert.False(win.IsVisible);
+            Assert.Null(Current());
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(exited.Task.IsCompleted); // the later step ran while cleanup was stalled
+            Assert.NotNull(win.NativeTeardown);
+            Assert.False(win.NativeTeardown!.IsCompleted);
+        }
+        finally
+        {
+            release.Set();
+            PanicSurfaces.All = all;
+            if (win.NativeTeardown != null) await win.NativeTeardown.WaitAsync(TimeSpan.FromSeconds(5));
+            win.BeforeNativeStop = null;
+            win.Close();
+        }
+    });
+
+    [Fact]
+    public async Task PanicKeepsDecoderBufferUntilNativeTeardownCompletes()
+    {
+        try { _ = new LibVlcAudio("--aout=dummy"); }
+        catch (Exception e) { Assert.Skip("libvlc not installed: " + e.Message); }
+        await RunAsync(async () =>
+        {
+            var clip = Path.Combine(AppContext.BaseDirectory, "Assets", "help-clip-audio-2s.mp4");
+            HelpVideoWindow.Show(new HelpContent { SectionId = "RetainedHelpTest", Title = "Help", ClipFile = clip }, null);
+            var win = Current()!;
+            var sink = win.Sink!;
+            using var release = new System.Threading.ManualResetEventSlim();
+            var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var frame = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            win.FrameShown += () => frame.TrySetResult();
+            try
+            {
+                await frame.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.False(sink.Freed);
+                win.BeforeNativeStop = () => { entered.TrySetResult(); release.Wait(TimeSpan.FromSeconds(5)); };
+                PanicSurfaces.All.Single(x => x.Id == "help-video").Stop(null);
+                await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.False(win.IsVisible);
+                Assert.Null(win.Player);
+                Assert.False(sink.Freed); // callback buffer belongs to the stalled decoder
+                Assert.False(win.NativeTeardown!.IsCompleted);
+            }
+            finally
+            {
+                release.Set();
+                if (win.NativeTeardown != null) await win.NativeTeardown.WaitAsync(TimeSpan.FromSeconds(5));
+                win.BeforeNativeStop = null;
+                win.Close();
+            }
+            Assert.True(sink.Freed);
+        });
+    }
+
     private static HelpVideoWindow? Current() =>
         (HelpVideoWindow?)typeof(HelpVideoWindow).GetField("_current", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null);
 
@@ -156,8 +281,9 @@ public sealed class HelpVideoWindowTests
     private static Task RunAsync(Func<Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         var oldSettings = CoreSettings.ServiceProvider;

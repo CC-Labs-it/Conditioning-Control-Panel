@@ -110,7 +110,7 @@ public sealed class SectionPaintShellTests
                 var band = w.Named<Panel>("SectionEdgeGlow")!.Children.OfType<Border>().ToList();
                 Assert.Equal(4, band.Count);
                 Assert.All(band, b => Assert.Equal(NavStripRules.WithAlpha(play, NavStripRules.EdgeGlowAlpha(play) / 255.0), Solid(b.Background)));
-                Assert.False(w.Named<Border>("SectionEdgeLiftTop")!.IsVisible);
+                Assert.False(w.Named<SectionEdgeLift>("SectionEdgeLift")!.IsVisible);
 
                 // Motion on: the lit pill glows in the section hue.
                 CoreSettings.Current.MotionLevel = MotionLevel.Full;
@@ -118,7 +118,7 @@ public sealed class SectionPaintShellTests
                 Dispatcher.UIThread.RunJobs();
                 w.UpdateLayout();
                 Assert.Equal(NavStripRules.WithAlpha(hue, NavStripRules.ActiveGlowOpacity), strip.ActiveFill.BoxShadow[0].Color);
-                Assert.True(w.Named<Border>("SectionEdgeLiftTop")!.IsVisible);
+                Assert.True(w.Named<SectionEdgeLift>("SectionEdgeLift")!.IsVisible);
             }
             finally { w?.Close(); }
             return Task.CompletedTask;

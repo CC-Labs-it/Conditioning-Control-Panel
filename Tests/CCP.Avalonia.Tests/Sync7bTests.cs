@@ -1,7 +1,5 @@
 using System;
-using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -13,9 +11,6 @@ using Avalonia.LogicalTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
-using ConditioningControlPanel.Avalonia.Platform;
-using ConditioningControlPanel.Avalonia.Views.AvatarTube;
-using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
 using IconKind = FluentIcons.Common.Symbol;
@@ -109,72 +104,6 @@ public class Sync7bTests
             Assert.False(d.IsVisible); Assert.False(d.IsOpen);
         }
         finally { w.Close(); }
-        return Task.CompletedTask;
-    });
-    [Fact]
-    public Task VoiceSliderSeedsRestoresAndControlsSpokenGain() => Run(() =>
-    {
-        CoreSettings.Current.CompanionVoiceLevel = 40; var cell = new WorkshopBehaviorCell();
-        var slider = cell.FindControl<Slider>("SliderVoiceLevelCompanion")!; Assert.Equal(40, slider.Value);
-        var panel = Assert.IsType<StackPanel>(slider.Parent); var index = panel.Children.IndexOf(slider);
-        var hint = Assert.IsType<TextBlock>(panel.Children[index + 1]);
-        Assert.True(panel.Children.IndexOf(cell.FindControl<Slider>("SliderBubbleDurationCompanion")!) < index);
-        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("label_companion_voice_level_hint"), hint.Text); Assert.True(hint.IsVisible);
-        Assert.Equal(new Thickness(0,0,0,9), hint.Margin); Assert.Equal(new Thickness(0,4,0,2), slider.Margin);
-        Assert.Null(ToolTip.GetTip(slider)); Assert.Same(cell.FindResource("CmpCellHintStyle"), hint.Theme); slider.Value = 100;
-        Assert.Equal(100, CoreSettings.Current.CompanionVoiceLevel); Assert.Equal("100", cell.FindControl<TextBlock>("TxtVoiceLevelCompanion")!.Text);
-        CoreSettings.Current.CompanionVoiceLevel = 20; cell.SyncFromSettings(); Assert.Equal(20, slider.Value); var path = Path.GetTempFileName();
-        var old = CoreAudio.PlayStoppableProvider; var w = new AvatarTubeWindow(); float gain = -1;
-        CoreAudio.PlayStoppableProvider = (_, v, _, _, _) => { gain = v; return () => { }; };
-        try
-        {
-            CoreSettings.Current.MasterVolume = 50; CoreSettings.Current.CompanionVoiceLinesMuted = false;
-            var play = typeof(AvatarTubeWindow).GetMethod("PlaySpeechAudio", BindingFlags.Instance | BindingFlags.NonPublic)!;
-            play.Invoke(w, new object?[] { false, path, true, null });
-            Assert.Equal(ConditioningControlPanel.Services.CompanionVoiceGain.Compute(50,20,0.85f), gain); slider.Value = 0; gain = -1;
-            play.Invoke(w, new object?[] { false, path, true, null });
-            Assert.Equal(-1, gain);
-        }
-        finally { w.Close(); CoreAudio.PlayStoppableProvider = old; File.Delete(path); }
-        return Task.CompletedTask;
-    });
-    private sealed class Drone : LayeredAudio.ILayerPlayer
-    {
-        public int Last; public bool Disposed;
-        public int Volume { set => Last = value; }
-        public void Dispose() => Disposed = true;
-    }
-    [Fact]   // the drone follows master in every phase, the tone obeys it, StopDrone unhooks
-    public Task MantraDroneFollowsMasterInEveryPhase() => Run(() =>
-    {
-        var (opener, play, master, mantra) = (MantraWindow.DroneOpener, CoreAudio.PlayOneShotProvider, CoreSettings.Current.MasterVolume, CoreSettings.Current.MantraDroneVolume);
-        var drone = new Drone(); MantraWindow.DroneOpener = _ => drone;
-        var w = new MantraWindow();
-        const BindingFlags F = BindingFlags.Instance | BindingFlags.NonPublic;
-        void Call(string name) => typeof(MantraWindow).GetMethod(name, F)!.Invoke(w, null);
-        float Cur() => (float)typeof(MantraWindow).GetField("_droneCurrentGain", F)!.GetValue(w)!;
-        void Tick() => typeof(MantraWindow).GetMethod("FloatTimer_Tick", F)!.Invoke(w, new object?[] { null, EventArgs.Empty });
-        int Expect(double m) => ToneWav.VlcVolume(Cur() * 0.3 * m * ToneWav.DronePeak);
-        try
-        {
-            CoreSettings.Current.MasterVolume = 50; CoreSettings.Current.MantraDroneVolume = 30; Call("StartDrone");
-            Assert.Equal(ToneWav.VlcVolume(0.05 * 0.3 * 0.5 * ToneWav.DronePeak), drone.Last);   // idle: level x drone dial x master
-            typeof(MantraWindow).GetField("_droneTargetGain", F)!.SetValue(w, 0.4f);
-            Tick(); Assert.Equal(Expect(0.5), drone.Last);
-            // A master change keeps the ramped level (WPF :374 dropped it to idle).
-            CoreSettings.Current.MasterVolume = 80; Assert.Equal(Expect(0.8), drone.Last);
-            for (var i = 0; i < 1000; i++) Tick();
-            // Master 0 silences a fully ramped streak (WPF :193 skipped master, PR #4080).
-            CoreSettings.Current.MasterVolume = 0; Assert.Equal(0, drone.Last);
-            typeof(MantraWindow).GetField("_droneCurrentGain", F)!.SetValue(w, 0.2f);
-            Tick(); Assert.Equal(0, drone.Last);
-            CoreSettings.Current.MasterVolume = 25; Assert.Equal(Expect(0.25), drone.Last);
-            float gain = -1; CoreAudio.PlayOneShotProvider = (_, v, _, _, _) => gain = v;
-            typeof(MantraWindow).GetMethod("PlayTone", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, new object[] { 400.0, 150 });
-            Assert.Equal(0.15f * 0.25f, gain); Call("StopDrone"); Assert.True(drone.Disposed);
-            var last = drone.Last; CoreSettings.Current.MasterVolume = 100; Assert.Equal(last, drone.Last);
-        }
-        finally { Call("Cleanup"); w.Close(); (MantraWindow.DroneOpener, CoreAudio.PlayOneShotProvider, CoreSettings.Current.MasterVolume, CoreSettings.Current.MantraDroneVolume) = (opener, play, master, mantra); }
         return Task.CompletedTask;
     });
 }

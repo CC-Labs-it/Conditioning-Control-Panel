@@ -56,15 +56,20 @@ public sealed class MantraWindowSessionTests
         var (factory, sources, sent) = (MemoryStore.SignalMirrorFactory, MemorySignalWriter.SourcesHook, CompanionBrain.UserMessageSent);
         var tones = new List<string>();
         var xp = new List<double>();
+        var settings = CoreSettings.Current;
+        var levels = (settings.MasterVolume, settings.MantraDroneVolume);
         var drone = new FakeDrone();
+        var master0 = CoreSettings.Current.MasterVolume;
+        CoreSettings.Current.MasterVolume = 100;
         CoreAudio.PlayOneShotProvider = (p, v, tag, _, done) => { tones.Add($"{Path.GetFileName(p)} {v.ToString(System.Globalization.CultureInfo.InvariantCulture)} {tag}"); done?.Invoke(); };
         MantraWindow.DroneOpener = p => { Assert.True(File.Exists(p)); return drone; };
         CoreProgression.AddXPProvider = (a, _) => xp.Add(a);
         MantraWindow? win = null;
-        var settings = CoreSettings.Current; var master = settings.MasterVolume; var droneLevel = settings.MantraDroneVolume;
         try
         {
-            settings.MasterVolume = 100; settings.MantraDroneVolume = 30; // This scenario asserts full-scale drone and tone gains.
+            // Pin the levels used by the gain assertions below.
+            settings.MasterVolume = 100;
+            settings.MantraDroneVolume = 30;
             AvApp.SeedMemorySignals();
             using var store = new MemoryStore(Path.Combine(dir, "memory.json"));
             using var writer = MemoryStore.SignalMirrorFactory!(store)!;
@@ -106,7 +111,7 @@ public sealed class MantraWindowSessionTests
         finally
         {
             win?.Close();
-            settings.MasterVolume = master; settings.MantraDroneVolume = droneLevel;
+            CoreSettings.Current.MasterVolume = master0;
             (CoreAudio.PlayOneShotProvider, MantraWindow.DroneOpener, CoreProgression.AddXPProvider) = (play, opener, xp0);
             (MemoryStore.SignalMirrorFactory, MemorySignalWriter.SourcesHook, CompanionBrain.UserMessageSent) = (factory, sources, sent);
             AvApp.StopMantra(Array.Empty<Window>());   // deletes ToneWav's temp folder

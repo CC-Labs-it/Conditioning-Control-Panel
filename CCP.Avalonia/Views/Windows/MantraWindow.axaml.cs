@@ -59,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private Platform.LayeredAudio.ILayerPlayer? _drone;
         private float _droneTargetGain = 0.05f;
         private float _droneCurrentGain = 0.05f;
+        private int _droneMasterApplied = -1;   // no master-volume event on this head: the float tick compares
 
         // Per-character highlight state
         private readonly List<Run> _mantraRuns = new();
@@ -286,11 +287,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Animate();
 
             // Smoothly ramp drone gain
-            if (_drone != null && Math.Abs(_droneCurrentGain - _droneTargetGain) > 0.001f)
-            {
-                _droneCurrentGain += (_droneTargetGain - _droneCurrentGain) * 0.02f;
-                ApplyDroneVolume(DroneGain());
-            }
+            if (_drone == null) return;
+            var ramping = Math.Abs(_droneCurrentGain - _droneTargetGain) > 0.001f;
+            if (ramping) _droneCurrentGain += (_droneTargetGain - _droneCurrentGain) * 0.02f;
+            if (ramping || _droneMasterApplied != CoreSettings.Current.MasterVolume) ApplyDroneVolume();
         }
 
         private void IdleTimer_Tick(object? sender, EventArgs e)
@@ -475,6 +475,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
+        /// <summary>WPF StartDrone: 90 Hz fundamental + 180 Hz harmonic at 0.4 of its gain.</summary>
         private ConditioningControlPanel.Models.AppSettings? _volumeSettings;
         private SettingsService? _volumeService;
 
@@ -490,15 +491,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_volumeSettings != null) _volumeSettings.PropertyChanged -= OnMasterVolumeChanged;
             _volumeSettings = CoreSettings.Current;
             _volumeSettings.PropertyChanged += OnMasterVolumeChanged;
-            ApplyDroneVolume(DroneGain());
+            ApplyDroneVolume();
         }
 
-        /// <summary>The drone gain follows WPF's level, drone dial and master in every phase.</summary>
-        internal static float DroneGain(float level, double droneVolume, int master) =>
-            level * (float)Math.Clamp(droneVolume / 100.0, 0.0, 1.0) * Math.Clamp(master / 100f, 0f, 1f);
-        private float DroneGain() => DroneGain(_droneCurrentGain, CoreSettings.Current.MantraDroneVolume, CoreSettings.Current.MasterVolume);
-
-        /// <summary>WPF StartDrone: 90 Hz fundamental + 180 Hz harmonic at 0.4 of its gain.</summary>
         private void StartDrone()
         {
             try
@@ -515,11 +510,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
-        /// <summary>Fundamental gain as WPF sets it; the file's peak is 1.4 x the fundamental's.</summary>
-        private void ApplyDroneVolume(double gain)
+        /// <summary>WPF MantraWindow.DroneGain (#4080): in every phase (idle, streak ramp, master change) the
+        /// drone is its level x the Mantra drone dial x the master dial.</summary>
+        internal static float DroneGain(float level, double droneVolume, int master) =>
+            level * (float)Math.Clamp(droneVolume / 100.0, 0.0, 1.0) * Math.Clamp(master / 100f, 0f, 1f);
+
+        /// <summary>The file's peak is 1.4 x the fundamental's.</summary>
+        private void ApplyDroneVolume()
         {
             if (_drone == null) return;
-            _drone.Volume = Platform.ToneWav.VlcVolume(gain * Platform.ToneWav.DronePeak);
+            var s = CoreSettings.Current;
+            _droneMasterApplied = s.MasterVolume;
+            _drone.Volume = Platform.ToneWav.VlcVolume(DroneGain(_droneCurrentGain, s.MantraDroneVolume, s.MasterVolume) * Platform.ToneWav.DronePeak);
         }
 
         /// <summary>Panic (PanicSurfaces "mantra"): WPF KillAllAudio's "Stop mantra lab audio" ->
@@ -543,9 +545,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _drone = null;
         }
 
+        private static float MasterGain() => Math.Clamp(CoreSettings.Current.MasterVolume / 100f, 0f, 1f);
+
         private static void PlayTone(double frequency, int durationMs)
         {
-            try { CoreAudio.PlayOneShot(Platform.ToneWav.Tone(frequency, durationMs), 0.15f * Math.Clamp(CoreSettings.Current.MasterVolume / 100f, 0f, 1f), "mantra"); }
+            try { CoreAudio.PlayOneShot(Platform.ToneWav.Tone(frequency, durationMs), 0.15f * MasterGain(), "mantra"); }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Failed to play mantra tone"); }
         }
 

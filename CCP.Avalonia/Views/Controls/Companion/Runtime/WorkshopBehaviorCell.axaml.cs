@@ -34,16 +34,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             // x:Name fields, and the seed below reads them.
             InitializeComponent();
 
-            SliderVoiceLevelCompanion.ValueChanged += (_, _) =>
-            {
-                if (_isLoading) return;
-                var value = (int)Math.Round(SliderVoiceLevelCompanion.Value);
-                TxtVoiceLevelCompanion.Text = value.ToString();
-                CoreSettings.Current.CompanionVoiceLevel = value;
-                CoreSettings.Save();
-            };
             SliderIdleIntervalCompanion.ValueChanged += SliderIdleInterval_ValueChanged;
             SliderBubbleDurationCompanion.ValueChanged += SliderBubbleDuration_ValueChanged;
+            SliderVoiceLevelCompanion.ValueChanged += SliderVoiceLevel_ValueChanged;
 
             BtnChatShortcut.Click += (_, _) => ChatShortcutRequested?.Invoke(this, EventArgs.Empty);
             BtnCameraShortcut.Click += (_, _) => CameraShortcutRequested?.Invoke(this, EventArgs.Empty);
@@ -58,9 +51,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                     if (_isLoading) return;
                     var paused = ChkPauseBrowserCompanion.IsChecked == true;
                     if (TopLevel.GetTopLevel(this) is Windows.MainShellWindow shell)
+                    {
                         await shell.SetBrowserPausedFromWorkshopAsync(paused);
+                        shell.Tube?.SetBrowserPaused(paused);
+                    }
                 };
 
+            ChkIdleVoiceEngineOffCompanion.IsCheckedChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.CompanionSpeaksIdleWhenEngineOff = ChkIdleVoiceEngineOffCompanion.IsChecked == true;
+                CoreSettings.Save();
+            };
             SyncFromSettings();
         }
 
@@ -93,15 +95,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 // "Muted" is its own flag, not the inverse of the enable (AppSettings.SubAudioMuted).
                 ChkMuteWhispersCompanion.IsChecked = s.SubAudioMuted;
                 ChkVoiceLinesCompanion.IsChecked = s.CompanionVoiceLinesMuted;
-
-                SliderVoiceLevelCompanion.Value = s.CompanionVoiceLevel;
-                TxtVoiceLevelCompanion.Text = s.CompanionVoiceLevel.ToString();
+                ChkIdleVoiceEngineOffCompanion.IsChecked = s.CompanionSpeaksIdleWhenEngineOff;
 
                 // Labels set explicitly rather than left to ValueChanged, which _isLoading blocks.
                 SliderIdleIntervalCompanion.Value = s.IdleGiggleIntervalSeconds;
                 TxtIdleIntervalCompanion.Text = $"{s.IdleGiggleIntervalSeconds}s";
                 SliderBubbleDurationCompanion.Value = s.BubbleDurationSeconds;
                 TxtBubbleDurationCompanion.Text = $"{(int)s.BubbleDurationSeconds}s";
+                SliderVoiceLevelCompanion.Value = s.CompanionVoiceLevel;
+                TxtVoiceLevelCompanion.Text = s.CompanionVoiceLevel.ToString();
 
                 // The chat pill's label. WPF's RefreshChatShortcutLabel writes THIS TextBlock and
                 // the Devices one from the same combo (MainWindow.SessionIO.cs:1326/1332); the
@@ -119,9 +121,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 // Paint the midnight-glass row from the two facts that govern it: does the player own
                 // tube_midnight, and did they ask for it. Ownership failing to read answers "no",
                 // which greys the row - the honest state for a prize we cannot prove was sold.
-                // ponytail: needs ArcademyHostService.WalletOwnsSku (ConditioningControlPanel/Services/
-                // Arcademy/ArcademyHostService.cs), still in the WPF head; the SKU itself is in Core.
-                bool owned = false;
+                // WPF ArcademyHostService.cs:905: persisted ownership when Arcademy is closed.
+                bool owned = global::ConditioningControlPanel.Services.Arcademy.ArcademyMetaStore.WalletOwnsOnDisk(
+                    global::ConditioningControlPanel.Services.Arcademy.ArcademyEconomy.SkuTubeMidnight);
                 ChkTubeMidnightGlass.IsEnabled = owned;
                 ChkTubeMidnightGlass.IsChecked = owned && s.TubeMidnightGlass;
             }
@@ -131,6 +133,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 Log.Debug(ex, "WorkshopBehaviorCell.SyncFromSettings failed");
             }
             finally { _isLoading = false; }
+        }
+
+        // WPF MainWindow.Patreon.cs:2179: mirror without dispatching a second pause.
+        internal void SetPauseBrowserChecked(bool paused)
+        {
+            var loading = _isLoading;
+            _isLoading = true;
+            try { ChkPauseBrowserCompanion.IsChecked = paused; }
+            finally { _isLoading = loading; }
         }
 
         /// <summary>
@@ -148,12 +159,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             var value = (int)SliderIdleIntervalCompanion.Value;
             TxtIdleIntervalCompanion.Text = $"{value}s";
             CoreSettings.Current.IdleGiggleIntervalSeconds = value;
+            Views.AvatarTube.AvatarTubeWindow.Live?.RestartIdleTimer();
             CoreSettings.Save();
-            // ponytail: WPF also restarts the tube's idle timer. This head's tube IS ported
-            // (CCP.Avalonia/Views/AvatarTube/AvatarTubeWindow.axaml.cs) but has no idle-giggle
-            // timer to restart - its ctor deliberately starts none of WPF's four loops, because
-            // each calls into a Reactions/Speech partial that has not been ported. The new
-            // interval is on CoreSettings either way, so it applies whenever that loop lands.
+
         }
 
         private void SliderBubbleDuration_ValueChanged(object? sender, RangeBaseValueChangedEventArgs e)
@@ -165,6 +173,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             CoreSettings.Save();
         }
 
+        private void SliderVoiceLevel_ValueChanged(object? sender, RangeBaseValueChangedEventArgs e)
+        {
+            if (_isLoading) return;
+            var value = (int)Math.Round(SliderVoiceLevelCompanion.Value);
+            TxtVoiceLevelCompanion.Text = value.ToString();
+            CoreSettings.Current.CompanionVoiceLevel = value;
+            CoreSettings.Save();
+        }
+
         private void ChkMuteWhispers_Changed(object? sender, RoutedEventArgs e)
         {
             if (_isLoading) return;
@@ -173,11 +190,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             // part of the prescribed dose and is locked while one runs.
             CoreSettings.Current.SubAudioMuted = ChkMuteWhispersCompanion.IsChecked == true;
             CoreSettings.Save();
-            // ponytail: WPF also refreshes the tube's quick menu. AvatarTubeWindow.UpdateQuickMenuState
-            // exists on this head and is private AND deliberately inert - it needs App.Engine and
-            // App.Companion for the item titles, which have no seam, so retitling from settings
-            // alone would print a menu that disagrees with the engine. Calling it would change
-            // nothing; it is not called for that reason, not because the tube is missing.
+            // WPF MainWindow.Patreon.cs:2119: refresh the open tube's whisper mute item.
+            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.Tube?.UpdateQuickMenuState();
         }
 
         // #846: mute only the spoken voicelines - the bubble, its text and the giggle cues stay.

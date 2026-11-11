@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -42,12 +43,100 @@ public sealed class PackMediaPoolTests : IDisposable
         double IMandatoryVideoHost.CloseAll() { Release(); return 0; }
     }
 
+    [Fact]
+    public void ADeletedTempDirectoryIsForgottenByPoolAndStore()
+    {
+        ContentPackStoreTests.WritePack(_root, "p1", "One", ("a.png", "image"));
+        var store = NewStore();
+        var pool = new PackMediaPool(ContentPackStore.ImageType, store: () => store);
+        var path = pool.TryDraw(0)!;
+        Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        pool.CleanupTemps();
+        Assert.Equal(0, pool.TempCount);
+        Assert.False(store.TryGetSourceKey(path, out _));
+    }
+
+    [Theory]
+    [InlineData("bubble-stop")]
+    [InlineData("bubble-reload")]
+    [InlineData("bubble-close")]
+    [InlineData("bubble-dispose")]
+    [InlineData("video-stop")]
+    [InlineData("video-reload")]
+    [InlineData("video-close")]
+    [InlineData("video-dispose")]
+    public void LifecycleRetriesRefusedDeletes(string lifecycle)
+    {
+        ContentPackStoreTests.WritePack(_root, "p1", "One", ("v.mp4", "video"));
+        var store = NewStore();
+        var pool = new PackMediaPool(ContentPackStore.VideoType, store: () => store);
+        var path = pool.TryDraw(0)!;
+        File.Delete(path);
+        Directory.CreateDirectory(path); // portable refusal, including when tests run as root
+        var host = new ClosingHost();
+        var b = new BubbleCountScheduler(host) { PackVideos = pool };
+        var v = new MandatoryVideoScheduler(host) { PackVideos = pool };
+        Action sweep = lifecycle switch
+        {
+            "bubble-stop" => b.Stop,
+            "bubble-reload" => b.ReloadAssets,
+            "bubble-close" => b.ForceCleanup,
+            "bubble-dispose" => b.Dispose,
+            "video-stop" => v.Stop,
+            "video-reload" => v.ReloadAssets,
+            "video-dispose" => v.Dispose,
+            _ => v.ForceCleanup,
+        };
+        sweep();
+        Assert.Equal(1, pool.TempCount);
+        Assert.True(store.TryGetSourceKey(path, out _));
+        Directory.Delete(path);
+        File.WriteAllText(path, "released");
+        sweep(); // a second lifecycle event retries without ever reaching the cap
+        Assert.Equal(0, pool.TempCount);
+        Assert.False(File.Exists(path));
+        Assert.False(store.TryGetSourceKey(path, out _));
+    }
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]
     [InlineData(false, true)]
     [InlineData(true, true)]
-    public void ActiveBubblePackDefersStopAndReloadUntilCompletionOrClose(bool reload, bool force)
+    public void TeardownClosesPlayersBeforeDeletingPackFiles(bool video, bool disposing)
+    {
+        ContentPackStoreTests.WritePack(_root, "p1", "One", ("v.mp4", "video"));
+        var store = NewStore();
+        var pool = new PackMediaPool(ContentPackStore.VideoType, store: () => store);
+        var path = pool.TryDraw(0)!;
+        var closed = false;
+        var host = new ClosingHost { Release = () =>
+        {
+            Assert.True(File.Exists(path));
+            closed = true;
+        } };
+        if (video)
+        {
+            var v = new MandatoryVideoScheduler(host, new PopQuizSchedulerTests.FakeClock(), () => new[] { path }) { PackVideos = pool };
+            Assert.True(v.Trigger());
+            if (disposing) v.Dispose(); else v.Stop();
+        }
+        else
+        {
+            var clock = new PopQuizSchedulerTests.FakeClock();
+            var b = new BubbleCountScheduler(host, clock, () => Array.Empty<string>()) { PackVideos = pool };
+            b.Trigger(forceTest: true);
+            clock.Advance(BubbleCountScheduler.LeadIn);
+            Assert.True(b.IsBusy);
+            if (disposing) b.Dispose(); else b.ForceCleanup();
+        }
+        Assert.True(closed);
+        Assert.False(File.Exists(path));
+        Assert.Equal(0, pool.TempCount);
+    }
+
+    [Fact]
+    public void BubbleStopLetsTheGameFinishThenRetriesAfterPlayerRelease()
     {
         ContentPackStoreTests.WritePack(_root, "p1", "One", ("v.mp4", "video"));
         var store = NewStore();
@@ -58,17 +147,60 @@ public sealed class PackMediaPoolTests : IDisposable
         b.Trigger(forceTest: true);
         clock.Advance(BubbleCountScheduler.LeadIn);
         var path = host.Path!;
-        var strict = ConditioningControlPanel.CoreSettings.Current.BubbleCountStrictLock; ConditioningControlPanel.CoreSettings.Current.BubbleCountStrictLock = false;
-        var presentAtClose = false; host.Release = () => presentAtClose = File.Exists(path);
-        try {
-            if (reload) b.ReloadAssets(); else b.Stop();
-            Assert.True(b.IsBusy); Assert.True(File.Exists(path)); Assert.True(store.TryGetSourceKey(path, out _));
-            if (force) { host.Release = () => throw new InvalidOperationException(); b.ForceCleanup(); b.Stop(); Assert.True(File.Exists(path));
-                Assert.True(store.TryGetSourceKey(path, out _)); host.Release = () => presentAtClose = File.Exists(path);
-                if (reload) { host.Done!(false); Assert.True(File.Exists(path)); b.ForceCleanup(); Assert.True(presentAtClose); } else host.Done!(true); } else { host.Done!(!reload); if (reload) Assert.True(presentAtClose); }
-            Assert.False(b.IsBusy); Assert.False(File.Exists(path)); Assert.Equal(0, pool.TempCount); Assert.False(store.TryGetSourceKey(path, out _));
-        }
-        finally { host.Release = () => { }; b.ForceCleanup(); pool.CleanupTemps(); ConditioningControlPanel.CoreSettings.Current.BubbleCountStrictLock = strict; }
+        File.Delete(path);
+        Directory.CreateDirectory(path);
+        b.Stop();
+        Assert.True(b.IsBusy); // WPF Stop leaves the live round on screen.
+        Assert.Equal(1, pool.TempCount);
+        Directory.Delete(path);
+        File.WriteAllText(path, "released");
+        host.Done!(true); // The head releases the player before calling completion.
+        Assert.False(b.IsBusy);
+        Assert.False(File.Exists(path));
+        Assert.Equal(0, pool.TempCount);
+        b.Dispose();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RefusedDeleteKeepsIdentityAndPoolEntryUntilRetry(bool overCap)
+    {
+        ContentPackStoreTests.WritePack(_root, "p1", "One", ("a.png", "image"));
+        var store = NewStore();
+        var pool = new PackMediaPool(ContentPackStore.ImageType, store: () => store);
+        var path = pool.TryDraw(0)!;
+        // A directory at the minted path forces a portable delete refusal, even as root.
+        File.Delete(path);
+        Directory.CreateDirectory(path);
+        if (overCap)
+            for (int i = 0; i <= PackMediaPool.TempCap; i++) pool.TryDraw(0);
+        else pool.CleanupTemps();
+        Assert.True(store.TryGetSourceKey(path, out _));
+        Assert.True(pool.TempCount > 0);
+        Directory.Delete(path);
+        File.WriteAllText(path, "released");
+        pool.CleanupTemps();
+        Assert.False(File.Exists(path));
+        Assert.False(store.TryGetSourceKey(path, out _));
+        Assert.Equal(0, pool.TempCount);
+    }
+
+    [Fact]
+    public void StoreShutdownRetriesARefusedDelete()
+    {
+        ContentPackStoreTests.WritePack(_root, "p1", "One", ("a.png", "image"));
+        var store = NewStore();
+        var path = new PackMediaPool(ContentPackStore.ImageType, store: () => store).TryDraw(0)!;
+        File.Delete(path);
+        Directory.CreateDirectory(path);
+        store.CleanupTempFiles();
+        Assert.True(store.TryGetSourceKey(path, out _));
+        Directory.Delete(path);
+        File.WriteAllText(path, "released");
+        store.CleanupTempFiles();
+        Assert.False(File.Exists(path));
+        Assert.False(store.TryGetSourceKey(path, out _));
     }
 
     [Fact]
@@ -135,29 +267,10 @@ public sealed class PackMediaPoolTests : IDisposable
         var bubble = new BubbleCountScheduler(null!, null, () => Array.Empty<string>())
             { PackVideos = new PackMediaPool(ContentPackStore.VideoType, new Random(1), () => store) };
 
-        void CheckSweep(Action sweep)
-        {
-            var clips = new[] { video.PickNext()!, bubble.PickNext()! };
-            Assert.All(clips, c => Assert.Equal("p1/v.mp4", Plain(c)));
-            // Refused deletes retain their files and identities until the next sweep.
-            var dir = Path.GetDirectoryName(clips[0])!;
-            var held = OperatingSystem.IsWindows() ? clips.Select(c => File.Open(c, FileMode.Open, FileAccess.Read, FileShare.Read)).ToArray() : Array.Empty<FileStream>();
-            var mode = OperatingSystem.IsWindows() ? 0 : File.GetUnixFileMode(dir);
-            try
-            {
-                if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(dir, UnixFileMode.UserRead | UnixFileMode.UserExecute);
-                sweep();
-                Assert.All(clips, c => Assert.True(File.Exists(c) && store.TryGetSourceKey(c, out _)));
-            }
-            finally
-            {
-                foreach (var h in held) h.Dispose();
-                if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(dir, mode);
-            }
-            sweep();
-            Assert.All(clips, c => Assert.False(File.Exists(c) || store.TryGetSourceKey(c, out _)));
-        }
-        CheckSweep(() => { video.Stop(); bubble.Stop(); }); CheckSweep(() => { video.ReloadAssets(); bubble.ReloadAssets(); });
+        Assert.Equal("p1/v.mp4", Plain(video.PickNext()!));
+        Assert.Equal("p1/v.mp4", Plain(bubble.PickNext()!));
+        video.PackVideos.CleanupTemps();
+        bubble.PackVideos.CleanupTemps();
 
         store.DeactivatePack("p1");
         Assert.Null(video.PickNext());

@@ -62,6 +62,66 @@ public sealed class AuthRecoveryTests : IDisposable
         CoreSecrets.StoreProvider = _oldSet;
     }
 
+    // WPF ProfileSyncService.cs:4668: a backup status 401 recovers for next time, never retries.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task BackupStatusRecoversWithoutRetryAndSharesCooldowns(bool restoreWorks)
+    {
+        var restarted = 0;
+        var providers = 0;
+        AuthRecovery.Recovered = () => restarted++;
+        AuthRecovery.ProviderRevalidate = () =>
+        {
+            providers++;
+            _settings.AuthToken = "provider-token";
+            return Task.FromResult(true);
+        };
+        _http.Answers.Enqueue((HttpStatusCode.Unauthorized, "{}"));
+        _http.Answers.Enqueue((restoreWorks ? HttpStatusCode.OK : HttpStatusCode.Unauthorized,
+            restoreWorks ? "{\"auth_token\":\"restored-token\"}" : "{}"));
+        var client = new CloudSettingsBackup(_http);
+        Assert.Null(await client.GetInfoAsync(_settings));
+        Assert.Equal(new[] { "/v2/user/settings-backup", "/v2/auth/restore-session" },
+            _http.Calls.Select(c => c.Path));
+        Assert.Equal(restoreWorks ? "restored-token" : "provider-token", _settings.AuthToken);
+        Assert.Equal(restoreWorks ? 0 : 1, providers);
+        Assert.Equal(1, restarted);
+        // A second status failure uses the recovered token but cannot repeat the restore.
+        // In the restore-success case the independent provider cooldown is still available.
+        _http.Answers.Enqueue((HttpStatusCode.Unauthorized, "{}"));
+        Assert.Null(await client.GetInfoAsync(_settings));
+        Assert.Equal(3, _http.Calls.Count);
+        Assert.Equal(restoreWorks ? "restored-token" : "provider-token", _http.Calls[2].Token);
+        Assert.Equal(1, providers);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BackupAndRestoreRecoverWithoutRetry(bool upload)
+    {
+        if (upload) _http.Answers.Enqueue((HttpStatusCode.OK, "{\"backup\":null}"));
+        _http.Answers.Enqueue((HttpStatusCode.Unauthorized, "{}"));
+        _http.Answers.Enqueue((HttpStatusCode.OK, "{\"auth_token\":\"fresh\"}"));
+        var client = new CloudSettingsBackup(_http);
+        if (upload) Assert.False(await client.BackupAsync(_settings));
+        else Assert.Null(await client.DownloadAsync(_settings));
+        Assert.Equal("fresh", _settings.AuthToken);
+        Assert.Equal(upload ? 3 : 2, _http.Calls.Count);
+        Assert.Equal("/v2/auth/restore-session", _http.Calls.Last().Path);
+    }
+
+    [Fact]
+    public async Task BackupStatusFailedRecoveryKeepsToken()
+    {
+        _http.Answers.Enqueue((HttpStatusCode.Unauthorized, "{}"));
+        _http.Answers.Enqueue((HttpStatusCode.Unauthorized, "{}"));
+        Assert.Null(await new CloudSettingsBackup(_http).GetInfoAsync(_settings));
+        Assert.Equal("tok", _settings.AuthToken);
+        Assert.Equal(2, _http.Calls.Count);
+    }
+
     private V2AuthService Client() => new(() => _settings, _http);
     private static HttpResponseMessage Status(HttpStatusCode code) => new(code) { Content = new StringContent("{}") };
 
