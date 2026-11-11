@@ -1,6 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.IO;
+using System.Linq;
+using Avalonia.Headless;
+using Avalonia.Media;
+using Avalonia.Controls.Shapes;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
@@ -53,6 +58,11 @@ public sealed class GazeRefineFlowTests
             gaze.HandleBlink(); Assert.Empty(popped);
             if (exit == "select")
             {
+                var competitor = new Window { Topmost = true }; competitor.Show();
+                gaze.HandleGazeMove(new Point(3000, 3000)); int raises = 0; gaze.RaiseRefine = p => { Assert.Same(panel, p); raises++; };
+                gaze.Tick(); Assert.Equal(1, raises);
+                clock.Advance(199); gaze.Tick(); Assert.Equal(1, raises);
+                clock.Advance(1); gaze.Tick(); Assert.Equal(2, raises); competitor.Close();
                 var chip = panel.ChipBounds(1).Center;
                 var attractor = (GazeLock)typeof(WebcamTracker).GetField("_gazeLock", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(tracker)!;
                 attractor.Clear(); attractor.Apply(0, 0);
@@ -86,9 +96,10 @@ public sealed class GazeRefineFlowTests
     });
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void RefineCanActivateFlashOrVideo(bool video) => AvaloniaTestDispatcher.Run(() =>
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void RefineCanActivateFlashOrVideo(bool video, bool clicked) => AvaloniaTestDispatcher.Run(() =>
     {
         LabWebcamStatusTests.Setup();
         var settings = CoreSettings.Current;
@@ -109,7 +120,7 @@ public sealed class GazeRefineFlowTests
             Rect source;
             if (video)
             {
-                host.Show(); target = new MandatoryVideoOverlay.Target(canvas, "x", 40, 999, new Random(1)) { OnHit = () => hits++ };
+                host.Show(); target = new MandatoryVideoOverlay.Target(canvas, "x", 40, 999, new Random(1)); target.OnHit = () => { hits++; targets.Remove(target); };
                 targets.Add(target); Dispatcher.UIThread.RunJobs(); source = target.GazeBounds;
             }
             else
@@ -122,6 +133,7 @@ public sealed class GazeRefineFlowTests
             BubbleOverlay.Field.Bubbles.Add(bubble);
             gaze.MasterEnabled = true; gaze.HandleGazeMove(source.Center); gaze.Tick(); clock.Advance(600); gaze.Tick();
             Assert.NotNull(panel); Assert.True(panel.IsVisible);
+            if (clicked) { target!.Hit(); Assert.True(target.GazeBounds.Width > 0); gaze.Tick(); Assert.False(panel.IsVisible); Assert.Equal(1, hits); return; }
             gaze.HandleGazeMove(panel.ChipBounds(video ? 1 : 0).Center); gaze.Tick(); clock.Advance(550); gaze.Tick();
             Assert.False(panel.IsVisible);
             if (video) Assert.Equal(1, hits);
@@ -158,6 +170,27 @@ public sealed class GazeRefineFlowTests
     });
 
     [Fact]
+    public void ChipKindsAndDwellArcRender() => AvaloniaTestDispatcher.Run(() =>
+    {
+        LabWebcamStatusTests.Setup();
+        var flash = new FlashOverlayWindow();
+        var panel = new GazeRefineOverlay(new object[] { new AmbientBubble(), flash, new object() }, new[] { new Rect(300, 300, 10, 10), new Rect(340, 300, 40, 40), new Rect(380, 300, 100, 100) }, new Rect(0, 0, 1400, 900), 1);
+        try
+        {
+            panel.Show(); Dispatcher.UIThread.RunJobs();
+            var children = ((Canvas)panel.Content!).Children;
+            Assert.IsType<Ellipse>(children[2]); Assert.IsType<Border>(children[4]);
+            Assert.IsType<ImageBrush>(((Border)children[4]).Background); Assert.IsType<Polygon>(((Border)children[6]).Child);
+            Assert.NotEqual(panel.ChipBounds(0).Width, panel.ChipBounds(2).Width);
+            using var before = new MemoryStream(); using var after = new MemoryStream();
+            panel.CaptureRenderedFrame()!.Save(before); panel.Progress(1, .5); Dispatcher.UIThread.RunJobs(); panel.CaptureRenderedFrame()!.Save(after);
+            Assert.False(before.ToArray().SequenceEqual(after.ToArray()));
+            Assert.IsType<PathGeometry>(((global::Avalonia.Controls.Shapes.Path)children[5]).Data);
+        }
+        finally { panel.Close(); flash.Close(); }
+    });
+
+    [Fact]
     public void LayoutStaysOnNegativeOriginMonitorAndKeepsHitAreasApart() => AvaloniaTestDispatcher.Run(() =>
     {
         LabWebcamStatusTests.Setup();
@@ -170,7 +203,7 @@ public sealed class GazeRefineFlowTests
             Assert.True(panel.ChipBounds(0).Center.X < panel.ChipBounds(1).Center.X);
             Assert.Equal(0, panel.HitTestChip(panel.ChipBounds(0).Center));
             Assert.Equal(1, panel.HitTestChip(panel.ChipBounds(1).Center));
-            Assert.True(Math.Abs(panel.ChipBounds(0).Center.X - panel.ChipBounds(1).Center.X) >= 218);
+            Assert.True(Math.Abs(panel.ChipBounds(0).Center.X - panel.ChipBounds(1).Center.X) >= (panel.ChipBounds(0).Width + panel.ChipBounds(1).Width) / 2 + 68);
             Assert.InRange(panel.Position.X, -2880, -960);
         }
         finally { panel.Close(); }

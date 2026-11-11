@@ -15,7 +15,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 internal sealed class GazeRefineOverlay : Window
 {
     private readonly List<Rect> _chips = new();
-    private readonly List<Ellipse> _rings = new();
+    private readonly List<Path> _rings = new();
+    private readonly List<Control> _bodies = new();
     internal Rect EscapeBounds { get; private set; }
     internal Rect ChipBounds(int index) => _chips[index];
 
@@ -38,8 +39,10 @@ internal sealed class GazeRefineOverlay : Window
             for (int j = i + 1; j < bounds.Count; j++)
                 min = Math.Min(min, Distance(bounds[i].Center, bounds[j].Center));
         double zoom = min < 4 ? 20 : Math.Clamp(210 / min, 1.6, 20);
+        var radii = new double[centers.Length];
         for (int i = 0; i < centers.Length; i++)
         {
+            radii[i] = Math.Clamp(Math.Max(bounds[i].Width, bounds[i].Height) * zoom, 150, 220) / 2;
             var d = bounds[i].Center - new Point(cx, cy);
             centers[i] = new Point(cx + d.X * zoom, cy + d.Y * zoom);
             if (min < 4) centers[i] = new Point(cx + 145 * Math.Cos(2 * Math.PI * i / centers.Length), cy + 145 * Math.Sin(2 * Math.PI * i / centers.Length));
@@ -50,26 +53,28 @@ internal sealed class GazeRefineOverlay : Window
                 for (int j = i + 1; j < centers.Length; j++)
                 {
                     var delta = new Vector(centers[j].X - centers[i].X, centers[j].Y - centers[i].Y); var dist = delta.Length;
-                    if (dist >= 218) continue;
+                    double separation = Math.Max(210, radii[i] + radii[j] + 68);
+                    if (dist >= separation) continue;
                     if (dist < .01) { delta = new Vector(1, 0); dist = 1; }
-                    var push = delta / dist * ((218 - dist) / 2 + .5);
+                    var push = delta / dist * ((separation - dist) / 2 + .5);
                     centers[i] -= push; centers[j] += push;
                 }
         void Fan()
         {
-            var radius = 110 / Math.Sin(Math.PI / centers.Length);
+            double widest = 210; foreach (var r in radii) widest = Math.Max(widest, 2 * (r + 34));
+            var radius = (widest + 1) / (2 * Math.Sin(Math.PI / centers.Length));
             for (int i = 0; i < centers.Length; i++) centers[i] = new Point(cx + radius * Math.Cos(2 * Math.PI * i / centers.Length), cy + radius * Math.Sin(2 * Math.PI * i / centers.Length));
         }
         bool overlap = false;
         for (int i = 0; i < centers.Length; i++)
             for (int j = i + 1; j < centers.Length; j++)
-                if (Distance(centers[i], centers[j]) < 218) overlap = true;
+                if (Distance(centers[i], centers[j]) < Math.Max(210, radii[i] + radii[j] + 68)) overlap = true;
         if (overlap) Fan();
         double left = 0, top = 0, right = 0, bottom = 0;
         void Measure()
         {
             left = top = double.MaxValue; right = bottom = double.MinValue;
-            foreach (var p in centers) { left = Math.Min(left, p.X - 109); right = Math.Max(right, p.X + 109); top = Math.Min(top, p.Y - 139); bottom = Math.Max(bottom, p.Y + 109); }
+            for (int i = 0; i < centers.Length; i++) { var p = centers[i]; var r = radii[i] + 34; left = Math.Min(left, p.X - r); right = Math.Max(right, p.X + r); top = Math.Min(top, p.Y - r - 30); bottom = Math.Max(bottom, p.Y + r); }
         }
         Measure();
         if (right - left > work.Width || bottom - top > work.Height)
@@ -91,13 +96,22 @@ internal sealed class GazeRefineOverlay : Window
         for (int i = 0; i < centers.Length; i++)
         {
             var p = centers[i] + new Vector(dx, dy);
-            _chips.Add(new Rect(p.X - 75, p.Y - 75, 150, 150));
-            IBrush fill = choices[i] is AmbientBubble ? Brushes.HotPink : Brushes.DarkSlateBlue;
-            if (choices[i] is FlashOverlayWindow { GazePreview: { } preview }) fill = new ImageBrush { Source = preview, Stretch = Stretch.UniformToFill };
-            var body = new Ellipse { Width = 150, Height = 150, Fill = fill, Stroke = Brushes.White, StrokeThickness = 2 };
-            Canvas.SetLeft(body, p.X - left - 75); Canvas.SetTop(body, p.Y - top - 75); canvas.Children.Add(body);
-            var ring = new Ellipse { Width = 158, Height = 158, Stroke = Brushes.HotPink, StrokeThickness = 6, Opacity = 0 };
-            Canvas.SetLeft(ring, p.X - left - 79); Canvas.SetTop(ring, p.Y - top - 79); canvas.Children.Add(ring); _rings.Add(ring);
+            double r = radii[i], size = r * 2;
+            _chips.Add(new Rect(p.X - r, p.Y - r, size, size));
+            Control body;
+            if (choices[i] is AmbientBubble)
+                body = new Ellipse { Width = size, Height = size, Stroke = new SolidColorBrush(Color.FromArgb(221, 255, 255, 255)), StrokeThickness = 1.5, Fill = new RadialGradientBrush { Center = new RelativePoint(.45, .42, RelativeUnit.Relative), GradientOrigin = new RelativePoint(.35, .3, RelativeUnit.Relative), GradientStops = { new(Color.FromArgb(85, 255, 255, 255), 0), new(Color.FromArgb(170, 255, 105, 180), .62), new(Color.FromArgb(102, 180, 105, 255), 1) } } };
+            else
+            {
+                IBrush fill = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative), GradientStops = { new(Color.FromRgb(37, 37, 66), 0), new(Color.FromRgb(58, 42, 85), 1) } };
+                if (choices[i] is FlashOverlayWindow { GazePreview: { } preview }) fill = new ImageBrush { Source = preview, Stretch = Stretch.UniformToFill };
+                var tile = new Border { Width = size, Height = size, CornerRadius = new CornerRadius(14), Background = fill, BorderBrush = Brushes.HotPink, BorderThickness = new Thickness(2) };
+                if (choices[i] is not FlashOverlayWindow) tile.Child = new Polygon { Points = { new(size * .5, size * .28), new(size * .72, size * .5), new(size * .5, size * .72), new(size * .28, size * .5) }, Fill = Brushes.HotPink };
+                body = tile;
+            }
+            Canvas.SetLeft(body, p.X - left - r); Canvas.SetTop(body, p.Y - top - r); canvas.Children.Add(body); _bodies.Add(body);
+            var ring = new Path { Stroke = Brushes.HotPink, StrokeThickness = 6, StrokeLineCap = PenLineCap.Round };
+            canvas.Children.Add(ring); _rings.Add(ring);
         }
         Content = canvas;
     }
@@ -105,12 +119,21 @@ internal sealed class GazeRefineOverlay : Window
     internal int HitTestChip(Point p)
     {
         for (int i = 0; i < _chips.Count; i++)
-            if (Distance(p, _chips[i].Center) <= 109) return i;
+            if (Distance(p, _chips[i].Center) <= _chips[i].Width / 2 + 34) return i;
         return -1;
     }
     internal void Progress(int index, double value)
     {
-        for (int i = 0; i < _rings.Count; i++) _rings[i].Opacity = i == index ? Math.Clamp(value, 0, 1) : 0;
+        for (int i = 0; i < _rings.Count; i++)
+        {
+            double t = i == index ? Math.Clamp(value, 0, .999) : 0;
+            _bodies[i].RenderTransformOrigin = RelativePoint.Center; _bodies[i].RenderTransform = new ScaleTransform(1 + t * .08, 1 + t * .08);
+            if (t <= .001) { _rings[i].Data = null; continue; }
+            var b = _chips[i]; double r = b.Width / 2 + 12, x = Canvas.GetLeft(_bodies[i]) + b.Width / 2, y = Canvas.GetTop(_bodies[i]) + b.Height / 2, a = t * 2 * Math.PI;
+            var fig = new PathFigure { StartPoint = new Point(x, y - r), IsClosed = false, IsFilled = false };
+            fig.Segments!.Add(new ArcSegment { Point = new Point(x + Math.Sin(a) * r, y - Math.Cos(a) * r), Size = new Size(r, r), IsLargeArc = t > .5, SweepDirection = SweepDirection.Clockwise });
+            _rings[i].Data = new PathGeometry { Figures = new PathFigures { fig } };
+        }
     }
 
     internal static GazeRefineOverlay? Open(IReadOnlyList<object> choices, IReadOnlyList<Rect> bounds)
@@ -124,8 +147,9 @@ internal sealed class GazeRefineOverlay : Window
         try
         {
             panel = new GazeRefineOverlay(choices, bounds, new Rect(w.X / k, w.Y / k, w.Width / k, w.Height / k), k);
+            if (!X11Overlay.SetOverrideRedirect(panel, new PixelRect(panel.Position, new PixelSize((int)Math.Ceiling(panel.Width * k), (int)Math.Ceiling(panel.Height * k))), passive: true) || !X11Overlay.SetClickThrough(panel, true)) { panel.Close(); return null; }
             panel.Show();
-            if (panel.ActualTransparencyLevel != WindowTransparencyLevel.None && X11Overlay.SetClickThrough(panel, true)) return panel;
+            if (panel.ActualTransparencyLevel != WindowTransparencyLevel.None) return panel;
         }
         catch { }
         panel?.Close();

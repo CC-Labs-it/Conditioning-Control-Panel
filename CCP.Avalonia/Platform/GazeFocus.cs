@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Linq;
 using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Threading;
@@ -44,6 +45,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private List<object>? _refineTargets;
         private DateTimeOffset _opened, _chipStart, _outside, _lost, _suppressedUntil;
         private int _chip = -1;
+        private DateTimeOffset _lastRaise = DateTimeOffset.MinValue;
+        internal Action<GazeRefineOverlay> RaiseRefine = p => X11Overlay.Raise(p);
 
         private DispatcherTimer? _timer;
         private Point? _lastGazePoint;
@@ -395,7 +398,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 if (panel == null) return false;
                 _refine = panel;
                 _refineTargets = choices;
-                _opened = Clock.GetUtcNow(); _outside = _lost = DateTimeOffset.MinValue; _chip = -1;
+                _opened = Clock.GetUtcNow(); _outside = _lost = _lastRaise = DateTimeOffset.MinValue; _chip = -1;
                 ClearTarget(); SetCursorLock(null);
                 return true;
             }
@@ -406,13 +409,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             if (target is AmbientBubble b) return BubblesGazeEnabled && b.Clickable && !b.Popping && BubbleOverlay.Field.Bubbles.Contains(b);
             if (target is FlashOverlayWindow f) return CoreSettings.Current.FlashGazePopEnabled && !f.IsFadingOut && f.Exit == null && FlashOverlay.Active.Exists(x => ReferenceEquals(x.Window, f));
-            if (target is MandatoryVideoOverlay.Target v) return CoreSettings.Current.VideoGazeClickEnabled && v.GazeBounds is { Width: > 0, Height: > 0 };
+            if (target is MandatoryVideoOverlay.Target v) return CoreSettings.Current.VideoGazeClickEnabled && MandatoryVideoOverlay.Instance.GazeTargets.Contains(v) && v.GazeBounds is { Width: > 0, Height: > 0 };
             return false;
         }
 
         private void TickRefine()
         {
             var panel = _refine!; var now = Clock.GetUtcNow();
+            if ((now - _lastRaise).TotalMilliseconds >= 200) { RaiseRefine(panel); _lastRaise = now; }
             if ((now - _opened).TotalMilliseconds >= 6000) { CloseRefine(true); return; }
             int alive = 0;
             foreach (var target in _refineTargets!) if (Alive(target)) alive++;
