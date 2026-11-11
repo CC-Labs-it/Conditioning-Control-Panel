@@ -32,7 +32,7 @@ public sealed class ScrolllerWebGateTests
     public void The_first_navigation_waits_for_the_gate()
     {
         var host = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Views", "Controls", "WebHost.axaml.cs"));
-        Assert.Contains("Platform.ScrolllerWebHostGate.Attach(_web, NewScrolllerEngine);", host);
+        Assert.Contains("Platform.ScrolllerWebHostGate.Attach(native, () => ReferenceEquals(_web, native) ? NewScrolllerEngine() : _ => { });", host);
         // Both roads into the engine (Source and Navigate) return while the gate has not reported.
         Assert.Equal(2, Regex.Matches(host, @"if \(_scrolllerGate is null\) return;").Count);
         Assert.Contains("if (!ScrolllerGateAllows(_scrolllerGate, target))", host);

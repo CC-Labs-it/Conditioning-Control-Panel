@@ -139,7 +139,9 @@ public sealed class BrowserInitialHomeTests
     [InlineData(2)]
     public Task CrashShowsPromptAndNavigationRestoresHost(int action) => Run((shell, page, host, mod) =>
     {
-        host.ScriptInvoker = _ => Task.FromResult<string?>(null);
+        host.NativeViewFactory = () => new NativeWebView();
+        Assert.True(host.RecreateNativeView());
+        var failedView = host.NativeView;
         page.OnBrowserPromptClick();
         host.OnBrowserProcessFailed();
         var prompt = page.FindControl<TextBlock>("BrowserLoadingText")!;
@@ -158,8 +160,77 @@ public sealed class BrowserInitialHomeTests
         else if (action == 1) shell.BtnReloadBrowser_Click(page, new global::Avalonia.Interactivity.RoutedEventArgs());
         else shell.NavigateToUrlInBrowser("https://hypnotube.com/test");
         Assert.Equal(requests + 1, host.NavigationRequests);
+        Assert.NotNull(host.NativeView);
+        Assert.NotSame(failedView, host.NativeView);
         Assert.True(host.IsVisible);
         Assert.False(prompt.IsVisible);
     });
+
+    [Fact]
+    public Task FailedReplacementKeepsCrashPromptAndCanRetry() => Run((shell, page, host, mod) =>
+    {
+        host.NativeViewFactory = () => new NativeWebView();
+        Assert.True(host.RecreateNativeView());
+        page.OnBrowserPromptClick();
+        host.OnBrowserProcessFailed();
+        var requests = host.NavigationRequests;
+        host.NativeViewFactory = () => throw new InvalidOperationException("test creation failure");
+        shell.BtnReloadBrowser_Click(page, new global::Avalonia.Interactivity.RoutedEventArgs());
+        var prompt = page.FindControl<TextBlock>("BrowserLoadingText")!;
+        Assert.Null(host.NativeView);
+        Assert.Equal(requests, host.NavigationRequests);
+        Assert.True(prompt.IsVisible);
+        Assert.Equal(IconText.BareLoc("label_browser_crashed_restart"), prompt.Text);
+        Assert.False(host.IsVisible);
+        host.NativeViewFactory = () => new NativeWebView();
+        shell.BtnReloadBrowser_Click(page, new global::Avalonia.Interactivity.RoutedEventArgs());
+        Assert.NotNull(host.NativeView);
+        Assert.Equal(requests + 1, host.NavigationRequests);
+        Assert.True(host.IsVisible);
+        host.OnBrowserProcessFailed();
+        Assert.True(prompt.IsVisible); // the card remains subscribed after replacement
+    });
+
+    [Fact]
+    public Task RetryLoadsOnReplacementAdapter() => Run((shell, page, host, mod) =>
+    {
+        host.NativeViewFactory = () => new NativeWebView();
+        var failures = new System.Collections.Generic.List<Action>();
+        var disposed = 0;
+        host.FailureWatchFactory = (_, failed) => { failures.Add(failed); return new Watch(() => disposed++); };
+        Assert.True(host.RecreateNativeView());
+        var oldView = host.NativeView!;
+        var oldAdapter = new WebHostPanicAdapterTests.Adapter();
+        WebHostPanicAdapterTests.BindControl(oldView, () => oldAdapter.Proxy);
+        WebHostPanicAdapterTests.NativeEvent(oldView, "ControlHostImplOnAdapterCreated", oldAdapter.Proxy);
+        host.NewScrolllerEngine()(true);
+        var initial = new Uri("http://127.0.0.1:5555/initial");
+        host.Navigate(initial);
+        Assert.Equal(initial, oldAdapter.Current);
+        Assert.Single(failures);
+        failures[0]();
+
+        var retry = new Uri("http://127.0.0.1:5555/retry");
+        Assert.True(shell.NavigateToUrlInBrowser(retry.AbsoluteUri));
+        var newView = host.NativeView!;
+        Assert.NotSame(oldView, newView);
+        var newAdapter = new WebHostPanicAdapterTests.Adapter();
+        WebHostPanicAdapterTests.BindControl(newView, () => newAdapter.Proxy);
+        WebHostPanicAdapterTests.NativeEvent(newView, "ControlHostImplOnAdapterCreated", newAdapter.Proxy);
+        host.NewScrolllerEngine()(true);
+        Assert.Equal(initial, oldAdapter.Current);
+        Assert.Equal(retry, newAdapter.Current);
+        Assert.Equal(1, disposed);
+        Assert.Equal(2, failures.Count);
+        failures[0](); // a stale callback cannot fail the replacement
+        Assert.True(host.IsVisible);
+        failures[1]();
+        Assert.False(host.IsVisible);
+    });
+
+    private sealed class Watch(Action dispose) : IDisposable
+    {
+        public void Dispose() => dispose();
+    }
 
 }

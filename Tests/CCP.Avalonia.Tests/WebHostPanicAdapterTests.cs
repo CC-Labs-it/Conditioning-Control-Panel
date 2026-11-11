@@ -87,7 +87,7 @@ public sealed class WebHostPanicAdapterTests
         return proxy;
     }
 
-    private static void BindControl(NativeWebView native, Func<object?> adapter)
+    internal static void BindControl(NativeWebView native, Func<object?> adapter)
     {
         var impl = Proxy("INativeWebViewControlImpl", (method, _) =>
             method.Name == "TryGetAdapter" ? adapter() : null);
@@ -98,10 +98,10 @@ public sealed class WebHostPanicAdapterTests
         typeof(NativeWebView).GetField("_controlHostImplTcs", Private)!.SetValue(native, tcs);
     }
 
-    private static void NativeEvent(NativeWebView native, string name, object adapter) =>
+    internal static void NativeEvent(NativeWebView native, string name, object adapter) =>
         typeof(NativeWebView).GetMethod(name, Private)!.Invoke(native, new object?[] { null, adapter });
 
-    private sealed class Adapter
+    internal sealed class Adapter
     {
         internal readonly object Proxy;
         internal readonly List<Uri> Navigations = new();

@@ -19,11 +19,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             SyncBrowserPrompt();
         }
 
-        internal void ClearBrowserCrash()
+        internal bool PrepareBrowserNavigation()
         {
-            if (!_browserCrashed) return;
+            if (!_browserCrashed) return true;
+            if (!BrowserWebHost.RecreateNativeView()) return false;
             _browserCrashed = false;
             SyncBrowserPrompt();
+            return true;
         }
     }
 }
