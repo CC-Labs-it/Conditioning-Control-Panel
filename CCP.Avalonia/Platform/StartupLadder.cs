@@ -97,7 +97,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
             catch (Exception ex) { Log.Warning(ex, "[Startup] modal pump failed"); }
             finally
             {
-                if (!token.IsCancellationRequested)
+                // WPF StartupPresenter.cs:491 restarts the pump while entries remain, so a failed pump strands nothing.
+                if (!token.IsCancellationRequested && !_modalQueue.IsEmpty)
+                    Dispatcher.UIThread.Post(() => _ = PumpModalsAsync(token), DispatcherPriority.Normal);
+                else if (!token.IsCancellationRequested)
                 {
                     _modalPumpRunning = false;
                     var deferred = _deferred.ToArray();
@@ -106,7 +109,6 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 }
             }
         }
-
 
         /// <summary>WPF's 1 s re-check of the held surfaces (Services/Startup/StartupPresenter.cs:541).</summary>
         internal static readonly TimeSpan PassiveRecheck = TimeSpan.FromSeconds(1);

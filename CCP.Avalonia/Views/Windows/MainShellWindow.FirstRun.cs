@@ -58,24 +58,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     StartupLadder.EnqueueModal("first-run-wizard", 20, async () =>
                     {
-                        if (!IsVisible)
-                        {
-                            FirstRunWizard.HandBackFirstRun("shell window is not visible");
-                            FirstRunWizard.AbortUngatedLaunch(this, "shell window is not visible");
-                            return;
-                        }
+                        if (!IsVisible) { AbandonFirstRun("shell window is not visible"); return; }
                         await FirstRunWizard.Run(this);
                         if (CoreSettings.Current.HasAcceptedAgeVerification && IsVisible)
-                            StartupLadder.EnqueueModal("first-show", 25, () =>
-                            {
-                                OfferWelcomeShowAfterFirstRun();
-                                return Task.CompletedTask;
-                            });
-                    }, () =>
-                    {
-                        FirstRunWizard.HandBackFirstRun("the ladder gave up on the wizard");
-                        FirstRunWizard.AbortUngatedLaunch(this, "the ladder gave up on the wizard");
-                    });
+                            StartupLadder.EnqueueModal("first-show", 25, () => { OfferWelcomeShowAfterFirstRun(); return Task.CompletedTask; });
+                    }, () => AbandonFirstRun("the ladder gave up on the wizard"));
                 }
                 // WPF's else branch (MainWindow.xaml.cs:602-612) no longer opens a mod picker:
                 // mods are offered by the first-run wizard and the Mod Manager only.
@@ -100,6 +87,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             "This application contains adult content intended for users aged 18 and older.\n\n" +
             "By clicking \"OK\", you confirm that you are at least 18 years old and that viewing adult content is legal in your jurisdiction.\n\n" +
             "Do you wish to continue?";
+
+        private void AbandonFirstRun(string why)
+        {
+            FirstRunWizard.HandBackFirstRun(why);
+            FirstRunWizard.AbortUngatedLaunch(this, why);
+        }
 
         private async Task RunAgeGateAsync()
         {

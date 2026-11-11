@@ -174,10 +174,7 @@ public sealed class StartupModalLadderTests
             await Step();
             var clock = (StartupLadder.TestClock)StartupLadder.Time;
             for (var i = 0; i < (int)(StartupLadder.ModalMaxWait / StartupLadder.ModalPoll); i++)
-            {
-                clock.Advance(StartupLadder.ModalPoll);
-                for (var j = 0; j < 5; j++) await Task.Yield();
-            }
+            { clock.Advance(StartupLadder.ModalPoll); for (var j = 0; j < 5; j++) await Task.Yield(); }
             Assert.False(shown);
             Assert.True(abandoned);
             foreach (var game in new[] { false, true })
@@ -238,6 +235,11 @@ public sealed class StartupModalLadderTests
             await Step();
             Assert.True(second);
             Assert.False(MainShellWindow.IsStartupDialogShowing);
+            var calls = 0; var stranded = false;   // a pump that throws restarts while entries remain
+            StartupLadder.ModalWindowReady = () => ++calls > 1 ? true : throw new InvalidOperationException();
+            StartupLadder.EnqueueModal("stranded", 10, () => { stranded = true; return Task.CompletedTask; });
+            await Step(); await Step();
+            Assert.True(stranded);
         }
         finally { MainShellWindow.IsStartupDialogShowing = false; StartupLadder.ResetForTests(); }
     });

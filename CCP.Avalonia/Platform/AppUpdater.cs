@@ -169,13 +169,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 await Task.Delay(500);
                 var outcome = ReleaseFeed.ConsumePendingUpdateOutcome(UserData, CoreReleaseContent.AppVersion);
                 if (outcome is { Succeeded: false })
-                    StartupLadder.EnqueueModal("failed-update-report", 10, async () =>
-                    {
-                        if (!shell.IsVisible) return;
-                        var dialog = new UpdateFailedDialog(Loc.Get("title_update_failed"),
-                            Loc.GetF("msg_update_install_failed", outcome.Version, CoreReleaseContent.AppVersion)) { Topmost = true };
-                        await dialog.ShowDialogSafe(shell);
-                    });
+                {
+                    var title = Loc.Get("title_update_failed");
+                    var message = Loc.GetF("msg_update_install_failed", outcome.Version, CoreReleaseContent.AppVersion);
+                    // WPF StartupPresenter.cs:401 reads IsLoaded, true in the tray: a hidden panel still gets the report.
+                    StartupLadder.EnqueueModal("failed-update-report", 10, () => new UpdateFailedDialog(title, message) { Topmost = true }
+                        .ShowDialogSafe(shell), () => UpdateFailedDialog.ShowFor(shell, title, message));
+                }
 
                 var info = await CheckAsync(force: false);
                 if (info?.IsNewer != true) return;

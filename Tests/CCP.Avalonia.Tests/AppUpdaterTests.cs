@@ -154,8 +154,8 @@ public sealed class AppUpdaterTests
         });
     }
 
-    [Fact]
-    public Task FailedUpdateReportWaitsForTheEarlierModal() => AvaloniaTestDispatcher.RunAsync(async () =>
+    [Theory, InlineData(false), InlineData(true)]
+    public Task FailedUpdateReportWaitsForTheEarlierModal(bool tray) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
@@ -172,7 +172,8 @@ public sealed class AppUpdaterTests
             AppUpdater.Handler = new FakeFeed();
             ReleaseFeed.SetPendingUpdateAttempt(CorePaths.UserData, "99.2.0");
             shell = new MainShellWindow();
-            StartupLadder.ModalWindowReady = () => shell.IsVisible;
+            var ready = true;   // tray: the ladder never sees a ready panel and abandons the report
+            StartupLadder.ModalWindowReady = () => ready && shell.IsVisible;
             shell.Show();
             var prior = new TaskCompletionSource();
             StartupLadder.EnqueueModal("prior", 5, () => prior.Task);
@@ -181,9 +182,12 @@ public sealed class AppUpdaterTests
             for (var i = 0; i < 5; i++) await Task.Yield();
             await AppUpdater.StartupAsync(shell);
             Assert.Empty(shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.UpdateFailedDialog>());
+            ready = !tray;
             prior.SetResult();
             for (var i = 0; i < 5; i++) await Task.Yield();
             ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupLadder.ModalSettle);
+            for (var i = 0; tray && i <= (int)(StartupLadder.ModalMaxWait / StartupLadder.ModalPoll); i++)
+            { ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupLadder.ModalPoll); for (var j = 0; j < 5; j++) await Task.Yield(); }
             for (var i = 0; i < 100 && !shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.UpdateFailedDialog>().Any(); i++) await Task.Delay(20);
             Assert.Single(shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.UpdateFailedDialog>()).Close();
         }

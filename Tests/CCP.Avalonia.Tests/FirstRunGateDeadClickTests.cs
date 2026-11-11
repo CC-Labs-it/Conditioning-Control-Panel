@@ -48,10 +48,7 @@ public sealed class FirstRunGateDeadClickTests
         var clock = (StartupLadder.TestClock)StartupLadder.Time;
         for (var i = 0; i < 5; i++) await Task.Yield();
         for (var i = 0; i < (int)(StartupLadder.ModalMaxWait / StartupLadder.ModalPoll); i++)
-        {
-            clock.Advance(StartupLadder.ModalPoll);
-            for (var j = 0; j < 5; j++) await Task.Yield();
-        }
+        { clock.Advance(StartupLadder.ModalPoll); for (var j = 0; j < 5; j++) await Task.Yield(); }
         Assert.True(closed);
         Assert.False(CoreSettings.Current.Welcomed);
         Assert.False(CoreSettings.Current.HasAcceptedAgeVerification);
