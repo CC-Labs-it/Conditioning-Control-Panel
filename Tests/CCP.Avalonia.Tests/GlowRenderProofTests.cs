@@ -177,9 +177,15 @@ public sealed class GlowRenderProofTests
             Assert.True(halo.X < plain.X - 2 && halo.Y < plain.Y - 2 && halo.Right > plain.Right + 2 && halo.Bottom > plain.Bottom + 2,
                 $"no halo around the glyph: ink {plain}, with glow {halo}");
 
-            // On screen: 2 DIP left of the glyph's ink, mid-height, the halo tints the frame.
+            // Sample outside the ink at the strongest point of the baked halo. The glyph's bounding
+            // box midpoint can fall beside its narrow shackle, where the blur is barely visible on
+            // Windows. Choose from the bake before looking at either frame, so this still proves that
+            // the actual halo is composited on screen at the same location.
+            int sampleX = plain.X - 2;
+            int sampleY = Enumerable.Range(plain.Y, plain.Height).MaxBy(y => Alpha(baked, new Point(sampleX, y)));
+            Assert.True(Alpha(baked, new Point(sampleX, sampleY)) > 8, "no halo beside the glyph in the bake");
             glow.Opacity = 1;
-            var p = lockGlyph.TranslatePoint(new Point(plain.X - pad - 2, plain.Y - pad + plain.Height / 2.0), w)!.Value;
+            var p = lockGlyph.TranslatePoint(new Point(sampleX - pad, sampleY - pad), w)!.Value;
             var lit = Pixel(Frame(w, "padlock-glow-on"), p);
             glow.IsVisible = false;
             var dark = Pixel(Frame(w, "padlock-glow-off"), p);
