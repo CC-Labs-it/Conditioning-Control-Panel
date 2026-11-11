@@ -100,6 +100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// </summary>
         internal static void PlacePassive(Window window, double bottomDip)
         {
+            window.Loaded += (_, _) => Platform.X11Overlay.Raise(window);
             try
             {
                 var screen = window.Screens.Primary ?? throw new InvalidOperationException("no primary screen");
