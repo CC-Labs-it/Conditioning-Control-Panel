@@ -66,7 +66,6 @@ public sealed partial class GameWindowTests
     [InlineData(RaceEngineFetchResult.Storage, "rt_engine_storage")]
     [InlineData(RaceEngineFetchResult.Unsupported, "rt_engine_unsupported")]
     [InlineData(RaceEngineFetchResult.Unavailable, "rt_engine_unavailable")]
-    [InlineData(RaceEngineFetchResult.Installed, "rt_engine_start_failed")]
     public void FirstRace_FetchResultsNameTheReason(RaceEngineFetchResult result, string key) => FirstRace((w, fake) =>
     {
         Click(w.RaceDownload);
@@ -79,6 +78,50 @@ public sealed partial class GameWindowTests
         Assert.Equal(Loc.Get(key), w.RaceStatus.Text);
         Assert.True(w.RaceDownload.IsEnabled);
         Assert.Null(w.PageUrl);
+    });
+
+    [Fact]
+    public void FirstRace_InstalledLaunchesShellWithHandoffRoomAndClosesCard() => FirstRace((w, fake) =>
+    {
+        var oldLaunch = GameWindow.LaunchRaceShell;
+        using var process = LinuxRaceHostTests.StartCat();
+        LinuxRaceHost? host = null;
+        try
+        {
+            int calls = 0;
+            Uri? url = null;
+            GameWindow.LaunchRaceShell = (session, uri) => { calls++; url = uri; return host = new LinuxRaceHost(session, process); };
+            w.HandoffRaceRoom("abcdef123456");
+            Click(w.RaceDownload);
+            fake.Reply.SetResult(RaceEngineFetchResult.Installed);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, calls);
+            Assert.Contains("join=abcdef123456", url!.Query);
+            Assert.False(w.IsVisible);
+            Assert.True(GameWindow.IsAnyOpen());
+        }
+        finally { GameWindow.CloseAllForPanic(); host?.Dispose(); GameWindow.LaunchRaceShell = oldLaunch; }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FirstRace_InstalledShellFailureKeepsCard(bool throws) => FirstRace((w, fake) =>
+    {
+        var oldLaunch = GameWindow.LaunchRaceShell;
+        try
+        {
+            int calls = 0;
+            GameWindow.LaunchRaceShell = (_, _) => { calls++; if (throws) throw new InvalidOperationException(); return null; };
+            Click(w.RaceDownload);
+            fake.Reply.SetResult(RaceEngineFetchResult.Installed);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, calls);
+            Assert.True(w.IsVisible);
+            Assert.Equal(Loc.Get("rt_engine_start_failed"), w.RaceStatus.Text);
+            Assert.True(w.RaceDownload.IsEnabled);
+        }
+        finally { GameWindow.LaunchRaceShell = oldLaunch; }
     });
 
     [Fact]
@@ -117,6 +160,9 @@ public sealed partial class GameWindowTests
         Assert.Equal("", w.RaceStatus.Text);
         Assert.Null(w.PageUrl);
         var second = new Fetch();
+        var oldLaunch = GameWindow.LaunchRaceShell;
+        int launches = 0;
+        GameWindow.LaunchRaceShell = (_, _) => { launches++; return null; };
         GameWindow.RaceEngineFetch = second;
         Click(w.RaceDownload);
         PanicSurfaces.All.Single(x => x.Id == "games").Stop(null!);
@@ -125,6 +171,8 @@ public sealed partial class GameWindowTests
         Dispatcher.UIThread.RunJobs();
         Assert.False(GameWindow.IsAnyOpen());
         Assert.Null(w.PageUrl);
+        GameWindow.LaunchRaceShell = oldLaunch;
+        Assert.Equal(0, launches);
     });
 
     [Fact]
