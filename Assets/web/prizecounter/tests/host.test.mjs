@@ -66,3 +66,25 @@ test('main.js hands an owned card\'s wear intent to the host', async () => {
   const src = await readFile(new URL('../main.js', import.meta.url), 'utf8');
   assert.match(src, /if \(ch\.wear\) host\.wear\(ch\.wear\.itemId\);/);
 });
+
+test('desktop string carrier delivers init and correlated replies', async () => {
+  const w = fakeWebview();
+  const host = createHost(w.win, { timeoutMs: 100 });
+  const ready = host.ready();
+  w.win.__ccpRnPush(JSON.stringify({ type: 'init', from: 'launcher' }));
+  assert.equal((await ready).from, 'launcher');
+  const pending = host.request('shop-state');
+  const request = w.posted.find((m) => m.type === 'request');
+  w.win.__ccpRnPush(JSON.stringify({ type: 'reply', reqId: request.reqId, body: { ok: true, sp: 42 } }));
+  assert.equal((await pending).sp, 42);
+});
+
+test('WebKit string carrier sends ready and accepts init', async () => {
+  const frames = [];
+  const win = { invokeCSharpAction: (s) => frames.push(JSON.parse(s)), addEventListener() {} };
+  const host = createHost(win);
+  const ready = host.ready();
+  assert.equal(frames[0].type, 'ready');
+  win.__ccpRnPush(JSON.stringify({ type: 'init', from: 'launcher' }));
+  assert.equal((await ready).from, 'launcher');
+});

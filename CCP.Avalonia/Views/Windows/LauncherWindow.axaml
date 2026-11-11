@@ -243,15 +243,15 @@
                             </Popup>
                         </StackPanel>
                     </Button>
-                    <!-- WPF LauncherWindow.xaml:432: signed-in wallet. Counter door is pending. -->
-                    <Border x:Name="SpChip" IsVisible="False" CornerRadius="15" Padding="11,0,13,0"
-                            Margin="0,0,6,0" Background="{DynamicResource GlassBorderBrush}">
+                    <!-- WPF LauncherWindow.xaml:432: signed-in wallet opens the counter. -->
+                    <Button x:Name="SpChip" IsVisible="False" Theme="{StaticResource LauncherBarPill}" Padding="11,0,13,0"
+                            Margin="0,0,6,0" ToolTip.Tip="{loc:Str shop_title}" AutomationProperties.Name="{loc:Str shop_title}" Click="WalletChip_Click">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="&#x25C6;" FontSize="10" Foreground="{DynamicResource PanelAccentBrush}" VerticalAlignment="Center"/>
                             <TextBlock x:Name="SpReadout" Text="0" Margin="7,0,0,0" FontSize="13" FontWeight="SemiBold"
                                        FontFamily="Fredoka, Segoe UI" VerticalAlignment="Center"/>
                         </StackPanel>
-                    </Border>
+                    </Button>
                     <!-- the active mod: a click lists the installed mods and "Manage mods" -->
                     <Button x:Name="ModPill" Theme="{StaticResource LauncherBarPill}" Margin="0,0,6,0"
                             ToolTip.Tip="{loc:Str launcher_mod_tooltip}" Click="ModPill_Click">

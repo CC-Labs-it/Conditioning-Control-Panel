@@ -11,6 +11,13 @@ const OFFLINE = { ok: false, reason: 'offline' };
 const mintId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
 
 export function createHost(win = window, { timeoutMs = 15000 } = {}) {
+  // WebKitGTK supplies a string carrier rather than WebView2's chrome.webview.
+  if (!win.chrome?.webview && typeof win.invokeCSharpAction === 'function') {
+    const carrier = new EventTarget();
+    carrier.postMessage = (m) => win.invokeCSharpAction(JSON.stringify(m));
+    win.chrome = win.chrome || {};
+    win.chrome.webview = carrier;
+  }
   const webview = win.chrome && win.chrome.webview;
   const parent = !webview && win.parent && win.parent !== win ? win.parent : null;
   const post = (m) => { try { if (webview) webview.postMessage(m); else if (parent) parent.postMessage(m, '*'); } catch (e) { /* host gone */ } };
@@ -23,7 +30,10 @@ export function createHost(win = window, { timeoutMs = 15000 } = {}) {
     else if (m.type === 'worn') wornHears.forEach((f) => { try { f(m); } catch (e) { /* page error stays local */ } });
     else if (m.type === 'reply' && waiting.has(m.reqId)) { waiting.get(m.reqId)(m.body || OFFLINE); waiting.delete(m.reqId); }
   };
-  if (webview) webview.addEventListener('message', (e) => onFrame(e.data));
+  if (webview) {
+    webview.addEventListener('message', (e) => onFrame(e.data));
+    win.__ccpRnPush = (json) => { try { onFrame(JSON.parse(json)); } catch (e) { /* bad frame */ } };
+  }
   else win.addEventListener('message', (e) => { if (parent && e.source === parent) onFrame(e.data); });
   const hosted = !!(webview || parent);
   return {

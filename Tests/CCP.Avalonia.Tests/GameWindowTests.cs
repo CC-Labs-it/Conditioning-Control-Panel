@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Interactivity;
 using Avalonia.Skia;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -74,6 +75,47 @@ public sealed partial class GameWindowTests
             }
         });
     }
+
+    [Fact]
+    public void WalletClick_OpensCounterOverLauncher_AndPanicClosesIt() => Run((shell, launcher) =>
+    {
+        CoreAccount.IsLoggedInProvider = () => true;
+        CoreSettings.Current.SkillPoints = 123;
+        CoreSettings.Current.UnifiedId = "test-account";
+        CoreSettings.Current.OfflineMode = false;
+        CoreSecrets.RetrieveProvider = n => n == CoreSecrets.AuthToken ? "test-token" : null;
+        launcher.RefreshAccount();
+        var button = launcher.FindControl<Button>("SpChip")!;
+        Assert.True(button.IsVisible);
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var counter = GameWindow.OpenForTests(GameWindow.PrizeCounterId)!;
+        Assert.NotNull(counter);
+        Assert.True(launcher.IsVisible);
+        Assert.False(shell.IsVisible);
+        Assert.Same(counter, GameWindow.Launch(GameWindow.PrizeCounterId));
+        Assert.EndsWith("/prizecounter/index.html", counter.PageUrl!.AbsolutePath);
+        var posted = new List<JObject>();
+        counter.Posted += json => posted.Add(JObject.Parse(json));
+        counter.Web.OnNavigationCompleted(new Uri(counter.PageUrl, "/other.html"));
+        counter.Web.OnWebMessage("{\"type\":\"ready\"}");
+        Assert.Empty(posted);
+        counter.Web.OnNavigationCompleted(counter.PageUrl);
+        Assert.Single(posted); // a ready frame can precede NavigationCompleted
+        counter.Web.OnWebMessage("{\"type\":\"ready\"}");
+        Assert.Equal("init", (string?)posted.Single()["type"]);
+        Assert.Equal("launcher", (string?)posted.Single()["from"]);
+        Assert.Equal("test-account", (string?)posted.Single()["identity"]!["unifiedId"]);
+        Assert.Null(posted.Single()["token"]);
+        CoreSettings.Current.OfflineMode = true;
+        counter.Web.OnWebMessage("{\"type\":\"request\",\"reqId\":\"r1\",\"op\":\"shop-state\"}");
+        var until = DateTime.UtcNow.AddSeconds(5);
+        while (posted.Count < 2 && DateTime.UtcNow < until) Dispatcher.UIThread.RunJobs();
+        Assert.Equal("offline", (string?)posted.Last()["body"]!["reason"]);
+        Assert.Equal("r1", (string?)posted.Last()["reqId"]);
+        GameWindow.CloseAllForPanic();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.True(launcher.IsVisible);
+    });
 
     [Fact]
     public void Play_OpensTheGameHost_AndPanicClosesIt() => Run((shell, launcher) =>

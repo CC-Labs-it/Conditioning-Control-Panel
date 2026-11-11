@@ -306,6 +306,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!MainShellWindow.LockdownActive) OpenPanel(p => p.ShowTab("appsettings"));
         }
 
+        private void WalletChip_Click(object? sender, RoutedEventArgs e)
+        {
+            try { Games.GameWindow.Launch(Games.GameWindow.PrizeCounterId); }
+            catch (Exception ex) { Log.Warning(ex, "[Launcher] Prize Counter failed to open"); }
+        }
+
         private void SignIn_Click(object? sender, RoutedEventArgs e) { if (!MainShellWindow.LockdownActive) OpenSignIn(); }
 
         /// <summary>WPF StopLink_Click.</summary>

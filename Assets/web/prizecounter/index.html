@@ -15,9 +15,10 @@
     import { createHost } from './host.js';
     import { mountPrizeCounter } from './main.js';
     import { createHostEscape, HOST_ESCAPE } from './host-escape.js';
+    const host = createHost();
     const esc = createHostEscape();
     window.chrome?.webview?.addEventListener('message', (e) => { if (e.data && e.data.type === HOST_ESCAPE) esc.kept(); });
-    mountPrizeCounter(createHost(), { root: document.getElementById('pc') });
+    mountPrizeCounter(host, { root: document.getElementById('pc') });
   </script>
 </body>
 </html>
