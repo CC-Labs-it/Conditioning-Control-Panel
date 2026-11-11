@@ -5,7 +5,7 @@
 // The mic opens only under WPF's conditions: VoiceInputRules.ModesToRun (consent + an armed mode +
 // premium or the "voice" free day + an available engine), re-read at every reconcile.
 // ponytail: no sherpa KWS spotter (the Vosk wake grammar is WPF's fallback path). Intents with no
-// seam here (keyword triggers, deeper) are left out of the grammar.
+// seam here (keyword triggers) are left out of the grammar.
 
 using System;
 using System.Linq;
@@ -129,6 +129,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             "video_off" when CoreEngine.Video != null => () => CoreEngine.Video?.Stop(),
             "video_pause" when CoreEngine.Video == MandatoryVideoOverlay.Instance.Scheduler => MandatoryVideoOverlay.Instance.PausePrimary,
             "video_resume" when CoreEngine.Video == MandatoryVideoOverlay.Instance.Scheduler => MandatoryVideoOverlay.Instance.PlayPrimary,
+            "deeper" when CoreEngine.StartBrainDrain != null => () => CoreEngine.StartBrainDrain?.Invoke(),
             "shake_once" => () => Deeper.ScreenShake.Shake(60, 1200),
             "pause" => PauseSessionFromRemote,
             "resume" => ResumeSessionFromRemote,
