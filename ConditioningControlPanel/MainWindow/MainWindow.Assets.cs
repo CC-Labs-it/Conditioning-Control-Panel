@@ -2291,7 +2291,7 @@ namespace ConditioningControlPanel
 
         /// <summary>Pushes live settings into every control in the panel. Safe to call as often
         /// as the tab is opened.</summary>
-        private void RefreshRemoteMediaPicker()
+        internal void RefreshRemoteMediaPicker()
         {
             var tab = AssetsTab;
             var settings = App.Settings?.Current;
@@ -2381,15 +2381,8 @@ namespace ConditioningControlPanel
         /// </summary>
         private bool AskRemoteMediaConsent(Models.AppSettings settings)
         {
-            var answer = MessageBox.Show(this,
-                LocOr("msg_remote_media_consent",
-                    "Pull media from Reddit?\n\n" +
-                    "The app will stream images and clips from the subreddits you pick, straight from your own machine. " +
-                    "Nothing is saved to your disk, nothing is uploaded, and none of it goes through our servers.\n\n" +
-                    "It is adult content and it is not curated by us - you choose the niches and subreddits, and only those are ever fetched.\n\n" +
-                    "Turn it on?"),
-                LocOr("title_remote_media_consent", "Use Reddit media?"),
-                MessageBoxButton.YesNo, MessageBoxImage.Question);
+            var (title, message) = RemoteMediaConsentText();
+            var answer = MessageBox.Show(this, message, title, MessageBoxButton.YesNo, MessageBoxImage.Question);
 
             if (answer != MessageBoxResult.Yes) return false;
 
@@ -2398,6 +2391,16 @@ namespace ConditioningControlPanel
             MaybeShowFeatureIntro("remotemedia");
             return true;
         }
+
+        /// <summary>The ask's title and text, shared with the first show's preset pick (FirstShowDesktopWindow.Pick).</summary>
+        internal static (string Title, string Message) RemoteMediaConsentText() => (
+            LocOr("title_remote_media_consent", "Use Reddit media?"),
+            LocOr("msg_remote_media_consent",
+                "Pull media from Reddit?\n\n" +
+                "The app will stream images and clips from the subreddits you pick, straight from your own machine. " +
+                "Nothing is saved to your disk, nothing is uploaded, and none of it goes through our servers.\n\n" +
+                "It is adult content and it is not curated by us - you choose the niches and subreddits, and only those are ever fetched.\n\n" +
+                "Turn it on?"));
 
         private void RemoteNicheChip_Changed(object sender, RoutedEventArgs e)
         {

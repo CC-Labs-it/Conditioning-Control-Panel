@@ -36,6 +36,11 @@ internal static class PbpWatchRules
     public static string CleanAmount(string? amount) =>
         amount != null && Amounts.Contains(amount, StringComparer.Ordinal) ? amount : DefaultAmount;
 
+    /// <summary>WPF PieceByPieceHostService.Friends.cs:110-112: an opaque chess table id.</summary>
+    public static bool IsTableId(string? id) =>
+        id is { Length: > 2 and <= 64 } && id.StartsWith("p_", StringComparison.Ordinal)
+        && id.Skip(2).All(c => char.IsAsciiLetterOrDigit(c) || c == '_' || c == '-');
+
     /// <summary>The server's match id: <c>m_</c> then hex (16 today; 8 to 32 accepted).</summary>
     public static bool IsMatchId(string? id) =>
         id != null && id.Length >= 10 && id.Length <= 34 && id.StartsWith("m_", StringComparison.Ordinal)

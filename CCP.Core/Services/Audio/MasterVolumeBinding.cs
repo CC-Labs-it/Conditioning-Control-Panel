@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using ConditioningControlPanel.Models;
 namespace ConditioningControlPanel.Services.Audio;
+/// <summary>Follows <see cref="AppSettings.MasterVolume"/> across settings replacement (WPF Services/Audio/MasterVolumeWatch.cs).</summary>
 public sealed class MasterVolumeBinding : IDisposable
 {
     private readonly SettingsService? _service;
@@ -38,11 +39,7 @@ public sealed class MasterVolumeBinding : IDisposable
         if (_service != null) _service.CurrentReplaced -= Replaced;
         lock (_gate) { _disposed = true; if (_settings != null) _settings.PropertyChanged -= Changed; }
     }
+    /// <summary>WPF MindWipeService.EffectiveVolume (MindWipeService.cs:118).</summary>
     public static float MindWipeGain(int master, double own) => double.IsNaN(own) ? 0f
         : Math.Clamp(master, 0, 100) / 100f * (float)Math.Clamp(own, 0, 1);
-    public static float SoundGain(int own, int master)
-    {
-        var level = Math.Clamp(own, 0, 100) / 100f * (Math.Clamp(master, 0, 100) / 100f);
-        return level <= 0 ? 0 : Math.Max(0.05f, (float)Math.Pow(level, 1.5));
-    }
 }

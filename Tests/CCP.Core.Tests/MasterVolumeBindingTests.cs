@@ -10,20 +10,9 @@ using Xunit;
 namespace CCP.Core.Tests;
 public sealed class MasterVolumeBindingTests
 {
-    [Theory, InlineData(100, 0, 0), InlineData(0, 100, 0), InlineData(100, 100, 1), InlineData(1, 1, 0.05), InlineData(-10, 100, 0)]
-    public void Sound_gain_preserves_mute_and_the_positive_floor(int own, int master, double expected)
-        => Assert.Equal(expected, MasterVolumeBinding.SoundGain(own, master), 5);
     [Theory, InlineData(0, 1, 0), InlineData(40, 0.5, 0.2), InlineData(200, 2, 1), InlineData(100, double.NaN, 0)]
     public void Mind_wipe_gain_is_linear_and_clamped(int master, double own, double expected)
         => Assert.Equal(expected, MasterVolumeBinding.MindWipeGain(master, own), 5);
-    [Theory, InlineData(false), InlineData(true)]
-    public void Failed_sound_completion_is_guarded(bool providerThrows)
-    {
-        var old = ConditioningControlPanel.CoreAudio.PlaySoundProvider;
-        ConditioningControlPanel.CoreAudio.PlaySoundProvider = providerThrows ? (_, _, _, _) => throw new InvalidOperationException() : null;
-        try { var calls = 0; ConditioningControlPanel.CoreAudio.PlaySound("missing", 100, finished: () => { calls++; throw new InvalidOperationException(); }); Assert.Equal(1, calls); }
-        finally { ConditioningControlPanel.CoreAudio.PlaySoundProvider = old; }
-    }
     [Fact]
     public void Watch_follows_replacement_detaches_old_settings_and_disposes()
     {

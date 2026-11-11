@@ -43,7 +43,7 @@ public sealed class LayeredAudioLoopTests
         }
     }
 
-    internal static void WriteSilentWav(string path, int ms)
+    private static void WriteSilentWav(string path, int ms)
     {
         const int rate = 8000;
         var data = rate * ms / 1000 * 2;

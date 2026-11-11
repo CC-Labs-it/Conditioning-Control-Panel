@@ -93,11 +93,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// the session at 1.000 throughout, each player reading its own value. 0 is DirectSound's floor
         /// (silence) and LibVLC's cubic scale is kept, so the linear gain mapping (<see cref="VlcVolume"/>)
         /// still lands WPF's sample-gain levels. ",any" falls back to the default output if DirectSound
-        /// cannot open. A caller's own --aout (tests: dummy) wins. Linux: pulse is per stream already.
+        /// cannot open. A caller's own --aout (tests: dummy) wins. Linux names its outputs: "any" can land on vlc-plugin-pipewire
+        /// (3-7.fc44), which dereferences an uninitialized stream when volume is set before the output starts.
         /// </summary>
         internal static string[] WithOutput(string[] options, bool windows) =>
-            windows && !options.Any(o => o.StartsWith("--aout", StringComparison.Ordinal))
-                ? options.Prepend("--aout=directsound,any").ToArray() : options;
+            options.Any(o => o.StartsWith("--aout", StringComparison.Ordinal)) ? options
+                : options.Prepend(windows ? "--aout=directsound,any" : "--aout=pulse,alsa,jack,none").ToArray();
 
         /// <summary>WPF's linear sample gain (0-1) as LibVLC's cubic 0-100 volume: 0.5 lands at about -6 dB.</summary>
         internal static int VlcVolume(float gain) => (int)Math.Round(Math.Cbrt(Math.Clamp(gain, 0f, 1f)) * 100);
@@ -146,64 +147,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
             LayeredAudio.Instance = new LayeredAudio(path => new LayeredAudio.VlcLayerPlayer(_vlc, path));
             CoreAudio.PlayOneShotProvider = (path, volume, tag, started, finished) => PlayOneShot(path, volume, tag, started, finished);
             CoreAudio.PlayStoppableProvider = PlayOneShot;
-            CoreAudio.StopSoundProvider = StopSound;
-            CoreAudio.PlaySoundProvider = (path, volume, started, finished) => PlaySound(path, volume, started, finished);
             // Windows ducking is seeded by StartDuckJournal (App start-up only): a probe or test must never
             // lower the desk's real apps.
             if (!OperatingSystem.IsLinux()) return;
             CoreAudio.DuckProvider = Duck;
             CoreAudio.UnduckProvider = Unduck;
             CoreAudio.DuckGenerationProvider = () => { lock (_duckLock) return _duckGeneration; };
-        }
-
-        private readonly object _soundGate = new();
-        private Action? _stopSound;
-        internal void StopSound() { Action? stop; lock (_soundGate) { stop = _stopSound; _stopSound = null; } stop?.Invoke(); }
-        internal void PlaySound(string path, int volume, Action<TimeSpan>? started, Action? finished, Func<Action, ISoundVoice>? create = null)
-        {
-            lock (_soundGate)
-            {
-                var old = _stopSound; _stopSound = null; old?.Invoke();
-                _stopSound = StartSound(create ?? (ended => NewVoice(path, ended, route: true)), volume, started, finished);
-            }
-        }
-
-        internal interface ISoundVoice : MindWipePlayer.IVoice
-        {
-            Action<long>? Started { set; }
-            void ApplyPreferredDevice();
-            bool Play();
-        }
-
-        // Device-free lifecycle seam: the same binding drives the native voice and regression tests.
-        internal static Action StartSound(Func<Action, ISoundVoice> create, int volume,
-            Action<TimeSpan>? started, Action? finished)
-        {
-            ConditioningControlPanel.Services.Audio.MasterVolumeBinding? master = null;
-            ISoundVoice? voice = null;
-            var stopped = 0;
-            var completed = 0;
-            void Ended() { master?.Dispose(); if (Interlocked.Exchange(ref completed, 1) == 0) Fire(finished); }
-            void Stop() { if (Interlocked.Exchange(ref stopped, 1) == 0) { master?.Dispose(); voice?.Dispose(); } }
-            void Apply(int level)
-            {
-                if (voice != null) voice.Volume = ConditioningControlPanel.Services.Audio.MasterVolumeBinding.SoundGain(volume, level);
-            }
-            try
-            {
-                voice = create(Ended);
-                master = new(Apply);
-                if (Volatile.Read(ref completed) != 0) { Stop(); return Stop; }
-                voice.Started = ms => started?.Invoke(TimeSpan.FromMilliseconds(ms));
-                Apply(master.Level);
-                if (!voice.Play()) { Stop(); Ended(); }
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "[Audio] Sound setup failed");
-                try { Stop(); } finally { Ended(); }
-            }
-            return Stop;
         }
 
         /// <summary>Same contract as WPF's AudioService.PlayOneShot: onStarted gets the clip length
@@ -266,79 +215,75 @@ namespace ConditioningControlPanel.Avalonia.Platform
             return voice.Play() ? voice : null;
         }
 
-        internal Voice NewVoice(string path, Action onEnded, bool route = false)
+        // WPF QuizWindow.xaml.cs:1191-1227, using its sequential decoded loop (:41-54).
+        internal static Action<MediaPlayer>? ConfigureQuizDrone;
+        internal MindWipePlayer.IVoice? PlayQuizDrone(string path, double volume, Action onEnded)
+        {
+            var input = new QuizDroneInput(path);
+            Media? media = null;
+            var owned = false;
+            try
+            {
+                media = new Media(_vlc, input, NoVideo, ":demux=rawaud", ":rawaud-fourcc=f32l",
+                    $":rawaud-samplerate={input.SampleRate}", $":rawaud-channels={input.Channels}");
+                var player = new MediaPlayer(media);
+                var voice = new Voice(player, media, () => { input.Dispose(); onEnded(); });
+                owned = true;
+                try { ConfigureQuizDrone?.Invoke(player); voice.Volume = volume; return voice.Play() ? voice : null; }
+                catch { voice.Dispose(); throw; }
+            }
+            catch { if (!owned) { media?.Dispose(); input.Dispose(); } throw; }
+        }
+
+        // Preparation never starts playback. Brain Drain arbitrates Play with Stop under its gate,
+        // as WPF Services/LockCard/BrainDrainService.cs:377-388 does after decoder creation.
+        internal interface IPreparedVoice : MindWipePlayer.IVoice { bool Play(); }
+        internal IPreparedVoice? PrepareVoice(string path, Action onEnded) =>
+            string.IsNullOrWhiteSpace(path) || !File.Exists(path) ? null : NewVoice(path, onEnded);
+        // WPF AudioService.PlaySound: unlike a one-shot cue, a muted sound remains live for unmute.
+        internal MindWipePlayer.IVoice? PlaySound(string path, float volume,
+            Action<TimeSpan> started, Action finished)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return null;
+            var voice = NewVoice(path, finished);
+            voice.UsePreferredDevice = true;
+            voice.Started = ms => started(TimeSpan.FromMilliseconds(ms));
+            voice.Volume = volume;
+            return voice.Play() ? voice : null;
+        }
+
+        private Voice NewVoice(string path, Action onEnded)
         {
             var media = new Media(_vlc, path, FromType.FromPath);
             media.AddOption(NoVideo);
-            media.AddOption(":start-paused");
-            try { return new Voice(new MediaPlayer(media), media, onEnded, route); }
-            catch { media.Dispose(); throw; }
+            return new Voice(new MediaPlayer(media), media, onEnded);
         }
 
-        internal sealed class Voice(MediaPlayer player, Media media, Action onEnded, bool route) : ISoundVoice
+        internal static Action<MediaPlayer> RouteVoice = ApplyPreferredDevice;
+
+        private sealed class Voice(MediaPlayer player, Media media, Action onEnded) : IPreparedVoice
         {
-            internal MediaPlayer Player => player;
             private int _vol, _done;
-            private volatile bool _setupPending = true; private bool _ready, _released;
-            internal bool Hold { get; set; } internal Action? FailedEarly { get; set; }
-            internal void Release()
-            {
-                lock (player)
-                {
-                    _released = true;
-                    if (_ready && _done == 0) { Set(); player.Time = 0; player.SetPause(false); }
-                }
-            }
             /// <summary>Raised once with the clip length in ms (0 when unknown) when it starts playing.</summary>
-            public Action<long>? Started { get; set; }
-            private volatile bool _failed; internal bool Failed { get => _failed; set { _failed = value; if (value) Fire(FailedEarly); } }
+            internal Action<long>? Started;
+            internal volatile bool Failed;
+            internal bool UsePreferredDevice;
             public double Volume
             {
                 // Cubic like PlayOneShot; applied off libvlc's thread once the output exists.
                 set { _vol = (int)Math.Round(Math.Cbrt(Math.Clamp(value, 0, 1)) * 100); Apply(); }
             }
-            public void ApplyPreferredDevice() => ThreadPool.QueueUserWorkItem(_ =>
-            {
-                var deadline = Stopwatch.StartNew();
-                try
-                {
-                    while (deadline.Elapsed < TimeSpan.FromSeconds(8))
-                    {
-                        lock (player)
-                        {
-                            if (_done != 0 || !_setupPending) return;
-                            if (player.Volume >= 0)
-                            {
-                                if (route) LibVlcAudio.ApplyPreferredDevice(player);
-                                _setupPending = false;
-                                Set();
-                                _ready = true;
-                                if (!Hold || _released) { player.Time = 0; player.SetPause(false); }
-                                return;
-                            }
-                        }
-                        Thread.Sleep(10);
-                    }
-                    throw new TimeoutException("Audio output did not become ready");
-                }
-                catch (Exception ex) { Log.Warning(ex, "[Audio] Sound output setup failed"); Failed = true; Dispose(); }
-            });
-            private void Apply() => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (_done == 0 && player.IsPlaying) Set(); });
-            // Muted and paused until gain (and a routed sound's device) lands.
-            private void Set() { player.Volume = _vol; if (!_setupPending) player.Mute = false; }
+            private void Apply() => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (_done == 0 && player.IsPlaying) { RouteVoice(player); player.Volume = _vol; } });
             public bool Play()
             {
                 var started = 0;
-                player.Paused += (_, _) => { if (_setupPending) ApplyPreferredDevice(); };
                 player.Playing += (_, _) =>
                 {
-                    if (_setupPending) return;
                     Apply();
                     if (Interlocked.Exchange(ref started, 1) == 0) Fire(() => Started?.Invoke(Math.Max(0, player.Length)));
                 };
                 player.EndReached += (_, _) => Dispose();
                 player.EncounteredError += (_, _) => { Failed = true; Dispose(); };
-                player.Mute = true;
                 if (player.Play()) return true;
                 Failed = true;
                 Dispose();
@@ -365,28 +310,24 @@ namespace ConditioningControlPanel.Avalonia.Platform
             private readonly object _gate = new();
             private readonly List<Voice> _live = new();
             private Timer? _next;
-            private Voice? _prepared; private bool _done, _due;
-            private int _cycle, _built = -1, _retried = -1;   // built copy and one early retry per cycle
+            private bool _done;
             private double _vol;
 
             public double Volume { set { lock (_gate) { _vol = value; foreach (var v in _live) v.Volume = value; } } }
 
-            public bool Start(bool prepared = false, int cycle = 0)
+            public bool Start()
             {
-                Voice v = null!;
+                Voice v;
                 lock (_gate)
                 {
-                    if (_done || (prepared && (cycle != _cycle || cycle == _built))) return false;
-                    // WPF MindWipeService.cs:476: a build failure is logged, never thrown off a pool thread.
-                    try { v = audio.NewVoice(path, () => Retire(v)); }
-                    catch (Exception ex) { Log.Warning(ex, "[Audio] mindwipe loop copy failed"); return false; }
-                    if (prepared) _built = cycle;
+                    if (_done) return false;
+                    v = null!;
+                    v = audio.NewVoice(path, () => Retire(v));
                     v.Volume = _vol;
-                    v.Hold = prepared && !_due; if (v.Hold) { _prepared = v; v.FailedEarly = () => ThreadPool.QueueUserWorkItem(_ => RetryPrepared(v)); }
-                    v.Started = ms => { lock (_gate) if (_prepared == v) _prepared = null; Schedule(ms); };
+                    v.Started = Schedule;
                     _live.Add(v);
-                    return v.Play();
                 }
+                return v.Play();
             }
 
             /// <summary>WPF: interval = length - overlap, at least 100 ms. Unknown length: back to back.</summary>
@@ -397,29 +338,18 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 {
                     if (_done) return;
                     _next?.Dispose();
-                    var cycle = ++_cycle; _due = false;
-                    _next = new Timer(_ =>
-                    {
-                        Voice? v;
-                        lock (_gate) { if (_done || cycle != _cycle) return; _due = true; v = _prepared; if (v?.Failed == true) { _prepared = null; v = null; _built = -1; } }
-                        // Nothing parked (its build failed): build and play now, as WPF's self-repair (MindWipeService.cs:428).
-                        if (v is null) Start(prepared: true, cycle); else { v.Release(); if (v.Failed) { lock (_gate) { if (_prepared == v) { _prepared = null; _built = -1; } } Start(prepared: true, cycle); } }
-                    }, null, Math.Max(100, lengthMs - OverlapMs), Timeout.Infinite);
-                    // Prepare off the LibVLC event thread while the current copy plays.
-                    ThreadPool.QueueUserWorkItem(_ => Start(prepared: true, cycle));
+                    _next = new Timer(_ => Start(), null, Math.Max(100, lengthMs - OverlapMs), Timeout.Infinite);
                 }
             }
 
-            private void RetryPrepared(Voice v) { lock (_gate) { if (_done || v != _prepared || _retried == _cycle) return; _prepared = null; _built = -1; _retried = _cycle; Start(prepared: true, _cycle); } }
             private void Retire(Voice v)
             {
                 bool restart = false, dead = false;
                 lock (_gate)
                 {
                     _live.Remove(v);
-                    if (v == _prepared) { RetryPrepared(v); if (v == _prepared) { _prepared = null; _built = -1; } }
                     if (_done || _live.Count > 0) return;
-                    if (v.Failed) dead = _done = true; else { _cycle++; _next?.Dispose(); restart = true; }
+                    if (v.Failed) dead = _done = true; else restart = true;
                 }
                 if (dead) { Fire(onEnded); return; }
                 if (restart && !Start()) { lock (_gate) _done = true; Fire(onEnded); }
@@ -427,8 +357,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
             public void Dispose()
             {
-                // Voices are marked done inside the gate, so a timer that already took the parked copy cannot start it.
-                lock (_gate) { _done = true; _next?.Dispose(); _next = null; foreach (var v in _live) v.Dispose(); _live.Clear(); }
+                Voice[] live;
+                lock (_gate) { _done = true; _next?.Dispose(); _next = null; live = _live.ToArray(); _live.Clear(); }
+                foreach (var v in live) v.Dispose();
                 Fire(onEnded);
             }
         }
@@ -506,14 +437,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>App exit: never leave other apps ducked behind us.</summary>
         internal void Shutdown()
         {
-            StopSound();
             if (_win != null) { _win.Shutdown(); return; }
             lock (_duckLock) { if (_isDucked) ForceUnduck(); }
-            Drain();
+            Drain(2000); // Keep app exit bounded, as before.
             lock (_duckLock) { _retry?.Dispose(); _retry = null; }
         }
 
-        internal void Drain() => _duckWork.Wait(2000);
+        // A completion barrier by default; shutdown supplies its bounded exit budget.
+        internal void Drain(int ms = Timeout.Infinite) => _duckWork.Wait(ms);
 
         internal bool IsDucked { get { lock (_duckLock) return _isDucked; } }
 
@@ -546,6 +477,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 foreach (var si in DuckRecovery.ParseSinkInputs(_pactl("-f json list sink-inputs")))
                 {
                     if (si.Pid == Environment.ProcessId) continue;
+                    // WPF AudioService.cs:1021-1041. WebKit audio runs in a child process.
+                    if ((CoreSettings.Current?.ExcludeBambiCloudFromDucking ?? true)
+                        && (si.Name.StartsWith("WebKit", StringComparison.Ordinal)
+                            || si.Name.Contains("webview2", StringComparison.OrdinalIgnoreCase))) continue;
                     var index = si.Index;
                     // PulseAudio volume units: 65536 is unity. WPF skips <=0.001 on rescans so an
                     // already-silent/recycled session is not captured as its original volume.
@@ -660,6 +595,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static List<OutputDevice> EnumerateOutputDevices(Func<string, string>? pactl = null)
         {
             var list = new List<OutputDevice> { new("", Loc.Get("set2_mic_system_default")) };
+            if (pactl is null && OperatingSystem.IsWindows())
+                return WindowsAudioDevices.Enumerate(list);
             if (pactl is null && !OperatingSystem.IsLinux()) return list;
             try
             {
@@ -679,7 +616,21 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>WPF's ApplyPreferredDevice rule: the saved device, only when the live player
         /// lists it (a stale id routes audio to nowhere), and not again when already there.</summary>
         internal static string? PreferredDevice(string? saved, string? current, IEnumerable<string> available)
-            => string.IsNullOrEmpty(saved) || saved == current || !available.Contains(saved) ? null : saved;
+        {
+            if (string.IsNullOrEmpty(saved) || saved == current) return null;
+            var live = available.ToArray();
+            if (live.Contains(saved)) return saved;
+            // WPF AudioService.cs:216-269 validates the live output. This head uses DirectSound
+            // for per-player gain: its device GUID is the suffix of the saved WASAPI endpoint ID.
+            if (saved.StartsWith("{0.0.0.", StringComparison.Ordinal)
+                && saved.LastIndexOf('{') is var start && start > 0
+                && Guid.TryParse(saved.AsSpan(start), out var endpoint))
+            {
+                var id = live.FirstOrDefault(d => Guid.TryParse(d, out var guid) && guid == endpoint);
+                return id == current ? null : id;
+            }
+            return null;
+        }
 
         /// <summary>Call once the player is live (its Playing event), never before: like WPF's
         /// mmdevice, the output's device list is only meaningful once it exists.</summary>

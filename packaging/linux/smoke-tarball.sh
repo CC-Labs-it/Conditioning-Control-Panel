@@ -13,6 +13,7 @@ trap 'rm -rf "$tmp"' EXIT
 tar -xzf "$1" -C "$tmp"
 app=$tmp/ConditioningControlPanel
 test -x "$app/CCP.Avalonia"
+test -x "$app/conditioning-control-panel.sh"
 test -f "$app/libvosk.so"
 id=io.github.CodeBambi.ConditioningControlPanel
 test -f "$app/LICENSE"
@@ -21,4 +22,4 @@ test -f "$app/share/icons/hicolor/256x256/apps/$id.png"
 test -f "$app/share/metainfo/$id.metainfo.xml"
 # Sandboxed profile: never the user's real settings or keyring.
 export CCP_USERDATA_DIR=$tmp/userdata XDG_CONFIG_HOME=$tmp/config
-CCP_SMOKE_BUNDLED_VOSK=1 timeout 300 "$app/CCP.Avalonia" --smoke
+CCP_SMOKE_BUNDLED_VOSK=1 timeout 300 "$app/conditioning-control-panel.sh" --smoke

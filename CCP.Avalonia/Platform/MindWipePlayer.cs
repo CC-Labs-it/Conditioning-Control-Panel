@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Audio;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform
@@ -22,13 +23,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private readonly Func<string, double, bool, Action, IVoice?> _play;
         private readonly TimeProvider _time;
         private readonly Func<double> _roll;
-        private readonly ConditioningControlPanel.Services.Audio.MasterVolumeBinding _master;
+        private readonly MasterVolumeBinding _master;
         private readonly Random _random = new();
         private readonly object _lock = new();
         private string[] _clips = Array.Empty<string>();
         private ITimer? _tick, _cleanSlate;
         private IVoice? _oneShot, _loop;
-        private bool _running;
+        private bool _running, _sessionMode;
+        private int _sessionBase;
+        private DateTime _sessionStart;
         private double _frequency = 6, _volume = 0.5;
 
         /// <summary>Raised with the loop's length in seconds once it has played 60 s (WPF Clean Slate).</summary>
@@ -41,7 +44,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             _play = play;
             _time = time ?? TimeProvider.System;
             _roll = roll ?? _random.NextDouble;
-            _master = new(_ => ApplyGain());
+            _master = new(_ => ApplyGain());   // WPF MindWipeService.cs:176, the master dial live (#1432)
             ReloadClips();
         }
 
@@ -53,6 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal void Seed()
         {
             CoreMindWipe.StartProvider = Start;
+            CoreMindWipe.StartSessionProvider = StartSession;
             CoreMindWipe.StopProvider = Stop;
             CoreMindWipe.IsRunningProvider = () => IsRunning;
             CoreMindWipe.TriggerOnceProvider = TriggerOnce;
@@ -78,6 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 if (!_running)
                 {
                     _running = started = true;
+                    _sessionMode = false;
                     var every = MindWipeSchedule.TickInterval;
                     _tick = _time.CreateTimer(_ => Tick(), null, every, every);
                 }
@@ -86,6 +91,24 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (started) App.DiscordRpc?.SetMindWipeActivity();   // WPF MindWipeService.cs:179
             Log.Information("MindWipe: Started (frequency: {Freq}/hour, volume: {Vol}%, files: {Count})",
                 frequencyPerHour, volume * 100, ClipCount);
+        }
+
+        /// <summary>WPF StartSession (MindWipeService.cs:232-248): escalating per five-minute block from now.
+        /// The session sets the volume first (SessionEngine.cs:218); a running service ignores it all.</summary>
+        internal void StartSession(int baseMultiplier, double volume)
+        {
+            lock (_lock)
+            {
+                if (_running) return;
+                _running = _sessionMode = true;
+                _sessionBase = baseMultiplier;
+                _sessionStart = _time.GetLocalNow().DateTime;
+                _volume = MindWipeSchedule.ClampVolume(volume);
+                var every = MindWipeSchedule.TickInterval;
+                _tick = _time.CreateTimer(_ => Tick(), null, every, every);
+            }
+            App.DiscordRpc?.SetMindWipeActivity();   // WPF MindWipeService.cs:245
+            Log.Information("MindWipe: Started in session mode (base multiplier: {Base})", baseMultiplier);
         }
 
         /// <summary>Everything off, running or not: panic reaches a test clip played with the service stopped.</summary>
@@ -117,8 +140,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
         }
 
-        private double CurrentGain => ConditioningControlPanel.Services.Audio.MasterVolumeBinding.MindWipeGain(CoreSettings.Current.MasterVolume, _volume);
+        /// <summary>WPF MindWipeService.cs:133-140: master x own.</summary>
+        private double CurrentGain => MasterVolumeBinding.MindWipeGain(CoreSettings.Current.MasterVolume, _volume);
 
+        /// <summary>WPF ApplyGainToLivePlayers (MindWipeService.cs:146): try/catch per voice.</summary>
         private void ApplyGain()
         {
             lock (_lock)
@@ -137,7 +162,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
             lock (_lock)
             {
                 if (!_running || _loop != null || _clips.Length == 0) return;
-                if (_roll() >= MindWipeSchedule.Probability(_frequency)) return;
+                // WPF MindWipeService.cs:238,717: local wall time, including backward/DST jumps.
+                var probability = _sessionMode
+                    ? MindWipeSchedule.SessionProbability(_sessionBase, _time.GetLocalNow().DateTime - _sessionStart)
+                    : MindWipeSchedule.Probability(_frequency);
+                if (_roll() >= probability) return;
             }
             PlayOnce();
         }
@@ -162,8 +191,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
             IVoice? voice = null;
             voice = _play(clip, volume, false, () => { lock (_lock) if (ReferenceEquals(_oneShot, voice)) _oneShot = null; });
             IVoice? displaced;
-            lock (_lock) { displaced = _oneShot; _oneShot = voice; ApplyGain(); }
+            lock (_lock) { displaced = _oneShot; _oneShot = voice; ApplyGain(); }   // a master move during _play
             displaced?.Dispose();
+            // WPF App.xaml.cs:750-752: a played one-shot feeds the memory favourite.
+            if (voice != null) App.NoteFeatureUsed(Services.Companion.Brain.MemorySignalWriter.FeatureMindWipe);
             Log.Debug("MindWipe: Playing {File} at volume {Vol}%", Path.GetFileName(clip), volume * 100);
         }
 

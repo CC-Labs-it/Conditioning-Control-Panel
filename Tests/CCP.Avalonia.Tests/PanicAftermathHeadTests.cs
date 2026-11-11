@@ -73,16 +73,20 @@ public sealed class PanicAftermathHeadTests
     public void TheStopPass_ArmsTheQuiet_ForTrayVoiceAndTheLeashGate()
     {
         // Tray Stop everything, the spoken safe word and the leash gate's Panic all run PanicSurfaces.StopAll.
-        var quiet = PanicSurfaces.All.Single(x => x.Id == "panic-quiet");
+        var saved = PanicSurfaces.All;
+        var quietAtStop = new List<bool>();
         PanicAftermath.EndQuiet();
         try
         {
-            quiet.Stop(null);
-            Assert.True(PanicAftermath.TriggersSilenced());
-            var ids = PanicSurfaces.All.Select(x => x.Id).ToList();
-            Assert.True(ids.IndexOf("panic-quiet") < ids.IndexOf("engine"));
+            // Quiet is a preamble, not a surface. Check it at every production stop position,
+            // retaining a production quiet action if one is accidentally reintroduced.
+            PanicSurfaces.All = saved.Select(s => s.Id == "panic-quiet"
+                ? s : s with { Stop = _ => quietAtStop.Add(PanicAftermath.TriggersSilenced()) }).ToArray();
+            PanicSurfaces.StopAll("tray/voice/leash");
+            Assert.NotEmpty(quietAtStop);
+            Assert.All(quietAtStop, quiet => Assert.True(quiet));
         }
-        finally { PanicAftermath.EndQuiet(); }
+        finally { PanicSurfaces.All = saved; PanicAftermath.EndQuiet(); }
     }
 
     [Fact]
