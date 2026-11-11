@@ -126,7 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 WindowDecorations = WindowDecorations.None,
                 TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
                 Background = Brushes.Transparent,
-                Topmost = true,
+                Topmost = ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop,
                 ShowInTaskbar = false,
                 ShowActivated = false,
                 CanResize = false,
@@ -169,6 +169,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 // WPF ChaosDvdOverlay :115-122, :244-255, :435-448: reuse hidden windows.
                 var w = Pool.Count > 0 ? Pool.Pop() : NewWindow(t, l.W, l.H);
+                w.Topmost = ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop;
                 w.Width = l.W;
                 w.Height = l.H;
                 w.Content = t;
@@ -210,7 +211,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (Labels.Remove(l, out var t))
                 {
                     _canvas?.Children.Remove(t);
-                    if (LogoWindows.Remove(l, out var w)) { w.Hide(); Pool.Push(w); }
+                    if (LogoWindows.Remove(l, out var w))
+                    {
+                        w.Hide();
+                        w.Content = null;
+                        if (Pool.Count < 12) Pool.Push(w);
+                        else w.Close();
+                    }
                 }
             foreach (var (l, t) in Labels)
             {
