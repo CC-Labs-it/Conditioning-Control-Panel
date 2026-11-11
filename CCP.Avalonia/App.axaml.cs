@@ -1050,6 +1050,7 @@ namespace ConditioningControlPanel.Avalonia
                 _achievementSaveTimer?.Stop();
                 _achievementSaveTimer = StartAchievementAutosave(Achievements);
                 WireAchievementUnlocks(Achievements);
+                SeedAchievementXp(Achievements);
                 SeedCompanionRecall();
                 WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
                 // WPF App.xaml.cs:2662: the Spiral rail day log, once Achievements and Settings are up.
@@ -1312,8 +1313,15 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>WPF App.OnAchievementUnlocked (App.xaml.cs:3815): one popup per unlock, shown at once.
         /// ponytail: no sound, no Discord webhook - neither service exists on this head.</summary>
-        /// <summary>WPF ProgressionService.cs:285 (a level-up celebrates) and App.xaml.cs:3174 (retroactive,
-        /// silent). Returns the LevelUp handler so a test can detach it.</summary>
+        // WPF ProgressionService.cs:104,162: achievements count settled XP from awards and claims.
+        internal static Action<ProgressionBank.XpAward> SeedAchievementXp(AchievementEngine engine)
+        {
+            Action<ProgressionBank.XpAward> onXp = award => engine.TrackXPEarned(award.Amount);
+            ProgressionBank.XPAwarded += onXp;
+            return onXp;
+        }
+
+        /// <summary>WPF ProgressionService.cs:285 and App.xaml.cs:3174. Returns the handler for tests.</summary>
         internal static Action<int> SeedLevelAchievements(AchievementEngine engine)
         {
             Action<int> onLevel = engine.CheckLevelAchievements;

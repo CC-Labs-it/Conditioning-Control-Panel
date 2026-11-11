@@ -61,6 +61,13 @@ internal sealed class AchievementEngine
         if (!_store.Write(() => Progress)) _isDirty = true;
     }
 
+    // WPF AchievementService.cs:814-818.
+    public void TrackXPEarned(double amount)
+    {
+        Progress.TotalXPEarned += amount;
+        _isDirty = true;
+    }
+
     public void TrackSkillPointsSpent(int amount)
     {
         if (amount <= 0) return;
