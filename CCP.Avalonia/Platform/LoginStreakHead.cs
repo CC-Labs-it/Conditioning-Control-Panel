@@ -13,10 +13,12 @@ internal static class LoginStreakHead
 {
     private static string? _loadedId;
     private static JObject? _loadedStats;
+    private static AchievementEngine? _questXpEngine;
     internal static int ProfileGeneration { get; private set; }
 
     internal static void Start(AchievementEngine engine, AppSettings settings)
     {
+        _questXpEngine = null;
         Update(engine.Progress, settings, DateTime.Today, false);
         SaveAndPay(engine, settings);
         if (engine.Progress.PendingStreakBreak)
@@ -161,6 +163,17 @@ internal static class LoginStreakHead
     {
         engine.Save();
         CoreSettings.SaveImmediate();
+        if (ReferenceEquals(_questXpEngine, engine)) PayPendingBonus(engine);
+    }
+
+    internal static void QuestXpReady(AchievementEngine? engine)
+    {
+        _questXpEngine = engine;
+        if (engine != null) PayPendingBonus(engine);
+    }
+
+    private static void PayPendingBonus(AchievementEngine engine)
+    {
         var p = engine.Progress;
         if (!p.PendingStreakBonus) return;
         p.PendingStreakBonus = false;

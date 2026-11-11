@@ -73,6 +73,7 @@ public class LoginStreakTests
     {
         var dir = Directory.CreateTempSubdirectory("ccp-login-startup-").FullName;
         var oldProvider = CoreSettings.ServiceProvider;
+        var oldQuests = AvApp.Quests;
         var settingsService = new SettingsService();
         var s = settingsService.Current;
         s.OfflineMode = true;
@@ -88,13 +89,21 @@ public class LoginStreakTests
             engine.Progress.LastLaunchDate = DateTime.Today.AddDays(-1);
             engine.Progress.ConsecutiveDays = 4;
             engine.Save();
-            LoginStreakHead.Start(new AchievementEngine(new AchievementStore(path)), s);
+            var started = new AchievementEngine(new AchievementStore(path));
+            LoginStreakHead.Start(started, s);
             var restarted = new AchievementEngine(new AchievementStore(path));
             Assert.Equal(5, restarted.Progress.ConsecutiveDays);
             Assert.Equal(DateTime.Today, restarted.Progress.LastLaunchDate);
             Assert.Equal(5, s.CurrentStreak);
-            Assert.Equal(1, awards);
+            Assert.Equal(0, awards);
+            Assert.True(started.Progress.PendingStreakBonus);
             using var quests = new QuestService(null, dir);
+            quests.Progress.WeeklyQuest = new ActiveQuest("conditioning_champion_w");
+            AvApp.Quests = quests;
+            AvApp.WireQuestXpAndPay(started);
+            Assert.Equal(1, awards);
+            Assert.Equal(100, quests.Progress.WeeklyQuest.CurrentProgress);
+            Assert.False(started.Progress.PendingStreakBonus);
             quests.Progress.WeeklyQuest = new ActiveQuest("streak_keeper_w");
             AvApp.CreditBankedLoginStreak(quests, restarted.Progress, DateTime.Today);
             Assert.Equal(5, quests.Progress.WeeklyQuest.CurrentProgress);
@@ -104,6 +113,8 @@ public class LoginStreakTests
         finally
         {
             ProgressionBank.Awarded -= Awarded;
+            ProgressionBank.Awarded -= AvApp.TrackQuestXp;
+            AvApp.Quests = oldQuests;
             CoreSettings.ServiceProvider = oldProvider;
             Directory.Delete(dir, true);
         }
@@ -293,12 +304,54 @@ public class LoginStreakTests
         }
     });
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CloudGapBonusReachesXpQuestWhetherItResolvesBeforeOrAfterWiring(bool before)
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-login-xp-").FullName;
+        var oldProvider = CoreSettings.ServiceProvider;
+        var oldLogin = CoreAccount.IsLoggedInProvider;
+        var oldQuests = AvApp.Quests;
+        var settingsService = new SettingsService();
+        var settings = settingsService.Current;
+        settings.UnifiedId = "cloud-id";
+        settings.OfflineMode = false;
+        CoreSettings.ServiceProvider = () => settingsService;
+        CoreAccount.IsLoggedInProvider = () => true;
+        try
+        {
+            var engine = new AchievementEngine(new AchievementStore(Path.Combine(dir, "achievements.json")));
+            engine.Progress.LastLaunchDate = DateTime.Today.AddDays(-3);
+            engine.Progress.ConsecutiveDays = 4;
+            using var quests = new QuestService(null, dir);
+            quests.Progress.WeeklyQuest = new ActiveQuest("conditioning_champion_w");
+            AvApp.Quests = quests;
+            LoginStreakHead.Start(engine, settings);
+            var stats = new JObject { ["consecutive_days"] = 5, ["last_streak_date"] = DateTime.Today.AddDays(-1).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) };
+            if (before) LoginStreakHead.ApplyCloud(engine, settings, stats, DateTime.Today);
+            Assert.Equal(0, quests.Progress.WeeklyQuest.CurrentProgress);
+            AvApp.WireQuestXpAndPay(engine);
+            if (!before) LoginStreakHead.ApplyCloud(engine, settings, stats, DateTime.Today);
+            Assert.Equal(100, quests.Progress.WeeklyQuest.CurrentProgress);
+            Assert.False(engine.Progress.PendingStreakBonus);
+        }
+        finally
+        {
+            ProgressionBank.Awarded -= AvApp.TrackQuestXp;
+            AvApp.Quests = oldQuests;
+            CoreAccount.IsLoggedInProvider = oldLogin;
+            CoreSettings.ServiceProvider = oldProvider;
+            Directory.Delete(dir, true);
+        }
+    }
+
     [Fact]
     public void StartupCreditsAfterQuestServiceIsCreated()
     {
         var path = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(Here())!, "..", "..", "CCP.Avalonia", "App.axaml.cs"));
         var source = File.ReadAllText(path);
-        Assert.Contains("ProgressionBank.Awarded += (amount, _) => Quests?.TrackXPEarned((int)amount);\n            CreditBankedLoginStreak(Quests, Achievements?.Progress, DateTime.Today);", source.Replace("\r\n", "\n"));
+        Assert.Contains("WireQuestXpAndPay(Achievements);\n            CreditBankedLoginStreak(Quests, Achievements?.Progress, DateTime.Today);", source.Replace("\r\n", "\n"));
     }
 
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string path = "") => path;

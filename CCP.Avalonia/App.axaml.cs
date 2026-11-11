@@ -162,8 +162,16 @@ namespace ConditioningControlPanel.Avalonia
             global::ConditioningControlPanel.Services.Companion.ConversationDelivery.QuestsOpenProvider = () => Quests?.HasUnfinishedQuest();
             definitions.QuestDefinitionsUpdated += () => Quests?.CheckAndGenerateQuests();
             // WPF ProgressionService.AddXP:120 feeds every award to the "earn X XP" quests.
-            ProgressionBank.Awarded += (amount, _) => Quests?.TrackXPEarned((int)amount);
+            WireQuestXpAndPay(Achievements);
             CreditBankedLoginStreak(Quests, Achievements?.Progress, DateTime.Today);
+        }
+
+        internal static void TrackQuestXp(double amount, string source) => Quests?.TrackXPEarned((int)amount);
+
+        internal static void WireQuestXpAndPay(AchievementEngine? engine)
+        {
+            ProgressionBank.Awarded += TrackQuestXp;
+            Platform.LoginStreakHead.QuestXpReady(engine);
         }
 
         /// <summary>Credit only a day already banked by the login streak writer. A stale local
