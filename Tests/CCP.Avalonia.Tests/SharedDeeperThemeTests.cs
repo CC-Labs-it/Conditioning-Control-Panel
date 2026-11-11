@@ -263,7 +263,12 @@ public sealed class SharedDeeperThemeTests
     {
         Setup();
         var oldMotion = CoreSettings.Current.MotionLevel;
+        var oldGentle = CoreSettings.Current.GentleVisuals;
+        var oldProbe = ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe;
         CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        CoreSettings.Current.GentleVisuals = false;
+        ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = () => true;
+        ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
         static double Base(AvaloniaObject o, StyledProperty<double> p) => o.GetBaseValue(p) is { HasValue: true } v ? v.Value : double.NaN;
         try
         {
@@ -391,7 +396,13 @@ public sealed class SharedDeeperThemeTests
             }
             finally { shell?.Close(); CoreSettings.ServiceProvider = oldProvider; }
         }
-        finally { CoreSettings.Current.MotionLevel = oldMotion; }
+        finally
+        {
+            CoreSettings.Current.MotionLevel = oldMotion;
+            CoreSettings.Current.GentleVisuals = oldGentle;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = oldProbe;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+        }
         await Task.CompletedTask;
     });
 }

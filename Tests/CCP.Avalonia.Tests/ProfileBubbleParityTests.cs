@@ -257,30 +257,25 @@ public sealed class ProfileBubbleParityTests : IDisposable
             double Angle() => visual.RenderTransform is TransformGroup g
                 ? g.Children.OfType<RotateTransform>().Single().Angle
                 : (visual.RenderTransform as RotateTransform)?.Angle ?? 0;
-            double maxTilt = 0, minOpacity = 1;
-            void Run()
+            var clock = new TestAnimationClock();
+            clock.Attach(visual);
+            DisplayFlash(shell);
+            Dispatcher.UIThread.RunJobs();
+            foreach (var (ms, angle) in new[] { (0, 0), (90, -12), (220, 9), (340, -5), (480, 0) })
             {
-                for (int i = 0; i < 60; i++)
-                {
-                    Dispatcher.UIThread.RunJobs();
-                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-                    maxTilt = Math.Max(maxTilt, Math.Abs(Angle()));
-                    minOpacity = Math.Min(minOpacity, visual.Opacity);
-                }
+                clock.Step(ms);
+                Assert.Equal(animates ? angle : 0, Angle(), 3);
+                Assert.Equal(1, visual.Opacity);
             }
 
-            DisplayFlash(shell);
-            Run();
-            if (animates) Assert.True(maxTilt > 1, $"a flash never tilted the bubble (max {maxTilt})");
-            else Assert.Equal(0, maxTilt);
-            Assert.Equal(1, minOpacity);
-
-            maxTilt = 0;
             DisplaySubliminal();
-            Run();
-            if (animates) Assert.True(minOpacity < 0.95, $"a subliminal never dipped the bubble (min {minOpacity})");
-            else Assert.Equal(1, minOpacity);
-            Assert.Equal(0, maxTilt);
+            Dispatcher.UIThread.RunJobs();
+            foreach (var (ms, opacity) in new[] { (1000, 1.0), (1150, 0.775), (1300, 0.55), (1450, 0.775), (1600, 1.0) })
+            {
+                clock.Step(ms);
+                Assert.Equal(animates ? opacity : 1, visual.Opacity, 3);
+                Assert.Equal(0, Angle());
+            }
         }
         finally
         {
