@@ -2,6 +2,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -23,6 +24,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private readonly Func<Media?> _media;
         private readonly Action<WriteableBitmap> _bitmapChanged;
         private readonly Action _frame;
+        private readonly int _decodeWidth;
         private IntPtr _buffer;
         private int _width, _height, _blitQueued, _frames;
         private bool _freed;
@@ -30,11 +32,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         /// <param name="bitmapChanged">UI thread: a new bitmap (first frame or a size change) to show.</param>
         /// <param name="frame">UI thread: the bitmap holds a new frame (invalidate what shows it).</param>
-        public VlcFrameSink(MediaPlayer player, Func<Media?> media, Action<WriteableBitmap> bitmapChanged, Action frame)
+        public VlcFrameSink(MediaPlayer player, Func<Media?> media, Action<WriteableBitmap> bitmapChanged, Action frame, int decodeWidth = 0)
         {
             _media = media;
             _bitmapChanged = bitmapChanged;
             _frame = frame;
+            _decodeWidth = decodeWidth;
             _blit = Blit;   // cached: Display runs per decoded frame
             player.SetVideoFormatCallbacks(Format, (ref IntPtr _) => { });
             player.SetVideoCallbacks(LockPicture, null, Display);
@@ -42,6 +45,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         public WriteableBitmap? Bitmap { get; private set; }
         public int FrameCount => Volatile.Read(ref _frames);
+        private readonly TaskCompletionSource _secondFrame = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        /// <summary>Completes when the second frame is shown (tests await it instead of polling).</summary>
+        internal Task SecondFrame => _secondFrame.Task;
+        internal event Action? FramePresented;
         public bool Freed { get { lock (_lock) return _buffer == IntPtr.Zero; } }
 
         private uint Format(ref IntPtr opaque, IntPtr chroma, ref uint width, ref uint height, ref uint pitches, ref uint lines)
@@ -57,6 +64,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 width = v.SarNum > 0 && v.SarDen > 0 ? v.Width * v.SarNum / v.SarDen : v.Width;
                 height = v.Height;
                 break;
+            }
+            // WPF MainWindow.Assets.cs:921 requests 100 px thumbnails off-thread. Ask VLC's
+            // scaler for that size before allocating/copying a frame; normal playback is unchanged.
+            if (_decodeWidth > 0)
+            {
+                height = Math.Max(1, (uint)((ulong)height * (uint)_decodeWidth / Math.Max(1u, width)));
+                width = (uint)_decodeWidth;
             }
             pitches = width * 4;
             lines = height;
@@ -103,8 +117,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 for (var y = 0; y < _height; y++)
                     Unsafe.CopyBlockUnaligned(ref At(fb.Address + y * fb.RowBytes), ref At(_buffer + y * rowBytes), (uint)rowBytes);
             }
-            Interlocked.Increment(ref _frames);
+            if (Interlocked.Increment(ref _frames) >= 2) _secondFrame.TrySetResult();
             _frame();
+            FramePresented?.Invoke();
         }
 
         private static ref byte At(IntPtr p) => ref Unsafe.AddByteOffset(ref Unsafe.NullRef<byte>(), p);

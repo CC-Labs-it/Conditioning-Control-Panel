@@ -47,7 +47,7 @@ public sealed class MantraWindowSessionTests
     public Task TypedMantraCompletesTheSessionWithTonesDroneAndMemorySignal() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
@@ -56,6 +56,8 @@ public sealed class MantraWindowSessionTests
         var (factory, sources, sent) = (MemoryStore.SignalMirrorFactory, MemorySignalWriter.SourcesHook, CompanionBrain.UserMessageSent);
         var tones = new List<string>();
         var xp = new List<double>();
+        var settings = CoreSettings.Current;
+        var levels = (settings.MasterVolume, settings.MantraDroneVolume);
         var drone = new FakeDrone();
         var master0 = CoreSettings.Current.MasterVolume;
         CoreSettings.Current.MasterVolume = 100;
@@ -65,6 +67,9 @@ public sealed class MantraWindowSessionTests
         MantraWindow? win = null;
         try
         {
+            // Pin the levels used by the gain assertions below.
+            settings.MasterVolume = 100;
+            settings.MantraDroneVolume = 30;
             AvApp.SeedMemorySignals();
             using var store = new MemoryStore(Path.Combine(dir, "memory.json"));
             using var writer = MemoryStore.SignalMirrorFactory!(store)!;
@@ -130,7 +135,7 @@ public sealed class MantraWindowSessionTests
     public Task StoryboardsStepOnTheClock() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
@@ -206,7 +211,7 @@ public sealed class MantraWindowSessionTests
     public Task ProgramTaskDoorOpensTheMantraLabAtTheTaskReps() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
@@ -246,7 +251,7 @@ public sealed class MantraWindowSessionTests
     public Task FailedOpenShowsWpfsWarning() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
@@ -288,7 +293,7 @@ public sealed class MantraWindowSessionTests
     public Task ClosingCompletedLabDoesNotEndTheNextProgramTaskSession() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
@@ -353,7 +358,7 @@ public sealed class MantraWindowSessionTests
     public Task PanicStopsTheDroneAndEndsTheSession() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
@@ -388,7 +393,7 @@ public sealed class MantraWindowSessionTests
     public Task ExitClosesTheWindowStopsTheDroneAndDeletesTheWavs() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 

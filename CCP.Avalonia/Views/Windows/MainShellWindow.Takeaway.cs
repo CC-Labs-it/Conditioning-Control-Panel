@@ -95,6 +95,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (JustDropService.DoorAvailable)
             {
                 var door = TakeawayChip("SdTakeawayChipDoor", () => { if (JustDropService.DoorAvailable) OpenJustDrop(); });
+                TakeawayTab?.PrepareChipFx(door); // WPF MainWindow.Takeaway.cs:499
                 door.Name = "TakeawayDoor"; door.Classes.Add("takeaway-affordance");
                 var line = Line(); var plus = IconGlyph.Of(IconKind.Add, size: 15); plus.Margin = new Thickness(0, 0, 6, 0); line.Children.Add(plus);
                 line.Children.Add(new TextBlock { Text = Loc.Get("sd_takeaway_order"), FontWeight = FontWeight.Bold, FontSize = 11.5 });
@@ -117,6 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private Border BuildTakeawayReceipt(JustDropOrdersService.Order order, bool row)
         {
             var chip = TakeawayChip(row ? "SdTakeawayRow" : "SdTakeawayChip", () => GameWindow.LaunchJustDropReplay(order.Code, this));
+            if (!row) TakeawayTab?.PrepareChipFx(chip); // WPF MainWindow.Takeaway.cs:244
             chip.Tag = order;
             ToolTip.SetTip(chip, Loc.Get("tooltip_takeaway_replay"));
             var title = TakeawayTextBlock(TakeawayText.Name(order), row ? "SdTakeawayRowTitle" : "SdTakeawayChipTitle");

@@ -10,3 +10,10 @@ tools/blender/breakout-office/assets/rough-linen/*.jpg filter=lfs diff=lfs merge
 
 # Byte goldens of the update helper .cmd (CRLF on purpose)
 Tests/CCP.Core.Tests/Fixtures/Update/*.cmd.txt -text
+
+# Menu entries and AppStream are parsed by freedesktop tools that reject CRLF; keep them LF even on Windows checkouts.
+packaging/linux/share/** text eol=lf
+packaging/linux/share/**/*.png -text
+
+# Shell scripts that ship in the Linux tarball (or run on Linux) must stay LF: a CRLF shebang cannot run.
+packaging/**/*.sh text eol=lf

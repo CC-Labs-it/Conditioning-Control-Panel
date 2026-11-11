@@ -21,17 +21,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     /// <c>_isLoading</c> (WPF's <c>SyncLabEffectPermsUI</c>) and compared before writing, because
     /// Avalonia raises <c>IsCheckedChanged</c> on a programmatic set too.</para>
     ///
-    /// <para><b>One write is deliberately NOT restored.</b> WPF's <c>UpdateUnlockablesVisibility</c>
-    /// force-clear (which unticks <c>ChkCapEffects</c> once an account has lapsed) is not ported:
-    /// it is a WRITE decided by an entitlement this head cannot see, so here it would silently
-    /// destroy a paid-up user's setting on every launch. Seeding shows the stored truth; only a
-    /// head that can read Patreon may repair it.</para>
+    /// <para>WPF MainWindow.UiUpdates.cs:909: tier changes repaint the effective checkbox
+    /// and permissions lock band while preserving the saved preference.</para>
     ///
     /// <para><see cref="ApplyTierGate"/> and the master toggle's refusal now call the real
     /// <c>TierGate</c> (CCP.Core/Services/TierGate.cs), not a local stand-in, over the providers
     /// <c>AccountSeed</c> installs. Like WPF (AiPermissionsGrid.xaml.cs:53 IsVisibleChanged,
     /// MainWindow.UiUpdates.cs:951 on a tier change) the band repaints on becoming visible and on
-    /// either provider's <c>TierChanged</c>, so a mid-session sign-in or upgrade unlocks it.</para>
+    /// either provider's <c>TierChanged</c>, so a mid-session sign-in or upgrade unlocks it, and on
+    /// <c>AccountSeed.GraceClosed</c> (WPF OnGraceClosed), so a confirmed lapse locks it.</para>
     ///
     /// <para>Motion budget: zero.</para>
     /// </summary>
@@ -86,6 +84,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             if (!_isPreview && CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
             if (global::ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon is { } p) p.TierChanged += OnTierChanged;
             if (global::ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar is { } ss) ss.TierChanged += OnTierChanged;
+            // WPF OnGraceClosed -> UpdateUnlockablesVisibility: a closed grace is not a TierChanged, same repaint.
+            global::ConditioningControlPanel.Avalonia.Platform.AccountSeed.GraceClosed += RepaintEntitlement;
             SyncFromSettings();
             ApplyTierGate();
         }
@@ -97,13 +97,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         }
 
         // Providers raise this off the UI thread (a poll or a sign-in callback).
-        private void OnTierChanged(object? sender, global::ConditioningControlPanel.Models.PatreonTier tier) => Dispatcher.UIThread.Post(ApplyTierGate);
+        private void OnTierChanged(object? sender, global::ConditioningControlPanel.Models.PatreonTier tier) => RepaintEntitlement();
+
+        /// <summary>The effective tick and the lockband, from a tier change or a grace close.</summary>
+        private void RepaintEntitlement() => Dispatcher.UIThread.Post(() => { SyncFromSettings(); ApplyTierGate(); });
 
         protected override void OnDetachedFromVisualTree(global::Avalonia.VisualTreeAttachmentEventArgs e)
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
             if (global::ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon is { } p) p.TierChanged -= OnTierChanged;
             if (global::ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar is { } ss) ss.TierChanged -= OnTierChanged;
+            global::ConditioningControlPanel.Avalonia.Platform.AccountSeed.GraceClosed -= RepaintEntitlement;
             base.OnDetachedFromVisualTree(e);
         }
 

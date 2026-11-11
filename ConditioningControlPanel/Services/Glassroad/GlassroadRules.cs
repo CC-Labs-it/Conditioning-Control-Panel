@@ -273,7 +273,48 @@ internal static class GlassroadRules
     private static int ReadInt(JObject m, string key) =>
         m[key] is JValue { Type: JTokenType.Integer or JTokenType.Float } v && v.Value<double>() is var d
             && d >= 0 && d <= 10_000 && d == Math.Floor(d) ? (int)d : 0;
+
+    // ============================ watchdog (ccp-bugs #1543) ============================
+
+    /// <summary>Before ready: a page that sent nothing at all for this long never ran.</summary>
+    public static readonly TimeSpan BootDeadline = TimeSpan.FromSeconds(45);
+
+    /// <summary>After ready: a page heartbeat silent this long gets one ping.</summary>
+    public static readonly TimeSpan PingAfter = TimeSpan.FromSeconds(20);
+
+    /// <summary>The longest silence a BUSY page gets (a course build holds its main thread; Boudoir
+    /// went past WebView2's hang monitor on a slower PC). Panic and the title-bar X still close at once.</summary>
+    public static readonly TimeSpan BusyLimit = TimeSpan.FromSeconds(90);
+
+    /// <summary>How long a page <c>loading</c> frame counts as "busy" after it lands.</summary>
+    public static readonly TimeSpan LoadingWindow = TimeSpan.FromSeconds(120);
+
+    /// <summary>A WebView2 process failure that ends the window. RenderProcessUnresponsive does not:
+    /// it is recoverable (the render process is only busy, often a long synchronous course build), so
+    /// the host waits and the watchdog decides (<see cref="Watch"/>). Every crash kind still closes.</summary>
+    public static bool ClosesOnProcessFailure(Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedKind kind)
+        => kind != Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedKind.RenderProcessUnresponsive;
+
+    /// <summary>The page counts as busy while WebView2 reports it unresponsive (cleared by the next page
+    /// message) or within <see cref="LoadingWindow"/> of its last <c>loading</c> frame.</summary>
+    public static bool IsBusy(bool unresponsive, TimeSpan? sinceLoadingFrame)
+        => unresponsive || (sinceLoadingFrame is { } s && s >= TimeSpan.Zero && s < LoadingWindow);
+
+    /// <summary>The 5 s watchdog's verdict. Before ready: close after <see cref="BootDeadline"/> with no
+    /// page message at all (<see cref="BusyLimit"/> while busy). After ready: silent past
+    /// <see cref="PingAfter"/> gets one ping, then a close on the next tick, unless the page is busy
+    /// and has been silent for less than <see cref="BusyLimit"/>.</summary>
+    public static WatchVerdict Watch(bool ready, TimeSpan sinceProgress, TimeSpan sinceHeartbeat, bool pinged, bool busy)
+    {
+        if (!ready) return sinceProgress < (busy ? BusyLimit : BootDeadline) ? WatchVerdict.Wait : WatchVerdict.Close;
+        if (sinceHeartbeat <= PingAfter) return WatchVerdict.Wait;
+        if (!pinged) return WatchVerdict.Ping;
+        return busy && sinceHeartbeat < BusyLimit ? WatchVerdict.Wait : WatchVerdict.Close;
+    }
 }
+
+/// <summary>What the Glassroad watchdog does on a tick (<see cref="GlassroadRules.Watch"/>).</summary>
+internal enum WatchVerdict { Wait, Ping, Close }
 
 /// <summary>What one finished race claims (game <see cref="GlassroadRules.SparklesGame"/>).</summary>
 internal sealed record GlassroadSparklesClaim(string Mode, Sparkles.SparklesResult Result, TimeSpan Duration,

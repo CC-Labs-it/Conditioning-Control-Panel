@@ -32,11 +32,11 @@ namespace ConditioningControlPanel.Avalonia.Helpers
         private Action? _unwatch;
         private global::Avalonia.Controls.TopLevel? _top;
 
-        public BeatLoop(Visual owner, Action<double> step)
+        public BeatLoop(Visual owner, Action<double> step, TimeSpan? interval = null)
         {
             _owner = owner;
             _step = step;
-            _clock = new FrameClock(owner) { Interval = TimeSpan.FromSeconds(1.0 / 30) };
+            _clock = new FrameClock(owner) { Interval = interval ?? TimeSpan.FromSeconds(1.0 / 30) };
             _clock.Tick += (_, _) => { if (Parked) _clock.Stop(); else Step(); };
         }
 
@@ -47,6 +47,13 @@ namespace ConditioningControlPanel.Avalonia.Helpers
         internal bool Parked =>
             !_owner.IsEffectivelyVisible
             || global::Avalonia.Controls.TopLevel.GetTopLevel(_owner) is global::Avalonia.Controls.Window { WindowState: global::Avalonia.Controls.WindowState.Minimized };
+
+        /// <summary>The beat this loop ticks on (30 fps unless the constructor or a caller said otherwise).</summary>
+        public TimeSpan Interval
+        {
+            get => _clock.Interval;
+            set => _clock.Interval = value;
+        }
 
         /// <summary>True while the beat's clock is actually subscribed (not parked).</summary>
         internal bool IsTicking => _clock.IsEnabled;

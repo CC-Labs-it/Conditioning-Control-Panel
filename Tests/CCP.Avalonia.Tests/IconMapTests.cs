@@ -26,6 +26,8 @@ public sealed class IconMapTests
     [InlineData("⚠️", IconKind.Warning, IconVariant.Filled, IconBrushes.Warn)]
     [InlineData("👯‍♀️", IconKind.People, IconVariant.Regular, null)]  // ZWJ sequence
     [InlineData("📋", IconKind.Clipboard, IconVariant.Regular, null)]   // ⚑ fallback
+    [InlineData(IconMap.InviteClaimedKey, IconKind.TicketDiagonal, IconVariant.Regular, null)]
+    [InlineData(IconMap.InviteSubscribedKey, IconKind.Heart, IconVariant.Filled, IconBrushes.Heart)]
     public void GlyphsMapToTheDesignedIcon(string glyph, IconKind kind, IconVariant variant, string? brush)
     {
         Assert.True(IconMap.TryGet(glyph, out var e), glyph);
