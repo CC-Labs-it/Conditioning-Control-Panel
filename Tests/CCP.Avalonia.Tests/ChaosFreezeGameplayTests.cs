@@ -139,6 +139,7 @@ public sealed class ChaosFreezeGameplayTests
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        using var slot = new ChaosMetaSlotSnapshot();
         var meta = ChaosMeta.State;
         int sparks = meta.Sparks;
         bool hadAward = meta.FirstTimesAwarded.Contains(ChaosFirstTimes.Play);
