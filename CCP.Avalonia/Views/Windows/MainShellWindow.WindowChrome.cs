@@ -39,7 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     && Named<Button>("BtnMaximize") is { } button)
                     button.Content = WindowState == WindowState.Maximized ? "❐" : "☐";
             };
-            Closed += (_, _) => _windowClosed = true;
+            Closed += (_, _) => { _windowClosed = true; _liveSessionRecap?.Close(); };
         }
 
         private void NotifyChromeScalingChanged()
@@ -51,7 +51,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (App.Sessions is not { IsRunning: true } runner) return;
             try
             {
-                _suppressNextSessionSummary = true;
+                _suppressSessionSummaryUntil = DateTime.UtcNow.AddSeconds(20);
                 runner.Stop(completed: false);
             }
             catch (Exception ex) { Log.Warning(ex, "Failed to restore session settings on exit"); }

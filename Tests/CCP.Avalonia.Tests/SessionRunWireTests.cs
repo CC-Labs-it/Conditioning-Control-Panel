@@ -25,6 +25,67 @@ namespace CCP.Avalonia.Tests;
 /// and opens the Ended Early recap by itself.</summary>
 public sealed class SessionRunWireTests
 {
+    [Fact]
+    public async Task SessionConfirmCopyAndPauseOptOut()
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            var previous = AvApp.Sessions;
+            var oldSkip = CoreSettings.Current.SkipPauseXpWarning;
+            var shell = new MainShellWindow();
+            var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+            try
+            {
+                CoreSettings.Current.SkipPauseXpWarning = false;
+                shell.Show();
+                var session = new Session { Id = "morning_drift", Name = "Different authored name", IsAvailable = true, DurationMinutes = 60 };
+                Assert.NotEqual(session.Name, session.GetModeAwareName());
+                shell.BtnStartSession_Click(session);
+                var start = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
+                Assert.Equal($"🌅 Start {session.GetModeAwareName()}?", start.Title);
+                Assert.Equal("▶ Start Session", Assert.IsType<TextBlock>(start.FindControl<Button>("BtnOk")!.Content).Text);
+                Assert.Equal("Not yet", Assert.IsType<TextBlock>(start.FindControl<Button>("BtnCancel")!.Content).Text);
+                start.FindControl<Button>("BtnCancel")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                await Task.Yield();
+                runner.Start(session);
+                var stopTask = shell.ConfirmStopSession("title_stop_session_confirm", "msg_stop_session_body", "btn_yes_stop_session", "btn_keep_going");
+                var stop = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
+                Assert.Contains(session.GetModeAwareName(), stop.FindControl<TextBlock>("TxtMessage")!.Text);
+                stop.FindControl<Button>("BtnCancel")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                await stopTask;
+                var pause = shell.Named<Button>("BtnPauseSession")!;
+                foreach (var yes in new[] { false, true })
+                {
+                    pause.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                    var dialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
+                    Assert.Equal(Loc.Get("btn_yes_pause"), Assert.IsType<TextBlock>(dialog.FindControl<Button>("BtnOk")!.Content).Text);
+                    Assert.Equal(Loc.Get("btn_keep_going"), Assert.IsType<TextBlock>(dialog.FindControl<Button>("BtnCancel")!.Content).Text);
+                    var box = dialog.FindControl<CheckBox>("DontAskAgain")!;
+                    Assert.True(box.IsVisible);
+                    box.IsChecked = true;
+                    dialog.FindControl<Button>(yes ? "BtnOk" : "BtnCancel")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                    await Task.Yield();
+                    Assert.Equal(yes, CoreSettings.Current.SkipPauseXpWarning);
+                    Assert.Equal(yes, runner.IsPaused);
+                }
+                runner.Resume();
+                pause.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                Assert.True(runner.IsPaused);
+                Assert.Empty(shell.OwnedWindows.OfType<MessageDialog>());
+            }
+            finally
+            {
+                foreach (var window in shell.OwnedWindows.ToArray()) window.Close();
+                runner.Stop();
+                CoreEngine.Stop();
+                CoreSettings.Current.SkipPauseXpWarning = oldSkip;
+                CoreSettings.Save();
+                AvApp.Sessions = previous;
+                shell.Close();
+            }
+        });
+    }
+
     [Theory]
     [InlineData(true, "Yes, stop session")] // WPF MainWindow.Presets.cs:2098
     [InlineData(false, "Stop the session")] // WPF MainWindow.StartStop.cs:85
@@ -328,6 +389,39 @@ public sealed class SessionRunWireTests
             return Task.CompletedTask;
         });
     }
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task OldOrPreviousRunSuppressionDoesNotHideRecap(bool stale)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var previous = AvApp.Sessions;
+            var shell = new MainShellWindow();
+            var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+            runner.SessionLog.LogReady += shell.OnSessionLogReady;
+            try
+            {
+                shell.Show();
+                shell._suppressSessionSummaryUntil = DateTime.UtcNow.AddSeconds(20);
+                shell.StartSession(new Session { Id = "suppression", Name = "Suppression", DurationMinutes = 60 });
+                if (stale) shell._suppressSessionSummaryUntil = DateTime.UtcNow.AddSeconds(-1);
+                runner.Stop(completed: true);
+                Dispatcher.UIThread.RunJobs();
+                var recap = Assert.Single(shell.OwnedWindows.OfType<SessionCompleteWindow>());
+                recap.Close();
+            }
+            finally
+            {
+                runner.Stop();
+                CoreEngine.Stop();
+                AvApp.Sessions = previous;
+                shell.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     private sealed class NoVideoHost : IMandatoryVideoHost
     {
         public void Show(string path, bool strict) { }
@@ -361,6 +455,7 @@ public sealed class SessionRunWireTests
                 shell.StartSession(session);
 
                 CoreEngine.Video = video;
+                if (survivesTimeout) shell.Hide();
                 runner.Stop(completed: true);
                 Assert.True(video.Trigger(path: "a.mp4"));   // a new clip, before the recap posts
                 int retries = 0;
@@ -374,12 +469,18 @@ public sealed class SessionRunWireTests
                 };
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal(survivesTimeout ? 15 : 1, retries);
-                var recap = Assert.Single(shell.OwnedWindows.OfType<SessionCompleteWindow>());
-                Assert.Equal(!survivesTimeout, recap.Topmost);
+                var recap = survivesTimeout ? Assert.IsType<SessionCompleteWindow>(shell._liveSessionRecap)
+                    : Assert.Single(shell.OwnedWindows.OfType<SessionCompleteWindow>());
+                Assert.False(recap.Topmost);
                 Assert.Equal(!survivesTimeout, recap.ShowActivated);
                 // Avalonia modal ownership disables the backend, not Window.IsEnabled.
                 Assert.Equal(!survivesTimeout, recap.IsDialog);
-                recap.Close();
+                if (survivesTimeout)
+                {
+                    shell.Close();
+                    Assert.False(recap.IsVisible);
+                }
+                else recap.Close();
             }
             finally
             {

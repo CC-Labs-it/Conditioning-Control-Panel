@@ -33,7 +33,9 @@
                        FontSize="14" TextWrapping="Wrap" LineHeight="20"/>
         </ScrollViewer>
 
-        <Grid Grid.Row="2" Margin="0,20,0,0" ColumnDefinitions="*,Auto,Auto,Auto">
+        <StackPanel Grid.Row="2" Margin="0,20,0,0">
+            <CheckBox x:Name="DontAskAgain" IsVisible="False" Margin="0,0,0,12"/>
+        <Grid ColumnDefinitions="*,Auto,Auto,Auto">
             <Button x:Name="BtnNo" Grid.Column="2" Theme="{StaticResource SecondaryButton}"
                     Margin="0,0,10,0" IsVisible="False">
                 <TextBlock Text="{loc:Str btn_no}"/>
@@ -47,5 +49,6 @@
                 <TextBlock Text="{loc:Str btn_ok}"/>
             </Button>
         </Grid>
+        </StackPanel>
     </Grid>
 </Window>

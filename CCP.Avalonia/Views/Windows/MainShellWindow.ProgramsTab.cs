@@ -97,7 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void EndProgramSessionQuietly(string reason)
         {
             if (App.Programs is not { } svc || App.Sessions is not { IsRunning: true } r || !svc.IsProgramSession(r.CurrentSession)) return;
-            _suppressNextSessionSummary = true;
+            _suppressSessionSummaryUntil = DateTime.UtcNow.AddSeconds(20);
             svc.StopProgramSessionIfRunning(reason, suppressAbandonTracking: true);
         }
 
