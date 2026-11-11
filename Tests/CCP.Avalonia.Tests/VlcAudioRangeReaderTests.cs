@@ -6,24 +6,38 @@ using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using LibVLCSharp.Shared;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
 public class VlcAudioRangeReaderTests
 {
-    [Fact]
-    public void ReadsMidFileRangeAsMonoSamples()
+    private static void WithDecoder(Action<LibVLC> run)
     {
-        _ = new LibVlcAudio("--aout=dummy");
-        var samples = VlcAudioRangeReader.Read(ToneWav.Tone(440, 4000), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), CancellationToken.None);
-        Assert.InRange(samples.Length, VlcAudioRangeReader.SampleRate - 4096, VlcAudioRangeReader.SampleRate);
+        var shared = LibVlcAudio.Shared;
+        LibVlcAudio.InitializeNative();
+        var decoder = new LibVLC("--aout=dummy", "--quiet");
+        try { run(decoder); }
+        finally
+        {
+            decoder.Dispose();
+            Assert.Multiple(
+                () => Assert.Equal(IntPtr.Zero, decoder.NativeReference),
+                () => Assert.Same(shared, LibVlcAudio.Shared));
+        }
     }
 
     [Fact]
-    public void MidFileRangeIsNotSilent()
+    public void ReadsMidFileRangeAsMonoSamples() => WithDecoder(decoder =>
     {
-        _ = new LibVlcAudio("--aout=dummy");
+        var samples = VlcAudioRangeReader.Read(ToneWav.Tone(440, 4000), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), CancellationToken.None, decoder);
+        Assert.InRange(samples.Length, VlcAudioRangeReader.SampleRate - 4096, VlcAudioRangeReader.SampleRate);
+    });
+
+    [Fact]
+    public void MidFileRangeIsNotSilent() => WithDecoder(decoder =>
+    {
         // ToneWav writes 22,050 Hz mono PCM16. Silence its first second so this also proves the seek.
         var wav = File.ReadAllBytes(ToneWav.Tone(440, 4000));
         Array.Clear(wav, 44, 22050 * 2);
@@ -31,11 +45,11 @@ public class VlcAudioRangeReaderTests
         try
         {
             File.WriteAllBytes(path, wav);
-            var samples = VlcAudioRangeReader.Read(path, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), CancellationToken.None);
+            var samples = VlcAudioRangeReader.Read(path, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), CancellationToken.None, decoder);
             Assert.True(samples.Any(s => Math.Abs(s) > 0.1));
         }
         finally { File.Delete(path); }
-    }
+    });
 
     [Fact]
     public void MissingFileIsEmpty()

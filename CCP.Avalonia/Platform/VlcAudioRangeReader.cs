@@ -11,6 +11,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal const int SampleRate = 44100;
 
         internal static float[] Read(string path, TimeSpan start, TimeSpan end, CancellationToken ct)
+            => Read(path, start, end, ct, null);
+
+        internal static float[] Read(string path, TimeSpan start, TimeSpan end, CancellationToken ct, LibVLCSharp.Shared.LibVLC? decoder)
         {
             ct.ThrowIfCancellationRequested();
             if (!File.Exists(path) || start < TimeSpan.Zero || end <= start) return Array.Empty<float>();
@@ -18,7 +21,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             try
             {
                 var sout = RaceTrackPlayer.SoutFor(wav).Replace("samplerate=16000", "samplerate=44100");
-                RaceTrackPlayer.TranscodeToWav(path, wav, null, ct, sout, start, end);
+                RaceTrackPlayer.TranscodeToWav(path, wav, null, ct, sout, start, end, decoder);
                 ct.ThrowIfCancellationRequested();
                 var samples = RaceTrackPlayer.ReadMono16(File.ReadAllBytes(wav), SampleRate);
                 ct.ThrowIfCancellationRequested();

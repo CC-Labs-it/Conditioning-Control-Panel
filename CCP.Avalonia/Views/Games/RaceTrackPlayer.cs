@@ -263,11 +263,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             finally { try { File.Delete(wav); } catch { } }
         }
 
-        internal static void TranscodeToWav(string source, string dest, IProgress<double>? progress, CancellationToken ct, string? sout = null, TimeSpan? start = null, TimeSpan? end = null)
+        internal static void TranscodeToWav(string source, string dest, IProgress<double>? progress, CancellationToken ct, string? sout = null, TimeSpan? start = null, TimeSpan? end = null, LibVLC? decoder = null)
         {
             // A short file transcodes inside the first 100 ms wait, so an already-cancelled pick must stop here.
             ct.ThrowIfCancellationRequested();
-            var vlc = LibVlcAudio.Shared ?? throw new InvalidOperationException(GameWindow.RaceNoAudioMessage);
+            var vlc = decoder ?? LibVlcAudio.Shared ?? throw new InvalidOperationException(GameWindow.RaceNoAudioMessage);
             using var done = new ManualResetEventSlim(false);
             bool failed = false;
             using var media = new Media(vlc, source, FromType.FromPath);
