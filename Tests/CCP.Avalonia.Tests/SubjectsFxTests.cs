@@ -63,7 +63,7 @@ public sealed class SubjectsFxTests
             Assert.All(cards, c => Assert.Equal(1, c.Opacity));
             Assert.False(view.SubjectsFxRunning);
             // The container animates, never the bound row card inside it.
-            Assert.All(cards, c => Assert.Equal(1, c.GetVisualDescendants().OfType<Border>().First().Opacity));
+            Assert.All(cards, c => Assert.Equal(1, c.GetVisualDescendants().OfType<Border>().Single(b => Equals(b.Tag, "lobby-face")).Opacity));
 
             // A service rebind while the page is being read must never replay the entrance.
             Paint(view, 1);
@@ -102,6 +102,9 @@ public sealed class SubjectsFxTests
             var view = new AvailableSubjectsTabView();
             window = new Window { Width = 1300, Height = 700, Content = view };
             window.Show();
+            Dispatcher.UIThread.RunJobs();
+            view.PaintSnapshot(new LobbySnapshot(Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), false),
+                LobbyGates.From(false, false, false));
             Dispatcher.UIThread.RunJobs();
             var row = new LobbyRow { Game = LobbyGame.Remote, Key = "one", HostName = "Host" };
             view.PaintSnapshot(new LobbySnapshot(new[] { row }, new[] { row }, new[] { row }, true),
@@ -159,6 +162,105 @@ public sealed class SubjectsFxTests
             service.SaveImmediate();
             CoreSettings.ServiceProvider = previous;
         }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Reduced)]
+    [InlineData(MotionLevel.Off)]
+    public Task NewRowsPopAcrossColumnsAndHideCleansUp(MotionLevel motion) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var previous = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var clock = new Clock(); SetClock(clock);
+        Window? window = null;
+        try
+        {
+            CoreSettings.Current.MotionLevel = motion;
+            var view = new AvailableSubjectsTabView();
+            window = new Window { Width = 1300, Height = 700, Content = view }; window.Show();
+            Dispatcher.UIThread.RunJobs();
+            LobbyRow Row(string key) => new() { Game = LobbyGame.Remote, Key = key, HostName = key };
+            var old = Row("old");
+            var gates = LobbyGates.From(true, false, false);
+            view.PaintSnapshot(new LobbySnapshot(new[] { old }, Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true), gates);
+            Dispatcher.UIThread.RunJobs(); Step(view, clock, 600);
+            view.PaintSnapshot(new LobbySnapshot(new[] { old, Row("a") }, new[] { Row("b") }, new[] { Row("c") }, true), gates);
+            Dispatcher.UIThread.RunJobs();
+            var lists = new[] { "AvailableSubjectsList", "LobbyPlayingList", "LobbyFriendsList" }.Select(n => view.FindControl<ItemsControl>(n)!).ToArray();
+            Control Card(int column, int index, string tag) => lists[column].ContainerFromIndex(index)!.GetVisualDescendants().OfType<Control>().First(c => Equals(c.Tag, tag));
+            Assert.Null(Card(0, 0, "lobby-card").RenderTransform);
+            foreach (var (column, index) in new[] { (0, 1), (1, 0), (2, 0) })
+            {
+                var card = Card(column, index, "lobby-card");
+                var ring = Card(column, index, "lobby-ring");
+                if (motion == MotionLevel.Off) { Assert.Null(card.RenderTransform); Assert.Equal(0, ring.Opacity); }
+                else
+                {
+                    Assert.Equal(0.9, Assert.IsType<ScaleTransform>(card.RenderTransform).ScaleX, 3);
+                    Assert.Equal(motion == MotionLevel.Full ? 0.9 : 0, ring.Opacity, 3);
+                }
+            }
+            var grid = Assert.IsType<Grid>(Card(0, 1, "lobby-card"));
+            var ringBorder = Assert.IsType<Border>(Card(0, 1, "lobby-ring"));
+            Assert.Same(ringBorder, grid.Children[0]);
+            Assert.Equal("lobby-face", Assert.IsType<Border>(grid.Children[1]).Tag);
+            Assert.Equal(new CornerRadius(16), ringBorder.CornerRadius);
+            Assert.Equal(Color.Parse("#FFFF8CC0"), Assert.IsAssignableFrom<ISolidColorBrush>(ringBorder.BorderBrush).Color);
+            Assert.Equal(new RelativePoint(0.5, 0.5, RelativeUnit.Relative), grid.RenderTransformOrigin);
+            Assert.Equal(new RelativePoint(0.5, 0.5, RelativeUnit.Relative), ringBorder.RenderTransformOrigin);
+
+            if (motion != MotionLevel.Off)
+            {
+                var scale = Assert.IsType<ScaleTransform>(grid.RenderTransform);
+                Step(view, clock, 80);
+                Assert.Equal(0.984329, scale.ScaleX, 6);
+                Step(view, clock, 80);
+                Assert.Equal(1.0125, scale.ScaleX, 5);
+                Assert.Equal(scale.ScaleX, scale.ScaleY, 5);
+                if (motion == MotionLevel.Full)
+                {
+                    var ringScale = Assert.IsType<ScaleTransform>(ringBorder.RenderTransform);
+                    Assert.Equal(1.0416568, ringScale.ScaleX, 6);
+                    Assert.Equal(ringScale.ScaleX, ringScale.ScaleY, 6);
+                    Assert.Equal(0.6230769, ringBorder.Opacity, 6);
+                }
+                else Assert.Equal(0, ringBorder.Opacity);
+                Step(view, clock, 80);
+                Assert.Equal(1.007276, scale.ScaleX, 6);
+                Step(view, clock, 80);
+                Assert.Equal(1, scale.ScaleX, 6);
+                Assert.Equal(1, scale.ScaleY, 6);
+                Assert.Equal(motion == MotionLevel.Full, view.SubjectsFxRunning);
+                if (motion == MotionLevel.Full)
+                {
+                    Assert.Equal(1.0681657, Assert.IsType<ScaleTransform>(ringBorder.RenderTransform).ScaleX, 6);
+                    Assert.Equal(0.3461538, ringBorder.Opacity, 6);
+                }
+                Step(view, clock, 200);
+                Assert.False(view.SubjectsFxRunning);
+                Assert.Equal(1, scale.ScaleX, 6);
+                Assert.Equal(0, ringBorder.Opacity, 6);
+                if (motion == MotionLevel.Full)
+                    Assert.Equal(1.08, Assert.IsType<ScaleTransform>(ringBorder.RenderTransform).ScaleX, 6);
+
+                // Start a fresh effect so hide cleanup is checked while the clock is running.
+                view.PaintSnapshot(new LobbySnapshot(new[] { old, Row("d") }, Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true), gates);
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(view.SubjectsFxRunning);
+            }
+            view.IsVisible = false;
+            Assert.False(view.SubjectsFxRunning);
+            if (motion != MotionLevel.Off)
+            {
+                Assert.Equal(1, Assert.IsType<ScaleTransform>(Card(0, 1, "lobby-card").RenderTransform).ScaleX);
+                Assert.Equal(0, Card(0, 1, "lobby-ring").Opacity);
+            }
+        }
+        finally { window?.Close(); SetClock(TimeProvider.System); service.SaveImmediate(); CoreSettings.ServiceProvider = previous; }
         return Task.CompletedTask;
     });
 
