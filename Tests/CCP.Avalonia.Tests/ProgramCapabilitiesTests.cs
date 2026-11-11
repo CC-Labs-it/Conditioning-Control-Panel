@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -6,6 +7,7 @@ using System.Text.RegularExpressions;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Models.Program;
 using ConditioningControlPanel.Services.Program;
 using Xunit;
 
@@ -87,10 +89,10 @@ public sealed class ProgramCapabilitiesTests
     {
         var keywordTask = BuiltInPrograms.All().SelectMany(p => p.Chapters).SelectMany(c => c.Days).SelectMany(d => d.Tasks)
             .First(t => t.Verifier == QuestCategory.KeywordTrigger);
-        Assert.False(KeywordTriggerHead.KeyboardSourceAvailable(true, "/tmp/ccp-sandbox", hookFailed: false));
-        Assert.False(KeywordTriggerHead.KeyboardSourceAvailable(true, null, hookFailed: true));
-        Assert.False(KeywordTriggerHead.KeyboardSourceAvailable(false, null, hookFailed: false));
-        Assert.True(KeywordTriggerHead.KeyboardSourceAvailable(true, null, hookFailed: false));
+        Assert.False(KeywordTriggerHead.KeyboardSourceAvailable(true, "/tmp/ccp-sandbox", () => true));
+        Assert.False(KeywordTriggerHead.KeyboardSourceAvailable(true, null, () => false));
+        Assert.False(KeywordTriggerHead.KeyboardSourceAvailable(false, null, () => true));
+        Assert.True(KeywordTriggerHead.KeyboardSourceAvailable(true, null, () => true));
 
         var (oldGate, oldFailed) = (ProgramCapabilities.KeywordInputAvailable, Win32PanicKey.InstallFailed);
         try
@@ -102,6 +104,43 @@ public sealed class ProgramCapabilitiesTests
             Assert.False(ProgramCapabilities.IsAvailable(keywordTask));
         }
         finally { (ProgramCapabilities.KeywordInputAvailable, Win32PanicKey.InstallFailed) = (oldGate, oldFailed); }
+    }
+
+    [Fact]
+    public void StartupRolloverWaitsForConfirmedKeyboardHook()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-program-hook-").FullName;
+        var path = Path.Combine(dir, "programs.json");
+        var (oldKeyword, oldTask, oldPremium) =
+            (ProgramCapabilities.KeywordInputAvailable, CoreProgram.TaskAvailableProvider, CoreProgram.HasPremiumProvider);
+        var now = new DateTime(2026, 5, 4, 12, 0, 0, DateTimeKind.Local);
+        var attempts = 0;
+        try
+        {
+            CoreProgram.TaskAvailableProvider = ProgramCapabilities.IsAvailable;
+            CoreProgram.HasPremiumProvider = () => true;
+            ProgramCapabilities.KeywordInputAvailable = () => KeywordTriggerHead.KeyboardSourceAvailable(true, null, () => true);
+            using (var svc = new ProgramService(path, readOnly: false, now: () => now))
+            {
+                Assert.NotNull(svc.Enroll(svc.Library.First(p => p.Id == "kept")));
+                svc.Save();
+            }
+
+            now = now.AddDays(7);
+            ProgramCapabilities.KeywordInputAvailable = () => KeywordTriggerHead.KeyboardSourceAvailable(true, null, () => { attempts++; return false; });
+            using var reopened = new ProgramService(path, readOnly: false, now: () => now);
+            Assert.True(attempts > 0);
+            Assert.NotNull(reopened.State.Active);
+            Assert.Equal(ProgramEnrollmentState.Active, reopened.State.Active!.State);
+            Assert.Equal(1, reopened.State.Active.CurrentDay);
+            Assert.Equal(4, reopened.State.Active.DaysOffRemaining);
+        }
+        finally
+        {
+            (ProgramCapabilities.KeywordInputAvailable, CoreProgram.TaskAvailableProvider, CoreProgram.HasPremiumProvider) =
+                (oldKeyword, oldTask, oldPremium);
+            Directory.Delete(dir, true);
+        }
     }
 
     /// <summary>The QuestService call that raises each category.</summary>
