@@ -93,6 +93,29 @@ public sealed class SubliminalWhisperShowTests
     }
 
     [Fact]
+    public void CustomFlashSanitizesAndAwardsXpWithoutHaptics()
+    {
+        var draw = SubliminalWhisperShow.Draw;
+        var xp = CoreProgression.AddXPProvider;
+        var cards = new List<string>();
+        var awards = new List<(double, string)>();
+        SubliminalWhisperShow.Draw = cards.Add;
+        CoreProgression.AddXPProvider = (amount, source) => awards.Add((amount, source));
+        try
+        {
+            SubliminalWhisperShow.Custom("   ", true);
+            SubliminalWhisperShow.Custom("  <b>" + new string('x', 210) + "</b>  ", true);
+            Assert.Equal(new string('x', 197), Assert.Single(cards));
+            Assert.Equal((10.0, "Subliminal"), Assert.Single(awards));
+        }
+        finally
+        {
+            SubliminalWhisperShow.Draw = draw;
+            CoreProgression.AddXPProvider = xp;
+        }
+    }
+
+    [Fact]
     public void Freeze_muted_draws_at_once_and_a_failed_roll_skips_reset()
     {
         With(audible: false, roll: 0.5, run =>

@@ -134,33 +134,45 @@ public class SpeakPromptSessionTests
     [InlineData(true)]
     public async Task IntermittentCueFlashesUntilCompletionOrStop(bool stop)
     {
-        int borrows = 0, listens = 0, shows = 0, hides = 0, flashes = 0;
+        int borrows = 0, listens = 0, shows = 0, hides = 0, flashes = 0, invalid = 0;
         var second = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var heard = new TaskCompletionSource<PhraseResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-        CoreSubliminal.CustomShowProvider = (text, suppressHaptic) =>
+        var previous = CoreSubliminal.CustomShowProvider;
+        SpeakPromptSession? session = null;
+        Task? run = null;
+        try
         {
-            Assert.Equal("Say YES", text);
-            Assert.True(suppressHaptic);
-            if (Interlocked.Increment(ref flashes) >= 2) second.TrySetResult(true);
-        };
-        var session = new SpeakPromptSession(new TriggerEffectAction
+            CoreSubliminal.CustomShowProvider = (text, suppressHaptic) =>
+            {
+                if (text != "Say YES" || !suppressHaptic) Interlocked.Increment(ref invalid);
+                if (Interlocked.Increment(ref flashes) >= 2) second.TrySetResult(true);
+            };
+            session = new SpeakPromptSession(new TriggerEffectAction
+            {
+                SpeakTarget = "yes", SpeakCue = "Say YES", SpeakCueMode = SpeakCueMode.Intermittent,
+                SpeakCueIntervalMs = 80
+            }, null, () => true, () => Task.FromResult(true), () => { borrows++; return true; }, () => { },
+            async (_, ct) => { listens++; return await heard.Task.WaitAsync(ct); }, _ => shows++, () => hides++, (_, _) => { });
+            run = session.RunAsync();
+            Assert.Equal(1, flashes);
+            Assert.Equal(1, borrows);
+            Assert.Equal(1, listens);
+            await second.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            if (stop) session.Stop(); else heard.SetResult(new PhraseResult { Matched = true });
+            await run.WaitAsync(TimeSpan.FromSeconds(5));
+            var count = Volatile.Read(ref flashes);
+            await Task.Delay(250);
+            Assert.Equal(count, Volatile.Read(ref flashes));
+            Assert.Equal(0, shows);
+            Assert.Equal(0, hides);
+            Assert.Equal(0, Volatile.Read(ref invalid));
+        }
+        finally
         {
-            SpeakTarget = "yes", SpeakCue = "Say YES", SpeakCueMode = SpeakCueMode.Intermittent,
-            SpeakCueIntervalMs = 80
-        }, null, () => true, () => Task.FromResult(true), () => { borrows++; return true; }, () => { },
-        async (_, ct) => { listens++; return await heard.Task.WaitAsync(ct); }, _ => shows++, () => hides++, (_, _) => { });
-        var run = session.RunAsync();
-        Assert.Equal(1, flashes);
-        Assert.Equal(1, borrows);
-        Assert.Equal(1, listens);
-        await second.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        if (stop) session.Stop(); else heard.SetResult(new PhraseResult { Matched = true });
-        await run.WaitAsync(TimeSpan.FromSeconds(5));
-        var count = Volatile.Read(ref flashes);
-        await Task.Delay(250);
-        Assert.Equal(count, Volatile.Read(ref flashes));
-        Assert.Equal(0, shows);
-        Assert.Equal(0, hides);
+            session?.Stop();
+            try { if (run != null) await run; }
+            finally { CoreSubliminal.CustomShowProvider = previous; }
+        }
     }
 
     [Fact]
