@@ -41,6 +41,9 @@ public sealed class PrizeCounterHelpBookTests
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             Assert.True(HelpPopover.IsOpen(button));
+            Assert.Equal(IconKind.Sparkle, shell.FindControl<IconGlyph>("PrizeCounterHelpIcon")!.Kind);
+            Assert.Contains(HelpPopover.PopupContent(button)!.GetVisualDescendants().OfType<IconGlyph>(),
+                icon => icon.Kind == IconKind.Sparkle);
             var text = HelpPopover.PopupContent(button)!.GetVisualDescendants().OfType<TextBlock>().Select(x => x.Inlines is { Count: > 0 } ? string.Concat(x.Inlines.OfType<Run>().Select(r => r.Text)) : x.Text).ToArray();
             foreach (var key in new[] { "title", "what", "tip1", "tip2", "tip3", "how" })
                 Assert.Contains(Loc.Get("help_counter_" + key).Replace("*", ""), text);

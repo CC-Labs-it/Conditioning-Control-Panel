@@ -67,7 +67,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static void AttachHelpButton(Button button)
         {
             HelpContent content;
-            if (button.Name == "BtnHelpPrizeCounter") content = BuildLocHelp("PrizeCounter", "help_counter", "✦");
+            if (button.Name == "BtnHelpPrizeCounter") content = BuildLocHelp("PrizeCounter", "help_counter", "");
             else if (button.Name == "BtnIntakePassHelp") content = BuildIntakePassHelpContent();
             else if (button.Name is { } name && HelpButtonSections.TryGetValue(name, out var sectionId))
                 content = HelpContentService.GetContent(sectionId);

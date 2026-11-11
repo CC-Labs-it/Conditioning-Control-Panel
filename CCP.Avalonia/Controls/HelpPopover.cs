@@ -293,13 +293,23 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 CornerRadius = new CornerRadius(8, 8, 0, 0),
             };
             var headerRow = new StackPanel { Orientation = Orientation.Horizontal };
-            headerRow.Children.Add(new TextBlock
-            {
-                Text = _content.Icon ?? "?",
-                FontSize = 18,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 10, 0),
-            });
+            if (_content.SectionId == "PrizeCounter")
+                headerRow.Children.Add(new IconGlyph
+                {
+                    Kind = IconKind.Sparkle,
+                    Variant = IconVariant.Filled,
+                    Size = 18,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 10, 0),
+                });
+            else
+                headerRow.Children.Add(new TextBlock
+                {
+                    Text = _content.Icon ?? "?",
+                    FontSize = 18,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 10, 0),
+                });
             headerRow.Children.Add(new TextBlock
             {
                 Text = _content.Title ?? string.Empty,
