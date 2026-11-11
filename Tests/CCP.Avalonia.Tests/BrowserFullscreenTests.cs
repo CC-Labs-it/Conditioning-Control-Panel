@@ -64,6 +64,41 @@ public class BrowserFullscreenTests
         finally { shell.ExitBrowserFullscreen(); shell.BrowserPopoutWindow?.Close(); shell.Close(); CoreSettings.ServiceProvider = old; }
         return Task.CompletedTask;
     });
+    [Fact]
+    public Task EmbeddedFullscreenPlaceholderClickKeepsCurrentPage() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        AmbientBeatLoopsTests.Setup();
+        var old = CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        settings.Current.OfflineMode = false;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            var page = shell.FindControl<SettingsTabView>("SettingsTab")!;
+            var browser = page.FindControl<WebHost>("BrowserWebHost")!;
+            var placeholder = page.FindControl<TextBlock>("BrowserLoadingText")!;
+            var url = new Uri("https://hypnotube.com/video");
+            browser.Navigate(url);
+            browser.OnWebMessage("ccp_fullscreen_on");
+            Assert.NotNull(shell.BrowserFullscreenWindow);
+            Assert.True(placeholder.IsVisible);
+            var requests = browser.NavigationRequests;
+            bool pressed = false;
+            placeholder.PointerPressed += (_, _) => pressed = true;
+            placeholder.RaiseEvent(new PointerPressedEventArgs(placeholder,
+                new Pointer(1, PointerType.Mouse, true), shell, default, 0,
+                new PointerPointProperties(), KeyModifiers.None, 1));
+            Assert.True(pressed);
+            Assert.Equal(requests, browser.NavigationRequests);
+            Assert.Equal(url, browser.Source);
+            Assert.NotNull(shell.BrowserFullscreenWindow);
+        }
+        finally { shell.ExitBrowserFullscreen(); shell.Close(); CoreSettings.ServiceProvider = old; }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(Key.Escape)]
     [InlineData(Key.F11)]

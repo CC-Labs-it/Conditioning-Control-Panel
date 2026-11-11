@@ -188,7 +188,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void OnBrowserPromptClick()
         {
             if (_browserPoppedOut) Shell?.PopOutBrowser();
-            else Shell?.BtnReloadBrowser_Click(this, new RoutedEventArgs());
+            else if (!_browserFullscreen) Shell?.BtnReloadBrowser_Click(this, new RoutedEventArgs());
         }
 
         // WPF MainWindow.Browser.cs:2736-2796: the card names the other window and returns to its load prompt on close.
