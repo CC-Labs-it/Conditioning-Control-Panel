@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
@@ -26,11 +27,15 @@ internal static class PassivePopupCheck
         return false;
     }
 
+    // A desktop lifetime for this check must not start App's shell, gates, services or windows.
+    private sealed class ProbeApp : Application { public ProbeApp() { } }
+
     internal static int Run(bool suppressRaise, bool stealFocus)
     {
         if (!OperatingSystem.IsWindows()) { Console.Error.WriteLine("FAIL: Windows desktop required"); return 1; }
         var lifetime = new ClassicDesktopStyleApplicationLifetime { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-        Program.BuildAvaloniaApp().SetupWithLifetime(lifetime);
+        AppBuilder.Configure<ProbeApp>().UsePlatformDetect().With(Program.Win32Options())
+            .SetupWithLifetime(lifetime);
         int result = 1;
         var foreground = new Window { Width = 200, Height = 100, Title = "Passive popup focus check" };
         var other = new Window { Width = 200, Height = 100, Topmost = true, ShowActivated = false, Title = "Other topmost" };
@@ -46,13 +51,19 @@ internal static class PassivePopupCheck
         popup.Loaded += (_, _) =>
         {
             before = GetForegroundWindow();
-            setup = fg != IntPtr.Zero && before == fg && otherHwnd != IntPtr.Zero && popupHwnd != IntPtr.Zero
-                && IsWindowVisible(otherHwnd) && IsWindowVisible(popupHwnd)
-                && (Win32Overlay.GetWindowLong(popupHwnd, -20) & (Win32Overlay.WsExTopmost | Win32Overlay.WsExNoActivate))
+            bool handles = fg != IntPtr.Zero && otherHwnd != IntPtr.Zero && popupHwnd != IntPtr.Zero;
+            bool visible = handles && IsWindowVisible(otherHwnd) && IsWindowVisible(popupHwnd);
+            uint popupStyle = handles ? Win32Overlay.GetWindowLong(popupHwnd, -20) : 0;
+            uint otherStyle = handles ? Win32Overlay.GetWindowLong(otherHwnd, -20) : 0;
+            bool placed = handles && SetWindowPos(otherHwnd, new IntPtr(-1), 0, 0, 0, 0, 0x13); // NOMOVE | NOSIZE | NOACTIVATE
+            bool initiallyAbove = placed && Above(otherHwnd, popupHwnd);
+            bool focusReady = handles && before == fg && GetForegroundWindow() == before;
+            setup = handles && visible && focusReady && initiallyAbove
+                && (popupStyle & (Win32Overlay.WsExTopmost | Win32Overlay.WsExNoActivate))
                     == (Win32Overlay.WsExTopmost | Win32Overlay.WsExNoActivate)
-                && (Win32Overlay.GetWindowLong(otherHwnd, -20) & Win32Overlay.WsExTopmost) != 0
-                && SetWindowPos(otherHwnd, new IntPtr(-1), 0, 0, 0, 0, 0x13) // NOMOVE | NOSIZE | NOACTIVATE
-                && Above(otherHwnd, popupHwnd) && GetForegroundWindow() == before;
+                && (otherStyle & Win32Overlay.WsExTopmost) != 0;
+            Console.WriteLine($"handles={handles} visible={visible} focus-ready={focusReady} " +
+                $"other-raised={placed} other-above={initiallyAbove} popup-style=0x{popupStyle:x} other-style=0x{otherStyle:x}");
         };
         Action<Window>? raise = suppressRaise ? _ => { } : stealFocus ? w =>
         {

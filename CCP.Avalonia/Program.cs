@@ -280,7 +280,7 @@ namespace ConditioningControlPanel.Avalonia
         /// the primary adapter) unless CCP_WIN32_COMPOSITION / CCP_WIN32_RENDERING / CCP_GPU_ADAPTER
         /// say otherwise (Platform/RenderBudget.cs); with CCP_GPU_ADAPTER set the adapter list is logged
         /// once, so a log says which GPU drew the frames.</summary>
-        private static global::Avalonia.Win32PlatformOptions Win32Options()
+        internal static global::Avalonia.Win32PlatformOptions Win32Options()
         {
             var o = new global::Avalonia.Win32PlatformOptions();
             var comp = Platform.RenderBudget.ParseModes<global::Avalonia.Win32CompositionMode>(
