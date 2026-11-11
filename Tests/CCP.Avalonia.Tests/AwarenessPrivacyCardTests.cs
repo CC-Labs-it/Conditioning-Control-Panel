@@ -55,6 +55,40 @@ public sealed class AwarenessPrivacyCardTests
     }
 
     [Fact]
+    public Task PublishedAdultFrameUsesProjection() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var s = CoreSettings.Current;
+        s.AwarenessModeEnabled = s.AwarenessConsentGiven = true;
+        AwarenessPause.Resume();
+        AwarenessLive.Clear();
+        try
+        {
+            var vm = new AwarenessPrivacyViewModel(() => null);
+            Assert.True(vm.IsLegacyPipeline);
+            Assert.False(vm.IsWireLive);
+            AwarenessLive.Publish(new ContextFrame { AppCluster = AwarenessClusters.Adult, AppId = "private-app", ServiceName = "private-name", PageTitleSanitized = "private-title" });
+            AwarenessLive.ObserverEnabled = true;
+            vm.Sync();
+            Assert.False(vm.IsLegacyPipeline);
+            Assert.True(vm.IsWireLive);
+            Assert.Contains(AwarenessClusters.Adult, vm.WireLine);
+            Assert.Contains(AwarenessClusters.Adult, vm.WireJson);
+            Assert.DoesNotContain("private", vm.WireLine);
+            Assert.DoesNotContain("private", vm.WireJson);
+            AwarenessLive.Publish(new ContextFrame { AppId = "editor", ServiceName = "Editor", PageTitleSanitized = "Contact user@example.com" });
+            vm.Sync();
+            Assert.DoesNotContain("user@example.com", vm.WireLine);
+            Assert.DoesNotContain("user@example.com", vm.WireJson);
+            Assert.Contains("Contact", vm.WireLine);
+            Assert.Contains("Contact", vm.WireJson);
+        }
+        finally { AwarenessLive.ObserverEnabled = false; AwarenessLive.Clear(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task DialConsentBandChipsPauseAndWipeAreReal() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
@@ -104,6 +138,29 @@ public sealed class AwarenessPrivacyCardTests
             Assert.True(vm.IsLegacyPipeline);
             Assert.False(vm.IsWireLive);
             Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("companion_awareness_wire_legacy"), vm.WireLine);
+
+            // Review always asks again. Decline changes nothing; accept bounces the poll.
+            Assert.True(vm.CanReviewConsent);
+            var calls = new System.Collections.Generic.List<bool>();
+            var lifecycle = ConditioningControlPanel.Services.WindowAwarenessService.V2Lifecycle;
+            try
+            {
+                ConditioningControlPanel.Services.WindowAwarenessService.V2Lifecycle = calls.Add;
+                AvApp.WindowAwareness.Start();
+                calls.Clear();
+                vm.ReviewConsentCommand.Execute(null);
+                await Until(() => shell.OwnedWindows.OfType<AwarenessConsentDialog>().Any());
+                shell.OwnedWindows.OfType<AwarenessConsentDialog>().Single().FindControl<Button>("BtnDecline")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await vm.Pending;
+                Assert.True(s.AwarenessConsentShownV2);
+                Assert.Empty(calls);
+                vm.ReviewConsentCommand.Execute(null);
+                await Until(() => shell.OwnedWindows.OfType<AwarenessConsentDialog>().Any());
+                shell.OwnedWindows.OfType<AwarenessConsentDialog>().Single().FindControl<Button>("BtnAccept")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await vm.Pending;
+                Assert.Equal(new[] { false, true }, calls);
+            }
+            finally { ConditioningControlPanel.Services.WindowAwarenessService.V2Lifecycle = lifecycle; AvApp.WindowAwareness.Stop(); }
 
             // Deny chips are the effective (seeded) list; removing one writes it.
             var first = vm.DenyList.First();
