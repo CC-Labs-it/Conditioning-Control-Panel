@@ -275,6 +275,19 @@ jobs:
         continue-on-error: true
         timeout-minutes: 5
         run: dotnet run --project CCP.Avalonia/CCP.Avalonia.csproj -c Release -- --overlay-check
+      - name: Check passive popup topmost and focus on Windows
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          dotnet build CCP.Avalonia/CCP.Avalonia.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw "Avalonia build exited $LASTEXITCODE" }
+          $app = 'CCP.Avalonia/bin/Release/net10.0/CCP.Avalonia.dll'
+          dotnet $app --passive-popup-check
+          if ($LASTEXITCODE -ne 0) { throw "passive popup check exited $LASTEXITCODE" }
+          dotnet $app --passive-popup-check --suppress-popup-raise
+          if ($LASTEXITCODE -ne 2) { throw "negative control expected exit 2, got $LASTEXITCODE" }
+          dotnet $app --passive-popup-check --steal-popup-focus
+          if ($LASTEXITCODE -ne 3) { throw "focus negative control expected exit 3, got $LASTEXITCODE" }
       # The installer's input (Properties/PublishProfiles/win-x64.pubxml, WPF's settings). WinExe has no
       # console, so Start-Process -Wait is what makes the exit code reach the step.
       - name: Publish win-x64 and smoke the published exe
