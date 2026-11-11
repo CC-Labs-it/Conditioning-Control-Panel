@@ -174,12 +174,59 @@ public sealed class BrainDrainIntegrationTests
         Assert.Equal(OperatingSystem.IsWindows(), card.FindControl<Grid>("CaptureRow")!.IsVisible);
         return Task.CompletedTask;
     });
+    // WPF BrainDrainLayer.cs:113-116: the tier caps both refresh requests.
+    [Theory]
+    [InlineData(false, false, 30)]
+    [InlineData(true, false, 30)]
+    [InlineData(false, true, 15)]
+    [InlineData(true, true, 15)]
+    public Task CaptureIntervalUsesRefreshRequestAndTier(bool high, bool performance, int fps) => Run(owner =>
+    {
+        var settings = CoreSettings.Current;
+        settings.BrainDrainHighRefresh = high;
+        settings.PerformanceMode = performance;
+        settings.AutoPerformanceMode = false;
+        var intervals = new List<TimeSpan>();
+        BrainDrainOverlay.CreatePump = (_, interval) => {
+            intervals.Add(interval);
+            return new BrainDrainCapturePump(() => null, interval);
+        };
+        BrainDrainOverlay.Start(owner);
+        Assert.Equal(2, intervals.Count);
+        Assert.All(intervals, interval => Assert.Equal(TimeSpan.FromSeconds(1.0 / fps), interval));
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task AutomaticBalancedTierCapsCaptureAt20Fps() => Run(owner =>
+    {
+        var settings = CoreSettings.Current;
+        settings.BrainDrainHighRefresh = true;
+        settings.PerformanceMode = false;
+        settings.AutoPerformanceMode = true;
+        var flashes = FlashOverlay.Active;
+        int start = flashes.Count;
+        try
+        {
+            for (int i = 0; i < 8; i++) flashes.Add((null!, default));
+            var intervals = new List<TimeSpan>();
+            BrainDrainOverlay.CreatePump = (_, interval) => {
+                intervals.Add(interval); return new BrainDrainCapturePump(() => null, interval);
+            };
+            BrainDrainOverlay.Start(owner);
+            Assert.Equal(2, intervals.Count);
+            Assert.All(intervals, interval => Assert.Equal(TimeSpan.FromSeconds(1.0 / 20), interval));
+        }
+        finally { flashes.RemoveRange(start, flashes.Count - start); }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task CapturedPixelsArePresentedWithLiveBlur() => Run(async owner =>
     {
         BrainDrainOverlay.Screens = _ => new[] { (new PixelRect(0, 0, 8, 8), 1.0, true) };
         BrainDrainCapturePump? pump = null;
-        BrainDrainOverlay.CreatePump = _ => pump = new BrainDrainCapturePump(
+        BrainDrainOverlay.CreatePump = (_, _) => pump = new BrainDrainCapturePump(
             () => new BrainDrainCapturePump.Frame(2, 2, new byte[] { 7, 12, 200, 255, 7, 12, 200, 255, 7, 12, 200, 255, 7, 12, 200, 255 }), TimeSpan.FromSeconds(1));
         BrainDrainOverlay.Start(owner);
         var image = Assert.IsType<Image>(Assert.Single(BrainDrainOverlay.Active).Content);
@@ -199,7 +246,7 @@ public sealed class BrainDrainIntegrationTests
         var pool = new BrainDrainCapturePumpTests.TrackingPool();
         var painted = new List<byte>();
         BrainDrainOverlay.Screens = _ => new[] { (new PixelRect(0, 0, 8, 8), 1.0, true) };
-        BrainDrainOverlay.CreatePump = _ => new BrainDrainCapturePump(() => pending.TryDequeue(out var f) ? f : null, TimeSpan.FromMilliseconds(10));
+        BrainDrainOverlay.CreatePump = (_, _) => new BrainDrainCapturePump(() => pending.TryDequeue(out var f) ? f : null, TimeSpan.FromMilliseconds(10));
         BrainDrainOverlay.InvalidateFrame = image => {
             using var buffer = Assert.IsType<WriteableBitmap>(image.Source).Lock();
             painted.Add(Marshal.ReadByte(buffer.Address)); image.InvalidateVisual();
@@ -226,7 +273,7 @@ public sealed class BrainDrainIntegrationTests
             (new PixelRect(2400, 0, 800, 600), 0.0, false) };
         BrainDrainOverlay.Screens = _ => screens;
         var pumps = new List<BrainDrainCapturePump>();
-        BrainDrainOverlay.CreatePump = _ => { var pump = new BrainDrainCapturePump(() => null, TimeSpan.FromSeconds(1)); pumps.Add(pump); return pump; };
+        BrainDrainOverlay.CreatePump = (_, _) => { var pump = new BrainDrainCapturePump(() => null, TimeSpan.FromSeconds(1)); pumps.Add(pump); return pump; };
         BrainDrainOverlay.Start(owner);
         Assert.Equal(4, BrainDrainOverlay.Active.Count);
         double Radius(int index) => pumps[pumps.Count - screens.Length + index].Sigma * 12 / (screens[index].Item2 > 0 ? screens[index].Item2 : 1);
@@ -258,7 +305,7 @@ public sealed class BrainDrainIntegrationTests
         var pumps = new List<BrainDrainCapturePump>();
         var bounds = new PixelRect(0, 0, 8, 8);
         BrainDrainOverlay.Screens = _ => new[] { (bounds, 1.0, true) };
-        BrainDrainOverlay.CreatePump = _ => {
+        BrainDrainOverlay.CreatePump = (_, _) => {
             if (pumps.Count > 0)
             {
                 var replacement = new BrainDrainCapturePump(() => null, TimeSpan.FromMilliseconds(33));

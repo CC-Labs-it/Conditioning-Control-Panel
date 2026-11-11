@@ -11,6 +11,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Models;
@@ -23,8 +24,8 @@ internal static class BrainDrainOverlay
     private static readonly List<Window> Hosts = new();
     private static readonly Dictionary<Window, (BrainDrainCapturePump Pump, Image Image, WriteableBitmap? Bitmap, double Scale)> Frames = new();
     private static BeatLoop? FrameBeat;
-    internal static Func<PixelRect, BrainDrainCapturePump?> CreatePump = bounds => OperatingSystem.IsWindows()
-        ? new BrainDrainCapturePump(bounds, TimeSpan.FromSeconds(1.0 / 30)) : null;
+    internal static Func<PixelRect, TimeSpan, BrainDrainCapturePump?> CreatePump = (bounds, interval) => OperatingSystem.IsWindows()
+        ? new BrainDrainCapturePump(bounds, interval) : null;
     private static Window? _owner;
     private static AppSettings? _settings;
     private static SettingsService? _service;
@@ -93,6 +94,14 @@ internal static class BrainDrainOverlay
         if (Hosts.Count != targets.Length || Hosts.Where((w, i) => i < targets.Length && (!Equals(w.Tag, targets[i]) || w.Position != targets[i].Bounds.Position)).Any())
         {
             CloseHosts();
+            // WPF BrainDrainLayer.cs:113-116 and PerformanceProfile.cs:111-116.
+            var cap = AmbientFxCanvas.Env.CurrentTier switch
+            {
+                PerformanceTier.Performance => 15,
+                PerformanceTier.Balanced => 20,
+                _ => 30
+            };
+            var interval = TimeSpan.FromSeconds(1.0 / Math.Min(s.BrainDrainHighRefresh ? 60 : 30, cap));
             foreach (var screen in targets)
             {
                 var b = screen.Bounds; var scale = screen.Scaling > 0 ? screen.Scaling : 1;
@@ -108,7 +117,7 @@ internal static class BrainDrainOverlay
                     Capture(w, affinity); w.Show(); Capture(w, affinity);
                     if (!Prepare(w)) { w.Close(); CloseHosts(); _refused = true; Serilog.Log.Warning("Brain Drain: compositor blur or click-through unavailable"); return; }
                     Hosts.Add(w);
-                    var pump = CreatePump(b);
+                    var pump = CreatePump(b, interval);
                     if (pump != null)
                     {
                         var image = new Image { Stretch = Stretch.Fill, IsHitTestVisible = false };
