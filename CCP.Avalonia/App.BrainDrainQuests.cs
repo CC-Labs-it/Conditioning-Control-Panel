@@ -9,7 +9,6 @@ public partial class App
 {
     private static readonly RunningTimeCredit BrainDrainCredit = new();
     private static DispatcherTimer? _brainDrainQuestTimer;
-    private static bool _brainDrainQuestRunning;
 
     // WPF AchievementService.cs:277-284. The clock runs even without LibVLC.
     internal static void WireBrainDrainQuestMinutes()
@@ -17,19 +16,23 @@ public partial class App
         _brainDrainQuestTimer ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _brainDrainQuestTimer.Tick -= OnBrainDrainQuestTick;
         _brainDrainQuestTimer.Tick += OnBrainDrainQuestTick;
+        BrainDrainCredit.Sample(false, TimeSpan.Zero);
+        _brainDrainQuestTimer.Start();
         CoreEngine.StartBrainDrain = () =>
         {
-            _brainDrainQuestRunning = true;
-            _brainDrainQuestTimer.Start();
             Platform.BrainDrainPlayer.Instance?.Start();
         };
         CoreEngine.StopBrainDrain = () =>
         {
-            _brainDrainQuestRunning = false;
-            _brainDrainQuestTimer.Stop();
             BrainDrainCredit.Sample(false, TimeSpan.Zero);
             Platform.BrainDrainPlayer.Instance?.Stop();
         };
+    }
+
+    internal static void StopBrainDrainQuestMinutes()
+    {
+        _brainDrainQuestTimer?.Stop();
+        BrainDrainCredit.Sample(false, TimeSpan.Zero);
     }
 
     private static void OnBrainDrainQuestTick(object? sender, EventArgs e) =>
@@ -37,7 +40,7 @@ public partial class App
 
     internal static void SampleBrainDrainQuestMinutes(TimeSpan now)
     {
-        var minutes = BrainDrainCredit.Sample(_brainDrainQuestRunning && CoreEngine.IsRunning
+        var minutes = BrainDrainCredit.Sample(CoreEngine.IsVisualRun
             && CoreSettings.Current.BrainDrainEnabled, now);
         if (minutes > 0) Quests?.TrackBrainDrainMinutes(minutes);
     }

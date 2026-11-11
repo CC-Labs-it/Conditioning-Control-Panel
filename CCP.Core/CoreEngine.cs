@@ -18,9 +18,13 @@ namespace ConditioningControlPanel
     public static class CoreEngine
     {
         private static volatile bool _running;
+        private static volatile bool _visualRun;
         private static bool _stopInProgress;
 
         public static bool IsRunning => _running;
+
+        // WPF StartStop.cs:331-335 starts the overlay only for a visual engine run.
+        public static bool IsVisualRun => _running && _visualRun;
 
         // Head-owned Brain Drain audio. WPF MainWindow.StartStop.cs:411-414,531.
         public static volatile Action? StartBrainDrain, StopBrainDrain;
@@ -73,6 +77,7 @@ namespace ConditioningControlPanel
             }
 
             if (!audioOnly && s.BrainDrainEnabled) StartBrainDrain?.Invoke();
+            _visualRun = !audioOnly;
             _running = true;
             StartedUtc = DateTime.UtcNow;
             Log.Information("Engine started - Flash: {Flash}, Subliminal: {Sub}, LockCard: {Lock}, BouncingText: {Bt}",
@@ -102,6 +107,7 @@ namespace ConditioningControlPanel
                 catch (Exception ex) { Log.Warning(ex, "Brain Drain stop failed"); }
                 CoreMindWipe.Stop();   // WPF StartStop.cs:489, also ends the loop
                 _running = false;
+                _visualRun = false;
                 RemoteCommands.StopOverlays(); // remote-only overlays must not survive Stop or panic
                 StartedUtc = null;
                 try { StoppedHook?.Invoke(); }

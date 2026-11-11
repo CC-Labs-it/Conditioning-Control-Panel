@@ -1505,6 +1505,7 @@ namespace ConditioningControlPanel.Avalonia
 
             // Restore any app we ducked; a pending Unduck would otherwise die with the process.
             try { Platform.KeywordTriggerHead.Stop(); } catch { }
+            try { StopBrainDrainQuestMinutes(); } catch { }
             try { Platform.BrainDrainPlayer.Instance?.Stop(); } catch { }
             try { MantraChant.Dispose(); } catch { } // WPF App.xaml.cs:6529
             try { Platform.LibVlcAudio.Instance?.Shutdown(); } catch { }
