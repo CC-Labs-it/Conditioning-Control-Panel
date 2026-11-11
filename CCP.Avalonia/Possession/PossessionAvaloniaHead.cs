@@ -150,10 +150,11 @@ namespace ConditioningControlPanel.Avalonia.Possession
             foreach (var e in PossessionRuntime.CreateAll()) list.Add(new DirectedHeadEffect(e));
             list.Add(new RetitleEffect());
             list.Add(new DokiDialogEffect());
+            list.Add(new DeleteDialogEffect());
             return list;
         }
 
-        /// <summary>True when the catalog carries a Full-Doki-only effect (the themed fake-crash dialogs).
+        /// <summary>True when the catalog carries a Full-Doki-only effect (the themed fake dialogs).
         /// The consent text names those scares only when this head can actually show one.</summary>
         internal static bool HasFullDokiEffects()
         {
