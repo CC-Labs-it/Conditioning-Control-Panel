@@ -30,7 +30,6 @@ internal static partial class GlassroadHostService
 {
     public const string ProductName = "Racing Thoughts";
     private const string ProxyBaseUrl = "https://codebambi-proxy.vercel.app";
-    private static readonly TimeSpan BootDeadline = TimeSpan.FromSeconds(45);
 
     /// <summary>The page's kept-Escape frame (host/hostEscape.js HOST_ESCAPE).</summary>
     internal const string KeptEscapeType = "kept-escape";
@@ -49,6 +48,9 @@ internal static partial class GlassroadHostService
     private static CoreWebView2? _core;
     private static DispatcherTimer? _watch;
     private static DateTime _lastHeartbeatUtc, _lastProgressUtc;
+    // ccp-bugs #1543: WebView2 said the render process is unresponsive (null = answering), and the
+    // page's last `loading` frame (a course build ahead that may hold the main thread).
+    private static DateTime? _unresponsiveSinceUtc, _lastLoadingUtc;
     private static bool _pinged, _earlyInitSent, _disposing;
 
     public static bool IsActive => _host != null;
@@ -92,6 +94,7 @@ internal static partial class GlassroadHostService
         {
             _pinged = _earlyInitSent = false;
             _lastProgressUtc = _lastHeartbeatUtc = DateTime.UtcNow;
+            _unresponsiveSinceUtc = _lastLoadingUtc = null;
             var webRoot = Path.Combine(AppContext.BaseDirectory, "Resources", "web");
             _host = new ChaosWebViewHost(new ChaosWebViewHost.Options
             {
@@ -116,11 +119,7 @@ internal static partial class GlassroadHostService
                 OnCoreCreated = core => { _core = core; core.DOMContentLoaded += OnDomContentLoaded; },
                 OnReady = OnPageReady,
                 OnMessage = OnPageMessage,
-                OnProcessFailed = kind =>
-                {
-                    App.Logger?.Warning("Glassroad: browser process failed ({Kind}) - closing", kind);
-                    RunOnUi(Close);
-                },
+                OnProcessFailed = kind => RunOnUi(() => OnProcessFailed(kind)),
             });
             _host.Show();
             if (_host.Window != null) _host.Window.Closed += (_, _) => Close();
@@ -216,9 +215,39 @@ internal static partial class GlassroadHostService
 
     // ============================ page messages ============================
 
+    /// <summary>A crash closes the window as before. An unresponsive render process only waits: a
+    /// course build (Boudoir, ccp-bugs #1543) can hold the page's main thread past WebView2's hang
+    /// monitor, and the window used to close on the first such report. The watchdog decides now
+    /// (<see cref="GlassroadRules.Watch"/>, at most <see cref="GlassroadRules.BusyLimit"/> of silence).</summary>
+    private static void OnProcessFailed(CoreWebView2ProcessFailedKind kind)
+    {
+        if (_host == null) return;
+        if (GlassroadRules.ClosesOnProcessFailure(kind))
+        {
+            App.Logger?.Warning("Glassroad: browser process failed ({Kind}) - closing", kind);
+            Close();
+            return;
+        }
+        var now = DateTime.UtcNow;
+        if (_unresponsiveSinceUtc == null)
+        {
+            _unresponsiveSinceUtc = now;
+            App.Logger?.Warning("Glassroad: page unresponsive (ready={Ready}, silent {S:0.0}s, last loading frame {L}) - waiting up to {Max}s",
+                _host.IsReady, (now - _lastProgressUtc).TotalSeconds,
+                _lastLoadingUtc is { } l ? $"{(now - l).TotalSeconds:0.0}s ago" : "none", GlassroadRules.BusyLimit.TotalSeconds);
+        }
+    }
+
     private static void OnPageMessage(JObject o)
     {
-        _lastProgressUtc = DateTime.UtcNow;
+        var now = DateTime.UtcNow;
+        _lastProgressUtc = now;
+        if (_unresponsiveSinceUtc is { } since)
+        {
+            // The proof line for #1543: how long the page really held its thread.
+            _unresponsiveSinceUtc = null;
+            App.Logger?.Information("Glassroad: page answered again {S:0.0}s after the unresponsive report", (now - since).TotalSeconds);
+        }
         try
         {
             if (!_earlyInitSent && _host is { IsReady: false })
@@ -230,8 +259,12 @@ internal static partial class GlassroadHostService
             {
                 case "heartbeat":
                 case "pong":
-                    _lastHeartbeatUtc = DateTime.UtcNow;
+                    _lastHeartbeatUtc = now;
                     _pinged = false;
+                    break;
+                case "loading":
+                    // The page's loading bar moved (glassroad CONTRACT.md): a long build may follow.
+                    _lastLoadingUtc = now;
                     break;
                 case "net":
                     OnNetRequest(o);
@@ -426,9 +459,10 @@ internal static partial class GlassroadHostService
         disp.BeginInvoke(act, DispatcherPriority.Normal);
     }
 
-    /// <summary>One 5 s watchdog. Before ready: close after 45 s with no page message at all (the
-    /// bridge beats every 2 s, so only a page that never ran fails). After ready: silent past 20 s
-    /// gets one ping, then the window closes on the next tick.</summary>
+    /// <summary>One 5 s watchdog (<see cref="GlassroadRules.Watch"/>). Before ready: close after 45 s
+    /// with no page message at all (the bridge beats every 2 s, so only a page that never ran fails).
+    /// After ready: silent past 20 s gets one ping, then the window closes on the next tick. A busy
+    /// page (unresponsive report, or a recent loading frame) gets up to 90 s of silence first.</summary>
     private static void StartWatch()
     {
         _watch = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromSeconds(5) };
@@ -436,22 +470,20 @@ internal static partial class GlassroadHostService
         {
             if (_host == null) return;
             var now = DateTime.UtcNow;
-            if (!_host.IsReady)
+            bool ready = _host.IsReady;
+            bool busy = GlassroadRules.IsBusy(_unresponsiveSinceUtc != null, now - _lastLoadingUtc);
+            switch (GlassroadRules.Watch(ready, now - _lastProgressUtc, now - _lastHeartbeatUtc, _pinged, busy))
             {
-                if (now - _lastProgressUtc < BootDeadline) return;
-                App.Logger?.Warning("Glassroad: no page progress for {S}s - closing", BootDeadline.TotalSeconds);
-                Close();
-                return;
+                case WatchVerdict.Ping:
+                    _pinged = true;
+                    try { _host.Post(new { type = "ping", t = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }); } catch (Exception ex) { Diag.Swallowed(ex); }
+                    return;
+                case WatchVerdict.Close:
+                    App.Logger?.Warning("Glassroad: page silent {S:0}s (ready={Ready}, busy={Busy}, unresponsive={U}) - closing",
+                        (now - (ready ? _lastHeartbeatUtc : _lastProgressUtc)).TotalSeconds, ready, busy, _unresponsiveSinceUtc != null);
+                    Close();
+                    return;
             }
-            if ((now - _lastHeartbeatUtc).TotalSeconds <= 20) return;
-            if (!_pinged)
-            {
-                _pinged = true;
-                try { _host.Post(new { type = "ping", t = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }); } catch (Exception ex) { Diag.Swallowed(ex); }
-                return;
-            }
-            App.Logger?.Warning("Glassroad: page heartbeat silent >20s and no pong - closing");
-            Close();
         };
         _watch.Start();
     }

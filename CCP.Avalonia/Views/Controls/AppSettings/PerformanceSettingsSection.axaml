@@ -125,6 +125,55 @@
                     </Border>
                 </Grid>
 
+                <!-- Pending rows 116-118: keep the global promise out of the UI until every
+                     dependent surface follows it. Keep the controls wired for regression coverage. -->
+                <StackPanel x:Name="PnlGentlePending" IsVisible="False">
+                    <!-- Gentle visuals (photosensitivity, 2026-10-14): one switch; its two choices show
+                         only while it is on. Item lists are filled from GentleVisuals.FadeChoices /
+                         SpeedChoices in code so the steps live in one place. -->
+                    <Grid MinHeight="34" Margin="0,2,0,0" ToolTip.Tip="{loc:Str tooltip_gentle_visuals}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Theme="{StaticResource SettingLabel}"
+                                   Text="{loc:Str setting_gentle_visuals}"
+                                   Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                        <CheckBox Grid.Column="1" x:Name="ChkGentleVisuals"
+                                  Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                  IsCheckedChanged="ChkGentleVisuals_Changed"/>
+                    </Grid>
+                    <StackPanel x:Name="PnlGentleChoices" IsVisible="False" Margin="14,0,0,0">
+                        <Grid MinHeight="34" Margin="0,2,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Theme="{StaticResource SettingLabel}"
+                                       Text="{loc:Str setting_gentle_fade}"
+                                       Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                            <ComboBox Grid.Column="1" x:Name="CmbGentleFade"
+                                      Theme="{StaticResource DarkComboBoxStyle}" FontSize="11"
+                                      Width="110" MinHeight="28" VerticalAlignment="Center"
+                                      SelectionChanged="CmbGentle_SelectionChanged"/>
+                        </Grid>
+                        <Grid MinHeight="34" Margin="0,2,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Theme="{StaticResource SettingLabel}"
+                                       Text="{loc:Str setting_gentle_speed}"
+                                       Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                            <ComboBox Grid.Column="1" x:Name="CmbGentleSpeed"
+                                      Theme="{StaticResource DarkComboBoxStyle}" FontSize="11"
+                                      Width="110" MinHeight="28" VerticalAlignment="Center"
+                                      SelectionChanged="CmbGentle_SelectionChanged"/>
+                        </Grid>
+                    </StackPanel>
+
+                </StackPanel>
+
                 <!-- Motion (accessibility). The three items ARE the enum ordinals — never reorder. -->
                 <Grid MinHeight="34" Margin="0,2,0,0" ColumnDefinitions="*,Auto"
                       ToolTip.Tip="{loc:Str tooltip_motion_level}">
@@ -138,6 +187,24 @@
                         <ComboBoxItem Content="{loc:Str label_motion_full}"/>
                         <ComboBoxItem Content="{loc:Str label_motion_reduced}"/>
                         <ComboBoxItem Content="{loc:Str label_motion_off}"/>
+                    </ComboBox>
+                </Grid>
+
+                <!-- Lighter effects (Avalonia head only, lane perf 2026-11-06; WPF has no software tier).
+                     Item order IS the LighterEffectsMode ordinal (Auto=0, On=1, Off=2) - never reorder.
+                     Auto takes WPF's Performance-mode FX tier when Skia draws on the CPU (no GPU). -->
+                <Grid MinHeight="34" Margin="0,2,0,0" ColumnDefinitions="*,Auto"
+                      ToolTip.Tip="{loc:Str tooltip_lighter_effects}">
+                    <TextBlock Grid.Column="0" Theme="{StaticResource SettingLabel}"
+                               Text="{loc:Str setting_lighter_effects}"
+                               Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                    <ComboBox Grid.Column="1" x:Name="CmbLighterEffects"
+                              Theme="{StaticResource DarkComboBoxStyle}" FontSize="11"
+                              Width="110" MinHeight="28" VerticalAlignment="Center" SelectedIndex="0"
+                              SelectionChanged="CmbLighterEffects_SelectionChanged">
+                        <ComboBoxItem Content="{loc:Str label_lighter_effects_auto}"/>
+                        <ComboBoxItem Content="{loc:Str label_lighter_effects_on}"/>
+                        <ComboBoxItem Content="{loc:Str label_lighter_effects_off}"/>
                     </ComboBox>
                 </Grid>
 

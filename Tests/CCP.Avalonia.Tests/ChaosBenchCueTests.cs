@@ -28,7 +28,7 @@ public class ChaosBenchCueTests
     public void Purchase_feedback_matches_wpf(string scenario, string expected, bool gift) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var settings = CoreSettings.Current;
         var oldSlot = settings.ChaosActiveSlot;
@@ -36,6 +36,7 @@ public class ChaosBenchCueTests
         var oldEngine = BarkHead.Engine;
         var oldAvatar = settings.AvatarEnabled;
         var oldSuppression = settings.BarkChatSuppressionMs;
+        var oldRotation = new Dictionary<string, List<string>>(settings.BarkVariantRotation);
         var item = ChaosBench.Items.Single(i => i.Id == BenchIds.AccPocket1);
         var oldGate = item.RevealGate;
         var sounds = new List<string>();
@@ -51,6 +52,7 @@ public class ChaosBenchCueTests
             int notifications = 0;
             engine.BarkSpoken += (_, _) => notifications++;
             CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => sounds.Add(Path.GetFileNameWithoutExtension(path));
+            for (int s = 1; s <= 3; s++) ChaosMetaStore.Delete(s);
             var state = new ChaosMetaState { Gold = scenario is "short" or "gift" ? 0 : 3000, RunsCompleted = scenario == "rank" ? 0 : 50 };
             if (scenario == "owned") state.BenchPurchases.Add(BenchIds.AccPocket1);
             if (scenario == "hazy") item.RevealGate = RevealIds.Diary;
@@ -70,6 +72,8 @@ public class ChaosBenchCueTests
             CoreAudio.PlayOneShotProvider = oldAudio;
             settings.AvatarEnabled = oldAvatar;
             settings.BarkChatSuppressionMs = oldSuppression;
+            settings.BarkVariantRotation = oldRotation;
+            for (int s = 1; s <= 3; s++) ChaosMetaStore.Delete(s);
             settings.ChaosActiveSlot = oldSlot;
             ChaosMeta.Init();
         }

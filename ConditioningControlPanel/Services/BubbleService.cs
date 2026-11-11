@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -2626,7 +2626,7 @@ internal class Bubble
     // Bubbles v2 Spiral In (ambient only): ring around the screen centre, radius shrinking to a core.
     private readonly bool _spiralIn;
     private double _spiralCx, _spiralCy, _spiralR0, _spiralRadial, _spiralTurns, _spiralDir;
-    private SpiralInPath.State _spiral;
+    private BubbleSpiralPath.State _spiral;
     private double _spiralFade = 1.0;                          // opacity multiplier over the last stretch of the spiral
     private double _screenBottom, _screenLeft, _screenRight;   // motion bounds (DIPs)
 
@@ -3368,11 +3368,11 @@ internal class Bubble
             _spiralIn = true;
             _spiralCx = (area.X + area.Width / 2.0) / dpiScale;
             _spiralCy = (area.Y + area.Height / 2.0) / dpiScale;
-            _spiralR0 = SpiralInPath.StartRadius(Math.Min(area.Width, area.Height) / dpiScale);
-            _spiralRadial = _speed * SpiralInPath.RadialPerSpeed;
-            _spiralTurns = SpiralInPath.Turns(MotionFx.Level);
+            _spiralR0 = BubbleSpiralPath.StartRadius(Math.Min(area.Width, area.Height) / dpiScale);
+            _spiralRadial = _speed * BubbleSpiralPath.RadialPerSpeed;
+            _spiralTurns = BubbleSpiralPath.Turns(MotionFx.Level);
             _spiralDir = random.Next(2) == 0 ? 1 : -1;
-            _spiral = SpiralInPath.Start(_spiralR0, random.NextDouble() * Math.PI * 2);
+            _spiral = BubbleSpiralPath.Start(_spiralR0, random.NextDouble() * Math.PI * 2);
             _posX = _startX = _spiralCx + Math.Cos(_spiral.Angle) * _spiral.Radius - _size / 2.0;
             _posY = _spiralCy + Math.Sin(_spiral.Angle) * _spiral.Radius - _size / 2.0;
         }
@@ -4084,7 +4084,7 @@ internal class Bubble
                 // Reaching the core is an EXIT like floating off the top (miss, quiet Destroy):
                 // never a pop, so no sound, XP, achievement, haptic or lucky roll. A click
                 // before then pops it normally.
-                _spiral = SpiralInPath.Step(_spiral, _spiralR0, _spiralRadial, _spiralTurns, _spiralDir, ts);
+                _spiral = BubbleSpiralPath.Step(_spiral, _spiralR0, _spiralRadial, _spiralTurns, _spiralDir, ts);
                 _posX = _spiralCx + Math.Cos(_spiral.Angle) * _spiral.Radius - _size / 2.0;
                 _posY = _spiralCy + Math.Sin(_spiral.Angle) * _spiral.Radius - _size / 2.0;
                 _spiralFade = _spiral.Fade;

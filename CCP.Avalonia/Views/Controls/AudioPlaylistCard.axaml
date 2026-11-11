@@ -1,0 +1,258 @@
+<!-- PORTED from ConditioningControlPanel/Views/Controls/AudioPlaylistCard.xaml.
+     Structure, order, spacing, sizes and every x:Name / loc key preserved. Deviations, all forced:
+       <Style x:Key BasedOn>              ->  <ControlTheme x:Key BasedOn>, Style= -> Theme=
+       Visibility + BoolToVisibility      ->  IsVisible="{Binding X}" / IsVisible="{Binding !X}"
+       ToolTip="..."                      ->  ToolTip.Tip="..."
+       Content="{loc:Str ...}" on Button  ->  a <TextBlock> child (trap 1: "_" is an access key)
+       ⏮ ▶ ⏸ ⏭ ▲ ▼ ✕ glyph text          ->  fx:IconGlyph (Fluent icons, decision 2026-10-10)
+       inline row-name Button.Template    ->  the keyed PlayerRowNameButton theme (an inline
+                                              template cannot carry state selectors)
+       DataTrigger IsCurrent / Trigger IsMouseOver
+                                          ->  Classes.current + :pointerover selectors in UserControl.Styles
+       Thumb.DragStarted / DragCompleted
+         + IsMoveToPointEnabled           ->  press/release handlers in code-behind (Avalonia's track
+                                              press already moves to the point)
+       feat:MoreFold                      ->  the ported Views/Features/MoreFold -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             xmlns:feat="using:ConditioningControlPanel.Avalonia.Views.Features"
+             xmlns:ctl="using:ConditioningControlPanel.Avalonia.Views.Controls"
+             x:Class="ConditioningControlPanel.Avalonia.Views.Controls.AudioPlaylistCard"
+             x:DataType="ctl:AudioPlaylistCardModel">
+
+    <!-- The playlist player (ccp-bugs suggestion "a simple audio player"). One card on the Deeper
+         page, where the player's own audio files already live. Wears that page's card skin: the
+         wash is the page's own DeeperHueWashBrush, found through the tree (DynamicResource), so
+         no shade is picked here. Every value comes from AudioPlaylistCardModel. -->
+    <UserControl.Resources>
+        <ControlTheme x:Key="PlayerIconButton" TargetType="Button" BasedOn="{StaticResource DeeperRoundIconButton}">
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource DeeperAccentBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DeeperAccentTransparent40Brush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Margin" Value="4,0,0,0"/>
+        </ControlTheme>
+        <ControlTheme x:Key="PlayerTextButton" TargetType="Button" BasedOn="{StaticResource DeeperRoundButton}">
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource DeeperAccentBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DeeperAccentTransparent40Brush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </ControlTheme>
+        <!-- ponytail: local copy of AudioPlaylistCard.xaml's inline row-name Button.Template, hoist when a second view needs it -->
+        <ControlTheme x:Key="PlayerRowNameButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Template">
+                <ControlTemplate TargetType="Button">
+                    <Border Background="Transparent" Padding="0,3">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </ControlTheme>
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <!-- DataTemplate.Triggers: the row lights and shows its tools under the pointer. -->
+        <Style Selector="Border.playlist-row:pointerover">
+            <Setter Property="Background" Value="{DynamicResource DeeperAccentTransparent20Brush}"/>
+        </Style>
+        <Style Selector="Border.playlist-row:pointerover StackPanel.row-tools">
+            <Setter Property="Opacity" Value="1"/>
+            <Setter Property="IsHitTestVisible" Value="True"/>
+        </Style>
+        <!-- DataTrigger IsCurrent: the loaded track's number and name take the accent. -->
+        <Style Selector="TextBlock.row-number.current">
+            <Setter Property="Foreground" Value="{DynamicResource DeeperAccentBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.row-name.current">
+            <Setter Property="Foreground" Value="{DynamicResource DeeperAccentBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Border Theme="{StaticResource SettingCardStyle}">
+        <Grid>
+            <Border Background="{DynamicResource DeeperHueWashBrush}" CornerRadius="11"/>
+            <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
+                    Background="{DynamicResource DeeperAccentBrush}"/>
+            <StackPanel Margin="16,10,16,12">
+
+                <!-- Kicker + the one way in -->
+                <DockPanel LastChildFill="False">
+                    <TextBlock DockPanel.Dock="Left" Text="{loc:Str audio_player_title}"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource DeeperAccentBrush}"
+                               FontSize="10" FontWeight="Bold"/>
+                    <Button x:Name="BtnAdd" x:FieldModifier="internal" DockPanel.Dock="Right"
+                            Theme="{StaticResource PlayerTextButton}"
+                            ToolTip.Tip="{loc:Str audio_player_add_tip}"
+                            IsEnabled="{Binding IsAvailable}"
+                            Click="BtnAdd_Click">
+                        <TextBlock Text="{loc:Str audio_player_add}"/>
+                    </Button>
+                </DockPanel>
+
+                <!-- Empty state -->
+                <TextBlock x:Name="TxtEmpty" x:FieldModifier="internal" Text="{loc:Str audio_player_empty}"
+                           IsVisible="{Binding IsEmpty}"
+                           Foreground="{DynamicResource TextMutedBrush}" FontSize="12"
+                           TextWrapping="Wrap" Margin="0,8,0,2"/>
+
+                <StackPanel x:Name="PlayerBody" x:FieldModifier="internal"
+                            IsVisible="{Binding HasTracks}">
+
+                    <!-- Transport: previous, play/pause, next, then what is loaded -->
+                    <Grid Margin="0,10,0,4" ColumnDefinitions="Auto,*">
+                        <StackPanel Orientation="Horizontal" Margin="-4,0,12,0">
+                            <Button x:Name="BtnPrevious" x:FieldModifier="internal" Theme="{StaticResource PlayerIconButton}"
+                                    ToolTip.Tip="{loc:Str audio_player_tip_previous}" Click="BtnPrevious_Click">
+                                <fx:IconGlyph Kind="Previous" Variant="Filled" Size="12"/>
+                            </Button>
+                            <Button x:Name="BtnPlayPause" x:FieldModifier="internal" Theme="{StaticResource PlayerIconButton}"
+                                    Width="36" Height="32" FontSize="14" Foreground="White"
+                                    Background="{DynamicResource DeeperAccentBrush}" BorderThickness="0"
+                                    Click="BtnPlayPause_Click">
+                                <fx:IconGlyph x:Name="IcoPlayPause" x:FieldModifier="internal" Kind="Play" Variant="Filled" Size="14"/>
+                            </Button>
+                            <Button x:Name="BtnNext" x:FieldModifier="internal" Theme="{StaticResource PlayerIconButton}"
+                                    ToolTip.Tip="{loc:Str audio_player_tip_next}" Click="BtnNext_Click">
+                                <fx:IconGlyph Kind="Next" Variant="Filled" Size="12"/>
+                            </Button>
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" VerticalAlignment="Center"
+                                   Text="{Binding CurrentName}" ToolTip.Tip="{Binding CurrentName}"
+                                   IsVisible="{Binding HasCurrent}"
+                                   Foreground="{DynamicResource TextLightBrush}" FontSize="13" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Grid.Column="1" VerticalAlignment="Center"
+                                   Text="{loc:Str audio_player_nothing_loaded}"
+                                   IsVisible="{Binding !HasCurrent}"
+                                   Foreground="{DynamicResource TextMutedBrush}" FontSize="12"/>
+                    </Grid>
+
+                    <!-- Seek bar with elapsed / total -->
+                    <Grid Margin="0,0,0,2" ColumnDefinitions="46,*,46">
+                        <TextBlock Text="{Binding ElapsedText}" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextDimBrush}" FontSize="11"/>
+                        <Slider Grid.Column="1" x:Name="SliderSeek" x:FieldModifier="internal" Margin="6,0" VerticalAlignment="Center"
+                                Minimum="0" Maximum="{Binding SeekMaximum, Mode=OneWay}"
+                                Value="{Binding PositionSeconds, Mode=OneWay}"
+                                IsEnabled="{Binding CanSeek}" Focusable="False"/>
+                        <TextBlock Grid.Column="2" Text="{Binding TotalText}" VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Foreground="{DynamicResource TextDimBrush}" FontSize="11"/>
+                    </Grid>
+
+                    <!-- Volume -->
+                    <Grid MinHeight="30" Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MinWidth="46"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="46"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{loc:Str audio_player_volume}" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"/>
+                        <Slider Grid.Column="1" x:Name="SliderVolume" x:FieldModifier="internal" Margin="6,0" VerticalAlignment="Center"
+                                Minimum="0" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True"
+                                Value="{Binding Volume, Mode=TwoWay}"/>
+                        <TextBlock Grid.Column="2" Text="{Binding VolumeText}" VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Foreground="{DynamicResource TextDimBrush}" FontSize="11"/>
+                    </Grid>
+
+                    <!-- The list. Click a name to play it; the row tools show on hover. -->
+                    <ScrollViewer MaxHeight="232" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl x:Name="TrackList" x:FieldModifier="internal" ItemsSource="{Binding Rows}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="ctl:AudioPlaylistRow">
+                                    <Border x:Name="RowBorder" Classes="playlist-row" CornerRadius="6" Padding="6,3" Background="Transparent">
+                                        <Grid ColumnDefinitions="26,*,Auto">
+                                            <TextBlock x:Name="RowNumber" Classes="row-number" Classes.current="{Binding IsCurrent}"
+                                                       Text="{Binding Number}" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextDimBrush}" FontSize="11"/>
+                                            <Button Grid.Column="1" Theme="{StaticResource PlayerRowNameButton}" Click="RowPlay_Click"
+                                                    ToolTip.Tip="{Binding Path}">
+                                                <TextBlock x:Name="RowName" Classes="row-name" Classes.current="{Binding IsCurrent}"
+                                                           Text="{Binding Name}"
+                                                           Foreground="{DynamicResource TextLightBrush}"
+                                                           FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                            </Button>
+                                            <StackPanel x:Name="RowTools" Classes="row-tools" Grid.Column="2" Orientation="Horizontal"
+                                                        Opacity="0" IsHitTestVisible="False">
+                                                <Button Theme="{StaticResource PlayerIconButton}"
+                                                        Width="24" Height="24" FontSize="9"
+                                                        IsEnabled="{Binding CanMoveUp}" Click="RowUp_Click"
+                                                        ToolTip.Tip="{loc:Str audio_player_tip_move_up}">
+                                                    <fx:IconGlyph Kind="CaretUp" Variant="Filled" Size="9"/>
+                                                </Button>
+                                                <Button Theme="{StaticResource PlayerIconButton}"
+                                                        Width="24" Height="24" FontSize="9"
+                                                        IsEnabled="{Binding CanMoveDown}" Click="RowDown_Click"
+                                                        ToolTip.Tip="{loc:Str audio_player_tip_move_down}">
+                                                    <fx:IconGlyph Kind="CaretDown" Variant="Filled" Size="9"/>
+                                                </Button>
+                                                <Button Theme="{StaticResource PlayerIconButton}"
+                                                        Width="24" Height="24" FontSize="10"
+                                                        Foreground="{DynamicResource DangerBrush}" Click="RowRemove_Click"
+                                                        ToolTip.Tip="{loc:Str audio_player_tip_remove}">
+                                                    <fx:IconGlyph Kind="Dismiss" Size="10"/>
+                                                </Button>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <!-- Loop, shuffle and clear: one click away -->
+                    <feat:MoreFold x:Name="OptionsFold" x:FieldModifier="internal">
+                        <Grid MinHeight="34" ColumnDefinitions="Auto,Auto,*,Auto">
+                            <Button x:Name="BtnLoop" x:FieldModifier="internal" Theme="{StaticResource PlayerTextButton}"
+                                    VerticalAlignment="Center" Click="BtnLoop_Click">
+                                <TextBlock x:Name="TxtLoop" x:FieldModifier="internal"/>
+                            </Button>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                                <TextBlock Text="{loc:Str audio_player_shuffle}" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
+                                           Margin="0,0,10,0"/>
+                                <CheckBox x:Name="ChkShuffle" x:FieldModifier="internal" Theme="{StaticResource ToggleStyle}"
+                                          VerticalAlignment="Center"
+                                          IsChecked="{Binding Shuffle, Mode=TwoWay}"/>
+                            </StackPanel>
+                            <Button Grid.Column="3" x:Name="BtnClear" x:FieldModifier="internal" Theme="{StaticResource PlayerTextButton}"
+                                    VerticalAlignment="Center"
+                                    Foreground="{DynamicResource TextMutedBrush}"
+                                    Click="BtnClear_Click">
+                                <TextBlock Text="{loc:Str audio_player_clear}"/>
+                            </Button>
+                        </Grid>
+                        <!-- A track with a Deeper enhancement runs it. On by default (owner, 7.1.8). -->
+                        <DockPanel MinHeight="34" LastChildFill="True"
+                                   ToolTip.Tip="{loc:Str audio_player_enhancements_tip}">
+                            <CheckBox x:Name="ChkEnhancements" x:FieldModifier="internal" DockPanel.Dock="Right"
+                                      Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                      IsChecked="{Binding Enhancements, Mode=TwoWay}"/>
+                            <TextBlock Text="{loc:Str audio_player_enhancements}" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
+                                       TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
+                        </DockPanel>
+                    </feat:MoreFold>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

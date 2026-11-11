@@ -16,6 +16,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Localization;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
@@ -34,15 +35,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///    switch / bench buy spend and save it with WPF's prices and gates (see <c>Shelf</c>).
     ///    The constructor reloads the save via <c>ChaosMeta.Init</c>, except under
     ///    <c>RenderProof.Rendering</c>, where it draws the in-memory state and writes nothing.
-    ///    Still sample data: mantras and the codex (ChaosBoonPool / ChaosBubbleVariants are
-    ///    run-engine, head-side). ponytail: <c>ChaosArt</c> returns
-    ///    <c>System.Windows.Media.ImageSource</c>, so only its path half can ever move; the hub's
-    ///    ChaosSfx cues and lesson/script-locked row dressing are not ported. Unlock cards are
+    ///    Mantras and the codex read Core discovery state and catalogues. ponytail: <c>ChaosArt</c> returns
+    ///    <c>System.Windows.Media.ImageSource</c>, so only its path half can ever move; the bench's
+    ///    remaining ChaosSfx cues are not ported. Lesson/script locks and unlock cards are
     ///    (<see cref="ChaosUnlockCardLayer"/>).
-    ///  - The four partials the WPF class spans (Bench / Reveals / Lessons / Debug) are NOT in
-    ///    this layer. <c>BuildBench</c> is inlined here over Core <c>ChaosBench</c>; reveal
-    ///    flashes, the lesson panel and the CCP_CHAOS_DEBUG strip are dropped, so pills and
-    ///    headers render in their revealed state.
+    ///  - <c>BuildBench</c> is inlined over Core <c>ChaosBench</c>; first-open reveal flashes
+    ///    live in ChaosHubWindow.Reveals.cs. Reveal visibility clamps and
+    ///    the CCP_CHAOS_DEBUG strip remain unported.
     ///  - The whole Skia menu scene (fog, per-frame glint masks, blooms, the crossfading
     ///    flipbook) and the NAudio menu music are gone: no SkiaSharp and no NAudio on this head,
     ///    and a view layer may not add a package. <c>SetupMenuMotion</c>'s breathing/wobble/glow
@@ -115,7 +114,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             _dollhouseView = Part<Grid>("DollhouseView");
             UnlockCards = new ChaosUnlockCardLayer(Part<Grid>("UnlockCardLayer"));
-            Closed += (_, _) => UnlockCards.Stop();
+            Closed += (_, _) => { UnlockCards.Stop(); StopRevealFlashes(); };
             _menuView = Part<Grid>("MenuView");
             _menuLeftCol = Part<Grid>("MenuLeftCol");
             _panelImprove = Part<Grid>("PanelImprove");
@@ -241,22 +240,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF ChaosHubWindow.Reveals.cs:139-153: the first hub open ever shows the intro card
         /// modally BEFORE anything else speaks, then marks <c>SeenIntroGuide</c> and saves - on any
         /// close, panic included, exactly as WPF's ShowDialog returned. A render never opens it.
-        /// ponytail: the rest of that pass (SeenDollhouse + Bark first-open line :156-163, the
-        /// "hub_open" reveal flashes :165) needs RevealService/Bark on this head.</summary>
-        private async System.Threading.Tasks.Task OnHubOpenedReveals()
+        /// Then the first-open bark and hub_open reveal pass run, in WPF order.</summary>
+        internal async System.Threading.Tasks.Task OnHubOpenedReveals()
         {
             if (_dollhouseBeatsFired || RenderProof.Rendering) return;
             _dollhouseBeatsFired = true;
+            ChaosIntroWindow? intro = null;
             try
             {
                 if (!ChaosMeta.State.SeenIntroGuide)
                 {
-                    await new ChaosIntroWindow().ShowDialogSafe(this);
+                    intro = new ChaosIntroWindow();
+                    await intro.ShowDialogSafe(this);
                     ChaosMeta.State.SeenIntroGuide = true;
                     ChaosMeta.Save();
                 }
             }
             catch (Exception ex) { Log.Warning("Chaos intro guide failed ({E})", ex.Message); }
+            if (_revealClosed) return; // A closed hub must not start FX after the modal returns.
+            // WPF's modal ignored panic, so it never reached here on one. After a panic she must not
+            // speak or chime: SeenDollhouse and the pending reveals wait for the next open.
+            if (intro?.ClosedByPanic == true) return;
+            try
+            {
+                if (!ChaosMeta.State.SeenDollhouse)
+                {
+                    ChaosMeta.State.SeenDollhouse = true;
+                    ChaosMeta.Save();
+                    Platform.BarkHead.Engine?.Raise("ChaosDollhouseFirstOpen");
+                }
+            }
+            catch (Exception ex) { Log.Debug("Dollhouse first-open beat: {E}", ex.Message); }
+            RunRevealFlashes();
         }
 
         /// <summary>Stand-in for <c>Services.Chaos.ChaosModeService.StoryModeEnabled</c>, which is
@@ -285,8 +300,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _tabEnhance.IsEnabled = true;
             _tabRun.IsEnabled = true;
             _tabImprove.IsEnabled = true;
-            // The Diary tab only appears once there's something in it (met a bubble down there).
+            // WPF Reveals.cs:111-117 (ApplyReveals): the start-mantra card and the Diary tab are
+            // bench purchases; don't strand the player on a tab that just vanished.
+            Part<Border>("CardMantras").IsVisible = RevealService.IsUnlocked(RevealIds.StartPicker);
             _tabDiary.IsVisible = DiaryUnlocked;
+            if (!DiaryUnlocked && _tabDiary.IsChecked == true) ShowTab("loadout");
         }
 
         private void Tab_Click(object? sender, RoutedEventArgs e)
@@ -326,10 +344,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             };
         }
 
-        /// <summary>WPF: <c>RevealService.IsUnlocked(RevealIds.Diary)</c>. The sample save has met
-        /// things down there, so the tab is offered.
-        /// ponytail: needs RevealService, wired when it moves to Core.</summary>
-        private static bool DiaryUnlocked => true;
+        /// <summary>WPF xaml.cs:174: the Diary is a bench purchase (Core reveal).</summary>
+        private static bool DiaryUnlocked => RevealService.IsUnlocked(RevealIds.Diary);
 
         /// <summary>WPF "🧪 testing options ▸/▾": a Tier-2 violet beaker and a fold chevron.</summary>
         private static StackPanel TestingLabel(bool open)
@@ -566,14 +582,122 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 toggle.Click += HabitToggle_Click;
                 right.Children.Add(toggle);
             }
+            else if (ChaosLessons.IsLessonBlocked(u.Id))
+                right.Children.Add(BuildLessonLockPanel(u.Id, accent));
             else
             {
-                right.Children.Add(BuyButton(Glyphed(13, "Train", IconKind.Sparkle, $"{u.Cost}"), u.Id, afford, Buy_Click));
+                // WPF ChaosHubWindow.xaml.cs:463-482: lesson first, then rank.
+                bool rankLocked = ChaosMeta.IsPurchaseRankLocked(u.Id);
+                var train = BuyButton(Glyphed(13, "Train", IconKind.Sparkle, $"{u.Cost}"), u.Id, afford && !rankLocked, Buy_Click);
+                if (rankLocked)
+                {
+                    ToolTip.SetTip(train, RankLockedTip + "\n" + ChaosRanks.RankSpecifics(ChaosRank.Devoted, ChaosMeta.State.RunsCompleted));
+                    ToolTip.SetShowOnDisabled(train, true);
+                }
+                right.Children.Add(train);
             }
             Grid.SetColumn(right, 2);
             grid.Children.Add(right);
 
             return ShelfCard(grid, on, owned, accent);
+        }
+
+        /// <summary>WPF ChaosHubWindow.Lessons.cs:25-81: exact progress and mechanics,
+        /// with no purchase button until the lesson is complete.</summary>
+        private static Control BuildLessonLockPanel(string id, Color accent)
+        {
+            var def = ChaosLessons.ById(id);
+            if (def == null) return new StackPanel();
+            long target = Math.Max(1, def.Target);
+            long progress = Math.Clamp(ChaosLessons.Progress(id), 0, target);
+            var panel = new StackPanel { HorizontalAlignment = HorizontalAlignment.Right };
+            var line = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+            line.Children.Add(new IconGlyph { Kind = IconKind.LockClosed, Size = 13, Margin = new Thickness(0, 0, 5, 0) });
+            var text = new TextBlock
+            {
+                Text = Loc.Get($"chaos_lesson_{id}_text"), FontSize = 10.5, FontStyle = FontStyle.Italic,
+                Foreground = new SolidColorBrush(Color.FromArgb(0xB0, accent.R, accent.G, accent.B)),
+                TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Right,
+            };
+            Grid.SetColumn(text, 1);
+            line.Children.Add(text);
+            panel.Children.Add(line);
+            panel.Children.Add(new Border
+            {
+                Width = 120, Height = 7, CornerRadius = new CornerRadius(3.5),
+                Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x26, 0x4C)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x50, accent.R, accent.G, accent.B)),
+                BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 7, 0, 4),
+                Child = new Border
+                {
+                    Width = progress <= 0 ? 0 : Math.Max(7, 120.0 * progress / target),
+                    CornerRadius = new CornerRadius(3.5), HorizontalAlignment = HorizontalAlignment.Left,
+                    Background = new LinearGradientBrush
+                    {
+                        StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                        EndPoint = new RelativePoint(1, 0, RelativeUnit.Relative),
+                        GradientStops = new GradientStops
+                        {
+                            new GradientStop(BoonAccent, 0),
+                            new GradientStop(Color.FromRgb(0x8B, 0x5C, 0xF6), 1),
+                        },
+                    },
+                },
+            });
+            panel.Children.Add(new TextBlock
+            {
+                Text = Loc.GetF("chaos_lesson_count", progress, target), FontSize = 10.5,
+                Foreground = new SolidColorBrush(Color.FromArgb(0xA0, 0xB8, 0xB8, 0xD0)),
+                HorizontalAlignment = HorizontalAlignment.Right,
+            });
+            // WPF ChaosTips.cs:20-66, called by ChaosHubWindow.Lessons.cs:75-79.
+            AttachLessonTip(panel, new StackPanel
+            {
+                MaxWidth = 260,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = Loc.Get(progress <= 0 ? "chaos_lesson_title" : "chaos_lesson_started"),
+                        FontWeight = FontWeight.Bold, FontSize = 13, Foreground = new SolidColorBrush(accent),
+                    },
+                    new TextBlock
+                    {
+                        Text = Loc.Get($"chaos_lesson_{id}_detail"), FontSize = 12, TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(0, 3, 0, 0), Foreground = new SolidColorBrush(Color.FromArgb(0xDD, 0xE0, 0xE0, 0xF0)),
+                    },
+                    new TextBlock
+                    {
+                        Text = Loc.GetF("chaos_lesson_progress", progress, target), FontSize = 12, TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(0, 3, 0, 0), Foreground = GoldBrush,
+                    },
+                },
+            });
+            return panel;
+        }
+
+        // WPF ChaosTips.cs:54-66. Avalonia has no ShowDuration, so stop a one-shot
+        // UI timer on close/detach and restart it for each opening.
+        internal static DispatcherTimer AttachLessonTip(Control target, StackPanel content)
+        {
+            ToolTip.SetTip(target, new ToolTip
+            {
+                Content = content,
+                Background = new SolidColorBrush(Color.FromArgb(0xF2, 0x15, 0x12, 0x26)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x55, 0xFF, 0x69, 0xB4)),
+                Foreground = Brushes.White, Padding = new Thickness(10, 8, 10, 8),
+            });
+            ToolTip.SetShowDelay(target, 250);
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+            timer.Tick += (_, _) => { timer.Stop(); ToolTip.SetIsOpen(target, false); };
+            target.GetObservable(ToolTip.IsOpenProperty).Subscribe(new AnonymousObserver<bool>(open =>
+            {
+                timer.Stop();
+                if (open) timer.Start();
+            }));
+            target.DetachedFromVisualTree += (_, _) => { timer.Stop(); ToolTip.SetIsOpen(target, false); };
+            return timer;
         }
 
         /// <summary>The card every shelf row sits in: gold edge while switched on, pink otherwise,
@@ -804,15 +928,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     ToolTip.SetTip(held, RankLockedTip + "\n" + RankSpecifics(b.RankFloor));
                     right.Children.Add(held);
                 }
+                else if (ChaosMeta.IsAccessoryScriptLocked(b.Id))
+                {
+                    // WPF ChaosHubWindow.xaml.cs:731-747: rank, her script, then lesson.
+                    var held = BuyButton(Glyphed(13, "Unlock", IconKind.Sparkle, $"{b.UnlockCost}"), b.Id, false, BoonUnlock_Click);
+                    ToolTip.SetTip(held, Loc.Get("chaos_accessory_script_lock"));
+                    ToolTip.SetShowOnDisabled(held, true);
+                    right.Children.Add(held);
+                }
                 else
                 {
-                    right.Children.Add(BuyButton(Glyphed(13, "Unlock", IconKind.Sparkle, $"{b.UnlockCost}"), b.Id, Live.Sparks >= b.UnlockCost, BoonUnlock_Click));
+                    right.Children.Add(ChaosLessons.IsLessonBlocked(b.Id)
+                        ? BuildLessonLockPanel(b.Id, BoonAccent)
+                        : BuyButton(Glyphed(13, "Unlock", IconKind.Sparkle, $"{b.UnlockCost}"), b.Id, Live.Sparks >= b.UnlockCost, BoonUnlock_Click));
                 }
             }
             else if (maxed)
                 right.Children.Add(new ContentControl { Content = Glyphed(13, "MAX", IconKind.Checkmark), Foreground = new SolidColorBrush(Color.FromRgb(0x5A, 0xE0, 0x96)), FontSize = 13, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Right });
             else
-                right.Children.Add(BuyButton(Glyphed(13, "deepen", IconKind.Sparkle, $"{b.UpgradeCost}"), b.Id, Live.Sparks >= b.UpgradeCost, BoonUpgrade_Click));
+            {
+                // WPF ChaosHubWindow.xaml.cs:753-767: the final deepen waits for Devoted.
+                bool capLocked = ChaosMeta.IsCapstonePurchaseRankLocked(b.Id);
+                var deepen = BuyButton(Glyphed(13, "deepen", IconKind.Sparkle, $"{b.UpgradeCost}"), b.Id, Live.Sparks >= b.UpgradeCost && !capLocked, BoonUpgrade_Click);
+                if (capLocked)
+                {
+                    ToolTip.SetTip(deepen, ChaosRanks.CapstoneLockedTip + "\n" + ChaosRanks.RankSpecifics(ChaosRank.Devoted, ChaosMeta.State.RunsCompleted));
+                    ToolTip.SetShowOnDisabled(deepen, true);
+                }
+                right.Children.Add(deepen);
+            }
 
             Grid.SetColumn(right, 2);
             grid.Children.Add(right);
@@ -915,6 +1059,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var card = ChaosUnlockCardRules.ForBench(id);
             if (card == null) ChaosOverlayWindow.ChaosSfx.Play("ui_unlock", 0.55f);
             RevealService.Sync("purchase");
+            ApplyUnlocks();   // WPF Bench.cs:223 ApplyReveals: the Diary / start-mantra buys show up now
             BuildBench();
             if (_herCornerCard.IsVisible) BuildHerCorner();
             BuildLifetimeBoons();
@@ -1339,16 +1484,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private void BuildMantras()
         {
             _mantrasHost.Children.Clear();
-            foreach (var b in Sample.Mantras) _mantrasHost.Children.Add(MantraRow(b));
+            foreach (var b in ChaosBoonPool.All) _mantrasHost.Children.Add(MantraRow(b));
         }
 
         /// <summary>One mantra/sin row: ??? until met in a draft; discovered mantras are clickable
         /// to set/clear the start mantra (gold ring + ★ on the whispered one). Sins are listed but
         /// can only be taken mid-fall, never chosen.</summary>
-        private Border MantraRow(SampleMantra b)
+        private Border MantraRow(ChaosBoon b)
         {
-            bool seen = b.Seen;
-            bool isStart = Sample.StartMantra == b.Id;
+            bool seen = ChaosMeta.IsDiscovered("boon:" + b.Id);
+            bool isStart = ChaosMeta.State.EquippedStartBoon == b.Id;
             bool pickable = seen && !b.IsCurse;
             var accent = b.IsCurse ? Color.FromRgb(0xFF, 0x8A, 0x8A) : Color.FromRgb(0x9C, 0xE8, 0xA0);
 
@@ -1423,7 +1568,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 card.PointerPressed += (_, e) =>
                 {
                     if (!e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) return;
-                    Sample.StartMantra = isStart ? null : b.Id;
+                    ChaosMeta.EquipStartBoon(isStart ? null : b.Id);
                     BuildMantras();
                 };
             return card;
@@ -1460,9 +1605,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             host.Children.Add(SubHeader("VERBS · how to play down there"));
             foreach (var v in DiaryVerbs) host.Children.Add(VerbRow(v.Glyph, v.Name, v.Desc, maxWidth));
             host.Children.Add(SubHeader("WHAT YOU'VE MET"));
-            foreach (var c in Sample.Codex)
-                host.Children.Add(CodexRow(c.Name, c.Desc, c.Glyph, c.Accent, c.Seen, maxWidth));
+            foreach (var v in ChaosBubbleVariants.All)
+                host.Children.Add(CodexRow("bubble:" + v.Id, v.Name, ChaosBubbleVariants.DescriptionFor(v.Id), "●",
+                    Color.FromRgb((byte)(v.Tint >> 16), (byte)(v.Tint >> 8), (byte)v.Tint), maxWidth));
+            // Not part of the weighted pool table; listed explicitly (WPF xaml.cs:1381-1395).
+            foreach (var (id, name, glyph, accent) in CodexExtras)
+                host.Children.Add(CodexRow("bubble:" + id, name, ChaosBubbleVariants.DescriptionFor(id), glyph, accent, maxWidth));
         }
+
+        private static readonly (string Id, string Name, string Glyph, Color Accent)[] CodexExtras =
+        {
+            ("darter", "White Rabbit", "✧", Color.FromRgb(0xFF, 0x4D, 0xC4)),
+            ("golden", "Lucky Bubble", "🍀", Color.FromRgb(0xFF, 0xD7, 0x00)),
+            ("echo", "The Echo", "◌", Color.FromRgb(0xC9, 0xC4, 0xE8)),
+            ("chaperone", "The Chaperone", "💞", Color.FromRgb(0x9C, 0xE8, 0xFF)),
+            ("tease", "The Tease", "✖", Color.FromRgb(0xB3, 0x0E, 0x2E)),
+            ("bound", "The Bound", "⛓", Color.FromRgb(0xFF, 0x69, 0xB4)),
+            ("brittle", "The Brittle", "◇", Color.FromRgb(0xD9, 0xEF, 0xFF)),
+        };
 
         private Window? _diaryPopout;
 
@@ -1541,8 +1701,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ? new IconGlyph { Kind = k, Variant = IconVariant.Filled, Foreground = fg, Size = size, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
             : new TextBlock { Text = "?", Foreground = fg, FontSize = size, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
 
-        private static Border CodexRow(string name, string desc, string glyph, Color accent, bool seen, double maxWidth)
+        private static Border CodexRow(string codexId, string name, string desc, string glyph, Color accent, double maxWidth)
         {
+            bool seen = ChaosMeta.IsDiscovered(codexId);
             var row = new StackPanel { Orientation = Orientation.Horizontal };
             var icon = new Border
             {
@@ -1629,11 +1790,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _segExtreme.IsEnabled = unlocked;
             _segExtreme.Content = unlocked ? "Inescapable" : Glyphed(12, "Inescapable", IconKind.LockClosed);
             if (!unlocked)
-                // The lock keeps its mystery on the face; the hover gives the exact path.
-                // ponytail: needs ChaosLessons / ChaosRanks for the real thresholds and price.
-                ToolTip.SetTip(_segExtreme,
-                    "a deeper door. she sells the key in the Toybox: finish enough relentless "
-                    + "descents, reach Devoted, then train it.");
+            {
+                // The lock keeps its mystery on the face; the hover gives the exact path (WPF xaml.cs:1585-1590).
+                int cost = ChaosUpgrades.ById("extreme_tier")?.Cost ?? 0;
+                ToolTip.SetTip(_segExtreme, Loc.GetF("chaos_inescapable_unlock_tip",
+                    ChaosLessons.T_EXTREME_TIER, ChaosRanks.Thresholds[(int)ChaosRank.Devoted], cost));
+                ToolTip.SetShowOnDisabled(_segExtreme, true);
+            }
             ApplyDifficultyPillTips(extremeUnlocked: unlocked);
             if (!unlocked && _segExtreme.IsChecked == true)
             {
@@ -1749,22 +1912,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
         }
 
-        /// <summary>The three bubble-pool presets. WPF read them from
-        /// <c>ChaosBubbleVariants.Presets</c>; the ids and groupings are copied verbatim.
-        /// ponytail: needs ChaosBubbleVariants, wired when it moves to Core.</summary>
-        private static readonly Dictionary<string, string[]> PoolPresets = new()
-        {
-            ["Balanced"] = new[] { "flash", "subliminal", "pink", "spiral", "braindrain", "bambifreeze", "video", "htlink" },
-            ["Tease"] = new[] { "flash", "subliminal", "pink", "spiral" },
-            ["Flash-only"] = new[] { "flash" },
-        };
-
+        /// <summary>WPF xaml.cs:1690: the bubble-pool presets come from Core.</summary>
         private void Preset_Click(object? sender, RoutedEventArgs e)
         {
             var name = (sender as Button)?.Tag?.ToString();
-            if (name == null || !PoolPresets.TryGetValue(name, out var ids)) return;
+            var preset = ChaosBubbleVariants.Presets.FirstOrDefault(p => p.Name == name);
+            if (preset == null) return;
             foreach (var t in _grpPool.Children.OfType<ToggleButton>())
-                t.IsChecked = ids.Contains(t.Tag?.ToString() ?? "");
+                t.IsChecked = preset.VariantIds.Contains(t.Tag?.ToString() ?? "");
         }
 
         private void BtnRandomize_Click(object? sender, RoutedEventArgs e)
@@ -2158,9 +2313,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
         }
 
-        // ============================ sample data ============================
-        // Mantras and the codex still stand in for head-side services (ChaosBoonPool and the
-        // bubble variants); the row records above are shared with the real shelves.
+        // ============================ shelf row snapshots ============================
 
         private sealed record SampleHabit(string Id, string Glyph, string Name, string Desc, string Flavor,
                                           string Branch, int Cost, bool Owned, bool On);
@@ -2170,38 +2323,5 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                                          bool Active, int UnlockCost, int UpgradeCost, bool RankLocked,
                                          string RankFloor, string CapstoneDesc, bool IsActiveUse,
                                          double UseCooldownSec);
-
-        private sealed record SampleMantra(string Id, string Name, string Desc, string Flavor, bool Seen, bool IsCurse);
-
-        private sealed record SampleCodexEntry(string Name, string Desc, string Glyph, Color Accent, bool Seen);
-
-        /// <summary>Mantras + codex stand-ins. ponytail: needs ChaosBoonPool / ChaosBubbleVariants
-        /// (head-side, run engine), wired when they move to Core.</summary>
-        private static class Sample
-        {
-            public static string? StartMantra = "soft_focus";
-
-            public static readonly List<SampleMantra> Mantras = new()
-            {
-                new("soft_focus", "Soft Focus", "trances start 20% deeper, and hold.", "you stopped blinking a while ago.", true, false),
-                new("open_hands", "Open Hands", "treats pay double for the first wave.", "", true, false),
-                new("the_slip", "The Slip", "one free snap, no focus spent.", "", false, false),
-                new("greedy_little_thing", "Greedy Little Thing", "gold doubles, focus never refills.", "she wrote this one down.", true, true),
-            };
-
-            public static readonly List<SampleCodexEntry> Codex = new()
-            {
-                new("Flash", "a treat carrying an image. pops clean, pays focus back.", "●", Color.FromRgb(0xFF, 0x9F, 0xD0), true),
-                new("Subliminal", "a treat that whispers on the way past.", "●", Color.FromRgb(0xC9, 0xC4, 0xE8), true),
-                new("Spiral", "live. snap it or it takes the screen for a while.", "●", Color.FromRgb(0x8B, 0x5C, 0xF6), true),
-                new("White Rabbit", "fast, small, and worth chasing — everything slows when you catch one.", "✧", Color.FromRgb(0xFF, 0x4D, 0xC4), true),
-                new("Lucky Bubble", "pays gold on the spot. rare.", "🍀", Color.FromRgb(0xFF, 0xD7, 0x00), true),
-                new("The Echo", "it repeats the last thing that got through.", "◌", Color.FromRgb(0xC9, 0xC4, 0xE8), false),
-                new("The Chaperone", "it wants to help. it does not help.", "💞", Color.FromRgb(0x9C, 0xE8, 0xFF), false),
-                new("The Tease", "it never goes off. that is the whole trick.", "✖", Color.FromRgb(0xB3, 0x0E, 0x2E), false),
-                new("The Bound", "it hunts on relentless.", "⛓", Color.FromRgb(0xFF, 0x69, 0xB4), false),
-                new("The Brittle", "one touch and it shatters into three.", "◇", Color.FromRgb(0xD9, 0xEF, 0xFF), false),
-            };
-        }
     }
 }

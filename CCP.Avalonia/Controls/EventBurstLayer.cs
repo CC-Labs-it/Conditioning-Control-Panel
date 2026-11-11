@@ -20,12 +20,20 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// <summary>Bursts fired (test hook).</summary>
         internal int Count { get; private set; }
 
+        // Release the transient surface on panic/close.
+        internal void Stop()
+        {
+            _layer?.Stop();
+            if (_layer?.Parent is Panel host) host.Children.Remove(_layer);
+            _layer = null;
+        }
+
         /// <summary>Bursts <paramref name="count"/> sparks on <paramref name="anchor"/>'s centre, or on its right
         /// edge (FxBurstSpot.RightEdge: the cap of a bar that just filled), in <paramref name="color"/> (null: the
         /// theme particle colour, as WPF FireBurstAt(color: null)). False when refused.</summary>
         internal bool Fire(Control anchor, int count, bool rightEdge = false, Color? color = null)
         {
-            if (!Env.AllowParticles || !anchor.IsEffectivelyVisible || anchor.Bounds.Width <= 0 || anchor.Bounds.Height <= 0) return false;
+            if (!Env.AllowFeedbackParticles || !anchor.IsEffectivelyVisible || anchor.Bounds.Width <= 0 || anchor.Bounds.Height <= 0) return false;
             if (TopLevel.GetTopLevel(anchor) is not Window { IsVisible: true, IsActive: true } w || w.WindowState == WindowState.Minimized) return false;
             if (OverlayLayer.GetOverlayLayer(anchor) is not { } host) return false;
             var spot = new Point(rightEdge ? anchor.Bounds.Width : anchor.Bounds.Width / 2, anchor.Bounds.Height / 2);

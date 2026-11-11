@@ -11,6 +11,42 @@ namespace CCP.Core.Tests;
 public sealed class CompanionVoiceLinesTests
 {
     [Fact]
+    public void EnabledFilesExcludeDisabledRemovedAndIncludeOnlyEnabledExistingCustomClips()
+    {
+        var root = Directory.CreateTempSubdirectory("ccp-enabled-voice-").FullName;
+        var dir = Path.Combine(root, "resources", "sounds", "flashes_audio");
+        Directory.CreateDirectory(dir);
+        var oldId = CoreMods.ActiveModIdProvider;
+        var oldPackage = CoreMods.ActiveModPackageProvider;
+        var customName = "test-" + Guid.NewGuid() + ".wav";
+        var customPath = Path.Combine(CompanionPhrase.DefaultAudioFolder, customName);
+        Directory.CreateDirectory(CompanionPhrase.DefaultAudioFolder);
+        try
+        {
+            foreach (var name in new[] { "kept.wav", "disabled.wav", "removed.wav" })
+                File.WriteAllText(Path.Combine(dir, name), "test");
+            File.WriteAllText(customPath, "test");
+            CoreMods.ActiveModIdProvider = () => "test-mod";
+            CoreMods.ActiveModPackageProvider = () => new ModPackage(new ModManifest { Id = "test-mod" }, root, false);
+            var settings = new AppSettings();
+            settings.DisabledPhraseIds.Add("VoiceLine:disabled");
+            settings.RemovedPhraseIds.Add("VoiceLine:removed");
+            settings.CustomCompanionPhrases.Add(new() { Category = "VoiceLine", Enabled = true, AudioFileName = customName });
+            settings.CustomCompanionPhrases.Add(new() { Category = "VoiceLine", Enabled = false, AudioFileName = customName });
+            settings.CustomCompanionPhrases.Add(new() { Category = "Greeting", Enabled = true, AudioFileName = customName });
+            settings.CustomCompanionPhrases.Add(new() { Category = "VoiceLine", Enabled = true, AudioFileName = "missing-" + customName });
+            Assert.Equal(new[] { Path.Combine(dir, "kept.wav"), customPath }, CompanionVoiceLines.GetEnabledFiles(settings));
+        }
+        finally
+        {
+            CoreMods.ActiveModIdProvider = oldId;
+            CoreMods.ActiveModPackageProvider = oldPackage;
+            File.Delete(customPath);
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public void PackagedFolderWinsAndFilesSortByNameAcrossAudioFormats()
     {
         var root = Path.Combine(Path.GetTempPath(), "ccp-voice-" + Guid.NewGuid());

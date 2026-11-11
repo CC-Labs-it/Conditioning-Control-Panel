@@ -121,6 +121,7 @@ public class PanicAftermathTests
         }
         Assert.Equal(new System.Collections.Generic.SortedDictionary<string, int>(StringComparer.Ordinal)
         {
+            ["CCP.Avalonia/Views/Windows/MainShellWindow.ProgramsTab.cs"] = 1,    // Avalonia "Start today's session" (WPF ProgramsTab.cs:2214)
             ["CCP.Avalonia/Views/Windows/MainShellWindow.SessionRun.cs"] = 1,     // Avalonia: the user's Resume (WPF BtnPauseSession_Click)
             ["CCP.Avalonia/Views/Windows/MainShellWindow.StartStop.cs"] = 1,      // Avalonia StartEngineFromUser
             ["ConditioningControlPanel/MainWindow/MainWindow.Presets.cs"] = 1,     // the user's Resume with the engine on

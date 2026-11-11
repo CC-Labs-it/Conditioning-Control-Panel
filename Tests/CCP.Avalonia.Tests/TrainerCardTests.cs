@@ -1,14 +1,19 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -62,7 +67,7 @@ public sealed partial class AccountSeedTests
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (global::Avalonia.Application.Current is null)
-                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 LocalizationManager.Instance.SetLanguage("en");
@@ -137,8 +142,10 @@ public sealed partial class AccountSeedTests
         }
     }
 
-    [Fact]
-    public async Task LeaderboardRowDoubleClick_OpensThatTrainersCard()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(750)]
+    public async Task LeaderboardRowDoubleClick_OpensThatTrainersCard(int renderDelayMs)
     {
         var s = CoreSettings.Current;
         var old = (s.OfflineMode, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId);
@@ -150,7 +157,7 @@ public sealed partial class AccountSeedTests
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (global::Avalonia.Application.Current is null)
-                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 var w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
@@ -158,36 +165,34 @@ public sealed partial class AccountSeedTests
                 w.ShowTab("leaderboard");
                 var board = w.Named<LeaderboardTabView>("LeaderboardTab")!;
                 await board.RefreshLeaderboardAsync();
+                // Pointer input uses the compositor's last scene, not the newly arranged row bounds.
+                // Land the entrance and await that scene before sampling the double-click target.
+                w.CompleteTabTransition();
                 Dispatcher.UIThread.RunJobs();
+                using var frame = w.CaptureRenderedFrame(); // settle layout and the hit-test tree before taking row coordinates
                 int BoardGets() => wire.Seen.Count(r => r.Contains("/v3/leaderboard"));
                 var boardTabGets = BoardGets();
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                w.UpdateLayout();
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
+                w.CaptureRenderedFrame()?.Dispose();
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
+                var name = ((LeaderboardRow)row.DataContext!).DisplayName;
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                // Hit-test the first click normally. Carry its source and pointer into a second
-                // press with click count 2: headless mouse timestamps use wall time, so a busy
-                // runner can otherwise turn the intended double click into two single clicks.
-                global::Avalonia.Input.PointerPressedEventArgs? first = null;
-                void Capture(object? _, global::Avalonia.Input.PointerPressedEventArgs e) => first = e;
-                w.AddHandler(global::Avalonia.Input.InputElement.PointerPressedEvent, Capture,
-                    global::Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
                 w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
-                w.RemoveHandler(global::Avalonia.Input.InputElement.PointerPressedEvent, Capture);
-                Assert.False(w.ProfilePage!.IsEffectivelyVisible); // one click alone opens nothing
-                var source = Assert.IsAssignableFrom<global::Avalonia.Input.InputElement>(first!.Source);
-                Assert.Same(source, global::Avalonia.Input.InputExtensions.InputHitTest(w, at));
-                source.RaiseEvent(new global::Avalonia.Input.PointerPressedEventArgs(source, first.Pointer, w, at, first.Timestamp + 100,
-                    new global::Avalonia.Input.PointerPointProperties(global::Avalonia.Input.RawInputModifiers.LeftMouseButton,
-                        global::Avalonia.Input.PointerUpdateKind.LeftButtonPressed), global::Avalonia.Input.KeyModifiers.None, 2));
-                source.RaiseEvent(new global::Avalonia.Input.PointerReleasedEventArgs(source, first.Pointer, w, at, first.Timestamp + 110,
-                    new global::Avalonia.Input.PointerPointProperties(global::Avalonia.Input.RawInputModifiers.None,
-                        global::Avalonia.Input.PointerUpdateKind.LeftButtonReleased), global::Avalonia.Input.KeyModifiers.None,
-                    global::Avalonia.Input.MouseButton.Left));
+                Assert.False(w.ProfilePage!.IsEffectivelyVisible);
+                Assert.DoesNotContain(wire.Seen, r => r.Contains("/user/lookup"));
+                await Task.Delay(renderDelayMs); // emulate a slow render between clicks
+                // Headless stamps input with the wall clock, so a >500 ms stall between two real clicks (CI load)
+                // counts them as two singles. The second press carries ClickCount 2 itself (AssetsTabTests precedent).
+                var hit = (global::Avalonia.Interactivity.Interactive)w.InputHitTest(at)!;
+                hit.RaiseEvent(new PointerPressedEventArgs(hit, new global::Avalonia.Input.Pointer(global::Avalonia.Input.Pointer.GetNextFreeId(), PointerType.Mouse, true), w, at, 0,
+                    new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None, 2));
+                w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
-                var name = ((LeaderboardRow)row.DataContext!).DisplayName;
                 Assert.True(card.IsEffectivelyVisible);                          // the Profile tab is up
                 Assert.Equal(name, card.FindControl<TextBox>("TxtProfileSearch")!.Text);
                 Assert.Equal(name, card.FindControl<TextBlock>("TxtProfileViewerName")!.Text);
@@ -213,6 +218,56 @@ public sealed partial class AccountSeedTests
         {
             (s.OfflineMode, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId) = old;
         }
+    }
+
+    [Fact]
+    public async Task Logout_ClearsCardAndDropsPendingRequests()
+    {
+        var s = CoreSettings.Current;
+        var old = (s.OfflineMode, LeaderboardTabView.NewClient);
+        var wire = new CardWire();
+        try
+        {
+            s.OfflineMode = false;
+            LeaderboardTabView.NewClient = () => new LeaderboardClient(wire);
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (global::Avalonia.Application.Current is null)
+                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                var w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+                var card = w.ProfilePage!;
+                await card.OpenProfileAsync("Nyx");
+                Assert.True(card.FindControl<Grid>("ProfileCardWrapper")!.IsVisible);
+                await w.LogoutAsync();
+                Assert.False(card.FindControl<Grid>("ProfileCardWrapper")!.IsVisible);
+                Assert.True(card.FindControl<Border>("NoProfileSelected")!.IsVisible);
+                w.Close();
+
+                // A board search that finishes after logout must not show a card.
+                wire.Gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                var w2 = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+                var pending = w2.ProfilePage!.OpenProfileAsync("Nyx");
+                await w2.LogoutAsync();
+                wire.Gate.SetResult();
+                await pending;
+                Assert.False(w2.ProfilePage.FindControl<Grid>("ProfileCardWrapper")!.IsVisible);
+                w2.Close();
+
+                // A lookup for a displayed row must not restore badges after logout.
+                wire.Gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                var w3 = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+                w3.ProfilePage!.DisplayProfileEntry(new LeaderboardRow { DisplayName = "Nyx" });
+                await w3.LogoutAsync();
+                wire.Gate.SetResult();
+                for (var i = 0; i < 20; i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
+                Assert.False(w3.ProfilePage.FindControl<Border>("StaffBadge")!.IsVisible);
+                Assert.Null(w3.ProfilePage.FindControl<ItemsControl>("ProfileAchievementGrid")!.ItemsSource);
+                w3.Close();
+            });
+        }
+        finally { (s.OfflineMode, LeaderboardTabView.NewClient) = old; }
     }
 
     [Fact]
