@@ -47,15 +47,19 @@ internal sealed class VideoWedgeWatchdog : IDisposable
             != VideoWedgeLadder.WedgeAction.EscapeHatch || Interlocked.Exchange(ref _escaped, 1) != 0) return;
         KeyValuePair<IntPtr, OverlayBackend>[] handles;
         lock (_gate) { handles = new KeyValuePair<IntPtr, OverlayBackend>[_handles.Count]; ((ICollection<KeyValuePair<IntPtr, OverlayBackend>>)_handles).CopyTo(handles, 0); }
-        _ = Task.Run(() =>
-        {
-            foreach (var (handle, backend) in handles)
+        ReleaseHandles(handles);
+    }
+
+    // One blocked native call must not prevent the other windows from being released.
+    internal void ReleaseHandles(KeyValuePair<IntPtr, OverlayBackend>[] handles)
+    {
+        foreach (var (handle, backend) in handles)
+            _ = Task.Run(() =>
             {
                 if (Volatile.Read(ref _disposed) != 0) return;
                 try { _hide(handle, backend); }
                 catch (Exception ex) { Log.Debug(ex, "Video wedge window release failed"); }
-            }
-        });
+            });
     }
 
     private static void Hide(IntPtr handle, OverlayBackend backend)
