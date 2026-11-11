@@ -430,6 +430,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             ApplySource();
         }
 
+        /// <summary>Request-level ad blocking (WPF BrowserService.cs:580-640), installed with the Scrolller gate before
+        /// this host's first page. Only the Home browser opts in.</summary>
+        public bool BlockAds { get; set; }
+
+        internal bool ShouldBlockAdRequest(string? page, string? request) => BlockAds
+            && ConditioningControlPanel.Services.Browser.BrowserAdBlockRules.ShouldBlock(page, request);
+
         // Only the Home browser opts in. Other embeds keep their existing popup policy.
         public bool RouteBrowserPopups { get; set; }
 
@@ -549,7 +556,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 native.WebResourceRequested += (_, e) => StampRequestHeader(e);
                 // The Scrolller licence on pages that load Scrolller themselves (WPF ScrolllerWebGate on every core):
                 // the WebView2 gate on Windows, a WebKitGTK block filter on Linux. The first navigation waits for it.
-                Platform.ScrolllerWebHostGate.Attach(native, () => ReferenceEquals(_web, native) ? NewScrolllerEngine() : _ => { });
+                Platform.ScrolllerWebHostGate.Attach(native, () => ReferenceEquals(_web, native) ? NewScrolllerEngine() : _ => { },
+                    () => BlockAds, ShouldBlockAdRequest);
                 _webSlot.Children.Add(native);
                 _fallback.IsVisible = false;
                 return true;

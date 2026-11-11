@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Text.Json;
 
@@ -7,6 +8,11 @@ namespace ConditioningControlPanel.Services.Browser;
 /// (BrowserService.cs:31-82, 580-640). Installation is the host's responsibility.</summary>
 public static class BrowserAdBlockRules
 {
+    public static bool ShouldBlock(string? pageUrl, string? requestUrl) =>
+        !BrowserPopupRule.IsPartner(pageUrl)
+        && Uri.TryCreate(requestUrl, UriKind.Absolute, out var target)
+        && BrowserPopupRule.IsBlockedHost(target.Host);
+
     private const string PartnerUrl = @"^https?://([^/:]+\.)?hypnotube\.com([/:?#]|$)";
 
     public static string WebKitJson { get; } = JsonSerializer.Serialize(
