@@ -171,7 +171,7 @@ namespace ConditioningControlPanel.Services
                     var o = JObject.Parse(File.ReadAllText(path));
                     found.Add((o, allowed, (long?)o["at"] ?? 0));
                 }
-                catch (Exception ex) { App.Logger?.Debug("[Session] {Journal} not read for the backup: {E}", name, ex.Message); }
+                catch (Exception ex) { Log.Debug("[Session] {Journal} not read for the backup: {E}", name, ex.Message); }
             }
             var written = 0;
             foreach (var j in found.OrderByDescending(j => j.At))

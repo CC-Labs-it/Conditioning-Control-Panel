@@ -455,6 +455,10 @@ namespace ConditioningControlPanel.Services
             try
             {
                 var obj = StripForUpload(settings);
+                // WPF 7.2.3 (#1488): a session or ramp still running keeps the user's own values in its
+                // journal; the backup carries those, never the session's Hydra / ducking / pink.
+                try { SessionSettingsJournal.OverlayOnBackup(obj, CorePaths.UserData); }
+                catch (Exception ex) { Log.Debug("Settings backup: session journal overlay failed: {E}", ex.Message); }
                 // The slot is shared with Windows, and frozen WPF restores the whole blob: a path field missing from
                 // it comes back EMPTY there. So the slot's own path fields ride along unchanged (review R3).
                 var slot = await FetchSlotAsync(settings);
