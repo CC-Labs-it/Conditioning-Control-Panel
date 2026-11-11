@@ -73,6 +73,12 @@ Avalonia ≤ WPF × 1.10 + 20 ms when measured on the same Windows runner (job <
 <h2 id="ledger">Ledger</h2>
 <p>One line per run: date, machine/runner, commit, artifact or evidence path, headline numbers.</p>
 <ul>
+<li>2026-11-11, cloud Linux, test syntax correction on parent <code>217dae076</code>, base
+<code>e62cb9ecd005</code>: Core, Avalonia and Avalonia test projects built in Release;
+Core tests 4650 passed / 5 skipped; 21 focused headless tests passed. Fail-proof: disabling the mod-revision check made the same-ID
+reattachment test fail (expected 2 image loads, actual 1); the production guard was restored.
+No real-window timing was taken. Windows median and p95 for this revision remain pending the
+CI <code>perf-bench-windows</code> artifact.</li>
 <li>2026-11-11, same-ID mod adoption correction on parent <code>b6cc602ea</code>, base
 <code>e62cb9ecd005</code>: added a headless regression for asset replacement while detached
 and a mod-change revision to invalidate the retained hero art. The cloud execution environment

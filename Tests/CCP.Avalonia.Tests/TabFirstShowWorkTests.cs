@@ -157,5 +157,5 @@ public sealed class TabFirstShowWorkTests
             window?.Close();
             CoreMods.ActiveModIdProvider = previousIdProvider;
         }
-    }
+    });
 }
