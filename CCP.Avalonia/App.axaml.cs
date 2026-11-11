@@ -632,6 +632,8 @@ namespace ConditioningControlPanel.Avalonia
 
         internal static void RepairLaunchSettings(SettingsService settings)
         {
+            // WPF App.xaml.cs:463,2952,3282: re-clones must see the live AI availability.
+            CoreAi.IsAvailableProvider = () => Ai?.IsAvailable == true;
             try { InstallDateRecorder.EnsureRecorded(settings, CorePaths.UserData, AppDomain.CurrentDomain.BaseDirectory); }
             catch (Exception ex) { Serilog.Log.Debug(ex, "Install date recording failed"); }
             var presets = new KeywordTriggerPresetService();
@@ -681,7 +683,6 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.BrowserVideoSurface.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
-                RepairLaunchSettings(Settings);
                 // WPF App.xaml.cs:2928: launch only sweeps retention on disk (creates nothing, arms no timer);
                 // the ledger starts when awareness turns on. No observer feeds it on this head yet.
                 InstallPrivacyLedger(new ConditioningControlPanel.Services.Awareness.ActivityLedger());
@@ -694,6 +695,7 @@ namespace ConditioningControlPanel.Avalonia
                         Settings.Save();
                 }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "Session settings heal failed (non-fatal)"); }
+                RepairLaunchSettings(Settings);
                 // WPF App.xaml.cs:2571-2577: the installer's Content Folder pick (Windows), then the custom
                 // folder's subdirs (#391), before anything resolves the assets folder.
                 Platform.InstallerAssetsPath.Apply(Settings);
