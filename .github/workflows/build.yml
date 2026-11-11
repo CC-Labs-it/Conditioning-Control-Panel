@@ -378,36 +378,61 @@ jobs:
             avalonia-expected.txt
           retention-days: 7
 
-  # The coverage guarantee the sequential script used to give: the shards' Total: counts must add up to
-  # the suite's own --list-tests count, so a test can never fall between shards (or a shard go missing).
-  # !cancelled() also keeps this running when avalonia-linux is skipped (scope=windows).
+  # Coverage still runs after a single-job rerun. If an older artifact has expired,
+  # rerun that shard on its original OS before checking all five totals.
   avalonia-coverage:
     needs: [avalonia-linux, avalonia-windows]
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os == 'windows' && 'windows-latest' || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
-        # scope=windows (hybrid rgate): the Linux shards ran locally, so only the Windows total is checked here.
+        # scope=windows (hybrid rgate): Linux shards ran locally.
         os: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.scope == 'windows' && '["windows"]' || '["linux", "windows"]') }}
     steps:
+      - uses: actions/checkout@v4
+      - name: Test shard coverage recovery
+        shell: bash
+        run: bash .github/scripts/test-avalonia-coverage.sh
       - uses: actions/download-artifact@v4
         with:
           pattern: avalonia-${{ matrix.os }}-shard-*
           path: shards
-      - name: Shard totals must add up to the suite
+      - name: Find missing shard results
+        id: missing
         shell: bash
         run: |
-          set -euo pipefail
-          expected=$(cat shards/*/avalonia-expected.txt | tr -d '\r' | sort -u)
-          [ "$(wc -l <<<"$expected")" -eq 1 ] || { echo "::error::shards disagree on the suite size: $expected"; exit 1; }
-          ran=0; n=0
-          for f in shards/*/avalonia-shard-*.total; do ran=$((ran + $(tr -d '\r' < "$f"))); n=$((n + 1)); done
-          echo "avalonia ${{ matrix.os }} shards ran $ran of $expected tests ($n shard files)"
-          if [ "$ran" -ne "$expected" ]; then
-            echo "::error::Avalonia ${{ matrix.os }} shards ran $ran tests but the suite lists $expected"
-            exit 1
-          fi
+          missing=$(bash .github/scripts/avalonia-coverage.sh missing shards '${{ matrix.os }}')
+          echo "shards=$missing" >> "$GITHUB_OUTPUT"
+          echo "Missing shards: $missing"
+      - uses: actions/setup-dotnet@v4
+        if: steps.missing.outputs.shards != ''
+        with:
+          dotnet-version: 10.0.x
+          cache: true
+          cache-dependency-path: "**/*.csproj"
+      - uses: actions/cache@v4
+        if: steps.missing.outputs.shards != '' && matrix.os == 'linux'
+        with:
+          path: ~/.cache/ccp-test/vosk
+          key: vosk-model-small-en-us-0.15-30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498
+      - name: Install Linux shard dependencies
+        if: steps.missing.outputs.shards != '' && matrix.os == 'linux'
+        run: |
+          bash .github/scripts/fetch-vosk-model.sh
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends libvlc-dev vlc-plugin-base
+      - name: Build the missing shards
+        if: steps.missing.outputs.shards != ''
+        run: dotnet build Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release
+      - name: Run missing shards
+        if: steps.missing.outputs.shards != ''
+        shell: bash
+        env:
+          CCP_REQUIRE_VOSK: ${{ matrix.os == 'linux' && '1' || '0' }}
+        run: bash .github/scripts/avalonia-coverage.sh recover shards '${{ matrix.os }}'
+      - name: Shard totals must add up to the suite
+        shell: bash
+        run: bash .github/scripts/avalonia-coverage.sh check shards '${{ matrix.os }}'
 
   # build-content-packs.ps1 is Windows-only (\\?\ long paths), so its proof runs here.
   # (a) The committed install-relative [InstallDelete] list must regenerate unchanged.
