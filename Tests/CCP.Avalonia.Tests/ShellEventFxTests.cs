@@ -138,7 +138,7 @@ public sealed class ShellEventFxTests
     private static int QuestBursts(MainShellWindow shell) => ((EventBurstLayer)typeof(MainShellWindow)
         .GetField("_questCompletionBurst", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(shell)!).Count;
 
-    private static AmbientFxCanvas Layer(MainShellWindow shell, string field = "_eventBursts")
+    internal static AmbientFxCanvas Layer(MainShellWindow shell, string field = "_eventBursts")
     {
         var bursts = typeof(MainShellWindow).GetField(field, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(shell)!;
         return Assert.IsType<AmbientFxCanvas>(typeof(EventBurstLayer)
@@ -155,7 +155,7 @@ public sealed class ShellEventFxTests
         Assert.Equal(at.Y - 280, Canvas.GetTop(layer), 3);
     }
 
-    private static void WithShell(Action<MainShellWindow, AchievementEngine, QuestService> body) => AvaloniaTestDispatcher.Run(() =>
+    internal static void WithShell(Action<MainShellWindow, AchievementEngine, QuestService> body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()

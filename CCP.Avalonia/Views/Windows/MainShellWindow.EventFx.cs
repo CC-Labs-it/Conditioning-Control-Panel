@@ -4,9 +4,11 @@
 // Programs tab's own layer (ProgramsTabView.CompletionFx QueueProgramBurst), so it is not fired here.
 // EventBurstLayer carries the shared particle/focus gates and native-pixel anchoring.
 // WPF MainWindow.EventFx.cs:249,276. Quest nav fallback already lives in MainShellWindow.Quests.cs.
-// Enhancement purchase/prestige and THE BANK remain separate follow-up work.
+// THE BANK remains separate follow-up work.
 
 using System;
+using System.Linq;
+using ConditioningControlPanel.Avalonia.Helpers;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -20,6 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     {
         private readonly EventBurstLayer _eventBursts = new();
         private bool _eventFxClosed;
+        private BeatLoop? _prestigeSheenBeat;
 
         private void InitializeEventFx()
         {
@@ -31,9 +34,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     CelebrateAchievementNav();
             });
             if (achievements != null) achievements.Unlocked += unlocked;
+            void MotionChanged() { if (!Env.AllowFeedbackParticles) ParkPrestigeSheen(); }
+            Env.MotionGateChanged += MotionChanged;
+            Deactivated += (_, _) => ParkPrestigeSheen();
             Closed += (_, _) =>
             {
                 _eventFxClosed = true; // posted callbacks must not rebuild a detached layer
+                Env.MotionGateChanged -= MotionChanged;
                 if (achievements != null) achievements.Unlocked -= unlocked;
                 StopEventFx();
             };
@@ -50,16 +57,52 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             FireEventBurst(Named<Border>("XPBarTrack"), 110, rightEdge: true);
         }
 
-        private void FireEventBurst(Control? anchor, int count, bool rightEdge = false, Color? color = null)
+        private bool FireEventBurst(Control? anchor, int count, bool rightEdge = false, Color? color = null)
         {
-            if (_eventFxClosed || anchor == null) return;
-            try { _eventBursts.Fire(anchor, count, rightEdge, color); }
-            catch (Exception ex) { Serilog.Log.Debug("Event burst: {Error}", ex.Message); }
+            if (_eventFxClosed || anchor == null) return false;
+            try { return _eventBursts.Fire(anchor, count, rightEdge, color); }
+            catch (Exception ex) { Serilog.Log.Debug("Event burst: {Error}", ex.Message); return false; }
+        }
+
+        // WPF EventFx.cs:428-455. Called before the tab rebuild detaches either anchor.
+        internal void CelebrateEnhancementPurchase(Control node, Control? prestigeRow, long rankBefore)
+        {
+            var fallback = NavAnchorForTab("enhancements");
+            if (!FireEventBurst(node, 100)) FireEventBurst(fallback, 100);
+            var rankNow = 1 + (App.Achievements?.Progress?.LifetimeSkillPointsSpent ?? 0) / 100;
+            if (rankNow <= rankBefore || _eventFxClosed || !Env.AllowFeedbackParticles || !IsVisible || !IsActive || WindowState == WindowState.Minimized) return;
+            if (!FireEventBurst(prestigeRow, 150, color: Env.GlowColor)) FireEventBurst(fallback, 150, color: Env.GlowColor);
+            SweepPrestigeSheen();
+        }
+
+        private void SweepPrestigeSheen()
+        {
+            var host = Named<Grid>("EventFxHost");
+            var band = Named<Border>("PrestigeSheen");
+            var slide = (band?.RenderTransform as TransformGroup)?.Children.OfType<TranslateTransform>().FirstOrDefault();
+            if (host == null || band == null || slide == null || host.Bounds.Width <= 0) return;
+            ParkPrestigeSheen();
+            _prestigeSheenBeat = new BeatLoop(band, seconds =>
+            {
+                if (!Env.AllowFeedbackParticles || !IsActive || !IsVisible || WindowState == WindowState.Minimized) { ParkPrestigeSheen(); return; }
+                double progress = Math.Clamp(seconds / 1.15, 0, 1);
+                SheenAt(host.Bounds.Width, band, slide, progress, 0.16);
+                if (progress >= 1) ParkPrestigeSheen();
+            }) { OnParked = ParkPrestigeSheen };
+            _prestigeSheenBeat.Start();
+        }
+
+        private void ParkPrestigeSheen()
+        {
+            _prestigeSheenBeat?.Stop();
+            _prestigeSheenBeat = null;
+            if (Named<Border>("PrestigeSheen") is { } band) band.Opacity = 0;
         }
 
         // Stricter than WPF: panic stops even transient sparks (MainWindow.xaml.cs:1954).
         internal void StopEventFx()
         {
+            ParkPrestigeSheen();
             _eventBursts.Stop();
             _questCompletionBurst.Stop();
         }

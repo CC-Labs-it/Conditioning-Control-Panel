@@ -36,6 +36,42 @@ public sealed class EnhancementsPurchaseTests
         tab.FindControl<Canvas>("SkillTreeCanvas")!.Children.OfType<Control>()
             .Where(c => c.Tag is string).ToDictionary(c => (string)c.Tag!);
     [Fact]
+    public Task TreeAndSecretCardUseRawModVocabulary() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        AmbientBeatLoopsTests.Setup();
+        var oldProvider = CoreMods.MakeModAwareProvider;
+        var language = LocalizationManager.Instance.CurrentLanguage;
+        var seen = new List<string>();
+        Window? window = null;
+        try
+        {
+            LocalizationManager.Instance.SetLanguage("fr");
+            CoreMods.MakeModAwareProvider = text => { seen.Add(text); return "mod:" + text; };
+            var tab = new EnhancementsTabView();
+            window = new Window { Width = 1400, Height = 700, Content = tab };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var nodeSkill = SkillDefinition.All.Single(x => x.Id == "sparkle_boost_2");
+            var node = Nodes(tab)[nodeSkill.Id];
+            Assert.Contains("mod:" + nodeSkill.Name, node.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text));
+            Assert.Contains(nodeSkill.FlavorText, seen);
+            Assert.Contains(nodeSkill.Description, seen);
+            var secret = SkillDefinition.All.Single(x => x.Id == "night_shift");
+            seen.Clear();
+            var card = tab.SecretSkillCard(secret);
+            Assert.Contains("mod:" + secret.Name, card.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text));
+            Assert.Contains(secret.FlavorText, seen);
+            Assert.Contains(secret.Description, seen);
+        }
+        finally
+        {
+            window?.Close();
+            CoreMods.MakeModAwareProvider = oldProvider;
+            LocalizationManager.Instance.SetLanguage(language);
+        }
+        return Task.CompletedTask;
+    });
+    [Fact]
     public Task PurchaseConfirmationClosesForPanic() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         AmbientBeatLoopsTests.Setup();

@@ -30,7 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// CreateAnimatedSkillTreeBrush. Ownership, purchasability, multiplier and time come from Core
     /// <c>SkillTreeRules</c>, the same rules WPF SkillTreeService delegates to.
     ///
-    /// <para>Purchasing: EnhancementsTabView.Purchase.cs. Purchase FX remain unported.
+    /// <para>Purchasing: EnhancementsTabView.Purchase.cs. Purchase FX live on the shell.
     /// PRO analytics live in EnhancementsTabView.Analytics.cs.</para>
     /// </summary>
     public partial class EnhancementsTabView : UserControl
@@ -125,11 +125,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// and SparkleWallet refresh only the visible tab).</summary>
         private void RepaintIfShown()
         {
+            if (_buying) { _dirty = true; return; }
             if (IsEffectivelyVisible && VisualRoot != null) Repaint();
             else _dirty = true;
         }
 
         private bool _dirty;
+        internal Border? PrestigeRow { get; private set; }
 
         private void OnVisibilityChanged()
         {
@@ -446,6 +448,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             pInfo.Children.Add(pValue);
             prestige.Children.Add(pInfo);
             var prestigeBox = Box(Rgb(52, 44, 28), new Thickness(15, 6, 15, 6), prestige);
+            PrestigeRow = prestigeBox;
             ToolTip.SetTip(prestigeBox, Loc.Get("tooltip_prestige"));
             main.Children.Add(prestigeBox);
 
@@ -620,7 +623,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Background = Rgb(30, 28, 45),
                 Child = new TextBlock
                 {
-                    Text = CoreMods.MakeModAware(skill.LocalizedName),
+                    Text = (CoreMods.MakeModAwareProvider?.Invoke(skill.Name) ?? skill.LocalizedName),
                     Foreground = Rgb(200, 200, 210),
                     FontSize = 9.5,
                     FontWeight = FontWeight.SemiBold,
@@ -678,8 +681,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             wrapper.PointerExited += (_, _) => ApplyNodeHover(wrapper, false);
 
             var tip = new StackPanel { MaxWidth = 280 };
-            tip.Children.Add(new TextBlock { Text = CoreMods.MakeModAware(skill.LocalizedFlavorText), Foreground = AccentLight, FontStyle = FontStyle.Italic, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
-            tip.Children.Add(new TextBlock { Text = CoreMods.MakeModAware(skill.LocalizedDescription), Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap });
+            tip.Children.Add(new TextBlock { Text = (CoreMods.MakeModAwareProvider?.Invoke(skill.FlavorText) ?? skill.LocalizedFlavorText), Foreground = AccentLight, FontStyle = FontStyle.Italic, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
+            tip.Children.Add(new TextBlock { Text = (CoreMods.MakeModAwareProvider?.Invoke(skill.Description) ?? skill.LocalizedDescription), Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap });
             if (!string.IsNullOrEmpty(skill.PrerequisiteId) && !SkillTreeRules.HasSkill(settings, skill.PrerequisiteId))
             {
                 var pre = SkillDefinition.All.FirstOrDefault(s => s.Id == skill.PrerequisiteId);
@@ -794,7 +797,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(stack, 1);
-            var name = Text(CoreMods.MakeModAware(skill.LocalizedName), owned ? Rgb(180, 130, 255) : Rgb(153, 50, 204), 11, bold: true);
+            var name = Text((CoreMods.MakeModAwareProvider?.Invoke(skill.Name) ?? skill.LocalizedName), owned ? Rgb(180, 130, 255) : Rgb(153, 50, 204), 11, bold: true);
             name.TextWrapping = TextWrapping.Wrap;
             stack.Children.Add(name);
             // WPF "💎N ✓ OWNED" / "💎 N".
@@ -816,8 +819,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             else if (canPurchase) card.BoxShadow = new BoxShadows(new BoxShadow { Blur = 10, Color = Color.FromArgb(102, Colors.MediumPurple.R, Colors.MediumPurple.G, Colors.MediumPurple.B) });
 
             var tip = new StackPanel { MaxWidth = 280 };
-            tip.Children.Add(new TextBlock { Text = CoreMods.MakeModAware(skill.LocalizedFlavorText), Foreground = Rgb(200, 150, 255), FontStyle = FontStyle.Italic, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
-            tip.Children.Add(new TextBlock { Text = CoreMods.MakeModAware(skill.LocalizedDescription), Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap });
+            tip.Children.Add(new TextBlock { Text = (CoreMods.MakeModAwareProvider?.Invoke(skill.FlavorText) ?? skill.LocalizedFlavorText), Foreground = Rgb(200, 150, 255), FontStyle = FontStyle.Italic, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
+            tip.Children.Add(new TextBlock { Text = (CoreMods.MakeModAwareProvider?.Invoke(skill.Description) ?? skill.LocalizedDescription), Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap });
             ToolTip.SetTip(card, Tip(tip, Rgb(40, 25, 55), Rgb(153, 50, 204)));
             return card;
         }
