@@ -226,7 +226,7 @@ public sealed class BannerMotionTests
                 beat.IsHitTestVisible = name == beatName;
             }
             w.UpdateLayout();
-            ContentHitTestTests.RenderLiveTree(w);
+            RenderBannerTree(w);
             var link = w.Named<SafeLink>(linkName)!;
             Assert.True(link.Bounds.Width > 2 && link.Bounds.Height > 2);
             var point = link.TranslatePoint(new Point(link.Bounds.Width / 2, 2), w)!.Value;
@@ -234,6 +234,24 @@ public sealed class BannerMotionTests
             Assert.True(hit == link || (hit != null && link.IsVisualAncestorOf(hit)), $"{linkName}: hit {hit}");
         }
     });
+
+    private static void RenderBannerTree(MainShellWindow w)
+    {
+        w.CompleteTabTransition();
+        Dispatcher.UIThread.RunJobs();
+        w.UpdateLayout();
+        var batch = global::Avalonia.Rendering.Composition.ElementComposition.GetElementVisual(w)!
+            .Compositor.RequestCompositionBatchCommitAsync();
+        var deadline = System.Diagnostics.Stopwatch.StartNew();
+        while (!batch.Rendered.IsCompleted)
+        {
+            Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10), "the compositor never rendered the live tree");
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+        }
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        Dispatcher.UIThread.RunJobs();
+    }
 
     [Fact]
     public Task BannerDepthFollowsSectionNavigation() => InShell(w =>
