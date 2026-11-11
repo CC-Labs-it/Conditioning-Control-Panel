@@ -855,7 +855,7 @@ public class AwarenessReviewFixTests : IDisposable
     [Fact]
     public void ThereIsExactlyOneAwarenessReplyParser()
     {
-        var source = SourceRoots.ReadProductFile("Services", "Companion", "Brain", "AwarenessSpeech.cs");
+        var source = SourceRoots.ReadProductFile("Services", "Awareness", "AwarenessSpeech.cs");
 
         Assert.DoesNotContain("\"ALT:\"", source, StringComparison.Ordinal);
         Assert.Contains("AwarenessReactionService.Parse", source, StringComparison.Ordinal);
