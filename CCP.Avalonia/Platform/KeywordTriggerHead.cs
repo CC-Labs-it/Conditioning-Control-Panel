@@ -36,6 +36,14 @@ internal static class KeywordTriggerHead
         else Stop();
     }
 
+    /// <summary>Whether keys can reach the engine: the hook exists only on Windows, Sync never subscribes in a
+    /// CCP_USERDATA_DIR sandbox, and a failed install delivers nothing (ProgramCapabilities keyword gate).</summary>
+    internal static bool KeyboardSourceAvailable() => KeyboardSourceAvailable(OperatingSystem.IsWindows(),
+        Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"), Win32PanicKey.InstallFailed);
+
+    internal static bool KeyboardSourceAvailable(bool windows, string? sandboxDir, bool hookFailed) =>
+        windows && string.IsNullOrEmpty(sandboxDir) && !hookFailed;
+
     // The hook itself stays: on this head the panic key (Win32Input.Start at boot) owns it, the case WPF :426 keeps it for.
     internal static void Stop() { DetachKeyboard(); Engine.Stop(); }
 

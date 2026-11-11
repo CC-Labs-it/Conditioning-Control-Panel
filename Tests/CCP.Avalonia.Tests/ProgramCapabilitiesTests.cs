@@ -32,7 +32,7 @@ public sealed class ProgramCapabilitiesTests
     public void EveryBuiltInProgramIsClassifiedAndOnlyTheFinishableOnesAreEnrollable()
     {
         var oldKeyword = ProgramCapabilities.KeywordInputAvailable;
-        ProgramCapabilities.KeywordInputAvailable = true;   // a head with a key source (Windows hook)
+        ProgramCapabilities.KeywordInputAvailable = () => true;   // a head with a key source (Windows hook)
         try { AssertClassified(); }
         finally { ProgramCapabilities.KeywordInputAvailable = oldKeyword; }
     }
@@ -61,7 +61,7 @@ public sealed class ProgramCapabilitiesTests
             (ProgramCapabilities.KeywordInputAvailable, CoreProgram.TaskAvailableProvider, CoreProgram.HasPremiumProvider);
         try
         {
-            ProgramCapabilities.KeywordInputAvailable = false;
+            ProgramCapabilities.KeywordInputAvailable = () => false;
             CoreProgram.TaskAvailableProvider = ProgramCapabilities.IsAvailable;
             CoreProgram.HasPremiumProvider = () => true;
             using var svc = new ProgramService(Path.Combine(dir, "programs.json"), readOnly: true);
@@ -78,6 +78,30 @@ public sealed class ProgramCapabilitiesTests
                 (oldKeyword, oldTask, oldPremium);
             Directory.Delete(dir, true);
         }
+    }
+
+    /// <summary>The default gate reads the real key source: a sandbox profile (Sync never subscribes there) and a
+    /// failed hook install both refuse keyword tasks, also on Windows.</summary>
+    [Fact]
+    public void KeywordGateFollowsTheSandboxAndTheHookInstall()
+    {
+        var keywordTask = BuiltInPrograms.All().SelectMany(p => p.Chapters).SelectMany(c => c.Days).SelectMany(d => d.Tasks)
+            .First(t => t.Verifier == QuestCategory.KeywordTrigger);
+        Assert.False(KeywordTriggerHead.KeyboardSourceAvailable(true, "/tmp/ccp-sandbox", hookFailed: false));
+        Assert.False(KeywordTriggerHead.KeyboardSourceAvailable(true, null, hookFailed: true));
+        Assert.False(KeywordTriggerHead.KeyboardSourceAvailable(false, null, hookFailed: false));
+        Assert.True(KeywordTriggerHead.KeyboardSourceAvailable(true, null, hookFailed: false));
+
+        var (oldGate, oldFailed) = (ProgramCapabilities.KeywordInputAvailable, Win32PanicKey.InstallFailed);
+        try
+        {
+            ProgramCapabilities.KeywordInputAvailable = KeywordTriggerHead.KeyboardSourceAvailable;
+            Win32PanicKey.InstallFailed = false;
+            // This process runs in a CCP_USERDATA_DIR profile (TestUserDataProfile), so no key source on any OS.
+            Assert.False(string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
+            Assert.False(ProgramCapabilities.IsAvailable(keywordTask));
+        }
+        finally { (ProgramCapabilities.KeywordInputAvailable, Win32PanicKey.InstallFailed) = (oldGate, oldFailed); }
     }
 
     /// <summary>The QuestService call that raises each category.</summary>

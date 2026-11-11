@@ -195,7 +195,7 @@ public sealed class ProgramsRunControlsTests
             {
                 CoreProgram.TaskAvailableProvider = ProgramCapabilities.IsAvailable;
                 ProgramCapabilities.RitualsAvailable = false;
-                ProgramCapabilities.KeywordInputAvailable = false;   // a head with no key source, also on Windows CI
+                ProgramCapabilities.KeywordInputAvailable = () => false;   // a head with no key source, also on Windows CI
                 var svc = AvApp.Programs = new ProgramService(path, readOnly: false);
                 AvApp.Sessions = new SessionRunner(new SessionLogService());
                 shell = new MainShellWindow();

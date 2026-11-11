@@ -41,7 +41,7 @@ public sealed class ProgramsBrowseTests
             try
             {
                 // A head with no key source, also on Windows CI where the hook would make Firmware Install enrollable.
-                ConditioningControlPanel.Avalonia.Platform.ProgramCapabilities.KeywordInputAvailable = false;
+                ConditioningControlPanel.Avalonia.Platform.ProgramCapabilities.KeywordInputAvailable = () => false;
                 LocalizationManager.Instance.SetLanguage("en");
                 var view = new ProgramsTabView { Width = 1200, Height = 900 };
                 host = new Window { Width = 1200, Height = 900, Content = view };
