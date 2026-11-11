@@ -245,6 +245,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             Field.HoldChaos = false;
             Field.FreezeChaos = false;
+            Field.ChaosTimeScale = 1.0;
             _chaosPopped = null;
             _chaosCanChannel = null;
             Field.ChaosDefused = Field.ChaosDetonated = null;

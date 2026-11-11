@@ -122,3 +122,133 @@ public sealed class ChaosThoughtFieldTests
         });
     }
 }
+
+public sealed class ChaosRabbitSlowMotionTests
+{
+    [Fact]
+    public async Task CatchStartsAndExtendsSlowMotionAndRestoresItAtRunEnd()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var meta = ChaosMeta.State; var json = JsonConvert.SerializeObject(meta);
+            try
+            {
+                meta.ActiveLifetimeBoons.Clear();
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 600, WaveCount = 3, DartersEnabled = false });
+                ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+                var state = ChaosRunHost.State!;
+                state.SlowMoBonusSec = 1;
+                ChaosRunHost.SpawnTick();
+                var timer = (global::Avalonia.Threading.DispatcherTimer)typeof(ChaosRunHost)
+                    .GetField("_spawnTimer", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+                double normalInterval = timer.Interval.TotalMilliseconds;
+                BubbleOverlay.PopChaos(BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0)));
+                Assert.Equal(0.12, BubbleOverlay.Field.ChaosTimeScale);
+                Assert.Equal(1.0 / 0.12, EffectPayload.GlobalDurationMult, 6);
+                ChaosRunHost.SpawnTick();
+                Assert.Equal(normalInterval / 0.12, timer.Interval.TotalMilliseconds, 2);
+                for (int i = 0; i < 4; i++) ChaosRunHost.Tick();
+                BubbleOverlay.PopChaos(BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0)));
+                for (int i = 0; i < 27; i++) ChaosRunHost.Tick();
+                Assert.Equal(0.12, BubbleOverlay.Field.ChaosTimeScale);
+                ChaosRunHost.Tick();
+                Assert.Equal(1.0, BubbleOverlay.Field.ChaosTimeScale);
+                Assert.Equal(1.0, EffectPayload.GlobalDurationMult);
+                ChaosRunHost.SpawnTick();
+                Assert.True(timer.Interval.TotalMilliseconds < normalInterval * 1.1);
+                BubbleOverlay.PopChaos(BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0)));
+                ChaosRunHost.ForceShutdown();
+                Assert.Equal(1.0, BubbleOverlay.Field.ChaosTimeScale);
+                Assert.Equal(1.0, EffectPayload.GlobalDurationMult);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                JsonConvert.PopulateObject(json, meta, new JsonSerializerSettings { ObjectCreationHandling = ObjectCreationHandling.Replace });
+            }
+            return Task.CompletedTask;
+        });
+    }
+}
+
+public sealed class ChaosRabbitFreezeOverlapTests
+{
+    [Fact]
+    public async Task ExpiringOnePowerUpKeepsTheOtherAndShutdownClearsBoth()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var meta = ChaosMeta.State; var json = JsonConvert.SerializeObject(meta);
+            try
+            {
+                meta.ActiveLifetimeBoons.Clear();
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 600, WaveCount = 3, DartersEnabled = false });
+                ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+                void Freeze() => BubbleOverlay.PopChaos(BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsFreeze = true }));
+                void Rabbit() => BubbleOverlay.PopChaos(BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0)));
+                void Tick(int count) { for (int i = 0; i < count; i++) ChaosRunHost.Tick(); }
+                Freeze(); Rabbit(); Tick(14);
+                Assert.False(BubbleOverlay.Field.FreezeChaos);
+                Assert.Equal(1.0 / 0.12, EffectPayload.GlobalDurationMult, 6);
+                Assert.Equal(0.12, BubbleOverlay.Field.ChaosTimeScale);
+                Tick(10); Assert.Equal(1.0, EffectPayload.GlobalDurationMult);
+                Rabbit(); Tick(16); Freeze(); Tick(8);
+                Assert.True(BubbleOverlay.Field.FreezeChaos);
+                Assert.Equal(1.0, BubbleOverlay.Field.ChaosTimeScale);
+                Assert.Equal(2.5, EffectPayload.GlobalDurationMult);
+                Tick(6); Assert.Equal(1.0, EffectPayload.GlobalDurationMult);
+                Freeze(); Rabbit(); ChaosRunHost.ForceShutdown();
+                Assert.False(BubbleOverlay.Field.FreezeChaos);
+                Assert.Equal(1.0, BubbleOverlay.Field.ChaosTimeScale);
+                Assert.Equal(1.0, EffectPayload.GlobalDurationMult);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                JsonConvert.PopulateObject(json, meta, new JsonSerializerSettings { ObjectCreationHandling = ObjectCreationHandling.Replace });
+            }
+            return Task.CompletedTask;
+        });
+    }
+}
+
+public sealed class ChaosRabbitChainTests
+{
+    [Fact]
+    public async Task SecondCatchAddsOnlyEightTenthsOfASecond()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var meta = ChaosMeta.State; var json = JsonConvert.SerializeObject(meta);
+            try
+            {
+                meta.ActiveLifetimeBoons.Clear();
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 600, WaveCount = 3, DartersEnabled = false });
+                ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+                void Rabbit() => BubbleOverlay.PopChaos(BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0)));
+                Rabbit();
+                for (int i = 0; i < 4; i++) ChaosRunHost.Tick();
+                Rabbit();
+                for (int i = 0; i < 21; i++) ChaosRunHost.Tick();
+                Assert.Equal(1.0 / 0.12, EffectPayload.GlobalDurationMult, 6);
+                for (int i = 0; i < 3; i++) ChaosRunHost.Tick();
+                Assert.Equal(1.0, EffectPayload.GlobalDurationMult);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                JsonConvert.PopulateObject(json, meta, new JsonSerializerSettings { ObjectCreationHandling = ObjectCreationHandling.Replace });
+            }
+            return Task.CompletedTask;
+        });
+    }
+}

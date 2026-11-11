@@ -252,8 +252,9 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>One logical step. <paramref name="held"/> and the cursor (global DIPs) feed a
         /// running defuse channel; a channel pins the bubble and pauses the fuse (WPF :3796).</summary>
-        public Result Step(bool held = false, double cursorX = 0, double cursorY = 0, DateTime nowUtc = default)
+        public Result Step(bool held = false, double cursorX = 0, double cursorY = 0, DateTime nowUtc = default, double chaosTimeScale = 1.0)
         {
+            double ts = Spec != null ? chaosTimeScale : 1.0;
             if (Popping)
             {
                 // Pop animation - expand and fade; lucky pops linger ~50% longer.
@@ -265,11 +266,11 @@ namespace ConditioningControlPanel.Services
             if (Channeling) return TickChannel(held, cursorX, cursorY, nowUtc);
             if (Spec is { IsDarter: true })
             {
-                _lifeMs -= FuseStepMs;
+                _lifeMs -= FuseStepMs * Math.Max(ts, 0.15);
                 if (_lifeMs <= 0) return Result.Done;
                 if (_telegraphMs > 0) { _telegraphMs -= FuseStepMs; return Result.Alive; }
-                _activeMs += FuseStepMs;
-                X += _vx; Y += _vy;
+                _activeMs += FuseStepMs * Math.Max(ts, 0.15);
+                X += _vx * ts; Y += _vy * ts;
                 if (_bounces < Chaos.ChaosBubbleVariants.DARTER_MAX_BOUNCES)
                 {
                     bool hit = false;
@@ -286,7 +287,7 @@ namespace ConditioningControlPanel.Services
             // WPF :4147-4193: the fuse burns 32 ms a step; fuse-out detonates.
             if (Spec is { IsLive: true } && FuseRemainingMs > 0)
             {
-                FuseRemainingMs -= FuseStepMs;
+                FuseRemainingMs -= FuseStepMs * ts;
                 if (FuseRemainingMs <= 0) return GoOff(null);
             }
             _timeAlive += 0.02;
@@ -298,7 +299,7 @@ namespace ConditioningControlPanel.Services
                 case 2: offset = Math.Cos(_timeAlive * 5.4) * 25; Angle = (Angle - 0.66) % 360; break;
                 case 3: offset = Math.Sin(_timeAlive * 3) * 30 + Math.Cos(_timeAlive * 6) * 15; Angle = (Angle + 0.54) % 360; break;
             }
-            Y -= _speed;
+            Y -= _speed * ts;
             X = _startX + offset;
             if (Y >= _top) return Result.Alive;
             return Spec is { IsLive: true } ? GoOff(null) : Result.Missed;   // WPF :4212: a live that escapes detonates
@@ -327,6 +328,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF SetChaosFrozen: a held Chaos run's live bubbles do not move (a pop burst still plays).</summary>
         public bool HoldChaos;
         public bool FreezeChaos;
+        /// <summary>WPF SetChaosTimeScale: ambient bubbles and pop animations stay at normal speed.</summary>
+        public double ChaosTimeScale = 1.0;
         /// <summary>WPF ChaosMouseHeld + CursorPx: the player's press, in global DIPs, for a defuse channel.</summary>
         public bool Held;
         public double CursorX, CursorY;
@@ -390,7 +393,7 @@ namespace ConditioningControlPanel.Services
                 var b = Bubbles[i];
                 if (HoldChaos && b.Spec != null && !b.Popping) { b.CancelChannel(); continue; }
                 if (FreezeChaos && b.Spec != null && !b.Popping && !b.Channeling) continue;
-                var r = b.Step(Held, CursorX, CursorY, now);
+                var r = b.Step(Held, CursorX, CursorY, now, ChaosTimeScale);
                 if (r == AmbientBubble.Result.Alive) continue;
                 if (r == AmbientBubble.Result.Detonated) { ChaosDetonated?.Invoke(b); continue; }
                 if (r == AmbientBubble.Result.Defused) { ChaosDefused?.Invoke(b); continue; }

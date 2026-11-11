@@ -19,7 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 {
     /// <summary>WPF ChaosDvdOverlay.cs:98-107,204-239: shared host is optional;
     /// Spanker logos always use an input-enabled per-logo window. One frame subscription drives all.
-    /// Rabbit slow-mo and freeze presentation remain incomplete.</summary>
+    /// Rabbit and freeze presentation remain incomplete.</summary>
     internal static class ChaosDvdOverlay
     {
         internal static readonly ChaosDvdFlock Flock = new();
