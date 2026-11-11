@@ -147,6 +147,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         {
             var list = new List<IPossessionEffect>();
             foreach (var e in PossessionRuntime.CreateAll()) list.Add(new DirectedHeadEffect(e));
+            list.Add(new GlitchPortraitEffect());
             return list;
         }
 
@@ -155,7 +156,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         internal static bool HasFullDokiEffects()
         {
             foreach (var e in CreateEffects())
-                if (e.MinIntensity == PossessionIntensity.FullDoki) return true;
+                if (e.Id == "dokidialog") return true;
             return false;
         }
 
