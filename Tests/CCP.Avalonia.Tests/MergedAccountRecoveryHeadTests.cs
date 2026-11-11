@@ -25,8 +25,7 @@ public class MergedAccountRecoveryHeadTests
                 .ConfigureFonts(AppFonts.Register).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var settings = new AppSettings { UnifiedId = "u_tombstone1", PlayerLevel = 7, PlayerXP = 42 };
-        var oldGet = CoreSecrets.RetrieveProvider;
-        var oldSet = CoreSecrets.StoreProvider;
+        using var saved = new MergedRecoveryState();
         string? token = "old";
         CoreSecrets.RetrieveProvider = _ => token;
         CoreSecrets.StoreProvider = (_, value) => token = value;
@@ -43,7 +42,6 @@ public class MergedAccountRecoveryHeadTests
             sync.MarkLoaded(null);
             MergedAccountRecovery.ResetForTest();
             MergedAccountRecovery.SettingsForTest = () => settings;
-            CoreSession.IsSessionRunningProvider = () => true;
             StartupLadder.ResetForTests();
             MergedAccountRecoveryHead.Seed();
             using var response = new HttpResponseMessage(HttpStatusCode.Conflict)
@@ -63,17 +61,53 @@ public class MergedAccountRecoveryHeadTests
         }
         finally
         {
-            MergedAccountRecovery.ResetForTest();
-            MergedAccountRecovery.StopSync = null;
-            MergedAccountRecovery.StampQuests = null;
-            MergedAccountRecovery.Finished = null;
-            V2AuthService.MergedRecovery = null;
-            App.Quests = null;
-            AccountSeed.Sync = null;
-            CoreSecrets.RetrieveProvider = oldGet;
-            CoreSecrets.StoreProvider = oldSet;
             StartupLadder.ResetForTests();
             System.IO.Directory.Delete(dir, true);
         }
     });
+}
+
+/// <summary>Every static and settings value the merged-recovery tests set, put back on Dispose.</summary>
+internal sealed class MergedRecoveryState : IDisposable
+{
+    private static readonly Newtonsoft.Json.JsonSerializerSettings Json = new()
+        { ObjectCreationHandling = Newtonsoft.Json.ObjectCreationHandling.Replace };
+    private readonly AppSettings _settings = CoreSettings.Current;
+    private readonly string _settingsJson = Newtonsoft.Json.JsonConvert.SerializeObject(CoreSettings.Current, Json);
+    private readonly Func<string, string?>? _get = CoreSecrets.RetrieveProvider;
+    private readonly Action<string, string?>? _set = CoreSecrets.StoreProvider;
+    private readonly Func<V2AuthService> _newV2 = AccountSeed.NewV2;
+    private readonly SyncPush? _sync = AccountSeed.Sync;
+    private readonly QuestService? _quests = App.Quests;
+    private readonly Func<ConditioningControlPanel.Avalonia.Views.Dialogs.WelcomeBackSheetContent, Task> _present = WelcomeBackOffer.Present;
+    private readonly Func<bool>? _loggedIn = CoreAccount.IsLoggedInProvider, _premium = CoreAccount.HasPremiumAccessProvider,
+        _lab = CoreAccount.HasLabAccessProvider, _whitelisted = CoreAccount.IsWhitelistedProvider,
+        _entPremium = CoreEntitlement.HasPremiumProvider, _entLab = CoreEntitlement.HasLabProvider,
+        _programPremium = CoreProgram.HasPremiumProvider, _session = CoreSession.IsSessionRunningProvider;
+    private readonly Func<string?>? _name = CoreAccount.DisplayNameProvider;
+    private readonly string? _unifiedUserId = CoreAccount.UnifiedUserId;
+    private readonly Func<Task<bool>>? _revalidate = AuthRecovery.ProviderRevalidate;
+    private readonly Action? _recovered = AuthRecovery.Recovered, _stopSync = MergedAccountRecovery.StopSync;
+    private readonly Action<string>? _stamp = MergedAccountRecovery.StampQuests;
+    private readonly Func<Task<bool>>? _reauth = MergedAccountRecovery.Reauthenticate;
+    private readonly Func<Task>? _reload = MergedAccountRecovery.ReloadProfile;
+    private readonly Action<string, bool>? _finished = MergedAccountRecovery.Finished;
+    private readonly Func<HttpResponseMessage, string?, Task<bool>>? _v2Hook = V2AuthService.MergedRecovery;
+    private readonly Func<HttpResponseMessage, Task>? _aiHook = AiService.MergedAccountHook;
+
+    public void Dispose()
+    {
+        MergedAccountRecovery.ResetForTest();
+        (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, AccountSeed.NewV2, AccountSeed.Sync) = (_get, _set, _newV2, _sync);
+        (App.Quests, WelcomeBackOffer.Present) = (_quests, _present);
+        (CoreAccount.IsLoggedInProvider, CoreAccount.HasPremiumAccessProvider, CoreAccount.HasLabAccessProvider) = (_loggedIn, _premium, _lab);
+        (CoreAccount.IsWhitelistedProvider, CoreAccount.DisplayNameProvider, CoreAccount.UnifiedUserId) = (_whitelisted, _name, _unifiedUserId);
+        (CoreEntitlement.HasPremiumProvider, CoreEntitlement.HasLabProvider) = (_entPremium, _entLab);
+        (CoreProgram.HasPremiumProvider, CoreSession.IsSessionRunningProvider) = (_programPremium, _session);
+        (AuthRecovery.ProviderRevalidate, AuthRecovery.Recovered) = (_revalidate, _recovered);
+        (MergedAccountRecovery.StopSync, MergedAccountRecovery.StampQuests, MergedAccountRecovery.Reauthenticate) = (_stopSync, _stamp, _reauth);
+        (MergedAccountRecovery.ReloadProfile, MergedAccountRecovery.Finished) = (_reload, _finished);
+        (V2AuthService.MergedRecovery, AiService.MergedAccountHook) = (_v2Hook, _aiHook);
+        Newtonsoft.Json.JsonConvert.PopulateObject(_settingsJson, _settings, Json);
+    }
 }

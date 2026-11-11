@@ -68,6 +68,7 @@ public class MergedAccountRecoveryReviewTests
     public Task ProviderExchangeReloadsOrOffersSignIn(string? provider) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
+        using var saved = new MergedRecoveryState();
         var secrets = new Dictionary<string, string?>();
         var tokenData = JsonConvert.SerializeObject(new PatreonTokenData { AccessToken = "provider", ExpiresAt = DateTime.UtcNow.AddDays(1) });
         secrets["patreon_auth"] = secrets["substar_auth"] = tokenData;
@@ -114,7 +115,6 @@ public class MergedAccountRecoveryReviewTests
         }
         finally
         {
-            MergedAccountRecovery.ResetForTest();
             StartupLadder.ResetForTests();
             InvitePanel.CancelExpiry();
         }
@@ -124,6 +124,7 @@ public class MergedAccountRecoveryReviewTests
     public Task AiMergedResponseTriggersRecovery() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
+        using var saved = new MergedRecoveryState();
         var secrets = new Dictionary<string, string?>();
         CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key);
         CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
@@ -151,7 +152,6 @@ public class MergedAccountRecoveryReviewTests
         }
         finally
         {
-            MergedAccountRecovery.ResetForTest();
             StartupLadder.ResetForTests();
             InvitePanel.CancelExpiry();
         }

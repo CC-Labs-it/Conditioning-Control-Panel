@@ -29,7 +29,9 @@ internal static class MergedAccountRecoveryHead
         MergedAccountRecovery.Finished = (canonical, reauthed) => Dispatcher.UIThread.Post(() =>
         {
             var shell = MainShellWindow.Current;
+            // WPF MainWindow.Login.cs:51-58; the other Update* calls are still stubs on this head.
             shell?.UpdateQuickLoginUI();
+            shell?.UpdateBannerWelcomeMessage();
             if (reauthed)
             {
                 InvitePanel.ArmExpiry();
@@ -74,14 +76,14 @@ internal static class MergedAccountRecoveryHead
             var token = getToken();
             if (string.IsNullOrEmpty(token)) return false;
             var result = await authenticate(AccountSeed.NewV2(), token);
-            if (!result.Success || result.NeedsRegistration || result.User == null ||
-                string.IsNullOrEmpty(result.User.UnifiedId) || string.IsNullOrEmpty(result.AuthToken)) return false;
+            // WPF App.xaml.cs:4578-4581 adopts the user even without a token; only a token ends the loop.
+            if (!result.Success || result.User == null) return false;
             var now = DateTime.UtcNow;
             ProfileAdopt.ApplyUserData(CoreSettings.Current, result.User, result.AuthToken, now);
             InviteRules.ApplyGrant(CoreSettings.Current, InviteRules.ParseUtc(result.User.InviteGrantUntilRaw), now);
             CoreAccount.UnifiedUserId = result.User.UnifiedId;
             CoreSettings.Save();
-            return true;
+            return !string.IsNullOrEmpty(result.User.UnifiedId) && !string.IsNullOrEmpty(result.AuthToken);
         }
         catch (Exception ex)
         {

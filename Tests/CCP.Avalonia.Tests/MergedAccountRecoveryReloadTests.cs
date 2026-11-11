@@ -56,6 +56,7 @@ public class MergedAccountRecoveryReloadTests
         WelcomeBackOffer.ResetForTests();
         InvitePanel.CancelExpiry();
         MergedAccountRecovery.ResetForTest();
+        using var saved = new MergedRecoveryState();
         var directory = Directory.CreateTempSubdirectory("ccp-merge-reload-");
         var secrets = new Dictionary<string, string?>
         {
@@ -117,9 +118,7 @@ public class MergedAccountRecoveryReloadTests
         finally
         {
             sync.StopHeartbeat();
-            AccountSeed.Sync = null;
             WelcomeBackOffer.ResetForTests();
-            MergedAccountRecovery.ResetForTest();
             StartupLadder.ResetForTests();
             InvitePanel.CancelExpiry();
             directory.Delete(true);
