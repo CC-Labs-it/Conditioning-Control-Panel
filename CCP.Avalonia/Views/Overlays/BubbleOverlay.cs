@@ -365,7 +365,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (b.Popping || b.Spec == null || Field.HoldChaos) return;   // held: the click is swallowed
             // WPF BubbleService.cs:4645-4669: instant pops preserve touch-only and escort immunity.
             if (b.Spec.IsTease || b.Spec.IsBrittle) return;
-            if (b.Spec.IsChaperoneLive && b.Escort is { Popping: false } escort && Field.Bubbles.Contains(escort)) return;
+            if (Field.IsChaperoneShielded(b)) return;
             if (b.IsLiveThreat)
             {
                 if (!b.Snap()) return;
@@ -406,7 +406,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (!rect.Intersects(new Rect(b.X, b.Y, b.Size, b.Size))) continue;
                 if (b.IsLiveThreat)
                 {
-                    if (b.Snap()) { Field.ChaosDefused?.Invoke(b); RequestFrame(); }
+                    if (!Field.IsChaperoneShielded(b) && b.Snap()) { Field.ChaosDefused?.Invoke(b); RequestFrame(); }
                 }
                 else PopChaos(b);
             }

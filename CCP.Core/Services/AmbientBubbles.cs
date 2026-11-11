@@ -354,10 +354,14 @@ namespace ConditioningControlPanel.Services
         /// <summary>A live chaos bubble was snapped (held to the end, or swept).</summary>
         public Action<AmbientBubble>? ChaosDefused;
 
+        /// <summary>WPF BubbleService.cs:2708: an active escort shields its live partner.</summary>
+        public bool IsChaperoneShielded(AmbientBubble b) =>
+            b.Spec?.IsChaperoneLive == true && b.Escort is { Popping: false } escort && Bubbles.Contains(escort);
+
         /// <summary>A press on a live bubble (WPF OnPlayerPress): starts its channel, or sets it off.</summary>
         public void PressLive(AmbientBubble b, bool canChannel, double cursorX, double cursorY)
         {
-            if (HoldChaos) return;   // manual pause swallows every press
+            if (HoldChaos || IsChaperoneShielded(b)) return;   // pause and escort swallow the press
             Held = true; CursorX = cursorX; CursorY = cursorY;
             if (b.Press(canChannel, Clock()) == AmbientBubble.Result.Detonated) ChaosDetonated?.Invoke(b);
         }
@@ -366,7 +370,7 @@ namespace ConditioningControlPanel.Services
         public void DefuseAllLive()
         {
             foreach (var b in Bubbles.ToArray())
-                if (b.Snap()) ChaosDefused?.Invoke(b);
+                if (!IsChaperoneShielded(b) && b.Snap()) ChaosDefused?.Invoke(b);
         }
 
         public bool CanSpawn(AppSettings s) => Bubbles.Count < Cap(s);
