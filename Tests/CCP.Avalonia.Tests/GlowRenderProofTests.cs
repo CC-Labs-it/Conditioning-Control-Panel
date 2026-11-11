@@ -49,6 +49,8 @@ public sealed class GlowRenderProofTests
     private static Bitmap Frame(Window w, string name)
     {
         Dispatcher.UIThread.RunJobs();
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        Dispatcher.UIThread.RunJobs();
         var frame = w.CaptureRenderedFrame()!;
         var dir = Environment.GetEnvironmentVariable("CCP_GLOW_PROOF_DIR");
         if (!string.IsNullOrEmpty(dir)) { System.IO.Directory.CreateDirectory(dir); frame.Save(System.IO.Path.Combine(dir, name + ".png")); }
@@ -138,8 +140,12 @@ public sealed class GlowRenderProofTests
         return x1 < 0 ? default : new PixelRect(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
     }
 
-    [Fact]
-    public Task PadlockGlowIsTheGlyphsBakedShadow() => AvaloniaTestDispatcher.RunAsync(() =>
+    [Theory]
+    [InlineData(0, 1.0)]
+    [InlineData(4, 1.0)]
+    [InlineData(0, 1.25)]
+    [InlineData(4, 1.25)]
+    public Task PadlockGlowIsTheGlyphsBakedShadow(int sampleShift, double renderScaling) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         EnsureApp();
         var s = CoreSettings.Current;
@@ -157,6 +163,7 @@ public sealed class GlowRenderProofTests
             CoreEntitlement.HasLabProvider = null;
             CoreEntitlement.IsFreeTodayProvider = null;
             w = new MainShellWindow { Width = 1400, Height = 900 };
+            if (renderScaling != 1.0) w.SetRenderScaling(renderScaling);
             w.Show();
             Dispatcher.UIThread.RunJobs();
             w.ShowTab("exclusives");
@@ -177,13 +184,26 @@ public sealed class GlowRenderProofTests
             Assert.True(halo.X < plain.X - 2 && halo.Y < plain.Y - 2 && halo.Right > plain.Right + 2 && halo.Bottom > plain.Bottom + 2,
                 $"no halo around the glyph: ink {plain}, with glow {halo}");
 
-            // On screen: 2 DIP left of the glyph's ink, mid-height, the halo tints the frame.
+            // Stop the clocks so they cannot overwrite opacity or move the background between frames.
+            view.FindControl<AmbientFxCanvas>("ExclusivesAmbientFx")!.Pause();
+            Assert.Single(ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Running,
+                loop => ReferenceEquals(loop.Owner, view)).Stop();
             glow.Opacity = 1;
-            var p = lockGlyph.TranslatePoint(new Point(plain.X - pad - 2, plain.Y - pad + plain.Height / 2.0), w)!.Value;
-            var lit = Pixel(Frame(w, "padlock-glow-on"), p);
-            glow.IsVisible = false;
-            var dark = Pixel(Frame(w, "padlock-glow-off"), p);
-            Assert.True(Diff(lit, dark) > 4, $"no halo beside the padlock: {lit:X6} vs {dark:X6}");
+            using var lit = Frame(w, "padlock-glow-on");
+            // Opacity keeps the image in layout, so the comparison cannot move the glyph.
+            glow.Opacity = 0;
+            using var dark = Frame(w, "padlock-glow-off");
+            // The ink edge can land on different device pixels. Require a halo in at least two
+            // columns near its left edge, checking three heights in each column.
+            var bands = new int[5];
+            for (int col = 0; col < bands.Length; col++)
+                foreach (var dy in new[] { -4, 0, 4 })
+                {
+                    var p = lockGlyph.TranslatePoint(new Point(plain.X - pad - 2 + sampleShift - 2 * col,
+                        plain.Y - pad + plain.Height / 2.0 + dy), w)!.Value;
+                    bands[col] = Math.Max(bands[col], Diff(Pixel(lit, p), Pixel(dark, p)));
+                }
+            Assert.True(bands.Count(d => d > 4) >= 2, $"no halo beside the padlock: {string.Join(", ", bands)}");
         }
         finally
         {
