@@ -121,8 +121,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var confirmed = await dialog.ShowDialogSafe<bool?>(this) == true;
             if (!confirmed || !ReferenceEquals(runner.CurrentSession, session)) return;
             Log.Information("Session stop confirmed by the user");
-            runner.Stop(completed: false);
-            App.Achievements?.TrackPanicPressed(); // WPF SessionEngine.cs:477-478, every confirmed early stop
+            runner.Stop(completed: false);   // tracks Relapse in Core (WPF SessionEngine.cs:477-478)
             Platform.AccountSeed.Sync?.Nudge("session end");   // explicit end: the runner no longer counts as running
         }
 

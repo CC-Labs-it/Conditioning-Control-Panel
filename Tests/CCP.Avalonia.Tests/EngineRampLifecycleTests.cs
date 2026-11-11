@@ -68,6 +68,7 @@ public sealed class EngineRampLifecycleTests
                 Assert.Equal(volume, audio.FindControl<Slider>("SliderMaster")!.Value);
                 Assert.Equal($"{volume}%", audio.FindControl<TextBlock>("TxtMaster")!.Text);
                 Assert.True(layers.IsPlaying);
+                Assert.True(layers.VolumeUpdates.Wait(TimeSpan.FromSeconds(5)));   // gain writes are queued off the UI thread
                 Assert.Equal((int)Math.Round(Math.Cbrt(volume / 100f) * 100), player.Volume);
             }
             var journal = Path.Combine(CorePaths.UserData, SessionSettingsJournal.RampFileName);
@@ -188,7 +189,10 @@ public sealed class EngineRampLifecycleTests
             var field = typeof(ConditioningControlPanel.Avalonia.App).GetField("<Achievements>k__BackingField",
                 System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
             var engine = new AchievementEngine(new AchievementStore(Path.Combine(CorePaths.UserData, "relapse-test.json")));
+            var oldEngine = field.GetValue(null);
             field.SetValue(null, engine);
+            var oldTrack = CoreProgression.TrackPanicPressedProvider;
+            CoreProgression.TrackPanicPressedProvider = () => engine.TrackPanicPressed();   // App.StartDesktop wiring
             var shell = new MainShellWindow(); shell.Show();
             CoreEngine.StoppedHook = shell.OnEngineStopped;
             try
@@ -218,7 +222,7 @@ public sealed class EngineRampLifecycleTests
                 shell.StartEngineFromUser(); Dispatcher.UIThread.RunJobs();
                 Assert.True(engine.Progress.IsUnlocked("relapse"));
             }
-            finally { MainShellWindow.StopEngine(); shell.Close(); }
+            finally { MainShellWindow.StopEngine(); shell.Close(); CoreProgression.TrackPanicPressedProvider = oldTrack; field.SetValue(null, oldEngine); }
         });
     }
 }
