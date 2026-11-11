@@ -526,6 +526,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             var game = Games.GameWindow.Launch(id);
             if (game == null) return;
+            TrackLaunchedGame(game, id);
+        }
+
+        private void TrackLaunchedGame(Games.GameWindow game, string id)
+        {
             AfterExitBeat(() =>
             {
                 if (!game.IsVisible) return;

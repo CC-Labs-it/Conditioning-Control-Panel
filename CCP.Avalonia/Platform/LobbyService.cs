@@ -3,13 +3,16 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.GoonGame;
 using ConditioningControlPanel.Services.Lobby;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using ConditioningControlPanel.Services;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
@@ -109,6 +112,36 @@ internal sealed class LobbyService : IDisposable
         _timer.Interval = LobbyPollPlan.Next(_timer.Interval, ok);
         Snapshot = snapshot;
         try { Changed?.Invoke(snapshot); } catch (Exception ex) { Log.Debug("Lobby.Changed: {E}", ex.Message); }
+    }
+
+    // WPF AvailableSubjectsService.cs:196-249: one claim, refresh after a win or an ordinary conflict.
+    internal async Task<string?> ClaimRemoteAsync(string subjectId)
+    {
+        var identity = Identity();
+        var baseUrl = BaseUrl();
+        if (_disposed || !SignedIn() || identity == null || baseUrl == null || string.IsNullOrWhiteSpace(subjectId)) return null;
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, baseUrl + "/v2/directory/claim")
+            {
+                Content = new StringContent(JsonConvert.SerializeObject(new { unified_id = subjectId }), Encoding.UTF8, "application/json")
+            };
+            request.Headers.Add("X-Auth-Token", identity.Value.Token);
+            request.Headers.Add("X-Caller-Unified-Id", identity.Value.UnifiedId);
+            using var response = await DirectoryHttp.SendAsync(request);
+            if ((int)response.StatusCode == 409)
+            {
+                if (!await MergedAccountRecovery.TryHandleAsync(response)) _ = RefreshAsync();
+                return null;
+            }
+            if (!response.IsSuccessStatusCode) return null;
+            var body = JObject.Parse(await response.Content.ReadAsStringAsync());
+            var result = body["session_url"]?.ToString();
+            _ = RefreshAsync();
+            return Uri.TryCreate(result, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp)
+                ? result : null;
+        }
+        catch (Exception) { Log.Debug("Lobby claim failed"); return null; }
     }
 
     private static async Task<T> Safe<T>(Func<Task<T>> fetch, T fallback)

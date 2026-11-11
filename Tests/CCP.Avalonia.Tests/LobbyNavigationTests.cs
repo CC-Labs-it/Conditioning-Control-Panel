@@ -74,7 +74,7 @@ public sealed class LobbyNavigationTests
             Assert.True(popup.IsOpen);
             Assert.Equal(2, shell.Lobby.Watchers);
             Assert.Equal(7, rows.Children.Count); // six rows and Open Lobby
-            Assert.All(rows.Children.OfType<Grid>(), row => Assert.False(row.Children.OfType<Button>().Single().IsEnabled));
+            Assert.All(rows.Children.OfType<Border>(), row => Assert.True(Assert.IsType<Grid>(row.Child).Children.OfType<Button>().Single().IsEnabled));
             Assert.Equal(7, NavBadges.Seen(NavSections.Social));
             Assert.Equal(0.60, chip.Opacity, 2);
             popup.IsOpen = false;
@@ -275,6 +275,70 @@ public sealed class LobbyNavigationTests
         Assert.False(lobby.Snapshot.SignedIn);
         Assert.True(lobby.Snapshot.IsEmpty);
     });
+
+    [Fact]
+    public void LauncherRemoteJoinClaimsSelectedSubjectAndOpensOnlySuccessfulUrl() => Run(() =>
+    {
+        var shell = new MainShellWindow();
+        Seed(shell.Lobby);
+        var lobby = shell.Lobby;
+        var handler = new ClaimHandler();
+        using var http = new HttpClient(handler);
+        lobby.DirectoryHttp = http;
+        lobby.Identity = () => ("caller", "token");
+        lobby.FetchChess = () => Task.FromResult(PbpLobbyReply.Empty);
+        lobby.FetchDirectory = _ => Task.FromResult<IReadOnlyList<RemoteSeat>>(new[] { new RemoteSeat("subject-key", "Subject", 1, "light", Array.Empty<string>(), false) });
+        string? opened = null;
+        var oldShell = ExternalOpener.Shell;
+        ExternalOpener.Shell = url => { opened = url; return true; };
+        LauncherWindow? launcher = null;
+        try
+        {
+            launcher = LauncherWindow.OpenFor(shell);
+            var chip = launcher.FindControl<Button>("LobbyChip")!;
+            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var rows = launcher.FindControl<StackPanel>("LobbyDropRows")!;
+            var grid = Assert.IsType<Grid>(Assert.IsType<Border>(rows.Children[0]).Child);
+            grid.Children.OfType<Button>().Single().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal("subject-key", handler.Subject);
+            Assert.Equal("http://localhost/session#pin", opened);
+            Assert.True(launcher.IsVisible);
+            opened = null;
+            handler.Status = HttpStatusCode.Conflict;
+            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            grid = Assert.IsType<Grid>(Assert.IsType<Border>(rows.Children[0]).Child);
+            grid.Children.OfType<Button>().Single().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Null(opened);
+            lobby.FetchGoon = () => Task.FromResult(new OpenTablesReply(true, true,
+                new[] { new OpenTable("ABCD", "Goon host", 1, null, false, null, false, 0, false, 0) }, null));
+            lobby.RefreshAsync().GetAwaiter().GetResult();
+            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Contains(rows.Children.OfType<Border>(), card => !Assert.IsType<Grid>(card.Child).Children.OfType<Button>().Single().IsEnabled);
+            launcher.FindControl<Popup>("LobbyDrop")!.IsOpen = false;
+            lobby.SignedIn = () => false;
+            Assert.Null(lobby.ClaimRemoteAsync("subject-key").GetAwaiter().GetResult());
+            Assert.Equal(2, handler.Calls);
+        }
+        finally { ExternalOpener.Shell = oldShell; launcher?.Close(); shell.Close(); NavBadges.ResetForTests(); }
+    });
+
+    private sealed class ClaimHandler : HttpMessageHandler
+    {
+        internal int Calls;
+        internal string? Subject;
+        internal HttpStatusCode Status = HttpStatusCode.OK;
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("/v2/directory/claim", request.RequestUri!.AbsolutePath);
+            Assert.Equal("caller", request.Headers.GetValues("X-Caller-Unified-Id").Single());
+            Assert.Equal("token", request.Headers.GetValues("X-Auth-Token").Single());
+            Subject = (string?)Newtonsoft.Json.Linq.JObject.Parse(await request.Content!.ReadAsStringAsync(cancellationToken))["unified_id"];
+            Calls++;
+            return new HttpResponseMessage(Status) { Content = new StringContent(Status == HttpStatusCode.OK
+                ? "{\"session_url\":\"http://localhost/session#pin\"}" : "{}") };
+        }
+    }
 
     [Fact]
     public void DirectoryFetchUsesAccountHeadersAndPaintsRemoteEntries() => Run(() =>
