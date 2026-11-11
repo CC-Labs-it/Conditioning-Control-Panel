@@ -114,6 +114,53 @@ public sealed partial class GameWindowTests
         finally { w.Close(); Directory.Delete(root, true); }
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Breakout_PanicLadder_ClosesOnSecondPressOrResumes(bool resume) => Run((shell, launcher) =>
+    {
+        var s = CoreSettings.Current;
+        s.PanicKey = "F8"; s.PanicKeyEnabled = true; s.PanicOverridesAll = false;
+        launcher.Hide();
+        var w = GameWindow.Launch("breakoutdemo")!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        var now = DateTime.Now;
+        shell.HandlePanicKeyPress(now);
+        Assert.True(w.IsVisible);
+        var frame = Assert.Single(sent, x => (string?)x["type"] == "suspend");
+        Assert.True((bool)frame["on"]!);
+        Assert.Equal("panic", (string?)frame["reason"]);
+        Assert.Equal(0, shell.PanicPressCountForTest);
+        if (resume)
+        {
+            w.ResumeBreakoutAfterPanic(now.AddSeconds(2));
+            Assert.Single(sent);
+            w.ResumeBreakoutAfterPanic(now.AddSeconds(3));
+            Assert.False((bool)sent.Last()["on"]!);
+            Assert.Equal("panic", (string?)sent.Last()["reason"]);
+            Assert.True(w.IsVisible);
+        }
+        else
+        {
+            shell.HandlePanicKeyPress(now.AddSeconds(1));
+            Assert.False(w.IsVisible);
+            Assert.Equal(0, shell.PanicPressCountForTest);
+        }
+    });
+
+    [Fact]
+    public void Breakout_OverridePanicClosesImmediately() => Run((shell, launcher) =>
+    {
+        var s = CoreSettings.Current;
+        s.PanicKey = "F8"; s.PanicKeyEnabled = true; s.PanicOverridesAll = true;
+        launcher.Hide();
+        var w = GameWindow.Launch("breakoutdemo")!;
+        shell.HandlePanicKeyPress(DateTime.Now);
+        Assert.False(w.IsVisible);
+        Assert.Equal(0, shell.PanicPressCountForTest);
+    });
+
     [Fact]
     public void Play_OpensTheGameHost_AndPanicClosesIt() => Run((shell, launcher) =>
     {
