@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
@@ -33,6 +34,67 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private Windows.QuestCompletePopup? _questCompletePopup;
         private double _weeklyFraction;
         private IDisposable? _bannerTimer;
+        private QuestCardDoor[] _dailyDoors = null!;
+        private QuestCardDoor _weeklyDoor = null!;
+
+        // WPF DailyQuestCard.xaml.cs:99-121 and QuestsTabView.xaml.cs:35-70.
+        private sealed class QuestCardDoor
+        {
+            private readonly Control _card;
+            private readonly Action<QuestCategory> _open;
+            private QuestCategory? _category;
+            private IPointer? _armed;
+
+            internal QuestCardDoor(Control card, Action<QuestCategory> open)
+            {
+                _card = card;
+                _open = open;
+                card.PointerPressed += Press;
+                card.PointerReleased += Release;
+                card.PointerCaptureLost += (_, _) => _armed = null;
+            }
+
+            internal void Set(QuestCategory? category)
+            {
+                if (_category != category) _armed = null;
+                _category = category;
+                _card.Cursor = category == null ? null : new Cursor(StandardCursorType.Hand);
+            }
+
+            private void Press(object? sender, PointerPressedEventArgs e)
+            {
+                _armed = _category != null && e.GetCurrentPoint(_card).Properties.IsLeftButtonPressed ? e.Pointer : null;
+                if (_armed != null) e.Pointer.Capture(_card);
+            }
+
+            private void Release(object? sender, PointerReleasedEventArgs e)
+            {
+                var armed = _armed == e.Pointer;
+                _armed = null;
+                var inside = new Rect(_card.Bounds.Size).Contains(e.GetPosition(_card));
+                if (armed) e.Pointer.Capture(null);
+                if (!armed || e.InitialPressMouseButton != MouseButton.Left || !inside || _category is not { } category) return;
+                e.Handled = true;
+                _open(category);
+            }
+        }
+
+        private void InitQuestDoors()
+        {
+            _dailyDoors = _dailyCards.Select(card => new QuestCardDoor(card, OpenQuestDestination)).ToArray();
+            _weeklyDoor = new QuestCardDoor(WeeklyQuestCard, OpenQuestDestination);
+        }
+
+        private void OpenQuestDestination(QuestCategory category)
+        {
+            var destination = QuestDestinations.For(category);
+            if (destination == null || TopLevel.GetTopLevel(this) is not Windows.MainShellWindow shell) return;
+            Windows.SettingsPaletteWindow.Navigate(shell, destination.ToPaletteEntry(category));
+        }
+
+        private static QuestCategory? DoorCategory(ActiveQuest? quest, QuestDefinition? definition) =>
+            quest != null && !quest.IsCompleted && definition != null && QuestDestinations.For(definition.Category) != null
+                ? definition.Category : null;
 
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
@@ -182,6 +244,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 var quest = i < board.Count ? board[i].Quest : null;
                 var def = i < board.Count ? board[i].Definition : null;
+                _dailyDoors[i].Set(DoorCategory(quest, def));
                 if (quest == null || def == null)
                     _dailyCards[i].ShowEmpty(i, Loc.Get("quest_card_empty_title"), Loc.Get("quest_card_empty_body"));
                 else
@@ -196,6 +259,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var weeklyDef = quests.GetCurrentWeeklyDefinition();
             var weekly = quests.Progress.WeeklyQuest;
             var rerollText = TxtWeeklyReroll;
+            _weeklyDoor.Set(DoorCategory(weekly, weeklyDef));
             if (weeklyDef != null && weekly != null)
             {
                 ImgWeeklyQuest.Source = GetQuestArt(weeklyDef);
