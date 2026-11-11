@@ -7,11 +7,11 @@
 // while the key is down (a repeat by LeashHoldToCut.RepeatGap), and each tick ends the hold unless the key
 // is physically down (XQueryKeymap), so a lost key-up never asks. Windows has real repeats and no clock.
 // Like WPF, it works with the panic key switched off and under Lockdown (panic always works on a leash).
-// The portal supplies Activated/Deactivated instead of physical X11 key state. Its existing effects-only
-// binding policy stays intact; a hold that started while bound keeps the session until release. A portal
+// The portal supplies Activated/Deactivated instead of physical X11 key state. Its effects-only
+// binding policy only extends an already-live hold until release (decision C), not the whole leash. A portal
 // hold skips the X11 key check only once that compositor has proven it sends Deactivated; until then a
 // portal hold needs the X11 key proven down on every tick: up OR unknown (no X11 listener) ends it, so a
-// portal that never reports release never asks. Only a live portal hold keeps the grab (KeepPortalBound).
+// portal that never reports release never asks. A stale IsHeld flag never keeps the grab (KeepPortalBound).
 using System;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;

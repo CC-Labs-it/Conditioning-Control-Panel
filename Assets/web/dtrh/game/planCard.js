@@ -1,9 +1,9 @@
 /* ============================================================================
  * planCard.js - the run summary's plan row (conversion lane G1, brief C10).
  *
- * "Open today. Prime keeps it open." under the payout, only when the host says
+ * "Open today. Basic keeps it open." under the payout, only when the host says
  * this run came from a Daily Gift (`payout-result` carries `daily_gift: true`,
- * DtrhHostService adds it with `plan: 'prime'`). A host that never sends the
+ * DtrhHostService adds it with `plan: 'basic'`). A host that never sends the
  * field never shows the row.
  *
  * DtRH is a trance game, so the row is the calmest thing on the card: it waits
@@ -12,7 +12,7 @@
  * sits under "fall again / wake up", never in front of them.
  *
  * The price shows only when the init payload carried C1 `plans`. The count
- * (C5) goes to the host as a `funnel` frame, or as a beacon on an https page,
+ * (C5) goes to the host as a `funnel` frame (either carrier), or as a beacon on an https page,
  * or nowhere. No DOM at import.
  * ==========================================================================*/
 
@@ -21,7 +21,7 @@ export const PLAN_FALLBACK = Object.freeze({
   prime: Object.freeze({ name: 'Prime', url: 'https://www.patreon.com/checkout/CodeBambi?rid=27681505' }),
 });
 export const FUNNEL_URL = 'https://codebambi-proxy.vercel.app/v2/public/funnel';
-export const DAILY_GIFT_LINE = 'Open today. Prime keeps it open.';
+export const DAILY_GIFT_LINE = 'Open today. Basic keeps it open.';
 export const PLAN_FEATURE = 'dtrh';
 /** How long after the payout lands the row starts to fade in: the payout's own count is ~1.2 s. */
 export const PLAN_ROW_DELAY_MS = 1600;
@@ -52,7 +52,7 @@ export function planOf(plans, key) {
 export function planRowFor(payout) {
   if (!payout || typeof payout !== 'object') return null;
   if (payout.daily_gift !== true || payout.dryRun) return null;
-  return { key: payout.plan === 'basic' ? 'basic' : 'prime', line: DAILY_GIFT_LINE };
+  return { key: 'basic', line: DAILY_GIFT_LINE };
 }
 
 export function funnelLine(event, a = '', b = '') {
@@ -67,10 +67,13 @@ export function postFunnel(event, a = '', b = '', env = globalThis, plan = '') {
   if (!line) return 'none';
   try {
     const wv = env && env.chrome && env.chrome.webview;
-    if (wv && typeof wv.postMessage === 'function') {
+    // WPF's WebView2, else the Avalonia head's WebKitGTK string carrier (shared/carrier.js shape).
+    const post = wv && typeof wv.postMessage === 'function' ? (m) => wv.postMessage(m)
+      : env && typeof env.invokeCSharpAction === 'function' ? (m) => env.invokeCSharpAction(JSON.stringify(m)) : null;
+    if (post) {
       const [, , ca, cb] = line.split('|');
       // With a plan named, the HOST opens that plan's checkout in the browser (its own links, its own throttle).
-      wv.postMessage(plan ? { type: 'funnel', event, a: ca, b: cb, plan } : { type: 'funnel', event, a: ca, b: cb });
+      post(plan ? { type: 'funnel', event, a: ca, b: cb, plan } : { type: 'funnel', event, a: ca, b: cb });
       return 'host';
     }
     const nav = env && env.navigator, loc = env && env.location;

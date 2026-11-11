@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -7,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Ellipse = Avalonia.Controls.Shapes.Ellipse;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -191,6 +193,9 @@ public sealed class RemoteDirectoryTabTests
     public Task Title_bar_pill_is_private_then_listed_then_claimed_and_hides_when_the_session_ends() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         EnsureAvalonia();
+        var loc = LocalizationManager.Instance;
+        var beforeLanguage = loc.CurrentLanguage;
+        loc.SetLanguage("en");
         var (oldRelay, oldProvider) = (RemoteControlTabView.Relay, CoreSettings.ServiceProvider);
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
@@ -215,22 +220,24 @@ public sealed class RemoteDirectoryTabTests
                 Dispatcher.UIThread.RunJobs();
             }
 
-            // A session that is not listed: "Private only" even with a controller on.
+            // A session that is not listed stays private even with a controller on.
             await relay.StartAsync("light");
             await Poll(true);
             Assert.True(pill.IsVisible);
-            Assert.Equal("Private only", text.Text);
+            Assert.Equal("Remote: private", text.Text);
+            Assert.Equal("Your Remote session is private: you are not listed in the Available Subjects Directory. Goon tables have their own Who sees this table switch.", ToolTip.GetTip(pill));
             await Poll(false);
 
             // Listed, then claimed by a controller, then listed again when it leaves.
             tab.FindControl<CheckBox>("ChkOptIntoDirectory")!.IsChecked = true;
             await tab.RunOptInChainAsync();
-            Assert.Equal("Listed", text.Text);
+            Assert.Equal("Remote: listed", text.Text);
             Assert.True(tab.FindControl<Border>("ListedConfirmationPanel")!.IsVisible);
             await Poll(true);
-            Assert.Equal("Claimed", text.Text);
+            Assert.Equal("Remote: claimed", text.Text);
+            Assert.Equal("A controller has claimed your Remote listing.", ToolTip.GetTip(pill));
             await Poll(false);
-            Assert.Equal("Listed", text.Text);
+            Assert.Equal("Remote: listed", text.Text);
 
             // The session ends: the pill goes.
             await relay.StopAsync();
@@ -240,18 +247,148 @@ public sealed class RemoteDirectoryTabTests
         finally
         {
             shell?.Close();
+            loc.SetLanguage(beforeLanguage);
             relay.Dispose();
             (RemoteControlTabView.Relay, CoreSettings.ServiceProvider) = (oldRelay, oldProvider);
         }
     });
 
     [Fact]
+    public void Pill_states_follow_the_selected_language()
+    {
+        var loc = LocalizationManager.Instance;
+        var before = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage("de");
+            var p = MainShellWindow.DirectoryPillFor(true, false, false);
+            Assert.Equal("Remote: privat", p.Text);
+            Assert.Equal("Deine Remote-Sitzung ist privat: Du bist nicht im Verzeichnis verfügbarer Personen aufgeführt. Für Goon-Tische gibt es einen eigenen Schalter, wer den Tisch sieht.", p.Tip);
+            Assert.Equal("Remote: gelistet", MainShellWindow.DirectoryPillFor(true, true, false).Text);
+            Assert.Equal("Remote: beansprucht", MainShellWindow.DirectoryPillFor(true, true, true).Text);
+        }
+        finally { loc.SetLanguage(before); }
+    }
+
+    [Fact]
+    public void All_languages_supply_the_six_pill_strings()
+    {
+        var loc = LocalizationManager.Instance;
+        var before = loc.CurrentLanguage;
+        var keys = new[] { "remote_directory_private", "remote_directory_private_tip", "remote_directory_listed",
+            "remote_directory_listed_tip", "remote_directory_claimed", "remote_directory_claimed_tip" };
+        var dir = Path.Combine(AppContext.BaseDirectory, "Localization", "Languages");
+        var english = JObject.Parse(File.ReadAllText(Path.Combine(dir, "en.json")));
+        try
+        {
+            foreach (var (code, _, _) in LocalizationManager.AvailableLanguages)
+            {
+                var data = JObject.Parse(File.ReadAllText(Path.Combine(dir, code + ".json")));
+                loc.SetLanguage(code);
+                var privateState = MainShellWindow.DirectoryPillFor(true, false, false);
+                var listedState = MainShellWindow.DirectoryPillFor(true, true, false);
+                var claimedState = MainShellWindow.DirectoryPillFor(true, true, true);
+                var actual = new[] { privateState.Text, privateState.Tip, listedState.Text, listedState.Tip,
+                    claimedState.Text, claimedState.Tip };
+                for (var i = 0; i < keys.Length; i++)
+                {
+                    var expected = data.Value<string>(keys[i]);
+                    Assert.False(string.IsNullOrWhiteSpace(expected), $"{code}: {keys[i]}");
+                    if (code != "en") Assert.NotEqual(english.Value<string>(keys[i]), expected);
+                    Assert.Equal(expected, actual[i]);
+                }
+            }
+        }
+        finally { loc.SetLanguage(before); }
+    }
+
+    [Fact]
+    public Task Pill_view_tracks_language_and_state_without_a_window() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureAvalonia();
+        var loc = LocalizationManager.Instance;
+        var before = loc.CurrentLanguage;
+        using var view = new MainShellWindow.DirectoryPillView();
+        var pill = new Border();
+        var label = new TextBlock();
+        var dot = new Ellipse();
+        try
+        {
+            loc.SetLanguage("en");
+            view.Update(pill, label, dot, true, false, false);
+            Assert.Equal("Remote: private", label.Text);
+            loc.SetLanguage("de");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Remote: privat", label.Text);
+            Assert.Contains("Remote-Sitzung ist privat", Assert.IsType<string>(ToolTip.GetTip(pill)));
+            view.Update(pill, label, dot, true, true, false);
+            Assert.Equal("Remote: gelistet", label.Text);
+            loc.SetLanguage("en");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Remote: listed", label.Text);
+            Assert.Equal("Your Remote session is listed in the Available Subjects Directory and waiting to be claimed.", ToolTip.GetTip(pill));
+            view.Update(pill, label, dot, true, true, true);
+            loc.SetLanguage("de");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Remote: beansprucht", label.Text);
+            Assert.Equal("Eine steuernde Person hat deinen Remote-Eintrag beansprucht.", ToolTip.GetTip(pill));
+            view.Update(pill, label, dot, false, true, true);
+            Assert.False(pill.IsVisible);
+        }
+        finally { loc.SetLanguage(before); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task Pill_binding_tracks_language_changes_in_each_state() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureAvalonia();
+        var loc = LocalizationManager.Instance;
+        var before = loc.CurrentLanguage;
+        MainShellWindow? shell = null;
+        try
+        {
+            loc.SetLanguage("en");
+            shell = new MainShellWindow();
+            var text = shell.Named<TextBlock>("TxtDirectoryStatus")!;
+            var pill = shell.Named<Border>("DirectoryStatusPill")!;
+            loc.SetLanguage("de");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Remote: privat", text.Text);
+            shell.UpdateDirectoryListingStatus(true, true, false);
+            Assert.Equal("Remote: gelistet", text.Text);
+            Assert.Equal("Deine Remote-Sitzung ist im Verzeichnis verfügbarer Personen gelistet und wartet darauf, beansprucht zu werden.", ToolTip.GetTip(pill));
+            loc.SetLanguage("en");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Remote: listed", text.Text);
+            Assert.Equal("Your Remote session is listed in the Available Subjects Directory and waiting to be claimed.", ToolTip.GetTip(pill));
+            shell.UpdateDirectoryListingStatus(true, true, true);
+            loc.SetLanguage("de");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Remote: beansprucht", text.Text);
+            Assert.Equal("Eine steuernde Person hat deinen Remote-Eintrag beansprucht.", ToolTip.GetTip(pill));
+        }
+        finally { shell?.Close(); loc.SetLanguage(before); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public void Pill_states_match_wpf()
     {
-        Assert.False(MainShellWindow.DirectoryPillFor(active: false, optedIn: true, claimed: true).Visible);
-        Assert.Equal(("Private only", "#8A8AA0"), Pick(MainShellWindow.DirectoryPillFor(true, false, true)));
-        Assert.Equal(("Listed", "#B47BFF"), Pick(MainShellWindow.DirectoryPillFor(true, true, false)));
-        Assert.Equal(("Claimed", "#00FF88"), Pick(MainShellWindow.DirectoryPillFor(true, true, true)));
+        var loc = LocalizationManager.Instance;
+        var before = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage("en");
+            Assert.False(MainShellWindow.DirectoryPillFor(active: false, optedIn: true, claimed: true).Visible);
+            Assert.Equal(("Remote: private", "#8A8AA0"), Pick(MainShellWindow.DirectoryPillFor(true, false, true)));
+            Assert.Equal("Your Remote session is private: you are not listed in the Available Subjects Directory. Goon tables have their own Who sees this table switch.", MainShellWindow.DirectoryPillFor(true, false, true).Tip);
+            Assert.Equal(("Remote: listed", "#B47BFF"), Pick(MainShellWindow.DirectoryPillFor(true, true, false)));
+            Assert.Equal("Your Remote session is listed in the Available Subjects Directory and waiting to be claimed.", MainShellWindow.DirectoryPillFor(true, true, false).Tip);
+            Assert.Equal(("Remote: claimed", "#00FF88"), Pick(MainShellWindow.DirectoryPillFor(true, true, true)));
+            Assert.Equal("A controller has claimed your Remote listing.", MainShellWindow.DirectoryPillFor(true, true, true).Tip);
+        }
+        finally { loc.SetLanguage(before); }
         static (string, string) Pick(MainShellWindow.DirectoryPill p) => (p.Text, p.DotHex);
     }
 

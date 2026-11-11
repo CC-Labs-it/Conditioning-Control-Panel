@@ -276,6 +276,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private bool _rackToolbarSyncing;
 
         private SessionManager? _sessionManager;
+        internal SessionManager? RemoteSessionManager => _sessionManager;
 
         // Every session, locked ones included: WPF lists them and only disables Start
         // ("🔒 Coming Soon", MainWindow.SessionIO.cs:971-972).
@@ -299,6 +300,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (lib.GetSession(session.Id) == null) lib.AddNewSession(session, filePath);
             UseSessionManager(lib);
         }
+
+        /// <summary>WPF MainWindow/MainWindow.CompanionAsks.cs:14-30: preserve order and recheck the live rack.</summary>
+        internal IReadOnlyList<ConditioningControlPanel.Services.Companion.Asks.AskOption> CompanionSessionOptions() =>
+            _availableSessions.Where(s => s.IsAvailable && !string.IsNullOrEmpty(s.Id))
+                .Select(s =>
+                {
+                    var id = s.Id;
+                    return new ConditioningControlPanel.Services.Companion.Asks.AskOption(id, s.GetModeAwareName(),
+                        () => App.Sessions?.IsRunning != true && _availableSessions.Any(x => x.Id == id && x.IsAvailable));
+                })
+                .ToArray();
 
         /// <summary>WPF RevealSessionInLibrary: select the session by id; null when it is not in the rack.</summary>
         internal Session? RevealSession(string sessionId)

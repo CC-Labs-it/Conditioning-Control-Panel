@@ -425,7 +425,7 @@ public class FloatingVideoFrameTests
         Assert.NotEmpty(moves);
         Assert.All(moves, m => Assert.Contains("SWP_NOACTIVATE", m.Substring(0, Math.Min(260, m.Length))));
 
-        foreach (var file in Directory.GetFiles(dir, "*.cs"))
+        foreach (var file in Directory.GetFiles(dir, "*.cs").Concat(Directory.GetFiles(Path.Combine(RepoRoot(), "CCP.Core", "Services", "Video", "Floating"), "*.cs")))
         {
             var src = File.ReadAllText(file);
             foreach (var banned in new[] { ".Activate(", ".Focus(", "SetForegroundWindow", "SetActiveWindow", "SetFocus(", "BringWindowToTop", "SetCapture(" })

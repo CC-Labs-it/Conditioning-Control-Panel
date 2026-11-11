@@ -59,7 +59,7 @@ public sealed class PanicKeyChasterHoldTests
     {
         var src = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Views", "Windows", "MainShellWindow.PanicKey.cs"))
             .ReplaceLineEndings("\n");
-        var at = src.IndexOf("internal void HandlePanicKeyPress(DateTime now, bool raceOwned = false)", StringComparison.Ordinal);
+        var at = src.IndexOf("internal void HandlePanicKeyPress(DateTime now)", StringComparison.Ordinal);
         var body = src.Substring(at, src.IndexOf("\n        }\n", at, StringComparison.Ordinal) - at);
         int pause = body.IndexOf("if (TryGamePauseOnEscape(now)) return;", StringComparison.Ordinal);
         int hold = body.IndexOf("PanicChasterHold.Open(\"panic key\");", StringComparison.Ordinal);

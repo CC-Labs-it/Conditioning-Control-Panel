@@ -5,8 +5,8 @@
 // px throughout, as WPF's physical route did (GetWindowRect/SetWindowPos). The saved
 // AvatarTubeLeft/Top stay in WPF's DIPs, so a WPF-written file reads unchanged: px = dip * DesktopScaling.
 //
-// ponytail: mirrored right-dock art, measured mod-art insets (stock 239/353 are used),
-// and the floating bob remain in the WPF reference.
+// ponytail: mirrored right-dock art and measured mod-art insets (stock 239/353 are used)
+// remain in the WPF reference.
 
 using System;
 using System.Linq;

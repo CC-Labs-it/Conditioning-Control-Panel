@@ -70,9 +70,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>The one relay client (WPF App.RemoteControl). Commands run through Core's gate and table.
         /// Tests swap in a fake-relay client before opening the shell.</summary>
-        internal static Lazy<RemoteRelay> Relay = new(() => new RemoteRelay(
+        internal static Lazy<RemoteRelay> Relay = new(() => App.WireRemoteQuestProgress(new RemoteRelay(
             () => CoreSettings.Current.AuthToken, () => CoreAccount.UnifiedUserId, CoreReleaseContent.AppVersion,
-            RemoteCommands.Execute, RemoteCommands.StopEffects));
+            RemoteCommands.Execute, RemoteCommands.StopEffects)));
 
         private readonly ObservableCollection<string> _log = new();
 
@@ -151,6 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 else await MessageDialog.ShowAsync(owner, Loc.Get("title_connection_error"), Loc.Get("msg_remote_connection_error"));
                 return;
             }
+            Platform.FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Remote); // WPF RemoteControlService.cs:198
             ShowSession(code);
             OptInChain = RunOptInChainAsync();
         }
@@ -396,7 +397,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         /// <summary>WPF UpdateDirectoryListingStatus: the "you're listed" banner under the code and the
-        /// shell's title-bar pill (Private only / Listed / Claimed).</summary>
+        /// shell's title-bar pill (Remote: private / listed / claimed).</summary>
         private void UpdateDirectoryListingStatus()
         {
             var r = Relay.Value;
@@ -406,12 +407,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void OnModChanged(object? sender, ModPackage? mod) => Dispatcher.UIThread.Post(ApplyFeatureArt);
 
-        /// <summary>WPF ApplyFeatureArt: features/remote_control.png (a mod's own first) into the hero plate.
-        /// A null answer leaves the bare plate, as WPF's resolver does.</summary>
+        /// <summary>WPF ApplyFeatureArt: features/remote_control.png (a mod's own first) into the hero plate
+        /// and the side plate (WPF mirrors ImgRemoteControlFeature into both). A null answer leaves the
+        /// authored plates, as WPF's resolver does.</summary>
         private void ApplyFeatureArt()
         {
             if (Helpers.ModArt.TryLoad("features/remote_control.png") is not { } art) return;
             HeroArtPlate.Background = new ImageBrush(art) { Stretch = Stretch.UniformToFill, AlignmentX = AlignmentX.Right };
+            SideArtPlate.Background = new ImageBrush(art) { Stretch = Stretch.UniformToFill };
+            SideArtSizer.Source = art;
         }
 
         // ---- Emotes: WPF MainWindow.RemoteControl.cs:325-480. The shell's big picker shares these. ----

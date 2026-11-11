@@ -1,8 +1,8 @@
 // PORTED from ConditioningControlPanel/Services/PieceByPiece/PieceByPieceHostService.cs (WPF 7.1.5).
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
-// media-flavour / media-more / online-media), friend / Lobby intents (.Friends.cs),
-// MergedAccountRecovery and SeasonRecapService.TrackFeature.
+// media-flavour / media-more / online-media), Lobby intents (.Friends.cs),
+// MergedAccountRecovery.
 
 using System;
 using System.Collections.Generic;
@@ -69,6 +69,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private static readonly Random PbpRng = new();
 
         private bool _pbpOpen;
+        private bool _pbpSettingsPosted, _pbpIdentityPosted;
         private Task? _pbpBootFrames;   // single-flight: settings always precedes identity, even during an OS query
         private bool _pbpPinged;
         private DateTime _pbpLastBeatUtc = DateTime.UtcNow;
@@ -87,10 +88,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (_pbpOpen) return;
             _pbpOpen = true;
+            // WPF PieceByPieceHostService.cs:230-232: keys work before the first click.
+            Dispatcher.UIThread.Post(() => { if (!_closing) Web.FocusPage(); }, DispatcherPriority.Loaded);
+            PrizeOwnership.GrantsChanged += OnPbpGrantsChanged;
+            CoreAccount.UnifiedIdentityChanged += OnPbpIdentityChanged;
             _pbpLastBeatUtc = _pbpLastProgressUtc = DateTime.UtcNow;
             Closed += (_, _) => ClosePbp();
             _pbpWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-            _pbpWatch.Tick += (_, _) => CheckPbpWatch(DateTime.UtcNow);
+            _pbpWatch.Tick += (_, _) => { CheckPbpWatch(DateTime.UtcNow); RefreshPbpOwnership(); };
             _pbpWatch.Start();
             try { FriendsHead.Service?.EnterActivity(PresenceActivity.Chess); } catch (Exception ex) { Diag.Swallowed(ex); }
             Log.Information("PieceByPieceHost: launched");
@@ -102,8 +107,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (!_pbpOpen) return;
             _pbpOpen = false;
+            PrizeOwnership.GrantsChanged -= OnPbpGrantsChanged;
+            CoreAccount.UnifiedIdentityChanged -= OnPbpIdentityChanged;
+            _pbpEquipLifetime.Cancel();
             try { _pbpWatch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _pbpWatch = null;
+            _pbpFriendsReady = false;
+            _pbpFriendIntent = null;
+            _pbpChallenge?.TrySetResult(null);
             try { FriendsHead.Service?.LeaveActivity(PresenceActivity.Chess); } catch (Exception ex) { Diag.Swallowed(ex); }
             Log.Information("PieceByPieceHost: closed");
         }
@@ -143,6 +154,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     case "pbp:media-request":
                         OnPbpMediaRequest(o);
                         return true;
+                    case PbpLookRules.LookType:
+                        PickPbpLook(o);
+                        return true;
+                    case PbpLookRules.CounterType:
+                        // B3: the Prize Counter is WPF desktop only in 7.2.
+                        return true;
+                    case "pbp:friend-challenge": OnPbpFriendChallenge(o); return true;
                     case "pbp:net":
                         OnPbpNetRequest(o);
                         return true;
@@ -178,7 +196,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             PbpBootFailedThisSession = false;
             _pbpLastBeatUtc = _pbpLastProgressUtc = DateTime.UtcNow;
             _pbpPinged = false;
-            try { Web.Focus(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            // WPF PieceByPieceHostService.cs:284: focus the native child, not its wrapper.
+            try { Web.FocusPage(); } catch (Exception ex) { Diag.Swallowed(ex); }
             return _pbpBootFrames ??= PostPbpBootFrames();
         }
 
@@ -193,13 +212,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 : !osAnimations ? MotionLevel.Reduced : s.MotionLevel;
             var frame = PbpHostRules.SettingsFrame(s.VideoMinDurationSeconds,
                 withoutGentle != MotionLevel.Full || s.GentleVisuals, PbpWhispers());
+            frame["prizeCounter"] = false;
             frame["letPeopleWatch"] = PbpWatchRules.LetPeopleWatch(s);
             frame["watchEffects"] = PbpWatchRules.WatchEffects(s);
             frame["watchAmount"] = PbpWatchRules.WatchAmount(s);
             frame["gentleIntroSpeed"] = PbpWatchRules.GentleIntroSpeed(s.GentleVisuals, withoutGentle, s.GentleSpeed);
+            if (_spectateInit != null) frame["spectateMatchId"] = _spectateInit;
+            _spectateInit = null;
+            _pbpSettingsPosted = true;
             Post(frame);
             Post(PbpHostRules.IdentityFrame(CoreAccount.UnifiedUserId, PbpAuthToken(),
                 s.UserDisplayName, CoreReleaseContent.AppVersion));
+            _pbpFriendsReady = true;
+            PostPbpFriendIntent();
+            _pbpIdentityPosted = true;
+            PostLobbyIntent();
+            // WPF PieceByPieceHostService.cs:294-297: the friend intent, then the wardrobe and the synced copy.
+            PostPbpWardrobe();
+            PbpEquipPending = PullPbpEquip();
+            RefreshPbpOwnership();
         }
 
         /// <summary>WPF SafeWhisperClips: own brain drain first, then the mod's permitted fallback.</summary>
@@ -227,7 +258,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         }
 
         /// <summary>The CCP auth token, NOT the Patreon bearer; empty with no cloud session (WPF SafeAuthToken :632).</summary>
-        internal static string PbpAuthToken()
+        private static string PbpAuthToken()
         {
             try { return CoreSettings.Current.AuthToken ?? string.Empty; } catch { return string.Empty; }
         }

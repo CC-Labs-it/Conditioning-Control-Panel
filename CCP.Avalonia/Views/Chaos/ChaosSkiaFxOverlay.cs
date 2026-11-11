@@ -69,15 +69,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         public static void ArmCursorGlow() => OnFx(w => w.Fx.ArmCursor());
 
+        /// <summary>WPF run-start prewarm: realize the idle surface without drawing or starting frames.</summary>
+        public static void EnsureCreated() => OnFx(_ => { });
+
         public static void DisarmCursorGlow() => OnUi(() => Active?.Fx.DisarmCursor());
 
         public static void MoveCursorGlowToPx(double px, double py) =>
             OnFx(w => { var p = w.Local(new Point(px, py)); w.Fx.MoveCursor(p.X, p.Y); });
 
         /// <summary>Run teardown and panic (WPF ChaosModeService ForceShutdown/EndRun/CleanupAfterRun).
-        /// Idempotent, safe when nothing was ever created.</summary>
+        /// Idempotent, safe when nothing was ever created. A platform refusal is remembered until
+        /// here, like the other chaos overlays, so one refused run never disables later runs.</summary>
         public static void CloseActive() => OnUi(() =>
         {
+            _refused = false;
             var w = Active;
             Active = null;
             if (w == null) return;

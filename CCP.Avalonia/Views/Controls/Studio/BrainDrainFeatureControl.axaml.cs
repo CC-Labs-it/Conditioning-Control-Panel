@@ -1,3 +1,8 @@
+using System;
+using System.IO;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
@@ -6,43 +11,34 @@ using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
 {
-    /// <summary>
-    /// Brain Drain panel, ported from the WPF head.
-    ///
-    /// What is real here: both slider read-outs, the clip-library readout's format string and the
-    /// empty-state banner it drives.
-    ///
-    /// What is not, and WHY - the settings are the interesting case. BrainDrainEnabled, Intensity,
-    /// HighRefresh, BlurStrength, MeltEnabled and AllowOverlayCapture are all on
-    /// <c>CoreSettings.Current</c> today, so "needs App.Settings" would be a stale reading. They
-    /// stay unwired here on purpose: on WPF each of these writes is followed by a call into
-    /// App.BrainDrain (Start/Stop, ReloadAudioFiles, the overlay-capture re-arm), so a control
-    /// that wrote the setting alone would show BRAIN DRAIN as ON with nothing draining. The
-    /// genuinely absent pieces are App.BrainDrain, BrainDrainService's folder paths,
-    /// OverlayService.BrainDrainWithheld and the shell folder-open - all WPF-head services with
-    /// no seam. Mod art is NOT a blocker any more (CoreModArt plus Helpers.ModArt), but there is
-    /// no art in this panel's markup to write into.
-    ///
-    /// The clip count is a placeholder 0, which is also the honest default for a fresh install and
-    /// is what puts the empty-state banner on screen in the render.
-    /// </summary>
+    // WPF BrainDrainFeatureControl.xaml.cs:37-48,121-198,417-429.
+    // Clip library and art are live. Audio playback and desktop visuals remain unported.
     public partial class BrainDrainFeatureControl : UserControl
     {
         public BrainDrainFeatureControl()
         {
             AvaloniaXamlLoader.Load(this);
 
+            ModArt.BindFeaturePlates(this, "features/brain_drain.png",
+                this.FindControl<Border>("HeroArt"), this.FindControl<Border>("SideArt"));
+            // WPF .xaml.cs:161-175: both buttons create and open the primary folder.
+            foreach (var name in new[] { "BtnOpenAudioFolder", "BtnOpenAudioFolderEmpty" })
+                this.FindControl<Button>(name)!.Click += async (_, _) =>
+                {
+                    try
+                    {
+                        Directory.CreateDirectory(BrainDrainAudioPolicy.AudioFolder);
+                        await ExternalOpener.OpenAsync(TopLevel.GetTopLevel(this), BrainDrainAudioPolicy.AudioFolder);
+                    }
+                    catch (Exception ex) { Serilog.Log.Warning(ex, "Brain Drain: open clip folder failed"); }
+                };
+
             SliderLabel.Wire(this, "SliderIntensity", "TxtIntensity", v => $"{(int)v}%");
             SliderLabel.Wire(this, "SliderBlurStrength", "TxtBlurStrength", v => $"{(int)v}%");
 
             RefreshClipCount();
 
-            // ponytail: needs App.BrainDrain, Services.BrainDrainService and OverlayService -
-            // NOT App.Settings, which is CoreSettings.Current today. See the class summary for
-            // why the settings writes are still deliberately absent. ChkEnable, ChkMelt,
-            // ChkHighRefresh, ChkAllowCapture, both sliders' setting writes, BtnOpenAudioFolder
-            // (Empty) and BtnRefreshAudio are inert until the service lands, and WithheldNotice
-            // stays hidden (OverlayService.BrainDrainWithheld is false anyway).
+            // Audio and visual controls stay inert until their hosts land.
             this.FindControl<Button>("BtnRefreshAudio")!.Click += (_, _) => RefreshClipCount();
 
             // Keep pictures clear is a pure preference (WPF ChkKeepClear_Changed writes and saves;
@@ -58,39 +54,73 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
                 CoreSettings.Current.BrainDrainKeepPicturesClear = on;
                 CoreSettings.Save();
             };
+
+            // WPF SliderVolume_Changed (.xaml.cs:269-282): Brain Drain's own clip volume. BrainDrainPlayer
+            // follows BrainDrainVolume itself, so a playing clip picks the change up too.
+            _volume = this.FindControl<Slider>("SliderVolume")!;
+            _volumeText = this.FindControl<TextBlock>("TxtVolume")!;
+            LoadVolume();
+            _volume.ValueChanged += (_, e) =>
+            {
+                if (_loadingVolume) return;
+                var v = (int)e.NewValue;
+                _volumeText.Text = $"{v}%";
+                if (CoreSettings.Current.BrainDrainVolume == v) return;
+                CoreSettings.Current.BrainDrainVolume = v;
+                CoreSettings.Save();
+            };
         }
 
         private readonly CheckBox _keepClear;
+        private readonly Slider _volume;
+        private readonly TextBlock _volumeText;
+        private bool _loadingVolume;
+
+        private void LoadVolume()
+        {
+            var v = CoreSettings.Current.BrainDrainVolume;
+            _loadingVolume = true;
+            try
+            {
+                _volume.Value = v;
+                _volumeText.Text = $"{v}%";
+                if (v != 100) this.FindControl<MoreFold>("FoldMore")!.IsOpen = true; // never hide a changed setting
+            }
+            finally { _loadingVolume = false; }
+        }
 
         // WPF re-reads on Loaded and on its settings rebind hook; the Studio tab keeps this control
         // alive, so a Reset or cloud restore (CurrentReplaced) must repaint the toggle.
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
-            if (CoreSettings.Service is { } svc) svc.CurrentReplaced += LoadKeepClear;
+            if (CoreSettings.Service is { } svc) { svc.CurrentReplaced += LoadKeepClear; svc.CurrentReplaced += LoadVolume; }
             LoadKeepClear();
+            LoadVolume();
+            RefreshClipCount(); // WPF .xaml.cs:40-43: re-scan whenever the rack is shown.
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
-            if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= LoadKeepClear;
+            if (CoreSettings.Service is { } svc) { svc.CurrentReplaced -= LoadKeepClear; svc.CurrentReplaced -= LoadVolume; }
             base.OnDetachedFromVisualTree(e);
         }
 
         private void LoadKeepClear() => _keepClear.IsChecked = CoreSettings.Current.BrainDrainKeepPicturesClear;
 
-        /// <summary>
-        /// Repaint the clip-library readout. An empty pool makes the whole audio half a silent
-        /// no-op, so the count is shown even when it is fine - "0 clips" is the answer to "why is
-        /// nothing happening?". The resolved folder path is the service's to give; until then the
-        /// line stays empty rather than printing a folder that may not exist.
-        /// </summary>
         private void RefreshClipCount()
         {
-            // ponytail: needs BrainDrainService.AudioFileCount, wired when it moves to Core.
-            const int clips = 0;
+            // Reused from the old lane. WPF .xaml.cs:121-151,186-198.
+            try { Directory.CreateDirectory(BrainDrainAudioPolicy.AudioFolder); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Brain Drain: could not create clip folder"); }
+            var clips = BrainDrainAudioPolicy.Discover(BrainDrainAudioPolicy.AudioFolder, BrainDrainAudioPolicy.LegacyFolder).Length;
             this.FindControl<TextBlock>("TxtClipCount")!.Text = Loc.GetF("st4_braindrain_clips_loaded_0", clips);
             this.FindControl<Border>("NoAudioHint")!.IsVisible = clips == 0;
+            this.FindControl<TextBlock>("TxtAudioFolderPath")!.Text = BrainDrainAudioPolicy.AudioFolder;
+            var legacy = BrainDrainAudioPolicy.Enumerate(BrainDrainAudioPolicy.LegacyFolder).Length > 0;
+            this.FindControl<TextBlock>("TxtLegacyFolderNote")!.IsVisible = legacy;
+            this.FindControl<TextBlock>("TxtLegacyFolderPath")!.IsVisible = legacy;
+            this.FindControl<TextBlock>("TxtLegacyFolderPath")!.Text = legacy ? BrainDrainAudioPolicy.LegacyFolder : "";
         }
     }
 }

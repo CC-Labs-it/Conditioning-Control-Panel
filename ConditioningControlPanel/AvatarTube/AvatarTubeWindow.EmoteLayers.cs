@@ -91,6 +91,8 @@ namespace ConditioningControlPanel
             var existing = WebpLayerIfAny(img);
             if (existing != null) return existing;
             var p = new EmoteClipPlayer(img);
+            // Baked Rain frames are 2x the layer's size: a filtered downscale keeps her smooth at 100-150% DPI.
+            System.Windows.Media.RenderOptions.SetBitmapScalingMode(img, System.Windows.Media.BitmapScalingMode.HighQuality);
             p.Completed += _ => OnCirceLayerCompleted(img);
             p.Failed += (_, error) => OnCirceLayerError(img, "webp", error);
             if (ReferenceEquals(img, ImgAvatarAnimated)) _webpLayerA = p; else _webpLayerB = p;

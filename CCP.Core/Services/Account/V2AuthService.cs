@@ -168,6 +168,9 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public class V2User
         {
+            [JsonProperty("prizes")]
+            public PrizesBlock? Prizes { get; set; }
+
             [JsonProperty("unified_id")]
             public string? UnifiedId { get; set; }
 
@@ -195,6 +198,9 @@ namespace ConditioningControlPanel.Services
             // servers before CCP-Server #210 and on the auth projections.
             [JsonProperty("curve_epoch")]
             public int? CurveEpoch { get; set; }
+
+            [JsonProperty("total_conditioning_minutes")]
+            public double? TotalConditioningMinutes { get; set; }
 
             [JsonProperty("current_season")]
             public string? CurrentSeason { get; set; }
@@ -739,7 +745,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Send heartbeat to update online status
         /// </summary>
-        public async Task<bool> SendHeartbeatAsync(string unifiedId, bool isActive = true, bool inSession = false)
+        public async Task<bool> SendHeartbeatAsync(string unifiedId, bool isActive = true, bool inSession = false, Action<string>? onBody = null)
         {
             try
             {
@@ -749,12 +755,24 @@ namespace ConditioningControlPanel.Services
                 var response = await _http.SendAsync(request);
 
                 if (await TryHandleMergedAsync(response)) return false;
+                if (response.IsSuccessStatusCode && onBody != null) onBody(await response.Content.ReadAsStringAsync());
                 return response.IsSuccessStatusCode;
             }
             catch
             {
                 return false;
             }
+        }
+
+        // WPF Services/Settings/ProfileSyncService.cs:4130-4144.
+        public async Task<bool?> IsDisplayNameAvailableAsync(string name)
+        {
+            try
+            {
+                var json = await _http.GetStringAsync($"{SERVER_URL}/v2/auth/check-name?name={Uri.EscapeDataString(name)}");
+                return (bool?)JObject.Parse(json)["available"];
+            }
+            catch { return null; }
         }
 
         /// <summary>
@@ -828,6 +846,37 @@ namespace ConditioningControlPanel.Services
             {
                 Log.Error(ex, "[V2Auth] Delete account failed");
                 return (false, "Account deletion requires an internet connection");
+            }
+        }
+
+        /// <summary>WPF ProfileSyncService.RecordEasterEggReadAsync (:4758): counts this reader on the server
+        /// and returns how many have read the note, or -1 on any failure (signed out still counts, anonymously).</summary>
+        public async Task<int> RecordEasterEggReadAsync()
+        {
+            try
+            {
+                var unifiedId = _settings()?.UnifiedId;
+                using var request = new HttpRequestMessage(HttpMethod.Post, $"{SERVER_URL}/v2/easter-egg");
+                string body = "{}";
+                if (!string.IsNullOrEmpty(unifiedId))
+                {
+                    AddAuthHeader(request);
+                    body = new JObject { ["unified_id"] = unifiedId }.ToString(Formatting.None);
+                }
+                request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+                using var response = await _http.SendAsync(request);
+                if (!response.IsSuccessStatusCode)
+                {
+                    if (await TryHandleMergedAsync(response)) return -1;
+                    Log.Warning("Easter egg endpoint returned {Status}", response.StatusCode);
+                    return -1;
+                }
+                return (int?)JObject.Parse(await response.Content.ReadAsStringAsync())["count"] ?? 0;   // WPF: missing count deserializes to 0
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Easter egg request failed");
+                return -1;
             }
         }
 

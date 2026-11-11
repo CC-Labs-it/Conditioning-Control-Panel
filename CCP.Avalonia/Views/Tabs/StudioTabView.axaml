@@ -135,9 +135,21 @@
             <Border Grid.Column="0" Width="230" Margin="0,0,14,0"
                     Background="{DynamicResource SurfaceBgBrush}" BorderBrush="#2A2A46"
                     BorderThickness="1" CornerRadius="12" Padding="8,10">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel x:Name="RackList"/>
-                </ScrollViewer>
+                <!-- Star above Auto (WPF StudioTabView.xaml:181-218): the rack scrolls inside
+                     whatever the gesture line leaves, so the line is never pushed off the card. -->
+                <Grid RowDefinitions="*,Auto">
+                    <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel x:Name="RackList"/>
+                    </ScrollViewer>
+                    <!-- THE GESTURE LINE (WPF RackGestureHint: 10pt, muted, centred, LineHeight 13),
+                         docked for good under the rack with a 1px top rule. -->
+                    <Border Grid.Row="1" Margin="2,0,2,0" Padding="0,5,0,1"
+                            BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="0,1,0,0">
+                        <TextBlock Text="{loc:Str st4_rack_gesture_hint}" FontSize="10"
+                                   Foreground="{DynamicResource TextMutedBrush}" TextAlignment="Center"
+                                   TextWrapping="Wrap" LineHeight="13"/>
+                    </Border>
+                </Grid>
             </Border>
 
             <!-- The detail column. -->
