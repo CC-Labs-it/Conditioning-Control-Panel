@@ -32,12 +32,16 @@ public sealed class RemoteSessionPauseTests
                 ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().With(fonts).UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             }
-            var shell = new MainShellWindow();
-            shell.Show();
+            var oldRunning = CoreSession.IsSessionRunningProvider;
+            var oldPaused = CoreSession.IsSessionPausedProvider;
             var oldSessions = AvApp.Sessions;
-            var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+            MainShellWindow? shell = null;
+            SessionRunner? runner = null;
             try
             {
+                shell = new MainShellWindow();
+                shell.Show();
+                runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
                 Assert.Null(RemoteControlTabView.ExecuteRemoteCommand("pause_session", null));
                 shell.StartSession(new Session { Id = "remote_pause_test", Name = "Test", DurationMinutes = 1 });
                 Assert.True(runner.IsRunning);
@@ -55,12 +59,22 @@ public sealed class RemoteSessionPauseTests
             }
             finally
             {
-                runner.Stop();
-                SpiralOverlay.Stop(); PinkFilterOverlay.Stop();
-                AvApp.Sessions = oldSessions;
-                CoreEngine.Stop();
-                shell.Close();
+                try
+                {
+                    runner?.Stop();
+                    SpiralOverlay.Stop(); PinkFilterOverlay.Stop();
+                    AvApp.Sessions = oldSessions;
+                    CoreEngine.Stop();
+                    shell?.Close();
+                }
+                finally
+                {
+                    CoreSession.IsSessionRunningProvider = oldRunning;
+                    CoreSession.IsSessionPausedProvider = oldPaused;
+                }
             }
+            Assert.Same(oldRunning, CoreSession.IsSessionRunningProvider);
+            Assert.Same(oldPaused, CoreSession.IsSessionPausedProvider);
             Assert.Equal(RemoteCommands.NotOnThisBuild, RemoteControlTabView.ExecuteRemoteCommand("pause_session", null));
             return Task.CompletedTask;
         });
