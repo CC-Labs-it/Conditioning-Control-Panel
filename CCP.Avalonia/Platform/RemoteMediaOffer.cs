@@ -20,9 +20,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
     {
         private const string IntroKey = "remotemedia";
         private static int _claimed;
-        private static (string Surface, Window? Owner)? _pending;
-        // A dead end hit before there is a UI thread to post to (WPF App.xaml.cs:229, a plain field write).
-        private static string? _parked;
+        // WPF's one slot (App.xaml.cs:890): a dead end behind a modal and one hit before any window
+        // (App.xaml.cs:229) share it, the first wins, and a flush always empties it.
+        private static Tuple<string, Window?>? _pending;
         private static bool ModalUp => AppUpdater.IsUpdateDialogActive || MainShellWindow.IsStartupDialogShowing;
 
         /// <summary>Test seam: what opening the card does (default: the intro popup).</summary>
@@ -33,12 +33,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             Interlocked.Exchange(ref _claimed, 0);
             _pending = null;
-            _parked = null;
         }
 
         /// <summary>WPF EffectiveAssetsPath (App.xaml.cs:229): only records the dead end, from any
         /// thread, and never throws; <see cref="FlushPending"/> surfaces it. The first one wins.</summary>
-        internal static void Park(string surface) => Interlocked.CompareExchange(ref _parked, surface, null);
+        internal static void Park(string surface, Window? owner = null) =>
+            Interlocked.CompareExchange(ref _pending, Tuple.Create(surface, owner), null);
 
         /// <summary>WPF FlushPendingRemoteMediaOffer: recheck the source and modal gates after
         /// the updater or first-run wizard releases the screen, or once the shell is open (WPF
@@ -48,8 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             try
             {
                 if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => FlushPending(owner)); return; }
-                if (_pending is { } pending) { _pending = null; Offer(pending.Surface, pending.Owner ?? owner); return; }
-                if (Interlocked.Exchange(ref _parked, null) is string surface) Offer(surface, owner);
+                if (Interlocked.Exchange(ref _pending, null) is { } pending) Offer(pending.Item1, pending.Item2 ?? owner);
             }
             catch (Exception ex) { Log.Warning(ex, "RemoteMedia: pending offer flush failed"); }
         }
@@ -62,7 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 if (!string.Equals(CoreSettings.Current.MediaSource, "local", StringComparison.OrdinalIgnoreCase)) return;
                 // WPF App.OfferRemoteMediaSource: do not let the intro's modal guard silently
                 // consume this launch's offer. Keep the first request until the modal unwinds.
-                if (ModalUp) { _pending ??= (surface, owner); return; }
+                if (ModalUp) { Park(surface, owner); return; }
                 Log.Information("RemoteMedia: empty assets at {Surface} - offering the online source", surface);
                 FeatureIntros.All.TryGetValue(IntroKey, out var card);
                 StartupLadder.PresentOrInbox(new InboxItem
@@ -74,7 +73,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     Open = () =>
                     {
                         // A held passive card / Inbox row can be opened after another modal starts.
-                        if (ModalUp) { _pending ??= (surface, owner); return; }
+                        if (ModalUp) { Park(surface, owner); return; }
                         if (!string.Equals(CoreSettings.Current.MediaSource, "local", StringComparison.OrdinalIgnoreCase)) return;
                         if (Interlocked.CompareExchange(ref _claimed, 1, 0) != 0) return;
                         ShowCard(owner);

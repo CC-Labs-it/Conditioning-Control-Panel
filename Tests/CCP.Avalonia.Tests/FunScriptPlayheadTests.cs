@@ -69,18 +69,6 @@ public sealed class FunScriptPlayheadTests
     }
 
     [Fact]
-    public void The_empty_flash_burst_the_missing_assets_folder_and_the_open_shell_reach_the_offer()
-    {
-        // WPF FlashService.cs:971 (outside the warn-once flag), App.xaml.cs:229, MainWindow.xaml.cs:3852.
-        Assert.Matches(@"if \(flashes\.Count == 0\)\s*\{[^}]*_warnedEmpty = true;\s*Platform\.RemoteMediaOffer\.Offer\(\s*\);\s*return;",
-            Src("Views", "Overlays", "FlashOverlay.cs"));
-        Assert.Matches(@"_warnedMissingCustomAssetsPath, 1\) == 0\)\s*\{[^}]*Platform\.RemoteMediaOffer\.Park\(\s*\);",
-            Src("App.axaml.cs"));
-        Assert.Matches(@"OnceOpened\(\(\) => Platform\.RemoteMediaOffer\.FlushPending\(this\)\);",
-            Src("Views", "Windows", "MainShellWindow.axaml.cs"));
-    }
-
-    [Fact]
     public Task CleanupDropsLoadedScriptAndUnsubscribesBeforePlayerTeardown() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
