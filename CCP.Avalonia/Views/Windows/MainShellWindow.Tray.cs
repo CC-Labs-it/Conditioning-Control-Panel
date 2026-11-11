@@ -40,6 +40,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // WPF TrayIconService._hasShownFirstMinimizeNotification.
         private bool _shownFirstMinimizeNotification;
 
+        /// <summary>WPF MainWindow.xaml.cs:3800: start in the tray only with a host to restore from.</summary>
+        internal void ConfigureStartMinimized(bool startMinimized, bool panelHidden)
+        {
+            if (panelHidden || !startMinimized || !TrayHostPresent()) return;
+            void ToTray(object? s, EventArgs e) { Opened -= ToTray; Hide(); NotifyFirstMinimize(); }
+            Opened += ToTray;
+        }
+
+        private void NotifyFirstMinimize()
+        {
+            if (_shownFirstMinimizeNotification) return;
+            _shownFirstMinimizeNotification = true;
+            Platform.OsNotifications.Show(Loc.Get("app_title"), Loc.Get("tray_balloon_body"), ShowFromTray);
+        }
+
         internal TrayIcon CreateTray()
         {
             Tray = new TrayIcon
@@ -175,11 +190,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Hide();
                 HideAvatarTube();
                 // ponytail: WPF fires App.EmiDesk "minimizedToTray" here (WindowChrome.cs:362); this head has no EmiDesk Fire moment bus yet.
-                if (!_shownFirstMinimizeNotification)
-                {
-                    _shownFirstMinimizeNotification = true;
-                    Platform.OsNotifications.Show(Loc.Get("app_title"), Loc.Get("tray_balloon_body"), ShowFromTray);
-                }
+                NotifyFirstMinimize();
             }
             // A tray hide is not an exit: preserve the session and public Closing subscriptions.
             if (e.Cancel) return;

@@ -1054,13 +1054,9 @@ namespace ConditioningControlPanel.Avalonia
                 try
                 {
                     shell.CreateTray();
-                    // WPF MainWindow.xaml.cs:3594: StartMinimized sends the shown window to the tray.
+                    // WPF MainWindow.xaml.cs:3800: StartMinimized sends the shown window to the tray.
                     // Only with a tray host to come back through; without one the window stays up.
-                    if (!panelHidden && Settings.Current.StartMinimized && shell.TrayHostPresent())
-                    {
-                        void ToTray(object? s, EventArgs e) { shell.Opened -= ToTray; shell.Hide(); }
-                        shell.Opened += ToTray;
-                    }
+                    shell.ConfigureStartMinimized(Settings.Current.StartMinimized, panelHidden);
                 }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "Tray icon unavailable; X closes the app"); }
                 // The panic key (WPF MainWindow.xaml.cs:363 installs its hook at startup the same way).

@@ -137,6 +137,54 @@ public sealed class ShellTrayTests
         }
     });
 
+    [Theory]
+    [InlineData(true, false, true, true)]
+    [InlineData(false, false, true, false)]
+    [InlineData(true, true, true, false)]
+    [InlineData(true, false, false, false)]
+    public void StartupTrayHintIsSentOnceOnlyWhenHidden(bool enabled, bool panelHidden, bool host, bool startsInTray) => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var previous = global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink;
+        var count = 0;
+        global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = (title, body) =>
+        {
+            Assert.Equal(Loc.Get("app_title"), title);
+            Assert.Equal(Loc.Get("tray_balloon_body"), body);
+            count++;
+        };
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.CreateTray();
+            shell.TrayHostPresent = () => host;
+            shell.ConfigureStartMinimized(enabled, panelHidden);
+            shell.Show();
+            Assert.Equal(!startsInTray, shell.IsVisible);
+            Assert.Equal(startsInTray ? 1 : 0, count);
+            if (startsInTray) shell.Show();
+            if (host)
+            {
+                shell.Close();
+                Assert.False(shell.IsVisible);
+                Assert.Equal(1, count);
+                shell.Show();
+                shell.Close();
+                Assert.Equal(1, count);
+            }
+        }
+        finally
+        {
+            global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = previous;
+            shell.MarkExitRequestedForTest();
+            shell.Close();
+            shell.Tray?.Dispose();
+        }
+    });
+
     [Fact]
     public async Task CloseWithoutATrayHostReallyCloses()
     {
