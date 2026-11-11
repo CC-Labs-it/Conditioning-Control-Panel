@@ -1765,7 +1765,7 @@
 
                     <!-- Pink Hours Stat: Total Conditioning Time (Unlocks at 5 points) -->
                     <Border x:Name="PillConditioningTime" Background="#2A2A4A" CornerRadius="10" Padding="10,4" Margin="0,0,8,0"
-                            IsVisible="False" ToolTip.Tip="{loc:Str tooltip_total_conditioning_time_pink_hours_skill}">
+                            IsVisible="False">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="⏱️" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
                             <TextBlock x:Name="TxtPillConditioningTime" Text="{loc:Str label_0h_0m}" Foreground="#B0B0B0" FontSize="11" VerticalAlignment="Center"/>
@@ -1774,7 +1774,7 @@
 
                     <!-- Hive Mind Stat: Online Users (Unlocks at 60 points total) -->
                     <Border x:Name="PillOnlineUsers" Background="#2A2A4A" CornerRadius="10" Padding="10,4" Margin="0,0,8,0"
-                            IsVisible="False" ToolTip.Tip="{loc:Str tooltip_bimbos_online_now_hive_mind_skill}">
+                            IsVisible="False">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="👯‍♀️" FontSize="14" Margin="0,0,4,0" VerticalAlignment="Center"/>
                             <TextBlock x:Name="TxtPillOnlineUsers" Text="0" Foreground="#00FF88" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
@@ -1783,7 +1783,7 @@
 
                     <!-- Popular Girl Stat: Rank Percentile (Unlocks at 130 points total) -->
                     <Border x:Name="PillRankPercentile" Background="#2A2A4A" CornerRadius="10" Padding="10,4"
-                            IsVisible="False" ToolTip.Tip="{loc:Str tooltip_your_rank_percentile_popular_girl_skill}">
+                            IsVisible="False">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="👑" FontSize="14" Margin="0,0,4,0" VerticalAlignment="Center"/>
                             <TextBlock x:Name="TxtPillRankPercentile" Text="{loc:Str label_top_0}" Foreground="#FFD700" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>

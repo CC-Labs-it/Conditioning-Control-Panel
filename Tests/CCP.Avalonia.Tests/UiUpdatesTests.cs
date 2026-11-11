@@ -170,6 +170,59 @@ public sealed class UiUpdatesTests
     });
 
     [Fact]
+    public void StatTipsAndBonusChipsFollowModAndLanguage() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        if (AvApp.Mods is null) AvApp.StartMods();
+        var mods = AvApp.Mods!;
+        var oldMod = mods.ActiveModId;
+        var loc = LocalizationManager.Instance;
+        var oldLanguage = loc.CurrentLanguage;
+        var oldProvider = CoreMods.MakeModAwareProvider;
+        var skills = CoreSettings.Current.UnlockedSkills.ToList();
+        mods.ActivateMod(BuiltInMods.CCPDefaultId);
+        CoreSettings.Current.UnlockedSkills.Clear();
+        CoreSettings.Current.UnlockedSkills.Add("sparkle_boost_1");
+        var shell = new MainShellWindow();
+        var tips = new[] { ("PillConditioningTime", "pink_hours", "tooltip_total_conditioning_time_pink_hours_skill"),
+            ("PillOnlineUsers", "hive_mind", "tooltip_bimbos_online_now_hive_mind_skill"),
+            ("PillRankPercentile", "popular_girl", "tooltip_your_rank_percentile_popular_girl_skill") };
+        void Drain() => global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        try
+        {
+            shell.Show(); Drain();
+            foreach (var (name, _, key) in tips)
+                Assert.Equal(Loc.Get(key), ToolTip.GetTip(shell.Named<Border>(name)!));
+            mods.ActivateMod(BuiltInMods.DronificationId);
+            CoreMods.MakeModAwareProvider = text => "Drone " + text;
+            CoreMods.RaiseModChanged(null, mods.ActiveMod); Drain();
+            foreach (var (name, skill, _) in tips)
+                Assert.Equal(mods.ActiveMod.Manifest.EnhancementOverrides!.StatPillTooltips![skill], ToolTip.GetTip(shell.Named<Border>(name)!));
+            var chip = Assert.Single(shell.Named<StackPanel>("XPBarBonusList")!.Children.OfType<Border>());
+            var label = Assert.IsType<TextBlock>(chip.Child);
+            Assert.Contains("Drone ", label.Text);
+            Assert.Equal(global::Avalonia.Media.Color.Parse(mods.GetAccentLightColorHex()),
+                Assert.IsAssignableFrom<global::Avalonia.Media.ISolidColorBrush>(label.Foreground).Color);
+            loc.SetLanguage("de"); Drain();
+            foreach (var (name, skill, _) in tips)
+                Assert.Equal(mods.ActiveMod.Manifest.EnhancementOverrides!.StatPillTooltips![skill], ToolTip.GetTip(shell.Named<Border>(name)!));
+            mods.ActivateMod(BuiltInMods.CCPDefaultId); Drain();
+            foreach (var (name, _, key) in tips)
+                Assert.Equal(Loc.Get(key), ToolTip.GetTip(shell.Named<Border>(name)!));
+            loc.SetLanguage("en"); Drain();
+            foreach (var (name, _, key) in tips)
+                Assert.Equal(Loc.Get(key), ToolTip.GetTip(shell.Named<Border>(name)!));
+        }
+        finally
+        {
+            shell.Close(); CoreMods.MakeModAwareProvider = oldProvider;
+            mods.ActivateMod(oldMod); loc.SetLanguage(oldLanguage);
+            CoreSettings.Current.UnlockedSkills.Clear(); CoreSettings.Current.UnlockedSkills.AddRange(skills);
+            Drain();
+        }
+    });
+
+    [Fact]
     public void ModChangeHidesJournalAndReturnsAnOpenJournalToDaily() => AvaloniaTestDispatcher.Run(() =>
     {
         Setup();
