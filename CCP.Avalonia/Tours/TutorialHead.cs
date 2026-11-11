@@ -65,7 +65,11 @@ namespace ConditioningControlPanel.Avalonia.Tours
             _seeded = true;
 
             Service.StepChanged += (s, step) => CoreTutorial.RaiseStepChanged(s, Project(step));
-            Service.TutorialFinished += (s, e) => CoreTutorial.RaiseFinished(s, e.Completed);
+            Service.TutorialFinished += (s, e) =>
+            {
+                CoreTutorial.RaiseFinished(s, e.Completed);
+                Views.Windows.EmiDesk.EmiBookOffer.Schedule(e.Completed ? "tourFinished" : "tourSkipped");
+            };
         }
 
         /// <summary>The seam's Start: a WPF TutorialType name. An unknown name starts nothing.</summary>
@@ -116,6 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
         internal static void OnPanic()
         {
             try { if (Service.IsActive) Service.Skip(); } catch { /* panic never throws */ }
+            Views.Windows.EmiDesk.EmiBookOffer.Stop();
         }
 
         /// <summary>One snapshot per head step, so the overlay's "is this still my step" check holds.</summary>
@@ -159,6 +164,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
         {
             try { if (Service.IsActive) Service.Skip(); } catch { }
             _shellOverlay = null;
+            Views.Windows.EmiDesk.EmiBookOffer.Stop();
         }
     }
 }
