@@ -69,6 +69,9 @@ public sealed class IconGuardTests
         var sample = "Loc.Get(\"chaos_estim_spent\"); Loc.Get(\"section_system\")";
         var sampleRefs = refs.Matches(Allowed("Views/Chaos/ChaosRunHost.cs", sample, "emoji"));
         Assert.Equal("section_system", Assert.Single(sampleRefs.Cast<Match>()).Groups[2].Value);
+        var freezeSample = "Loc.Get(\"chaos_freeze_trigger_feed\"); Loc.Get(\"section_system\")";
+        var freezeRefs = refs.Matches(Allowed("Views/Chaos/ChaosRunHost.cs", freezeSample, "emoji"));
+        Assert.Equal("section_system", Assert.Single(freezeRefs.Cast<Match>()).Groups[2].Value);
         var perFile = new SortedDictionary<string, List<string>>(StringComparer.Ordinal);
         foreach (var (rel, lines) in Sources())
         {
