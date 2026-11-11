@@ -61,7 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>One press of the configured key (UI thread). A foreground board or DTRH may keep the first
         /// Escape as pause; unclaimed presses stop everything. A second
         /// counted press within 2 s exits the app, as WPF does when no engine is running.</summary>
-        internal void HandlePanicKeyPress(DateTime now, bool raceOwned = false)
+        internal void HandlePanicKeyPress(DateTime now)
         {
             var s = CoreSettings.Current;
             // WPF MainWindow.xaml.cs:914: a Pause-key capture takes the press before the panic branch, so the
@@ -81,7 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
             // WPF MainWindow.xaml.cs:1557: a game's pause, BEFORE everything below: a pause is not a panic.
-            if (!raceOwned) { if (TryGamePauseOnEscape(now)) return; }
+            if (TryGamePauseOnEscape(now)) return;
             IntakeHostWindow.StopMicsForPanic();   // every press, before the lock-card stop or the capture abort reads as silence
             CancelPendingAi();   // every press, even one a lock card or the palette consumes
             try { EmiDesk.EmiDeskService.Instance.PanicSilence(); } catch (Exception ex) { Serilog.Log.Warning(ex, "EMI panic silence failed"); } // WPF MainWindow.xaml.cs:1620
@@ -109,7 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // stop tail with the exit ladder NOT armed (and no grace pause), in BOTH modes: override
             // (MainWindow.xaml.cs:1627) and ladder (:1720 RunPanicStopTail(advanceExitLadder: false)).
             // Sampled BEFORE the stop pass closes it (intake host, Chaos descent).
-            bool gameOwnedTheScreen = raceOwned || PanicSurfaces.AnyOwnsTheScreen();
+            bool gameOwnedTheScreen = PanicSurfaces.AnyOwnsTheScreen();
             // WPF #735: with PanicOverridesAll off (RunLadder), the first press over a playing mandatory
             // video grace-pauses it instead (TryGracePause refuses when panic overrides all), and the
             // window's own handling of the same keystroke is deduped there. Not a ladder rung.
@@ -173,10 +173,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                var game = Games.GameWindow.EscapePauseInFront();
-                var linux = Games.LinuxRaceHost.Current is { InFront: true } race ? race : null;
-                var page = linux != null ? PanicPolicy.KeptEscapePage.Glassroad : game?.KeptEscapePage ?? PanicPolicy.KeptEscapePage.None;
-                bool ready = linux?.Ready ?? (game?.KeptEscapeReady == true);
+                // The Linux race shell's session window is never shown, so the shell's focus stands in for IsActive.
+                var game = Games.GameWindow.EscapePauseInFront() ?? Games.LinuxRaceHost.InFrontWindow;
+                var page = game?.KeptEscapePage ?? PanicPolicy.KeptEscapePage.None;
+                bool ready = game?.KeptEscapeReady == true;
                 var intake = game == null ? IntakeHostWindow.InFront() : null;
                 bool intakeReady = intake?.KeptEscapeReady == true;
                 bool In(PanicPolicy.KeptEscapePage p) => page == p;
@@ -186,18 +186,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     intakeInFront: intake != null, intakeReady: intakeReady,
                     glassroadInFront: In(PanicPolicy.KeptEscapePage.Glassroad), glassroadReady: ready);
                 bool claim = PanicPolicy.GameClaimsEscapeAsPause(CoreSettings.Current.PanicKey,
-                    gameInFront: linux != null || game != null || intake != null, engineRunning: CoreEngine.IsRunning,
+                    gameInFront: game != null || intake != null, engineRunning: CoreEngine.IsRunning,
                     lockCardOpen: LockCardWindow.IsAnyOpen(), lastClaimUtc: _lastGameEscapeClaim, nowUtc: now,
                     frontGameReady: Route(true) != PanicPolicy.KeptEscapePage.None, fromPanicKey: true);
                 if (!claim) { _lastGameEscapeClaim = null; return false; }
                 _lastGameEscapeClaim = now;
                 Serilog.Log.Information("Panic: Escape kept by {Game} as its pause (again within 2 s = full panic)",
-                    linux != null ? "glassroad" : game?.Spec.Id ?? "intake");
+                    game?.Spec.Id ?? "intake");
                 switch (Route(claim))
                 {
                     case PanicPolicy.KeptEscapePage.Intake: intake!.PostKeptEscape(); break;
                     case PanicPolicy.KeptEscapePage.None: break;
-                    default: if (linux != null) linux.Pause(); else game!.PostKeptEscape(); break;
+                    default: game!.PostKeptEscape(); break;
                 }
                 return true;
             }

@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -10,60 +11,64 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 namespace ConditioningControlPanel.Avalonia.Views.Games;
+/// <summary>B2 (#3702) step 3: the owned Electron race shell, one process group per race. Its GameWindow is never shown
+/// and keeps the whole Glassroad session (GameWindow.Glassroad.cs); this class only owns the process and its pipe.</summary>
 internal sealed class LinuxRaceHost : IDisposable
 {
     internal static LinuxRaceHost? Current { get; private set; }
     internal static Func<MainShellWindow?> Shell = () => MainShellWindow.Current;
+    private readonly GameWindow _window;
     private readonly Process _process;
     private readonly Action<DateTime> _panic;
     private readonly int _pid;
-    private readonly GlassroadSession _session;
     private readonly DispatcherTimer _watch;
     private readonly object _writeLock = new();
     private Task _writes = Task.CompletedTask;
-    private int _closed; private long _lastEscape; private bool _escapeHeld;
-    private volatile string? _displayBackend; private volatile bool _backendKnown;
+    private int _closed; private long _lastEscape; private bool _escapeHeld, _disposed;
+    private volatile string? _displayBackend; private volatile bool _backendKnown, _loaded;
     private readonly Func<bool> _x11Listening;
-    internal event Action? Exited;   // once, when the race ends: the launcher's return signal
     internal bool InFront { get; private set; }
-    internal bool Ready => _session.Ready;
-    internal static string EnginePath => Path.Combine(CorePaths.UserData, "engines", "electron-45.1.0", "electron");
+    internal bool IsAlive => Volatile.Read(ref _closed) == 0;
+    /// <summary>The race session window while the live shell has focus (TryGamePauseOnEscape's front game).</summary>
+    internal static GameWindow? InFrontWindow => Current is { InFront: true, IsAlive: true } host ? host._window : null;
+    internal static string? EnginePath => RuntimeInformation.ProcessArchitecture is Architecture.X64 or Architecture.Arm64
+        ? Path.Combine(RaceEngineFetcher.DefaultRoot, RaceEngineManifest.For(RuntimeInformation.ProcessArchitecture).DirectoryName, "electron") : null;
     internal static string ShellPath => Path.Combine(AppContext.BaseDirectory, "Resources", "web", "glassroad-shell", "main.js");
-    internal static bool TryLaunch(Uri url) => TryLaunch(url, EnginePath, ShellPath);
-    internal static bool TryLaunch(Uri url, string enginePath, string shellPath)
+    internal static LinuxRaceHost? TryLaunch(GameWindow window, Uri url) => TryLaunch(window, url, EnginePath, ShellPath);
+    /// <summary>Null when the engine or shell is not installed; throws when they are and the shell did not start.</summary>
+    internal static LinuxRaceHost? TryLaunch(GameWindow window, Uri url, string? enginePath, string shellPath)
     {
-        if (!OperatingSystem.IsLinux()) return false;
-        if (Current is { } live) { live.Post(new { type = "focus" }); return true; }
-        if (!File.Exists(enginePath) || !File.Exists(shellPath)) return false;
+        if (!OperatingSystem.IsLinux() || enginePath == null || !File.Exists(enginePath) || !File.Exists(shellPath)) return null;
         var start = new ProcessStartInfo("/usr/bin/setsid") { UseShellExecute = false, RedirectStandardInput = true,
             RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
         // setsid execs without forking: this child's pid is its process group, never CCP's group.
         foreach (var arg in new[] { enginePath, "--ozone-platform=x11", shellPath }) start.ArgumentList.Add(arg);
         var process = new Process { StartInfo = start };
+        LinuxRaceHost? host = null;
         try
         {
             if (!process.Start()) throw new IOException("Race shell did not start");
-            Current = new LinuxRaceHost(process);
-            Current.Post(new { type = "launch", url = url.AbsoluteUri }); Current.StartReading(); return true;
+            host = new LinuxRaceHost(window, process);
+            host.Send(new { type = "launch", url = url.AbsoluteUri }); return host.StartReading();
         }
         catch
         {
-            try { kill(process.Id, 9); kill(-process.Id, 9); } catch { }
+            if (host != null) { host.Kill(); host._watch.Stop(); Current = null; }
+            else try { kill(process.Id, 9); kill(-process.Id, 9); } catch { }
             process.Dispose();
-            throw; // no silent renderer fallback on a startup failure
+            throw; // the caller shows the race card with rt_engine_start_failed
         }
     }
-    internal LinuxRaceHost(Process process, Action<DateTime>? panic = null, Func<bool>? x11Listening = null)
+    internal LinuxRaceHost(GameWindow window, Process process, Action<DateTime>? panic = null, Func<bool>? x11Listening = null)
     {
-        _process = process; _pid = process.Id;
+        _window = window; _process = process; _pid = process.Id;
         _x11Listening = x11Listening ?? (() => Platform.X11PanicKey.IsListening && Platform.X11PanicKey.BoundKeycode != 0);
-        _panic = panic ?? (now => Shell()?.HandlePanicKeyPress(now, raceOwned: _closed != 0));
-        _session = new GlassroadSession(Post, Dispose, () => Post(new { type = "focus" }));
+        _panic = panic ?? (now => Shell()?.HandlePanicKeyPress(now));
         _watch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-        _watch.Tick += (_, _) => { if (UnsupportedPanicKey) Dispose(); else _session.CheckGlassroadWatch(DateTime.UtcNow); };
+        _watch.Tick += (_, _) => { if (UnsupportedPanicKey) Dispose(); };
         _watch.Start(); Current = this;
     }
-    internal void StartReading()
+    internal LinuxRaceHost StartReading()
     {
         _ = Task.Run(async () =>
         {
@@ -78,20 +83,26 @@ internal sealed class LinuxRaceHost : IDisposable
                 }
             }
             catch { }
-            finally { Kill(); Dispatcher.UIThread.Post(Dispose); }
+            finally
+            {
+                // Ended on its own before any page loaded: the engine did not start (B2 section 1), not a closed race.
+                bool startFailed = IsAlive && !_loaded;
+                Kill(); Dispatcher.UIThread.Post(() => Dispose(startFailed));
+            }
         });
         _ = Task.Run(async () => { try { var b = new char[1024]; while (await _process.StandardError.ReadAsync(b, 0, b.Length) != 0) { } } catch { } });
+        return this;
     }
     // A non-Escape key needs a live X11 listener (WPF MainWindow.xaml.cs:334-337 installs the global hook).
     private bool UnsupportedPanicKey => _backendKnown && CoreSettings.Current.PanicKeyEnabled && CoreSettings.Current.PanicKey != "Escape" && !(_displayBackend == "x11" && _x11Listening());
     // Runs on the pipe reader: arm the watchdog before anything is queued behind a wedged UI.
     internal void ReadFrame(JObject frame)
     {
-        if (Volatile.Read(ref _closed) != 0) return;
+        if (!IsAlive) return;
         var type = (string?)frame["type"];
         if (type == RaceShellProtocol.Loaded)
         {
-            _displayBackend = (string?)frame["displayBackend"]; _backendKnown = true;
+            _displayBackend = (string?)frame["displayBackend"]; _backendKnown = true; _loaded = true;
             if (UnsupportedPanicKey) { Kill(); Dispatcher.UIThread.Post(Dispose); return; }
         }
         if (type != RaceShellProtocol.Escape) { Dispatcher.UIThread.Post(() => Receive(frame)); return; }
@@ -101,10 +112,10 @@ internal sealed class LinuxRaceHost : IDisposable
         {
             bool escapePanics = CoreSettings.Current.PanicKey == "Escape";
             // Killed meanwhile (watchdog): the race is gone, so the recovered UI still runs the full panic, not a pause.
-            if (_closed != 0) { try { if (escapePanics) _panic(DateTime.Now); } finally { Dispose(); } return; }
+            if (!IsAlive) { try { if (escapePanics) _panic(DateTime.Now); } finally { Dispose(); } return; }
             InFront = true; if (!escapePanics) { Pause(); return; }
             // WPF hold-to-cut rides the panic key (OnX11PanicPress): this shell owns it, so it reports the release.
-            _panic(DateTime.Now); Shell()?.OnRaceEscape(true); _escapeHeld = _closed == 0;
+            _panic(DateTime.Now); Shell()?.OnRaceEscape(true); _escapeHeld = IsAlive;
             if (!_escapeHeld) Shell()?.OnRaceEscape(null);
         }
         if (CoreSettings.Current.PanicKey == "Escape" && CoreSettings.Current.PanicKeyEnabled && !MainShellWindow.LockdownActive
@@ -114,45 +125,59 @@ internal sealed class LinuxRaceHost : IDisposable
     }
     internal void Receive(JObject frame)
     {
-        if (Volatile.Read(ref _closed) != 0) return;
-        switch ((string?)frame["type"])
+        if (!IsAlive) return;
+        var type = (string?)frame["type"];
+        switch (type)
         {
             case RaceShellProtocol.Loaded:
-                _displayBackend = (string?)frame["displayBackend"]; _backendKnown = true;
+                _displayBackend = (string?)frame["displayBackend"]; _backendKnown = true; _loaded = true;
                 if (UnsupportedPanicKey) { Dispose(); break; }
-                _session.PostGlassroadInit(); break;
-            case RaceShellProtocol.Focus: InFront = (bool?)frame["active"] == true; break;
+                _window.PostGlassroadInit(); break;
+            case RaceShellProtocol.Focus:
+                InFront = (bool?)frame["active"] == true;
+                // A lost key-up never asks (LeashHold.cs): focus gone mid-hold hands off to the key probe.
+                if (!InFront && _escapeHeld) { _escapeHeld = false; Shell()?.OnRaceEscape(null); }
+                break;
             case RaceShellProtocol.Escape: ReadFrame(frame); break;
             case RaceShellProtocol.EscapeUp: if (_escapeHeld) { _escapeHeld = false; Shell()?.OnRaceEscape(false); } break;
-            case "boot-error": Dispose(); break;
-            default: _session.HandleGlassroad(frame); break;
+            default:
+                _window.HandleMessage(frame.ToString(Formatting.None));   // the window's own Glassroad and shell frames
+                if (type == "ready") Focus();
+                break;
         }
     }
-    internal void Pause() => Post(new { type = "kept-escape" });
-    private void Post(object frame)
+    internal void Pause() => _window.PostKeptEscape();
+    internal void Focus() => Send(new { type = "focus" });
+    internal void Send(object frame)
     {
-        if (Volatile.Read(ref _closed) != 0) return;
-        var json = JObject.FromObject(frame);
-        if ((string?)json["type"] == "init") { json["caps"]!["forceRenderer"] = "webgl2"; json["caps"]!["scrolller"] = false; }
+        if (!IsAlive) return;
+        var json = frame is string s ? JObject.Parse(s) : JObject.FromObject(frame);
+        if ((string?)json["type"] == "init" && json["caps"] is JObject caps) caps["forceRenderer"] = "webgl2";
         lock (_writeLock) _writes = _writes.ContinueWith(_ =>
         {
-            try { if (_closed == 0) { _process.StandardInput.WriteLine(json.ToString(Formatting.None)); _process.StandardInput.Flush(); } }
+            try { if (IsAlive) { _process.StandardInput.WriteLine(json.ToString(Formatting.None)); _process.StandardInput.Flush(); } }
             catch { Kill(); Dispatcher.UIThread.Post(Dispose); }
         });
     }
-    [System.Runtime.InteropServices.DllImport("libc", SetLastError = true)] private static extern int kill(int pid, int signal);
+    [DllImport("libc", SetLastError = true)] private static extern int kill(int pid, int signal);
+    /// <summary>Thread-safe (the panic watchdog calls it off the UI thread): the race is gone, never in front again.</summary>
     internal void Kill()
     {
+        InFront = false;
         if (Interlocked.Exchange(ref _closed, 1) != 0) return;
         // Exact child first, then its isolated group, including orphaned Chromium helpers.
         kill(_pid, 9); kill(-_pid, 9);
     }
-    public void Dispose()
+    public void Dispose() => Dispose(false);
+    private void Dispose(bool startFailed)
     {
-        Kill(); _watch.Stop(); _session.Dispose();
+        Kill();
+        if (_disposed) return;
+        _disposed = true; _watch.Stop();
         if (ReferenceEquals(Current, this)) Current = null;
         _process.Dispose();
         if (_escapeHeld) { _escapeHeld = false; Shell()?.OnRaceEscape(null); }
-        Interlocked.Exchange(ref Exited, null)?.Invoke();
+        try { if (startFailed) _window.RaceShellFailed(); else _window.Close(); }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "Glassroad: race window close failed"); }
     }
 }
