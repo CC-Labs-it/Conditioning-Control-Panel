@@ -63,7 +63,7 @@ public sealed class SubjectsFxTests
             Assert.All(cards, c => Assert.Equal(1, c.Opacity));
             Assert.False(view.SubjectsFxRunning);
             // The container animates, never the bound row card inside it.
-            Assert.All(cards, c => Assert.Equal(1, c.GetVisualDescendants().OfType<Border>().First().Opacity));
+            Assert.All(cards, c => Assert.Equal(1, c.GetVisualDescendants().OfType<Border>().Single(b => Equals(b.Tag, "lobby-face")).Opacity));
 
             // A service rebind while the page is being read must never replay the entrance.
             Paint(view, 1);
@@ -200,6 +200,50 @@ public sealed class SubjectsFxTests
                     Assert.Equal(0.9, Assert.IsType<ScaleTransform>(card.RenderTransform).ScaleX, 3);
                     Assert.Equal(motion == MotionLevel.Full ? 0.9 : 0, ring.Opacity, 3);
                 }
+            }
+            var grid = Assert.IsType<Grid>(Card(0, 1, "lobby-card"));
+            var ringBorder = Assert.IsType<Border>(Card(0, 1, "lobby-ring"));
+            Assert.Same(ringBorder, grid.Children[0]);
+            Assert.Equal("lobby-face", Assert.IsType<Border>(grid.Children[1]).Tag);
+            Assert.Equal(new CornerRadius(16), ringBorder.CornerRadius);
+            Assert.Equal(Color.Parse("#FFFF8CC0"), Assert.IsAssignableFrom<ISolidColorBrush>(ringBorder.BorderBrush).Color);
+            Assert.Equal(new RelativePoint(0.5, 0.5, RelativeUnit.Relative), grid.RenderTransformOrigin);
+            Assert.Equal(new RelativePoint(0.5, 0.5, RelativeUnit.Relative), ringBorder.RenderTransformOrigin);
+
+            if (motion != MotionLevel.Off)
+            {
+                var scale = Assert.IsType<ScaleTransform>(grid.RenderTransform);
+                Step(view, clock, 160);
+                Assert.Equal(0.99375, scale.ScaleX, 5);
+                Assert.Equal(scale.ScaleX, scale.ScaleY, 5);
+                if (motion == MotionLevel.Full)
+                {
+                    var ringScale = Assert.IsType<ScaleTransform>(ringBorder.RenderTransform);
+                    Assert.Equal(1.0416568, ringScale.ScaleX, 6);
+                    Assert.Equal(ringScale.ScaleX, ringScale.ScaleY, 6);
+                    Assert.Equal(0.6230769, ringBorder.Opacity, 6);
+                }
+                else Assert.Equal(0, ringBorder.Opacity);
+                Step(view, clock, 160);
+                Assert.Equal(1, scale.ScaleX, 6);
+                Assert.Equal(1, scale.ScaleY, 6);
+                Assert.Equal(motion == MotionLevel.Full, view.SubjectsFxRunning);
+                if (motion == MotionLevel.Full)
+                {
+                    Assert.Equal(1.0681657, Assert.IsType<ScaleTransform>(ringBorder.RenderTransform).ScaleX, 6);
+                    Assert.Equal(0.3461538, ringBorder.Opacity, 6);
+                }
+                Step(view, clock, 200);
+                Assert.False(view.SubjectsFxRunning);
+                Assert.Equal(1, scale.ScaleX, 6);
+                Assert.Equal(0, ringBorder.Opacity, 6);
+                if (motion == MotionLevel.Full)
+                    Assert.Equal(1.08, Assert.IsType<ScaleTransform>(ringBorder.RenderTransform).ScaleX, 6);
+
+                // Start a fresh effect so hide cleanup is checked while the clock is running.
+                view.PaintSnapshot(new LobbySnapshot(new[] { old, Row("d") }, Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true), gates);
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(view.SubjectsFxRunning);
             }
             view.IsVisible = false;
             Assert.False(view.SubjectsFxRunning);
