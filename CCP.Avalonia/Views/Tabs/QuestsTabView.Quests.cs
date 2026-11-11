@@ -39,6 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             base.OnAttachedToVisualTree(e);
             UpdateAmbient(attached: true);
             CoreMods.ModChanged += OnJournalModChanged;
+            LocalizationManager.Instance.LanguageChanged += OnQuestLanguageChanged;
             ApplyBimboJournalModVisibility();
             if (App.Quests is not { } quests) return;
             WatchStreakFixCharges(attached: true);
@@ -54,6 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             base.OnDetachedFromVisualTree(e);
             UpdateAmbient(attached: false);
             CoreMods.ModChanged -= OnJournalModChanged;
+            LocalizationManager.Instance.LanguageChanged -= OnQuestLanguageChanged;
             WatchStreakFixCharges(attached: false);
             if (App.Quests is not { } quests) return;
             quests.QuestCompleted -= OnQuestCompleted;
@@ -71,6 +73,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (change.Property != IsVisibleProperty) return;
             UpdateAmbient(TopLevel.GetTopLevel(this) != null);
             if (IsVisible && App.Quests != null) RefreshQuestUI();
+        }
+
+        private void OnQuestLanguageChanged(object? sender, EventArgs e) =>
+            Dispatcher.UIThread.Post(RepaintQuestIfVisible);
+
+        private void RepaintQuestIfVisible()
+        {
+            if (IsVisible) RefreshQuestUI();
         }
 
         private void OnQuestsRefreshed(object? sender, EventArgs e) => Dispatcher.UIThread.Post(RefreshQuestUI);
