@@ -19,8 +19,9 @@ namespace ConditioningControlPanel.Services
     /// <c>POST /v2/user/sync</c> for a head that loaded only <c>GET /v2/user/profile</c> (WPF ProfileSyncService.SyncProfileAsync,
     /// cut to what is known): baseline fields, owned consents, adopted skills/progress, cosmetics and claim ack only.
     /// Achievements = server-loaded ∪ local. Gates, all
-    /// required: signed in, loaded THIS session (<see cref="MarkLoaded"/>; stricter than WPF's defaults-guard), the 30 s
-    /// cooldown and the XP watermark. Also the 120 s heartbeat and the coalesced XP nudge. No periodic push (WPF has none).
+    /// required: signed in, loaded THIS session (<see cref="MarkLoaded"/>), the 30 s cooldown and the XP watermark.
+    /// The post-login failed-read fallback alone may send guarded XP and level without opening the loaded gate.
+    /// Also the 120 s heartbeat and the coalesced XP nudge. No periodic push (WPF has none).
     /// ponytail: no restore-from-backup reconcile, 401 recovery or heartbeat adopt - add with the features that need them.
     /// </summary>
     public sealed class SyncPush
@@ -242,10 +243,16 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <param name="waitForGate">Logout: wait (bounded) for an in-flight push instead of skipping.</param>
-        public async Task<bool> PushAsync(string reason, bool waitForGate = false)
+        public Task<bool> PushAsync(string reason, bool waitForGate = false) => PushCoreAsync(reason, waitForGate, false);
+
+        // WPF Login.cs:175-181: only the post-login fallback can try without a profile read.
+        internal Task<bool> PushAfterFailedReadAsync() => PushCoreAsync("after login", false, true);
+
+        private async Task<bool> PushCoreAsync(string reason, bool waitForGate, bool allowUnread)
         {
             var s = CoreSettings.Current;
-            if (!Loaded || !SignedIn(s)) { Log.Debug("Profile sync skipped ({Reason}) - not loaded this session or not signed in", reason); return false; }
+            var session = Volatile.Read(ref _sessionVersion);
+            if ((!Loaded && !allowUnread) || !SignedIn(s)) { Log.Debug("Profile sync skipped ({Reason}) - not loaded this session or not signed in", reason); return false; }
             if (!await _gate.WaitAsync(waitForGate ? TimeSpan.FromSeconds(5) : TimeSpan.Zero)) return false;
             try
             {
@@ -256,6 +263,12 @@ namespace ConditioningControlPanel.Services
                     return false;
                 }
                 var totalXp = ProfileAdopt.TotalXp(s);
+                var unread = !Loaded;
+                // WPF ProfileSyncService.cs:1473-1479,1513-1518: an unreconciled backup or
+                // default-looking profile cannot be asserted to the server after a failed read.
+                if (unread && (CoreSettings.Service?.RestoredFromBackup == true
+                    || (s.PlayerLevel <= 1 && totalXp < ProfileAdopt.MeaningfulProgressXp)
+                    || Descent.DescentMigrationChoices.IsValid(s.PendingDescentMigrationChoice))) return false;
                 var watermark = Descent.DescentMigrationChoices.IsValid(s.PendingDescentMigrationChoice)
                     ? 0 : ProfileAdopt.ActiveXpWatermark(s);
                 if (watermark > 0 && totalXp < watermark)
@@ -264,12 +277,22 @@ namespace ConditioningControlPanel.Services
                     return false;
                 }
                 var id = s.UnifiedId!;
-                if (!Loaded || !SignedIn(s)) return false;   // a logout between the check above and the gate
+                if ((!Loaded && !allowUnread) || !SignedIn(s) || !ReferenceEquals(s, CoreSettings.Current)
+                    || session != Volatile.Read(ref _sessionVersion)) return false;
                 Prizes?.NoteAccount(id);
                 var server = _serverAchievements;
-                var clearing = _pendingCosmeticsClear;
-                var cosmetics = CosmeticsPayload(s, clearing);
-                var body = SerializeBody(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics, ConsentFields(s), _adopted, _knownProgress);
+                var clearing = !unread && _pendingCosmeticsClear;
+                var cosmetics = unread ? null : CosmeticsPayload(s, clearing);
+                string body;
+                if (unread)
+                {
+                    // Unknown account fields must not be overwritten by local defaults.
+                    var recovery = Body(s, null);
+                    recovery.Known &= SyncBody.Field.UnifiedId | SyncBody.Field.Xp | SyncBody.Field.Level
+                        | SyncBody.Field.DescentEpoch | SyncBody.Field.DescentAuto;
+                    body = JsonConvert.SerializeObject(recovery);
+                }
+                else body = SerializeBody(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics, ConsentFields(s), _adopted, _knownProgress);
                 var tokenUsed = s.AuthToken;
                 HttpRequestMessage NewRequest()
                 {
@@ -297,7 +320,8 @@ namespace ConditioningControlPanel.Services
                 }
                 using var _ = response;
                 // Signed out (or into another account) while this was in flight: the answer is not ours to apply.
-                if (!Loaded || !string.Equals(s.UnifiedId, id, StringComparison.Ordinal))
+                if ((!Loaded && !allowUnread) || !SignedIn(s) || !ReferenceEquals(s, CoreSettings.Current)
+                    || session != Volatile.Read(ref _sessionVersion) || !string.Equals(s.UnifiedId, id, StringComparison.Ordinal))
                 {
                     Log.Information("Profile sync response dropped - the account changed while it was in flight");
                     return false;

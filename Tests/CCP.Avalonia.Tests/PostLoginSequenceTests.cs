@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Collections.Generic;
+using System.Threading;
 using System.Net;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -24,6 +26,116 @@ public sealed partial class AccountSeedTests
         lock (wire.Seen)
             Assert.Equal(2, wire.Seen.Count(r => r.Path == "GET /v2/user/profile"));
         Assert.Empty(wire.Syncs);
+    });
+
+    [Fact]
+    public void FailedReadsRecoverProgressWithoutOpeningTheWriteGate() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, local) = SignIn("u1", null);
+        var s = CoreSettings.Current;
+        s.PlayerLevel = 2;
+        s.LastWebXpClaimId = "unread-claim";
+        local.Add("local-only");
+        wire.SyncReply = new Newtonsoft.Json.Linq.JObject
+        {
+            ["success"] = true,
+            ["user"] = new Newtonsoft.Json.Linq.JObject
+            {
+                ["unified_id"] = "u1", ["level"] = 40, ["xp"] = L40Xp, ["current_season"] = "2026-08"
+            }
+        }.ToString();
+        await AccountSeed.PostLoginAsync();
+        lock (wire.Seen)
+            Assert.Equal(2, wire.Seen.Count(r => r.Path == "GET /v2/user/profile"));
+        var body = Assert.Single(wire.Syncs);
+        Assert.Equal(new HashSet<string> { "unified_id", "xp", "level", "descent_epoch", "descent_auto" },
+            body.Properties().Select(p => p.Name).ToHashSet());
+        Assert.Equal("u1", body.Value<string>("unified_id"));
+        Assert.Equal(40, s.PlayerLevel);
+        Assert.False(sync.Loaded);
+        Assert.False(await sync.PushAsync("ordinary"));
+        Assert.Single(wire.Syncs);
+    });
+
+    [Theory]
+    [InlineData(99, 0)]
+    [InlineData(100, 1)]
+    public void FailedReadsUseWpfsDefaultProgressBoundary(int xp, int expectedSyncs) => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", null);
+        CoreSettings.Current.PlayerLevel = 1;
+        CoreSettings.Current.PlayerXP = xp;
+        await AccountSeed.PostLoginAsync();
+        Assert.Equal(expectedSyncs, wire.Syncs.Count());
+        Assert.False(sync.Loaded);
+    });
+
+    [Fact]
+    public void FailedReadsCannotSendBelowTheAccountWatermark() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", null);
+        var s = CoreSettings.Current;
+        s.PlayerLevel = 2;
+        s.LastConfirmedServerXp = ProfileAdopt.TotalXp(s) + 100;
+        s.LastConfirmedServerXpAccount = "u1";
+        s.LastConfirmedServerXpSeason = s.CurrentSeason;
+        await AccountSeed.PostLoginAsync();
+        Assert.Empty(wire.Syncs);
+        Assert.False(sync.Loaded);
+    });
+
+    [Fact]
+    public void FailedReadsDoNotSendAnUnreconciledBackup() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", null);
+        var s = CoreSettings.Current;
+        s.PlayerLevel = 2;
+        var restored = typeof(SettingsService).GetProperty(nameof(SettingsService.RestoredFromBackup))!;
+        restored.SetValue(CoreSettings.Service, true);
+        try { await AccountSeed.PostLoginAsync(); }
+        finally { restored.SetValue(CoreSettings.Service, false); }
+        Assert.Empty(wire.Syncs);
+        Assert.False(sync.Loaded);
+    });
+
+    [Fact]
+    public void FailedReadsDoNotSendPendingMigration() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", null);
+        var s = CoreSettings.Current;
+        s.PlayerLevel = 2;
+        s.PendingDescentMigrationChoice = ConditioningControlPanel.Services.Descent.DescentMigrationChoices.Restore;
+        try { await AccountSeed.PostLoginAsync(); }
+        finally { s.PendingDescentMigrationChoice = null; }
+        Assert.Empty(wire.Syncs);
+        Assert.False(sync.Loaded);
+    });
+
+    [Fact]
+    public void FailedReadRecoveryDropsReplyAfterLogout() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", null);
+        var s = CoreSettings.Current;
+        s.PlayerLevel = 2;
+        wire.SyncReply = new Newtonsoft.Json.Linq.JObject
+        {
+            ["success"] = true,
+            ["user"] = new Newtonsoft.Json.Linq.JObject { ["level"] = 40, ["xp"] = L40Xp }
+        }.ToString();
+        wire.Hold = new TaskCompletionSource();
+        try
+        {
+            var pending = AccountSeed.PostLoginAsync();
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            while (!wire.Syncs.Any()) await Task.Delay(20, timeout.Token);
+            sync.Reset();
+            wire.Hold.SetResult();
+            await pending;
+            Assert.Equal(2, s.PlayerLevel);
+            Assert.False(sync.Loaded);
+            Assert.Null(sync.LastSyncTime);
+        }
+        finally { wire.Hold.TrySetResult(); }
     });
 
     [Fact]

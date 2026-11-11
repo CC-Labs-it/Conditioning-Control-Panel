@@ -154,7 +154,7 @@ internal static class AccountSeed
         }
     }
 
-    // WPF MainWindow.Login.cs:155-187. Keep the fallback behind SyncPush's loaded gate.
+    // WPF MainWindow.Login.cs:155-187. The failed-read fallback has its own guards.
     internal static async Task PostLoginAsync(Func<Task<bool>>? load = null, AchievementEngine? achievements = null)
     {
         var uid = CoreSettings.Current.UnifiedId;
@@ -166,12 +166,15 @@ internal static class AccountSeed
         try
         {
             load ??= () => LoadProfileAsync();
-            if (!await load() && CoreSettings.Current.UnifiedId == uid)
-                await load();
-            // WPF Login.cs:170-181 calls sync after the load, even on failure.
-            // PushAsync retains the loaded, cooldown and failure-backoff gates.
+            var loaded = await load();
+            if (!loaded && CoreSettings.Current.UnifiedId == uid)
+                loaded = await load();
+            // WPF Login.cs:170-181 calls sync even after a failed read.
             if (CoreSettings.Current.UnifiedId == uid && Sync is { } sync)
-                await sync.PushAsync("after login");
+            {
+                if (loaded || sync.Loaded) await sync.PushAsync("after login");
+                else await sync.PushAfterFailedReadAsync();
+            }
         }
         finally
         {
