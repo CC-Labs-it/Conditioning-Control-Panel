@@ -14,10 +14,9 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// <summary>WPF MergedAccountRecoveryHead: preserve the merged person's local data.</summary>
 internal static class MergedAccountRecoveryHead
 {
-    internal static volatile bool PendingSignIn;
     internal static void Seed()
     {
-        MergedAccountRecovery.StopSync = () => AccountSeed.Sync?.Reset();
+        MergedAccountRecovery.StopSync = () => { CoreSettings.Current.MergedSignInPending = true; AccountSeed.Sync?.Reset(); };
         MergedAccountRecovery.StampQuests = id => App.Quests?.StampOwner(id);
         MergedAccountRecovery.Reauthenticate = ReauthenticateAsync;
         MergedAccountRecovery.ReloadProfile = () => Dispatcher.UIThread.InvokeAsync(async () =>
@@ -67,7 +66,7 @@ internal static class MergedAccountRecoveryHead
             await ExchangeAsync(AccountSeed.Discord.GetAccessToken, (v, t) => v.AuthenticateWithDiscordAsync(t))) return true;
         if (AccountSeed.SubscribeStar?.IsAuthenticated == true &&
             await ExchangeAsync(AccountSeed.SubscribeStar.GetAccessToken, (v, t) => v.AuthenticateWithSubstarAsync(t))) return true;
-        PendingSignIn = true;
+        CoreSettings.Current.MergedSignInPending = true;
         CoreAccount.UnifiedUserId = null;
         return false;
     }
@@ -86,8 +85,8 @@ internal static class MergedAccountRecoveryHead
             ProfileAdopt.ApplyUserData(CoreSettings.Current, result.User, result.AuthToken, now);
             InviteRules.ApplyGrant(CoreSettings.Current, InviteRules.ParseUtc(result.User.InviteGrantUntilRaw), now);
             CoreAccount.UnifiedUserId = result.User.UnifiedId;
+            if (!string.IsNullOrEmpty(result.User.UnifiedId) && !string.IsNullOrEmpty(result.AuthToken)) CoreSettings.Current.MergedSignInPending = false;
             CoreSettings.Save();
-            if (!string.IsNullOrEmpty(result.User.UnifiedId) && !string.IsNullOrEmpty(result.AuthToken)) PendingSignIn = false;
             return !string.IsNullOrEmpty(result.User.UnifiedId) && !string.IsNullOrEmpty(result.AuthToken);
         }
         catch (Exception ex)

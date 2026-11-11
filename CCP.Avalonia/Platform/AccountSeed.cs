@@ -54,7 +54,7 @@ internal static class AccountSeed
         patreon.PeerDisplayName = () => discord.CustomDisplayName; // WPF PatreonService
 
         // WPF App.IsLoggedIn / UserDisplayName / the PatreonService gates.
-        CoreAccount.IsLoggedInProvider = () => (!MergedAccountRecoveryHead.PendingSignIn ||
+        CoreAccount.IsLoggedInProvider = () => (!CoreSettings.Current.MergedSignInPending ||
             (!string.IsNullOrEmpty(CoreAccount.UnifiedUserId) && !string.IsNullOrEmpty(CoreSettings.Current.AuthToken))) &&
             (patreon.IsAuthenticated || discord.IsAuthenticated || substar.IsAuthenticated || !string.IsNullOrEmpty(CoreAccount.UnifiedUserId));
         CoreAccount.DisplayNameProvider = () =>
@@ -107,7 +107,6 @@ internal static class AccountSeed
             return;
         }
         CoreAccount.UnifiedUserId = id;
-        if (string.IsNullOrEmpty(CoreSettings.Current.AuthToken)) MergedAccountRecoveryHead.PendingSignIn = true; // a tokenless merged swap, restarted
         Log.Information("Restored UnifiedUserId from settings: {Id}", id);
     }
 
@@ -119,7 +118,7 @@ internal static class AccountSeed
     {
         var id = CoreAccount.UnifiedUserId;
         if (string.IsNullOrEmpty(id) || CoreSettings.Current.OfflineMode) return;
-        if (MergedAccountRecoveryHead.PendingSignIn && !await MergedAccountRecoveryHead.ReauthenticateAsync()) return; // WPF App.xaml.cs:4690,4757
+        if (CoreSettings.Current.MergedSignInPending && !await MergedAccountRecoveryHead.ReauthenticateAsync()) return; // WPF App.xaml.cs:4690,4757
         v2 ??= NewV2();
         // If a provider already authenticated, it validated the session (and owns the load in WPF).
         if (Patreon?.IsAuthenticated != true && Discord?.IsAuthenticated != true)
@@ -385,7 +384,7 @@ internal static class AccountSeed
         Discord?.Logout();
         SubscribeStar?.Logout();
         CoreAccount.UnifiedUserId = null;
-        MergedAccountRecoveryHead.PendingSignIn = false;
+        CoreSettings.Current.MergedSignInPending = false;
         var s = CoreSettings.Current;
         s.UnifiedId = null;
         s.AuthToken = null;

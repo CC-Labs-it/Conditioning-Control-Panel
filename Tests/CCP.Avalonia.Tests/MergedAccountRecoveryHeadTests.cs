@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using System.Reflection;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -18,9 +20,9 @@ public class MergedAccountRecoveryHeadTests
     [Fact]
     public void MergedResponsePreservesProgressAndDefersSignIn() => AvaloniaTestDispatcher.Run(() =>
     {
+        using var saved = new MergedRecoveryState();
         MergedAccountRecoveryReviewTests.Setup();
         var settings = new AppSettings { UnifiedId = "u_tombstone1", PlayerLevel = 7, PlayerXP = 42 };
-        using var saved = new MergedRecoveryState();
         string? token = "old";
         CoreSecrets.RetrieveProvider = _ => token;
         CoreSecrets.StoreProvider = (_, value) => token = value;
@@ -63,48 +65,32 @@ public class MergedAccountRecoveryHeadTests
 /// <summary>Every static and settings value the merged-recovery tests set, put back on Dispose.</summary>
 internal sealed class MergedRecoveryState : IDisposable
 {
-    private static readonly Newtonsoft.Json.JsonSerializerSettings Json = new()
-        { ObjectCreationHandling = Newtonsoft.Json.ObjectCreationHandling.Replace };
-    private readonly AppSettings _settings = CoreSettings.Current;
-    private readonly string _settingsJson = Newtonsoft.Json.JsonConvert.SerializeObject(CoreSettings.Current, Json);
-    private readonly Func<string, string?>? _get = CoreSecrets.RetrieveProvider;
-    private readonly Action<string, string?>? _set = CoreSecrets.StoreProvider;
-    private readonly Func<V2AuthService> _newV2 = AccountSeed.NewV2;
-    private readonly SyncPush? _sync = AccountSeed.Sync;
-    private readonly QuestService? _quests = App.Quests;
-    private readonly Func<ConditioningControlPanel.Avalonia.Views.Dialogs.WelcomeBackSheetContent, Task> _present = WelcomeBackOffer.Present;
-    private readonly Func<bool>? _loggedIn = CoreAccount.IsLoggedInProvider, _premium = CoreAccount.HasPremiumAccessProvider,
-        _lab = CoreAccount.HasLabAccessProvider, _whitelisted = CoreAccount.IsWhitelistedProvider,
-        _entPremium = CoreEntitlement.HasPremiumProvider, _entLab = CoreEntitlement.HasLabProvider,
-        _programPremium = CoreProgram.HasPremiumProvider, _session = CoreSession.IsSessionRunningProvider;
-    private readonly Func<string?>? _name = CoreAccount.DisplayNameProvider;
-    private readonly string? _unifiedUserId = CoreAccount.UnifiedUserId;
-    private readonly bool _pendingSignIn = MergedAccountRecoveryHead.PendingSignIn;
-    private readonly Func<Task<bool>>? _revalidate = AuthRecovery.ProviderRevalidate;
-    private readonly Action? _recovered = AuthRecovery.Recovered, _stopSync = MergedAccountRecovery.StopSync;
-    private readonly Action<string>? _stamp = MergedAccountRecovery.StampQuests;
-    private readonly Func<Task<bool>>? _reauth = MergedAccountRecovery.Reauthenticate;
-    private readonly Func<Task>? _reload = MergedAccountRecovery.ReloadProfile;
-    private readonly Action<string, bool>? _finished = MergedAccountRecovery.Finished;
-    private readonly Func<HttpResponseMessage, string?, Task<bool>>? _v2Hook = V2AuthService.MergedRecovery;
-    private readonly Func<HttpResponseMessage, Task>? _aiHook = AiService.MergedAccountHook;
-    private readonly Func<int, string, bool>? _backRoomHook = ConditioningControlPanel.Services.BackRoom.BackRoomApi.MergedReply;
+    private const BindingFlags StaticFields = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+    private const BindingFlags InstanceFields = BindingFlags.Instance | BindingFlags.NonPublic;
+    private readonly ProcessStateSnapshot _snapshot = ProcessStateSnapshot.Take();
+    // Seed mutates these statics through methods, so the suite's assignment scanner cannot find them.
+    private readonly (FieldInfo Field, object? Value)[] _statics = new[]
+        { typeof(AccountSeed), typeof(MergedAccountRecovery), typeof(V2AuthService), typeof(AiService),
+          typeof(ConditioningControlPanel.Services.BackRoom.BackRoomApi), typeof(AuthRecovery) }
+        .SelectMany(t => t.GetFields(StaticFields)).Where(f => !f.IsInitOnly && !f.IsLiteral)
+        .Select(f => (f, f.GetValue(null))).ToArray();
+    private readonly (FieldInfo Field, object? Value)[] _intake = App.IntakePass.GetType().GetFields(InstanceFields)
+        .Where(f => f.Name is "_entitlementHooked" or "_entitlementHandler" or "_detachEntitlement")
+        .Select(f => (f, f.GetValue(App.IntakePass))).ToArray();
+    private readonly FieldInfo _tierEvent = typeof(ProviderSubscription).GetField("TierChanged", InstanceFields)!;
+    private readonly ProviderSubscription? _patreon = AccountSeed.Patreon, _substar = AccountSeed.SubscribeStar;
+    private readonly object? _patreonHandlers = AccountSeed.Patreon is { } p ? typeof(ProviderSubscription).GetField("TierChanged", InstanceFields)!.GetValue(p) : null;
+    private readonly object? _substarHandlers = AccountSeed.SubscribeStar is { } p ? typeof(ProviderSubscription).GetField("TierChanged", InstanceFields)!.GetValue(p) : null;
 
     public void Dispose()
     {
-        MergedAccountRecovery.ResetForTest();
-        MergedAccountRecoveryHead.PendingSignIn = _pendingSignIn;
-        (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, AccountSeed.NewV2, AccountSeed.Sync) = (_get, _set, _newV2, _sync);
-        (App.Quests, WelcomeBackOffer.Present) = (_quests, _present);
-        (CoreAccount.IsLoggedInProvider, CoreAccount.HasPremiumAccessProvider, CoreAccount.HasLabAccessProvider) = (_loggedIn, _premium, _lab);
-        (CoreAccount.IsWhitelistedProvider, CoreAccount.DisplayNameProvider, CoreAccount.UnifiedUserId) = (_whitelisted, _name, _unifiedUserId);
-        (CoreEntitlement.HasPremiumProvider, CoreEntitlement.HasLabProvider) = (_entPremium, _entLab);
-        (CoreProgram.HasPremiumProvider, CoreSession.IsSessionRunningProvider) = (_programPremium, _session);
-        (AuthRecovery.ProviderRevalidate, AuthRecovery.Recovered) = (_revalidate, _recovered);
-        (MergedAccountRecovery.StopSync, MergedAccountRecovery.StampQuests, MergedAccountRecovery.Reauthenticate) = (_stopSync, _stamp, _reauth);
-        (MergedAccountRecovery.ReloadProfile, MergedAccountRecovery.Finished) = (_reload, _finished);
-        (V2AuthService.MergedRecovery, AiService.MergedAccountHook) = (_v2Hook, _aiHook);
-        ConditioningControlPanel.Services.BackRoom.BackRoomApi.MergedReply = _backRoomHook;
-        Newtonsoft.Json.JsonConvert.PopulateObject(_settingsJson, _settings, Json);
+        var handler = (EventHandler<PatreonTier>?)_intake.Single(p => p.Field.Name == "_entitlementHandler").Field.GetValue(App.IntakePass);
+        var detach = (Action<EventHandler<PatreonTier>>?)_intake.Single(p => p.Field.Name == "_detachEntitlement").Field.GetValue(App.IntakePass);
+        if (handler != null) detach?.Invoke(handler);
+        foreach (var (field, value) in _intake) field.SetValue(App.IntakePass, value);
+        if (_patreon != null) _tierEvent.SetValue(_patreon, _patreonHandlers);
+        if (_substar != null) _tierEvent.SetValue(_substar, _substarHandlers);
+        _snapshot.Restore();
+        foreach (var (field, value) in _statics) field.SetValue(null, value);
     }
 }

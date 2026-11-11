@@ -770,9 +770,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             // WPF V2AuthServiceHead: an invite week rides its own exact end date (main 6f5e76610).
             ConditioningControlPanel.Services.Invites.InviteRules.ApplyGrant(CoreSettings.Current, ConditioningControlPanel.Services.Invites.InviteRules.ParseUtc(user.InviteGrantUntilRaw), DateTime.UtcNow);
             Controls.Invites.InvitePanel.ArmExpiry();
+            if (!string.IsNullOrEmpty(authToken)) CoreSettings.Current.MergedSignInPending = false;
             CoreSettings.Save();
             CoreAccount.UnifiedUserId = user.UnifiedId; // before the load: its push is gated on signed in
-            if (!string.IsNullOrEmpty(authToken)) MergedAccountRecoveryHead.PendingSignIn = false;
             ProfileLoad = AccountSeed.LoadProfileAsync(); // WPF MainWindow.Login.cs:170
 
             // WPF UpdateServiceProperties
@@ -983,9 +983,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             var s = CoreSettings.Current;
             s.AuthToken = result.AuthToken;
             s.UnifiedId = result.UnifiedId;
+            CoreSettings.Current.MergedSignInPending = false;
             CoreSettings.Save();
             CoreAccount.UnifiedUserId = result.UnifiedId;
-            MergedAccountRecoveryHead.PendingSignIn = false;
             ProfileLoad = AccountSeed.LoadProfileAsync(); // WPF MainWindow.Login.cs:170 runs after every sign-in
             Result = new LoginResult
             {

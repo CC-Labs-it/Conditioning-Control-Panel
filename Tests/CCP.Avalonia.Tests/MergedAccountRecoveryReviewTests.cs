@@ -73,8 +73,8 @@ public class MergedAccountRecoveryReviewTests
     [InlineData(null)]
     public Task ProviderExchangeReloadsOrOffersSignIn(string? provider) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        Setup();
         using var saved = new MergedRecoveryState();
+        Setup();
         var secrets = new Dictionary<string, string?>();
         var tokenData = JsonConvert.SerializeObject(new PatreonTokenData { AccessToken = "provider", ExpiresAt = DateTime.UtcNow.AddDays(1) });
         secrets["patreon_auth"] = secrets["substar_auth"] = tokenData;
@@ -82,13 +82,28 @@ public class MergedAccountRecoveryReviewTests
         CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key);
         CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
         var settings = CoreSettings.Current;
-        (settings.UnifiedId, settings.AuthToken, settings.PlayerLevel, settings.PlayerXP, settings.OfflineMode, settings.InviteGrantUntil)
-            = ("u_tombstone1", "old", 7, 42, false, null);
+        (settings.UnifiedId, settings.AuthToken, settings.PlayerLevel, settings.PlayerXP, settings.OfflineMode, settings.InviteGrantUntil, settings.MergedSignInPending)
+            = ("u_tombstone1", null, 7, 42, provider == "substar", null, false);
         var wire = new Wire(provider);
         AccountSeed.NewV2 = () => new V2AuthService(() => settings, wire);
         AccountSeed.Sync = null;
         Assert.True(AccountSeed.Seed(p => new ProviderSubscription(p, () => settings),
             p => new DiscordAccount(() => p, () => settings)));
+        AccountSeed.RestoreSession();
+        await AccountSeed.ValidateRestoredSessionAsync();
+        Assert.True(CoreAccount.IsLoggedIn); // ordinary tokenless provider, both offline and failed exchange
+        (settings.AuthToken, settings.OfflineMode) = ("old", false);
+        wire = new Wire(provider);
+        var original = AccountSeed.Patreon!;
+        var oldUid = AccountSeed.LoadedProfileUid;
+        var tierEvent = typeof(ProviderSubscription).GetField("TierChanged", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        ProviderSubscription? replacement = null;
+        using (new MergedRecoveryState())
+            Assert.True(AccountSeed.Seed(p => { AccountSeed.LoadedProfileUid = "test"; return replacement = new ProviderSubscription(p); }));
+        Assert.Same(original, AccountSeed.Patreon);
+        Assert.Equal(oldUid, AccountSeed.LoadedProfileUid);
+        Assert.NotNull(tierEvent.GetValue(original));
+        Assert.Null(tierEvent.GetValue(replacement!));
         MergedAccountRecovery.SettingsForTest = () => settings;
         MergedAccountRecoveryHead.Seed();
         try
@@ -98,7 +113,7 @@ public class MergedAccountRecoveryReviewTests
             await MergedAccountRecovery.LastSwap;
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("u_canon123", settings.UnifiedId);
-            if (provider != null) MergedAccountRecoveryHead.PendingSignIn = true;
+            if (provider != null) CoreSettings.Current.MergedSignInPending = true;
             Assert.Equal(provider != null, CoreAccount.IsLoggedIn);
             Assert.Equal(provider != null ? "u_canon123" : null, CoreAccount.UnifiedUserId);
             Assert.Equal(7, settings.PlayerLevel);
@@ -117,8 +132,8 @@ public class MergedAccountRecoveryReviewTests
             Assert.Equal(provider != null ? wire.GrantUntil : null, settings.InviteGrantUntil);
             Assert.Equal(provider != null, InvitePanel.ExpiryArmed);
             Assert.Equal(provider == null, StartupLadder.Inbox.Contains("merged-account-signin:u_canon123"));
-            // A restart forgets PendingSignIn: a tokenless restore rebuilds it, the startup exchange clears it.
-            (settings.AuthToken, MergedAccountRecoveryHead.PendingSignIn, CoreAccount.UnifiedUserId) = (null, false, null);
+            // The pending merge survives a restart; the startup exchange clears it.
+            (settings.AuthToken, settings.MergedSignInPending, CoreAccount.UnifiedUserId) = (null, JsonConvert.DeserializeObject<AppSettings>(JsonConvert.SerializeObject(settings))!.MergedSignInPending, null);
             AccountSeed.RestoreSession();
             Assert.False(CoreAccount.IsLoggedIn);
             await AccountSeed.ValidateRestoredSessionAsync();
@@ -137,8 +152,8 @@ public class MergedAccountRecoveryReviewTests
     [InlineData(true)]
     public Task AiMergedResponseTriggersRecovery(bool purchase) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        Setup();
         using var saved = new MergedRecoveryState();
+        Setup();
         var secrets = new Dictionary<string, string?>();
         CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key);
         CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;

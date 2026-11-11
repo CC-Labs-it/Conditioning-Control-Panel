@@ -7641,6 +7641,7 @@ namespace ConditioningControlPanel.Models
 
         #region V5.5 Season System
 
+        public bool MergedSignInPending { get; set; }
         private string? _unifiedId = null;
         /// <summary>
         /// Unified user ID from v5.5+ server. Persists across logout to enable

@@ -45,9 +45,9 @@ public class MergedAccountRecoveryReloadTests
 
     private static Task Exercise(bool failProfile) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        using var saved = new MergedRecoveryState();
         MergedAccountRecoveryReviewTests.Setup();
         WelcomeBackOffer.ResetForTests();
-        using var saved = new MergedRecoveryState();
         var directory = Directory.CreateTempSubdirectory("ccp-merge-reload-");
         var secrets = new Dictionary<string, string?>
         {
