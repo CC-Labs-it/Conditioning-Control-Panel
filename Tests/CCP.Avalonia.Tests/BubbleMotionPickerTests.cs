@@ -135,6 +135,7 @@ public sealed class BubbleMotionPickerTests
             settings.UnifiedId = "other-owner";
             CoreAccount.UnifiedUserId = "other-owner";
             Dispatcher.UIThread.RunJobs();
+            Assert.False(box.IsVisible);
             Assert.False(panel.FindControl<CheckBox>("ChkBrainDrainBubble")!.IsVisible);
             settings.UnifiedId = "bubble-owner";
             CoreAccount.UnifiedUserId = "bubble-owner";
@@ -149,7 +150,8 @@ public sealed class BubbleMotionPickerTests
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null);
             Assert.DoesNotContain(changed?.GetInvocationList() ?? System.Array.Empty<System.Delegate>(), d => ReferenceEquals(d.Target, panel));
             host.Content = panel;
-            Assert.False(panel.FindControl<CheckBox>("ChkBrainDrainBubble")!.IsVisible); // reload catches the snapshot missed while detached
+            Assert.False(box.IsVisible); // reload catches the snapshot missed while detached
+            Assert.False(panel.FindControl<CheckBox>("ChkBrainDrainBubble")!.IsVisible);
             Assert.Single(picker.Items);
         }
         finally
