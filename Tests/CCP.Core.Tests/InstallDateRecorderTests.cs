@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.IO;
+using System.Threading;
 using ConditioningControlPanel.Services;
 using Xunit;
 
@@ -21,18 +22,26 @@ public class InstallDateRecorderTests
         var log = Path.Combine(logs, "log.txt");
         File.WriteAllText(path, "{}");
         File.WriteAllText(log, "log");
+        SettingsService? settings = null;
         try
         {
             var expected = new[] { File.GetCreationTimeUtc(path), Directory.GetCreationTimeUtc(exe), File.GetCreationTimeUtc(log) }.Min().Date;
             Assert.Equal(expected, InstallDateRecorder.Resolve(root, exe));
-            var settings = new SettingsService();
+            settings = new SettingsService { SaveDebounceDueTimeMilliseconds = Timeout.Infinite };
+            Assert.Equal(Timeout.Infinite, settings.SaveDebounceDueTimeMilliseconds);
             settings.Current.InstallDate = null;
             InstallDateRecorder.EnsureRecorded(settings, root, exe);
             Assert.Equal(expected.ToString("yyyy-MM-dd"), settings.Current.InstallDate);
+            Assert.True(settings.HasPendingSave);
             settings.Current.InstallDate = "2021-01-01";
             InstallDateRecorder.EnsureRecorded(settings, root, exe);
             Assert.Equal("2021-01-01", settings.Current.InstallDate);
         }
-        finally { Directory.Delete(root, true); }
+        finally
+        {
+            settings?.SealForReset();
+            Directory.Delete(root, true);
+        }
+        Assert.False(settings.HasPendingSave);
     }
 }
