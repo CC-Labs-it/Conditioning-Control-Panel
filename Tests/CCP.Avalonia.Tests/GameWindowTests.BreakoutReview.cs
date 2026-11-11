@@ -127,4 +127,31 @@ public sealed partial class GameWindowTests
         Dispatcher.UIThread.RunJobs();
         Assert.Empty(sent);
     });
+    [Fact]
+    public void Breakout_SettingsWireCarriesSafetyAndPlayerChoices() => Run((_, launcher) =>
+    {
+        launcher.Hide();
+        var s = CoreSettings.Current;
+        s.MotionLevel = MotionLevel.Reduced;
+        s.BackRoomFxIntensity = ConditioningControlPanel.Services.BackRoom.BackRoomFxIntensity.Full;
+        s.BackRoomTunnel = true;
+        s.BackRoomInvertLook = true;
+        s.SkillPoints = 42;
+        var window = GameWindow.Launch("breakoutdemo")!;
+        var sent = new List<JObject>();
+        window.Posted += json => sent.Add(JObject.Parse(json));
+        window.HandleMessage("{\"type\":\"ready\"}");
+        var init = sent[0];
+        Assert.Equal("calm", (string?)init["intensity"]);
+        Assert.Equal("full", (string?)init["intensityChoice"]);
+        Assert.True((bool)init["gates"]!["tunnel"]!);
+        Assert.True((bool)init["invertLook"]!);
+        Assert.Equal(42, (int)init["sp"]!);
+        Assert.NotNull(init["media"]!["effective"]);
+        sent.Clear();
+        s.BackRoomTunnel = false;
+        Dispatcher.UIThread.RunJobs();
+        Assert.False((bool)sent[^1]["gates"]!["tunnel"]!);
+        window.Close();
+    });
 }

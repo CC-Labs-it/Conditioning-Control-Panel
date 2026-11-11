@@ -8,6 +8,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.BackRoom;
 
 namespace ConditioningControlPanel.Avalonia.Views.Games;
 
@@ -58,16 +59,24 @@ internal sealed partial class GameWindow
 
     private void OnBreakoutSettingChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(AppSettings.MotionLevel)) Dispatcher.UIThread.Post(PushBreakoutSettings);
+        if (e.PropertyName is nameof(AppSettings.MotionLevel) or nameof(AppSettings.BackRoomFxIntensity)
+            or nameof(AppSettings.BackRoomTunnel) or nameof(AppSettings.BackRoomMelt)
+            or nameof(AppSettings.BackRoomInvertLook) or nameof(AppSettings.BackRoomMediaSource)
+            or nameof(AppSettings.BackRoomMediaSubs) or nameof(AppSettings.BackRoomMediaSubsOff)
+            or nameof(AppSettings.MediaSource) or nameof(AppSettings.RemoteMediaRatio)
+            or nameof(AppSettings.RemoteMediaConsented) or nameof(AppSettings.FypOnlineConsented)) Dispatcher.UIThread.Post(PushBreakoutSettings);
     }
 
     private void PushBreakoutSettings()
     {
         if (_closing) return;
         // WPF BackRoomHostService.cs:620-632; play.html merges partial settings frames.
-        var motion = CoreSettings.Current.MotionLevel;
+        var s = CoreSettings.Current;
+        var motion = s.MotionLevel;
         Post(new { type = "settings", motion = motion.ToString().ToLowerInvariant(),
-            reduced = motion != MotionLevel.Full, breakout = BreakoutEntitlementFor(Spec.Id), breakoutStandalone = true });
+            reduced = motion != MotionLevel.Full, breakout = BreakoutEntitlementFor(Spec.Id), breakoutStandalone = true,
+            intensity = BackRoomWire.IntensityWire(s, motion), intensityChoice = BackRoomWire.IntensityChoiceWire(s),
+            gates = BackRoomWire.GatesWire(s), media = BackRoomWire.MediaWire(s), invertLook = s.BackRoomInvertLook });
     }
 
     // WPF BreakoutHostService.cs:14-17 and BreakoutAccess.cs:9-16.

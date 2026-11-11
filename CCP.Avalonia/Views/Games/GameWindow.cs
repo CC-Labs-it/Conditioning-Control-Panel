@@ -319,6 +319,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var motion = CoreSettings.Current.MotionLevel;
             frame["motion"] = motion.ToString().ToLowerInvariant();
             frame["reduced"] = motion != ConditioningControlPanel.Models.MotionLevel.Full;
+            var settings = CoreSettings.Current;
+            frame["intensity"] = ConditioningControlPanel.Services.BackRoom.BackRoomWire.IntensityWire(settings, motion);
+            frame["intensityChoice"] = ConditioningControlPanel.Services.BackRoom.BackRoomWire.IntensityChoiceWire(settings);
+            frame["gates"] = JToken.FromObject(ConditioningControlPanel.Services.BackRoom.BackRoomWire.GatesWire(settings));
+            frame["media"] = JToken.FromObject(ConditioningControlPanel.Services.BackRoom.BackRoomWire.MediaWire(settings));
+            frame["sp"] = settings.SkillPoints;
+            frame["invertLook"] = settings.BackRoomInvertLook;
             return frame;
         }
 
