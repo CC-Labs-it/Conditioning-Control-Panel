@@ -45,14 +45,15 @@ public sealed class CloudSettingsBackupTests : IDisposable
     {
         public readonly List<(string Url, string? Token, string Body)> Seen = new();
         public HttpStatusCode Status = HttpStatusCode.OK;
-        public string Body = "{\"success\":true}";
+        public string Body = "{\"backup\":null}";
+        public Func<string, HttpStatusCode>? StatusFor;
         public Func<string, string?>? BodyFor;   // per url; null falls back to Body
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
-            Seen.Add((r.RequestUri!.AbsoluteUri, r.Headers.TryGetValues("X-Auth-Token", out var t) ? t.Single() : null,
-                await r.Content!.ReadAsStringAsync(ct)));
-            return new HttpResponseMessage(Status) { Content = new StringContent(BodyFor?.Invoke(r.RequestUri.AbsoluteUri) ?? Body) };
+            var body = await r.Content!.ReadAsStringAsync(ct);
+            lock (Seen) Seen.Add((r.RequestUri!.AbsoluteUri, r.Headers.TryGetValues("X-Auth-Token", out var t) ? t.Single() : null, body));
+            return new HttpResponseMessage(StatusFor?.Invoke(r.RequestUri!.AbsoluteUri) ?? Status) { Content = new StringContent(BodyFor?.Invoke(r.RequestUri.AbsoluteUri) ?? Body) };
         }
     }
 
@@ -268,6 +269,77 @@ public sealed class CloudSettingsBackupTests : IDisposable
         _fake.Status = HttpStatusCode.InternalServerError;
         Assert.False(await new CloudSettingsBackup(_fake).BackupAsync(Signed()));
         Assert.Empty(Uploads);
+    }
+
+    [Theory]
+    [InlineData("{\"backup\":42}", false)]
+    [InlineData("{\"backup\":[]}", false)]
+    [InlineData("{}", false)]
+    [InlineData("{\"backup\":null}", true)]
+    public async Task OnlyAnExplicitEmptySlotCanBeOverwritten(string body, bool allowed)
+    {
+        _fake.Body = body;
+        Assert.Equal(allowed, await new CloudSettingsBackup(_fake).BackupAsync(Signed()));
+        Assert.Equal(allowed ? 1 : 0, Uploads.Count);
+    }
+
+    [Fact]
+    public async Task AutomaticGateIsAtomicAndExpiresAfterFiveMinutes()
+    {
+        var now = new DateTime(2026, 10, 10, 12, 0, 0, DateTimeKind.Utc);
+        var c = new CloudSettingsBackup(_fake) { Now = () => now };
+        var s = Signed();
+        var results = await Task.WhenAll(Enumerable.Range(0, 20).Select(_ => Task.Run(() => c.BackupAsync(s, force: false))));
+        Assert.Single(results.Where(x => x));
+        now = now.AddMinutes(4);
+        Assert.False(await c.BackupAsync(s, force: false));
+        now = now.AddMinutes(1);
+        Assert.True(await c.BackupAsync(s, force: false));
+        Assert.Equal(2, Uploads.Count);
+    }
+
+    [Fact]
+    public async Task ManualBackupBypassesAndRestartsTheGate()
+    {
+        var now = new DateTime(2026, 10, 10, 12, 0, 0, DateTimeKind.Utc);
+        var c = new CloudSettingsBackup(_fake) { Now = () => now };
+        var s = Signed();
+        Assert.True(await c.BackupAsync(s, force: false));
+        now = now.AddMinutes(4);
+        Assert.True(await c.BackupAsync(s));
+        now = now.AddMinutes(1);
+        Assert.False(await c.BackupAsync(s, force: false));
+        now = now.AddMinutes(4);
+        Assert.True(await c.BackupAsync(s, force: false));
+    }
+
+    [Fact]
+    public async Task RestoredSettingsBlockAutomaticButNotManualUntilReconciled()
+    {
+        var c = new CloudSettingsBackup(_fake);
+        var s = Signed();
+        Assert.False(await c.BackupAsync(s, force: false, restoredFromBackup: true));
+        Assert.Empty(_fake.Seen);
+        Assert.True(await c.BackupAsync(s, force: false, restoredFromBackup: false));
+        Assert.True(await c.BackupAsync(s, force: true, restoredFromBackup: true));
+    }
+
+    [Fact]
+    public async Task A413StopsAutomaticUploadsForTheSessionButNotManualOnes()
+    {
+        var now = new DateTime(2026, 10, 10, 12, 0, 0, DateTimeKind.Utc);
+        var c = new CloudSettingsBackup(_fake) { Now = () => now };
+        var s = Signed();
+        _fake.StatusFor = url => url.EndsWith("/backup-settings") ? HttpStatusCode.RequestEntityTooLarge : HttpStatusCode.OK;
+        Assert.False(await c.BackupAsync(s));
+        now = now.AddMinutes(6);
+        Assert.False(await c.BackupAsync(s, force: false));
+        Assert.Single(Uploads);
+        _fake.StatusFor = _ => HttpStatusCode.OK;
+        Assert.True(await c.BackupAsync(s));
+        now = now.AddMinutes(6);
+        Assert.False(await c.BackupAsync(s, force: false));
+        Assert.Equal(2, Uploads.Count);
     }
 
     [Fact]

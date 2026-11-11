@@ -479,7 +479,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         // ---- cloud settings backup (WPF MainWindow.CloudBackup.cs, Core CloudSettingsBackup) ----
 
         /// <summary>Tests only: the client both buttons and the status line use.</summary>
-        internal static Func<CloudSettingsBackup> NewBackup = () => new CloudSettingsBackup();
+        internal static Func<CloudSettingsBackup> NewBackup = () => AutomaticCloudBackup.Client;
 
         /// <summary>Tests only: the restore question (WPF MessageBox YesNo).</summary>
         internal static Func<Window?, string, string, Task<bool>> Confirm = async (owner, title, body) =>

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Models;
 using Newtonsoft.Json;
@@ -30,6 +31,9 @@ namespace ConditioningControlPanel.Services
         // One client for the process: the section builds a CloudSettingsBackup on every refresh.
         private static readonly Lazy<HttpClient> Shared = new(() => V2AuthService.Configure(new HttpClient()));
         private readonly HttpClient _http;
+        private long _lastBackupTicks;
+        private int _refusedTooLarge;
+        internal Func<DateTime> Now = () => DateTime.UtcNow;
 
         /// <param name="handler">Tests only; null is the real network.</param>
         public CloudSettingsBackup(HttpMessageHandler? handler = null) =>
@@ -263,11 +267,20 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>The "Backup now" upload (WPF BackupSettingsAsync with force: true). False when there is
         /// no account, no token, offline, over budget, or the server refused.</summary>
-        public async Task<bool> BackupAsync(AppSettings settings)
+        public async Task<bool> BackupAsync(AppSettings settings, bool force = true, bool restoredFromBackup = false)
         {
             if (settings.OfflineMode) return false;
             var unifiedId = settings.UnifiedId;
             if (string.IsNullOrEmpty(unifiedId)) return false;
+            if (!force && (restoredFromBackup || Volatile.Read(ref _refusedTooLarge) != 0)) return false;
+            var now = Now().Ticks;
+            if (force) Interlocked.Exchange(ref _lastBackupTicks, now);
+            else
+            {
+                var last = Interlocked.Read(ref _lastBackupTicks);
+                if (now - last < TimeSpan.FromMinutes(5).Ticks ||
+                    Interlocked.CompareExchange(ref _lastBackupTicks, now, last) != last) return false;
+            }
             if (string.IsNullOrEmpty(settings.AuthToken))
             {
                 Log.Debug("Settings backup skipped (no auth token)");
@@ -300,6 +313,8 @@ namespace ConditioningControlPanel.Services
 
                 var body = new { unified_id = unifiedId, settings_data = encoded.Base64, app_version = CoreReleaseContent.AppVersion };
                 using var response = await PostAsync("/v2/user/backup-settings", settings, body);
+                if (response.StatusCode == HttpStatusCode.RequestEntityTooLarge)
+                    Interlocked.Exchange(ref _refusedTooLarge, 1);
                 if (!await SucceededAsync(response, "Settings backup")) return false;
                 Log.Information("Settings backed up to cloud ({Size} bytes compressed)", encoded.Compressed.Length);
                 return true;
@@ -393,7 +408,10 @@ namespace ConditioningControlPanel.Services
             // Dates stay strings (WPF read backed_up_at as a string and parsed it itself).
             var root = JsonConvert.DeserializeObject<JObject>(await response.Content.ReadAsStringAsync(),
                 new JsonSerializerSettings { DateParseHandling = DateParseHandling.None });
-            return (true, root?["backup"] as JObject);
+            var backup = root?["backup"];
+            if (backup == null || (backup.Type != JTokenType.Null && backup.Type != JTokenType.Object))
+                return (false, null);
+            return (true, backup as JObject);
         }
 
         private Task<HttpResponseMessage> PostAsync(string path, AppSettings settings, object body)
