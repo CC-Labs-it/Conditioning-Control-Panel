@@ -346,6 +346,41 @@ public sealed class AvatarTubeWindowingTests
         Assert.Equal(0.75, CoreSettings.Current.AvatarTubeScale);
     }, scale: 0.75);
 
+    [Fact]
+    public Task Chaos_detaches_once_and_restores_only_its_own_detach() => Run(detached: false, (main, tube) =>
+    {
+        tube.SetChaosRunActive(true);
+        Assert.True(tube.IsDetached);
+        var parked = tube.Position;
+        tube.SetChaosRunActive(true);
+        Assert.Equal(parked, tube.Position);
+        tube.SetChaosRunActive(false);
+        Assert.False(tube.IsDetached);
+    });
+
+    [Fact]
+    public Task Chaos_parks_the_attached_tube_at_the_bottom_left_of_the_primary_work_area() => Run(detached: false, (main, tube) =>
+    {
+        tube.SetChaosRunActive(true);
+        var screen = tube.Screens.Primary!;
+        var work = screen.WorkingArea;
+        var margin = (int)Math.Round(12 * screen.Scaling);
+        Assert.Equal(new PixelPoint(work.X + margin,
+            work.Bottom - (int)Math.Round(Math.Max(120, tube.Bounds.Height) * screen.Scaling) - margin), tube.Position);
+        tube.SetChaosRunActive(false);
+    });
+
+    [Fact]
+    public Task Chaos_leaves_a_previously_detached_tube_alone() => Run(detached: true, (main, tube) =>
+    {
+        var original = tube.Position;
+        tube.SetChaosRunActive(true);
+        Assert.Equal(original, tube.Position);
+        tube.SetChaosRunActive(false);
+        Assert.True(tube.IsDetached);
+        Assert.Equal(original, tube.Position);
+    });
+
     private static Task Run(bool detached, Action<Window, AvatarTubeWindow> body, double scale = 1.0) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
