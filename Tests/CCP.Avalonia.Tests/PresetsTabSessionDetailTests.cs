@@ -9,6 +9,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using CCP.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -29,6 +30,7 @@ public sealed class PresetsTabSessionDetailTests
     [Fact]
     public Task RowFillsDetailRevealAsksThriceAndCatalogueChipOpens() => Run(shell =>
     {
+        using var culture = new CultureScope();   // the "(1.1x)" XP label is display text in the user's culture
         CoreSettings.Current.PlayerLevel = 40;   // multiplier 1.1 (SessionXp.Multiplier)
         shell.ShowTab("presets");
         Dispatcher.UIThread.RunJobs();

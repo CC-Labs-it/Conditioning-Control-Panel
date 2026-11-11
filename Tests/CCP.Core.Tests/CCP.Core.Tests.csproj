@@ -58,6 +58,7 @@
     <Compile Include="..\ConditioningControlPanel.Tests\IntakePunchCardTests.cs" Link="IntakePunchCardTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\HostNetPathRuleTests.cs" Link="HostNetPathRuleTests.cs" />
     <Compile Include="..\Shared\BackRoomBridgeRig.cs" Link="BackRoomBridgeRig.cs" />
+    <Compile Include="..\Shared\TestEnvironment.cs" Link="TestEnvironment.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\AchievementSharePromptRuleTests.cs" Link="AchievementSharePromptRuleTests.cs" />
     <!-- Existing pure first-light timeline specs also run on Linux against the shared Core engine. -->
     <Compile Include="..\ConditioningControlPanel.Tests\SpiralFirstLightTimelineTests.cs" Link="SpiralFirstLightTimelineTests.cs" />

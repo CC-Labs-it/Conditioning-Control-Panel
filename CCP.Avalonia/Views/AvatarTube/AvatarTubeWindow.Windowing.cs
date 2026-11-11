@@ -44,7 +44,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         private Control[] DragSurfaces() => new Control[]
         {
-            _avatarBorder, _speechBubble, this.FindControl<Border>("TitleBox")!, _imgTubeFrame,
+            // Not the speech bubble: it is its own window now (WPF's bubble window is no drag surface).
+            _avatarBorder, this.FindControl<Border>("TitleBox")!, _imgTubeFrame,
         };
 
         private void InitWindowing()
@@ -65,6 +66,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             {
                 _parentWindow.PositionChanged += OnParentPositionChanged;
                 _parentWindow.PropertyChanged += OnParentPropertyChanged;
+                // A press on main may start a WM move that X11 WMs only report at its end (FollowDrag.cs).
+                _parentWindow.AddHandler(PointerPressedEvent, OnParentPointerPressedForFollow, RoutingStrategies.Tunnel, handledEventsToo: true);
             }
             AddHandler(PointerWheelChangedEvent, (_, e) =>
             {
@@ -83,18 +86,26 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 if (e.Property == IsVisibleProperty && !IsVisible) RestoreMadeRoom();
             };
             ApplyModeChrome();
+            InitInputShape();
         }
 
         private void ReleaseWindowing()
         {
             RestoreMadeRoom();
+            ReleaseInputShape();
             if (ToggleDetachedSink == (Action)ToggleDetached) ToggleDetachedSink = null;
+            StopFollowPoll();
             if (_parentWindow == null) return;
             _parentWindow.PositionChanged -= OnParentPositionChanged;
             _parentWindow.PropertyChanged -= OnParentPropertyChanged;
+            _parentWindow.RemoveHandler(PointerPressedEvent, OnParentPointerPressedForFollow);
         }
 
-        private void OnParentPositionChanged(object? s, PixelPointEventArgs e) => UpdatePosition();
+        private void OnParentPositionChanged(object? s, PixelPointEventArgs e)
+        {
+            NoteParentPositionReported();
+            UpdatePosition();
+        }
 
         private void OnParentPropertyChanged(object? s, AvaloniaPropertyChangedEventArgs e)
         {
@@ -134,8 +145,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             RefreshTubeLayout();
             ApplyModeChrome();
             UpdatePosition();
-            if (attached && _parentWindow != null) Platform.X11Overlay.RestackAbove(this, _parentWindow);
-            if (!attached) Platform.X11Overlay.SetInputRect(this, null);
+            if (!attached) InputRect = null;   // free: no shell under her margin to protect
+            ApplyStacking();                   // owned by main when attached, free and Topmost when not
+            ApplyBubbleStacking();             // the bubble rides in the tube's band (WPF DemoteSpeechBubble / ReassertTopmost)
+            SyncSpeechPopupOpen();             // attached, it also goes with main
+            RequestInputShape();
             Log.Information("Avatar tube {Mode}", attached ? "attached" : "detached");
             if (_restoringPlacement) return;
             CoreSettings.Current.AvatarTubeDetached = !attached;
@@ -248,34 +262,41 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private static Box ToBox(PixelRect r) => new(r.X, r.Y, r.Width, r.Height);
 
         /// <summary>WPF UpdatePosition's physical route: dock beside main per TubeDockPlacement.</summary>
-        internal void UpdatePosition()
+        /// <param name="parentAt">Main's position read live from the X server while a WM moves it
+        /// (AvatarTubeWindow.FollowDrag.cs); null = Avalonia's Position. While main is in the WM's hands
+        /// make-room is not applied: resizing main mid-move would fight the WM. It runs on the final
+        /// PositionChanged as before.</param>
+        internal void UpdatePosition(PixelPoint? parentAt = null)
         {
             if (_applyingRoom || !_isAttached || _parentWindow is not { } p || p.WindowState == WindowState.Minimized) return;
-            var pr = new PixelRect(p.Position, PixelSize.FromSize(p.ClientSize, p.DesktopScaling));
+            var pr = new PixelRect(parentAt ?? p.Position, PixelSize.FromSize(p.ClientSize, p.DesktopScaling));
             if (pr.Width <= 0 || pr.Height <= 0) return;
-            var work = p.Screens.ScreenFromWindow(p)?.WorkingArea ?? new PixelRect(-100000, -100000, 200000, 200000);
+            var screen = parentAt != null ? p.Screens.ScreenFromBounds(pr) : p.Screens.ScreenFromWindow(p);
+            var work = screen?.WorkingArea ?? new PixelRect(-100000, -100000, 200000, 200000);
             double art = _scaleFactor * DesktopScaling, day = DockDaylight * DesktopScaling;
             var size = TubePixelSize;
             int rightInset = (int)Math.Round(Math.Max(0, (TubeArtRightPadding - SeamOverlapOverMain) * art - day));
             int leftInset = (int)Math.Round(Math.Max(0, TubeArtLeftPadding * art - day));
-            var parent = MakeRoom(ToBox(pr), work, size.Width - leftInset - rightInset);
+            var parent = parentAt != null ? ToBox(pr) : MakeRoom(ToBox(pr), work, size.Width - leftInset - rightInset);
             var plan = TubeDockPlacement.Place(parent, size.Width, size.Height, leftInset, rightInset,
                 (int)Math.Round(VerticalOffset * art), ToBox(work));
             Position = new PixelPoint(plan.Left, plan.Top);
             // WPF's transparent margin was click-through (layered window); an X11 window takes
-            // clicks on every pixel, so cut her input down to everything left of the seam or the
+            // clicks on every pixel, so her input is cut down to everything left of the seam or the
             // shell's rail under that margin goes dead. The cut follows the side she docked to: on a
-            // right dock her LEFT margin is the one over the shell. Detach gives the whole window back.
+            // right dock her LEFT margin is the one over the shell. It clips the painted-pixel input
+            // shape (AvatarTubeWindow.InputShape.cs); detached there is no clip.
             InputRect = plan.Side switch
             {
                 DockSide.Left => new PixelRect(0, 0, size.Width - rightInset, size.Height),
                 DockSide.Right => new PixelRect(leftInset, 0, size.Width - leftInset, size.Height),
                 _ => new PixelRect(leftInset, 0, Math.Max(0, size.Width - leftInset - rightInset), size.Height),   // floating over the shell: both margins
             };
-            Platform.X11Overlay.SetInputRect(this, InputRect);
+            RequestInputShape();
         }
 
-        /// <summary>The attached tube's input region (window px) as last set by <see cref="UpdatePosition"/>.</summary>
+        /// <summary>The attached tube's dock-side input clip (window px) as last set by
+        /// <see cref="UpdatePosition"/>; null while detached.</summary>
         internal PixelRect? InputRect { get; private set; }
 
         /// <summary>WPF RestoreSavedPlacement: a detached tube comes back where it was left, with at

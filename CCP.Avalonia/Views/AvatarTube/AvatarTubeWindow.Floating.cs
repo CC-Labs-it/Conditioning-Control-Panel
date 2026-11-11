@@ -16,6 +16,12 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private void StartFloatingAnimation()
         {
             StopFloatingAnimation();
+            _floatWanted = true;
+            HookFloatGate();
+            // Owner decision (lane perf, 2026-11-06): on the CPU path (the lighter-effects tier) the idle bob
+            // holds still; each bob frame repaints the whole tube window there. Speech, bounces and the other
+            // animation states are not this loop and keep playing. With a GPU it is WPF's ungated bob.
+            if (global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.SoftwareFloorHoldsIdleLoops) return;
             BeatLoop? loop = null;
             FloatingFrame = seconds =>
             {
@@ -30,10 +36,41 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         private void StopFloatingAnimation()
         {
+            _floatWanted = false;
             _floatLoop?.Stop();
             _floatLoop = null;
             FloatingFrame = null;
             _avatarFloat.Y = 0;
+        }
+
+        /// <summary>The bob was asked for (shown and attached), whether or not it is moving right now.</summary>
+        private bool _floatWanted;
+        private bool _floatGateHooked;
+
+        /// <summary>True while the idle bob is actually moving (tests).</summary>
+        internal bool IsFloating => _floatLoop != null;
+
+        private void HookFloatGate()
+        {
+            if (_floatGateHooked) return;
+            _floatGateHooked = true;
+            global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.MotionGateChanged += OnFloatGate;
+            Closed += (_, _) => global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.MotionGateChanged -= OnFloatGate;
+        }
+
+        /// <summary>Settings ▸ Performance ▸ Lighter effects (or the renderer probe) moved: hold or resume the bob.</summary>
+        private void OnFloatGate()
+        {
+            if (!_floatWanted) return;
+            bool hold = global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.SoftwareFloorHoldsIdleLoops;
+            if (hold && _floatLoop != null)
+            {
+                _floatLoop.Stop();
+                _floatLoop = null;
+                FloatingFrame = null;
+                _avatarFloat.Y = 0;
+            }
+            else if (!hold && _floatLoop == null) StartFloatingAnimation();
         }
     }
 }
