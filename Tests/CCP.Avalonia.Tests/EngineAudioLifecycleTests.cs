@@ -26,6 +26,14 @@ public sealed class EngineAudioLifecycleTests
         return CoreSettings.Current;
     }
 
+    internal static MainShellWindow CreateShell()
+    {
+        var settings = CoreSettings.Current;
+        settings.PanicKeyEnabled = false; settings.OfflineMode = true;
+        var shell = new MainShellWindow(); shell.Show();
+        CoreEngine.StoppedHook = shell.OnEngineStopped; return shell;
+    }
+
     private sealed class Player : LayeredAudio.ILayerPlayer
     {
         public int Volume { set { } }
@@ -51,10 +59,7 @@ public sealed class EngineAudioLifecycleTests
             {
                 s.AudioOnlySession = audioOnly; s.AudioLayersEnabled = master;
                 s.AudioLayers = new() { new AudioLayerTrack { Path = file } };
-                s.PanicKeyEnabled = false; s.OfflineMode = true;
-                shell = new MainShellWindow();
-                shell.Show();
-                CoreEngine.StoppedHook = shell.OnEngineStopped;
+                shell = CreateShell();
                 shell.StartEngine();
                 Assert.True(CoreEngine.IsRunning);
                 Assert.Equal(audioOnly, layers.IsPlaying);
@@ -94,10 +99,7 @@ public sealed class EngineAudioLifecycleTests
             {
                 s.AudioOnlySession = true; s.AudioLayersEnabled = false;
                 s.AudioLayers = new() { new AudioLayerTrack { Path = file } };
-                s.PanicKeyEnabled = false; s.OfflineMode = true;
-                shell = new MainShellWindow();
-                shell.Show();
-                CoreEngine.StoppedHook = shell.OnEngineStopped;
+                shell = CreateShell();
                 if (alreadyRunning) shell.StartEngine();
                 shell.StartSession(new Session { Id = "audio_lifecycle", Name = "Audio", DurationMinutes = 10 });
                 Assert.True(runner.IsRunning);
@@ -137,10 +139,7 @@ public sealed class EngineAudioLifecycleTests
             {
                 s.AudioLayersEnabled = master;
                 s.AudioLayers = new() { new AudioLayerTrack { Path = file } };
-                s.PanicKeyEnabled = false; s.OfflineMode = true;
-                shell = new MainShellWindow();
-                shell.Show();
-                CoreEngine.StoppedHook = shell.OnEngineStopped;
+                shell = CreateShell();
                 Assert.False(CoreEngine.IsRunning);
                 layers.Start(ignoreMasterToggle: true);
                 audio.Duck(80);

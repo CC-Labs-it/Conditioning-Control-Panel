@@ -54,6 +54,12 @@ public sealed class LayeredAudioTests
             Assert.False(SpinWait.SpinUntil(() => Volatile.Read(ref unmutedAt) >= 0, 500));
             Volatile.Write(ref allow, 1); Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref unmutedAt) == 10, 5000));
             Assert.Equal(1, Volatile.Read(ref unmutes));
+            var fence = new LayeredAudio.VlcLayerPlayer.GainFence(10); var audible = -1;
+            entered.Reset(); release.Reset(); using var publishing = new ManualResetEventSlim();
+            var held = System.Threading.Tasks.Task.Run(() => fence.TryUnmute(10, () => { entered.Set(); release.Wait(TimeSpan.FromSeconds(5)); audible = fence.Value; })); Assert.True(entered.Wait(TimeSpan.FromSeconds(5)));
+            var publish = System.Threading.Tasks.Task.Run(() => { publishing.Set(); fence.Publish(0); }); Assert.True(publishing.Wait(TimeSpan.FromSeconds(5))); Assert.False(publish.Wait(TimeSpan.FromMilliseconds(500)));
+            release.Set(); Assert.True(held.Wait(TimeSpan.FromSeconds(5))); Assert.True(publish.Wait(TimeSpan.FromSeconds(5)));
+            Assert.Equal(10, audible); Assert.Equal(0, fence.Value);
         } finally { Volatile.Write(ref target, -1); release.Set(); }
     }
 

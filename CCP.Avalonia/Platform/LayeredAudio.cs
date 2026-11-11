@@ -108,7 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             foreach (var (_, player, volume) in updates)
             {
-                player.Publish(volume);   // non-blocking: a pass still confirming its gain unmutes at this one
+                player.Publish(volume);   // publish before queued native work
                 _pendingVolume[player] = volume;
                 if (!_volumeWriters.ContainsKey(player)) _volumeWriters[player] = Task.Run(() => WriteVolumes(player));
             }
@@ -187,8 +187,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             private Copy? _newest, _timerFor;
             private readonly TimeProvider _time;
             private ITimer? _next;
-            private volatile int _volume;
-            private volatile bool _volumeConfigured, _published;
+            private readonly GainFence _volume;
+            private volatile bool _volumeConfigured;
             private volatile bool _disposed;
 
             public Task Closing => _closed.Task;
@@ -208,7 +208,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 _time = time ?? TimeProvider.System;
                 _vlc = vlc;
                 _path = path;
-                _volume = initialVolume.GetValueOrDefault();
+                _volume = new GainFence(initialVolume.GetValueOrDefault());
                 _volumeConfigured = initialVolume.HasValue;
                 StartCopy(after: null);
             }
@@ -229,7 +229,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     c.Player.EndReached += (_, _) => ThreadPool.QueueUserWorkItem(_ => Retire(c, failed: false));
                     c.Player.EncounteredError += (_, _) => ThreadPool.QueueUserWorkItem(_ => Retire(c, failed: true));
                     c.Player.Mute = true;   // every pass stays muted until its configured gain sticks
-                    c.Gain = new GainWorker(() => _disposed || c.Disposed ? null : _volume, v =>
+                    c.Gain = new GainWorker(() => _disposed || c.Disposed ? null : _volume.Value, v =>
                     {
                         lock (c)
                         {
@@ -237,7 +237,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                             try { c.Player.Volume = v; return c.Player.Volume == v; }
                             catch (Exception ex) { Log.Debug(ex, "LayeredAudio: volume update"); return false; }
                         }
-                    }, v => { lock (_gate) if (!_disposed && _volume == v) lock (c) if (!c.Disposed) c.Player.Mute = false; });
+                    }, v => { lock (c) _volume.TryUnmute(v, () => { if (!_disposed && !c.Disposed) c.Player.Mute = false; }); });
                     if (Copies > 0 && _live.Count == 0) GapStarts++;
                     Copies++;
                     _live.Add(c);
@@ -256,9 +256,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 }
                 Schedule(c, 0);
                 lock (c) { if (c.Disposed) return; LibVlcAudio.ApplyPreferredDevice(c.Player); }
-                bool configured;
-                lock (_gate) configured = !_disposed && _volumeConfigured;
-                if (configured) c.Gain.Kick();
+                if (!_disposed && _volumeConfigured) c.Gain.Kick();
             }
 
             /// <summary>Start the next pass <see cref="OverlapMs"/> before this one ends, measured from its
@@ -315,7 +313,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     lock (_gate)
                     {
                         if (_disposed) return;
-                        if (!_published) _volume = value;   // a queued write may be older than the published gain
+                        _volume.SetUnlessPublished(value);   // a queued write may be older than the published gain
                         _volumeConfigured = true;
                         playing = _live.Where(c => c.Playing).ToArray();
                     }
@@ -323,9 +321,18 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 }
             }
 
-            /// <summary>The newest layer gain, lock-free, before its queued write: a pass that confirms the
+            /// <summary>The newest layer gain before its queued write: a pass that confirms the
             /// older gain then sees a different target and stays muted.</summary>
-            public void Publish(int volume) { _volume = volume; _volumeConfigured = _published = true; }
+            public void Publish(int volume) { _volume.Publish(volume); _volumeConfigured = true; }
+
+            internal sealed class GainFence(int initial)
+            {
+                private volatile int _value = initial; private bool _published; private readonly object _sync = new();
+                public int Value => _value;
+                public void Publish(int value) { lock (_sync) { _value = value; _published = true; } }
+                public void SetUnlessPublished(int value) { lock (_sync) if (!_published) _value = value; }
+                public void TryUnmute(int value, Action unmute) { lock (_sync) if (_value == value) unmute(); }
+            }
 
             /// <summary>Per pass: pulse drops a volume set too soon after the stream opens, so retry the newest
             /// target off the caller until it sticks or the pass retires. Unmute only at the current confirmed gain.</summary>
@@ -333,10 +340,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 private int _busy;
 
-                public void Kick()
-                {
-                    if (Interlocked.Exchange(ref _busy, 1) == 0) _ = Task.Run(Run);
-                }
+                public void Kick() { if (Interlocked.Exchange(ref _busy, 1) == 0) _ = Task.Run(Run); }
 
                 private async Task Run()
                 {

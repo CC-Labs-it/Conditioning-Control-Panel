@@ -52,11 +52,7 @@ public sealed class EngineAudioTeardownTests
                 s.AudioLayersEnabled = true;
                 s.AudioLayersMasterVolume = s.MasterVolume = 100;
                 s.AudioLayers = new() { new AudioLayerTrack { Path = file, Volume = 100 } };
-                s.PanicKeyEnabled = false;
-                s.OfflineMode = true;
-                shell = new MainShellWindow();
-                shell.Show();
-                CoreEngine.StoppedHook = shell.OnEngineStopped;
+                shell = EngineAudioLifecycleTests.CreateShell();
                 layers.Start();
                 shell.StartEngine();
                 audio.Duck(50);
