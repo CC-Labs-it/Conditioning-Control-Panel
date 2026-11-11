@@ -89,6 +89,42 @@ public sealed partial class GameWindowTests
         Assert.Contains(GameWindow.OpenWindowsForTests(), w => w.Spec.Id == GameWindow.PbpId);
     });
 
+    [Theory]
+    [InlineData("BtnHostChess")]
+    [InlineData("BtnEmptyHostChess")]
+    public void LobbyChessHostLogsLaunchFailure(string name) => Run((shell, launcher) =>
+    {
+        launcher.Hide();
+        shell.Show();
+        shell.ShowTab("availablesubjects");
+        var page = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.AvailableSubjectsTabView>("AvailableSubjectsTab")!;
+        page.ReadGates = () => ConditioningControlPanel.Services.Lobby.LobbyGates.From(true, false, false);
+        var failure = new InvalidOperationException("asset server unavailable");
+        var oldServer = GameWindow.Server;
+        var oldLogger = Serilog.Log.Logger;
+        var sink = new LobbyFailureSink();
+        try
+        {
+            Serilog.Log.Logger = new Serilog.LoggerConfiguration().WriteTo.Sink(sink).CreateLogger();
+            GameWindow.Server = () => throw failure;
+            page.FindControl<Button>(name)!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Contains(sink.Events, e => e.Exception == failure && e.Level == Serilog.Events.LogEventLevel.Warning
+                && e.RenderMessage().Contains("[Lobby] host"));
+            Assert.DoesNotContain(GameWindow.OpenWindowsForTests(), w => w.Spec.Id == GameWindow.PbpId);
+        }
+        finally
+        {
+            GameWindow.Server = oldServer;
+            Serilog.Log.Logger = oldLogger;
+        }
+    });
+
+    private sealed class LobbyFailureSink : Serilog.Core.ILogEventSink
+    {
+        public List<Serilog.Events.LogEvent> Events { get; } = new();
+        public void Emit(Serilog.Events.LogEvent e) => Events.Add(e);
+    }
+
     [Fact]
     public void LobbyChessHostIntentWaitsForIdentityAndExistingBoardReceivesAnother() => Run((_, launcher) =>
     {

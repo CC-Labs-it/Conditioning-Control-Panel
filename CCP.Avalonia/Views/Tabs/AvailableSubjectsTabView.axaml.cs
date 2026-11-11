@@ -9,6 +9,7 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Lobby;
+using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 
@@ -103,7 +104,8 @@ public partial class AvailableSubjectsTabView : UserControl
     {
         if (TopLevel.GetTopLevel(this) is not MainShellWindow shell) return;
         if (!ReadGates().SignedIn) { _ = shell.OpenUnifiedLoginDialog(); return; }
-        Games.GameWindow.HostPbpTable();
+        try { Games.GameWindow.HostPbpTable(); }
+        catch (Exception ex) { Log.Warning(ex, "[Lobby] host {Game} failed", LobbyGame.Chess); }
     }
 
     private void BtnBecomeASubject_Click(object? sender, RoutedEventArgs e)
