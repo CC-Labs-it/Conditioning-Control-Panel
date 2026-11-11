@@ -113,7 +113,7 @@ public sealed class DescentAutoRestoreTests
     {
         var s = Fixture();
         SyncPush.ApplyReply(s, Offer(), null, Now, () => { });
-        Assert.Equal("""{"unified_id":"fixture","xp":70343,"level":51,"descent_epoch":1,"descent_auto":true,"descent_migration":{"choice":"restore"}}""",
+        Assert.Equal("""{"unified_id":"fixture","xp":70343,"level":51,"descent_epoch":1,"descent_auto":true,"reset_weekly_quest":false,"reset_daily_quest":false,"descent_migration":{"choice":"restore"}}""",
             SyncPush.SerializeBody(s, null));
         s.PendingDescentMigrationChoice = "RESTORE";
         Assert.DoesNotContain("descent_migration", SyncPush.SerializeBody(s, null));
