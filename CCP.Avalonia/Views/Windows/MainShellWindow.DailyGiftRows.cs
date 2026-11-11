@@ -63,7 +63,7 @@ public partial class MainShellWindow
         var name = feature == null ? "" : Loc.Get(feature.TitleLocKey);
         Platform.StartupLadder.PresentOrInbox(new InboxItem
         {
-            Key = "conv:" + rowKey, Glyph = "🚪", Title = title, Summary = name,
+            Key = "conv:" + rowKey, Glyph = global::ConditioningControlPanel.Avalonia.Controls.IconMap.DailyGiftRelockKey, Title = title, Summary = name,
             Open = () => Dialogs.InboxNoticeCard.Present(this, title, name,
                 Loc.Get(tier >= 2 ? "conv_get_prime" : "conv_get_basic"),
                 () => Platform.ExternalOpener.Open(ConversionRules.PlanUrl(tier))),

@@ -46,6 +46,8 @@ public class DailyGiftRelockInboxTests
             Assert.False(service.Current.AutonomyModeEnabled);
             var row = Assert.Single(StartupLadder.Inbox.Items.Where(i => i.Key == "conv:daily_gift_relock"));
             Assert.False(string.IsNullOrEmpty(row.Summary));
+            Assert.True(ConditioningControlPanel.Avalonia.Controls.IconMap.TryGet(row.Glyph, out var icon));
+            Assert.Equal(FluentIcons.Common.Symbol.DoorArrowLeft, icon.Kind);
             shell.DailyGiftFocus();
             Assert.Single(StartupLadder.Inbox.Items.Where(i => i.Key == row.Key));
             row.Open!();
