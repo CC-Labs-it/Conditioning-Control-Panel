@@ -395,25 +395,67 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// the site you are on takes you home and Reload reloads. Assigning an equal Source raises no
         /// change, so it would do nothing. Source is kept in step (the fallback panel names it).
         /// </summary>
-        public bool Navigate(Uri url, bool requireReadyGate = false)
+        public bool Navigate(Uri url)
         {
+            CancelPendingNavigation();
             NavigationRequests++;
             if (RefusesScrolller(url)) { RefusedNavigations++; return false; }
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(url)) { RefusedNavigations++; return false; }
             // Do not retain a rejected request: a later gate report must not load it after fallback.
-            if ((_scrolllerGate is null && requireReadyGate) ||
-                (_scrolllerGate is not null && !ScrolllerGateAllows(_scrolllerGate, url))) return false;
+            if (_scrolllerGate is not null && !ScrolllerGateAllows(_scrolllerGate, url)) return false;
+            if (_web is null && NavigationInvoker is null) return false;
+            var previous = Source;
             _explicitNavigate = true;
             try { Source = url; } finally { _explicitNavigate = false; }
-            if (_web is null && NavigationInvoker is null) return false;
             if (_scrolllerGate is null) return true; // held until the gate reports
             try
             {
-                if (NavigationInvoker is { } navigate) return navigate(url);
-                _web!.Navigate(url);
+                if (NavigationInvoker is { } navigate)
+                {
+                    if (!navigate(url)) { RestoreSource(previous); return false; }
+                }
+                else _web!.Navigate(url);
                 return true;
             }
-            catch (Exception ex) { Log.Debug("WebHost: Navigate failed: {Error}", ex.Message); return false; }
+            catch (Exception ex)
+            {
+                RestoreSource(previous);
+                Log.Debug("WebHost: Navigate failed: {Error}", ex.Message);
+                return false;
+            }
+        }
+
+        private void RestoreSource(Uri? previous)
+        {
+            _explicitNavigate = true;
+            try { Source = previous; } finally { _explicitNavigate = false; }
+        }
+
+        // Null means a newer navigation superseded this request, so the caller must not fall back.
+        internal async Task<bool?> NavigateWhenReadyAsync(Uri url)
+        {
+            CancelPendingNavigation();
+            if (_web is null && NavigationInvoker is null) return false;
+            while (_scrolllerGate is null)
+            {
+                var pending = new TaskCompletionSource<bool?>(TaskCreationOptions.RunContinuationsAsynchronously);
+                _pendingNavigation = pending;
+                var completed = await Task.WhenAny(pending.Task, Task.Delay(TimeSpan.FromSeconds(15)));
+                if (_pendingNavigation != pending) return null;
+                _pendingNavigation = null;
+                if (completed != pending.Task) return false;
+                var ready = await pending.Task;
+                if (ready is null) return null;
+            }
+            return Navigate(url);
+        }
+
+        private TaskCompletionSource<bool?>? _pendingNavigation;
+        private void CancelPendingNavigation()
+        {
+            var pending = _pendingNavigation;
+            _pendingNavigation = null;
+            pending?.TrySetResult(null);
         }
 
         /// <summary>The URL as the fallback panel names it: WebAssetServer's ccp_t token never reaches the screen.</summary>
@@ -461,6 +503,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             if (engine != _scrolllerEngine) return;
             _scrolllerGate = gated;
+            _pendingNavigation?.TrySetResult(gated);
             var src = Source;
             if (ReloadAfterGate(_web?.Source, src, _loadedOnThisEngine) && ConditioningControlPanel.Services.SandboxNet.Allows(src))
             {
@@ -485,7 +528,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
             base.OnPropertyChanged(change);
-            if (change.Property == SourceProperty) ApplySource();
+            if (change.Property == SourceProperty)
+            {
+                if (!_explicitNavigate) CancelPendingNavigation();
+                ApplySource();
+            }
         }
 
         private void ApplySource()

@@ -103,13 +103,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Points the web view at a URL. A missing host (the tab is not in the tree, as in
         /// a single-view render) is a no-op that returns false, never a throw.</summary>
-        private bool NavigateBrowser(string url, bool requireReadyGate = false)
+        private bool NavigateBrowser(string url)
         {
             try
             {
                 var host = BrowserView;
                 if (host == null) return false;
-                if (!host.Navigate(new Uri(url), requireReadyGate)) return false;   // even when equal: WPF #867, re-click goes home
+                if (!host.Navigate(new Uri(url))) return false;   // even when equal: WPF #867, re-click goes home
                 Log.Information("Browser navigated to {Url}", url);
                 return true;
             }
@@ -169,6 +169,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// navigation still happens, which is what every caller needs first.</param>
         public bool NavigateToUrlInBrowser(string url, bool autoPlayFullscreen = false, bool userInitiated = true)
         {
+            if (!PrepareBrowserNavigation(url, autoPlayFullscreen, userInitiated)) return false;
+            return NavigateBrowser(url);
+        }
+
+        internal async System.Threading.Tasks.Task<bool?> NavigateCompanionUrlAsync(string url)
+        {
+            if (!PrepareBrowserNavigation(url, true, true)) return false;
+            var host = BrowserView;
+            return host == null ? false : await host.NavigateWhenReadyAsync(new Uri(url));
+        }
+
+        private bool PrepareBrowserNavigation(string url, bool autoPlayFullscreen, bool userInitiated)
+        {
             if (string.IsNullOrWhiteSpace(url)) return false;
             if (BrowserBlockedOffline(userInitiated)) return false;
 
@@ -190,7 +203,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (autoPlayFullscreen)
                 Log.Warning("Auto-play/fullscreen requested but WebHost has no script channel - takeover skipped: {Url}", url);
 
-            return NavigateBrowser(url, requireReadyGate: autoPlayFullscreen);
+            return true;
         }
 
         // ============================== the profile viewer ==============================
