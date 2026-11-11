@@ -28,6 +28,39 @@ namespace CCP.Avalonia.Tests;
 /// plays the script's beats on a stepped clock, and Stop, panic and Esc close it and hand her back.</summary>
 public sealed class FirstShowStageTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task LinuxBlurFollowsDrain(bool supported) => Run(stage =>
+    {
+        int enabled = 0, disabled = 0;
+        stage.EnableBlur = () => { enabled++; return supported; };
+        stage.DisableBlur = () => disabled++;
+        double t = 0; stage.Clock = () => t; stage.Start();
+        t = 10.9; stage.Frame(); Assert.Equal(0, enabled);
+        t = 11; stage.Frame(); Assert.Equal(1, enabled);
+        t = 13; stage.Frame(); Assert.Equal(1, enabled); Assert.Equal(0, disabled);
+        t = 15; stage.Frame(); Assert.Equal(supported ? 1 : 0, disabled);
+        t = 35; stage.Frame(); Assert.Equal(1, enabled); Assert.Equal(supported ? 1 : 0, disabled);
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public Task LinuxBlurClearsOnExit(int exit) => Run(stage =>
+    {
+        int disabled = 0;
+        stage.EnableBlur = () => true; stage.DisableBlur = () => disabled++;
+        double t = 0; stage.Clock = () => t; stage.Start(); t = 12; stage.Frame();
+        if (exit == 0) stage.Close();
+        else if (exit == 1) FirstShowService.Stop();
+        else PanicSurfaces.StopAll("test");
+        Assert.Equal(1, disabled);
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task OpensPlaysTheScriptAndStopHandsEmiBack() => Run(stage =>
     {

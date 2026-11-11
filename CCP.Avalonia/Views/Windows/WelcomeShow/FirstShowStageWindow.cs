@@ -75,6 +75,9 @@ internal sealed partial class FirstShowStageWindow : Window
     private bool _closed, _greeted, _centered, _playing, _ending, _serious, _moving, _bundled;
     private double _last, _moveAt, _showStart = double.NaN, _showFrozen, _settledAt, _x, _y;
     private int _beat = -1;
+    private bool _drainAttempted, _desktopBlur;
+    internal Func<bool> EnableBlur;
+    internal Action DisableBlur;
     private static readonly HttpClient Http = new(UrlSafety.CreateGuardedHandler()) { Timeout = TimeSpan.FromSeconds(20) };
     /// <summary>"via Scrolller" while a Scrolller show plays (WPF FirstShowDesktopWindow._credit, ScrolllerCreditBadge).
     /// Brand text, not a loc key, as on every page's mark.</summary>
@@ -106,6 +109,8 @@ internal sealed partial class FirstShowStageWindow : Window
     public FirstShowStageWindow(MainShellWindow? main)
     {
         Clock = () => _life.Elapsed.TotalSeconds;
+        EnableBlur = () => OperatingSystem.IsLinux() && X11Overlay.EnableDesktopBlur(this);
+        DisableBlur = () => X11Overlay.DisableDesktopBlur(this);
         _main = main;
         _panic = CoreSettings.Current?.PanicKey ?? "Escape";
         Title = "CCP - Emi show";
@@ -361,6 +366,9 @@ internal sealed partial class FirstShowStageWindow : Window
         var time = ShowTime;
         if (_playing)
         {
+            bool drain = time >= 11 && time < 15;
+            if (drain && !_drainAttempted) { _drainAttempted = true; _desktopBlur = EnableBlur(); }
+            if (!drain) ClearDesktopBlur();
             _effects?.Tick(time, dt);
             while (_beat + 1 < S.Beats.Length && time >= S.Beats[_beat + 1])
             {
@@ -460,9 +468,15 @@ internal sealed partial class FirstShowStageWindow : Window
         catch (Exception ex) { Log.Debug(ex, "First show speech window failed to show"); }
     }
     private void ReleaseFiles() { foreach (var path in _files) Release(path); _files.Clear(); }
+    private void ClearDesktopBlur()
+    {
+        if (_desktopBlur) { DisableBlur(); _desktopBlur = false; }
+        _drainAttempted = false;
+    }
     private void Cleanup()
     {
         if (_closed) return;
+        ClearDesktopBlur();
         ClearGuideTarget();
         _closed = true;
         if (OperatingSystem.IsWindows()) Win32PanicKey.KeyDown -= OnGlobalKey;
