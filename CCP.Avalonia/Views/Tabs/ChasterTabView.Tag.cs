@@ -1,5 +1,5 @@
 // WPF ChasterTabView.xaml.cs:449-465, 752-761; ChasterTabView.xaml:444-491,559-568.
-// Static tags reuse Core's landing rules. Tug and bob remain part B.
+// Static tags reuse Core's landing rules.
 using System;
 using Avalonia;
 using Avalonia.Interactivity;
@@ -12,7 +12,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 
 public partial class ChasterTabView
 {
-    private void PaperTag_Click(object? sender, RoutedEventArgs e) => ToggleBill();
+    private void PaperTag_Click(object? sender, RoutedEventArgs e) { ToggleBill(); FxTagTug(); }
 
     internal void RefreshTag(int balance)
     {
