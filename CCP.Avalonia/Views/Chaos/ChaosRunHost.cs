@@ -5,6 +5,7 @@ using System.Threading;
 using Avalonia;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
@@ -119,7 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!run.RippleReady)
             {
                 RippleCue("toy_denied", 0.45f);
-                run.PushEvent(Loc.GetF("Chaos_Ripple_Denied", run.RippleText));
+                run.PushEvent(IconText.BareLoc("Chaos_Ripple_Denied", run.RippleText));
                 double scale = primaryScale > 0 ? primaryScale : 1;
                 PopText?.Invoke(px.X / scale, px.Y / scale - 30, Loc.GetF("Chaos_Ripple_Gathering", run.RippleText),
                     Color.FromRgb(0x7A, 0xE0, 0xFF));
@@ -130,7 +131,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 ChaosMeta.State.SeenRippleTeach = true;
                 ChaosMeta.Save();
-                ChaosAnnouncerOverlay.Announce(Loc.Get("Chaos_Ripple_Teach"), ChaosAnnounceKind.PowerUp);
+                ChaosAnnouncerOverlay.Announce(IconText.BareLoc("Chaos_Ripple_Teach"), ChaosAnnounceKind.PowerUp);
             }
             bool skips = run.MaxedBoons.Contains("skipping_stone");
             void Wave()
