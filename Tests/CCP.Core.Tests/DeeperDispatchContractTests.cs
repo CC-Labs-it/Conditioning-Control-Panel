@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel.Services.Deeper;
+using CCP.Testing;
 using Xunit;
 
 namespace CCP.Core.Tests;
@@ -24,6 +25,7 @@ public class DeeperDispatchContractTests
     [Fact]
     public async Task Logging_RecordsDescribedLine_AndRaisesEvent()
     {
+        using var culture = new CultureScope();   // preview overlay text, formatted for the user's culture
         var d = new LoggingActionDispatcher();
         string? raised = null;
         d.ActionLogged += l => raised = l;
@@ -49,6 +51,7 @@ public class DeeperDispatchContractTests
     [Fact]
     public async Task Logging_CapsRecentAtFifty_OldestDropped()
     {
+        using var culture = new CultureScope();   // preview overlay text, formatted for the user's culture
         var d = new LoggingActionDispatcher();
         for (var i = 0; i < 55; i++)
             await d.DispatchAsync(new PauseAction(), Ctx(i));
@@ -62,6 +65,7 @@ public class DeeperDispatchContractTests
     [Fact]
     public async Task Recording_ForwardsUpdatesUnrecorded_AndRecordsEvenWhenInnerThrows()
     {
+        using var culture = new CultureScope();   // preview overlay text, formatted for the user's culture
         var inner = new ThrowingInner();
         var d = new RecordingActionDispatcher(inner);
 
@@ -77,6 +81,7 @@ public class DeeperDispatchContractTests
     [Fact]
     public async Task Logging_DescribesHapticAndEffectLines_WithPhaseSuffix()
     {
+        using var culture = new CultureScope();   // preview overlay text, formatted for the user's culture
         var d = new LoggingActionDispatcher();
         await d.DispatchAsync(new TriggerHapticAction { PatternName = "pulse", Intensity = 0.5, DurationMs = 800, Phase = EffectPhase.Start }, Ctx(1));
         await d.DispatchAsync(new TriggerHapticAction { Intensity = 1, DurationMs = 200, Phase = EffectPhase.Restart }, Ctx(1));

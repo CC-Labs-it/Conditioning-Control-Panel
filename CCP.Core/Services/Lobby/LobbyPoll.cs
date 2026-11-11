@@ -10,25 +10,31 @@ namespace ConditioningControlPanel.Services.Lobby;
 public sealed class LobbyPoll : IDisposable
 {
     private readonly IUiTimer _timer;
-    private readonly Func<string?> _account;
+    private readonly Func<bool> _signedIn;
     private readonly Func<Task<PbpLobbyReply>> _chess;
     private readonly Func<Task<OpenTablesReply>> _goon;
-    private readonly Func<Task<RaceOpenReply>> _race;
     private readonly Func<Task<(IReadOnlyList<RemoteSeat> Seats, bool Ok)>> _remote;
+    private readonly Func<Task<RaceOpenReply>>? _race;
+    private readonly Func<string?> _account; // the account a published round belongs to
+    private LobbySnapshot _snapshot = LobbySnapshot.Empty; private string? _snapshotAccount;
     private readonly Func<IReadOnlyList<Friend>> _friends;
     private readonly object _gate = new();
     private Task? _inflight;
     private int _watchers;
     private bool _disposed;
-    public LobbySnapshot Snapshot { get; private set; } = LobbySnapshot.Empty;
+    /// <summary>False once the account that fetched the last round is no longer the current one.</summary>
+    public bool SnapshotIsCurrent => string.Equals(_snapshotAccount, _account(), StringComparison.Ordinal);
+    /// <summary>The last round, only while <see cref="SnapshotIsCurrent"/>.</summary>
+    public LobbySnapshot Snapshot => SnapshotIsCurrent ? _snapshot : LobbySnapshot.Empty;
     public bool LastRoundOk { get; private set; } = true;
     public event Action<LobbySnapshot>? Changed;
-    public LobbyPoll(IUiTimer timer, Func<string?> account, Func<IReadOnlyList<Friend>> friends,
+    public LobbyPoll(IUiTimer timer, Func<bool> signedIn, Func<IReadOnlyList<Friend>> friends,
         Func<Task<PbpLobbyReply>> chess, Func<Task<OpenTablesReply>> goon,
-        Func<Task<(IReadOnlyList<RemoteSeat> Seats, bool Ok)>> remote, Func<Task<RaceOpenReply>> race)
+        Func<Task<(IReadOnlyList<RemoteSeat> Seats, bool Ok)>> remote,
+        Func<Task<RaceOpenReply>>? race = null, Func<string?>? account = null)
     {
-        _timer = timer; _account = account; _friends = friends;
-        _chess = chess; _goon = goon; _remote = remote; _race = race;
+        _timer = timer; _signedIn = signedIn; _friends = friends;
+        _chess = chess; _goon = goon; _remote = remote; _race = race; _account = account ?? (() => null);
         _timer.Interval = LobbyPollPlan.Base;
         _timer.Tick += OnTick;
     }
@@ -67,19 +73,20 @@ public sealed class LobbyPoll : IDisposable
         var ok = true;
         try
         {
-            if (account == null) snapshot = LobbySnapshot.Empty;
+            if (!_signedIn()) snapshot = LobbySnapshot.Empty;
             else
             {
                 var chess = Safe(_chess, PbpLobbyReply.Empty);
                 var goon = Safe(_goon, OpenTablesReply.Empty);
                 var remote = Safe(_remote, ((IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), false));
-                var race = Safe(_race, RaceOpenReply.Empty);
+                var race = _race == null ? Task.FromResult(RaceOpenReply.Empty) : Safe(_race, RaceOpenReply.Empty);
                 await Task.WhenAll(chess, goon, remote, race).ConfigureAwait(false);
                 ok = chess.Result.Ok || remote.Result.Item2 || race.Result.Ok; // Goon has no error distinction in WPF.
                 IReadOnlyList<Friend> friends;
                 try { friends = _friends(); } catch { friends = Array.Empty<Friend>(); }
                 snapshot = LobbyMerge.Build(chess.Result, goon.Result, remote.Result.Item1, friends, true,
                     DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), race.Result);
+                if (!_signedIn()) snapshot = LobbySnapshot.Empty;
             }
         }
         catch { ok = false; }
@@ -91,9 +98,10 @@ public sealed class LobbyPoll : IDisposable
             try
             {
                 if (_disposed) return;
+                // A round fetched for another account is never published (WPF reads one account at a time).
                 switched = !string.Equals(account, _account(), StringComparison.Ordinal);
                 if (switched) result = LobbySnapshot.Empty;
-                Snapshot = result; LastRoundOk = success;
+                _snapshot = result; _snapshotAccount = _account(); LastRoundOk = success;
                 _timer.Interval = LobbyPollPlan.Next(_timer.Interval, success);
                 try { Changed?.Invoke(result); } catch { /* WPF isolates subscriber failures. */ }
             }
@@ -101,7 +109,7 @@ public sealed class LobbyPoll : IDisposable
             {
                 lock (_gate) _inflight = null;
                 completion.TrySetResult();
-                if (switched && !_disposed && _account() != null) _ = RefreshAsync();
+                if (switched && !_disposed && _signedIn()) _ = RefreshAsync();
             }
         });
     }

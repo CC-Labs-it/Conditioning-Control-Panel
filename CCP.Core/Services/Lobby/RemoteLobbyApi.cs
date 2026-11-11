@@ -57,4 +57,26 @@ public sealed class RemoteLobbyApi
         }
         catch { return (_seats, false); }
     }
+    /// <summary>WPF AvailableSubjectsService.TryClaimAsync: the session url on 200, else null. The url
+    /// carries the PIN in its fragment, so it is never logged or kept.</summary>
+    public async Task<string?> ClaimAsync(string subjectUnifiedId, CancellationToken ct = default)
+    {
+        var id = _identity();
+        var url = _baseUrl();
+        if (id == null || string.IsNullOrEmpty(url) || string.IsNullOrEmpty(subjectUnifiedId)) return null;
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, url + "/v2/directory/claim") { Content = new StringContent(
+                new JObject { ["unified_id"] = subjectUnifiedId }.ToString(Newtonsoft.Json.Formatting.None), System.Text.Encoding.UTF8, "application/json") };
+            request.Headers.Add("X-Auth-Token", id.Value.Token);
+            request.Headers.Add("X-Caller-Unified-Id", id.Value.UnifiedId);
+            using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
+            // A 409 is either a merged account (recovery takes it) or a lost race (the next round shows it taken).
+            if ((int)response.StatusCode == 409) { await MergedAccountRecovery.TryHandleAsync(response).ConfigureAwait(false); return null; }
+            if (!response.IsSuccessStatusCode) return null;
+            var body = JObject.Parse(await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+            return body["session_url"]?.ToString() is { Length: > 0 } session ? session : null;
+        }
+        catch { return null; }
+    }
 }

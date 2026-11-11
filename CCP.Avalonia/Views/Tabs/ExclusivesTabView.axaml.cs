@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
@@ -23,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///
     /// <para>The WPF shell owns only the backdrop and geometry chores; all roster/card logic lives
     /// in MainWindow.Exclusives.cs. What survived here is the ambient canvas tuning (fog + dust +
-    /// aurora at 0.55, copied from StartExclusivesMotion - canvas composition, not service logic)
+    /// aurora at 0.75 plus VaultMotes, copied from StartExclusivesMotion - canvas composition, not service logic)
     /// plus the roster/gate repaint (RefreshVault), which reads Core's ExclusiveFeature.All.</para>
     ///
     /// <para>Dropped:
@@ -35,6 +37,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     public partial class ExclusivesTabView : UserControl
     {
         private readonly AmbientFxCanvas _ambientFx;
+        private static readonly Color ZoneGold = Color.FromRgb(0xFF, 0xC8, 0x5A);
+        private static readonly Color ZoneCyan = Color.FromRgb(0x6F, 0xE8, 0xFF);
+        private static readonly Color ZoneLilac = Color.FromRgb(0xB7, 0x9C, 0xFF);
+        private bool _vaultZonesQueued, _vaultZonesPending, _ambientNeedsRefresh;
+        internal int VaultZoneUpdates { get; private set; }
 
         public ExclusivesTabView()
         {
@@ -51,6 +58,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // matching WPF EnsureExclusivesBuilt. This view composes it and stops it on unload;
             // the canvas also self-gates on motion, tier and window focus.
             Loaded += OnLoaded;
+            this.FindControl<ScrollViewer>("ContentScroll")!.ScrollChanged += (_, _) => QueueVaultZones();
+            this.FindControl<ItemsControl>("ExclusivesShelf")!.SizeChanged += (_, _) => QueueVaultZones();
+            _ambientFx.SizeChanged += (_, _) => QueueVaultZones();
+            _ambientFx.ClockStarted += () => { if (_vaultZonesPending) QueueVaultZones(); };
             Unloaded += OnUnloaded;
             // PLAYBOOK P01: the shell hides tabs with IsVisible, so the motion clock follows it too.
             PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) UpdateMotion(); };
@@ -78,12 +89,75 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             (CardWidth, CardHeight, GroupHeadWidth) = (w, h, Math.Max(0, width - 1));
         }
 
+        private bool _plansMode, _plansActive = true;
+
+        /// <summary>
+        /// WPF Views/Tabs/ExclusivesTabView.xaml.cs:133: Settings &gt; Account &amp; Plans hosts this view inline with
+        /// its own header, the tier plates and a link to the Premium page; the spotlight and shelf stay on the
+        /// Premium page. The inner scroller is disabled so the Settings page owns the wheel.
+        /// </summary>
+        public bool PlansMode
+        {
+            get => _plansMode;
+            set
+            {
+                _plansMode = value;
+                this.FindControl<ItemsControl>("ExclusivesShelf")!.IsVisible = !value;
+                this.FindControl<Border>("SpotlightCard")!.IsVisible = !value;
+                this.FindControl<Button>("BtnSeePremium")!.IsVisible = value;
+                this.FindControl<Control>("InvitesHost")!.IsVisible = value;
+                BindLoc("TxtVaultTitle", value ? "plans_header_title" : "premium_page_title");
+                BindLoc("TxtVaultSub", value ? "plans_header_sub" : "premium_page_sub");
+                this.FindControl<ScrollViewer>("ContentScroll")!.VerticalScrollBarVisibility =
+                    value ? global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled
+                          : global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto;
+            }
+        }
+
+        /// <summary>Rebound, never assigned, so a language switch still repaints it (WPF BindLoc, P09).</summary>
+        private void BindLoc(string name, string key) => this.FindControl<TextBlock>(name)!.Bind(TextBlock.TextProperty,
+            (global::Avalonia.Data.Binding)new Localization.StrExtension(key).ProvideValue(null!));
+
+        /// <summary>
+        /// WPF Views/Tabs/AppSettingsTabView.xaml.cs:177 and MainWindow/MainWindow.Exclusives.cs:296: Settings is one scrolling
+        /// page, so the Account &amp; Plans copy is "visible" on every section; its motion follows the lit pill
+        /// instead, on while Account is the section in view and parked elsewhere. Becoming active repaints, as
+        /// WPF ShowVaultPage runs RefreshVaultCore. The Premium page never clears it.
+        /// </summary>
+        internal bool PlansActive
+        {
+            get => _plansActive;
+            set
+            {
+                if (_plansActive == value) return;
+                _plansActive = value;
+                if (value) RefreshVault();
+                if (this.IsAttachedToVisualTree()) { if (value) StartAmbient(); else _ambientFx.Stop(); }
+                UpdateMotion();
+            }
+        }
+
+        private void RefreshJustSubscribed() => this.FindControl<StackPanel>("JustSubscribedRow")!.IsVisible = Platform.EntitlementRefresh.EffectiveTier < 2;
+
+        private async void JustSubscribed_Click(object? sender, RoutedEventArgs e)
+        {
+            var button = this.FindControl<Button>("BtnJustSubscribed")!;
+            var status = this.FindControl<TextBlock>("TxtJustSubscribed")!;
+            button.IsEnabled = false;
+            status.Text = Loc.Get("plans_just_subscribed_checking");
+            try { status.Text = Loc.Get(Services.JustSubscribedRule.LocKey(await Platform.EntitlementRefresh.CheckAsync())); }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "Subscription check failed"); status.Text = Loc.Get("plans_just_subscribed_unreachable"); }
+            finally { button.IsEnabled = true; }
+        }
+
         private void OnLoaded(object? sender, RoutedEventArgs e)
         {
+            Platform.EntitlementRefresh.Changed += RefreshJustSubscribed;
+            RefreshJustSubscribed();
             CoreMods.ModChanged += OnModChanged;
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
-            AmbientFxCanvas.Env.MotionGateChanged += UpdateMotion;
-            StartAmbient();
+            AmbientFxCanvas.Env.MotionGateChanged += RefreshVaultMotion;
+            if (_plansActive) StartAmbient();
             UpdateMotion();
         }
 
@@ -93,26 +167,92 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF binds the group headers live (BindVaultLoc); here the rows are rebuilt (PLAYBOOK P09).</summary>
         private void OnLanguageChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(RefreshVault);
 
-        /// <summary>WPF LoadBackdrop: null keeps what is already painted rather than blanking the room.</summary>
+        /// <summary>WPF Views/Tabs/ExclusivesTabView.xaml.cs:96-103 (1400px cap at :37): null keeps what is already painted rather than blanking the room.</summary>
         private void LoadBackdrop()
         {
-            var art = Helpers.ModArt.TryLoad("exclusives/vault_backdrop.png");
+            var art = Helpers.ModArt.TryLoad("exclusives/vault_backdrop.png", 1400);
             if (art != null) this.FindControl<Image>("VaultBackdrop")!.Source = art;
         }
 
+        /// <summary>WPF MainWindow.Exclusives.cs StartExclusivesMotion: the Premium page is the vault
+        /// (room + motes at 0.75); Account &amp; Plans keeps the plain room at 0.55, no motes.</summary>
         private void StartAmbient()
-            => _ambientFx.StartLayers(new AmbientFxConfig
+        {
+            var room = AmbientFxLayers.FogDrift | AmbientFxLayers.DustField | AmbientFxLayers.AuroraWash;
+            _ambientFx.StartLayers(new AmbientFxConfig
             {
-                Layers = AmbientFxLayers.FogDrift | AmbientFxLayers.DustField | AmbientFxLayers.AuroraWash,
-                Intensity = 0.55,
+                Layers = _plansMode ? room
+                    : AmbientFxCanvas.Env.Level == MotionLevel.Full ? room | AmbientFxLayers.VaultMotes
+                    : AmbientFxLayers.VaultMotes,
+                Intensity = _plansMode ? 0.55 : 0.75,
                 FogPuffs = 3,
-            });
+            }, preservePause: true);
+        }
+
+        private void RefreshVaultMotion()
+        {
+            _ambientNeedsRefresh = true;
+            if (IsEffectivelyVisible && _plansActive)
+            {
+                StartAmbient();
+                _ambientNeedsRefresh = false;
+                QueueVaultZones();
+            }
+            UpdateMotion();
+        }
+
+        // Like WPF QueueVaultZones: scroll and size bursts share one pass after layout.
+        internal void QueueVaultZones()
+        {
+            _vaultZonesPending = true;
+            if (_vaultZonesQueued || !CanUpdateVaultZones) return;
+            _vaultZonesQueued = true;
+            Dispatcher.UIThread.Post(() =>
+            {
+                _vaultZonesQueued = false;
+                UpdateVaultZones();
+            }, DispatcherPriority.Background);
+        }
+
+        private bool CanUpdateVaultZones => IsEffectivelyVisible && _ambientFx.IsTicking
+            && _ambientFx.Bounds.Width > 0 && _ambientFx.Bounds.Height > 0;
+
+        // Layout changes include scrolling and shelf reflow. Coordinates belong to the canvas,
+        // so motes stay on their cards rather than the old scroll position.
+        internal void UpdateVaultZones()
+        {
+            if (!CanUpdateVaultZones) { _vaultZonesPending = true; return; }
+            _vaultZonesPending = false;
+            VaultZoneUpdates++;
+            var zones = new List<VaultZone>();
+            foreach (var c in this.GetVisualDescendants().OfType<Control>())
+            {
+                if (!c.IsEffectivelyVisible || c.Bounds.Width <= 0) continue;
+                Services.UI.PremiumGroup group;
+                int weight = 2;
+                if (c.Name == "ExCard" && c.DataContext is ExclusiveCardRow card)
+                {
+                    group = Services.UI.PremiumShelfOrder.GroupOf(card.Feature.Key, card.Tier);
+                    weight = card.IsLocked ? 1 : 2;
+                }
+                else if (c.Name == "VaultSign" && c.DataContext is ExclusiveGroupRow head) group = head.Group;
+                else continue;
+                if (c.TranslatePoint(default, _ambientFx) is not { } at) continue;
+                var bounds = new Rect(at, c.Bounds.Size);
+                if (bounds.Bottom < 0 || bounds.Top > _ambientFx.Bounds.Height) continue;
+                var diamond = group == Services.UI.PremiumGroup.Prime;
+                var hue = diamond ? ZoneCyan : group == Services.UI.PremiumGroup.Basic ? ZoneGold : ZoneLilac;
+                for (int i = 0; i < weight; i++) zones.Add(new VaultZone(bounds, hue, diamond));
+            }
+            _ambientFx.SetVaultZones(zones);
+        }
 
         private void OnUnloaded(object? sender, RoutedEventArgs e)
         {
+            Platform.EntitlementRefresh.Changed -= RefreshJustSubscribed;
             CoreMods.ModChanged -= OnModChanged;
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
-            AmbientFxCanvas.Env.MotionGateChanged -= UpdateMotion;
+            AmbientFxCanvas.Env.MotionGateChanged -= RefreshVaultMotion;
             _ambientFx.Stop();
             UpdateMotion();
         }
@@ -128,7 +268,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         internal void RefreshVault()
         {
+            if (_ambientNeedsRefresh) RefreshVaultMotion();
+            QueueVaultZones();
+            RefreshJustSubscribed();
             RetintVaultChrome();
+            RefreshHeaderArt();
+            // WPF MainWindow.Exclusives.cs:969: Plans repaints plates and its throttled invites.
+            if (_plansMode)
+            {
+                RefreshTierPlates();
+                _ = this.FindControl<Controls.Invites.InvitePanel>("InvitesCard")!.RefreshAsync();
+                return;
+            }
             // WPF ArrangeVaultShelf (polish 12): Basic, Prime, Free, each under its header, open doors first,
             // roster order within each half (Core PremiumShelfOrder). The two reserved seats are dropped. Just
             // Drop until the server opens its door and the Arcademy behind its build flag are hidden, not veiled.
@@ -144,7 +295,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var spot = new ExclusiveCardRow(ExclusiveFeature.All[0]);
             this.FindControl<TextBlock>("TxtSpotArtGlyph")!.Text = spot.Art == null ? spot.Feature.Emoji : "";
             var spotArt = this.FindControl<Image>("SpotArtImage")!;
-            var banner = ModArt.TryLoad(ArtName(spot.Feature.BannerArtResource), 1400);
+            var banner = ModArt.FirstOf(new[] { ArtName(spot.Feature.BannerArtResource) }, 1400);
             spotArt.Source = banner ?? spot.Art;
             // WPF ApplySpotlightArt: the Ken Burns zoom centres on a banner, on the focal point of card art.
             spotArt.RenderTransformOrigin = banner != null
@@ -175,6 +326,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             RefreshTierPlates();
             Dress(this.FindControl<Control>("SpotFreeToday")!);
             Dress(this.FindControl<Control>("SpotVeilLock")!);   // WPF :799 breathes only under a shown veil
+        }
+
+        private void RefreshHeaderArt()
+        {
+            // WPF MainWindow.Exclusives.cs:1012-1015; MainWindow.xaml.cs:2761-2776:
+            // themed variant first, but a third-party mod owns the base path.
+            // null preserves the last painted face; FirstOf caches per active mod (RefreshVault repaints often).
+            if (ModArt.FirstOf(FavoritesRailArt.Candidates("features/vault.png",
+                    FavoritesRailArt.ThemeSuffix(CoreMods.ActiveModId)), 480) is { } hero)
+                ((ImageBrush)this.FindControl<Border>("VaultHero")!.Background!).Source = hero;
+            for (int tier = 1; tier <= 2; tier++)
+                if (ModArt.TryLoadBuiltIn($"Patreon tier{tier}.png", 160) is { } art)
+                    this.FindControl<Image>($"TierPlate{tier}Art")!.Source = art;
         }
 
         // WPF RetintVaultChrome: only decor follows the mod; gold free-day and tier commerce do not.
@@ -237,7 +401,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>The only start/stop: visible, attached and MotionFx.AllowAmbientLoops (PLAYBOOK P01).</summary>
         private void UpdateMotion()
         {
-            bool want = IsVisible && this.IsAttachedToVisualTree() && AmbientFxCanvas.Env.AllowAmbientLoops;
+            bool want = IsVisible && _plansActive && this.IsAttachedToVisualTree() && AmbientFxCanvas.Env.AllowAmbientLoops;
             // Re-dressed either way: a glow-gate change (performance tier) alone must re-apply the glows.
             if (want == (_motion != null)) { }
             else if (want)
@@ -364,18 +528,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void Card_PointerReleased(object? sender, PointerReleasedEventArgs e)
         {
-            if (e.InitialPressMouseButton == MouseButton.Left && (sender as Control)?.DataContext is ExclusiveCardRow row)
-                Open(row.Feature);
+            if (e.InitialPressMouseButton == MouseButton.Left && (sender as Control)?.DataContext is ExclusiveCardRow row && IsOnThisBuild(row.Feature.Key))
+                OnVaultCardClicked((Control)sender!, row.Feature, () => Open(row.Feature));
         }
 
         /// <summary>
-        /// ponytail: "fyp" opens the feed and "justdrop" opens its GameWindow; "backroom" (WPF BtnStartBackRoom_Click) and main
-        /// 2e9080399's Breakout, Goon hosting, Down the Rabbit Hole and Arcademy have no host on this head, and
+        /// ponytail: "fyp" opens the feed and "justdrop" opens its GameWindow; Breakout and Down the Rabbit Hole open the
+        /// Play wall's doors (OpenExclusiveFeature). "backroom" (WPF BtnStartBackRoom_Click), Goon hosting and Arcademy
+        /// have no host on this head, and
         /// Focus Gaze's Play-wall switch is still inert (PlayTabView.ChkFocusGaze_Changed); add it back when that works.
         /// Their cards stay visible but inert (no hand, honest tooltip) and never reach ShowTab or a bark.
         /// </summary>
         internal static bool IsOnThisBuild(string key) =>
-            key is not ("backroom" or "breakout" or "goon" or "dtrh" or "arcademy" or "focusgaze");
+            key is not ("backroom" or "goon" or "arcademy" or "focusgaze");
+
+        /// <summary>WPF Views/Tabs/ExclusivesTabView.xaml.cs:175: Account &amp; Plans links to the full page.</summary>
+        private void SeePremium_Click(object? sender, RoutedEventArgs e)
+            => (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.ShowTab("premium");
 
         /// <summary>WPF OpenExclusiveFeature: the card never blocks, the destination's own gate does.</summary>
         private void Open(ExclusiveFeature feature)
@@ -384,11 +553,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.OpenExclusiveFeature(feature.Key);
         }
 
-        /// <summary>WPF OnExclusiveCardHover: the shared hover pop on the art, driven from the card.
-        /// ponytail: no MotionFx.HoverLift or glow bloom on this head yet.</summary>
-        private void Card_PointerEntered(object? sender, PointerEventArgs e) => HoverPop.Enter(CardArt(sender));
+        // WPF MainWindow.Exclusives.cs:912-943 and Services/MotionFx.cs:75-85:
+        // lift even unavailable cards; destinations own the gates.
+        private void Card_PointerEntered(object? sender, PointerEventArgs e) => CardHover(sender, true);
+        private void Card_PointerExited(object? sender, PointerEventArgs e) => CardHover(sender, false);
 
-        private void Card_PointerExited(object? sender, PointerEventArgs e) => HoverPop.Leave(CardArt(sender));
+        private static void CardHover(object? sender, bool on)
+        {
+            if (sender is not Border card) return;
+            if (card.RenderTransform is not ScaleTransform scale)
+            {
+                card.RenderTransformOrigin = RelativePoint.Center; // WPF Services/MotionFx.cs:300
+                card.RenderTransform = scale = new ScaleTransform();
+            }
+            scale.Transitions = AmbientFxCanvas.Env.AllowTransitions ? new Transitions
+            {
+                new DoubleTransition { Property = ScaleTransform.ScaleXProperty, Duration = TimeSpan.FromMilliseconds(150), Easing = new QuadraticEaseOut() },
+                new DoubleTransition { Property = ScaleTransform.ScaleYProperty, Duration = TimeSpan.FromMilliseconds(150), Easing = new QuadraticEaseOut() },
+            } : null;
+            scale.ScaleX = scale.ScaleY = on ? 1.02 : 1;
+            var glow = card.GetVisualDescendants().OfType<Border>().FirstOrDefault(b => b.Name == "HoverGlow");
+            if (glow != null)
+            {
+                var tier = AmbientFxCanvas.Env.CurrentTier;
+                glow.IsVisible = on && AmbientFxCanvas.Env.AllowGlow(tier);
+                // Read the current mod colour on every hover, just as WPF refreshes its cached bloom.
+                glow.BoxShadow = glow.IsVisible
+                    ? Glow(AmbientFxCanvas.Env.GlowColor, 0.55, Math.Min(24, AmbientFxCanvas.Env.MaxGlowBlurRadius(tier)))
+                    : default;
+            }
+            if (on) HoverPop.Enter(CardArt(card)); else HoverPop.Leave(CardArt(card));
+        }
 
         private static Control? CardArt(object? card) =>
             (card as Control)?.GetVisualDescendants().OfType<Control>().FirstOrDefault(c => c.Name == "CardArt");
@@ -405,10 +600,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Feature = feature;
             State = feature.GateState();
             FreeToday = feature.IsFreeToday(State);
-            // WPF ExclusiveArtPath: Takeover forks its art under BambiSleep.
-            Art = ModArt.TryLoad(feature.Key == "bambitakeover" && CoreMods.ActiveModId == BuiltInMods.BambiSleepId
+            // WPF ExclusiveArtPath: Takeover forks its art under BambiSleep. FirstOf caches per active mod:
+            // every RefreshVault (startup, each tier or daily-free change) rebuilt every row and re-decoded
+            // every card, ~1 s of UI thread per repaint under CPU rendering (fix2/startup trace).
+            Art = ModArt.FirstOf(new[] { feature.Key == "bambitakeover" && CoreMods.ActiveModId == BuiltInMods.BambiSleepId
                 ? "features/bambi takeover.png"
-                : ExclusivesTabView.ArtName(feature.ArtResource), 700);
+                : ExclusivesTabView.ArtName(feature.ArtResource) }, 700);
         }
 
         public ExclusiveFeature Feature { get; }

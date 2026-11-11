@@ -4,6 +4,11 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using ConditioningControlPanel.Services.UI;
+using ConditioningControlPanel.Services.Friends;
+using ConditioningControlPanel.Services.GoonGame;
+using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -12,17 +17,20 @@ using ConditioningControlPanel.Services.Lobby;
 
 namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 
-/// <summary>WPF's Lobby frame and narrow-column switcher. The old sample subject roster is gone.</summary>
+/// <summary>WPF Lobby frame, watched discovery and narrow-column switcher.</summary>
 public partial class AvailableSubjectsTabView : UserControl
 {
     internal bool IsNarrow { get; private set; }
     internal int SelectedColumn { get; private set; }
-    internal Func<LobbyGates> ReadGates = () => LobbyGates.From(Platform.FriendsHead.Identity() != null,
+    internal Func<LobbyGates> ReadGates = CurrentGates;
+    /// <summary>WPF MainWindow.CurrentLobbyGates, shared with the launcher's lobby chip.</summary>
+    internal static LobbyGates CurrentGates() => LobbyGates.From(Platform.FriendsHead.Identity() != null,
         TierGate.HasPremium, TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed);
-    private LobbySnapshot _snapshot = LobbySnapshot.Empty;
+    internal Func<LobbyPoll>? CreateLobby;
     private LobbyPoll? _lobby;
-    private IDisposable? _lobbyLease;
-    private IDisposable? _lobbyVisibility;
+    private bool _ownsLobby;
+    private IDisposable? _lease;
+    private LobbySnapshot _snapshot = LobbySnapshot.Empty;
 
     public AvailableSubjectsTabView()
     {
@@ -32,49 +40,48 @@ public partial class AvailableSubjectsTabView : UserControl
         SizeChanged += (_, e) => SetNarrow(LobbyPageRules.IsNarrowWidth(e.NewSize.Width));
         // The shell hides tabs with IsVisible, so Loaded fires once; WPF redraws on every open
         // (MainWindow.Lobby.cs:84), which picks up sign-in, Remote gate and language changes.
-        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) { Repaint(); SyncLobby(); } };
+        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) { Repaint(); SyncWatch(); } };
         Loaded += (_, _) =>
         {
-            _lobby = Platform.LobbyHead.Service;
-            _lobby.Changed += OnLobbyChanged;
-            _lobbyVisibility = EffectiveVisibility.Watch(this, SyncLobby);
-            SyncLobby();
+            if (_lobby == null)
+            {
+                // One feed with the launcher chip, as WPF App.Lobby; a test's own poll is disposed with the page.
+                _ownsLobby = CreateLobby != null;
+                _lobby = CreateLobby?.Invoke() ?? Platform.LobbyHead.Service;
+                _lobby.Changed += OnLobbyChanged;
+            }
             Repaint();
+            SyncWatch();
             SubjectsAmbientFx.StartLayers(new AmbientFxConfig
                 { Layers = AmbientFxLayers.FogDrift, FogPuffs = 2, Intensity = 0.40 });
         };
         Unloaded += (_, _) =>
         {
-            _lobbyLease?.Dispose(); _lobbyLease = null;
-            _lobbyVisibility?.Dispose(); _lobbyVisibility = null;
-            if (_lobby != null) _lobby.Changed -= OnLobbyChanged;
-            _lobby = null;
+            _lease?.Dispose(); _lease = null;
+            if (_lobby != null) { _lobby.Changed -= OnLobbyChanged; if (_ownsLobby) _lobby.Dispose(); _lobby = null; }
             SubjectsAmbientFx.Stop();
         };
     }
-
-    private void SyncLobby()
+    private void SyncWatch()
     {
-        if (_lobby == null) return;
-        if (IsEffectivelyVisible)
-        {
-            OnLobbyChanged(_lobby.Snapshot);
-            _lobbyLease ??= _lobby.Watch();
-        }
-        else { _lobbyLease?.Dispose(); _lobbyLease = null; }
+        if (IsVisible && _lobby != null) _lease ??= _lobby.Watch();
+        else { _lease?.Dispose(); _lease = null; }
     }
-
     private void OnLobbyChanged(LobbySnapshot snapshot)
     {
-        if (!IsEffectivelyVisible) return;
         var gates = ReadGates();
-        PaintSnapshot(gates.SignedIn ? snapshot : LobbySnapshot.Empty, gates);
+        PaintSnapshot(gates.SignedIn ? snapshot : LobbySnapshot.Empty, gates,
+            gates.SignedIn && snapshot.SignedIn && _lobby?.LastRoundOk == false);
     }
 
-    private void Repaint()
+    internal void Repaint()
     {
         var gates = ReadGates();
-        PaintSnapshot(gates.SignedIn ? _snapshot with { SignedIn = true } : LobbySnapshot.Empty, gates);
+        // WPF recomputes the error panel from LastRoundOk on every paint (MainWindow.Lobby.cs:116).
+        // The feed's snapshot is empty after an account switch, so a reopen never shows the last account's rows.
+        var snapshot = _lobby?.SnapshotIsCurrent == false ? LobbySnapshot.Empty : _snapshot;
+        PaintSnapshot(gates.SignedIn ? snapshot with { SignedIn = true } : LobbySnapshot.Empty, gates,
+            gates.SignedIn && _lobby?.LastRoundOk == false);
     }
 
     internal void SetNarrow(bool narrow)
@@ -123,11 +130,30 @@ public partial class AvailableSubjectsTabView : UserControl
         TabOpen.Content = Loc.Get("lobby_list_open") + "  " + snapshot.Open.Count;
         TabPlaying.Content = Loc.Get("lobby_list_playing") + "  " + snapshot.Playing.Count;
         TabFriends.Content = Loc.Get("lobby_list_friends") + "  " + snapshot.Friends.Count;
+        ChessHostLock.IsVisible = !gates.CanHost(LobbyGame.Chess);
+        GoonHostLock.IsVisible = !gates.CanHost(LobbyGame.Goon);
+        BtnHostChess.Opacity = gates.CanHost(LobbyGame.Chess) ? 1 : 0.7;
+        BtnHostGoon.Opacity = gates.CanHost(LobbyGame.Goon) ? 1 : 0.7;
         RemoteHostLock.IsVisible = !gates.CanHost(LobbyGame.Remote);
         BtnBecomeASubject.Opacity = gates.CanHost(LobbyGame.Remote) ? 1 : 0.7;
         TxtBecomeASubjectSubtitle.IsVisible = gates.SignedIn && !gates.CanHost(LobbyGame.Remote);
-        // ponytail: Chess/Goon host and all row Join flows wait for the Lobby service/hosts in the b-lane.
+        // Goon doors and Remote claims remain part B.
         // Keep those destinations disabled instead of constructing a made-up game or remote claim flow.
+    }
+
+    private void BtnHostChess_Click(object? sender, RoutedEventArgs e)
+    {
+        if (TopLevel.GetTopLevel(this) is not MainShellWindow shell) return;
+        if (!ReadGates().SignedIn) { _ = shell.OpenUnifiedLoginDialog(); return; }
+        GameWindow.OpenChessLobby("host");
+    }
+
+    private void BtnLobbyRow_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control { DataContext: LobbyCardView card } || card.Row.Game != LobbyGame.Chess) return;
+        if (TopLevel.GetTopLevel(this) is not MainShellWindow shell) return;
+        if (!ReadGates().CanJoin(LobbyGame.Chess)) { _ = shell.OpenUnifiedLoginDialog(); return; }
+        GameWindow.OpenChessLobby(card.Row.CanWatch ? "spectate" : "join", card.Row.Key);
     }
 
     private void BtnBecomeASubject_Click(object? sender, RoutedEventArgs e)
@@ -144,6 +170,7 @@ public sealed class LobbyCardView
 {
     public LobbyCardView(LobbyRow row, LobbyGates gates)
     {
+        Row = row;
         Title = LobbyPageRules.Title(row, Loc.Get);
         Line = LobbyPageRules.Line(Loc.Get(LobbyPageRules.LabelKey(row.Game)), LobbySummary.For(row, Loc.Get));
         Friend = row.Friend;
@@ -151,6 +178,25 @@ public sealed class LobbyCardView
         Locked = LobbyPageRules.Locked(row, gates);
         ButtonText = Loc.Get(row.CanJoin ? "lobby_btn_join" : "lobby_btn_watch");
         ButtonOpacity = LobbyPageRules.ButtonOpacity(Locked);
+    }
+    public LobbyRow Row { get; }
+    public bool DoorAvailable => Row.Game == LobbyGame.Chess;
+    private static IBrush? Theme(string key) =>
+        global::Avalonia.Application.Current?.TryFindResource(key, out var value) == true ? value as IBrush : null;
+    public IBrush? CardRim => Theme("DepthFloatRim");
+    public IBrush? ButtonBevel => Theme("DepthRaisedBevel");
+    public IBrush? ButtonSheen => Theme("DepthRaisedSheen");
+    public double CardShadowPx => DepthLaw.FloatPx;
+    public IBrush CardShadow => SharedCardShadow;
+    private static readonly IBrush SharedCardShadow = CreateCardShadow();
+    private static IBrush CreateCardShadow()
+    {
+        var c = Color.FromUInt32(DepthLaw.ShadowColor(NavStripTable.AccentRgb(NavSections.Social) | 0xFF000000, DepthLaw.FloatAlpha));
+        return new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+            GradientStops = { new(c, 0), new(Color.FromArgb(0, c.R, c.G, c.B), 1) },
+        };
     }
     public string Title { get; }
     public string Line { get; }

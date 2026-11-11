@@ -7,11 +7,11 @@
 // while the key is down (a repeat by LeashHoldToCut.RepeatGap), and each tick ends the hold unless the key
 // is physically down (XQueryKeymap), so a lost key-up never asks. Windows has real repeats and no clock.
 // Like WPF, it works with the panic key switched off and under Lockdown (panic always works on a leash).
-// The portal supplies Activated/Deactivated instead of physical X11 key state. Its existing effects-only
-// binding policy stays intact; a hold that started while bound keeps the session until release. A portal
+// The portal supplies Activated/Deactivated instead of physical X11 key state. Its effects-only
+// binding policy only extends an already-live hold until release (decision C), not the whole leash. A portal
 // hold skips the X11 key check only once that compositor has proven it sends Deactivated; until then a
 // portal hold needs the X11 key proven down on every tick: up OR unknown (no X11 listener) ends it, so a
-// portal that never reports release never asks. Only a live portal hold keeps the grab (KeepPortalBound).
+// portal that never reports release never asks. A stale IsHeld flag never keeps the grab (KeepPortalBound).
 using System;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -90,10 +90,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>A new portal press (PortalPanicShortcut.Route already dropped repeats): always a panic.
         /// A hold still running here lost its Deactivated, so it ends before the new one starts.</summary>
-        internal void OnPortalPanicPressed()
+        internal void OnPortalPanicPressed() => RunPortalPress(() => HandlePanicKeyPress(DateTime.Now));
+
+        internal void RunPortalPress(Action panic)
         {
             if (_leashHold.Held) LeashHoldReleased();
-            HandlePanicKeyPress(DateTime.Now);
+            try { panic(); }
+            finally { StartPortalHold(); }   // XInput2's report of this press was dropped, so nothing else can
+        }
+
+        /// <summary>The hold step of an XInput2 press. Its report and this post are not one step, so the
+        /// portal's echo can get here first: a hold the portal already took is this press, not a repeat.</summary>
+        internal void OnX11HoldPressed()
+        {
+            if (!_portalHoldLive) LeashHoldPressed();
+        }
+
+        /// <summary>The portal's report of a press XInput2 already panicked for: no second panic, but the
+        /// hold still restarts as the portal's. A plain Down here would read as a repeat and show the ring.</summary>
+        internal void OnPortalEchoPressed() => RunPortalPress(static () => { });
+
+        // The hold is the portal's, so the grab outlives the effects and only Deactivated can end it.
+        private void StartPortalHold()
+        {
             _leashHoldFromPortal = PortalPanicShortcut.ReportsRelease;
             _leashHoldPortalUnproven = !_leashHoldFromPortal;
             LeashHoldPressed();

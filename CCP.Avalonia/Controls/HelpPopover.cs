@@ -44,6 +44,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
 
         private readonly Button _button;
         private readonly HelpContent _content;
+        private readonly IconEntry? _headerIcon;
         private readonly Popup _popup;
         private readonly DispatcherTimer _openTimer;
         private readonly DispatcherTimer _closeTimer;
@@ -52,10 +53,11 @@ namespace ConditioningControlPanel.Avalonia.Controls
         private bool _pinned;
         private bool _detached;
 
-        private HelpPopover(Button button, HelpContent content)
+        private HelpPopover(Button button, HelpContent content, IconEntry? headerIcon)
         {
             _button = button;
             _content = content;
+            _headerIcon = headerIcon;
             _popup = new Popup
             {
                 PlacementTarget = button,
@@ -90,11 +92,11 @@ namespace ConditioningControlPanel.Avalonia.Controls
         }
 
         /// <summary>Attaches a popover to <paramref name="button"/>, replacing any old attachment.</summary>
-        public static void Attach(Button button, HelpContent content)
+        public static void Attach(Button button, HelpContent content, IconEntry? headerIcon = null)
         {
             if (button is null || content is null) return;
             Clear(button);
-            button.SetValue(InstanceProperty, new HelpPopover(button, content));
+            button.SetValue(InstanceProperty, new HelpPopover(button, content, headerIcon));
         }
 
         /// <summary>Detaches the popover and all of its input/timer handlers.</summary>
@@ -293,13 +295,16 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 CornerRadius = new CornerRadius(8, 8, 0, 0),
             };
             var headerRow = new StackPanel { Orientation = Orientation.Horizontal };
-            headerRow.Children.Add(new TextBlock
+            Control headerIcon = _headerIcon is { } icon
+                ? IconGlyph.Of(icon, null, 18)
+                : new TextBlock
             {
                 Text = _content.Icon ?? "?",
                 FontSize = 18,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 10, 0),
-            });
+            };
+            headerIcon.Margin = new Thickness(0, 0, 10, 0);
+            headerRow.Children.Add(headerIcon);
             headerRow.Children.Add(new TextBlock
             {
                 Text = _content.Title ?? string.Empty,

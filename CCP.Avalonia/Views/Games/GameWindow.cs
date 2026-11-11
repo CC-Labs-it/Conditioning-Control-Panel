@@ -7,6 +7,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.JustDrop;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Fyp.Online;
@@ -42,21 +43,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             // WPF BreakoutHostService.cs:8 StartUrl; LaunchDemo (:13) is free and needs no account. demo=1 holds the
             // page to 3 levels even before init lands (access.js reads it wherever chrome.webview is absent).
-            ["breakoutdemo"] = new("breakoutdemo", "launcher_game_breakoutdemo_title", "backroom/stations/breakout/play.html", null, "desktop=1&demo=1"),
+            ["breakout"] = new("breakout", "launcher_game_breakout_title", "backroom/stations/breakout/play.html", BreakoutGate, "desktop=1"),
+            [BreakoutDemoId] = new(BreakoutDemoId, "launcher_game_breakoutdemo_title", "backroom/stations/breakout/play.html", null, "desktop=1&demo=1"),
             // WPF FypHostService.cs:94 StartUrl, behind OpenFypFeed's premium gate (MainWindow.Lab.cs:246).
             [FypId] = new(FypId, "tab_fyp", "fyp/index.html", FypGate),
             // WPF JustDropHostService: the live shop at app.cclabs.app, not a page off disk (GameWindow.JustDrop.cs).
             [JustDropId] = new(JustDropId, "jd_door_title", "", JustDropDoorOpen),
             // WPF PieceByPieceHostService.cs:221 StartUrl; free for everyone since 2026-09-27 (:188), no gate.
             [PbpId] = new(PbpId, "launcher_game_piecebypiece_title", "piecebypiece/index.html"),
-            // WPF CaucusHostService.Launch: dtrh/race.html behind the racing-purchase door (GameWindow.Race.cs).
+            // WPF #3126: the 2D bridge remains, but no production door opens it.
             ["loom"] = new("loom", "billboard_loom_title", "dtrh/loom.html"), // WPF LoomHostService: free
-            ["race"] = new("race", "launcher_game_race_title", "dtrh/race.html", RaceGate),
+            ["race"] = new(GlassroadId, "launcher_game_race_title", "glassroad/index.html", GlassroadGate),
             // WPF DtrhHostService.cs:196 StartUrl behind the Basic door (GameWindow.Dtrh.cs).
             [DtrhId] = new(DtrhId, "launcher_game_dtrh_title", "dtrh/index.html", DtrhGate),
-            // WPF GlassroadHostService (feat/glassroad-a): the 3D race behind CCP_GLASSROAD=1 (GameWindow.Glassroad.cs).
+            // WPF #3132: Racing Thoughts is Prime only, including solo.
             [GlassroadId] = new(GlassroadId, "launcher_game_race_title", "glassroad/index.html", GlassroadGate),
         };
+
+        internal const string BreakoutDemoId = "breakoutdemo";
 
         private static readonly List<GameWindow> Open = new();
 
@@ -71,30 +75,82 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>WPF LauncherHost.LaunchGame -> each host's LaunchCore: one live window per game, focused
         /// rather than relaunched (a second click mid-match must never restart it). Null when refused.</summary>
-        internal static GameWindow? Launch(string id, string? joinRoomId = null)
+        internal static GameWindow? Launch(string id)
         {
-            id = ResolveDoor(id);   // the Racing Thoughts door opens Glassroad while CCP_GLASSROAD=1
-            if (joinRoomId != null && (id != GlassroadId || !Services.Lobby.RaceJoinLink.IsRoomId(joinRoomId))) return null;
+            id = ResolveDoor(id);   // one routing seam for the Racing Thoughts host
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
+            if (spec.Id == JustDropId && !JustDropDoorOpen()) return null;
+            return spec.Id == GlassroadId ? LaunchRacingThoughts() : LaunchWindow(spec);
+        }
+
+        /// <summary>A friend's Racing Thoughts invite: the same race gate and window, plus the room to join
+        /// (WPF FriendsLanding.cs:568 -> GlassroadHostService.Launch(joinRoomId)).</summary>
+        internal static GameWindow? LaunchFriendRace(string? room) => LaunchRacingThoughts(room);
+
+        /// <summary>The race launch seam. The Linux host lane replaces this call with its owned host.
+        /// WPF GlassroadHostService.Launch: DemandPrime runs before a live window is re-focused, so a tier
+        /// loss cannot bring a live race forward through another door.</summary>
+        private static GameWindow? LaunchRacingThoughts(string? room = null)
+        {
+            var spec = Games[GlassroadId];
+            return PassesGate(spec) ? LaunchWindow(spec, gated: true, room) : null;
+        }
+
+        private static bool PassesGate(Game spec)
+        {
+            try { return spec.Gate == null || spec.Gate(); }
+            catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", spec.Id); return false; }
+        }
+
+        private static GameWindow? LaunchWindow(Game spec, bool gated = false, string? room = null)
+        {
             GameWindow? live;
-            lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
-            if (live != null) { if (joinRoomId != null) live.Post(new { type = "join-room", roomId = joinRoomId }); live.Activate(); return live; }
-            try { if (spec.Gate != null && !spec.Gate()) return null; }
-            catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
-            if (joinRoomId != null) spec = spec with { Query = "join=" + joinRoomId };
+            lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase)
+                || ((spec.Id is "breakout" or "breakoutdemo") && w.IsBreakout));
+            if (live != null)
+            {
+                // WPF BreakoutHostService.LaunchFull gates even a focus of the live game.
+                if (spec.Id == "breakout" && !BreakoutGate()) return null;
+                live.HandoffRaceRoom(room);
+                live.Activate();
+                // WPF PieceByPieceHostService.cs:165: reopening a live board returns its keyboard too.
+                if (live.Spec.Id == PbpId)
+                    Dispatcher.UIThread.Post(() => { if (!live._closing) live.Web.FocusPage(); }, DispatcherPriority.Loaded);
+                if (live.IsBreakout && live.Spec.Id != spec.Id)
+                {
+                    _ = live.SwitchBreakoutAsync(spec.Id);
+                    return null; // the existing run stays alive until the user answers
+                }
+                return live;
+            }
+            // JustDrop's door ran in Launch (before any refocus); the race gated before its refocus.
+            if (!gated && spec.Id != JustDropId && !PassesGate(spec)) return null;
+            // WPF PieceByPieceHostService.cs:165-168: refocus is free; failed setup still counts.
+            if (spec.Id == PbpId)
+            {
+                try { SeasonFeatureTracking.Track(CoreSettings.Current, ConditioningControlPanel.Models.SeasonFeatureKeys.PieceByPiece,
+                    ev => App.FeatureDayLog?.Note(ev), DateTime.UtcNow); }
+                catch (Exception ex) { Diag.Swallowed(ex); }
+            }
             var window = new GameWindow(spec);
-            window.Load(Server());
+            if (spec.Id == GlassroadId && UseLinuxRaceCard())
+            {
+                window.ShowRaceCard();
+                window.HandoffRaceRoom(room);   // joins once the in-app page is ready (Play race slower)
+            }
+            else window.Load(Server(), room);
             window.Show();
             return window;
         }
 
         /// <summary>--render-all's sample: the Breakout demo's frame with no page loaded.</summary>
-        internal GameWindow() : this(Games["breakoutdemo"]) { }
+        internal GameWindow() : this(Games[BreakoutDemoId]) { }
 
         internal GameWindow(Game spec)
         {
             Spec = spec;
             Web = new WebHost();
+            if (spec.Id == "loom") Web.EnvironmentRequested += ConfigureLoomEnvironment;
             Title = spec.Id == "loom" ? "The Loom" : Loc.Get(spec.TitleKey);
             Width = 1280;
             Height = 800;
@@ -103,38 +159,60 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Web.WebMessage += OnPageMessage;
             // The page never leaves the served origin; anything else is refused before the engine loads it.
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);
-            Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); };
+            Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); StartBreakoutAccessWatch(); };
             Activated += (_, _) => FunnelPageMessage.OnAppActivated();   // WPF's Application.Activated covers every window
-            Closing += (_, _) => _closing = true;
-            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); };
+            Closing += (_, _) => { _closing = true; CancelRaceFetch(); };
+            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); if (Spec.Id == FypId) DisableFypEyes(); StopBreakoutAccessWatch(); _raceRooms.Clear(); };
+            // WPF BackRoom/BackRoomHostService.cs:390,792: Breakout presence lasts until close.
+            if (spec.Id == BreakoutDemoId || spec.Id == "breakout")
+            {
+                Opened += (_, _) => FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);
+                Closed += (_, _) => FriendsHead.Service?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);
+            }
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
             if (spec.Id == JustDropId) Closed += (_, _) =>
             {
                 JustDropOrdersService.Invalidate();
                 Windows.MainShellWindow.Current?.RefreshTakeawayShelf();
             };
-            if (spec.Id == GlassroadId) Opened += (_, _) => OpenGlassroad();
+            if (spec.Id == GlassroadId) Opened += (_, _) => { if (!_raceCard) OpenGlassroad(); };
         }
 
         private WebAssetServer? _server;
         private Lazy<GameMediaManifest.Manifest>? _library;   // single-flight: concurrent sit-downs share one walk
 
-        internal void Load(WebAssetServer server)
+        internal void Load(WebAssetServer server, string? room = null)
         {
             if (Spec.Id == JustDropId) { LoadJustDrop(); return; }
             _server = server;
             if (Spec.Id == "loom") DirectoryForLoom();
-            PageUrl = new Uri(server.Url(Spec.Page, Spec.Query));
+            PageUrl = new Uri(server.Url(Spec.Page, RaceQuery(Spec, room)));
             Web.Navigate(PageUrl);
         }
+
+        private readonly Queue<string> _raceRooms = new();
+        internal void HandoffRaceRoom(string? room)
+        {
+            if (_closing || !InviteDestination.IsRoomId(room)) return;
+            _raceRooms.Enqueue(room!); FlushRaceRooms();
+        }
+        private void FlushRaceRooms()
+        { if (IsReady) while (_raceRooms.TryDequeue(out var room)) Post(new { type = "join-room", roomId = room }); }
+
+        internal static string? RaceQuery(Game spec, string? room) => spec.Id == GlassroadId && InviteDestination.IsRoomId(room) ? "join=" + room : spec.Query;
 
         internal static bool SameOrigin(Uri a, Uri b) =>
             a.IsAbsoluteUri && b.IsAbsoluteUri && a.Scheme == b.Scheme && a.Authority == b.Authority;
 
-        /// <summary>WPF ChaosWebViewHost.OnWebMessage's same-document guard.</summary>
+        /// <summary>WPF ChaosWebViewHost.cs:238,1704 fences transferred documents; JustDropHostService.cs:105-108
+        /// keeps site navigation for the sign-in redirect. NativeWebView has no message source;
+        /// use its last completed top-level URL, as Intake does.</summary>
         private void OnPageMessage(string json)
         {
-            if (PageUrl == null || Web.CurrentUrl == null || !SameOrigin(Web.CurrentUrl, PageUrl)) return;
+            if (PageUrl == null || Web.CurrentUrl == null) return;
+            if (Spec.Id == JustDropId
+                ? !JustDropHandoff.IsSite(Web.CurrentUrl)
+                : !ConditioningControlPanel.Services.Quiz.IntakeRun.SameDocument(Web.CurrentUrl, PageUrl)) return;
             HandleMessage(json);
         }
 
@@ -218,27 +296,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>The init every one of these pages reads defensively: language + identity, plus the
         /// Breakout access WPF BackRoomHostService.BuildInit (:566) sends.</summary>
-        internal object InitMessage() => new
+        internal object InitMessage()
         {
-            type = "init",
-            protocol = 1,
-            lang = CoreSettings.Current.Language,
-            solo = !CoreAccount.IsLoggedIn,
-            identity = new
+            var init = new
             {
-                unifiedId = CoreAccount.UnifiedUserId ?? "",
-                displayName = CoreAccount.DisplayName ?? "",
-                appVersion = CoreReleaseContent.AppVersion,
-            },
-            breakout = BreakoutEntitlementFor(Spec.Id),
-            breakoutStandalone = Spec.Id.StartsWith("breakout", StringComparison.OrdinalIgnoreCase),
-        };
+                type = "init",
+                protocol = 1,
+                lang = CoreSettings.Current.Language,
+                solo = !CoreAccount.IsLoggedIn,
+                identity = new
+                {
+                    unifiedId = CoreAccount.UnifiedUserId ?? "",
+                    displayName = CoreAccount.DisplayName ?? "",
+                    appVersion = CoreReleaseContent.AppVersion,
+                },
+                breakout = BreakoutEntitlementFor(Spec.Id),
+                breakoutStandalone = Spec.Id.StartsWith("breakout", StringComparison.OrdinalIgnoreCase),
+            };
+            if (!IsBreakout) return init;
+            // WPF BackRoomHostService.cs:589-607: the page must know Off before it starts.
+            var frame = JObject.FromObject(init);
+            var motion = CoreSettings.Current.MotionLevel;
+            frame["motion"] = motion.ToString().ToLowerInvariant();
+            frame["reduced"] = motion != ConditioningControlPanel.Models.MotionLevel.Full;
+            return frame;
+        }
 
         /// <summary>WPF BreakoutAccess.Current(demo): the demo door is 3 levels, whatever the tier.</summary>
         internal static object? BreakoutEntitlementFor(string id) =>
             id.Equals("breakoutdemo", StringComparison.OrdinalIgnoreCase)
                 ? new { storyLimit = 3, endless = false, demo = true }
-                : null;
+                : id.Equals("breakout", StringComparison.OrdinalIgnoreCase)
+                    ? FullBreakoutEntitlement() : null;
 
         /// <summary>Every host -&gt; page frame, as sent (tests read the bridge from here).</summary>
         internal event Action<string>? Posted;
@@ -266,11 +355,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         internal static void CloseAllForPanic()
         {
+            _dtrhPanicEpoch++; // also cancels a recovery whose Closed callback re-enters panic
             GameWindow[] all;
             lock (Open) all = Open.ToArray();
             foreach (var w in all)
             {
-                try { w.Close(); }
+                try { if (w.IsDtrh) w.CloseDtrhForPanic(); else w.Close(); }
                 catch (Exception ex) { Log.Warning(ex, "[Game] panic close of {Id} failed", w.Spec.Id); }
             }
         }

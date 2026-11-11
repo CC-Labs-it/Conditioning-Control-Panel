@@ -9,7 +9,9 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Launcher;
+using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services.Race;
 using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
@@ -17,12 +19,13 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-/// <summary>The Glassroad host (WPF GlassroadHostService + GlassroadHostTests, feat/glassroad-a): the hidden door,
+/// <summary>The Glassroad host (WPF GlassroadHostService + GlassroadHostTests, feat/glassroad-a): the public 3D door,
 /// the v2 init frame at load + first message + ready, the relay's signing rule and its path gate, the kept Escape and
 /// panic.</summary>
 public sealed partial class GameWindowTests
 {
     private const string GrBase = "http://race.test";
+    private const double LoadingAged = 121;
     private const string GrRace = GlassroadHostRules.AllowedPathPrefix;
 
     private sealed class GrHttp : System.Net.Http.HttpMessageHandler
@@ -38,16 +41,21 @@ public sealed partial class GameWindowTests
         }
     }
 
+    /// <summary>Signed in as Prime, no Racing Thoughts track, the relay on a fake transport.</summary>
+    private static void RunGlassroad(Action<MainShellWindow, LauncherWindow, GrHttp> body) => RunGlassroad("1", body);
+
     /// <summary>Signed in, no Racing Thoughts track, the door at <paramref name="door"/>, the relay on a fake transport.</summary>
-    private static void RunGlassroad(string? door, Action<MainShellWindow, LauncherWindow, GrHttp> body) => Run((shell, launcher) =>
+    private static void RunGlassroad(string? door, Action<MainShellWindow, LauncherWindow, GrHttp> body, bool? lab = null) => Run((shell, launcher) =>
     {
-        var (oldDoor, oldOwns, oldHttp, oldBase) = (GameWindow.GlassroadDoorEnv, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase);
+        var (oldDoor, oldOwns, oldHttp, oldBase) = (CoreEntitlement.HasLabProvider, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase);
         var (oldUid, oldSecret, oldGate) = (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider);
+        var oldLinuxCard = GameWindow.UseLinuxRaceCard;
         var fake = new GrHttp();
         using var http = new System.Net.Http.HttpClient(fake);
         try
         {
-            GameWindow.GlassroadDoorEnv = () => door;
+            GameWindow.UseLinuxRaceCard = () => false; // exercise the existing WebKit host explicitly
+            CoreEntitlement.HasLabProvider = () => lab ?? door == "1"; // an explicit lab wins (Play door tests), else the door string
             RacingAccess.IsGrantedProvider = _ => false;
             GameWindow.PbpHttpClient = () => http;
             GameWindow.PbpServerBase = () => GrBase;
@@ -60,65 +68,157 @@ public sealed partial class GameWindowTests
         }
         finally
         {
-            (GameWindow.GlassroadDoorEnv, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase) = (oldDoor, oldOwns, oldHttp, oldBase);
+            GameWindow.UseLinuxRaceCard = oldLinuxCard;
+            (CoreEntitlement.HasLabProvider, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase) = (oldDoor, oldOwns, oldHttp, oldBase);
             (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider) = (oldUid, oldSecret, oldGate);
         }
     });
 
-    [Fact]
-    public void LobbyRaceJoinOpensRoomAndRejectsBadIds() => RunGlassroad("1", (_, launcher, _) =>
-    {
-        var oldLab = CoreEntitlement.HasLabProvider; var oldDenied = CoreEntitlement.ShowDeniedHandler;
-        var denied = 0;
-        var settings = CoreSettings.Current;
-        var oldId = settings.UnifiedId;
-        try
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(false, "1")]
+    [InlineData(true, null)]
+    [InlineData(true, "1")]
+    public void PlayRaceOpensGlassroadAndRequiresLab(bool lab, string? preview)
+        => RunGlassroad(preview, (shell, _, _) =>
         {
-            CoreEntitlement.HasLabProvider = () => false; CoreEntitlement.ShowDeniedHandler = _ => denied++;
-            settings.UnifiedId = "account";
-            var row = new LobbyRow { Game = LobbyGame.Race, State = LobbyRowState.Open, Key = "abcdef123456", HostName = "Host" };
-            launcher.PaintLobby(new LobbySnapshot(new[] { row }, Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true));
-            var grid = Assert.IsType<Grid>(launcher.FindControl<StackPanel>("LobbyDropRows")!.Children[0]);
-            var join = Assert.IsType<Button>(grid.Children[1]);
-            Assert.True(join.IsEnabled);
-            join.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.Equal(1, denied); Assert.Empty(GameWindow.OpenWindowsForTests());
-            CoreEntitlement.HasLabProvider = () => true;
-            join.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            var game = Assert.Single(GameWindow.OpenWindowsForTests());
-            Assert.Contains("join=abcdef123456", game.PageUrl!.Query);
-            var sent = new List<JObject>(); game.Posted += json => sent.Add(JObject.Parse(json));
-            Assert.Same(game, GameWindow.Launch(GameWindow.GlassroadId, "987654abcdef"));
-            Assert.Contains(sent, frame => (string?)frame["type"] == "join-room" && (string?)frame["roomId"] == "987654abcdef");
-            Assert.Null(GameWindow.Launch(GameWindow.GlassroadId, "bad"));
-        }
-        finally { CoreEntitlement.HasLabProvider = oldLab; CoreEntitlement.ShowDeniedHandler = oldDenied; settings.UnifiedId = oldId; }
-    });
+            CoreEntitlement.HasPremiumProvider = () => true; // Tier 1 alone must still be refused.
+            var denied = new List<TierVerdict>();
+            var oldDenied = CoreEntitlement.ShowDeniedHandler;
+            CoreEntitlement.ShowDeniedHandler = v => denied.Add(v);
+            try
+            {
+                shell.ShowTab("play");
+                shell.Named<global::Avalonia.Controls.Control>("PlayTab")!
+                    .FindControl<global::Avalonia.Controls.Button>("BtnPlayRacingThoughts")!
+                    .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                if (!lab)
+                {
+                    Assert.Empty(GameWindow.OpenWindowsForTests());
+                    Assert.False(Assert.Single(denied).Allowed);
+                    return;
+                }
+                Assert.Empty(denied);
+                var w = Assert.Single(GameWindow.OpenWindowsForTests());
+                Assert.Equal(GameWindow.GlassroadId, w.Spec.Id);
+                Assert.EndsWith("/glassroad/index.html", w.PageUrl!.AbsolutePath);
+                PanicSurfaces.All.Single(p => p.Id == "games").Stop(shell);
+                Assert.False(GameWindow.IsAnyOpen());
+            }
+            finally { CoreEntitlement.ShowDeniedHandler = oldDenied; }
+        }, lab);
+
+    // The launcher lobby chip's Join (WPF LauncherWindow.Lobby.cs:244): each game opens on its table.
+    private static void LobbyJoin(LauncherWindow launcher, LobbyGame game, string key)
+    {
+        var row = new LobbyRow { Game = game, State = LobbyRowState.Open, Key = key, HostName = "Host" };
+        launcher.PaintLobby(new LobbySnapshot(new[] { row }, Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true));
+        ((Button)((Grid)launcher.FindControl<StackPanel>("LobbyDropRows")!.Children[0]).Children[1]).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    }
 
     [Fact]
-    public void LobbyRaceSignedOutRequestsLogin() => RunGlassroad("1", (shell, launcher, _) =>
+    public void LobbyChipJoinSeatsChessAndRaceAndAsksSignedOutToSignIn() => RunGlassroad((_, launcher, _) =>
     {
-        var settings = CoreSettings.Current; var old = settings.UnifiedId;
+        var (settings, oldId) = (CoreSettings.Current, CoreSettings.Current.UnifiedId);
         try
         {
             settings.UnifiedId = null;
-            launcher.JoinLobbyRow(new LobbyRow { Game = LobbyGame.Race, Key = "abcdef123456", HostName = "Host" });
+            launcher.Show(); // the sign-in dialog is owned by the launcher, so it must be up
             Dispatcher.UIThread.RunJobs();
-            Assert.Contains(shell.OwnedWindows, w => w is ConditioningControlPanel.Avalonia.Views.Dialogs.LoginDialog);
+            LobbyJoin(launcher, LobbyGame.Chess, "p_table");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(GameWindow.OpenWindowsForTests());
+            Assert.Contains(launcher.OwnedWindows, w => w is ConditioningControlPanel.Avalonia.Views.Dialogs.LoginDialog);
+            foreach (var child in launcher.OwnedWindows.ToArray()) child.Close();
+            settings.UnifiedId = "discord:12";
+            LobbyJoin(launcher, LobbyGame.Chess, "p_table");
+            Assert.Equal(GameWindow.PbpId, Assert.Single(GameWindow.OpenWindowsForTests()).Spec.Id);
+            GameWindow.CloseAllForPanic();
+            LobbyJoin(launcher, LobbyGame.Race, "abcdef123456");
+            var race = Assert.Single(GameWindow.OpenWindowsForTests());
+            Assert.True(race.Spec.Id == GameWindow.GlassroadId && race.PageUrl!.Query.Contains("join=abcdef123456"));
+            GameWindow.CloseAllForPanic();
+            LobbyJoin(launcher, LobbyGame.Race, "bad room"); // a malformed room id never leaves
             Assert.Empty(GameWindow.OpenWindowsForTests());
         }
-        finally { foreach (var child in shell.OwnedWindows.ToArray()) child.Close(); settings.UnifiedId = old; }
+        finally
+        {
+            foreach (var child in launcher.OwnedWindows.ToArray()) child.Close();
+            settings.UnifiedId = oldId;
+            ConditioningControlPanel.Services.UI.NavBadges.ResetForTests();
+        }
     });
 
     // ---- pure rules ----
 
     [Theory]
-    [InlineData("1", true)]
-    [InlineData(" 1 ", true)]
-    [InlineData(null, false)]
-    [InlineData("0", false)]
-    [InlineData("true", false)]
-    public void Glassroad_TheDoor_OpensOnlyOnOne(string? env, bool open) => Assert.Equal(open, GlassroadHostRules.DoorOpen(env));
+    [InlineData("race", "glassroad")]
+    [InlineData("RACE", "glassroad")]
+    [InlineData("glassroad", "glassroad")]
+    [InlineData("breakoutdemo", "breakoutdemo")]
+    public void Glassroad_PublicDoorIsAlways3d(string id, string expected)
+    {
+        Assert.Equal(expected, GameWindow.ResolveDoor(id));
+    }
+
+    [Theory]
+    [InlineData(-1, true)]
+    [InlineData(0, true)]
+    [InlineData(1, true)]
+    [InlineData(2, false)]
+    public void Glassroad_TileLocksBelowPrime(int tier, bool locked)
+    {
+        CoreEntitlement.HasLabProvider = tier < 0 ? null : () => tier == 2;
+        Assert.Equal(locked, LauncherWindow.Destinations["race"].Locked());
+        Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
+    }
+
+    [Theory]
+    [InlineData("race", -1)]
+    [InlineData("race", 0)]
+    [InlineData("race", 1)]
+    [InlineData("race", 2)]
+    [InlineData("glassroad", -1)]
+    [InlineData("glassroad", 0)]
+    [InlineData("glassroad", 1)]
+    [InlineData("glassroad", 2)]
+    public void Glassroad_PrimeIsRequiredBeforeOpeningOrRefocusing(string door, int tier) => RunGlassroad((_, _, _) =>
+    {
+        CoreEntitlement.HasLabProvider = tier < 0 ? null : () => tier == 2;
+        CoreEntitlement.HasPremiumProvider = () => tier >= 1;
+        CoreEntitlement.IsFreeTodayProvider = _ => true; // the race has no daily-free bypass
+        var denied = new List<TierVerdict>();
+        CoreEntitlement.ShowDeniedHandler = denied.Add;
+        if (tier != 2)
+        {
+            Assert.Null(GameWindow.Launch(door));
+            Assert.False(GameWindow.IsAnyOpen());
+        }
+        else
+        {
+            var w = GameWindow.Launch(door);
+            Assert.NotNull(w);
+            Assert.Equal(GameWindow.GlassroadId, w.Spec.Id);
+            Assert.Same(w, GameWindow.Launch(door));
+            Assert.Single(GameWindow.OpenWindowsForTests());
+            Assert.Empty(denied);
+            CoreEntitlement.HasLabProvider = () => false;
+            Assert.Null(GameWindow.Launch(door)); // an existing window must not bypass the gate
+            Assert.Same(w, Assert.Single(GameWindow.OpenWindowsForTests()));
+        }
+        var refusal = Assert.Single(denied);
+        Assert.Equal(ConditioningControlPanel.Models.PatreonTier.Level2, refusal.Required);
+        Assert.Equal(Loc.Get("launcher_game_race_title"), refusal.Feature);
+    });
+
+    [Fact]
+    public void Glassroad_RaceTileIsVisibleWithoutPurchase()
+    {
+        RacingAccess.IsGrantedProvider = _ => false;
+        Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
+        Assert.True(LauncherWindow.CanStartGame("race"));
+    }
 
     [Theory]
     [InlineData("/v2/race/open", true)]
@@ -132,6 +232,48 @@ public sealed partial class GameWindowTests
     {
         Assert.Equal(pass, HostNetPathRule.TryBuild(GrBase, path, GrRace, out var uri));
         if (pass) Assert.Equal("race.test", uri!.Host);
+    }
+
+    /// <summary>WPF 7.2.2 GlassroadHostTests (#1543): a page building a course is waited for, up to 90 s.</summary>
+    [Fact]
+    public void Glassroad_Watch_ABusyPageIsWaitedFor()
+    {
+        static TimeSpan S(double s) => TimeSpan.FromSeconds(s);
+        Assert.True(GlassroadHostRules.IsBusy(S(10)));
+        Assert.False(GlassroadHostRules.IsBusy(null));
+        Assert.False(GlassroadHostRules.IsBusy(GlassroadHostRules.LoadingWindow));
+        Assert.Equal(PbpHostRules.WatchStep.Idle, GlassroadHostRules.Watch(false, S(40), S(40), false, busy: false));
+        Assert.Equal(PbpHostRules.WatchStep.Close, GlassroadHostRules.Watch(false, S(46), S(46), false, busy: false));
+        Assert.Equal(PbpHostRules.WatchStep.Idle, GlassroadHostRules.Watch(false, S(60), S(60), false, busy: true));
+        Assert.Equal(PbpHostRules.WatchStep.Close, GlassroadHostRules.Watch(false, S(91), S(91), false, busy: true));
+        Assert.Equal(PbpHostRules.WatchStep.Ok, GlassroadHostRules.Watch(true, S(1), S(19), false, busy: false));
+        Assert.Equal(PbpHostRules.WatchStep.Ping, GlassroadHostRules.Watch(true, S(25), S(25), false, busy: false));
+        Assert.Equal(PbpHostRules.WatchStep.Close, GlassroadHostRules.Watch(true, S(30), S(30), true, busy: false));
+        Assert.Equal(PbpHostRules.WatchStep.Ok, GlassroadHostRules.Watch(true, S(60), S(60), true, busy: true));
+        Assert.Equal(PbpHostRules.WatchStep.Close, GlassroadHostRules.Watch(true, S(95), S(95), true, busy: true));
+    }
+
+    /// <summary>B2 (owner 2026-10-29): the Linux race host says <c>caps.scrolller: false</c> outright, so the page
+    /// offers My files / Off (boot.js reads <c>init.caps.scrolller ? feed : null</c>); Windows keeps the WPF caps.</summary>
+    [Fact]
+    public void Glassroad_Init_LinuxHostOffersNoRemotePictures()
+    {
+        var old = GlassroadHostRules.LinuxHostOverride;
+        try
+        {
+            GlassroadHostRules.LinuxHostOverride = true;
+            Assert.False(GlassroadHostRules.RemotePicturesOffered);
+            var caps = GlassroadHostRules.InitFrame("u_1", "Kit", 2, false, 0.75, 0.5, picturesOn: true)["caps"]!;
+            Assert.Equal(JTokenType.Boolean, caps["scrolller"]!.Type);
+            Assert.False((bool)caps["scrolller"]!);
+            GlassroadHostRules.LinuxHostOverride = false;
+            Assert.True(GlassroadHostRules.RemotePicturesOffered);
+            caps = GlassroadHostRules.InitFrame("u_1", "Kit", 2, false, 0.75, 0.5, picturesOn: true)["caps"]!;
+            Assert.True((bool)caps["scrolller"]!["consent"]!);
+            Assert.Equal("device", (string?)caps["scrolller"]!["origin"]);
+            Assert.False((bool)GlassroadHostRules.InitFrame(null, null, 0, false, 1, 1)["caps"]!["scrolller"]!["consent"]!);
+        }
+        finally { GlassroadHostRules.LinuxHostOverride = old; }
     }
 
     [Fact]
@@ -186,31 +328,245 @@ public sealed partial class GameWindowTests
     public void Glassroad_Signing_Refusals(string method, string path, string body)
         => Assert.False(GlassroadHostRules.TrySign(method, path, body, "u_1", out _, out _));
 
+    [Fact]
+    public void Glassroad_OwnershipAndToys_KeepShopClosed()
+    {
+        var grants = new[] { "cos.kart.body.petal", "cos.other", "cos.kart.body.petal", "cos.kart." + new string('x', 65) };
+        var init = GlassroadHostRules.InitFrame("u", "Kit", 2, false, 1, 1, grants: grants, toysConnected: true);
+        Assert.Equal(new[] { "cos.kart.body.petal" }, init["identity"]!["grants"]!.Values<string>());
+        Assert.True((bool)init["caps"]!["toysConnected"]!);
+        Assert.False((bool)init["caps"]!["prizeCounter"]!);
+        Assert.Equal("owned", (string?)GlassroadHostRules.OwnedFrame(grants)["type"]);
+        Assert.Equal(64, GlassroadHostRules.KartGrants(Enumerable.Range(0, 100).Select(i => "cos.kart." + i)).Count);
+        Assert.Equal(JTokenType.Null, GlassroadHostRules.InitFrame(null, "Kit", 0, false, 1, 1, grants: grants)["identity"]!.Type);
+    }
+
+    [Fact]
+    public void Glassroad_InviteNamesKnownCourseOnly()
+    {
+        var item = new ConditioningControlPanel.Services.Friends.InboxItem("a",
+            ConditioningControlPanel.Services.Friends.SendKind.Invite, "u", "Kit", null, null,
+            ConditioningControlPanel.Services.Friends.InviteDestination.Race, null, null,
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(1)) { Track = "keep" };
+        Assert.Contains("The Keep", ConditioningControlPanel.Avalonia.Platform.FriendsLanding.KnockLine(item));
+        item = item with { Track = "unknown" };
+        Assert.DoesNotContain("unknown", ConditioningControlPanel.Avalonia.Platform.FriendsLanding.KnockLine(item));
+    }
+
+    [Fact]
+    public void Glassroad_OneDayEventPerWindow_PanicStopsRaceBed() => RunGlassroad((_, _, _) =>
+    {
+        var oldNote = GameWindow.GlassroadNoteEvent;
+        var oldHaptics = CoreHaptics.Service;
+        var oldPremium = CoreEntitlement.HasPremiumProvider;
+        using var haptics = new HapticService(new ConditioningControlPanel.Models.HapticSettings { Enabled = true });
+        var notes = new List<string>();
+        try
+        {
+            GameWindow.GlassroadNoteEvent = notes.Add;
+            CoreEntitlement.HasPremiumProvider = () => true;
+            CoreHaptics.Service = haptics;
+            GameWindow.Launch(GameWindow.GlassroadId);
+            GameWindow.Launch(GameWindow.GlassroadId);
+            Assert.Equal(new[] { "e_race3d" }, notes);
+            haptics.SetLayer(ConditioningControlPanel.Services.Haptics.Core.HapticLayer.Race, 0.8);
+            Assert.Equal(0.8, haptics.GetLayer(ConditioningControlPanel.Services.Haptics.Core.HapticLayer.Race));
+            GameWindow.CloseAllForPanic();
+            Assert.Equal(0, haptics.GetLayer(ConditioningControlPanel.Services.Haptics.Core.HapticLayer.Race));
+            Assert.Null(GameWindow.OpenForTests(GameWindow.GlassroadId));
+            GameWindow.Launch(GameWindow.GlassroadId);
+            Assert.Equal(2, notes.Count);
+        }
+        finally
+        {
+            GameWindow.CloseAllForPanic();
+            GameWindow.GlassroadNoteEvent = oldNote;
+            CoreHaptics.Service = oldHaptics;
+            CoreEntitlement.HasPremiumProvider = oldPremium;
+        }
+    });
+
+    private sealed class GrProfileHttp : System.Net.Http.HttpMessageHandler
+    {
+        public string Account = "discord:12", Grant = "cos.kart.body.petal";
+        public long Revision = 4;
+        public bool ProfileGrants = true;
+        protected override System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage> SendAsync(
+            System.Net.Http.HttpRequestMessage request, System.Threading.CancellationToken ct)
+        {
+            var prizes = new JObject { ["revision"] = Revision, ["grants"] = new JArray(Grant) };
+            var body = request.RequestUri!.AbsolutePath switch
+            {
+                "/v2/user/profile" => new JObject { ["user"] = new JObject { ["unified_id"] = Account, ["prizes"] = ProfileGrants ? prizes : null } },
+                "/v2/user/sync" => new JObject { ["success"] = true, ["prizes"] = prizes },
+                _ => throw new InvalidOperationException("Unexpected request: " + request.RequestUri.AbsolutePath),
+            };
+            return System.Threading.Tasks.Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                { Content = new System.Net.Http.StringContent(body.ToString()) });
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Glassroad_ExistingServerGrantsLoadWithoutPurchase_UpdateAndClear(bool profileGrants) => RunGlassroad((_, _, _) =>
+    {
+        var s = CoreSettings.Current;
+        var oldSync = ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync;
+        var oldAccount = CoreAccount.UnifiedUserId;
+        using var wire = new GrProfileHttp { ProfileGrants = profileGrants };
+        var v2 = new V2AuthService(() => s, wire);
+        // The production construction: NewSync seeds the sync push with PrizeOwnership.Feed.
+        var sync = ConditioningControlPanel.Avalonia.Platform.AccountSeed.NewSync(() => Array.Empty<string>(), () => false, wire);
+        try
+        {
+            ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync = profileGrants ? null : sync;
+            s.UnifiedId = CoreAccount.UnifiedUserId = wire.Account;
+            s.AuthToken = "tok";
+            s.OfflineMode = false;
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ResetHeld();
+            Assert.True(ConditioningControlPanel.Avalonia.Platform.AccountSeed.LoadProfileAsync(v2).GetAwaiter().GetResult());
+            sync.StopHeartbeat();
+            Dispatcher.UIThread.RunJobs();   // PrizesFeed applies on the UI queue
+            var w = GameWindow.Launch(GameWindow.GlassroadId)!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.PostGlassroadInit();
+            Assert.Contains(wire.Grant, sent.Last()["identity"]!["grants"]!.Values<string>());
+            ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync = sync;
+            // Same profile revision, then a newer sync snapshot from a different device.
+            sync.MarkLoaded(null);
+            Assert.True(ConditioningControlPanel.Avalonia.Platform.AccountSeed.LoadProfileAsync(v2).GetAwaiter().GetResult());
+            sync.StopHeartbeat();
+            wire.Grant = "cos.kart.body.trinket";
+            wire.Revision++;
+            sync.UtcNow = () => DateTime.UtcNow.AddMinutes(2);
+            Assert.True(sync.PushAsync("ownership refresh").GetAwaiter().GetResult());
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(wire.Grant, sent.Last(o => (string?)o["type"] == "owned")["grants"]!.Values<string>());
+            foreach (var (answer, revision) in new[] { ("wrong", 999L), (wire.Account, 1L) })
+                ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Feed.Apply(wire.Account, answer,
+                    new ConditioningControlPanel.Models.PrizesBlock { Revision = revision, Grants = new() { "cos.kart.body.old" } }, "stale");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { wire.Grant }, ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Grants);
+            s.UnifiedId = CoreAccount.UnifiedUserId = "other";
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Feed.NoteAccount("other");
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Feed.Apply(wire.Account, wire.Account,
+                new ConditioningControlPanel.Models.PrizesBlock { Revision = 999, Grants = new() { wire.Grant } }, "late");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Grants);
+            s.UnifiedId = CoreAccount.UnifiedUserId = wire.Account;
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Feed.NoteAccount(wire.Account);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Grants);
+            Assert.True(ConditioningControlPanel.Avalonia.Platform.AccountSeed.LoadProfileAsync(v2).GetAwaiter().GetResult());
+            Dispatcher.UIThread.RunJobs();
+            ConditioningControlPanel.Avalonia.Platform.AccountSeed.Logout(accountDeleted: true).GetAwaiter().GetResult();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(sent.Last(o => (string?)o["type"] == "owned")["grants"]!);
+            s.UnifiedId = wire.Account;
+            s.AuthToken = "tok";
+            Assert.Empty(ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Grants);
+        }
+        finally
+        {
+            sync.StopHeartbeat();
+            GameWindow.CloseAllForPanic();
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ResetHeld();
+            ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync = oldSync;
+            CoreAccount.UnifiedUserId = oldAccount;
+        }
+    });
+
     // ---- the window ----
 
-    /// <summary>Door shut: the page cannot be opened and the race tile stays hidden without a track. Door open: the
-    /// Racing Thoughts tile shows, Play opens Glassroad (not dtrh/race.html), and panic closes it.</summary>
     [Fact]
-    public void Glassroad_DoorHidesIt_TheRaceTileOpensIt_PanicClosesIt()
+    public void RacingThoughts_DoorRules_FailClosedWithoutATierProvider()
     {
-        RunGlassroad(null, (_, _, _) =>
+        var (oldLab, oldPremium, oldFree, oldDenied) = (CoreEntitlement.HasLabProvider,
+            CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreEntitlement.ShowDeniedHandler);
+        try
         {
-            Assert.Equal("race", GameWindow.ResolveDoor("race"));
-            Assert.Null(GameWindow.Launch(GameWindow.GlassroadId));
-            Assert.DoesNotContain(LauncherWindow.VisibleCards, c => c.Id == "race");
-            Assert.False(GameWindow.IsAnyOpen());
-        });
-        RunGlassroad("1", (shell, launcher, _) =>
+            CoreEntitlement.HasPremiumProvider = () => true;
+            CoreEntitlement.IsFreeTodayProvider = _ => true;
+            int refusals = 0;
+            CoreEntitlement.ShowDeniedHandler = _ => refusals++;
+            foreach (var lab in new Func<bool>?[] { null, () => false, () => throw new InvalidOperationException() })
+            {
+                CoreEntitlement.HasLabProvider = lab;
+                Assert.True(GameWindow.GlassroadLocked());
+                Assert.False(GameWindow.GlassroadGate());
+            }
+            Assert.Equal(3, refusals);
+            CoreEntitlement.HasLabProvider = () => true;
+            Assert.False(GameWindow.GlassroadLocked());
+            Assert.True(GameWindow.GlassroadGate());
+            Assert.Equal(GameWindow.GlassroadId, GameWindow.ResolveDoor("RACE"));
+            Assert.Equal("loom", GameWindow.ResolveDoor("loom"));
+            Assert.DoesNotContain(GameWindow.Games.Values, g => g.Page == "dtrh/race.html");
+            Assert.Equal("glassroad/index.html", GameWindow.Games["race"].Page);
+        }
+        finally
         {
+            (CoreEntitlement.HasLabProvider, CoreEntitlement.HasPremiumProvider,
+                CoreEntitlement.IsFreeTodayProvider, CoreEntitlement.ShowDeniedHandler) = (oldLab, oldPremium, oldFree, oldDenied);
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void RacingThoughts_PrimeOnlyIncludingSolo_AndPanic(bool prime, bool solo)
+    {
+        RunGlassroad(prime ? "1" : null, (shell, launcher, _) =>
+        {
+            CoreAccount.IsLoggedInProvider = () => !solo;
             Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
-            launcher.Play(LauncherCards.Find("race")!);
-            Dispatcher.UIThread.RunJobs();
-            var w = Assert.Single(GameWindow.OpenWindowsForTests());
-            Assert.Equal(GameWindow.GlassroadId, w.Spec.Id);
-            Assert.EndsWith("/glassroad/index.html", w.PageUrl!.AbsolutePath);
-            Assert.Same(w, GameWindow.Launch("race"));                 // one live window, focused
-            PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
-            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(!prime, LauncherWindow.Destinations["race"].Locked());
+            Assert.Equal(GameWindow.GlassroadId, GameWindow.ResolveDoor("RACE"));
+            Assert.DoesNotContain(GameWindow.Games.Values, g => g.Page == "dtrh/race.html");
+            if (prime && !solo)
+            {
+                int gates = 0;
+                MainShellWindow.LeashGateDueProvider = () => true;
+                var oldPresent = MainShellWindow.PresentLeashGateProvider;
+                try
+                {
+                    MainShellWindow.PresentLeashGateProvider = _ => gates++;
+                    launcher.Play(LauncherCards.Find("race")!);
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(1, gates);
+                    Assert.False(GameWindow.IsAnyOpen());
+                    MainShellWindow.LeashGateDueProvider = () => false;
+                    launcher.Play(LauncherCards.Find("race")!);
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(GameWindow.GlassroadId, Assert.Single(GameWindow.OpenWindowsForTests()).Spec.Id);
+                    PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
+                    Assert.False(GameWindow.IsAnyOpen());
+                }
+                finally { MainShellWindow.PresentLeashGateProvider = oldPresent; }
+            }
+            foreach (var id in new[] { "race", GameWindow.GlassroadId })
+            {
+                var w = GameWindow.Launch(id);
+                if (!prime) { Assert.Null(w); continue; }
+                Assert.NotNull(w);
+                Assert.Equal(GameWindow.GlassroadId, w.Spec.Id);
+                Assert.EndsWith("/glassroad/index.html", w.PageUrl!.AbsolutePath);
+                Assert.Same(w, GameWindow.Launch("race"));
+                var old = CoreEntitlement.HasLabProvider;
+                try
+                {
+                    CoreEntitlement.HasLabProvider = () => false;
+                    Assert.Null(GameWindow.Launch(id)); // gate also runs before refocusing
+                }
+                finally { CoreEntitlement.HasLabProvider = old; }
+                PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(GameWindow.IsAnyOpen());
+            }
             Assert.False(GameWindow.IsAnyOpen());
         });
     }
@@ -219,7 +575,7 @@ public sealed partial class GameWindowTests
     /// only /v2/race/ (judged signed), never the room-signed result; exit and menu-back close; a silent page is pinged
     /// then closed.</summary>
     [Fact]
-    public void Glassroad_InitFramesNetRelayExitAndWatchdog() => RunGlassroad("1", (_, _, fake) =>
+    public void Glassroad_InitFramesNetRelayExitAndWatchdog() => RunGlassroad((_, _, fake) =>
     {
         var w = GameWindow.Launch(GameWindow.GlassroadId)!;
         Dispatcher.UIThread.RunJobs();
@@ -263,9 +619,16 @@ public sealed partial class GameWindowTests
 
         var now = DateTime.UtcNow;
         Assert.Equal("ok", w.CheckGlassroadWatch(now));
+        // #1543: a `loading` frame marks the page busy, so a silent, pinged page is waited for instead of closed.
+        w.Web.OnWebMessage("{\"type\":\"loading\",\"stage\":\"boudoir\",\"p\":0.5}");
         Assert.Equal("ping", w.CheckGlassroadWatch(now.AddSeconds(25)));
+        Assert.Equal("ok", w.CheckGlassroadWatch(now.AddSeconds(60)));
+        Assert.True(GameWindow.IsAnyOpen());
+        w.Web.OnWebMessage("{\"type\":\"heartbeat\"}");
+        now = DateTime.UtcNow.AddSeconds(LoadingAged);   // the loading frame has aged out: back to ping, then close
+        Assert.Equal("ping", w.CheckGlassroadWatch(now));
         Assert.Equal("ping", (string?)sent.Last()["type"]);
-        Assert.Equal("closed", w.CheckGlassroadWatch(now.AddSeconds(30)));
+        Assert.Equal("closed", w.CheckGlassroadWatch(now.AddSeconds(5)));
         Dispatcher.UIThread.RunJobs();
         Assert.False(GameWindow.IsAnyOpen());
 
@@ -283,7 +646,7 @@ public sealed partial class GameWindowTests
     /// <summary>Booting: Escape is a full panic that closes it. Up: the first Escape is its pause (kept-escape),
     /// a second inside 2 s is a full panic that closes it.</summary>
     [Fact]
-    public void Glassroad_EscapePausesOnceUp_ASecondEscapeClosesIt() => RunGlassroad("1", (shell, _, _) =>
+    public void Glassroad_EscapePausesOnceUp_ASecondEscapeClosesIt() => RunGlassroad((shell, _, _) =>
     {
         var s = CoreSettings.Current;
         var (oldKey, oldEnabled) = (s.PanicKey, s.PanicKeyEnabled);
