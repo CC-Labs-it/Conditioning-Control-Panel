@@ -76,8 +76,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 lock (_pending) { _pending.Add(a.Id); if (_flushQueued) return; _flushQueued = true; }
                 global::Avalonia.Threading.Dispatcher.UIThread.Post(Flush);
             }
-            AttachedToVisualTree += (_, _) => { engine.Unlocked -= OnUnlocked; engine.Unlocked += OnUnlocked; };
-            DetachedFromVisualTree += (_, _) => engine.Unlocked -= OnUnlocked;
+            EventHandler<PatreonTier> tier = (_, _) => PostEntitlement();
+            Services.ProviderSubscription? patreon = null, substar = null;
+            AttachedToVisualTree += (_, _) =>
+            {
+                engine.Unlocked -= OnUnlocked; engine.Unlocked += OnUnlocked;
+                patreon = Platform.AccountSeed.Patreon; substar = Platform.AccountSeed.SubscribeStar;
+                if (patreon != null) patreon.TierChanged += tier;
+                if (substar != null) substar.TierChanged += tier;
+                Platform.AccountSeed.GraceClosed += PostEntitlement;
+                RefreshAll();
+            };
+            DetachedFromVisualTree += (_, _) =>
+            {
+                engine.Unlocked -= OnUnlocked;
+                if (patreon != null) patreon.TierChanged -= tier;
+                if (substar != null) substar.TierChanged -= tier;
+                Platform.AccountSeed.GraceClosed -= PostEntitlement;
+            };
             DetachedFromVisualTree += (_, _) => FinishFx();
             PropertyChanged += (_, e) =>
             {
@@ -87,6 +103,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 StaggerTiles();
             };
         }
+
+        private void PostEntitlement() => global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (VisualRoot != null) RefreshAll(); });
 
         /// <summary>The live engine; on the headless render path a read-only load of the same file
         /// (nothing on that path ever saves it).</summary>
