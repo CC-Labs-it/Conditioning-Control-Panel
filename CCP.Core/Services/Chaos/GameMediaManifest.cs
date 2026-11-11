@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Serilog;
+using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Services.Chaos
 {
@@ -110,12 +111,20 @@ namespace ConditioningControlPanel.Services.Chaos
         /// <summary>WPF BackRoomBridge.MediaCount: 1..13, anything else reads as 4.</summary>
         internal static int MediaCount(int? n) => n is >= 1 and <= 13 ? n.Value : 4;
 
+        // WPF BackRoomHostService.EffectiveMediaSource:171-177.
+        internal static string EffectiveSource(AppSettings? settings)
+        {
+            var source = settings?.BackRoomMediaSource ?? "auto";
+            if (source == "auto") source = settings?.MediaSource ?? "local";
+            return source is "online" or "mixed" && !(settings?.HasRemoteMediaConsent ?? false) ? "local" : source;
+        }
+
         /// <summary>WPF BackRoomMedia's local deal: the library's .gif/.webp, sorted so the listing order cannot
         /// move it, shuffled with the seed, <paramref name="count"/> of them. None = an empty deal, and the page
         /// falls back to its bundled loops (play.html hostDeal -> localDeal), as WPF's bundled source does.</summary>
-        internal static object Deal(Manifest library, string? reqId, int seed, int count)
+        internal static object Deal(Manifest library, string? reqId, int seed, int count, AppSettings? settings = null)
         {
-            var pool = library.Images
+            var pool = (EffectiveSource(settings) == "bundled" ? Enumerable.Empty<Entry>() : library.Images)
                 .Where(e => e.Url.EndsWith(".gif", StringComparison.OrdinalIgnoreCase) || e.Url.EndsWith(".webp", StringComparison.OrdinalIgnoreCase))
                 .OrderBy(e => e.Url, StringComparer.Ordinal).ToList();
             var rng = new Random(seed);

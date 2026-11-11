@@ -246,7 +246,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     _ = System.Threading.Tasks.Task.Run(() =>
                     {
                         object deal;
-                        try { deal = GameMediaManifest.Deal(library.Value, reqId, Random.Shared.Next(), count); }
+                        try { deal = GameMediaManifest.Deal(library.Value, reqId, Random.Shared.Next(), count, CoreSettings.Current); }
                         catch (Exception ex) { Log.Debug("[Game] media deal failed: {E}", ex.Message); deal = GameMediaManifest.Deal(new(), reqId, 0, count); }
                         Dispatcher.UIThread.Post(() => Post(deal));
                     });
