@@ -1,7 +1,7 @@
 // PORTED from ConditioningControlPanel/Services/PieceByPiece/PieceByPieceHostService.cs (WPF 7.1.5).
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
-// media-flavour / media-more / online-media), friend / Lobby intents (.Friends.cs),
+// media-flavour / media-more / online-media), other friend intents (.Friends.cs),
 // MergedAccountRecovery and SeasonRecapService.TrackFeature.
 
 using System;
@@ -69,6 +69,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private static readonly Random PbpRng = new();
 
         private bool _pbpOpen;
+        private bool _pbpIdentityPosted;
+        private string? _pbpJoinTarget;
+
+        // WPF PieceByPieceHostService.Friends.cs:63-68,113-134: validate and hold the
+        // selected table until settings and identity have reached the page.
+        internal static bool IsPbpTableId(string? target) =>
+            !string.IsNullOrEmpty(target) && target.Length <= 64 && target.StartsWith("p_", StringComparison.Ordinal)
+            && target.Length > 2 && target.Skip(2).All(c => char.IsAsciiLetterOrDigit(c) || c == '_' || c == '-');
+
+        internal bool QueuePbpJoin(string? target)
+        {
+            if (!IsPbpTableId(target)) return false;
+            _pbpJoinTarget = target;
+            if (_pbpIdentityPosted) PostPbpJoin();
+            return true;
+        }
+
+        private void PostPbpJoin()
+        {
+            var target = _pbpJoinTarget;
+            if (target == null || _closing) return;
+            _pbpJoinTarget = null;
+            Post(new { type = "pbp:friend", mode = "join", target });
+        }
+
         private Task? _pbpBootFrames;   // single-flight: settings always precedes identity, even during an OS query
         private bool _pbpPinged;
         private DateTime _pbpLastBeatUtc = DateTime.UtcNow;
@@ -200,6 +225,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Post(frame);
             Post(PbpHostRules.IdentityFrame(CoreAccount.UnifiedUserId, PbpAuthToken(),
                 s.UserDisplayName, CoreReleaseContent.AppVersion));
+            _pbpIdentityPosted = true;
+            PostPbpJoin();
         }
 
         /// <summary>WPF SafeWhisperClips: own brain drain first, then the mod's permitted fallback.</summary>

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using global::Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Skia;
 using Avalonia.Threading;
@@ -423,6 +424,148 @@ public sealed partial class GameWindowTests
         Assert.Equal(new[] { "pbp:settings", "pbp:identity" }, sent.Select(o => (string?)o["type"]));
         Assert.Equal(reduced, (bool)sent[0]["reducedMotion"]!);
         Assert.Equal(speed, (double)sent[0]["gentleIntroSpeed"]!);
+    });
+
+    [Fact]
+    public void LobbyChessJoinWaitsForIdentityThenUsesSelectedKeyOnLiveBoard() => RunBoard(() =>
+    {
+        var board = GameWindow.Launch(GameWindow.PbpId)!;
+        board.PbpOsAnimations = () => Task.FromResult(true);
+        var sent = new List<JObject>();
+        board.Posted += json => sent.Add(JObject.Parse(json));
+        Assert.False(board.QueuePbpJoin("p_"));
+        Assert.False(board.QueuePbpJoin("p_bad/path"));
+        Assert.True(board.QueuePbpJoin("p_table_17"));
+        Assert.Empty(sent);
+        board.HandleMessage("{\"type\":\"ready\"}");
+        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:friend" }, sent.Select(x => (string?)x["type"]));
+        Assert.Equal("join", (string?)sent[2]["mode"]);
+        Assert.Equal("p_table_17", (string?)sent[2]["target"]);
+        Assert.True(board.QueuePbpJoin("p_other"));
+        Assert.Equal("p_other", (string?)sent.Last()["target"]);
+    });
+
+    [Fact]
+    public void LobbyRaceJoinValidatesIdAndLabGateThenUsesFreshAndLiveRoom() => RunBoard(() =>
+    {
+        var old = CoreEntitlement.HasLabProvider;
+        try
+        {
+            CoreEntitlement.HasLabProvider = () => false;
+            Assert.Null(GameWindow.JoinGlassroadRoom("abcd1234efgh"));
+            CoreEntitlement.HasLabProvider = () => true;
+            Assert.Null(GameWindow.JoinGlassroadRoom("invalid"));
+            var race = GameWindow.JoinGlassroadRoom("abcd1234efgh")!;
+            Assert.Contains("join=abcd1234efgh", race.PageUrl!.Query);
+            var sent = new List<JObject>();
+            race.Posted += json => sent.Add(JObject.Parse(json));
+            Assert.Same(race, GameWindow.JoinGlassroadRoom("123456789abc"));
+            Assert.Empty(sent);
+            race.HandleMessage("{\"type\":\"ready\"}");
+            Assert.Equal("123456789abc", (string?)Assert.Single(sent, x => (string?)x["type"] == "join-room")["roomId"]);
+            sent.Clear();
+            Assert.Same(race, GameWindow.JoinGlassroadRoom("abc123abc123"));
+            Assert.Equal("join-room", (string?)sent.Last()["type"]);
+            Assert.Equal("abc123abc123", (string?)sent.Last()["roomId"]);
+        }
+        finally { CoreEntitlement.HasLabProvider = old; }
+    });
+
+    [Fact]
+    public void LauncherChessJoinUsesSelectedKeyAndReturnsAfterBoardCloses() => Run((shell, launcher) =>
+    {
+        var lobby = shell.Lobby;
+        lobby.SignedIn = () => true;
+        lobby.FetchChess = () => Task.FromResult(new ConditioningControlPanel.Services.Lobby.PbpLobbyReply(
+            new[] { new ConditioningControlPanel.Services.Lobby.PbpOpenSeat("p_chosen", "Host", 300000, 0, 0) },
+            Array.Empty<ConditioningControlPanel.Services.Lobby.PbpPlayingGame>(), true));
+        lobby.FetchGoon = () => Task.FromResult(ConditioningControlPanel.Services.GoonGame.OpenTablesReply.Empty);
+        lobby.FetchRace = () => Task.FromResult(ConditioningControlPanel.Services.Lobby.RaceOpenReply.Empty);
+        lobby.FetchDirectory = _ => Task.FromResult<IReadOnlyList<ConditioningControlPanel.Services.Lobby.RemoteSeat>>(Array.Empty<ConditioningControlPanel.Services.Lobby.RemoteSeat>());
+        lobby.ReadFriends = () => Array.Empty<ConditioningControlPanel.Services.Friends.Friend>();
+        CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
+        lobby.RefreshAsync().GetAwaiter().GetResult();
+        var chip = launcher.FindControl<global::Avalonia.Controls.Button>("LobbyChip")!;
+        chip.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+        var rows = launcher.FindControl<global::Avalonia.Controls.StackPanel>("LobbyDropRows")!;
+        var card = Assert.IsType<global::Avalonia.Controls.Border>(rows.Children[0]);
+        var grid = Assert.IsType<global::Avalonia.Controls.Grid>(card.Child);
+        Assert.IsType<global::Avalonia.Media.ImageBrush>(Assert.IsType<global::Avalonia.Controls.Border>(grid.Children[0]).Background);
+        Assert.IsType<global::Avalonia.Media.LinearGradientBrush>(card.Background);
+        var scale = Assert.IsType<global::Avalonia.Media.ScaleTransform>(card.RenderTransform);
+        card.RaiseEvent(new global::Avalonia.Input.PointerEventArgs(global::Avalonia.Input.InputElement.PointerEnteredEvent, card, null!, launcher, default, 0, global::Avalonia.Input.PointerPointProperties.None, global::Avalonia.Input.KeyModifiers.None));
+        Assert.Equal(1.02, scale.ScaleX, 2);
+        card.RaiseEvent(new global::Avalonia.Input.PointerEventArgs(global::Avalonia.Input.InputElement.PointerExitedEvent, card, null!, launcher, default, 0, global::Avalonia.Input.PointerPointProperties.None, global::Avalonia.Input.KeyModifiers.None));
+        Assert.Equal(1, scale.ScaleX);
+        var lines = Assert.IsType<global::Avalonia.Controls.StackPanel>(grid.Children[1]);
+        Assert.All(lines.Children.OfType<global::Avalonia.Controls.TextBlock>(), t => Assert.Equal(global::Avalonia.Media.TextTrimming.CharacterEllipsis, t.TextTrimming));
+        grid.Children.OfType<global::Avalonia.Controls.Button>().Single().RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+        var board = GameWindow.OpenForTests(GameWindow.PbpId)!;
+        var sent = new List<JObject>();
+        board.Posted += json => sent.Add(JObject.Parse(json));
+        board.PbpOsAnimations = () => Task.FromResult(true);
+        board.HandleMessage("{\"type\":\"ready\"}");
+        Assert.Equal("p_chosen", (string?)sent.Last()["target"]);
+        launcher.FinishExit();
+        Assert.False(launcher.IsVisible);
+        board.Close();
+        Assert.True(launcher.IsVisible);
+        chip.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        lobby.SignedIn = () => false; // account changed after the row was painted
+        grid = Assert.IsType<Grid>(Assert.IsType<Border>(rows.Children[0]).Child);
+        grid.Children.OfType<Button>().Single().RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Assert.False(GameWindow.IsAnyOpen());
+    });
+
+    [Fact]
+    public void LauncherRaceButtonPassesSelectedRoomWithoutHidingLauncher() => Run((shell, launcher) =>
+    {
+        var oldLab = CoreEntitlement.HasLabProvider;
+        try
+        {
+            CoreEntitlement.HasLabProvider = () => true;
+            var lobby = shell.Lobby;
+            lobby.SignedIn = () => true;
+            lobby.FetchChess = () => Task.FromResult(ConditioningControlPanel.Services.Lobby.PbpLobbyReply.Empty);
+            lobby.FetchGoon = () => Task.FromResult(ConditioningControlPanel.Services.GoonGame.OpenTablesReply.Empty);
+            lobby.FetchRace = () => Task.FromResult(new ConditioningControlPanel.Services.Lobby.RaceOpenReply(
+                new[] { new ConditioningControlPanel.Services.Lobby.RaceOpenRoom("abcd1234efgh", "Track", "Host", 4, 1, 3, false, null, false) }, true));
+            lobby.FetchDirectory = _ => Task.FromResult<IReadOnlyList<ConditioningControlPanel.Services.Lobby.RemoteSeat>>(Array.Empty<ConditioningControlPanel.Services.Lobby.RemoteSeat>());
+            lobby.ReadFriends = () => Array.Empty<ConditioningControlPanel.Services.Friends.Friend>();
+            lobby.RefreshAsync().GetAwaiter().GetResult();
+            launcher.FindControl<Button>("LobbyChip")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            var rows = launcher.FindControl<StackPanel>("LobbyDropRows")!;
+            var grid = Assert.IsType<Grid>(Assert.IsType<Border>(rows.Children[0]).Child);
+            grid.Children.OfType<Button>().Single().RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            var race = GameWindow.OpenForTests(GameWindow.GlassroadId)!;
+            Assert.Contains("join=abcd1234efgh", race.PageUrl!.Query);
+            Assert.True(launcher.IsVisible);
+        }
+        finally { CoreEntitlement.HasLabProvider = oldLab; }
+    });
+
+    [Fact]
+    public void LauncherChessJoinRespectsLeashGate() => Run((shell, launcher) =>
+    {
+        int gates = 0;
+        MainShellWindow.LeashGateDueProvider = () => true;
+        MainShellWindow.PresentLeashGateProvider = _ => gates++;
+        var lobby = shell.Lobby;
+        lobby.SignedIn = () => true;
+        lobby.FetchChess = () => Task.FromResult(new ConditioningControlPanel.Services.Lobby.PbpLobbyReply(
+            new[] { new ConditioningControlPanel.Services.Lobby.PbpOpenSeat("p_chosen", "Host", 300000, 0, 0) }, Array.Empty<ConditioningControlPanel.Services.Lobby.PbpPlayingGame>(), true));
+        lobby.FetchGoon = () => Task.FromResult(ConditioningControlPanel.Services.GoonGame.OpenTablesReply.Empty);
+        lobby.FetchRace = () => Task.FromResult(ConditioningControlPanel.Services.Lobby.RaceOpenReply.Empty);
+        lobby.FetchDirectory = _ => Task.FromResult<IReadOnlyList<ConditioningControlPanel.Services.Lobby.RemoteSeat>>(Array.Empty<ConditioningControlPanel.Services.Lobby.RemoteSeat>());
+        lobby.ReadFriends = () => Array.Empty<ConditioningControlPanel.Services.Friends.Friend>();
+        lobby.RefreshAsync().GetAwaiter().GetResult();
+        launcher.FindControl<Button>("LobbyChip")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        var rows = launcher.FindControl<StackPanel>("LobbyDropRows")!;
+        var grid = Assert.IsType<Grid>(Assert.IsType<Border>(rows.Children[0]).Child);
+        grid.Children.OfType<Button>().Single().RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        launcher.FinishExit();
+        Assert.Equal(1, gates);
+        Assert.False(GameWindow.IsAnyOpen());
     });
 
     [Fact]

@@ -8,13 +8,17 @@
 // Escape inside 2 s panics, and panic closes it with every other game (PanicSurfaces "games").
 // Not here yet: MergedAccountRecovery on a merged-account answer (the board host lacks it too).
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
+using ConditioningControlPanel.Services.Lobby;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
@@ -45,6 +49,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             return false;
         }
 
+        // WPF MainWindow.Lobby.cs:283-287 and GlassroadHostService.cs:79-104.
+        // A fresh board gets the room in its URL; a live one takes a join-room frame.
+        internal static GameWindow? JoinGlassroadRoom(string? roomId)
+        {
+            if (!RaceJoinLink.IsRoomId(roomId) || !TierGate.DemandLab(Loc.Get("launcher_game_race_title"))) return null;
+            GameWindow? live;
+            lock (Open) live = Open.FirstOrDefault(w => w.Spec.Id == GlassroadId && !w._closing);
+            if (live != null)
+            {
+                if (live.IsReady) live.Post(new { type = "join-room", roomId });
+                else live._grPendingJoins.Add(roomId!);
+                live.Activate();
+                return live;
+            }
+            var window = new GameWindow(Games[GlassroadId] with { Query = "join=" + roomId });
+            window.Load(Server());
+            window.Show();
+            return window;
+        }
+
+        private readonly List<string> _grPendingJoins = new();
         private bool IsGlassroad => string.Equals(Spec.Id, GlassroadId, StringComparison.OrdinalIgnoreCase);
         private bool _grOpen, _grEarlyInitSent, _grPinged;
         private DateTime _grLastBeatUtc = DateTime.UtcNow, _grLastProgressUtc = DateTime.UtcNow;
@@ -121,6 +146,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         _grLastBeatUtc = DateTime.UtcNow;
                         _grPinged = false;
                         PostGlassroadInit();
+                        foreach (var room in _grPendingJoins) Post(new { type = "join-room", roomId = room });
+                        _grPendingJoins.Clear();
                         try { Web.Focus(); } catch (Exception ex) { Diag.Swallowed(ex); }
                         return true;
                     case "heartbeat":
