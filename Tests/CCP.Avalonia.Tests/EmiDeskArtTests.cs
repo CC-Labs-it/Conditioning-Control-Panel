@@ -46,5 +46,6 @@ public class EmiDeskArtTests
             Assert.False(face.Flat);
         }
         finally { desk.Close(); }
+        return Task.CompletedTask;
     });
 }
