@@ -644,6 +644,7 @@ namespace ConditioningControlPanel.Avalonia
                 _desktopDispatch = new AvaloniaCoreDispatch(Dispatcher.UIThread);
                 _desktopDispatch.Attach();
                 desktop.Exit += OnDesktopExit;
+                RecoverEngineCrash(() => Views.Windows.EmiDesk.EmiDeskService.Instance.Fire("crashRecovered", null));
                 Platform.EntitlementRefresh.Install();
 
                 // Real settings on this head: SettingsService now lives in Core and reads and
@@ -1482,10 +1483,19 @@ namespace ConditioningControlPanel.Avalonia
             Platform.ToneWav.DeleteFiles();
         }
 
+        internal static void RecoverEngineCrash(Action fire)
+        {
+            if (ConditioningControlPanel.Services.EngineCrashSentinel.ConsumeAndReport(Serilog.Log.Logger))
+                try { fire(); } catch (Exception ex) { Serilog.Log.Debug(ex, "EMI crash recovery failed"); }
+        }
+
+        internal static void ClearEngineCrashOnExit() => ConditioningControlPanel.Services.EngineCrashSentinel.Clear();
+
         private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
         {
             if (Interlocked.Exchange(ref _exitHandled, 1) != 0) return;
             _exiting = true;
+            ClearEngineCrashOnExit();
 
             // WPF App.OnExit:5965: haptics FIRST and synchronously (bounded ~2 s). A Lovense level has no
             // server-side watchdog, so a toy not countermanded here keeps running after the app is gone.

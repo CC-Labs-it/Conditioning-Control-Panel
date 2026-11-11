@@ -75,6 +75,10 @@ namespace ConditioningControlPanel
             if (!audioOnly && s.BrainDrainEnabled) StartBrainDrain?.Invoke();
             _running = true;
             StartedUtc = DateTime.UtcNow;
+            EngineCrashSentinel.Mark(
+                $"started {DateTime.Now:yyyy-MM-dd HH:mm:ss} | flash {s.FlashFrequency}/min x{s.SimultaneousImages}" +
+                $" | bubbles {(s.BubblesEnabled ? "on" : "off")} | video {(s.MandatoryVideosEnabled ? "on" : "off")}" +
+                $" | subliminal {(s.SubliminalEnabled ? "on" : "off")}");
             Log.Information("Engine started - Flash: {Flash}, Subliminal: {Sub}, LockCard: {Lock}, BouncingText: {Bt}",
                 s.FlashEnabled, s.SubliminalEnabled, s.LockCardEnabled, s.BouncingTextEnabled);
             try { StartedHook?.Invoke(); }
@@ -108,7 +112,7 @@ namespace ConditioningControlPanel
                 catch (Exception ex) { Log.Warning(ex, "Engine stop hook failed"); }
                 Log.Information("Engine stopped");
             }
-            finally { _stopInProgress = false; }
+            finally { EngineCrashSentinel.Clear(); _stopInProgress = false; }
         }
 
         /// <summary>WPF ReconcileRunningServices (MainWindow.Presets.cs:2245, #872): after a preset
