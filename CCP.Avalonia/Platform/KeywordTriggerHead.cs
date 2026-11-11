@@ -39,22 +39,54 @@ internal static class KeywordTriggerHead
     }
 
     // The hook itself stays: on this head the panic key (Win32Input.Start at boot) owns it, the case WPF :426 keeps it for.
-    internal static void Stop() { DetachKeyboard(); _ocr?.Stop(); Engine.Stop(); }
+    internal static void Stop() { DetachKeyboard(); lock (_ocrGate) _ocr?.Stop(); Engine.Stop(); }
 
     /// <summary>Screen capture plus recognition. Null on this head (docs/avalonia-decisions.html 2026-11-04):
     /// plain net10.0 (no Windows TFM) cannot reach WinRT's OcrEngine, Linux ships no OCR engine, and Wayland capture is interactive only.
     /// While null the scanner never starts; everything after the source is live.</summary>
     internal static Func<CancellationToken, Task<IReadOnlyList<ScreenOcrService.Word>>>? OcrSource;
     private static ScreenOcrService? _ocr;
+    private static readonly object _ocrGate = new();
+    private static int _ocrSuspension;
+    private static bool _ocrSuspended;
 
     /// <summary>WPF MainWindow.Awareness.cs:414-428,461-468 and KeywordTriggers.cs:119: master, OCR switch and interval.</summary>
     internal static void SyncOcr()
     {
-        var s = CoreSettings.Current;
-        if (OcrSource == null) { _ocr?.Stop(); return; }
-        _ocr ??= new ScreenOcrService(t => OcrSource?.Invoke(t) ?? Task.FromResult<IReadOnlyList<ScreenOcrService.Word>>([]),
-            () => CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"), DeliverOcr);
-        _ocr.Sync(s.KeywordTriggersEnabled && Engine.IsActive, s.ScreenOcrEnabled, s.ScreenOcrIntervalMs);
+        lock (_ocrGate)
+        {
+            var s = CoreSettings.Current;
+            if (_ocrSuspended || OcrSource == null) { _ocr?.Stop(); return; }
+            _ocr ??= new ScreenOcrService(t => OcrSource?.Invoke(t) ?? Task.FromResult<IReadOnlyList<ScreenOcrService.Word>>([]),
+                HasOcrAccess, DeliverOcr);
+            _ocr.Sync(s.KeywordTriggersEnabled && Engine.IsActive, s.ScreenOcrEnabled, s.ScreenOcrIntervalMs);
+        }
+    }
+
+    private static bool HasOcrAccess() => CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness");
+
+    // WPF MainWindow.xaml.cs:1122,1150-1175. The generation prevents an older queued
+    // recovery from restarting capture during a subsequent fallback.
+    internal static int SuspendOcrForPanic()
+    {
+        lock (_ocrGate)
+        {
+            _ocrSuspended = true;
+            try { _ocr?.Stop(); }
+            catch (Exception ex) { Log.Warning(ex, "Panic OCR stop failed"); }
+            return ++_ocrSuspension;
+        }
+    }
+
+    internal static void RecoverOcrAfterPanic(int suspension)
+    {
+        lock (_ocrGate)
+        {
+            if (suspension != _ocrSuspension) return;
+            _ocrSuspended = false;
+            var s = CoreSettings.Current;
+            if (s.KeywordTriggersEnabled && s.ScreenOcrEnabled && HasOcrAccess()) SyncOcr();
+        }
     }
 
     internal static Task TickOcrForTest() => _ocr?.TickAsync() ?? Task.CompletedTask;
