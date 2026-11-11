@@ -154,4 +154,56 @@ public sealed class SubliminalWhisperShowTests
         Assert.Contains("stop reset.mp3", run.Log);
         Assert.DoesNotContain(run.Log, l => l.StartsWith("card"));
     });
+    [Fact]
+    public void Trigger_whisper_honours_quiet_mute_and_stop() => With(audible: true, roll: 0.5, run =>
+    {
+        var safety = ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced();
+        ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+        SubliminalWhisperShow.StopAll();
+        CoreAudio.PlayStoppableProvider = (path, volume, tag, _, done) =>
+        {
+            run.Log.Add("play " + Path.GetFileName(path));
+            return () => { run.Log.Add("stop " + Path.GetFileName(path)); done?.Invoke(); };
+        };
+        try
+        {
+            SubliminalWhisperShow.PlayTriggerAudio("reset");
+            Assert.Contains("play reset.mp3", run.Log);
+            SubliminalWhisperShow.StopAll();
+            Assert.Contains("stop reset.mp3", run.Log);
+            run.Log.Clear();
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            SubliminalWhisperShow.PlayTriggerAudio("reset");
+            Assert.DoesNotContain(run.Log, x => x.StartsWith("play "));
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            CoreSettings.Current.SubAudioMuted = true;
+            SubliminalWhisperShow.PlayTriggerAudio("reset");
+            Assert.DoesNotContain(run.Log, x => x.StartsWith("play "));
+        }
+        finally
+        {
+            SubliminalWhisperShow.StopAll();
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            if (safety) ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+        }
+    });
+    [Fact]
+    public void Trigger_whisper_racing_stop_is_silenced() => With(audible: true, roll: 0.5, run =>
+    {
+        ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+        SubliminalWhisperShow.StopAll();
+        CoreAudio.PlayStoppableProvider = (path, volume, tag, _, done) =>
+        {
+            run.Log.Add("play " + Path.GetFileName(path));
+            SubliminalWhisperShow.StopAll();
+            return () => { run.Log.Add("stop " + Path.GetFileName(path)); done?.Invoke(); };
+        };
+        try
+        {
+            SubliminalWhisperShow.PlayTriggerAudio("reset");
+            Assert.Contains("play reset.mp3", run.Log);
+            Assert.Contains("stop reset.mp3", run.Log);
+        }
+        finally { SubliminalWhisperShow.StopAll(); ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
+    });
 }

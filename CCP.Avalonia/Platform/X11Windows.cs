@@ -34,7 +34,7 @@ internal static class X11Windows
 
     private static readonly object Gate = new();
     private static IntPtr _conn;
-    private static uint _root, _active, _clients, _pid;
+    private static uint _root, _active, _clients, _pid, _state, _fullscreen, _above;
     private static bool _failed;
 
     /// <summary>Normalised process name owning the active window, or "" (no X, no EWMH, or Wayland-native).</summary>
@@ -43,6 +43,22 @@ internal static class X11Windows
         if (!Connect()) return "";
         var w = Read(_root, _active, 1);
         return w.Count == 0 || w[0] == 0 ? "" : NameOf(w[0]);
+    }
+
+    // X11's conservative equivalent: another app explicitly marked fullscreen AND above. Native
+    // Wayland surfaces are not exposed to X11, so an unknown foreground remains unknown.
+    internal static bool OtherAppExclusiveFullscreen()
+    {
+        if (X11ActiveWindow.Disabled || !Connect()) return false;
+        var active = Read(_root, _active, 1);
+        if (active.Count == 0 || active[0] == 0) return false;
+        var pid = Read(active[0], _pid, 1);
+        if (pid.Count == 0 || pid[0] == 0 || pid[0] == (uint)Environment.ProcessId) return false;
+        var process = NameOf(active[0]);
+        string[] safe = { "chrome", "google-chrome", "chromium", "firefox", "msedge", "brave", "vlc", "mpv" };
+        foreach (var prefix in safe) if (process.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
+        var states = Read(active[0], _state, 128);
+        return _fullscreen != 0 && _above != 0 && states.Contains(_fullscreen) && states.Contains(_above);
     }
 
     /// <summary>Process names of every managed top-level window, de-duplicated, sorted, without
@@ -90,6 +106,9 @@ internal static class X11Windows
                 _active = Atom(c, "_NET_ACTIVE_WINDOW");
                 _clients = Atom(c, "_NET_CLIENT_LIST");
                 _pid = Atom(c, "_NET_WM_PID");
+                _state = Atom(c, "_NET_WM_STATE");
+                _fullscreen = Atom(c, "_NET_WM_STATE_FULLSCREEN");
+                _above = Atom(c, "_NET_WM_STATE_ABOVE");
                 _conn = c;
                 return true;
             }

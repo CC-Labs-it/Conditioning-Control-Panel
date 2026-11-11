@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
 using ConditioningControlPanel.Services.UI;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
@@ -16,6 +17,41 @@ internal static class Win32Windows
 {
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Rect { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MonitorInfo { public int Size; public Rect Monitor, Work; public uint Flags; }
+    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out Rect rect);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, StringBuilder name, int size);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] private static extern int GetWindowLong(IntPtr hwnd, int index);
+    [DllImport("user32.dll")] private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
+
+    // WPF Windowing.cs:367: only another app's captionless, topmost popup covering its monitor.
+    internal static bool OtherAppExclusiveFullscreen()
+    {
+        if (!OperatingSystem.IsWindows()) return X11Windows.OtherAppExclusiveFullscreen();
+        try
+        {
+            var hwnd = GetForegroundWindow();
+            if (hwnd == IntPtr.Zero) return false;
+            GetWindowThreadProcessId(hwnd, out var pid);
+            if (pid == 0 || pid == (uint)Environment.ProcessId) return false;
+            var name = new StringBuilder(256);
+            GetClassName(hwnd, name, name.Capacity);
+            var cls = name.ToString();
+            string[] safe = { "Chrome_WidgetWin", "MozillaWindowClass", "ApplicationFrameWindow", "Windows.UI.Core", "CabinetWClass", "Shell_TrayWnd", "Progman", "WorkerW", "XLMAIN", "OpusApp", "PPTFrameClass", "VLC", "mpv", "MediaPlayerClassicW" };
+            foreach (var prefix in safe) if (cls.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
+            int style = GetWindowLong(hwnd, -16), exStyle = GetWindowLong(hwnd, -20);
+            if ((style & 0x00C00000) == 0x00C00000 || (style & unchecked((int)0x80000000)) == 0 || (exStyle & 8) == 0) return false;
+            var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
+            if (!GetWindowRect(hwnd, out var rect) || !GetMonitorInfo(MonitorFromWindow(hwnd, 2), ref info)) return false;
+            return rect.Left <= info.Monitor.Left + 5 && rect.Top <= info.Monitor.Top + 5 &&
+                   rect.Right >= info.Monitor.Right - 5 && rect.Bottom >= info.Monitor.Bottom - 5;
+        }
+        catch { return false; }
+    }
 
     /// <summary>The do-not-disturb sources for this OS: user32 on Windows, X11 elsewhere.</summary>
     internal static Func<string> ForegroundSource => OperatingSystem.IsWindows() ? ForegroundProcess : X11Windows.ForegroundProcess;

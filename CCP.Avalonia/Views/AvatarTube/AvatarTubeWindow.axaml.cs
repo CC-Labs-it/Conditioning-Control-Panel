@@ -399,6 +399,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // first: that Tick sets IsVisible = false unconditionally and would close the log under
             // the user a few seconds after they opened it. WPF's EnterChatHistoryMode kills the
             // same two timers for the same reason.
+            CancelTriggerPresentation();
             _speechTimer?.Stop();
             _cancelSpeechDelay();   // WPF ChatInput.cs:475 _speechDelayTimer.Stop (the queue stays)
             _cancelSpeechDelay = static () => { };
@@ -1245,6 +1246,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private void ShowSpeech(string text, bool playSound, bool aiGenerated, string? phraseAudioPath,
                                 bool barkVoice, bool preset, Action? onSpoken = null)
         {
+                CancelTriggerPresentation();
                 var spokenHandled = false;
                 var clipDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 Action spoken = () => { clipDone.TrySetResult(); onSpoken?.Invoke(); };
@@ -1317,6 +1319,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             {
                 if (_isPlayingUninterruptibleClip) return;
                 ClearSpeechQueue();   // WPF Speech.cs:719-721: nothing queued talks over the open mic
+                CancelTriggerPresentation();
                 _speechTimer?.Stop();
                 _isGiggling = false;
                 _isShowingAiBubble = false;

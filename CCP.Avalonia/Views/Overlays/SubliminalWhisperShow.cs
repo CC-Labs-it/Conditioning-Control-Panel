@@ -104,6 +104,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             });
         }
 
+        // WPF SubliminalService.PlayTriggerAudio: whisper only, no extra card or haptic.
+        internal static void PlayTriggerAudio(string text)
+        {
+            var entry = Volatile.Read(ref _gen);
+            var s = CoreSettings.Current;
+            if (!s.SubAudioAudible) return;
+            var path = SubliminalWhisper.FindLinkedAudio(text, SubliminalWhisper.ModAudioDir(App.Mods?.ActiveMod?.InstalledPath),
+                SubAudioDir, App.Mods?.ActiveModId);
+            if (path == null || Volatile.Read(ref _gen) != entry || Services.Safety.PanicAftermath.TriggersSilenced()) return;
+            if (s.AudioDuckingEnabled) CoreAudio.Duck(s.DuckingLevel);
+            var gen = CoreAudio.DuckGeneration;
+            Interlocked.Exchange(ref _stopWhisper, null)?.Invoke();
+            _stopWhisper = CoreAudio.PlayStoppable(path, SubliminalWhisper.Volume(s.MasterVolume, s.SubAudioVolume), "whisper",
+                onFinished: () => After(SubliminalWhisper.UnduckDelayMs, () => CoreAudio.Unduck(gen)));
+            if (Volatile.Read(ref _gen) != entry) Interlocked.Exchange(ref _stopWhisper, null)?.Invoke();
+        }
+
         /// <summary>Duck, play the phrase's linked clip, then draw the card. False (nothing played) when
         /// there is no clip or whispers are muted: the caller then draws the card straight away.</summary>
         internal static bool Whisper(string text)

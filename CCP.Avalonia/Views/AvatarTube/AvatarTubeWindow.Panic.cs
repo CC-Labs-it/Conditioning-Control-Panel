@@ -18,8 +18,10 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         public void PanicSilence() => RunOnAvatar(() =>
         {
             try { _stopSpoken(); } catch { }
+            try { Overlays.SubliminalWhisperShow.StopAll(); } catch { }
             _stopSpoken = static () => { };
             try { StopThinkingAnimation(); } catch { }
+            try { CancelTriggerPresentation(); } catch { }
             try { _speechTimer?.Stop(); } catch { }
             try { ClearSpeechQueue(); } catch { }   // WPF Speech.cs:1850-1851: nothing queued speaks after
             try { _listeningDotsTimer?.Stop(); _listeningDotsTimer = null; } catch { }
