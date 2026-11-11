@@ -55,36 +55,39 @@ public sealed class WelcomeBackRestoreTests
     public Task BackupIsPeekedButOnlyAChosenDownloadedBodyIsApplied(bool choose, bool bodyFails, bool sameVersion)
         => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
-        CoreSecrets.RetrieveProvider = _ => null;
-        CoreSecrets.StoreProvider = (_, _) => { };
-        var service = new SettingsService();
-        CoreSettings.ServiceProvider = () => service;
-        var current = service.Current;
-        current.UnifiedId = CoreAccount.UnifiedUserId = "welcome-test";
-        current.PlayerLevel = 24;
-        current.PlayerXP = 123;
-        current.CurrentSeason = current.LastSeasonResetSeen = "2026-10";
-        current.SpiralPath = "/this-machine/spiral.gif";
-        current.FlashEnabled = true;
-        current.Welcomed = current.FirstRunAssetsPromptShown = true;
-        current.TotalConditioningMinutes = 100;
-        CoreReleaseContent.AppVersionProvider = () => "7.2.0";
-        CoreReleaseContent.PatchNotesProvider = () => "Current notes";
-        var backup = new AppSettings
-        {
-            FlashEnabled = false, PlayerLevel = 99, SpiralPath = @"C:\other.gif",
-            LastSeenVersion = sameVersion ? "7.2.0" : "7.1.0", LastSeasonResetSeen = "2026-08",
-            TotalConditioningMinutes = 150
-        };
-        var server = new BackupServer(backup, bodyFails);
+        var saved = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, CoreSettings.ServiceProvider,
+            CoreAccount.UnifiedUserId, CoreReleaseContent.AppVersionProvider, CoreReleaseContent.PatchNotesProvider,
+            WelcomeBackOffer.NewBackup, WelcomeBackOffer.Choose, WelcomeBackOffer.Present, WelcomeBackOffer.Shell);
         var dir = Directory.CreateTempSubdirectory("welcome-restore-").FullName;
-        WelcomeBackOffer.ResetForTests();
         try
         {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            CoreSecrets.RetrieveProvider = _ => null;
+            CoreSecrets.StoreProvider = (_, _) => { };
+            var service = new SettingsService();
+            CoreSettings.ServiceProvider = () => service;
+            var current = service.Current;
+            current.UnifiedId = CoreAccount.UnifiedUserId = "welcome-test";
+            current.PlayerLevel = 24;
+            current.PlayerXP = 123;
+            current.CurrentSeason = current.LastSeasonResetSeen = "2026-10";
+            current.SpiralPath = "/this-machine/spiral.gif";
+            current.FlashEnabled = true;
+            current.Welcomed = current.FirstRunAssetsPromptShown = true;
+            current.TotalConditioningMinutes = 100;
+            CoreReleaseContent.AppVersionProvider = () => "7.2.0";
+            CoreReleaseContent.PatchNotesProvider = () => "Current notes";
+            var backup = new AppSettings
+            {
+                FlashEnabled = false, PlayerLevel = 99, SpiralPath = @"C:\other.gif",
+                LastSeenVersion = sameVersion ? "7.2.0" : "7.1.0", LastSeasonResetSeen = "2026-08",
+                TotalConditioningMinutes = 150
+            };
+            var server = new BackupServer(backup, bodyFails);
+            WelcomeBackOffer.ResetForTests();
             WelcomeBackOffer.NewBackup = () => new CloudSettingsBackup(server);
             WelcomeBackSheetContent? offered = null;
             WelcomeBackOffer.Choose = content =>
@@ -117,24 +120,33 @@ public sealed class WelcomeBackRestoreTests
                 Assert.Equal(150, CoreSettings.Current.TotalConditioningMinutes);
             }
         }
-        finally { WelcomeBackOffer.ResetForTests(); Directory.Delete(dir, true); }
+        finally
+        {
+            WelcomeBackOffer.ResetForTests();
+            (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, CoreSettings.ServiceProvider,
+                CoreAccount.UnifiedUserId, CoreReleaseContent.AppVersionProvider, CoreReleaseContent.PatchNotesProvider,
+                WelcomeBackOffer.NewBackup, WelcomeBackOffer.Choose, WelcomeBackOffer.Present, WelcomeBackOffer.Shell) = saved;
+            Directory.Delete(dir, true);
+        }
     });
 
     [Fact]
     public Task ConcurrentLooksPeekOnceAndShowOneSheet() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        var service = new SettingsService();
-        CoreSettings.ServiceProvider = () => service;
-        service.Current.UnifiedId = CoreAccount.UnifiedUserId = "welcome-test";
+        var saved = (CoreSettings.ServiceProvider, CoreAccount.UnifiedUserId, WelcomeBackOffer.NewBackup,
+            WelcomeBackOffer.Choose, WelcomeBackOffer.Present, WelcomeBackOffer.Shell);
+        var dir = Directory.CreateTempSubdirectory("welcome-gate-").FullName;
         var server = new BackupServer(new AppSettings(), false)
         {
             FirstReadStarted = new TaskCompletionSource(),
             ReleaseFirstRead = new TaskCompletionSource()
         };
-        var dir = Directory.CreateTempSubdirectory("welcome-gate-").FullName;
-        WelcomeBackOffer.ResetForTests();
         try
         {
+            var service = new SettingsService();
+            CoreSettings.ServiceProvider = () => service;
+            service.Current.UnifiedId = CoreAccount.UnifiedUserId = "welcome-test";
+            WelcomeBackOffer.ResetForTests();
             var sheets = 0;
             WelcomeBackOffer.NewBackup = () => new CloudSettingsBackup(server);
             WelcomeBackOffer.Choose = _ => { sheets++; return Task.FromResult((false, false)); };
@@ -148,7 +160,70 @@ public sealed class WelcomeBackRestoreTests
             Assert.Equal(2, server.Reads);
             Assert.Equal(1, sheets);
         }
-        finally { server.ReleaseFirstRead.TrySetResult(); WelcomeBackOffer.ResetForTests(); Directory.Delete(dir, true); }
+        finally
+        {
+            server.ReleaseFirstRead.TrySetResult();
+            WelcomeBackOffer.ResetForTests();
+            (CoreSettings.ServiceProvider, CoreAccount.UnifiedUserId, WelcomeBackOffer.NewBackup,
+                WelcomeBackOffer.Choose, WelcomeBackOffer.Present, WelcomeBackOffer.Shell) = saved;
+            Directory.Delete(dir, true);
+        }
+    });
+
+    [Fact]
+    public Task TestMethodsRestorePriorProvidersAndAccount() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var saved = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, CoreSettings.ServiceProvider,
+            CoreAccount.UnifiedUserId, CoreReleaseContent.AppVersionProvider, CoreReleaseContent.PatchNotesProvider,
+            CoreSession.IsSessionRunningProvider, WelcomeBackOffer.NewBackup, WelcomeBackOffer.Choose,
+            WelcomeBackOffer.Present, WelcomeBackOffer.Shell);
+        var inbox = StartupLadder.Inbox.Items.ToArray();
+        try
+        {
+            CoreSecrets.RetrieveProvider = _ => "prior";
+            CoreSecrets.StoreProvider = (_, _) => { };
+            CoreSettings.ServiceProvider = () => null;
+            CoreAccount.UnifiedUserId = "prior-user";
+            CoreReleaseContent.AppVersionProvider = () => "prior-version";
+            CoreReleaseContent.PatchNotesProvider = () => "prior-notes";
+            CoreSession.IsSessionRunningProvider = () => false;
+            WelcomeBackOffer.NewBackup = () => new CloudSettingsBackup();
+            WelcomeBackOffer.Choose = _ => Task.FromResult((false, false));
+            WelcomeBackOffer.Present = _ => Task.CompletedTask;
+            WelcomeBackOffer.Shell = () => null;
+            var expected = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, CoreSettings.ServiceProvider,
+                CoreAccount.UnifiedUserId, CoreReleaseContent.AppVersionProvider, CoreReleaseContent.PatchNotesProvider,
+                CoreSession.IsSessionRunningProvider, WelcomeBackOffer.NewBackup, WelcomeBackOffer.Choose,
+                WelcomeBackOffer.Present, WelcomeBackOffer.Shell);
+            var row = new ConditioningControlPanel.Services.Startup.InboxItem { Key = "prior-row" };
+            StartupLadder.Inbox.Items.Clear();
+            StartupLadder.Inbox.Items.Add(row);
+            void AssertRestored()
+            {
+                Assert.Equal(expected, (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, CoreSettings.ServiceProvider,
+                    CoreAccount.UnifiedUserId, CoreReleaseContent.AppVersionProvider, CoreReleaseContent.PatchNotesProvider,
+                    CoreSession.IsSessionRunningProvider, WelcomeBackOffer.NewBackup, WelcomeBackOffer.Choose,
+                    WelcomeBackOffer.Present, WelcomeBackOffer.Shell));
+                Assert.Same(row, Assert.Single(StartupLadder.Inbox.Items));
+            }
+            await BackupIsPeekedButOnlyAChosenDownloadedBodyIsApplied(true, false, true);
+            AssertRestored();
+            await ConcurrentLooksPeekOnceAndShowOneSheet();
+            AssertRestored();
+            await RestoreFailureFilesAnInboxRetryThatDownloadsAgain(false);
+            AssertRestored();
+            await RestoreFailureFilesAnInboxRetryThatDownloadsAgain(true);
+            AssertRestored();
+        }
+        finally
+        {
+            (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, CoreSettings.ServiceProvider,
+                CoreAccount.UnifiedUserId, CoreReleaseContent.AppVersionProvider, CoreReleaseContent.PatchNotesProvider,
+                CoreSession.IsSessionRunningProvider, WelcomeBackOffer.NewBackup, WelcomeBackOffer.Choose,
+                WelcomeBackOffer.Present, WelcomeBackOffer.Shell) = saved;
+            StartupLadder.Inbox.Items.Clear();
+            foreach (var item in inbox) StartupLadder.Inbox.Items.Add(item);
+        }
     });
 
     [Theory]
@@ -156,20 +231,24 @@ public sealed class WelcomeBackRestoreTests
     [InlineData(true)]
     public Task RestoreFailureFilesAnInboxRetryThatDownloadsAgain(bool locked) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
-        CoreSecrets.RetrieveProvider = _ => null;
-        CoreSecrets.StoreProvider = (_, _) => { };
-        var service = new SettingsService();
-        CoreSettings.ServiceProvider = () => service;
-        service.Current.UnifiedId = "welcome-test";
-        var server = new BackupServer(null, false);
-        WelcomeBackOffer.ResetForTests();
-        StartupLadder.Inbox.Items.Clear();
+        var saved = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, CoreSettings.ServiceProvider,
+            CoreSession.IsSessionRunningProvider, WelcomeBackOffer.NewBackup, WelcomeBackOffer.Choose,
+            WelcomeBackOffer.Present, WelcomeBackOffer.Shell);
+        var savedInbox = StartupLadder.Inbox.Items.ToArray();
         try
         {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            CoreSecrets.RetrieveProvider = _ => null;
+            CoreSecrets.StoreProvider = (_, _) => { };
+            var service = new SettingsService();
+            CoreSettings.ServiceProvider = () => service;
+            service.Current.UnifiedId = "welcome-test";
+            var server = new BackupServer(null, false);
+            WelcomeBackOffer.ResetForTests();
+            StartupLadder.Inbox.Items.Clear();
             WelcomeBackOffer.NewBackup = () => new CloudSettingsBackup(server);
             WelcomeBackOffer.ApplyRestore(null);
             var item = Assert.Single(StartupLadder.Inbox.Items);
@@ -194,6 +273,14 @@ public sealed class WelcomeBackRestoreTests
             Assert.Same(current, service.Current);
             Assert.Single(StartupLadder.Inbox.Items);
         }
-        finally { WelcomeBackOffer.ResetForTests(); StartupLadder.Inbox.Items.Clear(); }
+        finally
+        {
+            WelcomeBackOffer.ResetForTests();
+            (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, CoreSettings.ServiceProvider,
+                CoreSession.IsSessionRunningProvider, WelcomeBackOffer.NewBackup, WelcomeBackOffer.Choose,
+                WelcomeBackOffer.Present, WelcomeBackOffer.Shell) = saved;
+            StartupLadder.Inbox.Items.Clear();
+            foreach (var item in savedInbox) StartupLadder.Inbox.Items.Add(item);
+        }
     });
 }

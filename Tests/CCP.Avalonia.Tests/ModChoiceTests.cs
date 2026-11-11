@@ -40,11 +40,15 @@ public sealed class ModChoiceTests
         var backup = new AppSettings { ActiveModId = BuiltInMods.BambiSleepId, FlashEnabled = false };
         var settings = CoreSettings.Current;
         settings.FlashEnabled = true;
-        var old = CoreAccount.UnifiedUserId;
-        settings.UnifiedId = CoreAccount.UnifiedUserId = "welcome-test";
-        ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.ResetForTests();
+        var old = (CoreAccount.UnifiedUserId, settings.UnifiedId,
+            ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.NewBackup,
+            ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.Choose,
+            ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.Present,
+            ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.Shell);
         try
         {
+            settings.UnifiedId = CoreAccount.UnifiedUserId = "welcome-test";
+            ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.ResetForTests();
             ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.Shell = () => shell;
             ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.NewBackup = () => WelcomeBackRestoreTests.ClientFor(backup);
             ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.Choose = content =>
@@ -70,7 +74,11 @@ public sealed class ModChoiceTests
         finally
         {
             ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.ResetForTests();
-            CoreAccount.UnifiedUserId = old;
+            (CoreAccount.UnifiedUserId, settings.UnifiedId,
+                ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.NewBackup,
+                ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.Choose,
+                ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.Present,
+                ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.Shell) = old;
             dir.Delete(true);
         }
     });
