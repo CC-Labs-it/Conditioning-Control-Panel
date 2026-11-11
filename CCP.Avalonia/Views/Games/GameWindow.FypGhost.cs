@@ -36,6 +36,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal static Func<TopLevel, bool, bool> FypGhostClickThrough = X11Overlay.SetClickThrough;
         internal static Func<TopLevel, double, bool> FypGhostOpacity = X11Overlay.SetOpacity;
         internal static Func<DateTime> FypGhostNow = () => DateTime.UtcNow;
+        internal static Func<Window, PixelRect, bool, bool> FypGhostButtonConfigure = X11Overlay.SetOverrideRedirect;
+        private static double ClampFypGhostOpacity(double value) =>
+            double.IsFinite(value) ? Math.Clamp(value, 0.01, 1.0) : 1.0;
 
         private bool _fypGhosted;
         private DateTime _fypGhostExitUtc = DateTime.MinValue;
@@ -71,7 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         Width = screen.Bounds.Width / screen.Scaling;
                         Height = screen.Bounds.Height / screen.Scaling;
                     }
-                    if (!FypGhostOpacity(this, CoreSettings.Current.FypWindowOpacity) || !FypGhostClickThrough(this, true))
+                    if (!FypGhostOpacity(this, ClampFypGhostOpacity(CoreSettings.Current.FypWindowOpacity)) || !FypGhostClickThrough(this, true))
                         why = "mirror-failed";
                     else
                         ShowFypGhostButtons(screen);
@@ -124,19 +127,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             int size = Math.Max(40, (int)Math.Round(b.Height * 0.037));
             int pad = size / 2;
             _fypGhostButtons.Add(FypGhostButton(IconKind.Settings, Loc.Get("tab_settings"),
-                new PixelPoint(b.X + pad, b.Y + pad), size / scale, FypGhostGear, out _));
+                new PixelPoint(b.X + pad, b.Y + pad), size / scale, size, FypGhostGear, out _));
             _fypGhostButtons.Add(FypGhostButton(FypMuteKind(), Loc.Get("video_btn_mute"),
-                new PixelPoint(b.Right - pad - size, b.Y + pad), size / scale, FypGhostMute, out _fypMuteGlyph));
+                new PixelPoint(b.Right - pad - size, b.Y + pad), size / scale, size, FypGhostMute, out _fypMuteGlyph));
         }
 
         private static IconKind FypMuteKind() => CoreSettings.Current.FypMuted ? IconKind.SpeakerMute : IconKind.Speaker2;
 
-        private static Window FypGhostButton(IconKind kind, string name, PixelPoint at, double size, Action click, out IconGlyph? glyph)
+        private static Window FypGhostButton(IconKind kind, string name, PixelPoint at, double size, int pixels, Action click, out IconGlyph? glyph)
         {
             glyph = new IconGlyph { Kind = kind, Size = size * 0.45, Foreground = Brushes.White };
             var button = new Button
             {
-                Content = glyph, Width = size, Height = size, Padding = new Thickness(0),
+                Content = glyph, Width = size, Height = size, Padding = new Thickness(0), Focusable = false,
                 CornerRadius = new CornerRadius(size / 2), Background = new SolidColorBrush(Color.FromRgb(31, 31, 54)),
                 BorderBrush = new SolidColorBrush(Color.FromRgb(255, 105, 180)), BorderThickness = new Thickness(1.5),
                 HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center,
@@ -152,13 +155,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 Content = button, Width = size, Height = size, Position = at, Opacity = 0.14,
                 WindowDecorations = WindowDecorations.None, ShowInTaskbar = false, ShowActivated = false,
-                Topmost = true, CanResize = false, Background = Brushes.Transparent,
+                Topmost = true, CanResize = false, Focusable = false, Background = Brushes.Transparent,
                 TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
             };
             window.PointerEntered += (_, _) => window.Opacity = 0.92;
             window.PointerExited += (_, _) => window.Opacity = 0.14;
-            window.Show();
-            return window;
+            try
+            {
+                if (!FypGhostButtonConfigure(window, new PixelRect(at, new PixelSize(pixels, pixels)), true))
+                    throw new InvalidOperationException("ghost button cannot be made passive");
+                window.Show();
+                return window;
+            }
+            catch { window.Close(); throw; }
         }
 
         /// <summary>WPF GhostGearClicked (:604): give the window back and open the options popover.</summary>

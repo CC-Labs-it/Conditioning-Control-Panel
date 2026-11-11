@@ -192,7 +192,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case FypRules.SettingEffect.GhostOn: EnterFypGhost(); break;
                 case FypRules.SettingEffect.GhostOff: ExitFypGhost(); break;
                 case FypRules.SettingEffect.OpacityChanged:   // WPF :294: the live ghost follows the slider
-                    if (_fypGhosted) FypGhostOpacity(this, s.FypWindowOpacity);
+                    if (_fypGhosted) FypGhostOpacity(this, ClampFypGhostOpacity(s.FypWindowOpacity));
                     break;
                 case FypRules.SettingEffect.EyeControlOn:
                     // WPF FailEyeControl (:1278): stored off again, and the page told the truth - the camera
