@@ -164,6 +164,41 @@ public sealed class ChaosVibeTrailOverlayTests
         });
     }
 
+    [Fact]
+    public async Task Refusal_is_cached_until_teardown_then_a_new_run_can_follow()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var refused = typeof(ChaosVibeTrailOverlay).GetField("_refused",
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+            var host = new Window();
+            try
+            {
+                ChaosVibeTrailOverlay.CloseActive();
+                ChaosVibeTrailOverlay.SkipPlatformChecksForTests = true;
+                BubbleOverlay.BeginChaos(host, _ => { });
+                BubbleOverlay.SetVibePop(true);
+                Assert.True(BubbleOverlay.VibePopOn);
+                // A preceding run failed the click-through check and closed its window.
+                refused.SetValue(null, true);
+                ChaosVibeTrailOverlay.Start();
+                Assert.Null(ChaosVibeTrailOverlay.Active);
+                ChaosVibeTrailOverlay.CloseActive();
+                ChaosVibeTrailOverlay.Start();
+                Assert.True(ChaosVibeTrailOverlay.Active?.IsFollowing);
+            }
+            finally
+            {
+                ChaosVibeTrailOverlay.CloseActive();
+                BubbleOverlay.EndChaos();
+                ChaosVibeTrailOverlay.SkipPlatformChecksForTests = false;
+                host.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     // WPF BubbleService.cs:263-270,4329-4341: held sweep, hover, freeze exclusion and pause guard.
     [Fact]
     public async Task Sweep_pops_treats_snaps_lives_and_ignores_freeze_ambient_and_paused()
