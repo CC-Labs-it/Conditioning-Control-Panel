@@ -95,6 +95,30 @@ public sealed class FlashWireTests
     }
 
     [Theory]
+    [InlineData(false, true, false)]
+    [InlineData(true, true, true)]
+    [InlineData(false, false, true)]
+    public Task Solid_mode_controls_presented_clickability_and_stay(bool unified, bool solid, bool expected) => OnUi((s, _, _, _) =>
+    {
+        var saved = (s.UnifiedOverlayHost, s.FlashSolidMode, s.FlashClickable, s.FlashStayUntilPopped);
+        var present = FlashOverlay.Present;
+        try
+        {
+            (s.UnifiedOverlayHost, s.FlashSolidMode, s.FlashClickable, s.FlashStayUntilPopped) = (unified, solid, true, true);
+            bool? presented = null;
+            FlashOverlay.Present = (_, _, clickable) => { presented = clickable; return true; };
+            ShowOne(ambient: true);
+            Assert.Equal(expected, presented);
+            Assert.Equal(expected, FlashOverlay.Stays(s, ambient: true));
+        }
+        finally
+        {
+            FlashOverlay.Present = present;
+            (s.UnifiedOverlayHost, s.FlashSolidMode, s.FlashClickable, s.FlashStayUntilPopped) = saved;
+        }
+    });
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public Task A_lowered_cap_skips_one_frame_but_platform_refusal_stops_the_burst(bool platformRefused) => OnUi((s, _, xp, _) =>
