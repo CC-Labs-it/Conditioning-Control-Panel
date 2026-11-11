@@ -1270,6 +1270,7 @@
   "label_0ms": "0ms",
   "label_power": "Potência:",
   "tooltip_live_intensity_control_reduce_if_vibration_is": "Controle de intensidade ao vivo - reduza se a vibração estiver muito forte",
+  "label_browser_in_fullscreen": "Navegador em tela cheia",
   "label_click_to_load_browser": "🌐 Clique para carregar o navegador",
   "section_audio": "📊 Áudio",
   "label_duck": "Reduzir",

@@ -109,6 +109,7 @@ window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='
                 host.Show();
                 host.WindowState = WindowState.FullScreen;
             }
+            BrowserPage?.SetBrowserFullscreen(true);
             _ = browser.InvokeScriptAsync("window._ccpForcedFs = true;");
             _browserEffectTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
             _browserEffectTimer.Tick -= BrowserEffectTimerTick;
@@ -173,6 +174,7 @@ window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='
             }
             if (browser.Parent != null)
             {
+                BrowserPage?.SetBrowserFullscreen(false);
                 if (closeHost && !_browserFullscreenHostClosed) host.Close();
                 if (closeHost && !_browserFullscreenHostClosed && host.IsVisible) host.Hide();
                 if (_browserFullscreenHostClosed)

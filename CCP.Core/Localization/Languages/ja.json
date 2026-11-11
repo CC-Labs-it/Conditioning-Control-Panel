@@ -1270,6 +1270,7 @@
   "label_0ms": "0ms",
   "label_power": "強度：",
   "tooltip_live_intensity_control_reduce_if_vibration_is": "リアルタイム強度制御 - 振動が強すぎる場合は下げてください",
+  "label_browser_in_fullscreen": "ブラウザーは全画面表示中",
   "label_click_to_load_browser": "🌐 クリックでブラウザを読み込む",
   "section_audio": "📊 オーディオ",
   "label_duck": "ダッキング",

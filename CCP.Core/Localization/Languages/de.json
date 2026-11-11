@@ -1270,6 +1270,7 @@
   "label_0ms": "0ms",
   "label_power": "Stärke:",
   "tooltip_live_intensity_control_reduce_if_vibration_is": "Live-Intensitätssteuerung - reduziere, wenn die Vibration zu stark ist",
+  "label_browser_in_fullscreen": "Browser im Vollbild",
   "label_click_to_load_browser": "🌐 Klicke, um den Browser zu laden",
   "section_audio": "📊 Audio",
   "label_duck": "Absenken",

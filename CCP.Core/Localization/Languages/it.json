@@ -2037,6 +2037,7 @@
   "label_0ms": "0ms",
   "label_power": "Potenza:",
   "tooltip_live_intensity_control_reduce_if_vibration_is": "Intensità in tempo reale: abbassala se la vibrazione è troppo forte",
+  "label_browser_in_fullscreen": "Browser a schermo intero",
   "label_click_to_load_browser": "🌐 Clicca per caricare il browser",
   "section_audio": "📊 Audio",
   "label_duck": "Attenua",

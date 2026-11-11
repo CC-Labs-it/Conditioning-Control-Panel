@@ -1270,6 +1270,7 @@
   "label_0ms": "0ms",
   "label_power": "파워:",
   "tooltip_live_intensity_control_reduce_if_vibration_is": "실시간 강도 조절 - 진동이 너무 강하면 줄여요",
+  "label_browser_in_fullscreen": "브라우저 전체 화면 표시 중",
   "label_click_to_load_browser": "🌐 클릭하면 브라우저를 로드해요",
   "section_audio": "📊 오디오",
   "label_duck": "덕킹",

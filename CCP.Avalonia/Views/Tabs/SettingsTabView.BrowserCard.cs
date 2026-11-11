@@ -24,7 +24,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 {
     public partial class SettingsTabView
     {
-        private bool _browserCardSyncing, _browserPoppedOut;
+        private bool _browserCardSyncing, _browserPoppedOut, _browserFullscreen;
 
         /// <summary>Tests: how many times the mute script was sent to the page.</summary>
         internal int BrowserMuteApplies { get; private set; }
@@ -174,8 +174,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             bool prompt = BrowserPromptShown(BrowserWebHost.HasEngine, BrowserWebHost.Source != null);
             bool offline = CoreSettings.Current.OfflineMode;
-            BrowserLoadingText.IsVisible = offline || _browserPoppedOut || prompt;
+            BrowserLoadingText.IsVisible = offline || _browserPoppedOut || _browserFullscreen || prompt;
             BrowserWebHost.IsVisible = _browserPoppedOut || (!offline && !prompt);
+        }
+
+        internal void SetBrowserFullscreen(bool fullscreen)
+        {
+            _browserFullscreen = fullscreen;
+            SetBrowserPoppedOut(_browserPoppedOut);
         }
 
         // WPF MainWindow.Browser.cs:48-54,288-290: an initialized browser is not reloaded.
@@ -190,7 +196,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             _browserPoppedOut = poppedOut;
             BrowserLoadingText.Bind(TextBlock.TextProperty, LocBareBinding(CoreSettings.Current.OfflineMode
-                ? "label_browser_disabled_in_offline_mode" : poppedOut
+                ? "label_browser_disabled_in_offline_mode" : _browserFullscreen && !poppedOut
+                    ? "label_browser_in_fullscreen" : poppedOut
                     ? "label_browser_popped_out_nclick_to_focus_window" : "label_click_to_load_browser"));
             PopOutBrowserIcon.Kind = poppedOut ? IconKind.Window : IconKind.Open;
             TxtPopOutBrowser.Bind(TextBlock.TextProperty, LocBareBinding(poppedOut ? "btn_focus" : "btn_pop_out"));

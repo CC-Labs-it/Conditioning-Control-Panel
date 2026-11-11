@@ -42,8 +42,12 @@ public class BrowserFullscreenTests
             browser.OnWebMessage("ccp_fullscreen_on");
             var host = Assert.IsType<Window>(shell.BrowserFullscreenWindow);
             Assert.Same(browser, host.Content);
+            var placeholder = page.FindControl<TextBlock>("BrowserLoadingText")!;
+            Assert.True(placeholder.IsVisible);
+            if (!popout) Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("label_browser_in_fullscreen"), placeholder.Text);
             browser.OnWebMessage("ccp_exit_fullscreen");
             Assert.Null(shell.BrowserFullscreenWindow);
+            if (!popout) Assert.NotEqual(ConditioningControlPanel.Localization.Loc.Get("label_browser_in_fullscreen"), placeholder.Text);
             if (popout) Assert.Same(browser, shell.BrowserPopoutWindow!.Content);
             else Assert.Contains(browser, container.Children);
             browser.OnWebMessage("ccp_fullscreen_on");
@@ -76,16 +80,21 @@ public class BrowserFullscreenTests
             var page = shell.FindControl<SettingsTabView>("SettingsTab")!;
             var browser = page.FindControl<WebHost>("BrowserWebHost")!;
             var container = page.FindControl<Grid>("BrowserContainer")!;
+            var placeholder = page.FindControl<TextBlock>("BrowserLoadingText")!;
             browser.OnWebMessage("ccp_fullscreen_on");
             var host = Assert.IsType<Window>(shell.BrowserFullscreenWindow);
+            Assert.True(placeholder.IsVisible);
             host.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key });
             Assert.Null(shell.BrowserFullscreenWindow);
             Assert.Contains(browser, container.Children);
+            Assert.NotEqual(ConditioningControlPanel.Localization.Loc.Get("label_browser_in_fullscreen"), placeholder.Text);
             browser.OnWebMessage("ccp_fullscreen_on");
             host = Assert.IsType<Window>(shell.BrowserFullscreenWindow);
+            Assert.True(placeholder.IsVisible);
             host.Close();
             Assert.Null(shell.BrowserFullscreenWindow);
             Assert.Contains(browser, container.Children);
+            Assert.NotEqual(ConditioningControlPanel.Localization.Loc.Get("label_browser_in_fullscreen"), placeholder.Text);
         }
         finally { shell.ExitBrowserFullscreen(); shell.Close(); CoreSettings.ServiceProvider = old; }
         return Task.CompletedTask;

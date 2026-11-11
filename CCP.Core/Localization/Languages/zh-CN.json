@@ -1891,6 +1891,7 @@
   "label_0ms": "0ms",
   "label_power": "强度：",
   "tooltip_live_intensity_control_reduce_if_vibration_is": "实时强度控制 - 如果振动太强请降低",
+  "label_browser_in_fullscreen": "浏览器正在全屏显示",
   "label_click_to_load_browser": "🌐 点击加载浏览器",
   "section_audio": "📊 音频",
   "label_duck": "闪避",

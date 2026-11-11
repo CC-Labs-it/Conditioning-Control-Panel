@@ -1270,6 +1270,7 @@
   "label_0ms": "0мс",
   "label_power": "Мощность:",
   "tooltip_live_intensity_control_reduce_if_vibration_is": "Управление интенсивностью в реальном времени - уменьши, если вибрация слишком сильная",
+  "label_browser_in_fullscreen": "Браузер в полноэкранном режиме",
   "label_click_to_load_browser": "🌐 Нажми для загрузки браузера",
   "section_audio": "📊 Аудио",
   "label_duck": "Приглушение",

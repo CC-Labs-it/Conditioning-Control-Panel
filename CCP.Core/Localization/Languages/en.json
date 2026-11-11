@@ -2130,6 +2130,7 @@
   "label_0ms": "0ms",
   "label_power": "Power:",
   "tooltip_live_intensity_control_reduce_if_vibration_is": "Live intensity control - reduce if vibration is too strong",
+  "label_browser_in_fullscreen": "Browser in fullscreen",
   "label_click_to_load_browser": "🌐 Click to load browser",
   "section_audio": "📊 Audio",
   "label_duck": "Duck",
