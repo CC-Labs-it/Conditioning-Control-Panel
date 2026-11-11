@@ -68,10 +68,10 @@ internal sealed class SpeakPromptSession
         var ct = _stop.Token;
         bool borrowed = false, shown = false, paused = false;
         using var holdStop = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        Task? hold = null;
+        Task? hold = null, cue = null;
         try
         {
-            if (ct.IsCancellationRequested || _plan.CueMode != SpeakCueMode.Persistent ||
+            if (ct.IsCancellationRequested ||
                 string.IsNullOrWhiteSpace(_plan.Target) || !_available()) return;
             if (!await _consent() || ct.IsCancellationRequested || !_available()) return;
             borrowed = _borrowMic();
@@ -80,6 +80,11 @@ internal sealed class SpeakPromptSession
             {
                 shown = true;
                 _show(_plan.Cue);
+            }
+            else
+            {
+                FlashCue();
+                cue = CueAsync(holdStop.Token);
             }
             if (_plan.PausesAtCue && _source != null)
             {
@@ -129,6 +134,7 @@ internal sealed class SpeakPromptSession
             try
             {
                 if (hold != null) try { await hold; } catch (OperationCanceledException) { }
+                if (cue != null) try { await cue; } catch (OperationCanceledException) { }
             }
             finally
             {
@@ -138,6 +144,21 @@ internal sealed class SpeakPromptSession
                     try { if (paused) _source?.Play(); }
                     finally { if (borrowed) _restoreMic(); }
                 }
+            }
+        }
+
+        void FlashCue()
+        {
+            try { CoreSubliminal.CustomShowProvider?.Invoke(_plan.Cue, true); }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "Speak cue flash failed"); }
+        }
+
+        async Task CueAsync(CancellationToken token)
+        {
+            while (true)
+            {
+                await Task.Delay(_plan.CueIntervalMs, token);
+                FlashCue();
             }
         }
 

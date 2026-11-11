@@ -1,5 +1,6 @@
 using System;
 using System.Threading;
+using ConditioningControlPanel;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Platform.Deeper;
 using ConditioningControlPanel.Models.Deeper;
@@ -128,18 +129,38 @@ public class SpeakPromptSessionTests
         Assert.Equal(1, restores);
     }
 
-    [Fact]
-    public async Task UnsupportedIntermittentCueDoesNotStartCapture()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task IntermittentCueFlashesUntilCompletionOrStop(bool stop)
     {
-        int borrows = 0, listens = 0;
+        int borrows = 0, listens = 0, shows = 0, hides = 0, flashes = 0;
+        var second = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var heard = new TaskCompletionSource<PhraseResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        CoreSubliminal.CustomShowProvider = (text, suppressHaptic) =>
+        {
+            Assert.Equal("Say YES", text);
+            Assert.True(suppressHaptic);
+            if (Interlocked.Increment(ref flashes) >= 2) second.TrySetResult(true);
+        };
         var session = new SpeakPromptSession(new TriggerEffectAction
         {
-            SpeakTarget = "yes", SpeakCueMode = SpeakCueMode.Intermittent
+            SpeakTarget = "yes", SpeakCue = "Say YES", SpeakCueMode = SpeakCueMode.Intermittent,
+            SpeakCueIntervalMs = 80
         }, null, () => true, () => Task.FromResult(true), () => { borrows++; return true; }, () => { },
-        (_, _) => { listens++; return Task.FromResult(new PhraseResult { Matched = true }); }, _ => { }, () => { });
-        await session.RunAsync();
-        Assert.Equal(0, borrows);
-        Assert.Equal(0, listens);
+        async (_, ct) => { listens++; return await heard.Task.WaitAsync(ct); }, _ => shows++, () => hides++, (_, _) => { });
+        var run = session.RunAsync();
+        Assert.Equal(1, flashes);
+        Assert.Equal(1, borrows);
+        Assert.Equal(1, listens);
+        await second.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        if (stop) session.Stop(); else heard.SetResult(new PhraseResult { Matched = true });
+        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        var count = Volatile.Read(ref flashes);
+        await Task.Delay(250);
+        Assert.Equal(count, Volatile.Read(ref flashes));
+        Assert.Equal(0, shows);
+        Assert.Equal(0, hides);
     }
 
     [Fact]

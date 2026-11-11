@@ -42,6 +42,9 @@ namespace ConditioningControlPanel
         /// </summary>
         public static volatile Action<string>? ShowProvider;
 
+        /// <summary>Draw a custom flash, optionally suppressing haptics.</summary>
+        public static volatile Action<string, bool>? CustomShowProvider;
+
         /// <summary>
         /// The scheduler armed (true) or disarmed (false). A head hangs its transition work off
         /// this: the WPF head fires its EMI Desk moment on the way up and, on the way down, blanks
