@@ -30,6 +30,7 @@
   </Application.Resources>
   <Application.Styles>
     <FluentTheme />
+    <StyleInclude Source="avares://CCP.Avalonia/Theme/InputMenus.axaml"/>
     <!-- WPF Inputs.xaml implicit chrome; local/keyed themes retain precedence. -->
     <Style Selector="TextBox">
       <Setter Property="Theme" Value="{StaticResource InputTextBoxTheme}"/>
