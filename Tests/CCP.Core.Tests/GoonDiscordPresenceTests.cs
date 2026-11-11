@@ -55,6 +55,22 @@ public class GoonDiscordPresenceTests
         Assert.True(settings.GoonShareDiscordDm);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Unchanged_local_preferences_do_not_notify(bool value)
+    {
+        var settings = new AppSettings { GoonRichPresence = value, GoonSeenSharePrompt = value };
+        var notifications = new List<string?>();
+        settings.PropertyChanged += (_, e) => notifications.Add(e.PropertyName);
+
+        GoonDiscordPresence.Prefs(settings, null, null, value, value, () => { }, _ => { }, () => { });
+        Assert.Empty(notifications);
+
+        GoonDiscordPresence.Prefs(settings, null, null, !value, !value, () => { }, _ => { }, () => { });
+        Assert.Equal(new[] { nameof(AppSettings.GoonRichPresence), nameof(AppSettings.GoonSeenSharePrompt) }, notifications);
+    }
+
     [Fact]
     public void Teardown_retracts_even_when_disabled()
     {

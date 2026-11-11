@@ -19,8 +19,8 @@ namespace ConditioningControlPanel.Services.GoonGame
             if (avatar.HasValue && settings.GoonShareAvatar != avatar.Value) { settings.GoonShareAvatar = avatar.Value; sharedChanged = true; }
             if (dm.HasValue && settings.GoonShareDiscordDm != dm.Value) { settings.GoonShareDiscordDm = dm.Value; sharedChanged = true; }
             var turnedOff = presence.HasValue && settings.GoonRichPresence && !presence.Value;
-            if (presence.HasValue) settings.GoonRichPresence = presence.Value;
-            if (seen.HasValue) settings.GoonSeenSharePrompt = seen.Value;
+            if (presence.HasValue && settings.GoonRichPresence != presence.Value) settings.GoonRichPresence = presence.Value;
+            if (seen.HasValue && settings.GoonSeenSharePrompt != seen.Value) settings.GoonSeenSharePrompt = seen.Value;
             save();
             if (turnedOff) setActivity("off");
             if (sharedChanged) sync();
