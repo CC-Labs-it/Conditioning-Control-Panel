@@ -53,7 +53,7 @@ namespace ConditioningControlPanel.Avalonia
         }
 
         /// <summary>The achievement engine (achievements.json), or null on the headless render path.
-        /// Local-only: no sync, no streak writes, no ResetProgress on this head (oracle-achievements.md).</summary>
+        /// Login streak startup is handled by LoginStreakHead.</summary>
         internal static AchievementEngine? Achievements { get; private set; }
 
         /// <summary>WPF App.FeatureDayLog (App.xaml.cs:1045): the per-day feature log over the same
@@ -860,6 +860,7 @@ namespace ConditioningControlPanel.Avalonia
                 // way WPF App.xaml.cs:384/:394 seeds the two unlock seams. Unlocked is raised on the
                 // caller's thread; the popup hops to the UI thread as WPF's DispatcherHelper does.
                 Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
+                Platform.LoginStreakHead.Start(Achievements, CoreSettings.Current);
                 WireAchievementUnlocks(Achievements);
                 WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
                 // WPF App.xaml.cs:2662: the Spiral rail day log, once Achievements and Settings are up.
@@ -1268,6 +1269,7 @@ namespace ConditioningControlPanel.Avalonia
         {
             if (Interlocked.Exchange(ref _exitHandled, 1) != 0) return;
             _exiting = true;
+            Platform.LoginStreakHead.ClearProfile();
 
             // WPF App.OnExit:5965: haptics FIRST and synchronously (bounded ~2 s). A Lovense level has no
             // server-side watchdog, so a toy not countermanded here keeps running after the app is gone.

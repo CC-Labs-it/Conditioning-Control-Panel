@@ -213,12 +213,16 @@ internal static class AccountSeed
         var s = CoreSettings.Current;
         var id = s.UnifiedId;
         if (s.OfflineMode || string.IsNullOrEmpty(id)) return false;
+        var streakGeneration = LoginStreakHead.ProfileGeneration;
         var user = await v2.GetUserProfileAsync(id);
         if (user == null)
         {
             Log.Warning("Profile load: server profile could not be read for {Id}", id);
             return false;
         }
+        if (!ReferenceEquals(s, CoreSettings.Current) || s.UnifiedId != id
+            || streakGeneration != LoginStreakHead.ProfileGeneration) return false;
+        LoginStreakHead.ProfileLoaded(id, user.Stats);
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);
         ApplyTierReading(EntitlementTierRule.ParseTier(user.EffectiveTierRaw), "profile");
         ProfileAdopt.AdoptReadBeforeWrite(s, user);
@@ -270,6 +274,7 @@ internal static class AccountSeed
         ProgressionClear.Apply(s);
         if (accountDeleted) App.Quests?.ResetProgress();
         CoreSettings.Save();
+        LoginStreakHead.ClearProfile();
         App.Achievements?.Reset();
         Sync?.Reset();
     }
