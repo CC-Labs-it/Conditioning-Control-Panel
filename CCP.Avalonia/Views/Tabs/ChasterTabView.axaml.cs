@@ -57,6 +57,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             DetachedFromVisualTree += (_, _) => { _attached = false; Subscribe(false); };
             PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) Subscribe(_attached && IsVisible); };
             InitializeHeroSheen();
+            InitArrival();
             // WPF :102: a long lock name shrinks to the hero's inner width instead of clipping.
             HeroCard.SizeChanged += (_, _) => HeroTitle.FitWidth = Math.Max(0, HeroCard.Bounds.Width - 52);
             LadderInit();
