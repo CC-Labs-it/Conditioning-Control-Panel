@@ -1,8 +1,12 @@
+using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Localization;
+using SettingsModel = ConditioningControlPanel.Models.AppSettings;
+using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
 {
@@ -97,24 +101,61 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
         }
 
         private readonly CheckBox _keepClear;
-        private bool _loading;
+        private bool _loading, _attached;
         private readonly System.Action _loadAudio;
+        private SettingsService? _settingsService;
+        private SettingsModel? _settings;
 
-        // WPF re-reads on Loaded and on its settings rebind hook; the Studio tab keeps this control
-        // alive, so a Reset or cloud restore (CurrentReplaced) must repaint the toggle.
+        // WPF BrainDrainFeatureControl.xaml.cs:51-54,68-72,207-218: rebind on restore,
+        // observe the live model, and release both hooks when the card leaves the tree.
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
-            if (CoreSettings.Service is { } svc) svc.CurrentReplaced += LoadKeepClear;
-            LoadKeepClear();
-            _loadAudio();
+            _attached = true;
+            _settingsService = CoreSettings.Service;
+            if (_settingsService is not null) _settingsService.CurrentReplaced += OnSettingsReplaced;
+            BindSettings();
             RefreshClipCount();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
-            if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= LoadKeepClear;
+            _attached = false;
+            if (_settingsService is not null) _settingsService.CurrentReplaced -= OnSettingsReplaced;
+            _settingsService = null;
+            if (_settings is not null) _settings.PropertyChanged -= OnSettingsChanged;
+            _settings = null;
             base.OnDetachedFromVisualTree(e);
+        }
+
+        private void OnSettingsReplaced()
+        {
+            var service = _settingsService;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_attached && ReferenceEquals(service, _settingsService)) BindSettings();
+            });
+        }
+
+        private void BindSettings()
+        {
+            if (_settings is not null) _settings.PropertyChanged -= OnSettingsChanged;
+            _settings = CoreSettings.Current;
+            _settings.PropertyChanged += OnSettingsChanged;
+            LoadKeepClear();
+        }
+
+        private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName != nameof(SettingsModel.BrainDrainBlurStrength)) return;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_attached || !ReferenceEquals(sender, _settings) || !ReferenceEquals(sender, CoreSettings.Current)) return;
+                var wasLoading = _loading;
+                _loading = true;
+                try { this.FindControl<Slider>("SliderBlurStrength")!.Value = _settings!.BrainDrainBlurStrength; }
+                finally { _loading = wasLoading; }
+            });
         }
 
         private void LoadKeepClear()
