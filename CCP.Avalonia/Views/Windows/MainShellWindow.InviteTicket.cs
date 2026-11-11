@@ -105,7 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     var body = global::ConditioningControlPanel.Localization.Loc.Get(subscribed ? "invites_news_subscribed_body" : "invites_news_claimed_body");
                     Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
                     {
-                        Key = item.Key, Glyph = subscribed ? "💖" : "🎟", Title = title, Summary = body,
+                        Key = item.Key, Glyph = subscribed ? IconMap.HeartGlyph : IconMap.TicketGlyph, Title = title, Summary = body,
                         Open = () => Dialogs.InboxNoticeCard.Present(this, title, body, global::ConditioningControlPanel.Localization.Loc.Get("invites_news_see"), OpenInvitesCard),
                     });
                 }
