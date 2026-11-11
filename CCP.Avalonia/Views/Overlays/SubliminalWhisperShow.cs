@@ -56,6 +56,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             After(ms, () => { if (Volatile.Read(ref _gen) == gen) then(); });
         }
 
+        /// <summary>WPF FlashSubliminalCustom: sanitize, show, and award XP for a custom flash.</summary>
+        internal static void Custom(string text, bool suppressHaptic)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return;
+            text = text.Trim();
+            if (text.Length > 200) text = text.Substring(0, 200);
+            text = System.Text.RegularExpressions.Regex.Replace(text, "<[^>]*>", "");
+            if (suppressHaptic) Draw(text); else HapticThenDraw(text);
+            CoreProgression.AddXP(10, "Subliminal");
+        }
+
         /// <summary>WPF FlashPhrase: Core's ambient scheduler calls this for every show.</summary>
         public static void Phrase(string text)
         {
