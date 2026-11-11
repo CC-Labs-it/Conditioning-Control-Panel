@@ -29,7 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// <see cref="InvokeScriptAsync"/>, plus the live URL (<see cref="CurrentUrl"/>,
     /// <see cref="NavigationCompleted"/>). NativeWebView additionally offers WebMessageReceived,
     /// NewWindowRequested, GoBack/GoForward, Stop and Refresh; nothing needs
-    /// them yet, so they are not wrapped. It has no zoom factor or fullscreen-element signal.
+    /// them yet, so they are not wrapped. It has no fullscreen-element signal.
     ///
     /// The whole point is the fallback. A Linux box without webkit2gtk installed is the DEFAULT,
     /// not the exception, and a web view with no engine paints nothing: the render proof would
@@ -43,6 +43,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             AvaloniaProperty.Register<WebHost, Uri?>(nameof(Source));
 
         public Uri? Source { get => GetValue(SourceProperty); set => SetValue(SourceProperty, value); }
+
+        /// <summary>Zoom applied before each new engine loads its first page.</summary>
+        public double ZoomFactor { get; set; } = 1.0;
+        internal Func<double, Task<bool>>? NativeZoomInvoker { get; set; }
 
         /// <summary>
         /// Per-navigation gate. Return false to cancel. Runs for EVERY navigation the engine
@@ -464,6 +468,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private int _scrolllerEngine, _gateReport;
         private bool _loadedOnThisEngine;
         private Task<bool>? _carrierInstall;
+        private Task<bool>? _zoomInstall;
         internal Func<string, Task<bool>>? NativeCarrierInvoker { get; set; }
         internal bool? CarrierWindowsOverride { get; set; }
 
@@ -476,6 +481,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _scrolllerGate = null;
             _loadedOnThisEngine = false;
             _carrierInstall = null;
+            _zoomInstall = null;
             _gateReport = 0;
             var engine = ++_scrolllerEngine;
             return gated => OnScrolllerGate(engine, gated);
@@ -487,6 +493,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             if (engine != _scrolllerEngine) return;
             var report = ++_gateReport;
+            // Each adapter gets its own zoom before the held page loads.
+            _zoomInstall ??= ApplyZoomAsync();
+            await _zoomInstall;
+            if (engine != _scrolllerEngine || report != _gateReport) return;
             // WPF BrowserService.cs:245-246: fresh engines get the preference before navigation.
             if (_engineMuted is { } muted) await SetEngineMutedAsync(muted);
             if (engine != _scrolllerEngine || report != _gateReport) return;
@@ -506,6 +516,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 return;
             }
             ApplySource();
+        }
+
+        private async Task<bool> ApplyZoomAsync()
+        {
+            try { return await (NativeZoomInvoker?.Invoke(ZoomFactor) ?? Platform.WebViewSettings.SetZoomAsync(_web?.TryGetPlatformHandle(), ZoomFactor)); }
+            catch (Exception ex) { Log.Debug("WebHost: native zoom failed: {E}", ex.Message); return false; }
         }
 
         private async Task<bool> InstallCarrierAsync()
