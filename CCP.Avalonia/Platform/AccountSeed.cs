@@ -195,13 +195,25 @@ internal static class AccountSeed
             var id = s.UnifiedId;
             var token = s.AuthToken;
             if (s.OfflineMode || string.IsNullOrEmpty(id) || string.IsNullOrEmpty(token)) return;
-            var user = await NewV2().GetUserProfileAsync(id);
-            OfferTier(id, token, EntitlementTierRule.ParseTier(user?.EffectiveTierRaw));
+            var node = await NewV2().GetUserProfileNodeAsync(id);
+            Dispatcher.UIThread.Post(() => ApplyProfileReading(id, token, node));
         }
         catch (Exception ex) { Log.Debug("[Entitlement] focus refresh: {Error}", ex.Message); }
         finally { System.Threading.Interlocked.Exchange(ref _refreshInFlight, 0); }
     }
 
+    internal static void ApplyProfileReading(string id, string? token, Newtonsoft.Json.Linq.JObject? node)
+    {
+        var s = CoreSettings.Current;
+        if (node == null || s.UnifiedId != id || string.IsNullOrEmpty(token) || token != s.AuthToken) return;
+        var before = Patreon == null ? 0 : CoreAccount.HasLabAccess ? 2 : CoreAccount.HasPremiumAccess && !ProviderSubscription.IsInviteWeekOnly(Patreon, SubscribeStar, s) ? 1 : 0;
+        if (PatreonActiveRule.Restamp(s, PatreonActiveRule.Parse(node), DateTime.UtcNow)) {
+            CoreSettings.Save();
+            var after = Patreon == null ? 0 : CoreAccount.HasLabAccess ? 2 : CoreAccount.HasPremiumAccess && !ProviderSubscription.IsInviteWeekOnly(Patreon, SubscribeStar, s) ? 1 : 0;
+            if (after > before) { CheckoutUntilUtc = DateTime.MinValue; try { Patreon?.NotifyEntitlementRaised(after >= 2 ? Models.PatreonTier.Level2 : Models.PatreonTier.Level1); } catch (Exception ex) { Log.Debug("[Entitlement] confirmation listener: {Error}", ex.Message); } }
+        }
+        ApplyTier(id, token, EntitlementTierRule.ParseTier(node["effective_tier"]));
+    }
     internal static void OfferTier(string id, string? token, int? tier)
     {
         if (tier != null) Dispatcher.UIThread.Post(() => ApplyTier(id, token, tier));
@@ -241,7 +253,8 @@ internal static class AccountSeed
         var id = s.UnifiedId;
         var token = s.AuthToken;
         if (s.OfflineMode || string.IsNullOrEmpty(id)) return false;
-        var user = await v2.GetUserProfileAsync(id);
+        var node = await v2.GetUserProfileNodeAsync(id);
+        var user = node?.ToObject<V2AuthService.V2User>();
         if (user == null)
         {
             Log.Warning("Profile load: server profile could not be read for {Id}", id);
@@ -249,11 +262,7 @@ internal static class AccountSeed
         }
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);
         // WPF EntitlementTierSync.cs:60-90: only a valid authenticated answer counts.
-        var tier = EntitlementTierRule.ParseTier(user.EffectiveTierRaw);
-        if (s.UnifiedId == id && !string.IsNullOrEmpty(token) && token == s.AuthToken && tier.HasValue)
-        {
-            ApplyTier(id, token, tier);
-        }
+        ApplyProfileReading(id, token, node);
         ProfileAdopt.AdoptReadBeforeWrite(s, user);
         CoreSettings.Save();
         Log.Information("Profile load: Level {Level} ({Xp} XP into level) after adopt", s.PlayerLevel, (int)s.PlayerXP);

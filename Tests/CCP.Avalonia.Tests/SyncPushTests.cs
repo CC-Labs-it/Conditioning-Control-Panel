@@ -180,6 +180,14 @@ public sealed partial class AccountSeedTests
         Assert.Equal(2, wire.Syncs.Count());
     });
 
+    [Theory, InlineData(true, -1, true), InlineData(true, -73, false), InlineData(false, -1, false)]
+    public void PatreonConfirmationRestampsProfile(bool active, int hours, bool expected) => WithFreshInstall(async () =>
+    {
+        var (wire, _, _) = SignIn("u1", null); var s = CoreSettings.Current; s.PatreonTier = 1; s.PatreonPremiumValidUntil = DateTime.UtcNow.AddDays(-1);
+        wire.Profile = new JObject { ["user"] = new JObject { ["effective_tier"] = 0, ["patreon_tier"] = 1, ["patreon_is_active"] = active, ["patreon_confirmed_at"] = DateTime.UtcNow.AddHours(hours) } }.ToString();
+        Assert.True(await AccountSeed.LoadProfileAsync()); Assert.Equal(expected, s.PatreonPremiumValidUntil > DateTime.UtcNow);
+    });
+
     [Fact]
     public void Heartbeat_SendsWpfsFourFields() => WithFreshInstall(async () =>
     {
