@@ -77,7 +77,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
             GameWindow? live;
             lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
-            if (live != null) { live.Activate(); return live; }
+            if (live != null) { if (live.Spec.Id == FypId && !live.IsVisible) live.Show(); live.Activate(); return live; }
             try { if (spec.Gate != null && !spec.Gate()) return null; }
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
             var window = new GameWindow(spec);
@@ -101,12 +101,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Web.WebMessage += OnPageMessage;
             // The page never leaves the served origin; anything else is refused before the engine loads it.
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);
-            Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); };
+            Opened += (_, _) => { lock (Open) { if (!Open.Contains(this)) Open.Add(this); } if (IsRace) StartRace(); };
             Activated += (_, _) => FunnelPageMessage.OnAppActivated();   // WPF's Application.Activated covers every window
             Closing += (_, _) => _closing = true;
             Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); };
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
-            if (spec.Id == FypId) Closed += (_, _) => ExitFypGhost();   // WPF Close (:138): never outlive the feed
+            if (spec.Id == FypId)
+            {
+                // WPF FypHostService.cs:720-748 heals a source hidden or minimized by the WM.
+                // Here the source IS the ghost: return it to normal rather than leave orphaned buttons.
+                PropertyChanged += (_, e) =>
+                {
+                    if (!_fypGhosted) return;
+                    if (e.Property == IsVisibleProperty && !IsVisible) ExitFypGhost();
+                    else if (e.Property == WindowStateProperty && WindowState == WindowState.Minimized)
+                        Dispatcher.UIThread.Post(() => { if (_fypGhosted && WindowState == WindowState.Minimized) ExitFypGhost(); });
+                };
+                Closed += (_, _) => ExitFypGhost();
+            }
             if (spec.Id == JustDropId) Closed += (_, _) =>
             {
                 JustDropOrdersService.Invalidate();

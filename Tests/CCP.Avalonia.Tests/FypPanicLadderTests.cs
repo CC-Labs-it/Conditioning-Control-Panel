@@ -190,6 +190,56 @@ public sealed class FypPanicLadderTests
         }
     });
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void GhostMinimizeOrHideRestoresInputAndClosesControls(bool minimize) => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var old = (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostButtonConfigure);
+        bool through = false;
+        double alpha = 1;
+        GameWindow.FypGhostSupport = () => null;
+        GameWindow.FypGhostButtonConfigure = (_, _, passive) => passive;
+        GameWindow.FypGhostClickThrough = (_, on) => { through = on; return true; };
+        GameWindow.FypGhostOpacity = (_, value) => { alpha = value; return true; };
+        var feed = new GameWindow(GameWindow.Games[GameWindow.FypId]);
+        try
+        {
+            feed.Show();
+            var position = feed.Position;
+            feed.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"clickThrough\",\"value\":true}");
+            var buttons = feed.FypGhostButtons.ToArray();
+            Assert.True(feed.IsFypGhosted);
+            if (minimize) feed.WindowState = global::Avalonia.Controls.WindowState.Minimized;
+            else feed.Hide();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.False(feed.IsFypGhosted);
+            Assert.False(through);
+            Assert.Equal(1, alpha);
+            Assert.Empty(feed.FypGhostButtons);
+            Assert.All(buttons, button => Assert.False(button.IsVisible));
+            Assert.Equal(position, feed.Position);
+            if (minimize) Assert.Equal(global::Avalonia.Controls.WindowState.Normal, feed.WindowState);
+            else
+            {
+                Assert.Same(feed, GameWindow.Launch(GameWindow.FypId));
+                Assert.True(feed.IsVisible);
+                feed.Close();
+                Assert.DoesNotContain(feed, GameWindow.OpenWindowsForTests());
+            }
+        }
+        finally
+        {
+            feed.Close();
+            (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostButtonConfigure) = old;
+        }
+    });
+
     /// <summary>WPF Close (:138): a feed closed while ghosted (override panic, the games surface) leaves nothing.</summary>
     [Fact]
     public void ClosingAGhostedFeedRestoresEverything() => AvaloniaTestDispatcher.Run(() =>
