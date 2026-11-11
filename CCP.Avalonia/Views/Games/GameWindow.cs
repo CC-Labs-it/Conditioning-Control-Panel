@@ -93,6 +93,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             id = ResolveDoor(id);
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
             if (spec.Id == "breakout" && !gateChecked && !BreakoutGate()) return null;
+            // WPF GlassroadHostService.cs:79-84 checks Prime before even refocusing an open window.
+            bool playRace = string.Equals(id, "play-race", StringComparison.OrdinalIgnoreCase);
+            try { if (playRace && !GlassroadPlayGate()) return null; }
+            catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
             bool breakout = spec.Id is "breakout" or "breakoutdemo";
             GameWindow? live;
             lock (Open) live = Open.FirstOrDefault(w => breakout
@@ -113,7 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 catch (Exception ex) { Log.Warning(ex, "[Game] Breakout switch failed"); return null; }
                 finally { live._breakoutSwitchPending = false; }
             }
-            try { if (spec.Id != "breakout" && spec.Gate != null && !spec.Gate()) return null; }
+            try { if (spec.Id != "breakout" && !playRace && spec.Gate != null && !spec.Gate()) return null; }
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
             var window = new GameWindow(spec);
             window.Load(Server());

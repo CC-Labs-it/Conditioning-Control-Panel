@@ -178,6 +178,10 @@ public sealed class PlayWallPartBTests
             lab = false;
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(2, denied); // the door checks access even when the game is already open
+            Assert.Null(GameWindow.Launch("play-race"));
+            Assert.Equal(3, denied);
+            Assert.Null(GameWindow.Launch("PLAY-RACE"));
+            Assert.Equal(4, denied);
             PanicSurfaces.All.Single(s => s.Id == "games").Stop(shell);
             Assert.Null(GameWindow.OpenForTests(GameWindow.GlassroadId));
         }
