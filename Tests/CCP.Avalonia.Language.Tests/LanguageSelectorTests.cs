@@ -89,6 +89,13 @@ public sealed class LanguageSelectorTests
         var settingsPath = Path.Combine(TestProfile.DirectoryPath, "settings.json");
         var settingsBeforeStartup = SeedProfile(settingsPath);
         var settingsWriteBeforeStartup = File.GetLastWriteTimeUtc(settingsPath);
+        // WPF's one-time companion chat backfill marks achievements dirty even with no messages.
+        // Start with that migration complete so this test still measures an idle exit.
+        var achievementsPath = Path.Combine(TestProfile.DirectoryPath, "achievements.json");
+        var achievementsBeforeStartup = System.Text.Json.JsonSerializer.Serialize(
+            new AchievementProgress { CompanionChatBackfilled = true });
+        File.WriteAllText(achievementsPath, achievementsBeforeStartup);
+        var achievementsWriteBeforeStartup = File.GetLastWriteTimeUtc(achievementsPath);
         var catalogue = CreateSessionCatalogue();
         try
         {
@@ -352,8 +359,10 @@ public sealed class LanguageSelectorTests
                 Thread.Sleep(650); // Beyond the production 500ms due time, without pumping the UI queue.
                 Assert.Equal(diskBeforeExit, File.ReadAllText(settingsPath));
                 lifetime.Shutdown();
-                // Nothing earned this run: the exit handler must not rewrite achievements.json.
-                Assert.False(File.Exists(Path.Combine(TestProfile.DirectoryPath, "achievements.json")));
+                // Nothing earned this run: the exit handler must not rewrite or rotate achievements.
+                Assert.Equal(achievementsBeforeStartup, File.ReadAllText(achievementsPath));
+                Assert.Equal(achievementsWriteBeforeStartup, File.GetLastWriteTimeUtc(achievementsPath));
+                Assert.False(File.Exists(achievementsPath + ".bak"));
                 var reloaded = new SettingsService();
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal(0, Volatile.Read(ref queuedBeforeExit));
@@ -534,6 +543,7 @@ public sealed class LanguageSelectorTests
         };
 
         AppBuilder.Configure<CatalogueTestApp>(() => new CatalogueTestApp(customFolder, builtInFolder))
+            .WithInterFont()
             .UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
             .SetupWithLifetime(lifetime);
