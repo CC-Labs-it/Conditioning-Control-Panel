@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace ConditioningControlPanel.Services;
+namespace ConditioningControlPanel.Services.Flash;
 
 /// <summary>
 /// The app-wide budget for silent clip players (flashes, bubbles, any other non-flash clip). It counts

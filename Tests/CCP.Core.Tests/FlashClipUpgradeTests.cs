@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Flash;
 using Xunit;
 
 namespace ConditioningControlPanel.Tests;

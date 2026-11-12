@@ -1,4 +1,4 @@
-namespace ConditioningControlPanel.Services;
+namespace ConditioningControlPanel.Services.Flash;
 
 /// <summary>
 /// The per-tick clip decision for one online GIF flash, pulled out of the heartbeat so it can be
