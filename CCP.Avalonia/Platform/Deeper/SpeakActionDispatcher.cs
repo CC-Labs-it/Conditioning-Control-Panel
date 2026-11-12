@@ -14,6 +14,7 @@ internal sealed class SpeakActionDispatcher : IActionDispatcher
     private readonly Func<TriggerEffectAction, IPlaybackTimeSource, SpeakPromptSession> _create;
     private readonly IActionDispatcher _other;
     private readonly Dictionary<string, (SpeakPromptSession Session, Task Run)> _bands = new();
+    private readonly HashSet<SpeakPromptSession> _active = new();
 
     internal SpeakActionDispatcher(Func<TriggerEffectAction, IPlaybackTimeSource, SpeakPromptSession> create,
         IActionDispatcher? other = null)
@@ -43,10 +44,22 @@ internal sealed class SpeakActionDispatcher : IActionDispatcher
                 previous = prior.Run;
             }
             var session = _create(effect, ctx.Source);
+            _active.Add(session);
             // Yield before completion so the dictionary owns the session even if consent is immediately denied.
             var run = RunAsync(previous, session, ct, effect.Phase == EffectPhase.Start ? id : null);
             if (effect.Phase == EffectPhase.Start && !string.IsNullOrEmpty(id)) _bands[id] = (session, run);
             return Task.CompletedTask;
+        }
+    }
+
+    internal void StopAll()
+    {
+        List<SpeakPromptSession> sessions;
+        lock (_bands) sessions = new List<SpeakPromptSession>(_active);
+        foreach (var session in sessions)
+        {
+            try { session.Stop(); }
+            catch (Exception ex) { Log.Warning(ex, "Deeper speak stop failed"); }
         }
     }
 
@@ -63,8 +76,11 @@ internal sealed class SpeakActionDispatcher : IActionDispatcher
         finally
         {
             lock (_bands)
+            {
+                _active.Remove(session);
                 if (id != null && _bands.TryGetValue(id, out var current) && ReferenceEquals(current.Session, session))
                     _bands.Remove(id);
+            }
         }
     }
 }

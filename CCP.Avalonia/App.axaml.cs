@@ -471,8 +471,13 @@ namespace ConditioningControlPanel.Avalonia
             splash.FadeOutAndClose(() => { if (window is { IsVisible: true }) window.Activate(); });
         }
 
-        internal static void InstallSpeakPromptRuntime(Platform.Deeper.SpeakPromptRuntime runtime) =>
+        internal static Platform.Deeper.SpeakPromptRuntime? SpeakPromptRuntime { get; set; }
+
+        internal static void InstallSpeakPromptRuntime(Platform.Deeper.SpeakPromptRuntime runtime)
+        {
+            SpeakPromptRuntime = runtime;
             global::ConditioningControlPanel.Services.Deeper.EnhancementHostService.DispatcherFactory = runtime.CreateDispatcher;
+        }
 
         private async Task StartDesktop(Func<double, string, Task> step)
         {

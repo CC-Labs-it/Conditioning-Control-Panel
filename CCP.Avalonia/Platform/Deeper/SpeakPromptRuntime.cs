@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Models.Deeper;
@@ -16,6 +17,8 @@ internal sealed class SpeakPromptRuntime
     private readonly Func<string, RecognizeOptions, CancellationToken, Task<PhraseResult>> _recognize;
     private readonly Action<string> _show;
     private Task<bool>? _consentAttempt;
+    // A host may bind more than once; do not keep disposed dispatchers alive.
+    private readonly List<WeakReference<SpeakActionDispatcher>> _dispatchers = new();
 
     internal SpeakPromptRuntime(Func<bool> available, Func<bool> consented, Func<Task<bool>> askConsent,
         Func<bool> armed, Action stopVoice, Action restoreVoice, Func<bool> listening,
@@ -27,7 +30,25 @@ internal sealed class SpeakPromptRuntime
         _recognize = recognize; _stopListening = stopListening; _show = show; _hide = hide;
     }
 
-    internal IActionDispatcher CreateDispatcher() => new SpeakActionDispatcher(CreateSession, new LoggingActionDispatcher());
+    internal IActionDispatcher CreateDispatcher()
+    {
+        var dispatcher = new SpeakActionDispatcher(CreateSession, new LoggingActionDispatcher());
+        lock (_dispatchers)
+        {
+            _dispatchers.RemoveAll(reference => !reference.TryGetTarget(out _));
+            _dispatchers.Add(new WeakReference<SpeakActionDispatcher>(dispatcher));
+        }
+        return dispatcher;
+    }
+
+    internal void StopAll()
+    {
+        var live = new List<SpeakActionDispatcher>();
+        lock (_dispatchers)
+            foreach (var reference in _dispatchers)
+                if (reference.TryGetTarget(out var dispatcher)) live.Add(dispatcher);
+        foreach (var dispatcher in live) dispatcher.StopAll();
+    }
 
     internal SpeakPromptSession CreateSession(TriggerEffectAction effect, IPlaybackTimeSource? source)
     {
