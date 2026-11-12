@@ -71,6 +71,7 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             Current = ProcessStateSnapshot.Take();
+            ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Clear();
             // A get-only singleton retained queued toasts, old hosts and live sticky keys across tests.
             // The snapshot restores the original service after each test; each body gets fresh state.
             ConditioningControlPanel.Avalonia.App.Notifications = new();
@@ -176,6 +177,8 @@ internal sealed class ProcessStateSnapshot
     private readonly List<(MemberInfo Member, object? Value)> _statics = new();
     private readonly List<(AppSettings Settings, string Json)> _settings = new();
     private readonly Dictionary<string, byte[]> _files = new();
+    private readonly IReadOnlyList<ConditioningControlPanel.Services.Audio.RecentSounds.Entry> _sounds =
+        ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Snapshot();
 
     private static readonly JsonSerializerSettings Json = new()
     {
@@ -211,6 +214,7 @@ internal sealed class ProcessStateSnapshot
             if (!_files.ContainsKey(f)) try { File.Delete(f); } catch (IOException) { }
         WriteBack(_files);
         _restored = _files;
+        ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Restore(_sounds);
     }
 
     // The files as the last Restore left them. A write that lands after it (a save still in flight

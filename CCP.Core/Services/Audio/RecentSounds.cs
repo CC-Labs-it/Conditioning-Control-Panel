@@ -134,6 +134,17 @@ namespace ConditioningControlPanel.Services.Audio
             return name.Length <= MaxNameChars ? name : name.Substring(0, MaxNameChars);
         }
 
+        /// <summary>Restores a previously captured test snapshot, including the folding tail.</summary>
+        internal void Restore(IReadOnlyList<Entry> entries)
+        {
+            lock (_gate)
+            {
+                _ring.Clear();
+                foreach (var entry in entries) _ring.Enqueue(entry);
+                _newest = entries.Count == 0 ? null : entries[entries.Count - 1];
+            }
+        }
+
         /// <summary>Test seam.</summary>
         internal void Clear()
         {

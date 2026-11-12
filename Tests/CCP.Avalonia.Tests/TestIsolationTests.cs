@@ -266,6 +266,30 @@ public class TestIsolationTests
         Assert.Contains(ProcessStateSnapshot.Members.Value, m => m.DeclaringType == type && m.Name == member);
 
     [Fact]
+    public void RestorePutsRecentSoundsBackIncludingTheFoldedTail()
+    {
+        var ring = ConditioningControlPanel.Services.Audio.RecentSounds.Shared;
+        var original = ProcessStateSnapshot.Take();
+        try
+        {
+            ring.Clear();
+            var at = new System.DateTime(2026, 1, 1);
+            ring.Note("sound", "first.mp3", false, false, at);
+            ring.Note("sound", "second.mp3", false, false, at.AddSeconds(1));
+            var before = ring.Snapshot();
+            var snapshot = ProcessStateSnapshot.Take();
+            ring.Note("other", "leaked.mp3", true, false, at.AddSeconds(2));
+            snapshot.Restore();
+            Assert.Equal(before, ring.Snapshot());
+            ring.Note("sound", "third.mp3", false, false, at.AddSeconds(2));
+            var folded = Assert.Single(ring.Snapshot());
+            Assert.Equal("third.mp3", folded.File);
+            Assert.Equal(3, folded.Count);
+        }
+        finally { original.Restore(); }
+    }
+
+    [Fact]
     public void RestorePutsPanicQuietEngineHoldAndCountBack()
     {
         var original = ProcessStateSnapshot.Take();
