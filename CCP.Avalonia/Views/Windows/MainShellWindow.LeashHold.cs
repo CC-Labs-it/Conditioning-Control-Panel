@@ -90,10 +90,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>A new portal press (PortalPanicShortcut.Route already dropped repeats): always a panic.
         /// A hold still running here lost its Deactivated, so it ends before the new one starts.</summary>
-        internal void OnPortalPanicPressed()
+        internal void OnPortalPanicPressed() => RunPortalPress(() => HandlePanicKeyPress(DateTime.Now));
+
+        internal void RunPortalPress(Action panic)
         {
             if (_leashHold.Held) LeashHoldReleased();
-            HandlePanicKeyPress(DateTime.Now);
+            try { panic(); }
+            finally { StartPortalHold(); }   // XInput2's report of this press was dropped, so nothing else can
+        }
+
+        /// <summary>The hold step of an XInput2 press. Its report and this post are not one step, so the
+        /// portal's echo can get here first: a hold the portal already took is this press, not a repeat.</summary>
+        internal void OnX11HoldPressed()
+        {
+            if (!_portalHoldLive) LeashHoldPressed();
+        }
+
+        /// <summary>The portal's report of a press XInput2 already panicked for: no second panic, but the
+        /// hold still restarts as the portal's. A plain Down here would read as a repeat and show the ring.</summary>
+        internal void OnPortalEchoPressed() => RunPortalPress(static () => { });
+
+        // The hold is the portal's, so the grab outlives the effects and only Deactivated can end it.
+        private void StartPortalHold()
+        {
             _leashHoldFromPortal = PortalPanicShortcut.ReportsRelease;
             _leashHoldPortalUnproven = !_leashHoldFromPortal;
             LeashHoldPressed();

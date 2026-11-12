@@ -7,8 +7,9 @@
 //
 // ponytail: ApplyActiveModChange repaints what this head has - the selector, the palette. WPF also
 // reloads the takeover art, achievement grid, BambiCloud radio + browser URL, Hypnotube link
-// editor and per-mod defaults; each joins here when its surface is live. Home tile art now follows
-// CoreMods.ModChanged as well as startup; the manager footer is the WPF 7.1.5 action row.
+// editor; each joins here when its surface is live. Home tile art now follows
+// CoreMods.ModChanged as well as startup; the per-mod default presets picked in the Customise
+// window apply last (ApplyModDefaultPresets), as WPF.
 
 using System;
 using System.Linq;
@@ -191,7 +192,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             foreach (var personality in this.GetLogicalDescendants().OfType<Controls.Companion.MakeHerYoursView>())
                 personality.ViewModel.Sync();
 
+            // Last: the user's per-mod default presets (Customise window), if they picked any.
+            ApplyModDefaultPresets(mods.ActiveModId);
+
             Log.Information("Mod changed to {ModId}", mods.ActiveModId);
+        }
+
+        /// <summary>
+        /// WPF ApplyModDefaultPresets (MainWindow.Presets.cs:2299): the per-mod defaults picked in the
+        /// Customise window, applied on every switch to <paramref name="modId"/>. Only the user's
+        /// stored choice applies (ModPresetDefaults); assets go through the one asset apply path,
+        /// settings through the Presets tab's LoadPreset (session-lock guard included), quietly.
+        /// </summary>
+        internal void ApplyModDefaultPresets(string? modId)
+        {
+            var s = CoreSettings.Service?.Current;
+            if (s == null) return;
+
+            var assetId = ModPresetDefaults.ForActivation(s.ModDefaultAssetPreset, modId);
+            if (assetId != null && AssetPresetService.Find(s.AssetPresets, assetId) != null)
+                ApplyAssetPresetFromLauncher(assetId);
+
+            var settingsId = ModPresetDefaults.ForActivation(s.ModDefaultSettingsPreset, modId);
+            var preset = settingsId == null ? null
+                : Preset.GetDefaultPresets().Concat(s.UserPresets).FirstOrDefault(p => p.Id == settingsId);
+            if (preset != null) Named<Tabs.PresetsTabView>("PresetsTab")?.LoadPreset(preset);
         }
 
         /// <summary>WPF InitializeModSelector: stock mods in canonical order, then user mods A-Z.</summary>

@@ -197,4 +197,41 @@ public sealed class UiUpdatesTests
         }
         finally { host.Close(); CoreMods.ActiveModIdProvider = old; }
     });
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async System.Threading.Tasks.Task LeaderboardThemeFollowsModWithoutChangingMode(bool allTime)
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            Setup();
+            var oldAccent = CoreMods.AccentColorHexProvider;
+            var oldOffline = CoreSettings.Current.OfflineMode;
+            string accent = "#123456";
+            CoreMods.AccentColorHexProvider = () => accent;
+            CoreSettings.Current.OfflineMode = true;
+            var view = new LeaderboardTabView();
+            var host = new Window { Content = view };
+            try
+            {
+                host.Show();
+                await view.SetLeaderboardMode(allTime);
+                accent = "#ABCDEF";
+                CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, false));
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.Equal(allTime, view.IsAllTimeMode);
+                var monthly = view.FindControl<Button>("BtnLeaderboardMonthly")!;
+                var all = view.FindControl<Button>("BtnLeaderboardAllTime")!;
+                var expected = global::Avalonia.Media.Color.Parse(accent);
+                Assert.Equal(expected, Assert.IsType<global::Avalonia.Media.SolidColorBrush>(allTime ? monthly.Foreground : monthly.Background).Color);
+                if (!allTime) Assert.Equal(expected, Assert.IsType<global::Avalonia.Media.SolidColorBrush>(all.Foreground).Color);
+                Assert.True(view.TryFindResource("LeaderboardAccentBrush", out var rowBrush));
+                Assert.Equal(allTime ? global::Avalonia.Media.Color.Parse("#FFD700") : expected,
+                    Assert.IsType<global::Avalonia.Media.SolidColorBrush>(rowBrush).Color);
+                var tint = Assert.IsType<global::Avalonia.Media.SolidColorBrush>(view.FindControl<Border>("YouBar")!.Background).Color;
+                Assert.Equal(allTime ? global::Avalonia.Media.Color.Parse("#20FFD700") : global::Avalonia.Media.Color.Parse("#20ABCDEF"), tint);
+            }
+            finally { host.Close(); CoreMods.AccentColorHexProvider = oldAccent; CoreSettings.Current.OfflineMode = oldOffline; }
+        });
+    }
 }

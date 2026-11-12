@@ -13,22 +13,7 @@ namespace ConditioningControlPanel.Services.Companion;
 internal static class PersonalityStudio
 {
     internal static PersonalityPreset Draft(PersonalityPreset source, CompanionPromptSettings? activeOverride = null)
-    {
-        var p = activeOverride ?? source.PromptSettings ?? new CompanionPromptSettings();
-        return new PersonalityPreset
-        {
-            Id = Guid.NewGuid().ToString("N"), Name = source.Name, Description = source.Description,
-            IsBuiltIn = false, RequiresExplicitAcknowledgement = source.RequiresExplicitAcknowledgement,
-            SampleLines = source.SampleLines?.ToList(),
-            // Only character text belongs in a preset. Never copy API keys, hosts or effect permissions.
-            PromptSettings = new CompanionPromptSettings
-            {
-                UseCustomPrompt = true, Personality = p.Personality, ExplicitReaction = p.ExplicitReaction,
-                SlutModePersonality = p.SlutModePersonality, KnowledgeBase = p.KnowledgeBase,
-                ContextReactions = p.ContextReactions, OutputRules = p.OutputRules
-            }
-        };
-    }
+        => PersonalityStudioDraft.Create(source, activeOverride);
 
     public static void Show(Window owner)
     {

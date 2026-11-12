@@ -20,10 +20,19 @@
   <ItemGroup>
     <Compile Include="..\Shared\AvaloniaTestDispatcher.cs" Link="AvaloniaTestDispatcher.cs" />
     <Compile Include="..\Shared\FakeContentServer.cs" Link="FakeContentServer.cs" />
+    <Compile Include="..\Shared\TestEnvironment.cs" Link="TestEnvironment.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\SourceRoots.cs" Link="SourceRoots.cs" />
     <ProjectReference Include="..\..\CCP.Avalonia\CCP.Avalonia.csproj" />
     <!-- 2 s 96x64 h264 clip (3 KB) so the bubble-count game test never depends on ffmpeg. -->
     <None Include="Assets\quiz-drone-boundary.mp3" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Assets\bubblecount-2s.mp4" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Assets\help-clip-audio-2s.mp4" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../CCP.SingleInstance.Probe/CCP.SingleInstance.Probe.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <Target Name="CopySingleInstanceProbe" AfterTargets="Build">
+    <ItemGroup><ProbeFiles Include="../CCP.SingleInstance.Probe/bin/$(Configuration)/net10.0/*" /></ItemGroup>
+    <Copy SourceFiles="@(ProbeFiles)" DestinationFolder="$(OutDir)SingleInstanceProbe" />
+  </Target>
 </Project>

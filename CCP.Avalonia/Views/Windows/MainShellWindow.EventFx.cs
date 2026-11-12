@@ -1,7 +1,9 @@
 // PORTED from WPF MainWindow.EventFx.cs: the event callers on this head. Achievement/quest
-// tiles already own their on-tab burst; the shell owns the rail fallback, level cap and program
-// banner. EventBurstLayer carries the shared particle/focus gates and native-pixel anchoring.
-// WPF MainWindow.EventFx.cs:249,276,412. Quest nav fallback already lives in MainShellWindow.Quests.cs.
+// tiles already own their on-tab burst; the shell owns the rail fallback and the level cap.
+// The program day banner's 90-spark burst (WPF EventFx.cs:412, ProgramDayBurstCount) rides the
+// Programs tab's own layer (ProgramsTabView.CompletionFx QueueProgramBurst), so it is not fired here.
+// EventBurstLayer carries the shared particle/focus gates and native-pixel anchoring.
+// WPF MainWindow.EventFx.cs:249,276. Quest nav fallback already lives in MainShellWindow.Quests.cs.
 // Enhancement purchase/prestige and THE BANK remain separate follow-up work.
 
 using System;

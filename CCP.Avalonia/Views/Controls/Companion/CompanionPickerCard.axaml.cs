@@ -119,7 +119,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private async void Perk_Click(object? sender, RoutedEventArgs e)
         {
             if (TopLevel.GetTopLevel(this) is not Window owner) return;
-            await PerkPicker.Show(owner);
+            await GuardAsync("perk picker", () => PerkPicker.Show(owner));
             Refresh();
         }
 
@@ -158,10 +158,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             }
 
             TxtPreviewGlyph.Foreground = new SolidColorBrush(accent);
-            // ponytail: WPF previews an animated companion's idle emote frame first
-            // (AvatarTubeWindow.EmoteIdleClipUri); this head has no emote clips yet, so it goes
-            // straight to WPF's fallback, pose 1 from the mod's own folder.
-            ShowPortrait(PortraitInFolder(mod.InstalledPath));
+            ShowPortrait(EmoteStill(mod.Id, 1, mod.InstalledPath) ?? PortraitInFolder(mod.InstalledPath));
+        }
+
+        // WPF EmoteIdleClipUri: a registered mod-local set wins over the bundled registry.
+        private static global::Avalonia.Media.Imaging.Bitmap? EmoteStill(string? modId, int set, string? installedPath)
+        {
+            if (string.IsNullOrEmpty(modId)) return null;
+            try
+            {
+                if (!string.IsNullOrEmpty(installedPath))
+                {
+                    var dir = System.IO.Path.Combine(installedPath, "resources", "emotes", $"set{set}");
+                    var clip = System.IO.Path.Combine(dir, "idle.gif");
+                    if (System.IO.File.Exists(System.IO.Path.Combine(dir, "emotes.json")) && System.IO.File.Exists(clip))
+                    {
+                        using var stream = System.IO.File.OpenRead(clip);
+                        return global::Avalonia.Media.Imaging.Bitmap.DecodeToWidth(stream, 240);
+                    }
+                }
+                using var registry = global::Avalonia.Platform.AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/avatar_emotes_registry.json"));
+                using var reader = new System.IO.StreamReader(registry);
+                var folder = AvatarGenerationRule.ParseRegistry(reader.ReadToEnd()).sets
+                    .FirstOrDefault(e => string.Equals(e.modId, modId, StringComparison.OrdinalIgnoreCase) && e.set == set).folder;
+                if (string.IsNullOrEmpty(folder)) return null;
+                using var asset = global::Avalonia.Platform.AssetLoader.Open(new Uri($"avares://CCP.Avalonia/Resources/{folder}/idle.gif"));
+                return global::Avalonia.Media.Imaging.Bitmap.DecodeToWidth(asset, 240);
+            }
+            catch { return null; }
         }
 
         /// <summary>Pose 1 from a mod's own folder, never through the resolver (which answers
@@ -210,7 +234,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 if (sets.Length <= 1) ShowHint(Loc.Get("modmgr_avatar_single_hint"));
                 else TxtAvatarHint.IsVisible = false;
             }
-            ShowPortrait(ModArt.TryLoad(set == 1 ? "avatar_pose1.png" : $"avatar{set}_pose1.png", 240));
+            ShowPortrait(EmoteStill(CoreMods.ActiveModId, set, CoreMods.ActiveModPackage?.InstalledPath)
+                ?? ModArt.TryLoad(set == 1 ? "avatar_pose1.png" : $"avatar{set}_pose1.png", 240));
         }
 
         private void ShowHint(string text)
@@ -248,7 +273,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private async void CmbPersonality_SelectionChanged(object? sender, SelectionChangedEventArgs e)
         {
             if (_syncing || CmbPersonality.SelectedItem is not ComboBoxItem { Tag: string id }) return;
-            await ActivateAsync(id);
+            await GuardAsync("personality switch", () => ActivateAsync(id));
         }
 
         /// <summary>The gate lives on the shell; a refusal or a failed switch puts the combo back
@@ -313,8 +338,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private async void BtnMorePersonality_Click(object? sender, RoutedEventArgs e)
         {
             if (_morePersonalityOptions == null || TopLevel.GetTopLevel(this) is not Window owner) return;
-            await _morePersonalityOptions(owner);
+            await GuardAsync("personality editor", () => _morePersonalityOptions(owner));
             if (!_previewing) Refresh();
+        }
+
+        /// <summary>For the async void handlers: a throw there would end the app. WPF's handlers are
+        /// sync, so the same throw reaches App.xaml.cs:2425 DispatcherUnhandledException (log +
+        /// msg_unexpected_error); the Avalonia head has no such hook, so do both here.</summary>
+        private async Task GuardAsync(string what, Func<Task> work)
+        {
+            try { await work(); }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[CompanionPicker] {What} failed", what);
+                if (TopLevel.GetTopLevel(this) is not Window owner) return;
+                try
+                {
+                    await MessageDialog.ShowAsync(owner, Loc.Get("title_unexpected_error"),
+                        Loc.GetF("msg_unexpected_error", ex.Message));
+                }
+                catch (Exception dialogEx) { Log.Warning(dialogEx, "[CompanionPicker] error dialog failed"); }
+            }
         }
     }
 }

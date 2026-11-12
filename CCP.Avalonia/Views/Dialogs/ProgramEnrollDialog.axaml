@@ -237,9 +237,9 @@
                     </Border>
                     <TextBox x:Name="TxtContractInput" Theme="{StaticResource FocusGlowTextBox}"
                              FontSize="13" Padding="10,8"/>
-                    <TextBlock Text="{loc:Str program_enroll_contract_hint}"
-                               Foreground="{DynamicResource TextMutedBrush}"
-                               FontSize="11" Margin="0,6,0,0"/>
+                    <!-- No static "type it exactly" hint here (dropped in both heads): the footer's
+                         TxtBlockedHint says it while the phrase does not match, and both on screen
+                         read twice. -->
 
                 </StackPanel>
             </ScrollViewer>

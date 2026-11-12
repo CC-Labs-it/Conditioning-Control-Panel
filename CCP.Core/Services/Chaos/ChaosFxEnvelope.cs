@@ -50,8 +50,11 @@ public static class ChaosFxEnvelope
     public static readonly (byte R, byte G, byte B) FreezeEdgeColor = (150, 210, 255);
 
     /// <summary>Pulse (:151): peak = clamp(0.22 + s*0.5, 0.15, 0.72); snap up 40 ms, fade out by 300 ms.</summary>
-    public static ChaosFxRamp Pulse(double from, double strength) =>
-        new(from, (40, Math.Clamp(0.22 + strength * 0.5, 0.15, 0.72)), (300, 0.0));
+    public static ChaosFxRamp Pulse(double from, double strength, bool gentle = false)
+    {
+        var rise = Safety.GentleVisuals.RiseMs(40, gentle);
+        return new(from, (rise, Math.Clamp(0.22 + strength * 0.5, 0.15, 0.72)), (rise + 260, 0.0));
+    }
 
     /// <summary>FreezeBurst (:126): to 0.6 in 50 ms, melt to 0 by 650 ms.</summary>
     public static ChaosFxRamp FreezeBurst(double from) => new(from, (50, 0.6), (650, 0.0));

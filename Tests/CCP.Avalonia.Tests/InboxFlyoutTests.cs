@@ -29,6 +29,7 @@ public sealed class InboxFlyoutTests
                 .UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        var fonts = global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp(); fonts.AfterSetupCallback(fonts);
         StartupLadder.ResetForTests();
         try { body(); }
         finally { StartupLadder.ResetForTests(); Dispatcher.UIThread.RunJobs(); }

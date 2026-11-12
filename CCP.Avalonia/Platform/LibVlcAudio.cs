@@ -93,11 +93,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// the session at 1.000 throughout, each player reading its own value. 0 is DirectSound's floor
         /// (silence) and LibVLC's cubic scale is kept, so the linear gain mapping (<see cref="VlcVolume"/>)
         /// still lands WPF's sample-gain levels. ",any" falls back to the default output if DirectSound
-        /// cannot open. A caller's own --aout (tests: dummy) wins. Linux: pulse is per stream already.
+        /// cannot open. A caller's own --aout (tests: dummy) wins. Linux names its outputs: "any" can land on vlc-plugin-pipewire
+        /// (3-7.fc44), which dereferences an uninitialized stream when volume is set before the output starts.
         /// </summary>
         internal static string[] WithOutput(string[] options, bool windows) =>
-            windows && !options.Any(o => o.StartsWith("--aout", StringComparison.Ordinal))
-                ? options.Prepend("--aout=directsound,any").ToArray() : options;
+            options.Any(o => o.StartsWith("--aout", StringComparison.Ordinal)) ? options
+                : options.Prepend(windows ? "--aout=directsound,any" : "--aout=pulse,alsa,jack,none").ToArray();
 
         /// <summary>WPF's linear sample gain (0-1) as LibVLC's cubic 0-100 volume: 0.5 lands at about -6 dB.</summary>
         internal static int VlcVolume(float gain) => (int)Math.Round(Math.Cbrt(Math.Clamp(gain, 0f, 1f)) * 100);
@@ -234,6 +235,23 @@ namespace ConditioningControlPanel.Avalonia.Platform
             catch { if (!owned) { media?.Dispose(); input.Dispose(); } throw; }
         }
 
+        // Preparation never starts playback. Brain Drain arbitrates Play with Stop under its gate,
+        // as WPF Services/LockCard/BrainDrainService.cs:377-388 does after decoder creation.
+        internal interface IPreparedVoice : MindWipePlayer.IVoice { bool Play(); }
+        internal IPreparedVoice? PrepareVoice(string path, Action onEnded) =>
+            string.IsNullOrWhiteSpace(path) || !File.Exists(path) ? null : NewVoice(path, onEnded);
+        // WPF AudioService.PlaySound: unlike a one-shot cue, a muted sound remains live for unmute.
+        internal MindWipePlayer.IVoice? PlaySound(string path, float volume,
+            Action<TimeSpan> started, Action finished)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return null;
+            var voice = NewVoice(path, finished);
+            voice.UsePreferredDevice = true;
+            voice.Started = ms => started(TimeSpan.FromMilliseconds(ms));
+            voice.Volume = volume;
+            return voice.Play() ? voice : null;
+        }
+
         private Voice NewVoice(string path, Action onEnded)
         {
             var media = new Media(_vlc, path, FromType.FromPath);
@@ -243,12 +261,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         internal static Action<MediaPlayer> RouteVoice = ApplyPreferredDevice;
 
-        private sealed class Voice(MediaPlayer player, Media media, Action onEnded) : MindWipePlayer.IVoice
+        private sealed class Voice(MediaPlayer player, Media media, Action onEnded) : IPreparedVoice
         {
             private int _vol, _done;
             /// <summary>Raised once with the clip length in ms (0 when unknown) when it starts playing.</summary>
             internal Action<long>? Started;
             internal volatile bool Failed;
+            internal bool UsePreferredDevice;
             public double Volume
             {
                 // Cubic like PlayOneShot; applied off libvlc's thread once the output exists.
@@ -420,11 +439,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             if (_win != null) { _win.Shutdown(); return; }
             lock (_duckLock) { if (_isDucked) ForceUnduck(); }
-            Drain();
+            Drain(2000); // Keep app exit bounded, as before.
             lock (_duckLock) { _retry?.Dispose(); _retry = null; }
         }
 
-        internal void Drain() => _duckWork.Wait(2000);
+        // A completion barrier by default; shutdown supplies its bounded exit budget.
+        internal void Drain(int ms = Timeout.Infinite) => _duckWork.Wait(ms);
 
         internal bool IsDucked { get { lock (_duckLock) return _isDucked; } }
 

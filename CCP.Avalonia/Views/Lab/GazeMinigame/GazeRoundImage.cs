@@ -15,7 +15,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame;
 internal sealed class GazeRoundImage : Image, IDisposable
 {
     private List<Bitmap>? _frames;
-    private TimeSpan _delay;
+    private readonly List<TimeSpan> _durations = new();
+    private double _loopMs;
     private DateTimeOffset _started;
     private bool _disposed;
 
@@ -39,9 +40,11 @@ internal sealed class GazeRoundImage : Image, IDisposable
 
     private async Task Decode(string path, int fitLongSide)
     {
-        // ponytail: same bounded decoder as MiniPlayer/CornerGif; uniform first-frame delay,
-        // at most 120 frames and the pane's long side, rather than WPF's unbounded GIF playback.
-        var (frames, delay) = await Task.Run(() => SpiralOverlay.Decode(path, fitLongSide));
+        // WPF GazeMinigameWindow.xaml.cs:935-939: animate GIFs with source timing and repeat forever.
+        // ponytail: retain the shared decoder's memory/size budget (at most 120 frames, the pane's
+        // long side) instead of WPF's unbounded cache. Preserve source timing, summing skipped
+        // frames into the sampled frame's hold.
+        var (frames, _) = await Task.Run(() => SpiralOverlay.Decode(path, fitLongSide, frameDurations: _durations));
         if (_disposed || frames.Count < 2)
         {
             foreach (var frame in frames) frame.Dispose();
@@ -49,7 +52,7 @@ internal sealed class GazeRoundImage : Image, IDisposable
         }
         (Source as Bitmap)?.Dispose();
         _frames = frames;
-        _delay = delay;
+        foreach (var duration in _durations) _loopMs += duration.TotalMilliseconds;
         _started = GazeMinigameWindow.Clock.GetUtcNow();
         Source = frames[0];
     }
@@ -59,7 +62,10 @@ internal sealed class GazeRoundImage : Image, IDisposable
     {
         if (_frames == null) return;
         var elapsed = Math.Max(0, (now - _started).TotalMilliseconds);
-        var index = (int)((long)(elapsed / _delay.TotalMilliseconds) % _frames.Count);
+        var phase = elapsed % _loopMs;
+        var index = 0;
+        while (index < _frames.Count - 1 && phase >= _durations[index].TotalMilliseconds)
+            phase -= _durations[index++].TotalMilliseconds;
         Source = _frames[index];
     }
 

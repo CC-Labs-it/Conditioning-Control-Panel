@@ -147,6 +147,25 @@ public sealed class TabTransitionsTests
         });
     }
 
+    [Fact]
+    public Task AHeadlessRenderArmsNoFirstVisitPulse()
+    {
+        // --render-all on a slow host fired the 1.2 s timer inside CaptureRenderedFrame and drew
+        // the Play and You rows mid-dip (Linux beta shots). A render draws the rail at rest.
+        var armed = new System.Collections.Generic.List<TimeSpan>();
+        return Run(shell =>
+        {
+            Assert.Empty(armed);
+            Assert.False(shell.NavDoorHeaderPulsing("deeper"));
+            Assert.Equal(1.0, shell.Named<Button>("DoorPlay")!.Opacity);
+        }, shell =>
+        {
+            global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = true;
+            shell.Closed += (_, _) => global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = false;
+            shell.ScheduleOnce = (_, delay) => { armed.Add(delay); return new Pending(); };
+        });
+    }
+
     // A stepped entrance lets pointer tests sample resting geometry without sleeping.
     private static void Step(MainShellWindow shell, double milliseconds) => shell.StepTabTransition(milliseconds);
 

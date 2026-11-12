@@ -24,6 +24,22 @@ namespace CCP.Avalonia.Tests;
 public sealed class BubbleCountGameTests
 {
     [Fact]
+    public Task PlaybackWaitsForLoadedLayout() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null) global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+            .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var clip = Path.GetTempFileName();
+        var w = new BubbleCountWindow(clip, BubbleCountScheduler.Difficulty.Medium, false, _ => { });
+        try
+        {
+            w.Opened += (_, _) => { Assert.True(w.IsVisible); Assert.Null(BubbleCountWindow.Sink); };
+            w.Show(); Assert.True(w.IsVisible); Assert.Null(BubbleCountWindow.Sink);
+        }
+        finally { BubbleCountWindow.ForceCloseAll(); File.Delete(clip); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public async Task PlaysAnswersAndHonoursStrictAndPanic()
     {
         var dir = Directory.CreateTempSubdirectory("ccp-bcount-").FullName;
@@ -69,9 +85,10 @@ public sealed class BubbleCountGameTests
                         var ready = new TaskCompletionSource<BubbleCountWindow>();
                         using var opened = Window.WindowOpenedEvent.AddClassHandler<BubbleCountWindow>((w, _) =>
                         {
-                            // WindowOpened precedes Show/Opened. Subscribe after the game's own
-                            // Opened handler has installed its decoder, then observe presented frames.
-                            w.Opened += (_, _) =>
+                            // WindowOpened precedes Show/Opened. The game's own Opened handler defers the
+                            // decoder to Loaded (StartWhenLoaded, as WPF OnLoaded), so observe presented
+                            // frames from a Loaded handler subscribed after it.
+                            w.Opened += (_, _) => w.Loaded += (_, _) =>
                             {
                                 var sink = BubbleCountWindow.Sink!;
                                 void Presented()
@@ -111,6 +128,7 @@ public sealed class BubbleCountGameTests
                     BubbleCountWindow.Player!.SetPause(false); // the real EndReached opens the answer window
                     for (var i = 0; i < 400 && BubbleCountResultWindow.OpenWindows.Count == 0; i++) await Task.Delay(50);
                     var r = Assert.Single(BubbleCountResultWindow.OpenWindows);
+                    Assert.All(BubbleCountWindow.OpenWindows, w => Assert.False(w.IsVisible));
                     Assert.Equal(2, BubbleCountWindow.LastVideoDurationSeconds, 0);   // LengthChanged replaced the 30 s fallback
                     r.FindControl<TextBox>("TxtAnswer")!.Text = r.CorrectAnswer.ToString();
                     r.FindControl<TextBox>("TxtAnswer")!.Focus();

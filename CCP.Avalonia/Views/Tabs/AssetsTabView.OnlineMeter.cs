@@ -1,9 +1,19 @@
 using System;
 using System.Linq;
+using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
+using Avalonia.Styling;
+using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Safety;
 using Avalonia.Controls;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Services.Fyp.Online;
 using Serilog;
 
@@ -13,12 +23,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// The Assets tab's "Online media today" card, the one-time official note and the Scrolller credit (WPF
     /// MainWindow.OnlineMeter.cs PaintOnlineMeterCard / PaintOnlineOfficialNote + AssetsTabView.xaml:273-465). What
     /// shows is Core <see cref="OnlineMeterRules"/> through <see cref="OnlineMeterHead"/>; this file only paints it.
-    /// <para>ponytail: not on this head yet - the "See plans" link (no vault gate card here), the spent corner notice,
-    /// the licence card on the startup ladder, and the note's landing animation.</para>
+    /// <para>ponytail: not on this head yet - the spent corner notice,
+    /// and the licence card on the startup ladder.</para>
     /// </summary>
     public partial class AssetsTabView
     {
         private bool _meterWired;
+        internal Button? OnlineHelp => OnlineMeterHelp.Content as Button;
+        internal Button OnlineHelpButton => (Button)OnlineMeterHelp.Content!;
+
+        internal void PinOnlineHelp()
+        {
+            OnlineMeterHelp.BringIntoView();
+            if (OnlineHelp is { IsVisible: true } help) LeashHelpButton.Pin(help);
+        }
 
         /// <summary>WPF ScrolllerCredit.HomeLink.</summary>
         internal const string ScrolllerHome = "https://scrolller.com";
@@ -28,6 +46,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (_meterWired) return;
             _meterWired = true;
+            InitializeOfficialNoteLanding();
             try
             {
                 OnlineMeterHead.Start();
@@ -35,15 +54,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 DetachedFromVisualTree += (_, _) => OnlineMeterHead.Refresh -= RefreshOnlineMeter;
                 AttachedToVisualTree += (_, _) => { OnlineMeterHead.Refresh -= RefreshOnlineMeter; OnlineMeterHead.Refresh += RefreshOnlineMeter; };
                 BtnOnlineOfficialNice.Click += (_, _) => OnlineOfficialNice();
+                BtnOnlineSeePlans.Click += (_, _) =>
+                {
+                    if (OnlineMeterHead.Now().SeePlansTier is int tier)
+                        (TopLevel.GetTopLevel(this) as Windows.MainShellWindow ?? Windows.MainShellWindow.Current)?.OpenOnlinePlans(tier);
+                };
                 // The credit is the shared ScrolllerCreditLine: its own link opens scrolller.com and refuses under
                 // Strict Lock, Lockdown or a Chaos run (a second click handler here would open it twice).
-                ToolTip.SetTip(OnlineMeterHelp, HelpText());
+                OnlineMeterHelp.Content = LeashHelpButton.Create(() => new OnlineMediaHelpSlip(), "online-help");   // WPF MainWindow.OnlineMeter.cs:105
             }
             catch (Exception ex) { Log.Warning(ex, "Online meter wiring failed"); }
             RefreshOnlineMeter();
         }
 
-        /// <summary>The "?" slip as one tooltip: the title, then every paragraph (OnlineMeterRules.HelpParagraphKeys).</summary>
+        /// <summary>The help's text: the title, then every paragraph (OnlineMeterRules.HelpParagraphKeys).</summary>
         internal static string HelpText() =>
             string.Join("\n\n", new[] { Loc.Get(OnlineMeterRules.HelpTitleKey) }.Concat(OnlineMeterRules.HelpParagraphs(Loc.Get)));
 
@@ -56,9 +80,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         internal void PaintOnlineMeter(OnlineMeterState st, DateTime now, DateTime reset)
         {
+            // No ToolTip on the host: the LeashHelpButton's hover card is the help (WPF MainWindow.OnlineMeter.cs:104-106);
+            // a tip on top showed the same text twice.
             OnlineMeterCard.IsVisible = st.Show;
             OnlineMeterStamped.IsVisible = st.ShowStampedLine;
             OnlineOfficialNote.IsVisible = st.ShowOfficialNote;
+            BtnOnlineSeePlans.IsVisible = st.Show && st.SeePlansTier != null;
+            OnlinePlansSpace.Text = st.Show && st.SeePlansTier != null ? "   " : "";
             if (st.ShowOfficialNote) TxtOnlineOfficialPlan.Text = Loc.Get(OnlineMeterRules.OfficialPlanKey(st.Plan));
             if (!st.Show) return;
             var tone = new SolidColorBrush(ToneColor(st.Tone));
@@ -67,7 +95,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             OnlineMeterBar.ColumnDefinitions[0].Width = new GridLength(st.Percent, GridUnitType.Star);
             OnlineMeterBar.ColumnDefinitions[1].Width = new GridLength(100 - st.Percent, GridUnitType.Star);
             OnlineMeterBarFill.Background = tone;
-            TxtOnlineMeterLine.Text = OnlineMeterHead.CardLine(st, now, reset);
+            TxtOnlineMeterSummary.Text = OnlineMeterHead.CardLine(st, now, reset);
         }
 
         /// <summary>WPF OnlineMeterRing.ColorFor: pink, amber from 80%, grey once used up.</summary>

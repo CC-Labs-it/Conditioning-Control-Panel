@@ -131,6 +131,18 @@ namespace ConditioningControlPanel.Models
     }
 
     /// <summary>
+    /// Settings ▸ Performance ▸ Lighter effects (Avalonia head only; WPF has no software tier).
+    /// Auto = take WPF's Performance-mode FX tier when Skia draws on the CPU (no GPU: WSLg, VMs, old
+    /// laptops); On = always take it; Off = never. The ordinal is the combo's item index: never reorder.
+    /// </summary>
+    public enum LighterEffectsMode
+    {
+        Auto,
+        On,
+        Off
+    }
+
+    /// <summary>
     /// Studio › Wallpaper mode. Static = the composed still-image collage; Dynamic = the same collage
     /// with its gifs moving, live behind the desktop icons (not in performance mode); OwnImage = one
     /// picture the user picked. Only one runs.
@@ -5579,6 +5591,19 @@ namespace ConditioningControlPanel.Models
             set { _autoPerformanceMode = value; OnPropertyChanged(); }
         }
 
+        private LighterEffectsMode _lighterEffects = LighterEffectsMode.Auto;
+        /// <summary>
+        /// Avalonia head only (CCP.Avalonia Platform/SoftwareRender.cs): whether the lighter FX tier for
+        /// machines without a GPU applies. Auto follows the renderer probe; On forces it; Off never applies it.
+        /// The WPF head ignores it.
+        /// </summary>
+        [JsonProperty("LighterEffects")]
+        public LighterEffectsMode LighterEffects
+        {
+            get => _lighterEffects;
+            set { _lighterEffects = value; OnPropertyChanged(); }
+        }
+
         private MotionLevel _motionLevel = MotionLevel.Full;
         /// <summary>
         /// How much UI motion is allowed. Full by default; Reduced keeps crossfades but kills
@@ -6198,7 +6223,7 @@ namespace ConditioningControlPanel.Models
         /// <summary>
         /// ccp-bugs #1468: false (default) keeps the idle-timer lines quiet while neither the engine
         /// nor a session runs; the bubble and text still show. True speaks them as before. Lines that
-        /// answer a player action are never affected. Rule: Services.Companion.CompanionIdleVoice.
+        /// answer a player action are never affected. Rule: Services.Companion.CompanionVoicePolicy.
         /// </summary>
         [JsonProperty]
         public bool CompanionSpeaksIdleWhenEngineOff

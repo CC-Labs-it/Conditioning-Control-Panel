@@ -33,6 +33,33 @@ namespace CCP.Avalonia.Tests;
 public sealed class ProgramIgnitionTests
 {
     [Fact]
+    public void PanicStopsQueuedAndLiveProgramFxUntilReentryOrNewRun() => WithRun(lastDay: true, (shell, tab, svc, _) =>
+    {
+        Assert.True(tab.IgnitionLoopsRunning);
+        tab.RefreshPrograms(); // leaves generated pip work queued
+        PanicSurfaces.StopAll("test", shell);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(tab.IgnitionLoopsRunning);
+        Assert.False(tab.SessionSheenRunning);
+        bool InTab(BeatLoop l) => l.Owner == tab || global::Avalonia.VisualTree.VisualExtensions.IsVisualAncestorOf(tab, l.Owner);
+        Assert.DoesNotContain(BeatLoop.Running, InTab);
+        tab.RefreshPrograms();
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain(BeatLoop.Running, InTab);
+        Assert.Equal(0, tab.FindControl<Rectangle>("ProgramsEdgeGlow")!.Opacity);
+        tab.IsVisible = false;
+        tab.IsVisible = true;
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(tab.IgnitionLoopsRunning);
+        PanicSurfaces.StopAll("test", shell);
+        svc.ActiveEnrollment!.AttemptNumber++;
+        tab.RefreshPrograms();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(tab.IgnitionLoopsRunning);
+    });
+
+    [Fact]
     public void IgnitedRunLightsTheRigAndItsClocksFollowTheGates() => WithRun(lastDay: true, (shell, tab, svc, program) =>
     {
         T F<T>(string n) where T : Control => tab.FindControl<T>(n)!;
@@ -126,19 +153,24 @@ public sealed class ProgramIgnitionTests
     });
 
     [Fact]
-    public void DayChapterAndGraduationMomentsFireOncePerRun() => WithRun(lastDay: false, (_, tab, svc, program) =>
+    public void DayChapterAndGraduationMomentsFireOncePerRun() => WithRun(lastDay: false, (shell, tab, svc, program) =>
     {
         T F<T>(string n) where T : Control => tab.FindControl<T>(n)!;
         var enrollment = svc.ActiveEnrollment!;
 
         // Day complete: the day's real XP floats up (WPF PlayProgramDayCompleteMoment).
         Assert.Equal("", F<TextBlock>("TxtTodayXpFloat").Text ?? "");
+        Assert.Equal(0, ShellEventFxTests.Bursts(shell));
         svc.TodayRecord!.DayCompleted = true;
         tab.RefreshPrograms();
+        // The day's 90-spark burst rides the tab's own layer (DayCompletionUsesItsOwnBannerBurst...);
+        // the shell layer must not add a second one.
+        Assert.Equal(0, ShellEventFxTests.Bursts(shell));
         Assert.Equal(Loc.GetF("label_0_xp_3", ProgramHeat.DayXp(svc.Today!.Intensity, svc.Today.IsBoss)),
             F<TextBlock>("TxtTodayXpFloat").Text);
         F<TextBlock>("TxtTodayXpFloat").Text = "";
         tab.RefreshPrograms();
+        Assert.Equal(0, ShellEventFxTests.Bursts(shell));
         Assert.Equal("", F<TextBlock>("TxtTodayXpFloat").Text);   // once per day
 
         // Chapter seal: only a chapter closing after the run's baseline stamps.
