@@ -254,6 +254,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         internal static Action<MediaPlayer>? ConfigureLoopVoice;
+        internal static Action? BeforeLoopPlay;
         private Voice NewVoice(string path, Action onEnded, bool loop = false)
         {
             var media = new Media(_vlc, path, FromType.FromPath);
@@ -371,8 +372,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     v.Volume = _vol;
                     v.Started = Schedule;
                     _live.Add(v);
+                    BeforeLoopPlay?.Invoke();
+                    return v.Play();
                 }
-                return v.Play();
             }
 
             private void Schedule(long lengthMs)

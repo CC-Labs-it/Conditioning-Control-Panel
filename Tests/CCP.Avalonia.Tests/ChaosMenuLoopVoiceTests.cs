@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Platform;
 using Xunit;
 
@@ -36,6 +37,46 @@ public class ChaosMenuLoopVoiceTests
             Assert.Same(marker.Vlc, LibVlcAudio.Shared);
         }
         finally { shared.SetValue(null, prior); }
+    }
+
+    [Fact]
+    public void Panic_waits_for_loop_restart_playback_startup()
+    {
+        var shared = typeof(LibVlcAudio).GetProperty("Shared", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var prior = shared.GetValue(null);
+        var path = Path.GetTempFileName();
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        using var panicEntered = new ManualResetEventSlim();
+        LibVlcAudio.IPausableVoice? voice = null;
+        var oldHook = LibVlcAudio.BeforeLoopPlay;
+        try
+        {
+            var audio = new LibVlcAudio("--aout=dummy");
+            // A valid clip long enough to schedule an overlapping restart.
+            using (var w = new BinaryWriter(File.Create(path)))
+            {
+                const int data = 16000;
+                w.Write("RIFF"u8); w.Write(36 + data); w.Write("WAVE"u8);
+                w.Write("fmt "u8); w.Write(16); w.Write((short)1); w.Write((short)1);
+                w.Write(8000); w.Write(16000); w.Write((short)2); w.Write((short)16);
+                w.Write("data"u8); w.Write(data); w.Write(new byte[data]);
+            }
+            int starts = 0;
+            LibVlcAudio.BeforeLoopPlay = () => { if (Interlocked.Increment(ref starts) == 2) { entered.Set(); release.Wait(); } };
+            voice = Assert.IsAssignableFrom<LibVlcAudio.IPausableVoice>(audio.PlayVoice(path, 0.5, true, () => { }));
+            Assert.True(entered.Wait(5000));
+            var panic = Task.Run(() => { panicEntered.Set(); voice.Dispose(); });
+            Assert.True(panicEntered.Wait(5000));
+            Assert.False(panic.Wait(500));
+            release.Set();
+            Assert.True(panic.Wait(5000));
+        }
+        finally
+        {
+            release.Set(); voice?.Dispose(); LibVlcAudio.BeforeLoopPlay = oldHook;
+            shared.SetValue(null, prior); File.Delete(path);
+        }
     }
 
     private static void ExerciseLoop()
