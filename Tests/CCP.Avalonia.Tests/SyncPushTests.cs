@@ -32,6 +32,8 @@ public sealed partial class AccountSeedTests
         public string? Profile;
         public HttpStatusCode SyncStatus = HttpStatusCode.OK;
         public string SyncReply = "{\"success\":true}";
+        public TaskCompletionSource? HeartbeatHold;
+        public TaskCompletionSource? HeartbeatStarted;
         public TaskCompletionSource? Hold;   // a sync answer that waits until released
         public readonly Queue<(HttpStatusCode, string)> Next = new();   // one-shot sync answers, then SyncStatus
         // A snapshot under the lock: the heartbeat LoadProfile starts can still be adding while a test reads.
@@ -45,6 +47,12 @@ public sealed partial class AccountSeedTests
             if (path == "GET /v2/user/profile")
                 return Profile == null ? new(HttpStatusCode.InternalServerError) { Content = new StringContent("{}") }
                     : new(HttpStatusCode.OK) { Content = new StringContent(Profile) };
+            if (path == "POST /v2/user/heartbeat" && HeartbeatHold is { } heartbeatHold)
+            {
+                HeartbeatStarted?.TrySetResult();
+                await heartbeatHold.Task;
+                return new(HttpStatusCode.OK) { Content = new StringContent("{\"effective_tier\":2}") };
+            }
             if (path == "POST /v2/user/sync")
             {
                 var (status, reply) = Next.Count > 0 ? Next.Dequeue() : (SyncStatus, SyncReply);
@@ -107,6 +115,24 @@ public sealed partial class AccountSeedTests
             CoreSettings.ServiceProvider = oldSettings;
         }
     }
+
+    [Fact]
+    public void Heartbeat_response_keeps_the_identity_used_for_the_request() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("first", null);
+        wire.HeartbeatHold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        wire.HeartbeatStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        string? id = null, token = null, body = null;
+        sync.HeartbeatIdentityBody = (i, t, b) => (id, token, body) = (i, t, b);
+        var pending = sync.HeartbeatAsync();
+        await wire.HeartbeatStarted.Task;
+        (CoreSettings.Current.UnifiedId, CoreSettings.Current.AuthToken) = ("second", "new-token");
+        wire.HeartbeatHold.SetResult();
+        Assert.True(await pending);
+        Assert.Equal("first", id);
+        Assert.Equal("tok", token);
+        Assert.Equal(2, EntitlementTierRule.ParseHeartbeatTier(body!));
+    });
 
     [Fact]
     public void NoPush_BeforeASuccessfulLoad_NorAfterLogout_UntilTheNextLoad() => WithFreshInstall(async () =>

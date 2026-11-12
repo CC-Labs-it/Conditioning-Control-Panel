@@ -269,6 +269,22 @@ public sealed partial class AccountSeedTests : IDisposable
     private static DateTime ReadingClock() => DateTime.UtcNow.AddMinutes(-10);
 
     [Fact]
+    public Task Heartbeat_tier_is_ignored_after_account_or_token_changes() => WithTierReadings("heartbeat-user", 0, ReadingClock(), (s, events) =>
+    {
+        const string body = "{\"effective_tier\":2}";
+        AccountSeed.ApplyHeartbeatTier("other", s.AuthToken, body);
+        AccountSeed.ApplyHeartbeatTier(s.UnifiedId!, "old-token", body);
+        s.OfflineMode = true;
+        AccountSeed.ApplyHeartbeatTier(s.UnifiedId!, s.AuthToken, body);
+        Assert.Equal(0, s.PatreonTier);
+        Assert.Empty(events);
+        s.OfflineMode = false;
+        AccountSeed.ApplyHeartbeatTier(s.UnifiedId!, s.AuthToken, body);
+        Assert.Equal(2, s.PatreonTier);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task A_rise_from_the_heartbeat_raises_TierRaised_before_TierChanged() => WithTierReadings("rising", 0, ReadingClock(), (s, events) =>
     {
         Assert.False(CoreAccount.HasPremiumAccess);
