@@ -15,6 +15,7 @@ using Avalonia.Data;
 using ConditioningControlPanel.Avalonia.Localization;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
@@ -26,6 +27,84 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     public partial class SettingsTabView
     {
         private bool _browserCardSyncing;
+        internal static volatile bool RemixBrowserMediaBusy;
+        private static volatile bool _remixWatchActive;
+        internal static long RemixMediaTick;
+        internal static bool RemixBrowserVideoBusy => RemixBrowserMediaBusy || (_remixWatchActive
+            && System.Diagnostics.Stopwatch.GetElapsedTime(System.Threading.Interlocked.Read(ref RemixMediaTick)).TotalSeconds > 3);
+        private string? _remixMediaId;
+
+        // WPF BrowserService.cs:337: watch user-started media, not only takeover playback.
+        // Inaccessible player-sized frames stay busy: this adapter cannot inject into frames.
+        internal const string RemixMediaScript = """
+            (() => {
+              const id = __CCP_TOKEN__;
+              if (window.__ccpRemixWatch) clearInterval(window.__ccpRemixWatch);
+              if (window.__ccpRemixAbort) window.__ccpRemixAbort.abort();
+              const controller = window.__ccpRemixAbort = new AbortController();
+              let lastPlaying = 0;
+              const busy = d => {
+                // This head mutes elements, so player-sized video stays busy even while muted.
+                if ([...d.querySelectorAll('video,audio')].some(m => !m.paused && !m.ended && (m.tagName === 'AUDIO' ? !m.muted : m.offsetWidth >= 200))) return true;
+                for (const f of d.querySelectorAll('iframe')) {
+                  if (f.offsetWidth < 200) continue;
+                  try { if (!f.contentDocument || busy(f.contentDocument)) return true; }
+                  catch (_) { return true; }
+                }
+                return false;
+              };
+              const report = () => {
+                let active = true;
+                try { active = busy(document); } catch (_) {}
+                if (active) lastPlaying = Date.now();
+                else active = lastPlaying > 0 && Date.now() - lastPlaying < 2000;
+                const msg = JSON.stringify({ type: 'ccpRemixMedia', id, active });
+                if (typeof window.invokeCSharpAction === 'function') window.invokeCSharpAction(msg);
+                else if (window.chrome?.webview) window.chrome.webview.postMessage(msg);
+              };
+              for (const event of ['playing', 'pause', 'ended', 'volumechange']) document.addEventListener(event, report, { capture: true, signal: controller.signal });
+              window.__ccpRemixWatch = setInterval(report, 500);
+              report();
+            })();
+            """;
+
+        private void BeginRemixMediaWatch()
+        {
+            _remixMediaId = null;
+            var hasEngine = BrowserWebHost.HasEngine;
+            RemixBrowserMediaBusy = hasEngine;
+            System.Threading.Interlocked.Exchange(ref RemixMediaTick, System.Diagnostics.Stopwatch.GetTimestamp());
+            _remixWatchActive = hasEngine;
+        }
+
+        private void InstallRemixMediaWatch(Uri uri, bool success)
+        {
+            if (!BrowserWebHost.HasEngine) { _remixWatchActive = false; RemixBrowserMediaBusy = false; return; }
+            BeginRemixMediaWatch();
+            if (!success) return; // Unknown playback fails closed until the next navigation.
+            _remixMediaId = Guid.NewGuid().ToString("N");
+            _ = BrowserWebHost.InvokeScriptAsync(RemixMediaScript.Replace("__CCP_TOKEN__", System.Text.Json.JsonSerializer.Serialize(_remixMediaId)));
+        }
+
+        private void OnRemixMediaMessage(string body)
+        {
+            try
+            {
+                using var outer = System.Text.Json.JsonDocument.Parse(body);
+                var payload = outer.RootElement.ValueKind == System.Text.Json.JsonValueKind.String ? outer.RootElement.GetString() : body;
+                using var json = System.Text.Json.JsonDocument.Parse(payload!);
+                var root = json.RootElement;
+                if (_remixMediaId != null && root.GetProperty("type").GetString() == "ccpRemixMedia"
+                    && root.GetProperty("id").GetString() == _remixMediaId && root.GetProperty("active").ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
+                {
+                    var active = root.GetProperty("active").GetBoolean();
+                    if (active) RemixBrowserMediaBusy = true;
+                    System.Threading.Interlocked.Exchange(ref RemixMediaTick, System.Diagnostics.Stopwatch.GetTimestamp());
+                    if (!active) RemixBrowserMediaBusy = false;
+                }
+            }
+            catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or System.Collections.Generic.KeyNotFoundException) { }
+        }
 
         /// <summary>Tests: how many times the mute script was sent to the page.</summary>
         internal int BrowserMuteApplies { get; private set; }
@@ -33,6 +112,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void HookBrowserCard()
         {
             BrowserWebHost.NavigationCompleted += _ => ApplyBrowserMute();
+            BrowserWebHost.NavigationBeginning += BeginRemixMediaWatch;
+            BrowserWebHost.NavigationFinished += InstallRemixMediaWatch;
+            BrowserWebHost.WebMessage += OnRemixMediaMessage;
+            BrowserWebHost.AttachedToVisualTree += (_, _) =>
+            {
+                if (BrowserWebHost.CurrentUrl is { } current) InstallRemixMediaWatch(current, true);
+                else if (BrowserWebHost.Source != null) BeginRemixMediaWatch();
+            };
+            BrowserWebHost.DetachedFromVisualTree += (_, _) => Dispatcher.UIThread.Post(() =>
+            {
+                if (!BrowserWebHost.IsAttachedToVisualTree()) { _remixMediaId = null; _remixWatchActive = false; RemixBrowserMediaBusy = false; }
+            });
             BrowserWebHost.NavigationFinished += (url, success) =>
                 _ = Browser.BrowserAdCss.ApplyAsync(url, success, BrowserWebHost.InvokeScriptAsync);
             BrowserWebHost.PropertyChanged += (_, e) => { if (e.Property == WebHost.SourceProperty) SyncBrowserPrompt(); };

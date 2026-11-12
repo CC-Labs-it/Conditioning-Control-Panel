@@ -35,13 +35,18 @@ internal static partial class FlashOverlay
             var dir = Path.Combine(root, "images");
             return Directory.Exists(dir) ? AssetFolderExclusion.Enabled(Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
                 .Where(p => p.EndsWith(".gif", StringComparison.OrdinalIgnoreCase)).ToList(), root, CoreSettings.Current) : Array.Empty<string>();
-        }, () => Active.Count > 0, () => CoreEngine.Video?.IsPlaying == true,
+        }, () => Active.Count > 0, RemixVideoBusy,
             () => CoreFlash.IsRunning && CoreSettings.Current.FlashEnabled && CoreSettings.Current.JackpotRemixEnabled,
             folder, () => PrizeOwnership.IsGranted(PrizeOwnership.JackpotRemix), () => CoreSettings.Current.MotionLevel,
             () => builder.Disabled, builder.BuildAsync, AvailableMemory);
         _remix.Start();
         return _remix;
     }
+
+    // The mandatory scheduler owns all its mirrored surfaces; the bubble game has its own player.
+    internal static bool RemixVideoBusy() => CoreEngine.Video?.IsPlaying == true
+        || BrowserVideoSurface.SessionActive || Views.Windows.BubbleCountWindow.VideoSessionActive
+        || Views.Tabs.SettingsTabView.RemixBrowserVideoBusy;
 
     private static void StopRemix()
     {
@@ -65,6 +70,7 @@ internal static partial class FlashOverlay
         var windows = new List<FlashOverlayWindow>();
         DispatcherTimer? timer = null;
         var creating = true;
+        var capped = false;
         void Cleanup()
         {
             if (creating || windows.Count > 0) return;
@@ -73,6 +79,7 @@ internal static partial class FlashOverlay
         }
         try { foreach (var index in targets)
         {
+            if (Active.Count >= Cap(CoreSettings.Current, ambient)) { capped = true; break; }
             var screen = screens[index];
             var b = screen.Bounds;
             var (x, y, w, h) = JackpotRemixRoll.CentredGeometry(b.X, b.Y, b.Width, b.Height, frames[0].PixelSize.Width, frames[0].PixelSize.Height);
@@ -85,7 +92,7 @@ internal static partial class FlashOverlay
         }
         } catch { foreach (var win in windows.ToArray()) win.Close(); creating = false; Cleanup(); throw; }
         creating = false;
-        if (windows.Count == 0) { Cleanup(); return false; }
+        if (windows.Count == 0) { Cleanup(); return capped; }
         Platform.BarkHead.Engine?.Raise("FlashDisplayed");
         Displayed?.Invoke();
         var multiplier = FlashFxRules.RollLucky(SkillTreeRules.HasSkill(s, FlashFxRules.LuckySkillId), 0, remixMirror: false, Rng);

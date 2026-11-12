@@ -22,7 +22,7 @@ public class JackpotRemixFlowTests
     public Task OwnedToggleAndCachedRemixReachAnimatedFlashAndCleanUp() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var s = CoreSettings.Current;
-        var old = (s.JackpotRemixEnabled, s.MotionLevel, s.FlashClickable, s.CorruptionMode);
+        var old = (s.JackpotRemixEnabled, s.MotionLevel, s.FlashClickable, s.CorruptionMode, s.HydraLimit, s.FlashStayUntilPopped, s.GlobalTargetMonitor);
         var own = PrizeOwnership.IsGranted;
         var present = FlashOverlay.Present;
         var multiply = FlashOverlay.Multiply;
@@ -45,7 +45,8 @@ public class JackpotRemixFlowTests
             card.FindControl<CheckBox>("ChkJackpotRemix")!.IsChecked = true;
             Assert.True(s.JackpotRemixEnabled);
             s.MotionLevel = MotionLevel.Full; s.FlashClickable = true; s.CorruptionMode = true;
-            FlashOverlay.Present = (_, _, _) => true;
+            s.HydraLimit = 2; s.FlashStayUntilPopped = false; s.GlobalTargetMonitor = ConditioningControlPanel.Services.UI.MonitorTarget.All;
+            FlashOverlay.Present = (_, _, _) => { s.HydraLimit = 1; return true; };
             var children = 0; FlashOverlay.Multiply = (_, _, _, _) => children++;
             var payments = 0; CoreProgression.AddXPProvider = (_, _) => payments++;
             FlashOverlay._remix = new JackpotRemixDirector(() => new[] { cached }, () => false, () => false,
@@ -53,10 +54,18 @@ public class JackpotRemixFlowTests
                 (_, _, _) => Task.FromResult<string?>(null), () => ulong.MaxValue, odds: 1);
             var screen = shell.Screens.All[0];
             Assert.False(await FlashOverlay.TryShowRemix(s, new[] { screen }, null, false, FlashOverlay.Generation)); Assert.True(File.Exists(cached));
-            Assert.True(await FlashOverlay.TryShowRemix(s, new[] { screen }, null, true, FlashOverlay.Generation));
+            Assert.True(await FlashOverlay.TryShowRemix(s, new[] { screen, screen }, null, true, FlashOverlay.Generation));
             Assert.False(File.Exists(cached));
             var window = Assert.Single(FlashOverlay.Active).Window;
             Assert.True(window.IsRemix);
+            Assert.Equal(1, payments);
+            File.Copy(fixture, cached);
+            FlashOverlay._remix!.Dispose();
+            FlashOverlay._remix = new JackpotRemixDirector(() => new[] { cached }, () => false, () => false,
+                () => s.JackpotRemixEnabled, dir, () => true, () => MotionLevel.Full, () => false,
+                (_, _, _) => Task.FromResult<string?>(null), () => ulong.MaxValue, odds: 1);
+            Assert.True(await FlashOverlay.TryShowRemix(s, new[] { screen, screen }, null, true, FlashOverlay.Generation));
+            Assert.Single(FlashOverlay.Active); // a full cap consumes the roll without an ordinary fallback
             Assert.Equal(1, payments);
             var first = window.Picture;
             for (var i = 0; i < 30 && ReferenceEquals(first, window.Picture); i++) await Task.Delay(100);
@@ -71,7 +80,7 @@ public class JackpotRemixFlowTests
             FlashOverlay.CloseAll(false); shell.Close();
             PrizeOwnership.IsGranted = own; FlashOverlay.Present = present; FlashOverlay.Multiply = multiply;
             CoreProgression.AddXPProvider = xp;
-            (s.JackpotRemixEnabled, s.MotionLevel, s.FlashClickable, s.CorruptionMode) = old;
+            (s.JackpotRemixEnabled, s.MotionLevel, s.FlashClickable, s.CorruptionMode, s.HydraLimit, s.FlashStayUntilPopped, s.GlobalTargetMonitor) = old;
             Directory.Delete(dir, true);
         }
     });
@@ -79,37 +88,72 @@ public class JackpotRemixFlowTests
     [Fact]
     public void ProfileSnapshotAndRevocationRefreshTheToggle() => AvaloniaTestDispatcher.Run(() =>
     {
-        var saved = CoreAccount.UnifiedUserId;
         var seam = PrizeOwnership.IsGranted;
+        const string account = "remix-profile-test";
+        var ownership = new ConditioningControlPanel.Services.Prizes.OwnershipService(() => account, null, action => action());
+        var feed = new ConditioningControlPanel.Services.Prizes.PrizesFeed(() => ownership, () => account, action => action());
+        ownership.OwnershipChanged += (_, _) => ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
         var value = CoreSettings.Current.JackpotRemixEnabled;
         Window? shell = null;
         try
         {
-            CoreAccount.UnifiedUserId = "remix-profile-test";
-            PrizeOwnership.ResetHeld();
-            PrizeOwnership.IsGranted = ConditioningControlPanel.Services.Prizes.PrizeGrants.IsGranted;
+            PrizeOwnership.IsGranted = ownership.IsGranted;
             var card = new FlashFeatureControl();
             shell = new Window { Content = card }; shell.Show();
             var row = card.FindControl<Grid>("RowJackpotRemix")!;
             var rows = (StackPanel)row.Parent!;
             Assert.True(rows.Children.IndexOf(card.FindControl<Grid>("RowShatter")!) < rows.Children.IndexOf(row));
             Assert.False(row.IsVisible);
-            PrizeOwnership.Feed.Apply("remix-profile-test", "remix-profile-test", new PrizesBlock { Revision = 1, Grants = new() { PrizeOwnership.JackpotRemix } }, "profile");
+            feed.Apply(account, account, new PrizesBlock { Revision = 1, Grants = new() { PrizeOwnership.JackpotRemix } }, "profile");
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             Assert.True(row.IsVisible);
             card.FindControl<CheckBox>("ChkJackpotRemix")!.IsChecked = true;
             Assert.True(CoreSettings.Current.JackpotRemixEnabled);
-            PrizeOwnership.Feed.Apply("remix-profile-test", "remix-profile-test", new PrizesBlock { Revision = 2, Grants = new() }, "profile");
+            feed.Apply(account, account, new PrizesBlock { Revision = 2, Grants = new() }, "profile");
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             Assert.False(row.IsVisible);
             Assert.True(CoreSettings.Current.JackpotRemixEnabled);
         }
         finally
         {
-            shell?.Close(); PrizeOwnership.Feed.Clear();
+            shell?.Close();
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            CoreAccount.UnifiedUserId = saved; PrizeOwnership.IsGranted = seam;
+            PrizeOwnership.IsGranted = seam;
             CoreSettings.Current.JackpotRemixEnabled = value;
+        }
+    });
+
+    [Fact]
+    public void ProfileTestLeavesSharedOwnershipAndFeedIntact() => AvaloniaTestDispatcher.Run(() =>
+    {
+        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+        var service = (ConditioningControlPanel.Services.Prizes.OwnershipService)typeof(PrizeOwnership)
+            .GetField("Service", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+        var feed = PrizeOwnership.Feed;
+        var fields = new[] { "_grants", "_heldAccountId", "_revision" }.Select(name => service.GetType().GetField(name, flags)!).ToArray();
+        var values = fields.Select(field => field.GetValue(service)).ToArray();
+        var feedAccount = feed.GetType().GetField("_accountId", flags)!;
+        var previousFeedAccount = feedAccount.GetValue(feed);
+        var gate = service.GetType().GetField("_gate", flags)!.GetValue(service)!;
+        var feedGate = feed.GetType().GetField("_gate", flags)!.GetValue(feed)!;
+        var account = CoreAccount.UnifiedUserId;
+        try
+        {
+            CoreAccount.UnifiedUserId = "sentinel";
+            feed.NoteAccount("sentinel");
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            service.ApplySnapshot("sentinel", 71, new[] { PrizeOwnership.FlashPendulum });
+            ProfileSnapshotAndRevocationRefreshTheToggle();
+            Assert.Equal("sentinel", CoreAccount.UnifiedUserId);
+            Assert.Equal(71, service.Revision);
+            Assert.True(service.IsGranted(PrizeOwnership.FlashPendulum));
+            Assert.Equal("sentinel", feedAccount.GetValue(feed));
+        }
+        finally
+        {
+            lock (gate) for (var j = 0; j < fields.Length; j++) fields[j].SetValue(service, values[j]);
+            lock (feedGate) feedAccount.SetValue(feed, previousFeedAccount);
+            CoreAccount.UnifiedUserId = account;
         }
     });
 
