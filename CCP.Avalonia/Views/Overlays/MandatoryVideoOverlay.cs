@@ -699,12 +699,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (UpdateFloatingReveal(_sinceReady.Elapsed.TotalSeconds, _player?.IsPlaying == true)
                     == ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.FirstFrameVerdict.Skip) return;
             var played = (framed ? _sinceFrame.Elapsed.TotalSeconds : Elapsed) + PlayedSkew;
-            var enhanced = EnhancementOwnsLength(played, _playback.Length / 1000.0);
             var why = MandatoryVideoScheduler.Guard(Elapsed, played, framed,
-                _playback.HasVideo, enhanced ? double.PositiveInfinity : _playback.Length / 1000.0,
+                _playback.HasVideo, _playback.Length / 1000.0,
                 Stopwatch.GetElapsedTime(FrameTs).TotalSeconds, CoreSettings.Current.VideoMaxDurationSeconds, _capSpent,
-                _cutClock == null ? null : _cutClock.PlayedMs / 1000.0 + PlayedSkew)
-                ?? (enhanced && EnhancementStalled(played) ? "stalled" : null);
+                _cutClock == null ? null : _cutClock.PlayedMs / 1000.0 + PlayedSkew);
             if (why == null) return;
             if (MandatoryVideoScheduler.GuardHeals(why, _healUsed))
             {

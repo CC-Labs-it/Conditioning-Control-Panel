@@ -1,6 +1,5 @@
 using System;
 using Avalonia;
-using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.Deeper;
 using Serilog;
@@ -16,7 +15,6 @@ internal sealed partial class MandatoryVideoOverlay
     private void BeginEnhancement(string path)
     {
         EndEnhancement();
-        _stallMs = -1;
         // App startup seeds the dispatcher (App.axaml.cs); never bind a dry-run logger to playback.
         if (!CoreSettings.Current.VideoEnhanceIfPossible || _playback == null || EnhancementHostService.DispatcherFactory == null) return;
         try
@@ -37,32 +35,6 @@ internal sealed partial class MandatoryVideoOverlay
     }
 
     private void EndEnhancement() => _enhancementHost.Unload();
-
-    // WPF VideoService.cs:6596 (#536): while bound, an enhancement can loop or hold the clip past its
-    // length, so past length + 5 s the guillotine becomes a progress watch that ends the clip only
-    // after 90 s without a new playhead. Unbinding stops IsRunning, which restores it (:141).
-    internal const double EnhancementStallGraceSeconds = 90;
-    private long _stallMs = -1;
-    private double _stallSince;
-    private bool EnhancementOwnsLength(double played, double lengthSeconds) =>
-        EnhancementRunning && lengthSeconds > 0 && played >= lengthSeconds + 5;
-    private bool EnhancementStalled(double played)
-    {
-        var ms = _playback?.Time ?? -1;
-        if (ms >= 0 && ms != _stallMs) { (_stallMs, _stallSince) = (ms, played); return false; }
-        return played - _stallSince >= EnhancementStallGraceSeconds;
-    }
-
-    // WPF VideoServiceTimeSource.cs:149: the primary picture's on-screen box in DIPs. The Uniform
-    // Image arranges to the contain-fit box (FitContain :181); before a frame, the full area (:171).
-    internal PlaybackRect VideoScreenRect() => _surfaces.Count == 0 ? PlaybackRect.Empty : ScreenRect(_surfaces[0].Video);
-    internal static PlaybackRect ScreenRect(Control video)
-    {
-        var box = video.Bounds.Width > 0 && video.Bounds.Height > 0 ? video : video.Parent as Control;
-        if (box == null || box.Bounds.Width <= 0 || box.Bounds.Height <= 0 || TopLevel.GetTopLevel(box) is not { } top) return PlaybackRect.Empty;
-        var p = box.PointToScreen(default);
-        return new PlaybackRect(p.X / top.RenderScaling, p.Y / top.RenderScaling, box.Bounds.Width, box.Bounds.Height);
-    }
 
     private sealed class MandatoryVideoTimeSource : IPlaybackTimeSource, IDisposable
     {
@@ -109,7 +81,8 @@ internal sealed partial class MandatoryVideoOverlay
         public void Seek(double seconds) { if (_attached && _player.IsSeekable) _player.Time = (long)Math.Max(0, seconds * 1000); }
         public void Pause() { if (_attached) { if (_owner._player != null) _owner.PausePrimary(); else _player.SetPause(true); } }
         public void Play() { if (_attached) { if (_owner._player != null) _owner.PlayPrimary(); else _player.SetPause(false); } }
-        public PlaybackRect GetVideoRect() => _attached ? _owner.VideoScreenRect() : PlaybackRect.Empty;
+        // Gaze geometry awaits the content-fit surface adapter; never use a wrong screen rectangle.
+        public PlaybackRect GetVideoRect() => PlaybackRect.Empty;
         public void Dispose()
         {
             if (!_attached) return;
