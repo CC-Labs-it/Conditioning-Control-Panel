@@ -27,6 +27,7 @@ public class EmiDeskGlassTests
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        EmiLineEngine.Instance.ResetForTests();
         var old = CoreSettings.ServiceProvider;
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
@@ -73,6 +74,7 @@ public class EmiDeskGlassTests
         }
         finally
         {
+            EmiLineEngine.Instance.ResetForTests();
             desk.ShutDown(); host.Close(); EmiState.Current.BedtimeUntil = savedBedtime;
             LocalizationManager.Instance.SetLanguage(language);
             CoreSettings.ServiceProvider = old;
@@ -81,9 +83,25 @@ public class EmiDeskGlassTests
     });
 
     [Fact]
+    public async Task ExpiryTestStartsAndEndsWithAClearLineEngine()
+    {
+        var engine = EmiLineEngine.Instance;
+        engine.ResetForTests();
+        try
+        {
+            engine.Draw("effectDeclined");
+            Assert.True(engine.HoldActive);
+            await SettingsControlsTheIdleSaverAndItsTenSecondLife();
+            Assert.False(engine.HoldActive);
+        }
+        finally { engine.ResetForTests(); }
+    }
+
+    [Fact]
     public Task GlassRunsOnTheSharedBeatAndStopsWhenClosed() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         AmbientBeatLoopsTests.Setup();
+        EmiLineEngine.Instance.ResetForTests();
         var old = CoreSettings.ServiceProvider;
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
@@ -131,6 +149,7 @@ public class EmiDeskGlassTests
         }
         finally
         {
+            EmiLineEngine.Instance.ResetForTests();
             desk.ShutDown();
             BeatLoop.Time = TimeProvider.System;
             EmiState.Current.BedtimeUntil = savedBedtime;
