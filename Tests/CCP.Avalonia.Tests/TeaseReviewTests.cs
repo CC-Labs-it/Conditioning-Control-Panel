@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
@@ -72,7 +76,7 @@ public sealed class TeaseReviewTests
     });
 
     [Theory]
-    [InlineData(0), InlineData(1), InlineData(2)]
+    [InlineData(0), InlineData(1), InlineData(2), InlineData(3)]
     public Task Tease_sprite_and_oversized_face_use_bounded_still(int stage) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (stage == 0) { Assert.NotNull(ChaosArt.Resolve("bubbles", "tease")); return; }
@@ -94,17 +98,38 @@ public sealed class TeaseReviewTests
                 return;
             }
             var assets = CorePaths.EffectiveAssetsProvider;
+            var window = new BubbleOverlayWindow(0, new PixelRect(0, 0, 200, 200), 1) { Width = 200, Height = 200 }; window.Show();
             try
             {
                 CorePaths.EffectiveAssetsProvider = () => dir;
-                var bubble = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsTease = true, SizePx = 200 });
+                var bubble = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsTease = true, SizePx = 200 }); bubble.X = bubble.Y = 0; bubble.Angle = 90; bubble.Scale = stage == 2 ? .65 : 1;
                 for (int i = 0; i < 200 && !BubbleOverlay.TeaseFaces.ContainsKey(bubble); i++) await Task.Delay(10);
-                Assert.True(BubbleOverlay.TeaseFaces.ContainsKey(bubble));
-                BubbleOverlay.EndChaos();
+                Assert.True(BubbleOverlay.TeaseFaces.ContainsKey(bubble)); Strip(path); BubbleOverlay.TeaseFaces[bubble].Frames.Insert(0, new global::Avalonia.Media.Imaging.Bitmap(path)); window.Sync(); Assert.True(Pixel(window, .5, .2).R > Pixel(window, .5, .2).B + 10, $"top {Pixel(window, .5, .2)}");
+                Assert.True(Pixel(window, .5, .8).B > Pixel(window, .5, .8).R + 10, $"bottom {Pixel(window, .5, .8)}"); BubbleOverlay.EndChaos();
                 Assert.DoesNotContain(bubble, BubbleOverlay.TeaseFaces.Keys);
             }
-            finally { BubbleOverlay.EndChaos(); CorePaths.EffectiveAssetsProvider = assets; }
+            finally { window.Close(); BubbleOverlay.EndChaos(); CorePaths.EffectiveAssetsProvider = assets; }
         }
         finally { Directory.Delete(dir, true); }
     });
+    private static void Strip(string path)
+    {
+        using var bitmap = new SKBitmap(1, 2); bitmap.SetPixel(0, 0, SKColors.Red); bitmap.SetPixel(0, 1, SKColors.Blue);
+        using var png = bitmap.Encode(SKEncodedImageFormat.Png, 100); File.WriteAllBytes(path, png.ToArray());
+    }
+    private static (byte R, byte B) Pixel(Window window, double x = 0.25, double y = 0.25)
+    {
+        Dispatcher.UIThread.RunJobs();
+        using var bitmap = window.CaptureRenderedFrame()!;
+        var pixel = Marshal.AllocHGlobal(4);
+        try
+        {
+            bitmap.CopyPixels(new PixelRect((int)(bitmap.PixelSize.Width * x), (int)(bitmap.PixelSize.Height * y), 1, 1), pixel, 4, 4);
+            var first = Marshal.ReadByte(pixel);
+            var third = Marshal.ReadByte(pixel, 2);
+            return bitmap.Format == global::Avalonia.Platform.PixelFormats.Rgba8888 ? (first, third) : (third, first);
+        }
+        finally { Marshal.FreeHGlobal(pixel); }
+    }
+
 }

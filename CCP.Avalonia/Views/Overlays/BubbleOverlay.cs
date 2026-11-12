@@ -799,7 +799,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         }
                         if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
                         else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
-                        if (b.Spec?.IsTease == true && BubbleOverlay.TeaseFaces.TryGetValue(b, out var face))
+                        if (b.Spec?.IsTease == true && BubbleOverlay.TeaseFaces.TryGetValue(b, out var face)) using (dc.PushTransform(m.TryInvert(out var inverse) ? inverse : Matrix.Identity))
                         {
                             var frame = face.Frames[face.Animated && global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level != MotionLevel.Off
                                 ? (int)((Environment.TickCount64 - face.Start) / face.Delay % face.Frames.Count) : 0];
