@@ -177,6 +177,13 @@ public sealed class GlowRenderProofTests
             Assert.True(halo.X < plain.X - 2 && halo.Y < plain.Y - 2 && halo.Right > plain.Right + 2 && halo.Bottom > plain.Bottom + 2,
                 $"no halo around the glyph: ink {plain}, with glow {halo}");
 
+            // The card art and selected mod can make the underlying pixel nearly the glow colour.
+            // Put an opaque plate behind the actual glyph and glow so this tests the rendered halo's
+            // contrast consistently, independent of the art and the platform's text rasterizer.
+            var panel = Assert.IsAssignableFrom<Panel>(lockGlyph.Parent);
+            panel.Children.Insert(0, new Border { Background = Brushes.Black, Margin = glow.Margin, IsHitTestVisible = false });
+            HeadlessFrame.Publish(w);  // settle the plate before taking either comparison frame
+
             // On screen: 2 DIP left of the glyph's ink, mid-height, the halo tints the frame.
             glow.Opacity = 1;
             var p = lockGlyph.TranslatePoint(new Point(plain.X - pad - 2, plain.Y - pad + plain.Height / 2.0), w)!.Value;
