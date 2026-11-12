@@ -21,7 +21,6 @@ public class PossessionDropTests
 {
     private static PossessionTarget Target(Control control, PossessionRole role = PossessionRole.Title) =>
         new() { Visual = control, Role = role, Key = "title" };
-
     [Fact]
     public void RefusesBoundTextAndTimer() => AvaloniaTestDispatcher.Run(() =>
     {
@@ -31,7 +30,6 @@ public class PossessionDropTests
         text.Bind(TextBlock.TextProperty, new Binding("Name") { Source = new { Name = "title" } });
         Assert.Null(DropEffect.FindTarget(Target(text)));
     });
-
     [Fact]
     public void RefusesTextThatCannotBeSafelyRewritten() => AvaloniaTestDispatcher.Run(() =>
     {
@@ -51,12 +49,13 @@ public class PossessionDropTests
         public Window? PossessionWindow => window;
         public Canvas? GhostLayer => layer;
         public Canvas? RubbleFloor => floor;
+        public Rect? FloorBoundsOverride { get; set; }
         public IFrameSource PossessionFrames => frames;
         public PossessionRuntime PossessionEffectRuntime { get; } = new(frames);
         public Point PointerPosition => default;
         public IReadOnlyList<PossessionTarget> Targets => Array.Empty<PossessionTarget>();
         public bool IsUsable => true;
-        public Rect? BoundsOnGhostLayer(Control element) => element.TranslatePoint(default, layer) is { } point
+        public Rect? BoundsOnGhostLayer(Control element) => element == floor && FloorBoundsOverride is { } bounds ? bounds : element.TranslatePoint(default, layer) is { } point
             ? new Rect(point, element.Bounds.Size) : null;
     }
     private sealed class Attribution : IPossessionAttribution
@@ -73,7 +72,6 @@ public class PossessionDropTests
         Intensity = PossessionIntensity.Eerie, Photosafe = false, Rng = new Random(4),
         ElapsedFraction = 0.7, Remaining = TimeSpan.FromMinutes(1), Name = (_, _) => { }
     };
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -125,7 +123,6 @@ public class PossessionDropTests
         }
         finally { PossessionRuntime.UndoAllLive(); window.Close(); }
     });
-
     [Fact]
     public async Task CancellationAndExternalRewriteDoNotLeaveRubbleOrOverwriteNewText()
     {
@@ -272,11 +269,17 @@ public class PossessionDropTests
         var frames = new FakeFrames(); var effect = new DropEffect(); var host = new Host(window, layer, frames, floor);
         try
         {
+            host.FloorBoundsOverride = new Rect(0, 100, 400, 0);
             await effect.ApplyAsync(Context(host), Target(text), CancellationToken.None);
+            host.FloorBoundsOverride = new Rect(0, 200, 400, 0);
             frames.Frame(TimeSpan.Zero); frames.Frame(TimeSpan.FromMilliseconds(5000));
-            Assert.Single(layer.Children);
+            var glyph = Assert.IsType<Image>(Assert.Single(layer.Children));
+            var tr = Assert.IsType<TransformGroup>(glyph.RenderTransform).Children.OfType<TranslateTransform>().Single();
+            double homeY = Canvas.GetTop(glyph); host.FloorBoundsOverride = new Rect(0, 250, 400, 0);
             frames.Frame(TimeSpan.FromMilliseconds(8000));
-            Assert.Empty(layer.Children); Assert.Single(floor.Children);
+            Assert.Equal(200, homeY + tr.Y, 3);
+            Assert.Empty(layer.Children); Assert.Same(glyph, Assert.Single(floor.Children));
+            Assert.Equal(homeY, Canvas.GetTop(glyph) + 250, 3);
             if (mode == 1) PossessionRuntime.UndoAllLive();
             else
             {
