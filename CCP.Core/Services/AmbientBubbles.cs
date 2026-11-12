@@ -58,8 +58,13 @@ namespace ConditioningControlPanel.Services
         public bool Clickable, Popping, Lucky;
         /// <summary>A Chaos run's bubble (WPF Bubble with a spec); null for a plain ambient one.</summary>
         public Chaos.EffectBubbleSpec? Spec;
-        private double _startX, _top, _bottom, _speed, _wobbleOffset, _timeAlive;
+        // A dashboard trigger is an ambient bubble with a benign payload, not a Chaos run bubble.
+        public bool IsAmbientTrigger, IsNatasha;
+        public double TimeAlive => _timeAlive;
+        public void Deflate() { Popping = Deflating = true; }
+        private double _startX, _top, _bottom, _speed, _wobbleOffset, _timeAlive, _ambientLifeMs;
         private int _animType;
+        private double _left, _right, _roamTop, _roamBottom, _vx, _vy;
 
         /// <summary>The concrete Bubbles v2 motion this bubble flies (never Mix).</summary>
         public BubbleMotionStyle Motion { get; private set; } = BubbleMotionStyle.FloatUp;
@@ -185,21 +190,32 @@ namespace ConditioningControlPanel.Services
             return b;
         }
 
-        /// <summary>WPF Bubble ctor with a Chaos spec, FloatUp only: the spec's size, the chaos
+        /// <summary>WPF Bubble ctor with a Chaos spec: the spec's size, the chaos
         /// pace (bigger drifts slower, SpeedMult, CHAOS_SPEED_MULT), the ambient wobble and rise.</summary>
         public static AmbientBubble SpawnChaos(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
-            double scaling, Chaos.EffectBubbleSpec spec)
+            double scaling, Chaos.EffectBubbleSpec spec, int speedBoost = 0)
         {
             var b = new AmbientBubble { Screen = screen, Clickable = true, Spec = spec, Size = spec.SizePx };
             if (spec.IsLive) b.FuseTotalMs = b.FuseRemainingMs = Math.Max(1, spec.FuseMs);   // WPF :3362
             b._speed = (1.0 + r.NextDouble()) * Math.Clamp(1.4 - (b.Size - 150) / 220.0, 0.6, 1.4)
                        * Math.Max(0.1, spec.SpeedMult) * Chaos.ChaosTuning.CHAOS_SPEED_MULT;
+            if (speedBoost > 0) b._speed *= 1.0 + Math.Clamp(speedBoost, 0, 500) / 100.0;
             b._animType = r.Next(4);
             b._wobbleOffset = r.NextDouble() * 100;
             b.Angle = r.Next(360);
             b._top = areaY / scaling - b.Size - 50;
             b.X = b._startX = (areaX + r.Next(50, (int)Math.Max(100, areaW - b.Size - 50))) / scaling;
+            b._bottom = (areaY + areaH) / scaling + 50;
             b.Y = (areaY + areaH) / scaling;
+            if (spec.Motion == Chaos.ChaosMotion.RainDown) b.Y = areaY / scaling - b.Size;
+            if (spec.Motion == Chaos.ChaosMotion.RoamBounce)
+            {
+                b._left = areaX / scaling; b._right = (areaX + areaW) / scaling - b.Size;
+                b._roamTop = areaY / scaling; b._roamBottom = (areaY + areaH) / scaling - b.Size;
+                b.Y = (areaY + r.Next(50, (int)Math.Max(100, areaH - b.Size - 50))) / scaling;
+                var angle = r.NextDouble() * Math.PI * 2;
+                b._vx = Math.Cos(angle) * b._speed * 1.4; b._vy = Math.Sin(angle) * b._speed * 1.4;
+            }
             return b;
         }
 
@@ -284,6 +300,11 @@ namespace ConditioningControlPanel.Services
                 FuseRemainingMs -= FuseStepMs;
                 if (FuseRemainingMs <= 0) return GoOff(null);
             }
+            if (IsAmbientTrigger && Spec is { TreatLifeMs: > 0 } && (_ambientLifeMs += FuseStepMs) >= Spec.TreatLifeMs)
+            {
+                Deflate();
+                return Result.Alive;
+            }
             _timeAlive += 0.02;
             double offset = 0;
             switch (_animType)
@@ -292,6 +313,20 @@ namespace ConditioningControlPanel.Services
                 case 1: offset = Math.Sin(_timeAlive * 7.5) * 30; Angle = (Angle + 0.14) % 360; break;
                 case 2: offset = Math.Cos(_timeAlive * 5.4) * 25; Angle = (Angle - 0.66) % 360; break;
                 case 3: offset = Math.Sin(_timeAlive * 3) * 30 + Math.Cos(_timeAlive * 6) * 15; Angle = (Angle + 0.54) % 360; break;
+            }
+            if (Spec?.Motion == Chaos.ChaosMotion.RainDown)
+            {
+                Y += _speed; X = _startX + offset;
+                return Y > _bottom ? (Spec.IsLive ? GoOff(null) : Result.Missed) : Result.Alive;
+            }
+            if (Spec?.Motion == Chaos.ChaosMotion.RoamBounce)
+            {
+                X += _vx; Y += _vy;
+                if (X < _left) { X = _left; _vx = Math.Abs(_vx); }
+                else if (X > _right) { X = _right; _vx = -Math.Abs(_vx); }
+                if (Y < _roamTop) { Y = _roamTop; _vy = Math.Abs(_vy); }
+                else if (Y > _roamBottom) { Y = _roamBottom; _vy = -Math.Abs(_vy); }
+                return Result.Alive;
             }
             switch (Motion)
             {
@@ -398,7 +433,7 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>One logical step. Missed and finished bubbles are removed; returns the misses.
         /// Allocation-free.</summary>
-        public int Step()
+        public int Step(AmbientBubble? heldNatasha = null)
         {
             var missed = 0;
             var now = Clock();
@@ -406,7 +441,8 @@ namespace ConditioningControlPanel.Services
             {
                 if (i >= Bubbles.Count) continue;   // a callback cleared the field
                 var b = Bubbles[i];
-                if (HoldChaos && b.Spec != null && !b.Popping) { b.CancelChannel(); continue; }
+                if (ReferenceEquals(b, heldNatasha) && !b.Popping) continue;
+                if (HoldChaos && b.Spec != null && !b.IsAmbientTrigger && !b.Popping) { b.CancelChannel(); continue; }
                 var r = b.Step(Held, CursorX, CursorY, now);
                 if (r == AmbientBubble.Result.Alive) continue;
                 if (r == AmbientBubble.Result.Detonated) { ChaosDetonated?.Invoke(b); continue; }

@@ -96,12 +96,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             VoiceOpacity = next;
             return changed;
         }
-        internal static void Stop() { VoiceOpacity = null; CloseAll(); }
+        internal static void Stop() { VoiceOpacity = null; Timed.Clear(); CloseAll(); }
+        internal static readonly TimedOverlayHold Timed = new();
 
         /// <summary>The painted alpha: the slider through WPF's #722 curve. A ramping session's value
         /// holds it instead (WPF _rampSpiralOpacity; SetSustainedOverlayOpacity clamps to 0..1).</summary>
         internal static double PaintedOpacity => SpiralFrames.Paint(
-            VoiceOpacity ?? Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
+            Timed.Opacity ?? VoiceOpacity ?? Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
 
         private static double? _pulseWeight;
         private static double _pulseBase, _pulsePeak;
@@ -125,7 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             Refreshes++;
             var s = CoreSettings.Current;
-            if (VoiceOpacity == null && (!s.SpiralEnabled || !ShouldShow())) { CloseAll(); return; }
+            if (VoiceOpacity == null && Timed.Opacity == null && (!s.SpiralEnabled || !ShouldShow())) { CloseAll(); return; }
 
             var path = SourcePath();
             var video = IsVideo(path);

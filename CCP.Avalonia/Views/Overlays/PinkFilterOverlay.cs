@@ -55,7 +55,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             VoiceOpacity = next;
             return changed;
         }
-        internal static void Stop() { VoiceOpacity = null; CloseAll(); }
+        internal static void Stop() { VoiceOpacity = null; Timed.Clear(); CloseAll(); }
+        internal static readonly TimedOverlayHold Timed = new();
 
         private static bool _refused;
         internal static bool SkipPlatformChecksForTests;
@@ -70,7 +71,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             get
             {
                 var s = CoreSettings.Current;
-                var steady = VoiceOpacity ?? (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;
+                var steady = Timed.Opacity ?? VoiceOpacity ?? (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;
                 return Math.Clamp(_pulseWeight is { } k ? _pulseBase + (_pulsePeak - _pulseBase) * k : steady, 0, 1);
             }
         }
@@ -125,7 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static void Refresh(Visual host)
         {
             var s = CoreSettings.Current;
-            if (VoiceOpacity == null && (!s.PinkFilterEnabled || !ShouldShow())) { CloseAll(); return; }
+            if (VoiceOpacity == null && Timed.Opacity == null && (!s.PinkFilterEnabled || !ShouldShow())) { CloseAll(); return; }
 
             var screens = ScreenList.Enumerate(host);
             var primary = -1;
@@ -296,5 +297,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         private static void OnOwnerClosed(object? sender, EventArgs e) => CloseAll();
+    }
+
+    /// <summary>WPF OverlayService.ShowOverlayTimed (Services/Notifications/OverlayService.cs:924-1100): a popped
+    /// effect holds the overlay at its own opacity, never dims a live one, and the last hold's timer releases it.</summary>
+    internal sealed class TimedOverlayHold
+    {
+        internal static Action<Action, TimeSpan> Schedule = (a, t) => global::Avalonia.Threading.DispatcherTimer.RunOnce(a, t);
+        private int _holds, _generation;
+        internal double? Opacity { get; private set; }
+        internal void Show(double opacity, int durationMs, bool showing, double current, Action refresh)
+        {
+            _holds++;
+            Opacity = Math.Clamp(showing ? Math.Max(Opacity ?? current, opacity) : opacity, 0, 1);
+            var generation = _generation;
+            refresh();
+            Schedule(() => { if (generation == _generation && --_holds == 0) { Opacity = null; refresh(); } },
+                TimeSpan.FromMilliseconds(Math.Max(50, durationMs)));
+        }
+        internal void Clear() { _generation++; _holds = 0; Opacity = null; }
     }
 }

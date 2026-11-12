@@ -118,7 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow.xaml.cs:1900-1902: panic is a manual stop for this schedule.
             new("scheduler", sh => sh?.Scheduler.NoteManualStop(CoreSettings.Current, sh.SchedulerNow())),
             new("event-fx", sh => sh?.StopEventFx()), // release transient celebration surfaces
-            new("engine", _ => MainShellWindow.StopEngine(),
+            new("engine", _ => { Overlays.BubbleOverlay.Stop(); MainShellWindow.StopEngine(); },
                 After: ["companion-audio", "audio-playlist", "ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task", "browser-media", "deeper-player", "scheduler"]),
             new("chaster-trailer", _ => Tabs.ChasterTabView.StopTrailersForPanic()),
             new("voice-overlays", _ => { Overlays.SpiralOverlay.Stop(); Overlays.PinkFilterOverlay.Stop(); }, After: ["engine"]),
