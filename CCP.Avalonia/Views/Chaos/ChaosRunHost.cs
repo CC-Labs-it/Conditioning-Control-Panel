@@ -555,6 +555,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     _spawnTimer?.Stop();
                     BubbleOverlay.HoldChaos(true);
                     BubbleOverlay.ClearForDraft();
+                    Pulse(Color.FromRgb(150, 200, 255), 0.30);
                     ChaosWaveTimerWindow.Clear();
                     DealDraft();
                 }
