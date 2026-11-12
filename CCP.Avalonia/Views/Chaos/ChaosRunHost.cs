@@ -286,6 +286,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (_state == null || _manualPaused || _lessonCardPaused) return;
             int gold = ChaosRunEngine.GoldScaled(_state, Rng.Next(ChaosTuning.TEASE_GOLD_MIN, ChaosTuning.TEASE_GOLD_MAX + 1));
             BankGold(gold);
+            if (ChaosMeta.State.BubbleHintsLearned.Add("tease")) ChaosMeta.Save();
+            string announcement = Loc.GetF("chaos_tease_denied_gold", gold);
+            ChaosAnnouncerOverlay.Announce(announcement, ChaosAnnounceKind.PowerUp, artKey: "denied", subText: announcement);
             double pts = ChaosTuning.TEASE_DENIED_SCORE * _state.TotalMult * _state.BlindfoldPayMult;
             _state.Score += pts;
             _state.Focus += ChaosTuning.FOCUS_PER_DENIED;

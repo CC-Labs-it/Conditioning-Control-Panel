@@ -98,6 +98,7 @@
   <ItemGroup>
     <!-- WPF ChaosArt loads these from disk (ConditioningControlPanel.csproj:217).
          Ship the overlay's promoted art at the same paths, including in single-file publishes. -->
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\bubbles\tease.png" Link="assets\Chaos\bubbles\tease.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <Content Include="..\ConditioningControlPanel\assets\Chaos\recap.png" Link="assets\Chaos\recap.png"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <Content Include="..\ConditioningControlPanel\assets\Chaos\boons\*.png"

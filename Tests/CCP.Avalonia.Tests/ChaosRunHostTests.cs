@@ -788,8 +788,9 @@ public sealed class ChaosRunHostTests
         });
     }
 
-    [Fact]
-    public async Task Tease_expires_once_and_rewards_restraint()
+    [Theory]
+    [InlineData(true), InlineData(false)]
+    public async Task Tease_expires_once_and_rewards_restraint(bool hint)
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
@@ -797,6 +798,7 @@ public sealed class ChaosRunHostTests
             var oldRng = ChaosRunHost.Rng;
             var oldPopText = ChaosRunHost.PopText;
             var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
+            var oldAnnouncer = CoreSettings.Current.ChaosAnnouncerEnabled;
             try
             {
                 ChaosRunHost.Rng = new TeaseDice();
@@ -806,6 +808,8 @@ public sealed class ChaosRunHostTests
                 var state = ChaosRunHost.State!;
                 state.Focus = 20;
                 LocalizationManager.Instance.SetLanguage("de");
+                CoreSettings.Current.ChaosAnnouncerEnabled = true;
+                ChaosAnnouncerOverlay.CloseActive();
                 string? label = null;
                 ChaosRunHost.PopText = (_, _, text, _) => label = text;
                 var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsTease = true, SizePx = 200 });
@@ -824,13 +828,15 @@ public sealed class ChaosRunHostTests
                 Assert.Equal("WIDERSTANDEN", label);
                 Assert.True(state.Score > 0);
                 Assert.Equal(5, ChaosMeta.State.Gold);
+                if (hint) Assert.Contains("tease", ChaosMeta.State.BubbleHintsLearned);
+                else Assert.Equal("Widerstanden. +5 Gold", ChaosAnnouncerOverlay.Active!.Current!.Text);
                 Assert.Equal(0, state.Detonated);
                 double score = state.Score;
                 for (int i = 0; i < 30; i++) BubbleOverlay.Field.Step();
                 Assert.Equal(score, state.Score);
                 Assert.Equal(5, ChaosMeta.State.Gold);
             }
-            finally { ChaosRunHost.ForceShutdown(); ChaosRunHost.Rng = oldRng; ChaosRunHost.PopText = oldPopText; LocalizationManager.Instance.SetLanguage(oldLanguage); FreshMeta(); }
+            finally { ChaosRunHost.ForceShutdown(); ChaosRunHost.Rng = oldRng; ChaosRunHost.PopText = oldPopText; CoreSettings.Current.ChaosAnnouncerEnabled = oldAnnouncer; LocalizationManager.Instance.SetLanguage(oldLanguage); FreshMeta(); }
             return Task.CompletedTask;
         });
     }

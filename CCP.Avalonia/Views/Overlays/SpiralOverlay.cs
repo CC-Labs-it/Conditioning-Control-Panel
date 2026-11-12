@@ -80,6 +80,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         // WPF ShowOverlaySustained: voice owns a runtime hold, never the saved feature flag.
         // ponytail: retain the request through asynchronous decode; panic clears it even if no window opened.
+        private static double? _timedOpacity;
+        private static int _timedHolds, _timedGeneration;
+        internal static void ShowTimed(Visual host, int durationMs, double opacity)
+        {
+            double target = Math.Clamp((int)(opacity * 100), 0, 100) / 100.0;
+            _timedOpacity = Math.Max(_timedOpacity ?? (IsShowing ? VoiceOpacity ?? Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1) : 0), target);
+            _timedHolds++;
+            int generation = _timedGeneration;
+            Refresh(host);
+            DispatcherTimer.RunOnce(() =>
+            {
+                if (generation != _timedGeneration) return;
+                if (--_timedHolds == 0) _timedOpacity = null;
+                Refresh(host);
+            }, TimeSpan.FromMilliseconds(Math.Max(50, durationMs)));
+        }
         internal static double? VoiceOpacity { get; private set; }
         internal static void SetVoiceHold(Visual host, bool on)
         {
@@ -96,12 +112,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             VoiceOpacity = next;
             return changed;
         }
-        internal static void Stop() { VoiceOpacity = null; CloseAll(); }
+        internal static void Stop() { _timedGeneration++; _timedHolds = 0; _timedOpacity = null; VoiceOpacity = null; CloseAll(); }
 
         /// <summary>The painted alpha: the slider through WPF's #722 curve. A ramping session's value
         /// holds it instead (WPF _rampSpiralOpacity; SetSustainedOverlayOpacity clamps to 0..1).</summary>
         internal static double PaintedOpacity => SpiralFrames.Paint(
-            VoiceOpacity ?? Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
+            _timedOpacity is double t && VoiceOpacity is double v ? Math.Max(t, v)
+                : _timedOpacity ?? VoiceOpacity ?? Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
 
         private static double? _pulseWeight;
         private static double _pulseBase, _pulsePeak;
@@ -125,7 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             Refreshes++;
             var s = CoreSettings.Current;
-            if (VoiceOpacity == null && (!s.SpiralEnabled || !ShouldShow())) { CloseAll(); return; }
+            if (_timedOpacity == null && VoiceOpacity == null && (!s.SpiralEnabled || !ShouldShow())) { CloseAll(); return; }
 
             var path = SourcePath();
             var video = IsVideo(path);
