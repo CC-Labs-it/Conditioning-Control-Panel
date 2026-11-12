@@ -128,6 +128,13 @@ public sealed class EmiChainPlayer : IDisposable
     }
 
     internal TimeSpan? PendingHold { get; private set; }
+    // Freeze the current hold in a test while retaining the same frame and manual tick path.
+    internal void SuspendPendingHold()
+    {
+        if (_stopTimer == null) return;
+        _stopTimer();
+        _stopTimer = static () => { };
+    }
     internal void ElapsePendingHold() { if (_stopTimer != null) OnTick(); }
 
     /// <summary>Kill the running chain. Done is NOT called.</summary>

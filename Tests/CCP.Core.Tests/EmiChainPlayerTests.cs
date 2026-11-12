@@ -72,6 +72,26 @@ public sealed class EmiChainPlayerTests
         Assert.False(player.IsLive);
     }
     [Fact]
+    public void SuspendingAHoldStopsItsTimerAndManualAdvanceStartsTheNext()
+    {
+        var clock = new Clock();
+        using var player = new EmiChainPlayer(() => true, a => a(), clock.Start);
+        var faces = new List<string>();
+        var chain = new EmiChain("test", "test", new[] { new EmiFrame("first", 160), new EmiFrame("second", 80) });
+        player.Play(chain, new EmiChainHooks { Draw = (text, _, _) => faces.Add(text) });
+        player.SuspendPendingHold();
+        Assert.Null(clock.Hold);
+        Assert.Equal(TimeSpan.FromMilliseconds(160), player.PendingHold);
+        clock.Elapse();
+        Assert.Equal(new[] { "first" }, faces);
+        player.ElapsePendingHold();
+        Assert.Equal(new[] { "first", "second" }, faces);
+        Assert.Equal(TimeSpan.FromMilliseconds(80), clock.Hold);
+        clock.Elapse();
+        Assert.False(player.IsLive);
+    }
+
+    [Fact]
     public void OffThreadPlayPostsBeforeStartingTheClock()
     {
         var clock = new Clock(); bool access = false; Action? posted = null;

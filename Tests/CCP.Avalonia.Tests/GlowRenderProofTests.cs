@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.Headless;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -146,6 +147,9 @@ public sealed class GlowRenderProofTests
         var before = (s.MotionLevel, s.PerformanceMode);
         var (premium, lab, free) = (CoreEntitlement.HasPremiumProvider, CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider);
         var (fxTime, beatTime) = (FxAdorner.Time, ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time);
+        var resources = Application.Current!.Resources;
+        bool hadGlowColor = resources.ContainsKey("FxGlowColor");
+        var oldGlowColor = hadGlowColor ? resources["FxGlowColor"] : null;
         MainShellWindow? w = null;
         try
         {
@@ -159,11 +163,17 @@ public sealed class GlowRenderProofTests
             w = new MainShellWindow { Width = 1400, Height = 900 };
             w.Show();
             Dispatcher.UIThread.RunJobs();
+            // A mod can make the halo indistinguishable from the card art at one sampled pixel.
+            // Fix the palette and backdrop so this remains a test of the rendered halo.
+            resources["FxGlowColor"] = Colors.White;
             w.ShowTab("exclusives");
             Dispatcher.UIThread.RunJobs();
             var view = w.Named<ExclusivesTabView>("ExclusivesTab")!;
             var lockGlyph = view.GetVisualDescendants().OfType<IconGlyph>().First(t => t.Name == "VeilLock" && t.IsEffectivelyVisible);
             var glow = ExclusivesTabView.LockGlow(lockGlyph)!;
+            var backdrop = Assert.IsType<Panel>(lockGlyph.Parent);
+            backdrop.Background = Brushes.Black;
+            Assert.Equal(Colors.White, AmbientFxCanvas.Env.GlowColor);
             Assert.True(glow.IsVisible, "the padlock glow is not shown - the proof proves nothing");
             Assert.Null(lockGlyph.Effect);                                    // no live Effect on the glyph
             var baked = Assert.IsAssignableFrom<Bitmap>(glow.Source);          // the shadow, baked once
@@ -178,10 +188,15 @@ public sealed class GlowRenderProofTests
                 $"no halo around the glyph: ink {plain}, with glow {halo}");
 
             // On screen: 2 DIP left of the glyph's ink, mid-height, the halo tints the frame.
-            glow.Opacity = 1;
-            var p = lockGlyph.TranslatePoint(new Point(plain.X - pad - 2, plain.Y - pad + plain.Height / 2.0), w)!.Value;
+            // Keep the clock from overwriting the requested opacity between captures.
+            using var fixedOpacity = glow.SetValue(Visual.OpacityProperty, 1d, BindingPriority.Animation);
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            var localPoint = new Point(plain.X - pad - 2, plain.Y - pad + plain.Height / 2.0);
+            Assert.True(new Rect(backdrop.Bounds.Size).Contains(lockGlyph.TranslatePoint(localPoint, backdrop)!.Value));
+            var p = lockGlyph.TranslatePoint(localPoint, w)!.Value;
             var lit = Pixel(Frame(w, "padlock-glow-on"), p);
             glow.IsVisible = false;
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             var dark = Pixel(Frame(w, "padlock-glow-off"), p);
             Assert.True(Diff(lit, dark) > 4, $"no halo beside the padlock: {lit:X6} vs {dark:X6}");
         }
@@ -191,6 +206,8 @@ public sealed class GlowRenderProofTests
             Dispatcher.UIThread.RunJobs();
             (FxAdorner.Time, ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time) = (fxTime, beatTime);
             (CoreEntitlement.HasPremiumProvider, CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider) = (premium, lab, free);
+            if (hadGlowColor) resources["FxGlowColor"] = oldGlowColor!;
+            else resources.Remove("FxGlowColor");
             (s.MotionLevel, s.PerformanceMode) = before;
         }
         return Task.CompletedTask;

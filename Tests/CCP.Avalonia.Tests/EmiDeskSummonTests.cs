@@ -296,6 +296,13 @@ public sealed class EmiDeskSummonTests
             if (panic) win.StopChainForPanic(); else win.Say("x");
             Assert.Equal(1, completed);
             win.PlayChain("shock");
+            var chain = win.ChainPlayer.Current;
+            Assert.NotNull(chain);
+            Assert.Equal(TimeSpan.FromMilliseconds(160), win.ChainPlayer.PendingHold);
+            win.ChainPlayer.SuspendPendingHold();
+            // Pointer dispatch pumps the UI; a loaded runner can otherwise elapse the 160 ms frame.
+            await Task.Delay(200);
+            var pets = ConditioningControlPanel.Services.EmiDesk.EmiState.Current.PetsTotal;
             var body = (Control)typeof(EmiDeskWindow).GetField("_bodyRoot",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(win)!;
             var point = body.TranslatePoint(new Point(body.Bounds.Width / 2, body.Bounds.Height / 2), win)!.Value;
@@ -303,6 +310,11 @@ public sealed class EmiDeskSummonTests
             win.MouseUp(point, global::Avalonia.Input.MouseButton.Left);
             Assert.Equal("o_o", win.Face);
             Assert.True(win.ChainLive);
+            Assert.Same(chain, win.ChainPlayer.Current);
+            Assert.Equal(pets, ConditioningControlPanel.Services.EmiDesk.EmiState.Current.PetsTotal);
+            win.ChainPlayer.ElapsePendingHold();
+            Assert.Equal("0_0", win.Face);
+            Assert.Same(chain, win.ChainPlayer.Current);
             await Pump(2000);
             Assert.Equal(1, completed);
         }
