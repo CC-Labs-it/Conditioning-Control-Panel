@@ -177,13 +177,27 @@ public sealed class GlowRenderProofTests
             Assert.True(halo.X < plain.X - 2 && halo.Y < plain.Y - 2 && halo.Right > plain.Right + 2 && halo.Bottom > plain.Bottom + 2,
                 $"no halo around the glyph: ink {plain}, with glow {halo}");
 
-            // On screen: 2 DIP left of the glyph's ink, mid-height, the halo tints the frame.
+            // Freeze the actual beat as well as its clock: a tick would reset the opacity below.
+            var motion = Assert.Single(ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Running,
+                loop => ReferenceEquals(loop.Owner, view));
+            motion.Stop();
+            // On screen: the halo must tint several pixels outside the glyph's left ink edge.
+            // One pixel can match a similarly coloured background even when the halo is visible.
             glow.Opacity = 1;
-            var p = lockGlyph.TranslatePoint(new Point(plain.X - pad - 2, plain.Y - pad + plain.Height / 2.0), w)!.Value;
-            var lit = Pixel(Frame(w, "padlock-glow-on"), p);
+            using var lit = Frame(w, "padlock-glow-on");
             glow.IsVisible = false;
-            var dark = Pixel(Frame(w, "padlock-glow-off"), p);
-            Assert.True(Diff(lit, dark) > 4, $"no halo beside the padlock: {lit:X6} vs {dark:X6}");
+            using var dark = Frame(w, "padlock-glow-off");
+            var origin = lockGlyph.TranslatePoint(new Point(plain.X - pad, plain.Y - pad), w)!.Value;
+            int tinted = 0, strongest = 0;
+            for (int y = 0; y < plain.Height; y++)
+                for (int x = 1; x <= 8; x++)
+                {
+                    var at = new Point(origin.X - x, origin.Y + y);
+                    int diff = Diff(Pixel(lit, at), Pixel(dark, at));
+                    strongest = Math.Max(strongest, diff);
+                    if (diff > 4) tinted++;
+                }
+            Assert.True(tinted >= 3, $"no halo beside the padlock: {tinted} tinted pixels, max difference {strongest}");
         }
         finally
         {

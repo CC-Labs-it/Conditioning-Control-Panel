@@ -295,6 +295,8 @@ public sealed class EmiDeskSummonTests
             Assert.True(win.ChainLive);
             if (panic) win.StopChainForPanic(); else win.Say("x");
             Assert.Equal(1, completed);
+            // MouseDown/MouseUp pump the dispatcher; keep the 160 ms shock frame fixed while testing the click.
+            win.ChainTimerOverride = (_, _) => () => { };
             win.PlayChain("shock");
             var body = (Control)typeof(EmiDeskWindow).GetField("_bodyRoot",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(win)!;
@@ -303,8 +305,16 @@ public sealed class EmiDeskSummonTests
             win.MouseUp(point, global::Avalonia.Input.MouseButton.Left);
             Assert.Equal("o_o", win.Face);
             Assert.True(win.ChainLive);
-            await Pump(2000);
+            Assert.Equal(TimeSpan.FromMilliseconds(160), win.ChainPlayer.PendingHold);
+            await Pump(2000); // stale summon callbacks must not replace this chain
+            Assert.Equal("o_o", win.Face);
             Assert.Equal(1, completed);
+            win.ChainPlayer.ElapsePendingHold();
+            Assert.Equal("0_0", win.Face);
+            win.ChainPlayer.ElapsePendingHold();
+            Assert.Equal("(◉_◉)", win.Face);
+            win.ChainPlayer.ElapsePendingHold();
+            Assert.False(win.ChainLive);
         }
         finally { win.ShutDown(); }
     });
