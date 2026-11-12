@@ -286,7 +286,9 @@ public sealed class EmiDeskSummonTests
     [InlineData(false)]
     public Task InterruptedWakeFinishesOnceAndLaterLinesEatPats(bool panic) => Muted(() => Task.FromResult(EmiMuteChoice.Keep), async _ =>
     {
-        var win = new EmiDeskWindow();
+        // Freeze the existing chain timer seam: a loaded CI runner can spend more than the
+        // first shock frame's 160 ms dispatching a real pointer click.
+        var win = new EmiDeskWindow((_, _) => () => { });
         int completed = 0;
         try
         {
@@ -296,6 +298,7 @@ public sealed class EmiDeskSummonTests
             if (panic) win.StopChainForPanic(); else win.Say("x");
             Assert.Equal(1, completed);
             win.PlayChain("shock");
+            await Pump(250); // dispatch may take longer than the first frame's hold
             var body = (Control)typeof(EmiDeskWindow).GetField("_bodyRoot",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(win)!;
             var point = body.TranslatePoint(new Point(body.Bounds.Width / 2, body.Bounds.Height / 2), win)!.Value;
@@ -303,6 +306,12 @@ public sealed class EmiDeskSummonTests
             win.MouseUp(point, global::Avalonia.Input.MouseButton.Left);
             Assert.Equal("o_o", win.Face);
             Assert.True(win.ChainLive);
+            win.ChainPlayer.ElapsePendingHold();
+            Assert.Equal("0_0", win.Face);
+            win.ChainPlayer.ElapsePendingHold();
+            Assert.Equal("(◉_◉)", win.Face);
+            win.ChainPlayer.ElapsePendingHold();
+            Assert.False(win.ChainLive);
             await Pump(2000);
             Assert.Equal(1, completed);
         }
