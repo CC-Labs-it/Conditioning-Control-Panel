@@ -151,6 +151,63 @@ public class HomeBrowserEnhanceTests
     }
 
     [Fact]
+    public void AudioDuckingIsReleasedOnCompletionAndCleanup()
+    {
+        var player = CoreAudio.PlayStoppableProvider;
+        var duck = CoreAudio.DuckProvider;
+        var unduck = CoreAudio.UnduckProvider;
+        var generation = CoreAudio.DuckGenerationProvider;
+        var enabled = CoreSettings.Current.AudioDuckingEnabled;
+        var level = CoreSettings.Current.DuckingLevel;
+        var path = Path.GetTempFileName();
+        var ducks = 0;
+        var releases = new List<long>();
+        Action? finish = null;
+        try
+        {
+            CoreSettings.Current.AudioDuckingEnabled = true;
+            CoreSettings.Current.DuckingLevel = 71;
+            CoreAudio.DuckProvider = strength => { Assert.Equal(71, strength); ducks++; };
+            CoreAudio.UnduckProvider = g => releases.Add(g);
+            CoreAudio.DuckGenerationProvider = () => 42;
+            CoreAudio.PlayStoppableProvider = (_, _, _, _, done) => { finish = done; return () => { }; };
+            using var source = new WebHostVideoTimeSource(new WebHost());
+            var ctx = new EnhancementDispatchContext(new Enhancement(), source, 0, null);
+            var dispatcher = new BrowserEnhancementDispatcher();
+            var action = new PlayAudioAction { Path = path, Volume = 50, DuckOtherAudio = true };
+            dispatcher.DispatchAsync(action, ctx).GetAwaiter().GetResult();
+            Assert.Equal(1, ducks);
+            finish!();
+            Assert.Equal(new long[] { 42 }, releases);
+            dispatcher.DispatchAsync(action, ctx).GetAwaiter().GetResult();
+            dispatcher.ResetOverlayBands();
+            Assert.Equal(new long[] { 42, 42 }, releases);
+            finish!();
+            Assert.Equal(2, releases.Count);
+            CoreSettings.Current.AudioDuckingEnabled = false;
+            var silentDuck = new BrowserEnhancementDispatcher();
+            silentDuck.DispatchAsync(action, ctx).GetAwaiter().GetResult();
+            silentDuck.ResetOverlayBands();
+            Assert.Equal(2, ducks);
+            Assert.Equal(2, releases.Count);
+            CoreSettings.Current.AudioDuckingEnabled = true;
+            action.DuckOtherAudio = false;
+            var unrequested = new BrowserEnhancementDispatcher();
+            unrequested.DispatchAsync(action, ctx).GetAwaiter().GetResult();
+            unrequested.ResetOverlayBands();
+            Assert.Equal(2, ducks);
+            Assert.Equal(2, releases.Count);
+        }
+        finally
+        {
+            CoreAudio.PlayStoppableProvider = player; CoreAudio.DuckProvider = duck;
+            CoreAudio.UnduckProvider = unduck; CoreAudio.DuckGenerationProvider = generation;
+            CoreSettings.Current.AudioDuckingEnabled = enabled; CoreSettings.Current.DuckingLevel = level;
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void WebcamAdapterForwardsUntilDisposed() => AvaloniaTestDispatcher.Run(() =>
     {
         var camera = new BrowserEnhancementWebcam();

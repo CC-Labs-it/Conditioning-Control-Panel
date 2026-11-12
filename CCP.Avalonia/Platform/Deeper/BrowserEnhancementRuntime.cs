@@ -26,17 +26,28 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
     public void StopOneShotFlashes() { }
     public void StopOneShotSubliminals() { }
 
-    private void PlayAudio(string path, float volume)
+    private void PlayAudio(string path, float volume, bool duckOtherAudio)
     {
         lock (_audioGate)
         {
             if (_retired || CoreAudio.PlayStoppableProvider == null) return;
+            var ducked = duckOtherAudio && CoreSettings.Current.AudioDuckingEnabled;
+            if (ducked) CoreAudio.Duck(CoreSettings.Current.DuckingLevel);
+            var generation = CoreAudio.DuckGeneration;
             Action? stop = null;
             bool finished = false;
-            stop = CoreAudio.PlayStoppable(path, volume, "deeper", onFinished: () =>
+            void Finish()
             {
-                lock (_audioGate) { finished = true; if (stop != null) _audioStops.Remove(stop); }
-            });
+                lock (_audioGate)
+                {
+                    if (finished) return;
+                    finished = true;
+                    if (stop != null) _audioStops.Remove(stop);
+                    if (ducked) CoreAudio.Unduck(generation);
+                }
+            }
+            var stopPlayer = CoreAudio.PlayStoppable(path, volume, "deeper", onFinished: Finish);
+            stop = () => { try { stopPlayer(); } finally { Finish(); } };
             if (!finished) _audioStops.Add(stop);
         }
     }
@@ -66,7 +77,7 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
                 break;
             case PlayAudioAction audio when !string.IsNullOrEmpty(audio.Path):
                 var path = Path.IsPathRooted(audio.Path) ? audio.Path : Path.Combine(CorePaths.EffectiveAssets, audio.Path);
-                if (File.Exists(path)) PlayAudio(path, Math.Clamp(audio.Volume / 100f, 0f, 1f));
+                if (File.Exists(path)) PlayAudio(path, Math.Clamp(audio.Volume / 100f, 0f, 1f), audio.DuckOtherAudio);
                 break;
             case ScreenShakeAction shake: Views.Deeper.ScreenShake.Shake(shake.Intensity, shake.DurationMs); break;
             case TriggerHapticAction haptic: await Haptic(haptic); break;
