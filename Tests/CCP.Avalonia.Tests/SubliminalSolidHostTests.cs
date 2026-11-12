@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Xunit;
@@ -25,8 +26,11 @@ public sealed class SubliminalSolidHostTests
             var card = Assert.Single(canvas.Children);
             Assert.Equal(0, card.Opacity);
             await System.Threading.Tasks.Task.Delay(150);
+            // Headless timer callbacks must run before sampling the fade.
+            Dispatcher.UIThread.RunJobs();
             Assert.Equal(0.8, card.Opacity, 3);
             await System.Threading.Tasks.Task.Delay(650);
+            Dispatcher.UIThread.RunJobs();
             Assert.Empty(canvas.Children);
         }
         finally { SubliminalOverlay.CloseAll(); SharedOverlayHost.Configure = configure; }
