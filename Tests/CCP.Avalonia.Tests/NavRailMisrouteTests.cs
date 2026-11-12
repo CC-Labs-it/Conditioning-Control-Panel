@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -113,6 +114,50 @@ public sealed class NavRailMisrouteTests
         Press(w, "DoorStudio");
         Assert.Equal("studio", w.CurrentTab);
     });
+    [Fact]
+    public void ShellDiscoversRailDoorsAndMisroutesARealPress() => Run(w =>
+    {
+        var host = (IPossessionHost)w;
+        var doors = new[]
+        {
+            ("DoorHome", "the Home door"), ("DoorStudio", "the Studio door"),
+            ("DoorCompanion", "the Companion door"), ("DoorPlay", "the Play door"),
+            ("DoorSocial", "the Social door"), ("DoorYou", "the You door"),
+            ("DoorLibrary", "the Library door"), ("DoorSettings", "the Settings door")
+        };
+        var targets = host.Targets;
+        foreach (var (name, displayName) in doors)
+        {
+            var button = w.Named<Button>(name)!;
+            var target = Assert.Single(targets, t => ReferenceEquals(t.Visual, button));
+            Assert.Equal(PossessionRole.TabHeader, target.Role);
+            Assert.Equal(displayName, target.DisplayName);
+            if (name != "DoorStudio" && name != "DoorSocial") button.IsVisible = false;
+        }
+        Dispatcher.UIThread.RunJobs();
+        w.InvalidatePossessionTargets();
+        var studio = Assert.Single(host.Targets, t => ReferenceEquals(t.Visual, w.Named<Button>("DoorStudio")));
+        var ctx = new PossessionContext
+        {
+            Host = host, Attribution = new Attribution(), Rung = PossessionRung.Melt,
+            Intensity = PossessionIntensity.Eerie, Photosafe = false, Rng = new Random(1),
+            ElapsedFraction = 0, Remaining = TimeSpan.Zero, Name = (_, _) => { }
+        };
+        var effect = Assert.IsType<MisrouteEffect>(
+            Assert.Single(PossessionAvaloniaHead.CreateEffects(), e => e.Id == "misroute"));
+        Assert.True(effect.CanApply(ctx, studio));
+        try
+        {
+            effect.ApplyAsync(ctx, studio, CancellationToken.None).GetAwaiter().GetResult();
+            Press(w, "DoorStudio");
+            Assert.Equal("availablesubjects", w.CurrentTab);
+            Assert.Null(MainShellWindow.PossessionReroute);
+            Press(w, "DoorStudio");
+            Assert.Equal("studio", w.CurrentTab);
+        }
+        finally { effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult(); }
+    });
+
     [Fact]
     public void MisrouteEffectStealsOnePressAndReleasesItsHook() => Run(w =>
     {
