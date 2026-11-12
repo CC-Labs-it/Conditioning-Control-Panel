@@ -199,6 +199,10 @@ public sealed class PossessionShellTests
         // The ghost layer covers the window and never takes a click.
         var layer = Assert.IsType<Canvas>(rig.Shell.PossessionGhostLayer);
         Assert.False(layer.IsHitTestVisible);
+        var floor = Assert.IsType<Canvas>(((IAvaloniaPossessionHost)rig.Shell).RubbleFloor);
+        Assert.False(floor.IsHitTestVisible);
+        Assert.Equal(28, floor.Height);
+        Assert.DoesNotContain(targets, t => ReferenceEquals(t.Visual, floor));
 
         // A rebuild hands back the SAME target objects, so a cooldown on the Stop button survives it.
         var first = targets[0];
