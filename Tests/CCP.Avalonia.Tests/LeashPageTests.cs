@@ -329,6 +329,60 @@ public sealed class LeashPageTests
             Assert.NotNull(LeashAskWindow.Snap);
         });
 
+    [Fact]
+    public void TugWobblesTheLauncherAndReportsSeenOnlyWhenVisibleWithMotion() =>
+        Run(false, (shell, launcher, _) =>
+        {
+            var seen = new List<string>();
+            var service = new LeashService(new Wire(), () => "u_me", cutSafety: () => { }, reportSeen: seen.Add);
+            LeashHead.Service = service;
+            shell.Hide(); launcher.Show(); shell.CheckLeashGate();
+            ConditioningControlPanel.CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+            ConditioningControlPanel.CoreSettings.Current.GentleVisuals = false;
+            var target = Assert.IsAssignableFrom<Control>(launcher.Content);
+            var prior = new ScaleTransform(0.9, 0.9);
+            target.RenderTransform = prior;
+            void Tug(string id)
+            {
+                var block = Block();
+                block["events"] = new JArray(new JObject {
+                    ["id"] = id, ["kind"] = "tug", ["from"] = new JObject { ["id"] = "u_a", ["name"] = "A" },
+                    ["at"] = DateTimeOffset.UtcNow.ToString("o") });
+                service.ApplyBlock(block); Dispatcher.UIThread.RunJobs();
+            }
+            Tug("abcdef0123456789");
+            var group = Assert.IsType<TransformGroup>(target.RenderTransform);
+            Assert.Same(prior, group.Children[0]);
+            shell.OfferSurfaces!.StepTug(156);
+            Assert.Equal(-9.6, Assert.IsType<TranslateTransform>(group.Children[2]).X, 5);
+            Assert.Equal(-1.76, Assert.IsType<RotateTransform>(group.Children[1]).Angle, 5);
+            shell.OfferSurfaces.StepTug(416);
+            Assert.Equal(-0.30618, Assert.IsType<TranslateTransform>(group.Children[2]).X, 4);
+            shell.OfferSurfaces.StepTug(520);
+            Assert.Same(prior, target.RenderTransform);
+            Assert.Contains("abcdef0123456789", seen);
+            ConditioningControlPanel.CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
+            Tug("0123456789abcdef");
+            Assert.DoesNotContain("0123456789abcdef", seen);
+            launcher.Hide(); shell.Show(); shell.CheckLeashGate();
+            Assert.Contains("0123456789abcdef", seen);
+            ConditioningControlPanel.CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Reduced;
+            var panelTarget = Assert.IsAssignableFrom<Control>(shell.Content);
+            var panelPrior = panelTarget.RenderTransform;
+            Tug("1111111111111111");
+            var panelGroup = Assert.IsType<TransformGroup>(panelTarget.RenderTransform);
+            shell.OfferSurfaces!.StepTug(156);
+            Assert.Equal(-4.8, Assert.IsType<TranslateTransform>(panelGroup.Children[2]).X, 5);
+            Assert.Contains("1111111111111111", seen);
+            shell.OfferSurfaces.StepTug(520);
+            Assert.Same(panelPrior, panelTarget.RenderTransform);
+            shell.Hide(); launcher.Hide(); shell.CheckLeashGate();
+            Tug("2222222222222222");
+            Assert.DoesNotContain("2222222222222222", seen);
+            shell.Show(); shell.CheckLeashGate();
+            Assert.Contains("2222222222222222", seen);
+        });
+
     private sealed class Runner : ILeashTaskRunner
     {
         public int Starts;

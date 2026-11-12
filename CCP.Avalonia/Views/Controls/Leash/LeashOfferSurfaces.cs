@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Diagnostics;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services.Leash;
@@ -20,6 +23,15 @@ internal sealed class LeashOfferSurfaces : IDisposable
     private readonly List<LeashOffer> _waiting = new();
     private readonly List<LeashEvent> _held = new();
     private ILeashService? _service;
+    private Control? _tugTarget;
+    private ITransform? _tugPrior;
+    private RelativePoint _tugOrigin;
+    private TransformGroup? _tugGroup;
+    private RotateTransform? _tugTurn;
+    private TranslateTransform? _tugMove;
+    private DispatcherTimer? _tugTimer;
+    private Stopwatch? _tugClock;
+    private double _tugAmount;
     private string? _account;
     internal LeashOfferSurfaces(Func<Window?> owner)
     {
@@ -60,7 +72,9 @@ internal sealed class LeashOfferSurfaces : IDisposable
                 return;
             }
             LeashSound.Event(e.Kind, DateTime.UtcNow);
-            var (toast, seen, hold) = LeashUiRules.EventNotice(e.Kind, PanelShowing(), false);
+            var owner = _owner();
+            var wobbles = e.Kind == LeashEventKind.Tug && StartTug(owner);
+            var (toast, seen, hold) = LeashUiRules.EventNotice(e.Kind, owner is MainShellWindow, wobbles);
             if (toast) Toast(e);
             if (seen) source?.NoteShown(e.Id);
             if (hold)
@@ -71,6 +85,64 @@ internal sealed class LeashOfferSurfaces : IDisposable
         }
         if (Dispatcher.UIThread.CheckAccess()) Apply(); else Dispatcher.UIThread.Post(Apply);
     }
+    // WPF MainWindow.Leash.cs:442-450 and LeashFx.cs:89-115: preserve the root's
+    // transform, yank left, swing back and settle in 520 ms. Reduced motion halves distance.
+    private bool StartTug(Window? owner)
+    {
+        var amount = FriendsDrawer.FeedMotionAmount * 0.8;
+        if (amount <= 0 || owner is not { IsVisible: true, WindowState: not WindowState.Minimized, Content: Control target }) return false;
+        StopTug();
+        _tugTarget = target; _tugPrior = target.RenderTransform; _tugOrigin = target.RenderTransformOrigin;
+        _tugTurn = new RotateTransform(); _tugMove = new TranslateTransform();
+        _tugGroup = new TransformGroup();
+        _tugGroup.Children.Add(_tugPrior as Transform ?? new MatrixTransform { Matrix = _tugPrior?.Value ?? Matrix.Identity });
+        _tugGroup.Children.Add(_tugTurn); _tugGroup.Children.Add(_tugMove);
+        target.RenderTransformOrigin = RelativePoint.Center;
+        target.RenderTransform = _tugGroup;
+        _tugAmount = amount;
+        _tugClock = Stopwatch.StartNew();
+        _tugTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        _tugTimer.Tick += (_, _) => StepTug(_tugClock!.Elapsed.TotalMilliseconds);
+        _tugTimer.Start();
+        return true;
+    }
+
+    internal void StepTug(double milliseconds)
+    {
+        if (_tugTarget == null || _tugTurn == null || _tugMove == null) return;
+        if (milliseconds >= 520 || FriendsDrawer.FeedMotionAmount <= 0) { StopTug(); return; }
+        var t = Math.Clamp(milliseconds / 520, 0, 1);
+        double x, angle;
+        if (t <= 0.3)
+        {
+            var q = t / 0.3;
+            x = -12 * (1 - (1 - q) * (1 - q)); angle = -2.2 * q;
+        }
+        else if (t <= 0.6)
+        {
+            var q = (t - 0.3) / 0.3;
+            var ease = q < 0.5 ? 2 * q * q : 1 - 2 * (1 - q) * (1 - q);
+            x = -12 + 17 * ease; angle = -2.2 + 3.3 * q;
+        }
+        else
+        {
+            var q = (t - 0.6) / 0.4;
+            x = 5 * (1 - ConditioningControlPanel.Services.Billboard.BillboardTiming.Thud(q)); angle = 1.1 * (1 - q);
+        }
+        _tugMove.X = x * _tugAmount; _tugTurn.Angle = angle * _tugAmount;
+    }
+
+    private void StopTug()
+    {
+        _tugTimer?.Stop(); _tugTimer = null; _tugClock = null;
+        if (_tugTarget is { } target && ReferenceEquals(target.RenderTransform, _tugGroup))
+        {
+            target.RenderTransform = _tugPrior;
+            target.RenderTransformOrigin = _tugOrigin;
+        }
+        _tugTarget = null; _tugGroup = null; _tugMove = null; _tugTurn = null; _tugPrior = null;
+    }
+
     private static void Toast(LeashEvent e)
     {
         if (LeashUiRules.EventKey(e) is { } key)
@@ -119,6 +191,7 @@ internal sealed class LeashOfferSurfaces : IDisposable
     }
     public void Dispose()
     {
+        StopTug();
         LeashAskWindow.Freed -= TryShow;
         if (_service != null) { _service.SnapshotChanged -= OnSnapshot; _service.EventArrived -= OnEvent; }
         _service = null; _waiting.Clear(); _seen.Clear();
