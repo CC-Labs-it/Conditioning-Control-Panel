@@ -34,7 +34,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Panic surface "browser-media" (WPF b9368d963 PanicEndBrowserMedia): page video stops, fullscreen drops.</summary>
         internal void PanicPauseBrowserMedia()
         {
-            if (BrowserView is { } host) _ = host.InvokeScriptAsync(WebHostMedia.PanicPauseScript);
+            if (BrowserView is { } host)
+            {
+                host.CancelBrowserZoom();
+                _ = host.InvokeScriptAsync(WebHostMedia.PanicPauseScript);
+            }
         }
 
         /// <summary>Homepage of whichever site radio is selected. BambiCloud is the default, as on
@@ -69,7 +73,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var host = BrowserView;
                 if (host == null) return false;
-                host.Navigate(new Uri(url));   // even when equal: WPF #867, re-click goes home
+                var target = new Uri(url);
+                host.SetBrowserZoom(host.BrowserZoomReady ? 0.5 : 0.75);
+                host.Navigate(target);   // even when equal: WPF #867, re-click goes home
                 Log.Information("Browser navigated to {Url}", url);
                 return true;
             }

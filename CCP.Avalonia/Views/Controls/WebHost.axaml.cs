@@ -29,7 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// <see cref="InvokeScriptAsync"/>, plus the live URL (<see cref="CurrentUrl"/>,
     /// <see cref="NavigationCompleted"/>). NativeWebView additionally offers WebMessageReceived,
     /// GoBack/GoForward, Stop and Refresh; nothing needs
-    /// them yet, so they are not wrapped. It has NO zoom factor, no document-created script
+    /// them yet, so they are not wrapped. Native zoom is applied through WebViewZoom; it has no document-created script
     /// injection, and no fullscreen-element signal.
     ///
     /// The whole point is the fallback. A Linux box without webkit2gtk installed is the DEFAULT,
@@ -107,6 +107,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal void OnNavigationCompleted(Uri? url, bool success = true)
         {
             if (url is null || _panicBlank) return;
+            BrowserZoomNavigationCompleted();
             CurrentUrl = url;
             if (InjectCarrier) _ = InvokeScriptAsync(CarrierShim);
             NavigationCompleted?.Invoke(url);
@@ -359,7 +360,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     // gate has to be live for the FIRST navigation too, and a caller that assigns
                     // the predicate and the Source in that order would otherwise race the engine.
                     _web.EnvironmentRequested += (_, e) => EnvironmentRequested?.Invoke(e);
-                    _web.AdapterDestroyed += (_, _) => { try { _failureWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Trailer failure cleanup failed"); } finally { _failureWatch = null; }
+                    _web.AdapterDestroyed += (_, _) => { BrowserZoomAdapterDestroyed(); try { _failureWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Trailer failure cleanup failed"); } finally { _failureWatch = null; }
                         try { _fullscreenWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Fullscreen signal cleanup failed"); } finally { _fullscreenWatch = null; } };
                     _web.NavigationStarted += OnNavigationStarted;
                     _web.NavigationCompleted += (_, e) => {
