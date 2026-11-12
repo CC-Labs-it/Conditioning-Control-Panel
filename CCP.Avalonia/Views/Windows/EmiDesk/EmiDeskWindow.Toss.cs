@@ -11,11 +11,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 // EmiFlingDetector, shared with WPF.
 //
 // Land faces and the landing curve are retained; throws now play Core's dizzy chain.
-// ponytail: the land body frame and dragged/dropped/flung moment bus still need hosts.
+
 public partial class EmiDeskWindow
 {
     /// <summary>The throw clock; tests step it.</summary>
     internal static TimeProvider TossClock = TimeProvider.System;
+
+    internal static Action<string, object?> TossMoment = (moment, context) => EmiDeskService.Instance.Fire(moment, context);
 
     private readonly EmiFlingDetector _toss = new();
 
@@ -34,6 +36,7 @@ public partial class EmiDeskWindow
             _toss.PickUp(Position.Y / SafeScale());
             EmiSfx.Lift();
             if (!ChainLive && _wobbleFace == null) DrawFace(EmiTossRules.PickupFace);
+            TossMoment("dragged", null);
         }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] pickup failed"); }
     }
@@ -50,19 +53,36 @@ public partial class EmiDeskWindow
     {
         try
         {
+            var zoneRow = TossZoneRow();
             if (_toss.PutDown(TossNow))
             {
-                EmiState.NoteFling();
+                int total = EmiState.NoteFling();
                 EmiSfx.Thud();
                 PlayLanding(thrown: true);
-                PlayChain("dizzy");
+                var ctx = new { zoneRow, flings20 = total >= 20, flings50 = total >= 50 };
+                PlayChain("dizzy", () => TossMoment("flung", ctx));
                 return;
             }
             EmiSfx.Bump();
             PlayLanding(thrown: false);
-            if (!ChainLive) PlayChain(LandChain);
+            var dropCtx = new { zoneRow, flings20 = false, flings50 = false };
+            if (ChainLive) TossMoment("dropped", dropCtx);
+            else PlayChain(LandChain, () => TossMoment("dropped", dropCtx));
         }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] put down failed"); }
+    }
+
+    private string TossZoneRow()
+    {
+        try
+        {
+            var body = BodyScreenRect;
+            var work = WorkAreaAt(body);
+            return work is { } area
+                ? EmiTossRules.ZoneRow(Math.Round(body.Y + body.Height / 2), area.Y, area.Height)
+                : "mid";
+        }
+        catch { return "mid"; }
     }
 
     internal const int LandFaceMs = 600;
