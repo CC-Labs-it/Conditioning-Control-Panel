@@ -142,6 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private int _waveformGeneration;
         private AudioWaveformResult? _waveformData;
         private double? _waveformDuration;
+        private (long Size, DateTime Modified)? _waveformFile;
         private bool _closing;
 
 
@@ -681,7 +682,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             if (_closing) return;
             StopAudio();
-            if (!reuseWaveform) InvalidateWaveform();
+            var info = new System.IO.FileInfo(path);
+            var file = info.Exists ? (info.Length, info.LastWriteTimeUtc) : ((long, DateTime)?)null;
+            if (!reuseWaveform || file == null || file != _waveformFile) InvalidateWaveform();
+            _waveformFile = file;
             var load = _audioLoad;
             _audioPath = path;
             _txtAudioPath.Text = path;
@@ -709,6 +713,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 _durationSec = reuseWaveform && _waveformDuration is { } known ? known : audio.DurationSeconds;
                 if (_waveformData == null && _waveformLoad?.IsCompleted == true) _waveformLoad = null;
                 _waveformLoad ??= LoadWaveformAsync(path, _waveformGeneration);
+                await _waveformLoad;
+                if (_closing || load != _audioLoad) return;
                 audio.Play();
                 _isPlaying = true;
                 _txtTotal.Text = FormatTime(_durationSec);
@@ -799,6 +805,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _waveformLoad = null;
             _waveformData = null;
             _waveformDuration = null;
+            _waveformFile = null;
             _peaks = null;
             _waveformPath.Data = null;
         }
@@ -910,6 +917,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             if (!_isVideoMode && _audioPath != null)
             {
                 if (_localAudio == null) { LoadAudio(_audioPath, reuseWaveform: true); return; }
+                if (_waveformLoad is { IsCompleted: false }) { StopAudio(); LoadAudio(_audioPath, reuseWaveform: true); return; }
                 try { if (_isPlaying) _localAudio.Pause(); else _localAudio.Play(); }
                 catch (Exception ex) { AudioFailed(); Log.Warning(ex, "Deeper audio start failed"); return; }
                 _isPlaying = !_isPlaying;
