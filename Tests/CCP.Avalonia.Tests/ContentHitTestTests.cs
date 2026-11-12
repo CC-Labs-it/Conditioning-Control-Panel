@@ -64,6 +64,14 @@ public sealed class ContentHitTestTests
                     if (w.GetVisualsAt(p).OfType<Button>().FirstOrDefault(o => o != b && !b.IsVisualAncestorOf(o)) is { } over && !over.IsVisualAncestorOf(b)) continue;   // another control drawn on top, e.g. the Start footer
                     tested++;
                     var hit = w.InputHitTest(p) as Visual;
+                    // A rendered batch can precede a ScrollViewer's next layout/clip commit.
+                    // Wait for that target's hit geometry, then still require the real press below.
+                    for (var frame = 0; frame < 4 && (hit is null || (hit != b && !b.IsVisualAncestorOf(hit))); frame++)
+                    {
+                        RenderLiveTree(w);
+                        p = b.TranslatePoint(new Point(b.Bounds.Width / 2, b.Bounds.Height / 2), w)!.Value;
+                        hit = w.InputHitTest(p) as Visual;
+                    }
                     bool pressed = false;
                     void Swallow(object? s, PointerPressedEventArgs e) { pressed = true; e.Handled = true; }
                     b.AddHandler(InputElement.PointerPressedEvent, Swallow, RoutingStrategies.Tunnel);
@@ -87,7 +95,7 @@ public sealed class ContentHitTestTests
     /// committed after it is missing from the frame. Every tab's first probe ran with one batch pending,
     /// and on a slow runner the stale frame still had no hero there (Linux CI 38316007639: awareness
     /// BtnAwarenessTutorial / ChkAwarenessMaster hit ScrollContentPresenter, pressed False).</summary>
-    private static void RenderLiveTree(Visual w)
+    internal static void RenderLiveTree(Visual w)
     {
         // Finish the real entrance before measuring pointer coordinates. Render completion
         // alone does not stop its next frame from moving the controls under the pointer.
