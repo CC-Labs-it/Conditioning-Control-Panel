@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Threading;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.BackRoom;
 using ConditioningControlPanel.Services.Prizes;
@@ -31,9 +32,19 @@ internal static class PrizeOwnership
     }
     internal static void Seed()
     {
-        ProviderSubscription.PrizesSink = (requested, answered, prizes, source) => Feed.Apply(requested, answered, prizes, source);
+        ProviderSubscription.PrizesSink = SinkFor(Feed);
         BackRoomApi.DefaultApplyPrizes = ApplySnapshot;
     }
+    /// <summary>The validate sink over <paramref name="feed"/>. Tests pass their own feed, so the shared grants
+    /// stay untouched.</summary>
+    internal static Action<string?, string?, PrizesBlock?, string> SinkFor(PrizesFeed feed) => (requested, answered, prizes, source) =>
+    {
+        feed.Apply(requested, answered, prizes, source);
+        // WPF ProfileSyncService.ApplyValidatePrizes:585-587: Rain's look pulls queued behind the snapshot,
+        // so the clamp sees the grants.
+        if (!string.IsNullOrEmpty(requested) && string.Equals(requested, answered, StringComparison.Ordinal))
+            Post(() => RainLookSyncHead.OnAccountReady(requested));
+    };
     private static volatile bool _shutdown;
     private static void Raise(Action work)
     {
