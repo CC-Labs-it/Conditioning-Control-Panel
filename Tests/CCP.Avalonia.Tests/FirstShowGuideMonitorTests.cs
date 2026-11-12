@@ -71,7 +71,12 @@ public sealed partial class FirstShowStageTests
             Assert.Equal(targetScreen.Bounds.Position, stage.Position);
             Assert.NotNull(stage.HighlightTarget);
             Assert.InRange(stage.GuideBodyCenter.X, targetScreen.Bounds.X, targetScreen.Bounds.Right);
-            t += 1; stage.Frame(); Dispatcher.UIThread.RunJobs();
+            // Simulate one second of frames, including layout between them. Frame clamps its
+            // delta to 50 ms, so a single one-second jump cannot settle the guide after a move.
+            for (int frame = 0; frame < 20; frame++)
+            {
+                t += .05; stage.Frame(); Dispatcher.UIThread.RunJobs(); await Task.Yield();
+            }
             Assert.True(stage.GuideSpeechWindow.IsVisible);
             Assert.InRange(stage.GuideSpeechWindow.Position.X, targetScreen.Bounds.X, targetScreen.Bounds.Right);
             stage.GuideScreenFromPointOverride = _ => shell.Position.X < 0 ? second : first;
@@ -92,7 +97,12 @@ public sealed partial class FirstShowStageTests
             Assert.NotNull(stage.HighlightTarget);
             Assert.InRange(stage.GuideBodyCenter.X, -1920, 0);
             Assert.InRange(stage.GuideBodyCenter.Y, -200, 1000);
-            t += 1; stage.Frame(); Dispatcher.UIThread.RunJobs();
+            // Simulate one second of frames, including layout between them. Frame clamps its
+            // delta to 50 ms, so a single one-second jump cannot settle the guide after a move.
+            for (int frame = 0; frame < 20; frame++)
+            {
+                t += .05; stage.Frame(); Dispatcher.UIThread.RunJobs(); await Task.Yield();
+            }
             Assert.True(stage.GuideSpeechWindow.IsVisible);
             Assert.InRange(stage.GuideSpeechWindow.Position.X, -1920, 0);
             Assert.InRange(stage.GuideSpeechWindow.Position.Y, -200, 1000);
