@@ -378,6 +378,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PortalStartQueue.Enqueue(start);
             if (PortalStartQueue.Count != 1) return;
             _portalBind ??= BindPortalAsync();
+            // Post as soon as binding completes, including an already-completed bind. Leaving the
+            // continuation on the thread pool can keep the portal alive after the last effect stops.
             _portalBind.ContinueWith(_ => Dispatcher.UIThread.Post(() =>
             {
                 while (PortalStartQueue.Count > 0)
@@ -385,7 +387,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     try { PortalStartQueue.Dequeue()(); }
                     catch (Exception ex) { Serilog.Log.Error(ex, "Deferred effect start failed"); }
                 }
-            }), TaskScheduler.Default);
+            }), System.Threading.CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         }
 
         private static async Task BindPortalAsync()
