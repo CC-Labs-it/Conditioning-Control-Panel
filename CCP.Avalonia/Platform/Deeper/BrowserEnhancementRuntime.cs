@@ -26,7 +26,7 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
         foreach (var stop in stops) { try { stop(); } catch { } }
     }
     public void StopOneShotFlashes() { }
-    public void StopOneShotSubliminals() { }
+    public void StopOneShotSubliminals() => Views.Overlays.SubliminalWhisperShow.StopOneShots();
 
     private void PlayAudio(string path, float volume, bool duckOtherAudio)
     {
