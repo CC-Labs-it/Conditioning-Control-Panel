@@ -149,16 +149,30 @@ public class PossessionSwapRelabelTests
         finally { window.Close(); }
     });
 
-    [Fact]
-    public void RelabelRefusesBoundCaption() => AvaloniaTestDispatcher.Run(() =>
+    [Theory]
+    [InlineData(BindingPriority.LocalValue)]
+    [InlineData(BindingPriority.Template)]
+    public void RelabelRestoresCurrentBoundCaptionAndKeepsBinding(BindingPriority priority) => AvaloniaTestDispatcher.Run(() =>
     {
+        var source = new CaptionSource { Text = "Start Guide" };
         var button = new Button { Width = 150, Height = 40 };
-        button.Bind(ContentControl.ContentProperty, new Binding { Source = "Start", Mode = BindingMode.OneWay });
+        button.Bind(ContentControl.ContentProperty, new Binding(nameof(CaptionSource.Text)) { Source = source, Mode = BindingMode.OneWay, Priority = priority });
         var window = Show(button);
         try
         {
-            Assert.Equal("Start", button.Content);
-            Assert.False(new RelabelEffect().CanApply(Context(), Target(button)));
+            var effect = new RelabelEffect();
+            var target = Target(button);
+            var ctx = Context();
+            Assert.Equal("Start Guide", button.Content);
+            Assert.True(effect.CanApply(ctx, target));
+            effect.ApplyAsync(ctx, target, CancellationToken.None).GetAwaiter().GetResult();
+            Assert.Equal("Stay", button.Content);
+            source.Text = "Stop Guide";
+            Assert.Equal("Stay", button.Content);
+            effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+            Assert.Equal("Stop Guide", button.Content);
+            source.Text = "Start Again";
+            Assert.Equal("Start Again", button.Content);
         }
         finally { window.Close(); }
     });

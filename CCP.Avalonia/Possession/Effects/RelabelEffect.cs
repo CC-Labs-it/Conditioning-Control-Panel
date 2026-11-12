@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Data;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Possession;
@@ -33,8 +32,7 @@ internal sealed class RelabelEffect : PossessionEffectBase
             || PossessionTree.IsOffLimits(button) || PossessionLease.IsLeased(button)) return false;
 
         if (button.Content is string text)
-            return BindingOperations.GetBindingExpressionBase(button, ContentControl.ContentProperty) == null
-                && IsStartOrStop(text) && !string.Equals(text, Stay(), StringComparison.OrdinalIgnoreCase);
+            return IsStartOrStop(text) && !string.Equals(text, Stay(), StringComparison.OrdinalIgnoreCase);
 
         label = FindLabel(button, 0);
         return label != null && !string.Equals(label.Text, Stay(), StringComparison.OrdinalIgnoreCase);
