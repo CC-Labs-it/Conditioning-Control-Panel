@@ -182,7 +182,7 @@ public sealed class DiscordRichPresenceTests
         // to idle, Stop of a stopped one leaves whatever activity another feature set.
         var oldRpc = AvApp.DiscordRpc;
         var rpc = AvApp.DiscordRpc = new DiscordRichPresenceService();
-        var player = new ConditioningControlPanel.Avalonia.Platform.MindWipePlayer((_, _, _, _) => null);
+        var player = new ConditioningControlPanel.Avalonia.Platform.MindWipePlayer((_, _, _, _) => null, (_, _) => null);
         try
         {
             player.Start(60, 0.5);

@@ -30,19 +30,21 @@ public sealed class MindWipeTests
         {
             player.TriggerOnce();
             Assert.Equal(new[] { "mindwipe" }, uses);
-            var failed = new MindWipePlayer((path, volume, loop, ended) => null);
+            var failed = new MindWipePlayer((path, volume, loop, ended) => null, (path, ended) => null);
             failed.TriggerOnce();
             Assert.Single(uses);
         }
         finally { global::ConditioningControlPanel.Avalonia.App.FeatureUsed -= uses.Add; }
     });
 
-    private sealed class Voice : MindWipePlayer.IVoice
+    private sealed class Voice : LibVlcAudio.IPreparedVoice
     {
         public bool Loop, Disposed;
+        public int Plays;
         public double Vol;
         public Action Ended = () => { };
         public double Volume { set => Vol = value; }
+        public bool Play() { Plays++; return true; }
         public void Dispose() => Disposed = true;
     }
 
@@ -104,6 +106,12 @@ public sealed class MindWipeTests
                 var v = new Voice { Loop = loop, Vol = vol, Ended = ended };
                 voices.Add(v);
                 return v;
+            }, (path, ended) =>
+            {
+                Assert.Equal(clip, path);
+                var v = new Voice { Ended = ended };
+                voices.Add(v);
+                return v;
             }, clock, roll: () => roll);   // 0.4: under 180/h's 0.5 per tick, every tick fires
             player.Seed();
             try { body(player, voices, clock); }
@@ -120,6 +128,43 @@ public sealed class MindWipeTests
             }
             return Task.CompletedTask;
         }).GetAwaiter().GetResult();
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Stop_during_preparation_cancels_a_one_shot(bool timed) => Run((_, voices, clock) =>
+    {
+        var prepared = new Voice();
+        MindWipePlayer? player = null;
+        player = new MindWipePlayer((path, volume, loop, ended) => null, (path, ended) =>
+        {
+            player!.Stop();
+            return prepared;
+        }, clock, roll: () => 0);
+        if (timed) { player.Start(180, 0.4); clock.Advance(TimeSpan.FromSeconds(10)); }
+        else player.TriggerOnce();
+        Assert.Equal(0, prepared.Plays);
+        Assert.True(prepared.Disposed);
+    });
+
+    [Fact]
+    public void Volume_changed_during_preparation_is_applied_before_play() => Run((_, voices, clock) =>
+    {
+        var prepared = new Voice();
+        MindWipePlayer? player = null;
+        player = new MindWipePlayer((path, volume, loop, ended) => null, (path, ended) =>
+        {
+            player!.UpdateSettings(180, 0.8);
+            return prepared;
+        }, clock, roll: () => 0);
+        try
+        {
+            player.TriggerOnce();
+            Assert.Equal(1, prepared.Plays);
+            Assert.Equal(0.8, prepared.Vol, 3);
+        }
+        finally { player.Stop(); }
+    });
 
     [Fact]
     public void Card_drives_the_service_ticks_loop_clean_slate_and_stop() => Run((player, voices, clock) =>
