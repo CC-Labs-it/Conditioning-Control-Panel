@@ -27,7 +27,8 @@ public sealed class DeeperPlayerWebcamTests
     {
         public int Opens;
         public bool OpenResult = true;
-        public bool Open() { Opens++; return OpenResult; }
+        public Action? Opening;
+        public bool Open() { Opens++; Opening?.Invoke(); return OpenResult; }
         public bool Read(Mat frame) { frame.Create(480, 640, MatType.CV_8UC3); frame.SetTo(Scalar.All(0)); System.Threading.Thread.Sleep(10); return true; }
         public void Dispose() { }
     }
@@ -44,7 +45,7 @@ public sealed class DeeperPlayerWebcamTests
     {
         Setup();
         var settings = CoreSettings.Current;
-        var old = (settings.WebcamConsentGiven, settings.WebcamConsentVersion, WebcamTracker.SourceFactory);
+        var old = (settings.WebcamConsentGiven, settings.WebcamConsentVersion, WebcamTracker.SourceFactory, EnhancementHostService.WebcamProvider);
         var source = new Source();
         WebcamTracker.SourceFactory = () => source;
         var player = new EnhancementPlayerWindow(WebcamEnhancement(), null);
@@ -75,7 +76,7 @@ public sealed class DeeperPlayerWebcamTests
         {
             player.Close();
             WebcamTracker.Instance.Stop();
-            (settings.WebcamConsentGiven, settings.WebcamConsentVersion, WebcamTracker.SourceFactory) = old;
+            (settings.WebcamConsentGiven, settings.WebcamConsentVersion, WebcamTracker.SourceFactory, EnhancementHostService.WebcamProvider) = old;
         }
     });
     private static async Task Until(Func<bool> condition)
@@ -88,7 +89,7 @@ public sealed class DeeperPlayerWebcamTests
     {
         Setup();
         var settings = CoreSettings.Current;
-        var old = (settings.WebcamConsentGiven, settings.WebcamConsentVersion, WebcamTracker.SourceFactory);
+        var old = (settings.WebcamConsentGiven, settings.WebcamConsentVersion, WebcamTracker.SourceFactory, EnhancementHostService.WebcamProvider);
         var source = new Source();
         WebcamTracker.SourceFactory = () => source;
         settings.WebcamConsentGiven = true;
@@ -104,8 +105,8 @@ public sealed class DeeperPlayerWebcamTests
             await Until(() => WebcamTracker.Instance.IsRunning);
             await Until(() => Equals(player.FindControl<Button>("BtnEyeTracking")!.Content, ConditioningControlPanel.Localization.Loc.Get("deeper_player_btn_eye_tracking_stop")));
             player.Close();
-            await Until(() => !WebcamTracker.Instance.IsRunning);
-            Assert.True(await WebcamTracker.Instance.StartAsync());
+            await Task.Delay(300);
+            Assert.True(WebcamTracker.Instance.IsRunning);
             var second = new EnhancementPlayerWindow(WebcamEnhancement(), null);
             try
             {
@@ -117,12 +118,71 @@ public sealed class DeeperPlayerWebcamTests
             finally { second.Close(); }
             await Task.Delay(300);
             Assert.True(WebcamTracker.Instance.IsRunning);
+            await WebcamTracker.Instance.StopAsync();
+            var third = new EnhancementPlayerWindow(WebcamEnhancement(), null);
+            try
+            {
+                third.Show();
+                typeof(EnhancementPlayerWindow).GetField("_isPlaying", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(third, true);
+                Tick(third);
+                Click(third.FindControl<Button>("WebcamEnable")!);
+                await Until(() => WebcamTracker.Instance.IsRunning);
+            }
+            finally { third.Close(); }
+            await Until(() => !WebcamTracker.Instance.IsRunning);
         }
         finally
         {
             player.Close();
             await WebcamTracker.Instance.StopAsync();
-            (settings.WebcamConsentGiven, settings.WebcamConsentVersion, WebcamTracker.SourceFactory) = old;
+            (settings.WebcamConsentGiven, settings.WebcamConsentVersion, WebcamTracker.SourceFactory, EnhancementHostService.WebcamProvider) = old;
+        }
+    });
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task CloseDuringStartRespectsOrigin(bool fromBanner) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var settings = CoreSettings.Current;
+        var old = (settings.WebcamConsentGiven, settings.WebcamConsentVersion, WebcamTracker.SourceFactory, EnhancementHostService.WebcamProvider);
+        using var release = new System.Threading.ManualResetEventSlim();
+        var source = new Source { Opening = () => release.Wait(TimeSpan.FromSeconds(20)) };
+        WebcamTracker.SourceFactory = () => source;
+        settings.WebcamConsentGiven = true;
+        settings.WebcamConsentVersion = WebcamConsent.ConsentVersion;
+        var player = new EnhancementPlayerWindow(WebcamEnhancement(), null);
+        try
+        {
+            player.Show();
+            if (fromBanner)
+            {
+                typeof(EnhancementPlayerWindow).GetField("_isPlaying", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(player, true);
+                Tick(player);
+                Click(player.FindControl<Button>("WebcamEnable")!);
+            }
+            else
+            {
+                Click(player.FindControl<Button>("BtnEyeTracking")!);
+                await Until(() => player.OwnedWindows.OfType<MessageDialog>().Any());
+                Assert.Single(player.OwnedWindows.OfType<MessageDialog>()).Close(true);
+            }
+            await Until(() => source.Opens > 0);
+            player.Close();
+            release.Set();
+            if (fromBanner)
+            {
+                await Until(() => !WebcamTracker.Instance.IsStarting);
+                Assert.False(WebcamTracker.Instance.IsRunning);
+            }
+            else await Until(() => WebcamTracker.Instance.IsRunning && !WebcamTracker.Instance.IsStarting);
+        }
+        finally
+        {
+            release.Set();
+            player.Close();
+            await WebcamTracker.Instance.StopAsync();
+            (settings.WebcamConsentGiven, settings.WebcamConsentVersion, WebcamTracker.SourceFactory, EnhancementHostService.WebcamProvider) = old;
         }
     });
     [Fact]
@@ -130,7 +190,7 @@ public sealed class DeeperPlayerWebcamTests
     {
         Setup();
         var settings = CoreSettings.Current;
-        var old = (settings.WebcamConsentGiven, settings.WebcamConsentVersion, WebcamTracker.SourceFactory);
+        var old = (settings.WebcamConsentGiven, settings.WebcamConsentVersion, WebcamTracker.SourceFactory, EnhancementHostService.WebcamProvider);
         var source = new Source { OpenResult = false };
         WebcamTracker.SourceFactory = () => source;
         settings.WebcamConsentGiven = true;
@@ -151,9 +211,31 @@ public sealed class DeeperPlayerWebcamTests
             foreach (var dialog in player.OwnedWindows.OfType<MessageDialog>().ToArray()) dialog.Close(false);
             player.Close();
             await WebcamTracker.Instance.StopAsync();
-            (settings.WebcamConsentGiven, settings.WebcamConsentVersion, WebcamTracker.SourceFactory) = old;
+            (settings.WebcamConsentGiven, settings.WebcamConsentVersion, WebcamTracker.SourceFactory, EnhancementHostService.WebcamProvider) = old;
         }
     });
+    [Fact]
+    public async Task PlayerTestsRestoreWebcamProvider()
+    {
+        var original = EnhancementHostService.WebcamProvider;
+        try
+        {
+            EnhancementHostService.WebcamProvider = null;
+            await ConsentAndConfirmationGateCamera();
+            Assert.Null(EnhancementHostService.WebcamProvider);
+            await AcceptedStartUpdatesLabelAndCloseRespectsOwnership();
+            Assert.Null(EnhancementHostService.WebcamProvider);
+            await FailedStartReportsError();
+            Assert.Null(EnhancementHostService.WebcamProvider);
+            await CloseDuringStartRespectsOrigin(false);
+            Assert.Null(EnhancementHostService.WebcamProvider);
+            await CloseDuringStartRespectsOrigin(true);
+            Assert.Null(EnhancementHostService.WebcamProvider);
+            await BannerIsOfferedOnlyOnceAndButtonRequiresWebcam();
+            Assert.Null(EnhancementHostService.WebcamProvider);
+        }
+        finally { EnhancementHostService.WebcamProvider = original; }
+    }
     [Fact]
     public void AdapterForwardsTrackerEvents()
     {
@@ -178,6 +260,7 @@ public sealed class DeeperPlayerWebcamTests
     public Task BannerIsOfferedOnlyOnceAndButtonRequiresWebcam() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
+        var oldProvider = EnhancementHostService.WebcamProvider;
         var player = new EnhancementPlayerWindow(WebcamEnhancement(), null);
         try
         {
@@ -196,7 +279,7 @@ public sealed class DeeperPlayerWebcamTests
             Tick(player);
             Assert.False(player.FindControl<Button>("BtnEyeTracking")!.IsVisible);
         }
-        finally { player.Close(); }
+        finally { player.Close(); EnhancementHostService.WebcamProvider = oldProvider; }
         return Task.CompletedTask;
     });
 }

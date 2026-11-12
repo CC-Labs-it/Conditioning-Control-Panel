@@ -17,7 +17,7 @@ public partial class EnhancementPlayerWindow
 {
     private static readonly Lazy<TrackerEnhancementWebcam> WebcamAdapter = new(() => new(WebcamTracker.Instance));
     private Enhancement? _webcamEnhancement;
-    private bool _webcamPromptShown, _playerStartedWebcam, _webcamClosed, _webcamStarting;
+    private bool _webcamPromptShown, _playerStartedWebcam, _webcamClosed, _webcamStarting, _webcamBannerStarting;
     private Button EyeButton => this.FindControl<Button>("BtnEyeTracking")!;
     private Border CameraBanner => this.FindControl<Border>("WebcamBanner")!;
     private Button CameraEnable => this.FindControl<Button>("WebcamEnable")!;
@@ -38,7 +38,7 @@ public partial class EnhancementPlayerWindow
         _webcamClosed = true;
         WebcamTracker.Instance.StateChanged -= WebcamStateChanged;
         if (_uiTimer != null) _uiTimer.Tick -= WebcamTick;
-        if (_playerStartedWebcam || _webcamStarting) _ = WebcamTracker.Instance.StopAsync();
+        if (_playerStartedWebcam || _webcamBannerStarting) _ = WebcamTracker.Instance.StopAsync();
         base.OnClosed(e);
     }
 
@@ -75,7 +75,7 @@ public partial class EnhancementPlayerWindow
         }
         if (!await MessageDialog.ConfirmAsync(this, title, Loc.Get("deeper_player_eye_tracking_confirm_start"))) return;
         if (_webcamClosed) return;
-        if (!await StartPlayerWebcam())
+        if (!await StartPlayerWebcam(fromBanner: false))
             await MessageDialog.ShowAsync(this, title, string.Format(Loc.Get("deeper_player_eye_tracking_start_failed_fmt"), tracker.LastError ?? tracker.State.ToString()));
     }
 
@@ -91,23 +91,24 @@ public partial class EnhancementPlayerWindow
         CameraEnable.IsEnabled = false;
         try
         {
-            if (await StartPlayerWebcam()) CameraBanner.IsVisible = false;
+            if (await StartPlayerWebcam(fromBanner: true)) CameraBanner.IsVisible = false;
             else CameraText.Text = string.Format(Loc.Get("deeper_player_eye_tracking_start_failed_fmt"), WebcamTracker.Instance.LastError ?? WebcamTracker.Instance.State.ToString());
         }
         finally { CameraEnable.IsEnabled = true; }
     }
 
-    private async Task<bool> StartPlayerWebcam()
+    private async Task<bool> StartPlayerWebcam(bool fromBanner)
     {
         if (_webcamStarting || WebcamTracker.Instance.IsRunning) return false;
         _webcamStarting = true;
+        _webcamBannerStarting = fromBanner;
         try
         {
             bool started = await WebcamTracker.Instance.StartAsync();
-            if (started && _webcamClosed) { await WebcamTracker.Instance.StopAsync(); return false; }
-            if (started) _playerStartedWebcam = true;
+            if (started && fromBanner && _webcamClosed) { await WebcamTracker.Instance.StopAsync(); return false; }
+            if (started && fromBanner) _playerStartedWebcam = true;
             return started;
         }
-        finally { _webcamStarting = false; }
+        finally { _webcamStarting = false; _webcamBannerStarting = false; }
     }
 }
