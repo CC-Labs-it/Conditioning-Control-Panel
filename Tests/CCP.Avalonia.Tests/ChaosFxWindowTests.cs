@@ -1,10 +1,15 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Media;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
 
@@ -124,6 +129,59 @@ public sealed class ChaosFxWindowTests
             }
             ChaosRunHost.OnDetonated(bubble);
             AssertPulse(clock, Color.FromRgb((byte)r, (byte)g, (byte)b), strength);
+        });
+    }
+
+    [Fact]
+    public async Task Unleashed_bounces_shielded_chaperone_and_throttles_its_cue()
+    {
+        await Run(_ =>
+        {
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+            ChaosRunHost.Overlay!.FinishCountdown();
+            ChaosRunHost.StopTimerForTests();
+            var state = ChaosRunHost.State!;
+            state.Shields = 0;
+            state.UnleashedEnabled = true;
+            state.DefuseInvulnMs = 0;
+            var field = BubbleOverlay.Field;
+            var oldClock = field.Clock;
+            var oldAudio = CoreAudio.PlayOneShotProvider;
+            var now = DateTime.UtcNow;
+            var sounds = new List<string>();
+            field.Clock = () => now;
+            CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => sounds.Add(Path.GetFileName(path));
+            try
+            {
+                var trigger = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsLive = true, FuseMs = 5000 });
+                trigger.Popping = true;
+                var live = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsLive = true, IsChaperoneLive = true, FuseMs = 5000 });
+                var escort = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsEscort = true });
+                live.Escort = escort;
+                var other = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsLive = true, FuseMs = 5000 });
+                var darter = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsLive = true, IsDarter = true, FuseMs = 5000 });
+                var freeze = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsLive = true, IsFreeze = true, FuseMs = 5000 });
+                void Unleash() { state.CollarSaves = 1; ChaosRunHost.OnDetonated(trigger); }
+
+                Unleash();
+                Assert.False(live.Popping);
+                Assert.False(escort.Popping);
+                Assert.True(other.Popping);
+                Assert.False(darter.Popping);
+                Assert.False(freeze.Popping);
+                Assert.Equal(0.95, live.ShieldOpacity);
+                Assert.Equal(1, sounds.Count(x => x is "shield_thunk.mp3" or "toy_denied.mp3"));
+                now = now.AddMilliseconds(100);
+                Unleash();
+                Assert.Equal(1, sounds.Count(x => x is "shield_thunk.mp3" or "toy_denied.mp3"));
+                now = now.AddMilliseconds(100);
+                Unleash();
+                Assert.Equal(2, sounds.Count(x => x is "shield_thunk.mp3" or "toy_denied.mp3"));
+                escort.Popping = true;
+                Unleash();
+                Assert.True(live.Popping);
+            }
+            finally { field.Clock = oldClock; CoreAudio.PlayOneShotProvider = oldAudio; }
         });
     }
 

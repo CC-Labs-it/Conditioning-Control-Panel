@@ -317,6 +317,7 @@ namespace ConditioningControlPanel.Services
             }
             if (Spec is { IsEscort: true })
             {
+                _timeAlive += 0.02;   // WPF BubbleService.cs:3957: breathe while orbiting
                 var target = OrbitTarget;
                 if (target == null || target.Popping)
                 {
@@ -427,11 +428,16 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>WPF DefuseAllLive: snap every live chaos bubble on the field (full pay).</summary>
-        public void DefuseAllLive()
+        public void DefuseAllLive(Action<AmbientBubble>? onShielded = null)
         {
             foreach (var b in Bubbles.ToArray())
             {
-                if (b.Spec is { IsChaperoneLive: true } && b.Escort is { Popping: false } escort && Bubbles.Contains(escort)) continue;
+                if (b.Popping || !b.IsLiveThreat) continue;
+                if (b.Spec is { IsChaperoneLive: true } && b.Escort is { Popping: false } escort && Bubbles.Contains(escort))
+                {
+                    onShielded?.Invoke(b);
+                    continue;
+                }
                 if (b.Snap()) ChaosDefused?.Invoke(b);
             }
         }

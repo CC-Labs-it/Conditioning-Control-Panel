@@ -276,9 +276,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static bool IsShielded(AmbientBubble b) => b.Spec is { IsChaperoneLive: true }
             && b.Escort is { Popping: false } escort && Field.Bubbles.Contains(escort);
 
-        private static void BounceShield(AmbientBubble b)
+        internal static void BounceShield(AmbientBubble b)
         {
-            if (b.BounceShield(DateTime.UtcNow))
+            if (b.BounceShield(Field.Clock()))
             {
                 var cue = File.Exists(ChaosCuePath("shield_thunk")) ? "shield_thunk" : "toy_denied";
                 if (File.Exists(ChaosCuePath(cue))) PlayChaosCue(cue, 0.45f);

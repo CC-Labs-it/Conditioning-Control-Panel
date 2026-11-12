@@ -37,6 +37,19 @@ public sealed class ChaosEscortOrbitTests
         Assert.True(orphan.Popping && orphan.Deflating);
     }
     [Fact]
+    public void Escort_breathes_on_each_orbit_step()
+    {
+        var live = new AmbientBubble { Size = 240 };
+        var escort = new AmbientBubble { Size = 100, Spec = new EffectBubbleSpec { IsEscort = true }, OrbitTarget = live };
+        var before = escort.DrawScale;
+        escort.Step();
+        Assert.Equal(1 + 0.06 * Math.Sin(0.02 * 7.5), escort.DrawScale, 8);
+        Assert.NotEqual(before, escort.DrawScale);
+        escort.Step();
+        Assert.Equal(1 + 0.06 * Math.Sin(0.04 * 7.5), escort.DrawScale, 8);
+    }
+
+    [Fact]
     public void Snap_field_respects_a_standing_escort()
     {
         var field = new AmbientBubbleField();

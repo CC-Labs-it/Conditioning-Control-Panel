@@ -389,7 +389,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     Shake(0.25 + s * 0.3, 280);
                     if (_state.UnleashedEnabled)
                     {
-                        BubbleOverlay.Field.DefuseAllLive();
+                        BubbleOverlay.Field.DefuseAllLive(BubbleOverlay.BounceShield);
                         _state.PushEvent("📿 unleashed — the field lets go");
                         Pulse(Color.FromRgb(255, 215, 0), 0.50);
                     }
