@@ -193,12 +193,13 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF Bubble ctor with a Chaos spec: the spec's size, the chaos
         /// pace (bigger drifts slower, SpeedMult, CHAOS_SPEED_MULT), the ambient wobble and rise.</summary>
         public static AmbientBubble SpawnChaos(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
-            double scaling, Chaos.EffectBubbleSpec spec)
+            double scaling, Chaos.EffectBubbleSpec spec, int speedBoost = 0)
         {
             var b = new AmbientBubble { Screen = screen, Clickable = true, Spec = spec, Size = spec.SizePx };
             if (spec.IsLive) b.FuseTotalMs = b.FuseRemainingMs = Math.Max(1, spec.FuseMs);   // WPF :3362
             b._speed = (1.0 + r.NextDouble()) * Math.Clamp(1.4 - (b.Size - 150) / 220.0, 0.6, 1.4)
                        * Math.Max(0.1, spec.SpeedMult) * Chaos.ChaosTuning.CHAOS_SPEED_MULT;
+            if (speedBoost > 0) b._speed *= 1.0 + Math.Clamp(speedBoost, 0, 500) / 100.0;
             b._animType = r.Next(4);
             b._wobbleOffset = r.NextDouble() * 100;
             b.Angle = r.Next(360);
@@ -313,12 +314,12 @@ namespace ConditioningControlPanel.Services
                 case 2: offset = Math.Cos(_timeAlive * 5.4) * 25; Angle = (Angle - 0.66) % 360; break;
                 case 3: offset = Math.Sin(_timeAlive * 3) * 30 + Math.Cos(_timeAlive * 6) * 15; Angle = (Angle + 0.54) % 360; break;
             }
-            if (IsAmbientTrigger && Spec?.Motion == Chaos.ChaosMotion.RainDown)
+            if (Spec?.Motion == Chaos.ChaosMotion.RainDown)
             {
                 Y += _speed; X = _startX + offset;
-                return Y > _bottom ? Result.Missed : Result.Alive;
+                return Y > _bottom ? (Spec.IsLive ? GoOff(null) : Result.Missed) : Result.Alive;
             }
-            if (IsAmbientTrigger && Spec?.Motion == Chaos.ChaosMotion.RoamBounce)
+            if (Spec?.Motion == Chaos.ChaosMotion.RoamBounce)
             {
                 X += _vx; Y += _vy;
                 if (X < _left) { X = _left; _vx = Math.Abs(_vx); }

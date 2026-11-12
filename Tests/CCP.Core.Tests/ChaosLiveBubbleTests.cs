@@ -54,6 +54,30 @@ public class ChaosLiveBubbleTests
         Assert.Equal((0, 1), (log2.Count, misses));
     }
 
+    [Theory]
+    [InlineData(ChaosMotion.RainDown)]
+    [InlineData(ChaosMotion.RoamBounce)]
+    public void ChaosMotionMovesFromItsSpawn(ChaosMotion motion)
+    {
+        var spec = new EffectBubbleSpec { SizePx = 200, Motion = motion, IsLive = true, FuseMs = 5000 };
+        var b = AmbientBubble.SpawnChaos(new Random(1), 0, 0, 0, 1920, 1080, 1, spec);
+        var y = b.Y;
+        Assert.Equal(AmbientBubble.Result.Alive, b.Step());
+        Assert.True(motion == ChaosMotion.RainDown ? b.Y > y : b.Y != y);
+    }
+
+    [Fact]
+    public void TriggerSpeedBoostScalesTravel()
+    {
+        var spec = new EffectBubbleSpec { SizePx = 200, Motion = ChaosMotion.RainDown };
+        var normal = AmbientBubble.SpawnChaos(new Random(1), 0, 0, 0, 1920, 1080, 1, spec);
+        var fast = AmbientBubble.SpawnChaos(new Random(1), 0, 0, 0, 1920, 1080, 1, spec, 200);
+        normal.IsAmbientTrigger = fast.IsAmbientTrigger = true;
+        var y = normal.Y;
+        normal.Step(); fast.Step();
+        Assert.Equal((normal.Y - y) * 3, fast.Y - y, 6);
+    }
+
     [Fact]
     public void A_full_hold_snaps_with_the_bubble_pinned_and_the_fuse_paused()
     {

@@ -201,7 +201,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Field.Bubbles.Count(b => b.Spec != null && !b.Popping));
             var b = spec == null
                 ? AmbientBubble.Spawn(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, s, mod, clickable, level, motion)
-                : AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec);
+                : AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec, s.BubbleSpeedBoost);
             b.Clickable = clickable;
             b.IsAmbientTrigger = spec != null;
             MarkNatasha(b, s, Field.Random, ChasterHead.Service?.CanBook(NatashasFavourite.EventId) == true);
