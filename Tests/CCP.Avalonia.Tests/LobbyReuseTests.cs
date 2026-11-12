@@ -26,19 +26,21 @@ public sealed class LobbyReuseTests
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        LocalizationManager.Instance.SetLanguage("en");
-        var gates = LobbyGates.From(true, false, false);
-        // A poll that never answers: the test alone decides what is painted.
-        var page = new AvailableSubjectsTabView { ReadGates = () => gates, CreateLobby = () => new LobbyPoll(new SilentTimer(),
-            () => false, Array.Empty<Friend>, null!, null!, null!) };
-        var row = new LobbyRow { Key = "one", HostName = "One", Game = LobbyGame.Chess };
-        var snapshot = new LobbySnapshot(new[] { row, row with { Key = "two", HostName = "Two" } },
-            Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true);
-        page.PaintSnapshot(snapshot, gates);
-        var window = new Window { Width = 1200, Height = 800, Content = page };
-        window.Show();
+        var language = LocalizationManager.Instance.CurrentLanguage;
+        Window? window = null;
         try
         {
+            LocalizationManager.Instance.SetLanguage("en");
+            var gates = LobbyGates.From(true, false, false);
+            // A poll that never answers: the test alone decides what is painted.
+            var page = new AvailableSubjectsTabView { ReadGates = () => gates, CreateLobby = () => new LobbyPoll(new SilentTimer(),
+                () => false, Array.Empty<Friend>, null!, null!, null!) };
+            var row = new LobbyRow { Key = "one", HostName = "One", Game = LobbyGame.Chess };
+            var snapshot = new LobbySnapshot(new[] { row, row with { Key = "two", HostName = "Two" } },
+                Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true);
+            page.PaintSnapshot(snapshot, gates);
+            window = new Window { Width = 1200, Height = 800, Content = page };
+            window.Show();
             window.UpdateLayout();
             var lists = new[] { "AvailableSubjectsList", "LobbyPlayingList", "LobbyFriendsList" }
                 .Select(n => page.FindControl<ItemsControl>(n)!).ToArray();
@@ -78,7 +80,11 @@ public sealed class LobbyReuseTests
             page.PaintSnapshot(snapshot, gates);
             Assert.All(lists[0].Items, c => Assert.True(Assert.IsType<LobbyCardView>(c).Locked));
         }
-        finally { window.Close(); }
+        finally
+        {
+            window?.Close();
+            LocalizationManager.Instance.SetLanguage(language);
+        }
     });
 
     private sealed class SilentTimer : IUiTimer
