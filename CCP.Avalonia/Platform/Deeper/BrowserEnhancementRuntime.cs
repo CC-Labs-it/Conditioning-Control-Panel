@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using global::Avalonia.Controls.ApplicationLifetimes;
+using global::Avalonia.Threading;
 using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel.Services.Deeper;
 
@@ -24,13 +26,14 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
         foreach (var stop in stops) { try { stop(); } catch { } }
     }
     public void StopOneShotFlashes() { }
-    public void StopOneShotSubliminals() => Views.Overlays.SubliminalWhisperShow.StopOneShots();
+    public void StopOneShotSubliminals() { }
 
     private void PlayAudio(string path, float volume, bool duckOtherAudio)
     {
         lock (_audioGate)
         {
             if (_retired || CoreAudio.PlayStoppableProvider == null) return;
+            foreach (var previous in _audioStops.ToArray()) { try { previous(); } catch { } } // WPF AudioService.cs:833 StopSound first
             var ducked = duckOtherAudio && CoreSettings.Current.AudioDuckingEnabled;
             if (ducked) CoreAudio.Duck(CoreSettings.Current.DuckingLevel);
             var generation = CoreAudio.DuckGeneration;
@@ -55,7 +58,7 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
     // Do not claim a match is active when this head cannot run its effects.
     internal static bool Supports(Enhancement enhancement)
     {
-        static bool EffectSupported(string? type) => type == EffectTypes.Haptic || type == EffectTypes.Flash || type == EffectTypes.Subliminal;
+        static bool EffectSupported(string? type) => type is EffectTypes.Haptic or EffectTypes.Flash or EffectTypes.Subliminal or EffectTypes.Bubble;
         static bool ActionSupported(EnhancementAction? action) => action is not TriggerEffectAction effect || EffectSupported(effect.EffectType);
         return enhancement.Rules.All(r => !r.Enabled || ActionSupported(r.Action))
             && enhancement.TimelineItems.All(i => !i.Enabled || (i.Kind == TimelineItemKind.Effect ? EffectSupported(i.EffectType) : ActionSupported(i.Action)));
@@ -77,7 +80,7 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
                 break;
             case PlayAudioAction audio when !string.IsNullOrEmpty(audio.Path):
                 var path = Path.IsPathRooted(audio.Path) ? audio.Path : Path.Combine(CorePaths.EffectiveAssets, audio.Path);
-                if (File.Exists(path)) PlayAudio(path, Math.Clamp(audio.Volume / 100f, 0f, 1f), audio.DuckOtherAudio);
+                if (File.Exists(path)) PlayAudio(path, CoreAudio.SoundGain(audio.Volume, CoreSettings.Current.MasterVolume), audio.DuckOtherAudio);
                 break;
             case ScreenShakeAction shake: Views.Deeper.ScreenShake.Shake(shake.Intensity, shake.DurationMs); break;
             case TriggerHapticAction haptic: await Haptic(haptic); break;
@@ -85,11 +88,29 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
                 await Haptic(new TriggerHapticAction { PatternName = effect.PatternName, CustomPattern = effect.CustomPattern, Intensity = effect.Intensity, DurationMs = effect.DurationMs, Phase = effect.Phase });
                 break;
             case TriggerEffectAction effect when effect.EffectType == EffectTypes.Flash && effect.Phase != EffectPhase.Stop:
-                CoreFlash.ShowProvider?.Invoke(); break;
+                // WPF RealActionDispatcher.cs:188-194 -> FlashService.cs:793: one picture for the authored duration.
+                Dispatcher.UIThread.Post(() => { if (Host is { } h) Views.Overlays.FlashOverlay.TriggerOnce(h, amount: 1, durationMs: effect.DurationMs); }); break;
+            case TriggerEffectAction effect when effect.EffectType == EffectTypes.Bubble: BubbleBurst(effect.DurationMs, ct); break;
             case TriggerEffectAction effect when effect.EffectType == EffectTypes.Subliminal && effect.Phase != EffectPhase.Stop && !string.IsNullOrWhiteSpace(effect.Text):
                 CoreSubliminal.CustomShowProvider?.Invoke(effect.Text); break;
         }
     }
+    private static global::Avalonia.Visual? Host => (global::Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+
+    // WPF RealActionDispatcher.cs:345-395: bursts share one claim on the app-wide field; the last one
+    // to end stops it only if a burst started it, and the engine's run token releases it early.
+    private static int _bubbleHolds;
+    private static bool _bubbleOwns;
+    private static void BubbleBurst(int durationMs, CancellationToken ct) => Dispatcher.UIThread.Post(() =>
+    {
+        if (ct.IsCancellationRequested) return;
+        if (_bubbleHolds++ == 0) _bubbleOwns = !Views.Overlays.BubbleOverlay.IsRunning;
+        ConditioningControlPanel.Services.CoreBubbles.Start();
+        var released = false;
+        void Release() { if (released) return; released = true; if (--_bubbleHolds == 0 && _bubbleOwns) { _bubbleOwns = false; ConditioningControlPanel.Services.CoreBubbles.Stop(); } }
+        var timer = DispatcherTimer.RunOnce(Release, TimeSpan.FromMilliseconds(Math.Max(50, durationMs)));
+        if (ct.CanBeCanceled) ct.Register(() => Dispatcher.UIThread.Post(() => { timer.Dispose(); Release(); }));
+    });
     private static (double start, double end)? Resolve(EnhancementDispatchContext ctx, string? id)
     {
         if (string.IsNullOrEmpty(id)) return null;
