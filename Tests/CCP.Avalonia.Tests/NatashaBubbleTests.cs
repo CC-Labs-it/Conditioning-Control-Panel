@@ -49,6 +49,27 @@ public sealed class NatashaBubbleTests
     }
 
     [Fact]
+    public Task StopInvalidatesQueuedTriggerPop() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var oldFirer = EffectPayload.Firer;
+        var fired = 0;
+        try
+        {
+            EffectPayload.Firer = _ => fired++;
+            var b = new AmbientBubble { Clickable = true, IsAmbientTrigger = true, Spec = new EffectBubbleSpec { Payload = new GifCascadePayload() } };
+            BubbleOverlay.PopByPlayer(b);
+            BubbleOverlay.Stop();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, fired);
+        }
+        finally { EffectPayload.Firer = oldFirer; BubbleOverlay.Stop(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task RedClickFiresPayloadAndBooksWhileHoldCreditsWithoutPop() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)

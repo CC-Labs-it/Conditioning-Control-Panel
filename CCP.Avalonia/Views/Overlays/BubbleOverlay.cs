@@ -143,8 +143,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Log.Information("BubbleService started - {Freq} bubbles/min", frequency ?? s.BubblesFrequency);
         }
 
+        private static int _ambientPayloadGeneration;
+
         public static void Stop()
         {
+            _ambientPayloadGeneration++;
             // WPF Stop returns early when the ambient game is idle, so a chaos-only teardown keeps presence.
             var wasRunning = IsRunning;
             if (_chaosPopped != null && _running)
@@ -539,7 +542,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             try { App.Quests?.TrackBubblePopped(); } catch (Exception ex) { Log.Debug("bubble quest credit: {E}", ex.Message); }
             _ = CoreHaptics.Service?.BubblePopAsync();   // WPF BubbleService.cs:1089
             if (b.IsAmbientTrigger && b.Spec?.Payload is { } payload)
-                Dispatcher.UIThread.Post(() => FireAmbientPayload(payload), DispatcherPriority.Background);
+            {
+                var generation = _ambientPayloadGeneration;
+                Dispatcher.UIThread.Post(() => { if (generation == _ambientPayloadGeneration) FireAmbientPayload(payload); }, DispatcherPriority.Background);
+            }
             try { Popped?.Invoke(); } catch (Exception ex) { Log.Debug("bubble popped handler: {E}", ex.Message); }   // WPF OnBubblePopped
         }
 
