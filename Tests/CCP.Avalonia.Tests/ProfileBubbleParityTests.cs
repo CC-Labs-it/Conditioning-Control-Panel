@@ -257,13 +257,16 @@ public sealed class ProfileBubbleParityTests : IDisposable
             double Angle() => visual.RenderTransform is TransformGroup g
                 ? g.Children.OfType<RotateTransform>().Single().Angle
                 : (visual.RenderTransform as RotateTransform)?.Angle ?? 0;
+            var clock = new TestAnimationClock();
+            clock.Attach(visual);
             double maxTilt = 0, minOpacity = 1;
             void Run()
             {
-                for (int i = 0; i < 60; i++)
+                var start = clock.Now;
+                for (int i = 0; i <= 60; i++)
                 {
                     Dispatcher.UIThread.RunJobs();
-                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                    clock.Step(start + i * 10);
                     maxTilt = Math.Max(maxTilt, Math.Abs(Angle()));
                     minOpacity = Math.Min(minOpacity, visual.Opacity);
                 }

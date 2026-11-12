@@ -59,8 +59,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 Width = settings.DeeperPlayerWindowWidth;
                 Height = settings.DeeperPlayerWindowHeight;
             }
+            var boundsWindowOpen = false;
+            Closed += (_, _) => boundsWindowOpen = false;
             Opened += (_, _) =>
             {
+                boundsWindowOpen = true;
                 if (settings.DeeperPlayerWindowWidth <= 0 || !double.IsFinite(settings.DeeperPlayerWindowLeft)
                     || !double.IsFinite(settings.DeeperPlayerWindowTop)) return;
                 // Prefer the primary when mixed-DPI interpretations overlap.
@@ -75,9 +78,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             };
             Closing += (_, _) =>
             {
-                if (WindowState != WindowState.Normal || !double.IsFinite(Width) || !double.IsFinite(Height)
+                if (!boundsWindowOpen || WindowState != WindowState.Normal || !double.IsFinite(Width) || !double.IsFinite(Height)
                     || Width < MinWidth || Height < MinHeight) return;
-                var scale = Screens.ScreenFromWindow(this)?.Scaling ?? Screens.Primary?.Scaling ?? 1;
+                double scale;
+                try { scale = Screens.ScreenFromWindow(this)?.Scaling ?? Screens.Primary?.Scaling ?? 1; }
+                catch (ObjectDisposedException) { return; }
                 if (scale <= 0) scale = 1;
                 SaveWindowPosition(settings, Position, scale);
                 settings.DeeperPlayerWindowWidth = Width;

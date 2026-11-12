@@ -48,6 +48,38 @@ public class EnhancementPlayerWindowStateTests
     });
 
     [Fact]
+    public void ClosingTwiceOrBeforeShowingDoesNotOverwriteSavedBounds() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var settings = CoreSettings.Current;
+        var old = (settings.DeeperPlayerWindowLeft, settings.DeeperPlayerWindowTop,
+            settings.DeeperPlayerWindowWidth, settings.DeeperPlayerWindowHeight, settings.DeeperPlayerWindowPositionHint);
+        try
+        {
+            var player = new EnhancementPlayerWindow(null, null);
+            player.Show();
+            player.Width = 1100;
+            player.Height = 800;
+            player.Close();
+            Assert.Equal(1100, settings.DeeperPlayerWindowWidth);
+            Assert.Equal(800, settings.DeeperPlayerWindowHeight);
+            settings.DeeperPlayerWindowWidth = 1200;
+            player.Close();
+            Assert.Equal(1200, settings.DeeperPlayerWindowWidth);
+            var unopened = new EnhancementPlayerWindow(null, null);
+            unopened.Close();
+            Assert.Equal(1200, settings.DeeperPlayerWindowWidth);
+        }
+        finally
+        {
+            settings.DeeperPlayerWindowLeft = old.DeeperPlayerWindowLeft;
+            settings.DeeperPlayerWindowTop = old.DeeperPlayerWindowTop;
+            settings.DeeperPlayerWindowWidth = old.DeeperPlayerWindowWidth;
+            settings.DeeperPlayerWindowHeight = old.DeeperPlayerWindowHeight;
+            settings.DeeperPlayerWindowPositionHint = old.DeeperPlayerWindowPositionHint;
+        }
+    });
+
+    [Fact]
     public void WpfPositionUsesSystemScaleBeforeSelectingMonitor()
     {
         var screens = new[] { (new PixelRect(0, 0, 1920, 1080), 1.0), (new PixelRect(1920, 0, 1920, 1080), 1.5) };
