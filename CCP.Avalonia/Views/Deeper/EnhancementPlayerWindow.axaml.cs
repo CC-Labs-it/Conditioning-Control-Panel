@@ -139,6 +139,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private static readonly List<EnhancementPlayerWindow> OpenPlayers = new();
         private string? _audioPath;
         private int _audioLoad;
+        private int _waveformGeneration;
+        private AudioWaveformResult? _waveformData;
         private bool _closing;
 
 
@@ -705,7 +707,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 audio.Ended += _audioEnded; audio.Failed += _audioFailed;
                 audio.Volume = (int)_sliderVolume.Value;
                 _durationSec = audio.DurationSeconds;
-                _waveformLoad = LoadWaveformAsync(path, load, _durationSec);
+                _waveformLoad = LoadWaveformAsync(path, _waveformGeneration);
                 audio.Play();
                 _isPlaying = true;
                 _txtTotal.Text = FormatTime(_durationSec);
@@ -724,19 +726,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         internal Task? _waveformLoad;
 
         // WPF EnhancementPlayerWindow.xaml.cs:665: decode off the UI thread and draw the peaks.
-        private async Task LoadWaveformAsync(string path, int load, double duration)
+        private async Task LoadWaveformAsync(string path, int generation)
         {
             try
             {
                 var data = await AudioWaveformCache.LoadAsync(path);
-                if (_closing || load != _audioLoad) return;
-                // A truncated transcode must not be stretched over the full player timeline.
-                if (duration <= 0 || data.DurationSeconds <= 0 ||
-                    Math.Abs(data.DurationSeconds - duration) > 0.05) return;
-                _peaks = data.Peaks;
-                RenderWaveform();
+                if (_closing || generation != _waveformGeneration) return;
+                _waveformData = data;
+                UpdateAudioWaveform();
             }
             catch (Exception ex) { Log.Debug(ex, "EnhancementPlayer: waveform decode failed"); }
+        }
+
+        private void UpdateAudioWaveform()
+        {
+            if (_waveformData is not { } data || _localAudio?.PlaybackDurationSeconds is not { } duration) return;
+            // A truncated transcode must not be stretched over the full player timeline.
+            var complete = double.IsFinite(duration) && double.IsFinite(data.DurationSeconds)
+                && duration > 0 && data.DurationSeconds > 0 && Math.Abs(data.DurationSeconds - duration) <= 0.05;
+            var peaks = complete ? data.Peaks : null;
+            if (ReferenceEquals(_peaks, peaks)) return;
+            _peaks = peaks;
+            RenderWaveform();
         }
 
         // WPF MainWindow.xaml.cs:2046 and player:2527: panic pauses every player, including pending opens.
@@ -764,6 +775,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void StopAudio()
         {
             ++_audioLoad; // Invalidate an asynchronous open before it can start sound.
+            ++_waveformGeneration;
+            _waveformData = null;
             var audio = _localAudio;
             _localAudio = null;
             _isPlaying = false;
@@ -1018,6 +1031,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             {
                 _currentSec = _localAudio.PositionSeconds;
                 _durationSec = _localAudio.DurationSeconds;
+                UpdateAudioWaveform();
             }
 
             _txtCurrent.Text = FormatTime(_currentSec);

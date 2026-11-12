@@ -13,6 +13,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     {
         int Volume { get; set; }
         double DurationSeconds { get; }
+        double? PlaybackDurationSeconds { get; }
         double PositionSeconds { get; set; }
         void Play();
         void Pause();
@@ -94,14 +95,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
             // The parse misreads some LAME/Xing mp3 headers (measured: a 6.0 s ffmpeg mp3 parsed as
             // 12.1 s); the playing player's Length is exact, so it wins once known.
-            public double DurationSeconds
+            public double? PlaybackDurationSeconds
             {
                 get
                 {
                     var len = Live ? player.Length : -1;
-                    return (len > 0 ? len : parsedMs) / 1000.0;
+                    return len > 0 ? len / 1000.0 : null;
                 }
             }
+            public double DurationSeconds => PlaybackDurationSeconds ?? parsedMs / 1000.0;
 
             public double PositionSeconds
             {

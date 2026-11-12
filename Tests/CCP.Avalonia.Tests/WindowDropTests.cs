@@ -118,6 +118,7 @@ public sealed class WindowDropTests
         public bool RejectStart;
         public int Volume { get; set; }
         public double DurationSeconds => 95;
+        public double? PlaybackDurationSeconds => 95;
         public double PositionSeconds { get; set; }
         public event Action? Ended;
         public event Action? Failed;
