@@ -261,7 +261,7 @@ public sealed class LeashPageTests
         });
 
     [Fact]
-    public void OffersQueueWhileHiddenAndTheNextAskFollowsAnAnswer() =>
+    public void OffersQueueWhileHiddenAndTheSnapHoldsTheNextAskUntilItCloses() =>
         Run(false, (shell, _, _) =>
         {
             var seen = new List<string>(); var wire = new Wire();
@@ -278,6 +278,10 @@ public sealed class LeashPageTests
             wire.AnswerStatus = "on";
             LeashGateCardTests.Click(first.Card.PutItOnButton);
             Assert.False(first.IsVisible);
+            Assert.Null(LeashAskWindow.Current);
+            var snap = Assert.IsAssignableFrom<Window>(LeashAskWindow.Snap);
+            Assert.Single(seen);
+            LeashGateCardTests.Click(Find(snap, "leash-snap-ok"));
             var second = LeashAskWindow.Current!;
             Assert.Equal("leash-ask:u_b", second.Card.Tag);
             Assert.Equal(new[] { "abcdef0123456789", "0123456789abcdef" }, seen);
@@ -288,6 +292,38 @@ public sealed class LeashPageTests
             service.ApplyBlock(block); shell.CheckLeashGate(); Dispatcher.UIThread.RunJobs();
             Assert.Null(LeashAskWindow.Current); Assert.Equal(2, seen.Count);
         });
+
+    private static Window? SnapWindow() => LeashAskWindow.Snap;
+
+    [Fact]
+    public void AcceptedAnswerShowsRecipientSnap() => Run(false, (shell, _, _) =>
+    {
+        var wire = new Wire { AnswerStatus = "on" };
+        var service = new LeashService(wire, () => "u_me", cutSafety: () => { });
+        LeashHead.Service = service;
+        ConditioningControlPanel.CoreSettings.Current.LeashIntroSeenLeashed = true;
+        shell.Show(); shell.CheckLeashGate();
+        service.ApplyBlock(Block(("u_a", "A", "abcdef0123456789"))); Dispatcher.UIThread.RunJobs();
+        LeashGateCardTests.Click(LeashAskWindow.Current!.Card.PutItOnButton);
+        var snap = Assert.IsAssignableFrom<Window>(SnapWindow());
+        Assert.Contains(snap.GetLogicalDescendants().OfType<TextBlock>(), t =>
+            t.Text == ConditioningControlPanel.Localization.Loc.GetF("leash_snap_holder", "A"));
+    });
+
+    [Fact]
+    public void AcceptedEventShowsHolderSnap() => Run(false, (shell, _, _) =>
+    {
+        var service = new LeashService(new Wire(), () => "u_me", cutSafety: () => { });
+        LeashHead.Service = service;
+        shell.Show(); shell.CheckLeashGate();
+        var block = Block();
+        block["events"] = new JArray(new JObject { ["id"] = "abcdef0123456789", ["kind"] = "answered", ["accepted"] = true,
+            ["from"] = new JObject { ["id"] = "u_a", ["name"] = "A" }, ["at"] = DateTimeOffset.UtcNow.ToString("o") });
+        service.ApplyBlock(block); Dispatcher.UIThread.RunJobs();
+        var snap = Assert.IsAssignableFrom<Window>(SnapWindow());
+        Assert.Contains(snap.GetLogicalDescendants().OfType<TextBlock>(), t =>
+            t.Text == ConditioningControlPanel.Localization.Loc.GetF("leash_snap_leashed", "A"));
+    });
 
     // WPF LeashSurfaces.OnEvent (:145-147) and NoteCut (:267-272): the Ended a cut pressed here brings back is swallowed once.
     [Fact]

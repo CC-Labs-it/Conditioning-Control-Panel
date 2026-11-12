@@ -78,6 +78,23 @@ public sealed class LeashCardsTests
         Dispatcher.UIThread.RunJobs();
     }
     [Fact]
+    public void HolderCanReplaySnapFromTheHostedCard() => Run(() =>
+    {
+        var service = new Service(); service.Push(null, Held());
+        var page = new LeashTabView(() => service);
+        var window = new Window { Content = page };
+        try
+        {
+            window.Show(); page.OnShown(); Dispatcher.UIThread.RunJobs();
+            Click(page, "leash-replay");
+            var snap = LeashAskWindow.Snap;
+            Assert.NotNull(snap);
+            Assert.Contains(snap.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.GetF("leash_snap_leashed", "Friend"));
+        }
+        finally { LeashAskWindow.CloseCurrent(); window.Close(); }
+    });
+
+    [Fact]
     public void PreviewIsReadOnlyAndHasNoInventedWeek() => Run(() =>
     {
         var svc = new Service(); var card = new LeashSelfCard(Me(), () => svc);

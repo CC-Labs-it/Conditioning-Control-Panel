@@ -1,5 +1,5 @@
 // WPF LeashHolderCard.cs:83, 339, 423, 432, 542-769: holder report, sheets and sends.
-// Flat cards reuse FriendsDrawer chrome. Offer, snap, explainers and FX remain gaps.
+// Flat cards reuse FriendsDrawer chrome; some explainers and FX remain gaps.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -173,6 +173,12 @@ public sealed class LeashHolderCard : Border
             }
             _body.Children.Add(panel);
         }
+        // WPF LeashHolderCard.cs:289-291 and LeashDrawerSection.cs:139: replay for the current held person.
+        _body.Children.Add(LeashCardUi.Action(Loc.Get("leash_menu_replay"), "leash-replay", () =>
+        {
+            LeashAskWindow.ShowHolderSnap(_held.Who, TopLevel.GetTopLevel(this) as Window);
+            return Task.CompletedTask;
+        }));
         // WPF LeashHolderCard.cs:310: letting go asks first; it ends the leash for both and sets a 24 h cooldown.
         _body.Children.Add(LeashCardUi.Action(Loc.GetF("leash_menu_release", h.Who.Name), "leash-release", () =>
         {
