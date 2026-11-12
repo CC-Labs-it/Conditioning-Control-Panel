@@ -163,8 +163,12 @@ public sealed class BarkEngineTests : IDisposable
     public void TierLatchUsesTheCurrentPatreonTierAndFailsClosed()
     {
         var previous = CoreAccount.CurrentTierProvider;
+        var fired = _s.BarkLifetimeFired;
+        var rotation = _s.BarkVariantRotation;
         try
         {
+            _s.BarkLifetimeFired = new();
+            _s.BarkVariantRotation = new();
             var tier = ConditioningControlPanel.Models.PatreonTier.Level1;
             CoreAccount.CurrentTierProvider = () => tier;
             var rule = Rule("AttentionCheckFail", "once");
@@ -178,7 +182,14 @@ public sealed class BarkEngineTests : IDisposable
             CoreAccount.CurrentTierProvider = () => throw new InvalidOperationException();
             Assert.Equal(ConditioningControlPanel.Models.PatreonTier.None, CoreAccount.CurrentTier);
         }
-        finally { CoreAccount.CurrentTierProvider = previous; }
+        finally
+        {
+            CoreAccount.CurrentTierProvider = previous;
+            _s.BarkLifetimeFired = fired;
+            _s.BarkVariantRotation = rotation;
+        }
+        Assert.Same(fired, _s.BarkLifetimeFired);
+        Assert.Same(rotation, _s.BarkVariantRotation);
     }
 
     [Fact]
