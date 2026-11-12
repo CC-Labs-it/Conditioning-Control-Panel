@@ -164,4 +164,22 @@ public sealed class PossessionStealCardTests
         Assert.Equal(.7, card.Opacity); Assert.True(card.IsHitTestVisible);
     });
 
+    [Fact]
+    public void ReturnFadeFinishesAtFortyPercentWhileScaleContinues() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var image = new Image();
+        var scale = new ScaleTransform();
+        StealCardEffect.ApplyFrame(image, scale, .06, 1, .25, .2);
+        Assert.Equal(.90625, image.Opacity, 5);
+        Assert.True(scale.ScaleX < 1);
+        StealCardEffect.ApplyFrame(image, scale, .06, 1, .25, .4);
+        Assert.Equal(1, image.Opacity, 5);
+        Assert.True(scale.ScaleX < 1);
+        StealCardEffect.ApplyFrame(image, scale, .06, 1, .25, 1);
+        Assert.Equal(1, image.Opacity, 5);
+        Assert.Equal(1, scale.ScaleX, 5);
+        StealCardEffect.ApplyFrame(image, scale, 1, .06, 1, .5);
+        Assert.Equal(.875, image.Opacity, 5);
+    });
+
 }

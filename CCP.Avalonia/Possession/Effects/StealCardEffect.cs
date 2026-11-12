@@ -83,6 +83,16 @@ internal sealed class StealCardEffect : PossessionEffectBase
         }
     }
 
+    internal static void ApplyFrame(Image image, ScaleTransform scale, double from, double to, double opacityFrom, double t)
+    {
+        var eased = to < from ? t * t * t : 1 - Math.Pow(1 - t, 3);
+        scale.ScaleX = scale.ScaleY = from + (to - from) * eased;
+        // WPF StealCardEffect.cs:170-172 fades in over the first 40% of the return.
+        var fadeT = to < from ? t : Math.Min(t / .4, 1);
+        var fade = to < from ? eased : 1 - Math.Pow(1 - fadeT, 3);
+        image.Opacity = opacityFrom + ((to < from ? 0 : 1) - opacityFrom) * fade;
+    }
+
     private static async Task AnimateAsync(PossessionGhost ghost, ScaleTransform scale, double from, double to, double ms, CancellationToken ct)
     {
         var start = Environment.TickCount64;
@@ -91,9 +101,7 @@ internal sealed class StealCardEffect : PossessionEffectBase
         {
             ct.ThrowIfCancellationRequested();
             var t = Math.Clamp((Environment.TickCount64 - start) / ms, 0, 1);
-            var eased = to < from ? t * t * t : 1 - Math.Pow(1 - t, 3);
-            scale.ScaleX = scale.ScaleY = from + (to - from) * eased;
-            ghost.Image.Opacity = opacityFrom + ((to < from ? 0 : 1) - opacityFrom) * eased;
+            ApplyFrame(ghost.Image, scale, from, to, opacityFrom, t);
             if (t >= 1) return;
             await Task.Delay(28, ct);
         }
