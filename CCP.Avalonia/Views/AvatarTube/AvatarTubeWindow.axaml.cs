@@ -1230,32 +1230,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         {
             if (_idleTimer != null) _idleTimer.Interval = TimeSpan.FromSeconds(CoreSettings.Current.IdleGiggleIntervalSeconds);
             ClearStaleSpeechLatch();   // WPF Speech.cs:1612-1614: the one beat still running once she is wedged
-            if (!IsSpeechReady()) return;
-            // WPF main a8735256be: one tick in IdleVoiceLines.OneIn speaks the player's own Voice Line clip.
-            if (!ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced() && TrySpeakOwnVoiceLine()) return;
-            Platform.BarkHead.Engine?.DispatchIdle();
-        }
-
-        private string? _lastOwnVoiceLine;
-
-        /// <summary>WPF TrySpeakOwnVoiceLine (Speech.cs): a voiced, UNPROMPTED line, so the engine-off hold,
-        /// mute, "Mute Voice Lines" and the Voice level all apply. False = the tick is not ours.</summary>
-        internal bool TrySpeakOwnVoiceLine()
-        {
-            var phrases = CoreSettings.Current.CustomCompanionPhrases;
-            var clips = ConditioningControlPanel.Services.Companion.IdleVoiceLines.OwnClips(phrases, CompanionPhrase.DefaultAudioFolder, File.Exists);
-            if (!ConditioningControlPanel.Services.Companion.IdleVoiceLines.TakesTurn(clips.Count,
-                    _random.Next(ConditioningControlPanel.Services.Companion.IdleVoiceLines.OneIn))) return false;
-            var path = ConditioningControlPanel.Services.Companion.IdleVoiceLines.Pick(clips, _lastOwnVoiceLine, _random);
-            if (path == null) return false;
-            var file = System.IO.Path.GetFileName(path);
-            // WPF GetVoiceLineDisplayText (CompanionPhraseService.cs:473-482): a VoiceLine phrase only, any case.
-            var text = phrases.FirstOrDefault(p => p?.Category == ConditioningControlPanel.Services.CompanionPhraseIds.VoiceLineCategory
-                && string.Equals(p.AudioFileName, file, StringComparison.OrdinalIgnoreCase))?.Text;
-            if (string.IsNullOrWhiteSpace(text)) text = System.IO.Path.GetFileNameWithoutExtension(path);
-            _lastOwnVoiceLine = path;
-            GigglePriority(text, playSound: true, aiGenerated: false, phraseAudioPath: path, barkVoice: true, unprompted: true);
-            return true;
+            if (IsSpeechReady()) Platform.BarkHead.Engine?.DispatchIdle();
         }
 
         /// <summary>WPF ClearStaleSpeechLatch (Speech.cs:3070): drop a latch nothing can lower any more.
