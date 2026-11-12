@@ -1699,9 +1699,7 @@ public class QuestService : IDisposable
     public bool AreAllDailyQuestsCompleted() => Progress.AreAllDailyQuestsCompleted();
 
     /// <summary>
-    /// The day key used by the quest completion log: the same calendar day
-    /// <see cref="QuestProgress.DailyQuestCompletionDates"/> stores, as yyyy-MM-dd invariant
-    /// (the format the cloud sync already sends those dates in).
+    /// The invariant day format used by the completion log and its retention cutoff.
     /// </summary>
     private static string DayKey(DateTime day) =>
         day.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
@@ -1712,13 +1710,14 @@ public class QuestService : IDisposable
     /// shield and the manual day fix stamp the calendar with no quest behind them and must not
     /// invent one here.
     /// </summary>
-    private void RecordQuestInLog(DateTime day, string questId)
+    internal static void RecordQuestInLog(QuestProgress progress, DateTimeOffset completedAt, string questId)
     {
         if (string.IsNullOrWhiteSpace(questId)) return;
-        var key = DayKey(day);
-        Progress.QuestCompletionLog ??= new List<QuestLogEntry>();
-        if (Progress.QuestCompletionLog.Any(e => e.D == key && e.Q == questId)) return;
-        Progress.QuestCompletionLog.Add(new QuestLogEntry(key, questId));
+        // New receipts align with the UTC banked day. Old rows and the local quest clock stay intact.
+        var key = DayKey(completedAt.UtcDateTime.Date);
+        progress.QuestCompletionLog ??= new List<QuestLogEntry>();
+        if (progress.QuestCompletionLog.Any(e => e.D == key && e.Q == questId)) return;
+        progress.QuestCompletionLog.Add(new QuestLogEntry(key, questId));
     }
 
     /// <summary>
@@ -1728,13 +1727,14 @@ public class QuestService : IDisposable
     {
         if (quest.IsCompleted) return;
 
+        var completedAt = DateTimeOffset.Now;
         quest.IsCompleted = true;
-        quest.CompletedAt = DateTime.Now;
+        quest.CompletedAt = completedAt.LocalDateTime;
 
         // Spiral W1: remember WHICH quest was finished today, not just that one was. Daily and
         // weekly both, and here at the top because this is the last place that still holds the
-        // definition id. Keyed on the same calendar day the streak calendar uses.
-        RecordQuestInLog(DateTime.Today, def.Id);
+        // definition id. The receipt uses UTC; quest resets and streaks still use local days.
+        RecordQuestInLog(Progress, completedAt, def.Id);
 
         // Update statistics
         if (type == QuestType.Daily)
