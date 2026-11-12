@@ -550,7 +550,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             try { Popped?.Invoke(); } catch (Exception ex) { Log.Debug("bubble popped handler: {E}", ex.Message); }   // WPF OnBubblePopped
         }
 
-        // WPF EffectPayloadFiring: use the head's existing one-shot surfaces where available.
+        // WPF EffectPayloadFiring: the head's one-shot surfaces.
         internal static void FireAmbientPayload(EffectPayload payload)
         {
             if (payload is FlashPayload) { CoreFlash.ShowProvider?.Invoke(); return; }
@@ -561,8 +561,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (phrase != null) CoreSubliminal.ShowProvider?.Invoke(phrase);
                 return;
             }
+            if (payload is OverlayPayload o)   // WPF EffectPayloadFiring.cs:50-68 into OverlayService.ShowOverlayTimed
+            {
+                if (EffectHost() is not { } host) return;
+                var ms = (int)(o.Scale(1500, 4500) * EffectPayload.GlobalDurationMult * o.DurationMult);
+                if (o.OverlayKind == "braindrain") RunOverlay(o.OverlayKind, host, ms, o.BraindrainOpacity ?? ChaosFlashWash.DefaultOpacity);
+                else if (o.OverlayKind is "pink_filter" or "spiral")
+                {
+                    var pink = o.OverlayKind == "pink_filter";
+                    (pink ? PinkFilterOverlay.Timed : SpiralOverlay.Timed).Show(o.ScaleD(0.25, 0.70), ms, pink ? PinkFilterOverlay.IsShowing : SpiralOverlay.IsShowing,
+                        pink ? PinkFilterOverlay.PaintedOpacity : SpiralOverlay.VoiceOpacity ?? CoreSettings.Current.SpiralOpacity / 100.0, () => RunOverlay(o.OverlayKind, host, ms, 0));
+                }
+                return;
+            }
+            if (payload is BrainDrainMeltPayload)   // WPF EffectPayloadFiring.cs:71-102: a drain up or a dial at 0 pays XP only
+            {
+                if (BrainDrainPlayer.Instance?.IsRunning == true || BrainDrainVisualPolicy.IsSilent(CoreSettings.Current.BrainDrainBlurStrength)) return;
+                // ponytail: the timed blur/melt waits on the desktop-capture port (CCP.Avalonia/Platform/BrainDrainPlayer.cs:9).
+                if (!_brainDrainVisualLogged) Log.Information("Bubble: brain drain pop paid XP only - no desktop-capture drain on this head");
+                _brainDrainVisualLogged = true;
+                return;
+            }
             payload.Fire();
         }
+        private static bool _brainDrainVisualLogged;
+        internal static Func<Visual?> EffectHost = () => global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.Current;
+        internal static Action<string, Visual, int, double> RunOverlay = (kind, host, ms, opacity) =>
+        { if (kind == "braindrain") ChaosFlashOverlay.Show(host, ms, opacity); else if (kind == "spiral") SpiralOverlay.Refresh(host); else PinkFilterOverlay.Refresh(host); };
 
         // WPF BubbleService.cs:2191-2236: mod audio, perk opt-out and missing-chime fallback.
         internal static (string Path, bool Chime) ResolvePopSound(bool lucky, bool suppressed, Random random)
@@ -627,7 +652,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static readonly Dictionary<uint, IPen> FuseCache = new();
         private static readonly Dictionary<uint, (IBrush, IPen)> TintCache = new();
         private static readonly IBrush?[] NatashaWashes = new IBrush[256];
-        private static readonly IPen NatashaPen = new Pen(new SolidColorBrush(Color.FromRgb(NatashasFavourite.R, NatashasFavourite.G, NatashasFavourite.B), NatashasFavourite.HaloOpacity), 2);
+        // WPF Bubble.MarkNatasha (BubbleService.cs:2931-2950): a blurred red glow, dropped where the tier forbids glow.
+        private static readonly Color NatashaHalo = Color.FromArgb((byte)(255 * NatashasFavourite.HaloOpacity), NatashasFavourite.R, NatashasFavourite.G, NatashasFavourite.B);
         private static readonly IPen ResistPen = new Pen(new SolidColorBrush(Color.FromRgb(NatashasFavourite.MintR, NatashasFavourite.MintG, NatashasFavourite.MintB)), 4);
         private static IBrush NatashaWash(double opacity)
         {
@@ -811,13 +837,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                             var (fill, pen) = TintPaint(b.Spec.Tint);
                             dc.DrawEllipse(fill, pen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
                         }
+                        if (b.IsNatasha && !b.Popping && global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowGlow(global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier))
+                            dc.DrawRectangle(null, null, new RoundedRect(new Rect(cx - size / 2 + 5, cy - size / 2 + 5, size - 10, size - 10), size / 2 - 5),
+                                new BoxShadows(new BoxShadow { Blur = NatashasFavourite.HaloBlurDip * k, Color = NatashaHalo }));
                         var sprite = b.IsAmbientTrigger && b.Spec != null ? BubbleOverlay.TriggerImage(b.Spec.VariantId) : img;
                         if (sprite != null) dc.DrawImage(sprite, new Rect(cx - size / 2, cy - size / 2, size, size));
                         else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
                         if (b.IsNatasha && !b.Popping)
                         {
                             var opacity = NatashasFavourite.BubbleWashAt(b.TimeAlive, global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowAmbientLoops);
-                            dc.DrawEllipse(NatashaWash(opacity), NatashaPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                            dc.DrawEllipse(NatashaWash(opacity), null, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
                             if (BubbleOverlay.IsResisting(b))
                             {
                                 var count = (int)(48 * BubbleOverlay.ResistProgress);
