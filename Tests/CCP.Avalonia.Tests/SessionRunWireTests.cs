@@ -45,6 +45,16 @@ public sealed class SessionRunWireTests
                 Assert.Equal($"🌅 Start {session.GetModeAwareName()}?", start.Title);
                 Assert.Equal("▶ Start Session", Assert.IsType<TextBlock>(start.FindControl<Button>("BtnOk")!.Content).Text);
                 Assert.Equal("Not yet", Assert.IsType<TextBlock>(start.FindControl<Button>("BtnCancel")!.Content).Text);
+                // WPF ShowStyledDialog has no default button or initial button focus.
+                foreach (var key in new[] { Key.Enter, Key.Space })
+                {
+                    start.KeyPress(key, RawInputModifiers.None, key == Key.Enter ? PhysicalKey.Enter : PhysicalKey.Space, null);
+                    Assert.True(start.IsVisible);
+                    Assert.False(runner.IsRunning);
+                    start.KeyRelease(key, RawInputModifiers.None, key == Key.Enter ? PhysicalKey.Enter : PhysicalKey.Space, null);
+                    Assert.True(start.IsVisible);
+                    Assert.False(runner.IsRunning);
+                }
                 start.FindControl<Button>("BtnCancel")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
                 await Task.Yield();
                 runner.Start(session);

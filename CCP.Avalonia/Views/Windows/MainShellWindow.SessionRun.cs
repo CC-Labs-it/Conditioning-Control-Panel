@@ -39,12 +39,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (selected is null || !selected.IsAvailable) return;
 
             // WPF's text here is not localised (MainWindow.Presets.cs:1572); kept verbatim.
-            var confirmed = await MessageDialog.ConfirmAsync(this, $"🌅 Start {selected.GetModeAwareName()}?",
+            var dialog = new MessageDialog($"🌅 Start {selected.GetModeAwareName()}?",
                 $"Duration: {selected.DurationMinutes} minutes\n\n" +
                 "Your current settings will be temporarily replaced.\n" +
                 "They will be restored when the session ends." +
-                "\n\nReady to begin?", okText: "▶ Start Session", cancelText: "Not yet");
-            if (confirmed) StartSession(selected);
+                "\n\nReady to begin?", showCancel: true, okText: "▶ Start Session", cancelText: "Not yet");
+            dialog.FindControl<Button>("BtnOk")!.IsDefault = false;
+            if (await dialog.ShowDialogSafe<bool?>(this) == true) StartSession(selected);
         }
 
         /// <summary>WPF StartSession: the engine start (through the portal wrapper, so the panic key is
