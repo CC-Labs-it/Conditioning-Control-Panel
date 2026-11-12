@@ -156,11 +156,16 @@ public sealed class GlowRenderProofTests
             CoreEntitlement.HasPremiumProvider = null;
             CoreEntitlement.HasLabProvider = null;
             CoreEntitlement.IsFreeTodayProvider = null;
-            w = new MainShellWindow { Width = 1400, Height = 900 };
+            w = new MainShellWindow { Width = 1400, Height = 900, TabClock = new SteppedTime() };
             w.Show();
             Dispatcher.UIThread.RunJobs();
             w.ShowTab("exclusives");
+            // Freeze the entrance clock and complete the real transition before sampling pixels.
+            // RunJobs alone can leave the tab transparent or moving on a loaded CI runner.
+            Assert.NotNull(w.EnteringTab);
+            w.CompleteTabTransition();
             Dispatcher.UIThread.RunJobs();
+            Assert.Null(w.EnteringTab);
             var view = w.Named<ExclusivesTabView>("ExclusivesTab")!;
             var lockGlyph = view.GetVisualDescendants().OfType<IconGlyph>().First(t => t.Name == "VeilLock" && t.IsEffectivelyVisible);
             var glow = ExclusivesTabView.LockGlow(lockGlyph)!;
@@ -179,9 +184,11 @@ public sealed class GlowRenderProofTests
 
             // On screen: 2 DIP left of the glyph's ink, mid-height, the halo tints the frame.
             glow.Opacity = 1;
+            HeadlessPointerFrame.Render(w); // commit the live tree before reading positions and pixels
             var p = lockGlyph.TranslatePoint(new Point(plain.X - pad - 2, plain.Y - pad + plain.Height / 2.0), w)!.Value;
             var lit = Pixel(Frame(w, "padlock-glow-on"), p);
             glow.IsVisible = false;
+            HeadlessPointerFrame.Render(w); // commit the visibility change before the comparison frame
             var dark = Pixel(Frame(w, "padlock-glow-off"), p);
             Assert.True(Diff(lit, dark) > 4, $"no halo beside the padlock: {lit:X6} vs {dark:X6}");
         }
