@@ -159,6 +159,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             Spec = spec;
             Web = new WebHost();
+            if (spec.Id == FypId) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
             if (spec.Id == "loom") Web.EnvironmentRequested += ConfigureLoomEnvironment;
             Title = spec.Id == "loom" ? "The Loom" : Loc.Get(spec.TitleKey);
             Width = 1280;

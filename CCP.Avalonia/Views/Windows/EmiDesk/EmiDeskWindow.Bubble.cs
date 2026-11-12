@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Media;
+using Avalonia.Input;
 using Avalonia.Media.Immutable;
 using ConditioningControlPanel.Services.EmiDesk;
 using Serilog;
@@ -22,6 +23,68 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private Border? _bubble;
         private TextBlock? _bubbleText;
         private Polygon? _bubbleTail;
+        private StackPanel? _bubbleContent;
+        private StackPanel? _askChips;
+        private AskDraw? _ask;
+        private EmiLineEngine? _askEngine;
+        internal bool AskLive => _ask != null;
+
+        internal void ShowAsk(AskDraw ask, EmiLineEngine engine)
+        {
+            if (!IsVisible || PresentationActive) return;
+            CancelChain();
+            CancelHold();
+            EnsureBubble();
+            _ask = ask;
+            _askEngine = engine;
+            engine.Ack(ask.Id);
+            DrawFace(ask.Face);
+            ShowBubble(ask.Question);
+            _askChips!.Children.Clear();
+            for (int i = 0; i < 2; i++)
+            {
+                int answer = i;
+                var button = new Button { Content = ask.Chips[i], Margin = new Thickness(0, 4, 4, 0) };
+                button.Click += (_, _) => AnswerAsk(answer);
+                _askChips.Children.Add(button);
+            }
+            _askChips.IsVisible = true;
+            _bubble!.IsHitTestVisible = true;
+            _bubbleCanvas.IsHitTestVisible = true;
+            LayoutBubble();
+            (_askChips.Children[0] as Button)?.Focus();
+        }
+        internal void AnswerAsk(int index)
+        {
+            var ask = _ask;
+            var engine = _askEngine;
+            if (ask == null || engine == null) return;
+            ClearAsk();
+            engine.NoteAskAnswered();
+            EmiDeskService.Instance.Fire("askAnswered", new { answer = index == 0 ? "yes" : "no" });
+            SpeakLine(index == 0 ? ask.Yes : ask.No, engine);
+            if (index == 0 && string.Equals(ask.Effect, "pinTop:fyp", StringComparison.OrdinalIgnoreCase))
+            {
+                EmiSuggester.PinToTop("fyp");
+                RebuildRing();
+                EmiDeskService.Instance.Fire("pinAdded", new { target = "fyp", fromAsk = true });
+            }
+        }
+        internal void CancelAsk()
+        {
+            if (_ask == null) return;
+            _askEngine?.NoteAskIgnored();
+            ClearAsk();
+        }
+        private void ClearAsk()
+        {
+            _ask = null;
+            _askEngine = null;
+            if (_askChips != null) { _askChips.Children.Clear(); _askChips.IsVisible = false; }
+            if (_bubble != null) _bubble.IsHitTestVisible = false;
+            _bubbleCanvas.IsHitTestVisible = false;
+            HideBubble();
+        }
         /// <summary>The bubble's text while it is up, else null (test seam).</summary>
         internal string? BubbleText => _bubble is { IsVisible: true } ? _bubbleText?.Text : null;
         partial void OnBubbleTextCore(string? text)
@@ -36,6 +99,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private void EnsureBubble()
         {
             if (_bubble != null) return;
+            KeyDown += (_, e) => { if (e.Key == Key.Escape && AskLive) { CancelAsk(); e.Handled = true; } };
             _bubbleText = new TextBlock
             {
                 Foreground = BubbleInk,
@@ -43,6 +107,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 TextWrapping = TextWrapping.Wrap,
                 IsHitTestVisible = false
             };
+            _askChips = new StackPanel { Orientation = global::Avalonia.Layout.Orientation.Horizontal, IsVisible = false };
+            _bubbleContent = new StackPanel();
+            _bubbleContent.Children.Add(_bubbleText);
+            _bubbleContent.Children.Add(_askChips);
             _bubble = new Border
             {
                 Background = BubbleFill,
@@ -50,7 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 BorderThickness = new Thickness(1),
                 Padding = new Thickness(8, 8, 10, 8),
                 IsHitTestVisible = false,
-                Child = _bubbleText,
+                Child = _bubbleContent,
                 IsVisible = false
             };
             _bubbleTail = new Polygon

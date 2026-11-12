@@ -118,6 +118,27 @@ public sealed class GameWindowFypTests
         }
     });
 
+    [Fact]
+    public void BrowserFailure_ClosesVisitOnce() => Run((_, _) =>
+    {
+        var oldMoment = ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiTargets.Moment;
+        var moments = new List<string>();
+        ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiTargets.Moment = (name, _) => moments.Add(name);
+        try
+        {
+            CoreEntitlement.HasPremiumProvider = () => true;
+            var window = GameWindow.Launch("fyp")!;
+            window.Web.OnBrowserProcessFailed();
+            Assert.False(GameWindow.IsAnyOpen());
+            Assert.Equal(new[] { "fypOpened", "fypClosed" }, moments);
+            window.Web.OnBrowserProcessFailed();
+            GameWindow.CloseAllForPanic();
+            Assert.False(GameWindow.IsAnyOpen());
+            Assert.Equal(new[] { "fypOpened", "fypClosed" }, moments);
+        }
+        finally { ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiTargets.Moment = oldMoment; }
+    });
+
     // WPF VideoService.cs:1982: the video host uses the same visible-feed predicate as Bubble Count.
     [Fact]
     public void MandatoryVideoHost_TracksVisibleFeed_AndPanicClearsIt() => Run((shell, _) =>
