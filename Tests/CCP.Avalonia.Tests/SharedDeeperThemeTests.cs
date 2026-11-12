@@ -19,6 +19,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using Xunit;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 namespace CCP.Avalonia.Tests;
@@ -258,15 +259,30 @@ public sealed class SharedDeeperThemeTests
         Assert.Equal(1, spring.Ease(1));
     }
 
-    [Fact]
-    public Task HudPlanksRaiseTheStartRowAndTravelOnHoverPressRelease() => AvaloniaTestDispatcher.RunAsync(async () =>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    public Task HudPlanksRaiseTheStartRowAndTravelOnHoverPressRelease(bool ambientAnimations, bool ambientGentle) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
         var oldMotion = CoreSettings.Current.MotionLevel;
-        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        var oldGentle = CoreSettings.Current.GentleVisuals;
+        var oldProbe = UiMotionPreference.OsProbe;
         static double Base(AvaloniaObject o, StyledProperty<double> p) => o.GetBaseValue(p) is { HasValue: true } v ? v.Value : double.NaN;
         try
         {
+            // The assertions below sample the 140 ms full-motion spring. Isolate both caps even
+            // when a prior test or the host OS asks for reduced motion.
+            CoreSettings.Current.GentleVisuals = ambientGentle;
+            UiMotionPreference.OsProbe = () => ambientAnimations;
+            UiMotionPreference.CacheStamp = long.MinValue;
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            Assert.Equal(ambientAnimations && !ambientGentle ? MotionLevel.Full : MotionLevel.Reduced, HudPlank.Level);
+            CoreSettings.Current.GentleVisuals = false;
+            UiMotionPreference.OsProbe = () => true;
+            UiMotionPreference.CacheStamp = long.MinValue;
             foreach (var (key, kind) in new[]
             {
                 ("PinkButton", HudPlankKind.None), ("PinkButton", HudPlankKind.Plank), ("PinkButton", HudPlankKind.Chunky),
@@ -391,7 +407,13 @@ public sealed class SharedDeeperThemeTests
             }
             finally { shell?.Close(); CoreSettings.ServiceProvider = oldProvider; }
         }
-        finally { CoreSettings.Current.MotionLevel = oldMotion; }
+        finally
+        {
+            CoreSettings.Current.MotionLevel = oldMotion;
+            CoreSettings.Current.GentleVisuals = oldGentle;
+            UiMotionPreference.OsProbe = oldProbe;
+            UiMotionPreference.CacheStamp = long.MinValue;
+        }
         await Task.CompletedTask;
     });
 }
