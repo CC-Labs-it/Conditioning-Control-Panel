@@ -3,7 +3,8 @@
 # <runtime>.checked (its sha256), which build-tarball.sh accepts instead of re-checking.
 #
 #   packaging/linux/vlc/check.sh [RUNTIME_TAR_GZ]     (default: out/ccp-vlc-runtime-<ver>-linux-x64.tar.gz)
-#   packaging/linux/vlc/check.sh --clips              only make the test clips in out/clips
+#   packaging/linux/vlc/check.sh --clips              only make the test clips in out/clips (also the ts, wmv
+#                                                     and flv ones smoke-tarball.sh decodes)
 #
 # In a clean BUILD_IMAGE (ubuntu:22.04, no VLC, no FFmpeg):
 #   1. ldd -r: the only unresolved libraries are libpulse.so.0 / libasound.so.2 (distro deps);
@@ -69,7 +70,12 @@ fi
 engine=${CONTAINER_ENGINE:-$(command -v podman || command -v docker || true)}
 [ -n "$engine" ] || { echo "check.sh: neither podman nor docker found" >&2; exit 1; }
 clips=$here/out/clips
-if [ ! -f "$clips/audio.mp3" ]; then
+# Regenerate all when any is missing: a cache from before the ts/wmv/flv clips holds only mp4/webm/mp3.
+all_clips=1
+for c in h264_aac.mp4 vp9_opus.webm h264_aac.ts wmv2_wma.wmv flv1_mp3.flv audio.mp3; do
+    [ -f "$clips/$c" ] || all_clips=0
+done
+if [ "$all_clips" = 0 ]; then
     mkdir -p "$clips"
     # shellcheck disable=SC2016 # expanded by the container's sh
     "$engine" run --rm -v "$clips:/clips:z" "$CLIP_IMAGE" sh -euc '
@@ -78,6 +84,9 @@ if [ ! -f "$clips/audio.mp3" ]; then
         a="-f lavfi -i sine=frequency=440:duration=2:sample_rate=48000"
         ffmpeg -v error -y $v $a -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest /clips/h264_aac.mp4
         ffmpeg -v error -y $v $a -c:v libvpx-vp9 -c:a libopus -shortest /clips/vp9_opus.webm
+        ffmpeg -v error -y $v $a -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest /clips/h264_aac.ts
+        ffmpeg -v error -y $v $a -c:v wmv2 -c:a wmav2 -shortest /clips/wmv2_wma.wmv
+        ffmpeg -v error -y $v $a -c:v flv -c:a libmp3lame -ar 44100 -shortest /clips/flv1_mp3.flv
         ffmpeg -v error -y $a -c:a libmp3lame /clips/audio.mp3
         chown '"$(id -u):$(id -g)"' /clips/*'
 fi

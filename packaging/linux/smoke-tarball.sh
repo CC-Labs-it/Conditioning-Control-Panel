@@ -26,7 +26,7 @@ grep -q 'releases/download/.*-sources.tar' "$app/SOURCES.txt"
 clipdir=${2:-${CCP_SMOKE_VLC_CLIP_DIR:-}}
 if [ -z "$clipdir" ]; then
   clipdir=$(dirname "$0")/vlc/out/clips
-  [ -f "$clipdir/flv1_mp3.flv" ] || bash "$(dirname "$0")/vlc/check.sh" --clips >&2
+  bash "$(dirname "$0")/vlc/check.sh" --clips >&2
 fi
 CCP_SMOKE_VLC_CLIPS=
 for c in h264_aac.mp4 vp9_opus.webm h264_aac.ts wmv2_wma.wmv flv1_mp3.flv; do
