@@ -115,6 +115,41 @@ public class BrainDrainAudioTests
         }
         finally { player.Stop(); BrainDrainPlayer.Instance = oldInstance; state.Dispose(); Directory.Delete(root, true); }
     }
+    [Fact]
+    public void TriggerReachesSubscriberWhilePreparationIsBlocked()
+    {
+        using var state = new BrainDrainTestState();
+        var root = Directory.CreateTempSubdirectory("ccp-drain-blocked-trigger-").FullName;
+        Directory.CreateDirectory(Path.Combine(root, "braindrain"));
+        File.WriteAllText(Path.Combine(root, "braindrain", "clip.wav"), "");
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        Action? queued = null; int count = 0; Task? tick = null;
+        var player = new BrainDrainPlayer((_, _) =>
+        {
+            entered.Set();
+            Assert.True(release.Wait(TimeSpan.FromSeconds(10)), "preparation was never released");
+            return new Voice();
+        }, new Clock(), () => 0, action => queued = action);
+        player.Triggered += (_, _) => count++;
+        try
+        {
+            CorePaths.EffectiveAssetsProvider = () => root; CoreSettings.Current.BrainDrainEnabled = true;
+            player.Start(); tick = Task.Run(() => player.Tick(TimeSpan.FromSeconds(5)));
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(10)), "preparation never started");
+            Assert.NotNull(queued); queued!();
+            Assert.Equal(1, count); Assert.False(tick.IsCompleted);
+            release.Set(); tick.GetAwaiter().GetResult();
+            Assert.Equal(1, count);
+        }
+        finally
+        {
+            release.Set();
+            try { tick?.GetAwaiter().GetResult(); }
+            finally { player.Stop(); Directory.Delete(root, true); }
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -232,13 +267,13 @@ public class BrainDrainAudioTests
         File.WriteAllText(Path.Combine(root, "braindrain", "clip.wav"), "");
         using var entered = new ManualResetEventSlim();
         using var release = new ManualResetEventSlim();
-        var voice = new Voice(); int triggers = 0;
+        var voice = new Voice(); int triggers = 0; Action? queued = null;
         var player = new BrainDrainPlayer((_, _) =>
         {
             entered.Set();
             Assert.True(release.Wait(TimeSpan.FromSeconds(10)), "preparation was never released");
             return voice;
-        }, new Clock(), () => 0, action => action());
+        }, new Clock(), () => 0, action => queued = action);
         player.Triggered += (_, _) => triggers++;
         var oldInstance = BrainDrainPlayer.Instance;
         Task? tick = null;
@@ -256,6 +291,7 @@ public class BrainDrainAudioTests
             else player.Stop();
             Assert.False(player.IsRunning);
             if (restart) player.Start();
+            Assert.NotNull(queued); queued!();
             release.Set(); tick.GetAwaiter().GetResult();
             Assert.Equal(0, voice.Plays);
             Assert.Equal(0, triggers);
