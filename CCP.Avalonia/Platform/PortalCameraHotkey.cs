@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Services.EmiDesk;
+using ConditioningControlPanel.Input;
 using Serilog;
 using Tmds.DBus.Protocol;
 
@@ -15,10 +16,11 @@ internal sealed class PortalCameraHotkey : IDisposable
     private const string Id = "camera";
     private readonly object _gate = new();
     private readonly Action _pressed;
+    private readonly PanicKeyHold _hold = new();
     private DBusConnection? _bus;
     private IDisposable? _down, _up, _closed;
     private string? _session;
-    private bool _disposed, _bound, _held;
+    private bool _disposed, _bound;
     internal string Trigger { get; private set; } = "";
     internal bool IsBound { get { lock (_gate) return _bound && !_disposed; } }
 
@@ -92,15 +94,13 @@ internal sealed class PortalCameraHotkey : IDisposable
         catch (Exception ex) { Log.Warning(ex, "Camera shortcut portal unavailable"); Dispose(); }
     }
 
-    internal void Route(string session, string id, bool down)
+    internal void Route(string session, string id, bool down, DateTime? now = null)
     {
         lock (_gate)
         {
             if (_disposed || !_bound || session != _session || id != Id) return;
-            if (!down) { _held = false; return; }
-            if (_held) return;
-            _held = true;
-            _pressed();
+            if (!down) { _hold.Up(); return; }
+            if (!_hold.Down(now ?? DateTime.UtcNow)) _pressed();
         }
     }
 
@@ -111,7 +111,7 @@ internal sealed class PortalCameraHotkey : IDisposable
         lock (_gate)
         {
             if (_disposed) return;
-            _disposed = true; _bound = false; _held = false;
+            _disposed = true; _bound = false; _hold.Up();
             bus = _bus; _bus = null;
             down = _down; up = _up; closed = _closed;
             _down = _up = _closed = null;

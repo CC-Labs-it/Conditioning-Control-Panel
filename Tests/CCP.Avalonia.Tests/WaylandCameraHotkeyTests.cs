@@ -9,6 +9,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.EmiDesk;
+using ConditioningControlPanel.Input;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -29,18 +30,25 @@ public sealed class WaylandCameraHotkeyTests
         int presses = 0;
         using var portal = new PortalCameraHotkey(() => presses++);
         portal.SetSessionForTests("/session/camera");
-        portal.Route("/session/other", "camera", true);
-        portal.Route("/session/camera", "other", true);
-        portal.Route("/session/camera", "camera", true);
-        portal.Route("/session/camera", "camera", true);
+        var start = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        portal.Route("/session/other", "camera", true, start);
+        portal.Route("/session/camera", "other", true, start);
+        portal.Route("/session/camera", "camera", true, start);
+        // Sustained repeats refresh the gap and do not toggle the camera.
+        portal.Route("/session/camera", "camera", true, start.AddSeconds(1));
+        portal.Route("/session/camera", "camera", true, start.AddSeconds(2));
         Assert.Equal(1, presses);
-        portal.Route("/session/camera", "camera", false);
-        portal.Route("/session/camera", "camera", true);
+        // A lost Deactivated must not make all subsequent presses disappear.
+        var afterGap = start.AddSeconds(2).Add(PanicKeyHold.RepeatGap).AddTicks(1);
+        portal.Route("/session/camera", "camera", true, afterGap);
         Assert.Equal(2, presses);
+        portal.Route("/session/camera", "camera", false, afterGap);
+        portal.Route("/session/camera", "camera", true, afterGap);
+        Assert.Equal(3, presses);
         portal.Dispose();
-        portal.Route("/session/camera", "camera", false);
-        portal.Route("/session/camera", "camera", true);
-        Assert.Equal(2, presses);
+        portal.Route("/session/camera", "camera", false, afterGap);
+        portal.Route("/session/camera", "camera", true, afterGap);
+        Assert.Equal(3, presses);
         Assert.False(portal.IsBound);
     }
 
