@@ -1,7 +1,10 @@
 using System;
 using System.Linq;
 using Avalonia.Input;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using IconKind = FluentIcons.Common.Symbol;
+using IconVariant = FluentIcons.Common.IconVariant;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -32,18 +35,27 @@ public sealed class SessionRunWireTests
         {
             var previous = AvApp.Sessions;
             var oldSkip = CoreSettings.Current.SkipPauseXpWarning;
+            var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
             var shell = new MainShellWindow();
             var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
             try
             {
                 CoreSettings.Current.SkipPauseXpWarning = false;
                 shell.Show();
+                LocalizationManager.Instance.SetLanguage("fr");
                 var session = new Session { Id = "morning_drift", Name = "Different authored name", IsAvailable = true, DurationMinutes = 60 };
                 Assert.NotEqual(session.Name, session.GetModeAwareName());
                 shell.BtnStartSession_Click(session);
                 var start = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
                 Assert.Equal($"🌅 Start {session.GetModeAwareName()}?", start.Title);
-                Assert.Equal("▶ Start Session", Assert.IsType<TextBlock>(start.FindControl<Button>("BtnOk")!.Content).Text);
+                var startLabel = Assert.IsType<IconLabel>(start.FindControl<Button>("BtnOk")!.Content);
+                Assert.Equal("▶ Start Session", startLabel.Source);
+                Assert.NotEqual(Loc.Get("btn_start_session"), startLabel.Source); // WPF copy stays English.
+                Assert.Equal("Start Session", startLabel.Label.Text);
+                var startGlyph = Assert.Single(startLabel.Children.OfType<IconGlyph>());
+                Assert.Equal(IconKind.Play, startGlyph.Kind);
+                Assert.Equal(IconVariant.Filled, startGlyph.Variant);
+                Assert.False(startGlyph.IsFallback);
                 Assert.Equal("Not yet", Assert.IsType<TextBlock>(start.FindControl<Button>("BtnCancel")!.Content).Text);
                 // WPF ShowStyledDialog has no default button or initial button focus.
                 foreach (var key in new[] { Key.Enter, Key.Space })
@@ -57,6 +69,7 @@ public sealed class SessionRunWireTests
                 }
                 start.FindControl<Button>("BtnCancel")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
                 await Task.Yield();
+                LocalizationManager.Instance.SetLanguage(oldLanguage);
                 runner.Start(session);
                 var stopTask = shell.ConfirmStopSession("title_stop_session_confirm", "msg_stop_session_body", "btn_yes_stop_session", "btn_keep_going");
                 var stop = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
@@ -89,6 +102,7 @@ public sealed class SessionRunWireTests
                 runner.Stop();
                 CoreEngine.Stop();
                 CoreSettings.Current.SkipPauseXpWarning = oldSkip;
+                LocalizationManager.Instance.SetLanguage(oldLanguage);
                 CoreSettings.Save();
                 AvApp.Sessions = previous;
                 shell.Close();

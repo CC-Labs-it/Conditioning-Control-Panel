@@ -14,6 +14,7 @@ using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Media;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Localization;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -43,8 +44,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 $"Duration: {selected.DurationMinutes} minutes\n\n" +
                 "Your current settings will be temporarily replaced.\n" +
                 "They will be restored when the session ends." +
-                "\n\nReady to begin?", showCancel: true, okText: "▶ Start Session", cancelText: "Not yet");
-            dialog.FindControl<Button>("BtnOk")!.IsDefault = false;
+                "\n\nReady to begin?", showCancel: true, cancelText: "Not yet");
+            // WPF uses fixed English copy; render its play marker with the head's Fluent icon.
+            var startText = LocalizationManager.Instance.GetEnglish("btn_start_session");
+            var yes = dialog.FindControl<Button>("BtnOk")!;
+            yes.Content = new IconLabel { Text = startText ?? "Start Session", Kind = startText == null ? IconKind.Play : null };
+            yes.IsDefault = false;
             if (await dialog.ShowDialogSafe<bool?>(this) == true) StartSession(selected);
         }
 
