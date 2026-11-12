@@ -25,7 +25,14 @@ public sealed class TutorialStageTests
         public void Latch(string name) { }
     }
 
-    private static Task WithHost(Action<Window, TutorialOverlay, Button, Button, int> check) => AvaloniaTestDispatcher.RunAsync(() =>
+    private static Task WithHost(Action<Window, TutorialOverlay, Button, Button, int> check) =>
+        WithHost((host, overlay, target, outside, index) =>
+        {
+            check(host, overlay, target, outside, index);
+            return Task.CompletedTask;
+        });
+
+    private static Task WithHost(Func<Window, TutorialOverlay, Button, Button, int, Task> check) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current == null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
@@ -57,7 +64,7 @@ public sealed class TutorialStageTests
             overlay = new TutorialOverlay(host);
             overlay.Show();
             Dispatcher.UIThread.RunJobs();
-            check(host, overlay, target, outside, CoreTutorial.CurrentStepIndex);
+            await check(host, overlay, target, outside, CoreTutorial.CurrentStepIndex);
         }
         finally
         {
@@ -69,7 +76,6 @@ public sealed class TutorialStageTests
             TutorialHeadHooks.ShellProvider = oldShell;
             Dispatcher.UIThread.RunJobs();
         }
-        return Task.CompletedTask;
     });
 
     private static void Click(Window host, Control target)
@@ -113,6 +119,96 @@ public sealed class TutorialStageTests
         Assert.Equal(1, root.Opacity, 2);
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task FinishAndSkipFadeBeforeDetach(bool finish) => WithHost(async (host, overlay, _, _, _) =>
+    {
+        var root = overlay.StageRoot!;
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        Dispatcher.UIThread.RunJobs();
+        System.Threading.Thread.Sleep(400);
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        Dispatcher.UIThread.RunJobs();
+        if (finish) while (CoreTutorial.IsActive) CoreTutorial.Next();
+        else CoreTutorial.Skip();
+        Assert.True(overlay.IsOnStage);
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        Dispatcher.UIThread.RunJobs();
+        System.Threading.Thread.Sleep(80);
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        Dispatcher.UIThread.RunJobs();
+        Assert.InRange(root.Opacity, 0.01, 0.99);
+        await Task.Delay(250);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(overlay.IsOnStage);
+    });
+
+    [Fact]
+    public Task FadingStageKeepsItsInputRegionAndIgnoresOldCardActions() => WithHost(async (host, overlay, target, outside, _) =>
+    {
+        var outsideClicks = 0;
+        var targetClicks = 0;
+        outside.Click += (_, _) => outsideClicks++;
+        target.Click += (_, _) => targetClicks++;
+        var oldSkip = overlay.StageRoot!.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "BtnSkip");
+        CoreTutorial.Skip();
+        Assert.True(overlay.IsOnStage);
+
+        var outsidePoint = outside.TranslatePoint(new Point(outside.Bounds.Width / 2, outside.Bounds.Height / 2), host)!.Value;
+        var targetPoint = target.TranslatePoint(new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), host)!.Value;
+        host.MouseDown(outsidePoint, MouseButton.Left);
+        host.MouseUp(outsidePoint, MouseButton.Left);
+        host.MouseDown(targetPoint, MouseButton.Left);
+        host.MouseUp(targetPoint, MouseButton.Left);
+        Assert.Equal(0, outsideClicks);
+        Assert.Equal(1, targetClicks);
+
+        TutorialHead.Service.Start(TutorialType.DeeperEditorInteractiveHTPart2);
+        oldSkip.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Assert.True(CoreTutorial.IsActive);
+        await Task.Delay(250);
+        Assert.False(overlay.IsOnStage);
+        Click(host, outside);
+        Assert.Equal(1, outsideClicks);
+    });
+
+    [Fact]
+    public Task PanicDetachesImmediately() => WithHost((_, overlay, _, _, _) =>
+    {
+        TutorialHead.OnPanic();
+        Assert.False(overlay.IsOnStage);
+        Assert.False(CoreTutorial.IsActive);
+    });
+
+    [Fact]
+    public Task HostCloseDuringFadeDetachesImmediately() => WithHost((host, overlay, _, _, _) =>
+    {
+        CoreTutorial.Skip();
+        Assert.True(overlay.IsOnStage);
+        host.Close();
+        Assert.False(overlay.IsOnStage);
+    });
+
+    [Fact]
+    public Task RestartDuringFadeKeepsNewStage() => WithHost(async (host, overlay, _, _, _) =>
+    {
+        CoreTutorial.Skip();
+        Assert.True(overlay.IsOnStage);
+        TutorialHead.Service.Start(TutorialType.DeeperEditorInteractiveHTPart2);
+        var successor = new TutorialOverlay(host);
+        try
+        {
+            successor.Show();
+            Assert.NotSame(overlay.StageRoot, successor.StageRoot);
+            await Task.Delay(250);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(overlay.IsOnStage);
+            Assert.True(successor.IsOnStage);
+        }
+        finally { successor.Close(); }
+    });
+
     [Fact]
     public Task ClosingLiveCardRestoresHostInputAndLeavesNoCardOrSubscriptions() => WithHost((host, overlay, target, _, _) =>
     {
@@ -130,6 +226,7 @@ public sealed class TutorialStageTests
         var closed = 0;
         overlay.Closed += (_, _) => closed++;
         host.Close();
+        Assert.False(overlay.IsOnStage);
         Dispatcher.UIThread.RunJobs();
         Assert.False(CoreTutorial.IsActive);
         Assert.False(overlay.IsOnStage);
@@ -159,16 +256,17 @@ public sealed class TutorialStageTests
     });
 
     [Fact]
-    public Task HostEscapeEndsTheTourWithoutTakingFocus() => WithHost((host, overlay, target, _, _) =>
+    public Task HostEscapeEndsTheTourWithoutTakingFocus() => WithHost(async (host, overlay, target, _, _) =>
     {
         target.Focus();
         Dispatcher.UIThread.RunJobs();
         Assert.Same(target, host.FocusManager?.GetFocusedElement()); // the card did not pull focus back
         host.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, "");
-        Dispatcher.UIThread.RunJobs();
         Assert.False(CoreTutorial.IsActive);
-        Assert.False(overlay.IsOnStage);
+        Assert.True(overlay.IsOnStage);
         Assert.Same(target, host.FocusManager?.GetFocusedElement()); // Escape reached the host while target kept focus
+        await Task.Delay(700); // dispatcher may be delayed beyond the fade duration
+        Assert.False(overlay.IsOnStage);
     });
 
     [Fact]
