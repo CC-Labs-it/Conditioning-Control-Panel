@@ -1,7 +1,10 @@
 using System;
 using System.Linq;
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Helpers;
@@ -64,7 +67,10 @@ public partial class LauncherWindow
     private void LobbyChip_Click(object? sender, RoutedEventArgs e)
     {
         if (MainShellWindow.LockdownActive || _lobby == null) return;
-        var menu = new ContextMenu { Placement = PlacementMode.Top };
+        var menu = new ContextMenu { Placement = PlacementMode.Top, Width = 380,
+            Background = new SolidColorBrush(Color.Parse("#F2160B22")),
+            BorderBrush = new SolidColorBrush(Color.Parse("#40FFFFFF")), BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(16), Padding = new Thickness(12) };
         FillLobbyDrop(menu, _lobby.Snapshot);
         menu.Opened += (_, _) => _lobbyLease ??= _lobby.Watch();
         menu.Closed += (_, _) => { _lobbyLease?.Dispose(); _lobbyLease = null; };
@@ -101,6 +107,15 @@ public partial class LauncherWindow
                 Padding = new Thickness(14, 4, 14, 5),
                 IsEnabled = row.Game is LobbyGame.Chess or LobbyGame.Race or LobbyGame.Remote,
                 VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
+            var travel = new TranslateTransform();
+            join.RenderTransform = travel;
+            join.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
+            {
+                if (e.GetCurrentPoint(join).Properties.IsLeftButtonPressed) travel.Y = 3;
+            }, RoutingStrategies.Tunnel, handledEventsToo: true);
+            join.AddHandler(InputElement.PointerReleasedEvent, (_, _) => travel.Y = 0, RoutingStrategies.Tunnel, handledEventsToo: true);
+            join.PointerExited += (_, _) => travel.Y = 0;
+            join.PointerCaptureLost += (_, _) => travel.Y = 0;
             join.Click += (_, e) => { e.Handled = true; _lobbyDrop?.Close(); JoinLobbyRow(row); };
             var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
             Grid.SetColumn(text, 1); Grid.SetColumn(join, 2);
@@ -108,6 +123,19 @@ public partial class LauncherWindow
             var frame = new Border { Width = 350, CornerRadius = new CornerRadius(13), Padding = new Thickness(8, 7),
                 Background = new SolidColorBrush(Color.Parse("#24FFFFFF")),
                 BorderBrush = new SolidColorBrush(Color.Parse("#55FFFFFF")), BorderThickness = new Thickness(1), Child = grid };
+            var scale = new ScaleTransform(1, 1);
+            frame.RenderTransform = scale;
+            void Lift(bool on)
+            {
+                scale.Transitions = global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowTransitions ? new Transitions
+                {
+                    new DoubleTransition { Property = ScaleTransform.ScaleXProperty, Duration = TimeSpan.FromMilliseconds(150), Easing = new QuadraticEaseOut() },
+                    new DoubleTransition { Property = ScaleTransform.ScaleYProperty, Duration = TimeSpan.FromMilliseconds(150), Easing = new QuadraticEaseOut() },
+                } : null;
+                scale.ScaleX = scale.ScaleY = on ? 1.02 : 1;
+            }
+            frame.PointerEntered += (_, _) => Lift(true);
+            frame.PointerExited += (_, _) => Lift(false);
             var item = new MenuItem { Header = frame };
             menu.Items.Add(item);
         }
@@ -140,6 +168,8 @@ public partial class LauncherWindow
         if (!string.IsNullOrEmpty(url) && !token.IsCancellationRequested && !MainShellWindow.LockdownActive) OpenLobbyUrl(url);
         _ = _lobby?.RefreshAsync();
     }
+    internal static void CancelLobbyClaimForPanic() => Instance?.CancelLobbyClaim();
+
     private void CancelLobbyClaim()
     {
         _lobbyClaim?.Cancel();

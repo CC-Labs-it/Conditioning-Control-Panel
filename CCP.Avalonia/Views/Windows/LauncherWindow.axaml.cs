@@ -84,6 +84,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (ReferenceEquals(_window, this)) _window = null;
                 _statusTimer.Stop();
                 StopLobby();
+                CancelLobbyClaim();
                 _lobby?.Dispose();
                 CoreMods.ModChanged -= OnModChanged;
                 PrizeGrants.GrantsChanged -= OnGrantsChanged;
