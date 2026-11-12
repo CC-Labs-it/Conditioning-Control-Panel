@@ -12,18 +12,34 @@ using ConditioningControlPanel.Services.GoonGame;
 namespace ConditioningControlPanel.Services.Lobby;
 
 /// <summary>When the next poll runs. Pure: a good answer polls at <see cref="Base"/>, a failed
-/// one doubles the wait up to <see cref="Max"/>.</summary>
+/// one doubles the wait up to <see cref="Max"/>. With only the rail badge watching (nobody
+/// looking at the Lobby itself) every round waits <see cref="Badge"/>.</summary>
 public static class LobbyPollPlan
 {
     public static readonly TimeSpan Base = TimeSpan.FromSeconds(10);
     public static readonly TimeSpan Max = TimeSpan.FromSeconds(60);
 
-    public static TimeSpan Next(TimeSpan current, bool ok)
+    /// <summary>The badge-only pace. The rail badge ("3 open") was holding the 10 s poll for
+    /// as long as the panel sat on screen, four server calls a round: about 60% of every
+    /// request the proxy served (Nov 2026 bill). A count on a badge can be two minutes old.</summary>
+    public static readonly TimeSpan Badge = TimeSpan.FromMinutes(2);
+
+    /// <summary>How long a tier refusal on the race list stands before it is asked again.
+    /// Opening the Lobby page or the launcher drop asks again at once.</summary>
+    public static readonly TimeSpan TierLockHold = TimeSpan.FromMinutes(30);
+
+    public static TimeSpan Next(TimeSpan current, bool ok, bool badgeOnly = false)
     {
+        if (badgeOnly) return Badge;
         if (ok) return Base;
         var doubled = TimeSpan.FromTicks(Math.Max(Base.Ticks, current.Ticks) * 2);
         return doubled > Max ? Max : doubled;
     }
+
+    /// <summary>A badge lease taken (the panel came back on screen) asks for a round at once
+    /// only when the last one is older than the badge pace.</summary>
+    public static bool BadgeWantsRoundNow(long nowMs, long lastRoundMs) =>
+        lastRoundMs <= 0 || nowMs - lastRoundMs >= (long)Badge.TotalMilliseconds;
 }
 
 /// <summary>
@@ -33,17 +49,24 @@ public static class LobbyPollPlan
 /// Remote <c>GET /v2/directory/list</c> via <see cref="AvailableSubjectsService"/>), folds in
 /// the friends list, and hands one <see cref="LobbySnapshot"/> to the page and the launcher.
 ///
-/// Polls ONLY while somebody watches (<see cref="Watch"/>: the Lobby page, the launcher
-/// dropdown), every 10 s, doubling to 60 s after a failed round. Signed out it asks nobody.
+/// Polls ONLY while somebody watches. <see cref="Watch"/> (the Lobby page, the launcher
+/// dropdown) polls every 10 s, doubling to 60 s after a failed round; <see cref="WatchBadge"/>
+/// (the rail badge) alone polls every 2 minutes. Signed out it asks nobody. A tier refusal on
+/// the race list is remembered (<see cref="LobbyPollPlan.TierLockHold"/>) instead of re-asked
+/// every round.
 /// </summary>
 public sealed class LobbyService : IDisposable
 {
     private readonly object _gate = new();
     private int _watchers;
+    private int _badgeWatchers;
     private DispatcherTimer? _timer;
     private TimeSpan _interval = LobbyPollPlan.Base;
     private Task? _inflight;
     private bool _disposed;
+    private long _lastRoundMs;
+    private RaceOpenReply? _raceLocked;
+    private long _raceLockedUntilMs;
 
     /// <summary>Seams. The real wires by default.</summary>
     internal Func<CancellationToken, Task<PbpLobbyReply>> FetchChess { get; set; } = ct => new PbpLobbyApi().FetchAsync(ct);
@@ -63,32 +86,66 @@ public sealed class LobbyService : IDisposable
 
     /// <summary>False after a round where neither chess nor the Remote directory answered.</summary>
     public bool LastRoundOk { get; private set; } = true;
-    public bool IsWatched { get { lock (_gate) return _watchers > 0; } }
+    public bool IsWatched { get { lock (_gate) return _watchers + _badgeWatchers > 0; } }
 
-    /// <summary>Start watching. Dispose the lease to stop; the last lease out stops the poll.
-    /// Call on the UI thread (the timer is a DispatcherTimer).</summary>
+    /// <summary>True when only the rail badge watches: the slow pace.</summary>
+    public bool BadgeOnly { get { lock (_gate) return _watchers == 0 && _badgeWatchers > 0; } }
+
+    /// <summary>Start watching at the full pace (the Lobby page, the launcher drop). Dispose the
+    /// lease to stop; the last lease out stops the poll. Call on the UI thread (the timer is a
+    /// DispatcherTimer).</summary>
     public IDisposable Watch()
     {
-        bool first;
-        lock (_gate) { first = ++_watchers == 1; }
-        if (first)
+        bool firstFull;
+        lock (_gate)
         {
-            _interval = LobbyPollPlan.Base;
-            _timer ??= new DispatcherTimer(DispatcherPriority.Normal);
-            _timer.Tick -= OnTick;
-            _timer.Tick += OnTick;
-            _timer.Interval = _interval;
-            _timer.Start();
+            firstFull = ++_watchers == 1;
+            // Somebody is looking at the race row now: ask the server again.
+            if (firstFull) { _raceLocked = null; _raceLockedUntilMs = 0; }
         }
+        if (firstFull) ApplyPace(LobbyPollPlan.Base);
         _ = RefreshAsync();
-        return new Lease(this);
+        return new Lease(this, badge: false);
     }
 
-    private void Unwatch()
+    /// <summary>Start watching for the rail badge only: one round every
+    /// <see cref="LobbyPollPlan.Badge"/>, and no round on taking the lease when the last one
+    /// is fresher than that. A full <see cref="Watch"/> lease beside it wins.</summary>
+    public IDisposable WatchBadge()
     {
-        bool last;
-        lock (_gate) { last = _watchers > 0 && --_watchers == 0; }
-        if (last) _timer?.Stop();
+        bool startTimer, roundNow;
+        lock (_gate)
+        {
+            startTimer = ++_badgeWatchers == 1 && _watchers == 0;
+            roundNow = _watchers == 0 && LobbyPollPlan.BadgeWantsRoundNow(NowMs(), _lastRoundMs);
+        }
+        if (startTimer) ApplyPace(LobbyPollPlan.Badge);
+        if (roundNow) _ = RefreshAsync();
+        return new Lease(this, badge: true);
+    }
+
+    private void ApplyPace(TimeSpan interval)
+    {
+        _interval = interval;
+        _timer ??= new DispatcherTimer(DispatcherPriority.Normal);
+        _timer.Tick -= OnTick;
+        _timer.Tick += OnTick;
+        _timer.Interval = _interval;
+        if (!_timer.IsEnabled) _timer.Start();
+    }
+
+    private void Unwatch(bool badge)
+    {
+        bool stop, slow;
+        lock (_gate)
+        {
+            if (badge) { if (_badgeWatchers > 0) _badgeWatchers--; }
+            else if (_watchers > 0) _watchers--;
+            stop = _watchers == 0 && _badgeWatchers == 0;
+            slow = !badge && _watchers == 0 && _badgeWatchers > 0;
+        }
+        if (stop) _timer?.Stop();
+        else if (slow) ApplyPace(LobbyPollPlan.Badge);
     }
 
     private void OnTick(object? sender, EventArgs e)
@@ -145,11 +202,11 @@ public sealed class LobbyService : IDisposable
         }
         finally
         {
-            lock (_gate) { _inflight = null; }
+            lock (_gate) { _inflight = null; _lastRoundMs = NowMs(); }
         }
 
         LastRoundOk = ok;
-        _interval = LobbyPollPlan.Next(_interval, ok);
+        _interval = LobbyPollPlan.Next(_interval, ok, BadgeOnly);
         try
         {
             var t = _timer;
@@ -173,9 +230,24 @@ public sealed class LobbyService : IDisposable
         catch { return OpenTablesReply.Empty; }
     }
 
+    /// <summary>The race list, unless the server refused this account's tier a moment ago:
+    /// then the remembered refusal (it paints the Prime lock row) and no request.</summary>
     private async Task<RaceOpenReply> SafeRace()
     {
-        try { return await FetchRace(CancellationToken.None).ConfigureAwait(false); }
+        long now = NowMs();
+        RaceOpenReply? held;
+        lock (_gate) held = now < _raceLockedUntilMs ? _raceLocked : null;
+        if (held != null) return held;
+        try
+        {
+            var reply = await FetchRace(CancellationToken.None).ConfigureAwait(false);
+            lock (_gate)
+            {
+                if (reply.TierLocked) { _raceLocked = reply; _raceLockedUntilMs = now + (long)LobbyPollPlan.TierLockHold.TotalMilliseconds; }
+                else { _raceLocked = null; _raceLockedUntilMs = 0; }
+            }
+            return reply;
+        }
         catch { return RaceOpenReply.Empty; }
     }
 
@@ -205,14 +277,15 @@ public sealed class LobbyService : IDisposable
 
     public void Dispose()
     {
-        lock (_gate) { _disposed = true; _watchers = 0; }
+        lock (_gate) { _disposed = true; _watchers = 0; _badgeWatchers = 0; }
         try { _timer?.Stop(); } catch { }
     }
 
     private sealed class Lease : IDisposable
     {
         private LobbyService? _owner;
-        public Lease(LobbyService owner) => _owner = owner;
-        public void Dispose() { Interlocked.Exchange(ref _owner, null)?.Unwatch(); }
+        private readonly bool _badge;
+        public Lease(LobbyService owner, bool badge) { _owner = owner; _badge = badge; }
+        public void Dispose() { Interlocked.Exchange(ref _owner, null)?.Unwatch(_badge); }
     }
 }
