@@ -12,50 +12,43 @@ internal sealed class SpeakPromptSession
 {
     private readonly SpeakPromptPlan _plan;
     private readonly IPlaybackTimeSource? _source;
-    private readonly Func<bool> _available;
+    private readonly Func<bool> _available, _borrowMic;
     private readonly Func<Task<bool>> _consent;
-    private readonly Func<bool> _borrowMic;
-    private readonly Action _restoreMic;
+    private readonly Action _restoreMic, _hide;
     private readonly Func<string, CancellationToken, Task<PhraseResult>> _listen;
     private readonly Action<string> _show;
-    private readonly Action _hide;
     private readonly Action<string, bool> _feedback;
     private readonly Action? _stopCapture;
     private int _stopRequested;
     private readonly CancellationTokenSource _stop = new();
     private bool _started;
+    private readonly bool _intermittentCues; // only when show/hide flash the cue on a timer themselves
 
     internal SpeakPromptSession(TriggerEffectAction effect, IPlaybackTimeSource? source,
         Func<bool> available, Func<Task<bool>> consent, Func<bool> borrowMic, Action restoreMic,
         Func<string, CancellationToken, Task<PhraseResult>> listen, Action<string> show, Action hide,
-        Action<string, bool>? feedback = null, Action? stopCapture = null)
+        Action<string, bool>? feedback = null, Action? stopCapture = null, bool intermittentCues = false)
     {
         _plan = new SpeakPromptPlan(effect, DateTime.UtcNow);
-        _source = source;
-        _available = available;
-        _consent = consent;
-        _borrowMic = borrowMic;
-        _restoreMic = restoreMic;
-        _listen = listen;
-        _show = show;
-        _hide = hide;
-        _feedback = feedback ?? Feedback;
-        _stopCapture = stopCapture;
+        _source = source; _available = available; _consent = consent; _borrowMic = borrowMic; _restoreMic = restoreMic;
+        _listen = listen; _show = show; _hide = hide; _feedback = feedback ?? Feedback; _stopCapture = stopCapture;
+        _intermittentCues = intermittentCues;
+    }
+
+    // WPF SubliminalService.FlashSubliminalCustom:311, on the one-shot Speak generation.
+    internal static void FlashCustom(string text)
+    {
+        var sanitized = text.Trim();
+        if (sanitized.Length > 200) sanitized = sanitized.Substring(0, 200);
+        sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, "<[^>]*>", "");
+        if (string.IsNullOrWhiteSpace(sanitized)) return;
+        Views.Overlays.SubliminalWhisperShow.DrawSpeak(sanitized);
+        CoreProgression.AddXP(10, "Subliminal");
     }
 
     private static void Feedback(string text, bool correct)
     {
-        try
-        {
-            var sanitized = text.Trim();
-            if (sanitized.Length > 200) sanitized = sanitized.Substring(0, 200);
-            sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, "<[^>]*>", "");
-            if (!string.IsNullOrWhiteSpace(sanitized))
-            {
-                Views.Overlays.SubliminalWhisperShow.DrawSpeak(sanitized);
-                CoreProgression.AddXP(10, "Subliminal");
-            }
-        }
+        try { FlashCustom(text); }
         catch (Exception ex) { Serilog.Log.Debug(ex, "Speak feedback flash failed"); }
         try { if (correct) Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(text, playSound: false, aiGenerated: false); }
         catch (Exception ex) { Serilog.Log.Debug(ex, "Speak feedback avatar failed"); }
@@ -79,21 +72,14 @@ internal sealed class SpeakPromptSession
         Task? hold = null;
         try
         {
-            if (ct.IsCancellationRequested || _plan.CueMode != SpeakCueMode.Persistent ||
+            if (ct.IsCancellationRequested || (_plan.CueMode != SpeakCueMode.Persistent && !_intermittentCues) ||
                 string.IsNullOrWhiteSpace(_plan.Target) || !_available()) return;
             if (!await _consent() || ct.IsCancellationRequested || !_available()) return;
             borrowed = _borrowMic();
             if (ct.IsCancellationRequested) return;
-            if (_plan.CueMode == SpeakCueMode.Persistent)
-            {
-                shown = true;
-                _show(_plan.Cue);
-            }
-            if (_plan.PausesAtCue && _source != null)
-            {
-                _source.Pause();
-                paused = true;
-            }
+            shown = true;
+            _show(_plan.Cue);
+            if (_plan.PausesAtCue && _source != null) { _source.Pause(); paused = true; }
             if (_plan.HasRegion && _plan.HoldsPlayback && _source != null)
                 hold = HoldAsync(holdStop.Token);
             int reps = 0, unavailable = 0;

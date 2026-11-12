@@ -25,14 +25,7 @@ internal sealed class SpeakPromptRuntime
         _available = available; _consented = consented; _askConsent = askConsent;
         _armed = armed; _stopVoice = stopVoice; _restoreVoice = restoreVoice; _listening = listening;
         _recognize = recognize; _stopListening = stopListening; _show = show; _hide = hide;
-        _flash = flash ?? (text =>
-        {
-            var cleaned = System.Text.RegularExpressions.Regex.Replace(text.Trim(), "<[^>]*>", "");
-            if (cleaned.Length > 200) cleaned = cleaned.Substring(0, 200);
-            if (string.IsNullOrWhiteSpace(cleaned)) return;
-            Views.Overlays.SubliminalWhisperShow.DrawSpeak(cleaned);
-            CoreProgression.AddXP(10, "Subliminal");
-        });
+        _flash = flash ?? SpeakPromptSession.FlashCustom;
     }
 
     internal SpeakPromptSession CreateSession(TriggerEffectAction effect, IPlaybackTimeSource? source)
@@ -41,15 +34,7 @@ internal sealed class SpeakPromptRuntime
         int capturing = 0, cueStopped = 0;
         global::Avalonia.Threading.DispatcherTimer? timer = null;
         bool intermittent = effect.SpeakCueMode == SpeakCueMode.Intermittent;
-        var planned = intermittent ? new TriggerEffectAction
-        {
-            SpeakTarget = effect.SpeakTarget, SpeakCue = effect.SpeakCue, SpeakCueMode = SpeakCueMode.Persistent,
-            SpeakCueIntervalMs = effect.SpeakCueIntervalMs, SpeakRequiredReps = effect.SpeakRequiredReps,
-            SpeakCompletion = effect.SpeakCompletion, SpeakHoldMode = effect.SpeakHoldMode,
-            SpeakCorrectMessage = effect.SpeakCorrectMessage, SpeakIncorrectMessage = effect.SpeakIncorrectMessage,
-            SpeakRegionStartSec = effect.SpeakRegionStartSec, SpeakRegionEndSec = effect.SpeakRegionEndSec
-        } : effect;
-        return new SpeakPromptSession(planned, source, _available, ConsentAsync,
+        return new SpeakPromptSession(effect, source, _available, ConsentAsync,
             () => { if (!_armed()) return false; _stopVoice(); evicted = true; return true; },
             _restoreVoice,
             async (target, ct) =>
@@ -57,11 +42,7 @@ internal sealed class SpeakPromptRuntime
                 Interlocked.Exchange(ref capturing, 1);
                 try
                 {
-                    if (evicted && !waited)
-                    {
-                        waited = true;
-                        for (int i = 0; i < 24 && _listening(); i++) await Task.Delay(25, ct);
-                    }
+                    if (evicted && !waited) { waited = true; for (int i = 0; i < 24 && _listening(); i++) await Task.Delay(25, ct); }
                     ct.ThrowIfCancellationRequested();
                     return await _recognize(target, new RecognizeOptions { Timeout = TimeSpan.FromSeconds(10) }, ct);
                 }
@@ -78,7 +59,7 @@ internal sealed class SpeakPromptRuntime
                 Interlocked.Exchange(ref cueStopped, 1);
                 timer?.Stop();
                 if (Volatile.Read(ref capturing) != 0) _stopListening();
-            });
+            }, intermittentCues: true);
     }
 
     private async Task<bool> ConsentAsync()

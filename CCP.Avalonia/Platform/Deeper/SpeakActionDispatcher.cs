@@ -17,11 +17,7 @@ internal sealed class SpeakActionDispatcher : IActionDispatcher, IEnhancementRun
     private readonly HashSet<SpeakPromptSession> _active = new();
 
     internal SpeakActionDispatcher(Func<TriggerEffectAction, IPlaybackTimeSource, SpeakPromptSession> create,
-        IActionDispatcher? other = null)
-    {
-        _create = create;
-        _other = other ?? new LoggingActionDispatcher();
-    }
+        IActionDispatcher? other = null) { _create = create; _other = other ?? new LoggingActionDispatcher(); }
 
     public Task DispatchAsync(EnhancementAction action, EnhancementDispatchContext ctx, CancellationToken ct = default)
     {
@@ -39,10 +35,7 @@ internal sealed class SpeakActionDispatcher : IActionDispatcher, IEnhancementRun
             if (ct.IsCancellationRequested) return Task.CompletedTask;
             Task previous = Task.CompletedTask;
             if (effect.Phase == EffectPhase.Start && !string.IsNullOrEmpty(id) && _bands.Remove(id, out var prior))
-            {
-                prior.Session.Stop();
-                previous = prior.Run;
-            }
+            { prior.Session.Stop(); previous = prior.Run; }
             var session = _create(effect, ctx.Source);
             _active.Add(session);
             // Yield before completion so the dictionary owns the session even if consent is immediately denied.
@@ -61,10 +54,7 @@ internal sealed class SpeakActionDispatcher : IActionDispatcher, IEnhancementRun
         List<SpeakPromptSession> sessions;
         lock (_bands) sessions = new List<SpeakPromptSession>(_active);
         foreach (var session in sessions)
-        {
-            try { session.Stop(); }
-            catch (Exception ex) { Log.Warning(ex, "Deeper speak stop failed"); }
-        }
+            try { session.Stop(); } catch (Exception ex) { Log.Warning(ex, "Deeper speak stop failed"); }
     }
 
     private async Task RunAsync(Task previous, SpeakPromptSession session, CancellationToken ct, string? id)
@@ -80,11 +70,8 @@ internal sealed class SpeakActionDispatcher : IActionDispatcher, IEnhancementRun
         finally
         {
             lock (_bands)
-            {
-                _active.Remove(session);
-                if (id != null && _bands.TryGetValue(id, out var current) && ReferenceEquals(current.Session, session))
+                if (_active.Remove(session) && id != null && _bands.TryGetValue(id, out var current) && ReferenceEquals(current.Session, session))
                     _bands.Remove(id);
-            }
         }
     }
 }

@@ -25,10 +25,8 @@ public partial class EnhancementPlayerWindow
             // its stop cleanup must not silence haptics belonging to another feature.
             var speakOnly = new Enhancement
             {
-                Metadata = _loadedEnhancement.Metadata,
-                MediaType = _loadedEnhancement.MediaType,
-                MediaSource = _loadedEnhancement.MediaSource,
-                Regions = _loadedEnhancement.Regions,
+                Metadata = _loadedEnhancement.Metadata, MediaType = _loadedEnhancement.MediaType,
+                MediaSource = _loadedEnhancement.MediaSource, Regions = _loadedEnhancement.Regions,
                 TimelineItems = _loadedEnhancement.TimelineItems.Where(item => item != null &&
                     (item.Kind == TimelineItemKind.Rule || item.Kind == TimelineItemKind.Effect && item.EffectType == EffectTypes.Speak))
                     .Select(item => item.Kind == TimelineItemKind.Rule && item.Action is not TriggerEffectAction { EffectType: EffectTypes.Speak }
@@ -48,8 +46,7 @@ public partial class EnhancementPlayerWindow
         _deeperSource?.Invalidate();
         _deeperEngine?.Stop();
         _deeperEngine?.Dispose();
-        _deeperEngine = null;
-        _deeperSource = null;
+        (_deeperEngine, _deeperSource) = (null, null);
     }
 
     private sealed class PlayerTimeSource : IPlaybackTimeSource
@@ -78,10 +75,7 @@ public partial class EnhancementPlayerWindow
         private void SetPlaying(bool playing)
         {
             if (!_valid || _player._isPlaying == playing) return;
-            if (_player._localAudio != null)
-            {
-                if (playing) _player._localAudio.Play(); else _player._localAudio.Pause();
-            }
+            if (_player._localAudio is { } audio) { if (playing) audio.Play(); else audio.Pause(); }
             else if (_player._isVideoMode && _player._videoNavigated)
                 _ = _player._videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke(playing ? "l.play();" : "l.pause();"));
             else return;
