@@ -13,11 +13,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 /// Suppression matches WPF :18. Lines remain silent.</summary>
 internal sealed class FirstShowAudio : IDisposable
 {
+    private readonly bool _preview;
+    public FirstShowAudio(bool preview = false) { _preview = preview; }
     private Action? _stopCue;
     private bool _disposed;
     /// <summary>Test seam: (path, volume, tag) -> stop.</summary>
     internal Func<string, float, string, Action> Play = (path, volume, tag) => CoreAudio.PlayStoppable(path, volume, tag);
-    private static double Volume => Math.Clamp((CoreSettings.Current?.MasterVolume ?? 0) / 100.0, 0, 1);
+    private double Volume => Math.Clamp((CoreSettings.Service?.Current?.MasterVolume ?? (_preview ? 65 : 0)) / 100.0, 0, 1);
     public void Cue(string name)
     {
         if (_disposed || CoreAudio.IsOutputSuppressed || Volume <= 0) return;

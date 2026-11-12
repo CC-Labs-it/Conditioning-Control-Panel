@@ -17,6 +17,12 @@ internal static class FirstShowService
     internal static FirstShowStageWindow? Window => _window;
     /// <summary>Test seam: headless has no native window to make click-through.</summary>
     internal static bool RequireClickThrough = true;
+    // WPF FirstShowAudio.cs:13,18: preview has its own player and works without app audio startup.
+    internal static Func<Func<string, float, string, Action>> PreviewAudioPlayer = () =>
+    {
+        var audio = new Platform.LibVlcAudio();
+        return (path, volume, tag) => audio.PlayOneShot(path, volume, tag, null, null);
+    };
     /// <summary>Open the show. False when it is refused or could not start.</summary>
     public static bool Open(MainShellWindow? owner = null, bool preview = false)
     {
@@ -26,7 +32,12 @@ internal static class FirstShowService
         try
         {
             FirstShowStageWindow.SweepTemp();
-            window = new FirstShowStageWindow(owner);
+            window = new FirstShowStageWindow(owner, preview);
+            if (preview)
+            {
+                try { window.Audio.Play = PreviewAudioPlayer(); }
+                catch (Exception ex) { Log.Warning(ex, "[FirstShow] preview audio unavailable"); }
+            }
             if (!window.Launch() && RequireClickThrough)
             {
                 Log.Warning("[FirstShow] not opened: this desktop cannot make the stage click-through");

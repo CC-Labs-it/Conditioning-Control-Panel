@@ -463,6 +463,71 @@ public sealed class FirstShowStageTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task PreviewPlaysCuesWithoutStartupAudioAndUsesWpfVolume() => Run(_ =>
+    {
+        FirstShowService.Stop();
+        EmiDeskService.Instance.Window?.ShutDown();
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldFactory = FirstShowService.PreviewAudioPlayer;
+        var path = Path.GetTempFileName();
+        var volumes = new List<float>();
+        int created = 0, stopped = 0;
+        using var desktop = new global::Avalonia.Controls.ApplicationLifetimes.ClassicDesktopStyleApplicationLifetime
+        {
+            Args = new[] { "--first-show-preview" },
+        };
+        try
+        {
+            CoreSettings.ServiceProvider = null;
+            CoreAudio.PlayStoppableProvider = null;
+            CoreAudio.PlayOneShotProvider = null;
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreModArt.AudioOverridePathProvider = _ => path;
+            FirstShowService.PreviewAudioPlayer = () =>
+            {
+                created++;
+                return (p, volume, tag) =>
+                {
+                    Assert.Equal(path, p);
+                    Assert.Equal("first-show-cue", tag);
+                    volumes.Add(volume);
+                    return () => stopped++;
+                };
+            };
+            Assert.True(ConditioningControlPanel.Avalonia.App.TryStartFirstShowPreview(desktop));
+            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            var stage = Assert.IsType<FirstShowStageWindow>(desktop.MainWindow);
+            Assert.Equal(1, created);
+            stage.Audio.Cue("pop");
+            Assert.Equal((float)(.65 * S.CueScale), Assert.Single(volumes));
+            CoreSettings.ServiceProvider = oldSettings;
+            CoreSettings.Current.MasterVolume = 50;
+            stage.Audio.Cue("pop");
+            Assert.Equal((float)(.5 * S.CueScale), volumes[1]);
+            Assert.Equal(1, stopped);
+            CoreAudio.IsOutputSuppressedProvider = () => true;
+            stage.Audio.Cue("pop");
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreSettings.Current.MasterVolume = 0;
+            stage.Audio.Cue("pop");
+            Assert.Equal(2, volumes.Count);
+            stage.Close();
+            Assert.Equal(2, stopped);
+        }
+        finally
+        {
+            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            FirstShowService.Stop();
+            EmiDeskService.Instance.Window?.ShutDown();
+            desktop.MainWindow = null;
+            FirstShowService.PreviewAudioPlayer = oldFactory;
+            CoreSettings.ServiceProvider = oldSettings;
+            File.Delete(path);
+        }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData("--first-show-preview-extra")]
     [InlineData("--FIRST-SHOW-PREVIEW")]
