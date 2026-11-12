@@ -26,6 +26,13 @@ internal sealed partial class GameWindow
     private GoonOnlineMedia? _breakoutRemote;
     private IReadOnlyList<GameMediaManifest.Entry> _breakoutClips = Array.Empty<GameMediaManifest.Entry>();
     private string _breakoutChannels = "";
+    private TaskCompletionSource<bool>? _breakoutWarm;
+    private Action<GoonOnlineMedia.Snapshot>? _breakoutSnapshot;
+    private bool _breakoutWaveFinished = true;
+    private long? _breakoutLastWarmMs;
+    private const int BreakoutWarmWaitMs = 2000, BreakoutWarmGapMs = 8000; // WPF BackRoomRemotePool.cs:122,129
+    internal Func<long>? BreakoutClockForTests;
+    internal Action<Action<GoonOnlineMedia.Snapshot>>? BreakoutStartForTests;
     private readonly HashSet<string> _breakoutMediaRequests = new(StringComparer.Ordinal);
     // A per-window test seam; production always uses the pool below.
     internal Func<IReadOnlyList<GameMediaManifest.Entry>>? BreakoutClipsForTests;
@@ -49,7 +56,7 @@ internal sealed partial class GameWindow
         return channels;
     }
 
-    private IReadOnlyList<GameMediaManifest.Entry> BreakoutClips(string source)
+    private IReadOnlyList<GameMediaManifest.Entry> BreakoutClips(string source, bool start = true)
     {
         if (source is not ("online" or "mixed") || !CoreSettings.Current.HasRemoteMediaConsent)
             return Array.Empty<GameMediaManifest.Entry>();
@@ -58,28 +65,48 @@ internal sealed partial class GameWindow
         string key = string.Join(",", channels.Select(n => n.ToLowerInvariant()));
         if (_breakoutRemote == null || key != _breakoutChannels)
         {
-            _breakoutRemote?.Dispose();
+            if (!start) return Array.Empty<GameMediaManifest.Entry>();
+            DisposeBreakoutMedia();
             _breakoutClips = Array.Empty<GameMediaManifest.Entry>();
             _breakoutChannels = key;
             GoonOnlineMedia.Materialize = DtrhRemoteMedia.AssetsTempCopier.Materialize;
             GoonOnlineMedia.ReleaseTempFile = DtrhRemoteMedia.AssetsTempCopier.Release;
             GoonOnlineMedia? pool = null;
-            pool = GoonOnlineMedia.ForGameClips("backroom-breakout", snapshot => Dispatcher.UIThread.Post(() =>
+            void Snapshot(GoonOnlineMedia.Snapshot snapshot) => Dispatcher.UIThread.Post(() =>
             {
                 if (_closing || !ReferenceEquals(pool, _breakoutRemote) || !CoreSettings.Current.HasRemoteMediaConsent) return;
                 var oldCount = _breakoutClips.Count;
                 _breakoutClips = snapshot.Videos.Select(item => new GameMediaManifest.Entry(item.Name,
                     _server!.AssetUrl(Path.GetRelativePath(CorePaths.EffectiveAssets, item.Path)))).ToArray();
+                _breakoutWaveFinished = snapshot.State != "loading";
+                if (_breakoutClips.Count > 0 || _breakoutWaveFinished) _breakoutWarm?.TrySetResult(true);
                 if (oldCount == 0 && _breakoutClips.Count > 0) Post(new { type = "media-warm", station = "breakout" });
-            }));
+            });
+            pool = GoonOnlineMedia.ForGameClips("backroom-breakout", Snapshot);
             _breakoutRemote = pool;
-            pool.Start(channels);
+            _breakoutSnapshot = Snapshot;
+        }
+        // Start only once per empty wave. Start() is a no-op for a running or populated pool.
+        var now = BreakoutClockForTests?.Invoke() ?? Environment.TickCount64;
+        if (start && _breakoutClips.Count == 0 && _breakoutWaveFinished
+            && (_breakoutLastWarmMs == null || now - _breakoutLastWarmMs >= BreakoutWarmGapMs))
+        {
+            _breakoutLastWarmMs = now;
+            _breakoutWaveFinished = false;
+            _breakoutWarm = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (BreakoutStartForTests is { } fake) fake(_breakoutSnapshot!);
+            else _breakoutRemote!.Start(channels);
         }
         return _breakoutClips;
     }
 
     private void DisposeBreakoutMedia()
     {
+        _breakoutWarm?.TrySetResult(false);
+        _breakoutWarm = null;
+        _breakoutWaveFinished = true;
+        _breakoutLastWarmMs = null;
+        _breakoutSnapshot = null;
         _breakoutRemote?.Dispose();
         _breakoutRemote = null;
         _breakoutChannels = "";
@@ -95,19 +122,23 @@ internal sealed partial class GameWindow
         var requested = o["source"];
         int count = BackRoomBridge.MediaCount(o["count"]);
         int seed = Random.Shared.Next();
-        _ = BreakoutClips(BreakoutSource(requested)); // start the pool before the disk walk
+        var source = BreakoutSource(requested);
+        var clips = BreakoutClips(source); // start the pool before the disk walk
+        var warm = source is "online" or "mixed" && clips.Count == 0 ? _breakoutWarm?.Task : null;
+        var wait = warm == null ? Task.CompletedTask : Task.WhenAny(warm, Task.Delay(BreakoutWarmWaitMs));
         var server = _server;
         var library = _library ??= new(() => server == null ? new() : GameMediaManifest.BuildLocal(server.AssetUrl));
-        _ = Task.Run(() =>
+        _ = Task.Run(async () =>
         {
             GameMediaManifest.Manifest local;
             try { local = library.Value; } catch { local = new(); }
+            await wait.ConfigureAwait(false);
             Dispatcher.UIThread.Post(() =>
             {
                 if (_closing) return;
-                var source = BreakoutSource(requested); // consent and settings may have changed during the walk
-                var clips = BreakoutClips(source);
-                Post(GameMediaManifest.BreakoutDeal(local, reqId, seed, count, source, CoreSettings.Current.RemoteMediaRatio, clips));
+                var currentSource = BreakoutSource(requested); // consent may have changed during the wait
+                var currentClips = BreakoutClips(currentSource, start: false);
+                Post(GameMediaManifest.BreakoutDeal(local, reqId, seed, count, currentSource, CoreSettings.Current.RemoteMediaRatio, currentClips));
             });
         });
     }
