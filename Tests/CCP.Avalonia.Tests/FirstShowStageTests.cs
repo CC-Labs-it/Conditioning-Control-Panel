@@ -46,6 +46,28 @@ public sealed class FirstShowStageTests
     });
 
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task LinuxBlurFadesBothPhases(bool supported) => Run(stage =>
+    {
+        var opacity = new List<double>();
+        stage.EnableBlur = () => supported;
+        stage.DisableBlur = () => { };
+        stage.SetBlurOpacity = opacity.Add;
+        double t = 0; stage.Clock = () => t; stage.Start();
+        foreach (var (time, edge) in new[] { (11.0, 0.0), (11.15, .5), (11.3, 1.0),
+            (12.85, .5), (13.0, 0.0), (13.15, .5), (13.3, 1.0), (14.85, .5) })
+        {
+            t = time; stage.Frame();
+            if (supported) Assert.Equal(Math.Sqrt(176.0 / 255 * edge), opacity[^1], 6);
+            else Assert.Empty(opacity);
+        }
+        t = 15; stage.Frame();
+        Assert.Equal(supported ? 8 : 0, opacity.Count);
+        return Task.CompletedTask;
+    });
+
+    [Theory]
     [InlineData(0)]
     [InlineData(1)]
     [InlineData(2)]

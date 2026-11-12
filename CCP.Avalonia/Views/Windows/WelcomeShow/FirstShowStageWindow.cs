@@ -76,8 +76,10 @@ internal sealed partial class FirstShowStageWindow : Window
     private double _last, _moveAt, _showStart = double.NaN, _showFrozen, _settledAt, _x, _y;
     private int _beat = -1;
     private bool _drainAttempted, _desktopBlur;
+    private Window? _blurHost;
     internal Func<bool> EnableBlur;
     internal Action DisableBlur;
+    internal Action<double> SetBlurOpacity;
     private static readonly HttpClient Http = new(UrlSafety.CreateGuardedHandler()) { Timeout = TimeSpan.FromSeconds(20) };
     /// <summary>"via Scrolller" while a Scrolller show plays (WPF FirstShowDesktopWindow._credit, ScrolllerCreditBadge).
     /// Brand text, not a loc key, as on every page's mark.</summary>
@@ -109,8 +111,9 @@ internal sealed partial class FirstShowStageWindow : Window
     public FirstShowStageWindow(MainShellWindow? main)
     {
         Clock = () => _life.Elapsed.TotalSeconds;
-        EnableBlur = () => OperatingSystem.IsLinux() && X11Overlay.EnableDesktopBlur(this);
-        DisableBlur = () => X11Overlay.DisableDesktopBlur(this);
+        EnableBlur = OpenBlurHost;
+        DisableBlur = CloseBlurHost;
+        SetBlurOpacity = alpha => { if (_blurHost != null) X11Overlay.SetOpacity(_blurHost, alpha); };
         _main = main;
         _panic = CoreSettings.Current?.PanicKey ?? "Escape";
         Title = "CCP - Emi show";
@@ -368,6 +371,14 @@ internal sealed partial class FirstShowStageWindow : Window
         {
             bool drain = time >= 11 && time < 15;
             if (drain && !_drainAttempted) { _drainAttempted = true; _desktopBlur = EnableBlur(); }
+            if (drain && _desktopBlur)
+            {
+                double start = time < S.DrainDeepAt ? S.DrainAt : S.DrainDeepAt;
+                double end = time < S.DrainDeepAt ? S.DrainDeepAt : S.WordsAt;
+                double edge = Math.Clamp(Math.Min(time - start, end - time) / .3, 0, 1);
+                // KWin squares window opacity for blur modulation. WPF AlphaFor(70) is 176/255.
+                SetBlurOpacity(Math.Sqrt(176.0 / 255 * edge));
+            }
             if (!drain) ClearDesktopBlur();
             _effects?.Tick(time, dt);
             while (_beat + 1 < S.Beats.Length && time >= S.Beats[_beat + 1])
@@ -468,6 +479,36 @@ internal sealed partial class FirstShowStageWindow : Window
         catch (Exception ex) { Log.Debug(ex, "First show speech window failed to show"); }
     }
     private void ReleaseFiles() { foreach (var path in _files) Release(path); _files.Clear(); }
+    // A separate window leaves the stage art at full opacity while KWin fades the blur behind it.
+    private bool OpenBlurHost()
+    {
+        if (!OperatingSystem.IsLinux()) return false;
+        var host = new Window
+        {
+            WindowDecorations = WindowDecorations.None, Background = Brushes.Transparent,
+            TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
+            CanResize = false, ShowInTaskbar = false, ShowActivated = false, Topmost = true,
+            Focusable = false, IsHitTestVisible = false
+        };
+        try
+        {
+            if (!X11Overlay.SetOverrideRedirect(host, _screenPx, passive: true) ||
+                !X11Overlay.SetClickThrough(host, true) || !X11Overlay.SetOpacity(host, 0)) return false;
+            host.Show();
+            if (!X11Overlay.RestackBelow(host, this) || !X11Overlay.EnableDesktopBlur(host)) return false;
+            _blurHost = host;
+            return true;
+        }
+        catch (Exception ex) { Log.Debug(ex, "First show blur host unavailable"); return false; }
+        finally { if (_blurHost != host) host.Close(); }
+    }
+    private void CloseBlurHost()
+    {
+        if (_blurHost is not { } host) return;
+        _blurHost = null;
+        X11Overlay.DisableDesktopBlur(host);
+        host.Close();
+    }
     private void ClearDesktopBlur()
     {
         if (_desktopBlur) { DisableBlur(); _desktopBlur = false; }
