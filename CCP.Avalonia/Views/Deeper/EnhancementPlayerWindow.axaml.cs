@@ -142,6 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private int _waveformGeneration;
         private AudioWaveformResult? _waveformData;
         private double? _waveformDuration;
+        private double? _parsedDuration;
         private (long Size, DateTime Modified)? _waveformFile;
         private bool _closing;
 
@@ -710,7 +711,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 _audioFailed = () => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(_localAudio, audio)) AudioFailed(); });
                 audio.Ended += _audioEnded; audio.Failed += _audioFailed;
                 audio.Volume = (int)_sliderVolume.Value;
-                _durationSec = reuseWaveform && _waveformDuration is { } known ? known : audio.DurationSeconds;
+                _parsedDuration = audio.DurationSeconds;
+                _durationSec = reuseWaveform && _waveformDuration is { } known ? known : _parsedDuration.Value;
                 if (_waveformData == null && _waveformLoad?.IsCompleted == true) _waveformLoad = null;
                 _waveformLoad ??= LoadWaveformAsync(path, _waveformGeneration);
                 await _waveformLoad;
@@ -752,15 +754,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 _waveformDuration = _durationSec = live;
                 _txtTotal.Text = FormatTime(live);
             }
-            if (_waveformData is not { } data || _waveformDuration is not { } duration) return;
+            if (_waveformData is not { } data) return;
+            // Without playback, the header parse and the decoded sample count are independent: a
+            // truncated decode is shorter than the file, a misread header is longer, so agreement
+            // verifies both (WPF EnhancementPlayerWindow.xaml.cs:671 draws as soon as decoded).
+            if (_waveformDuration == null && _parsedDuration is { } parsed && Matches(data.DurationSeconds, parsed))
+            {
+                _waveformDuration = _durationSec = parsed;
+                _txtTotal.Text = FormatTime(parsed);
+            }
+            if (_waveformDuration is not { } duration) return;
             // A truncated transcode must not be stretched over the full player timeline.
-            var complete = double.IsFinite(duration) && double.IsFinite(data.DurationSeconds)
-                && duration > 0 && data.DurationSeconds > 0 && Math.Abs(data.DurationSeconds - duration) <= 0.05;
+            var complete = Matches(data.DurationSeconds, duration);
             var peaks = complete ? data.Peaks : null;
             if (ReferenceEquals(_peaks, peaks)) return;
             _peaks = peaks;
             RenderWaveform();
         }
+
+        private static bool Matches(double decoded, double duration) =>
+            double.IsFinite(duration) && double.IsFinite(decoded) && duration > 0 && decoded > 0
+            && Math.Abs(decoded - duration) <= 0.05;
 
         // WPF MainWindow.xaml.cs:2046 and player:2527: panic pauses every player, including pending opens.
         internal static void PanicPauseAll()
@@ -804,7 +818,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             ++_waveformGeneration;
             _waveformLoad = null;
             _waveformData = null;
-            _waveformDuration = null;
+            _waveformDuration = _parsedDuration = null;
             _waveformFile = null;
             _peaks = null;
             _waveformPath.Data = null;

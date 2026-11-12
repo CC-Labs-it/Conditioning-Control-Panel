@@ -404,6 +404,46 @@ public sealed class DeeperRowsTests
     });
 
     [Fact]
+    public Task PlayerDrawsWaveformDecodedAfterStopWithoutLiveDuration() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("ccp-player-stop-parsed-").FullName;
+        var path = Path.Combine(dir, "clip.mp3");
+        File.WriteAllBytes(path, new byte[16]);
+        var originalOpen = DeeperLocalAudio.Open;
+        var originalDecoder = AudioWaveformCache.Decoder;
+        using var started = new System.Threading.ManualResetEventSlim();
+        using var release = new System.Threading.ManualResetEventSlim();
+        var audio = new FakeAudio { DurationSeconds = 95, PlaybackDurationSeconds = null };
+        var peaks = new[] { 0.2f, 0.8f };
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
+        AudioWaveformCache.Decoder = _ => { started.Set(); release.Wait(TimeSpan.FromSeconds(10)); return new AudioWaveformResult { Peaks = peaks, DurationSeconds = 95 }; };
+        var player = new EnhancementPlayerWindow(null, null);
+        try
+        {
+            player.Show();
+            player.OpenLocalMediaFile(path);
+            var load = player._waveformLoad!;
+            Assert.True(started.Wait(TimeSpan.FromSeconds(10)));
+            Invoke(player, "BtnStop_Click");
+            Assert.True(audio.Disposed);
+            release.Set();
+            await load.WaitAsync(TimeSpan.FromSeconds(10));
+            var field = typeof(EnhancementPlayerWindow).GetField("_peaks", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            Assert.Equal(peaks, (float[]?)field.GetValue(player));
+            Assert.Equal("1:35", player.FindControl<TextBlock>("TxtTotal")!.Text);
+        }
+        finally
+        {
+            release.Set();
+            player.Close();
+            DeeperLocalAudio.Open = originalOpen;
+            AudioWaveformCache.Decoder = originalDecoder;
+            Directory.Delete(dir, true);
+        }
+    });
+
+    [Fact]
     public Task PlayerKeepsUnverifiedPeaksAfterStopUntilReplayHasLiveDuration() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
