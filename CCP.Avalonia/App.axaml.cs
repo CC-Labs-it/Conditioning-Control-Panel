@@ -251,8 +251,8 @@ namespace ConditioningControlPanel.Avalonia
         }
 
         // WPF App.xaml.cs:678: binding subscribes to tracking but never starts it.
-        internal static void SeedDeeperWebcam() =>
-            Services.Deeper.EnhancementHostService.WebcamProvider = () => new Platform.DeeperWebcamEvents(Platform.WebcamTracker.Instance);
+        internal static void SeedDeeperWebcam(Platform.WebcamTracker? tracker = null) =>
+            Services.Deeper.EnhancementHostService.WebcamProvider = () => new Platform.DeeperWebcamEvents(tracker ?? Platform.WebcamTracker.Instance);
 
         // WPF App.xaml.cs:3218: subscribe at construction time and return the exact detach.
         internal static void SeedHapticPlaybackTime()

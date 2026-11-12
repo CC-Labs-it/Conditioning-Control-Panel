@@ -35,6 +35,7 @@
 
   <ItemGroup>
     <Compile Include="..\ConditioningControlPanel\Services\ChromeFxNav.cs" Link="Services\ChromeFxNav.cs" />
+    <Compile Include="..\ConditioningControlPanel\Services\Deeper\PlayheadExtrapolator.cs" Link="Services\Deeper\PlayheadExtrapolator.cs" />
     <!-- The audio player's order rules (list, loop, shuffle): no UI, no audio, one source for both heads. -->
     <Compile Include="..\ConditioningControlPanel\Services\AudioPlayer\AudioPlaylistRules.cs" Link="Services\AudioPlayer\AudioPlaylistRules.cs" />
     <PackageReference Include="Avalonia" Version="12.1.5" />

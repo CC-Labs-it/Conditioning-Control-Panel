@@ -15,14 +15,13 @@ public class DeeperWebcamEventsTests
     [Fact]
     public void SeededAdapterForwardsAndUnsubscribesWithoutStartingCamera() => AvaloniaTestDispatcher.Run(() =>
     {
-        var tracker = WebcamTracker.Instance;
-        tracker.Stop();
+        var tracker = new WebcamTracker();
         var consent = CoreSettings.Current.WebcamConsentGiven;
         var previous = EnhancementHostService.WebcamProvider;
         try
         {
             CoreSettings.Current.WebcamConsentGiven = false;
-            App.SeedDeeperWebcam();
+            App.SeedDeeperWebcam(tracker);
             using var adapter = Assert.IsType<DeeperWebcamEvents>(EnhancementHostService.WebcamProvider!());
             int blink = 0, mouth = 0, lost = 0, found = 0;
             (double x, double y) gaze = default;
