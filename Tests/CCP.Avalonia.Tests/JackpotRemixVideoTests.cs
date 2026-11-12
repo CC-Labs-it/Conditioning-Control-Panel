@@ -54,6 +54,14 @@ public class JackpotRemixVideoTests
             Assert.True(FlashOverlay.RemixVideoBusy());
             web.OnWebMessage(Message(id!, false));
             Assert.False(FlashOverlay.RemixVideoBusy());
+            bool? audio = null;
+            web.AudioProbe = () => audio;
+            void Frame(bool? engine) { audio = engine; web.OnWebMessage(JsonSerializer.Serialize(new { type = "ccpRemixMedia", id, active = false, unknown = true })); }
+            Frame(true); Assert.True(FlashOverlay.RemixVideoBusy()); // an unreadable embed that is playing holds the gate
+            Frame(false); Assert.True(FlashOverlay.RemixVideoBusy()); // held two seconds after the engine goes quiet
+            page.RemixAudioTick -= 3 * System.Diagnostics.Stopwatch.Frequency;
+            Frame(false); Assert.False(FlashOverlay.RemixVideoBusy()); // an idle unreadable embed releases it
+            Frame(null); Assert.True(FlashOverlay.RemixVideoBusy()); // no engine answer is not evidence of silence
             web.OnNavigationCompleted(new Uri("https://example.com/failure"), success: false);
             web.OnWebMessage(Message(id!, false));
             Assert.True(FlashOverlay.RemixVideoBusy()); // failed injection must not claim silence

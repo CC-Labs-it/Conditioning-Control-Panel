@@ -33,77 +33,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal static bool RemixBrowserVideoBusy => RemixBrowserMediaBusy || (_remixWatchActive
             && System.Diagnostics.Stopwatch.GetElapsedTime(System.Threading.Interlocked.Read(ref RemixMediaTick)).TotalSeconds > 3);
         private string? _remixMediaId;
+        internal long RemixAudioTick;
 
         // WPF BrowserService.cs:337: watch user-started media, not only takeover playback.
-        // Recognised players report their state. Unknown or stale cross-origin state stays busy.
+        // Cross-origin frames are flagged unknown and fall back to the engine's audible-playback state.
         internal const string RemixMediaScript = """
             (() => {
               const id = __CCP_TOKEN__;
-              if (window.__ccpRemixWatch) clearInterval(window.__ccpRemixWatch);
-              if (window.__ccpRemixAbort) window.__ccpRemixAbort.abort();
+              clearInterval(window.__ccpRemixWatch); window.__ccpRemixAbort?.abort();
               const controller = window.__ccpRemixAbort = new AbortController();
-              let lastPlaying = 0;
-              const states = new WeakMap();
-              let players = [];
-              const player = f => {
-                try {
-                  const url = new URL(f.src, document.baseURI), host = url.hostname;
-                  const kind = host === 'player.vimeo.com' ? 'vimeo'
-                    : (host === 'www.youtube.com' || host === 'www.youtube-nocookie.com') && url.searchParams.get('enablejsapi') === '1' ? 'youtube' : null;
-                  if (!kind || !f.contentWindow) return true;
-                  let state = states.get(f);
-                  if (!state || state.src !== url.href) { state = { src: url.href, active: true, time: 0, subscribed: false, ready: false }; states.set(f, state); }
-                  players.push({ f, origin: url.origin, kind, state });
-                  const send = o => f.contentWindow.postMessage(JSON.stringify(o), url.origin);
-                  if (kind === 'vimeo') send({ method: 'getPaused' });
-                  else {
-                    if (!state.ready) send({ event: 'listening', id: 'ccp-remix' });
-                    if (!state.subscribed) {
-                      send({ event: 'command', func: 'addEventListener', args: ['onStateChange'], id: 'ccp-remix' });
-                      state.subscribed = true;
-                    }
-                    send({ event: 'command', func: 'getPlayerState', args: [], id: 'ccp-remix' });
-                  }
-                  return !state.time || Date.now() - state.time > 3000 || state.active;
-                } catch (_) { return true; }
-              };
+              let lastPlaying = 0, unknown = false;
               const busy = d => {
                 let active = [...d.querySelectorAll('video,audio')].some(m => !m.paused && !m.ended && (m.tagName === 'AUDIO' ? !m.muted : m.offsetWidth >= 200));
                 for (const f of d.querySelectorAll('iframe')) {
                   if (f.offsetWidth < 200) continue;
-                  try {
-                    if (!f.contentDocument) active = player(f) || active;
-                    else active = busy(f.contentDocument) || active;
-                  } catch (_) { active = player(f) || active; }
+                  let inner = null; try { inner = f.contentDocument; } catch (_) {}
+                  if (inner) active = busy(inner) || active; else unknown = true;
                 }
                 return active;
               };
               const report = () => {
-                let active = true;
-                try { players = []; active = busy(document); } catch (_) {}
+                let active = true; unknown = false;
+                try { active = busy(document); } catch (_) {}
                 if (active) lastPlaying = Date.now();
                 else active = lastPlaying > 0 && Date.now() - lastPlaying < 2000;
-                const msg = JSON.stringify({ type: 'ccpRemixMedia', id, active });
+                const msg = JSON.stringify({ type: 'ccpRemixMedia', id, active, unknown });
                 if (typeof window.invokeCSharpAction === 'function') window.invokeCSharpAction(msg);
                 else if (window.chrome?.webview) window.chrome.webview.postMessage(msg);
               };
-              window.addEventListener('message', e => {
-                const p = players.find(p => p.f.contentWindow === e.source && p.origin === e.origin);
-                if (!p) return;
-                let data = e.data;
-                try { if (typeof data === 'string') data = JSON.parse(data); } catch (_) { return; }
-                if (!data || typeof data !== 'object') return;
-                let active;
-                if (p.kind === 'vimeo' && data.method === 'getPaused' && typeof data.value === 'boolean') active = !data.value;
-                if (p.kind === 'youtube') {
-                  if (data.event === 'onReady' && !p.state.ready) { p.state.ready = true; p.state.subscribed = false; }
-                  const value = data.event === 'onStateChange' ? data.info
-                    : data.event === 'infoDelivery' || data.event === 'initialDelivery' ? data.info?.playerState : null;
-                  if (typeof value === 'number') active = ![-1, 0, 2, 5].includes(value);
-                }
-                if (active === undefined) return;
-                p.state.active = active; p.state.time = Date.now();
-              }, { signal: controller.signal });
               for (const event of ['playing', 'pause', 'ended', 'volumechange']) document.addEventListener(event, report, { capture: true, signal: controller.signal });
               window.__ccpRemixWatch = setInterval(report, 500);
               report();
@@ -133,17 +90,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             try
             {
                 using var outer = System.Text.Json.JsonDocument.Parse(body);
-                var payload = outer.RootElement.ValueKind == System.Text.Json.JsonValueKind.String ? outer.RootElement.GetString() : body;
-                using var json = System.Text.Json.JsonDocument.Parse(payload!);
+                using var json = System.Text.Json.JsonDocument.Parse(outer.RootElement.ValueKind == System.Text.Json.JsonValueKind.String ? outer.RootElement.GetString()! : body);
                 var root = json.RootElement;
-                if (_remixMediaId != null && root.GetProperty("type").GetString() == "ccpRemixMedia"
-                    && root.GetProperty("id").GetString() == _remixMediaId && root.GetProperty("active").ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
+                if (_remixMediaId == null || root.GetProperty("type").GetString() != "ccpRemixMedia" || root.GetProperty("id").GetString() != _remixMediaId) return;
+                var active = root.GetProperty("active").GetBoolean();
+                // An unreadable frame is idle only while the engine reports no audio, held two seconds like WPF's pause debounce.
+                if (root.TryGetProperty("unknown", out var unknown) && unknown.ValueKind == System.Text.Json.JsonValueKind.True)
                 {
-                    var active = root.GetProperty("active").GetBoolean();
-                    if (active) RemixBrowserMediaBusy = true;
-                    System.Threading.Interlocked.Exchange(ref RemixMediaTick, System.Diagnostics.Stopwatch.GetTimestamp());
-                    if (!active) RemixBrowserMediaBusy = false;
+                    if (BrowserWebHost.IsPlayingAudio() != false) RemixAudioTick = System.Diagnostics.Stopwatch.GetTimestamp();
+                    active |= RemixAudioTick != 0 && System.Diagnostics.Stopwatch.GetElapsedTime(RemixAudioTick).TotalSeconds < 2;
                 }
+                if (active) RemixBrowserMediaBusy = true;
+                System.Threading.Interlocked.Exchange(ref RemixMediaTick, System.Diagnostics.Stopwatch.GetTimestamp());
+                if (!active) RemixBrowserMediaBusy = false;
             }
             catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or System.Collections.Generic.KeyNotFoundException) { }
         }

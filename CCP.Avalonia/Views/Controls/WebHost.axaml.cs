@@ -275,6 +275,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         // Native script boundary; tests supply a per-instance page adapter without opening a desktop.
         internal Func<string, Task<string?>>? ScriptInvoker { get; set; }
+        internal Func<bool?>? AudioProbe { get; set; }
+        internal bool? IsPlayingAudio() => AudioProbe != null ? AudioProbe() : _web == null ? null : Platform.WebAudioProbe.IsPlaying(_web.TryGetPlatformHandle());
 
         /// <summary>Live pause from the Workshop switch (WebHostMedia.SetPausedAsync). Re-applied mutes honour it, so a
         /// navigation while paused stays muted, as WPF's engine-level IsMuted does.</summary>
