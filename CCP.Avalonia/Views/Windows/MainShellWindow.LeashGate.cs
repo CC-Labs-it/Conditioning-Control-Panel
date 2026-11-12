@@ -286,6 +286,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal async System.Threading.Tasks.Task CutLeashAsync()
         {
             LeashTaskHost.EndTask("cut", this);   // WPF LeashSurfaces.CutDone -> EndLeashTask
+            LeashOfferSurfaces.NoteCut();
             App.Notifications.Show(Loc.Get("leash_cut_done"), Helpers.NotificationType.Success);
             try { if (LeashHead.Service is { } s) await s.CutAsync(); }
             catch (Exception ex) { Serilog.Log.Debug("[Leash] cut failed (service retries): {E}", ex.Message); }

@@ -184,6 +184,7 @@ public sealed class LeashSelfCard : Border
         else
         {
             try { LeashTaskHost.Runner?.Cancel(); } catch { }
+            LeashOfferSurfaces.NoteCut();
             try { if (_service() is { } s) await s.CutAsync(); } catch { }
         }
     }

@@ -261,53 +261,70 @@ public sealed class LeashPageTests
         });
 
     [Fact]
-    public void OffersQueueWhileHiddenAndTheSnapHoldsTheNextAskUntilItCloses() =>
+    public void OffersQueueWhileHiddenAndTheNextAskFollowsAnAnswer() =>
         Run(false, (shell, _, _) =>
         {
             var seen = new List<string>(); var wire = new Wire();
             var service = new LeashService(wire, () => "u_me", cutSafety: () => { }, reportSeen: seen.Add);
-            var oldName = ConditioningControlPanel.CoreAccount.DisplayNameProvider;
-            ConditioningControlPanel.CoreAccount.DisplayNameProvider = () => " Mira ";
+            LeashHead.Service = service; shell.CheckLeashGate();
+            ConditioningControlPanel.CoreSettings.Current.LeashIntroSeenLeashed = true;
+            shell.Hide();
+            var block = Block(("u_a", "A", "abcdef0123456789"), ("u_b", "B", "0123456789abcdef"));
+            service.ApplyBlock(block); Dispatcher.UIThread.RunJobs();
+            Assert.Empty(seen); Assert.Null(LeashAskWindow.Current);
+            shell.Show(); shell.ShowTab("friends"); shell.CheckLeashGate(); Dispatcher.UIThread.RunJobs();
+            var first = LeashAskWindow.Current!;
+            Assert.Equal("leash-ask:u_a", first.Card.Tag); Assert.Equal(new[] { "abcdef0123456789" }, seen);
+            wire.AnswerStatus = "on";
+            LeashGateCardTests.Click(first.Card.PutItOnButton);
+            Assert.False(first.IsVisible);
+            var second = LeashAskWindow.Current!;
+            Assert.Equal("leash-ask:u_b", second.Card.Tag);
+            Assert.Equal(new[] { "abcdef0123456789", "0123456789abcdef" }, seen);
+            second.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
+            block["offers"] = new JArray(((JArray)block["offers"]!).Reverse().Select(o => o.DeepClone()));
+            service.ApplyBlock(block); shell.CheckLeashGate(); Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current); Assert.Equal(2, seen.Count);
+        });
+
+    // WPF LeashSurfaces.OnEvent (:145-147) and NoteCut (:267-272): the Ended a cut pressed here brings back is swallowed once.
+    [Fact]
+    public void TheEndedEventOfASelfCutIsSwallowedOnce() =>
+        Run(false, (shell, _, _) =>
+        {
+            var service = new LeashService(new Wire(), () => "u_me", cutSafety: () => { });
+            LeashHead.Service = service;
+            shell.Show(); shell.CheckLeashGate();
+            var (oldToasts, oldSelfCut) = (global::ConditioningControlPanel.Avalonia.App.Notifications, LeashOfferSurfaces.SelfCut);
+            var host = new StackPanel();
+            var ended = ConditioningControlPanel.Localization.Loc.GetF("leash_evt_ended", "A");
+            int Ended(string id)
+            {
+                var block = Block();
+                block["events"] = new JArray(new JObject { ["id"] = id, ["kind"] = "ended",
+                    ["from"] = new JObject { ["id"] = "u_a", ["name"] = "A" }, ["at"] = DateTimeOffset.UtcNow.ToString("o") });
+                service.ApplyBlock(block); Dispatcher.UIThread.RunJobs();
+                return host.GetLogicalDescendants().OfType<TextBlock>().Count(t => t.Text == ended);
+            }
             try
             {
-                LeashHead.Service = service; shell.CheckLeashGate();
-                ConditioningControlPanel.CoreSettings.Current.LeashIntroSeenLeashed = true;
-                shell.Hide();
-                var block = Block(("u_a", "A", "abcdef0123456789"), ("u_b", "B", "0123456789abcdef"));
-                service.ApplyBlock(block); Dispatcher.UIThread.RunJobs();
-                Assert.Empty(seen); Assert.Null(LeashAskWindow.Current);
-                shell.Show(); shell.ShowTab("friends"); shell.CheckLeashGate(); Dispatcher.UIThread.RunJobs();
-                var first = LeashAskWindow.Current!;
-                Assert.Equal("leash-ask:u_a", first.Card.Tag); Assert.Equal(new[] { "abcdef0123456789" }, seen);
-                wire.AnswerStatus = "on";
-                LeashGateCardTests.Click(first.Card.PutItOnButton);
-                Assert.Null(LeashAskWindow.Current); Assert.False(first.IsVisible);
-                var snap = LeashAskWindow.Snap!;
-                Assert.True(snap.IsVisible);
-                Assert.Equal(10, snap.GetLogicalDescendants().OfType<Canvas>().Single(c => c.Tag as string == "leash-snap-chain").Children.Count);
-                var snapCard = snap.GetLogicalDescendants().OfType<LeashSnapCard>().Single();
-                Assert.Equal("u_a", snapCard.Holder.Id); // the offer's LeashPerson, look and all (WPF ShowSnap(o.From, Me()))
-                Assert.Single(snap.GetLogicalDescendants().OfType<Control>(), c => c.Tag as string == "leash-tag");
-                Assert.Contains(snap.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == ConditioningControlPanel.Localization.Loc.GetF("leash_snap_leashed", "Mira"));
-                shell.CheckLeashGate();
-                Assert.Null(LeashAskWindow.Current); Assert.Single(seen);
-                LeashGateCardTests.Click(Find(snap, "leash-snap-ok"));
-                Assert.Null(LeashAskWindow.Snap);
-                var second = LeashAskWindow.Current!;
-                Assert.Equal("leash-ask:u_b", second.Card.Tag);
-                Assert.Equal(new[] { "abcdef0123456789", "0123456789abcdef" }, seen);
-                second.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
-                Dispatcher.UIThread.RunJobs();
-                Assert.Null(LeashAskWindow.Current);
-                block["offers"] = new JArray(((JArray)block["offers"]!).Reverse().Select(o => o.DeepClone()));
-                service.ApplyBlock(block); shell.CheckLeashGate(); Dispatcher.UIThread.RunJobs();
-                Assert.Null(LeashAskWindow.Current); Assert.Equal(2, seen.Count);
+                global::ConditioningControlPanel.Avalonia.App.Notifications = new();
+                global::ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(host);
+                shell.CutLeashAsync().GetAwaiter().GetResult();
+                Assert.Equal(0, Ended("abcdef0123456789"));
+                Assert.Equal(1, Ended("0123456789abcdef"));
             }
-            finally { ConditioningControlPanel.CoreAccount.DisplayNameProvider = oldName; }
+            finally
+            {
+                foreach (var toast in host.Children.OfType<Border>()) (toast.Tag as DispatcherTimer)?.Stop();
+                (global::ConditioningControlPanel.Avalonia.App.Notifications, LeashOfferSurfaces.SelfCut) = (oldToasts, oldSelfCut);
+            }
         });
 
     [Fact]
-    public void HiddenReceiptWaitsForPanelAndAcceptedOfferShowsHolderSnap() =>
+    public void HiddenReceiptWaitsForThePanel() =>
         Run(false, (shell, _, _) =>
         {
             var seen = new List<string>();
@@ -322,11 +339,6 @@ public sealed class LeashPageTests
             Assert.Empty(seen);
             shell.Show(); shell.CheckLeashGate(); Dispatcher.UIThread.RunJobs();
             Assert.Contains("abcdef0123456789", seen);
-            block["events"] = new JArray(new JObject {
-                ["id"] = "0123456789abcdef", ["kind"] = "answered", ["accepted"] = true,
-                ["from"] = new JObject { ["id"] = "u_a", ["name"] = "A" }, ["at"] = DateTimeOffset.UtcNow.ToString("o") });
-            service.ApplyBlock(block); Dispatcher.UIThread.RunJobs();
-            Assert.NotNull(LeashAskWindow.Snap);
         });
 
     [Fact]

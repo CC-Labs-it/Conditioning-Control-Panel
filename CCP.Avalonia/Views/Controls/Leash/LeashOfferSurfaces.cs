@@ -15,7 +15,7 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 
 // WPF LeashSurfaces.OnSnapshot/TryShowWaitingAsk (:104-124): a newly arrived offer pops up as the one ask
-// (LeashAskWindow), held until the panel or launcher is up and until no ask or snap is on screen.
+// (LeashAskWindow), held until the panel or launcher is up and until no ask is on screen.
 internal sealed class LeashOfferSurfaces : IDisposable
 {
     private readonly Func<Window?> _owner;
@@ -60,17 +60,23 @@ internal sealed class LeashOfferSurfaces : IDisposable
     }
 
     private bool PanelShowing() => _owner() is MainShellWindow;
+    // WPF LeashSurfaces._iCut/NoteCut (:30,:145-147,:267-272): a cut pressed here already sounded and was
+    // said, so the Ended event it brings back is swallowed once.
+    internal static bool SelfCut;
+    internal static void NoteCut()
+    {
+        SelfCut = true;
+        LeashSound.Event(LeashEventKind.Ended, DateTime.UtcNow);
+    }
     private void OnEvent(LeashEvent e)
     {
         var source = _service;
         void Apply()
         {
             if (!ReferenceEquals(source, _service) || !ReferenceEquals(source, LeashHead.Service) || _account != CoreSettings.Current.UnifiedId) return;
-            if (e.Kind == LeashEventKind.Answered && e.Accepted == true)
-            {
-                LeashAskWindow.ShowHolderSnap(e.From, _owner());
-                return;
-            }
+            if (e.Kind == LeashEventKind.Ended && SelfCut) { SelfCut = false; return; }
+            // WPF shows the holder's snap here and nothing else (LeashSurfaces.cs:137-139); the snap is owed.
+            if (e.Kind == LeashEventKind.Answered && e.Accepted == true) return;
             LeashSound.Event(e.Kind, DateTime.UtcNow);
             var owner = _owner();
             var wobbles = e.Kind == LeashEventKind.Tug && StartTug(owner);
@@ -181,7 +187,7 @@ internal sealed class LeashOfferSurfaces : IDisposable
     }
     private void TryShow()
     {
-        if (_service?.Available != true || _waiting.Count == 0 || LeashAskWindow.Current != null || LeashAskWindow.Snap != null) return;
+        if (_service?.Available != true || _waiting.Count == 0 || LeashAskWindow.Current != null) return;
         var owner = _owner();
         if (owner == null || !owner.IsVisible || owner.WindowState == WindowState.Minimized) return;
         var offer = _waiting[0];
