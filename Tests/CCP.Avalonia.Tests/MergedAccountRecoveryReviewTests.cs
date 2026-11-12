@@ -47,6 +47,7 @@ public class MergedAccountRecoveryReviewTests
     {
         internal readonly List<string> Paths = new();
         internal string? ProfileQuery, ProfileToken;
+        internal HttpStatusCode Restore = HttpStatusCode.OK;
         internal readonly DateTime GrantUntil = DateTime.UtcNow.AddDays(1);
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
@@ -61,8 +62,8 @@ public class MergedAccountRecoveryReviewTests
             var ok = profile || path == "/v2/auth/" + successfulProvider;
             var body = profile ? "{\"user\":{\"unified_id\":\"u_canon123\",\"level\":1,\"xp\":0}}"
                 : "{\"success\":true,\"auth_token\":\"canonical-token\",\"user\":{\"unified_id\":\"u_canon123\",\"level\":1,\"xp\":0,\"invite_grant_until\":\"" + GrantUntil.ToString("O") + "\"}}";
-            return Task.FromResult(new HttpResponseMessage(ok ? HttpStatusCode.OK : HttpStatusCode.Unauthorized)
-            { Content = new StringContent(ok ? body : "{}") });
+            var status = path == "/v2/auth/restore-session" ? Restore : ok ? HttpStatusCode.OK : HttpStatusCode.Unauthorized;
+            return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(status == HttpStatusCode.OK ? body : "{}") });
         }
     }
 
@@ -138,7 +139,12 @@ public class MergedAccountRecoveryReviewTests
             Assert.True(CoreAccount.IsLoggedIn);
             await AccountSeed.ValidateRestoredSessionAsync();
             Assert.True(CoreAccount.IsLoggedIn && CoreAccount.UnifiedUserId == "u_canon123");
-            Assert.Equal(provider != null ? "canonical-token" : null, settings.AuthToken);
+            // No provider mints: restore-session re-issues the token (WPF App.xaml.cs:4805) and ends the pending merge.
+            Assert.Equal(provider == null, wire.Paths.Contains("/v2/auth/restore-session"));
+            Assert.True(settings.AuthToken == "canonical-token" && !settings.MergedSignInPending);
+            (settings.AuthToken, settings.MergedSignInPending, wire.Restore) = (null, true, HttpStatusCode.NotFound);
+            if (provider == null) await AccountSeed.ValidateRestoredSessionAsync(); // 404: the identity is gone
+            Assert.Equal(provider == null, CoreAccount.UnifiedUserId == null && settings.UnifiedId == null && !settings.MergedSignInPending);
         }
         finally
         {

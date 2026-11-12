@@ -117,15 +117,17 @@ internal static class AccountSeed
     {
         var id = CoreAccount.UnifiedUserId;
         if (string.IsNullOrEmpty(id) || CoreSettings.Current.OfflineMode) return;
-        if (CoreSettings.Current.MergedSignInPending && !await MergedAccountRecoveryHead.ReauthenticateAsync()) return; // WPF App.xaml.cs:4690,4757
+        // A pending merge: a provider mints the token (WPF App.xaml.cs:4690,4757); when none can, restore-session does (WPF :4805).
+        var unproven = CoreSettings.Current.MergedSignInPending && !await MergedAccountRecoveryHead.ReauthenticateAsync();
         v2 ??= NewV2();
         // If a provider already authenticated, it validated the session (and owns the load in WPF).
-        if (Patreon?.IsAuthenticated != true && Discord?.IsAuthenticated != true)
+        if (unproven || (Patreon?.IsAuthenticated != true && Discord?.IsAuthenticated != true))
         {
             Log.Information("Validating restored session for {Id}...", id);
             var outcome = await v2.ValidateRestoredSessionAsync(id);
-            if (outcome == V2AuthService.RestoreOutcome.Cleared) CoreAccount.UnifiedUserId = null;
+            if (outcome == V2AuthService.RestoreOutcome.Cleared) { CoreAccount.UnifiedUserId = null; CoreSettings.Current.MergedSignInPending = false; CoreSettings.Save(); }
             if (outcome != V2AuthService.RestoreOutcome.Validated) return;
+            if (unproven && !string.IsNullOrEmpty(CoreSettings.Current.AuthToken)) { CoreSettings.Current.MergedSignInPending = false; CoreSettings.Save(); }
         }
         await LoadProfileAsync(v2);
     }

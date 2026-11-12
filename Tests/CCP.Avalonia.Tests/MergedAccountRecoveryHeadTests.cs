@@ -26,8 +26,7 @@ public class MergedAccountRecoveryHeadTests
         string? token = "old";
         CoreSecrets.RetrieveProvider = _ => token;
         CoreSecrets.StoreProvider = (_, value) => token = value;
-        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ccp-merge-" + Guid.NewGuid());
-        System.IO.Directory.CreateDirectory(dir);
+        var dir = System.IO.Directory.CreateTempSubdirectory("ccp-merge-").FullName;
         using var quests = new QuestService(null, dir);
         var sync = new SyncPush(() => null, () => false);
         try
@@ -39,8 +38,7 @@ public class MergedAccountRecoveryHeadTests
             sync.MarkLoaded(null);
             MergedAccountRecovery.SettingsForTest = () => settings;
             MergedAccountRecoveryHead.Seed();
-            using var response = new HttpResponseMessage(HttpStatusCode.Conflict)
-            { Content = new StringContent("{\"error\":\"merged\",\"canonical_unified_id\":\"u_canon123\"}") };
+            using var response = new HttpResponseMessage(HttpStatusCode.Conflict) { Content = new StringContent("{\"error\":\"merged\",\"canonical_unified_id\":\"u_canon123\"}") };
             Assert.True(V2AuthService.MergedRecovery!(response, null).GetAwaiter().GetResult());
             MergedAccountRecovery.LastSwap.GetAwaiter().GetResult();
             Dispatcher.UIThread.RunJobs();

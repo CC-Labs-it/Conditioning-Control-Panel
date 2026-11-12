@@ -49,11 +49,8 @@ public class MergedAccountRecoveryReloadTests
         MergedAccountRecoveryReviewTests.Setup();
         WelcomeBackOffer.ResetForTests();
         var directory = Directory.CreateTempSubdirectory("ccp-merge-reload-");
-        var secrets = new Dictionary<string, string?>
-        {
-            ["patreon_auth"] = JsonConvert.SerializeObject(new PatreonTokenData
-                { AccessToken = "provider", ExpiresAt = DateTime.UtcNow.AddDays(1) })
-        };
+        var secrets = new Dictionary<string, string?> { ["patreon_auth"] = JsonConvert.SerializeObject(
+            new PatreonTokenData { AccessToken = "provider", ExpiresAt = DateTime.UtcNow.AddDays(1) }) };
         CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key);
         CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
         var settings = CoreSettings.Current;
@@ -68,19 +65,12 @@ public class MergedAccountRecoveryReloadTests
         sync.MarkLoaded(null);
         MergedAccountRecovery.SettingsForTest = () => settings;
         MergedAccountRecoveryHead.Seed();
-        var shown = 0;
-        var shownOnUi = false;
-        WelcomeBackOffer.Present = _ =>
-        {
-            shownOnUi = Dispatcher.UIThread.CheckAccess();
-            shown++;
-            return Task.CompletedTask;
-        };
+        var (shown, shownOnUi) = (0, false);
+        WelcomeBackOffer.Present = _ => { shownOnUi = Dispatcher.UIThread.CheckAccess(); shown++; return Task.CompletedTask; };
         WelcomeBackOffer.Arm(true, directory.FullName);
         try
         {
-            using var response = new HttpResponseMessage(HttpStatusCode.Conflict)
-            { Content = new StringContent("{\"error\":\"merged\",\"canonical_unified_id\":\"u_canon123\"}") };
+            using var response = new HttpResponseMessage(HttpStatusCode.Conflict) { Content = new StringContent("{\"error\":\"merged\",\"canonical_unified_id\":\"u_canon123\"}") };
             Assert.True(await V2AuthService.MergedRecovery!(response, null));
             await MergedAccountRecovery.LastSwap;
             Dispatcher.UIThread.RunJobs();
