@@ -162,6 +162,7 @@ public sealed class Sync7CompanionAudioTests
         try
         {
             Assert.True(await CompanionEffects.PlayAudio("recorded.mp3"));
+            Assert.Contains(ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Snapshot(), e => e.Player == "sound" && e.File == "recorded.mp3");
             Assert.True(await CompanionEffects.PlayAudio("replacement.mp3"));
             Assert.Equal(1, stopped);
             var panic = PanicSurfaces.All.Single(s => s.Id == "companion-audio");

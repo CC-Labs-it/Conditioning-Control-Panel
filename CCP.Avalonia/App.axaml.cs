@@ -16,6 +16,7 @@ namespace ConditioningControlPanel.Avalonia
     public partial class App : Application
     {
         internal static Action? PostCodeInputsChanged;
+        private Platform.MindWipePlayer? _mindWipe;
 
         /// <summary>The settings service, or null on the headless render path.</summary>
         public static SettingsService? Settings { get; private set; }
@@ -977,7 +978,7 @@ namespace ConditioningControlPanel.Avalonia
                     // Ducking crash journal (Linux): restore what a dead run left ducked, then journal every duck.
                     vlc.StartDuckJournal(Path.Combine(CorePaths.UserData, Platform.DuckRecovery.PulseFileName));
                     // Mind wipe plays through the same LibVLC (WPF App.MindWipe, App.xaml.cs:385).
-                    new Platform.MindWipePlayer(vlc.PlayVoice) { CleanSlate = secs => Achievements?.TrackMindWipeDuration(secs) }.Seed();
+                    (_mindWipe = new Platform.MindWipePlayer(vlc.PlayVoice) { CleanSlate = secs => Achievements?.TrackMindWipeDuration(secs) }).Seed();
                     Console.WriteLine("[Audio] LibVLC seeded CoreAudio");
                 }
                 catch (Exception ex)
@@ -1508,6 +1509,7 @@ namespace ConditioningControlPanel.Avalonia
             try { Platform.KeywordTriggerHead.Stop(); } catch { }
             try { Platform.BrainDrainPlayer.Instance?.Stop(); } catch { }
             try { MantraChant.Dispose(); } catch { } // WPF App.xaml.cs:6529
+            try { _mindWipe?.Dispose(); } catch { } // WPF App.xaml.cs:6543
             try { Platform.LibVlcAudio.Instance?.Shutdown(); } catch { }
             try { Platform.LayeredAudio.Instance?.Shutdown(); } catch { }
             try { ReleaseContent?.Dispose(); } catch { }

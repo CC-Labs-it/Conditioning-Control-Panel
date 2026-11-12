@@ -133,6 +133,15 @@ public sealed class MindWipeTests
         Assert.Equal(0, Assert.Single(voices).Vol);
     }, duringPlay: () => CoreSettings.Current.MasterVolume = 0);
 
+    [Theory, InlineData(true), InlineData(false)]
+    public void Publishing_a_voice_preserves_the_other_voice_gain(bool loopFirst) => Run((player, voices, clock) =>
+    {
+        if (loopFirst) { player.StartLoop(0.7); player.TriggerOnce(); }
+        else { player.TriggerOnce(); player.StartLoop(0.7); }
+        Assert.Equal(loopFirst ? 0.7 : 0.4, voices[0].Vol, 5);
+        Assert.Equal(loopFirst ? 0.4 : 0.7, voices[1].Vol, 5);
+    });
+
     [Fact]
     public void Master_updates_one_shot_and_loop_without_losing_their_own_level() => Run((player, voices, clock) =>
     {

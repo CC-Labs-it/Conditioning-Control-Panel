@@ -191,7 +191,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             IVoice? voice = null;
             voice = _play(clip, volume, false, () => { lock (_lock) if (ReferenceEquals(_oneShot, voice)) _oneShot = null; });
             IVoice? displaced;
-            lock (_lock) { displaced = _oneShot; _oneShot = voice; ApplyGain(); }   // a master move during _play
+            lock (_lock) { displaced = _oneShot; _oneShot = voice; try { if (voice != null) voice.Volume = CurrentGain; } catch { } }   // a master move during _play
             displaced?.Dispose();
             // WPF App.xaml.cs:750-752: a played one-shot feeds the memory favourite.
             if (voice != null) App.NoteFeatureUsed(Services.Companion.Brain.MemorySignalWriter.FeatureMindWipe);
@@ -223,7 +223,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 lock (_lock) if (!ReferenceEquals(_loop, voice)) return;
                 CleanSlate?.Invoke(_time.GetElapsedTime(started).TotalSeconds);
             }, null, TimeSpan.FromSeconds(60), Timeout.InfiniteTimeSpan);
-            lock (_lock) { _loop = voice; _cleanSlate = check; ApplyGain(); }
+            lock (_lock) { _loop = voice; _cleanSlate = check; try { voice.Volume = CurrentGain; } catch { } }
             Log.Information("MindWipe: Loop started with {File} at {Vol}% volume", Path.GetFileName(clip), volume * 100);
         }
 
