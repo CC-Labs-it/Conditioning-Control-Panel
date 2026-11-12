@@ -526,7 +526,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             var player = new MediaPlayer(vlc) { EnableHardwareDecoding = true };
             player.Volume = Math.Clamp(CoreSettings.Current.MasterVolume, 0, 100);
-            _player = player;
+            lock (_nativeStopGate) _player = player;
             var media = new Media(vlc, _videoPath, FromType.FromPath);
             _media = media;
             _sink = new VlcFrameSink(player, () => media,
@@ -633,6 +633,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
+        // Share an in-flight stop with teardown. If startup resumes after a stop completed,
+        // teardown needs a fresh stop before disposing the player.
+        private static readonly object _nativeStopGate = new();
+        private static object? _nativeStopOwner;
+        private static Task? _nativeStopTask;
+
+        internal static Task QueueNativeStop(object owner, Action stop)
+        {
+            lock (_nativeStopGate)
+            {
+                if (!ReferenceEquals(_nativeStopOwner, owner) || _nativeStopTask == null || _nativeStopTask.IsCompleted)
+                {
+                    _nativeStopOwner = owner;
+                    _nativeStopTask = Task.Run(stop);
+                }
+                return _nativeStopTask!;
+            }
+        }
+
+        internal static void StopForWedge()
+        {
+            lock (_nativeStopGate)
+            {
+                var player = _player;
+                if (player != null) _ = QueueNativeStop(player, player.Stop);
+            }
+        }
+
         private static Task StopPlayer()
         {
             foreach (var window in _allWindows)
@@ -642,18 +670,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             if (_browserOwner != null) BrowserVideoSurface.Release(_browserOwner);
             _browserOwner = null;
-            var player = _player;
+            MediaPlayer? player;
+            Task stopped;
+            lock (_nativeStopGate)
+            {
+                player = _player;
+                _player = null;
+                stopped = player == null ? Task.CompletedTask : QueueNativeStop(player, player.Stop);
+                _nativeStopOwner = null;
+                _nativeStopTask = null;
+            }
             var media = _media;
             var sink = _sink;
             var vlc = _gameVlc;
             _gameVlc = null;
-            _player = null;
             _media = null;
             _sink = null;
             foreach (var w in _allWindows) w._videoImage.Source = null;
             if (player == null && media == null && sink == null && vlc == null) return Task.CompletedTask;
             var settled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            StopNative(() => player?.Stop(), () =>
+            StopNative(() => stopped.GetAwaiter().GetResult(), () =>
             {
                 player?.Dispose();
                 media?.Dispose();

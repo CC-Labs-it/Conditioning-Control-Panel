@@ -2,9 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
@@ -16,22 +19,24 @@ internal sealed class BubbleCountWedgeWatchdog
     private readonly HashSet<IntPtr> _windows = new();
     private readonly Func<long> _clock;
     private readonly Action<IntPtr[]> _release;
+    private readonly Action _stop;
     private Timer? _timer;
     private DispatcherTimer? _heartbeat;
     private bool _armed;
     private long _lastBeat;
     private int _rung;
 
-    internal BubbleCountWedgeWatchdog(Func<long>? clock = null, Action<IntPtr[]>? release = null)
+    internal BubbleCountWedgeWatchdog(Func<long>? clock = null, Action<IntPtr[]>? release = null, Action? stop = null)
     {
         _clock = clock ?? (() => Environment.TickCount64);
-        _release = release ?? ReleaseX11;
+        _release = release ?? Release;
+        _stop = stop ?? BubbleCountWindow.StopForWedge;
     }
 
     internal void Arm(bool startTimers = true)
     {
         Disarm();
-        lock (_gate) { _armed = true; _lastBeat = _clock(); _rung = 1; }
+        lock (_gate) { _armed = true; _lastBeat = _clock(); _rung = 0; }
         if (!startTimers) return;
         _heartbeat = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _heartbeat.Tick += (_, _) => Beat();
@@ -49,7 +54,13 @@ internal sealed class BubbleCountWedgeWatchdog
         lock (_gate)
         {
             if (!_armed) return;
-            if (VideoWedgeLadder.NextRung(_clock() - _lastBeat, _rung, true, false) == VideoWedgeLadder.WedgeAction.EscapeHatch)
+            var step = VideoWedgeLadder.NextRung(_clock() - _lastBeat, _rung, true, false);
+            if (step == VideoWedgeLadder.WedgeAction.StopPlayers)
+            {
+                _rung = 1;
+                try { _stop(); } catch (Exception ex) { Serilog.Log.Debug(ex, "Bubble count wedge stop failed"); }
+            }
+            else if (step == VideoWedgeLadder.WedgeAction.EscapeHatch)
             {
                 _rung = 3;
                 ids = new IntPtr[_windows.Count];
@@ -65,15 +76,54 @@ internal sealed class BubbleCountWedgeWatchdog
         _heartbeat?.Stop(); _heartbeat = null;
     }
 
+    internal static bool SupportsHandle(IPlatformHandle? handle) =>
+        X11Overlay.BackendOf(handle) is OverlayBackend.X11 or OverlayBackend.Win32;
+
+    internal bool RegisterHandle(IPlatformHandle? handle)
+    {
+        if (!SupportsHandle(handle)) return false;
+        // Install the existing process-wide X error handler before stale XIDs can be encountered.
+        if (X11Overlay.BackendOf(handle) == OverlayBackend.X11) _ = X11Overlay.IsAvailable;
+        Register(handle!.Handle);
+        return true;
+    }
+
     internal void Register(Window window)
     {
         var handle = window.TryGetPlatformHandle();
-        if (X11Overlay.BackendOf(handle) != OverlayBackend.X11) return;
-        // Install the existing process-wide X error handler before stale XIDs can be encountered.
-        _ = X11Overlay.IsAvailable;
+        if (!RegisterHandle(handle)) return;
         var id = handle!.Handle;
-        Register(id);
         window.Closed += (_, _) => Unregister(id);
+    }
+
+    [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr window, IntPtr after, int x, int y, int width, int height, uint flags);
+    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr window, int command);
+
+    private static void Release(IntPtr[] ids) =>
+        Release(ids, OperatingSystem.IsWindows(), ReleaseWindowsAsync, ReleaseX11);
+
+    internal static void Release(IntPtr[] ids, bool windows, Action<IntPtr[]> releaseWindows, Action<IntPtr[]> releaseX11)
+    {
+        if (windows) releaseWindows(ids); else releaseX11(ids);
+    }
+
+    // A blocked window cannot hold up the timer or another window's release.
+    private static void ReleaseWindowsAsync(IntPtr[] ids)
+    {
+        foreach (var id in ids)
+            _ = Task.Run(() => ReleaseWindows(new[] { id },
+                (window, after, flags) => SetWindowPos(window, after, 0, 0, 0, 0, flags),
+                (window, command) => ShowWindow(window, command)));
+    }
+
+    internal static void ReleaseWindows(IntPtr[] ids, Action<IntPtr, IntPtr, uint> removeTopmost, Action<IntPtr, int> hide)
+    {
+        const uint flags = 0x4000 | 0x10 | 0x2 | 0x1; // async, no activate, no move, no size
+        foreach (var id in ids)
+        {
+            try { removeTopmost(id, new IntPtr(-2), flags); hide(id, 0); }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "Bubble count window release failed"); }
+        }
     }
 
     private const string X11 = "libX11.so.6";
