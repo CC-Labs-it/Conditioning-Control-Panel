@@ -135,20 +135,42 @@ public class HomeBrowserEnhanceTests
     public void EnhancementCleanupStopsPlayingAudio()
     {
         var previous = CoreAudio.PlayStoppableProvider;
+        var master = CoreSettings.Current.MasterVolume;
         var path = Path.GetTempFileName();
         var stops = 0;
+        var gains = new List<float>();
         try
         {
-            CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => () => stops++;
+            CoreSettings.Current.MasterVolume = 40;
+            CoreAudio.PlayStoppableProvider = (_, gain, _, _, _) => { gains.Add(gain); return () => stops++; };
             using var source = new WebHostVideoTimeSource(new WebHost());
             var dispatcher = new BrowserEnhancementDispatcher();
-            dispatcher.DispatchAsync(new PlayAudioAction { Path = path, Volume = 50 },
-                new EnhancementDispatchContext(new Enhancement(), source, 0, null)).GetAwaiter().GetResult();
+            var ctx = new EnhancementDispatchContext(new Enhancement(), source, 0, null);
+            dispatcher.DispatchAsync(new PlayAudioAction { Path = path, Volume = 50 }, ctx).GetAwaiter().GetResult();
+            dispatcher.DispatchAsync(new PlayAudioAction { Path = path, Volume = 50 }, ctx).GetAwaiter().GetResult();
+            Assert.Equal(1, stops); // the second clip replaces the first (WPF AudioService.cs:833)
+            Assert.Equal(new[] { CoreAudio.SoundGain(50, 40), CoreAudio.SoundGain(50, 40) }, gains);
             Assert.IsAssignableFrom<IEnhancementRunCleanup>(dispatcher).ResetOverlayBands();
-            Assert.Equal(1, stops);
+            Assert.Equal(2, stops);
         }
-        finally { CoreAudio.PlayStoppableProvider = previous; File.Delete(path); }
+        finally { CoreAudio.PlayStoppableProvider = previous; CoreSettings.Current.MasterVolume = master; File.Delete(path); }
     }
+
+    [Fact]
+    public void BubbleBurstReleasesTheFieldItStartedOnStop() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var (start, stop, calls) = (ConditioningControlPanel.Services.CoreBubbles.StartAction, ConditioningControlPanel.Services.CoreBubbles.StopAction, new List<string>());
+        using var cts = new System.Threading.CancellationTokenSource(); using var source = new WebHostVideoTimeSource(new WebHost());
+        try
+        {
+            (ConditioningControlPanel.Services.CoreBubbles.StartAction, ConditioningControlPanel.Services.CoreBubbles.StopAction) = (() => calls.Add("start"), () => calls.Add("stop"));
+            var burst = new TriggerEffectAction { EffectType = EffectTypes.Bubble, DurationMs = 60_000 };
+            new BrowserEnhancementDispatcher().DispatchAsync(burst, new EnhancementDispatchContext(new Enhancement(), source, 0, null), cts.Token).GetAwaiter().GetResult();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); cts.Cancel(); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { "start", "stop" }, calls); // WPF RealActionDispatcher.cs:387-391: Stop releases the burst early
+        }
+        finally { (ConditioningControlPanel.Services.CoreBubbles.StartAction, ConditioningControlPanel.Services.CoreBubbles.StopAction) = (start, stop); }
+    });
 
     [Fact]
     public void AudioDuckingIsReleasedOnCompletionAndCleanup()
