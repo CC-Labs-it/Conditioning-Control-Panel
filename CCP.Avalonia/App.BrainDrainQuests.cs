@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 
 namespace ConditioningControlPanel.Avalonia;
 
@@ -37,6 +38,8 @@ public partial class App
         BrainDrainCredit.Sample(false, TimeSpan.Zero);
     }
 
+    internal static void ResetBrainDrainQuestSample() => BrainDrainCredit.Sample(false, TimeSpan.Zero);
+
     private static void OnBrainDrainQuestTick(object? sender, EventArgs e) =>
         SampleBrainDrainQuestMinutes(Stopwatch.GetElapsedTime(0));
 
@@ -49,7 +52,7 @@ public partial class App
             _brainDrainOverlayStopGeneration = stopGeneration;
         }
         // WPF SessionEngine.cs:530,582,1628; RemoteControlService.cs:587,1204.
-        var overlayRunning = !RemoteCommands.OverlaysStopped &&
+        var overlayRunning = PinkFilterOverlay.PulseHold || !RemoteCommands.OverlaysStopped &&
             (RemoteCommands.OverlayRunning || (Sessions?.IsPaused != true &&
              (CoreEngine.IsVisualRun || Sessions?.IsRunning == true)));
         var minutes = BrainDrainCredit.Sample(overlayRunning && CoreSettings.Current.BrainDrainEnabled, now);

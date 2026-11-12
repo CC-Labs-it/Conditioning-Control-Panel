@@ -5,6 +5,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
 using Xunit;
 using App = ConditioningControlPanel.Avalonia.App;
@@ -55,6 +56,46 @@ public class BrainDrainQuestMinutesTests
         finally
         {
             CoreEngine.Stop();
+            App.StopBrainDrainQuestMinutes();
+            CoreEngine.StartBrainDrain = oldStart;
+            CoreEngine.StopBrainDrain = oldStop;
+            CoreSettings.ServiceProvider = oldSettings;
+            App.Quests = oldQuests;
+            try { Directory.Delete(dir, true); } catch { }
+        }
+    });
+    [Fact]
+    public void IdlePulsesCreditOnlyTheirOwnSampledTime() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldQuests = App.Quests;
+        var oldStart = CoreEngine.StartBrainDrain;
+        var oldStop = CoreEngine.StopBrainDrain;
+        var dir = Directory.CreateTempSubdirectory("ccp-brain-pulse-").FullName;
+        using var quests = new QuestService(null, dir);
+        var quest = new ActiveQuest("soft_static_d");
+        quests.Progress.DailyQuests = new List<ActiveQuest> { quest };
+        var settings = new SettingsService();
+        settings.Current.BrainDrainEnabled = true;
+        CoreSettings.ServiceProvider = () => settings;
+        App.Quests = quests;
+        try
+        {
+            CoreEngine.Stop();
+            App.WireBrainDrainQuestMinutes();
+            PinkFilterOverlay.PulseHold = true;
+            App.SampleBrainDrainQuestMinutes(TimeSpan.Zero);
+            App.SampleBrainDrainQuestMinutes(TimeSpan.FromSeconds(30));
+            PinkFilterOverlay.PulseHold = false;
+            PinkFilterOverlay.PulseHold = true; // No timer tick between pulses.
+            App.SampleBrainDrainQuestMinutes(TimeSpan.FromSeconds(90));
+            Assert.Equal(0, quest.CurrentProgress);
+            App.SampleBrainDrainQuestMinutes(TimeSpan.FromSeconds(120));
+            Assert.Equal(1, quest.CurrentProgress);
+        }
+        finally
+        {
+            PinkFilterOverlay.PulseHold = false;
             App.StopBrainDrainQuestMinutes();
             CoreEngine.StartBrainDrain = oldStart;
             CoreEngine.StopBrainDrain = oldStop;
