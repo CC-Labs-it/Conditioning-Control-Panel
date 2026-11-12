@@ -18,6 +18,7 @@ internal sealed class ScrollHijackEffect : PossessionEffectBase
     private ScrollViewer? _viewer;
     private IFrameSource? _frames;
     private TimeSpan? _start;
+    private TaskCompletionSource? _completion;
     private double _home, _lastSet;
     public override string Id => "scrollhijack";
     public override PossessionRung MinRung => PossessionRung.Melt;
@@ -37,7 +38,7 @@ internal sealed class ScrollHijackEffect : PossessionEffectBase
         return ctx.Host is IAvaloniaPossessionHost && sv != null && sv.Extent.Height - sv.Viewport.Height - sv.Offset.Y >= 40;
     }
 
-    protected override Task ApplyCoreAsync(PossessionContext ctx, PossessionTarget? target, CancellationToken ct)
+    protected override async Task ApplyCoreAsync(PossessionContext ctx, PossessionTarget? target, CancellationToken ct)
     {
         _viewer = Resolve(target?.Visual);
         _frames = (ctx.Host as IAvaloniaPossessionHost)?.PossessionFrames;
@@ -45,9 +46,16 @@ internal sealed class ScrollHijackEffect : PossessionEffectBase
         {
             _home = _lastSet = _viewer.Offset.Y;
             _start = null;
+            _completion = new TaskCompletionSource();
             _frames.Subscribe(Frame);
+            await Task.WhenAny(_completion.Task, Task.Delay(1200, ct)).ConfigureAwait(true);
+            ct.ThrowIfCancellationRequested();
+            _frames?.Unsubscribe(Frame);
+            _frames = null;
+            AdoptUserScroll();
+            SetOffset(_home);
+            _completion = null;
         }
-        return Task.CompletedTask;
     }
 
     private void AdoptUserScroll()
@@ -67,7 +75,7 @@ internal sealed class ScrollHijackEffect : PossessionEffectBase
         double leg = t <= 1 ? t : 2 - t;
         double eased = leg < 0.5 ? 4 * leg * leg * leg : 1 - Math.Pow(-2 * leg + 2, 3) / 2;
         SetOffset(_home + 40 * eased);
-        if (ms >= 1200) _frames?.Unsubscribe(Frame);
+        if (ms >= 1200) { _frames?.Unsubscribe(Frame); _completion?.TrySetResult(); }
     }
 
     private void SetOffset(double y)
@@ -82,6 +90,7 @@ internal sealed class ScrollHijackEffect : PossessionEffectBase
     {
         _frames?.Unsubscribe(Frame);
         _frames = null;
+        _completion = null;
         if (_viewer != null) { AdoptUserScroll(); SetOffset(_home); }
         _viewer = null;
         return Task.CompletedTask;

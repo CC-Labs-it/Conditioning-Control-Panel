@@ -22,6 +22,7 @@ internal sealed class SliderCreepEffect : PossessionEffectBase
     private Border? _ghost;
     private IFrameSource? _frames;
     private TimeSpan? _start;
+    private TaskCompletionSource? _completion;
     private bool _vertical;
     private double _distance, _slow;
 
@@ -55,11 +56,11 @@ internal sealed class SliderCreepEffect : PossessionEffectBase
         return recent == null || ReferenceEquals(recent, slider);
     }
 
-    protected override Task ApplyCoreAsync(PossessionContext ctx, PossessionTarget? target, CancellationToken ct)
+    protected override async Task ApplyCoreAsync(PossessionContext ctx, PossessionTarget? target, CancellationToken ct)
     {
         if (ctx.Host is not IAvaloniaPossessionHost host || host.GhostLayer is not { } layer ||
             SliderOf(target?.Visual) is not { } slider || host.BoundsOnGhostLayer(slider) is not { } bounds ||
-            slider.Maximum <= slider.Minimum) return Task.CompletedTask;
+            slider.Maximum <= slider.Minimum) return;
 
         _vertical = slider.Orientation == Orientation.Vertical;
         var thumb = slider.GetVisualDescendants().OfType<Thumb>().FirstOrDefault();
@@ -75,6 +76,7 @@ internal sealed class SliderCreepEffect : PossessionEffectBase
             Width = Math.Max(6, rect.Width), Height = Math.Max(6, rect.Height),
             CornerRadius = new CornerRadius(Math.Min(6, Math.Min(rect.Width, rect.Height) / 2)),
             Background = new SolidColorBrush(Color.Parse("#FF8A5C")), Opacity = 0,
+            BoxShadow = new BoxShadows(new BoxShadow { Blur = 14, Color = Color.Parse("#D9FF8A5C") }),
             IsHitTestVisible = false, RenderTransform = new TranslateTransform()
         };
         Canvas.SetLeft(_ghost, rect.X);
@@ -83,8 +85,12 @@ internal sealed class SliderCreepEffect : PossessionEffectBase
         layer.Children.Add(_ghost);
         _frames = host.PossessionFrames;
         _start = null;
+        _completion = new TaskCompletionSource();
         _frames.Subscribe(Frame);
-        return Task.CompletedTask;
+        await Task.WhenAny(_completion.Task, Task.Delay(TimeSpan.FromMilliseconds(1950 * _slow + 80), ct)).ConfigureAwait(true);
+        ct.ThrowIfCancellationRequested();
+        RemoveGhost();
+        _completion = null;
     }
 
     private static Rect EstimateThumb(Slider slider, Rect bounds, bool vertical)
@@ -110,7 +116,7 @@ internal sealed class SliderCreepEffect : PossessionEffectBase
         var translate = (TranslateTransform)_ghost.RenderTransform!;
         if (_vertical) translate.Y = _distance * ease; else translate.X = -_distance * ease;
         _ghost.Opacity = 0.6 * Math.Min(1, ms / 220) * (1 - Math.Clamp((ms - 1540) / 450, 0, 1));
-        if (ms >= 1990) RemoveGhost();
+        if (ms >= 1950 + 80 / _slow) { RemoveGhost(); _completion?.TrySetResult(); }
     }
 
     private void RemoveGhost()
@@ -125,6 +131,7 @@ internal sealed class SliderCreepEffect : PossessionEffectBase
     protected override Task UndoCoreAsync(TimeSpan duration)
     {
         RemoveGhost();
+        _completion = null;
         return Task.CompletedTask;
     }
 }
