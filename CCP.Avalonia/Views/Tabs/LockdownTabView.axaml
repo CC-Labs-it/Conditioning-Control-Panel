@@ -494,6 +494,7 @@
                                                  lettering, so the words stay a loc key. The face plate uses that same shipped art. -->
                                             <Button x:Name="BtnEmergencyExit"
                                                     Cursor="Hand" Background="Transparent" BorderThickness="0"
+                                                    RenderTransform="none"
                                                     Padding="0" Margin="0,16,0,2" MinHeight="150"
                                                     HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
                                                     ToolTip.Tip="{loc:Str lockdown_ee_tooltip}"
