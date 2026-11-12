@@ -268,10 +268,10 @@ public class AwarenessReactionParseTests
 
     private static AwarenessReactionService Service(
         FakeTransport? transport, bool machineLocal = false, bool enabled = true)
-        => new(() => transport,
-               new AwarenessPromptBuilder(() => "builtin-bambisleep", AwarenessAngleCards.Embedded, () => null, 7),
-               () => machineLocal,
-               () => enabled);
+        => new(transport: () => transport,
+               isEnabled: () => enabled,
+               builder: new AwarenessPromptBuilder(() => "builtin-bambisleep", AwarenessAngleCards.Embedded, () => null, 7),
+               isMachineLocal: () => machineLocal);
 
     private sealed class FakeTransport : IAiService
     {
