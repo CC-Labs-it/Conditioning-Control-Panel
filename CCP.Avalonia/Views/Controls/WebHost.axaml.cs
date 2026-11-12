@@ -107,7 +107,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal void OnNavigationCompleted(Uri? url, bool success = true)
         {
             if (url is null || _panicBlank) return;
-            BrowserZoomNavigationCompleted();
             CurrentUrl = url;
             if (InjectCarrier) _ = InvokeScriptAsync(CarrierShim);
             NavigationCompleted?.Invoke(url);
@@ -360,6 +359,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     // gate has to be live for the FIRST navigation too, and a caller that assigns
                     // the predicate and the Source in that order would otherwise race the engine.
                     _web.EnvironmentRequested += (_, e) => EnvironmentRequested?.Invoke(e);
+                    _web.AdapterCreated += (_, e) =>
+                    {
+                        if (!global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+                        { global::Avalonia.Threading.Dispatcher.UIThread.Post(TryBrowserZoomAdapterReady); return; }
+                        try
+                        {
+                            var handle = e.TryGetPlatformHandle();
+                            if (Platform.WebViewZoom.IsReady(handle)) BrowserZoomAdapterReady(handle);
+                            else TryBrowserZoomAdapterReady();
+                        }
+                        catch (Exception ex) { Log.Debug(ex, "WebHost: zoom adapter readiness failed"); TryBrowserZoomAdapterReady(); }
+                    };
                     _web.AdapterDestroyed += (_, _) => { BrowserZoomAdapterDestroyed(); try { _failureWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Trailer failure cleanup failed"); } finally { _failureWatch = null; }
                         try { _fullscreenWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Fullscreen signal cleanup failed"); } finally { _fullscreenWatch = null; } };
                     _web.NavigationStarted += OnNavigationStarted;
@@ -420,6 +431,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // Panic teardown must pass a caller's page allowlist, including on reattachment.
             // Late redirects from the stopped document must not replace the blank page.
             if (_panicBlank) { e.Cancel = target != PanicBlank; return; }
+            TryBrowserZoomAdapterReady();
             _scrolllerPanicTarget = target;
             if (RefusesScrolller(target)) { e.Cancel = true; return; }
             // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
@@ -508,6 +520,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal void OnScrolllerGate(int engine, bool gated)
         {
             if (engine != _scrolllerEngine) return;
+            TryBrowserZoomAdapterReady();
             _scrolllerGate = gated;
             var src = Source;
             if (ReloadAfterGate(_web?.Source, src, _loadedOnThisEngine) && ConditioningControlPanel.Services.SandboxNet.Allows(src))

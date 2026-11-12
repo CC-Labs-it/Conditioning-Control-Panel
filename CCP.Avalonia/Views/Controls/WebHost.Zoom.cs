@@ -1,5 +1,6 @@
 using System;
 using System.Threading;
+using Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Platform;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls;
@@ -9,18 +10,26 @@ public partial class WebHost
     private CancellationTokenSource? _zoomPending;
     private double? _zoom;
     private bool _zoomEnabled;
-    private bool _zoomNeedsCompletion;
+    private bool _zoomAdapterReady;
     private int _zoomGeneration;
     internal Action<double, CancellationToken>? ZoomInvoker { get; set; }
     internal double? BrowserZoom => _zoom;
     internal bool BrowserZoomReady { get; private set; }
 
-    private void BrowserZoomNavigationCompleted()
+    internal void BrowserZoomAdapterReady(IPlatformHandle? handle = null)
     {
-        if (_zoom != null) BrowserZoomReady = true;
-        if (!_zoomEnabled || !_zoomNeedsCompletion) return;
-        _zoomNeedsCompletion = false;
-        ApplyBrowserZoom();
+        if (_zoomAdapterReady) return;
+        _zoomAdapterReady = true;
+        // The adapter may exist before the first user request.
+        if (_zoom == null) return;
+        BrowserZoomReady = true;
+        if (_zoomEnabled) ApplyBrowserZoom(handle);
+    }
+
+    private void TryBrowserZoomAdapterReady()
+    {
+        try { var handle = _web?.TryGetPlatformHandle(); if (WebViewZoom.IsReady(handle)) BrowserZoomAdapterReady(handle); }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "WebHost: zoom readiness failed"); }
     }
 
     internal void SetBrowserZoom(double zoom)
@@ -28,15 +37,17 @@ public partial class WebHost
         _zoomGeneration++;
         _zoom = zoom;
         _zoomEnabled = true;
-        _zoomNeedsCompletion = true;
-        ApplyBrowserZoom();
+        if (_zoomAdapterReady)
+        {
+            ApplyBrowserZoom();
+            BrowserZoomReady = _zoomAdapterReady;
+        }
     }
 
     internal void CancelBrowserZoom()
     {
         _zoomGeneration++;
         _zoomEnabled = false;
-        _zoomNeedsCompletion = false;
         CancelPendingBrowserZoom();
     }
 
@@ -51,7 +62,8 @@ public partial class WebHost
             });
             return;
         }
-        if (_zoomEnabled) _zoomNeedsCompletion = true;
+        _zoomAdapterReady = false;
+        BrowserZoomReady = false;
         CancelPendingBrowserZoom();
     }
 
@@ -62,16 +74,31 @@ public partial class WebHost
         _zoomPending = null;
     }
 
-    private void ApplyBrowserZoom()
+    private void ApplyBrowserZoom(IPlatformHandle? handle = null)
     {
         CancelPendingBrowserZoom();
         if (!_zoomEnabled || _zoom is not { } zoom) return;
-        _zoomPending = new CancellationTokenSource();
-        if (ZoomInvoker is { } invoke) invoke(zoom, _zoomPending.Token);
-        else
+        try
         {
-            try { WebViewZoom.Set(_web?.TryGetPlatformHandle(), zoom, _zoomPending.Token); }
-            catch (Exception ex) { Serilog.Log.Debug(ex, "WebHost: zoom failed"); }
+            if (ZoomInvoker is null && _web is not null)
+            {
+                handle ??= _web.TryGetPlatformHandle();
+                if (!WebViewZoom.IsReady(handle))
+                {
+                    _zoomAdapterReady = false;
+                    BrowserZoomReady = false;
+                    return;
+                }
+            }
+            _zoomPending = new CancellationTokenSource();
+            if (ZoomInvoker is { } invoke) invoke(zoom, _zoomPending.Token);
+            else WebViewZoom.Set(handle, zoom, _zoomPending.Token);
+        }
+        catch (Exception ex)
+        {
+            _zoomAdapterReady = false;
+            BrowserZoomReady = false;
+            Serilog.Log.Debug(ex, "WebHost: zoom failed");
         }
     }
 }

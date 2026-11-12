@@ -51,6 +51,14 @@ internal static class WebViewZoom
         return null;
     }
 
+    internal static bool IsReady(IPlatformHandle? handle) => handle switch
+    {
+        IWindowsWebView2PlatformHandle win => win.CoreWebView2Controller != IntPtr.Zero,
+        IGtkWebViewPlatformHandle gtk => gtk.WebKitWebView != IntPtr.Zero,
+        ILinuxWpePlatformHandle wpe => wpe.WebKitWebView != IntPtr.Zero,
+        _ => false
+    };
+
     internal static void Set(IPlatformHandle? handle, double zoom, CancellationToken cancellation)
     {
         try

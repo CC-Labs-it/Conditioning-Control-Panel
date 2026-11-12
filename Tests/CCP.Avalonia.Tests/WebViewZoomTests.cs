@@ -29,6 +29,8 @@ public class WebViewZoomTests
     {
         IPlatformHandle handle = wpe ? new WpeHandle() : new GtkHandle();
         Assert.Equal((new IntPtr(wpe ? 19 : 17), wpe), WebViewZoom.LinuxView(handle));
+        Assert.True(WebViewZoom.IsReady(handle));
+        Assert.False(WebViewZoom.IsReady(null));
     }
 
     [Fact]
