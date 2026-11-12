@@ -161,6 +161,7 @@ internal static class AccountSeed
             // A minutes lift rebaselines the day log once, through ProfileAdopt.ConditioningMinutesLifted
             // (RebaselineDayLogAfterCloudMerge), for the profile read and the sync reply alike.
             Prizes = PrizeOwnership.Feed,
+            ReceiptReceived = PrizeOwnership.SyncReceipt,
             Countdown = App.DescentCountdown,
             DescentReader = App.Descent,
         };

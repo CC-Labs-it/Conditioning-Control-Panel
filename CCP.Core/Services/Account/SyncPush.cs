@@ -136,6 +136,8 @@ namespace ConditioningControlPanel.Services
         }
 
         public PrizesFeed? Prizes { get; set; }
+        /// <summary>Head notification after a successful authenticated receipt has queued its prize snapshot.</summary>
+        public Action<string>? ReceiptReceived { get; set; }
         public bool Loaded { get; private set; }
         /// <summary>The fuse fed by each successful response's <c>descent_countdown</c> block.</summary>
         public Descent.DescentCountdownService? Countdown { get; set; }
@@ -327,7 +329,12 @@ namespace ConditioningControlPanel.Services
                 {
                     var reply = JObject.Parse(json);
                     // WPF ProfileSyncService.cs:1874: ownership precedes other response flags.
-                    Prizes?.Apply(id, id, reply["prizes"]?.ToObject<PrizesBlock>(), "V2 sync");
+                    try
+                    {
+                        Prizes?.Apply(id, id, reply["prizes"]?.ToObject<PrizesBlock>(), "V2 sync");
+                        ReceiptReceived?.Invoke(id);
+                    }
+                    catch (Exception ex) { Log.Debug("V2 Sync: prize receipt failed: {Error}", ex.Message); }
                     if (AdoptFromResponse(s, reply)) _adopted = true;
                     ClaimWebXp(s, reply);
                     // Then the level/XP adopt (held while a migration is pending) and WPF's migration handshake
