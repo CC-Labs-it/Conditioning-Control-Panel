@@ -1,5 +1,5 @@
 // WPF Services/Possession/Effects/DodgeEffect.cs:132-160, 195-245, 401-452.
-// Geometry only. The pointer-driven effect and its lifetime are not wired yet.
+// Shared geometry for the pointer-driven Dodge effect.
 using System;
 using Avalonia;
 

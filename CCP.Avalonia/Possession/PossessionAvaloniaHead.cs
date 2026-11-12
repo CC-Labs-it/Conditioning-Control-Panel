@@ -42,6 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         PossessionRuntime PossessionEffectRuntime { get; }
         /// <summary>Last pointer position in ghost-layer coordinates; (0,0) until the pointer has moved.</summary>
         Point PointerPosition { get; }
+        PossessionPointer PossessionPointer { get; }
         /// <summary>A control's bounds in ghost-layer coordinates, render transform included; null when it has none.</summary>
         Rect? BoundsOnGhostLayer(Control element);
     }
@@ -151,6 +152,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             list.Add(new RetitleEffect());
             list.Add(new DokiDialogEffect());
             list.Add(new DeleteDialogEffect());
+            list.Add(new DodgeEffect());
             return list;
         }
 

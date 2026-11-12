@@ -142,6 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _possessionRuntime ??= new PossessionRuntime(((IAvaloniaPossessionHost)this).PossessionFrames);
 
         Point IAvaloniaPossessionHost.PointerPosition => _possessionPointer.Position;
+        PossessionPointer IAvaloniaPossessionHost.PossessionPointer => _possessionPointer;
 
         Rect? IAvaloniaPossessionHost.BoundsOnGhostLayer(Control element)
         {

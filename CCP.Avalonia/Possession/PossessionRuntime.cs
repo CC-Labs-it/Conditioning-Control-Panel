@@ -21,7 +21,7 @@
 //     lifecycle (rungs from the timer, cadence NextDelay/FirstDelay, intensity/photosafe settings,
 //     scenes), EmberAttribution charge + Ghost, PossessionEvents tripwires, Warden,
 //     PossessionAudio, PossessionRemember, bark naming of IsBig effects.
-//   possession-head-c: the remaining effects - crack, delete dialog, dissolve, dodge, doki dialog,
+//   possession-head-c: the remaining effects - crack, delete dialog, dissolve, doki dialog,
 //     drop, fall, ghost cursor, glitch portrait, melt, misroute, relabel, reorder doors,
 //     retitle, room warp, scroll hijack, slider creep, steal card, swap, toast, toggle lie,
 //     xp drain (opacity effects clamp to [0,1], P82).
