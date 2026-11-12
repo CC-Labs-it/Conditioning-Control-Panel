@@ -2,9 +2,7 @@ using System;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
-
 namespace ConditioningControlPanel.Tests;
-
 public class SeasonActivityTests
 {
     [Fact]
@@ -18,7 +16,6 @@ public class SeasonActivityTests
         Assert.Equal("2026-07", s.SeasonStatsSeason);
         Assert.Equal(new[] { "2026-07-03", "2026-07-04" }, s.SeasonActiveDays);
     }
-
     [Fact]
     public void PeakSurvivesReset()
     {

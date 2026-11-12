@@ -7,9 +7,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
 using Newtonsoft.Json.Linq;
 using Xunit;
-
 namespace CCP.Core.Tests;
-
 [Collection(SessionStatics.Name)]
 public class SeasonActivitySyncTests
 {
@@ -24,7 +22,6 @@ public class SeasonActivitySyncTests
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"user\":{\"stats\":{\"consecutive_days\":7,\"last_streak_date\":\"2026-07-07T23:00:00-07:00\"}}}") };
         }
     }
-
     [Fact]
     public async Task SyncCarriesOnlyTheKnownStreakPairAndDeliversCloudReply()
     {

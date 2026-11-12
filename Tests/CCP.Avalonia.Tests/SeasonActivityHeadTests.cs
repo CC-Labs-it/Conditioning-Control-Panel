@@ -9,9 +9,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel;
 using Xunit;
 using App = ConditioningControlPanel.Avalonia.App;
-
 namespace CCP.Avalonia.Tests;
-
 public class SeasonActivityHeadTests
 {
     [Fact]
@@ -28,7 +26,6 @@ public class SeasonActivityHeadTests
         Assert.Equal(original.Keys.OrderBy(x => x), Directory.GetFiles(root, "settings*").Select(Path.GetFileName).OrderBy(x => x));
         foreach (var item in original) Assert.Equal(item.Value, File.ReadAllBytes(Path.Combine(root, item.Key!)));
     });
-
     private static bool ActivitySaved(string path, string day)
     {
         try { return (JObject.Parse(File.ReadAllText(path))["SeasonActiveDays"] as JArray)?.Values<string>().Contains(day) == true; }

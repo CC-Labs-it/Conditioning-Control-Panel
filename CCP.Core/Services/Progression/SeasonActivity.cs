@@ -1,9 +1,7 @@
 using System;
 using System.Globalization;
 using ConditioningControlPanel.Models;
-
 namespace ConditioningControlPanel.Services;
-
 /// <summary>WPF SeasonRecapService.cs:146-165.</summary>
 public static class SeasonActivity
 {
@@ -17,7 +15,6 @@ public static class SeasonActivity
         s.SeasonActiveDays.Add(today);
         return true;
     }
-
     public static void TrackStreakPeak(AppSettings s, int days)
     {
         if (string.IsNullOrEmpty(s.SeasonStatsSeason))

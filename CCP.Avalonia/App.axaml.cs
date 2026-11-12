@@ -101,7 +101,7 @@ namespace ConditioningControlPanel.Avalonia
         {
             var progress = engine.Progress;
             var wasLive = ReferenceEquals(Achievements, engine);
-            DateTime? lastUtcDay = null, pendingSince = null;
+            DateTime? pendingSince = null;
             var bonusReady = false;
             Action<string, Newtonsoft.Json.Linq.JObject?>? receive = null;
             bool Current() => ReferenceEquals(engine.Progress, progress)
@@ -114,7 +114,7 @@ namespace ConditioningControlPanel.Avalonia
                 var days = progress.ConsecutiveDays;
                 var xp = days <= 3 ? 50 : days <= 6 ? 100 : days <= 13 ? 150 : days <= 29 ? 200 : 300;
                 CoreProgression.AddXP(xp, "Other");
-                if (bonusPopup != null) bonusPopup(days, xp); else Dispatcher.UIThread.Post(() => { try { new Views.Windows.AchievementPopup(Loc.GetF("skill_streak_bonus_name", days), Loc.GetF("skill_streak_bonus_flavor", xp, days), "skills/milestone_rewards.png", "🎁", Loc.Get("skill_daily_streak_bonus_header")).Show(); } catch (Exception ex) { Serilog.Log.Warning(ex, "Daily streak popup failed"); } }, DispatcherPriority.ApplicationIdle);
+                if (bonusPopup != null) bonusPopup(days, xp); else Dispatcher.UIThread.Post(() => { try { new Views.Windows.AchievementPopup(Loc.GetF("skill_streak_bonus_name", days), Loc.GetF("skill_streak_bonus_flavor", xp, days), "skills/milestone_rewards.png", Controls.IconMap.StreakBonusKey, Loc.Get("skill_daily_streak_bonus_header")).Show(); } catch (Exception ex) { Serilog.Log.Warning(ex, "Daily streak popup failed"); } }, DispatcherPriority.ApplicationIdle);
                 engine.Save();
             }
             void Update(DateTime now, bool resolve = false, bool startup = false)
@@ -151,7 +151,6 @@ namespace ConditioningControlPanel.Avalonia
                 {
                     progress = engine.Progress;
                     pendingSince = null;
-                    lastUtcDay = null;
                     if (SeasonActivity.MarkActiveToday(settings.Current, now)) settings.Save();
                     Update(now, startup: true);
                     if (sync?.LastLoginStreakReply is { } reply) receive?.Invoke(reply.Account, reply.Stats);
@@ -165,11 +164,9 @@ namespace ConditioningControlPanel.Avalonia
                 if (AchievementProgress.ShouldBankDayRollover(progress.LastLaunchDate, now.ToLocalTime().Date)) Update(now);
                 if (progress.PendingStreakBreak && pendingSince is { } since && now - since >= TimeSpan.FromSeconds(120)) Update(now, resolve: true);
                 AwardBonus();
-                lastUtcDay = now.Date;
             }
             var launchNow = clock().ToUniversalTime();
             if (SeasonActivity.MarkActiveToday(settings.Current, launchNow)) settings.Save();
-            lastUtcDay = launchNow.Date;
             Update(launchNow, startup: true);
             CheckDay();
             if (sync != null)
@@ -1193,9 +1190,9 @@ namespace ConditioningControlPanel.Avalonia
                 };
                 SeedLevelAchievements(Achievements);
                 StartQuests();
-                checkSeasonActivity(); // WPF App.xaml.cs:2924 awards the startup bonus after services exist.
                 Platform.CompanionHead.Start();   // WPF App.Companion: switch seams, companion XP, drain, level-up
                 Platform.BarkHead.Start();        // WPF App.Bark (App.xaml.cs:313/336/604/2826): rules, gate, sources
+                checkSeasonActivity(); // WPF App.xaml.cs:2924 awards the startup bonus after services exist.
                 // WPF App.xaml.cs:290: a game.* palette row is listed only when this head can start it.
                 SettingsPaletteIndex.GameAvailableProvider = Views.Windows.LauncherWindow.CanStartGame;
                 SettingsPaletteIndex.WallpaperDoorAvailableProvider = () => false;   // owner 2026-11-01: no door on this head

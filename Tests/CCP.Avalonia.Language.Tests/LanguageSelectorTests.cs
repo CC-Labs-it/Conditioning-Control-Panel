@@ -89,6 +89,7 @@ public sealed class LanguageSelectorTests
         var settingsPath = Path.Combine(TestProfile.DirectoryPath, "settings.json");
         var settingsBeforeStartup = SeedProfile(settingsPath);
         var settingsWriteBeforeStartup = File.GetLastWriteTimeUtc(settingsPath);
+        var achievementsBeforeStartup = File.ReadAllText(Path.Combine(TestProfile.DirectoryPath, "achievements.json"));
         var catalogue = CreateSessionCatalogue();
         try
         {
@@ -357,7 +358,8 @@ public sealed class LanguageSelectorTests
                     .GetProperty("Achievements", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null));
                 Assert.False(achievements.IsDirty);
                 Assert.Empty(achievements.Progress.UnlockedAchievements);
-                Assert.False(File.Exists(achievementsPath)); // idle startup must not create the file
+                Assert.Equal(achievementsBeforeStartup, File.ReadAllText(achievementsPath)); // idle startup must not rewrite progress
+                File.Delete(achievementsPath); // prove exit flushes even without an existing file
                 var expectedProgress = System.Text.Json.JsonSerializer.Serialize(achievements.Progress);
                 lifetime.Shutdown();
                 // WPF AchievementService.cs:947-954 always flushes on exit, even a clean idle profile.
@@ -501,6 +503,14 @@ public sealed class LanguageSelectorTests
         settings.Current.RailRecent.Add("tab.presets");
         // Opening a section page remembers its last tab (a real save, WPF SyncSectionChrome); already so.
         settings.Current.NavLastTabBySection = "{\"studio\":\"presets\"}";
+        // Returning profile already banked today: startup must not write settings or achievements again.
+        var today = DateTime.Today;
+        settings.Current.CurrentStreak = 1;
+        settings.Current.LastStreakDate = today;
+        settings.Current.SeasonPeakStreak = 1;
+        SeasonActivity.MarkActiveToday(settings.Current, DateTime.UtcNow);
+        Assert.True(new AchievementStore(Path.Combine(TestProfile.DirectoryPath, "achievements.json"))
+            .Write(new AchievementProgress { ConsecutiveDays = 1, LastLaunchDate = today }));
         settings.SaveImmediate();
         return File.ReadAllText(settingsPath);
     }

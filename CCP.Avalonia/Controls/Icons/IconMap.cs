@@ -20,6 +20,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
     {
         public const string FriendRequest = "💌"; // WPF Services/Friends/FriendsLanding.cs:320,365: Inbox row data, rendered as Mail.
         // Stable keys for the shared InboxItem string hint, resolved by IconGlyph in the flyout.
+        public const string StreakBonusKey = "streak.bonus";
         public const string InviteClaimedKey = "invite.claimed";
         public const string InviteSubscribedKey = "invite.subscribed";
 
@@ -107,7 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             M(IconKind.Star, R, Gold, "☆");
             M(IconKind.Trophy, F, Gold, "🏆");
             M(IconKind.Crown, F, Gold, "👑");
-            M(IconKind.Gift, R, null, "🎁"); M(IconKind.TicketDiagonal, R, null, "🎟", InviteClaimedKey);
+            M(IconKind.Gift, R, null, "🎁", StreakBonusKey); M(IconKind.TicketDiagonal, R, null, "🎟", InviteClaimedKey);
             M(IconKind.Sparkle, F, null, "✨", "✦", "🎉", "🔮"); // Confetti missing -> listed fallback
             M(IconKind.Sparkle, R, null, "✧", "💫");
             M(IconKind.Heart, F, Heart, "💗", "💖", "💕", "💞", "🩷", "💜", "♥", "❤", InviteSubscribedKey);
