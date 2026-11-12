@@ -124,6 +124,25 @@ public sealed class StartModsTests
         finally { manifest.TextReplacements = priorReplacements; }
     });
 
+    [Fact]
+    public void ModSwitchDropsPrewarmedArtEvenWhenThePathIsReused() => WithBrainCreatedAfterStartup((settings, brain) =>
+    {
+        var manifest = Path.GetTempFileName();
+        var request = new ConditioningControlPanel.Avalonia.Helpers.StartupArt.Request("o", "test.png", null);
+        try
+        {
+            File.WriteAllText(manifest, "[{\"K\":\"o\",\"N\":\"test.png\"}]");
+            ConditioningControlPanel.Avalonia.Helpers.StartupArt.Start(manifest, _ => "same-path", (_, _) => null)!.GetAwaiter().GetResult();
+            AvApp.Mods!.ActivateMod(BuiltInMods.SissyHypnoId);
+            Assert.False(ConditioningControlPanel.Avalonia.Helpers.StartupArt.Take(request, "same-path", out _));
+        }
+        finally
+        {
+            ConditioningControlPanel.Avalonia.Helpers.StartupArt.Finish(manifest);
+            File.Delete(manifest);
+        }
+    });
+
     private static void WithBrainCreatedAfterStartup(
         System.Action<SettingsService, ConditioningControlPanel.Services.Companion.Brain.CompanionBrain> body)
     {

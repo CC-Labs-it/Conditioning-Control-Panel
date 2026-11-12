@@ -15,6 +15,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Launcher;
 using ConditioningControlPanel.Services.Race;
@@ -1172,6 +1173,35 @@ public sealed partial class GameWindowTests
     /// <summary>WPF LauncherCatalogue (Basic door, DemandPremium refusal), OnPageReady :271 (init with motionLevel
     /// and runSetup, then the manifest with videos), OnRequestRun :523, OnRunEnded :583 (one payout per descent)
     /// and DisposeAll :1002 (a window closed mid-descent banks its last snapshot, paid by the host's clock).</summary>
+    [Fact]
+    public void Dtrh_ModSwitchRequestsEndWithoutClosingOtherGames() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        using var snapshot = new CoreModsSnapshot();
+        var oldSettings = CoreSettings.ServiceProvider;
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.App.StartMods();
+            var w = GameWindow.Launch("dtrh")!;
+            var other = GameWindow.Launch("breakoutdemo")!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            sent.Clear();
+            var target = global::ConditioningControlPanel.Avalonia.App.Mods!.ActiveModId == BuiltInMods.SissyHypnoId
+                ? BuiltInMods.BambiSleepId : BuiltInMods.SissyHypnoId;
+            global::ConditioningControlPanel.Avalonia.App.Mods.ActivateMod(target);
+            Assert.Contains(sent, x => (string?)x["type"] == "end-run");
+            Assert.True(other.IsVisible);
+            w.HandleMessage("{\"type\":\"exit-done\"}");
+            Assert.False(w.IsVisible);
+        }
+        finally
+        {
+            global::ConditioningControlPanel.Avalonia.App.ResetReleaseContent();
+            CoreSettings.ServiceProvider = oldSettings;
+        }
+    });
+
     [Fact]
     public void Dtrh_BasicDoor_BootRunLifecycle_AndCloseBanks()
     {

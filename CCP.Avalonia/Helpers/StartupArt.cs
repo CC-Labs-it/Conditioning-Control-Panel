@@ -77,6 +77,9 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             catch (Exception ex) { Log.Debug("[StartupArt] prewarmed load failed: {E}", ex.Message); return false; }
         }
 
+        // A switch or content replacement can change an override at the same path.
+        internal static void InvalidateOverrides() => Interlocked.Exchange(ref _warm, null);
+
         /// <summary>Startup is over: write this launch's list for the next one and drop what was not taken.</summary>
         internal static void Finish(string manifestPath)
         {
