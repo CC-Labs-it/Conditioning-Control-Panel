@@ -1,4 +1,6 @@
 {
+  "first_run_assets_title": "Choose Content Folder",
+  "first_run_assets_body": "Choose a folder for your images, videos and downloaded packs? You can change it later in Settings > Assets.",
   "scheduler_started_title": "Scheduler Active",
   "scheduler_started_body": "Session auto-started based on schedule.",
   "scheduler_ended_title": "Scheduler",

@@ -1,4 +1,6 @@
 {
+  "first_run_assets_title": "Inhaltsordner wählen",
+  "first_run_assets_body": "Einen Ordner für Bilder, Videos und heruntergeladene Pakete wählen? Du kannst ihn später unter Einstellungen > Inhalte ändern.",
   "scheduler_started_title": "Zeitplan aktiv",
   "scheduler_started_body": "Sitzung automatisch nach Zeitplan gestartet.",
   "scheduler_ended_title": "Zeitplan",

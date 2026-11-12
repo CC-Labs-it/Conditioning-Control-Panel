@@ -1,4 +1,6 @@
 {
+  "first_run_assets_title": "Elegir carpeta de contenido",
+  "first_run_assets_body": "¿Elegir una carpeta para imágenes, vídeos y paquetes descargados? Puedes cambiarla después en Ajustes > Recursos.",
   "scheduler_started_title": "Programación activa",
   "scheduler_started_body": "Sesión iniciada automáticamente según el horario.",
   "scheduler_ended_title": "Programación",
