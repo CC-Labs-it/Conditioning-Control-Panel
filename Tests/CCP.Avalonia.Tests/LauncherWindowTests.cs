@@ -310,6 +310,10 @@ public sealed class LauncherWindowTests
         reply.SetResult("https://example.invalid/#pin");
         Dispatcher.UIThread.RunJobs();
         Assert.Null(opened);
+        launcher.ClaimLobbySubject = (_, ct) => { token = ct; return Task.FromResult<string?>("https://example.invalid/#new"); };
+        typeof(LauncherWindow).GetMethod("JoinLobbyRow", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(launcher, new object[] { row });
+        Assert.False(token.IsCancellationRequested);
+        Assert.Equal("https://example.invalid/#new", opened);
     });
 
     [Fact]
