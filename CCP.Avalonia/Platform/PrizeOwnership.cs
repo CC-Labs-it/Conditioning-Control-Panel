@@ -44,16 +44,14 @@ internal static class PrizeOwnership
             RainLookSyncHead.OnAccountReady(account);
     });
 
-    /// <summary>The validate sink over <paramref name="feed"/> and the <paramref name="ownership"/> it feeds
-    /// (default: the shared one). Tests pass their own, so the shared grants stay untouched.</summary>
-    internal static Action<string?, string?, PrizesBlock?, string> SinkFor(PrizesFeed feed, OwnershipService? ownership = null) =>
+    /// <summary>The validate sink over <paramref name="feed"/>. Tests pass their own feed so shared grants stay untouched.</summary>
+    internal static Action<string?, string?, PrizesBlock?, string> SinkFor(PrizesFeed feed) =>
         (requested, answered, prizes, source) =>
         {
             feed.Apply(requested, answered, prizes, source);
-            // WPF ProfileSyncService.ApplyValidatePrizes:585-587: Rain's look pulls queued behind the snapshot,
-            // so the clamp sees the grants.
+            // WPF ProfileSyncService.ApplyValidatePrizes:585-587: queue after the snapshot, even when absent.
             if (!string.IsNullOrEmpty(requested) && string.Equals(requested, answered, StringComparison.Ordinal))
-                SyncReceipt(requested, ownership ?? Service);
+                Post(() => RainLookSyncHead.OnAccountReady(requested));
         };
 
     private static volatile bool _shutdown;
