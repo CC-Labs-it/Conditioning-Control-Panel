@@ -46,6 +46,46 @@ public class LaunchRepairsTests
     }
 
     [Fact]
+    public void RestoredCloudAccountKeepsAiActionsEnabledOnReinstall()
+    {
+        var app = File.ReadAllText(Path.Combine(Root(), "CCP.Avalonia", "App.axaml.cs"));
+        var restore = app.IndexOf("Platform.AccountSeed.RestoreSession();", StringComparison.Ordinal);
+        var repair = app.IndexOf("RepairLaunchSettings(Settings);", StringComparison.Ordinal);
+        Assert.True(restore > 0 && repair > restore, "restore the account before reinstalling presets");
+
+        var settings = new SettingsService();
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldGet = CoreSecrets.RetrieveProvider;
+        var oldId = CoreAccount.UnifiedUserId;
+        var oldAi = AvApp.Ai;
+        var oldAvailable = CoreAi.IsAvailableProvider;
+        try
+        {
+            CoreSettings.ServiceProvider = () => settings;
+            CoreSecrets.RetrieveProvider = _ => "test-token";
+            CoreAccount.UnifiedUserId = null;
+            settings.Current.UnifiedId = "test-user";
+            AvApp.Ai = new AiServiceStrategy();
+            var preset = new KeywordTriggerPreset { Id = "cloud-launch-test", IsBuiltIn = true };
+            preset.Triggers.Add(new KeywordTrigger { Id = "ai", Actions = { new AvatarCommentAction { Enabled = true, RequireAiAvailable = true } } });
+            settings.Current.KeywordTriggerPresets.Add(preset);
+            settings.PendingPresetReinstalls.Add(preset.Id);
+            ConditioningControlPanel.Avalonia.Platform.AccountSeed.RestoreSession();
+            AvApp.RepairLaunchSettings(settings);
+            var clone = Assert.Single(settings.Current.KeywordTriggers.Where(t => t.Id == "preset:cloud-launch-test:ai"));
+            Assert.True(Assert.IsType<AvatarCommentAction>(Assert.Single(clone.Actions)).Enabled);
+        }
+        finally
+        {
+            CoreSettings.ServiceProvider = oldSettings;
+            CoreSecrets.RetrieveProvider = oldGet;
+            CoreAccount.UnifiedUserId = oldId;
+            AvApp.Ai = oldAi;
+            CoreAi.IsAvailableProvider = oldAvailable;
+        }
+    }
+
+    [Fact]
     public void DesktopHealsJournalBeforeRepairCanSave()
     {
         var app = File.ReadAllText(Path.Combine(Root(), "CCP.Avalonia", "App.axaml.cs"));
