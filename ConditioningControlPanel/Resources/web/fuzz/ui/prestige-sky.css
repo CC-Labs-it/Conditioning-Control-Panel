@@ -1,0 +1,206 @@
+/* ui/prestige-sky.css - Renewal Sky, the prestige constellation between runs (ui/prestige-sky.js). Ported from the owner
+ * approved mockup (artifact 7UV3pZjpzujgggf3cwn8vf, handoff-1109/tc-prestige-map/sky.src.html). Committed dark on purpose.
+ * Everything is scoped under #ps-sky: the game's own .card, .pill and .backdrop rules never reach in, and none leak out.
+ * It sits above the cards (90) and under the pause card (95) and Wake Up, so Escape, panic and Wake Up still cover it. */
+@font-face { font-family: SkyFredoka; src: url("../assets/fonts/fredoka-latin.woff2") format("woff2"); font-weight: 300 700; font-display: swap; }
+
+#ps-sky {
+  --night: #130c25; --paper: #fbf6ee; --paper-2: #efe4d1; --ink: #2a2031; --ink-soft: #6d6273;
+  --chalk: #ddd3f2; --gold: #f6c544; --stamp: #e8395f;
+  --font: SkyFredoka, Fredoka, "Trebuchet MS", system-ui, sans-serif;
+  position: fixed; inset: 0; z-index: 92; overflow: hidden; background: var(--night); color: var(--chalk); font-family: var(--font);
+  color-scheme: dark; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
+  animation: psIn .5s ease-out;
+}
+@keyframes psIn { from { opacity: 0; } }
+#ps-sky.out { animation: psOut .45s ease-in forwards; pointer-events: none; }
+@keyframes psOut { to { opacity: 0; } }
+#ps-sky * { box-sizing: border-box; }
+#ps-sky [hidden] { display: none !important; }
+#ps-sky canvas.ps-cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+#ps-sky canvas.ps-cv.drag { cursor: grabbing; }
+#ps-sky canvas.ps-cv.hot { cursor: pointer; }
+#ps-sky button { font: inherit; color: inherit; }
+#ps-sky button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+
+/* HUD. The top right belongs to Wake Up and the sound controls (#game-controls), so the top cluster keeps clear of it. */
+#ps-sky .ps-hud { position: absolute; z-index: 5; left: 0; right: 0; display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; pointer-events: none;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+#ps-sky .ps-hud > * { pointer-events: auto; }
+#ps-sky .ps-hud.top { top: 0; padding-top: calc(14px + env(safe-area-inset-top, 0px)); padding-right: max(176px, env(safe-area-inset-right, 0px)); }
+#ps-sky .ps-hud.bottom { bottom: 0; padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); align-items: flex-end; }
+#ps-sky .ps-cluster { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; min-width: 0; }
+#ps-sky .ps-pill { display: inline-flex; align-items: center; gap: 7px; background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 16px 12px 17px 11px;
+  box-shadow: 3px 4px 0 rgba(0,0,0,.45); padding: 4px 12px 4px 7px; font-weight: 600; font-size: 20px; line-height: 1; font-variant-numeric: tabular-nums; position: relative; }
+#ps-sky .ps-pill img { width: 30px; height: 30px; }
+#ps-sky .ps-pill.mult { font-size: 16px; padding-right: 10px; }
+#ps-sky .ps-pill.mult img { width: 24px; height: 24px; }
+#ps-sky .ps-dust { width: 28px; height: 28px; display: inline-block; flex: none; }
+#ps-sky .ps-wallet.bump { animation: psBump .35s ease; }
+#ps-sky .ps-wallet.spend b { color: var(--stamp); }
+@keyframes psBump { 40% { transform: scale(1.12) rotate(-2deg); } }
+#ps-sky .ps-stamp { display: grid; place-items: center; width: 66px; height: 58px; background: var(--paper); color: var(--stamp); border: 3px solid var(--stamp); border-radius: 10px 7px 11px 6px;
+  transform: rotate(-6deg); box-shadow: 3px 4px 0 rgba(0,0,0,.45); line-height: .95; text-transform: uppercase; }
+#ps-sky .ps-stamp small { font-size: 10px; letter-spacing: .14em; font-weight: 600; }
+#ps-sky .ps-stamp b { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+#ps-sky .ps-stamp.slam { animation: psSlam .55s cubic-bezier(.2,1.6,.4,1); }
+@keyframes psSlam { 0% { transform: rotate(-16deg) scale(2.3); opacity: 0; } 55% { transform: rotate(-4deg) scale(.92); opacity: 1; } 100% { transform: rotate(-6deg) scale(1); } }
+#ps-sky .ps-clock { display: inline-flex; align-items: center; gap: 4px; background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 14px 12px 15px 11px;
+  box-shadow: 3px 4px 0 rgba(0,0,0,.45); padding: 3px 10px 3px 4px; line-height: 1; }
+#ps-sky .ps-clock svg { width: 36px; height: 36px; }
+#ps-sky .ps-clock b { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+#ps-sky .ps-clock small { font-size: 12px; color: var(--ink-soft); }
+#ps-sky .ps-next { flex: none; display: inline-flex; align-items: center; gap: 8px; background: var(--gold); color: var(--ink); border: 3px solid var(--ink); border-radius: 16px 12px 17px 11px;
+  box-shadow: 3px 4px 0 rgba(0,0,0,.5); padding: 6px 16px 6px 8px; font-weight: 600; font-size: 18px; cursor: pointer; transition: transform .15s ease; }
+#ps-sky .ps-next img { width: 32px; height: 32px; }
+#ps-sky .ps-next:hover { transform: translateY(-2px) rotate(-1deg); }
+#ps-sky .ps-next:active { transform: translateY(1px); box-shadow: 1px 1px 0 rgba(0,0,0,.5); }
+#ps-sky .ps-next[disabled] { opacity: .55; cursor: default; transform: none; }
+#ps-sky .ps-ib { width: 42px; height: 42px; display: grid; place-items: center; background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 13px 10px 14px 9px;
+  box-shadow: 3px 4px 0 rgba(0,0,0,.45); cursor: pointer; padding: 0; }
+#ps-sky .ps-ib svg { width: 22px; height: 22px; }
+
+#ps-sky .ps-legend { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 4px 2px 6px; min-width: 0; flex: 1 1 auto; }
+#ps-sky .ps-legend::-webkit-scrollbar { display: none; }
+#ps-sky .ps-arm { flex: none; display: grid; grid-template-columns: auto auto; align-items: center; gap: 2px 6px; background: var(--paper); color: var(--ink); border: 3px solid var(--ink);
+  border-radius: 13px 10px 14px 9px; box-shadow: 3px 3px 0 rgba(0,0,0,.45); padding: 3px 11px 4px 4px; cursor: pointer; transition: transform .15s ease; position: relative; }
+#ps-sky .ps-arm img { width: 30px; height: 30px; grid-row: span 2; }
+#ps-sky .ps-arm .nm { font-size: 13px; font-weight: 600; white-space: nowrap; line-height: 1.05; }
+#ps-sky .ps-arm .nm b { font-size: 12px; color: var(--ink-soft); margin-left: 4px; }
+#ps-sky .ps-arm .bar { width: 100%; min-width: 44px; height: 6px; border-radius: 4px; background: var(--paper-2); overflow: hidden; border: 1.5px solid var(--ink); }
+#ps-sky .ps-arm .bar i { display: block; height: 100%; background: var(--c); width: 0; transition: width .5s ease; }
+#ps-sky .ps-arm:hover, #ps-sky .ps-arm.on { transform: translateY(-3px); }
+#ps-sky .ps-arm.ready::after { content: ""; position: absolute; top: -8px; right: -8px; width: 12px; height: 12px; border-radius: 50%; background: var(--c); border: 2px solid var(--ink); animation: psPulse 1.6s ease infinite; }
+#ps-sky .ps-arm.full { background: color-mix(in srgb, var(--c) 35%, var(--paper)); }
+@keyframes psPulse { 50% { transform: scale(1.3); } }
+#ps-sky .ps-zoom { display: flex; gap: 6px; flex: none; }
+#ps-sky .ps-zoom .ps-ib { width: 38px; height: 38px; font-size: 20px; font-weight: 600; }
+
+/* star card */
+#ps-sky .ps-card { position: absolute; width: 310px; max-width: calc(100vw - 32px); background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 18px 13px 19px 12px;
+  box-shadow: 5px 6px 0 rgba(0,0,0,.5); padding: 12px 14px 12px; z-index: 4; display: grid; gap: 8px; transform-origin: 20% 0; user-select: text; -webkit-user-select: text; }
+#ps-sky .ps-card.in { animation: psCardIn .26s cubic-bezier(.2,1.4,.4,1); }
+@keyframes psCardIn { from { transform: scale(.85) rotate(-3deg); opacity: 0; } }
+#ps-sky .ps-card .head { display: flex; gap: 10px; align-items: center; padding-right: 22px; }
+#ps-sky .ps-card .disc { width: 54px; height: 54px; border-radius: 50%; background: var(--paper-2); border: 3px solid var(--c); display: grid; place-items: center; flex: none; }
+#ps-sky .ps-card .disc img { width: 42px; height: 42px; }
+#ps-sky .ps-card .disc img.grey { filter: grayscale(1); opacity: .6; }
+#ps-sky .ps-card .tag { display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--ink); background: color-mix(in srgb, var(--c) 45%, var(--paper));
+  border: 2px solid var(--ink); border-radius: 8px 5px 8px 5px; padding: 1px 7px; }
+#ps-sky .ps-card h3 { margin: 3px 0 0; font-size: 20px; font-weight: 600; line-height: 1.1; text-wrap: balance; }
+#ps-sky .ps-card p { margin: 0; font-size: 15px; line-height: 1.35; color: var(--ink); }
+#ps-sky .ps-card p.flav { font-size: 16px; font-weight: 600; }
+#ps-sky .ps-card p.real { font-style: italic; font-size: 14.5px; line-height: 1.4; color: #4a3f52; border-left: 3px solid color-mix(in srgb, var(--c) 70%, var(--paper)); padding-left: 9px; }
+#ps-sky .ps-card .tags { display: flex; gap: 5px; flex-wrap: wrap; }
+#ps-sky .ps-card .tag.kind { background: var(--kc); }
+#ps-sky .ps-card .foot { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+#ps-sky .ps-card .cost { display: inline-flex; gap: 4px; align-items: center; font-weight: 600; font-size: 18px; font-variant-numeric: tabular-nums; }
+#ps-sky .ps-card .cost .ps-dust { width: 22px; height: 22px; }
+#ps-sky .ps-go { background: var(--gold); border: 3px solid var(--ink); border-radius: 12px 9px 13px 8px; box-shadow: 2px 3px 0 var(--ink); padding: 5px 14px; font-weight: 600; font-size: 16px; cursor: pointer; color: var(--ink); }
+#ps-sky .ps-go:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+#ps-sky .ps-go[disabled] { background: var(--paper-2); color: var(--ink-soft); cursor: default; box-shadow: none; transform: none; }
+#ps-sky .ps-go.plain { background: var(--paper); }
+#ps-sky .ps-card .lit { font-weight: 700; color: var(--stamp); border: 2.5px solid var(--stamp); border-radius: 8px 5px 8px 5px; padding: 2px 9px; transform: rotate(-5deg); text-transform: uppercase; letter-spacing: .1em; font-size: 14px; }
+#ps-sky .ps-x { position: absolute; top: 4px; right: 6px; width: 32px; height: 32px; border: 0; background: none; font-size: 22px; line-height: 1; cursor: pointer; color: var(--ink-soft); }
+
+/* the renewal contract and the Next run sheet: lined paper, one lamp, top left */
+#ps-sky .ps-over { position: absolute; inset: 0; display: grid; place-items: center; z-index: 6; pointer-events: none;
+  padding: calc(70px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+#ps-sky .ps-over.dim { background: rgba(8,4,20,.5); pointer-events: auto; }
+#ps-sky .ps-paper { pointer-events: auto; width: 300px; max-width: 100%; background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 6px 4px 7px 3px;
+  box-shadow: 7px 9px 0 rgba(0,0,0,.55); padding: 18px 20px 20px; position: relative; transform: rotate(-2deg);
+  background-image: repeating-linear-gradient(transparent 0 25px, color-mix(in srgb, var(--ink) 9%, transparent) 25px 26px); }
+#ps-sky .ps-paper.in { animation: psPaperIn .5s cubic-bezier(.2,1.3,.4,1); }
+#ps-sky .ps-paper.out { animation: psPaperOut .45s ease-in forwards; }
+@keyframes psPaperIn { from { transform: translateY(60vh) rotate(8deg); } }
+@keyframes psPaperOut { to { transform: translateY(-70vh) rotate(-14deg) scale(.7); opacity: 0; } }
+#ps-sky .ps-paper .run { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; border-bottom: 2.5px solid var(--ink); padding-bottom: 6px; margin-bottom: 10px; }
+#ps-sky .ps-paper .run b { font-size: 30px; font-weight: 700; }
+#ps-sky .ps-paper .run span { font-size: 18px; font-weight: 600; display: inline-flex; gap: 4px; align-items: center; }
+#ps-sky .ps-paper .run img { width: 26px; height: 26px; }
+#ps-sky .ps-paper .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 18px; padding: 3px 0; font-variant-numeric: tabular-nums; }
+#ps-sky .ps-paper .row b { font-size: 24px; font-weight: 700; display: inline-flex; gap: 4px; align-items: center; }
+#ps-sky .ps-paper .row .ps-dust { width: 26px; height: 26px; }
+#ps-sky .ps-paper .sig { margin-top: 14px; border-top: 2px dashed var(--ink-soft); padding-top: 4px; font-size: 12px; color: var(--ink-soft); }
+#ps-sky .ps-paper .sig svg { display: block; width: 150px; height: 34px; margin-top: -30px; }
+#ps-sky .ps-paper .sig path { fill: none; stroke: var(--ink); stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 400; stroke-dashoffset: 400; }
+#ps-sky .ps-paper.in .sig path { animation: psSign .9s .35s ease forwards; }
+@keyframes psSign { to { stroke-dashoffset: 0; } }
+#ps-sky .ps-ok { position: absolute; right: 14px; bottom: 26px; font-size: 26px; font-weight: 700; color: var(--stamp); border: 4px solid var(--stamp); border-radius: 10px 6px 11px 6px;
+  padding: 2px 10px; letter-spacing: .08em; transform: rotate(-14deg); opacity: 0; mix-blend-mode: multiply; text-transform: uppercase; }
+#ps-sky .ps-ok.slam { animation: psOk .4s cubic-bezier(.2,1.7,.4,1) forwards; }
+@keyframes psOk { 0% { opacity: 0; transform: rotate(-24deg) scale(2.6); } 100% { opacity: .9; transform: rotate(-14deg) scale(1); } }
+
+#ps-sky .ps-sheet { width: 380px; transform: rotate(-1deg); max-height: 100%; overflow-y: auto; overscroll-behavior: contain; user-select: text; -webkit-user-select: text; }
+#ps-sky .ps-sheet h2 { margin: 0; font-size: 26px; font-weight: 700; }
+#ps-sky .ps-sheet .sub { margin: 2px 0 8px; font-size: 14px; color: var(--ink-soft); }
+#ps-sky .ps-sheet section { margin: 10px 0 0; }
+#ps-sky .ps-sheet h4 { margin: 0 0 6px; font-size: 16px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+#ps-sky .ps-sheet h4 small { font-size: 13px; font-weight: 500; color: var(--ink-soft); }
+#ps-sky .ps-sheet .none { margin: 0; font-size: 14px; color: var(--ink-soft); font-style: italic; }
+#ps-sky .ps-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+#ps-sky .ps-chip { display: inline-flex; align-items: center; gap: 5px; min-height: 34px; padding: 3px 10px; border: 2.5px solid var(--ink); border-radius: 11px 8px 12px 7px;
+  background: var(--paper); color: var(--ink); font-size: 15px; font-weight: 600; cursor: pointer; box-shadow: 2px 2px 0 rgba(0,0,0,.35); }
+#ps-sky .ps-chip small { font-size: 12px; color: var(--ink-soft); font-weight: 600; }
+#ps-sky .ps-chip[aria-pressed="true"] { background: var(--c, var(--gold)); box-shadow: inset 1px 2px 0 rgba(0,0,0,.25); transform: translateY(1px); }
+#ps-sky .ps-chip[aria-pressed="true"] small { color: var(--ink); }
+#ps-sky .ps-chip[disabled] { opacity: .45; cursor: default; }
+#ps-sky .ps-chip img { width: 22px; height: 22px; }
+#ps-sky .ps-factor { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 15px; font-weight: 600; }
+#ps-sky .ps-factor b { font-size: 20px; color: var(--stamp); }
+#ps-sky .ps-sheet .acts { display: flex; gap: 8px; justify-content: space-between; margin-top: 16px; flex-wrap: wrap; }
+
+/* first-visit note */
+#ps-sky .ps-note { position: absolute; z-index: 3; pointer-events: none; display: flex; align-items: flex-end; transition: opacity .5s ease; }
+#ps-sky .ps-note .paper { background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 12px 8px 13px 7px; box-shadow: 3px 4px 0 rgba(0,0,0,.45);
+  padding: 6px 12px; font-size: 16px; font-weight: 600; transform: rotate(-3deg); white-space: nowrap; }
+#ps-sky .ps-note svg { width: 70px; height: 56px; overflow: visible; }
+#ps-sky .ps-note path { fill: none; stroke: var(--paper); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 160; stroke-dashoffset: 160; animation: psSign .8s .2s ease forwards; }
+#ps-sky .ps-note.gone { opacity: 0; }
+
+#ps-sky .ps-flash { position: absolute; inset: 0; z-index: 7; pointer-events: none; background: radial-gradient(circle, #fff 0%, #ffd3e8 40%, rgba(255,111,181,0) 75%); opacity: 0; }
+#ps-sky .ps-flash.go { animation: psFlash 1.6s ease forwards; }
+@keyframes psFlash { 15% { opacity: 1; } 100% { opacity: 0; } }
+
+/* frozen (pause, panic): every css motion holds too */
+#ps-sky.frozen *, #ps-sky.frozen { animation-play-state: paused !important; }
+
+@media (max-width: 600px) {
+  #ps-sky .ps-card { left: max(12px, env(safe-area-inset-left, 0px)) !important; right: max(12px, env(safe-area-inset-right, 0px)); width: auto; max-width: none; top: auto !important;
+    bottom: calc(var(--ps-bot, 120px) + 8px); transform-origin: 50% 100%; }
+  #ps-sky .ps-hud.top { padding-right: max(150px, env(safe-area-inset-right, 0px)); }
+  #ps-sky .ps-hud.bottom { flex-wrap: wrap-reverse; justify-content: flex-end; }
+  #ps-sky .ps-legend { flex-basis: 100%; }
+  #ps-sky .ps-pill { font-size: 17px; } #ps-sky .ps-pill img, #ps-sky .ps-dust { width: 24px; height: 24px; }
+  #ps-sky .ps-pill.mult { display: none; }
+  #ps-sky .ps-stamp { width: 56px; height: 50px; } #ps-sky .ps-stamp b { font-size: 23px; }
+  #ps-sky .ps-clock b { font-size: 17px; } #ps-sky .ps-clock svg { width: 30px; height: 30px; }
+  #ps-sky .ps-zoom { display: none; }
+}
+
+/* Gentle visuals and reduced motion: fades only, no slams, no spin (ps-sky.js holds the canvas still too) */
+#ps-sky.calm .ps-card.in, #ps-sky.calm .ps-paper.in, #ps-sky.calm .ps-paper.out, #ps-sky.calm .ps-stamp.slam, #ps-sky.calm .ps-wallet.bump,
+#ps-sky.calm .ps-arm.ready::after, #ps-sky.calm .ps-ok.slam { animation: psFade .3s ease both; }
+#ps-sky.calm .ps-paper.out { animation: psOut .4s ease forwards; }
+#ps-sky.calm .ps-ok.slam { opacity: .9; }
+#ps-sky.calm .ps-paper.in .sig path, #ps-sky.calm .ps-note path { animation: none; stroke-dashoffset: 0; }
+#ps-sky.calm .ps-flash.go { animation: psFlashSoft 1.6s ease forwards; }
+#ps-sky.calm .ps-next:hover, #ps-sky.calm .ps-arm:hover { transform: none; }
+@keyframes psFade { from { opacity: 0; } }
+@keyframes psFlashSoft { 30% { opacity: .6; } 100% { opacity: 0; } }
+
+/* Looks shelf (after the core): the run shops' cosmetics for Stardust, same paper as the Next run sheet */
+#ps-sky .ps-next.ps-looks { background: var(--paper); }
+#ps-sky .ps-shelf { width: min(420px, calc(100vw - 24px)); box-sizing: border-box; }
+#ps-sky .ps-shelf .none { margin-bottom: 6px; }
+#ps-sky .ps-looks-list { display: grid; gap: 6px; }
+#ps-sky .ps-look { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 4px 6px; border: 2px dashed var(--ink-soft); border-radius: 8px 5px 9px 6px; }
+#ps-sky .ps-look img { width: 40px; height: 40px; object-fit: contain; }
+#ps-sky .ps-look > span { display: grid; min-width: 0; line-height: 1.15; }
+#ps-sky .ps-look b { font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#ps-sky .ps-look small { display: inline-flex; align-items: center; gap: 3px; font-size: 13px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+#ps-sky .ps-look small .ps-dust { width: 16px; height: 16px; }
+#ps-sky .ps-look .ps-go { font-size: 14px; padding: 3px 10px; }
+#ps-sky .ps-look .lit { font-weight: 700; color: var(--stamp); border: 2.5px solid var(--stamp); border-radius: 8px 5px 8px 5px; padding: 1px 7px; transform: rotate(-5deg); text-transform: uppercase; letter-spacing: .1em; font-size: 12px; }
+#ps-sky .ps-look.own { border-style: solid; border-color: var(--stamp); }
+@media (max-width: 600px) { #ps-sky .ps-next.ps-looks span { display: none; } #ps-sky .ps-next.ps-looks { padding: 6px 8px; } }

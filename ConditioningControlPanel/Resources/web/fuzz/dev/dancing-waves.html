@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dancing waves | Button ribbon study</title>
+<style>
+  :root { color-scheme:light; font:16px/1.45 'Segoe UI',sans-serif; color:#301c33; background:#f8f3f7 }
+  * { box-sizing:border-box } body { margin:0 }
+  main { max-width:900px; margin:9vh auto 0; padding:0 20px 35px }
+  h1 { font-size:clamp(30px,5vw,48px); letter-spacing:-.055em; line-height:1.05; margin:0 0 8px }
+  p { margin:0 0 20px; color:#674e65 }
+  .stage { display:block; width:100%; height:clamp(128px,21vw,176px); border:1px solid #c6aabc;
+    border-radius:10px; cursor:crosshair; background:#fbd4e8; padding:0; overflow:hidden }
+  button { touch-action:manipulation; font:inherit; cursor:pointer }
+  canvas { display:block; width:100%; height:100% }
+  .tools,nav { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; margin-top:14px }
+  .tools button { background:#503153; color:white; border:0; border-radius:6px; padding:8px 15px; font-weight:600 }
+  .tools button:disabled { opacity:.55; cursor:default }
+  :focus-visible { outline:3px solid #476cba; outline-offset:3px }
+  nav { margin-top:24px } a { color:#644069; text-underline-offset:3px }
+</style>
+</head>
+<body>
+<main>
+  <h1>Dancing waves</h1>
+  <p>A ribbon study after Misha Tsankashvili. Tap along the dots to send a fold through the sheet.</p>
+  <button class="stage" aria-label="Tap the particle ribbon"><canvas aria-hidden="true"></canvas></button>
+  <div class="tools"><button id="burst">Burst ×6</button><button id="pause" aria-pressed="false">Pause</button></div>
+  <nav aria-label="Compare animations">
+    <a href="./wave-studies.html">Compare four ribbons</a>
+    <a href="https://dribbble.com/shots/3848457-Dancing-waves">Watch the artist’s original</a>
+    <a href="https://codepen.io/Tsankashvili/pen/BwpwZz">Original CodePen</a>
+    <a href="http://localhost:8807/fuzz/index.html?preview=waves&amp;pictures=none&amp;waveStudy=harp">Try Resonance Harp in the game</a>
+  </nav>
+</main>
+<script>
+/*
+  Choreography adapted from Dancing waves by Misha Tsankashvili for Leavingstone.
+  Original public Pen: https://codepen.io/Tsankashvili/pen/BwpwZz
+  Copyright (c) Misha Tsankashvili
+  Permission is hereby granted, free of charge, to any person obtaining a copy of
+  this software and associated documentation files (the "Software"), to deal in
+  the Software without restriction, including without limitation the rights to
+  use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+  of the Software, and to permit persons to whom the Software is furnished to do
+  so, subject to the following conditions:
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+*/
+const stage = document.querySelector('.stage');
+const canvas = stage.querySelector('canvas');
+const g = canvas.getContext('2d');
+const motion = matchMedia('(prefers-reduced-motion: reduce)');
+const pause = document.querySelector('#pause');
+const burst = document.querySelector('#burst');
+const hits = [];
+const rows = 8;
+const colors = Array.from({length:72}, (_,i) => 'hsl(' + i * 5 + ' 76% 39%)');
+let clock = .38, prev = null, request = 0, held = false, pending = 0, next = 0;
+
+function touch(u) {
+  if (motion.matches || held) return;
+  if (hits.length >= 16) hits.shift();
+  hits.push({u, time:clock, speed:.78 + Math.random() * .35, strength:.77 + Math.random() * .28});
+  paint();
+}
+function paint() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (!w || !h) return;
+  const density = Math.min(2, devicePixelRatio || 1);
+  if (canvas.width !== Math.round(w*density) || canvas.height !== Math.round(h*density)) {
+    canvas.width = Math.round(w*density); canvas.height = Math.round(h*density);
+  }
+  g.setTransform(canvas.width / w,0,0,canvas.height / h,0,0);
+  g.clearRect(0,0,w,h);
+  const pitch = w < 520 ? 8.0 : 9.6, lift = w < 520 ? 20 : 25;
+  const columns = Math.ceil(w/pitch) + 6;
+  for (let c = -5; c < columns; c++) {
+    const x = c*pitch;
+    let load = 0;
+    for (const hit of hits) {
+      const age = clock - hit.time;
+      const front = (Math.abs(x - w*hit.u) - age*(w*.50 + 45)*hit.speed) / (w*.095 + 12);
+      load += hit.strength * Math.exp(-front*front - age*.92) * Math.min(1,(3.5-age)*2);
+    }
+    const fold = 1 - Math.exp(-.80*load);
+    for (let r = 0; r < rows; r++) {
+      // The source offsets 22-column rows by 70 ms per dot on a 1.5 s cycle.
+      const tick = (clock + (22*r + c) * .070) / 1.5 + fold*.44;
+      const f = 1 - Math.abs(2*(tick - Math.floor(tick)) - 1);
+      const tilt = f * Math.PI / 4, roll = -f * Math.PI * 5 / 6;
+      const reach = lift * f * (1 + .86 * fold);
+      const u = reach * (Math.cos(tilt) - Math.sin(tilt));
+      const v = reach * (Math.cos(tilt) + Math.sin(tilt));
+      const rowOffset = r - (rows-1)*.5;
+      const px = x + u + rowOffset * 1.1;
+      const py = h*.50 + rowOffset * 3.8 + v*Math.cos(roll)
+          + 7 * Math.sin(x / 77 - clock*.53);
+      const depth = .5-.5*Math.sin(roll);
+      const radius = (w < 520 ? 1.53 : 1.72) + .57*depth + fold*.42;
+      const hue = Math.round(62 + r * 7.5 + c *.40);
+      g.fillStyle = colors[(hue%72 + 72)%72];
+      g.globalAlpha = .12; g.beginPath(); g.arc(px,py,radius*1.8,0,Math.PI*2); g.fill();
+      g.globalAlpha = .90; g.beginPath(); g.arc(px,py,radius,0,Math.PI*2); g.fill();
+    }
+  }
+  g.globalAlpha = 1;
+}
+function frame(t) {
+  if (prev !== null) clock += Math.min(.06,(t-prev)/1000);
+  prev = t;
+  while (hits.length && clock-hits[0].time >= 3.5) hits.shift();
+  if (pending && clock >= next) { touch(.5); pending--; next = clock + .105; }
+  burst.disabled = pending > 0;
+  paint(); request = requestAnimationFrame(frame);
+}
+function sync() {
+  cancelAnimationFrame(request); prev = null;
+  if (motion.matches) { hits.length = 0; pending = 0; }
+  const still = motion.matches || held;
+  pause.textContent = motion.matches ? 'Reduced motion' : held ? 'Resume' : 'Pause';
+  pause.setAttribute('aria-pressed', String(held));
+  pause.disabled = motion.matches; stage.disabled = still; burst.disabled = still || pending > 0;
+  paint();
+  if (!still && !document.hidden) request = requestAnimationFrame(frame);
+}
+stage.addEventListener('pointerdown',e => {
+  if (e.isPrimary && e.button === 0) touch((e.clientX-stage.getBoundingClientRect().left)/stage.clientWidth);
+});
+stage.addEventListener('click',e => { if (e.detail === 0) touch(.5); });
+burst.onclick = () => { touch(.5); pending = 5; next = clock + .105; burst.disabled = true; };
+pause.onclick = () => { held = !held; sync(); };
+motion.addEventListener('change',sync);
+document.addEventListener('visibilitychange',sync);
+new ResizeObserver(paint).observe(stage);
+sync();
+</script>
+</body></html>

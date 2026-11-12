@@ -1,0 +1,35 @@
+.bfn-scene { position:absolute;inset:0;overflow:hidden;isolation:isolate;touch-action:none;pointer-events:auto;outline:0;
+  background:radial-gradient(ellipse at 53% 45%,#372139 0%,#21182c 28%,transparent 65%),
+    radial-gradient(ellipse at 15% 76%,#19293b 0%,transparent 52%),radial-gradient(ellipse at 88% 27%,#382137 0%,transparent 48%),#0b0c19; }
+.bfn-scene > *,.bfn-stage > * { position:absolute;pointer-events:none; }
+.bfn-sky,.bfn-stage,.bfn-click-light,.bfn-bloom {inset:0;width:100%;height:100%}
+.bfn-stage {perspective-origin:50% 50%;overflow:hidden;will-change:transform}
+.bfn-eye {position:absolute;left:50%;top:50%;width:0;height:0;transform-origin:0 0;transform-style:preserve-3d}
+.bfn-piece {position:absolute;left:0;top:0;transform-origin:0 0;transform-style:preserve-3d;pointer-events:none}
+.bfn-ink {position:absolute;inset:0;transform:translateZ(.45px);pointer-events:none}
+.bfn-piece.bfn-stock .bt-prop-side,.bfn-piece.bfn-stock .bt-prop-back {
+  display:block;position:absolute;left:0;top:0;pointer-events:none;backface-visibility:hidden;box-sizing:border-box}
+.bfn-piece.bfn-stock .bt-prop-side {backface-visibility:visible}
+.bfn-piece.bfn-stock .bt-prop-back {width:100%;height:100%;background:#8b8188}
+.bfn-paper-back {position:absolute;inset:0;background:repeating-linear-gradient(9deg,#81777b,#81777b 1px,#938891 2px);
+  transform:translateZ(-2px) rotateY(180deg);backface-visibility:hidden}
+.bfn-cursor {position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0;pointer-events:none}
+/* Centre of the foremost opaque edge pixel in the 515 px cursor. The empty image
+   border is outside the pivot, and the texture keeps its native aspect. */
+.bfn-cursor-sheet {position:absolute;left:-64.5px;top:-22.5px;width:515px;height:515px;
+  transform-origin:64.5px 22.5px;will-change:transform;pointer-events:none}
+.bfn-cursor-sheet img,.bfn-cursor-tone {position:absolute;inset:0;width:100%;height:100%;max-width:none;pointer-events:none}
+.bfn-cursor-sheet img {filter:drop-shadow(-.6px .25px 0 #a4e3ee) drop-shadow(.6px -.25px 0 #f1a9cd)}
+.bfn-cursor-tone {background:linear-gradient(143deg,transparent 7%,#f6ddec1a 22%,transparent 40%,#231a3e87 83%,#20182f99);
+  mix-blend-mode:multiply;mask:url('../../assets/arcade/button-cursor.webp') center / 100% 100% no-repeat}
+.bfn-click-light {mix-blend-mode:screen;background:radial-gradient(ellipse at 50% 50%,#ebbfdf52 0%,#c394cc15 24%,transparent 68%)}
+.bfn-contact {left:50%;top:50%;width:clamp(13px,2.4vmin,24px);aspect-ratio:1;transform:translate(-50%,-50%);
+  mix-blend-mode:screen;background:radial-gradient(circle,#fff5edcf 0%,#ffc5e482 9%,#ffb3dc36 28%,transparent 68%)}
+.bfn-contact::after {content:'';position:absolute;left:18%;top:48%;width:64%;height:1px;transform:rotate(-28deg);
+  background:linear-gradient(90deg,transparent,#fff2eb 50%,transparent)}
+.bfn-caption,.bfn-look {position:absolute;left:4%;right:4%;margin:0;text-align:center;pointer-events:none}
+.bfn-caption {bottom:9%;font:italic 500 clamp(26px,3.9vmin,47px)/1.1 Georgia,'Times New Roman',serif;
+  color:#fff3ef;letter-spacing:.028em;text-shadow:0 1px 3px #110e1f,0 0 9px #1e142e,0 1px 12px #1b112d}
+.bfn-look {bottom:max(2.2%,env(safe-area-inset-bottom));color:#f4dfee;font:500 clamp(11px,1.65vmin,13px)/1.2 system-ui,sans-serif;
+  text-shadow:0 1px 4px #120d1c;letter-spacing:.02em}
+.bfn-bloom {background:radial-gradient(ellipse at 50% 49%,#fff1f8 0%,#ffdeed 30%,#ffb1d5 62%,#cc83b2)}

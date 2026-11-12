@@ -36,11 +36,11 @@ export function deviceUrl(url, pageOrigin) {
 }
 
 /** The rows a device-origin feed may carry: v1, stills (never svg) and, only with `clips`, clips, on the page's own origin, deduped, capped. */
-export function deviceRows(msg, pageOrigin, clips = false) {
+export function deviceRows(msg, pageOrigin, clips = false, limit = MAX_FEED_ROWS) {
   if (!msg || msg.v !== 1 || !Array.isArray(msg.rows)) return [];
   const out = [], seen = new Set();
   for (const r of msg.rows) {
-    if (out.length >= MAX_FEED_ROWS) break;
+    if (out.length >= limit) break;
     const clip = clips && r?.kind === 'video';
     const url = r?.kind === 'image' || clip ? deviceUrl(r.url, pageOrigin) : '';
     if (!url || seen.has(url) || /\.svg($|[?#])/i.test(url) || (r.mime !== undefined && !(clip ? /^video\//i : /^image\/(?!svg)/i).test(String(r.mime)))) continue;
@@ -50,11 +50,11 @@ export function deviceRows(msg, pageOrigin, clips = false) {
 }
 
 /** The rows a feed message may carry: v1, https on a scrolller.com host, stills and GIF-style clips, deduped, capped. */
-export function feedRows(msg) {
+export function feedRows(msg, limit = MAX_FEED_ROWS) {
   if (!msg || msg.v !== 1 || !Array.isArray(msg.rows)) return [];
   const out = [], seen = new Set();
   for (const r of msg.rows) {
-    if (out.length >= MAX_FEED_ROWS) break;
+    if (out.length >= limit) break;
     const url = r && typeof r.url === 'string' ? r.url : '';
     if ((r?.kind !== 'image' && r?.kind !== 'video') || !SCROLLLER_MEDIA.test(url) || seen.has(url)) continue;
     seen.add(url);
