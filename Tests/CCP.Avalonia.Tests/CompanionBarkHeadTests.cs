@@ -257,6 +257,35 @@ public sealed class CompanionBarkHeadTests
     });
 
     [Fact]
+    public void OwnVoiceLinesTakeAnIdleTurnOnlyWithAClipOnDisk() => WithSeamsRestored(s =>
+    {
+        var tube = new ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow(null);
+        var folder = ConditioningControlPanel.Models.CompanionPhrase.DefaultAudioFolder;
+        var clip = Path.Combine(folder, "own-idle-test.mp3");
+        var old = s.CustomCompanionPhrases.ToList();
+        try
+        {
+            s.CustomCompanionPhrases.Clear();
+            s.CustomCompanionPhrases.Add(new ConditioningControlPanel.Models.CustomCompanionPhrase
+                { Text = "mine", Category = "VoiceLine", AudioFileName = "own-idle-test.mp3" });
+            for (int i = 0; i < 30; i++) Assert.False(tube.TrySpeakOwnVoiceLine());
+            Directory.CreateDirectory(folder);
+            File.WriteAllBytes(clip, new byte[] { 0 });
+            var turns = 0;
+            while (!tube.TrySpeakOwnVoiceLine() && ++turns < 200) { }
+            Assert.True(turns < 200);
+            Assert.True(tube.IsSpeaking);
+        }
+        finally
+        {
+            tube.Close();
+            File.Delete(clip);
+            s.CustomCompanionPhrases.Clear();
+            s.CustomCompanionPhrases.AddRange(old);
+        }
+    });
+
+    [Fact]
     public void IdleTickClearsAWedgedSpeechLatch() => WithSeamsRestored(_ =>
     {
         var tube = new ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow(null);
