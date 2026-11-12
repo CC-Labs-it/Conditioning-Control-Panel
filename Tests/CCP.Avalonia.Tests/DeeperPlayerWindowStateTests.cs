@@ -46,6 +46,54 @@ public class DeeperPlayerWindowStateTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task WindowUsesMonitorScaleWhenRestoringAndClosing() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        EnhancementPlayerWindow? w = null;
+        try
+        {
+            EnhancementPlayerWindow.WindowStateScaleOverride = 1.5;
+            var settings = CoreSettings.Current;
+            settings.DeeperPlayerWindowLeft = 100; settings.DeeperPlayerWindowTop = 80;
+            settings.DeeperPlayerWindowWidth = 700; settings.DeeperPlayerWindowHeight = 550;
+            w = new EnhancementPlayerWindow(null, null);
+            w.Show();
+            Assert.Equal(new PixelPoint(150, 120), w.Position);
+            w.Position = new PixelPoint(300, 180);
+            w.Close(); w = null;
+            Assert.Equal(200, settings.DeeperPlayerWindowLeft);
+            Assert.Equal(120, settings.DeeperPlayerWindowTop);
+        }
+        finally { w?.Close(); EnhancementPlayerWindow.WindowStateScaleOverride = null; }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(1.0, 100, 80, 100, 80)]
+    [InlineData(1.5, 100, 80, 150, 120)]
+    [InlineData(2.0, 100, 80, 200, 160)]
+    public void WpfCoordinatesRoundTripAtScreenScale(double scale, double x, double y, int pixelX, int pixelY)
+    {
+        var screens = new[] { (new PixelRect(0, 0, 2400, 1800), scale) };
+        Assert.True(EnhancementPlayerWindow.TryRestorePosition(x, y, 700, 550, screens, out var position));
+        Assert.Equal(new PixelPoint(pixelX, pixelY), position);
+        Assert.Equal(new Point(x, y), EnhancementPlayerWindow.ToSavedPosition(position, scale));
+    }
+
+    [Fact]
+    public void RestoreUsesTheScreenWhoseScaledCandidateIsVisible()
+    {
+        var screens = new[] { (new PixelRect(0, 0, 1920, 1080), 1.0),
+            (new PixelRect(-2400, 0, 2400, 1800), 1.5) };
+        Assert.True(EnhancementPlayerWindow.TryRestorePosition(-800, 100, 700, 550, screens, out var position));
+        Assert.Equal(new PixelPoint(-1200, 150), position);
+        Assert.Equal(new Point(-800, 100), EnhancementPlayerWindow.ToSavedPosition(position, 1.5));
+        Assert.False(EnhancementPlayerWindow.TryRestorePosition(-3000, 100, 700, 550, screens, out _));
+        // Only 199 DIPs of the window reach the scaled monitor.
+        Assert.False(EnhancementPlayerWindow.TryRestorePosition(-2101, 100, 700, 550, screens, out _));
+    }
+
     [Theory]
     [InlineData(false, 0)]
     [InlineData(true, 4)]
