@@ -85,8 +85,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (allowAnimation && codec.FrameCount > 1 && (long)codec.Info.Width * codec.Info.Height <= 4096L * 4096L
                     && new FileInfo(path).Length <= Services.Chaos.ChaosTuning.TEASE_ANIMATED_MAX_BYTES)
                 {
-                    var (frames, delay) = SpiralOverlay.Decode(path, width, 48);
-                    if (frames.Count > 0) return (frames, Math.Max(1, delay.TotalMilliseconds), true);
+                    var (frames, _) = SpiralOverlay.Decode(path, width, 48);
+                    var plan = SpiralFrames.Plan(codec.Info.Width, codec.Info.Height, codec.FrameCount, codec.FrameInfo[0].Duration);
+                    int step = plan.Frames > 48 ? (int)Math.Ceiling(codec.FrameCount / 48.0) : plan.Step;
+                    double avg = codec.FrameInfo.Where((f, i) => i < 600 && i % step == 0 && i / step < frames.Count && f.Duration > 0)
+                        .Select(f => (double)f.Duration).DefaultIfEmpty(100).Average();
+                    if (avg < 20) avg = 100;
+                    if (frames.Count > 0) return (frames, Math.Clamp(avg * step, 20, 2000), true);
                 }
                 using var stream = File.OpenRead(path);
                 int w = codec.Info.Width, h = codec.Info.Height, target = Math.Max(1, width);

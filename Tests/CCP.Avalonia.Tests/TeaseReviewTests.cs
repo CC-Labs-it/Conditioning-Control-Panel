@@ -31,23 +31,18 @@ public sealed class TeaseReviewTests
         try
         {
             ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
-            ChaosRunHost.Overlay!.FinishCountdown();
-            ChaosRunHost.StopTimerForTests();
-            EffectPayload.Firer = AvApp.FireChaosPayload;
-            ChaosRunHost.State!.Shields = 0;
+            ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+            EffectPayload.Firer = AvApp.FireChaosPayload; ChaosRunHost.State!.Shields = 0;
             void Touch(EffectPayload payload) => BubbleOverlay.Press(BubbleOverlay.SpawnChaos(
                 new EffectBubbleSpec { IsTease = true, SizePx = 200, Payload = payload }), 0, 0);
             (int?, int?, int?) sent = default;
             AvApp.FireChaosFlash = (_, amount, duration, size, _) => sent = (amount, duration, size);
-            var p = new FlashPayload { Strength = 50 };
-            if (kind == "flash") { Touch(p); var expected = p.ResolveBurst(CoreSettings.Current);
+            var p = new FlashPayload { Strength = 50 }; if (kind == "flash") { Touch(p); var expected = p.ResolveBurst(CoreSettings.Current);
                 Assert.Equal(((int?)expected.Amount, (int?)expected.DurationMs, (int?)expected.Size), sent); }
-            string? phrase = null;
-            CoreSettings.Current.SubliminalPool = new Dictionary<string, bool> { ["test phrase"] = true };
+            string? phrase = null; CoreSettings.Current.SubliminalPool = new Dictionary<string, bool> { ["test phrase"] = true };
             CoreSubliminal.ShowProvider = value => phrase = value;
             if (kind == "sub") { Touch(new SubliminalPayload()); Assert.Equal("test phrase", phrase); }
-            PinkFilterOverlay.SkipPlatformChecksForTests = true;
-            SpiralOverlay.SkipPlatformChecksForTests = true;
+            PinkFilterOverlay.SkipPlatformChecksForTests = true; SpiralOverlay.SkipPlatformChecksForTests = true;
             if (kind == "pink") { Touch(new OverlayPayload("pink_filter") { Strength = 50 });
                 Assert.Equal(.47, PinkFilterOverlay.PaintedOpacity, 3); }
             if (kind == "spiral") { Touch(new OverlayPayload("spiral") { Strength = 50 });
@@ -56,8 +51,7 @@ public sealed class TeaseReviewTests
             var oldWash = ChaosFlashOverlay.LastShow;
             if (kind == "wash") { Touch(new OverlayPayload("braindrain") { Strength = 50 });
                 Assert.NotSame(oldWash, ChaosFlashOverlay.LastShow); }
-            var oldRain = ChaosGifCascadeOverlay.LastPick;
-            if (kind == "rain") { Touch(new GifCascadePayload()); Assert.NotSame(oldRain, ChaosGifCascadeOverlay.LastPick); }
+            var oldRain = ChaosGifCascadeOverlay.LastPick; if (kind == "rain") { Touch(new GifCascadePayload()); Assert.NotSame(oldRain, ChaosGifCascadeOverlay.LastPick); }
         }
         finally
         {
@@ -67,14 +61,12 @@ public sealed class TeaseReviewTests
         }
         return Task.CompletedTask;
     });
-
     [Theory]
     [InlineData(0), InlineData(1), InlineData(2), InlineData(3)]
     public Task Tease_sprite_and_oversized_face_use_bounded_still(int stage) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (stage == 0) { Assert.NotNull(ChaosArt.Resolve("bubbles", "tease")); Assert.Equal((2, 6, 10), (BubbleOverlay.MaxAnimatedTease(PerformanceTier.Performance), BubbleOverlay.MaxAnimatedTease(PerformanceTier.Balanced), BubbleOverlay.MaxAnimatedTease(PerformanceTier.Quality))); return; }
-        var dir = Path.Combine(Path.GetTempPath(), "ccp-tease-" + Guid.NewGuid().ToString("N"));
-        var pool = Path.Combine(dir, "teasebubble");
+        var dir = Path.Combine(Path.GetTempPath(), "ccp-tease-" + Guid.NewGuid().ToString("N")); var pool = Path.Combine(dir, "teasebubble");
         Directory.CreateDirectory(pool);
         try
         {
@@ -105,6 +97,17 @@ public sealed class TeaseReviewTests
         }
         finally { Directory.Delete(dir, true); }
     });
+    [Theory]
+    [InlineData("R0lGODlhAgACAIEAAP8AAAAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQAZAAAACwAAAAAAgACAAAIBgABCAQQEAAh+QQBCgABACwAAAAAAgACAIEAAP8AAAAAAAAAAAAIBgABCAQQEAA7", 550)]
+    [InlineData("R0lGODlhAgACAIEAAP8AAAAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQAAQAAACwAAAAAAgACAAAIBgABCAQQEAAh+QQBAQABACwAAAAAAgACAIEAAP8AAAAAAAAAAAAIBgABCAQQEAA7", 100)]
+    [InlineData("R0lGODlhAgACAIEAAP8AAAAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAsAAAAAAIAAgAACAYAAQgEEBAAIfkEAQAAAQAsAAAAAAIAAgCBAAD/AAAAAAAAAAAACAYAAQgEEBAAOw==", 100)]
+    public Task Tease_animation_uses_average_sampled_delay(string gif, double expected) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var path = Path.GetTempFileName(); File.WriteAllBytes(path, Convert.FromBase64String(gif));
+        try { var (frames, delay, animated) = BubbleOverlay.DecodeTeaseFace(path, 64, true); try { Assert.True(animated); Assert.Equal(2, frames.Count); Assert.Equal(expected, delay); } finally { foreach (var frame in frames) frame.Dispose(); } }
+        finally { File.Delete(path); }
+        return Task.CompletedTask;
+    });
     [Fact]
     public Task Animated_face_plays_with_motion_off() => AvaloniaTestDispatcher.RunAsync(() =>
     {
@@ -122,7 +125,6 @@ public sealed class TeaseReviewTests
         finally { BubbleOverlay.TeaseFaces.Remove(bubble); foreach (var frame in frames) frame.Dispose(); BubbleOverlay.Field.Bubbles.Remove(bubble); window.Close(); CoreSettings.Current.MotionLevel = old; }
         return Task.CompletedTask;
     });
-
     private static void Strip(string path)
     {
         using var bitmap = new SKBitmap(1, 2); bitmap.SetPixel(0, 0, SKColors.Red); bitmap.SetPixel(0, 1, SKColors.Blue);
@@ -130,14 +132,12 @@ public sealed class TeaseReviewTests
     }
     private static (byte R, byte B) Pixel(Window window, double x = 0.25, double y = 0.25)
     {
-        Dispatcher.UIThread.RunJobs();
-        using var bitmap = window.CaptureRenderedFrame()!;
+        Dispatcher.UIThread.RunJobs(); using var bitmap = window.CaptureRenderedFrame()!;
         var pixel = Marshal.AllocHGlobal(4);
         try
         {
             bitmap.CopyPixels(new PixelRect((int)(bitmap.PixelSize.Width * x), (int)(bitmap.PixelSize.Height * y), 1, 1), pixel, 4, 4);
-            var first = Marshal.ReadByte(pixel);
-            var third = Marshal.ReadByte(pixel, 2);
+            var first = Marshal.ReadByte(pixel); var third = Marshal.ReadByte(pixel, 2);
             return bitmap.Format == global::Avalonia.Platform.PixelFormats.Rgba8888 ? (first, third) : (third, first);
         }
         finally { Marshal.FreeHGlobal(pixel); }
