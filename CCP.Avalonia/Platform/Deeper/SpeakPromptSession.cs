@@ -20,13 +20,15 @@ internal sealed class SpeakPromptSession
     private readonly Action<string> _show;
     private readonly Action _hide;
     private readonly Action<string, bool> _feedback;
+    private readonly Action? _stopCapture;
+    private int _stopRequested;
     private readonly CancellationTokenSource _stop = new();
     private bool _started;
 
     internal SpeakPromptSession(TriggerEffectAction effect, IPlaybackTimeSource? source,
         Func<bool> available, Func<Task<bool>> consent, Func<bool> borrowMic, Action restoreMic,
         Func<string, CancellationToken, Task<PhraseResult>> listen, Action<string> show, Action hide,
-        Action<string, bool>? feedback = null)
+        Action<string, bool>? feedback = null, Action? stopCapture = null)
     {
         _plan = new SpeakPromptPlan(effect, DateTime.UtcNow);
         _source = source;
@@ -38,6 +40,7 @@ internal sealed class SpeakPromptSession
         _show = show;
         _hide = hide;
         _feedback = feedback ?? Feedback;
+        _stopCapture = stopCapture;
     }
 
     private static void Feedback(string text, bool correct)
@@ -59,7 +62,12 @@ internal sealed class SpeakPromptSession
     }
 
     // Stop also works while the consent dialog is open. No side effects follow a stopped dialog.
-    internal void Stop() => _stop.Cancel();
+    internal void Stop()
+    {
+        if (Interlocked.Exchange(ref _stopRequested, 1) != 0) return;
+        try { _stopCapture?.Invoke(); }
+        finally { _stop.Cancel(); }
+    }
 
     internal async Task RunAsync()
     {
@@ -122,7 +130,7 @@ internal sealed class SpeakPromptSession
                 }
             }
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested || Volatile.Read(ref _stopRequested) != 0) { }
         finally
         {
             holdStop.Cancel();

@@ -88,6 +88,7 @@ public sealed class PanicSurfacesTests
         "tour",
         "games",
         "first-show",
+        "speak-prompt",
         "voice-capture",
         "ai-followups",
         "blink-trainer",
@@ -145,6 +146,9 @@ public sealed class PanicSurfacesTests
     {
         // Avalonia decision (PanicSurfaces.cs "intake" comment): say-it loops end before the capture abort reads as silence.
         ("intake", "voice-capture", "intake loops end before the mic abort"),
+        ("intake", "speak-prompt", "intake ends before Deeper speak"),
+        ("speak-prompt", "voice-capture", "speak loop ends before the mic abort"),
+        ("speak-prompt", "speak-cue", "speak loop ends before the cue closes"),
         // decisions "Panic <-> mic": capture and the command chain end before anything can react to them.
         ("voice-capture", "ai-followups", "mic first"),
         // WPF :1553 FirstShowService.Stop() runs before CancelPendingAi and the rest of HandlePanicKeyPress.
@@ -223,10 +227,13 @@ public sealed class PanicSurfacesTests
         "gaze-minigame>engine",
         "haptics>engine",
         "intake>voice-capture",
+        "intake>speak-prompt",
         "leash-task>engine",
         "leash-task>lock-cards",
         "mantra>engine",
         "remote-haptics>engine",
+        "speak-prompt>speak-cue",
+        "speak-prompt>voice-capture",
         "takeover>engine",
         "voice-capture>ai-followups",
     };
