@@ -14,6 +14,15 @@ namespace CCP.Avalonia.Tests;
 
 public class EmiTourVoiceTests
 {
+    private static readonly FieldInfo[] PanicState = Array.ConvertAll(
+        new[] { "_quietUntilMs", "_engineHeld", "_panics" },
+        name => typeof(PanicAftermath).GetField(name, BindingFlags.Static | BindingFlags.NonPublic)!);
+    private static object?[] ReadPanicState() => Array.ConvertAll(PanicState, field => field.GetValue(null));
+    private static void RestorePanicState(object?[] values)
+    {
+        for (int i = 0; i < PanicState.Length; i++) PanicState[i].SetValue(null, values[i]);
+    }
+
     // PanicKeyTests leaves EMI's five-minute panic tail behind; each test clears and restores it.
     private static readonly FieldInfo HoldUntil = typeof(EmiLineEngine).GetField("_holdUntilUtc", BindingFlags.Instance | BindingFlags.NonPublic)!;
 
@@ -111,6 +120,31 @@ public class EmiTourVoiceTests
         finally { held.SetValue(engine, previous); }
     }
 
+    [Theory]
+    [InlineData("palette")]
+    [InlineData("card")]
+    [InlineData("tail")]
+    public async Task PanicTestsRestorePriorAftermath(string test)
+    {
+        var before = ReadPanicState();
+        var held = typeof(EmiLineEngine).GetField("_heldBy", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var previousHeld = held.GetValue(EmiLineEngine.Instance);
+        object?[] seeded = { Environment.TickCount64 + 60000, 1, 42L };
+        try
+        {
+            held.SetValue(EmiLineEngine.Instance, null);
+            RestorePanicState(seeded);
+            if (test == "tail") await PanicHoldOutlivesStartForEveryRung();
+            else await PanicEarlyRungStopsThePlayingLine(test == "card");
+            Assert.Equal(seeded, ReadPanicState());
+        }
+        finally
+        {
+            RestorePanicState(before);
+            held.SetValue(EmiLineEngine.Instance, previousHeld);
+        }
+    }
+
     // WPF MainWindow.xaml.cs:1620 and EmiDeskWindow.Bubble.cs:545-559: the hold cuts
     // a sounding line before the lock-card and palette rungs can return.
     [Theory]
@@ -127,6 +161,7 @@ public class EmiTourVoiceTests
         var windowField = typeof(EmiDeskService).GetField("_window", BindingFlags.Instance | BindingFlags.NonPublic)!;
         var held = typeof(EmiLineEngine).GetField("_heldBy", BindingFlags.Instance | BindingFlags.NonPublic)!;
         var previousWindow = windowField.GetValue(service);
+        var previousPanic = ReadPanicState();
         var previousHeld = held.GetValue(engine);
         var previousUntil = HoldUntil.GetValue(engine);
         var previousPlay = CoreAudio.PlayStoppableProvider;
@@ -182,7 +217,7 @@ public class EmiTourVoiceTests
             shell.Close();
             held.SetValue(engine, previousHeld);
             HoldUntil.SetValue(engine, previousUntil);
-            PanicAftermath.EndQuiet();
+            RestorePanicState(previousPanic);
             (settings.PanicKeyEnabled, settings.PanicKey, settings.MasterVolume) = (enabled, key, volume);
             CoreAudio.PlayStoppableProvider = previousPlay;
             CoreAudio.IsOutputSuppressedProvider = previousBreaker;
@@ -202,6 +237,7 @@ public class EmiTourVoiceTests
         var engine = EmiLineEngine.Instance;
         var until = HoldUntil;
         object? oldUntil = until.GetValue(engine);
+        var previousPanic = ReadPanicState();
         bool enabled = s.PanicKeyEnabled;
         string key = s.PanicKey;
         int volume = s.MasterVolume;
@@ -238,7 +274,7 @@ public class EmiTourVoiceTests
             global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.StopLockCards();
             shell.Close();
             until.SetValue(engine, oldUntil);
-            PanicAftermath.EndQuiet();
+            RestorePanicState(previousPanic);
             s.PanicKeyEnabled = enabled;
             s.PanicKey = key;
             s.MasterVolume = volume;
