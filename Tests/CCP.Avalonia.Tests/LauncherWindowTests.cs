@@ -153,7 +153,7 @@ public sealed class LauncherWindowTests
             () => Task.FromResult(PbpLobbyReply.Empty), () => Task.FromResult(OpenTablesReply.Empty),
             () => Task.FromResult(((IReadOnlyList<RemoteSeat>)new[] { new RemoteSeat("subject", "Host", 1, "light", Array.Empty<string>(), false) }, true)));
         string? claimed = null; string? opened = null;
-        launcher.ClaimLobbySubject = key => { claimed = key; return Task.FromResult<string?>("https://example.invalid/#pin"); };
+        launcher.ClaimLobbySubject = (key, _) => { claimed = key; return Task.FromResult<string?>("https://example.invalid/#pin"); };
         launcher.OpenLobbyUrl = url => { opened = url; return true; };
         try
         {
@@ -167,6 +167,37 @@ public sealed class LauncherWindowTests
             Assert.Equal("https://example.invalid/#pin", opened);
         }
         finally { launcher.Close(); }
+    });
+
+    [Fact]
+    public void LobbyRemoteClaimInFlightWhenLockdownStarts_IsCancelledAndNeverOpens() => Run(shell =>
+    {
+        var launcher = new LauncherWindow();
+        typeof(LauncherWindow).GetField("_panel", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(launcher, shell);
+        launcher.ReadLobbyGates = () => LobbyGates.From(true, true, true);
+        launcher.CreateLobby = () => new LobbyPoll(new LobbyTimer(), () => true, () => Array.Empty<Friend>(),
+            () => Task.FromResult(PbpLobbyReply.Empty), () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((IReadOnlyList<RemoteSeat>)new[] { new RemoteSeat("subject", "Host", 1, "light", Array.Empty<string>(), false) }, true)));
+        var reply = new TaskCompletionSource<string?>();
+        var token = System.Threading.CancellationToken.None; string? opened = null;
+        launcher.ClaimLobbySubject = (_, ct) => { token = ct; return reply.Task; };
+        launcher.OpenLobbyUrl = url => { opened = url; return true; };
+        var ld = LockdownService.Current = new LockdownService();
+        try
+        {
+            launcher.Show();
+            var chip = launcher.FindControl<Button>("LobbyChip")!;
+            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            ((MenuItem)chip.ContextMenu!.Items[0]!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.False(token.IsCancellationRequested);
+            ld.Activate(TimeSpan.FromMinutes(30));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(token.IsCancellationRequested);
+            reply.SetResult("https://example.invalid/#pin");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(opened);
+        }
+        finally { ld.Deactivate(); launcher.Close(); }
     });
 
     [Fact]

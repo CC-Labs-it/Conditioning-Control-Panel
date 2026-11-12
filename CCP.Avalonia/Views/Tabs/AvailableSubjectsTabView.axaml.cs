@@ -63,8 +63,7 @@ public partial class AvailableSubjectsTabView : UserControl
         return new LobbyPoll(new Platform.FriendsHead.Timer(),
             () => Platform.FriendsHead.Identity() != null,
             () => Platform.FriendsHead.Service?.Snapshot.Friends ?? Array.Empty<Friend>(),
-            () => new PbpLobbyApi().FetchAsync(), () => GoonOpenTables.RefreshAsync(), () => remote.FetchAsync(),
-            () => new RaceOpenApi().FetchAsync());
+            () => new PbpLobbyApi().FetchAsync(), () => GoonOpenTables.RefreshAsync(), () => remote.FetchAsync());
     }
 
     private void SyncWatch()

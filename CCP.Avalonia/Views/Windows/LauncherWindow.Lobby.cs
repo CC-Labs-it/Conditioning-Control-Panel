@@ -19,12 +19,14 @@ public partial class LauncherWindow
         TierGate.HasPremium, TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed);
     internal Func<LobbyRow, Window?> OpenLobbyGame = row => row.Game == LobbyGame.Chess
         ? GameWindow.OpenChessLobby("join", row.Key) : GameWindow.LaunchFriendRace(row.Key);
-    internal Func<string, System.Threading.Tasks.Task<string?>> ClaimLobbySubject = key => new RemoteLobbyApi().ClaimAsync(key);
+    internal Func<string, System.Threading.CancellationToken, System.Threading.Tasks.Task<string?>> ClaimLobbySubject =
+        (key, ct) => new RemoteLobbyApi().ClaimAsync(key, ct);
     internal Func<string, bool> OpenLobbyUrl = Platform.ExternalOpener.Open;
     private LobbyPoll? _lobby;
     private DispatcherTimer? _lobbyTimer;
     private ContextMenu? _lobbyDrop;
     private IDisposable? _lobbyLease;
+    private System.Threading.CancellationTokenSource? _lobbyClaim;
 
     private void StartLobby()
     {
@@ -98,11 +100,21 @@ public partial class LauncherWindow
         else if (row.Game == LobbyGame.Race && RaceJoinLink.IsRoomId(row.Key)) _ = OpenLobbyGame(row);
         else if (row.Game == LobbyGame.Remote) _ = ClaimRemoteLobby(row.Key!);
     }
+    /// <summary>WPF MainWindow.ClaimRemoteSubjectAsync (MainWindow.RemoteControl.cs:499). Lockdown starting
+    /// mid-claim cancels it, and a url that still comes back is not opened through the veil.</summary>
     private async System.Threading.Tasks.Task ClaimRemoteLobby(string key)
     {
-        var url = await ClaimLobbySubject(key);
-        if (!string.IsNullOrEmpty(url)) OpenLobbyUrl(url);
+        var token = (_lobbyClaim ??= new System.Threading.CancellationTokenSource()).Token;
+        string? url = null;
+        try { url = await ClaimLobbySubject(key, token); }
+        catch (OperationCanceledException) { }
+        if (!string.IsNullOrEmpty(url) && !token.IsCancellationRequested && !MainShellWindow.LockdownActive) OpenLobbyUrl(url);
         _ = _lobby?.RefreshAsync();
+    }
+    private void CancelLobbyClaim()
+    {
+        _lobbyClaim?.Cancel();
+        _lobbyClaim = null;
     }
 
 }
