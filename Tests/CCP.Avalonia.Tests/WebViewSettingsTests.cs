@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -52,8 +53,7 @@ public sealed class WebViewSettingsTests
         var home = new SettingsTabView().FindControl<WebHost>("BrowserWebHost")!;
         var host = new WebHost(true, () => new NativeWebView())
         {
-            ZoomFactor = home.ZoomFactor,
-            ResetZoomOnNavigate = home.ResetZoomOnNavigate
+            ZoomFactor = home.ZoomFactor
         };
         double currentZoom = 1.25;
         var seen = new List<(Uri Url, double Zoom)>();
@@ -65,7 +65,7 @@ public sealed class WebViewSettingsTests
         var site = new Uri("http://127.0.0.1/site");
         var pending = new TaskCompletionSource<bool>();
         host.NativeZoomInvoker = async zoom => { await pending.Task; currentZoom = zoom; return true; };
-        host.Navigate(site); // the site toggle
+        host.Navigate(site, resetZoom: true); // the site toggle
         Assert.Empty(seen);
         report(true); // a late gate report cannot load the held URL first
         Assert.Empty(seen);
@@ -76,10 +76,10 @@ public sealed class WebViewSettingsTests
         currentZoom = 1.75;
         host.NativeZoomInvoker = zoom => { currentZoom = zoom; return Task.FromResult(true); };
         var url = new Uri("http://127.0.0.1/video");
-        host.Navigate(url); // the app-initiated URL path
+        host.Navigate(url, resetZoom: true); // the app-initiated URL path
         Assert.Equal((url, 0.5), seen[1]);
         currentZoom = 2.0;
-        host.Navigate(url); // re-clicking the same site still resets zoom
+        host.Navigate(url, resetZoom: true); // re-clicking the same site still resets zoom
         Assert.Equal((url, 0.5), seen[2]);
     });
 
@@ -87,27 +87,63 @@ public sealed class WebViewSettingsTests
     public Task NewerNavigationAndEngineReplacementDiscardPendingZoomNavigation() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         ChatThresholdLinksTests.Setup();
-        var host = new WebHost(true, () => new NativeWebView()) { ResetZoomOnNavigate = true };
+        var host = new WebHost(true, () => new NativeWebView());
         var seen = new List<Uri>();
         host.NativeNavigateInvoker = seen.Add;
         host.NativeZoomInvoker = _ => Task.FromResult(true);
         host.NewScrolllerEngine()(true);
         var pending = new TaskCompletionSource<bool>();
         host.NativeZoomInvoker = _ => pending.Task;
-        host.Navigate(new Uri("http://127.0.0.1/old"));
+        host.Navigate(new Uri("http://127.0.0.1/old"), resetZoom: true);
         var latest = new Uri("http://127.0.0.1/new");
         host.NativeZoomInvoker = _ => Task.FromResult(true);
-        host.Navigate(latest);
+        host.Navigate(latest, resetZoom: true);
         pending.SetResult(true);
         await Task.Yield();
         Assert.Equal(latest, Assert.Single(seen));
         pending = new TaskCompletionSource<bool>();
         host.NativeZoomInvoker = _ => pending.Task;
-        host.Navigate(new Uri("http://127.0.0.1/stale-engine"));
+        host.Navigate(new Uri("http://127.0.0.1/stale-engine"), resetZoom: true);
         host.NewScrolllerEngine();
         pending.SetResult(true);
         await Task.Yield();
         Assert.Equal(latest, Assert.Single(seen));
+    });
+
+    [Fact]
+    public Task ReloadPreservesChangedZoomWhileSiteAndUrlResetIt() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var oldOffline = ConditioningControlPanel.CoreSettings.Current.OfflineMode;
+        ConditioningControlPanel.CoreSettings.Current.OfflineMode = false;
+        var shell = new MainShellWindow();
+        try
+        {
+            var host = new WebHost(true, () => new NativeWebView()) { ZoomFactor = 0.5 };
+            double currentZoom = 0.5;
+            var navigatedAt = new List<double>();
+            host.NativeZoomInvoker = zoom => { currentZoom = zoom; return Task.FromResult(true); };
+            host.NativeNavigateInvoker = _ => navigatedAt.Add(currentZoom);
+            host.NewScrolllerEngine()(true);
+            // Redirect the shell's requests to a loopback page inside the test sandbox.
+            shell.BrowserNavigationInvoker = (_, reset) => host.Navigate(new Uri("http://127.0.0.1/"), reset);
+            currentZoom = 1.25;
+            shell.BtnReloadBrowser_Click(shell, new global::Avalonia.Interactivity.RoutedEventArgs());
+            Assert.Equal(1.25, Assert.Single(navigatedAt));
+            currentZoom = 1.5;
+            shell.BrowserSiteToggle_Click(shell, new global::Avalonia.Interactivity.RoutedEventArgs());
+            Assert.Equal(0.5, navigatedAt[1]);
+            currentZoom = 1.75;
+            Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1/video"));
+            Assert.Equal(0.5, navigatedAt[2]);
+            currentZoom = 1.6;
+            var tab = shell.FindControl<SettingsTabView>("SettingsTab")!;
+            tab.FindControl<RadioButton>("RbBambiCloud")!.IsChecked = true;
+            tab.SyncBrowserSite(false, "https://hypnotube.com/", navigateIfChanged: true);
+            Assert.Equal(1.6, navigatedAt[3]);
+        }
+        finally { shell.Close(); ConditioningControlPanel.CoreSettings.Current.OfflineMode = oldOffline; }
+        return Task.CompletedTask;
     });
 
 }

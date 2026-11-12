@@ -53,15 +53,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             return true;
         }
 
+        // Headless tests route requests to a loopback engine.
+        internal Action<Uri, bool>? BrowserNavigationInvoker { get; set; }
+
         /// <summary>Points the web view at a URL. A missing host (the tab is not in the tree, as in
         /// a single-view render) is a no-op that returns false, never a throw.</summary>
-        private bool NavigateBrowser(string url)
+        private bool NavigateBrowser(string url, bool resetZoom = false)
         {
             try
             {
                 var host = BrowserView;
                 if (host == null) return false;
-                host.Navigate(new Uri(url));   // even when equal: WPF #867, re-click goes home
+                var target = new Uri(url);
+                if (BrowserNavigationInvoker is { } invoke) invoke(target, resetZoom);
+                else host.Navigate(target, resetZoom); // even when equal: WPF #867, re-click goes home
                 Log.Information("Browser navigated to {Url}", url);
                 return true;
             }
@@ -90,10 +95,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Back to the selected site's homepage. Shared by the reload button and the
         /// remote video-stop path, exactly as on WPF.</summary>
-        private void NavigateBrowserToCurrentSiteHome()
+        internal void NavigateBrowserToCurrentSiteHome(bool resetZoom = false)
         {
             RevealDashboardBrowser("reload");   // WPF Browser.cs:3153 / :603 (site-toggle)
-            NavigateBrowser(SiteHomeUrl());
+            NavigateBrowser(SiteHomeUrl(), resetZoom);
         }
 
         /// <summary>The site radios' one entry point. Click, not IsCheckedChanged, for the WPF
@@ -103,7 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void BrowserSiteToggle_Click(object? sender, RoutedEventArgs e)
         {
             if (BrowserBlockedOffline()) return;
-            NavigateBrowserToCurrentSiteHome();
+            NavigateBrowserToCurrentSiteHome(resetZoom: true);
         }
 
         /// <summary>Toolbar reload: back onto the selected site's homepage. The way out of a stuck
@@ -147,7 +152,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             // WPF MainWindow/MainWindow.Browser.cs:487-498: HTTPS only, after the offline gate.
             // ponytail: an unavailable adapter is known immediately; no 12-second ready poll is needed.
-            var navigated = NavigateBrowser(url);
+            var navigated = NavigateBrowser(url, resetZoom: true);
             if (BrowserView is { HasEngine: false }
                 && Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
                 Platform.ExternalOpener.Open(url);

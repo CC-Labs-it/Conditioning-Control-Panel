@@ -48,8 +48,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         public double ZoomFactor { get; set; } = 1.0;
         internal Func<double, Task<bool>>? NativeZoomInvoker { get; set; }
 
-        /// <summary>Reapply the host zoom before an explicit navigation, as Home does on WPF.</summary>
-        public bool ResetZoomOnNavigate { get; set; }
         internal Action<Uri>? NativeNavigateInvoker { get; set; }
         private int _navigationGeneration;
         private bool _zoomNavigationPending;
@@ -434,7 +432,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// the site you are on takes you home and Reload reloads. Assigning an equal Source raises no
         /// change, so it would do nothing. Source is kept in step (the fallback panel names it).
         /// </summary>
-        public void Navigate(Uri url)
+        public void Navigate(Uri url, bool resetZoom = false)
         {
             var navigation = ++_navigationGeneration;
             _zoomNavigationPending = false;
@@ -447,7 +445,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(url)) { RefusedNavigations++; return; }
             if (_web is null) return;
             if (_scrolllerGate is null) return;   // held: the gate's report loads Source
-            if (ResetZoomOnNavigate)
+            if (resetZoom)
             {
                 _zoomNavigationPending = true;
                 _ = NavigateAfterZoomAsync(url, navigation, _scrolllerEngine, _web);

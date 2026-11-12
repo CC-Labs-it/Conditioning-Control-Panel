@@ -186,7 +186,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var moved = target.IsChecked != true;
             target.IsChecked = true;
             if (moved && navigateIfChanged && !CoreSettings.Current.OfflineMode)
-                Shell?.BrowserSiteToggle_Click(target, new RoutedEventArgs());
+                Shell?.NavigateBrowserToCurrentSiteHome();
         }
 
         // ------------------------------------------------------------------ the load prompt
