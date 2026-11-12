@@ -18,10 +18,13 @@ public class DeeperWebcamEventsTests
         var tracker = new WebcamTracker();
         var consent = CoreSettings.Current.WebcamConsentGiven;
         var previous = EnhancementHostService.WebcamProvider;
+        var previousDispatcher = EnhancementHostService.DispatcherFactory;
         try
         {
             CoreSettings.Current.WebcamConsentGiven = false;
-            App.SeedDeeperWebcam(tracker);
+            EnhancementHostService.DispatcherFactory = null;
+            App.SeedDeeperEnhancements(tracker);
+            Assert.IsType<ConditioningControlPanel.Avalonia.Platform.Deeper.BrowserEnhancementDispatcher>(EnhancementHostService.DispatcherFactory!());
             using var adapter = Assert.IsType<DeeperWebcamEvents>(EnhancementHostService.WebcamProvider!());
             int blink = 0, mouth = 0, lost = 0, found = 0;
             (double x, double y) gaze = default;
@@ -50,6 +53,7 @@ public class DeeperWebcamEventsTests
         {
             CoreSettings.Current.WebcamConsentGiven = consent;
             EnhancementHostService.WebcamProvider = previous;
+            EnhancementHostService.DispatcherFactory = previousDispatcher;
         }
     });
 

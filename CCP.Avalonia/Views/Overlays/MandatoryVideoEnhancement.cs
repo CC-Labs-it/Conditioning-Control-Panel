@@ -15,7 +15,7 @@ internal sealed partial class MandatoryVideoOverlay
     private void BeginEnhancement(string path)
     {
         EndEnhancement();
-        // Until the head has a real dispatcher, a dry-run bind would misrepresent playback.
+        // App startup seeds the dispatcher (App.axaml.cs); never bind a dry-run logger to playback.
         if (!CoreSettings.Current.VideoEnhanceIfPossible || _playback == null || EnhancementHostService.DispatcherFactory == null) return;
         try
         {

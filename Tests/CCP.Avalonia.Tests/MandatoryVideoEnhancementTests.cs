@@ -6,6 +6,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel.Services.Deeper;
 using ConditioningControlPanel.Services;
@@ -31,7 +32,6 @@ public class MandatoryVideoEnhancementTests
         var enabled = settings.VideoEnhanceIfPossible;
         var oldDispatcher = EnhancementHostService.DispatcherFactory;
         var oldWebcam = EnhancementHostService.WebcamProvider;
-        var oldVideo = CoreEngine.Video;
         var oldPost = CoreDispatch.PostProvider;
         var oldFreeze = CoreSubliminal.BambiFreezeProvider;
         var attention = settings.AttentionChecksEnabled;
@@ -66,8 +66,7 @@ public class MandatoryVideoEnhancementTests
             overlay.Show(path, false);
             overlay.ReportPlaybackTime(1500);
             Assert.Equal(2, recorder.Fired);
-            CoreEngine.Video = overlay.Scheduler;
-            MainShellWindow.StopEngine(); // also used by the panic surface
+            overlay.Scheduler.Stop(); // what CoreEngine.Stop (CoreEngine.cs:94) runs on Stop and panic
             overlay.ReportPlaybackTime(2500);
             Assert.Equal(2, recorder.Fired);
 
@@ -80,7 +79,6 @@ public class MandatoryVideoEnhancementTests
         finally
         {
             overlay.CloseAll();
-            CoreEngine.Video = oldVideo;
             CoreDispatch.PostProvider = oldPost;
             CoreSubliminal.BambiFreezeProvider = oldFreeze;
             settings.AttentionChecksEnabled = attention;
@@ -88,6 +86,72 @@ public class MandatoryVideoEnhancementTests
             EnhancementHostService.WebcamProvider = oldWebcam;
             settings.VideoEnhanceIfPossible = enabled;
             Directory.Delete(dir, true);
+        }
+    });
+
+    [Fact]
+    public Task EngineStartNudgeHonoursGatesConsentAndDontAskAgain() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.MandatoryVideosEnabled, s.SkipMandatoryVideoEnhanceNudge, s.VideoEnhanceIfPossible);
+        var (shown, scan, dialog, lockdown) = (MainShellWindow.VideoEnhanceNudgeShown, MainShellWindow.VideoEnhanceScan,
+            MainShellWindow.VideoEnhanceNudgeDialog, LockdownService.Current);
+        var asked = new System.Collections.Generic.List<(string Body, string Yes)>();
+        (bool, bool) answer = default;
+        var running = true;
+        var webcamStarts = 0;
+        var result = new MandatoryVideoEnhancementScanner.ScanResult(true, false);
+        Task Nudge() => MainShellWindow.MaybePromptMandatoryVideoEnhancement(null, () => running, () => false, () => webcamStarts++);
+        void Reset(bool webcam) { MainShellWindow.VideoEnhanceNudgeShown = false; result = new(true, webcam); asked.Clear(); }
+        try
+        {
+            MainShellWindow.VideoEnhanceScan = _ => result;
+            MainShellWindow.VideoEnhanceNudgeDialog = (_, body, yes) => { asked.Add((body, yes)); return Task.FromResult(answer); };
+            (s.MandatoryVideosEnabled, s.SkipMandatoryVideoEnhanceNudge, s.VideoEnhanceIfPossible) = (true, false, false);
+
+            // Not now leaves enhancement off; the nudge is once per launch.
+            Reset(webcam: false);
+            await Nudge();
+            Assert.Equal(Loc.Get("deeper_nudge_yes_enhance"), Assert.Single(asked).Yes);
+            Assert.Contains(Loc.Get("deeper_nudge_enhance_off"), asked[0].Body);
+            Assert.False(s.VideoEnhanceIfPossible);
+            await Nudge();
+            Assert.Single(asked);
+
+            // Lockdown and an engine that stopped during the scan never ask.
+            Reset(webcam: false);
+            var ld = LockdownService.Current = new LockdownService();
+            ld.Activate(TimeSpan.FromMinutes(5));
+            try { await Nudge(); } finally { ld.Deactivate(); }
+            running = false;
+            await Nudge();
+            Assert.Empty(asked);
+            running = true;
+
+            // Yes enables enhancement and routes the webcam through the consent flow.
+            Reset(webcam: true);
+            answer = (true, false);
+            await Nudge();
+            Assert.Equal(Loc.Get("deeper_nudge_yes_both"), Assert.Single(asked).Yes);
+            Assert.True(s.VideoEnhanceIfPossible);
+            Assert.Equal(1, webcamStarts);
+
+            // Don't ask again on Not now stops the question without starting anything.
+            Reset(webcam: true);
+            answer = (false, true);
+            await Nudge();
+            Assert.Equal(Loc.Get("deeper_nudge_yes_webcam"), Assert.Single(asked).Yes);
+            Assert.True(s.SkipMandatoryVideoEnhanceNudge);
+            Assert.Equal(1, webcamStarts);
+            Reset(webcam: true);
+            await Nudge();
+            Assert.Empty(asked);
+        }
+        finally
+        {
+            (s.MandatoryVideosEnabled, s.SkipMandatoryVideoEnhanceNudge, s.VideoEnhanceIfPossible) = saved;
+            (MainShellWindow.VideoEnhanceNudgeShown, MainShellWindow.VideoEnhanceScan,
+                MainShellWindow.VideoEnhanceNudgeDialog, LockdownService.Current) = (shown, scan, dialog, lockdown);
         }
     });
 

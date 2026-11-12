@@ -250,9 +250,12 @@ namespace ConditioningControlPanel.Avalonia
             catch (Exception ex) { Serilog.Log.Debug("Chime failed: {E}", ex.Message); }
         }
 
-        // WPF App.xaml.cs:678: binding subscribes to tracking but never starts it.
-        internal static void SeedDeeperWebcam(Platform.WebcamTracker? tracker = null) =>
+        // WPF App.xaml.cs:677-678: the real effects dispatcher; binding subscribes to tracking but never starts it.
+        internal static void SeedDeeperEnhancements(Platform.WebcamTracker? tracker = null)
+        {
+            Services.Deeper.EnhancementHostService.DispatcherFactory = () => new Platform.Deeper.BrowserEnhancementDispatcher();
             Services.Deeper.EnhancementHostService.WebcamProvider = () => new Platform.DeeperWebcamEvents(tracker ?? Platform.WebcamTracker.Instance);
+        }
 
         // WPF App.xaml.cs:3218: subscribe at construction time and return the exact detach.
         internal static void SeedHapticPlaybackTime()
@@ -1000,7 +1003,7 @@ namespace ConditioningControlPanel.Avalonia
                 // Start, which fails with a message; revoke keeps all four of the consent dialog's promises.
                 CoreWebcam.IsAvailableProvider = () => true;
                 CoreWebcam.RevokeConsentAction = Platform.WebcamTracker.RevokeConsent;
-                SeedDeeperWebcam();
+                SeedDeeperEnhancements();
                 // The plain engine (Start/Stop) is CoreEngine; the one SessionRunner seeds
                 // IsSessionRunningProvider, so the feature lock fires for a session, not a plain Start.
                 CoreSession.IsEngineRunningProvider = () => CoreEngine.IsRunning;
