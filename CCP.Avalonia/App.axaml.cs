@@ -9,6 +9,7 @@ using Avalonia.Input.Platform;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia
@@ -82,7 +83,7 @@ namespace ConditioningControlPanel.Avalonia
         }
 
         /// <summary>The achievement engine (achievements.json), or null on the headless render path.
-        /// Local-only: no sync, no streak writes, no ResetProgress on this head (oracle-achievements.md).</summary>
+        /// The login streak syncs its known pair; other achievement progress remains local-only.</summary>
         internal static AchievementEngine? Achievements { get; private set; }
         private DispatcherTimer? _achievementSaveTimer;
 
@@ -95,34 +96,99 @@ namespace ConditioningControlPanel.Avalonia
             return timer;
         }
 
-        // WPF AchievementProgressStreak.cs:25-26 and :99: record each day and retain the peak.
-        internal static Action StartSeasonActivity(SettingsService settings, AchievementEngine engine, Func<DateTime> clock)
+        // WPF AchievementService.cs:93, :146 and AchievementProgressStreak.cs:19, :192.
+        internal static Action StartSeasonActivity(SettingsService settings, AchievementEngine engine, Func<DateTime> clock, SyncPush? sync = null)
         {
-            // WPF AchievementProgressStreak.cs:38-51: a profile with no launch history
-            // starts at one without treating the missing history as a broken streak.
             var progress = engine.Progress;
-            if (progress.LastLaunchDate.Date == default)
+            var wasLive = ReferenceEquals(Achievements, engine);
+            DateTime? lastUtcDay = null, pendingSince = null;
+            var bonusReady = false;
+            Action<string, Newtonsoft.Json.Linq.JObject?>? receive = null;
+            bool Current() => ReferenceEquals(engine.Progress, progress)
+                && (!wasLive || (ReferenceEquals(Achievements, engine) && ReferenceEquals(Settings, settings)));
+            void Persist() { engine.Save(); settings.Save(); }
+            void AwardBonus()
             {
-                progress.ConsecutiveDays = Math.Max(1, progress.ConsecutiveDays);
-                progress.LastLaunchDate = clock().ToLocalTime().Date;
-                settings.Current.CurrentStreak = progress.ConsecutiveDays;
-                settings.Current.LastStreakDate = progress.LastLaunchDate;
+                if (!bonusReady || !progress.PendingStreakBonus || CoreProgression.AddXPProvider == null) return;
+                progress.PendingStreakBonus = false;
+                var days = progress.ConsecutiveDays;
+                CoreProgression.AddXP(days <= 3 ? 50 : days <= 6 ? 100 : days <= 13 ? 150 : days <= 29 ? 200 : 300, "Other");
                 engine.Save();
-                settings.Save();
             }
-            DateTime? lastDay = null;
+            void Update(DateTime now, bool resolve = false, bool startup = false)
+            {
+                var s = settings.Current;
+                var credits = s.StreakFixCharges;
+                var peak = s.SeasonPeakStreak;
+                var oldStreak = s.CurrentStreak;
+                var oldDate = s.LastStreakDate;
+                var canDefer = !s.OfflineMode && !string.IsNullOrEmpty(s.UnifiedId);
+                if (SeasonActivity.UpdateStreak(s, progress, now.ToLocalTime().Date, canDefer, resolve, allowProtection: !startup)) Persist();
+                else if (peak != s.SeasonPeakStreak || oldStreak != s.CurrentStreak || oldDate != s.LastStreakDate) settings.Save();
+                if (credits > s.StreakFixCharges && sync != null && !string.IsNullOrEmpty(s.UnifiedId))
+                {
+                    var id = s.UnifiedId;
+                    var session = sync.SessionVersion;
+                    var sentProgress = progress;
+                    _ = new StreakFix(() => s).UseAsync(now.ToLocalTime().Date).ContinueWith(t => Dispatcher.UIThread.Post(() =>
+                    {
+                        if (Current() && ReferenceEquals(engine.Progress, sentProgress) && sync.SessionVersion == session && ReferenceEquals(settings.Current, s) && s.UnifiedId == id && t.Status == TaskStatus.RanToCompletion
+                            && t.Result.success && t.Result.credits is { } balance) { s.StreakFixCharges = balance; settings.Save(); }
+                    }));
+                }
+                if (progress.PendingStreakBreak) pendingSince ??= now;
+                else pendingSince = null;
+                AwardBonus();
+            }
             void CheckDay()
             {
+                if (wasLive && (!ReferenceEquals(Achievements, engine) || !ReferenceEquals(Settings, settings))) return;
                 var now = clock().ToUniversalTime();
+                if (!ReferenceEquals(engine.Progress, progress))
+                {
+                    progress = engine.Progress;
+                    pendingSince = null;
+                    lastUtcDay = null;
+                    if (SeasonActivity.MarkActiveToday(settings.Current, now)) settings.Save();
+                    Update(now, startup: true);
+                    if (sync?.LastLoginStreakReply is { } reply) receive?.Invoke(reply.Account, reply.Stats);
+                    if (sync?.Loaded == true) sync.Nudge("login streak");
+                }
                 var s = settings.Current;
-                var added = lastDay != now.Date && SeasonActivity.MarkActiveToday(s, now);
+                var added = lastUtcDay != now.Date && SeasonActivity.MarkActiveToday(s, now);
                 var peak = s.SeasonPeakStreak;
-                SeasonActivity.TrackStreakPeak(s, engine.Progress.ConsecutiveDays);
+                SeasonActivity.TrackStreakPeak(s, progress.ConsecutiveDays);
                 if (added || peak != s.SeasonPeakStreak) settings.Save();
-                lastDay = now.Date;
+                if (AchievementProgress.ShouldBankDayRollover(progress.LastLaunchDate, now.ToLocalTime().Date)) Update(now);
+                if (progress.PendingStreakBreak && pendingSince is { } since && now - since >= TimeSpan.FromSeconds(120)) Update(now, resolve: true);
+                AwardBonus();
+                lastUtcDay = now.Date;
             }
+            var launchNow = clock().ToUniversalTime();
+            if (SeasonActivity.MarkActiveToday(settings.Current, launchNow)) settings.Save();
+            lastUtcDay = launchNow.Date;
+            Update(launchNow, startup: true);
             CheckDay();
-            return CheckDay;
+            if (sync != null)
+            {
+                sync.LoginStreak = () => Current() ? (progress.ConsecutiveDays, progress.LastLaunchDate) : null;
+                receive = (id, stats) =>
+                {
+                    if (!Current() || settings.Current.OfflineMode || settings.Current.UnifiedId != id) return;
+                    var now = clock().ToUniversalTime();
+                    if (SeasonActivity.AdoptStreak(settings.Current, progress, stats, now.ToLocalTime().Date)) Persist();
+                    if (progress.PendingStreakBreak) Update(now, resolve: true);
+                };
+                sync.LoginStreakReceived = (id, stats) =>
+                {
+                    var session = sync.SessionVersion;
+                    var sentProgress = progress;
+                    Dispatcher.UIThread.Post(() => { if (sync.SessionVersion == session && ReferenceEquals(engine.Progress, sentProgress)) receive?.Invoke(id, stats); });
+                };
+                if (sync.LastLoginStreakReply is { } reply) receive(reply.Account, reply.Stats);
+                if (sync.Loaded) sync.Nudge("login streak");
+            }
+            return () => { bonusReady = true; CheckDay(); };
         }
 
         /// <summary>The automatic cloud settings backup (WPF ProfileSyncService.BackupSettingsAsync, force: false).</summary>
@@ -1078,7 +1144,8 @@ namespace ConditioningControlPanel.Avalonia
                 // caller's thread; the popup hops to the UI thread as WPF's DispatcherHelper does.
                 Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
                 _achievementSaveTimer?.Stop();
-                _achievementSaveTimer = StartAchievementAutosave(Achievements, StartSeasonActivity(Settings!, Achievements, () => DateTime.UtcNow));
+                var checkSeasonActivity = StartSeasonActivity(Settings!, Achievements, () => DateTime.UtcNow, Platform.AccountSeed.Sync);
+                _achievementSaveTimer = StartAchievementAutosave(Achievements, checkSeasonActivity);
                 WireAchievementUnlocks(Achievements);
                 SeedCompanionRecall();
                 WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
@@ -1123,6 +1190,7 @@ namespace ConditioningControlPanel.Avalonia
                 };
                 SeedLevelAchievements(Achievements);
                 StartQuests();
+                checkSeasonActivity(); // WPF App.xaml.cs:2924 awards the startup bonus after services exist.
                 Platform.CompanionHead.Start();   // WPF App.Companion: switch seams, companion XP, drain, level-up
                 Platform.BarkHead.Start();        // WPF App.Bark (App.xaml.cs:313/336/604/2826): rules, gate, sources
                 // WPF App.xaml.cs:290: a game.* palette row is listed only when this head can start it.

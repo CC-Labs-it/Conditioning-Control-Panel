@@ -106,6 +106,19 @@ namespace ConditioningControlPanel.Services
         public bool Adopted => _adopted;
         public const SyncBody.Field AfterAdopt = SyncBody.Field.UnlockedSkills | SyncBody.Field.SkillPoints;
         public Action? LifetimeLifted { get; set; }
+        // Only the known login pair is sent; a head without an achievement engine sends no stats.
+        public Func<(int Streak, DateTime LastDate)?>? LoginStreak { get; set; }
+        public Action<string, JObject?>? LoginStreakReceived { get; set; }
+        public (string Account, JObject? Stats)? LastLoginStreakReply { get; private set; }
+        public int SessionVersion => Volatile.Read(ref _sessionVersion);
+
+        private void NoteLoginStreakReply(string id, JObject? stats)
+        {
+            LastLoginStreakReply = (id, stats);
+            try { LoginStreakReceived?.Invoke(id, stats); }
+            catch (Exception ex) { Log.Debug(ex, "Login streak reply handler failed"); }
+        }
+
 
         /// <summary>WPF ProfileSyncService.PendingCosmeticsClear: set by an EMPTY Customize save (unequip everything),
         /// cleared once a sync carrying the clear succeeds. In memory, as WPF.</summary>
@@ -179,6 +192,7 @@ namespace ConditioningControlPanel.Services
             _adopted = false;
             _knownProgress = SyncBody.Field.None;
             _serverAchievements = null;
+            LastLoginStreakReply = null;
             _pendingCosmeticsClear = false;   // never carry one account's unequip into the next
             LastSyncTime = null;
         }
@@ -247,6 +261,8 @@ namespace ConditioningControlPanel.Services
             var s = CoreSettings.Current;
             if (!Loaded || !SignedIn(s)) { Log.Debug("Profile sync skipped ({Reason}) - not loaded this session or not signed in", reason); return false; }
             if (!await _gate.WaitAsync(waitForGate ? TimeSpan.FromSeconds(5) : TimeSpan.Zero)) return false;
+            string? attemptedId = null;
+            var attemptVersion = SessionVersion;
             try
             {
                 if (LastSyncTime is { } last && UtcNow() - last < Cooldown) { Log.Debug("Profile sync skipped - cooldown active"); return false; }
@@ -270,6 +286,16 @@ namespace ConditioningControlPanel.Services
                 var clearing = _pendingCosmeticsClear;
                 var cosmetics = CosmeticsPayload(s, clearing);
                 var body = SerializeBody(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics, ConsentFields(s), _adopted, _knownProgress);
+                if (LoginStreak?.Invoke() is { } streak)
+                {
+                    var payload = JObject.Parse(body);
+                    payload["stats"] = new JObject
+                    {
+                        ["consecutive_days"] = streak.Streak,
+                        ["last_streak_date"] = streak.LastDate.Date == default ? "" : streak.LastDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
+                    };
+                    body = payload.ToString(Formatting.None);
+                }
                 var tokenUsed = s.AuthToken;
                 HttpRequestMessage NewRequest()
                 {
@@ -281,6 +307,7 @@ namespace ConditioningControlPanel.Services
                 }
                 Log.Information("Syncing profile ({Reason}) - Level: {Level}, TotalXP: {Xp}", reason, s.PlayerLevel, (int)totalXp);
                 using var request = NewRequest();
+                attemptedId = id;
                 var response = await _http.SendAsync(request);
                 var json = await response.Content.ReadAsStringAsync();
                 // A 403 for clock skew: the signature was right, our timestamp was not. Learn the
@@ -297,13 +324,15 @@ namespace ConditioningControlPanel.Services
                 }
                 using var _ = response;
                 // Signed out (or into another account) while this was in flight: the answer is not ours to apply.
-                if (!Loaded || !string.Equals(s.UnifiedId, id, StringComparison.Ordinal))
+                if (!Loaded || attemptVersion != SessionVersion || !ReferenceEquals(s, CoreSettings.Current)
+                    || !string.Equals(s.UnifiedId, id, StringComparison.Ordinal))
                 {
                     Log.Information("Profile sync response dropped - the account changed while it was in flight");
                     return false;
                 }
                 if (!response.IsSuccessStatusCode)
                 {
+                    NoteLoginStreakReply(id, null);
                     // Contract D: merged tombstone; the head's recovery re-signs in and reloads.
                     if (V2AuthService.MergedRecovery is { } merged && await merged(response, json)) return false;
                     // 429, and a 409 no recovery handled: cool down rather than retry on every trigger.
@@ -326,6 +355,8 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var reply = JObject.Parse(json);
+                    using var dayReader = new JsonTextReader(new StringReader(json)) { DateParseHandling = DateParseHandling.None };
+                    NoteLoginStreakReply(id, JObject.Load(dayReader)["user"]?["stats"] as JObject);
                     // WPF ProfileSyncService.cs:1874: ownership precedes other response flags.
                     Prizes?.Apply(id, id, reply["prizes"]?.ToObject<PrizesBlock>(), "V2 sync");
                     if (AdoptFromResponse(s, reply)) _adopted = true;
@@ -335,7 +366,7 @@ namespace ConditioningControlPanel.Services
                     if (ApplyReply(s, reply, DescentReader?.Current?.Stage, UtcNow(), PersistMigration))
                         Nudge("descent migration");
                 }
-                catch (Exception ex) { Log.Debug("V2 Sync: Could not parse server flags: {Error}", ex.Message); }
+                catch (Exception ex) { NoteLoginStreakReply(id, null); Log.Debug("V2 Sync: Could not parse server flags: {Error}", ex.Message); }
                 // THE FUSE's cache, off the RAW body (WPF ProfileSyncService.HandleDescentCountdown).
                 if (Countdown != null && Descent.DescentCountdownService.TryReadCeremonyAt(json, out var ceremonyAt))
                     Countdown.ApplyCeremonyAt(ceremonyAt);
@@ -346,6 +377,7 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex)
             {
                 Log.Warning(ex, "Profile sync failed");
+                if (attemptedId != null && Loaded && attemptVersion == SessionVersion && ReferenceEquals(s, CoreSettings.Current) && s.UnifiedId == attemptedId) NoteLoginStreakReply(attemptedId, null);
                 // WPF ProfileSyncService: a shutdown cancellation is not a server failure, but HttpClient.Timeout
                 // (a cancellation wrapping a TimeoutException) is a hung proxy and backs off like any other.
                 if (!IsExpectedCancellation(ex) || ex.InnerException is TimeoutException)
