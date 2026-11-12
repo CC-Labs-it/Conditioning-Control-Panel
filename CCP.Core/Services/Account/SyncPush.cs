@@ -106,6 +106,9 @@ namespace ConditioningControlPanel.Services
         public bool Adopted => _adopted;
         public const SyncBody.Field AfterAdopt = SyncBody.Field.UnlockedSkills | SyncBody.Field.SkillPoints;
         public Action? LifetimeLifted { get; set; }
+        // WPF ProfileSyncService.cs:1576-1584,2034-2055: the paired login streak.
+        public Func<string, (int Streak, DateTime Date)?>? LoginStreakProvider { get; set; }
+        public Action<string, int?, DateTime?>? LoginStreakReceived { get; set; }
 
         /// <summary>WPF ProfileSyncService.PendingCosmeticsClear: set by an EMPTY Customize save (unequip everything),
         /// cleared once a sync carrying the clear succeeds. In memory, as WPF.</summary>
@@ -247,6 +250,9 @@ namespace ConditioningControlPanel.Services
             var s = CoreSettings.Current;
             if (!Loaded || !SignedIn(s)) { Log.Debug("Profile sync skipped ({Reason}) - not loaded this session or not signed in", reason); return false; }
             if (!await _gate.WaitAsync(waitForGate ? TimeSpan.FromSeconds(5) : TimeSpan.Zero)) return false;
+            string? loginStreakAccount = null;
+            var loginStreakSignalled = false;
+            var sessionVersion = Volatile.Read(ref _sessionVersion);
             try
             {
                 if (LastSyncTime is { } last && UtcNow() - last < Cooldown) { Log.Debug("Profile sync skipped - cooldown active"); return false; }
@@ -270,6 +276,13 @@ namespace ConditioningControlPanel.Services
                 var clearing = _pendingCosmeticsClear;
                 var cosmetics = CosmeticsPayload(s, clearing);
                 var body = SerializeBody(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics, ConsentFields(s), _adopted, _knownProgress);
+                if (LoginStreakProvider?.Invoke(id) is { } login)
+                {
+                    var payload = JObject.Parse(body);
+                    payload["stats"] = new JObject { ["consecutive_days"] = login.Streak,
+                        ["last_streak_date"] = login.Date.Date == default ? "" : login.Date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) };
+                    body = payload.ToString(Formatting.None);
+                }
                 var tokenUsed = s.AuthToken;
                 HttpRequestMessage NewRequest()
                 {
@@ -281,6 +294,7 @@ namespace ConditioningControlPanel.Services
                 }
                 Log.Information("Syncing profile ({Reason}) - Level: {Level}, TotalXP: {Xp}", reason, s.PlayerLevel, (int)totalXp);
                 using var request = NewRequest();
+                loginStreakAccount = id;
                 var response = await _http.SendAsync(request);
                 var json = await response.Content.ReadAsStringAsync();
                 // A 403 for clock skew: the signature was right, our timestamp was not. Learn the
@@ -297,7 +311,8 @@ namespace ConditioningControlPanel.Services
                 }
                 using var _ = response;
                 // Signed out (or into another account) while this was in flight: the answer is not ours to apply.
-                if (!Loaded || !string.Equals(s.UnifiedId, id, StringComparison.Ordinal))
+                if (!Loaded || sessionVersion != Volatile.Read(ref _sessionVersion)
+                    || !ReferenceEquals(CoreSettings.Current, s) || !string.Equals(s.UnifiedId, id, StringComparison.Ordinal))
                 {
                     Log.Information("Profile sync response dropped - the account changed while it was in flight");
                     return false;
@@ -326,6 +341,13 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var reply = JObject.Parse(json);
+                    var stats = reply["user"]?["stats"] as JObject;
+                    int? streak = int.TryParse(stats?["consecutive_days"]?.ToString(), out var number) ? number : null;
+                    DateTime? lastDay = DateTime.TryParseExact(stats?["last_streak_date"]?.ToString(), "yyyy-MM-dd",
+                        System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var parsed) ? parsed : null;
+                    loginStreakSignalled = true;
+                    try { LoginStreakReceived?.Invoke(id, streak, lastDay); }
+                    catch (Exception ex) { Log.Debug(ex, "Login streak callback failed"); }
                     // WPF ProfileSyncService.cs:1874: ownership precedes other response flags.
                     Prizes?.Apply(id, id, reply["prizes"]?.ToObject<PrizesBlock>(), "V2 sync");
                     if (AdoptFromResponse(s, reply)) _adopted = true;
@@ -352,7 +374,15 @@ namespace ConditioningControlPanel.Services
                     NoteFailureForBackoff(null, s.AuthToken);
                 return false;
             }
-            finally { _gate.Release(); }
+            finally
+            {
+                _gate.Release();
+                // WPF resolves a deferred gap on a failed sync too, but never for another account.
+                if (!loginStreakSignalled && loginStreakAccount != null && Loaded
+                    && sessionVersion == Volatile.Read(ref _sessionVersion) && ReferenceEquals(CoreSettings.Current, s) && s.UnifiedId == loginStreakAccount)
+                    try { LoginStreakReceived?.Invoke(loginStreakAccount, null, null); }
+                    catch (Exception ex) { Log.Debug(ex, "Login streak failure callback failed"); }
+            }
         }
 
         private static void PersistMigration()

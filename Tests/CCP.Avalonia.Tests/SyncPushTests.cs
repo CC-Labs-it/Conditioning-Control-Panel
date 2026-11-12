@@ -109,6 +109,65 @@ public sealed partial class AccountSeedTests
     }
 
     [Fact]
+    public void LoginStreakPairIsSentAndCloudStreakRaisesSeasonPeak() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
+        var today = new DateTime(2026, 8, 15);
+        var progress = new ConditioningControlPanel.Models.AchievementProgress
+        { ConsecutiveDays = 5, LastLaunchDate = today.AddDays(-4) };
+        var settings = CoreSettings.Current;
+        settings.SeasonPeakStreak = 0;
+        ConditioningControlPanel.Services.LoginStreak.Advance(progress, settings, today, today);
+        wire.SyncReply = """{"success":true,"user":{"stats":{"consecutive_days":8,"last_streak_date":"2026-08-14"}}}""";
+        sync.LoginStreakProvider = id => id == "u1" ? (progress.ConsecutiveDays, progress.LastLaunchDate) : null;
+        sync.LoginStreakReceived = (_, streak, date) =>
+        {
+            if (streak.HasValue) ConditioningControlPanel.Services.LoginStreak.Adopt(progress, streak.Value, date, today);
+            ConditioningControlPanel.Services.LoginStreak.Advance(progress, settings, today, today, resolve: true);
+        };
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        var stats = Assert.IsType<JObject>(Assert.Single(wire.Syncs)["stats"]);
+        Assert.Equal(5, stats.Value<int>("consecutive_days"));
+        Assert.Equal("2026-08-11", stats.Value<string>("last_streak_date"));
+        Assert.Equal(9, progress.ConsecutiveDays);
+        Assert.Equal(9, settings.SeasonPeakStreak);
+    });
+
+    [Fact]
+    public void FailedSyncSignalsPendingStreakResolution() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        wire.SyncStatus = HttpStatusCode.InternalServerError;
+        sync.UtcNow = () => T0.AddSeconds(31);
+        var received = 0;
+        sync.LoginStreakReceived = (id, streak, date) =>
+        {
+            Assert.Equal("u1", id); Assert.Null(streak); Assert.Null(date); received++;
+        };
+        Assert.False(await sync.PushAsync("streak"));
+        Assert.Equal(1, received);
+    });
+
+    [Fact]
+    public void OldStreakReplyIsDroppedAfterLogoutAndReloginToSameAccount() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        wire.Hold = new TaskCompletionSource();
+        wire.SyncReply = """{"success":true,"user":{"stats":{"consecutive_days":20}}}""";
+        sync.UtcNow = () => T0.AddSeconds(31);
+        var received = 0;
+        sync.LoginStreakReceived = (_, _, _) => received++;
+        var pending = sync.PushAsync("streak");
+        sync.Reset();
+        sync.MarkLoaded(Array.Empty<string>());
+        wire.Hold.SetResult();
+        Assert.False(await pending);
+        Assert.Equal(0, received);
+    });
+
+    [Fact]
     public void NoPush_BeforeASuccessfulLoad_NorAfterLogout_UntilTheNextLoad() => WithFreshInstall(async () =>
     {
         var (wire, sync, _) = SignIn("u1", profile: null);

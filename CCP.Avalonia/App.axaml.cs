@@ -871,6 +871,8 @@ namespace ConditioningControlPanel.Avalonia
                     var sync = Platform.AccountSeed.Sync = Platform.AccountSeed.NewSync(
                         () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true);
                     // WPF ProfileSyncService: the heartbeat body is also a server tier reading (#4073).
+                    sync.LoginStreakProvider = LoginStreakForSync;
+                    sync.LoginStreakReceived = ReceiveLoginStreak;
                     sync.HeartbeatBody = body => Dispatcher.UIThread.Post(() =>
                         Platform.AccountSeed.ApplyTierReading(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat"));
                     SkillPurchase.Current = new SkillPurchase
@@ -1079,8 +1081,15 @@ namespace ConditioningControlPanel.Avalonia
                 Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
                 var activityStart = DateTimeOffset.Now;
                 RecordSeasonActivity(activityStart.UtcDateTime);
+                AdvanceLoginStreak(activityStart.UtcDateTime);
+                if (_pendingLoginStreak is { } pendingStreak)
+                {
+                    _pendingLoginStreak = null;
+                    ReceiveLoginStreak(pendingStreak.Id, pendingStreak.Streak, pendingStreak.Date);
+                }
                 _seasonRolloverTimer?.Stop();
-                _seasonRolloverTimer = StartSeasonRollover(RecordSeasonActivity, () => DateTimeOffset.Now, TimeSpan.FromSeconds(1), activityStart.Date);
+                _seasonRolloverTimer = StartSeasonRollover(utc => { RecordSeasonActivity(utc); AdvanceLoginStreak(utc); },
+                    () => DateTimeOffset.Now, TimeSpan.FromSeconds(1), activityStart.Date);
                 Platform.AccountSeed.ProfileLoaded -= RecordSeasonActivity;
                 Platform.AccountSeed.ProfileLoaded += RecordSeasonActivity;
                 _achievementSaveTimer?.Stop();

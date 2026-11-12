@@ -122,6 +122,35 @@ public sealed class RealCatalogueFailureFallbackTests
                     var app = Assert.IsType<FailingCatalogueApp>(Application.Current);
                     var today = DateTime.UtcNow.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
                     Assert.Contains(today, CoreSettings.Current.SeasonActiveDays);
+                    Assert.Equal(1, CoreSettings.Current.SeasonPeakStreak);
+                    var accountSeed = typeof(App).Assembly.GetType("ConditioningControlPanel.Avalonia.Platform.AccountSeed")!;
+                    var sync = Assert.IsType<SyncPush>(accountSeed.GetField("Sync", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null));
+                    var originalId = CoreSettings.Current.UnifiedId;
+                    try
+                    {
+                        CoreSettings.Current.UnifiedId = "streak-test";
+                        Assert.NotNull(sync.LoginStreakProvider);
+                        var initialStreak = sync.LoginStreakProvider!("streak-test");
+                        Assert.NotNull(initialStreak);
+                        Assert.Equal(1, initialStreak.Value.Streak);
+                        Assert.Equal(DateTime.Today, initialStreak.Value.Date);
+                        Assert.Null(sync.LoginStreakProvider!("another-account"));
+                        Assert.NotNull(sync.LoginStreakReceived);
+                        sync.LoginStreakReceived!("streak-test", 8, DateTime.Today);
+                        Dispatcher.UIThread.RunJobs();
+                        Assert.Equal(8, CoreSettings.Current.SeasonPeakStreak);
+                        Assert.Equal(8, CoreSettings.Current.CurrentStreak);
+                        var exiting = typeof(App).GetField("_exiting", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+                        try
+                        {
+                            exiting.SetValue(null, true);
+                            sync.LoginStreakReceived!("streak-test", 99, DateTime.Today);
+                            Dispatcher.UIThread.RunJobs();
+                            Assert.Equal(8, CoreSettings.Current.SeasonPeakStreak);
+                        }
+                        finally { exiting.SetValue(null, false); }
+                    }
+                    finally { CoreSettings.Current.UnifiedId = originalId; }
                     Assert.Contains(ConditioningControlPanel.Services.EnhancementAnalytics.Series(
                         CoreSettings.Current, DateTime.UtcNow.ToString("yyyy-MM"),
                         Array.Empty<ConditioningControlPanel.Models.SeasonRecapSnapshot>()),
