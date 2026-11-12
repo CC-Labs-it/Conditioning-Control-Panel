@@ -5,6 +5,7 @@ using Avalonia.Media;
 using ConditioningControlPanel.Localization;
 using Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Localization;
@@ -248,9 +249,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 ChaosMeta.State.SeenChaperone = true;
                 ChaosMeta.Save();
-                ChaosAnnouncerOverlay.Announce($"💞 {Loc.Get("chaos_chaperone_title")}: {Loc.Get("chaos_chaperone_hint")}", ChaosAnnounceKind.Item,
+                ChaosAnnouncerOverlay.Announce($"{IconMap.Chaperone} {Loc.Get("chaos_chaperone_title")}: {Loc.Get("chaos_chaperone_hint")}", ChaosAnnounceKind.Item,
                     artKey: "chaperone", subText: Loc.Get("chaos_chaperone_hint"));
-                state.PushEvent($"💞 {Loc.Get("chaos_chaperone_event")}");
+                state.PushEvent($"{IconMap.Chaperone} {Loc.Get("chaos_chaperone_event")}");
             }
             var (liveSpec, escortSpec) = ChaosBubbleVariants.BuildChaperonePair(intensity, state.FuseTimeMult,
                 state.Config.EffectIntensity, state.BubbleScale, debut ? ChaosTuning.DEBUT_FUSE_MULT : 1.0);

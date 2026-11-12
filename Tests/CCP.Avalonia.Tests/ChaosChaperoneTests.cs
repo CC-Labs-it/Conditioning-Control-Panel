@@ -7,12 +7,14 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -54,6 +56,10 @@ public sealed class ChaosChaperoneTests
             Assert.Equal("primero su pequeña escolta", ChaosAnnouncerOverlay.Active!.Current!.SubText);
             var live = Assert.Single(BubbleOverlay.Field.Bubbles.Where(b => b.Spec?.IsChaperoneLive == true));
             Assert.True(ChaosMeta.State.SeenChaperone);
+            var feedGlyph = Assert.Single(IconText.Split(ChaosRunHost.State!.RecentEvents[0]).Icons);
+            Assert.Equal(IconMap.Chaperone, feedGlyph);
+            Assert.True(IconMap.TryGet(feedGlyph, out var feedIcon));
+            Assert.Equal(IconKind.Heart, feedIcon.Kind);
             ChaosMeta.State.DiscoveredCodexIds.Add("test:chaperone-isolation");
             var escort = live.Escort!;
             Assert.NotNull(escort);
