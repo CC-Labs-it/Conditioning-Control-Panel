@@ -34,6 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     internal sealed class FlashOverlayWindow : Window
     {
         private readonly Image _image;
+        internal IImageBrushSource? GazePreview => _image.Source as IImageBrushSource;
         private bool _closed;
         private DispatcherTimer? _gifTimer;
         private System.Collections.Generic.List<Bitmap>? _gifFrames;
