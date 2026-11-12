@@ -555,6 +555,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     _spawnTimer?.Stop();
                     BubbleOverlay.HoldChaos(true);
                     BubbleOverlay.ClearForDraft();
+                    ChaosOverlayWindow.ChaosSfx.PlayWaveClear();
                     Pulse(Color.FromRgb(150, 200, 255), 0.30);
                     ChaosWaveTimerWindow.Clear();
                     DealDraft();
@@ -601,6 +602,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 _state.Shields++;
                 _state.PushEvent(Loc.Get("chaos_event_skip"));
+                ChaosAnnouncerOverlay.Announce("+1 RESISTANCE", ChaosAnnounceKind.Willpower, artKey: "resistance");
             }
             else
             {
@@ -619,7 +621,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 {
                     _state.BoonMult += _state.SinExtraMult;
                     if (_state.MaxedBoons.Contains("surrender")) _state.Shields++;
+                    ChaosOverlayWindow.ChaosSfx.Play("sin_accept", 0.6f);
                 }
+                ChaosAnnouncerOverlay.Announce($"{(boon.IsCurse ? "☠" : "◈")} {boon.Name}",
+                    boon.IsCurse ? ChaosAnnounceKind.Temptation : ChaosAnnounceKind.Mantra, artKey: boon.Id);
             }
             _state.WaveIndex = _pendingWave;
             _state.ActIndex = ChaosRunEngine.ActFor(_pendingWave);
