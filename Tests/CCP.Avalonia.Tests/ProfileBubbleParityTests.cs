@@ -257,30 +257,26 @@ public sealed class ProfileBubbleParityTests : IDisposable
             double Angle() => visual.RenderTransform is TransformGroup g
                 ? g.Children.OfType<RotateTransform>().Single().Angle
                 : (visual.RenderTransform as RotateTransform)?.Angle ?? 0;
-            double maxTilt = 0, minOpacity = 1;
-            void Run()
-            {
-                for (int i = 0; i < 60; i++)
-                {
-                    Dispatcher.UIThread.RunJobs();
-                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-                    maxTilt = Math.Max(maxTilt, Math.Abs(Angle()));
-                    minOpacity = Math.Min(minOpacity, visual.Opacity);
-                }
-            }
-
+            var clock = new TestAnimationClock();
+            clock.Attach(visual);
+            clock.Step(0);
             DisplayFlash(shell);
-            Run();
-            if (animates) Assert.True(maxTilt > 1, $"a flash never tilted the bubble (max {maxTilt})");
-            else Assert.Equal(0, maxTilt);
-            Assert.Equal(1, minOpacity);
+            Dispatcher.UIThread.RunJobs();
+            clock.Step(0);
+            clock.Step(90);
+            if (animates) Assert.Equal(-12, Angle(), 3);
+            else Assert.Equal(0, Angle());
+            Assert.Equal(1, visual.Opacity);
+            clock.Step(480);
 
-            maxTilt = 0;
             DisplaySubliminal();
-            Run();
-            if (animates) Assert.True(minOpacity < 0.95, $"a subliminal never dipped the bubble (min {minOpacity})");
-            else Assert.Equal(1, minOpacity);
-            Assert.Equal(0, maxTilt);
+            Dispatcher.UIThread.RunJobs();
+            clock.Step(1000);
+            clock.Step(1300);
+            if (animates) Assert.Equal(0.55, visual.Opacity, 3);
+            else Assert.Equal(1, visual.Opacity);
+            Assert.Equal(0, Angle(), 3);
+            clock.Step(1600);
         }
         finally
         {
