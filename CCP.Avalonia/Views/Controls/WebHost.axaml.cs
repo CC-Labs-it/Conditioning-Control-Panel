@@ -64,8 +64,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>The engine granted a page's fullscreen request (WPF ContainsFullScreenElementChanged).
         /// Native only: a page message can never raise it.</summary>
         internal event Action? NativeFullscreenEntered;
+        internal event Action? NativeFullscreenExited;
         private IDisposable? _fullscreenWatch;
         internal void OnNativeFullscreenEntered() => NativeFullscreenEntered?.Invoke();
+        internal void OnNativeFullscreenExited() => NativeFullscreenExited?.Invoke();
+        internal event Action? AcceptedNavigationStarted;
         internal IDisposable? PreserveForMove() => _web?.BeginReparenting();
 
         /// <summary>Per-host WebView2 options, set before attachment. Other adapters ignore these.</summary>
@@ -367,8 +370,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                         if (BrowserProcessFailed != null && _failureWatch == null)
                             try { _failureWatch = Platform.TrailerBrowserPolicy.Attach(_web.TryGetPlatformHandle(), OnBrowserProcessFailed); }
                             catch (Exception ex) { Log.Debug(ex, "Trailer failure subscription failed"); OnBrowserProcessFailed(); }
-                        if (NativeFullscreenEntered != null && _fullscreenWatch == null)
-                            try { _fullscreenWatch = Platform.WebFullscreenSignal.Attach(_web.TryGetPlatformHandle(), OnNativeFullscreenEntered); }
+                        if ((NativeFullscreenEntered != null || NativeFullscreenExited != null) && _fullscreenWatch == null)
+                            try { _fullscreenWatch = Platform.WebFullscreenSignal.Attach(_web.TryGetPlatformHandle(), OnNativeFullscreenEntered, OnNativeFullscreenExited); }
                             catch (Exception ex) { Log.Debug(ex, "Fullscreen signal subscription failed"); }
                         OnNavigationCompleted(e.Request ?? _web?.Source, e.IsSuccess);
                     };
@@ -418,7 +421,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             var target = e.Request;
             // Panic teardown must pass a caller's page allowlist, including on reattachment.
             // Late redirects from the stopped document must not replace the blank page.
-            if (_panicBlank) { e.Cancel = target != PanicBlank; return; }
+            if (_panicBlank) { e.Cancel = target != PanicBlank; if (!e.Cancel) AcceptedNavigationStarted?.Invoke(); return; }
             _scrolllerPanicTarget = target;
             if (RefusesScrolller(target)) { e.Cancel = true; return; }
             // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
@@ -434,11 +437,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // The Scrolller licence switch is off: no web view of this app opens a Scrolller page (WPF ScrolllerWebGate Block).
             if (ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicyService.Blocks(target?.AbsoluteUri)) { e.Cancel = true; return; }
             var gate = AllowNavigation;
-            if (gate is null) return;
+            if (gate is null) { if (!e.Cancel) AcceptedNavigationStarted?.Invoke(); return; }
             // No URL to judge: refuse. A navigation the gate cannot see is exactly the one a
             // hostile page would use to slip past it.
             if (target is null) { e.Cancel = true; return; }
-            if (gate(target)) return;
+            if (gate(target)) { if (!e.Cancel) AcceptedNavigationStarted?.Invoke(); return; }
             e.Cancel = true;
             // Host + path only: a signed media URL's query string must not reach the log.
             Log.Warning("WebHost: navigation blocked to {Host}{Path}", target.Host, target.AbsolutePath);

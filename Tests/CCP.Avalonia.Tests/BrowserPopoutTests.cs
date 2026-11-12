@@ -226,10 +226,69 @@ public sealed class BrowserPopoutTests
         host.OnNavigationCompleted(new Uri("https://example.com/closed"));
         host.OnNativeFullscreenEntered();
         Assert.DoesNotContain(scripts, s => s.Contains("ccp_browser_fullscreen_off"));
-        var handlers = (Delegate?)typeof(WebHost).GetField("NavigationCompleted", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(host);
-        Assert.DoesNotContain(handlers?.GetInvocationList() ?? Array.Empty<Delegate>(), h => ReferenceEquals(h.Target, shell));
+        foreach (var eventName in new[] { "NavigationCompleted", "AcceptedNavigationStarted", "NativeFullscreenEntered", "NativeFullscreenExited" })
+        {
+            var handlers = (Delegate?)typeof(WebHost).GetField(eventName, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(host);
+            Assert.DoesNotContain(handlers?.GetInvocationList() ?? Array.Empty<Delegate>(), h => ReferenceEquals(h.Target, shell));
+        }
         Assert.False(next.IsVisible);
         Assert.NotEqual(WindowState.FullScreen, next.WindowState);
+    });
+
+    [Fact]
+    public Task NativeExitRestoresPopoutEvenBeforePageScriptCompletes() => WithShell((shell, page, host) =>
+    {
+        var script = new TaskCompletionSource<string?>();
+        var cleanups = 0;
+        host.ScriptInvoker = js =>
+        {
+            if (js.Contains("var f=window.__ccpBrowserFsExit")) { cleanups++; return Task.FromResult<string?>(null); }
+            return script.Task;
+        };
+        Click(page, "BtnPopOutBrowser");
+        var popout = shell.BrowserPopoutWindow!;
+        host.OnNativeFullscreenEntered();
+        Assert.Equal(WindowState.FullScreen, popout.WindowState);
+        host.OnNativeFullscreenExited();
+        Assert.Equal(WindowState.Normal, popout.WindowState);
+        Assert.Same(host, popout.Content);
+        Assert.Equal(1, cleanups);
+        script.SetResult(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(2, cleanups); // a late install is retired after the first cleanup
+    });
+
+    [Fact]
+    public Task AcceptedNavigationRestoresFullscreenButRefusedNavigationDoesNot() => WithShell((shell, page, host) =>
+    {
+        Click(page, "BtnPopOutBrowser");
+        var popout = shell.BrowserPopoutWindow!;
+        host.NewScrolllerEngine()(true);
+        var url = new Uri("http://127.0.0.1:9/next");
+        host.AllowNavigation = _ => false;
+        host.OnNativeFullscreenEntered();
+        var refused = new WebViewNavigationStartingEventArgs { Request = url };
+        host.OnNavigationStarted(null, refused);
+        Assert.True(refused.Cancel);
+        Assert.Equal(WindowState.FullScreen, popout.WindowState);
+        host.AllowNavigation = _ => true;
+        var accepted = new WebViewNavigationStartingEventArgs { Request = url };
+        host.OnNavigationStarted(null, accepted);
+        Assert.False(accepted.Cancel);
+        Assert.Equal(WindowState.Normal, popout.WindowState);
+        Assert.Same(host, popout.Content);
+    });
+
+    [Fact]
+    public Task NavigationCompletionRestoresFullscreenIfStartWasMissed() => WithShell((shell, page, host) =>
+    {
+        Click(page, "BtnPopOutBrowser");
+        var popout = shell.BrowserPopoutWindow!;
+        host.OnNativeFullscreenEntered();
+        Assert.Equal(WindowState.FullScreen, popout.WindowState);
+        host.OnNavigationCompleted(new Uri("http://127.0.0.1:9/next"));
+        Assert.Equal(WindowState.Normal, popout.WindowState);
+        Assert.Same(host, popout.Content);
     });
 
 }
