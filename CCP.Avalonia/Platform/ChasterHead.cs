@@ -110,6 +110,16 @@ internal static class ChasterHead
         return relay;
     }
 
+    /// <summary>WPF RemoteControlService.cs:1401 also books a video trigger dropped during playback.
+    /// The relay calls this only after its gate and leave/panic checks, on the command thread.</summary>
+    internal static string? ExecuteRemote(string action, Newtonsoft.Json.Linq.JObject? parameters)
+    {
+        var overlappingVideo = action == "trigger_video" && CoreEngine.Video?.IsPlaying == true;
+        var reason = RemoteCommands.Execute(action, parameters);
+        if (overlappingVideo && reason != null) Safe(() => Service?.Note("remote_video"));
+        return reason;
+    }
+
     private static readonly HashSet<ChasterService> Attached = new();
 
     /// <summary>WPF ChasterHooks.cs:65-69: a finished program day pays back, a missed one costs. Reads
