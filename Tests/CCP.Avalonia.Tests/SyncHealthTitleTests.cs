@@ -8,6 +8,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -103,6 +104,37 @@ public class SyncHealthTitleTests
             AccountSeed.Sync = oldSync;
             CoreSettings.ServiceProvider = oldSettings;
             CoreAccount.IsLoggedInProvider = oldLogin;
+        }
+    });
+
+    [Fact]
+    public void SyncIssueTitleTracksSelectedLanguage() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var loc = LocalizationManager.Instance;
+        var original = loc.CurrentLanguage;
+        var window = new MainShellWindow();
+        try
+        {
+            window.OnSyncHealthChanged(null, 3);
+            foreach (var (language, text) in new[]
+            {
+                ("en", "Cloud sync issue"), ("de", "Problem bei der Cloud-Synchronisierung"),
+                ("es", "Problema de sincronización en la nube"), ("fr", "Problème de synchronisation cloud"),
+                ("it", "Problema di sincronizzazione cloud"), ("ja", "クラウド同期の問題"),
+                ("ko", "클라우드 동기화 문제"), ("pt-BR", "Problema de sincronização na nuvem"),
+                ("ru", "Проблема синхронизации с облаком"), ("zh-CN", "云同步出现问题")
+            })
+            {
+                loc.SetLanguage(language);
+                Assert.EndsWith(" - " + text, window.Title);
+            }
+            window.OnSyncHealthChanged(null, 0);
+            Assert.DoesNotContain("云同步出现问题", window.Title);
+        }
+        finally
+        {
+            window.Close();
+            loc.SetLanguage(original);
         }
     });
 

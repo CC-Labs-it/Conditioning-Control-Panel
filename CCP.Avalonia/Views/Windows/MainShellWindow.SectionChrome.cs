@@ -459,7 +459,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 : string.IsNullOrEmpty(page)
                     ? $"{_navBaseTitle} - {sectionLabel}"
                     : $"{_navBaseTitle} - {sectionLabel} {Loc.Get("nav_crumb_sep")} {page}";
-            Title = _syncIssueTitle ? $"{title} - Cloud sync issue" : title;
+            Title = _syncIssueTitle ? $"{title} - {Loc.Get("cloud_sync_issue")}" : title;
         }
 
         /// <summary>The label of the Settings section whose pill is checked (null if none). WPF :340.</summary>

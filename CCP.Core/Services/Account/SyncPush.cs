@@ -316,6 +316,11 @@ namespace ConditioningControlPanel.Services
                     // 429, and a 409 no recovery handled: cool down rather than retry on every trigger.
                     if (response.StatusCode is (HttpStatusCode)429 or HttpStatusCode.Conflict)
                     {
+                        if (response.StatusCode == HttpStatusCode.Conflict)
+                        {
+                            ConsecutiveSyncFailures++;
+                            SyncHealthChanged?.Invoke(this, ConsecutiveSyncFailures);
+                        }
                         LastSyncTime = UtcNow();
                         Log.Warning("V2 Profile sync refused by server ({Status}), will retry after the cooldown", (int)response.StatusCode);
                         return false;

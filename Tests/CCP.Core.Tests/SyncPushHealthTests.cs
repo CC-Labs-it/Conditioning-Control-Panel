@@ -16,8 +16,9 @@ public class SyncPushHealthTests
     private sealed class Wire : HttpMessageHandler
     {
         public bool Succeed;
+        public HttpStatusCode FailureStatus = HttpStatusCode.InternalServerError;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromResult(new HttpResponseMessage(Succeed ? HttpStatusCode.OK : HttpStatusCode.InternalServerError) { Content = new StringContent("{}") });
+            Task.FromResult(new HttpResponseMessage(Succeed ? HttpStatusCode.OK : FailureStatus) { Content = new StringContent("{}") });
     }
 
     [Fact]
@@ -91,6 +92,56 @@ public class SyncPushHealthTests
         finally
         {
             sync.Reset();
+            CoreSettings.ServiceProvider = oldSettings;
+            CoreAccount.IsLoggedInProvider = oldLogin;
+        }
+    }
+
+    [Fact]
+    public async Task UnhandledConflictsCountButCooldownAndHandledConflictsDoNot()
+    {
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldLogin = CoreAccount.IsLoggedInProvider;
+        var oldRecovery = V2AuthService.MergedRecovery;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        CoreAccount.IsLoggedInProvider = () => true;
+        var wire = new Wire { FailureStatus = HttpStatusCode.Conflict };
+        var sync = new SyncPush(() => Array.Empty<string>(), () => false, wire);
+        var now = DateTime.UtcNow;
+        sync.UtcNow = () => now;
+        var events = new List<int>();
+        sync.SyncHealthChanged += (_, count) => events.Add(count);
+        try
+        {
+            settings.Current.UnifiedId = "conflict-health-test";
+            settings.Current.AuthToken = "fake";
+            settings.Current.OfflineMode = false;
+            settings.Current.LastConfirmedServerXp = 0;
+            sync.MarkLoaded(null);
+            V2AuthService.MergedRecovery = (_, _) => Task.FromResult(true);
+            Assert.False(await sync.PushAsync("handled"));
+            Assert.Empty(events);
+            V2AuthService.MergedRecovery = (_, _) => Task.FromResult(false);
+            for (var i = 0; i < 3; i++)
+            {
+                Assert.False(await sync.PushAsync("conflict"));
+                Assert.False(await sync.PushAsync("cooldown"));
+                now += SyncPush.Cooldown + TimeSpan.FromSeconds(1);
+            }
+            Assert.Equal(new[] { 1, 2, 3 }, events);
+            wire.FailureStatus = (HttpStatusCode)429;
+            Assert.False(await sync.PushAsync("rate limited"));
+            Assert.Equal(new[] { 1, 2, 3 }, events);
+            now += SyncPush.Cooldown + TimeSpan.FromSeconds(1);
+            wire.Succeed = true;
+            Assert.True(await sync.PushAsync("success"));
+            Assert.Equal(new[] { 1, 2, 3, 0 }, events);
+        }
+        finally
+        {
+            sync.Reset();
+            V2AuthService.MergedRecovery = oldRecovery;
             CoreSettings.ServiceProvider = oldSettings;
             CoreAccount.IsLoggedInProvider = oldLogin;
         }
