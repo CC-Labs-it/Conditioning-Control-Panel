@@ -147,6 +147,35 @@ public sealed class MindWipeTests
         Assert.True(prepared.Disposed);
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Newer_one_shot_wins_when_preparations_finish_in_reverse_order(bool timed) => Run((_, voices, clock) =>
+    {
+        var older = new Voice();
+        var newer = new Voice();
+        var preparations = 0;
+        MindWipePlayer? player = null;
+        player = new MindWipePlayer((path, volume, loop, ended) => null, (path, ended) =>
+        {
+            if (++preparations != 1) return newer;
+            player!.TriggerOnce(); // Finish the newer preparation before returning the older one.
+            return older;
+        }, clock, roll: () => 0);
+        try
+        {
+            if (timed) { player.Start(180, 0.4); clock.Advance(TimeSpan.FromSeconds(10)); }
+            else player.TriggerOnce();
+            Assert.Equal(2, preparations);
+            Assert.Equal(0, older.Plays);
+            Assert.True(older.Disposed);
+            Assert.Equal(1, newer.Plays);
+            Assert.False(newer.Disposed);
+        }
+        finally { player.Stop(); }
+        Assert.True(newer.Disposed);
+    });
+
     [Fact]
     public void Volume_changed_during_preparation_is_applied_before_play() => Run((_, voices, clock) =>
     {

@@ -154,7 +154,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     ? MindWipeSchedule.SessionProbability(_sessionBase, _time.GetLocalNow().DateTime - _sessionStart)
                     : MindWipeSchedule.Probability(_frequency);
                 if (_roll() >= probability) return;
-                generation = _generation;
+                generation = ++_generation;
             }
             PlayOnce(generation);
         }
@@ -166,7 +166,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             lock (_lock)
             {
                 _volume = MindWipeSchedule.ClampVolume(CoreSettings.Current.MindWipeVolume / 100.0);
-                generation = _generation;
+                generation = ++_generation;
             }
             PlayOnce(generation);
         }
