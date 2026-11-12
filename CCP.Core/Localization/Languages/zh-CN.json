@@ -8712,5 +8712,7 @@
   "shop_item_rt_bundle_1_name": "Racing Thoughts 合集 1",
   "shop_item_rt_bundle_2_name": "Racing Thoughts 合集 2",
   "shop_item_rt_bundle_3_name": "Racing Thoughts 合集 3",
-  "remote_invalid_hypnotube_url": "不是有效的 HypnoTube 视频链接"
+  "remote_invalid_hypnotube_url": "不是有效的 HypnoTube 视频链接",
+  "remote_browser_unavailable": "浏览器无法打开",
+  "remote_browser_screen_busy": "{0}正在屏幕上显示"
 }

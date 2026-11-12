@@ -8956,5 +8956,7 @@
   "shop_item_rt_bundle_1_name": "Racing Thoughts Vol. 1",
   "shop_item_rt_bundle_2_name": "Racing Thoughts Vol. 2",
   "shop_item_rt_bundle_3_name": "Racing Thoughts Vol. 3",
-  "remote_invalid_hypnotube_url": "not an eligible HypnoTube URL"
+  "remote_invalid_hypnotube_url": "not an eligible HypnoTube URL",
+  "remote_browser_unavailable": "the browser could not open it",
+  "remote_browser_screen_busy": "{0} is on screen"
 }

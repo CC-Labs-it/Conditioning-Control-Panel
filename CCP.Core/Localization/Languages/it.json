@@ -8951,5 +8951,7 @@
   "shop_item_rt_bundle_1_name": "Pacchetto Racing Thoughts 1",
   "shop_item_rt_bundle_2_name": "Pacchetto Racing Thoughts 2",
   "shop_item_rt_bundle_3_name": "Pacchetto Racing Thoughts 3",
-  "remote_invalid_hypnotube_url": "URL video HypnoTube non valido"
+  "remote_invalid_hypnotube_url": "URL video HypnoTube non valido",
+  "remote_browser_unavailable": "il browser non è riuscito ad aprirlo",
+  "remote_browser_screen_busy": "{0} è sullo schermo"
 }

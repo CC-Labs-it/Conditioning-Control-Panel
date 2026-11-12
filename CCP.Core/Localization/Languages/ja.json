@@ -8203,5 +8203,7 @@
   "shop_item_rt_bundle_1_name": "Racing Thoughts バンドル1",
   "shop_item_rt_bundle_2_name": "Racing Thoughts バンドル2",
   "shop_item_rt_bundle_3_name": "Racing Thoughts バンドル3",
-  "remote_invalid_hypnotube_url": "有効なHypnoTube動画のURLではありません"
+  "remote_invalid_hypnotube_url": "有効なHypnoTube動画のURLではありません",
+  "remote_browser_unavailable": "ブラウザーで開けませんでした",
+  "remote_browser_screen_busy": "{0}が画面に表示されています"
 }

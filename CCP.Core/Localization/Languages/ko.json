@@ -8203,5 +8203,7 @@
   "shop_item_rt_bundle_1_name": "Racing Thoughts 번들 1",
   "shop_item_rt_bundle_2_name": "Racing Thoughts 번들 2",
   "shop_item_rt_bundle_3_name": "Racing Thoughts 번들 3",
-  "remote_invalid_hypnotube_url": "올바른 HypnoTube 동영상 URL이 아닙니다"
+  "remote_invalid_hypnotube_url": "올바른 HypnoTube 동영상 URL이 아닙니다",
+  "remote_browser_unavailable": "브라우저에서 열 수 없습니다",
+  "remote_browser_screen_busy": "{0}이(가) 화면에 표시되어 있습니다"
 }

@@ -415,7 +415,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (gate(target)) return;
             e.Cancel = true;
             // Host + path only: a signed media URL's query string must not reach the log.
-            Log.Warning("WebHost: navigation blocked to {Host}{Path}", target.Host, target.AbsolutePath);
+            Log.Warning("WebHost: navigation blocked to {Host}", Services.Logging.UrlLog.Host(target));
         }
 
         /// <summary>
@@ -434,7 +434,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (_web is null) return;
             if (_scrolllerGate is null) return;   // held: the gate's report loads Source
             try { _web.Navigate(url); }
-            catch (Exception ex) { Log.Debug("WebHost: Navigate failed: {Error}", ex.Message); }
+            catch (Exception ex) { Log.Debug("WebHost: Navigate failed: {ErrorType}", ex.GetType().Name); }
         }
 
         /// <summary>The URL as the fallback panel names it: WebAssetServer's ccp_t token never reaches the screen.</summary>
@@ -484,7 +484,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (ReloadAfterGate(_web?.Source, src, _loadedOnThisEngine) && ConditioningControlPanel.Services.SandboxNet.Allows(src))
             {
                 try { _web!.Navigate(src!); }
-                catch (Exception ex) { Log.Debug("WebHost: Navigate failed: {Error}", ex.Message); }
+                catch (Exception ex) { Log.Debug("WebHost: Navigate failed: {ErrorType}", ex.GetType().Name); }
                 return;
             }
             ApplySource();

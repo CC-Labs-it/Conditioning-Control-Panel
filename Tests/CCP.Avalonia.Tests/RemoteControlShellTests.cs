@@ -40,6 +40,12 @@ public sealed class RemoteControlShellTests
         }
     }
 
+    private sealed class BrowserLogSink : Serilog.Core.ILogEventSink
+    {
+        public readonly System.Collections.Concurrent.ConcurrentQueue<Serilog.Events.LogEvent> Events = new();
+        public void Emit(Serilog.Events.LogEvent e) => Events.Enqueue(e);
+    }
+
     private sealed class SteppedClock : TimeProvider
     {
         public long Now = 1_000_000;
@@ -240,6 +246,28 @@ public sealed class RemoteControlShellTests
             Assert.Equal("the browser could not open it", RemoteCommands.Execute("play_hypnotube", new Newtonsoft.Json.Linq.JObject { ["url"] = video }));
             Assert.False(browser.IsVisible);
             Assert.Equal(0, web.NavigationRequests);
+            var loc = LocalizationManager.Instance;
+            var oldLanguage = loc.CurrentLanguage;
+            try
+            {
+                loc.SetLanguage("fr");
+                Assert.Equal("le navigateur n’a pas pu l’ouvrir", RemoteCommands.Execute("play_hypnotube", new Newtonsoft.Json.Linq.JObject { ["url"] = video }));
+            }
+            finally { loc.SetLanguage(oldLanguage); }
+
+            var sink = new BrowserLogSink();
+            var oldLogger = Serilog.Log.Logger;
+            Serilog.Log.Logger = new Serilog.LoggerConfiguration().MinimumLevel.Verbose().WriteTo.Sink(sink).CreateLogger();
+            try
+            {
+                Assert.True(shell.NavigateToUrlInBrowser("https://hypnotube.com/video/private-title-123.html?token=private-secret", true));
+                Assert.False(shell.NavigateToUrlInBrowser("invalid-private-secret", true));
+                var logged = string.Join("\n", sink.Events.Select(e => e.RenderMessage() + e.Exception));
+                Assert.Contains("hypnotube.com", logged);
+                Assert.DoesNotContain("private-title", logged);
+                Assert.DoesNotContain("private-secret", logged);
+            }
+            finally { Serilog.Log.Logger = oldLogger; }
 
             // A page engine from here on: the takeover script is what reaches it.
             var scripts = new List<string>();
@@ -301,6 +329,12 @@ public sealed class RemoteControlShellTests
             {
                 intake.Show();
                 Assert.Equal("Graded Intake is on screen", RemoteCommands.Execute("play_hypnotube", new Newtonsoft.Json.Linq.JObject { ["url"] = video }));
+                try
+                {
+                    loc.SetLanguage("fr");
+                    Assert.Equal("Graded Intake est à l’écran", RemoteCommands.Execute("play_hypnotube", new Newtonsoft.Json.Linq.JObject { ["url"] = video }));
+                }
+                finally { loc.SetLanguage(oldLanguage); }
                 Assert.False(browser.IsVisible);
                 Assert.Equal(new Uri("https://hypnotube.com/"), web.Source);
             }

@@ -111,12 +111,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var host = BrowserView;
                 if (host == null) return false;
                 host.Navigate(new Uri(url));   // even when equal: WPF #867, re-click goes home
-                Log.Information("Browser navigated to {Url}", url);
+                Log.Information("Browser navigated to {Host}", Services.Logging.UrlLog.Host(url));
                 return true;
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, "Browser navigation failed for {Url}", url);
+                Log.Warning("Browser navigation failed for {Host}: {ErrorType}", Services.Logging.UrlLog.Host(url), ex.GetType().Name);
                 return false;
             }
         }
@@ -196,7 +196,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (autoPlayFullscreen && BrowserView is { HasEngine: true } web && !lower.Contains("bambicloud.com/playlist/"))
                 _disarmBrowserAutoPlay = disarm = ArmVideoAutoPlay(web, request);
             else if (autoPlayFullscreen)
-                Log.Warning("Auto-play/fullscreen requested but the web view has no engine - takeover skipped: {Url}", url);
+                Log.Warning("Auto-play/fullscreen requested but the web view has no engine - takeover skipped: {Host}", Services.Logging.UrlLog.Host(url));
 
             if (NavigateBrowser(url)) return true;
             disarm?.Invoke();
@@ -259,7 +259,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal string? PlayHypnotubeFromRemote(string url)
         {
             var ownedBy = ScreenOwningWebHostName();
-            if (ownedBy != null) return ownedBy + " is on screen";
+            if (ownedBy != null) return Loc.GetF("remote_browser_screen_busy", ownedBy);
             _remoteBrowserVideoActive = true;
             RevealBrowserForRemoteVideo(true);
             // WPF NavigateToUrlInBrowser returns false with no browser (:698): a web view with no engine draws only
@@ -267,7 +267,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (BrowserView is { HasEngine: true } && NavigateToUrlInBrowser(url, autoPlayFullscreen: true)) return null;
             _remoteBrowserVideoActive = false;
             RevealBrowserForRemoteVideo(false);
-            return "the browser could not open it";
+            return Loc.Get("remote_browser_unavailable");
         }
 
         /// <summary>WPF StopBrowserVideoFromRemote (Browser.cs:3228) via EndWebVideoTakeover's remote branch
