@@ -83,6 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (ReferenceEquals(_window, this)) _window = null;
                 _statusTimer.Stop();
+                StopLobby();
                 CoreMods.ModChanged -= OnModChanged;
                 PrizeGrants.GrantsChanged -= OnGrantsChanged;
             };
@@ -91,12 +92,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (e.Property != IsVisibleProperty) return;
                 if (IsVisible) OnShown();
-                else _statusTimer.Stop();
+                else { _statusTimer.Stop(); StopLobby(); }
             };
             BuildTiles();
             HookVeil();
             HookFx();
             HookLinks();
+            HookLobby();
             PaintSoundButton();
         }
 
@@ -111,6 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 RefreshStatus();
                 RefreshStats();
                 _statusTimer.Start();
+                StartLobby();
             }
             catch (Exception ex) { Log.Warning(ex, "[Launcher] OnShown failed"); }
         }
@@ -539,9 +542,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF LauncherHost.LaunchGame (:335): the game opens, then the launcher hides behind it;
         /// the return poll brings the launcher back when the game closes and the panel is not up. A gate
         /// that refused leaves the launcher where it is.</summary>
-        private void LaunchGameWindow(string id)
+        private void LaunchGameWindow(string id, Func<Games.GameWindow?>? open = null)
         {
-            var game = Games.GameWindow.Launch(id);
+            var game = open != null ? open() : Games.GameWindow.Launch(id);
             if (game == null) return;
             AfterExitBeat(() =>
             {

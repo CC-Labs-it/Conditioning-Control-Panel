@@ -22,10 +22,14 @@ public partial class AvailableSubjectsTabView : UserControl
 {
     internal bool IsNarrow { get; private set; }
     internal int SelectedColumn { get; private set; }
-    internal Func<LobbyGates> ReadGates = () => LobbyGates.From(Platform.FriendsHead.Identity() != null,
+    internal Func<LobbyGates> ReadGates = CurrentGates;
+    /// <summary>WPF MainWindow.CurrentLobbyGates, shared with the launcher's lobby chip.</summary>
+    internal static LobbyGates CurrentGates() => LobbyGates.From(Platform.FriendsHead.Identity() != null,
         TierGate.HasPremium, TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed);
     internal Func<LobbyPoll>? CreateLobby;
+    internal LobbyPoll? SharedLobby; // stands in for LobbyHead.Service in tests; never disposed by the page
     private LobbyPoll? _lobby;
+    private bool _ownsLobby;
     private IDisposable? _lease;
     private LobbySnapshot _snapshot = LobbySnapshot.Empty;
 
@@ -42,8 +46,12 @@ public partial class AvailableSubjectsTabView : UserControl
         {
             if (_lobby == null)
             {
-                _lobby = CreateLobby?.Invoke() ?? BuildLobby();
+                // One feed with the launcher chip, as WPF App.Lobby; a test's own poll is disposed with the page.
+                _ownsLobby = CreateLobby != null;
+                _lobby = CreateLobby?.Invoke() ?? SharedLobby ?? Platform.LobbyHead.Service;
                 _lobby.Changed += OnLobbyChanged;
+                // WPF EnterLobbyTab paints App.Lobby.Snapshot (MainWindow.Lobby.cs:87); rows painted before the first load stay.
+                if (_snapshot.IsEmpty) _snapshot = _lobby.Snapshot;
             }
             Repaint();
             SyncWatch();
@@ -53,19 +61,11 @@ public partial class AvailableSubjectsTabView : UserControl
         Unloaded += (_, _) =>
         {
             _lease?.Dispose(); _lease = null;
-            if (_lobby != null) { _lobby.Changed -= OnLobbyChanged; _lobby.Dispose(); _lobby = null; }
+            if (_lobby != null) { _lobby.Changed -= OnLobbyChanged; if (_ownsLobby) _lobby.Dispose(); _lobby = null; }
+            _snapshot = LobbySnapshot.Empty; // unheard rounds may belong to another account: reload reads the feed
             SubjectsAmbientFx.Stop();
         };
     }
-    private static LobbyPoll BuildLobby()
-    {
-        var remote = new RemoteLobbyApi();
-        return new LobbyPoll(new Platform.FriendsHead.Timer(),
-            () => Platform.FriendsHead.Identity() != null,
-            () => Platform.FriendsHead.Service?.Snapshot.Friends ?? Array.Empty<Friend>(),
-            () => new PbpLobbyApi().FetchAsync(), () => GoonOpenTables.RefreshAsync(), () => remote.FetchAsync());
-    }
-
     private void SyncWatch()
     {
         if (IsVisible && _lobby != null) _lease ??= _lobby.Watch();
@@ -82,7 +82,9 @@ public partial class AvailableSubjectsTabView : UserControl
     {
         var gates = ReadGates();
         // WPF recomputes the error panel from LastRoundOk on every paint (MainWindow.Lobby.cs:116).
-        PaintSnapshot(gates.SignedIn ? _snapshot with { SignedIn = true } : LobbySnapshot.Empty, gates,
+        // The feed's snapshot is empty after an account switch, so a reopen never shows the last account's rows.
+        var snapshot = _lobby?.SnapshotIsCurrent == false ? LobbySnapshot.Empty : _snapshot;
+        PaintSnapshot(gates.SignedIn ? snapshot with { SignedIn = true } : LobbySnapshot.Empty, gates,
             gates.SignedIn && _lobby?.LastRoundOk == false);
     }
 

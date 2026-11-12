@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Threading;
 using Avalonia.Controls;
+using Avalonia.Interactivity;
+using ConditioningControlPanel.Services.Lobby;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -106,6 +108,47 @@ public sealed partial class GameWindowTests
             }
             finally { CoreEntitlement.ShowDeniedHandler = oldDenied; }
         }, lab);
+
+    // The launcher lobby chip's Join (WPF LauncherWindow.Lobby.cs:244): each game opens on its table.
+    private static void LobbyJoin(LauncherWindow launcher, LobbyGame game, string key)
+    {
+        var row = new LobbyRow { Game = game, State = LobbyRowState.Open, Key = key, HostName = "Host" };
+        launcher.PaintLobby(new LobbySnapshot(new[] { row }, Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true));
+        ((Button)((Grid)launcher.FindControl<StackPanel>("LobbyDropRows")!.Children[0]).Children[1]).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    }
+
+    [Fact]
+    public void LobbyChipJoinSeatsChessAndRaceAndAsksSignedOutToSignIn() => RunGlassroad((_, launcher, _) =>
+    {
+        var (settings, oldId) = (CoreSettings.Current, CoreSettings.Current.UnifiedId);
+        try
+        {
+            settings.UnifiedId = null;
+            launcher.Show(); // the sign-in dialog is owned by the launcher, so it must be up
+            Dispatcher.UIThread.RunJobs();
+            LobbyJoin(launcher, LobbyGame.Chess, "p_table");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(GameWindow.OpenWindowsForTests());
+            Assert.Contains(launcher.OwnedWindows, w => w is ConditioningControlPanel.Avalonia.Views.Dialogs.LoginDialog);
+            foreach (var child in launcher.OwnedWindows.ToArray()) child.Close();
+            settings.UnifiedId = "discord:12";
+            LobbyJoin(launcher, LobbyGame.Chess, "p_table");
+            Assert.Equal(GameWindow.PbpId, Assert.Single(GameWindow.OpenWindowsForTests()).Spec.Id);
+            GameWindow.CloseAllForPanic();
+            LobbyJoin(launcher, LobbyGame.Race, "abcdef123456");
+            var race = Assert.Single(GameWindow.OpenWindowsForTests());
+            Assert.True(race.Spec.Id == GameWindow.GlassroadId && race.PageUrl!.Query.Contains("join=abcdef123456"));
+            GameWindow.CloseAllForPanic();
+            LobbyJoin(launcher, LobbyGame.Race, "bad room"); // a malformed room id never leaves
+            Assert.Empty(GameWindow.OpenWindowsForTests());
+        }
+        finally
+        {
+            foreach (var child in launcher.OwnedWindows.ToArray()) child.Close();
+            settings.UnifiedId = oldId;
+            ConditioningControlPanel.Services.UI.NavBadges.ResetForTests();
+        }
+    });
 
     // ---- pure rules ----
 

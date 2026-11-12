@@ -37,6 +37,7 @@ public sealed partial class FriendsService : IFriendsService, IDisposable
 
     private IUiTimer? _timer;
     private string? _lastAccount;
+    private volatile string? _snapshotAccount;
     private int _pollIndex;
     private bool _drawerOpen;
     private bool _drawerJustOpened;
@@ -108,6 +109,9 @@ public sealed partial class FriendsService : IFriendsService, IDisposable
     public bool Available => _account() != null;
 
     public FriendsSnapshot Snapshot { get; private set; } = FriendsSnapshot.Empty;
+
+    /// <summary>The account that owns Snapshot, or null before the first account check.</summary>
+    public string? SnapshotAccount => _snapshotAccount;
 
     public bool PresenceShared
     {
@@ -307,6 +311,7 @@ public sealed partial class FriendsService : IFriendsService, IDisposable
         var now = _account();
         if (now != _lastAccount)
         {
+            _snapshotAccount = null;
             _lastAccount = now;
             _pollIndex = 0;
             ClearReports();
@@ -317,6 +322,7 @@ public sealed partial class FriendsService : IFriendsService, IDisposable
             _requests.Reset();
             _sentBook.Clear();
             Publish(FriendsSnapshot.Empty);
+            _snapshotAccount = now;
         }
         return now != null;
     }
