@@ -36,7 +36,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (BrowserView is { } host)
             {
-                host.CancelHeldNavigation();
+                host.CancelHeldNavigation(companionOnly: true);
                 _ = host.InvokeScriptAsync(WebHostMedia.PanicPauseScript);
             }
         }
@@ -67,13 +67,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Points the web view at a URL. A missing host (the tab is not in the tree, as in
         /// a single-view render) is a no-op that returns false, never a throw.</summary>
-        private bool NavigateBrowser(string url)
+        private bool NavigateBrowser(string url, bool cancelOnPanic = false)
         {
             try
             {
                 var host = BrowserView;
                 if (host == null) return false;
-                host.Navigate(new Uri(url));   // even when equal: WPF #867, re-click goes home
+                host.Navigate(new Uri(url), cancelOnPanic);   // even when equal: WPF #867, re-click goes home
                 Log.Information("Browser navigated to {Url}", url);
                 return true;
             }
@@ -162,14 +162,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // ponytail: an unavailable adapter is known immediately; no 12-second ready poll is needed.
             if (BrowserView is { HasEngine: false })
             {
-                var navigated = NavigateBrowser(url); // retain the requested URL on the fallback panel
+                var navigated = NavigateBrowser(url, autoPlayFullscreen); // retain the requested URL on the fallback panel
                 // Companion watch owns its HTTPS fallback and must see the missing engine.
                 if (autoPlayFullscreen) return false;
                 if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
                     Platform.ExternalOpener.Open(url);
                 return navigated;
             }
-            return NavigateBrowser(url);
+            return NavigateBrowser(url, autoPlayFullscreen);
         }
 
         // ============================== the profile viewer ==============================

@@ -452,8 +452,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// the site you are on takes you home and Reload reloads. Assigning an equal Source raises no
         /// change, so it would do nothing. Source is kept in step (the fallback panel names it).
         /// </summary>
-        public void Navigate(Uri url)
+        public void Navigate(Uri url, bool cancelOnPanic = false)
         {
+            _cancelHeldOnPanic = cancelOnPanic;
             _panicBlank = false;
             _explicitNavigate = true;
             try { Source = url; } finally { _explicitNavigate = false; }
@@ -543,6 +544,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             base.OnPropertyChanged(change);
             if (change.Property == SourceProperty)
             {
+                if (!_explicitNavigate) _cancelHeldOnPanic = false;
                 if (Source != null) _panicBlank = false; // a new explicit request may load normally
                 ApplySource();
             }

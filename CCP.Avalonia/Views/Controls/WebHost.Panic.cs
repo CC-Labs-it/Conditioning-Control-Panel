@@ -27,10 +27,11 @@ public partial class WebHost
         catch (Exception ex) { Serilog.Log.Debug(ex, "WebHost: panic blank failed"); }
     }
 
-    // A dashboard request held for the native gate must not start after panic or offline.
-    internal void CancelHeldNavigation()
+    // Only a companion watch request is cancelled by panic; offline cancels any held request.
+    private bool _cancelHeldOnPanic;
+    internal void CancelHeldNavigation(bool companionOnly = false)
     {
-        if (_loadedOnThisEngine || Source is null) return;
+        if ((companionOnly && !_cancelHeldOnPanic) || _loadedOnThisEngine || Source is null) return;
         _panicBlank = true;
         try { _web?.Stop(); }
         catch (Exception ex) { Serilog.Log.Debug(ex, "WebHost: held navigation stop failed"); }

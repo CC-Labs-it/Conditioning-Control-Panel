@@ -65,6 +65,7 @@ public sealed class CompanionWatchRecutTests
         var shell = new MainShellWindow();
         var settings = CoreSettings.Current;
         var oldStrict = settings.StrictLockEnabled;
+        var oldOffline = settings.OfflineMode;
         var oldLockdown = LockdownService.Current;
         using var lockdown = new LockdownService();
         try
@@ -72,9 +73,11 @@ public sealed class CompanionWatchRecutTests
             LockdownService.Current = lockdown;
             lockdown.Activate(TimeSpan.FromMinutes(30));
             settings.StrictLockEnabled = true;
+            settings.OfflineMode = false;
             var host = shell.FindControl<SettingsTabView>("SettingsTab")!.FindControl<WebHost>("BrowserWebHost")!;
+            host.ScriptInvoker = _ => Task.FromResult<string?>(null);
             var ready = host.NewScrolllerEngine();
-            host.Navigate(new Uri("https://127.0.0.1/watch"));
+            Assert.True(shell.NavigateToUrlInBrowser("https://127.0.0.1/watch", autoPlayFullscreen: true));
             if (gateTimedOut) ready(false);
             PanicSurfaces.All.Single(surface => surface.Id == "browser-media").Stop(shell);
             Assert.Null(host.Source);
@@ -88,10 +91,53 @@ public sealed class CompanionWatchRecutTests
             lockdown.Deactivate();
             LockdownService.Current = oldLockdown;
             settings.StrictLockEnabled = oldStrict;
+            settings.OfflineMode = oldOffline;
             shell.Close();
         }
         return Task.CompletedTask;
     });
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task ManualNavigationReplacesTheHeldWatchRequest(bool setSource) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var shell = new MainShellWindow();
+        try
+        {
+            var host = shell.FindControl<SettingsTabView>("SettingsTab")!.FindControl<WebHost>("BrowserWebHost")!;
+            var ready = host.NewScrolllerEngine();
+            host.Navigate(new Uri("https://127.0.0.1/watch"), cancelOnPanic: true);
+            var manual = new Uri("https://127.0.0.1/manual");
+            if (setSource) host.Source = manual; else host.Navigate(manual);
+            shell.PanicPauseBrowserMedia();
+            ready(true);
+            Assert.Equal(manual, host.Source);
+        }
+        finally { shell.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ExplicitManualReloadOfTheSameUrlReplacesTheWatchRequest() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var shell = new MainShellWindow();
+        try
+        {
+            var host = shell.FindControl<SettingsTabView>("SettingsTab")!.FindControl<WebHost>("BrowserWebHost")!;
+            var url = new Uri("https://127.0.0.1/watch");
+            var ready = host.NewScrolllerEngine();
+            host.Navigate(url, cancelOnPanic: true);
+            host.Navigate(url); // equal Source still counts as an explicit manual request
+            shell.PanicPauseBrowserMedia();
+            ready(true);
+            Assert.Equal(url, host.Source);
+        }
+        finally { shell.Close(); }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task GateReportCannotLoadBrowserAfterOfflineModeStarts() => AvaloniaTestDispatcher.RunAsync(() =>
     {

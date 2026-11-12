@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -295,7 +296,13 @@ public sealed class EmiDeskSummonTests
             Assert.True(win.ChainLive);
             if (panic) win.StopChainForPanic(); else win.Say("x");
             Assert.Equal(1, completed);
-            win.PlayChain("shock");
+            // Keep the real shock chain and its effects, but hold its first frame until after
+            // input: a headless click can take longer than the production 160 ms frame.
+            var shock = ConditioningControlPanel.Services.EmiDesk.EmiChains.Get("shock")!;
+            var heldShock = shock with { Seq = shock.Seq.Select((frame, index) =>
+                index == 0 ? frame with { Ms = 60_000 } : frame).ToArray() };
+            win.PlayChain(heldShock);
+            var pets = ConditioningControlPanel.Services.EmiDesk.EmiState.Current.PetsTotal;
             var body = (Control)typeof(EmiDeskWindow).GetField("_bodyRoot",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(win)!;
             var point = body.TranslatePoint(new Point(body.Bounds.Width / 2, body.Bounds.Height / 2), win)!.Value;
@@ -303,6 +310,10 @@ public sealed class EmiDeskSummonTests
             win.MouseUp(point, global::Avalonia.Input.MouseButton.Left);
             Assert.Equal("o_o", win.Face);
             Assert.True(win.ChainLive);
+            Assert.Same(heldShock, win.ChainPlayer.Current);
+            Assert.Equal(pets, ConditioningControlPanel.Services.EmiDesk.EmiState.Current.PetsTotal);
+            win.ChainPlayer.ElapsePendingHold();
+            Assert.Equal(shock.Seq[1].Text, win.Face);
             await Pump(2000);
             Assert.Equal(1, completed);
         }
