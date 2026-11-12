@@ -27,8 +27,8 @@ public partial class MainShellWindow
             }
             catch
             {
-                // WPF App.xaml.cs:4358 releases on a failed route; a throw that escapes routing
-                // must not leave the startup ladder held for the rest of the run.
+                // WPF App.xaml.cs:4358 releases on any routing failure; a Hide throw here must not
+                // leave the ladder held (WPF's own Hide throw, App.xaml.cs:3704, rethrows held).
                 Platform.StartupLadder.Release();
                 throw;
             }
