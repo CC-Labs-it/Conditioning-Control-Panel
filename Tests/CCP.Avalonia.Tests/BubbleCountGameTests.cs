@@ -49,6 +49,9 @@ public sealed class BubbleCountGameTests
             var real = host.Scheduler;
             var prevEngine = CoreEngine.BubbleCount;
             var listener = BubbleCountWindow.PanicListenerLive;
+            var oldEndHold = BubbleCountWindow.HoldVideoEndForTest;
+            Action? pendingEnd = null;
+            BubbleCountWindow.HoldVideoEndForTest = end => pendingEnd ??= end;
             host.Scheduler = b;
             CoreEngine.BubbleCount = b;
             try
@@ -61,8 +64,9 @@ public sealed class BubbleCountGameTests
                             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                             .SetupWithoutStarting();
 
-                    async Task<BubbleCountWindow> Open(bool strict)
+                    async Task<BubbleCountWindow> Open(bool strict, bool waitForEnd = false)
                     {
+                        pendingEnd = null;
                         s.BubbleCountStrictLock = strict;
                         b.Trigger(forceTest: true);
                         Assert.True(b.IsBusy);
@@ -72,13 +76,21 @@ public sealed class BubbleCountGameTests
                         for (var i = 0; i < 400 && (BubbleCountWindow.OpenWindows.Count == 0 || (BubbleCountWindow.Sink?.FrameCount ?? 0) < 3); i++) await Task.Delay(50);
                         var w = Assert.Single(BubbleCountWindow.OpenWindows);
                         Assert.True(BubbleCountWindow.Sink!.FrameCount >= 3, "frames decoded");
+                        if (waitForEnd)
+                        {
+                            // Prove the actual end can arrive before the frame/window assertions.
+                            for (var i = 0; i < 400 && pendingEnd is null; i++) await Task.Delay(50);
+                            Assert.NotNull(pendingEnd);
+                        }
                         Assert.Same(BubbleCountWindow.Sink.Bitmap, w.VideoImage.Source);
-                        Assert.True(w.Topmost && w.IsVisible);
+                        Assert.True(w.Topmost, "game is topmost");
+                        Assert.True(w.IsVisible, "game stays visible until the end is released");
                         return w;
                     }
 
                     // Non-strict: the 2 s clip ends, the answer window asks, the right count wins.
-                    await Open(strict: false);
+                    await Open(strict: false, waitForEnd: true);
+                    pendingEnd!();
                     for (var i = 0; i < 400 && BubbleCountResultWindow.OpenWindows.Count == 0; i++) await Task.Delay(50);
                     var r = Assert.Single(BubbleCountResultWindow.OpenWindows);
                     Assert.Equal(2, BubbleCountWindow.LastVideoDurationSeconds, 0);   // LengthChanged replaced the 30 s fallback
@@ -113,6 +125,7 @@ public sealed class BubbleCountGameTests
             }
             finally
             {
+                BubbleCountWindow.HoldVideoEndForTest = oldEndHold;
                 b.ForceCleanup();
                 host.Scheduler = real;
                 CoreEngine.BubbleCount = prevEngine;

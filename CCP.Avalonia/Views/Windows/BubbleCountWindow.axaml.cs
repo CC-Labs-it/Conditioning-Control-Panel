@@ -103,6 +103,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The global panic listener can stop the game right now (as MandatoryVideoOverlay). Tests swap it.</summary>
         internal static Func<bool> PanicListenerLive = () => PanicListeners.Live;
         internal static VlcFrameSink? Sink => _sink;
+        // Tests can hold the real end callback until they have observed the decoded frames.
+        internal static Action<Action>? HoldVideoEndForTest;
 
         // Multi-monitor support - static shared state
         private static readonly object _cleanupLock = new();
@@ -611,6 +613,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         private void OnVideoEnded()
+        {
+            if (_videoEnded || _isCleaningUp) return;
+            if (HoldVideoEndForTest is { } hold) { hold(CompleteVideoEnd); return; }
+            CompleteVideoEnd();
+        }
+
+        private void CompleteVideoEnd()
         {
             if (_videoEnded || _isCleaningUp) return;
             _videoEnded = true;
