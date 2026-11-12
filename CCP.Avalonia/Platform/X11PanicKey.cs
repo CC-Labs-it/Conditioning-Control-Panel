@@ -250,9 +250,9 @@ internal static class X11PanicKey
                 if (evType == XI_RawButtonPress) { RouteCountdownPress(evType, keycode); continue; }
 
                 Resolve();
-                RouteVideoEscape(evType == XI_RawKeyPress, keycode, escapeCode, ref escapeDown, () => QueueVideoEscape(eventTime));
-                if (evType == XI_RawKeyRelease) { Route(false, keycode, onPress); continue; }
-                Route(true, keycode, onPress);
+                RouteRawKey(evType == XI_RawKeyPress, keycode, escapeCode, ref escapeDown,
+                    () => QueueVideoEscape(eventTime), onPress);
+                if (evType == XI_RawKeyRelease) continue;
                 // Preserve the base safety order: panic posts before countdown completion.
                 RouteCountdownPress(evType, keycode);
                 // She's Listening push-to-talk rides the same XI2 listener (WPF GlobalKeyboardHook).
@@ -269,27 +269,42 @@ internal static class X11PanicKey
         }
     }
 
-    // XI2 raw events reach the listener even when another X11 client has focus. Keep this
-    // separate from the panic binding: panic always takes precedence, including duplicate downs.
+    internal static void RouteRawKey(bool press, int code, int escapeCode, ref bool down, Func<bool> queue, Action onPress)
+    {
+        bool videoOwnsPress = false;
+        RouteVideoEscape(press, code, escapeCode, ref down, () => videoOwnsPress = queue());
+        if (!videoOwnsPress) Route(press, code, onPress);
+    }
+
+    // XI2 raw events reach the listener even when another X11 client has focus. WPF gives
+    // a non-strict video Escape when panic is disabled or Lockdown prevents it from running.
     internal static void RouteVideoEscape(bool press, int code, int escapeCode, ref bool down, Action queue)
     {
         if (escapeCode == 0 || code != escapeCode) return;
         if (!press) { down = false; return; }
         if (down) return;
         down = true;
-        if (code != _boundCode) queue();
+        var s = CoreSettings.Current;
+        if (Services.Safety.PanicPolicy.EscapeDismissesVideo(true, false, false,
+                s.PanicKeyEnabled, s.PanicKey, Views.Windows.MainShellWindow.LockdownActive)) queue();
     }
 
-    internal static void QueueVideoEscape(ulong? timestamp = null)
+    internal static bool QueueVideoEscape(ulong? timestamp = null)
     {
         var video = Views.Overlays.MandatoryVideoOverlay.Instance;
         var generation = video.EscapeGeneration;
-        if (!video.WantsGlobalEscape || generation != video.EscapeGeneration) return;
+        var s = CoreSettings.Current;
+        if (generation != video.EscapeGeneration || EscapeClaim.SurfaceOwnsEscape(timestamp)
+            || !Services.Safety.PanicPolicy.EscapeDismissesVideo(video.WantsGlobalEscape,
+                Views.Windows.LockCardWindow.IsAnyOpen(), Views.Windows.SettingsPaletteWindow.IsOpen,
+                s.PanicKeyEnabled, s.PanicKey, Views.Windows.MainShellWindow.LockdownActive)
+            || generation != video.EscapeGeneration) return false;
         global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             if (generation == video.EscapeGeneration && !EscapeClaim.SurfaceOwnsEscape(timestamp))
                 Win32Input.EscapeDoor();
         });
+        return true;
     }
 
     // WPF/Avalonia Key names (the setting stores Key.ToString()) whose X keysym name differs.

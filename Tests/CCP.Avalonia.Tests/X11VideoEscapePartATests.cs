@@ -104,6 +104,7 @@ public sealed class X11VideoEscapePartATests
         o.Scheduler.ForceCleanup();
         Open(o);
         X11PanicKey.BindKeycodeForTest(9);
+        CoreSettings.Current.PanicKey = "Escape";
         bool down = false;
         int panic = 0, videoRequests = 0;
         X11PanicKey.RouteVideoEscape(true, 9, 9, ref down, () => videoRequests++);
@@ -112,6 +113,35 @@ public sealed class X11VideoEscapePartATests
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(1, panic);
         Assert.False(o.Scheduler.IsPlaying);
+    });
+
+    [Theory]
+    [InlineData(false, false)] // panic disabled
+    [InlineData(true, true)]   // Lockdown blocks the enabled panic key
+    public Task SharedEscapeReachesNonStrictVideoWhenPanicCannotRun(bool panicEnabled, bool locked) => WithVideo(o =>
+    {
+        var s = CoreSettings.Current;
+        (s.PanicKeyEnabled, s.PanicKey) = (panicEnabled, "Escape");
+        X11PanicKey.BindKeycodeForTest(9);
+        var oldLockdown = LockdownService.Current;
+        using var lockdown = LockdownService.Current = new LockdownService();
+        try
+        {
+            if (locked) lockdown.Activate(TimeSpan.FromMinutes(30));
+            Open(o);
+            var decoder = new Decoder();
+            typeof(MandatoryVideoOverlay).GetField("_playback", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(o, decoder);
+            typeof(MandatoryVideoOverlay).GetField("_graceConsumed", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(o, false);
+            bool down = false, videoOwns = false;
+            int panic = 0;
+            X11PanicKey.RouteRawKey(true, 9, 9, ref down,
+                () => videoOwns = X11PanicKey.QueueVideoEscape(), () => panic++);
+            Assert.True(videoOwns);
+            Assert.Equal(0, panic);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(o.GracePaused || !o.Scheduler.IsPlaying);
+        }
+        finally { if (locked) lockdown.Deactivate(); LockdownService.Current = oldLockdown; }
     });
 
     [Fact]
@@ -171,23 +201,28 @@ public sealed class X11VideoEscapePartATests
     public void SharedPanicBindingDoesNotQueueVideo()
     {
         var code = X11PanicKey.BoundKeycode;
+        var s = CoreSettings.Current;
+        var saved = (s.PanicKeyEnabled, s.PanicKey);
+        (s.PanicKeyEnabled, s.PanicKey) = (true, "Escape");
         X11PanicKey.BindKeycodeForTest(9);
         try
         {
             bool down = false;
             int requests = 0, panic = 0;
-            X11PanicKey.RouteVideoEscape(true, 9, 9, ref down, () => requests++);
-            X11PanicKey.Route(true, 9, () => panic++);
+            X11PanicKey.RouteRawKey(true, 9, 9, ref down, () => { requests++; return true; }, () => panic++);
             Assert.Equal(0, requests);
             Assert.Equal(1, panic);
         }
-        finally { X11PanicKey.BindKeycodeForTest(code); }
+        finally { X11PanicKey.BindKeycodeForTest(code); (s.PanicKeyEnabled, s.PanicKey) = saved; }
     }
 
     [Fact]
     public void DuplicateDownIsOneVideoPressUntilRelease()
     {
         var code = X11PanicKey.BoundKeycode;
+        var s = CoreSettings.Current;
+        var saved = (s.PanicKeyEnabled, s.PanicKey);
+        (s.PanicKeyEnabled, s.PanicKey) = (true, "F12");
         X11PanicKey.BindKeycodeForTest(96);
         try
         {
@@ -201,6 +236,6 @@ public sealed class X11VideoEscapePartATests
             X11PanicKey.RouteVideoEscape(true, 9, 9, ref down, Queue);
             Assert.Equal(2, queued);
         }
-        finally { X11PanicKey.BindKeycodeForTest(code); }
+        finally { X11PanicKey.BindKeycodeForTest(code); (s.PanicKeyEnabled, s.PanicKey) = saved; }
     }
 }
