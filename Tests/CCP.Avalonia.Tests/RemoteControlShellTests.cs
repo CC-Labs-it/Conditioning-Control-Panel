@@ -272,7 +272,7 @@ public sealed class RemoteControlShellTests
             await relay.PollOnceAsync();
             Dispatcher.UIThread.RunJobs();
             var hud = shell.RemoteHudPill!;
-            Assert.True(hud.IsVisible);
+            Assert.True(hud.IsVisible); Assert.True(hud.GetVisualDescendants().OfType<global::Avalonia.Controls.Shapes.Ellipse>().Single(e => e.Name == "RemoteLiveDot").IsVisible);
             Assert.Equal(Loc.GetF("remote_hud_has_remote", "Ana"), hud.Headline);
             Assert.Null(hud.StrengthTag);
             var raised = 0;   // WPF KeepOnTop (RemoteHudWindow.cs:271): every 1 s Refresh re-asserts topmost

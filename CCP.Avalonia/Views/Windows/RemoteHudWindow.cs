@@ -56,7 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             _initial = new TextBlock { FontSize = 14, FontWeight = FontWeight.Bold, Foreground = Brushes.White,
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            var badge = new Border { Width = 30, Height = 30, CornerRadius = new CornerRadius(15), Child = _initial,
+            var badge = new Border { Width = 30, Height = 30, CornerRadius = new CornerRadius(15), Child = new Grid { Children = { _initial, new global::Avalonia.Controls.Shapes.Ellipse { Name = "RemoteLiveDot", Width = 10, Height = 10, Fill = new SolidColorBrush(Mint), Stroke = new SolidColorBrush(Ink), StrokeThickness = 2, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, -2, -2) } } },
                 Background = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
                     GradientStops = { new GradientStop(Pink, 0), new GradientStop(Color.FromRgb(0xB0, 0x7C, 0xFF), 1) } } };
             _headline = new TextBlock { FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = Brushes.White, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 260 };
