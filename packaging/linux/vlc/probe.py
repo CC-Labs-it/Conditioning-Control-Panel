@@ -3,7 +3,8 @@
 
 usage: probe.py LIBVLC_SO CLIP MIN_VIDEO_FRAMES MIN_AUDIO_SECONDS
 Video goes to vmem (RV32, as VlcFrameSink asks), audio to amem (S16N 48 kHz stereo). Exits 1
-unless playback reaches Ended with at least the given number of frames and seconds of audio.
+unless playback reaches Ended with at least the given number of frames and seconds of audio,
+and, when MIN_VIDEO_FRAMES > 0, LibVLC accepted the RV32 chroma.
 """
 import ctypes as C
 import sys
@@ -85,7 +86,9 @@ vlc.libvlc_media_release(media)
 vlc.libvlc_release(inst)
 
 audio_s = counts["samples"] / 48000
-ok = (state == ENDED and counts["chroma"] == b"RV32" and counts["frames"] >= min_frames
+# An audio-only clip never calls on_format, so chroma is only checked when frames are expected.
+chroma_ok = min_frames == 0 or counts["chroma"] == b"RV32"
+ok = (state == ENDED and chroma_ok and counts["frames"] >= min_frames
       and audio_s >= min_audio)
 print(f"{'ok  ' if ok else 'FAIL'} {clip}: libvlc {vlc.libvlc_get_version().decode()}, "
       f"state={state}, chroma={counts['chroma'].decode(errors='replace')}, video frames={counts['frames']} (min {min_frames}), "
