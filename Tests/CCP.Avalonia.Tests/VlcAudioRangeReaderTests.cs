@@ -6,6 +6,9 @@ using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Haptics.Core;
+using ConditioningControlPanel.Avalonia.Views.Windows;
+using CCP.Tests.Shared;
 using LibVLCSharp.Shared;
 using Xunit;
 
@@ -63,6 +66,53 @@ public class VlcAudioRangeReaderTests
         using var cts = new CancellationTokenSource();
         cts.Cancel();
         Assert.Throws<OperationCanceledException>(() => VlcAudioRangeReader.Read("missing", TimeSpan.Zero, TimeSpan.FromSeconds(1), cts.Token));
+    }
+
+    [Fact]
+    public async Task PanicStopsAudioSyncAndCancelsPendingPreparation()
+    {
+        var surface = Assert.Single(PanicSurfaces.All, entry => entry.Id == "audio-sync");
+        AudioSyncHost.Stop();
+        var settings = new HapticSettings { Enabled = true };
+        settings.EnsureV2Migrated();
+        foreach (var provider in new[] { "lovense", "buttplug" }) settings.V2.Provider(provider).Enabled = false;
+        settings.V2.Provider("mock").Enabled = true;
+        settings.AudioSync.Enabled = true;
+        using var haptics = new HapticService(settings);
+        Assert.True(await haptics.ConnectAsync());
+        using var server = new FakeServer();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        server.Handle = async context =>
+        {
+            entered.TrySetResult();
+            await release.Task;
+            await FakeServer.Send(context, new byte[] { 1 });
+        };
+        AudioSyncHost.Start(haptics, settings.AudioSync);
+        var service = Assert.IsType<BrowserAudioSyncService>(AudioSyncHost.Service);
+        var completed = 0;
+        service.ProcessingCompleted += (_, _) => completed++;
+        var pending = Task.Run(() => service.OnVideoDetectedAsync(server.Prefix + "video.mp4", TimeSpan.FromSeconds(1)));
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            Assert.True(service.IsProcessing);
+            haptics.Mixer.SetLayer(HapticLayer.AudioSync, 0.8);
+            Assert.True(haptics.Mixer.GetLayer(HapticLayer.AudioSync) > 0);
+            surface.Stop(null);
+            await pending.WaitAsync(TimeSpan.FromSeconds(15));
+            Assert.False(service.IsProcessing);
+            Assert.Equal(0, completed);
+            Assert.Equal(0, haptics.Mixer.GetLayer(HapticLayer.AudioSync));
+            Assert.Same(service, AudioSyncHost.Service);
+        }
+        finally
+        {
+            release.TrySetResult();
+            AudioSyncHost.Stop();
+            try { await pending.WaitAsync(TimeSpan.FromSeconds(15)); } catch (OperationCanceledException) { }
+        }
     }
 
     [Fact]
