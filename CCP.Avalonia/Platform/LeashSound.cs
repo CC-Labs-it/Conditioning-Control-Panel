@@ -13,6 +13,8 @@ internal static class LeashSound
 
     internal static void Tick(DateTime now) => Play(LeashCue.Tick, "chaos/countdown_tick.mp3", 0.10f, now);
 
+    internal static void Snap(DateTime now) => Play(LeashCue.Snap, "chaos/collar_save.mp3", 0.28f, now);
+
     // WPF LeashFx.Ask/Denied (LeashFx.cs:204,222).
     internal static void Ask(DateTime now) => Play(LeashCue.Ask, "chaos/reveal_chime.mp3", 0.18f, now);
 
