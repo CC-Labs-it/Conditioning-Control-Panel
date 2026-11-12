@@ -142,10 +142,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (rung != PanicPolicy.Rung.DismissSettingsPalette) PanicAftermath.ArmQuiet();
             if (rung == PanicPolicy.Rung.DismissLockCard) { StopLockCards(); StopCameraForPanic(); }
             if (!PanicPolicy.StopsSurfaces(rung)) return;
-            // WPF MainWindow.xaml.cs:1741: DtRH takes the ladder press before the Back Room.
-            if (rung == PanicPolicy.Rung.RunLadder && Games.GameWindow.HandleDtrhPanic()) return;
-            // WPF MainWindow.xaml.cs:1763: the Back Room owns its ladder, including Breakout.
-            if (rung == PanicPolicy.Rung.RunLadder && Games.GameWindow.HandleBreakoutPanic(now)) return;
+            // WPF MainWindow.xaml.cs:1734: a live Chaos descent outranks both game handoffs.
+            // This head stops Chaos through the normal stop pass, including during its countdown.
+            if (rung == PanicPolicy.Rung.RunLadder && !Chaos.ChaosRunHost.IsActive)
+            {
+                // WPF MainWindow.xaml.cs:1741,1763: DtRH before the Back Room, including Breakout.
+                if (Games.GameWindow.HandleDtrhPanic()) return;
+                if (Games.GameWindow.HandleBreakoutPanic(now)) return;
+            }
             // WPF MainWindow.xaml.cs:1709: close the game surface that owns the screen, then the normal
             // stop tail with the exit ladder NOT armed (and no grace pause), in BOTH modes: override
             // (MainWindow.xaml.cs:1627) and ladder (:1720 RunPanicStopTail(advanceExitLadder: false)).

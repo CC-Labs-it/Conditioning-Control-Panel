@@ -13,6 +13,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
@@ -1284,6 +1285,46 @@ public sealed partial class GameWindowTests
             Assert.Equal(new[] { true, true }, runs);
         });
     }
+
+    /// <summary>WPF MainWindow.xaml.cs:1731-1766: a live descent takes priority over either game handoff.</summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void Chaos_ActiveDescentPanicOutranksOpenGames(bool withDtrh, bool countdown) => RunDtrh(lab: true, (shell, _, _, _) =>
+    {
+        var s = CoreSettings.Current;
+        var (oldKey, oldEnabled, oldOverride) = (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll);
+        try
+        {
+            (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll) = ("F8", true, false);
+            var breakout = GameWindow.Launch("breakoutdemo")!;
+            var frames = new List<JObject>();
+            breakout.Posted += json => frames.Add(JObject.Parse(json));
+            var dtrh = withDtrh ? GameWindow.Launch("dtrh")! : null;
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+            var overlay = ChaosRunHost.Overlay!;
+            if (!countdown) overlay.FinishCountdown();
+            ChaosRunHost.StopTimerForTests();
+            Assert.True(ChaosRunHost.IsActive);
+            Assert.Equal(!countdown, ChaosRunHost.IsDescending);
+
+            shell.HandlePanicKeyPress(DateTime.Now);
+            Assert.False(ChaosRunHost.IsActive);
+            overlay.FinishCountdown(); // a queued start must not revive the run after panic
+            Assert.False(ChaosRunHost.IsDescending);
+            Assert.False(breakout.IsVisible);
+            Assert.DoesNotContain(frames, f => (string?)f["type"] == "suspend");
+            if (dtrh != null) Assert.False(dtrh.IsVisible);
+            Assert.Equal(0, shell.PanicPressCountForTest);
+        }
+        finally
+        {
+            ChaosRunHost.ForceShutdown();
+            (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll) = (oldKey, oldEnabled, oldOverride);
+        }
+    });
 
     /// <summary>WPF MainWindow.xaml.cs:1742-1769: DtRH takes an unclaimed ladder press before Breakout.</summary>
     [Theory]
