@@ -87,6 +87,63 @@ public sealed class Sync7BarAndVideoTests
             return Task.CompletedTask;
         });
     }
+    [Fact]
+    public async Task NativeMovesKeepTheirPathBetweenPolls()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            double now = 0;
+            var pointer = (new PixelPoint(110, 110), true);
+            var window = new Window { Width = 200, Height = 120, Position = new PixelPoint(100, 100) };
+            window.Show();
+            var settings = CoreSettings.Current; var savedMotion = settings.MotionLevel;
+            settings.MotionLevel = MotionLevel.Full;
+            try
+            {
+                var frame = new ConditioningControlPanel.Avalonia.Views.Overlays.FloatingVideoFrame(window,
+                    () => now, nativePointer: () => pointer);
+                frame.StartDrag(pointer.Item1);
+                // A flick right, then left, all between the old 30 Hz polls.
+                frame.HandleNativeMouse(0x0200, false, new PixelPoint(310, 110), 90);
+                frame.HandleNativeMouse(0x0200, false, new PixelPoint(210, 110), 110);
+                pointer = (new PixelPoint(500, 110), true); now = 115; frame.Tick();
+                Assert.Equal(new PixelPoint(200, 100), window.Position);
+                frame.HandleNativePointerUp(0x0202, false, new PixelPoint(190, 110), 120);
+                Assert.Equal(new PixelPoint(180, 100), window.Position);
+                now = 140; frame.Tick();
+                Assert.True(window.Position.X < 180, "the recent leftward movement determines the throw");
+                var released = window.Position;
+                frame.HandleNativeMouse(0x0200, false, new PixelPoint(700, 110), 150);
+                Assert.Equal(released, window.Position);
+            }
+            finally { window.Close(); settings.MotionLevel = savedMotion; }
+            return Task.CompletedTask;
+        });
+    }
+    [Fact]
+    public async Task DragClockTicksEveryFrameAndReturnsToThirtyHertzOnRelease()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var pointer = (new PixelPoint(110, 110), true);
+            var window = new Window { Width = 200, Height = 120, Position = new PixelPoint(100, 100) };
+            window.Show();
+            try
+            {
+                var frame = new ConditioningControlPanel.Avalonia.Views.Overlays.FloatingVideoFrame(window,
+                    nativePointer: () => pointer);
+                Assert.Equal(TimeSpan.FromSeconds(1.0 / 30), frame.FrameInterval);
+                frame.StartDrag(pointer.Item1);
+                Assert.Equal(TimeSpan.Zero, frame.FrameInterval);
+                frame.HandleNativePointerUp(0x0202, false, pointer.Item1, 10);
+                Assert.Equal(TimeSpan.FromSeconds(1.0 / 30), frame.FrameInterval);
+            }
+            finally { window.Close(); }
+            return Task.CompletedTask;
+        });
+    }
     [Theory]
     [InlineData(false, 0x0202, 0x0205)]
     [InlineData(true, 0x0205, 0x0202)]

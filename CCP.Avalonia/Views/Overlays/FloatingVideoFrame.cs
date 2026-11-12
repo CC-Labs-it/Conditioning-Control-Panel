@@ -23,9 +23,10 @@ internal sealed class FloatingVideoFrame
     private readonly BeatLoop _beat;
     private readonly Func<double> _nowMs;
     private double _last, _lit, _breathSeconds;
-    private bool _audioLit, _closed;
+    private bool _audioLit, _closed, _receivingNativeMoves;
     internal bool Running => _beat.IsRunning;
     internal double BreathSeconds => _breathSeconds;
+    internal TimeSpan FrameInterval => _beat.Interval;
     private readonly Border? _frame;
     private readonly Func<bool> _audible;
     internal double MotionSpeed { get => _motion.Speed; set => _motion.Speed = value; }
@@ -48,7 +49,7 @@ internal sealed class FloatingVideoFrame
         };
         _beat = new BeatLoop(window, _ => Tick());
         window.PointerPressed += Press; window.PointerMoved += Move; window.PointerReleased += Release;
-        window.PointerCaptureLost += (_, _) => { if (_motion.Held && _nativePointer == null) _motion.Drop(); };
+        window.PointerCaptureLost += (_, _) => { if (_motion.Held && _nativePointer == null) { _motion.Drop(); UpdateRate(); } };
         window.Screens.Changed += DisplaysChanged;
         var settings = CoreSettings.Current;
         PropertyChangedEventHandler changed = (_, e) => { if (e.PropertyName is nameof(CoreSettings.Current.MotionLevel) or nameof(CoreSettings.Current.MandatoryVideoFloatingSpeedPercent)) Dispatcher.UIThread.Post(Refresh); };
@@ -75,7 +76,7 @@ internal sealed class FloatingVideoFrame
     private void DisplaysChanged(object? sender, EventArgs e)
     {
         RefreshDesktop();
-        StopMouseHook(); _motion.Drop(); _motion.Rehome();
+        StopMouseHook(); _motion.Drop(); _motion.Rehome(); UpdateRate();
         Place();
     }
     private PixelPoint Pointer(PointerEventArgs e) => _window.PointToScreen(e.GetPosition(_window));
@@ -90,7 +91,9 @@ internal sealed class FloatingVideoFrame
     {
         _motion.Resync(_window.Position.X, _window.Position.Y,
             _window.Bounds.Width * _window.RenderScaling, _window.Bounds.Height * _window.RenderScaling, rehome: true);
+        _receivingNativeMoves = false;
         _motion.Press(p.X, p.Y, _nowMs());
+        UpdateRate();
         if (_nativePointer != null && OperatingSystem.IsWindows())
         {
             StopMouseHook();
@@ -114,9 +117,11 @@ internal sealed class FloatingVideoFrame
         var now = _nowMs();
         _motion.Move(p.X, p.Y, now);
         _motion.Release(now, CoreSettings.Current.MotionLevel);
+        UpdateRate();
         e.Pointer.Capture(null);
         Place();
     }
+    private void UpdateRate() => _beat.Interval = _motion.Held ? TimeSpan.Zero : TimeSpan.FromSeconds(1.0 / 30);
     internal void Refresh()
     {
         if (_closed) return;
@@ -133,7 +138,11 @@ internal sealed class FloatingVideoFrame
         if (_motion.Held && _nativePointer != null && _nativePointer() is { } pointer)
         {
             var ms = _nowMs();
-            if (pointer.Down) _motion.Move(pointer.Position.X, pointer.Position.Y, ms);
+            if (pointer.Down)
+            {
+                // With a hook, each native event already contributes its own timestamp.
+                if (_mouseHook == IntPtr.Zero && !_receivingNativeMoves) _motion.Move(pointer.Position.X, pointer.Position.Y, ms);
+            }
             else { FinishNativeDrag(pointer.Position, ms); Place(); }
         }
         var now = _nowMs() / 1000.0;
@@ -156,7 +165,7 @@ internal sealed class FloatingVideoFrame
         Place();
         if (!NeedsClock) _beat.Stop();
     }
-    // A low-level hook reaches an up outside the window without capturing or consuming input.
+    // A low-level hook follows the hand outside the window without capturing or consuming input.
     private delegate IntPtr HookProc(int code, IntPtr message, IntPtr data);
     [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr SetWindowsHookEx(int id, HookProc proc, IntPtr module, uint thread);
     [DllImport("user32.dll")] private static extern bool UnhookWindowsHookEx(IntPtr hook);
@@ -169,11 +178,12 @@ internal sealed class FloatingVideoFrame
     {
         try
         {
-            if (code >= 0 && data != IntPtr.Zero && (int)message is 0x0202 or 0x0205)
+            if (code >= 0 && data != IntPtr.Zero && (int)message is 0x0200 or 0x0202 or 0x0205)
             {
                 var mouse = Marshal.PtrToStructure<MouseHookData>(data);
-                HandleNativePointerUp((int)message, GetSystemMetrics(23) != 0,
-                    new PixelPoint(mouse.Point.X, mouse.Point.Y), EventTime(mouse.Time, GetTickCount(), _nowMs()));
+                var point = new PixelPoint(mouse.Point.X, mouse.Point.Y);
+                var ms = EventTime(mouse.Time, GetTickCount(), _nowMs());
+                HandleNativeMouse((int)message, (int)message != 0x0200 && GetSystemMetrics(23) != 0, point, ms);
             }
         }
         catch (Exception ex) { Serilog.Log.Debug(ex, "Floating video mouse hook failed"); }
@@ -181,6 +191,13 @@ internal sealed class FloatingVideoFrame
     }
     internal static double EventTime(uint eventTick, uint currentTick, double nowMs) =>
         nowMs - unchecked(currentTick - eventTick);
+    internal void HandleNativeMouse(int message, bool swapped, PixelPoint point, double eventMs)
+    {
+        if (message != 0x0200) { HandleNativePointerUp(message, swapped, point, eventMs); return; }
+        if (_nativePointer == null || !_motion.Held) return;
+        _receivingNativeMoves = true;
+        _motion.Move(point.X, point.Y, eventMs);
+    }
     internal void HandleNativePointerUp(int message, bool swapped, PixelPoint point, double eventMs)
     {
         if (_nativePointer == null || !_motion.Held || message != (swapped ? 0x0205 : 0x0202)) return;
@@ -194,6 +211,7 @@ internal sealed class FloatingVideoFrame
         _motion.Move(point.X, point.Y, ms);
         _motion.Step(0.001);
         _motion.Release(ms, CoreSettings.Current.MotionLevel);
+        UpdateRate();
     }
     private void StopMouseHook()
     {
