@@ -31,7 +31,7 @@ public partial class MainShellWindow
                 && url.Contains("bambicloud.com", StringComparison.OrdinalIgnoreCase);
             if (page.FindControl<RadioButton>("RbBambiCloud") is { } bambiRadio) bambiRadio.IsChecked = bambi;
             if (page.FindControl<RadioButton>("RbHypnoTube") is { } hypnoRadio) hypnoRadio.IsChecked = !bambi;
-            NavigateBrowser(url);
+            NavigateBrowser(url, 0.75); // WPF BrowserService.cs:230 initializes at 75%
         }
         RevealDashboardBrowser("browser-init");
         Window? window = null;
