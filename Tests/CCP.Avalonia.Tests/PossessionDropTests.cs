@@ -259,9 +259,10 @@ public class PossessionDropTests
         finally { PossessionRuntime.UndoAllLive(); window.Close(); }
     });
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public Task RubbleMovesToFloorAndIsRemovedOnUndo(bool panic) => AvaloniaTestDispatcher.RunAsync(async () =>
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public Task RubbleMovesToFloorAndIsRemovedOnUndo(int mode) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var text = new TextBlock { Text = "Drop", Width = 200, Height = 30 };
         var floor = new Canvas { Height = 28, VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Bottom };
@@ -276,13 +277,13 @@ public class PossessionDropTests
             Assert.Single(layer.Children);
             frames.Frame(TimeSpan.FromMilliseconds(8000));
             Assert.Empty(layer.Children); Assert.Single(floor.Children);
-            if (panic) PossessionRuntime.UndoAllLive();
+            if (mode == 1) PossessionRuntime.UndoAllLive();
             else
             {
                 var undo = effect.UndoAsync(TimeSpan.FromMilliseconds(600));
                 Assert.Empty(floor.Children); Assert.Single(layer.Children);
-                frames.Frame(TimeSpan.FromMilliseconds(8100)); frames.Frame(TimeSpan.FromMilliseconds(8700));
-                await undo.WaitAsync(TimeSpan.FromSeconds(3));
+                if (mode == 0) { frames.Frame(TimeSpan.FromMilliseconds(8100)); frames.Frame(TimeSpan.FromMilliseconds(8700)); }
+                await undo.WaitAsync(TimeSpan.FromSeconds(2));
             }
             Assert.Empty(floor.Children); Assert.Empty(layer.Children); Assert.Equal("Drop", text.Text);
         }

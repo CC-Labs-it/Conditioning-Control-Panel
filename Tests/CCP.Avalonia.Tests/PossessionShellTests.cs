@@ -660,4 +660,16 @@ public sealed class PossessionShellTests
         Assert.DoesNotContain(rig.Shell.PossessionGhostLayer!.Children, c => c is Border);
         handle.Dispose();   // a late dispose after ReleaseAll is harmless
     });
+    [Fact]
+    public void DoorPressRequestsDropAtCollapseAndRespectsThrottle() => Run(rig =>
+    {
+        rig.Lockdown.Activate(TimeSpan.FromMinutes(30)); Frame();
+        var a = rig.Shell.NavSectionRowsForTests.First(r => r.Section == "home"); var b = rig.Shell.NavSectionRowsForTests.First(r => r.Section == "play");
+        foreach (var row in new[] { a, b }) row.Button.Content = new TextBlock { Text = "DOOR", FontSize = 12 };
+        Frame(); var at = rig.Director.TargetFor(a.Button, PossessionRole.TabHeader); var bt = rig.Director.TargetFor(b.Button, PossessionRole.TabHeader); Assert.NotNull(at); Assert.NotNull(bt); Assert.Same(a.Button.Content, DropEffect.FindTarget(at)); Assert.Same(b.Button.Content, DropEffect.FindTarget(bt));
+        int starts = 0; rig.Director.EffectStarted += (id, _, _) => { if (id == "drop") starts++; };
+        void Press(Button button) => button.RaiseEvent(new global::Avalonia.Input.PointerPressedEventArgs(button, new global::Avalonia.Input.Pointer(global::Avalonia.Input.Pointer.GetNextFreeId(), global::Avalonia.Input.PointerType.Mouse, true), rig.Shell, default, 0, new global::Avalonia.Input.PointerPointProperties(global::Avalonia.Input.RawInputModifiers.LeftMouseButton, global::Avalonia.Input.PointerUpdateKind.LeftButtonPressed), global::Avalonia.Input.KeyModifiers.None));
+        Press(a.Button); Assert.Equal(0, starts); rig.Clock += TimeSpan.FromMinutes(19); Tick(rig.Lockdown); Frame(); Assert.Equal(PossessionRung.Collapse, rig.Director.CurrentRung);
+        Press(a.Button); Assert.Equal(1, starts); rig.Director.UndoAll(); Press(b.Button); Assert.Equal(1, starts);
+    });
 }

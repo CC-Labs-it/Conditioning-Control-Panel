@@ -79,6 +79,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     }
                     catch (Exception ex) { Serilog.Log.Warning(ex, "Possession: failed to detach the main window host"); }
                 };
+                foreach (var name in NavSectionButtonNames) if (Named<Button>(name) is { } door) PossessionTree.SetRole(door, PossessionRole.TabHeader);
+                AddHandler(PointerPressedEvent, (_, e) => { if (_possessionAttached && Director is { } d && d.TargetFor(e.Source, PossessionRole.TabHeader) is { } door) d.RequestReactive("drop", door, PossessionRung.Collapse); }, RoutingStrategies.Tunnel, handledEventsToo: true);
                 LayoutUpdated += (_, _) =>
                 {
                     var now = DateTime.Now;

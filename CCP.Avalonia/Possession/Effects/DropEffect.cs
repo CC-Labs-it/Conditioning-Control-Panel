@@ -206,8 +206,9 @@ internal sealed class DropEffect : PossessionEffectBase
             }
             g.ReturnX = g.Translation.X; g.ReturnY = g.Translation.Y; g.ReturnAngle = g.Rotation.Angle;
         }
-        _returned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        await _returned.Task.ConfigureAwait(true);
+        var returned = _returned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (await Task.WhenAny(returned.Task, Task.Delay(TimeSpan.FromMilliseconds(_returnDuration + 100))).ConfigureAwait(true) != returned.Task) Finish();
+        await returned.Task.ConfigureAwait(true);
     }
 
     private void Park()
