@@ -1,11 +1,11 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
-using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Safety;
@@ -30,17 +30,15 @@ public class ChaosHubMusicTests
     {
         AvaloniaTestDispatcher.Run(() =>
         {
-            var priorAudio = LibVlcAudio.Instance;
-            LibVlcAudio.Instance = null;
+            var priorAudio = LibVlcAudio.Instance; LibVlcAudio.Instance = null;
             var settings = CoreSettings.Current;
-            int oldMaster = settings.MasterVolume;
-            bool oldMute = settings.ChaosMenuMusicMuted;
+            int oldMaster = settings.MasterVolume; bool oldMute = settings.ChaosMenuMusicMuted;
             ChaosHubWindow? hub = null;
             try
             {
                 settings.MasterVolume = 100; settings.ChaosMenuMusicMuted = false;
-                hub = new ChaosHubWindow();
-                var voice = new Voice();
+                hub = new ChaosHubWindow(); var voice = new Voice();
+                var time = new SteppedTime(); hub.MenuMusicTime = time;
                 hub.MenuMusicPlay = (path, volume, loop, ended) =>
                 {
                     Assert.EndsWith("menu_theme.mp3", path);
@@ -51,14 +49,14 @@ public class ChaosHubMusicTests
                 global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = true; try { hub.Show(); }
                 finally { global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = false; }
                 hub.StartMenuMusic();
-                for (int i = 0; i < 20; i++) hub.MenuMusicTick();
+                for (int i = 0; i < 15; i++) { time.Advance(TimeSpan.FromSeconds(1.0 / 15)); hub.MenuMusicTick(); }
                 Assert.Equal(0.25, voice.Last, 5);
                 settings.MasterVolume = 50;
-                for (int i = 0; i < 20; i++) hub.MenuMusicTick();
+                time.Advance(TimeSpan.FromSeconds(1)); hub.MenuMusicTick();
                 Assert.Equal(0.25, voice.Last, 5);
                 hub.FindControl<Button>("BtnMenuMute")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.True(settings.ChaosMenuMusicMuted);
-                for (int i = 0; i < 12; i++) hub.MenuMusicTick();
+                time.Advance(TimeSpan.FromSeconds(0.6)); hub.MenuMusicTick();
                 Assert.Equal(0, voice.Last, 5);
                 global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = true;
                 try { hub.Close(); }
@@ -81,13 +79,15 @@ public class ChaosHubMusicTests
     }
 
     [Fact]
-    public void Leaving_menu_pauses_and_return_resumes_the_same_voice()
+    public Task Leaving_menu_pauses_and_return_resumes_the_same_voice()
     {
-        AvaloniaTestDispatcher.Run(() =>
+        return AvaloniaTestDispatcher.RunAsync(async () =>
         {
             var priorAudio = LibVlcAudio.Instance;
-            LibVlcAudio.Instance = null;
-            var hub = new ChaosHubWindow();
+            var settings = CoreSettings.Current; var oldMaster = settings.MasterVolume; var oldMute = settings.ChaosMenuMusicMuted;
+            settings.MasterVolume = 100; settings.ChaosMenuMusicMuted = false; LibVlcAudio.Instance = null;
+            var hub = new ChaosHubWindow(); var time = new SteppedTime(); hub.MenuMusicTime = time;
+            void Step(int n) { time.Advance(TimeSpan.FromMilliseconds(n * 50)); hub.MenuMusicTick(); }
             var voice = new Voice();
             try
             {
@@ -95,33 +95,37 @@ public class ChaosHubMusicTests
                 hub.MenuMusicPlay = (_, _, _, _) => { starts++; return voice; };
                 global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = true; try { hub.Show(); }
                 finally { global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = false; }
-                hub.StartMenuMusic(); var beat = Assert.Single(BeatLoop.Running.Where(b => ReferenceEquals(b.Owner, hub)));
-                for (int i = 0; i < 40; i++) hub.MenuMusicTick();
+                hub.StartMenuMusic(); Step(40);
                 hub.FindControl<Grid>("MenuView")!.IsVisible = false;
-                beat.OnParked!(); Assert.True(voice.Paused);
-                hub.FindControl<Grid>("MenuView")!.IsVisible = true; hub.FindControl<Grid>("MenuView")!.IsVisible = false;
-                for (int i = 0; i < 39; i++) hub.MenuMusicTick();
+                hub.WindowState = WindowState.Minimized;
+                Assert.False(voice.Paused);
+                Assert.True(voice.Last > 0);
+                time.Advance(TimeSpan.FromSeconds(1));
+                for (int i = 0; i < 100 && voice.Last >= 0.49; i++) await Task.Delay(50);
+                Assert.Equal(0.25, voice.Last, 5);
+                Step(19);
                 Assert.False(voice.Disposed);
                 Assert.False(voice.Paused);
-                hub.MenuMusicTick();
+                Step(1);
                 Assert.True(voice.Paused);
+                hub.WindowState = WindowState.Normal;
                 Assert.False(voice.Disposed);
                 Assert.Equal(0, voice.Last, 5);
                 hub.FindControl<Grid>("MenuView")!.IsVisible = true;
                 Assert.False(voice.Paused);
                 Assert.Equal(1, starts);
-                for (int i = 0; i < 40; i++) hub.MenuMusicTick();
+                Step(40);
                 Assert.True(voice.Last > 0);
                 hub.FindControl<Grid>("MenuView")!.IsVisible = false;
-                for (int i = 0; i < 10; i++) hub.MenuMusicTick();
+                Step(10);
                 hub.FindControl<Grid>("MenuView")!.IsVisible = true;
-                for (int i = 0; i < 40; i++) hub.MenuMusicTick();
+                Step(40);
                 Assert.False(voice.Paused);
                 Assert.Equal(1, starts);
                 hub.DisposeMenuMusic();
                 Assert.True(voice.Disposed);
             }
-            finally { hub.Close(); hub.DisposeMenuMusic(); LibVlcAudio.Instance = priorAudio; }
+            finally { hub.Close(); hub.DisposeMenuMusic(); settings.MasterVolume = oldMaster; settings.ChaosMenuMusicMuted = oldMute; LibVlcAudio.Instance = priorAudio; }
         });
     }
     [Fact]
@@ -137,32 +141,26 @@ public class ChaosHubMusicTests
             ChaosHubWindow? first = null, second = null;
             try
             {
-                CoreSettings.Current.MasterVolume = 100;
-                CoreSettings.Current.ChaosMenuMusicMuted = false;
-                first = new ChaosHubWindow();
-                second = new ChaosHubWindow();
-                var firstVoice = new Voice();
-                var secondVoice = new Voice();
+                CoreSettings.Current.MasterVolume = 100; CoreSettings.Current.ChaosMenuMusicMuted = false;
+                first = new ChaosHubWindow(); second = new ChaosHubWindow();
+                var time = new SteppedTime(); first.MenuMusicTime = second.MenuMusicTime = time;
+                var firstVoice = new Voice(); var secondVoice = new Voice();
                 int starts = 0;
                 first.MenuMusicPlay = (_, _, _, _) => { starts++; return firstVoice; };
                 second.MenuMusicPlay = (_, _, _, _) => { starts++; return secondVoice; };
-                first.StartMenuMusic();
-                second.StartMenuMusic();
-                for (int i = 0; i < 20; i++) { first.MenuMusicTick(); second.MenuMusicTick(); }
-                Assert.True(firstVoice.Last > 0);
-                Assert.True(secondVoice.Last > 0);
+                first.StartMenuMusic(); second.StartMenuMusic();
+                time.Advance(TimeSpan.FromSeconds(1)); first.MenuMusicTick(); second.MenuMusicTick();
+                Assert.True(firstVoice.Last > 0); Assert.True(secondVoice.Last > 0);
                 PanicSurfaces.All = surfaces.Where(s => s.Id == "chaos-hub-music").ToArray();
                 Assert.Single(PanicSurfaces.All);
                 PanicSurfaces.StopAll("hub music test");
-                Assert.True(firstVoice.Disposed);
-                Assert.True(secondVoice.Disposed);
+                Assert.True(firstVoice.Disposed); Assert.True(secondVoice.Disposed);
                 first.StartMenuMusic();
                 second.FindControl<Grid>("MenuView")!.IsVisible = false;
                 second.FindControl<Grid>("MenuView")!.IsVisible = true;
                 PanicSurfaces.StopAll("hub music again");
                 Assert.Equal(2, starts);
-                Assert.Equal(1, firstVoice.Disposals);
-                Assert.Equal(1, secondVoice.Disposals);
+                Assert.Equal(1, firstVoice.Disposals); Assert.Equal(1, secondVoice.Disposals);
                 var registered = (System.Collections.Generic.HashSet<ChaosHubWindow>)typeof(ChaosHubWindow).GetField("MusicHubs", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!;
                 Assert.DoesNotContain(first, registered);
                 Assert.DoesNotContain(second, registered);
@@ -172,8 +170,7 @@ public class ChaosHubMusicTests
             }
             finally
             {
-                first?.DisposeMenuMusic();
-                second?.DisposeMenuMusic();
+                first?.DisposeMenuMusic(); second?.DisposeMenuMusic();
                 PanicSurfaces.All = surfaces;
                 PanicAftermath.EndQuiet();
                 CoreSettings.Current.MasterVolume = oldMaster;

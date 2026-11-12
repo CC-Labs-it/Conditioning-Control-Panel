@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.IO;
 using Avalonia;
-using ConditioningControlPanel.Avalonia.Helpers;
+using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -16,11 +16,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         // WPF ChaosHubWindow.xaml.cs:2789-2913.
         private static readonly HashSet<ChaosHubWindow> MusicHubs = new();
         private LibVlcAudio.IPausableVoice? _menuMusic;
-        private BeatLoop? _menuMusicTimer;
+        private DispatcherTimer? _menuMusicTimer;
         private AppSettings? _menuMusicSettings;
         private double _menuMusicVolume, _menuMusicFrom, _menuMusicTo, _menuMusicLevel;
-        private int _menuMusicStep, _menuMusicSteps;
+        private long _menuMusicStarted;
+        private int _menuMusicSteps;
         private bool _menuMusicLeaving, _menuMusicInitialized, _menuMusicClosed;
+        internal TimeProvider MenuMusicTime = TimeProvider.System;
         internal Func<string, double, bool, Action, LibVlcAudio.IPausableVoice?>? MenuMusicPlay;
 
         private void InitializeMenuMusic()
@@ -72,13 +74,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _menuMusicLevel = level;
             _menuMusicFrom = _menuMusicVolume;
             _menuMusicTo = Math.Clamp(level * CoreSettings.Current.MasterVolume / 100.0, 0, 1);
-            _menuMusicStep = 0;
+            _menuMusicStarted = MenuMusicTime.GetTimestamp();
             _menuMusicSteps = steps;
             _menuMusicLeaving = leaving;
             if (_menuMusicTimer == null)
             {
-                _menuMusicTimer = new BeatLoop(this, t => { if (t > 0) MenuMusicTick(); }, TimeSpan.FromMilliseconds(50))
-                { OnParked = () => { _menuMusicStep = _menuMusicSteps - 1; MenuMusicTick(); } };
+                // Audio continues while the window is minimized; this is not a frame timer.
+                _menuMusicTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(0.05) };
+                _menuMusicTimer.Tick += (_, _) => MenuMusicTick();
             }
             _menuMusicTimer.Start();
         }
@@ -86,7 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal void MenuMusicTick()
         {
             if (_menuMusic == null) return;
-            var t = Math.Min(1.0, (double)++_menuMusicStep / _menuMusicSteps);
+            var t = Math.Clamp(MenuMusicTime.GetElapsedTime(_menuMusicStarted).TotalSeconds / (_menuMusicSteps * 0.05), 0, 1);
             _menuMusicVolume = Math.Clamp(_menuMusicFrom + (_menuMusicTo - _menuMusicFrom) * t, 0, 1);
             _menuMusic.Volume = _menuMusicVolume;
             if (t < 1) return;
@@ -98,7 +101,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (e.PropertyName != nameof(AppSettings.MasterVolume) || _menuMusic == null) return;
             _menuMusicTo = Math.Clamp(_menuMusicLevel * CoreSettings.Current.MasterVolume / 100.0, 0, 1);
-            if (_menuMusicTimer?.IsRunning != true) _menuMusic.Volume = _menuMusicVolume = _menuMusicTo;
+            if (_menuMusicTimer?.IsEnabled != true) _menuMusic.Volume = _menuMusicVolume = _menuMusicTo;
         }
 
         private void ReleaseMenuMusic()
