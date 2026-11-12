@@ -2,6 +2,8 @@ using Avalonia;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
+using ConditioningControlPanel.Models;
+using Newtonsoft.Json;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -16,8 +18,10 @@ public class EnhancementPlayerWindowStateTests
         var oldHeight = settings.DeeperPlayerWindowHeight;
         var oldLeft = settings.DeeperPlayerWindowLeft;
         var oldTop = settings.DeeperPlayerWindowTop;
+        var oldHint = settings.DeeperPlayerWindowPositionHint;
         try
         {
+            settings.DeeperPlayerWindowPositionHint = null;
             settings.DeeperPlayerWindowWidth = 1000;
             settings.DeeperPlayerWindowHeight = 700;
             var player = new EnhancementPlayerWindow(null, null);
@@ -29,6 +33,9 @@ public class EnhancementPlayerWindowStateTests
             player.Close();
             Assert.Equal(1100, settings.DeeperPlayerWindowWidth);
             Assert.Equal(800, settings.DeeperPlayerWindowHeight);
+            Assert.NotNull(settings.DeeperPlayerWindowPositionHint);
+            Assert.Equal(settings.DeeperPlayerWindowLeft, settings.DeeperPlayerWindowPositionHint![0]);
+            Assert.Equal(settings.DeeperPlayerWindowTop, settings.DeeperPlayerWindowPositionHint[1]);
         }
         finally
         {
@@ -36,6 +43,7 @@ public class EnhancementPlayerWindowStateTests
             settings.DeeperPlayerWindowHeight = oldHeight;
             settings.DeeperPlayerWindowLeft = oldLeft;
             settings.DeeperPlayerWindowTop = oldTop;
+            settings.DeeperPlayerWindowPositionHint = oldHint;
         }
     });
 
@@ -49,6 +57,25 @@ public class EnhancementPlayerWindowStateTests
         Assert.Equal(new PixelPoint(1500, 100), position);
         Assert.False(secondary.Contains(position));
         Assert.True(EnhancementPlayerWindow.BoundsVisible(position, 900, 768, 1, new PixelRect(0, 0, 1920, 1080)));
+    }
+
+    [Fact]
+    public void MixedDpiPositionRoundTripsAndStaleHintDoesNotOverrideWpf()
+    {
+        var screens = new[] { (new PixelRect(0, 0, 1920, 1080), 1.0), (new PixelRect(1920, 0, 1920, 1080), 1.5) };
+        var settings = new AppSettings();
+        EnhancementPlayerWindow.SaveWindowPosition(settings, new PixelPoint(2000, 150), 1.5);
+        var restored = JsonConvert.DeserializeObject<AppSettings>(JsonConvert.SerializeObject(settings))!;
+        Assert.Equal(2000 / 1.5, restored.DeeperPlayerWindowLeft);
+        Assert.Equal(new PixelPoint(2000, 150), EnhancementPlayerWindow.SelectBoundsPosition(
+            restored.DeeperPlayerWindowLeft, restored.DeeperPlayerWindowTop, 900, 768, screens, restored.DeeperPlayerWindowPositionHint));
+        var primaryOnly = new[] { screens[0] };
+        Assert.Equal(new PixelPoint(1333, 100), EnhancementPlayerWindow.SelectBoundsPosition(
+            restored.DeeperPlayerWindowLeft, restored.DeeperPlayerWindowTop, 900, 768, primaryOnly, restored.DeeperPlayerWindowPositionHint));
+        restored.DeeperPlayerWindowLeft = 1500; // WPF changed the saved position.
+        Assert.Equal(new PixelPoint(1500, 100), EnhancementPlayerWindow.SelectBoundsPosition(
+            restored.DeeperPlayerWindowLeft, restored.DeeperPlayerWindowTop, 900, 768, screens, restored.DeeperPlayerWindowPositionHint));
+        Assert.Null(EnhancementPlayerWindow.SelectBoundsPosition(4000, 100, 900, 768, screens, new[] { 4000d, 100d, 1.5 }));
     }
 
     [Fact]
