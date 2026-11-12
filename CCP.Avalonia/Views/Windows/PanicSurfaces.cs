@@ -72,7 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("takeover", sh => sh?.StopAutonomyForPanic()),           // WPF KillAllAudio -> Autonomy.Stop
             // WPF PanicStopEverySurface :2066 "web video" (PanicEndBrowserMedia -> EndWebVideoTakeover's remote
             // branch, Browser.cs:995) runs before RunPanicStopTail's StopEngine: the controller's page goes, blindfold back.
-            new("remote-browser-video", sh => sh?.StopBrowserVideoFromRemote()),
+            new("remote-browser-video", sh => (sh ?? MainShellWindow.Current)?.EndWebVideoTakeover()),
             // WPF RunPanicStopTail StopEngine/StopAdHocEffects: pauses a running session; OnEngineStopped
             // then ends Takeover pulses, desktop overlays (subliminal/whisper, mind wipe, spiral, video,
             // bubbles, pink filter), pop quizzes and open lock cards.

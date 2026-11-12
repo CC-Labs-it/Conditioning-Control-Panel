@@ -352,6 +352,30 @@ public sealed class RemoteControlShellTests
             Assert.Equal("the browser could not open it", RemoteCommands.Execute("play_hypnotube", new Newtonsoft.Json.Linq.JObject { ["url"] = video }));
             Assert.False(browser.IsVisible);
             Assert.Equal(new Uri("https://hypnotube.com/"), web.Source);
+
+            // A local watch link must not start after panic, even if the page finishes later.
+            service.Current.OfflineMode = false;
+            domReady = false;
+            Assert.True(shell.NavigateToUrlInBrowser(video, autoPlayFullscreen: true));
+            var countBeforePanic = Takeovers();
+            var endScripts = scripts.Count(js => js == global::ConditioningControlPanel.Avalonia.Views.Controls.WebHostMedia.EndTakeoverScript);
+            PanicSurfaces.All.Single(s => s.Id == "remote-browser-video").Stop(shell);
+            Assert.Equal(endScripts + 1, scripts.Count(js => js == global::ConditioningControlPanel.Avalonia.Views.Controls.WebHostMedia.EndTakeoverScript));
+            var probes = scripts.Count(js => js.Contains("performance.timeOrigin"));
+            domReady = true;
+            await Task.Delay(250);
+            Assert.Equal(probes, scripts.Count(js => js.Contains("performance.timeOrigin")));
+            web.OnNavigationCompleted(new Uri(video));
+            await Task.Delay(20);
+            Assert.Equal(countBeforePanic, Takeovers());
+            Assert.Equal(new Uri(video), web.Source);
+            MainShellWindow.TakeoverSettle = TimeSpan.FromMilliseconds(250);
+            domReady = false;
+            Assert.True(shell.NavigateToUrlInBrowser(video, autoPlayFullscreen: true));
+            web.OnNavigationCompleted(new Uri(video));
+            PanicSurfaces.All.Single(s => s.Id == "remote-browser-video").Stop(shell);
+            await Task.Delay(300);
+            Assert.Equal(countBeforePanic, Takeovers());
         }
         finally
         {

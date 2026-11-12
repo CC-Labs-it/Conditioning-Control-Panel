@@ -274,13 +274,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// (:995): back to the site home, which drops the playing page, then the blindfold goes back on.</summary>
         internal void StopBrowserVideoFromRemote()
         {
-            if (!_remoteBrowserVideoActive) return;
+            if (_remoteBrowserVideoActive) EndWebVideoTakeover();
+        }
+
+        /// <summary>WPF Browser.cs:973: panic ends any takeover; only remote video restores the blindfold.</summary>
+        internal void EndWebVideoTakeover()
+        {
+            var remote = _remoteBrowserVideoActive;
             _remoteBrowserVideoActive = false;
-            // WPF EndWebVideoTakeover (:981): a pending takeover never fires, the page pauses and leaves fullscreen.
             ++_browserRequestGeneration;
             _disarmBrowserAutoPlay?.Invoke();
             _disarmBrowserAutoPlay = null;
-            _ = BrowserView?.InvokeScriptAsync(WebHostMedia.EndTakeoverScript);   // never throws: WebHost logs
+            _ = BrowserView?.InvokeScriptAsync(WebHostMedia.EndTakeoverScript);
+            if (!remote) return;
             try { NavigateBrowserToCurrentSiteHome(); }
             finally { RevealBrowserForRemoteVideo(false); }
         }
