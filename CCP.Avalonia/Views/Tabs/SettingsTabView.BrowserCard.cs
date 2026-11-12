@@ -35,7 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private string? _remixMediaId;
 
         // WPF BrowserService.cs:337: watch user-started media, not only takeover playback.
-        // Give inaccessible frames a bounded grace period because their playback state is unknown.
+        // Recognised players report their state. Unknown or stale cross-origin state stays busy.
         internal const string RemixMediaScript = """
             (() => {
               const id = __CCP_TOKEN__;
@@ -43,32 +43,67 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
               if (window.__ccpRemixAbort) window.__ccpRemixAbort.abort();
               const controller = window.__ccpRemixAbort = new AbortController();
               let lastPlaying = 0;
-              const unknownFrames = new WeakMap();
-              const unknown = f => {
-                if (!unknownFrames.has(f)) unknownFrames.set(f, Date.now());
-                return Date.now() - unknownFrames.get(f) < 8000;
+              const states = new WeakMap();
+              let players = [];
+              const player = f => {
+                try {
+                  const url = new URL(f.src, document.baseURI), host = url.hostname;
+                  const kind = host === 'player.vimeo.com' ? 'vimeo'
+                    : (host === 'www.youtube.com' || host === 'www.youtube-nocookie.com') && url.searchParams.get('enablejsapi') === '1' ? 'youtube' : null;
+                  if (!kind || !f.contentWindow) return true;
+                  let state = states.get(f);
+                  if (!state || state.src !== url.href) { state = { src: url.href, active: true, time: 0, subscribed: false, ready: false }; states.set(f, state); }
+                  players.push({ f, origin: url.origin, kind, state });
+                  const send = o => f.contentWindow.postMessage(JSON.stringify(o), url.origin);
+                  if (kind === 'vimeo') send({ method: 'getPaused' });
+                  else {
+                    if (!state.ready) send({ event: 'listening', id: 'ccp-remix' });
+                    if (!state.subscribed) {
+                      send({ event: 'command', func: 'addEventListener', args: ['onStateChange'], id: 'ccp-remix' });
+                      state.subscribed = true;
+                    }
+                    send({ event: 'command', func: 'getPlayerState', args: [], id: 'ccp-remix' });
+                  }
+                  return !state.time || Date.now() - state.time > 3000 || state.active;
+                } catch (_) { return true; }
               };
               const busy = d => {
-                // This head mutes elements, so player-sized video stays busy even while muted.
-                if ([...d.querySelectorAll('video,audio')].some(m => !m.paused && !m.ended && (m.tagName === 'AUDIO' ? !m.muted : m.offsetWidth >= 200))) return true;
+                let active = [...d.querySelectorAll('video,audio')].some(m => !m.paused && !m.ended && (m.tagName === 'AUDIO' ? !m.muted : m.offsetWidth >= 200));
                 for (const f of d.querySelectorAll('iframe')) {
                   if (f.offsetWidth < 200) continue;
                   try {
-                    if (!f.contentDocument) { if (unknown(f)) return true; }
-                    else { unknownFrames.delete(f); if (busy(f.contentDocument)) return true; }
-                  } catch (_) { if (unknown(f)) return true; }
+                    if (!f.contentDocument) active = player(f) || active;
+                    else active = busy(f.contentDocument) || active;
+                  } catch (_) { active = player(f) || active; }
                 }
-                return false;
+                return active;
               };
               const report = () => {
                 let active = true;
-                try { active = busy(document); } catch (_) {}
+                try { players = []; active = busy(document); } catch (_) {}
                 if (active) lastPlaying = Date.now();
                 else active = lastPlaying > 0 && Date.now() - lastPlaying < 2000;
                 const msg = JSON.stringify({ type: 'ccpRemixMedia', id, active });
                 if (typeof window.invokeCSharpAction === 'function') window.invokeCSharpAction(msg);
                 else if (window.chrome?.webview) window.chrome.webview.postMessage(msg);
               };
+              window.addEventListener('message', e => {
+                const p = players.find(p => p.f.contentWindow === e.source && p.origin === e.origin);
+                if (!p) return;
+                let data = e.data;
+                try { if (typeof data === 'string') data = JSON.parse(data); } catch (_) { return; }
+                if (!data || typeof data !== 'object') return;
+                let active;
+                if (p.kind === 'vimeo' && data.method === 'getPaused' && typeof data.value === 'boolean') active = !data.value;
+                if (p.kind === 'youtube') {
+                  if (data.event === 'onReady' && !p.state.ready) { p.state.ready = true; p.state.subscribed = false; }
+                  const value = data.event === 'onStateChange' ? data.info
+                    : data.event === 'infoDelivery' || data.event === 'initialDelivery' ? data.info?.playerState : null;
+                  if (typeof value === 'number') active = ![-1, 0, 2, 5].includes(value);
+                }
+                if (active === undefined) return;
+                p.state.active = active; p.state.time = Date.now();
+              }, { signal: controller.signal });
               for (const event of ['playing', 'pause', 'ended', 'volumechange']) document.addEventListener(event, report, { capture: true, signal: controller.signal });
               window.__ccpRemixWatch = setInterval(report, 500);
               report();
