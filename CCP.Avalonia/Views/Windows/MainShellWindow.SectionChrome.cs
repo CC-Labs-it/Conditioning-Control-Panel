@@ -189,17 +189,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Serilog.Log.Debug("Motion chrome refresh failed: {E}", ex.Message); }
         }
 
-        /// <summary>WPF PaintSectionEdge (SectionEdge.cs :105): the fog strips first (Mount re-checks
-        /// the motion gate), then the 3 px line at 0xE6, each band's edge alpha balanced for brightness
-        /// (SectionEdgeRules.GlowAlpha) and, while the fog runs, thinned to 16 px at 70% (WPF
-        /// SectionEdgeRules.FogBand/FogBandShare), the lift the hue toward white, hidden at Motion Off.</summary>
+        /// <summary>WPF PaintSectionEdge (SectionEdge.cs :105): the fog strips (Mount re-checks the gate), the 3 px
+        /// line at 0xE6, each band's edge alpha balanced for brightness (SectionEdgeRules.GlowAlpha), 16 px at 70%
+        /// while the fog runs (FogBand/FogBandShare), the lift the hue toward white, hidden at Motion Off.</summary>
         private void PaintSectionEdge(global::Avalonia.Media.Color hue, Models.MotionLevel level, int ms)
         {
             var fog = Named<EdgeParticles>("SectionEdgeParticles");
             fog?.Mount(hue, ms);
             bool fogLive = fog?.FogLive == true;
-            byte glowAlpha = NavStripRules.EdgeGlowAlpha(hue);
-            if (fogLive) glowAlpha = (byte)Math.Round(glowAlpha * SectionEdgeFogBandShare);
+            byte glowAlpha = (byte)Math.Round(NavStripRules.EdgeGlowAlpha(hue) * (fogLive ? SectionEdgeFogBandShare : 1));
             if (Named<Border>("GlassWindowEdge") is { } line)
             {
                 Fade(line, Border.BorderBrushProperty, ms);

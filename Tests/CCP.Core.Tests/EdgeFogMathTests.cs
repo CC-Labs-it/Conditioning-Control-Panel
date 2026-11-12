@@ -49,10 +49,8 @@ public sealed class EdgeFogMathTests
     }
 
     [Theory]
-    [InlineData(0.0, 2.0)]
-    [InlineData(0.5, 7.0)]
-    [InlineData(1.0, 7.0)]
-    [InlineData(1.0, 2.0)]
+    [InlineData(0.0, 2.0), InlineData(0.5, 7.0)]
+    [InlineData(1.0, 7.0), InlineData(1.0, 2.0)]
     public void ASpeckWandersInsideTheStripAndHugsTheFrame(double u, double wander)
     {
         double depth = EdgeFogMath.DustDepth(u, wander);

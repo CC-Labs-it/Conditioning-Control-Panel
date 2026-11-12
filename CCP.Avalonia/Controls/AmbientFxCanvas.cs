@@ -32,11 +32,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// <summary>Warm motes rising from the bottom edge on a slow sine sway, budgeted by the tier.</summary>
         Embers = 1 << 5,
         EdgeDrift = 1 << 6,
-        /// <summary>The section edge's fog (WPF AmbientFxCanvas.cs:47): puffs and dust along a
-        /// window-edge strip, sim and paint in AmbientFxCanvas.EdgeFog.cs. May tick at Reduced
-        /// when <see cref="AmbientFxConfig.EdgeFogReduced"/> asks for it.</summary>
-        EdgeFog = 1 << 7,
-        VaultMotes = 1 << 8,
+        EdgeFog = 1 << 7,      // WPF :47, the section edge fog (AmbientFxCanvas.EdgeFog.cs)
+        VaultMotes = 1 << 8,   // WPF AmbientFxCanvas.cs:54 (EdgeFog holds 1 << 7)
     }
 
     /// <summary>Per-surface tuning for <see cref="AmbientFxCanvas.StartLayers(AmbientFxConfig)"/>.</summary>
@@ -84,10 +81,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
 
         /// <summary>Depth the EdgeDrift motes keep to on a thicker strip (WPF :180); 0 = the whole strip.</summary>
         public double EdgeDriftBandPx { get; set; }
-
         /// <summary>EdgeFog at Reduced: half the puffs at half the speed (WPF :184).</summary>
         public bool EdgeFogReduced { get; set; }
-
         /// <summary>Alpha gain on the fog, 0-1.5 (WPF :187).</summary>
         public double EdgeFogGain { get; set; } = 1.0;
 
@@ -371,8 +366,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             _dustN = 0;
             _emberN = 0;
             _edgeN = 0;
-            _fogN = 0;
-            _grainN = 0;
+            _fogN = _grainN = 0;
             _vaultN = 0;
             InvalidateVisual();
         }

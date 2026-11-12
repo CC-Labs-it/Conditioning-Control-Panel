@@ -51,7 +51,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         public bool FogLive => _mode != EdgeFogMode.None && _strips.Count > 0;
 
         public static bool ShouldMount(MotionLevel level, bool tierAllowsParticles) =>
-            ModeFor(level, tierAllowsParticles) == EdgeFogMode.Full;
+            level == MotionLevel.Full && tierAllowsParticles;
 
         public static EdgeFogMode ModeFor(MotionLevel level, bool tierAllowsParticles) =>
             !tierAllowsParticles || level == MotionLevel.Off ? EdgeFogMode.None
@@ -77,11 +77,9 @@ namespace ConditioningControlPanel.Avalonia.Controls
             return ModeFor(level, tier);
         }
 
-        public void Mount(Color hue) => Mount(hue, 0);
-
         /// <summary>Re-checks the gate: a level or tier change builds, rebuilds or tears down the
         /// strips; otherwise the live strips crossfade to the hue (WPF :115).</summary>
-        public void Mount(Color hue, int fadeMs)
+        public void Mount(Color hue, int fadeMs = 0)
         {
             _hue = hue;
             _mountAsked = true;
@@ -93,12 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                     Teardown();
                     return;
                 }
-                if (mode != _mode || _strips.Count == 0)
-                {
-                    Teardown();
-                    _mode = mode;
-                    Build();
-                }
+                if (mode != _mode || _strips.Count == 0) { Teardown(); _mode = mode; Build(); }
                 else Retint(hue, fadeMs);
             }
             catch (Exception ex)
@@ -112,18 +105,12 @@ namespace ConditioningControlPanel.Avalonia.Controls
             if (_mountAsked) Mount(_hue);
         }
 
-        public void Retint(Color hue) => Retint(hue, 0);
-
         /// <summary>Crossfade the fog over <paramref name="fadeMs"/>; the embers swap at once (WPF :150).</summary>
-        public void Retint(Color hue, int fadeMs)
+        public void Retint(Color hue, int fadeMs = 0)
         {
             _hue = hue;
-            double gain = FogGain(hue);
             foreach (var strip in _strips)
-            {
-                strip.Retint(hue);
-                strip.SetEdgeFog(hue, gain, fadeMs);
-            }
+            { strip.Retint(hue); strip.SetEdgeFog(hue, FogGain(hue), fadeMs); }
         }
 
         private void Build()
