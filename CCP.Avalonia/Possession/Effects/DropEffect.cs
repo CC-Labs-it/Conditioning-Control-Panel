@@ -35,7 +35,7 @@ internal sealed class DropEffect : PossessionEffectBase
     private string? _original;
     private InlineCollection? _originalInlines, _ours;
     private Canvas? _layer, _floor;
-    private Rect? _floorBounds;
+    private IAvaloniaPossessionHost? _host;
     private RenderTargetBitmap? _snapshot;
     private IFrameSource? _frames;
     private Random _rng = Random.Shared;
@@ -70,7 +70,7 @@ internal sealed class DropEffect : PossessionEffectBase
         catch { bitmap.Dispose(); return Task.CompletedTask; }
         _snapshot = bitmap;
         _text = text; _original = text.Text; _originalInlines = text.Inlines;
-        _layer = layer; _floor = host.RubbleFloor; _floorBounds = _floor == null ? null : host.BoundsOnGhostLayer(_floor);
+        _layer = layer; _floor = host.RubbleFloor; _host = host;
         _frames = host.PossessionFrames; _rng = ctx.Rng; _photosafe = ctx.Photosafe;
         _originX = bounds.X; _originY = bounds.Y;
         _scaleX = bounds.Width / text.Bounds.Width; _scaleY = bounds.Height / text.Bounds.Height;
@@ -85,12 +85,10 @@ internal sealed class DropEffect : PossessionEffectBase
         { if (generation == _generation && IsLive && !_returning) _ = UndoAsync(TimeSpan.Zero); }));
         return Task.CompletedTask;
     }
-
     private static double Width(TextBlock text, string value) => value.Length == 0 ? 0 :
         new FormattedText(value, CultureInfo.CurrentUICulture, text.FlowDirection,
             new Typeface(text.FontFamily, text.FontStyle, text.FontWeight, text.FontStretch), text.FontSize,
             text.Foreground ?? Brushes.White).WidthIncludingTrailingWhitespace;
-
     private static bool Fits(TextBlock text, out double start)
     {
         start = 0;
@@ -129,7 +127,7 @@ internal sealed class DropEffect : PossessionEffectBase
             double bounce = ms - g.Start - g.Duration;
             if (!_photosafe && bounce >= 0 && bounce < 370)
                 g.Translation.Y -= bounce < 170 ? 10 * HeadEffect.CubicOut(bounce / 170) : 10 * (1 - Math.Pow((bounce - 170) / 200, 2));
-            if (!g.InRubble && _floor != null && _floorBounds is { } floor && bounce >= (_photosafe ? 20 : 370))
+            if (!g.InRubble && _floor != null && bounce >= (_photosafe ? 20 : 370) && _host?.BoundsOnGhostLayer(_floor) is { } floor)
             {
                 _layer?.Children.Remove(g.Image); Canvas.SetLeft(g.Image, g.HomeX - floor.X);
                 Canvas.SetTop(g.Image, g.HomeY - floor.Y); _floor.Children.Add(g.Image); g.InRubble = true;
@@ -169,7 +167,7 @@ internal sealed class DropEffect : PossessionEffectBase
         double homeY = _originY;
         Canvas.SetLeft(image, _originX + x0 * _scaleX); Canvas.SetTop(image, homeY);
         _layer.Children.Add(image);
-        double floorY = _floorBounds is { } floor ? floor.Y + Math.Max(0, floor.Height - h * _scaleY) * _rng.NextDouble()
+        double floorY = (_floor == null ? null : _host?.BoundsOnGhostLayer(_floor)) is { } floor ? floor.Y + Math.Max(0, floor.Height - h * _scaleY) * _rng.NextDouble()
             : Math.Max(homeY + 80, _layer.Bounds.Height - 48);
         double dy = Math.Max(30, floorY - homeY);
         double amplitude = _photosafe ? 0.5 : 1;
@@ -225,7 +223,7 @@ internal sealed class DropEffect : PossessionEffectBase
         if (StillOurs() && _text != null) _text.Inlines = _originalInlines;
         _cancellation.Dispose(); _snapshot?.Dispose();
         _snapshot = null; _text = null; _original = null; _ours = _originalInlines = null;
-        _layer = _floor = null; _floorBounds = null; _frames = null; _start = _returnStart = null;
+        _layer = _floor = null; _host = null; _frames = null; _start = _returnStart = null;
         _glyphs.Clear(); _dropped.Clear(); _returning = false; Live.Remove(this);
         _returned?.TrySetResult(); _returned = null;
     }
