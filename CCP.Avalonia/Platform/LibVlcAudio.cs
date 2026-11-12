@@ -31,7 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private static string? _bundle;
 
         /// <summary>The libvlc file that loaded: an absolute path for the bundle, the soname for the system.</summary>
-        internal static string? Loaded { get; private set; }
+        internal static string? Loaded { get; set; }
 
         /// <summary>The bundled runtime's dir (holds libvlc.so.5, libvlccore.so.9 and vlc/plugins),
         /// or null for the distro libvlc: not Linux, no bundle, or CCP_VLC=system.</summary>
@@ -65,7 +65,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         /// <summary>First candidate <paramref name="tryLoad"/> opens; Zero = let .NET probe as usual.
-        /// With a bundle only the bundle's files are tried, so bundled and system libs never mix.</summary>
+        /// With a bundle only the bundle's files are tried, so bundled and system libs never mix: a bundle
+        /// that does not load throws, since Zero would let .NET load the distro libvlc against the bundle's
+        /// VLC_PLUGIN_PATH. CCP_VLC=system is the way to the distro libvlc.</summary>
         internal static IntPtr Resolve(string name, Func<string, IntPtr> tryLoad, string? bundleDir = null)
         {
             if (!Candidates.TryGetValue(name, out var files)) return IntPtr.Zero;
@@ -77,7 +79,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 if (name == "libvlc") Loaded = f;
                 return h;
             }
-            if (bundleDir != null) Log.Warning("[Audio] bundled {Name} did not load from {Dir}", name, bundleDir);
+            if (bundleDir != null)
+                throw new DllNotFoundException($"bundled {name} did not load from {bundleDir} (CCP_VLC=system uses the distro libVLC)");
             return IntPtr.Zero;
         }
     }

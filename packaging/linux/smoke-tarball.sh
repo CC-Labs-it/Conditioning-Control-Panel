@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Extract a built tarball to a temp dir and run --smoke from it, requiring the bundled Vosk model to load and the
-# bundled libVLC (lib/, not the distro's) to load and decode H.264+AAC.
-#   bash packaging/linux/smoke-tarball.sh <ConditioningControlPanel-*-linux-x64.tar.gz> [h264_aac.mp4]
-# The clip defaults to CCP_SMOKE_VLC_CLIP, else the one packaging/linux/vlc/check.sh --clips makes (needs docker/podman).
+# bundled libVLC (lib/, not the distro's) to load and decode every clip: mp4, webm, ts, wmv, flv.
+#   bash packaging/linux/smoke-tarball.sh <ConditioningControlPanel-*-linux-x64.tar.gz> [clip-dir]
+# The clips (h264_aac.mp4 ...) default to CCP_SMOKE_VLC_CLIP_DIR, else the ones packaging/linux/vlc/check.sh --clips
+# makes (needs docker/podman).
 # Needs no VLC on the host: run it in a container without one, and on Fedora with vlc-plugin-pipewire (#4441).
 set -euo pipefail
 # The AUR PKGBUILD downloads the release asset by pkgver, so it must follow Version.props (it sat at 6.11.3 under 7.0.5).
@@ -22,13 +23,17 @@ test -f "$app/lib/libvlc.so.5"
 test -s "$app/lib/vlc/plugins/plugins.dat"
 test -f "$app/VLC-NOTICES.txt"
 grep -q 'releases/download/.*-sources.tar' "$app/SOURCES.txt"
-clip=${2:-${CCP_SMOKE_VLC_CLIP:-}}
-if [ -z "$clip" ]; then
-  clip=$(dirname "$0")/vlc/out/clips/h264_aac.mp4
-  [ -f "$clip" ] || bash "$(dirname "$0")/vlc/check.sh" --clips >&2
+clipdir=${2:-${CCP_SMOKE_VLC_CLIP_DIR:-}}
+if [ -z "$clipdir" ]; then
+  clipdir=$(dirname "$0")/vlc/out/clips
+  [ -f "$clipdir/flv1_mp3.flv" ] || bash "$(dirname "$0")/vlc/check.sh" --clips >&2
 fi
-export CCP_SMOKE_VLC_CLIP
-CCP_SMOKE_VLC_CLIP=$(realpath "$clip")
+CCP_SMOKE_VLC_CLIPS=
+for c in h264_aac.mp4 vp9_opus.webm h264_aac.ts wmv2_wma.wmv flv1_mp3.flv; do
+  test -f "$clipdir/$c" || { echo "smoke-tarball: no $clipdir/$c" >&2; exit 1; }
+  CCP_SMOKE_VLC_CLIPS=$CCP_SMOKE_VLC_CLIPS$(realpath "$clipdir/$c"):
+done
+export CCP_SMOKE_VLC_CLIPS
 id=io.github.CodeBambi.ConditioningControlPanel
 test -f "$app/LICENSE"
 test -f "$app/share/applications/$id.desktop"

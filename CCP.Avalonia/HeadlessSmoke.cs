@@ -72,14 +72,21 @@ namespace ConditioningControlPanel.Avalonia
             }
             catch (Exception ex) { Check("LibVLC plays a clip: started then finished within 2 s", false, ex.Message); }
             // packaging/linux/smoke-tarball.sh: the tarball's pinned libVLC (not the distro's) loaded and decodes
-            // H.264+AAC (CCP_SMOKE_VLC_CLIP) through vmem/amem, the way VlcFrameSink and the pulse output pull it.
+            // each CCP_SMOKE_VLC_CLIPS clip (':'-separated; mp4, webm, ts, wmv, flv: the containers the scheduler
+            // takes, CCP.Core/Helpers/MediaTypeSniffer.cs:88) through vmem/amem, the way VlcFrameSink and the pulse output pull it.
             if (Environment.GetEnvironmentVariable("CCP_SMOKE_BUNDLED_VLC") == "1")
             {
                 var loaded = Platform.LibVlcNative.Loaded ?? "none";
                 Check("bundled libVLC loaded from the install folder",
                     loaded.StartsWith(AppContext.BaseDirectory, StringComparison.Ordinal), $"{loaded}, {Platform.LibVlcAudio.Shared?.Version}");
-                try { var (ok, detail) = DecodeClip(Environment.GetEnvironmentVariable("CCP_SMOKE_VLC_CLIP") ?? ""); Check("bundled libVLC decodes H.264+AAC", ok, detail); }
-                catch (Exception ex) { Check("bundled libVLC decodes H.264+AAC", false, ex.Message); }
+                var clips = (Environment.GetEnvironmentVariable("CCP_SMOKE_VLC_CLIPS") ?? "").Split(':', StringSplitOptions.RemoveEmptyEntries);
+                Check("bundled libVLC has clips to decode", clips.Length > 0, string.Join(", ", clips));
+                foreach (var file in clips)
+                {
+                    var name = $"bundled libVLC decodes {System.IO.Path.GetFileName(file)}";
+                    try { var (ok, detail) = DecodeClip(file); Check(name, ok, detail); }
+                    catch (Exception ex) { Check(name, false, ex.Message); }
+                }
             }
             // The Linux tarball ships the Vosk model in the install folder (packaging/linux/build-tarball.sh);
             // the packaging runs set this so a tarball without a loadable model fails. ModelStatus never touches the mic.
