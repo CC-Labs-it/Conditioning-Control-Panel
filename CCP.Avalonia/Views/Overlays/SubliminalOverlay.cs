@@ -38,6 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static bool _warnedUnavailable;
         private static readonly Dictionary<PixelRect, SharedOverlayHost.Lease> Hosts = new();
         private static readonly List<Action> RetireHosted = new();
+        internal static Action<Action, TimeSpan> ScheduleHosted = (action, delay) => DispatcherTimer.RunOnce(action, delay);
 
         /// <summary>Solid mode goes to the shared stage unless focus is requested or a mandatory video owns the screen.</summary>
         internal static bool UseSolidHost(bool solidMode, bool stealsFocus, int liveVideoWindows) =>
@@ -64,7 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 lease.Canvas.Children.Remove(card);
             };
             RetireHosted.Add(retire);
-            void Step(double value, TimeSpan at) => DispatcherTimer.RunOnce(() =>
+            void Step(double value, TimeSpan at) => ScheduleHosted(() =>
             {
                 if (!retired) card.Opacity = Math.Clamp(value, 0, 1);
             }, at);
@@ -77,7 +78,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Step(alpha * i / steps, fade * i / steps);
                 Step(alpha * (1 - (double)i / steps), fade + hold + fade * i / steps);
             }
-            DispatcherTimer.RunOnce(() =>
+            ScheduleHosted(() =>
             {
                 retire();
                 RetireHosted.Remove(retire);

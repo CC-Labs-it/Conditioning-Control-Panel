@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using CCP.Avalonia.Testing;
@@ -16,20 +18,78 @@ public sealed class SubliminalSolidHostTests
     {
         SubliminalSilentHintTests.EnsureAvalonia();
         var configure = SharedOverlayHost.Configure;
+        var schedule = SubliminalOverlay.ScheduleHosted;
         Window? stage = null;
         SharedOverlayHost.Configure = (w, _) => { stage = w; w.Width = 300; w.Height = 200; return true; };
+        // Model a busy dispatcher: the card's callbacks can run after a wall-clock wait.
+        SubliminalOverlay.ScheduleHosted = (action, delay) => schedule(action, delay + TimeSpan.FromMilliseconds(200));
         try
         {
             Assert.True(SubliminalOverlay.ShowHosted(new PixelRect(0, 0, 300, 200), "TEST", 0.8, TimeSpan.FromMilliseconds(500)));
             var canvas = Assert.IsType<Grid>(stage!.Content);
             var card = Assert.Single(canvas.Children);
             Assert.Equal(0, card.Opacity);
-            await System.Threading.Tasks.Task.Delay(150);
-            Assert.Equal(0.8, card.Opacity, 3);
-            await System.Threading.Tasks.Task.Delay(650);
+            var peak = new TaskCompletionSource<double>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var removed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            card.PropertyChanged += (_, e) =>
+            {
+                if (e.Property == Visual.OpacityProperty && Math.Abs(card.Opacity - 0.8) < 0.001)
+                    peak.TrySetResult(card.Opacity);
+            };
+            canvas.Children.CollectionChanged += (_, _) =>
+            {
+                if (canvas.Children.Count == 0) removed.TrySetResult(true);
+            };
+            Assert.Equal(0.8, await peak.Task.WaitAsync(TimeSpan.FromSeconds(10)), 3);
+            await removed.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Empty(canvas.Children);
         }
-        finally { SubliminalOverlay.CloseAll(); SharedOverlayHost.Configure = configure; }
+        finally { SubliminalOverlay.CloseAll(); SubliminalOverlay.ScheduleHosted = schedule; SharedOverlayHost.Configure = configure; }
+    });
+
+    [Fact]
+    public void Hosted_card_schedule_preserves_fade_and_hold() => AvaloniaTestDispatcher.Run(() =>
+    {
+        SubliminalSilentHintTests.EnsureAvalonia();
+        var configure = SharedOverlayHost.Configure;
+        var schedule = SubliminalOverlay.ScheduleHosted;
+        var scheduled = new List<(TimeSpan At, Action Run)>();
+        Window? stage = null;
+        SharedOverlayHost.Configure = (w, _) => { stage = w; w.Width = 300; w.Height = 200; return true; };
+        SubliminalOverlay.ScheduleHosted = (action, delay) => scheduled.Add((delay, action));
+        try
+        {
+            var hold = TimeSpan.FromMilliseconds(500);
+            var fade = SubliminalOverlayWindow.FadeDuration;
+            Assert.True(SubliminalOverlay.ShowHosted(new PixelRect(0, 0, 300, 200), "TEST", 0.8, hold));
+            var canvas = Assert.IsType<Grid>(stage!.Content);
+            var card = Assert.Single(canvas.Children);
+            void AdvanceTo(TimeSpan time)
+            {
+                foreach (var item in scheduled.Where(item => item.At <= time).OrderBy(item => item.At).ToArray())
+                {
+                    scheduled.Remove(item);
+                    item.Run();
+                }
+            }
+            Assert.Equal(0, card.Opacity);
+            AdvanceTo(fade / 2);
+            Assert.InRange(card.Opacity, 0.001, 0.799);
+            AdvanceTo(fade);
+            Assert.Equal(0.8, card.Opacity, 3);
+            AdvanceTo(fade + hold);
+            Assert.Equal(0.8, card.Opacity, 3);
+            AdvanceTo(fade + hold + fade);
+            Assert.Equal(0, card.Opacity);
+            Assert.Empty(canvas.Children);
+            Assert.Empty(scheduled);
+        }
+        finally
+        {
+            SubliminalOverlay.CloseAll();
+            SubliminalOverlay.ScheduleHosted = schedule;
+            SharedOverlayHost.Configure = configure;
+        }
     });
 
     [Fact]
