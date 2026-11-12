@@ -87,6 +87,54 @@ public class CompanionDrainCadenceTests
         }
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task RestartedHeadStillSwitchesAfterCleanup(bool worker) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var path = Path.Combine(CorePaths.UserData, "settings.json");
+        var originalFile = File.Exists(path) ? File.ReadAllBytes(path) : null;
+        var oldHooks = (CoreModsHooks.ActiveCompanionProvider, CoreModsHooks.SwitchCompanion);
+        var oldProvider = CoreSettings.ServiceProvider;
+        var oldActiveTime = LastActiveTime.GetValue(null);
+        var wasStarted = CompanionHead.Started;
+        var service = new SettingsService { SaveDebounceDueTimeMilliseconds = 600_000 };
+        try
+        {
+            if (wasStarted) CompanionHead.Stop();
+            CoreSettings.ServiceProvider = () => service;
+            CompanionHead.Start();
+            var hook = CoreModsHooks.SwitchCompanion;
+            if (worker) await RunWorkerSwitchScenario();
+            else RunScenario(path);
+            Assert.True(CompanionHead.Started);
+            Assert.Same(hook, CoreModsHooks.SwitchCompanion);
+            var next = CompanionCore.ActiveCompanion == CompanionId.CultBunny ? CompanionId.OGBambiSprite : CompanionId.CultBunny;
+            await Task.Run(() => CoreModsHooks.SwitchCompanion!(next));
+            Assert.Equal(next, CompanionCore.ActiveCompanion);
+        }
+        finally
+        {
+            CompanionHead.Stop();
+            service.SealForReset();
+            try
+            {
+                if (originalFile == null) File.Delete(path);
+                else File.WriteAllBytes(path, originalFile);
+            }
+            finally
+            {
+                CoreSettings.ServiceProvider = oldProvider;
+                try { if (wasStarted) CompanionHead.Start(); }
+                finally
+                {
+                    LastActiveTime.SetValue(null, oldActiveTime);
+                    (CoreModsHooks.ActiveCompanionProvider, CoreModsHooks.SwitchCompanion) = oldHooks;
+                }
+            }
+        }
+    });
+
     [Fact]
     public async Task WorkerSwitchKeepsDrainOnUiAndDoesNotRestartANewHead()
     {

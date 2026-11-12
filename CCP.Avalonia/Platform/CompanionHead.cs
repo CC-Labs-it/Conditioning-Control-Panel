@@ -42,9 +42,10 @@ internal static class CompanionHead
                         new MessageDialog(Loc.Get("community_prompt_warning_title"), Loc.GetF("community_prompt_warning_body", count), false));
             });
         };
+        // Resolve the live head per call: a captured hook keeps working after Stop/Start and no-ops while stopped.
         CoreModsHooks.SwitchCompanion = id =>
         {
-            if (ReferenceEquals(_prompts, prompts)) CompanionCore.SwitchCompanion(id, prompts);
+            if (_prompts is { } live) CompanionCore.SwitchCompanion(id, live);
         };
 
         CompanionCore.Switched += OnSwitched;
