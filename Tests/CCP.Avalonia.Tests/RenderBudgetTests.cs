@@ -79,4 +79,73 @@ public sealed class RenderBudgetTests
         var soft = new[] { Win32RenderingMode.Software };
         Assert.Same(soft, RenderBudget.ChooseRendering(new[] { Rtx }, soft));
     }
+
+    // The enumeration loop DxgiAdapters.List drives (EnumAdapters1 + GetDesc1 folded into one HRESULT).
+    private static RenderBudget.ReadAdapter Reads(params (int Hr, RenderBudget.DxgiAdapter A)[] steps) =>
+        (uint i, out RenderBudget.DxgiAdapter a) => { var s = steps[i]; a = s.A; return s.Hr; };
+
+    private const int NotFound = RenderBudget.DxgiErrorNotFound, EFail = unchecked((int)0x80004005);
+
+    [Fact]
+    public void Enumeration_stops_at_not_found_and_keeps_every_adapter()
+    {
+        Assert.Equal(new[] { Rtx, Warp }, RenderBudget.CollectAdapters(Reads((0, Rtx), (0, Warp), (NotFound, default))));
+        Assert.Equal(new[] { Warp }, RenderBudget.CollectAdapters(Reads((0, Warp), (NotFound, default))));
+        Assert.Empty(RenderBudget.CollectAdapters(Reads((NotFound, default))));
+    }
+
+    [Fact]
+    public void A_partial_enumeration_failure_keeps_the_default_renderer()
+    {
+        // The GPU at index 0 fails to read and WARP reads fine: without the clear this was [WARP] -> Software.
+        var gpuUnread = RenderBudget.CollectAdapters(Reads((EFail, default), (0, Warp), (NotFound, default)));
+        Assert.Empty(gpuUnread);
+        Assert.Null(RenderBudget.ChooseRendering(gpuUnread, null));
+        // A failure after WARP was read, and an exception, drop the list too.
+        Assert.Empty(RenderBudget.CollectAdapters(Reads((0, Warp), (EFail, default))));
+        Assert.Empty(RenderBudget.CollectAdapters((uint i, out RenderBudget.DxgiAdapter a) =>
+        {
+            if (i == 1) throw new InvalidOperationException("driver");
+            a = Warp; return 0;
+        }));
+    }
+
+    private static Win32PlatformOptions Startup(string? rendering, params RenderBudget.DxgiAdapter[] adapters)
+    {
+        bool listed = false;
+        var o = global::ConditioningControlPanel.Avalonia.Program.Win32Options(
+            name => name == "CCP_WIN32_RENDERING" ? rendering : null,
+            () => { listed = true; return adapters; });
+        Assert.Equal(rendering == null, listed);   // the override skips the enumeration
+        return o;
+    }
+
+    [Fact]
+    public void Startup_applies_the_chosen_rendering_mode()
+    {
+        var avaloniaDefault = new Win32PlatformOptions().RenderingMode;
+        Assert.Equal(new[] { Win32RenderingMode.Software }, Startup(null, Warp).RenderingMode);
+        Assert.Equal(avaloniaDefault, Startup(null, Rtx, Warp).RenderingMode);
+        Assert.Equal(avaloniaDefault, Startup(null).RenderingMode);   // enumeration failed or not Windows
+        Assert.Equal(new[] { Win32RenderingMode.AngleEgl }, Startup("angle", Warp).RenderingMode);
+    }
+
+    [Fact]
+    public void Windows_reads_real_adapters_and_a_warp_only_machine_renders_in_software()
+    {
+        if (!OperatingSystem.IsWindows()) { Assert.Skip("DXGI exists only on Windows."); return; }   // return: CA1416 flow
+        var real = DxgiAdapters.List();
+        Assert.NotEmpty(real);   // DXGI always lists at least the Basic Render Driver
+        foreach (var a in real)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(a.Name));
+            // The Basic Render Driver carries DXGI_ADAPTER_FLAG_SOFTWARE: proves the DXGI_ADAPTER_DESC1 layout.
+            if (a.VendorId == 0x1414 && a.DeviceId == 0x8C) Assert.Equal(2u, a.Flags & 2);
+        }
+        var o = global::ConditioningControlPanel.Avalonia.Program.Win32Options(_ => null, DxgiAdapters.List);
+        if (real.TrueForAll(a => a.IsSoftware))   // windows-latest runners: WARP only
+            Assert.Equal(new[] { Win32RenderingMode.Software }, o.RenderingMode);
+        else
+            Assert.Equal(new Win32PlatformOptions().RenderingMode, o.RenderingMode);
+    }
 }

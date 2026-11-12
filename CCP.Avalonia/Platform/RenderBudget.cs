@@ -68,6 +68,37 @@ namespace ConditioningControlPanel.Avalonia.Platform
             public bool IsSoftware => (VendorId == 0x1414 && DeviceId == 0x8C) || (Flags & 2) != 0;
         }
 
+        /// <summary>DXGI_ERROR_NOT_FOUND: EnumAdapters1 past the last adapter, the normal end of the list.</summary>
+        public const int DxgiErrorNotFound = unchecked((int)0x887A0002);
+
+        /// <summary>Reads adapter <paramref name="index"/> and returns an HRESULT: EnumAdapters1's, or
+        /// GetDesc1's when that call fails (never DXGI_ERROR_NOT_FOUND for a GetDesc1 failure).</summary>
+        public delegate int ReadAdapter(uint index, out DxgiAdapter adapter);
+
+        /// <summary>The DXGI enumeration loop (DxgiAdapters.List). Stops at DXGI_ERROR_NOT_FOUND. Any other
+        /// failure, or an exception, returns an empty list (= Avalonia's default): DXGI lists WARP last, so
+        /// skipping a GPU that failed to read would leave [WARP] and push a GPU machine to Software.</summary>
+        public static List<DxgiAdapter> CollectAdapters(ReadAdapter read)
+        {
+            var list = new List<DxgiAdapter>();
+            try
+            {
+                for (uint i = 0; i < 16; i++)
+                {
+                    int hr = read(i, out var a);
+                    if (hr == DxgiErrorNotFound) break;
+                    if (hr < 0) { list.Clear(); break; }
+                    list.Add(a);
+                }
+            }
+            catch (Exception ex)
+            {
+                list.Clear();
+                Serilog.Log.Warning(ex, "DXGI adapter enumeration failed; keeping Avalonia's default renderer");
+            }
+            return list;
+        }
+
         /// <summary>The Win32 rendering modes: the env override when set; Software when every adapter is
         /// WARP/software; otherwise null, which keeps Avalonia's default (ANGLE). An empty list (enumeration
         /// failed) keeps the default too, so an unknown machine is never pushed off its GPU.</summary>

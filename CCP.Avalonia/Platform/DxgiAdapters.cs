@@ -8,13 +8,13 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 
 /// <summary>Lists the DXGI adapters (CreateDXGIFactory1 + EnumAdapters1 + GetDesc1) so Program can see a
 /// GPU-less machine before Avalonia picks its renderer (RenderBudget.ChooseRendering). Raw vtable calls,
-/// no unsafe context and no COM interop types; any failure returns an empty list (= Avalonia's default).</summary>
+/// no unsafe context and no COM interop types; any failure returns an empty list (= Avalonia's default; the loop is RenderBudget.CollectAdapters).</summary>
 [SupportedOSPlatform("windows")]
 internal static class DxgiAdapters
 {
     private const int EnumAdapters1Slot = 12;   // IUnknown 3 + IDXGIObject 4 + IDXGIFactory 5
     private const int GetDesc1Slot = 10;        // IUnknown 3 + IDXGIObject 4 + IDXGIAdapter 3
-    private const int DxgiErrorNotFound = unchecked((int)0x887A0002);
+    private const int EFail = unchecked((int)0x80004005);
     private static readonly Guid IidFactory1 = new("770aae78-f26f-4dba-a829-253c83d1b387");
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -37,27 +37,28 @@ internal static class DxgiAdapters
 
     public static List<RenderBudget.DxgiAdapter> List()
     {
-        var list = new List<RenderBudget.DxgiAdapter>();
         IntPtr factory = IntPtr.Zero;
         try
         {
-            if (CreateDXGIFactory1(IidFactory1, out factory) < 0 || factory == IntPtr.Zero) return list;
+            if (CreateDXGIFactory1(IidFactory1, out factory) < 0 || factory == IntPtr.Zero) return new();
             var enumAdapters = Slot<EnumAdapters1Fn>(factory, EnumAdapters1Slot);
-            // Partial failure counts as failure: DXGI lists WARP last, so a skipped GPU would leave [WARP].
-            for (uint i = 0; i < 16; i++)
+            int Read(uint i, out RenderBudget.DxgiAdapter a)
             {
+                a = default;
                 int hr = enumAdapters(factory, i, out var adapter);
-                if (hr < 0) { if (hr != DxgiErrorNotFound) list.Clear(); break; }
+                if (hr < 0) return hr;
                 try
                 {
-                    if (Slot<GetDesc1Fn>(adapter, GetDesc1Slot)(adapter, out var d) < 0) { list.Clear(); break; }
-                    list.Add(new RenderBudget.DxgiAdapter(d.Description ?? "", d.VendorId, d.DeviceId, d.Flags));
+                    hr = Slot<GetDesc1Fn>(adapter, GetDesc1Slot)(adapter, out var d);
+                    if (hr < 0) return hr == RenderBudget.DxgiErrorNotFound ? EFail : hr;
+                    a = new RenderBudget.DxgiAdapter(d.Description ?? "", d.VendorId, d.DeviceId, d.Flags);
+                    return 0;
                 }
                 finally { Marshal.Release(adapter); }
             }
+            return RenderBudget.CollectAdapters(Read);
         }
-        catch (Exception ex) { list.Clear(); Log.Warning(ex, "DXGI adapter enumeration failed; keeping Avalonia's default renderer"); }
+        catch (Exception ex) { Log.Warning(ex, "DXGI adapter enumeration failed; keeping Avalonia's default renderer"); return new(); }
         finally { if (factory != IntPtr.Zero) Marshal.Release(factory); }
-        return list;
     }
 }
