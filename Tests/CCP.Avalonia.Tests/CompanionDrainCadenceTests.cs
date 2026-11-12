@@ -44,7 +44,48 @@ public class CompanionDrainCadenceTests
         }
     });
 
+    private static readonly FieldInfo LastActiveTime = typeof(CompanionCore).GetField("_lastActiveTimeUpdate", BindingFlags.NonPublic | BindingFlags.Static)!;
     private static readonly FieldInfo LastDrainSave = typeof(CompanionCore).GetField("_lastDrainSaveUtc", BindingFlags.NonPublic | BindingFlags.Static)!;
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public Task ScenariosRestoreActiveTime(bool worker, bool started) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var oldTime = LastActiveTime.GetValue(null);
+        var oldHooks = (CoreModsHooks.ActiveCompanionProvider, CoreModsHooks.SwitchCompanion);
+        var oldProvider = CoreSettings.ServiceProvider;
+        var oldEnv = Environment.GetEnvironmentVariable("CCP_COMPANION_V2");
+        var wasStarted = CompanionHead.Started;
+        var service = new SettingsService { SaveDebounceDueTimeMilliseconds = 600_000 };
+        var sentinel = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Local);
+        try
+        {
+            if (wasStarted) CompanionHead.Stop();
+            CoreSettings.ServiceProvider = () => service;
+            Environment.SetEnvironmentVariable("CCP_COMPANION_V2", "0");
+            if (started) CompanionHead.Start();
+            LastActiveTime.SetValue(null, sentinel);
+            if (worker) await RunWorkerSwitchScenario();
+            else RunScenario(Path.Combine(CorePaths.UserData, "settings.json"));
+            Assert.Equal(sentinel, LastActiveTime.GetValue(null));
+        }
+        finally
+        {
+            CompanionHead.Stop();
+            service.SealForReset();
+            CoreSettings.ServiceProvider = oldProvider;
+            Environment.SetEnvironmentVariable("CCP_COMPANION_V2", oldEnv);
+            try { if (wasStarted) CompanionHead.Start(); }
+            finally
+            {
+                LastActiveTime.SetValue(null, oldTime);
+                (CoreModsHooks.ActiveCompanionProvider, CoreModsHooks.SwitchCompanion) = oldHooks;
+            }
+        }
+    });
 
     [Fact]
     public async Task WorkerSwitchKeepsDrainOnUiAndDoesNotRestartANewHead()
@@ -67,6 +108,7 @@ public class CompanionDrainCadenceTests
         var oldHooks = (CoreModsHooks.ActiveCompanionProvider, CoreModsHooks.SwitchCompanion);
         var oldEnv = Environment.GetEnvironmentVariable("CCP_COMPANION_V2");
         var oldProvider = CoreSettings.ServiceProvider;
+        var oldActiveTime = LastActiveTime.GetValue(null);
         var oldDrainSave = LastDrainSave.GetValue(null);
         var wasStarted = CompanionHead.Started;
         SettingsService? service = null;
@@ -116,7 +158,11 @@ public class CompanionDrainCadenceTests
                 CoreSettings.ServiceProvider = oldProvider;
                 Environment.SetEnvironmentVariable("CCP_COMPANION_V2", oldEnv);
                 try { if (wasStarted) CompanionHead.Start(); }
-                finally { (CoreModsHooks.ActiveCompanionProvider, CoreModsHooks.SwitchCompanion) = oldHooks; }
+                finally
+                {
+                    LastActiveTime.SetValue(null, oldActiveTime);
+                    (CoreModsHooks.ActiveCompanionProvider, CoreModsHooks.SwitchCompanion) = oldHooks;
+                }
             }
         }
     });
@@ -127,6 +173,7 @@ public class CompanionDrainCadenceTests
         var oldHooks = (CoreModsHooks.ActiveCompanionProvider, CoreModsHooks.SwitchCompanion);
         var oldEnv = Environment.GetEnvironmentVariable("CCP_COMPANION_V2");
         var oldProvider = CoreSettings.ServiceProvider;
+        var oldActiveTime = LastActiveTime.GetValue(null);
         var wasStarted = CompanionHead.Started;
         SettingsService? service = null;
         try
@@ -170,7 +217,11 @@ public class CompanionDrainCadenceTests
                 CoreSettings.ServiceProvider = oldProvider;
                 Environment.SetEnvironmentVariable("CCP_COMPANION_V2", oldEnv);
                 try { if (wasStarted) CompanionHead.Start(); }
-                finally { (CoreModsHooks.ActiveCompanionProvider, CoreModsHooks.SwitchCompanion) = oldHooks; }
+                finally
+                {
+                    LastActiveTime.SetValue(null, oldActiveTime);
+                    (CoreModsHooks.ActiveCompanionProvider, CoreModsHooks.SwitchCompanion) = oldHooks;
+                }
             }
         }
     }
