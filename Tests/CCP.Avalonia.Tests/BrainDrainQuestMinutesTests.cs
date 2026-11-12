@@ -105,9 +105,10 @@ public class BrainDrainQuestMinutesTests
         }
     });
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void EndingPulsePreservesCreditWhenAnotherOwnerRuns(bool remote) =>
+    [InlineData(false, false, 2)]
+    [InlineData(true, false, 2)]
+    [InlineData(true, true, 0)] // WPF: the pulse started the overlay, so its end stops the controller's too.
+    public void EndingPulseKeepsCreditOnlyForOverlayItDidNotStart(bool remote, bool joinMidPulse, int expected) =>
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
     {
         var oldSettings = CoreSettings.ServiceProvider;
@@ -130,13 +131,15 @@ public class BrainDrainQuestMinutesTests
             CoreEngine.Stop();
             RemoteCommands.StopOverlays();
             App.WireBrainDrainQuestMinutes();
-            if (remote) RemoteCommands.EnsureOverlayRunning();
-            else CoreEngine.Start();
+            if (!remote) CoreEngine.Start();
+            else if (!joinMidPulse) RemoteCommands.EnsureOverlayRunning();
             PinkFilterOverlay.PulseHold = true;
+            if (joinMidPulse) RemoteCommands.EnsureOverlayRunning(); // what a controller join posts
             App.SampleBrainDrainQuestMinutes(TimeSpan.Zero);
             PinkFilterOverlay.PulseHold = false;
             App.SampleBrainDrainQuestMinutes(TimeSpan.FromMinutes(2));
-            Assert.Equal(2, quest.CurrentProgress);
+            Assert.Equal(expected, quest.CurrentProgress);
+            Assert.Equal(!joinMidPulse, CoreEngine.IsRunning || RemoteCommands.OverlayRunning);
         }
         finally
         {

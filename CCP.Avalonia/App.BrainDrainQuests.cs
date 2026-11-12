@@ -42,8 +42,15 @@ public partial class App
         (RemoteCommands.OverlayRunning || (Sessions?.IsPaused != true &&
          (CoreEngine.IsVisualRun || Sessions?.IsRunning == true)));
 
+    private static bool _pulseStartedOverlay;
+    internal static void NoteBrainDrainPulseStart() => _pulseStartedOverlay = !OverlayRunningWithoutPulse;
+
     internal static void ResetBrainDrainQuestSampleAfterPulse()
     {
+        // WPF AutonomyService.cs:572-575,1602-1604: a pulse that started the overlay service stops it
+        // again, even after a controller joined mid-pulse (RemoteControlService.cs:1207 found it running).
+        if (_pulseStartedOverlay && RemoteCommands.OverlayRunning && !CoreEngine.IsRunning) RemoteCommands.StopOverlays();
+        _pulseStartedOverlay = false;
         if (!OverlayRunningWithoutPulse) BrainDrainCredit.Sample(false, TimeSpan.Zero);
     }
 
