@@ -155,6 +155,33 @@ public class MandatoryVideoEnhancementTests
         }
     });
 
+    [Fact]
+    public void DispatcherRetiresQueuedSubliminalOnUnbind() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var old = (CoreSubliminal.CustomShowProvider, CoreHaptics.Service, SubliminalWhisperShow.DrawNow);
+        var drawn = new System.Collections.Generic.List<string>();
+        try
+        {
+            CoreHaptics.Service = null;
+            SubliminalWhisperShow.DrawNow = drawn.Add;
+            CoreSubliminal.CustomShowProvider = text => SubliminalWhisperShow.Custom(text);
+            var dispatcher = new ConditioningControlPanel.Avalonia.Platform.Deeper.BrowserEnhancementDispatcher();
+            dispatcher.DispatchAsync(new TriggerEffectAction { EffectType = EffectTypes.Subliminal, Text = "queued" }, null!).GetAwaiter().GetResult();
+            dispatcher.StopOneShotSubliminals();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Empty(drawn);
+            SubliminalWhisperShow.Draw("ambient");
+            dispatcher.StopOneShotSubliminals();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { "ambient" }, drawn);
+        }
+        finally
+        {
+            SubliminalWhisperShow.StopAll();
+            (CoreSubliminal.CustomShowProvider, CoreHaptics.Service, SubliminalWhisperShow.DrawNow) = old;
+        }
+    });
+
     private sealed class Counter : IActionDispatcher
     {
         internal int Fired;
