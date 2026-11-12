@@ -98,6 +98,56 @@ public class SyncPushHealthTests
     }
 
     [Fact]
+    public async Task RateLimitsCountOnlyWhileAnErrorIsOutstanding()
+    {
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldLogin = CoreAccount.IsLoggedInProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        CoreAccount.IsLoggedInProvider = () => true;
+        var wire = new Wire { FailureStatus = (HttpStatusCode)429 };
+        var sync = new SyncPush(() => Array.Empty<string>(), () => false, wire);
+        var now = DateTime.UtcNow;
+        sync.UtcNow = () => now;
+        var events = new List<int>();
+        sync.SyncHealthChanged += (_, count) => events.Add(count);
+        try
+        {
+            settings.Current.UnifiedId = "rate-limit-health-test";
+            settings.Current.AuthToken = "fake";
+            settings.Current.OfflineMode = false;
+            settings.Current.LastConfirmedServerXp = 0;
+            sync.MarkLoaded(null);
+            Assert.False(await sync.PushAsync("initial rate limit"));
+            Assert.Empty(events);
+            now += TimeSpan.FromMinutes(20);
+            wire.FailureStatus = HttpStatusCode.InternalServerError;
+            Assert.False(await sync.PushAsync("error"));
+            now += TimeSpan.FromMinutes(20);
+            wire.FailureStatus = (HttpStatusCode)429;
+            Assert.False(await sync.PushAsync("rate limit"));
+            Assert.False(await sync.PushAsync("cooldown skip"));
+            now += SyncPush.Cooldown + TimeSpan.FromSeconds(1);
+            Assert.False(await sync.PushAsync("rate limit again"));
+            Assert.Equal(new[] { 1, 2, 3 }, events);
+            now += SyncPush.Cooldown + TimeSpan.FromSeconds(1);
+            wire.Succeed = true;
+            Assert.True(await sync.PushAsync("success"));
+            Assert.Equal(new[] { 1, 2, 3, 0 }, events);
+            now += SyncPush.Cooldown + TimeSpan.FromSeconds(1);
+            wire.Succeed = false;
+            Assert.False(await sync.PushAsync("rate limit after success"));
+            Assert.Equal(new[] { 1, 2, 3, 0 }, events);
+        }
+        finally
+        {
+            sync.Reset();
+            CoreSettings.ServiceProvider = oldSettings;
+            CoreAccount.IsLoggedInProvider = oldLogin;
+        }
+    }
+
+    [Fact]
     public async Task UnhandledConflictsCountButCooldownAndHandledConflictsDoNot()
     {
         var oldSettings = CoreSettings.ServiceProvider;
@@ -132,11 +182,11 @@ public class SyncPushHealthTests
             Assert.Equal(new[] { 1, 2, 3 }, events);
             wire.FailureStatus = (HttpStatusCode)429;
             Assert.False(await sync.PushAsync("rate limited"));
-            Assert.Equal(new[] { 1, 2, 3 }, events);
+            Assert.Equal(new[] { 1, 2, 3, 4 }, events);
             now += SyncPush.Cooldown + TimeSpan.FromSeconds(1);
             wire.Succeed = true;
             Assert.True(await sync.PushAsync("success"));
-            Assert.Equal(new[] { 1, 2, 3, 0 }, events);
+            Assert.Equal(new[] { 1, 2, 3, 4, 0 }, events);
         }
         finally
         {

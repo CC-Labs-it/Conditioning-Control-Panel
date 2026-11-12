@@ -118,6 +118,7 @@ namespace ConditioningControlPanel.Services
         public event EventHandler<int>? SyncHealthChanged;
         public int ConsecutiveSyncFailures { get; private set; }
 
+        private bool _hasSyncError;
         private int _backoffFailures;
         private DateTime? _blockedUntilUtc;
         private string? _backoffToken;
@@ -130,6 +131,7 @@ namespace ConditioningControlPanel.Services
 
         private void NoteFailureForBackoff(int? status, string? tokenUsed)
         {
+            _hasSyncError = true;
             ConsecutiveSyncFailures++;
             SyncHealthChanged?.Invoke(this, ConsecutiveSyncFailures);
             _backoffFailures++;
@@ -266,6 +268,7 @@ namespace ConditioningControlPanel.Services
                 if (watermark > 0 && totalXp < watermark)
                 {
                     Log.Error("[XP watermark] Sync REFUSED — would push {Xp} XP, below the {Watermark} XP last agreed", (int)totalXp, (int)watermark);
+                    _hasSyncError = true;
                     ConsecutiveSyncFailures++;
                     SyncHealthChanged?.Invoke(this, ConsecutiveSyncFailures);
                     return false;
@@ -316,8 +319,10 @@ namespace ConditioningControlPanel.Services
                     // 429, and a 409 no recovery handled: cool down rather than retry on every trigger.
                     if (response.StatusCode is (HttpStatusCode)429 or HttpStatusCode.Conflict)
                     {
-                        if (response.StatusCode == HttpStatusCode.Conflict)
+                        // WPF retains LastSyncError on 429 and counts it in the finally block.
+                        if (response.StatusCode == HttpStatusCode.Conflict || _hasSyncError)
                         {
+                            _hasSyncError = true;
                             ConsecutiveSyncFailures++;
                             SyncHealthChanged?.Invoke(this, ConsecutiveSyncFailures);
                         }
@@ -332,6 +337,7 @@ namespace ConditioningControlPanel.Services
                 LastSyncTime = UtcNow();
                 Interlocked.Increment(ref _syncSuccesses);
                 (_backoffFailures, _blockedUntilUtc) = (0, null);
+                _hasSyncError = false;
                 if (ConsecutiveSyncFailures > 0)
                 {
                     ConsecutiveSyncFailures = 0;
