@@ -90,20 +90,45 @@ public sealed class BrowserInitialHomeTests
     });
 
     [Fact]
-    public Task LinksBeforeInitializationUseDefaultZoom() => Run((shell, page, host, mod) =>
+    public Task LaterLinkBeforeInitializationAppliesHalfWhenReady() => Run((shell, page, host, mod) =>
     {
+        double applied = 0;
+        host.ZoomInvoker = (zoom, _) => applied = zoom;
         Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:9/one"));
         Assert.Equal(0.75, host.BrowserZoom);
+        Assert.Equal(0, applied);
         Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:9/two"));
-        Assert.Equal(0.75, host.BrowserZoom); // still initializing
+        Assert.Equal("http://127.0.0.1:9/two", host.Source!.AbsoluteUri);
+        host.BrowserZoomAdapterReady();
+        Assert.Equal(0.5, applied);
+        Assert.Equal(0.5, host.BrowserZoom);
     });
 
     [Fact]
-    public Task AnotherLinkWhileInitializingKeepsDefaultZoom() => Run((shell, page, host, mod) =>
+    public Task AdditionalLinksWhileInitializingKeepHalfZoom() => Run((shell, page, host, mod) =>
     {
+        double applied = 0;
+        host.ZoomInvoker = (zoom, _) => applied = zoom;
         shell.NavigateToUrlInBrowser("http://127.0.0.1:9/one");
         shell.NavigateToUrlInBrowser("http://127.0.0.1:9/two");
-        Assert.Equal(0.75, host.BrowserZoom);
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/three");
+        Assert.Equal("http://127.0.0.1:9/three", host.Source!.AbsoluteUri);
+        host.BrowserZoomAdapterReady();
+        Assert.Equal(0.5, host.BrowserZoom);
+        Assert.Equal(0.5, applied);
+    });
+
+    [Fact]
+    public Task SiteToggleDuringInitializationKeepsInitialZoom() => Run((shell, page, host, mod) =>
+    {
+        double applied = 0;
+        host.ZoomInvoker = (zoom, _) => applied = zoom;
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/one");
+        var requests = host.NavigationRequests;
+        shell.BrowserSiteToggle_Click(null, new global::Avalonia.Interactivity.RoutedEventArgs());
+        Assert.Equal(requests + 1, host.NavigationRequests);
+        host.BrowserZoomAdapterReady();
+        Assert.Equal(0.75, applied);
     });
 
     [Fact]
@@ -146,6 +171,12 @@ public sealed class BrowserInitialHomeTests
         CoreSettings.Current.OfflineMode = false;
         Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:9/"));
         Assert.Equal(0.75, host.BrowserZoom);
+        CoreSettings.Current.OfflineMode = true;
+        Assert.False(shell.NavigateToUrlInBrowser("http://127.0.0.1:9/blocked"));
+        Assert.Equal(0.75, host.BrowserZoom);
+        CoreSettings.Current.OfflineMode = false;
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:9/next"));
+        Assert.Equal(0.5, host.BrowserZoom);
     });
 
     [Fact]
@@ -248,6 +279,8 @@ public sealed class BrowserInitialHomeTests
         var calls = 0;
         host.ZoomInvoker = (_, _) => calls++;
         shell.NavigateToUrlInBrowser("http://127.0.0.1:9/");
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/next");
+        Assert.Equal(0.5, host.BrowserZoom);
         Assert.Equal(0, calls);
         if (close) shell.Close(); else PanicSurfaces.StopAll("zoom test", shell);
         host.BrowserZoomAdapterReady();

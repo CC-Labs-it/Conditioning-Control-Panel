@@ -67,14 +67,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Points the web view at a URL. A missing host (the tab is not in the tree, as in
         /// a single-view render) is a no-op that returns false, never a throw.</summary>
-        private bool NavigateBrowser(string url)
+        private bool NavigateBrowser(string url, bool linkNavigation = false)
         {
             try
             {
                 var host = BrowserView;
                 if (host == null) return false;
                 var target = new Uri(url);
-                host.SetBrowserZoom(host.BrowserZoomReady ? 0.5 : 0.75);
+                // WPF MainWindow.Browser.cs:458,730: later links waiting for init use 50%.
+                host.SetBrowserZoom(host.BrowserZoomReady || (linkNavigation && host.BrowserZoom is not null) ? 0.5 : 0.75);
                 host.Navigate(target);   // even when equal: WPF #867, re-click goes home
                 Log.Information("Browser navigated to {Url}", url);
                 return true;
@@ -164,12 +165,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // ponytail: an unavailable adapter is known immediately; no 12-second ready poll is needed.
             if (BrowserView is { HasEngine: false })
             {
-                var navigated = NavigateBrowser(url); // retain the requested URL on the fallback panel
+                var navigated = NavigateBrowser(url, linkNavigation: true); // retain the requested URL on the fallback panel
                 if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
                     Platform.ExternalOpener.Open(url);
                 return navigated;
             }
-            return NavigateBrowser(url);
+            return NavigateBrowser(url, linkNavigation: true);
         }
 
         // ============================== the profile viewer ==============================
