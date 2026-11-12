@@ -144,6 +144,31 @@ public sealed class JustDropWindowTests
     });
 
     [Fact]
+    public void EscapeDuringTheFirstAllowedNavigationRestoresTheWindow() => Run(shell =>
+    {
+        JustDropService.SetServerEnabledForTests(true);
+        shell.ShowTab("justdrop");
+        var w = Open()!;
+        const string escape = "{\"type\":\"ccp-host-escape\"}";
+        w.WindowState = global::Avalonia.Controls.WindowState.FullScreen;
+        w.Web.OnWebMessage(escape); // no accepted navigation
+        Assert.Equal(global::Avalonia.Controls.WindowState.FullScreen, w.WindowState);
+        w.Web.RecordAllowedNavigation(new Uri("https://app.cclabs.app.evil.example/"));
+        w.Web.OnWebMessage(escape);
+        Assert.Equal(global::Avalonia.Controls.WindowState.FullScreen, w.WindowState);
+        w.Web.RecordAllowedNavigation(new Uri(JustDropHandoff.SiteOrigin + JustDropHandoff.ShopPath));
+        w.Web.OnWebMessage("{\"type\":\"ready\"}");
+        Assert.Equal(global::Avalonia.Controls.WindowState.FullScreen, w.WindowState);
+        Assert.Null(w.Web.CurrentUrl); // still loading, not a simulated completion
+        w.Web.OnWebMessage(escape);
+        Assert.Equal(global::Avalonia.Controls.WindowState.Normal, w.WindowState);
+        w.WindowState = global::Avalonia.Controls.WindowState.FullScreen;
+        w.Web.OnNavigationCompleted(null); // a completion without a URL clears the in-flight authority
+        w.Web.OnWebMessage(escape);
+        Assert.Equal(global::Avalonia.Controls.WindowState.FullScreen, w.WindowState);
+    });
+
+    [Fact]
     public void TheTokenRidesTheHandoffOnce_AndPageFramesReachCore() => Run(shell =>
     {
         JustDropService.SetServerEnabledForTests(true);
@@ -199,6 +224,9 @@ public sealed class JustDropWindowTests
             var complete = "{\"source\":\"justdrop\",\"v\":1,\"type\":\"session-complete\",\"payload\":{\"orderCode\":\"JD-"
                 + Guid.NewGuid().ToString("N") + "\",\"sizeId\":\"S\"}}";
             w.Web.OnWebMessage(complete);   // no completed navigation yet
+            Assert.Equal(0, paid);
+            w.Web.RecordAllowedNavigation(w.PageUrl);
+            w.Web.OnWebMessage(complete);   // even an accepted in-flight page cannot send business frames yet
             Assert.Equal(0, paid);
             foreach (var foreign in new[]
             {

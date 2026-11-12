@@ -88,6 +88,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public Uri? CurrentUrl { get; private set; }
 
+        // The last accepted top-level start, only while it has not completed. NativeWebView's
+        // message event has no source, so callers must not treat this as a message's proven origin.
+        internal Uri? ActiveNavigation { get; private set; }
+
         /// <summary>
         /// Raised on the UI thread with <see cref="CurrentUrl"/> after every top-level navigation
         /// completes, failed ones included, as WPF's <c>BrowserService.NavigationCompleted</c>
@@ -106,6 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         internal void OnNavigationCompleted(Uri? url, bool success = true)
         {
+            ActiveNavigation = null;
             if (url is null || _panicBlank) return;
             CurrentUrl = url;
             if (InjectCarrier) _ = InvokeScriptAsync(CarrierShim);
@@ -416,6 +421,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
         {
             var target = e.Request;
+            ActiveNavigation = null;
+            if (e.Cancel) return;
             // Panic teardown must pass a caller's page allowlist, including on reattachment.
             // Late redirects from the stopped document must not replace the blank page.
             if (_panicBlank) { e.Cancel = target != PanicBlank; return; }
@@ -434,15 +441,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // The Scrolller licence switch is off: no web view of this app opens a Scrolller page (WPF ScrolllerWebGate Block).
             if (ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicyService.Blocks(target?.AbsoluteUri)) { e.Cancel = true; return; }
             var gate = AllowNavigation;
-            if (gate is null) return;
+            if (gate is null || (target != null && gate(target)))
+            {
+                RecordAllowedNavigation(target);
+                return;
+            }
             // No URL to judge: refuse. A navigation the gate cannot see is exactly the one a
             // hostile page would use to slip past it.
             if (target is null) { e.Cancel = true; return; }
-            if (gate(target)) return;
             e.Cancel = true;
             // Host + path only: a signed media URL's query string must not reach the log.
             Log.Warning("WebHost: navigation blocked to {Host}{Path}", target.Host, target.AbsolutePath);
         }
+
+        internal void RecordAllowedNavigation(Uri? target) => ActiveNavigation = target;
 
         /// <summary>
         /// Loads <paramref name="url"/> even when it is already the <see cref="Source"/>: WPF #867, clicking
@@ -451,6 +463,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public void Navigate(Uri url)
         {
+            ActiveNavigation = null;
             _panicBlank = false;
             _explicitNavigate = true;
             try { Source = url; } finally { _explicitNavigate = false; }
@@ -526,6 +539,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal Action<bool> NewScrolllerEngine()
         {
             _scrolllerGate = null;
+            ActiveNavigation = null;
             _loadedOnThisEngine = false;
             if (_panicBlank) NavigatePanicBlank();
             var engine = ++_scrolllerEngine;
@@ -564,6 +578,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             base.OnPropertyChanged(change);
             if (change.Property == SourceProperty)
             {
+                ActiveNavigation = null;
                 if (Source != null) _panicBlank = false; // a new explicit request may load normally
                 ApplySource();
             }
