@@ -191,6 +191,29 @@ public class FirstRunAssetsPromptTests
         return Task.CompletedTask;
     }, (s, _) => s.HasAcceptedAgeVerification = false);
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Fixture_restores_card_handler_even_when_body_throws(bool throws) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var original = RemoteMediaOffer.ShowCard;
+        Action<Window?> sentinel = _ => { };
+        RemoteMediaOffer.ShowCard = sentinel;
+        try
+        {
+            if (throws)
+                await Assert.ThrowsAsync<InvalidOperationException>(() => Run((_, _, _, _) =>
+                {
+                    RemoteMediaOffer.ShowCard = _ => { };
+                    throw new InvalidOperationException("fixture failure");
+                }));
+            else
+                await Age_and_startup_modals_hold_prompt_and_pending_flush_until_offer();
+            Assert.Same(sentinel, RemoteMediaOffer.ShowCard);
+        }
+        finally { RemoteMediaOffer.ShowCard = original; }
+    });
+
     [Fact]
     public Task Declining_age_gate_never_shows_prompt_or_flushes_offer() => Run((shell, service, root, clock) =>
     {
@@ -240,6 +263,7 @@ public class FirstRunAssetsPromptTests
         var oldRoot = DefaultRoot.GetValue(app);
         var oldProvider = CoreSettings.ServiceProvider;
         var oldAssets = CorePaths.EffectiveAssetsProvider;
+        var oldShowCard = RemoteMediaOffer.ShowCard;
         var service = new SettingsService { SaveDebounceDueTimeMilliseconds = Timeout.Infinite };
         var s = service.Current;
         s.PerformanceMode = true;
@@ -262,18 +286,22 @@ public class FirstRunAssetsPromptTests
         try { await body(shell, service, root, clock); }
         finally
         {
-            foreach (var window in shell.OwnedWindows.ToArray()) window.Close();
-            shell.Close();
-            Dispatcher.UIThread.RunJobs();
-            service.SealForReset();
-            CoreSettings.ServiceProvider = oldProvider;
-            CorePaths.EffectiveAssetsProvider = oldAssets;
-            DefaultRoot.SetValue(app, oldRoot);
-            MainShellWindow.IsStartupDialogShowing = false;
-            UpdateOffering.SetValue(null, false);
-            RemoteMediaOffer.ResetForTests();
-            StartupLadder.ResetForTests();
-            Directory.Delete(root, true);
+            try
+            {
+                foreach (var window in shell.OwnedWindows.ToArray()) window.Close();
+                shell.Close();
+                Dispatcher.UIThread.RunJobs();
+                service.SealForReset();
+                CoreSettings.ServiceProvider = oldProvider;
+                CorePaths.EffectiveAssetsProvider = oldAssets;
+                DefaultRoot.SetValue(app, oldRoot);
+                MainShellWindow.IsStartupDialogShowing = false;
+                UpdateOffering.SetValue(null, false);
+                RemoteMediaOffer.ResetForTests();
+                StartupLadder.ResetForTests();
+                Directory.Delete(root, true);
+            }
+            finally { RemoteMediaOffer.ShowCard = oldShowCard; }
         }
     });
 }
