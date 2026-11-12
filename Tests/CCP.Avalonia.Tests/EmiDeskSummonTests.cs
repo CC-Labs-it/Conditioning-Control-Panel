@@ -288,14 +288,25 @@ public sealed class EmiDeskSummonTests
     {
         var win = new EmiDeskWindow();
         int completed = 0;
+        Action? advance = null;
+        win.ChainTimerScheduler = (_, tick) => { advance = tick; return () => advance = null; };
         try
         {
             win.RunSummon(() => completed++);
             await Pump(700);
             Assert.True(win.ChainLive);
+            Assert.Equal("wake", win.ChainPlayer.Current?.Id);
+            Assert.Equal(TimeSpan.FromMilliseconds(500), win.ChainPlayer.PendingHold);
+            Assert.NotNull(advance);
+            advance(); // interrupt the wake after its first frame, regardless of runner load
+            Assert.Equal("o_o", win.Face);
             if (panic) win.StopChainForPanic(); else win.Say("x");
             Assert.Equal(1, completed);
             win.PlayChain("shock");
+            var shock = win.ChainPlayer.Current;
+            Assert.NotNull(shock);
+            Assert.Equal(TimeSpan.FromMilliseconds(160), win.ChainPlayer.PendingHold);
+            await Pump(250); // a slow pointer dispatch must not race the frame we are checking
             var body = (Control)typeof(EmiDeskWindow).GetField("_bodyRoot",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(win)!;
             var point = body.TranslatePoint(new Point(body.Bounds.Width / 2, body.Bounds.Height / 2), win)!.Value;
@@ -303,6 +314,18 @@ public sealed class EmiDeskSummonTests
             win.MouseUp(point, global::Avalonia.Input.MouseButton.Left);
             Assert.Equal("o_o", win.Face);
             Assert.True(win.ChainLive);
+            Assert.Same(shock, win.ChainPlayer.Current); // a pat cannot replace a running line
+            Assert.NotNull(advance);
+            advance();
+            Assert.Equal("0_0", win.Face);
+            Assert.Equal(TimeSpan.FromMilliseconds(160), win.ChainPlayer.PendingHold);
+            Assert.NotNull(advance);
+            advance();
+            Assert.Equal("(◉_◉)", win.Face);
+            Assert.Equal(TimeSpan.FromMilliseconds(900), win.ChainPlayer.PendingHold);
+            Assert.NotNull(advance);
+            advance();
+            Assert.False(win.ChainLive);
             await Pump(2000);
             Assert.Equal(1, completed);
         }
