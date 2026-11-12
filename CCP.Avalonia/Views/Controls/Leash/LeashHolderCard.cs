@@ -80,7 +80,7 @@ public sealed class LeashHolderCard : Border
     private readonly StackPanel _body = new();
     private readonly DispatcherTimer _resultTimer = new() { Interval = TimeSpan.FromSeconds(3) };
     private static readonly LeashTugThrottle TugThrottle = new();
-    private string? _sheet, _result;
+    private string? _sheet, _result, _videoFor;
     private bool _resultGood;
     internal LeashHolderCard() : this(new HeldLeash(new("friend", "Friend", null), true, LeashIntensity.Standard,
         DateTimeOffset.UtcNow, 1, null, new DayReport("20261023", 30, 2, 3, 4, false, null, null, false, DateTimeOffset.UtcNow),
@@ -94,7 +94,7 @@ public sealed class LeashHolderCard : Border
         Render();
     }
     internal void Update(HeldLeash held) { _held = held; Render(); }
-    internal void Fold() { _sheet = null; Render(); }
+    internal void Fold() { _sheet = _videoFor = null; Render(); }
     private void Render()
     {
         _body.Children.Clear();
@@ -107,9 +107,8 @@ public sealed class LeashHolderCard : Border
         _body.Children.Add(Figures());
         if (h.Assignment is { } a) _body.Children.Add(LeashCardUi.Text(Loc.GetF(a.Status switch
         { AssignStatus.Done => "leash_task_done", AssignStatus.Missed => "leash_task_missed", _ => "leash_task_open" }, LeashCardUi.TaskText(a)), "leash-holder-task"));
-        var week = new WrapPanel { Tag = "leash-week" };
-        foreach (var day in h.Week.TakeLast(7)) week.Children.Add(LeashCardUi.Text(R.DayLetter(day.Day), "leash-week:" + day.Mark,
-            day.Mark switch { WeekMark.Did => F.Mint, WeekMark.Punished => F.Red, WeekMark.Today => F.Gold, _ => F.Dim }));
+        var week = new global::Avalonia.Controls.Primitives.UniformGrid { Columns = 7, Tag = "leash-week", Margin = new Thickness(0, 10, 0, 0) };
+        foreach (var day in h.Week.TakeLast(7)) week.Children.Add(WeekCell(day));
         _body.Children.Add(week);
         if (dnd && h.DndUntil is { } quietUntil)
             _body.Children.Add(LeashCardUi.Text(Loc.GetF("leash_holder_dnd", h.Who.Name, R.DndUntilText(quietUntil)), "leash-holder-dnd", F.Lilac));
@@ -124,10 +123,10 @@ public sealed class LeashHolderCard : Border
                     if (!TugThrottle.TryTug(h.Who.Id, DateTime.UtcNow)) { Word(new(LeashSendStatus.TooFast), ""); return; }
                     await Send(s => s.TugAsync(h.Who.Id), Honest("leash_done_tug"), close: false);
                 }
-                else { _sheet = _sheet == id ? null : id; Render(); }
+                else { _sheet = _sheet == id ? null : id; _videoFor = null; Render(); }
             });
             button.IsEnabled = id == "reward" || !dnd;
-            buttons.Children.Add(button);
+            buttons.Children.Add(WithHelp(button, id));
         }
         _body.Children.Add(buttons);
         if (_sheet is { } sheet)
@@ -142,8 +141,9 @@ public sealed class LeashHolderCard : Border
                     if (h.Pending.Count > 0) panel.Children.Add(LeashCardUi.Text(Loc.GetF("leash_sheet_waiting", h.Pending.Count)));
                     foreach (var kind in R.VisiblePunishments(h.Intensity, r?.ChasterLinked == true))
                     {
-                        panel.Children.Add(LeashCardUi.Text(Loc.Get(R.Key(kind))));
-                        if (kind == PunishKind.Video) panel.Children.Add(VideoPicker(w => Send(s => s.PunishAsync(h.Who.Id, kind, _videoCap, w), Punished), true));
+                        panel.Children.Add(Label(Loc.Get(R.Key(kind)), LeashHelpCatalog.ForPunish(kind)));
+                        if (kind == PunishKind.Video) panel.Children.Add(Pick("punish", "leash-punish:video:1",
+                            () => VideoPicker(w => Send(s => s.PunishAsync(h.Who.Id, kind, _videoCap, w), Punished), true)));
                         else panel.Children.Add(LeashCardUi.Choices(R.Sizes(kind).Select(size =>
                             (R.SizeText(kind, size), $"leash-punish:{kind.ToString().ToLowerInvariant()}:{size}", (Func<Task>)(() => Send(s => s.PunishAsync(h.Who.Id, kind, size), Punished))))));
                     }
@@ -155,31 +155,32 @@ public sealed class LeashHolderCard : Border
                 if (h.Assignment is { Status: AssignStatus.Open } current) panel.Children.Add(LeashCardUi.Text(Loc.GetF("leash_sheet_replaces", LeashCardUi.TaskText(current))));
                 foreach (var kind in R.AssignOrder)
                 {
-                    panel.Children.Add(LeashCardUi.Text(Loc.Get(R.Key(kind))));
-                    if (kind == AssignKind.Video) panel.Children.Add(VideoPicker(w => Send(s => s.AssignAsync(h.Who.Id, kind, 1, w), Honest("leash_done_assign")), false));
+                    panel.Children.Add(Label(Loc.Get(R.Key(kind)), LeashHelpCatalog.ForAssign(kind)));
+                    if (kind == AssignKind.Video) panel.Children.Add(Pick("assign", "leash-assign:video:1",
+                        () => VideoPicker(w => Send(s => s.AssignAsync(h.Who.Id, kind, 1, w), Honest("leash_done_assign")), false)));
                     else panel.Children.Add(LeashCardUi.Choices(R.Sizes(kind).Select(size =>
                         (size.ToString(), $"leash-assign:{kind.ToString().ToLowerInvariant()}:{size}", (Func<Task>)(() => Send(s => s.AssignAsync(h.Who.Id, kind, size), Honest("leash_done_assign")))))));
                 }
             }
             else
             {
-                panel.Children.Add(LeashCardUi.Choices(R.Stickers.Select(id =>
-                    (Loc.Get("leash_rew_sticker_" + id), "leash-reward:sticker:" + id, (Func<Task>)(() => Reward(RewardKind.Sticker, id))))));
-                panel.Children.Add(LeashCardUi.Choices(R.Praise.Select(id =>
-                    (Loc.Get("leash_praise_" + id), "leash-reward:praise:" + id, (Func<Task>)(() => Reward(RewardKind.Praise, id))))));
-                panel.Children.Add(LeashCardUi.Action(Loc.Get("leash_rew_pardon"), "leash-reward:pardon", () => Reward(RewardKind.Pardon)));
-                if (r?.ChasterLinked == true) panel.Children.Add(LeashCardUi.Choices(R.CreditSizes.Select(size =>
-                    ("-" + R.Span(size), "leash-reward:credit:" + size, (Func<Task>)(() => Reward(RewardKind.Credit, size: size))))));
+                panel.Children.Add(Helped(LeashCardUi.Choices(R.Stickers.Select(id =>
+                    (Loc.Get("leash_rew_sticker_" + id), "leash-reward:sticker:" + id, (Func<Task>)(() => Reward(RewardKind.Sticker, id))))), RewardKind.Sticker));
+                panel.Children.Add(Helped(LeashCardUi.Choices(R.Praise.Select(id =>
+                    (Loc.Get("leash_praise_" + id), "leash-reward:praise:" + id, (Func<Task>)(() => Reward(RewardKind.Praise, id))))), RewardKind.Praise));
+                panel.Children.Add(Helped(new WrapPanel { Children = { LeashCardUi.Action(Loc.Get("leash_rew_pardon"), "leash-reward:pardon", () => Reward(RewardKind.Pardon)) } }, RewardKind.Pardon));
+                if (r?.ChasterLinked == true) panel.Children.Add(Helped(LeashCardUi.Choices(R.CreditSizes.Select(size =>
+                    ("-" + R.Span(size), "leash-reward:credit:" + size, (Func<Task>)(() => Reward(RewardKind.Credit, size: size))))), RewardKind.Credit));
             }
             _body.Children.Add(panel);
         }
         // WPF LeashHolderCard.cs:310: letting go asks first; it ends the leash for both and sets a 24 h cooldown.
-        _body.Children.Add(LeashCardUi.Action(Loc.GetF("leash_menu_release", h.Who.Name), "leash-release", () =>
+        _body.Children.Add(WithHelp(LeashCardUi.Action(Loc.GetF("leash_menu_release", h.Who.Name), "leash-release", () =>
         {
             LeashCutConfirmWindow.Confirm(Loc.GetF("leash_release_confirm_title", h.Who.Name), Loc.GetF("leash_release_confirm_body", h.Who.Name),
                 Loc.Get("leash_release_confirm_yes"), Loc.Get("leash_cut_confirm_no"), "leash-release-confirm", () => _ = Release(h.Who));
             return Task.CompletedTask;
-        }, IconKind.Link));
+        }, IconKind.Link), LeashHelpCatalog.LetGoId));
         if (LeashSentList.For(_service(), h.Who.Id) is { } receipts) _body.Children.Add(receipts);
         if (_result != null) _body.Children.Add(LeashCardUi.Text(_result, "leash-holder-result", _resultGood ? F.Mint : F.Gold));
     }
@@ -213,6 +214,22 @@ public sealed class LeashHolderCard : Border
         return new Border { Child = body, Tag = tag, Background = F.Foot, CornerRadius = new CornerRadius(10),
             Padding = new Thickness(4, 8, 4, 7), Margin = new Thickness(3, 0) };
     }
+    // WPF LeashHolderCard.cs:423-430, LeashLook.cs:385-412: seven columns, a dot over its letter; Today is a dashed gold ring.
+    private static readonly IBrush Idle = new SolidColorBrush(Color.FromRgb(0x4A, 0x3D, 0x61));
+    private static Control WeekCell(WeekDay d) => new StackPanel { Tag = "leash-week:" + d.Mark, HorizontalAlignment = HorizontalAlignment.Center, Children = {
+        new global::Avalonia.Controls.Shapes.Ellipse { Width = 15, Height = 15, Fill = d.Mark switch { WeekMark.Did => F.Mint, WeekMark.Punished => F.Red, WeekMark.Today => Brushes.Transparent, _ => Idle },
+            Stroke = d.Mark == WeekMark.Today ? F.Gold : null, StrokeThickness = 2, StrokeDashArray = d.Mark == WeekMark.Today ? new() { 1.6, 1.2 } : null },
+        new TextBlock { Text = R.DayLetter(d.Day), FontFamily = F.Mono, FontSize = 9.5, FontWeight = FontWeight.Bold, Foreground = F.Dim, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 3, 0, 0) } } };
+    // WPF LeashHolderCard.cs:449-461, 507-516, 632-645: the "?" sits on a button's top-right corner (never pressing it) or leads its row.
+    private Button Help(LeashHelpEntry e) => LeashHelpButton.Create(e, () => _held.Who.Name);
+    private Control WithHelp(Control b, string id) { var q = Help(LeashHelpCatalog.Get(id)!);
+        (q.HorizontalAlignment, q.VerticalAlignment, q.Margin) = (HorizontalAlignment.Right, VerticalAlignment.Top, new Thickness(0, -3, -2, 0)); return new Grid { Children = { b, q } }; }
+    private Control Label(string text, LeashHelpEntry e) => new StackPanel { Orientation = Orientation.Horizontal, Children = { Help(e), LeashCardUi.Text(text) } };
+    private Control Helped(WrapPanel row, RewardKind k) { row.Children.Insert(0, Help(LeashHelpCatalog.ForReward(k))); return row; }
+    // WPF LeashHolderCard.cs:560-578, 660-665: a Pick chip opens or closes the picker; it stays open across polls.
+    private Control Pick(string forWhat, string tag, Func<Control> picker) => new StackPanel { Children = {
+        LeashCardUi.Action(Loc.Get("leash_pick"), tag, () => { _videoFor = _videoFor == forWhat ? null : forWhat; Render(); return Task.CompletedTask; }),
+        _videoFor == forWhat ? picker() : new Panel() } };
     private int _videoCap = LeashVideoCap.Default;
     private Control VideoPicker(Func<LeashWatch, Task> send, bool punish)
     {
@@ -261,7 +278,7 @@ public sealed class LeashHolderCard : Border
         LeashSendResult result;
         try { result = _service() is { } s ? await call(s) : new(LeashSendStatus.Off); }
         catch { result = new(LeashSendStatus.Failed); }
-        if (close && R.IsGood(result.Status)) _sheet = null;
+        if (close && R.IsGood(result.Status)) _sheet = _videoFor = null;
         Word(result, R.IsGood(result.Status) ? good(result) : "");
     }
     private void Word(LeashSendResult result, string goodText)
