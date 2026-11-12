@@ -18,7 +18,7 @@ public sealed class RemoteWearerWiringTests
         int recover = app.IndexOf("LockdownService.RecoverIfNeeded();", StringComparison.Ordinal);
         int heal = app.IndexOf("RemoteWearer.HealOnLaunch();", StringComparison.Ordinal);
         Assert.True(recover > 0 && heal > recover, "RemoteWearer.HealOnLaunch must run after LockdownService.RecoverIfNeeded");
-        int stamp = app.IndexOf("RecordInstallDate(Settings);", StringComparison.Ordinal);
+        int stamp = app.IndexOf("RecordInstallDate(Settings, installDate);", StringComparison.Ordinal);
         int sync = app.IndexOf("if (Platform.AccountSeed.Seed())", StringComparison.Ordinal);
         Assert.True(stamp > heal && sync > stamp, "recover Lockdown and remote holdings before the stamp can offer a backup, then stamp before sync");
     }

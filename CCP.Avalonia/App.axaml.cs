@@ -17,11 +17,24 @@ namespace ConditioningControlPanel.Avalonia
     {
         internal static Action? PostCodeInputsChanged;
 
-        internal static void RecordInstallDate(SettingsService settings)
+        internal static string? CaptureInstallDate(SettingsService settings)
+        {
+            if (!string.IsNullOrWhiteSpace(settings.Current.InstallDate)) return null;
+            var evidence = new ConditioningControlPanel.Models.AppSettings();
+            return InstallDateEvidence.Record(evidence, CorePaths.UserData, AppContext.BaseDirectory)
+                ? evidence.InstallDate : null;
+        }
+
+        internal static void RecordInstallDate(SettingsService settings, string? captured = null)
         {
             try
             {
-                if (InstallDateEvidence.Record(settings.Current, CorePaths.UserData, AppContext.BaseDirectory))
+                if (captured != null && string.IsNullOrWhiteSpace(settings.Current.InstallDate))
+                {
+                    settings.Current.InstallDate = captured;
+                    settings.SaveImmediate();
+                }
+                else if (InstallDateEvidence.Record(settings.Current, CorePaths.UserData, AppContext.BaseDirectory))
                     settings.SaveImmediate();
             }
             catch (Exception ex) { Serilog.Log.Debug(ex, "Install date recording failed"); }
@@ -677,6 +690,7 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.BrowserVideoSurface.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
+                var installDate = CaptureInstallDate(Settings);
                 // WPF App.xaml.cs:2928: launch only sweeps retention on disk (creates nothing, arms no timer);
                 // the ledger starts when awareness turns on. No observer feeds it on this head yet.
                 InstallPrivacyLedger(new ConditioningControlPanel.Services.Awareness.ActivityLedger());
@@ -709,7 +723,7 @@ namespace ConditioningControlPanel.Avalonia
                 try { ConditioningControlPanel.Services.Remote.RemoteWearer.HealOnLaunch(); }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "Remote holdings heal failed (non-fatal)"); }
                 // Save only after crash recovery has restored safety settings.
-                RecordInstallDate(Settings);
+                RecordInstallDate(Settings, installDate);
                 LocalizationManager.Instance.SetLanguage(Settings.Current.Language);
                 LockdownService.Current = new LockdownService();
                 // WPF App.xaml.cs:3295: quest credit for each completed lockdown of 20+ minutes.

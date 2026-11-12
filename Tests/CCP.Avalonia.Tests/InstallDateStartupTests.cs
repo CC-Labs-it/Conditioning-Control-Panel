@@ -97,6 +97,39 @@ public class InstallDateStartupTests
     }
 
     [Fact]
+    public void CapturePrecedesRecoveryAndPreservesOldSettingsEvidence()
+    {
+        var path = Path.Combine(CorePaths.UserData, "settings.json");
+        var recovery = Path.Combine(CorePaths.UserData, "lockdown_recovery.json");
+        var previousProvider = CoreSettings.ServiceProvider;
+        var previousBackup = CoreSettingsHooks.CloudBackup;
+        var service = new SettingsService();
+        try
+        {
+            CoreSettingsHooks.CloudBackup = null;
+            CoreSettings.ServiceProvider = () => service;
+            service.Current.InstallDate = null;
+            service.Current.PanicKeyEnabled = false;
+            service.SaveImmediate(suppressCloudBackup: true);
+            File.SetCreationTimeUtc(path, new DateTime(2021, 2, 3, 0, 0, 0, DateTimeKind.Utc));
+            Assert.Equal(new DateTime(2021, 2, 3), File.GetCreationTimeUtc(path).Date);
+            File.WriteAllText(recovery, "{\"PanicKeyEnabled\":true,\"StrictLockEnabled\":false}");
+            var captured = AvApp.CaptureInstallDate(service);
+            LockdownService.RecoverIfNeeded();
+            AvApp.RecordInstallDate(service, captured);
+            Assert.Equal("2021-02-03", service.Current.InstallDate);
+            Assert.True(service.Current.PanicKeyEnabled);
+        }
+        finally
+        {
+            CoreSettings.ServiceProvider = previousProvider;
+            CoreSettingsHooks.CloudBackup = previousBackup;
+            service.SealForReset();
+            if (File.Exists(recovery)) File.Delete(recovery);
+        }
+    }
+
+    [Fact]
     public void StartupRecordsDateOnlyOnceInSandboxSettings()
     {
         var path = Path.Combine(CorePaths.UserData, "settings.json");

@@ -18,7 +18,9 @@ public sealed class SessionJournalHeadTests
         var heal = app.IndexOf("SessionSettingsJournal.HealOnLaunch(CorePaths.UserData, Settings.Current)", StringComparison.Ordinal);
         var language = app.IndexOf("LocalizationManager.Instance.SetLanguage(Settings.Current.Language);", StringComparison.Ordinal);
         Assert.True(seeded > 0 && heal > seeded && language > heal, "heal right after the settings load");
-        var stamp = app.IndexOf("RecordInstallDate(Settings);", StringComparison.Ordinal);
+        var capture = app.IndexOf("var installDate = CaptureInstallDate(Settings);", StringComparison.Ordinal);
+        Assert.True(capture > seeded && capture < heal, "capture evidence before recovery can replace settings");
+        var stamp = app.IndexOf("RecordInstallDate(Settings, installDate);", StringComparison.Ordinal);
         Assert.True(heal < stamp && stamp < language, "heal before the install-date save can offer a cloud backup");
         Assert.Contains("JournalDir = CorePaths.UserData,", app);
         Assert.Contains("SettleBeforeSnapshot = () => Views.Windows.MainShellWindow.Current?.SettleAutonomyPulses(),", app);
