@@ -58,7 +58,8 @@ public partial class MainShellWindow
             while (!_upgradeCancelled && waited < TimeSpan.FromMinutes(5) && !CanShowUpgrade())
             {
                 await UpgradeDelay(TimeSpan.FromMilliseconds(500));
-                waited += TimeSpan.FromMilliseconds(500);
+                // WPF StartupPresenter.cs:454: a launcher hold does not spend the wait.
+                if (!Platform.StartupLadder.LauncherHolding) waited += TimeSpan.FromMilliseconds(500);
             }
             if (_upgradeCancelled || !CanShowUpgrade()) return; // unspent, owed next launch
             IsStartupDialogShowing = true;
@@ -91,7 +92,8 @@ public partial class MainShellWindow
     }
 
     private bool CanShowUpgrade() => StartupQueueCore.CanStartModal(IsStartupDialogShowing,
-        Platform.AppUpdater.IsUpdateDialogActive, CoreTutorial.IsActive, IsVisible && CoreSettings.Current.HasAcceptedAgeVerification);
+        Platform.AppUpdater.IsUpdateDialogActive, CoreTutorial.IsActive, IsVisible && CoreSettings.Current.HasAcceptedAgeVerification,
+        parked: Platform.StartupLadder.LauncherHolding);
 
     // Stricter safety: also close/cancel this modal in the WPF MainWindow/MainWindow.xaml.cs:2017 stop-all pass.
     internal static void StopUpgradeIntroForPanic(MainShellWindow? shell)

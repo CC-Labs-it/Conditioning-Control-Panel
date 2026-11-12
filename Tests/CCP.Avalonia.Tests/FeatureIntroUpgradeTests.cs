@@ -90,6 +90,73 @@ public sealed class FeatureIntroUpgradeTests
         Assert.Equal(601, delays.Count);
         Assert.All(delays.Skip(1), delay => Assert.Equal(TimeSpan.FromMilliseconds(500), delay));
     });
+    [Fact]
+    public Task LauncherHoldDoesNotSpendUpgradeDeadline() => Run("old-version", async shell =>
+    {
+        StartupLadder.Hold();
+        var polls = 0;
+        shell.UpgradeDelay = delay =>
+        {
+            if (delay == TimeSpan.FromMilliseconds(500) && ++polls == 610)
+                StartupLadder.Release();
+            return Task.CompletedTask;
+        };
+        var showing = shell.ShowWhatsNewIfNeeded();
+        Assert.Equal(610, polls);
+        var news = Assert.Single(shell.OwnedWindows.OfType<WhatsNewDialog>());
+        Assert.Equal("old-version", CoreSettings.Current.LastSeenVersion);
+        news.Close();
+        await showing;
+        Assert.Equal(CoreReleaseContent.AppVersion, CoreSettings.Current.LastSeenVersion);
+    });
+
+    [Fact]
+    public Task LauncherReleaseDoesNotBypassAgeGate() => Run("old-version", async shell =>
+    {
+        CoreSettings.Current.HasAcceptedAgeVerification = false;
+        StartupLadder.Hold();
+        var polls = 0;
+        shell.UpgradeDelay = delay =>
+        {
+            if (delay == TimeSpan.FromMilliseconds(500) && ++polls == 610)
+                StartupLadder.Release();
+            return Task.CompletedTask;
+        };
+        var showing = shell.ShowWhatsNewIfNeeded();
+        Assert.Equal(1209, polls);
+        await showing;
+        Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
+        Assert.False(CoreSettings.Current.HasAcceptedAgeVerification);
+        Assert.Equal("old-version", CoreSettings.Current.LastSeenVersion);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task ParkedUpgradeStopsOnPanicOrClose(bool close) => Run("old-version", async shell =>
+    {
+        StartupLadder.Hold();
+        var waiting = new TaskCompletionSource();
+        var calls = 0;
+        shell.UpgradeDelay = _ => ++calls == 1 ? Task.CompletedTask : waiting.Task;
+        CoreSettings.Current.StrictLockEnabled = true;
+        CoreSettings.Current.LockdownForceStrictLock = true;
+        var showing = shell.ShowWhatsNewIfNeeded();
+        Assert.Equal(2, calls);
+        if (close) shell.Close();
+        else PanicSurfaces.All.Single(s => s.Id == "upgrade-intro").Stop(shell);
+        StartupLadder.Release();
+        waiting.SetResult();
+        await Task.Yield();
+        Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
+        await showing;
+        Assert.Equal(2, calls); // cancellation ends the poll without scheduling another delay
+        Assert.Equal("old-version", CoreSettings.Current.LastSeenVersion);
+        Assert.False(StartupLadder.ModalPending);
+        Assert.True(CoreSettings.Current.StrictLockEnabled);
+        Assert.True(CoreSettings.Current.LockdownForceStrictLock);
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
