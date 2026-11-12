@@ -92,6 +92,7 @@ public class Sync7bEntitlementTests {
             shell.MaybePostConversionRows(); shell.MaybePostConversionRows();
             var row = Assert.Single(StartupLadder.Inbox.Items.Where(row => row.Key == "conv:pass_ends"));
             Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("pass_ends_days", 3), row.Title);
+            Assert.Equal("HourglassHalf", row.IconKey); Assert.Empty(row.Glyph);
             StartupLadder.ResetForTests(); s.InboxStamps.Clear(); ProgressionClear.Apply(s); s.AuthToken = null; s.UnifiedId = null;
             shell.MaybePostConversionRows(); Assert.Empty(StartupLadder.Inbox.Items.Where(row => row.Key == "conv:pass_ends"));
         } finally { shell.Close(); StartupLadder.ResetForTests(); }

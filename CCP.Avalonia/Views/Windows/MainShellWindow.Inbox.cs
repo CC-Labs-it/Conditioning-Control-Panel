@@ -59,7 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var body = Loc.Get("pass_ends_body");
                 StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
                 {
-                    Key = "conv:" + key, Glyph = "\u23F3", Title = title, Summary = body,
+                    Key = "conv:" + key, IconKey = "HourglassHalf", Title = title, Summary = body,
                     Open = () => InboxNoticeCard.Present(this, title, body, Loc.Get("pass_ends_action"),
                         () => ExternalOpener.Open("https://app.cclabs.app/crypto")),
                 });
