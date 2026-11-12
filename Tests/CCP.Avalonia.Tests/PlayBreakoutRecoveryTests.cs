@@ -24,10 +24,8 @@ public class PlayBreakoutRecoveryTests
             ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var settings = new SettingsService();
-        var oldSettings = CoreSettings.ServiceProvider;
-        var oldLogin = CoreAccount.IsLoggedInProvider;
-        var oldLab = CoreEntitlement.HasLabProvider;
-        var oldServer = GameWindow.Server;
+        var (oldSettings, oldLogin, oldLab, oldServer) =
+            (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider, GameWindow.Server);
         var root = Directory.CreateTempSubdirectory("play-full-breakout-");
         using var server = new WebAssetServer(root.FullName);
         CoreSettings.ServiceProvider = () => settings;
