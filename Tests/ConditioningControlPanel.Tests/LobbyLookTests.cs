@@ -10,11 +10,16 @@ using Xunit;
 
 namespace ConditioningControlPanel.Tests;
 
+// PlayerLook.KnownIdsProvider is shared with other test collections.
+[CollectionDefinition("LobbyLook", DisableParallelization = true)]
+public class LobbyLookCollection { }
+
 /// <summary>
 /// Fix wave 2 (F4a, contract 4 "others see it"): a Lobby row draws its host's profile frame/avatar. The look comes
 /// from the row's own wire (<c>cosmetics</c>, server-clamped) when present, else from the friends state for a friend;
 /// strangers on a server that sends nothing draw as before.
 /// </summary>
+[Collection("LobbyLook")]
 public class LobbyLookTests
 {
     private const long Now = 1_000_000_000L;
