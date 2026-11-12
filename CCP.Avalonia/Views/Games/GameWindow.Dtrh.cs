@@ -60,6 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal bool DtrhWatchRunning => _dtrhHeartbeatWatch?.IsEnabled == true;
 
         internal bool DtrhRunActive => _dtrhRunActive;
+        internal static bool AnyDtrhRunActive { get { lock (Open) return Open.Any(w => w.DtrhRunActive); } }
 
         /// <summary>WPF IsReady: the page said ready and is not on its way out.</summary>
         internal bool DtrhReady => IsReady && !_dtrhExiting && !_closing;

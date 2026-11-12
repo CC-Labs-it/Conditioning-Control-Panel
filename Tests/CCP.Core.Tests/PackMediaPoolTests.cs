@@ -258,7 +258,7 @@ public sealed class PackMediaPoolTests : IDisposable
     }
 
     [Fact]
-    public void Online_video_does_not_displace_an_active_pack_clip()
+    public void Dry_online_buffer_does_not_displace_an_active_pack_clip()
     {
         ContentPackStoreTests.WritePack(_root, "p1", "One", ("v.mp4", "video"));
         var store = NewStore();
@@ -267,7 +267,7 @@ public sealed class PackMediaPoolTests : IDisposable
         var video = new MandatoryVideoScheduler(null!, null, () => Array.Empty<string>())
         {
             PackVideos = new PackMediaPool(ContentPackStore.VideoType, new Random(1), () => store),
-            RemotePick = () => "https://cdn.scrolller.com/clip.mp4"
+            RemotePick = () => null
         };
         try
         {
@@ -275,6 +275,8 @@ public sealed class PackMediaPoolTests : IDisposable
             var selected = video.PickNext();
             Assert.NotEqual("https://cdn.scrolller.com/clip.mp4", selected);
             Assert.Equal("p1/v.mp4", Plain(selected!));
+            video.RemotePick = () => "https://cdn.scrolller.com/clip.mp4";
+            Assert.Equal("https://cdn.scrolller.com/clip.mp4", video.PickNext());
         }
         finally
         {

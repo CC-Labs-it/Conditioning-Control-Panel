@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.IO;
 using System.Threading.Tasks;
 using System.Threading;
 using Avalonia.Controls;
@@ -22,6 +23,7 @@ public sealed class RemoteMandatoryVideoTests
         var s = CoreSettings.Current;
         var saved = (s.MediaSource, s.RemoteMediaConsented, s.FypOnlineConsented, ScrolllerPolicy.Enabled, ScrolllerPolicy.MaxClipShortSide);
         var oldCache = MandatoryVideoOverlay.CachedScrolllerPath;
+        var oldOpener = MandatoryVideoOverlay.CreditOpener; var opened = 0;
         var started = 0;
         var overlay = new MandatoryVideoOverlay(() => { started++; return new Decoder(); });
         try
@@ -54,11 +56,31 @@ public sealed class RemoteMandatoryVideoTests
                 Assert.False(mark.IsHitTestVisible);
             }
             finally { surface.Window.Close(); }
+            ScrolllerItemIndex.Remember(url, new ScrolllerCacheMeta("clip", "testsub"));
+            MandatoryVideoOverlay.CreditOpener = _ => { opened++; return true; };
+            overlay.Show(url, false); surface = overlay.Build(null, false);
+            try
+            {
+                var card = Assert.Single(((Panel)surface.Window.Content!).Children.OfType<Button>());
+                Assert.False(card.IsVisible);
+                Assert.Equal("via Scrolller\nr/testsub", card.Content);
+                overlay.UpdateCredit(7000, 7000, 10000); Assert.False(card.IsVisible);
+                overlay.UpdateCredit(7500, 7500, 10000); Assert.True(card.IsVisible);
+                card.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                overlay.FinishCredit(true);
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.Equal(1, opened);
+                card.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); overlay.FinishCredit(true); overlay.CloseAll();
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.Equal(1, opened);
+                card.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); overlay.FinishCredit(true); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.Equal(1, opened); Assert.False(MandatoryVideoOverlay.CreditAllowed(true));
+            }
+            finally { surface.Window.Close(); }
         }
         finally
         {
             overlay.CloseAll();
             MandatoryVideoOverlay.CachedScrolllerPath = oldCache;
+            MandatoryVideoOverlay.CreditOpener = oldOpener;
             (s.MediaSource, s.RemoteMediaConsented, s.FypOnlineConsented) = (saved.MediaSource, saved.RemoteMediaConsented, saved.FypOnlineConsented);
             ScrolllerPolicy.Apply(saved.Enabled, saved.MaxClipShortSide);
         }
@@ -93,6 +115,22 @@ public sealed class RemoteMandatoryVideoTests
             Assert.True(video.IsPlaying);
             await Task.Delay(50);
             Assert.True(video.IsPlaying);
+            video.Stop(); var picks = 0;
+            video = new MandatoryVideoScheduler(overlay, clock, () => new[] { "/videos/fallback.mp4" })
+                { RemotePick = () => picks++ == 0 ? url : null };
+            overlay.Scheduler = video;
+            Assert.True(video.Trigger()); clock.Fire();
+            Assert.Equal("/videos/fallback.mp4", video.LastVideoPath);
+            Assert.Equal(2, picks);
+            video.Stop();
+            picks = 0;
+            video.RemotePick = () => { picks++; return url; };
+            MandatoryVideoOverlay.CachedScrolllerPath = _ => "/cache/clip.mp4";
+            Assert.True(video.Trigger()); clock.Fire();
+            MandatoryVideoOverlay.CachedScrolllerPath = _ => null;
+            overlay.FrameTs = System.Diagnostics.Stopwatch.GetTimestamp() - 10 * System.Diagnostics.Stopwatch.Frequency;
+            overlay.GuardTick(); // the output-heal replay must not pick another clip
+            Assert.Equal(1, picks);
         }
         finally
         {
@@ -105,6 +143,29 @@ public sealed class RemoteMandatoryVideoTests
         }
     });
 
+    [Fact]
+    public void Credit_uses_metadata_reloaded_from_the_device_cache()
+    {
+        const string url = "https://scrolller.com/restart-test.mp4";
+        var dir = Directory.CreateTempSubdirectory("ccp-video-credit-").FullName;
+        var root = ScrolllerDiskCache.RootProvider; var inline = ScrolllerDiskCache.WarmInline;
+        var enabled = ScrolllerPolicy.Enabled; var max = ScrolllerPolicy.MaxClipShortSide;
+        try
+        {
+            var file = Path.Combine(dir, new string('a', 64) + ".mp4"); File.WriteAllBytes(file, new byte[] { 1, 2, 3 });
+            var now = DateTime.UtcNow; var book = new ScrolllerCacheBook { FormatChecked = true };
+            book.Put(new ScrolllerCacheEntry(url, file, 3, now, new ScrolllerCacheMeta("clip", "savedsub"), now));
+            File.WriteAllText(Path.Combine(dir, ScrolllerDiskCache.IndexFileName), book.ToJson());
+            ScrolllerDiskCache.RootProvider = () => dir; ScrolllerDiskCache.WarmInline = true;
+            ScrolllerPolicy.Apply(true, null);
+            Assert.Equal("https://scrolller.com/r/savedsub", MandatoryVideoOverlay.CreditLinkFor(url));
+        }
+        finally
+        {
+            ScrolllerDiskCache.RootProvider = root; ScrolllerDiskCache.WarmInline = inline;
+            ScrolllerPolicy.Apply(enabled, max); Directory.Delete(dir, true);
+        }
+    }
     private sealed class Clock : TimeProvider
     {
         private ManualTimer? _timer;

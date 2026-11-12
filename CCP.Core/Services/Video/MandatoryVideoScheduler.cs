@@ -74,7 +74,8 @@ namespace ConditioningControlPanel.Services
         private readonly FypFeedDefer _feedDefer;
         private readonly TimeProvider _time;
         private readonly Func<IReadOnlyList<string>> _library;
-        private readonly Random _random = new();
+        private Random _random = new();
+        internal Random SelectionRandom { set => _random = value; }
         private readonly RemoteVideoPool _remote = new();
         internal Func<string?>? RemotePick { get; set; }
         private Queue<string> _queue = new();
@@ -95,7 +96,7 @@ namespace ConditioningControlPanel.Services
         public event Action? VideoStarted;
 
         /// <summary>The clip <see cref="VideoStarted"/> announced (WPF VideoService.LastVideoPath).</summary>
-        public string? LastVideoPath { get; private set; }
+        public string? LastVideoPath { get; internal set; }
 
         /// <summary>Replays forced this run (WPF _penalties); reset by <see cref="End"/>.</summary>
         public int Penalties { get; private set; }
@@ -476,9 +477,10 @@ namespace ConditioningControlPanel.Services
                 CoreDiscord.Service?.SetVideoActivity(); // WPF StartVideoPlayback:3133
                 // WPF StartVideoPlayback: presentation can change during the pre-roll.
                 if (!_host.IsFloating(strict) && CoreFlash.IsRunning) CoreFlash.Stop();
+                var previousPath = LastVideoPath; LastVideoPath = path;
                 try { _host.Show(path, strict); }
-                catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); End(); return; }
-                LastVideoPath = path;
+                catch (Exception ex) { LastVideoPath = previousPath; Log.Error(ex, "VideoService: show failed"); End(); return; }
+                path = LastVideoPath ?? path;
                 try { VideoStarted?.Invoke(); }
                 catch (Exception ex) { Log.Debug("VideoStarted handler failed: {Error}", ex.Message); }
                 // WPF VideoService.cs:3372: background vibe and the clip's funscript, once on screen.
@@ -668,11 +670,12 @@ namespace ConditioningControlPanel.Services
                 LastFunnelDuration = kept.Count;
                 _queue = new Queue<string>(kept.OrderBy(_ => _random.Next()));
             }
-            // WPF VideoService.cs:7981-8005: a ready remote clip fills an empty local pool.
+            // WPF VideoService.cs:7981-8005: blend ready remote clips, with a local fallback.
             // Fetching and downloading run in the background and never delay this pick.
             var settings = CoreSettings.Current;
             if (settings.MediaSource != "local" && settings.HasRemoteMediaConsent &&
-                _queue.Count == 0 && PackVideos?.HasEntries != true)
+                VideoSelectionRules.WantsRemote(_queue.Count == 0 && PackVideos?.HasEntries != true,
+                    settings.MediaSource, settings.RemoteMediaRatio, _random))
             {
                 var remote = (RemotePick ?? _remote.Take)();
                 if (remote != null) return remote;
