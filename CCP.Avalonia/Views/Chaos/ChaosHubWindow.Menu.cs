@@ -15,7 +15,7 @@ public partial class ChaosHubWindow
     private DispatcherTimer? _menuTimer, _menuMotionTimer;
     private ImageBrush? _menuBase, _menuTop;
     private Border? _menuTopBox;
-    private int _menuPos;
+    private int _menuPos, _menuShownFrame;
     private long _menuClickReady, _menuFadeStart, _menuMotionStart;
     private bool _menuFading;
 
@@ -82,8 +82,13 @@ public partial class ChaosHubWindow
         _menuPos = (_menuPos + 1) % _menuSeq.Length;
         var step = _menuSeq[_menuPos];
         _menuTimer.Interval = TimeSpan.FromMilliseconds(step.hold);
-        if (_menuBase?.Source == _menuFrames[step.frame]) return;
-        if (_menuFading && _menuBase != null) _menuBase.Source = _menuTop.Source;
+        if (step.frame == _menuShownFrame) return;
+        _menuShownFrame = step.frame;
+        if (_menuFading && _menuBase != null)
+        {
+            _menuBase.Source = _menuTop.Source;
+            if (_menuTopBox != null) _menuTopBox.Opacity = 0;
+        }
         _menuTop.Source = _menuFrames[step.frame];
         _menuFadeStart = Environment.TickCount64;
         _menuFading = true;

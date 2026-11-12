@@ -72,6 +72,60 @@ public class ChaosHubMenuArtTests
         return Task.CompletedTask;
     });
     [Fact]
+    public Task Click_during_automatic_fade_returns_to_idle() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        string root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        ChaosHubWindow? hub = null;
+        bool oldRendering = global::ConditioningControlPanel.Avalonia.RenderProof.Rendering;
+        try
+        {
+            for (int i = 1; i <= 3; i++)
+            {
+                using var image = new WriteableBitmap(new PixelSize(6, 3), new Vector(96, 96));
+                image.Save(Path.Combine(root, $"menu_{i}.png"));
+            }
+            ChaosArt.RootsOverride = () => new[] { root };
+            global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = true;
+            hub = new ChaosHubWindow();
+            hub.Show();
+            var type = typeof(ChaosHubWindow);
+            object Field(string name) => type.GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(hub)!;
+            void SetField(string name, object value) => type.GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(hub, value);
+            void Invoke(string name) => type.GetMethod(name, BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(hub, null);
+            var frames = (Bitmap?[])Field("_menuFrames");
+            var baseBrush = (global::Avalonia.Media.ImageBrush)Field("_menuBase");
+            var topBrush = (global::Avalonia.Media.ImageBrush)Field("_menuTop");
+            var topBox = (global::Avalonia.Controls.Border)Field("_menuTopBox");
+
+            Invoke("AdvanceMenuFrame"); // automatic idle -> blink
+            SetField("_menuFadeStart", Environment.TickCount64 - 275);
+            Invoke("StepMenuMotion");
+            Assert.Same(frames[0], baseBrush.Source);
+            Assert.Same(frames[1], topBrush.Source);
+            Assert.InRange(topBox.Opacity, .45, .6);
+
+            hub.AdvanceMenuClick(Environment.TickCount64); // blink -> idle during the fade
+            Assert.Same(frames[1], baseBrush.Source);
+            Assert.Same(frames[0], topBrush.Source);
+            Assert.Equal(0, topBox.Opacity);
+            Assert.Equal(TimeSpan.FromMilliseconds(6000), ((DispatcherTimer)Field("_menuTimer")).Interval);
+            SetField("_menuFadeStart", Environment.TickCount64 - 550);
+            Invoke("StepMenuMotion");
+            Assert.Same(frames[0], baseBrush.Source);
+            Assert.Equal(0, topBox.Opacity);
+        }
+        finally
+        {
+            hub?.Close();
+            global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = oldRendering;
+            ChaosArt.ResetForTest();
+            Directory.Delete(root, true);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task Still_then_banner_fallback() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         string root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
