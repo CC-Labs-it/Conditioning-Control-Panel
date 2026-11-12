@@ -11,8 +11,8 @@ namespace ConditioningControlPanel.Services.Mods;
 internal sealed class EmoteSetValidation
 {
     internal const long SoftLimitBytes = 50L * 1024 * 1024;
-    internal readonly List<string> Errors = new();
-    internal readonly List<string> Warnings = new();
+    internal readonly List<(string Key, string? Arg)> Errors = new();
+    internal readonly List<(string Key, string? Arg)> Warnings = new();
     internal int GifCount;
     internal long TotalBytes;
     internal bool IsValid => Errors.Count == 0;
@@ -22,7 +22,7 @@ internal sealed class EmoteSetValidation
         var result = new EmoteSetValidation();
         if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder))
         {
-            result.Errors.Add("Folder not found on disk.");
+            result.Errors.Add(("mod_emote_folder_missing", null));
             return result;
         }
         try
@@ -33,27 +33,27 @@ internal sealed class EmoteSetValidation
             result.GifCount = gifs.Count;
             result.TotalBytes = Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length);
             var path = Path.Combine(folder, "emotes.json");
-            if (!File.Exists(path)) result.Errors.Add("emotes.json is missing from the folder.");
+            if (!File.Exists(path)) result.Errors.Add(("mod_emote_map_missing", null));
             else
             {
                 JObject? map = null;
                 try { map = JObject.Parse(File.ReadAllText(path)); }
-                catch (Exception ex) { result.Errors.Add("emotes.json is not valid JSON: " + ex.Message); }
+                catch (Exception ex) { result.Errors.Add(("mod_emote_map_invalid", ex.Message)); }
                 if (map != null)
                 {
                     var clips = ReferencedClips(map, out var hasTalk);
                     var missing = clips.Where(c => !gifs.Contains(c)).OrderBy(c => c, StringComparer.OrdinalIgnoreCase).ToList();
-                    if (missing.Count != 0) result.Errors.Add("Referenced clips missing from the folder: " + string.Join(", ", missing.Select(c => c + ".gif")));
+                    if (missing.Count != 0) result.Errors.Add(("mod_emote_clips_missing", string.Join(", ", missing.Select(c => c + ".gif"))));
                     if (!hasTalk) { clips.Add("talkA"); clips.Add("talkC"); }
                     var unused = gifs.Where(c => !clips.Contains(c)).OrderBy(c => c, StringComparer.OrdinalIgnoreCase).ToList();
-                    if (unused.Count != 0) result.Warnings.Add("GIFs not referenced by emotes.json: " + string.Join(", ", unused));
-                    if (!hasTalk && !gifs.Contains("talkA")) result.Warnings.Add("No talking pool or talkA.gif.");
+                    if (unused.Count != 0) result.Warnings.Add(("mod_emote_unused", string.Join(", ", unused)));
+                    if (!hasTalk && !gifs.Contains("talkA")) result.Warnings.Add(("mod_emote_no_talk", null));
                 }
             }
-            if (!File.Exists(Path.Combine(folder, "clip_timing.json"))) result.Warnings.Add("clip_timing.json is missing.");
-            if (result.TotalBytes > SoftLimitBytes) result.Warnings.Add("Folder exceeds the 50 MB soft limit.");
+            if (!File.Exists(Path.Combine(folder, "clip_timing.json"))) result.Warnings.Add(("mod_emote_no_timing", null));
+            if (result.TotalBytes > SoftLimitBytes) result.Warnings.Add(("mod_emote_large", null));
         }
-        catch (Exception ex) { result.Errors.Add("Could not read the folder: " + ex.Message); }
+        catch (Exception ex) { result.Errors.Add(("mod_emote_read_error", ex.Message)); }
         return result;
     }
 

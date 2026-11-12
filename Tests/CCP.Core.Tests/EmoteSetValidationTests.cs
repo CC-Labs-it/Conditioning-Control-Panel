@@ -1,5 +1,8 @@
 using System;
 using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
+using Newtonsoft.Json.Linq;
 using ConditioningControlPanel.Services.Mods;
 using Xunit;
 
@@ -32,7 +35,7 @@ public sealed class EmoteSetValidationTests
         if (missing != "idle") File.WriteAllText(Path.Combine(dir, "idle.gif"), "");
         var result = EmoteSetValidation.Inspect(dir);
         Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, e => e.Contains(missing + ".gif"));
+        Assert.Contains(result.Errors, e => e.Key == "mod_emote_clips_missing" && e.Arg!.Contains(missing + ".gif"));
         File.WriteAllText(Path.Combine(dir, missing + ".gif"), "");
         Assert.True(EmoteSetValidation.Inspect(dir).IsValid);
     });
@@ -48,11 +51,34 @@ public sealed class EmoteSetValidationTests
         var result = EmoteSetValidation.Inspect(dir);
         Assert.True(result.IsValid);
         Assert.Equal(2, result.GifCount);
-        Assert.Contains(result.Warnings, w => w.Contains("50 MB"));
-        Assert.Contains(result.Warnings, w => w.Contains("extra"));
-        Assert.Contains(result.Warnings, w => w.Contains("clip_timing"));
-        Assert.Contains(result.Warnings, w => w.Contains("talkA"));
+        Assert.Contains(result.Warnings, w => w.Key == "mod_emote_large");
+        Assert.Contains(result.Warnings, w => w.Key == "mod_emote_unused" && w.Arg!.Contains("extra"));
+        Assert.Contains(result.Warnings, w => w.Key == "mod_emote_no_timing");
+        Assert.Contains(result.Warnings, w => w.Key == "mod_emote_no_talk");
     });
+
+    [Fact]
+    public void EmoteMessagesAndPlaceholdersExistInEveryLanguage()
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, "Localization", "Languages");
+        var files = Directory.GetFiles(directory, "*.json");
+        Assert.Equal(10, files.Length);
+        var english = JObject.Parse(File.ReadAllText(Path.Combine(directory, "en.json")));
+        var keys = english.Properties().Select(p => p.Name).Where(k => k.StartsWith("mod_emote_", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(20, keys.Length);
+        foreach (var file in files)
+        {
+            var translations = JObject.Parse(File.ReadAllText(file));
+            foreach (var key in keys)
+            {
+                var value = translations.Value<string>(key);
+                Assert.False(string.IsNullOrWhiteSpace(value), $"{file}: {key}");
+                var expected = Regex.Matches(english.Value<string>(key)!, @"\{\d+(?::[^}]+)?\}").Select(m => m.Value).OrderBy(x => x);
+                var actual = Regex.Matches(value!, @"\{\d+(?::[^}]+)?\}").Select(m => m.Value).OrderBy(x => x);
+                Assert.Equal(expected, actual);
+            }
+        }
+    }
 
     [Fact]
     public void UppercaseGifExtensionMatchesOnLinux() => InFolder(dir =>
@@ -65,9 +91,15 @@ public sealed class EmoteSetValidationTests
     [Fact]
     public void MissingOrMalformedMapIsInvalid() => InFolder(dir =>
     {
-        Assert.False(EmoteSetValidation.Inspect(dir).IsValid);
+        var missing = EmoteSetValidation.Inspect(dir);
+        Assert.False(missing.IsValid);
+        Assert.Contains(missing.Errors, e => e.Key == "mod_emote_map_missing");
         File.WriteAllText(Path.Combine(dir, "emotes.json"), "[");
-        Assert.False(EmoteSetValidation.Inspect(dir).IsValid);
-        Assert.False(EmoteSetValidation.Inspect(null).IsValid);
+        var malformed = EmoteSetValidation.Inspect(dir);
+        Assert.False(malformed.IsValid);
+        Assert.Contains(malformed.Errors, e => e.Key == "mod_emote_map_invalid" && !string.IsNullOrEmpty(e.Arg));
+        var absent = EmoteSetValidation.Inspect(null);
+        Assert.False(absent.IsValid);
+        Assert.Contains(absent.Errors, e => e.Key == "mod_emote_folder_missing");
     });
 }
