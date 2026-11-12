@@ -83,6 +83,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (ReferenceEquals(_window, this)) _window = null;
                 _statusTimer.Stop();
+                StopLobby();
+                _lobby?.Dispose();
                 CoreMods.ModChanged -= OnModChanged;
                 PrizeGrants.GrantsChanged -= OnGrantsChanged;
             };
@@ -91,7 +93,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (e.Property != IsVisibleProperty) return;
                 if (IsVisible) OnShown();
-                else _statusTimer.Stop();
+                else { _statusTimer.Stop(); StopLobby(); }
             };
             BuildTiles();
             HookVeil();
@@ -111,6 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 RefreshStatus();
                 RefreshStats();
                 _statusTimer.Start();
+                StartLobby();
             }
             catch (Exception ex) { Log.Warning(ex, "[Launcher] OnShown failed"); }
         }

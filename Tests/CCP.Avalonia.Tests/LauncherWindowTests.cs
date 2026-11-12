@@ -1,5 +1,11 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using ConditioningControlPanel.Services.Lobby;
+using ConditioningControlPanel.Services.Friends;
+using ConditioningControlPanel.Services.GoonGame;
+using Avalonia.Interactivity;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -57,6 +63,40 @@ public sealed class LauncherWindowTests
             }
         });
     }
+
+    private sealed class LobbyTimer : IUiTimer
+    {
+        public TimeSpan Interval { get; set; }
+        public event EventHandler? Tick { add { } remove { } }
+        public void Start() { }
+        public void Stop() { }
+        public void OnUiThread(Action action) => action();
+    }
+
+    [Fact]
+    public void LobbyChipRefreshesOnShowAndOpensLobby() => Run(shell =>
+    {
+        var calls = 0;
+        var launcher = new LauncherWindow();
+        typeof(LauncherWindow).GetField("_panel", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(launcher, shell);
+        launcher.CreateLobby = () => new LobbyPoll(new LobbyTimer(), () => true, () => Array.Empty<Friend>(),
+            () => { calls++; return Task.FromResult(new PbpLobbyReply(new[] { new PbpOpenSeat("p_table", "Host", 300000, 0, 0) }, Array.Empty<PbpPlayingGame>(), true)); },
+            () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), true)));
+        try
+        {
+            launcher.Show();
+            Assert.Equal(1, calls);
+            Assert.Equal(Loc.GetF("launcher_lobby_open", 1), launcher.FindControl<TextBlock>("LobbyChipText")!.Text);
+            launcher.Hide();
+            launcher.Show();
+            Assert.Equal(2, calls);
+            launcher.FindControl<Button>("LobbyChip")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal("availablesubjects", shell.CurrentTab);
+            Assert.False(launcher.IsVisible);
+        }
+        finally { launcher.Close(); }
+    });
 
     [Fact]
     public void HiddenBoot_ConcealsTheWholeWindowUntilRoutingCompletes() => Run(shell =>

@@ -375,11 +375,13 @@
         </Grid>
 
         <!-- ================= bottom row ================= -->
-        <!-- ponytail: the Sky/open-tables chip needs the Lobby service. -->
         <Border Grid.Row="2" BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="0,1,0,0" Margin="28,0,28,0">
             <Grid ColumnDefinitions="*,Auto">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
             <friends:FriendsRailChip x:Name="FriendsChip" Margin="-8,0,10,0"/>
+            <Button x:Name="LobbyChip" Theme="{StaticResource LauncherLink}" Click="LobbyChip_Click" Margin="0,0,10,0">
+                <TextBlock x:Name="LobbyChipText"/>
+            </Button>
             <Button x:Name="WhatsNewLink" Theme="{StaticResource LauncherLink}" HorizontalAlignment="Left"
                     VerticalAlignment="Center" Click="WhatsNew_Click">
                 <TextBlock Text="{loc:Str launcher_link_whats_new}"/>
