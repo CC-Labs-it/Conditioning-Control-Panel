@@ -35,10 +35,12 @@ public sealed class DevicesDiagnosticsTests
             Assert.Contains("Mouth-open #2", log.Text);
             tracker.RaiseBlinkForTest();
             var oldFactory = WebcamTracker.SourceFactory;
+            var settings = CoreSettings.Current;
+            var oldConsent = (settings.WebcamConsentGiven, settings.WebcamConsentVersion);
             try
             {
-                CoreSettings.Current.WebcamConsentGiven = true;
-                CoreSettings.Current.WebcamConsentVersion = WebcamConsent.ConsentVersion;
+                settings.WebcamConsentGiven = true;
+                settings.WebcamConsentVersion = WebcamConsent.ConsentVersion;
                 WebcamTracker.SourceFactory = () => throw new System.InvalidOperationException("test camera unavailable");
                 var button = section.FindControl<Button>("BtnWebcamDebugStart")!;
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -48,13 +50,20 @@ public sealed class DevicesDiagnosticsTests
             }
             finally
             {
-                // Never restore the real camera factory while a timed-out start can still reach it.
-                if (section.WebcamDebugStartTask is { IsCompleted: false } pending)
+                try
                 {
-                    tracker.Stop();
-                    await pending;
+                    // Never restore the real camera factory while a timed-out start can still reach it.
+                    if (section.WebcamDebugStartTask is { IsCompleted: false } pending)
+                    {
+                        tracker.Stop();
+                        await pending;
+                    }
                 }
-                WebcamTracker.SourceFactory = oldFactory;
+                finally
+                {
+                    WebcamTracker.SourceFactory = oldFactory;
+                    (settings.WebcamConsentGiven, settings.WebcamConsentVersion) = oldConsent;
+                }
             }
             Assert.Equal("Face: — | Blinks: 0 | Gaze: —", section.FindControl<TextBlock>("TxtWebcamDebugCounters")!.Text);
             tracker.RaiseMouthForTest();
@@ -76,31 +85,70 @@ public sealed class DevicesDiagnosticsTests
         {
             var tracker = WebcamTracker.Instance;
             tracker.Stop();
-            CoreSettings.Current.WebcamConsentGiven = true;
-            CoreSettings.Current.WebcamConsentVersion = WebcamConsent.ConsentVersion;
-            var section = new DevicesSettingsSection();
-            var window = new Window { Content = section };
-            var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            section.StartWebcamDebug = () => completion.Task;
+            var settings = CoreSettings.Current;
+            var oldConsent = (settings.WebcamConsentGiven, settings.WebcamConsentVersion);
             try
             {
-                window.Show();
-                var button = section.FindControl<Button>("BtnWebcamDebugStart")!;
-                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                var task = Assert.IsAssignableFrom<Task>(section.WebcamDebugStartTask);
-                Assert.False(task.IsCompleted);
-                Assert.False(button.IsEnabled);
-                if (throws) completion.SetException(new InvalidOperationException("test start failed"));
-                else completion.SetResult(false);
-                await task.WaitAsync(TimeSpan.FromSeconds(10));
-                Assert.True(button.IsEnabled);
+                settings.WebcamConsentGiven = true;
+                settings.WebcamConsentVersion = WebcamConsent.ConsentVersion;
+                var section = new DevicesSettingsSection();
+                var window = new Window { Content = section };
+                var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                section.StartWebcamDebug = () => completion.Task;
+                try
+                {
+                    window.Show();
+                    var button = section.FindControl<Button>("BtnWebcamDebugStart")!;
+                    button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    var task = Assert.IsAssignableFrom<Task>(section.WebcamDebugStartTask);
+                    Assert.False(task.IsCompleted);
+                    Assert.False(button.IsEnabled);
+                    if (throws) completion.SetException(new InvalidOperationException("test start failed"));
+                    else completion.SetResult(false);
+                    await task.WaitAsync(TimeSpan.FromSeconds(10));
+                    Assert.True(button.IsEnabled);
+                }
+                finally
+                {
+                    completion.TrySetResult(false);
+                    if (section.WebcamDebugStartTask is { } task) await task;
+                    window.Close();
+                }
             }
             finally
             {
-                completion.TrySetResult(false);
-                if (section.WebcamDebugStartTask is { } task) await task;
-                window.Close();
+                (settings.WebcamConsentGiven, settings.WebcamConsentVersion) = oldConsent;
             }
         });
     }
+
+    [Fact]
+    public Task MouthDiagnosticsRestoresConsent() =>
+        AssertConsentRestored(MouthCountsResetAndSubscriptionsEndWithTheSection, false, "prior-denied");
+
+    [Theory]
+    [InlineData(false, "prior-denied", false)]
+    [InlineData(true, "prior-granted", true)]
+    public Task StartDiagnosticsRestoresConsent(bool given, string version, bool throws) =>
+        AssertConsentRestored(() => StartButtonWaitsForCompletionAndRecoversOnFailure(throws), given, version);
+
+    private static Task AssertConsentRestored(Func<Task> exercise, bool given, string version) =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            var settings = CoreSettings.Current;
+            var previous = (settings.WebcamConsentGiven, settings.WebcamConsentVersion);
+            try
+            {
+                settings.WebcamConsentGiven = given;
+                settings.WebcamConsentVersion = version;
+                await exercise();
+                Assert.Multiple(
+                    () => Assert.Equal(given, settings.WebcamConsentGiven),
+                    () => Assert.Equal(version, settings.WebcamConsentVersion));
+            }
+            finally
+            {
+                (settings.WebcamConsentGiven, settings.WebcamConsentVersion) = previous;
+            }
+        });
 }
