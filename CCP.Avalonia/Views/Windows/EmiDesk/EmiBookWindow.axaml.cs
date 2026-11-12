@@ -897,7 +897,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             // UI-thread exception handler, so a throw here would take the app down.
             try
             {
-                if (card.Target != null) { EmiTargets.Find(card.Target)?.Open(); return; }
+                if (card.Target != null)
+                {
+                    var target = EmiTargets.Find(card.Target);
+                    if (target == null || !target.Available) return;
+                    target.Open();
+                    EmiTargets.Moment("effectFired", new { channel = "bookGo", target = card.Target });
+                    return;
+                }
                 if (card.Tour == null || !TourReady()) return;
                 if (!Enum.TryParse<TutorialType>(card.Tour, out var type) || !Enum.IsDefined(type))
                 {
@@ -906,12 +913,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 }
                 CloseBook();
                 CoreTutorial.Start(card.Tour);
+                if (CoreTutorial.IsActive)
+                    EmiTargets.Moment("effectFired", new { channel = "bookTour", tour = card.Tour });
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "[EmiDesk] book detour failed for {Card}", card.Id);
             }
-            // ponytail: bookGo/bookTour moments need the desk's moment bus (wire-win-emi-book-b).
         }
 
         private void RenderTabs()
