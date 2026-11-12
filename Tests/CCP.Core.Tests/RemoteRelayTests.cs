@@ -181,13 +181,18 @@ public sealed class RemoteRelayTests
         RemoteCommands.RefreshOverlays = () => { };
         try
         {
+            settings.Current.LockCardEnabled = true;
             CoreEngine.Start();
+            Assert.True(LockCardScheduler.Instance.IsRunning);
             settings.Current.PinkFilterEnabled = true;
             ConditioningControlPanel.Services.Remote.RemoteWearer.Take();
             Assert.Null(RemoteCommands.Execute("set_pink_opacity", JObject.FromObject(new { value = 30 })));
             RemoteCommands.StopEffects(force: false); // user unticks Remote Control mid-run (WPF LeavesLocalRun, #1405)
             Assert.False(RemoteCommands.OverlaysStopped);
             Assert.True(settings.Current.PinkFilterEnabled);
+            Assert.True(LockCardScheduler.Instance.IsRunning);
+            RemoteCommands.StopEffects(force: false, leashCut: true);
+            Assert.False(LockCardScheduler.Instance.IsRunning);
             RemoteCommands.StopEffects(force: true); // trigger_panic takes the run and the remote switches down
             Assert.False(CoreEngine.IsRunning);
             Assert.True(settings.Current.PinkFilterEnabled); // base wearer restoration wins
@@ -862,6 +867,19 @@ public sealed class RemoteRelayTests
         Assert.Equal("uid-1", (string?)sent.Body["unified_id"]);
         r.EndSessionNow();                       // safe with no session
         Assert.Single(_stops);
+    }
+
+    [Fact]
+    public async Task Leash_cut_uses_full_teardown_instead_of_normal_cleanup()
+    {
+        var normal = 0;
+        var cut = 0;
+        using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", (_, _) => null,
+            _ => normal++, new FakeRelay(), () => cut++) { AutoPoll = false };
+        await r.StartAsync("full");
+        r.EndSessionNow();
+        Assert.Equal(1, cut);
+        Assert.Equal(0, normal);
     }
 
     // main d39969827: 1 s polls while a connected controller is busy; a 429 still backs off from 5 s.

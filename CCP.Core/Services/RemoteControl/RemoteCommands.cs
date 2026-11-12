@@ -173,7 +173,9 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF StopAllRemoteEffects: everything a controller could start stops and the wearer's own
         /// values come back (RemoteWearer: their strict lock, panic on unless a running Lockdown holds it off).
         /// Only <paramref name="force"/> (trigger_panic) takes the subject's own engine down (#878).</summary>
-        public static void StopEffects(bool force)
+        public static void StopEffects(bool force) => StopEffects(force, false);
+
+        public static void StopEffects(bool force, bool leashCut)
         {
             if (force) Commands.AiCommandService.CancelAll();   // a remote panic cancels pending AI follow-ups too
             // A controller's panic is a way out like the key: Circe's Tab opens its safety hold (PanicChasterHold).
@@ -182,6 +184,16 @@ namespace ConditioningControlPanel.Services
             // (PanicAftermath). It only ever refuses; no pause mark, so the controller may still resume.
             if (force) Safety.PanicAftermath.ArmQuiet();
             if (force) StopHaptics(); else RemoteHaptics.Stop();
+            // A normal disconnect over a local run leaves its services and audio alone.
+            // A leash cut still tears them down (WPF RemoteControlService.cs:953-964).
+            if (!force && !leashCut && CoreEngine.IsRunning)
+            {
+                var restored = Remote.RemoteWearer.HandBackAllButStrict();
+                Remote.RemoteWearer.ReleaseSafetyState();
+                if (restored > 0)
+                    try { RefreshOverlays?.Invoke(); } catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] overlay restore refresh failed"); }
+                return;
+            }
             try { CoreHaptics.Service?.PanicStop(); } catch { }
             CoreAudio.Unduck();
             // Keep the base's wearer restoration; never clear the subject's saved switches.

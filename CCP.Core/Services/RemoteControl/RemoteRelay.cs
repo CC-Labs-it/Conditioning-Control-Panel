@@ -48,6 +48,7 @@ namespace ConditioningControlPanel.Services
         private readonly Func<string?> _token, _unifiedId;
         private readonly Func<string, JObject?, string?> _execute;
         private readonly Action<bool> _stopEffects;
+        private readonly Action? _leashCutEffects;
         private CancellationTokenSource? _loop;
         private int _pollBusy, _consecutiveFailures;
         private DateTime? _idleSince;
@@ -93,9 +94,10 @@ namespace ConditioningControlPanel.Services
         /// <param name="execute">Runs one command on the UI thread; returns a refusal reason or null.</param>
         /// <param name="stopEffects">WPF StopAllRemoteEffects(force) / StopRemoteTriggeredEffects.</param>
         public RemoteRelay(Func<string?> token, Func<string?> unifiedId, string appVersion,
-            Func<string, JObject?, string?> execute, Action<bool> stopEffects, HttpMessageHandler? handler = null)
+            Func<string, JObject?, string?> execute, Action<bool> stopEffects, HttpMessageHandler? handler = null, Action? leashCutEffects = null)
         {
             (_token, _unifiedId, _execute, _stopEffects) = (token, unifiedId, execute, stopEffects);
+            _leashCutEffects = leashCutEffects;
             _baseUrl = handler != null ? RealBaseUrl : ResolveBaseUrl(
                 Environment.GetEnvironmentVariable("CCP_REMOTE_BASE_URL"),
                 !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
@@ -175,7 +177,7 @@ namespace ConditioningControlPanel.Services
         {
             if (!IsActive) return;
             var uid = _unifiedId();
-            Cleanup();
+            Cleanup(leashCut: true);
             Log.Information("[RemoteControl] Session ended locally (leash cut)");
             if (string.IsNullOrEmpty(uid)) return;
             _ = Task.Run(async () =>
@@ -186,7 +188,7 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>WPF CleanupSession: everything the controller started stops; the subject's own run stays.</summary>
-        private void Cleanup()
+        private void Cleanup(bool leashCut = false)
         {
             if (!IsActive) return;
             _loop?.Cancel();
@@ -202,7 +204,7 @@ namespace ConditioningControlPanel.Services
             // session's snapshot and its recovery file go.
             void StopEffects()
             {
-                try { _stopEffects(false); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
+                try { if (leashCut && _leashCutEffects != null) _leashCutEffects(); else _stopEffects(false); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
                 Remote.RemoteWearer.Drop();
             }
             var (done, _) = CoreDispatch.Invoke(() => { StopEffects(); return 0; }, TimeSpan.FromSeconds(10));

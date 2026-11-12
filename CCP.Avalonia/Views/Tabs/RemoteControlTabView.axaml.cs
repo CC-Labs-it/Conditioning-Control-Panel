@@ -72,7 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// Tests swap in a fake-relay client before opening the shell.</summary>
         internal static Lazy<RemoteRelay> Relay = new(() => App.WireRemoteQuestProgress(new RemoteRelay(
             () => CoreSettings.Current.AuthToken, () => CoreAccount.UnifiedUserId, CoreReleaseContent.AppVersion,
-            RemoteCommands.Execute, RemoteCommands.StopEffects)));
+            RemoteCommands.Execute, RemoteCommands.StopEffects, leashCutEffects: () => RemoteCommands.StopEffects(false, true))));
 
         private readonly ObservableCollection<string> _log = new();
 
