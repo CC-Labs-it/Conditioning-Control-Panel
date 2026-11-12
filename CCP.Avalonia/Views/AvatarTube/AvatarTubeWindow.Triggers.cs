@@ -153,11 +153,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             });
         }
 
-        // WPF Speech.cs:1278-1295,1448-1455,3033: final labels become clickable HTTP(S) links.
+        // WPF Speech.cs:1278-1295,1392-1407,1448-1455: final markdown and bare URLs become links.
         private void RenderTriggerText(string text)
         {
             var matches = System.Text.RegularExpressions.Regex.Matches(text,
-                @"\[([^\]]+)\]\(([^)]+)\)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                @"\[(?<label>[^\]]+)\]\((?<url>[^)]+)\)|(?<raw>https?://[^\s,""'<>]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             if (matches.Count == 0) { _txtSpeech.Text = text; return; }
             _txtSpeech.Text = "";
             _txtSpeech.Inlines!.Clear();
@@ -165,8 +165,12 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             foreach (System.Text.RegularExpressions.Match match in matches)
             {
                 _txtSpeech.Inlines!.Add(new Run(text[at..match.Index]));
-                var label = match.Groups[1].Value;
-                if (Uri.TryCreate(match.Groups[2].Value.Trim(), UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")
+                var raw = match.Groups["raw"].Value;
+                var target = raw.Length > 0 ? raw : match.Groups["url"].Value.Trim();
+                var label = raw.Length > 0
+                    ? global::ConditioningControlPanel.Helpers.HtUrlHelper.DeriveTitleFromUrl(target)
+                    : match.Groups["label"].Value;
+                if (Uri.TryCreate(target, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")
                     _txtSpeech.Inlines.Add(new InlineUIContainer(new global::ConditioningControlPanel.Avalonia.Controls.SafeHyperlinkButton
                     {
                         Content = label, Padding = new(0), FontSize = _txtSpeech.FontSize,

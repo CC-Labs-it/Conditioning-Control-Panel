@@ -18,6 +18,56 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class TubeTriggerModeTests
 {
+    [Fact]
+    public void TriggerBareUrlBecomesClickableAfterTyping() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var settings = CoreSettings.Current;
+        var saved = (settings.TriggerModeEnabled, settings.TriggerIntervalSeconds, settings.CustomTriggers,
+            settings.AvatarMuted, settings.AvatarTubeDetached, settings.AvatarEnabled);
+        var previousNavigate = CompanionLinkLauncher.Navigate;
+        var loops = new List<Action>();
+        var delays = new List<Action>();
+        AvatarTubeWindow? tube = null;
+        try
+        {
+            PanicAftermath.EndQuiet();
+            settings.TriggerModeEnabled = true;
+            settings.TriggerIntervalSeconds = 45;
+            settings.CustomTriggers = new() { "Watch https://example.com/my-video-123.html now" };
+            settings.AvatarMuted = false;
+            settings.AvatarTubeDetached = true;
+            settings.AvatarEnabled = true;
+            tube = new AvatarTubeWindow(null);
+            tube.SpeechClock = new Stepped();
+            tube.TriggerLoopScheduler = (_, tick) => { loops.Add(tick); return () => { }; };
+            tube.SpeechDelayScheduler = (_, fire) => { delays.Add(fire); return () => { }; };
+            tube.Show();
+            Dispatcher.UIThread.RunJobs();
+            loops[0]();
+            delays[^1]();
+            var text = tube.FindControl<TextBlock>("TxtSpeech")!;
+            loops[^1]();
+            Assert.Equal("W", text.Text);
+            for (var i = 1; i < settings.CustomTriggers[0].Length; i++) loops[^1]();
+            var link = Assert.IsType<global::ConditioningControlPanel.Avalonia.Controls.SafeHyperlinkButton>(
+                Assert.Single(text.Inlines!.OfType<InlineUIContainer>()).Child);
+            Assert.Equal("My Video", link.Content);
+            Assert.Equal(new[] { "Watch ", " now" }, text.Inlines.OfType<Run>().Select(r => r.Text));
+            string? opened = null;
+            CompanionLinkLauncher.Navigate = url => { opened = url; return true; };
+            typeof(Button).GetMethod("OnClick", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(link, null);
+            Assert.Equal("https://example.com/my-video-123.html", opened);
+        }
+        finally
+        {
+            CompanionLinkLauncher.Navigate = previousNavigate;
+            tube?.Close();
+            (settings.TriggerModeEnabled, settings.TriggerIntervalSeconds, settings.CustomTriggers,
+                settings.AvatarMuted, settings.AvatarTubeDetached, settings.AvatarEnabled) = saved;
+            PanicAftermath.EndQuiet();
+        }
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
