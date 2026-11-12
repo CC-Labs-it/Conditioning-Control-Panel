@@ -1089,14 +1089,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             a.Dispose();
         }
 
-        /// <summary>Panic (P06): every open editor stops its local audio. WPF's KillAllAudio never
-        /// reached the editor's WaveOutEvent; a panic that leaves a clip playing is worse.</summary>
+        /// <summary>Stop local media even before the editor has observed playback. A local video
+        /// document may autoplay before its first poll, so blank it and close its navigation fence.</summary>
         internal static void PauseAllForPanic()
         {
-            foreach (var ed in s_open)
+            foreach (var ed in s_open.ToArray())
             {
-                if (ed._localAudio == null || !ed._isPlaying) continue;
-                ed._localAudio.Pause();
+                var localVideo = ed._browserNavigated && ed.BrowserPreview.Source?.IsFile == true;
+                if (localVideo) ed.StopBrowserPreview();
+                if (ed._localAudio == null && !localVideo) continue;
+                try { ed._localAudio?.Pause(); }
+                catch (Exception ex) { Log.Warning(ex, "DeeperEditor: panic pause failed"); ed.DisposeLocalAudio(); }
                 ed._isPlaying = false;
                 ed._playheadTimer?.Stop();
                 ed.PlayPauseGlyph.Kind = IconKind.Play;
