@@ -19,6 +19,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Launcher;
 using ConditioningControlPanel.Services.Race;
+using ConditioningControlPanel.Services.Webcam;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -121,32 +122,50 @@ public sealed partial class GameWindowTests
     public void Breakout_PanicLadder_ClosesOnSecondPressOrResumes(bool resume) => Run((shell, launcher) =>
     {
         var s = CoreSettings.Current;
-        s.PanicKey = "F8"; s.PanicKeyEnabled = true; s.PanicOverridesAll = false;
-        launcher.Hide();
-        var w = GameWindow.Launch("breakoutdemo")!;
-        var sent = new List<JObject>();
-        w.Posted += json => sent.Add(JObject.Parse(json));
-        var now = DateTime.Now;
-        shell.HandlePanicKeyPress(now);
-        Assert.True(w.IsVisible);
-        var frame = Assert.Single(sent, x => (string?)x["type"] == "suspend");
-        Assert.True((bool)frame["on"]!);
-        Assert.Equal("panic", (string?)frame["reason"]);
-        Assert.Equal(0, shell.PanicPressCountForTest);
-        if (resume)
+        var tracker = WebcamTracker.Instance;
+        var old = (s.WebcamConsentGiven, s.WebcamConsentVersion, WebcamTracker.SourceFactory);
+        try
         {
-            w.ResumeBreakoutAfterPanic(now.AddSeconds(2));
-            Assert.Single(sent);
-            w.ResumeBreakoutAfterPanic(now.AddSeconds(3));
-            Assert.False((bool)sent.Last()["on"]!);
-            Assert.Equal("panic", (string?)sent.Last()["reason"]);
+            s.PanicKey = "F8"; s.PanicKeyEnabled = true; s.PanicOverridesAll = false;
+            s.WebcamConsentGiven = true; s.WebcamConsentVersion = WebcamConsent.ConsentVersion;
+            WebcamTracker.SourceFactory = () => new BlinkTrainerSessionTests.BlackFrames();
+            launcher.Hide();
+            var w = GameWindow.Launch("breakoutdemo")!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            Assert.True(tracker.Start(), tracker.LastError);
+            var now = DateTime.Now;
+            shell.HandlePanicKeyPress(now);
             Assert.True(w.IsVisible);
-        }
-        else
-        {
-            shell.HandlePanicKeyPress(now.AddSeconds(1));
-            Assert.False(w.IsVisible);
+            Assert.True(SpinWait.SpinUntil(() => !tracker.IsRunning, TimeSpan.FromSeconds(5)));
+            Assert.True(WebcamConsent.IsCurrent(s));
+            var frame = Assert.Single(sent, x => (string?)x["type"] == "suspend");
+            Assert.True((bool)frame["on"]!);
+            Assert.Equal("panic", (string?)frame["reason"]);
             Assert.Equal(0, shell.PanicPressCountForTest);
+            if (resume)
+            {
+                w.ResumeBreakoutAfterPanic(now.AddSeconds(2));
+                Assert.Single(sent);
+                w.ResumeBreakoutAfterPanic(now.AddSeconds(3));
+                Assert.False((bool)sent.Last()["on"]!);
+                Assert.Equal("panic", (string?)sent.Last()["reason"]);
+                Assert.True(w.IsVisible);
+            }
+            else
+            {
+                Assert.True(tracker.Start(), tracker.LastError); // manually restarted after press 1
+                shell.HandlePanicKeyPress(now.AddSeconds(1));
+                Assert.False(w.IsVisible);
+                Assert.True(SpinWait.SpinUntil(() => !tracker.IsRunning, TimeSpan.FromSeconds(5)));
+                Assert.Equal(0, shell.PanicPressCountForTest);
+            }
+        }
+        finally
+        {
+            tracker.Stop();
+            SpinWait.SpinUntil(() => !tracker.IsClosing, TimeSpan.FromSeconds(20));
+            (s.WebcamConsentGiven, s.WebcamConsentVersion, WebcamTracker.SourceFactory) = old;
         }
     });
 
@@ -1367,6 +1386,46 @@ public sealed partial class GameWindowTests
             Assert.Equal(0, shell.PanicPressCountForTest);
         }
         finally { (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll) = (oldKey, oldEnabled, oldOverride); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Dtrh_PanicHandoffStopsCamera(bool ready) => RunDtrh(lab: true, (shell, _, _, _) =>
+    {
+        var s = CoreSettings.Current;
+        var tracker = WebcamTracker.Instance;
+        var old = (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll, s.WebcamConsentGiven,
+            s.WebcamConsentVersion, WebcamTracker.SourceFactory);
+        try
+        {
+            (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll) = ("F8", true, false);
+            s.WebcamConsentGiven = true; s.WebcamConsentVersion = WebcamConsent.ConsentVersion;
+            WebcamTracker.SourceFactory = () => new BlinkTrainerSessionTests.BlackFrames();
+            var w = GameWindow.Launch("dtrh")!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            if (ready) w.HandleMessage("{\"type\":\"ready\"}");
+            sent.Clear();
+            Assert.True(tracker.Start(), tracker.LastError);
+            shell.HandlePanicKeyPress(DateTime.Now);
+            Assert.True(SpinWait.SpinUntil(() => !tracker.IsRunning, TimeSpan.FromSeconds(5)));
+            Assert.True(WebcamConsent.IsCurrent(s));
+            Assert.Equal(0, shell.PanicPressCountForTest);
+            if (ready)
+            {
+                Assert.Equal("end-run", (string?)Assert.Single(sent)["type"]);
+                w.HandleMessage("{\"type\":\"exit-done\"}");
+            }
+            Assert.False(w.IsVisible);
+        }
+        finally
+        {
+            tracker.Stop();
+            SpinWait.SpinUntil(() => !tracker.IsClosing, TimeSpan.FromSeconds(20));
+            (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll, s.WebcamConsentGiven,
+                s.WebcamConsentVersion, WebcamTracker.SourceFactory) = old;
+        }
     });
 
     [Fact]
