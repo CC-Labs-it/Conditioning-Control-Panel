@@ -19,6 +19,8 @@
   "mod_barks_line": "文本",
   "mod_barks_remove": "移除",
   "mod_barks_load_error": "无法读取 bark_rules.json。",
+  "mod_barks_no_id": "无 ID",
+  "mod_barks_skipped": "Barks：已跳过 {0} 条不完整规则（{1}）。",
   "deeper_submission_badge_published": "已发布",
   "deeper_submission_badge_published_tip": "此增强已在社区目录中上线。",
   "deeper_submission_badge_pending": "待审核",

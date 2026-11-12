@@ -19,6 +19,8 @@
   "mod_barks_line": "Variantentext",
   "mod_barks_remove": "Entfernen",
   "mod_barks_load_error": "bark_rules.json konnte nicht gelesen werden.",
+  "mod_barks_no_id": "ohne ID",
+  "mod_barks_skipped": "Barks: {0} unvollständige Regeln übersprungen ({1}).",
   "deeper_submission_badge_published": "Veröffentlicht",
   "deeper_submission_badge_published_tip": "Diese Erweiterung ist im Community-Katalog live.",
   "deeper_submission_badge_pending": "Ausstehend",

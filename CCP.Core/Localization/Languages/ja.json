@@ -19,6 +19,8 @@
   "mod_barks_line": "テキスト",
   "mod_barks_remove": "削除",
   "mod_barks_load_error": "bark_rules.jsonを読み込めませんでした。",
+  "mod_barks_no_id": "IDなし",
+  "mod_barks_skipped": "Barks: 不完全なルールを {0} 件スキップしました ({1})。",
   "deeper_submission_badge_published": "公開済み",
   "deeper_submission_badge_published_tip": "このエンハンスメントはコミュニティカタログで公開中です。",
   "deeper_submission_badge_pending": "審査中",

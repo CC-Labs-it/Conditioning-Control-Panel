@@ -19,6 +19,8 @@
   "mod_barks_line": "Testo",
   "mod_barks_remove": "Rimuovi",
   "mod_barks_load_error": "Impossibile leggere bark_rules.json.",
+  "mod_barks_no_id": "senza id",
+  "mod_barks_skipped": "Barks: {0} regole incomplete saltate ({1}).",
   "Sparkles_Slip_Paid": "Pagato",
   "Sparkles_Slip_Place": "Posto {0} su {1}",
   "Sparkles_Slip_Gold": "Oro",

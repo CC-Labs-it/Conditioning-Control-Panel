@@ -19,6 +19,8 @@
   "mod_barks_line": "Texto",
   "mod_barks_remove": "Eliminar",
   "mod_barks_load_error": "No se pudo leer bark_rules.json.",
+  "mod_barks_no_id": "sin id",
+  "mod_barks_skipped": "Barks: {0} reglas incompletas omitidas ({1}).",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Esta mejora está publicada en el catálogo de la comunidad.",
   "deeper_submission_badge_pending": "Pendiente",

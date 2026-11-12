@@ -21,6 +21,7 @@ public partial class ModCreatorWindow
     private readonly List<BarkCard> _barkCards = new();
     private StackPanel? _barkCardsPanel;
     private string? _barkAudioDir;
+    private string _barkSkipStatus = "";
     private sealed class BarkCard
     {
         public JObject Json = new();
@@ -203,12 +204,14 @@ public partial class ModCreatorWindow
     {
         var rules = new JArray();
         var badConditions = new List<string>();
+        var skipped = new List<string>();
+        _barkSkipStatus = "";
         foreach (var card in _barkCards)
         {
             var isOverride = card.Override.IsChecked == true;
             var id = card.Id.Text?.Trim() ?? "";
             if (!isOverride) id = Regex.Replace(id.ToLowerInvariant(), "[^a-z0-9]+", "_").Trim('_');
-            if (id.Length == 0) continue;
+            if (id.Length == 0) { skipped.Add(Loc.Get("mod_barks_no_id")); continue; }
             var pool = new JArray();
             foreach (var (box, original, _) in card.Lines)
             {
@@ -225,14 +228,15 @@ public partial class ModCreatorWindow
             var rule = (JObject)card.Json.DeepClone();
             if (isOverride)
             {
-                if (pool.Count == 0) continue;
+                if (pool.Count == 0) { skipped.Add(id); continue; }
                 // Fresh overrides emit only overlay fields. Loaded rules retain their backing fields.
                 if (!card.LoadedFromFile) rule.RemoveAll();
             }
             else
             {
                 var trigger = card.Trigger.Text?.Trim() ?? "";
-                if (trigger.Length == 0 || (pool.Count == 0 && string.IsNullOrWhiteSpace(rule.Value<string>("pool_ref")))) continue;
+                if (trigger.Length == 0 || (pool.Count == 0 && string.IsNullOrWhiteSpace(rule.Value<string>("pool_ref"))))
+                { skipped.Add(id); continue; }
                 rule["trigger"] = trigger;
                 // WPF ModCreatorWindow.Barks.cs:513-540: invalid conditions retain the backing value.
                 SetBarkIntField(rule, "priority", card.Priority);
@@ -259,6 +263,11 @@ public partial class ModCreatorWindow
             card.Json = (JObject)rule.DeepClone();
             rules.Add(rule);
         }
+        if (skipped.Count > 0)
+        {
+            _barkSkipStatus = Loc.GetF("mod_barks_skipped", skipped.Count, string.Join(", ", skipped));
+            _txtStatus.Text = _barkSkipStatus;
+        }
         if (rules.Count == 0) return badConditions;
         var dir = Path.Combine(resourcesDir, "sounds", "companion_audio");
         Directory.CreateDirectory(dir);
@@ -279,6 +288,9 @@ public partial class ModCreatorWindow
         }
         return badConditions;
     }
+
+    internal string BarkExportStatus(string status) =>
+        _barkSkipStatus.Length == 0 ? status : status + " " + _barkSkipStatus;
 
     internal void LoadBarksFrom(string resourcesDir)
     {
@@ -303,5 +315,6 @@ public partial class ModCreatorWindow
         _barkCards.Clear();
         _barkCardsPanel?.Children.Clear();
         _barkAudioDir = null;
+        _barkSkipStatus = "";
     }
 }
