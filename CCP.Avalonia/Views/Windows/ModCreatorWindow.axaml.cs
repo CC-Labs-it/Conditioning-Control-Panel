@@ -356,7 +356,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var btn = new Button
                 {
-                    Content = label,
+                    Content = key == "mantras" ? Loc.Get("pl6_mantra_title") : label,
                     Tag = key,
                     HorizontalContentAlignment = HorizontalAlignment.Left,
                     Padding = new Thickness(13, 9, 13, 9),
@@ -456,7 +456,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // when each is ported. In the WPF head these three aggregate hooks let export write each
         // panel's side files into the .ccpmod resources tree, let load repopulate the panels from
         // an extracted tree, and let reset clear them.
-        private async Task WriteSideFilesTo(string resourcesDir) { WriteBarksTo(resourcesDir); var skipped = WriteMantrasTo(resourcesDir); if (skipped.Count > 0) await MessageDialog.ShowAsync(this, "Mantras - Skipped Entries", string.Join("\n", skipped)); }
+        private async Task WriteSideFilesTo(string resourcesDir) { WriteBarksTo(resourcesDir); var skipped = WriteMantrasTo(resourcesDir); if (skipped.Count > 0) await MessageDialog.ShowAsync(this, Loc.Get("mod_mantra_skipped_title"), string.Join("\n", skipped)); }
         private void LoadSideFilesFrom(string resourcesDir) { LoadBarksFrom(resourcesDir); _ = LoadMantrasFrom(resourcesDir); }
         private void ClearSideFileState() { ClearBarksSection(); ClearMantrasSection(); }
 

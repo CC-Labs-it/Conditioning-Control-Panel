@@ -13,6 +13,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Localization;
 using Newtonsoft.Json;
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -21,24 +22,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     {
         private sealed class MantraAudioRef
         {
-            public string? SourcePath;
-            public string? FileName;
+            public string? SourcePath, FileName;
             public bool Missing;
             public TextBlock Label = null!;
-            public Button PlayBtn = null!;
-            public Button ClearBtn = null!;
+            public Button PlayBtn = null!, ClearBtn = null!;
         }
         private sealed class MantraCard
         {
             public string Id = "";                 // preserved from a loaded mod; generated on export otherwise
             public Border Root = null!;
-            public TextBox PhraseBox = null!;
-            public TextBox PromptBox = null!;
+            public TextBox PhraseBox = null!, PromptBox = null!;
             public DockPanel ContainHint = null!;
             public TextBox ResponseBox = null!;
             public CheckBox EnabledCheck = null!;
-            public MantraAudioRef PromptAudio = null!;
-            public MantraAudioRef ResponseAudio = null!;
+            public MantraAudioRef PromptAudio = null!, ResponseAudio = null!;
         }
         private sealed class MantraSharedLineRow
         {
@@ -47,40 +44,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             public MantraAudioRef Audio = null!;
         }
         private readonly List<MantraCard> _mantraCards = new();
-        private readonly List<MantraSharedLineRow> _mantraRetryRows = new();
-        private readonly List<MantraSharedLineRow> _mantraTimeoutRows = new();
-        private StackPanel? _mantraCardsPanel;
-        private StackPanel? _mantraRetryPanel;
-        private StackPanel? _mantraTimeoutPanel;
+        private readonly List<MantraSharedLineRow> _mantraRetryRows = new(), _mantraTimeoutRows = new();
+        private StackPanel? _mantraCardsPanel, _mantraRetryPanel, _mantraTimeoutPanel;
         private void BuildMantrasSection()
         {
-            var panel = CreateSectionPanel("mantras");
-            var stack = new StackPanel();
-            panel.Child = stack;
-            stack.Children.Add(CreateSectionHeader("Mantras"));
-            stack.Children.Add(CreateSectionDescription(
-                "Voiced mantra prompts for Takeover's \"say it for me\" flow. She speaks the prompt line, " +
-                "the user repeats the phrase aloud, and she answers with the response. Audio is optional per " +
-                "line - entries without clips are delivered as text only. The prompt text must contain the " +
-                "phrase word-for-word."));
-            stack.Children.Add(CreateSubHeader("Mantras"));
-            _mantraCardsPanel = new StackPanel();
-            stack.Children.Add(_mantraCardsPanel);
-            var addMantraBtn = CreateMantraAddButton("+ Add mantra");
+            var panel = CreateSectionPanel("mantras"); var stack = new StackPanel();
+            panel.Child = stack; stack.Children.Add(CreateSectionHeader(Loc.Get("pl6_mantra_title")));
+            stack.Children.Add(CreateSectionDescription(Loc.Get("mod_mantra_intro"))); stack.Children.Add(CreateSubHeader(Loc.Get("pl6_mantra_title")));
+            _mantraCardsPanel = new StackPanel(); stack.Children.Add(_mantraCardsPanel);
+            var addMantraBtn = CreateMantraAddButton(Loc.Get("mod_mantra_add"));
             addMantraBtn.Click += (_, _) => AddMantraCard(null, null);
-            stack.Children.Add(addMantraBtn);
-            stack.Children.Add(CreateSubHeader("Retry Lines"));
-            stack.Children.Add(CreateSectionDescription("Shared \"louder / say it again\" lines played when the attempt misses or is too quiet."));
-            _mantraRetryPanel = new StackPanel();
+            stack.Children.Add(addMantraBtn); stack.Children.Add(CreateSubHeader(Loc.Get("mod_mantra_retry_title")));
+            stack.Children.Add(CreateSectionDescription(Loc.Get("mod_mantra_retry_help"))); _mantraRetryPanel = new StackPanel();
             stack.Children.Add(_mantraRetryPanel);
-            var addRetryBtn = CreateMantraAddButton("+ Add retry line");
+            var addRetryBtn = CreateMantraAddButton(Loc.Get("mod_mantra_retry_add"));
             addRetryBtn.Click += (_, _) => AddMantraSharedLineRow(_mantraRetryPanel, _mantraRetryRows, null, null, "retry");
-            stack.Children.Add(addRetryBtn);
-            stack.Children.Add(CreateSubHeader("Timeout Lines"));
-            stack.Children.Add(CreateSectionDescription("Shared \"too shy?\" lines played when no speech is heard at all."));
-            _mantraTimeoutPanel = new StackPanel();
+            stack.Children.Add(addRetryBtn); stack.Children.Add(CreateSubHeader(Loc.Get("mod_mantra_timeout_title")));
+            stack.Children.Add(CreateSectionDescription(Loc.Get("mod_mantra_timeout_help"))); _mantraTimeoutPanel = new StackPanel();
             stack.Children.Add(_mantraTimeoutPanel);
-            var addTimeoutBtn = CreateMantraAddButton("+ Add timeout line");
+            var addTimeoutBtn = CreateMantraAddButton(Loc.Get("mod_mantra_timeout_add"));
             addTimeoutBtn.Click += (_, _) => AddMantraSharedLineRow(_mantraTimeoutPanel, _mantraTimeoutRows, null, null, "timeout");
             stack.Children.Add(addTimeoutBtn);
         }
@@ -114,12 +96,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             card.EnabledCheck = new CheckBox
             {
-                Content = "Enabled", IsChecked = entry?.Enabled ?? true,
+                Content = Loc.Get("session_spoiler_corner_gif_enabled"), IsChecked = entry?.Enabled ?? true,
                 Foreground = new SolidColorBrush(Color.FromRgb(192, 192, 192)), FontSize = 12,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            Grid.SetColumn(card.EnabledCheck, 0);
-            headerRow.Children.Add(card.EnabledCheck);
+            Grid.SetColumn(card.EnabledCheck, 0); headerRow.Children.Add(card.EnabledCheck);
             var removeBtn = new Button
             {
                 // WPF "\u2715 Remove" (Mantras.cs:191): the glyph becomes a Dismiss icon beside the text.
@@ -129,7 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Children =
                     {
                         new IconGlyph { Kind = IconKind.Dismiss, Size = 10, VerticalAlignment = VerticalAlignment.Center },
-                        new TextBlock { Text = "Remove", VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = Loc.Get("mod_barks_remove"), VerticalAlignment = VerticalAlignment.Center },
                     },
                 },
                 Background = Brushes.Transparent, Foreground = new SolidColorBrush(Color.FromRgb(255, 100, 100)),
@@ -141,16 +122,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _mantraCardsPanel?.Children.Remove(card.Root);
                 _mantraCards.Remove(card);
             };
-            Grid.SetColumn(removeBtn, 1);
-            headerRow.Children.Add(removeBtn);
-            body.Children.Add(headerRow);
-            body.Children.Add(CreateFieldLabel("Phrase (what the user must say) *"));
-            card.PhraseBox = CreateDarkTextBox("good girls obey");
-            card.PhraseBox.Width = 350;
-            body.Children.Add(card.PhraseBox);
-            body.Children.Add(CreateFieldLabel("Prompt text (what she says - must contain the phrase)"));
-            card.PromptBox = CreateDarkTextBox("Say it for me, sweetie: good girls obey", multiline: true, height: 52);
-            body.Children.Add(card.PromptBox);
+            Grid.SetColumn(removeBtn, 1); headerRow.Children.Add(removeBtn); body.Children.Add(headerRow);
+            body.Children.Add(CreateFieldLabel(Loc.Get("mod_mantra_phrase_label")));
+            card.PhraseBox = CreateDarkTextBox(Loc.Get("mod_mantra_phrase_example")); card.PhraseBox.Width = 350; body.Children.Add(card.PhraseBox);
+            body.Children.Add(CreateFieldLabel(Loc.Get("mod_mantra_prompt_label")));
+            card.PromptBox = CreateDarkTextBox(Loc.Get("mod_mantra_prompt_example"), multiline: true, height: 52); body.Children.Add(card.PromptBox);
             // WPF warning-sign prefix (Mantras.cs:221) becomes a Warning icon.
             var hintBrush = new SolidColorBrush(Color.FromRgb(255, 112, 112));
             var warnIcon = new IconGlyph { Kind = IconKind.Warning, Variant = IconVariant.Filled, Size = 11, Foreground = hintBrush, Margin = new Thickness(0, 1, 4, 0), VerticalAlignment = VerticalAlignment.Top };
@@ -163,7 +139,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     warnIcon,
                     new TextBlock
                     {
-                        Text = "Prompt text must contain the phrase word-for-word.", Foreground = hintBrush, FontSize = 11,
+                        Text = Loc.Get("mod_mantra_hint"), Foreground = hintBrush, FontSize = 11,
                         TextWrapping = TextWrapping.Wrap,
                     },
                 },
@@ -171,21 +147,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             body.Children.Add(card.ContainHint);
             card.PhraseBox.TextChanged += (_, _) => UpdateMantraContainHint(card);
             card.PromptBox.TextChanged += (_, _) => UpdateMantraContainHint(card);
-            body.Children.Add(CreateFieldLabel("Prompt audio (optional)"));
-            card.PromptAudio = new MantraAudioRef();
-            body.Children.Add(CreateMantraAudioRow(card.PromptAudio, "Select prompt audio",
+            body.Children.Add(CreateFieldLabel(Loc.Get("mod_mantra_prompt_audio"))); card.PromptAudio = new MantraAudioRef();
+            body.Children.Add(CreateMantraAudioRow(card.PromptAudio, Loc.Get("mod_mantra_prompt_picker"),
                 () => GetTextBoxValue(card.PhraseBox), "prompt"));
-            body.Children.Add(CreateFieldLabel("Response text (her line when the user nails it)"));
-            card.ResponseBox = CreateDarkTextBox("Mmm, good girl~", multiline: true, height: 40);
-            body.Children.Add(card.ResponseBox);
-            body.Children.Add(CreateFieldLabel("Response audio (optional)"));
-            card.ResponseAudio = new MantraAudioRef();
-            body.Children.Add(CreateMantraAudioRow(card.ResponseAudio, "Select response audio",
+            body.Children.Add(CreateFieldLabel(Loc.Get("mod_mantra_response_label")));
+            card.ResponseBox = CreateDarkTextBox(Loc.Get("mod_mantra_response_example"), multiline: true, height: 40); body.Children.Add(card.ResponseBox);
+            body.Children.Add(CreateFieldLabel(Loc.Get("mod_mantra_response_audio"))); card.ResponseAudio = new MantraAudioRef();
+            body.Children.Add(CreateMantraAudioRow(card.ResponseAudio, Loc.Get("mod_mantra_response_picker"),
                 () => GetTextBoxValue(card.PhraseBox), "response"));
             if (entry != null)
             {
-                SetTextBoxValue(card.PhraseBox, entry.Phrase);
-                SetTextBoxValue(card.PromptBox, entry.PromptText);
+                SetTextBoxValue(card.PhraseBox, entry.Phrase); SetTextBoxValue(card.PromptBox, entry.PromptText);
                 SetTextBoxValue(card.ResponseBox, entry.Response);
                 MantraLinkLoadedAudio(card.PromptAudio, entry.PromptAudio, companionAudioDir);
                 MantraLinkLoadedAudio(card.ResponseAudio, entry.ResponseAudio, companionAudioDir);
@@ -196,8 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
         private void UpdateMantraContainHint(MantraCard card)
         {
-            var phrase = GetTextBoxValue(card.PhraseBox).Trim();
-            var prompt = GetTextBoxValue(card.PromptBox).Trim();
+            var phrase = GetTextBoxValue(card.PhraseBox).Trim(); var prompt = GetTextBoxValue(card.PromptBox).Trim();
             var bad = phrase.Length > 0 && prompt.Length > 0 && !MantraPromptContainsPhrase(prompt, phrase);
             card.ContainHint.IsVisible = bad;
         }
@@ -209,19 +180,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var row = new MantraSharedLineRow();
             var root = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
             row.Root = root;
-            row.TextBox = CreateDarkTextBox(role == "retry" ? "Louder, sweetie. Again." : "Too shy? Say it for me.");
-            row.TextBox.Width = 260;
-            row.TextBox.Margin = new Thickness(0, 0, 8, 0);
-            row.TextBox.VerticalAlignment = VerticalAlignment.Center;
-            root.Children.Add(row.TextBox);
-            row.Audio = new MantraAudioRef();
-            var audioRow = CreateMantraAudioRow(row.Audio, role == "retry" ? "Select retry audio" : "Select timeout audio",
+            row.TextBox = CreateDarkTextBox(role == "retry" ? Loc.Get("mod_mantra_retry_example") : Loc.Get("mod_mantra_timeout_example"));
+            row.TextBox.Width = 260; row.TextBox.Margin = new Thickness(0, 0, 8, 0); row.TextBox.VerticalAlignment = VerticalAlignment.Center;
+            root.Children.Add(row.TextBox); row.Audio = new MantraAudioRef();
+            var audioRow = CreateMantraAudioRow(row.Audio, role == "retry" ? Loc.Get("mod_mantra_retry_picker") : Loc.Get("mod_mantra_timeout_picker"),
                 () => GetTextBoxValue(row.TextBox), role);
-            audioRow.VerticalAlignment = VerticalAlignment.Center;
-            root.Children.Add(audioRow);
+            audioRow.VerticalAlignment = VerticalAlignment.Center; root.Children.Add(audioRow);
             var removeBtn = new Button
             {
-                Content = "Remove", Background = Brushes.Transparent,
+                Content = Loc.Get("mod_barks_remove"), Background = Brushes.Transparent,
                 Foreground = new SolidColorBrush(Color.FromRgb(255, 100, 100)), BorderThickness = new Thickness(0),
                 Cursor = new Cursor(StandardCursorType.Hand), FontSize = 11, Margin = new Thickness(8, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center,
@@ -246,7 +213,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
             audio.Label = new TextBlock
             {
-                Text = "No audio", Foreground = new SolidColorBrush(Color.FromRgb(96, 96, 128)), FontSize = 11,
+                Text = Loc.Get("kwt_no_audio"), Foreground = new SolidColorBrush(Color.FromRgb(96, 96, 128)), FontSize = 11,
                 FontStyle = FontStyle.Italic, VerticalAlignment = VerticalAlignment.Center, Width = 200,
                 TextTrimming = TextTrimming.CharacterEllipsis,
             };
@@ -264,11 +231,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (audio.SourcePath != null && File.Exists(audio.SourcePath))
                     ToggleAudioPreview(audio.SourcePath, audio.PlayBtn);
             };
-            ToolTip.SetTip(audio.PlayBtn, "Play preview");
-            row.Children.Add(audio.PlayBtn);
+            ToolTip.SetTip(audio.PlayBtn, Loc.Get("haptics_pattern_play")); row.Children.Add(audio.PlayBtn);
             var browseBtn = new Button
             {
-                Content = "Browse", Background = new SolidColorBrush(Color.FromRgb(50, 50, 80)),
+                Content = Loc.Get("btn_browse"), Background = new SolidColorBrush(Color.FromRgb(50, 50, 80)),
                 Foreground = Brushes.White, BorderThickness = new Thickness(0),
                 Cursor = new Cursor(StandardCursorType.Hand), FontSize = 10, Padding = new Thickness(8, 4, 8, 4),
                 Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
@@ -290,50 +256,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             };
             audio.ClearBtn.Click += (_, _) =>
             {
-                audio.SourcePath = null;
-                audio.FileName = null;
-                audio.Missing = false;
+                audio.SourcePath = null; audio.FileName = null; audio.Missing = false;
                 UpdateMantraAudioUi(audio);
             };
-            ToolTip.SetTip(audio.ClearBtn, "Remove audio");
-            row.Children.Add(audio.ClearBtn);
+            ToolTip.SetTip(audio.ClearBtn, Loc.Get("mod_mantra_remove_audio")); row.Children.Add(audio.ClearBtn);
             return row;
         }
         private void AttachMantraAudio(MantraAudioRef audio, string path, string source, string role)
         {
-            audio.SourcePath = path;
-            audio.Missing = false;
-            audio.FileName = MantraAutoFileName(source, role, Path.GetExtension(path));
+            audio.SourcePath = path; audio.Missing = false; audio.FileName = MantraAutoFileName(source, role, Path.GetExtension(path));
             UpdateMantraAudioUi(audio);
         }
         private static void UpdateMantraAudioUi(MantraAudioRef audio)
         {
             if (audio.FileName == null)
             {
-                audio.Label.Text = "No audio";
-                audio.Label.FontStyle = FontStyle.Italic;
-                audio.Label.Foreground = new SolidColorBrush(Color.FromRgb(96, 96, 128));
-                ToolTip.SetTip(audio.Label, null);
-                audio.PlayBtn.IsVisible = false;
-                audio.ClearBtn.IsVisible = false;
+                audio.Label.Text = Loc.Get("kwt_no_audio"); audio.Label.FontStyle = FontStyle.Italic;
+                audio.Label.Foreground = new SolidColorBrush(Color.FromRgb(96, 96, 128)); ToolTip.SetTip(audio.Label, null);
+                audio.PlayBtn.IsVisible = false; audio.ClearBtn.IsVisible = false;
             }
             else if (audio.Missing)
             {
-                audio.Label.Text = $"{audio.FileName} (missing)";
-                audio.Label.FontStyle = FontStyle.Italic;
-                audio.Label.Foreground = new SolidColorBrush(Color.FromRgb(255, 112, 112));
-                ToolTip.SetTip(audio.Label, "Referenced by the loaded mod, but the clip was not found in the package.");
-                audio.PlayBtn.IsVisible = false;
-                audio.ClearBtn.IsVisible = true;
+                audio.Label.Text = Loc.GetF("mod_mantra_missing_fmt", audio.FileName); audio.Label.FontStyle = FontStyle.Italic;
+                audio.Label.Foreground = new SolidColorBrush(Color.FromRgb(255, 112, 112)); ToolTip.SetTip(audio.Label, Loc.Get("mod_mantra_missing_tip"));
+                audio.PlayBtn.IsVisible = false; audio.ClearBtn.IsVisible = true;
             }
             else
             {
-                audio.Label.Text = audio.FileName;
-                audio.Label.FontStyle = FontStyle.Normal;
-                audio.Label.Foreground = Brushes.White;
-                ToolTip.SetTip(audio.Label, audio.SourcePath);
-                audio.PlayBtn.IsVisible = true;
-                audio.ClearBtn.IsVisible = true;
+                audio.Label.Text = audio.FileName; audio.Label.FontStyle = FontStyle.Normal; audio.Label.Foreground = Brushes.White;
+                ToolTip.SetTip(audio.Label, audio.SourcePath); audio.PlayBtn.IsVisible = true; audio.ClearBtn.IsVisible = true;
             }
         }
         private static void MantraLinkLoadedAudio(MantraAudioRef audio, string? fileName, string? companionAudioDir)
@@ -343,13 +294,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var full = companionAudioDir != null ? Path.Combine(companionAudioDir, fileName) : null;
             if (full != null && File.Exists(full))
             {
-                audio.SourcePath = full;
-                audio.Missing = false;
+                audio.SourcePath = full; audio.Missing = false;
             }
             else
             {
-                audio.SourcePath = null;
-                audio.Missing = true;
+                audio.SourcePath = null; audio.Missing = true;
             }
             UpdateMantraAudioUi(audio);
         }
@@ -362,9 +311,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private string MantraAutoFileName(string sourceText, string role, string ext)
         {
             if (string.IsNullOrWhiteSpace(ext)) ext = ".mp3";
-            var baseName = $"mantra_{MantraSlug(sourceText)}_{role}";
-            var name = baseName + ext;
-            var n = 2;
+            var baseName = $"mantra_{MantraSlug(sourceText)}_{role}"; var name = baseName + ext; var n = 2;
             while (MantraFileNameTaken(name))
                 name = $"{baseName}_{n++}{ext}";
             return name;
@@ -386,32 +333,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
         internal List<string> WriteMantrasTo(string resourcesDir)
         {
-            var set = new MantraSet();
-            var skipped = new List<string>();
-            var clipsToCopy = new List<MantraAudioRef>();
+            var set = new MantraSet(); var skipped = new List<string>(); var clipsToCopy = new List<MantraAudioRef>();
             var usedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var card in _mantraCards)
             {
-                var phrase = GetTextBoxValue(card.PhraseBox).Trim();
-                var prompt = GetTextBoxValue(card.PromptBox).Trim();
+                var phrase = GetTextBoxValue(card.PhraseBox).Trim(); var prompt = GetTextBoxValue(card.PromptBox).Trim();
                 var response = GetTextBoxValue(card.ResponseBox).Trim();
                 var hasAnything = phrase.Length > 0 || prompt.Length > 0 || response.Length > 0
                                   || card.PromptAudio.FileName != null || card.ResponseAudio.FileName != null;
                 if (!hasAnything) continue; // blank card, ignore silently
                 if (phrase.Length == 0)
                 {
-                    var label = prompt.Length > 0 ? $"\"{MantraTruncate(prompt, 40)}\"" : "(unnamed mantra)";
-                    skipped.Add($"{label} - no phrase set (the phrase is the recognition target and is required).");
+                    var label = prompt.Length > 0 ? $"\"{MantraTruncate(prompt, 40)}\"" : Loc.Get("mod_mantra_unnamed");
+                    skipped.Add(Loc.GetF("mod_mantra_no_phrase", label));
                     continue;
                 }
                 if (prompt.Length > 0 && !MantraPromptContainsPhrase(prompt, phrase))
                 {
-                    skipped.Add($"\"{MantraTruncate(phrase, 40)}\" - prompt text does not contain the phrase.");
+                    skipped.Add(Loc.GetF("mod_mantra_no_contain", $"\"{MantraTruncate(phrase, 40)}\""));
                     continue;
                 }
-                var id = !string.IsNullOrWhiteSpace(card.Id) ? card.Id : $"mantra_{MantraSlug(phrase)}";
-                var uniqueId = id;
-                var n = 2;
+                var id = !string.IsNullOrWhiteSpace(card.Id) ? card.Id : $"mantra_{MantraSlug(phrase)}"; var uniqueId = id; var n = 2;
                 while (!usedIds.Add(uniqueId))
                     uniqueId = $"{id}_{n++}";
                 set.Mantras.Add(new MantraEntry
@@ -460,8 +402,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal async Task LoadMantrasFrom(string resourcesDir)
         {
             ClearMantrasSection();
-            var audioDir = Path.Combine(resourcesDir, "sounds", "companion_audio");
-            var path = Path.Combine(audioDir, "mantras.json");
+            var audioDir = Path.Combine(resourcesDir, "sounds", "companion_audio"); var path = Path.Combine(audioDir, "mantras.json");
             if (!File.Exists(path)) return;
             MantraSet? set;
             try
@@ -471,7 +412,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex)
             {
                 Log.Warning(ex, "ModCreator: failed to parse mantras.json at {Path}", path);
-                await MessageDialog.ShowAsync(this, "Mantras - Load Warning", $"Could not parse mantras.json in this mod:\n{ex.Message}");
+                await MessageDialog.ShowAsync(this, Loc.Get("mod_mantra_load_title"), Loc.GetF("mod_mantra_load_error", ex.Message));
                 return;
             }
             if (set == null) return;
@@ -487,9 +428,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _mantraCards.Clear();
             _mantraRetryRows.Clear();
             _mantraTimeoutRows.Clear();
-            _mantraCardsPanel?.Children.Clear();
-            _mantraRetryPanel?.Children.Clear();
-            _mantraTimeoutPanel?.Children.Clear();
+            _mantraCardsPanel?.Children.Clear(); _mantraRetryPanel?.Children.Clear(); _mantraTimeoutPanel?.Children.Clear();
         }
     }
 }
