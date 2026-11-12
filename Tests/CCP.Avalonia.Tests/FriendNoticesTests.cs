@@ -161,14 +161,18 @@ public sealed class FriendNoticesTests
                 "x", SendKind.Invite, "f", "Friend", null, null, InviteDestination.Ramp, null, null,
                 DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(5))))))
         using (var ms = new MemoryStream()) { stream.CopyTo(ms); png = ms.ToArray(); }
-        KnockCard.FetchPicture = url =>
-        {
-            urls.Add(url);
-            return path?.Contains("broken") == true
-                ? Task.FromException<byte[]>(new IOException("unavailable")) : Task.FromResult(png);
-        };
+        var previousFetch = KnockCard.FetchPicture;
+        var previousAnchor = FriendsLanding.Anchor;
+        var settings = CoreSettings.Current;
+        var previousBell = settings.FriendNotificationsEnabled;
         try
         {
+            KnockCard.FetchPicture = url =>
+            {
+                urls.Add(url);
+                return path?.Contains("broken") == true
+                    ? Task.FromException<byte[]>(new IOException("unavailable")) : Task.FromResult(png);
+            };
             panel.Show();
             FriendsLanding.Anchor = () => panel;
             CoreSettings.Current.FriendNotificationsEnabled = true;
@@ -181,9 +185,48 @@ public sealed class FriendNoticesTests
             Assert.Equal(path?.StartsWith('/') == true ? 1 : 0, urls.Count);
             if (urls.Count > 0) Assert.Equal("https://codebambi-proxy.vercel.app" + path, urls[0]);
         }
-        finally { FriendNotices.CloseAll(); panel.Close(); }
+        finally
+        {
+            KnockCard.FetchPicture = previousFetch;
+            FriendsLanding.Anchor = previousAnchor;
+            settings.FriendNotificationsEnabled = previousBell;
+            FriendNotices.CloseAll();
+            panel.Close();
+        }
         return Task.CompletedTask;
     });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AvatarTestRestoresItsStateEvenWhenItFails(bool fail)
+    {
+        var previousFetch = KnockCard.FetchPicture;
+        var previousAnchor = FriendsLanding.Anchor;
+        var settings = CoreSettings.Current;
+        var previousBell = settings.FriendNotificationsEnabled;
+        Func<string, Task<byte[]>> fetch = _ => Task.FromResult(Array.Empty<byte>());
+        Func<Window?> anchor = () => null;
+        try
+        {
+            KnockCard.FetchPicture = fetch;
+            FriendsLanding.Anchor = anchor;
+            settings.FriendNotificationsEnabled = false;
+            if (fail)
+                await Assert.ThrowsAnyAsync<Xunit.Sdk.XunitException>(() => RequestNoticeUsesOnlyProxyPicturesAndKeepsInitials(null, true));
+            else
+                await RequestNoticeUsesOnlyProxyPicturesAndKeepsInitials(null, false);
+            Assert.Same(fetch, KnockCard.FetchPicture);
+            Assert.Same(anchor, FriendsLanding.Anchor);
+            Assert.False(settings.FriendNotificationsEnabled);
+        }
+        finally
+        {
+            KnockCard.FetchPicture = previousFetch;
+            FriendsLanding.Anchor = previousAnchor;
+            settings.FriendNotificationsEnabled = previousBell;
+        }
+    }
 
     // WPF FriendNotices.cs:283-325: a repeat keeps its time in the heading and accents the count.
     [Fact]
