@@ -102,6 +102,7 @@ public sealed partial class DeeperFollowupTests
     public Task AMediaHandoffBeforeTheShellOpensIsRoutedOnceItOpens() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
+        var savedPerformance = CoreSettings.Current.PerformanceMode;
         CoreSettings.Current.PerformanceMode = true;
         var shell = new MainShellWindow();
         var media = Path.Combine(TestUserDataProfile.Root, "early.mp3");
@@ -128,6 +129,7 @@ public sealed partial class DeeperFollowupTests
             foreach (var window in shell.OwnedWindows.ToArray()) window.Close();
             LauncherWindow.Instance?.Close();
             shell.Close();
+            CoreSettings.Current.PerformanceMode = savedPerformance;
         }
         return Task.CompletedTask;
     });
@@ -258,6 +260,7 @@ public sealed partial class DeeperFollowupTests
     public Task OpenErrorsShowWithThePanelHidden() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
+        var savedPerformance = CoreSettings.Current.PerformanceMode;
         CoreSettings.Current.PerformanceMode = true;
         var shell = new MainShellWindow();
         MessageDialog? shown = null;
@@ -275,7 +278,7 @@ public sealed partial class DeeperFollowupTests
             Assert.Equal(Loc.Get("deeper_open_editor_failed_title"), shown.Title);
             Assert.Contains("IOException: test detail", shown.FindControl<TextBlock>("TxtMessage")!.Text);
         }
-        finally { shown?.Close(); shell.Close(); }
+        finally { shown?.Close(); shell.Close(); CoreSettings.Current.PerformanceMode = savedPerformance; }
         return Task.CompletedTask;
     });
 
