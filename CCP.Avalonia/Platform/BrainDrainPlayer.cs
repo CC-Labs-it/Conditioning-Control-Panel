@@ -62,7 +62,7 @@ internal sealed class BrainDrainPlayer
         long generation;
         lock (_gate)
         {
-            if (!_running || _busy || CoreAudio.IsOutputSuppressed || _roll() >= BrainDrainAudioPolicy.Probability(CoreSettings.Current.BrainDrainIntensity, interval)) return;
+            if (!_running || _busy || _roll() >= BrainDrainAudioPolicy.Probability(CoreSettings.Current.BrainDrainIntensity, interval)) return;
             _busy = true; generation = ++_generation;
         }
         LibVlcAudio.IPreparedVoice? voice = null;
@@ -70,7 +70,13 @@ internal sealed class BrainDrainPlayer
         {
             var clips = BrainDrainAudioPolicy.Discover(BrainDrainAudioPolicy.AudioFolder, BrainDrainAudioPolicy.LegacyFolder);
             var path = clips.Length == 0 ? null : clips[Random.Shared.Next(clips.Length)];
-            if (path != null) voice = _prepare(path, () =>
+            lock (_gate)
+            {
+                if (!_running || generation != _generation) return;
+                // WPF BrainDrainService.cs:309-313: the trigger counts even if audio fails.
+                if (path != null) App.NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureBrainDrain);
+            }
+            if (path != null && !CoreAudio.IsOutputSuppressed) voice = _prepare(path, () =>
             {
                 lock (_gate) if (generation == _generation) { _voice = null; _busy = false; ++_generation; }
             });
@@ -88,11 +94,7 @@ internal sealed class BrainDrainPlayer
                 if (generation == _generation) _busy = _voice != null;
             }
             // WPF BrainDrainService.cs:405-411: only a clip that actually started enters Media Log.
-            if (started)
-            {
-                App.NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureBrainDrain);
-                App.MediaHistory?.RecordAudio(path);
-            }
+            if (started) App.MediaHistory?.RecordAudio(path);
         }
         catch { lock (_gate) if (generation == _generation) _busy = false; }
         finally { voice?.Dispose(); }
