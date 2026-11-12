@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -286,17 +288,28 @@ public sealed class EmiDeskSummonTests
     [InlineData(false)]
     public Task InterruptedWakeFinishesOnceAndLaterLinesEatPats(bool panic) => Muted(() => Task.FromResult(EmiMuteChoice.Keep), async _ =>
     {
-        // Freeze the existing chain timer seam: a loaded CI runner can spend more than the
-        // first shock frame's 160 ms dispatching a real pointer click.
-        var win = new EmiDeskWindow((_, _) => () => { });
+        // Step the chain timer so real pointer dispatch cannot race the 160 ms shock frame.
+        var clock = new ChainClock();
+        var win = new EmiDeskWindow(clock.Start);
         int completed = 0;
         try
         {
             win.RunSummon(() => completed++);
             await Pump(700);
             Assert.True(win.ChainLive);
+            Assert.Equal("wake", win.ChainPlayer.Current?.Id);
+            var wake = Assert.Single(clock.Scheduled);
+            Assert.Equal(TimeSpan.FromMilliseconds(500), wake.Hold);
             if (panic) win.StopChainForPanic(); else win.Say("x");
             Assert.Equal(1, completed);
+            Assert.True(wake.Cancelled);
+            var replacement = win.ChainPlayer.Current;
+            Assert.Equal(panic ? null : "say", replacement?.Id);
+            clock.Advance(wake.Hold); // the interrupted wake's original timer is now due
+            Assert.False(wake.Fired);
+            Assert.Same(replacement, win.ChainPlayer.Current);
+            Assert.Equal(1, completed);
+            Assert.Equal("0_0", win.Face); // neither interrupted wake nor its next frame resumed
             win.PlayChain("shock");
             await Pump(250); // dispatch may take longer than the first frame's hold
             var body = (Control)typeof(EmiDeskWindow).GetField("_bodyRoot",
@@ -306,13 +319,15 @@ public sealed class EmiDeskSummonTests
             win.MouseUp(point, global::Avalonia.Input.MouseButton.Left);
             Assert.Equal("o_o", win.Face);
             Assert.True(win.ChainLive);
-            win.ChainPlayer.ElapsePendingHold();
+            clock.Advance(TimeSpan.FromMilliseconds(160));
             Assert.Equal("0_0", win.Face);
-            win.ChainPlayer.ElapsePendingHold();
+            clock.Advance(TimeSpan.FromMilliseconds(160));
             Assert.Equal("(◉_◉)", win.Face);
-            win.ChainPlayer.ElapsePendingHold();
+            clock.Advance(TimeSpan.FromMilliseconds(900));
             Assert.False(win.ChainLive);
+            clock.Advance(TimeSpan.FromMilliseconds(2000));
             await Pump(2000);
+            Assert.False(wake.Fired);
             Assert.Equal(1, completed);
         }
         finally { win.ShutDown(); }
@@ -439,4 +454,38 @@ public sealed class EmiDeskSummonTests
         Assert.True(closed);
         return Task.CompletedTask;
     });
+    private sealed class ChainClock
+    {
+        internal sealed class Timer(TimeSpan due, TimeSpan hold, Action callback)
+        {
+            internal TimeSpan Due { get; } = due;
+            internal TimeSpan Hold { get; } = hold;
+            internal bool Cancelled { get; set; }
+            internal bool Fired { get; set; }
+            internal Action Callback { get; } = callback;
+        }
+
+        private TimeSpan _now;
+        internal List<Timer> Scheduled { get; } = new();
+        internal Action Start(TimeSpan hold, Action callback)
+        {
+            var timer = new Timer(_now + hold, hold, callback);
+            Scheduled.Add(timer);
+            return () => timer.Cancelled = true;
+        }
+
+        internal void Advance(TimeSpan elapsed)
+        {
+            var target = _now + elapsed;
+            while (Scheduled.Where(t => !t.Cancelled && !t.Fired && t.Due <= target)
+                       .OrderBy(t => t.Due).FirstOrDefault() is { } timer)
+            {
+                _now = timer.Due;
+                timer.Fired = true;
+                timer.Callback();
+            }
+            _now = target;
+        }
+    }
+
 }
