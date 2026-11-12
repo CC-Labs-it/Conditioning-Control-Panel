@@ -602,7 +602,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 _state.Shields++;
                 _state.PushEvent(Loc.Get("chaos_event_skip"));
-                ChaosAnnouncerOverlay.Announce("+1 RESISTANCE", ChaosAnnounceKind.Willpower, artKey: "resistance");
+                ChaosAnnouncerOverlay.Announce(Loc.Get("chaos_announce_resist"), ChaosAnnounceKind.Willpower, artKey: "resistance");
             }
             else
             {

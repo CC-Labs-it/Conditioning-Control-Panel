@@ -135,11 +135,7 @@ public class ChaosWaveDraftTests
     {
         try
         {
-            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = true, DraftAutoResumeSec = 0 });
-            var overlay = ChaosRunHost.Overlay!;
-            overlay.FinishCountdown();
-            ChaosRunHost.StopTimerForTests();
-            for (int i = 0; i < 80; i++) ChaosRunHost.Tick();
+            var overlay = BeginDraft();
             Assert.True(overlay.FindControl<Border>("DraftPanel")!.IsVisible);
             ChaosRunHost.RequestStop();
             Assert.True(overlay.FindControl<Border>("ResultsPanel")!.IsVisible);
@@ -167,6 +163,9 @@ public class ChaosWaveDraftTests
     public Task Only_picked_cards_advance_their_lessons(int pick, long draft, long surrender) => Run(() =>
     {
         var oldAudio = CoreAudio.PlayOneShotProvider;
+        var oldMod = CoreModArt.AudioOverridePathProvider;
+        var modCue = Path.GetTempFileName();   // WPF ChaosSfx.cs:69: the active mod wins
+        CoreModArt.AudioOverridePathProvider = rel => rel == "chaos/wave_clear.mp3" ? modCue : null;
         bool oldAnnouncer = CoreSettings.Current.ChaosAnnouncerEnabled;
         var cues = new System.Collections.Generic.List<string>();
         CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => cues.Add(Path.GetFileName(path));
@@ -175,21 +174,22 @@ public class ChaosWaveDraftTests
         {
             ChaosMeta.State.LessonsComplete.Add("silk_touch");
             var overlay = BeginDraft();
-            Assert.Contains("lvup.mp3", cues);
+            Assert.Contains(Path.GetFileName(modCue), cues);
+            Assert.DoesNotContain("lvup.mp3", cues);
             var boon = pick == 0 ? null : ChaosBoonPool.All.First(b => b.IsCurse == (pick == 2));
             var language = LocalizationManager.Instance.CurrentLanguage;
             try { LocalizationManager.Instance.SetLanguage("fr"); Choose(overlay, boon);
                 if (pick == 0) Assert.Contains("♥ refus : +1 résistance", ChaosRunHost.State!.RecentEvents); }
             finally { LocalizationManager.Instance.SetLanguage(language); }
             var announcement = ChaosAnnouncerOverlay.Active!.Current!;
-            Assert.Equal(pick == 0 ? "+1 RESISTANCE" : (pick == 2 ? "☠ " : "◈ ") + boon!.Name, announcement.Text);
+            Assert.Equal(pick == 0 ? "+1 RÉSISTANCE" : (pick == 2 ? "☠ " : "◈ ") + boon!.Name, announcement.Text);
             Assert.Equal(pick == 0 ? ChaosAnnounceKind.Willpower : pick == 2 ? ChaosAnnounceKind.Temptation : ChaosAnnounceKind.Mantra, announcement.Kind);
             Assert.Equal(pick == 0 ? "resistance" : boon!.Id, announcement.ArtKey);
             Assert.Equal(pick == 2, cues.Contains("sin_accept.mp3"));
             Assert.Equal(draft, ChaosLessons.Progress("draft4"));
             Assert.Equal(surrender, ChaosLessons.Progress("surrender"));
         }
-        finally { CoreAudio.PlayOneShotProvider = oldAudio; CoreSettings.Current.ChaosAnnouncerEnabled = oldAnnouncer; }
+        finally { CoreAudio.PlayOneShotProvider = oldAudio; CoreModArt.AudioOverridePathProvider = oldMod; File.Delete(modCue); CoreSettings.Current.ChaosAnnouncerEnabled = oldAnnouncer; }
     });
 
     [Fact]
@@ -288,7 +288,7 @@ public class ChaosWaveDraftTests
             foreach (var (code, _, _) in LocalizationManager.AvailableLanguages)
             {
                 var strings = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Localization", "Languages", code + ".json")));
-                foreach (var key in new[] { "chaos_event_reroll", "chaos_event_skip", "chaos_event_shower" }) Assert.False(string.IsNullOrWhiteSpace((string?)strings[key]));
+                foreach (var key in new[] { "chaos_event_reroll", "chaos_event_skip", "chaos_event_shower", "chaos_announce_resist" }) Assert.False(string.IsNullOrWhiteSpace((string?)strings[key]));
             }
             for (int i = 0; i < paths.Length; i++)
                 Assert.Equal(before[i], File.Exists(paths[i]) ? File.ReadAllBytes(paths[i]) : null);

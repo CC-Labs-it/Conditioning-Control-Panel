@@ -1,5 +1,5 @@
 {
-  "chaos_event_reroll": "🎲 nueva tirada", "chaos_event_skip": "♥ resististe: +1 resistencia", "chaos_event_shower": "lluvia de bienvenida: premios desde arriba",
+  "chaos_event_reroll": "🎲 nueva tirada", "chaos_event_skip": "♥ resististe: +1 resistencia", "chaos_event_shower": "lluvia de bienvenida: premios desde arriba", "chaos_announce_resist": "+1 RESISTENCIA",
   "scheduler_started_title": "Programación activa",
   "scheduler_started_body": "Sesión iniciada automáticamente según el horario.",
   "scheduler_ended_title": "Programación",
