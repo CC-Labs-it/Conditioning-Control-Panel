@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -154,6 +155,129 @@ public sealed class FrameClockTests
         }
         finally
         {
+            w.Close();
+        }
+        return Task.CompletedTask;
+    });
+
+    private static void EnsureApp()
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+    }
+
+    [Fact]
+    public Task ParkedSourceRequestsNoFramesBetweenBeatsAndResumesOnTheBeat() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var a = new Border();
+        var w = new Window { Width = 100, Height = 100, Content = a };
+        w.Show();
+        var clock = new FrameClock(a) { Interval = TimeSpan.FromMilliseconds(150) };
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            int ticks = 0;
+            clock.Tick += (_, _) => { ticks++; a.InvalidateVisual(); };
+            clock.Start();
+            var src = TopLevelFrameSource.For(w);
+            Pump();
+            Assert.Equal(1, ticks);
+            // Between beats the source waits on a one-shot timer, not on frames (a 360 Hz loop asked for every one).
+            Assert.True(src.IsParked, "a clock between beats must park");
+            Assert.False(src.IsRequesting, "a parked source must not hold a frame request");
+            for (int i = 0; i < 5; i++)
+            {
+                Pump();
+                Assert.False(src.IsRequesting, "a parked source asked for a frame between beats");
+            }
+            Assert.Equal(1, ticks);
+
+            // On the beat the timer asks for the frame again, not before it, and the clock ticks on that frame.
+            // The timer is armed for the beat (150 ms less the 4 ms gate slack, plus 1 ms), never for the next frame.
+            Assert.InRange(src.ParkTimer!.Interval.TotalMilliseconds, 140, 150);
+            Thread.Sleep(160);   // blocking: nothing else may bring a frame round meanwhile
+            Assert.False(src.IsRequesting);
+            // Headless MainLoop never fires DispatcherTimers, so fire the due one by hand (CompanionBarkHeadTests).
+            typeof(DispatcherTimer).GetMethod("Promote", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+                .Invoke(src.ParkTimer, null);
+            Dispatcher.UIThread.RunJobs();
+            // RunJobs may already render the requested frame when an earlier test left a render pass queued.
+            if (ticks == 1)
+            {
+                Assert.True(src.IsRequesting, "the park timer did not bring the next beat round");
+                Pump();
+            }
+            Assert.Equal(2, ticks);
+        }
+        finally
+        {
+            clock.Stop();
+            w.Close();
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ClockOnAHiddenDetachedOrMinimisedOwnerStopsTicking() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var a = new Border { Width = 10, Height = 10 };
+        var panel = new StackPanel { Children = { a } };
+        var w = new Window { Width = 100, Height = 100, Content = panel };
+        w.Show();
+        var clock = new FrameClock(a) { Interval = TimeSpan.FromMilliseconds(1) };   // never parks: only the gate stops it
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            int ticks = 0;
+            clock.Tick += (_, _) => { ticks++; a.InvalidateVisual(); };
+            clock.Start();
+            var src = TopLevelFrameSource.For(w);
+
+            void Stopped(string why)
+            {
+                for (int i = 0; i < 3; i++) Pump();
+                int at = ticks;
+                for (int i = 0; i < 3; i++) Pump();
+                Assert.Equal(at, ticks);
+                Assert.True(src.IsAsleep, $"{why}: the source still waits on frames");
+                Assert.False(src.IsRequesting, $"{why}: the source still holds a frame request");
+                Assert.True(clock.IsEnabled, $"{why}: the gate must not stop the clock itself");
+            }
+            void Ticking(string why)
+            {
+                int at = ticks;
+                for (int i = 0; i < 4; i++) Pump();
+                Assert.True(ticks > at, $"{why}: the clock did not resume");
+                Assert.False(src.IsAsleep);
+            }
+
+            Ticking("shown");
+            a.IsVisible = false;
+            Stopped("hidden");
+            a.IsVisible = true;
+            Ticking("shown again");
+
+            panel.IsVisible = false;   // a hidden tab: the ancestor, not the owner
+            Stopped("ancestor hidden");
+            panel.IsVisible = true;
+            Ticking("ancestor shown");
+
+            panel.Children.Remove(a);
+            Stopped("detached");
+            panel.Children.Add(a);
+            Ticking("attached again");
+
+            w.WindowState = WindowState.Minimized;
+            Stopped("minimised");
+            w.WindowState = WindowState.Normal;
+            Ticking("restored");
+        }
+        finally
+        {
+            clock.Stop();
             w.Close();
         }
         return Task.CompletedTask;

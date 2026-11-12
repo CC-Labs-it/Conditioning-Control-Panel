@@ -19,6 +19,11 @@ namespace ConditioningControlPanel.Motion
 
         public TimeSpan Interval { get; set; } = TimeSpan.FromMilliseconds(33);
 
+        /// <summary>The earliest frame time that can tick next (<see cref="TimeSpan.MinValue"/> before the first tick).</summary>
+        public TimeSpan NextDue => _lastTick == TimeSpan.MinValue
+            ? TimeSpan.MinValue
+            : _lastTick + Interval - TimeSpan.FromMilliseconds(SlackMs);
+
         public void Reset()
         {
             _lastTick = TimeSpan.MinValue;

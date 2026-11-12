@@ -97,6 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Fx
         private void OnFrame(TimeSpan now)
         {
             if (!IsEnabled) return;
+            if (_source is TopLevelFrameSource src && src.Gated(this)) return;
             bool due = _source is TopLevelFrameSource top ? top.BeatDue(_gate, now) : _gate.Due(now);
             if (!due) return;
             Tick?.Invoke(this, EventArgs.Empty);
@@ -152,13 +153,61 @@ namespace ConditioningControlPanel.Avalonia.Controls.Fx
             if (_subs.Remove(onFrame)) _snapshot = _subs.ToArray();
         }
 
+        /// <summary>Frames requested by every window's clocks since start (PerfBench idle rate, tests).</summary>
+        internal static long FrameRequests;
+
         private void Request()
         {
+            _park?.Stop();
+            Wake(false);
             if (_requested || _subs.Count == 0) return;
             if (!_top.TryGetTarget(out var top)) return;
             _requested = true;
+            System.Threading.Interlocked.Increment(ref FrameRequests);
             top.RequestAnimationFrame(_callback);
         }
+
+        /// <summary>True when <paramref name="clock"/>'s owner draws nothing on this window: detached or moved off it,
+        /// hidden (itself or any ancestor: a hidden tab or page), or the window minimised. Such a clock skips its
+        /// ticks and asks for no frames, the way <c>BeatLoop.Parked</c> does for the ambient loops.</summary>
+        internal bool Gated(FrameClock clock) =>
+            clock.Owner is { } o && _top.TryGetTarget(out var top)
+            && (TopLevel.GetTopLevel(o) != top || !o.IsEffectivelyVisible
+                || top is Window { WindowState: WindowState.Minimized });
+
+        private bool _asleep;
+
+        // Every listener is gated: nothing to draw, so no frames and no timer. Whatever ungates a clock (a show,
+        // an attach, a tab switch) runs a layout pass, and a restore changes WindowState; either wakes the source.
+        private void Sleep(TopLevel top)
+        {
+            if (_asleep) return;
+            _asleep = true;
+            top.LayoutUpdated += OnWake;
+            top.PropertyChanged += OnTopChanged;
+        }
+
+        private void OnWake(object? sender, EventArgs e) => Wake(true);
+
+        private void OnTopChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+        {
+            if (e.Property == Window.WindowStateProperty || e.Property == Visual.IsVisibleProperty) Wake(true);
+        }
+
+        private void Wake(bool request)
+        {
+            if (!_asleep) return;
+            _asleep = false;
+            if (_top.TryGetTarget(out var top))
+            {
+                top.LayoutUpdated -= OnWake;
+                top.PropertyChanged -= OnTopChanged;
+            }
+            if (request) Request();
+        }
+
+        /// <summary>True while every listener is gated and the source waits for a show or restore (tests).</summary>
+        internal bool IsAsleep => _asleep;
 
         // ---- the shared beat (Home lag, 2026-10-09) -------------------------------------------
         //
@@ -197,7 +246,54 @@ namespace ConditioningControlPanel.Avalonia.Controls.Fx
             // the next pulse and its animation timer (or the compositor) brings that pulse round.
             // Posting the re-arm instead schedules an immediate render op and spins the dispatcher.
             _requested = false;
-            Request();
+            var wait = UntilNextBeat(now);
+            if (wait <= TimeSpan.Zero) { Request(); return; }
+            if (wait == TimeSpan.MaxValue)
+            {
+                if (_subs.Count > 0 && _top.TryGetTarget(out var top)) Sleep(top);
+                return;
+            }
+            // Nothing is due before the next beat: park instead of asking for every frame in between.
+            // Avalonia's X11 loop runs at the FASTEST monitor's refresh (360 Hz on the owner's PC), so 30 fps
+            // clocks re-arming each frame kept it at 360 ticks/s for 30 useful ones (real-app-perf 2026-11-11).
+            // WPF's DesiredFrameRate throttles its render loop the same way. An idle loop restarts on request,
+            // so the frame lands right at the beat.
+            if (_park == null)
+            {
+                _park = new DispatcherTimer(DispatcherPriority.Render);
+                _park.Tick += (_, _) => Request();
+            }
+            _park.Interval = wait;
+            _park.Start();
+        }
+
+        private DispatcherTimer? _park;
+
+        /// <summary>True while the source waits on a timer for the next beat instead of a frame (tests).</summary>
+        internal bool IsParked => _park?.IsEnabled == true;
+
+        /// <summary>The one-shot timer a parked source waits on (tests).</summary>
+        internal DispatcherTimer? ParkTimer => _park;
+
+        /// <summary>How long after <paramref name="now"/> the first listener can tick; zero when one may tick on
+        /// the very next frame (a raw subscriber, a clock that never ticked, or a beat within 2 ms);
+        /// <see cref="TimeSpan.MaxValue"/> when every listener is gated.</summary>
+        internal TimeSpan UntilNextBeat(TimeSpan now)
+        {
+            var due = TimeSpan.MaxValue;
+            foreach (var s in _snapshot)
+            {
+                if (s.Target is not FrameClock c) return TimeSpan.Zero;
+                if (!c.IsEnabled || Gated(c)) continue;
+                if (!_beats.TryGetValue((long)Math.Round(c.Interval.TotalMilliseconds), out var beat)) return TimeSpan.Zero;
+                var next = beat.Gate.NextDue;
+                if (next == TimeSpan.MinValue) return TimeSpan.Zero;
+                if (next < due) due = next;
+            }
+            if (due == TimeSpan.MaxValue) return due;
+            // +1 ms so a timer that fires a hair early does not bring a frame that is not due yet.
+            var wait = due - now + TimeSpan.FromMilliseconds(1);
+            return wait > TimeSpan.FromMilliseconds(2) ? wait : TimeSpan.Zero;
         }
     }
 
