@@ -34,16 +34,48 @@ public sealed class LeashPageTests
             if (Application.Current is null)
                 global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-            LeashGateCardTests.Run(punished, (shell, launcher, svc) =>
+            var previousSelfCut = LeashOfferSurfaces.SelfCut;
+            try
             {
-                try { body(shell, launcher, svc); }
-                // Unhook the shell's pop-up queue first, so closing the overlay does not open the next waiting ask.
-                finally { shell.OfferSurfaces?.Dispose(); LeashAskWindow.CloseCurrent(); }
-            });
+                LeashGateCardTests.Run(punished, (shell, launcher, svc) =>
+                {
+                    try { body(shell, launcher, svc); }
+                    // Unhook the shell's pop-up queue first, so closing the overlay does not open the next waiting ask.
+                    finally { shell.OfferSurfaces?.Dispose(); LeashAskWindow.CloseCurrent(); }
+                });
+            }
+            finally { LeashOfferSurfaces.SelfCut = previousSelfCut; }
         });
 
     private static Button Find(Control page, string tag) =>
         page.GetLogicalDescendants().OfType<Button>().Single(b => b.Tag as string == tag);
+
+    [Fact]
+    public void FixtureRestoresSelfCutAfterCutAndAfterAnException() =>
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            var previous = LeashOfferSurfaces.SelfCut;
+            try
+            {
+                LeashOfferSurfaces.SelfCut = false;
+                Run(true, (shell, _, _) =>
+                {
+                    shell.ShowTab("leash");
+                    var page = shell.Named<LeashTabView>("LeashTab")!;
+                    LeashGateCardTests.Click(Find(page, "leash-cut"));
+                    Assert.True(LeashOfferSurfaces.SelfCut);
+                });
+                Assert.False(LeashOfferSurfaces.SelfCut);
+                LeashOfferSurfaces.SelfCut = true;
+                Assert.Throws<InvalidOperationException>(() => Run(false, (_, _, _) =>
+                {
+                    LeashOfferSurfaces.SelfCut = false;
+                    throw new InvalidOperationException("test cleanup");
+                }));
+                Assert.True(LeashOfferSurfaces.SelfCut);
+            }
+            finally { LeashOfferSurfaces.SelfCut = previous; }
+        });
 
     [Fact]
     public void LiveLeashShowsTheOwnCardAndCutReturnsToTheEmptyState() =>
