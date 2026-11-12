@@ -1,6 +1,7 @@
 """Exercise coverage-job retry routing and its real shell gate, without GitHub/network access."""
 from pathlib import Path
 import re
+import os
 import subprocess
 import tempfile
 import textwrap
@@ -73,6 +74,66 @@ class CoverageJobTests(unittest.TestCase):
 
     def test_mismatched_total_fails(self):
         self.assertNotEqual(0, self.run_gate([20, 20, 19, 20, 20]).returncode)
+
+
+class AptRetryTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        job = WORKFLOW.read_text().split("  avalonia-linux:\n", 1)[1].split("  avalonia-windows:\n", 1)[0]
+        step = job.split("      - name: Install LibVLC with refreshed package indexes\n", 1)[1]
+        cls.command = textwrap.dedent(step.split("        run: |\n", 1)[1].split("\n      - ", 1)[0])
+
+    def run_install(self, updates, installs):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root)
+            sudo = path / "sudo"
+            sudo.write_text(r"""#!/usr/bin/env python3
+import os, pathlib, sys
+root = pathlib.Path(os.environ['FAKE_ROOT'])
+kind = 'update' if 'update' in sys.argv else 'install'
+log = root / 'calls'
+with log.open('a') as out: out.write(kind + ' ' + ' '.join(sys.argv[1:]) + '\n')
+count = root / kind
+n = int(count.read_text()) if count.exists() else 0
+count.write_text(str(n + 1))
+values = os.environ['FAKE_' + kind.upper()].split(',')
+sys.exit(int(values[min(n, len(values) - 1)]))
+""")
+            sudo.chmod(0o755)
+            sleep = path / "sleep"
+            sleep.write_text("#!/bin/sh\nexit 0\n")
+            sleep.chmod(0o755)
+            env = dict(os.environ, PATH=str(path) + os.pathsep + os.environ["PATH"],
+                       FAKE_ROOT=root, FAKE_UPDATE=updates, FAKE_INSTALL=installs)
+            result = subprocess.run(["bash", "-e", "-c", self.command], env=env, capture_output=True, text=True)
+            calls = (path / "calls").read_text().splitlines()
+            return result, calls
+
+    def test_stale_index_install_failure_refreshes_before_retry(self):
+        result, calls = self.run_install("0,0", "100,0")
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual(["update", "install", "update", "install"],
+                         ["update" if " update" in c else "install" for c in calls])
+        self.assertIn("APT::Update::Error-Mode=any", calls[0])
+        self.assertIn("libvlc-dev vlc-plugin-base", calls[1])
+
+    def test_update_failure_never_installs_from_stale_indexes(self):
+        result, calls = self.run_install("1,0", "0")
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual(["update", "update", "install"],
+                         ["update" if " update" in c else "install" for c in calls])
+
+    def test_persistent_update_failure_never_installs(self):
+        result, calls = self.run_install("1", "0")
+        self.assertNotEqual(0, result.returncode)
+        self.assertEqual(3, len(calls))
+        self.assertTrue(all(" update" in c for c in calls))
+
+    def test_exhausted_retries_fail(self):
+        result, calls = self.run_install("0", "100")
+        self.assertNotEqual(0, result.returncode)
+        self.assertEqual(6, len(calls))
+        self.assertIn("failed after 3 attempts", result.stdout)
 
 
 if __name__ == "__main__":

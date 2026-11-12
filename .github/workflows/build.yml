@@ -444,7 +444,16 @@ jobs:
           key: vosk-model-small-en-us-0.15-30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498
       - run: bash .github/scripts/fetch-vosk-model.sh
       # LibVLC tests use the system libvlc, like --smoke in core-linux.
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libvlc-dev vlc-plugin-base
+      - name: Install LibVLC with refreshed package indexes
+        run: |
+          for attempt in 1 2 3; do
+            if sudo apt-get -o APT::Update::Error-Mode=any update && sudo apt-get install -y --no-install-recommends libvlc-dev vlc-plugin-base; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then sleep 10; fi
+          done
+          echo "::error::LibVLC package installation failed after 3 attempts"
+          exit 1
       - run: dotnet build Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release
       - name: Test Avalonia notification suite (shard ${{ matrix.shard }})
         run: bash .github/scripts/avalonia-tests-sharded.sh --shard ${{ matrix.shard }}
