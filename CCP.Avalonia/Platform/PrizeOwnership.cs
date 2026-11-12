@@ -41,8 +41,12 @@ internal static class PrizeOwnership
         };
         BackRoomApi.DefaultApplyPrizes = ApplySnapshot;
     }
-    // Queue after Feed.Apply so the Rain clamp sees the receipt’s ownership snapshot.
-    internal static void SyncReceipt(string account) => Post(() => RainLookSyncHead.OnAccountReady(account));
+    // Run after Feed.Apply: an absent snapshot must not clamp a shop look against unknown ownership.
+    internal static void SyncReceipt(string account) => Post(() =>
+    {
+        if (string.Equals(CoreAccount.UnifiedUserId, account, StringComparison.Ordinal) && KnownGrants() != null)
+            RainLookSyncHead.OnAccountReady(account);
+    });
 
     private static volatile bool _shutdown;
     private static void Raise(Action work)
