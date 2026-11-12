@@ -131,7 +131,8 @@ public class EdgeParticlesTests
             Assert.Equal(Colors.SkyBlue, strip.FogPaint.Tint);   // a running strip fades, it does not swap
             var seen = new System.Collections.Generic.HashSet<Color>();
             var gold = (Colors.Gold, (float)EdgeParticles.FogGain(Colors.Gold));
-            await LifecycleTestPump.UntilAsync(() => seen.Add(strip.FogPaint.Tint) | strip.FogPaint == gold, "The fade never landed.");
+            // Record every colour on the way, but only stop once the fade has landed on gold.
+            await LifecycleTestPump.UntilAsync(() => { seen.Add(strip.FogPaint.Tint); return strip.FogPaint == gold; }, "The fade never landed.");
             Assert.Contains(seen, c => c != Colors.SkyBlue && c != Colors.Gold);
         }
         finally { w?.Close(); (s.MotionLevel, s.PerformanceMode, s.AutoPerformanceMode) = (motion, perf, auto); }
