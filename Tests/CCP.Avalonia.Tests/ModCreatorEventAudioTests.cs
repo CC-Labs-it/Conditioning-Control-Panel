@@ -5,6 +5,8 @@ using System.Reflection;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Platform.Storage;
+using System.IO.Enumeration;
 using Avalonia.LogicalTree;
 using Avalonia.Automation;
 using Avalonia.Interactivity;
@@ -18,6 +20,7 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
+[Collection(RunsAloneCollection.Name)]
 public sealed class ModCreatorEventAudioTests
 {
     [Fact]
@@ -139,6 +142,39 @@ public sealed class ModCreatorEventAudioTests
             finally { w.Close(); Dispatcher.UIThread.RunJobs(); }
         }
         finally { loc.SetLanguage(previous); Directory.Delete(root, true); }
+    });
+
+    [Fact]
+    public void AttachPickerOffersEveryMp3CaseAndAttachesMixedCaseFile() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current == null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var root = Path.Combine(Path.GetTempPath(), "ccp-event-pick-" + Guid.NewGuid()); Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "clip.Mp3"); File.WriteAllText(path, "audio");
+        var file = DispatchProxy.Create<IStorageFile, NewEnhancementSourceTests.ItemProxy>();
+        ((NewEnhancementSourceTests.ItemProxy)(object)file).PathValue = new Uri(path);
+        var provider = DispatchProxy.Create<IStorageProvider, NewEnhancementSourceTests.PickerProxy>();
+        var picker = (NewEnhancementSourceTests.PickerProxy)(object)provider; picker.Result = file;
+        using var scope = NewEnhancementSourceTests.BindStorageProvider(new NewEnhancementSourceTests.Factory(provider));
+        var w = new ModCreatorWindow(); w.Show();
+        try
+        {
+            w.GetLogicalDescendants().OfType<Button>().Single(b => Equals(b.Content, Loc.Get("mod_event_add")))
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var panel = (StackPanel)typeof(ModCreatorWindow).GetField("_eventAudioRowsPanel", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(w)!;
+            panel.GetLogicalDescendants().OfType<TextBox>().Single().Text = "Chosen phrase";
+            panel.GetLogicalDescendants().OfType<Button>().Single(b => Equals(b.Content, Loc.Get("mod_event_attach")))
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            var patterns = Assert.IsType<FilePickerOpenOptions>(picker.Options).FileTypeFilter!.Single().Patterns!;
+            foreach (var name in new[] { "x.mp3", "x.mP3", "x.Mp3", "x.MP3" })
+                Assert.Contains(patterns, pattern => FileSystemName.MatchesSimpleExpression(pattern, name, ignoreCase: false));
+            Assert.DoesNotContain(patterns, pattern => FileSystemName.MatchesSimpleExpression(pattern, "x.wav", ignoreCase: false));
+            var output = Path.Combine(root, "out"); w.WriteEventAudioTo(output);
+            Assert.Equal("audio", File.ReadAllText(Path.Combine(output, "sounds", "event_audio", "chosen phrase.mp3")));
+        }
+        finally { w.Close(); Dispatcher.UIThread.RunJobs(); Directory.Delete(root, true); }
     });
 
 }

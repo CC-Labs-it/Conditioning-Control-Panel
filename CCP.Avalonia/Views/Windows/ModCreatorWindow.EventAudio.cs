@@ -184,7 +184,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (filePath != null) ShowFile(filePath);
             attachBtn.Click += async (_, _) =>
             {
-                var files = await PickFilesAsync(Loc.Get("mod_event_pick"), new[] { "*.mp3", "*.MP3" }, multiple: false);
+                var files = await PickFilesAsync(Loc.Get("mod_event_pick"), new[] { "*.mp3", "*.mP3", "*.Mp3", "*.MP3" }, multiple: false);
                 if (files.Count == 0) return;
                 ShowFile(files[0]);
                 UpdateStatusBar();
