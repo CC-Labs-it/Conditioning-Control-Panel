@@ -211,7 +211,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             catch (Exception ex)
             {
                 Log.Error(ex, "BtnStartIntake_Click failed");
-                Windows.IntakeHostWindow.ShowWarning(owner, "Couldn't start Graded Intake:\n\n" + ex.Message);
+                Windows.IntakeHostWindow.ShowWarning(owner, Loc.GetF("intake_launch_failed_body", ex.Message));
             }
         }
 

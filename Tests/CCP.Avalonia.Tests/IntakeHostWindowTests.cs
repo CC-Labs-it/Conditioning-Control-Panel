@@ -11,6 +11,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
@@ -20,12 +21,16 @@ namespace CCP.Avalonia.Tests;
 /// intake (a parsed quiz-result) and by nothing else (WPF IntakeHostService.OnQuizResult).</summary>
 public sealed class IntakeHostWindowTests
 {
-    [Fact]
-    public async Task BootErrorClosesThenWarnsOnce()
+    [Theory]
+    [InlineData("en", "Graded Intake could not start on this machine.\n\npage failed")]
+    [InlineData("de", "Graded Intake konnte auf diesem Rechner nicht gestartet werden.\n\npage failed")]
+    public async Task BootErrorClosesThenWarnsOnce(string language, string expected)
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             var previous = IntakeHostWindow.ShowWarning;
+            var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
+            LocalizationManager.Instance.SetLanguage(language);
             var host = new IntakeHostWindow();
             var calls = 0;
             try
@@ -35,23 +40,27 @@ public sealed class IntakeHostWindowTests
                 {
                     calls++;
                     Assert.Empty(IntakeHostWindow.Snapshot());
-                    Assert.Equal("Graded Intake could not start on this machine.\n\npage failed", message);
+                    Assert.Equal(expected, message);
                 };
                 host.HandleMessage("{\"type\":\"boot-error\",\"msg\":\"page failed\"}");
                 Assert.Equal(1, calls);
             }
-            finally { host.Close(); IntakeHostWindow.ShowWarning = previous; }
+            finally { host.Close(); IntakeHostWindow.ShowWarning = previous; LocalizationManager.Instance.SetLanguage(oldLanguage); }
             return Task.CompletedTask;
         });
     }
 
-    [Fact]
-    public async Task LaunchFailureClosesAndWarnsOnce()
+    [Theory]
+    [InlineData("en", "Couldn't start Graded Intake:\n\nshow failed")]
+    [InlineData("de", "Graded Intake konnte nicht gestartet werden:\n\nshow failed")]
+    public async Task LaunchFailureClosesAndWarnsOnce(string language, string expected)
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             var previous = IntakeHostWindow.ShowWarning;
             var load = GradedIntakeTabView.LoadAndShowIntake;
+            var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
+            LocalizationManager.Instance.SetLanguage(language);
             var calls = 0;
             try
             {
@@ -59,14 +68,14 @@ public sealed class IntakeHostWindowTests
                 {
                     calls++;
                     Assert.Empty(IntakeHostWindow.Snapshot());
-                    Assert.Equal("Couldn't start Graded Intake:\n\nshow failed", message);
+                    Assert.Equal(expected, message);
                 };
                 GradedIntakeTabView.LoadAndShowIntake = host => { host.Show(); throw new InvalidOperationException("show failed"); };
                 GradedIntakeTabView.LaunchIntake(null, false);
                 Assert.Equal(1, calls);
                 Assert.Empty(IntakeHostWindow.Snapshot());
             }
-            finally { IntakeHostWindow.ShowWarning = previous; GradedIntakeTabView.LoadAndShowIntake = load; }
+            finally { IntakeHostWindow.ShowWarning = previous; GradedIntakeTabView.LoadAndShowIntake = load; LocalizationManager.Instance.SetLanguage(oldLanguage); }
             return Task.CompletedTask;
         });
     }

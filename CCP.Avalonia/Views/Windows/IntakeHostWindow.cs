@@ -4,6 +4,7 @@ using System.Linq;
 using Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Localization;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Services;
@@ -125,7 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 case "boot-error":
                     Log.Warning("IntakeHost: page boot-error: {Msg}", (string?)o["msg"]);
                     Close();
-                    ShowWarning(WarningOwner, $"Graded Intake could not start on this machine.\n\n{(string?)o["msg"]}");
+                    ShowWarning(WarningOwner, Loc.GetF("arcademy_boot_error_body", "Graded Intake", (string?)o["msg"] ?? ""));
                     break;
                 case "exit":   // page-initiated wind-down: its own exit-done, or the watchdog
                     ReportWalkOutIfUnfinished();
