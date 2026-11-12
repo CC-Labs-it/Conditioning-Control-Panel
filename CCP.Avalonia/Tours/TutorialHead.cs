@@ -156,6 +156,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
         /// <summary>Panic: a tour ends at once, by the abandon route (never latched as walked).</summary>
         internal static void OnPanic()
         {
+            try { TutorialOverlay.ShutdownStages(); } catch { /* panic never throws */ }
             try { if (Service.IsActive) Service.Skip(); } catch { /* panic never throws */ }
         }
 

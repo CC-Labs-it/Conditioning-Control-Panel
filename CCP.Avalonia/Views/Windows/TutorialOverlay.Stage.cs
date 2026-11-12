@@ -33,7 +33,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private Control? _stage;                 // RootGrid once it lives in a window's OverlayLayer
         private OverlayLayer? _layer;
         private IDisposable? _layerBoundsSub;
+        private IDisposable? _fadeTimer;
         private bool _tornDown;
+        private static readonly System.Collections.Generic.HashSet<TutorialOverlay> LiveStages = new();
 
         /// <summary>The tour's card left the screen (finished, skipped, panic, host closed). Hides
         /// Window.Closed: a live overlay is never a shown window, so the base event would never fire.</summary>
@@ -62,6 +64,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Close();
                 return;
             }
+            LiveStages.Add(this);
             _stage!.Transitions = new Transitions
             {
                 new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(300) }
@@ -78,9 +81,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Teardown();
         }
 
-        private void Teardown()
+        internal static void ShutdownStages()
         {
+            foreach (var overlay in LiveStages.ToArray()) overlay.Close();
+        }
+
+        private void FadeOut()
+        {
+            if (!_live || _stage == null || _layer == null) { Close(); return; }
             if (_tornDown) return;
+            Teardown(fade: true);
+        }
+
+        private void Teardown(bool fade = false)
+        {
+            if (_tornDown) { Detach(); LiveStages.Remove(this); return; }
             _tornDown = true;
             _closed = true;
             try { _spotlightDelayTimer?.Stop(); } catch { /* already stopped */ }
@@ -89,9 +104,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             CoreTutorial.StepChanged -= OnSeamStepChanged;
             CoreTutorialEvents.Event -= OnTutorialEvent;
             CoreTutorial.Finished -= OnSeamFinished;
-            Detach();
+            if (fade && _stage != null)
+            {
+                _stage.IsHitTestVisible = false;
+                _stage.Transitions = new Transitions
+                {
+                    new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(200) }
+                };
+                _stage.Opacity = 0;
+                _fadeTimer = DispatcherTimer.RunOnce(() => { Detach(); LiveStages.Remove(this); }, TimeSpan.FromMilliseconds(200));
+            }
+            else { Detach(); LiveStages.Remove(this); }
             // The host window closing must not strand a running tour (WPF OnClosed does the same).
-            if (CoreTutorial.IsActive) CoreTutorial.Skip();
+            if (!fade && CoreTutorial.IsActive) CoreTutorial.Skip();
             base.Close(); // dispose the never-shown Window platform implementation too
             try { Closed?.Invoke(this, EventArgs.Empty); } catch { /* a subscriber's fault is not the tour's */ }
         }
@@ -120,6 +145,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void Detach()
         {
+            _fadeTimer?.Dispose();
+            _fadeTimer = null;
             try { _layerBoundsSub?.Dispose(); } catch { }
             _layerBoundsSub = null;
             if (_targetWindow != null)
@@ -158,19 +185,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void OnStageWindowClosed(object? sender, EventArgs e)
         {
-            // Scripted host swaps may close the old dialog before opening the next one.
-            Dispatcher.UIThread.Post(() =>
-            {
-                if (_tornDown || !ReferenceEquals(sender, _targetWindow)) return;
-                // WPF TutorialOverlay.xaml.cs:264-282: any named target window (current or next) means a
-                // scripted cross-window jump is pending, so the tour waits for WindowLoaded/Next to retarget.
-                if (!string.IsNullOrEmpty(CoreTutorial.CurrentStep?.TargetWindowTypeName)) return;
-                var service = TutorialHead.Service;
-                var nextIndex = service.CurrentStepIndex + 1;
-                if (nextIndex < service.CurrentSteps.Count
-                    && !string.IsNullOrEmpty(service.CurrentSteps[nextIndex].TargetWindowTypeName)) return;
-                Teardown();
-            }, DispatcherPriority.Background);
+            if (_tornDown) { Detach(); LiveStages.Remove(this); return; }
+            if (!ReferenceEquals(sender, _targetWindow)) return;
+            // Named current or next windows signal a scripted cross-window jump.
+            if (!string.IsNullOrEmpty(CoreTutorial.CurrentStep?.TargetWindowTypeName)) return;
+            var service = TutorialHead.Service;
+            var nextIndex = service.CurrentStepIndex + 1;
+            if (nextIndex < service.CurrentSteps.Count
+                && !string.IsNullOrEmpty(service.CurrentSteps[nextIndex].TargetWindowTypeName)) return;
+            Teardown();
         }
 
         // WPF TutorialOverlay.OnKeyDown: Escape abandons the tour. Tunnelled on the HOST window, since

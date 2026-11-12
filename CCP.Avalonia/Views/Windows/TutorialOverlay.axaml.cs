@@ -26,7 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///
     /// Adapted from WPF's TutorialOverlay: card, spotlight and automatic advance subscriptions.
     /// Live cards use the host overlay layer, including a real spotlight input hole. Narration,
-    /// the exit fade and monitor-wide dim remain to be ported. The parameterless constructor renders a
+    /// the monitor-wide dim remains to be ported. The parameterless constructor renders a
     /// sample and never subscribes to the live tour.
     /// </summary>
     public partial class TutorialOverlay : Window
@@ -181,13 +181,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             else Dispatcher.UIThread.Post(() => UpdateStep(step));
         }
 
-        /// <summary>The tour ended, by any route. The overlay goes with it — WPF fades out over
-        /// 200ms and closes; the fade is dropped here for the reason in the header.</summary>
+        /// <summary>Fade the finished tour before removing its stage.</summary>
         private void OnSeamFinished(object? sender, bool completed)
         {
             _ = completed;
-            if (Dispatcher.UIThread.CheckAccess()) Close();
-            else Dispatcher.UIThread.Post(Close);
+            if (Dispatcher.UIThread.CheckAccess()) FadeOut();
+            else Dispatcher.UIThread.Post(FadeOut);
         }
 
         protected override void OnClosed(EventArgs e)
@@ -209,7 +208,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // every "not while a tutorial is up" gate in the app for the rest of the session.
                 // Skip never latches the tour as completed, and the head guards re-entry, so the
                 // ordinary close-after-Finished path lands on a no-op.
-                if (CoreTutorial.IsActive) CoreTutorial.Skip();
+                if (!_tornDown && CoreTutorial.IsActive) CoreTutorial.Skip();
             }
 
             base.OnClosed(e);
