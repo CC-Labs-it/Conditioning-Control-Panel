@@ -64,6 +64,11 @@ public class DeeperPlayerWindowStateTests
             w.Close(); w = null;
             Assert.Equal(200, settings.DeeperPlayerWindowLeft);
             Assert.Equal(120, settings.DeeperPlayerWindowTop);
+            Assert.Equal(300, settings.DeeperPlayerWindowPixelLeft);
+            Assert.Equal(180, settings.DeeperPlayerWindowPixelTop);
+            w = new EnhancementPlayerWindow(null, null);
+            w.Show();
+            Assert.Equal(new PixelPoint(300, 180), w.Position);
         }
         finally { w?.Close(); EnhancementPlayerWindow.WindowStateScaleOverride = null; }
         return Task.CompletedTask;
@@ -92,6 +97,23 @@ public class DeeperPlayerWindowStateTests
         Assert.False(EnhancementPlayerWindow.TryRestorePosition(-3000, 100, 700, 550, screens, out _));
         // Only 199 DIPs of the window reach the scaled monitor.
         Assert.False(EnhancementPlayerWindow.TryRestorePosition(-2101, 100, 700, 550, screens, out _));
+    }
+
+    [Fact]
+    public void PhysicalPositionWinsWhenMixedDpiCandidatesOverlap()
+    {
+        var screens = new[] { (new PixelRect(0, 0, 1920, 1080), 1.0),
+            (new PixelRect(1920, 0, 2880, 1620), 1.5) };
+        // Legacy WPF settings still use the existing largest-visible-area fallback.
+        Assert.True(EnhancementPlayerWindow.TryRestorePosition(1500, 100, 700, 550, screens, out var fallback));
+        Assert.Equal(new PixelPoint(2250, 150), fallback);
+        Assert.True(EnhancementPlayerWindow.TryRestorePosition(1500, 100, 700, 550, screens, out var restored,
+            new PixelPoint(1500, 100)));
+        Assert.Equal(new PixelPoint(1500, 100), restored);
+        // A stale hint for a removed display must not put the window off screen.
+        Assert.True(EnhancementPlayerWindow.TryRestorePosition(1500, 100, 700, 550, screens, out restored,
+            new PixelPoint(-10000, 100)));
+        Assert.Equal(fallback, restored);
     }
 
     [Theory]

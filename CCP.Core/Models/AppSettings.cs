@@ -10120,7 +10120,7 @@ namespace ConditioningControlPanel.Models
         public double DeeperPlayerWindowLeft
         {
             get => _deeperPlayerWindowLeft;
-            set { _deeperPlayerWindowLeft = value; OnPropertyChanged(); }
+            set { _deeperPlayerWindowLeft = value; DeeperPlayerWindowPixelLeft = DeeperPlayerWindowPixelTop = null; OnPropertyChanged(); }
         }
 
         private double _deeperPlayerWindowTop;
@@ -10128,7 +10128,7 @@ namespace ConditioningControlPanel.Models
         public double DeeperPlayerWindowTop
         {
             get => _deeperPlayerWindowTop;
-            set { _deeperPlayerWindowTop = value; OnPropertyChanged(); }
+            set { _deeperPlayerWindowTop = value; DeeperPlayerWindowPixelLeft = DeeperPlayerWindowPixelTop = null; OnPropertyChanged(); }
         }
 
         private double _deeperPlayerWindowWidth;
@@ -10147,6 +10147,14 @@ namespace ConditioningControlPanel.Models
             get => _deeperPlayerWindowHeight;
             set { _deeperPlayerWindowHeight = value; OnPropertyChanged(); }
         }
+
+        // Optional physical position from Avalonia. WPF's Left/Top setters invalidate it,
+        // so a later WPF save cannot leave a stale monitor hint behind.
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public int? DeeperPlayerWindowPixelLeft { get; set; }
+
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public int? DeeperPlayerWindowPixelTop { get; set; }
 
         // The audio player with a playlist. All four are this machine's own (whole file paths):
         // ProfileSyncService keeps every AudioPlaylist* property out of the cloud backup and

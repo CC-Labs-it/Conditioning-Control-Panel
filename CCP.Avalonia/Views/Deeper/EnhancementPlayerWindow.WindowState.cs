@@ -28,9 +28,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 Width = s.DeeperPlayerWindowWidth;
                 Height = s.DeeperPlayerWindowHeight;
             }
+            var physical = s.DeeperPlayerWindowPixelLeft is int pixelLeft && s.DeeperPlayerWindowPixelTop is int pixelTop
+                ? new PixelPoint(pixelLeft, pixelTop) : (PixelPoint?)null;
             if (s.DeeperPlayerWindowWidth > 0 && TryRestorePosition(
                 s.DeeperPlayerWindowLeft, s.DeeperPlayerWindowTop, Width, Height,
-                Screens.All.Select(screen => (screen.Bounds, WindowStateScaleOverride ?? screen.Scaling)), out var position))
+                Screens.All.Select(screen => (screen.Bounds, WindowStateScaleOverride ?? screen.Scaling)), out var position, physical))
             {
                 WindowStartupLocation = WindowStartupLocation.Manual;
                 Position = position;
@@ -40,9 +42,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         // WPF's Left and Top are DIPs; Avalonia's Position and screen bounds are pixels.
         // Try each monitor's scale and keep the candidate with the largest visible area.
         internal static bool TryRestorePosition(double x, double y, double width, double height,
-            IEnumerable<(PixelRect Bounds, double Scale)> screens, out PixelPoint position)
+            IEnumerable<(PixelRect Bounds, double Scale)> screens, out PixelPoint position, PixelPoint? physical = null)
         {
             position = default;
+            // A saved physical location wins over ambiguous WPF coordinates if still usable.
+            if (physical is { } pixel && screens.Any(screen =>
+                screen.Scale > 0 && double.IsFinite(screen.Scale) &&
+                Math.Min((double)pixel.X + width * screen.Scale, screen.Bounds.Right) - Math.Max(pixel.X, screen.Bounds.X) >= 200 * screen.Scale &&
+                Math.Min((double)pixel.Y + height * screen.Scale, screen.Bounds.Bottom) - Math.Max(pixel.Y, screen.Bounds.Y) >= 120 * screen.Scale))
+            {
+                position = pixel;
+                return true;
+            }
             double bestArea = 0;
             if (!double.IsFinite(x) || !double.IsFinite(y)) return false;
             foreach (var (bounds, scale) in screens)
@@ -83,6 +94,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             var saved = ToSavedPosition(Position, scale);
             s.DeeperPlayerWindowLeft = saved.X;
             s.DeeperPlayerWindowTop = saved.Y;
+            s.DeeperPlayerWindowPixelLeft = Position.X;
+            s.DeeperPlayerWindowPixelTop = Position.Y;
             s.DeeperPlayerWindowWidth = Width;
             s.DeeperPlayerWindowHeight = Height;
             CoreSettings.Save();
