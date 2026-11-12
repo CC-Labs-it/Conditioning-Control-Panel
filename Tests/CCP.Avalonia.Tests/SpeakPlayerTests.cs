@@ -30,6 +30,32 @@ public class SpeakPlayerTests
         public void Dispose() { }
     }
 
+    [Fact]
+    public Task PanicStopsIntermittentCuesBeforeRecognitionTeardown() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        int flashes = 0;
+        var listening = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runtime = new SpeakPromptRuntime(
+            () => true, () => true, () => Task.FromResult(true), () => false, () => { }, () => { }, () => false,
+            async (_, _, _) => { listening.TrySetResult(); await release.Task; return PhraseResult.NotAvailable; },
+            () => { }, _ => { }, () => { }, _ => flashes++);
+        var session = runtime.CreateSession(new TriggerEffectAction { SpeakTarget = "yes", SpeakCueMode = SpeakCueMode.Intermittent, SpeakCueIntervalMs = 80 }, null);
+        var run = session.RunAsync();
+        try
+        {
+            await listening.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await Task.Delay(200);
+            Assert.True(flashes >= 2);
+            session.Stop();
+            int atStop = flashes;
+            await Task.Delay(250);
+            Assert.Equal(atStop, flashes);
+            Assert.False(run.IsCompleted);
+        }
+        finally { release.TrySetResult(); await run.WaitAsync(TimeSpan.FromSeconds(5)); }
+    });
+
     [Theory]
     [InlineData(false, false, false)]
     [InlineData(true, false, false)]

@@ -38,7 +38,7 @@ internal sealed class SpeakPromptRuntime
     internal SpeakPromptSession CreateSession(TriggerEffectAction effect, IPlaybackTimeSource? source)
     {
         bool evicted = false, waited = false;
-        int capturing = 0;
+        int capturing = 0, cueStopped = 0;
         global::Avalonia.Threading.DispatcherTimer? timer = null;
         bool intermittent = effect.SpeakCueMode == SpeakCueMode.Intermittent;
         var planned = intermittent ? new TriggerEffectAction
@@ -71,9 +71,14 @@ internal sealed class SpeakPromptRuntime
                 if (!intermittent) { _show(cue); return; }
                 _flash(cue);
                 timer = new global::Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(Math.Max(80, effect.SpeakCueIntervalMs)) };
-                timer.Tick += (_, _) => _flash(cue);
+                timer.Tick += (_, _) => { if (Volatile.Read(ref cueStopped) == 0) _flash(cue); };
                 timer.Start();
-            }, () => { if (intermittent) timer?.Stop(); else _hide(); }, stopCapture: () => { if (Volatile.Read(ref capturing) != 0) _stopListening(); });
+            }, () => { if (intermittent) timer?.Stop(); else _hide(); }, stopCapture: () =>
+            {
+                Interlocked.Exchange(ref cueStopped, 1);
+                timer?.Stop();
+                if (Volatile.Read(ref capturing) != 0) _stopListening();
+            });
     }
 
     private async Task<bool> ConsentAsync()
