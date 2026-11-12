@@ -24,7 +24,7 @@ internal sealed class ScrollHijackEffect : PossessionEffectBase
     public override PossessionRung MinRung => PossessionRung.Melt;
     public override PossessionIntensity MinIntensity => PossessionIntensity.Eerie;
     public override bool IsBig => true;
-    protected override string? NameOverride => "the page";
+    protected override string? NameOverride => ConditioningControlPanel.Localization.Loc.Get("possession_target_page");
     public override double Weight => 2;
     public override TimeSpan HoldFor => TimeSpan.FromSeconds(3);
     public override IReadOnlyList<PossessionRole> Roles => ScrollRole;
