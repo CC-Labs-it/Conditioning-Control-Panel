@@ -78,6 +78,9 @@ internal sealed partial class FirstShowStageWindow : Window
     internal int InputPushes { get; private set; }
     internal PixelRect[] InputRects => _inputBuf[..InputRectCount];
     internal FirstShowEffects? Effects => _effects;
+    // Headless tests can exercise the Windows event path without installing a native hook.
+    internal static bool TestWindowsKeys;
+    private bool _windowsKeys;
     private bool _closed, _greeted, _centered, _playing, _ending, _serious, _moving, _bundled;
     private double _last, _moveAt, _showStart = double.NaN, _showFrozen, _settledAt, _x, _y;
     private int _beat = -1;
@@ -169,7 +172,8 @@ internal sealed partial class FirstShowStageWindow : Window
         catch (Exception ex) { ok = false; Log.Debug(ex, "First show stage: click-through failed"); }
         Show();
         // WPF ran its own keyboard hook so Esc stops the show even with the panic key off (:52, :92).
-        if (OperatingSystem.IsWindows()) Win32PanicKey.KeyDown += OnGlobalKey;
+        _windowsKeys = OperatingSystem.IsWindows() || TestWindowsKeys;
+        if (_windowsKeys) Win32PanicKey.KeyDown += OnGlobalKey;
         return ok;
     }
     private void OnGlobalKey(int vk, string? name)
@@ -582,7 +586,7 @@ internal sealed partial class FirstShowStageWindow : Window
         ClearGuideTarget();
         _closed = true;
         if (_main != null) _main.Activated -= OnShellActivated;
-        if (OperatingSystem.IsWindows()) Win32PanicKey.KeyDown -= OnGlobalKey;
+        if (_windowsKeys) Win32PanicKey.KeyDown -= OnGlobalKey;
         _clock.Stop();
         try { _speechWindow.Close(); } catch (Exception ex) { Log.Debug(ex, "First show speech window close failed"); }
         _load?.Cancel(); _load?.Dispose(); _load = null;

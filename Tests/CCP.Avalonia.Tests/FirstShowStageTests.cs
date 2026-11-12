@@ -620,6 +620,58 @@ public sealed partial class FirstShowStageTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task DebugPreviewGlobalEscapeStopsTheShowAndItsHook() => Run(_ =>
+    {
+        FirstShowService.Stop();
+        EmiDeskService.Instance.Window?.ShutDown();
+        using var desktop = new global::Avalonia.Controls.ApplicationLifetimes.ClassicDesktopStyleApplicationLifetime
+        {
+            Args = new[] { "--first-show-preview" },
+        };
+        int starts = 0, stops = 0;
+        FirstShowStageWindow.TestWindowsKeys = true;
+        try
+        {
+            Assert.True(ConditioningControlPanel.Avalonia.App.TryStartFirstShowPreview(desktop,
+                () => ConditioningControlPanel.Avalonia.App.StartFirstShowPreviewHook(true, () => false,
+                    () => { starts++; return true; }, () => stops++)));
+            Assert.Equal(1, starts);
+            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            ConditioningControlPanel.Avalonia.Platform.Win32PanicKey.OnDown(0x41, DateTime.UtcNow);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(FirstShowService.IsActive);
+            ConditioningControlPanel.Avalonia.Platform.Win32PanicKey.OnDown(0x1B, DateTime.UtcNow);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(FirstShowService.IsActive);
+            Assert.Equal(1, stops);
+            Assert.Null(EmiDeskService.Instance.Window);
+            ConditioningControlPanel.Avalonia.Platform.Win32PanicKey.OnDown(0x1B, DateTime.UtcNow);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, stops);
+        }
+        finally
+        {
+            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            FirstShowService.Stop();
+            FirstShowStageWindow.TestWindowsKeys = false;
+            desktop.MainWindow = null;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public void PreviewDoesNotOwnAnExistingHookOrStartOneOffWindows()
+    {
+        int starts = 0, stops = 0;
+        Action? Start(bool windows, bool listening) => ConditioningControlPanel.Avalonia.App.StartFirstShowPreviewHook(
+            windows, () => listening, () => { starts++; return true; }, () => stops++);
+        Assert.Null(Start(false, false));
+        Assert.Null(Start(true, true));
+        Assert.Equal(0, starts);
+        Assert.Equal(0, stops);
+    }
+
     [Theory]
     [InlineData("--first-show-preview-extra")]
     [InlineData("--FIRST-SHOW-PREVIEW")]
