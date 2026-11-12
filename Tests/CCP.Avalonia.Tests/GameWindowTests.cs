@@ -114,6 +114,24 @@ public sealed partial class GameWindowTests
         finally { w.Close(); Directory.Delete(root, true); }
     });
 
+    [Theory]
+    [InlineData("breakoutdemo")]
+    [InlineData("breakout")]
+    public void Breakout_ReadyIncludesCurrentPlans(string id) => Run((_, _) =>
+    {
+        var w = new GameWindow(GameWindow.Games[id]);
+        try
+        {
+            var sent = new List<string>();
+            w.Posted += sent.Add;
+            w.HandleMessage("{\"type\":\"ready\"}");
+            var plans = JObject.Parse(Assert.Single(sent))["plans"];
+            Assert.True(JToken.DeepEquals(
+                ConditioningControlPanel.Services.Vault.PlanCatalog.ToWire(ConditioningControlPanel.Services.Vault.PlanCatalog.Current), plans));
+        }
+        finally { w.Close(); }
+    });
+
     [Fact]
     public void Play_OpensTheGameHost_AndPanicClosesIt() => Run((shell, launcher) =>
     {
