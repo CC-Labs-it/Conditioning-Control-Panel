@@ -274,7 +274,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_closed) return;
             _step = step;
             if (RetargetIfNeeded(step)) return;
-            UpdateMainWindowDim(step.BlockBackgroundClicks);
             _advanceFiredThisStep = false;
 
             _txtStepCounter.Text = StepCounterText();
@@ -509,6 +508,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void DrawFullOverlay(bool blockClicks = true)
         {
+            UpdateMainWindowDim(blockClicks);
             // When blockClicks=false the user needs to interact with something ON TOP of our
             // overlay (e.g. an OS save dialog), so drop the dim entirely and hand the whole
             // window's input away; the card alone signals the wait state.
@@ -529,6 +529,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void DrawSpotlightOverlay(Rect highlightBounds, bool clickThroughHole)
         {
+            // WPF TutorialOverlay.xaml.cs:610-613, 738: a spotlight always dims outside its hole.
+            UpdateMainWindowDim(true);
             var padding = 8.0;
             var glowBounds = new Rect(
                 highlightBounds.X - padding,

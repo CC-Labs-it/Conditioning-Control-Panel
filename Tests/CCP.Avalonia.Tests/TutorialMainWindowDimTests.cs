@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -23,7 +24,7 @@ public class TutorialMainWindowDimTests
         public void Latch(string name) { }
     }
 
-    private static Task WithWindows(Action<Window, Window, Button, TutorialOverlay> check) => AvaloniaTestDispatcher.RunAsync(() =>
+    private static Task WithWindows(Action<Window, Window, Button, TutorialOverlay> check, string? targetName = null) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         var previousStore = TutorialService.CompletionStore;
         TutorialService.CompletionStore = new Store();
@@ -31,8 +32,17 @@ public class TutorialMainWindowDimTests
         TutorialHead.ResetForTests();
         var button = new Button { Content = "Main", Width = 100, Height = 40 };
         var main = new Window { Width = 800, Height = 600, Content = button };
-        var target = new Button { Content = "Dialog", Width = 100, Height = 40 };
-        var dialog = new Window { Width = 400, Height = 300, Content = target };
+        var target = new Button { Name = targetName, Content = "Dialog", Width = targetName == null ? 100 : 160, Height = 40 };
+        var dialog = new Window { Width = 400, Height = 300 };
+        if (targetName != null)
+        {
+            dialog.Width = 900;
+            dialog.Height = 650;
+            Canvas.SetLeft(target, 40);
+            Canvas.SetTop(target, 60);
+            dialog.Content = new Canvas { Children = { target } };
+        }
+        else dialog.Content = target;
         TutorialOverlay? overlay = null;
         TutorialStep? step = null;
         string? previousWindow = null;
@@ -118,6 +128,37 @@ public class TutorialMainWindowDimTests
         Click(main, button);
         Assert.Equal(1, clicks);
     });
+
+    [Theory]
+    [InlineData(TutorialType.DeeperEditorInteractiveLocalAudio, "iaud_browse", "BtnBrowse")]
+    [InlineData(TutorialType.DeeperEditorInteractiveLocalAudio, "iaud_create", "BtnCreate")]
+    [InlineData(TutorialType.DeeperEditorInteractiveLocalVideo, "ivid_browse", "BtnBrowse")]
+    [InlineData(TutorialType.DeeperEditorInteractiveLocalVideo, "ivid_create", "BtnCreate")]
+    public Task NonBlockingSpotlightStillBlocksMainWindow(TutorialType type, string id, string targetName) => WithWindows((main, dialog, button, overlay) =>
+    {
+        var clicks = 0;
+        button.Click += (_, _) => clicks++;
+        var step = TutorialHead.Service.StepsFor(type).Single(s => s.Id == id);
+        Assert.False(step.BlockBackgroundClicks);
+
+        // A missing target draws the nonblocking full overlay.
+        CoreTutorial.RaiseStepChanged(null, new CoreTutorial.Step
+        {
+            TargetElementName = "MissingTarget", BlockBackgroundClicks = false,
+        });
+        Click(main, button);
+        Assert.Equal(1, clicks);
+
+        // Once a spotlight is actually drawn, WPF dims and blocks outside it.
+        CoreTutorial.RaiseStepChanged(null, TutorialHead.Project(step));
+        Click(main, button);
+        Assert.Equal(1, clicks);
+        var target = ((Canvas)dialog.Content!).Children.OfType<Button>().Single();
+        var targetClicks = 0;
+        target.Click += (_, _) => targetClicks++;
+        Click(dialog, target);
+        Assert.Equal(1, targetClicks);
+    }, targetName);
 
     [Theory]
     [InlineData("skip")]
