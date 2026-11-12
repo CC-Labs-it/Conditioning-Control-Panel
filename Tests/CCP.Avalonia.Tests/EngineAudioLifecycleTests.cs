@@ -45,117 +45,108 @@ public sealed class EngineAudioLifecycleTests
     [InlineData(true, false)]
     [InlineData(true, true)]
     [InlineData(false, false)]
-    public async Task AudioOnlyStartAndStopRespectStandaloneMasterAndUnduck(bool audioOnly, bool master)
+    public Task AudioOnlyStartAndStopRespectStandaloneMasterAndUnduck(bool audioOnly, bool master) => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        await AvaloniaTestDispatcher.RunAsync(() =>
+        var s = Headless();
+        var file = Path.GetTempFileName();
+        var opened = new List<Player>();
+        var layers = LayeredAudio.Instance = new LayeredAudio((_, _) => { var p = new Player(); opened.Add(p); return p; });
+        var audio = LibVlcAudio.Instance = new LibVlcAudio(_ => "[]");
+        MainShellWindow? shell = null;
+        try
         {
-            var s = Headless();
-            var file = Path.GetTempFileName();
-            var opened = new List<Player>();
-            var layers = LayeredAudio.Instance = new LayeredAudio((_, _) => { var p = new Player(); opened.Add(p); return p; });
-            var audio = LibVlcAudio.Instance = new LibVlcAudio(_ => "[]");
-            MainShellWindow? shell = null;
-            try
-            {
-                s.AudioOnlySession = audioOnly; s.AudioLayersEnabled = master;
-                s.AudioLayers = new() { new AudioLayerTrack { Path = file } };
-                shell = CreateShell();
-                shell.StartEngine();
-                Assert.True(CoreEngine.IsRunning);
-                Assert.Equal(audioOnly, layers.IsPlaying);
-                Assert.Equal(audioOnly ? 1 : 0, opened.Count);
-                audio.Duck(80);
-                Assert.True(audio.IsDucked);
-                MainShellWindow.StopEngine();
-                Assert.False(audio.IsDucked);
-                Assert.Equal(audioOnly && master, layers.IsPlaying);
-                if (audioOnly) Assert.Equal(!master, opened[0].Disposed);
-            }
-            finally
-            {
-                CoreEngine.Stop(); shell?.Close();
-                layers.Dispose();
-                audio.Shutdown();
-                File.Delete(file);
-            }
-            return Task.CompletedTask;
-        });
-    }
+            s.AudioOnlySession = audioOnly; s.AudioLayersEnabled = master;
+            s.AudioLayers = new() { new AudioLayerTrack { Path = file } };
+            shell = CreateShell();
+            shell.StartEngine();
+            Assert.True(CoreEngine.IsRunning);
+            Assert.Equal(audioOnly, layers.IsPlaying);
+            Assert.Equal(audioOnly ? 1 : 0, opened.Count);
+            audio.Duck(80);
+            Assert.True(audio.IsDucked);
+            MainShellWindow.StopEngine();
+            Assert.False(audio.IsDucked);
+            Assert.Equal(audioOnly && master, layers.IsPlaying);
+            if (audioOnly) Assert.Equal(!master, opened[0].Disposed);
+        }
+        finally
+        {
+            CoreEngine.Stop(); shell?.Close();
+            layers.Dispose();
+            audio.Shutdown();
+            File.Delete(file);
+        }
+        return Task.CompletedTask;
+    });
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task SessionStartsAudioBedOnlyWhenItStartsTheEngine(bool alreadyRunning)
+    public Task SessionStartsAudioBedOnlyWhenItStartsTheEngine(bool alreadyRunning) => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        await AvaloniaTestDispatcher.RunAsync(() =>
+        var s = Headless();
+        var file = Path.GetTempFileName();
+        var opened = new List<Player>();
+        var layers = LayeredAudio.Instance = new LayeredAudio((_, _) => { var p = new Player(); opened.Add(p); return p; });
+        var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+        MainShellWindow? shell = null;
+        try
         {
-            var s = Headless();
-            var file = Path.GetTempFileName();
-            var opened = new List<Player>();
-            var layers = LayeredAudio.Instance = new LayeredAudio((_, _) => { var p = new Player(); opened.Add(p); return p; });
-            var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
-            MainShellWindow? shell = null;
-            try
-            {
-                s.AudioOnlySession = true; s.AudioLayersEnabled = false;
-                s.AudioLayers = new() { new AudioLayerTrack { Path = file } };
-                shell = CreateShell();
-                if (alreadyRunning) shell.StartEngine();
-                shell.StartSession(new Session { Id = "audio_lifecycle", Name = "Audio", DurationMinutes = 10 });
-                Assert.True(runner.IsRunning);
-                var player = Assert.Single(opened);
-                Assert.False(player.Disposed);
-                Assert.True(layers.IsPlaying);
-                runner.Stop();
-                Assert.True(player.Disposed);
-                Assert.False(layers.IsPlaying);
-            }
-            finally
-            {
-                runner.Stop();
-                CoreEngine.Stop(); shell?.Close();
-                layers.Dispose();
-                File.Delete(file);
-            }
-            return Task.CompletedTask;
-        });
-    }
+            s.AudioOnlySession = true; s.AudioLayersEnabled = false;
+            s.AudioLayers = new() { new AudioLayerTrack { Path = file } };
+            shell = CreateShell();
+            if (alreadyRunning) shell.StartEngine();
+            shell.StartSession(new Session { Id = "audio_lifecycle", Name = "Audio", DurationMinutes = 10 });
+            Assert.True(runner.IsRunning);
+            var player = Assert.Single(opened);
+            Assert.False(player.Disposed);
+            Assert.True(layers.IsPlaying);
+            runner.Stop();
+            Assert.True(player.Disposed);
+            Assert.False(layers.IsPlaying);
+        }
+        finally
+        {
+            runner.Stop();
+            CoreEngine.Stop(); shell?.Close();
+            layers.Dispose();
+            File.Delete(file);
+        }
+        return Task.CompletedTask;
+    });
 
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]
     [InlineData(false, true)]
-    public async Task StopRestoresAudioEvenWhenTheEngineWasAlreadyIdle(bool master, bool checkUnduck)
+    public Task StopRestoresAudioEvenWhenTheEngineWasAlreadyIdle(bool master, bool checkUnduck) => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        await AvaloniaTestDispatcher.RunAsync(() =>
+        var s = Headless();
+        var file = Path.GetTempFileName();
+        var player = new Player();
+        var layers = LayeredAudio.Instance = new LayeredAudio((_, _) => player);
+        var audio = LibVlcAudio.Instance = new LibVlcAudio(_ => "[]");
+        MainShellWindow? shell = null;
+        try
         {
-            var s = Headless();
-            var file = Path.GetTempFileName();
-            var player = new Player();
-            var layers = LayeredAudio.Instance = new LayeredAudio((_, _) => player);
-            var audio = LibVlcAudio.Instance = new LibVlcAudio(_ => "[]");
-            MainShellWindow? shell = null;
-            try
-            {
-                s.AudioLayersEnabled = master;
-                s.AudioLayers = new() { new AudioLayerTrack { Path = file } };
-                shell = CreateShell();
-                Assert.False(CoreEngine.IsRunning);
-                layers.Start(ignoreMasterToggle: true);
-                audio.Duck(80);
-                Assert.True(layers.IsPlaying && audio.IsDucked);
-                CoreEngine.Stop(); // WPF StopEngineCore also cleans up when already idle.
-                if (checkUnduck) Assert.False(audio.IsDucked);
-                else { Assert.Equal(master, layers.IsPlaying); Assert.Equal(!master, player.Disposed); }
-            }
-            finally
-            {
-                CoreEngine.Stop(); shell?.Close();
-                layers.Dispose();
-                audio.Shutdown();
-                File.Delete(file);
-            }
-            return Task.CompletedTask;
-        });
-    }
+            s.AudioLayersEnabled = master;
+            s.AudioLayers = new() { new AudioLayerTrack { Path = file } };
+            shell = CreateShell();
+            Assert.False(CoreEngine.IsRunning);
+            layers.Start(ignoreMasterToggle: true);
+            audio.Duck(80);
+            Assert.True(layers.IsPlaying && audio.IsDucked);
+            CoreEngine.Stop(); // WPF StopEngineCore also cleans up when already idle.
+            if (checkUnduck) Assert.False(audio.IsDucked);
+            else { Assert.Equal(master, layers.IsPlaying); Assert.Equal(!master, player.Disposed); }
+        }
+        finally
+        {
+            CoreEngine.Stop(); shell?.Close();
+            layers.Dispose();
+            audio.Shutdown();
+            File.Delete(file);
+        }
+        return Task.CompletedTask;
+    });
 }

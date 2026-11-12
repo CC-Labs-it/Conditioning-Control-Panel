@@ -175,7 +175,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 public readonly MediaPlayer Player = player;
                 public readonly Media Media = media;
-                public bool Playing; public volatile bool Disposed;
+                public bool Playing, Unmuted; public volatile bool Disposed;
                 public GainWorker Gain = null!;
             }
 
@@ -228,16 +228,23 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     c.Player.TimeChanged += (_, e) => { var t = e.Time; ThreadPool.QueueUserWorkItem(_ => Schedule(c, t)); };
                     c.Player.EndReached += (_, _) => ThreadPool.QueueUserWorkItem(_ => Retire(c, failed: false));
                     c.Player.EncounteredError += (_, _) => ThreadPool.QueueUserWorkItem(_ => Retire(c, failed: true));
-                    c.Player.Mute = true;   // every pass stays muted until its configured gain sticks
+                    c.Player.Mute = true;   // a pass stays muted until zero gain sticks
                     c.Gain = new GainWorker(() => _disposed || c.Disposed ? null : _volume.Value, v =>
                     {
                         lock (c)
                         {
                             if (c.Disposed) return true;
-                            try { c.Player.Volume = v; return c.Player.Volume == v; }
+                            try { var gain = c.Unmuted ? v : 0; c.Player.Volume = gain; return c.Player.Volume == gain; }
                             catch (Exception ex) { Log.Debug(ex, "LayeredAudio: volume update"); return false; }
                         }
-                    }, v => { lock (c) _volume.TryUnmute(v, () => { if (!_disposed && !c.Disposed) c.Player.Mute = false; }); });
+                    }, v => { lock (c) return _disposed || c.Disposed || c.Unmuted ? Task.FromResult(false) : _volume.QueueUnmute(v, () =>
+                    {
+                        lock (c) {
+                            if (_disposed || c.Disposed) return false;
+                            try { c.Player.Mute = false; c.Unmuted = true; return true; } // apply the latest gain
+                            catch (Exception ex) { Log.Debug(ex, "LayeredAudio: unmute"); return true; } // retry
+                        }
+                    }); });
                     if (Copies > 0 && _live.Count == 0) GapStarts++;
                     Copies++;
                     _live.Add(c);
@@ -332,11 +339,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 public void Publish(int value) { lock (_sync) { _value = value; _published = true; } }
                 public void SetUnlessPublished(int value) { lock (_sync) if (!_published) _value = value; }
                 public void TryUnmute(int value, Action unmute) { lock (_sync) if (_value == value) unmute(); }
+                public Task<bool> QueueUnmute(int value, Func<bool> unmute) { Task<bool>? work = null; TryUnmute(value, () => work = Task.Run(unmute)); return work ?? Task.FromResult(false); }
             }
 
             /// <summary>Per pass: pulse drops a volume set too soon after the stream opens, so retry the newest
-            /// target off the caller until it sticks or the pass retires. Unmute only at the current confirmed gain.</summary>
-            internal sealed class GainWorker(Func<int?> target, Func<int, bool> trySet, Action<int> unmute)
+            /// target off the caller until it sticks or the pass retires. Confirm zero before unmuting.</summary>
+            internal sealed class GainWorker(Func<int?> target, Func<int, bool> trySet, Func<int, Task<bool>> unmute)
             {
                 private int _busy;
 
@@ -348,7 +356,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     {
                         int? v;
                         while ((v = target()) is { } want && !trySet(want)) await Task.Delay(25).ConfigureAwait(false);
-                        if (v is { } confirmed && target() == confirmed) unmute(confirmed);
+                        if (v is { } confirmed && target() == confirmed && await unmute(confirmed).ConfigureAwait(false)) { await Task.Delay(25).ConfigureAwait(false); continue; }
                         Volatile.Write(ref _busy, 0);
                         // A target set while we held _busy skipped its own Kick: take it on unless another did.
                         if (v == null || target() == v || Interlocked.Exchange(ref _busy, 1) != 0) return;

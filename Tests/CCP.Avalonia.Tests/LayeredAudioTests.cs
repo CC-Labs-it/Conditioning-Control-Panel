@@ -44,7 +44,7 @@ public sealed class LayeredAudioTests
             if (Interlocked.Increment(ref attempts) <= 25) return false;
             if (v == 100) { entered.Set(); release.Wait(TimeSpan.FromSeconds(5)); }
             return v == 100 || Volatile.Read(ref allow) == 1;
-        }, v => { Interlocked.Increment(ref unmutes); Volatile.Write(ref unmutedAt, v); });
+        }, v => { Interlocked.Increment(ref unmutes); Volatile.Write(ref unmutedAt, v); return System.Threading.Tasks.Task.FromResult(false); });
         try {
             var clock = Stopwatch.StartNew(); gain.Kick(); gain.Kick();
             Assert.True(clock.Elapsed < TimeSpan.FromMilliseconds(200));

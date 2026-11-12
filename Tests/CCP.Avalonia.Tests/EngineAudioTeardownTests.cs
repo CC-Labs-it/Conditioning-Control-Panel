@@ -17,19 +17,16 @@ public sealed class EngineAudioTeardownTests
 {
     private sealed class SlowPlayer : LayeredAudio.ILayerPlayer
     {
-        public readonly ManualResetEventSlim Restoring = new(), Release = new();
+        public readonly ManualResetEventSlim Restoring = new(), Release = new(), Unmuting = new(), ReleaseUnmute = new();
+        public readonly LayeredAudio.VlcLayerPlayer.GainFence Fence = new(100); public void Publish(int volume) => Fence.Publish(volume);
         public bool BlockRestore;
         private int _volume, _writes;
         public int Writes => Volatile.Read(ref _writes);
         public int Current => Volatile.Read(ref _volume);
-        public int Volume
-        {
-            set
-            {
-                if (value == 100 && BlockRestore) { Restoring.Set(); Release.Wait(TimeSpan.FromSeconds(10)); }
-                Volatile.Write(ref _volume, value); Interlocked.Increment(ref _writes);
-            }
-        }
+        public int Volume { set {
+            if (value == 100 && BlockRestore) { Restoring.Set(); Release.Wait(TimeSpan.FromSeconds(10)); }
+            Volatile.Write(ref _volume, value); Interlocked.Increment(ref _writes);
+        } }
         public void Dispose() { }
     }
 
@@ -59,13 +56,17 @@ public sealed class EngineAudioTeardownTests
                 return Task.CompletedTask;
             });
             await layers.VolumeUpdates.WaitAsync(TimeSpan.FromSeconds(5));
-            Assert.Equal(79, player.Current);
+            Assert.Equal(79, player.Current); var applied = -1;
+            var gain = new LayeredAudio.VlcLayerPlayer.GainWorker(() => player.Fence.Value, v => { Volatile.Write(ref applied, v); return true; },
+                v => player.Unmuting.IsSet ? Task.FromResult(false) : player.Fence.QueueUnmute(v, () => { player.Unmuting.Set(); player.ReleaseUnmute.Wait(TimeSpan.FromSeconds(10)); return true; }));
+            gain.Kick(); Assert.True(player.Unmuting.Wait(TimeSpan.FromSeconds(5)));
             player.BlockRestore = true;
             stopping = AvaloniaTestDispatcher.RunAsync(() => { MainShellWindow.StopEngine(); return Task.CompletedTask; });
             Assert.True(player.Restoring.Wait(TimeSpan.FromSeconds(5)), "the slow restore must begin");
             await stopping.WaitAsync(TimeSpan.FromSeconds(3)); // teardown must finish before the volume setter returns
             Assert.False(CoreEngine.IsRunning);
             Assert.True(layers.IsPlaying); // standalone master remains on
+            player.ReleaseUnmute.Set(); Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref applied) == 100, 5000));
             var writes = player.Writes;
             s.MasterVolume = 25; layers.SetMasterVolumeLive();
             s.MasterVolume = 50; layers.SetMasterVolumeLive();
@@ -79,7 +80,7 @@ public sealed class EngineAudioTeardownTests
         }
         finally
         {
-            player.Release.Set();
+            player.ReleaseUnmute.Set(); player.Release.Set();
             if (stopping != null) await stopping.WaitAsync(TimeSpan.FromSeconds(10));
             audio.ForceUnduck();
             await layers.VolumeUpdates.WaitAsync(TimeSpan.FromSeconds(5));
