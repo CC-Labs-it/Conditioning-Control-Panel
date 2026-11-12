@@ -20,6 +20,22 @@ internal static class LeashSound
 
     internal static void Denied(DateTime now) => Play(LeashCue.Denied, "chaos/ui_denied.mp3", 0.16f, now);
 
+    internal static void Event(LeashEventKind kind, DateTime now)
+    {
+        var cue = kind switch
+        {
+            LeashEventKind.Tug => (LeashCue.Jingle, "chaos/chain_pop.mp3", 0.22f),
+            LeashEventKind.Answered or LeashEventKind.PunishSkipped => (LeashCue.Refused, "chaos/ui_unequip.mp3", 0.14f),
+            LeashEventKind.Ended => (LeashCue.Cut, "chaos/snap.mp3", 0.22f),
+            LeashEventKind.Reward => (LeashCue.Gift, "chaos/ui_unlock.mp3", 0.18f),
+            LeashEventKind.Punish or LeashEventKind.AssignMissed => (LeashCue.Scold, "chaos/thud.mp3", 0.2f),
+            LeashEventKind.Assign => (LeashCue.Assigned, "chaos/cards_in.mp3", 0.16f),
+            LeashEventKind.AssignDone or LeashEventKind.PunishDone => (LeashCue.Done, "chaos/sin_accept.mp3", 0.18f),
+            _ => ((LeashCue, string, float)?)null,
+        };
+        if (cue is { } c) Play(c.Item1, c.Item2, c.Item3, now);
+    }
+
     private static void Play(LeashCue cueKind, string cue, float scale, DateTime now)
     {
         try

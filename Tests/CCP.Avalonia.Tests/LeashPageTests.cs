@@ -306,6 +306,29 @@ public sealed class LeashPageTests
             finally { ConditioningControlPanel.CoreAccount.DisplayNameProvider = oldName; }
         });
 
+    [Fact]
+    public void HiddenReceiptWaitsForPanelAndAcceptedOfferShowsHolderSnap() =>
+        Run(false, (shell, _, _) =>
+        {
+            var seen = new List<string>();
+            var service = new LeashService(new Wire(), () => "u_me", cutSafety: () => { }, reportSeen: seen.Add);
+            LeashHead.Service = service;
+            shell.Show(); shell.CheckLeashGate(); shell.Hide();
+            var block = Block();
+            block["events"] = new JArray(new JObject {
+                ["id"] = "abcdef0123456789", ["kind"] = "tug",
+                ["from"] = new JObject { ["id"] = "u_a", ["name"] = "A" }, ["at"] = DateTimeOffset.UtcNow.ToString("o") });
+            service.ApplyBlock(block); Dispatcher.UIThread.RunJobs();
+            Assert.Empty(seen);
+            shell.Show(); shell.CheckLeashGate(); Dispatcher.UIThread.RunJobs();
+            Assert.Contains("abcdef0123456789", seen);
+            block["events"] = new JArray(new JObject {
+                ["id"] = "0123456789abcdef", ["kind"] = "answered", ["accepted"] = true,
+                ["from"] = new JObject { ["id"] = "u_a", ["name"] = "A" }, ["at"] = DateTimeOffset.UtcNow.ToString("o") });
+            service.ApplyBlock(block); Dispatcher.UIThread.RunJobs();
+            Assert.NotNull(LeashAskWindow.Snap);
+        });
+
     private sealed class Runner : ILeashTaskRunner
     {
         public int Starts;

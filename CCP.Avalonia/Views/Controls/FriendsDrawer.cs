@@ -926,7 +926,7 @@ public sealed partial class FriendsDrawer : Border
 
     /// <summary>Initials on the roster's per-name gradient (WPF FriendsLook.Avatar), with a presence dot
     /// (mint on, grey off, none for null).</summary>
-    internal static Control Avatar(string name, double size, bool? dot, ConditioningControlPanel.Services.PlayerLook? look = null)
+    internal static Control Avatar(string name, double size, bool? dot, ConditioningControlPanel.Services.PlayerLook? look = null, string? url = null)
     {
         var g = new Grid { Width = size, Height = size };
         g.Children.Add(new Border
@@ -940,7 +940,7 @@ public sealed partial class FriendsDrawer : Border
         });
         if (look is { IsEmpty: false })
         {
-            if (Helpers.ModArt.AvatarPreset(look.AvatarId) is { } art && g.Children[0] is Border disc)
+            if (string.IsNullOrEmpty(url) && Helpers.ModArt.AvatarPreset(look.AvatarId) is { } art && g.Children[0] is Border disc)
             {
                 disc.Background = new ImageBrush(art) { Stretch = Stretch.UniformToFill };
                 disc.Child = null;
@@ -952,6 +952,7 @@ public sealed partial class FriendsDrawer : Border
                     Margin = new Thickness(-(frame - size) / 2), IsHitTestVisible = false, Tag = "friends-frame" });
             }
         }
+        if (!string.IsNullOrEmpty(url) && g.Children[0] is Border photo) _ = PaintAvatarPhoto(photo, url);
         if (dot is bool on)
             g.Children.Add(new Ellipse
             {
@@ -959,6 +960,22 @@ public sealed partial class FriendsDrawer : Border
                 HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom,
             });
         return g;
+    }
+
+    private static readonly System.Net.Http.HttpClient AvatarHttp = new(ConditioningControlPanel.Services.Deeper.UrlSafety.CreateGuardedHandler()) { Timeout = TimeSpan.FromSeconds(10) };
+    private static async System.Threading.Tasks.Task PaintAvatarPhoto(Border disc, string url)
+    {
+        try
+        {
+            var full = url.StartsWith("/", StringComparison.Ordinal) ? "https://codebambi-proxy.vercel.app" + url : url;
+            if (!full.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return;
+            var bytes = await AvatarHttp.GetByteArrayAsync(full);
+            using var stream = new System.IO.MemoryStream(bytes);
+            var image = global::Avalonia.Media.Imaging.Bitmap.DecodeToWidth(stream, 96);
+            disc.Background = new ImageBrush(image) { Stretch = Stretch.UniformToFill };
+            disc.Child = null;
+        }
+        catch (Exception ex) { Serilog.Log.Debug("[Friends] avatar photo failed: {E}", ex.Message); }
     }
 
     /// <summary>WPF FriendsLook.SafeAvatarBrush: the leaderboard's deterministic gradient, lilac if it throws.</summary>

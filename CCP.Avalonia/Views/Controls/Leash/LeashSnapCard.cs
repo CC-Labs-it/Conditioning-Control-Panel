@@ -45,9 +45,9 @@ public sealed class LeashSnapCard : Border
         }
         var row = new Grid { Height = 84, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
         // WPF :57-77: both avatars wear their look; the leashed one carries the swinging heart tag.
-        row.Children.Add(F.Avatar(holder.Name, 68, null, holder.Look));
+        row.Children.Add(F.Avatar(holder.Name, 68, null, holder.Look, holder.AvatarUrl));
         Grid.SetColumn(_chain, 1); row.Children.Add(_chain);
-        _right = F.Avatar(leashed.Name, 68, null, leashed.Look);
+        _right = F.Avatar(leashed.Name, 68, null, leashed.Look, leashed.AvatarUrl);
         var tag = HeartTag(26);
         var rightHost = new Grid { Children = { _right, tag } };
         Grid.SetColumn(rightHost, 2); row.Children.Add(rightHost);

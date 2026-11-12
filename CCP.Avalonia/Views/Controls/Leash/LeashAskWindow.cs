@@ -96,7 +96,16 @@ public sealed class LeashAskWindow : Window
     internal static void ShowSnap(LeashPerson holder, Window? owner)
     {
         var me = string.IsNullOrWhiteSpace(CoreAccount.DisplayName) ? Loc.Get("leash_you") : CoreAccount.DisplayName!.Trim();
-        var card = new LeashSnapCard(holder, new LeashPerson("me", me, null)); // WPF LeashSurfaces.Me (:188-194)
+        ShowSnap(holder, new LeashPerson("me", me, null), owner);
+    }
+    internal static void ShowHolderSnap(LeashPerson leashed, Window? owner)
+    {
+        var me = string.IsNullOrWhiteSpace(CoreAccount.DisplayName) ? Loc.Get("leash_you") : CoreAccount.DisplayName!.Trim();
+        ShowSnap(new LeashPerson("me", me, null), leashed, owner);
+    }
+    private static void ShowSnap(LeashPerson holder, LeashPerson leashed, Window? owner)
+    {
+        var card = new LeashSnapCard(holder, leashed);
         var w = new Window();
         Overlay(w, card, () => w.Close());
         card.Closed += w.Close;

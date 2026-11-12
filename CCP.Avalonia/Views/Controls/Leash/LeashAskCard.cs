@@ -57,7 +57,7 @@ public sealed class LeashAskCard : Border
         Tag = "leash-ask:" + offer.From.Id;
         Child = _body;
         var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        var av = F.Avatar(offer.From.Name, 60, null);
+        var av = F.Avatar(offer.From.Name, 60, null, offer.From.Look, offer.From.AvatarUrl);
         av.Margin = new Thickness(0, 0, 14, 0);
         head.Children.Add(av);
         var t = new TextBlock
