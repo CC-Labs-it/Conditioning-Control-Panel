@@ -7,21 +7,17 @@ using Xunit;
 
 namespace CCP.Core.Tests;
 
-public class ServerClockTimeProviderTests
-{
-    private sealed class TestClock(DateTimeOffset now) : TimeProvider
-    {
+public class ServerClockTimeProviderTests {
+    private sealed class TestClock(DateTimeOffset now) : TimeProvider {
         public DateTimeOffset Now = now;
         public override DateTimeOffset GetUtcNow() => Now;
     }
 
     [Fact]
-    public void FrozenLocalTimeKeepsTheServerOffsetAndResetRestoresTheSystemClock()
-    {
+    public void FrozenLocalTimeKeepsTheServerOffsetAndResetRestoresTheSystemClock() {
         var local = new DateTimeOffset(2026, 11, 12, 12, 0, 0, TimeSpan.Zero);
         var clock = new TestClock(local);
-        try
-        {
+        try {
             ServerClock.ResetForTests();
             ServerClock.Clock = clock;
             Assert.True(ServerClock.Observe(local.AddMinutes(-2), local));
