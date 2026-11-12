@@ -17,6 +17,8 @@ namespace ConditioningControlPanel.Avalonia.Possession;
 
 internal sealed class ToggleLieEffect : PossessionEffectBase
 {
+    // The director releases its booking before awaiting a timed return. Panic must still find it.
+    private static readonly HashSet<ToggleLieEffect> Returning = new();
     private static readonly PossessionRole[] TargetRoles = { PossessionRole.Toggle };
     private static readonly string[] Names = { "thumb", "knob", "indicator", "dot", "switch", "pill", "handle" };
     private PossessionLease? _lease;
@@ -36,6 +38,15 @@ internal sealed class ToggleLieEffect : PossessionEffectBase
     public override double Weight => 2;
     public override TimeSpan HoldFor => TimeSpan.FromMilliseconds(1500);
     public override IReadOnlyList<PossessionRole> Roles => TargetRoles;
+
+    internal static void UndoAllReturning()
+    {
+        foreach (var effect in Returning.ToArray())
+        {
+            try { effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult(); }
+            catch (Exception ex) { Serilog.Log.Warning("Possession togglelie panic failed: {Error}", ex.Message); }
+        }
+    }
 
     private static Control? FindKnob(Control toggle)
     {
@@ -124,6 +135,7 @@ internal sealed class ToggleLieEffect : PossessionEffectBase
             return;
         }
         _returnCts = new CancellationTokenSource();
+        Returning.Add(this);
         var source = _returnCts;
         try
         {
@@ -160,6 +172,7 @@ internal sealed class ToggleLieEffect : PossessionEffectBase
 
     private void Cleanup()
     {
+        Returning.Remove(this);
         _frames?.Unsubscribe(Frame);
         _frames = null;
         _lease?.ReleaseImmediate();

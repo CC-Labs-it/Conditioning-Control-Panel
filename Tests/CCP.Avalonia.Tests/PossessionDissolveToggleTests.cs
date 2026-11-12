@@ -13,6 +13,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Possession;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Possession;
 using Xunit;
 
@@ -225,6 +226,55 @@ public sealed class PossessionDissolveToggleTests
             Assert.False(PossessionLease.IsLeased(knob));
             Assert.False(target.IsLive);
             Assert.True(toggle.IsVisible);
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); window.Close(); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PanicSurfaceStopsAReleasedReturningEffect(bool fallback) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var original = new TranslateTransform(2, 0);
+        Control part = fallback ? new TextBlock { Width = 80, Height = 16, Text = "toggle" }
+            : new Border { Name = "knob", Width = 16, Height = 16, RenderTransform = original };
+        var toggle = new ToggleButton { Width = 100, Height = 30, Opacity = 0.6, IsChecked = true,
+            Template = new FuncControlTemplate<ToggleButton>((_, _) => new Canvas { Children = { part } }) };
+        var layer = new Canvas { IsHitTestVisible = false };
+        var window = new Window { Width = 200, Height = 100, Content = new Grid { Children = { toggle, layer } } };
+        var frames = new FakeFrames();
+        window.Show(); Dispatcher.UIThread.RunJobs();
+        var target = new PossessionTarget { Visual = toggle, Role = PossessionRole.Toggle, Key = "toggle", DisplayName = "toggle" };
+        var ctx = new PossessionContext { Host = new Host(window, layer, frames), Attribution = new Attribution(),
+            Rung = PossessionRung.Melt, Intensity = PossessionIntensity.Eerie, Photosafe = false,
+            Rng = new Random(1), ElapsedFraction = 0, Remaining = TimeSpan.Zero, Name = (_, _) => { } };
+        var effect = new ToggleLieEffect();
+        int writes = 0;
+        toggle.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) writes++; };
+        try
+        {
+            var apply = effect.ApplyAsync(ctx, target, CancellationToken.None);
+            frames.Frame(TimeSpan.FromMilliseconds(1000)); frames.Frame(TimeSpan.FromMilliseconds(1240));
+            await apply;
+            // The director has already released the effect when its timed return begins.
+            var undo = effect.UndoAsync(TimeSpan.FromMilliseconds(300));
+            Assert.False(undo.IsCompleted);
+            frames.Frame(TimeSpan.FromMilliseconds(2000)); frames.Frame(TimeSpan.FromMilliseconds(2090));
+            Assert.Single(layer.Children);
+            Assert.True(layer.Children[0].Opacity > 0);
+            PanicSurfaces.All.Single(s => s.Id == "possession").Stop(null);
+            Assert.Empty(layer.Children);
+            Assert.False(PossessionLease.IsLeased(part));
+            if (!fallback) Assert.Same(original, part.RenderTransform);
+            Assert.Equal(0.6, toggle.Opacity);
+            Assert.True(toggle.IsVisible);
+            Assert.True(toggle.IsChecked);
+            Assert.Equal(0, writes);
+            frames.Frame(TimeSpan.FromMilliseconds(2250));
+            Assert.Empty(layer.Children);
+            await undo;
+            Assert.False(effect.IsLive);
+            Assert.False(target.IsLive);
         }
         finally { await effect.UndoAsync(TimeSpan.Zero); window.Close(); }
     });
