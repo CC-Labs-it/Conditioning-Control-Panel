@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
@@ -46,9 +47,10 @@ public sealed class GlowRenderProofTests
         finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(buf); }
     }
 
-    private static Bitmap Frame(Window w, string name)
+    private static Bitmap Frame(Window w, string name, Action? beforeCapture = null)
     {
         Dispatcher.UIThread.RunJobs();
+        beforeCapture?.Invoke();
         var frame = w.CaptureRenderedFrame()!;
         var dir = Environment.GetEnvironmentVariable("CCP_GLOW_PROOF_DIR");
         if (!string.IsNullOrEmpty(dir)) { System.IO.Directory.CreateDirectory(dir); frame.Save(System.IO.Path.Combine(dir, name + ".png")); }
@@ -177,12 +179,23 @@ public sealed class GlowRenderProofTests
             Assert.True(halo.X < plain.X - 2 && halo.Y < plain.Y - 2 && halo.Right > plain.Right + 2 && halo.Bottom > plain.Bottom + 2,
                 $"no halo around the glyph: ink {plain}, with glow {halo}");
 
+            // Keep the real on-screen glyph and glow, but give them a fixed contrasting backdrop.
+            // The card art can match the cyan glow closely or move between the two captures.
+            var backdrop = new Border
+            {
+                Background = Brushes.Black,
+                Width = baked.Size.Width, Height = baked.Size.Height,
+                Margin = glow.Margin, HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false,
+            };
+            ((Panel)lockGlyph.Parent!).Children.Insert(0, backdrop);
+            Dispatcher.UIThread.RunJobs();
+
             // On screen: 2 DIP left of the glyph's ink, mid-height, the halo tints the frame.
-            glow.Opacity = 1;
             var p = lockGlyph.TranslatePoint(new Point(plain.X - pad - 2, plain.Y - pad + plain.Height / 2.0), w)!.Value;
-            var lit = Pixel(Frame(w, "padlock-glow-on"), p);
-            glow.IsVisible = false;
-            var dark = Pixel(Frame(w, "padlock-glow-off"), p);
+            var lit = Pixel(Frame(w, "padlock-glow-on", () => { glow.IsVisible = true; glow.Opacity = 1; }), p);
+            var dark = Pixel(Frame(w, "padlock-glow-off", () => glow.IsVisible = false), p);
+            Assert.True(Diff(dark, 0) < 30, $"padlock backdrop did not cover the sample: {dark:X6}");
             Assert.True(Diff(lit, dark) > 4, $"no halo beside the padlock: {lit:X6} vs {dark:X6}");
         }
         finally
