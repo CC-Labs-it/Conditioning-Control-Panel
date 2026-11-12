@@ -108,6 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private bool _healUsed, _strict;
         private string _path = "";
         private int _playGeneration, _endCardAt = -1;
+        private long? _cardShownAt;
         private readonly List<Panel> _creditCards = new();
         private string? _creditQueued;
         internal static Func<string, bool> CreditOpener = ExternalOpener.Open;
@@ -339,7 +340,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     if (_player != live) return;
                     // WPF OnEnded: a clip that really played to its end earns Circe's "video" note.
                     if (Scheduler.IsPlaying && FirstFrameMs >= 0) App.ChasterNote("video");
-                    if (len <= 0 && _creditCards.Count > 0) EndCard(); else FinishCredit(true);
+                    PictureEnded();
                 });
             };
             _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(Scheduler.End);
@@ -481,25 +482,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     CoreSettings.Current.VideoMaxDurationSeconds * 1000L, 2500))
                 foreach (var card in _creditCards) ShowCard(card);
         }
-        /// <summary>WPF OnBrowserMediaEnded (VideoService.Browser.cs:653): the picture of a clip with no known end is over and
+        /// <summary>WPF OnBrowserMediaEnded (VideoService.Browser.cs:653): the picture of a credited clip is over and
         /// only its card is left. The guards and further spawns stand down until it finishes; targets already up stay.</summary>
-        internal void EndCard()
+        internal TimeSpan PictureEnded()
+        {
+            if (_creditCards.Count == 0) { FinishCredit(true); return TimeSpan.Zero; }
+            return EndCard();
+        }
+        internal TimeSpan EndCard()
         {
             var generation = _endCardAt = _playGeneration; _spawnTimes.Clear(); foreach (var card in _creditCards) ShowCard(card);
-            DispatcherTimer.RunOnce(() => { if (generation == _playGeneration && Scheduler.IsPlaying) FinishCredit(true); }, TimeSpan.FromMilliseconds(2500));
+            var left = TimeSpan.FromMilliseconds(Math.Max(0, 2500 - Time.GetElapsedTime(_cardShownAt ?? Time.GetTimestamp()).TotalMilliseconds));
+            if (left == TimeSpan.Zero) FinishCredit(true);
+            else DispatcherTimer.RunOnce(() => { if (generation == _playGeneration && Scheduler.IsPlaying) FinishCredit(true); }, left);
+            return left;
         }
-        private static void ShowCard(Panel card) { (card.IsVisible, card.Opacity) = (true, 1); (card.Tag as ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditBadge)?.SetShown(false); }   // player.js:225
+        private void ShowCard(Panel card) { _cardShownAt ??= Time.GetTimestamp(); (card.IsVisible, card.Opacity) = (true, 1); (card.Tag as ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditBadge)?.SetShown(false); }   // player.js:225
         /// <summary>WPF Assets/web/player/player.css:181-206, index.html:32: the end card dims the whole surface, fades in
         /// over 0.5 s and only its centre takes a press (pointerdown, player.js:986).</summary>
         private static Panel CreditCard(string sub, out Border press)
         {
             static TextBlock Line(string text, double size, double opacity, FontWeight weight = FontWeight.Normal) => new() { Text = text, FontSize = size,
                 Opacity = opacity, FontWeight = weight, Foreground = Brushes.White, HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center };
-            press = new Border { Background = Brushes.Transparent, Padding = new Thickness(40, 26), Cursor = new Cursor(StandardCursorType.Hand),
+            press = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
                 HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center, VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
-                Child = new StackPanel { Children = { Line("via", 26, 0.7), Line("Scrolller", 68, 1, FontWeight.ExtraBold), Line("r/" + sub, 26, 1), Line("scrolller.com/r/" + sub, 22, 0.65) } } };
-            return new Panel { IsVisible = false, Opacity = 0, Transitions = new() { new global::Avalonia.Animation.DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromMilliseconds(500) } },
+                Child = new StackPanel { Children = { Line("via", 12, 0.7), Line("Scrolller", 31.2, 1, FontWeight.ExtraBold), Line("r/" + sub, 12, 1), Line("scrolller.com/r/" + sub, 10.2, 0.65) } } };
+            var card = new Panel { IsVisible = false, Opacity = 0, Transitions = new() { new global::Avalonia.Animation.DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromMilliseconds(500) } },
                 Children = { new Border { Background = new SolidColorBrush(Color.FromArgb(184, 0, 0, 0)), IsHitTestVisible = false }, press } };
+            var target = press; var lines = ((StackPanel)press.Child!).Children.OfType<TextBlock>().ToArray();
+            card.SizeChanged += (_, e) => { var size = Math.Clamp(Math.Min(e.NewSize.Width, e.NewSize.Height) * 0.024, 12, 26);
+                target.Padding = new Thickness(size * 1.6, size); lines[0].FontSize = lines[2].FontSize = size; lines[1].FontSize = size * 2.6; lines[3].FontSize = size * 0.85;
+                lines[2].Margin = new Thickness(0, size * 0.3, 0, 0); lines[3].Margin = new Thickness(0, size * 0.6, 0, 0); };
+            return card;
         }
         internal Surface Build(global::Avalonia.Platform.Screen? screen, bool strict)
         {
@@ -919,7 +933,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private void SetupAttention()
         {
-            if (!_attention || !Scheduler.IsPlaying || _surfaces.Count == 0) return;
+            if (_endCardAt == _playGeneration || !_attention || !Scheduler.IsPlaying || _surfaces.Count == 0) return;
             var s = CoreSettings.Current;
             var total = MandatoryVideoScheduler.AttentionTargetCount(s.AttentionDensity, s.RandomizeAttentionTargets, _random);
             _spawnTimes = MandatoryVideoScheduler.AttentionSpawnTimes(total, (_player?.Length ?? 0) / 1000.0, _random);
@@ -1250,6 +1264,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             _playGeneration++;
             _creditQueued = null;
+            _cardShownAt = null;
             _creditCards.Clear();
             _floatingOnScreen = false;
             SampleCutPlayback();

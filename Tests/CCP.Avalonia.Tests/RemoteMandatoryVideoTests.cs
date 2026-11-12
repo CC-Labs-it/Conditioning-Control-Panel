@@ -64,7 +64,13 @@ public sealed class RemoteMandatoryVideoTests
             try
             {
                 var (card, press) = Card(surface.Window); Assert.False(card.IsVisible); Assert.Equal(new[] { "via", "Scrolller", "r/testsub", "scrolller.com/r/testsub" }, ((StackPanel)press.Child!).Children.OfType<TextBlock>().Select(t => t.Text));
+                card.IsVisible = true; card.Measure(new Size(800, 600)); card.Arrange(new Rect(0, 0, 800, 600));
+                var lines = ((StackPanel)press.Child!).Children.OfType<TextBlock>().ToArray(); Assert.Equal(14.4, lines[0].FontSize, 3); Assert.Equal(37.44, lines[1].FontSize, 3); Assert.Equal(23.04, press.Padding.Left, 3);
+                card.Measure(new Size(1920, 1080)); card.Arrange(new Rect(0, 0, 1920, 1080)); Assert.Equal(25.92, lines[0].FontSize, 3); Assert.Equal(67.392, lines[1].FontSize, 3);
+                card.Measure(new Size(200, 200)); card.Arrange(new Rect(0, 0, 200, 200)); Assert.Equal(12, lines[0].FontSize); card.Measure(new Size(4000, 4000)); card.Arrange(new Rect(0, 0, 4000, 4000)); Assert.Equal(26, lines[0].FontSize);
+                card.IsVisible = false; var elapsed = new Clock(); overlay.Time = elapsed;
                 overlay.UpdateCredit(7000, 7000, 10000); Assert.False(card.IsVisible); overlay.UpdateCredit(7500, 7500, 10000); Assert.True(card.IsVisible); Assert.Equal(1.0, card.GetBaseValue(Visual.OpacityProperty).Value); Assert.NotEmpty(card.Transitions!); Assert.False(Assert.Single(((Panel)surface.Window.Content!).Children.OfType<ScrolllerCreditBadge>()).Shown);
+                elapsed.Advance(1000); overlay._spawnTimes.Add(0); Assert.Equal(TimeSpan.FromMilliseconds(1500), overlay.PictureEnded()); Assert.Empty(overlay._spawnTimes);
                 void Frames() { surface.Window.UpdateLayout(); var until = DateTime.UtcNow.AddSeconds(5); for (var i = 0; i < 3 || card.Opacity < 1 && DateTime.UtcNow < until; i++) { global::Avalonia.Headless.AvaloniaHeadlessPlatform.ForceRenderTimerTick(); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); } } // the 0.5 s fade runs on the render clock
                 Frames(); var at = press.TranslatePoint(press.Bounds.Center - press.Bounds.Position, surface.Window)!.Value; Assert.True(press.IsVisualAncestorOf((Visual)surface.Window.InputHitTest(at)!));
                 var target = new Border { Background = Brushes.Red, Width = 9999, Height = 9999 }; surface.Layer.Children.Add(target); Frames(); Assert.Same(target, surface.Window.InputHitTest(at)); surface.Layer.Children.Remove(target); // WPF player.css:73: an attention target is never under the card
@@ -183,7 +189,10 @@ public sealed class RemoteMandatoryVideoTests
     }
     private sealed class Clock : TimeProvider
     {
-        private ManualTimer? _timer;
+        private ManualTimer? _timer; private long _stamp;
+        public override long TimestampFrequency => 1000;
+        public override long GetTimestamp() => _stamp;
+        public void Advance(long ms) => _stamp += ms;
         public void Fire() => _timer!.Fire();
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan due, TimeSpan period)
             => _timer = new ManualTimer(() => callback(state));
