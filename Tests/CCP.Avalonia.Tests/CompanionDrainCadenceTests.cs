@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -43,14 +44,30 @@ public class CompanionDrainCadenceTests
         }
     });
 
+    private static readonly FieldInfo LastDrainSave = typeof(CompanionCore).GetField("_lastDrainSaveUtc", BindingFlags.NonPublic | BindingFlags.Static)!;
+
     [Fact]
-    public Task WorkerSwitchKeepsDrainOnUiAndDoesNotRestartANewHead() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public async Task WorkerSwitchKeepsDrainOnUiAndDoesNotRestartANewHead()
+    {
+        var original = LastDrainSave.GetValue(null);
+        var sentinel = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        try
+        {
+            LastDrainSave.SetValue(null, sentinel);
+            await RunWorkerSwitchScenario();
+            Assert.Equal(sentinel, LastDrainSave.GetValue(null));
+        }
+        finally { LastDrainSave.SetValue(null, original); }
+    }
+
+    private static Task RunWorkerSwitchScenario() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var path = Path.Combine(CorePaths.UserData, "settings.json");
         var originalFile = File.Exists(path) ? File.ReadAllBytes(path) : null;
         var oldHooks = (CoreModsHooks.ActiveCompanionProvider, CoreModsHooks.SwitchCompanion);
         var oldEnv = Environment.GetEnvironmentVariable("CCP_COMPANION_V2");
         var oldProvider = CoreSettings.ServiceProvider;
+        var oldDrainSave = LastDrainSave.GetValue(null);
         var wasStarted = CompanionHead.Started;
         SettingsService? service = null;
         var drained = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -86,7 +103,8 @@ public class CompanionDrainCadenceTests
         finally
         {
             CompanionCore.XPDrained -= OnDrain;
-            CompanionHead.Stop();
+            try { CompanionHead.Stop(); }
+            finally { LastDrainSave.SetValue(null, oldDrainSave); }
             service?.SealForReset();
             try
             {
