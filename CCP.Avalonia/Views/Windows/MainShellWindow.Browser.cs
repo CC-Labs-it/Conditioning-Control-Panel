@@ -277,7 +277,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         // A document started after the request belongs to the pending navigation generation.
-        private const string BrowserDocumentStateScript = "JSON.stringify({url:location.href,state:document.readyState,started:performance.timeOrigin})";
+        private const string BrowserDocumentStateScript = "JSON.stringify({url:location.href,state:document.readyState,started:performance.timeOrigin,domEnd:performance.getEntriesByType('navigation')[0]?.domContentLoadedEventEnd ?? performance.timing?.domContentLoadedEventEnd ?? null})";
         internal Func<Task> BrowserDomPollDelay = () => Task.Delay(100);
 
         private bool IsActiveBrowserDocument(string? result, Uri? expectedUrl = null, bool requireParsed = true)
@@ -292,7 +292,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (!Uri.TryCreate(root.GetProperty("url").GetString(), UriKind.Absolute, out var current) ||
                     (expectedUrl != null && !expectedUrl.Equals(current)) ||
                     root.GetProperty("started").GetDouble() <= _browserNavigationStarted ||
-                    (requireParsed && root.GetProperty("state").GetString() is not ("interactive" or "complete"))) return false;
+                    (requireParsed && root.GetProperty("state").GetString() != "complete" &&
+                     (!root.TryGetProperty("domEnd", out var domEnd) || !domEnd.TryGetDouble(out var end) || end <= 0))) return false;
                 return true;
             }
             catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or System.Collections.Generic.KeyNotFoundException) { return false; }
@@ -317,6 +318,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             var target = _pendingBrowserAutoplay;
             if (target == null) return;
+            // GTK reports completion at commit, which can precede deferred scripts and DOMContentLoaded.
+            if (success && !IsBrowserPlaylist(target))
+            {
+                _ = CompleteVideoNavigationAsync(url, target, _browserAutoplayGeneration);
+                return;
+            }
             if (!_browserActiveNavigation!.Equals(url))
             {
                 if (success) _ = CompleteChangedBrowserUrlAsync(url, target, _browserAutoplayGeneration);
@@ -325,6 +332,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _pendingBrowserAutoplay = null;
             if (!success) { EndAvatarBrowserSession(); return; }
             _ = StartBrowserAutoplay(_hookedAvatarBrowser!, target, _browserAutoplayGeneration);
+        }
+
+        // If timing is available, an early native completion must leave the DOM poll armed.
+        // If the timing entry is absent, keep the completion fallback; a failed script is retried by the poll.
+        private async Task CompleteVideoNavigationAsync(Uri url, Uri target, int generation)
+        {
+            var host = _hookedAvatarBrowser!;
+            var result = await host.InvokeScriptAsync(BrowserDocumentStateScript);
+            if (generation != _browserAutoplayGeneration || !target.Equals(_pendingBrowserAutoplay)) return;
+            if (result == null || DomContentStillPending(result)) return;
+            if (!_browserActiveNavigation!.Equals(url) && !IsActiveBrowserDocument(result, url, requireParsed: false)) return;
+            _pendingBrowserAutoplay = null;
+            _ = StartBrowserAutoplay(host, target, generation);
+        }
+
+        private static bool DomContentStillPending(string result)
+        {
+            try
+            {
+                using var outer = System.Text.Json.JsonDocument.Parse(result);
+                var json = outer.RootElement.ValueKind == System.Text.Json.JsonValueKind.String ? outer.RootElement.GetString() : result;
+                using var doc = System.Text.Json.JsonDocument.Parse(json!);
+                if (doc.RootElement.TryGetProperty("state", out var state) && state.GetString() == "complete") return false;
+                return doc.RootElement.TryGetProperty("domEnd", out var end) &&
+                    end.ValueKind != System.Text.Json.JsonValueKind.Null &&
+                    (!end.TryGetDouble(out var value) || value <= 0);
+            }
+            catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException) { return false; }
         }
 
         private async Task CompleteChangedBrowserUrlAsync(Uri url, Uri target, int generation)

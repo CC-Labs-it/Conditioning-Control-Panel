@@ -211,7 +211,7 @@ public sealed class CompanionBrowserLinkTests
         var scripts = new List<string>();
         var step = new TaskCompletionSource();
         host.NavigationInvoker = _ => true;
-        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(script.Contains("document.readyState") ? "{\"url\":\"https://127.0.0.1/video\",\"state\":\"interactive\",\"started\":9999999999999}" : "ok"); };
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(script.Contains("document.readyState") ? "{\"url\":\"https://127.0.0.1/video\",\"state\":\"interactive\",\"started\":9999999999999,\"domEnd\":1}" : "ok"); };
         shell.BrowserDomPollDelay = () => step.Task;
         shell.BrowserAutoplayDelay = () => Task.CompletedTask;
         var video = new Uri("https://127.0.0.1/video");
@@ -256,7 +256,7 @@ public sealed class CompanionBrowserLinkTests
         var requested = new Uri("https://127.0.0.1/video");
         var redirected = new Uri("https://127.0.0.1/result");
         host.NavigationInvoker = _ => true;
-        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(script.Contains("document.readyState") ? "{\"url\":\"https://127.0.0.1/result#changed\",\"document\":\"https://127.0.0.1/result\",\"state\":\"interactive\",\"started\":9999999999999}" : "ok"); };
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(script.Contains("document.readyState") ? "{\"url\":\"https://127.0.0.1/result#changed\",\"document\":\"https://127.0.0.1/result\",\"state\":\"interactive\",\"started\":9999999999999,\"domEnd\":1}" : "ok"); };
         shell.BrowserDomPollDelay = () => ++polls == 1 ? step.Task : Task.Delay(-1);
         shell.BrowserAutoplayDelay = () => Task.CompletedTask;
         Assert.True(shell.NavigateToUrlInBrowser(requested.AbsoluteUri, true));
@@ -321,6 +321,71 @@ public sealed class CompanionBrowserLinkTests
         host.OnNavigationCompleted(redirected);
         Assert.Single(scripts, s => s.Contains("ccpAvatarMedia"));
         step.SetResult(); await Task.Yield();
+        Assert.Single(scripts, s => s.Contains("ccpAvatarMedia"));
+    }));
+    [Fact]
+    public Task DeferredPlayerWaitsForDomContentLoaded() => AvaloniaTestDispatcher.RunAsync(() => WithShell(async (shell, host) =>
+    {
+        var scripts = new List<string>(); var first = new TaskCompletionSource(); var second = new TaskCompletionSource();
+        var polls = 0; var domEnd = 0; var delays = 0;
+        host.NavigationInvoker = _ => true;
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(script.Contains("document.readyState") ? $"{{\"url\":\"https://127.0.0.1/video\",\"state\":\"interactive\",\"started\":9999999999999,\"domEnd\":{domEnd}}}" : "ok"); };
+        shell.BrowserDomPollDelay = () => ++polls switch { 1 => first.Task, 2 => second.Task, _ => Task.Delay(-1) };
+        shell.BrowserAutoplayDelay = () => { delays++; return Task.CompletedTask; };
+        var video = new Uri("https://127.0.0.1/video");
+        Assert.True(shell.NavigateToUrlInBrowser(video.AbsoluteUri, true));
+        first.SetResult(); await Task.Yield();
+        Assert.Equal(0, delays); Assert.DoesNotContain(scripts, s => s.Contains("ccpAvatarMedia"));
+        // The deferred player is still executing, even beyond the old search window.
+        domEnd = 12000;
+        second.SetResult(); await Task.Yield();
+        Assert.Equal(1, delays); Assert.Single(scripts, s => s.Contains("ccpAvatarMedia"));
+        host.OnNavigationCompleted(video);
+        Assert.Single(scripts, s => s.Contains("ccpAvatarMedia"));
+    }));
+
+    [Fact]
+    public Task EarlyNativeCompletionDoesNotPreemptDeferredPlayer() => AvaloniaTestDispatcher.RunAsync(() => WithShell(async (shell, host) =>
+    {
+        var scripts = new List<string>(); var step = new TaskCompletionSource(); var domEnd = 0; var delays = 0;
+        host.NavigationInvoker = _ => true;
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(script.Contains("document.readyState") ? $"{{\"url\":\"https://127.0.0.1/video\",\"state\":\"interactive\",\"started\":9999999999999,\"domEnd\":{domEnd}}}" : "ok"); };
+        shell.BrowserDomPollDelay = () => step.Task;
+        shell.BrowserAutoplayDelay = () => { delays++; return Task.CompletedTask; };
+        var video = new Uri("https://127.0.0.1/video");
+        Assert.True(shell.NavigateToUrlInBrowser(video.AbsoluteUri, true));
+        host.OnNavigationCompleted(video);
+        Assert.Equal(0, delays); Assert.DoesNotContain(scripts, s => s.Contains("ccpAvatarMedia"));
+        domEnd = 12000; step.SetResult(); await Task.Yield();
+        Assert.Equal(1, delays); Assert.Single(scripts, s => s.Contains("ccpAvatarMedia"));
+    }));
+    [Fact]
+    public Task CompletionStillWorksWhenDomTimingIsUnavailable() => AvaloniaTestDispatcher.RunAsync(() => WithShell((shell, host) =>
+    {
+        var scripts = new List<string>();
+        host.NavigationInvoker = _ => true;
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(script.Contains("document.readyState") ? "{\"url\":\"https://127.0.0.1/video\",\"state\":\"complete\",\"started\":9999999999999,\"domEnd\":null}" : "ok"); };
+        shell.BrowserDomPollDelay = () => Task.Delay(-1); shell.BrowserAutoplayDelay = () => Task.CompletedTask;
+        var video = new Uri("https://127.0.0.1/video");
+        Assert.True(shell.NavigateToUrlInBrowser(video.AbsoluteUri, true));
+        host.OnNavigationCompleted(video);
+        Assert.Single(scripts, s => s.Contains("ccpAvatarMedia"));
+        return Task.CompletedTask;
+    }));
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task CompleteDocumentStartsWhenTimingIsZero(bool completion) => AvaloniaTestDispatcher.RunAsync(() => WithShell(async (shell, host) =>
+    {
+        var scripts = new List<string>(); var step = new TaskCompletionSource(); var polls = 0;
+        host.NavigationInvoker = _ => true;
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(script.Contains("document.readyState") ? "{\"url\":\"https://127.0.0.1/video\",\"state\":\"complete\",\"started\":9999999999999,\"domEnd\":0}" : "ok"); };
+        shell.BrowserDomPollDelay = () => ++polls == 1 ? step.Task : Task.Delay(-1);
+        shell.BrowserAutoplayDelay = () => Task.CompletedTask;
+        var video = new Uri("https://127.0.0.1/video");
+        Assert.True(shell.NavigateToUrlInBrowser(video.AbsoluteUri, true));
+        if (completion) host.OnNavigationCompleted(video);
+        else { step.SetResult(); await Task.Yield(); }
         Assert.Single(scripts, s => s.Contains("ccpAvatarMedia"));
     }));
 }
