@@ -548,11 +548,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Height = 300;
         }
 
-        internal bool IsRemix { get; set; }
-        internal void SetPicture(Bitmap picture) => _image.Source = picture;
-        internal object? Picture => _image.Source;
-
-        public FlashOverlayWindow(Bitmap picture, string? path = null, bool ownsPicture = true)
+        public FlashOverlayWindow(Bitmap picture, string? path = null)
         {
             WindowDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
@@ -591,7 +587,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _gifTimer?.Stop(); _gifTimer = null;
                 if (_gifFrames is { } frames) for (var i = 1; i < frames.Count; i++) frames[i].Dispose();
                 _gifFrames = null;
-                if (ownsPicture) picture.Dispose();
+                picture.Dispose();
             };
         }
 
