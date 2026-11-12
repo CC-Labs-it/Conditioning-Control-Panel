@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Input;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -32,9 +33,26 @@ public sealed class DeeperPlayerWebcamTests
         public bool Read(Mat frame) { frame.Create(480, 640, MatType.CV_8UC3); frame.SetTo(Scalar.All(0)); System.Threading.Thread.Sleep(10); return true; }
         public void Dispose() { }
     }
+    private sealed class Audio : IDeeperLocalAudio
+    {
+        public int Volume { get; set; }
+        public double DurationSeconds => 90;
+        public double PositionSeconds { get; set; }
+        public void Play() { }
+        public void Pause() { }
+        public event Action? Ended { add { } remove { } }
+        public event Action? Failed { add { } remove { } }
+        public void Dispose() { }
+    }
+    private static void PrepareAudio(EnhancementPlayerWindow w)
+    {
+        typeof(EnhancementPlayerWindow).GetField("_audioPath", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(w, "test.mp3");
+        typeof(EnhancementPlayerWindow).GetField("_localAudio", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(w, new Audio());
+    }
+    private static void Play(EnhancementPlayerWindow w) => Click(w.FindControl<Button>("BtnPlayPause")!);
     private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
     private static void Tick(EnhancementPlayerWindow w) => typeof(EnhancementPlayerWindow).GetMethod("WebcamTick", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(w, new object?[] { null, EventArgs.Empty });
-    private static Enhancement WebcamEnhancement() => new() { Metadata = new EnhancementMetadata { AutoTags = { EnhancementAutoTagger.TagWebcam } } };
+    private static Enhancement WebcamEnhancement() => new() { MediaType = MediaTypes.Audio, Metadata = new EnhancementMetadata { AutoTags = { EnhancementAutoTagger.TagWebcam } } };
     private static void Setup()
     {
         if (Application.Current is null)
@@ -111,8 +129,8 @@ public sealed class DeeperPlayerWebcamTests
             try
             {
                 second.Show();
-                typeof(EnhancementPlayerWindow).GetField("_isPlaying", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(second, true);
-                Tick(second);
+                PrepareAudio(second);
+                Play(second);
                 Assert.False(second.FindControl<Border>("WebcamBanner")!.IsVisible);
             }
             finally { second.Close(); }
@@ -123,8 +141,9 @@ public sealed class DeeperPlayerWebcamTests
             try
             {
                 third.Show();
-                typeof(EnhancementPlayerWindow).GetField("_isPlaying", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(third, true);
-                Tick(third);
+                PrepareAudio(third);
+                Play(third);
+                Assert.True(third.FindControl<Border>("WebcamBanner")!.IsVisible);
                 Click(third.FindControl<Button>("WebcamEnable")!);
                 await Until(() => WebcamTracker.Instance.IsRunning);
             }
@@ -135,6 +154,37 @@ public sealed class DeeperPlayerWebcamTests
         {
             player.Close();
             await WebcamTracker.Instance.StopAsync();
+            (settings.WebcamConsentGiven, settings.WebcamConsentVersion, WebcamTracker.SourceFactory, EnhancementHostService.WebcamProvider) = old;
+        }
+    });
+    [Fact]
+    public Task BannerOwnershipSurvivesButtonStopAndRestart() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var settings = CoreSettings.Current;
+        var old = (settings.WebcamConsentGiven, settings.WebcamConsentVersion, WebcamTracker.SourceFactory, EnhancementHostService.WebcamProvider);
+        WebcamTracker.SourceFactory = () => new Source();
+        settings.WebcamConsentGiven = true;
+        settings.WebcamConsentVersion = WebcamConsent.ConsentVersion;
+        var player = new EnhancementPlayerWindow(WebcamEnhancement(), null);
+        try
+        {
+            player.Show(); PrepareAudio(player); Play(player);
+            Assert.True(player.FindControl<Border>("WebcamBanner")!.IsVisible);
+            Click(player.FindControl<Button>("WebcamEnable")!);
+            await Until(() => WebcamTracker.Instance.IsRunning && !WebcamTracker.Instance.IsStarting);
+            Click(player.FindControl<Button>("BtnEyeTracking")!);
+            await Until(() => !WebcamTracker.Instance.IsRunning);
+            Click(player.FindControl<Button>("BtnEyeTracking")!);
+            await Until(() => player.OwnedWindows.OfType<MessageDialog>().Any());
+            Assert.Single(player.OwnedWindows.OfType<MessageDialog>()).Close(true);
+            await Until(() => WebcamTracker.Instance.IsRunning && !WebcamTracker.Instance.IsStarting);
+            player.Close();
+            await Until(() => !WebcamTracker.Instance.IsRunning);
+        }
+        finally
+        {
+            player.Close(); await WebcamTracker.Instance.StopAsync();
             (settings.WebcamConsentGiven, settings.WebcamConsentVersion, WebcamTracker.SourceFactory, EnhancementHostService.WebcamProvider) = old;
         }
     });
@@ -157,8 +207,9 @@ public sealed class DeeperPlayerWebcamTests
             player.Show();
             if (fromBanner)
             {
-                typeof(EnhancementPlayerWindow).GetField("_isPlaying", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(player, true);
-                Tick(player);
+                PrepareAudio(player);
+                Play(player);
+                Assert.True(player.FindControl<Border>("WebcamBanner")!.IsVisible);
                 Click(player.FindControl<Button>("WebcamEnable")!);
             }
             else
@@ -225,6 +276,8 @@ public sealed class DeeperPlayerWebcamTests
             Assert.Null(EnhancementHostService.WebcamProvider);
             await AcceptedStartUpdatesLabelAndCloseRespectsOwnership();
             Assert.Null(EnhancementHostService.WebcamProvider);
+            await BannerOwnershipSurvivesButtonStopAndRestart();
+            Assert.Null(EnhancementHostService.WebcamProvider);
             await FailedStartReportsError();
             Assert.Null(EnhancementHostService.WebcamProvider);
             await CloseDuringStartRespectsOrigin(false);
@@ -257,6 +310,24 @@ public sealed class DeeperPlayerWebcamTests
         Assert.Equal((1, 1, 1, 1, 12d, 34d), (blink, mouth, lost, found, x, y));
     }
     [Fact]
+    public Task BannerDoesNotCoverMedia() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var oldProvider = EnhancementHostService.WebcamProvider;
+        var player = new EnhancementPlayerWindow(WebcamEnhancement(), null);
+        try
+        {
+            player.Show(); PrepareAudio(player); Play(player); player.UpdateLayout();
+            var banner = player.FindControl<Border>("WebcamBanner")!;
+            var audio = player.FindControl<Border>("AudioPane")!;
+            var bannerY = banner.TranslatePoint(new global::Avalonia.Point(), player)!.Value.Y;
+            var audioY = audio.TranslatePoint(new global::Avalonia.Point(), player)!.Value.Y;
+            Assert.True(banner.IsVisible && banner.Bounds.Height > 0 && audioY >= bannerY + banner.Bounds.Height);
+        }
+        finally { player.Close(); EnhancementHostService.WebcamProvider = oldProvider; }
+        return Task.CompletedTask;
+    });
+    [Fact]
     public Task BannerIsOfferedOnlyOnceAndButtonRequiresWebcam() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
@@ -265,15 +336,32 @@ public sealed class DeeperPlayerWebcamTests
         try
         {
             player.Show();
+            PrepareAudio(player);
+            var banner = player.FindControl<Border>("WebcamBanner")!;
+            // Playback observed from a page is not a player Play action.
             typeof(EnhancementPlayerWindow).GetField("_isPlaying", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(player, true);
             Tick(player);
-            var banner = player.FindControl<Border>("WebcamBanner")!;
+            Assert.False(banner.IsVisible);
+            Play(player); // pause
+            Assert.False(banner.IsVisible);
+            Play(player); // resume using the button
+            Assert.True(banner.IsVisible);
+            player.UpdateLayout();
+            var audio = player.FindControl<Border>("AudioPane")!;
+            var bannerY = banner.TranslatePoint(new global::Avalonia.Point(), player)!.Value.Y;
+            var audioY = audio.TranslatePoint(new global::Avalonia.Point(), player)!.Value.Y;
+            Assert.True(banner.Bounds.Height > 0 && audioY >= bannerY + banner.Bounds.Height);
+            banner.IsVisible = false;
+            Play(player); Play(player);
+            Assert.False(banner.IsVisible);
+            Play(player); // pause before loading another enhancement
+            typeof(EnhancementPlayerWindow).GetMethod("UpdateHostUi", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(player, new object?[] { WebcamEnhancement(), null });
+            player.PlayerKey(Key.Space);
             Assert.True(banner.IsVisible);
             banner.IsVisible = false;
-            Tick(player);
-            Assert.False(banner.IsVisible);
+            player.PlayerKey(Key.Space); // pause
             typeof(EnhancementPlayerWindow).GetMethod("UpdateHostUi", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(player, new object?[] { WebcamEnhancement(), null });
-            Tick(player);
+            typeof(EnhancementPlayerWindow).GetMethod("OnVideoWebMessage", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(player, new object?[] { "ccp_key:Space:0:0" });
             Assert.True(banner.IsVisible);
             typeof(EnhancementPlayerWindow).GetMethod("UpdateHostUi", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(player, new object?[] { new Enhancement(), null });
             Tick(player);

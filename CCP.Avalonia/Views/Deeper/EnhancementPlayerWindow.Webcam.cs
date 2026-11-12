@@ -55,7 +55,15 @@ public partial class EnhancementPlayerWindow
         }
         bool needed = EnhancementCapabilities.NeedsWebcam(_loadedEnhancement);
         EyeButton.IsVisible = needed;
-        if (!needed || !_isPlaying || _webcamPromptShown) return;
+    }
+
+    private void WebcamPlay_Click(object? sender, RoutedEventArgs e) => OfferWebcamBeforePlay();
+
+    private void OfferWebcamBeforePlay()
+    {
+        if (_isPlaying || (_isVideoMode ? !_videoNavigated : _audioPath == null)) return;
+        WebcamTick(null, EventArgs.Empty);
+        if (!EnhancementCapabilities.NeedsWebcam(_loadedEnhancement) || _webcamPromptShown) return;
         _webcamPromptShown = true;
         if (WebcamTracker.Instance.IsRunning || WebcamTracker.Instance.IsStarting) return;
         CameraText.Text = Loc.Get("deeper_player_webcam_banner_text");
@@ -66,7 +74,7 @@ public partial class EnhancementPlayerWindow
     private async void EyeTracking_Click(object? sender, RoutedEventArgs e)
     {
         var tracker = WebcamTracker.Instance;
-        if (tracker.IsRunning || tracker.IsStarting) { await tracker.StopAsync(); _playerStartedWebcam = false; return; }
+        if (tracker.IsRunning || tracker.IsStarting) { await tracker.StopAsync(); return; }
         string title = Loc.Get("deeper_player_btn_eye_tracking_start");
         if (!WebcamConsent.IsCurrent(CoreSettings.Current))
         {
