@@ -211,8 +211,9 @@ internal static class AccountSeed
                 var node = await (v2 ?? NewV2()).GetUserProfileNodeAsync(id);
                 // A late answer for an account that signed out or switched while it ran lands nowhere.
                 if (node == null || CoreSettings.Current.UnifiedId != id) return;
-                ApplyTierReading(EntitlementTierRule.ParseTier(node["effective_tier"]), "focus");
-                ApplyPatreonReading(PatreonActiveRule.Parse(node), "focus");
+                var user = node.ToObject<V2AuthService.V2User>();
+                if (user != null) EntitlementRefresh.Apply(CoreSettings.Current, id, user, "focus",
+                    ConditioningControlPanel.Services.Startup.Conversion.ProfileExtras.Parse(node));
             });
         }
         catch (Exception ex) { Log.Debug("[Entitlement] focus refresh failed: {Error}", ex.Message); }

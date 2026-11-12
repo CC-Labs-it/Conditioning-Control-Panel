@@ -72,8 +72,10 @@ public class InboxNoticeCardTests
     {
         var symbol = new InboxItem { Key = "symbol", IconKey = "Heart", Title = "Prime is on" };
         var legacy = new InboxItem { Key = "legacy", Glyph = "old", Title = "Legacy" };
+        var pass = new InboxItem { Key = "pass", IconKey = "HourglassHalf", Title = "Pass ending" };
         StartupLadder.Inbox.File(symbol);
         StartupLadder.Inbox.File(legacy);
+        StartupLadder.Inbox.File(pass);
         var flyout = new InboxFlyout();
         owner.Content = flyout;
         owner.Width = 400; owner.Height = 300;
@@ -83,6 +85,10 @@ public class InboxNoticeCardTests
         Assert.True(heart.IsVisible);
         Assert.Equal("Heart", heart.Kind.ToString());
         Assert.False(heart.IsFallback);
+        var hourglass = Assert.Single(icons, g => ReferenceEquals(g.DataContext, pass));
+        Assert.True(hourglass.IsVisible);
+        Assert.Equal("HourglassHalf", hourglass.Kind.ToString());
+        Assert.False(hourglass.IsFallback);
         Assert.False(Assert.Single(icons, g => ReferenceEquals(g.DataContext, legacy)).IsVisible);
         Assert.Contains(flyout.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "old" && t.IsVisible);
     });

@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Startup.Conversion;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
@@ -69,19 +70,26 @@ internal static class EntitlementRefresh
             || Interlocked.Exchange(ref _inFlight, 1) != 0) return false;
         try
         {
-            var user = await AccountSeed.NewV2().GetUserProfileAsync(id);
+            var node = await AccountSeed.NewV2().GetUserProfileNodeAsync(id);
+            var user = node?.ToObject<V2AuthService.V2User>();
             if (user == null) return false;
-            return await Dispatcher.UIThread.InvokeAsync(() => Apply(s, id, user));
+            var extras = ProfileExtras.Parse(node);
+            return await Dispatcher.UIThread.InvokeAsync(() => Apply(s, id, user, extras: extras));
         }
         catch (Exception ex) { Log.Debug(ex, "Entitlement refresh failed"); return false; }
         finally { Interlocked.Exchange(ref _inFlight, 0); }
     }
 
-    internal static bool Apply(AppSettings s, string id, V2AuthService.V2User user, string source = "refresh")
+    internal static bool Apply(AppSettings s, string id, V2AuthService.V2User user, string source = "refresh", ProfileExtrasReading? extras = null)
     {
         if (!ReferenceEquals(s, CoreSettings.Current) || s.OfflineMode || s.UnifiedId != id
             || string.IsNullOrEmpty(s.AuthToken)) return false;
         var before = EffectiveTier;
+        if (ProfileExtras.Apply(s, extras))
+        {
+            CoreSettings.Save();
+            App.PostCodeInputsChanged?.Invoke();
+        }
         // WPF EntitlementTierSync.Offer -> ApplyOnUi: the one grace-aware tier path (a rise unlocks, a tier
         // renews the grace, the same lower reading 90 s later closes it), never a rise-only write.
         AccountSeed.ApplyTierReading(EntitlementTierRule.ParseTier(user.EffectiveTierRaw), source);

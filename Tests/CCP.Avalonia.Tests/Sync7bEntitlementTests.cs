@@ -17,6 +17,7 @@ using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Startup.Conversion;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -38,6 +39,63 @@ public class Sync7bEntitlementTests {
         Assert.True(EntitlementRefresh.ServerAnsweredThisRun); s.AuthToken = null;
         s.PatreonPremiumValidUntil = null; Assert.False(EntitlementRefresh.Apply(s, "sync7b", user));
         Assert.Null(s.PatreonPremiumValidUntil);
+    });
+    [Fact] public void ChangedProfileExtrasNotifyDailyGiftOnce() => AvaloniaTestDispatcher.Run(() => {
+        using var isolation = new EntitlementTestScope();
+        var secrets = new Dictionary<string, string?>();
+        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key);
+        CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
+        var s = CoreSettings.Current; s.OfflineMode = false; s.UnifiedId = "extras-test"; s.AuthToken = "test-token";
+        s.PatreonMember = false; s.PostGrants = new Dictionary<string, string>();
+        var user = new V2AuthService.V2User { EffectiveTierRaw = new JValue(0) };
+        var extras = ProfileExtras.Parse(JObject.Parse("{\"patreon_member\":true,\"post_grants\":{\"voice\":\"2030-01-01T00:00:00Z\"}}"));
+        var previous = ConditioningControlPanel.Avalonia.App.PostCodeInputsChanged;
+        var notifications = 0;
+        ConditioningControlPanel.Avalonia.App.PostCodeInputsChanged = () => notifications++;
+        try {
+            Assert.True(EntitlementRefresh.Apply(s, "extras-test", user, extras: extras));
+            Assert.True(s.PatreonMember); Assert.True(s.PostGrants.ContainsKey("voice"));
+            Assert.Equal(1, notifications);
+            Assert.True(EntitlementRefresh.Apply(s, "extras-test", user, extras: extras));
+            Assert.Equal(1, notifications);
+            s.AuthToken = null;
+            var cleared = ProfileExtras.Parse(JObject.Parse("{\"patreon_member\":false,\"post_grants\":{}}"));
+            Assert.False(EntitlementRefresh.Apply(s, "extras-test", user, extras: cleared));
+            Assert.True(s.PatreonMember); Assert.Equal(1, notifications);
+            s.AuthToken = "test-token";
+            Assert.True(EntitlementRefresh.Apply(s, "extras-test", user, extras: cleared));
+            Assert.False(s.PatreonMember); Assert.Empty(s.PostGrants); Assert.Equal(2, notifications);
+        } finally { ConditioningControlPanel.Avalonia.App.PostCodeInputsChanged = previous; }
+    });
+    [Fact] public Task RawProfilePostsOnePassNoticeAndSignOutStopsIt() => AvaloniaTestDispatcher.RunAsync(async () => {
+        using var isolation = new EntitlementTestScope();
+        var secrets = new Dictionary<string, string?>();
+        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key);
+        CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
+        var s = CoreSettings.Current; s.OfflineMode = false; s.UnifiedId = "pass-test"; s.AuthToken = "test-token";
+        s.InboxStamps = new Dictionary<string, string>();
+        if (Application.Current == null) AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>()
+            .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+            .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var ends = DateTime.UtcNow.AddDays(3).AddMinutes(-1);
+        var handler = new ProfileAnswer(); AccountSeed.NewV2 = () => new V2AuthService(() => s, handler);
+        handler.Profile.SetResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(
+            new JObject { ["user"] = new JObject { ["effective_tier"] = 1, ["patreon_member"] = true,
+                ["paid_until"] = ends.ToString("o"), ["crypto_pass"] = new JObject { ["ends_at"] = ends.ToString("o") },
+                ["post_grants"] = new JObject { ["voice"] = ends.ToString("o") } } }.ToString()) });
+        Assert.True(await EntitlementRefresh.RefreshAsync());
+        Assert.Equal(ends, s.PassEndsUtc); Assert.Equal(ends, s.ServerPaidUntil);
+        Assert.True(s.PatreonMember); Assert.True(s.PostGrants.ContainsKey("voice"));
+        StartupLadder.ResetForTests(); StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(1));
+        var shell = new MainShellWindow();
+        try {
+            shell.MaybePostConversionRows(); shell.MaybePostConversionRows();
+            var row = Assert.Single(StartupLadder.Inbox.Items.Where(row => row.Key == "conv:pass_ends"));
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("pass_ends_days", 3), row.Title);
+            Assert.Equal("HourglassHalf", row.IconKey); Assert.Empty(row.Glyph);
+            StartupLadder.ResetForTests(); s.InboxStamps.Clear(); ProgressionClear.Apply(s); s.AuthToken = null; s.UnifiedId = null;
+            shell.MaybePostConversionRows(); Assert.Empty(StartupLadder.Inbox.Items.Where(row => row.Key == "conv:pass_ends"));
+        } finally { shell.Close(); StartupLadder.ResetForTests(); }
     });
     [Fact] public void ButtonShowsFeedbackAndHidesForPrime() => AvaloniaTestDispatcher.Run(() => {
         using var isolation = new EntitlementTestScope();
