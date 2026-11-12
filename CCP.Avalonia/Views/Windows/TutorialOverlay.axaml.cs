@@ -9,6 +9,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Tours;
 
 // The step model now comes from the tutorial seam. Aliased to the names the WPF original uses so
 // this file still reads against ConditioningControlPanel/Windows/TutorialOverlay.xaml.cs line for
@@ -120,7 +121,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
         }
 
-        private TutorialOverlay(Window? targetWindow, bool live)
+        internal TutorialOverlay(Window targetWindow, Window mainWindow) : this(targetWindow, live: true, mainWindow) { }
+
+        private TutorialOverlay(Window? targetWindow, bool live, Window? mainWindow = null)
         {
             AvaloniaXamlLoader.Load(this);
 
@@ -154,6 +157,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             _live = live;
             _targetWindow = targetWindow;
+            _tutorialMainWindow = live ? mainWindow ?? TutorialHeadHooks.Shell : null;
 
             if (_live)
             {
@@ -270,6 +274,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_closed) return;
             _step = step;
             if (RetargetIfNeeded(step)) return;
+            UpdateMainWindowDim(step.BlockBackgroundClicks);
             _advanceFiredThisStep = false;
 
             _txtStepCounter.Text = StepCounterText();
