@@ -462,7 +462,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var language = LocalizationManager.Instance.CurrentLanguage;
             if (_cardFolders != null && _cardFolders.SequenceEqual(folders) &&
                 _cardVideos == s.BlinkTrainerIncludeVideos && _cardLanguage == language &&
-                ReferenceEquals(_cardPink, pink)) return;
+                ReferenceEquals(_cardPink, pink))
+            {
+                for (int i = 0; i < folders.Length; i++)
+                    UpdateFolderCount((TextBlock)((Border)BlinkTrainerFolderCardsHost.Children[i]).Tag!, folders[i], s.BlinkTrainerIncludeVideos);
+                return;
+            }
             BlinkTrainerFolderCardsHost.Children.Clear();
             _cardFolders = null;
             foreach (var folder in folders)
@@ -479,7 +484,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var rest = new SolidColorBrush(Color.FromRgb(0xFF, 0x69, 0xB4), 0.3);
             var muted = this.FindResource("TextMutedBrush") as IBrush ?? Brushes.Gray;
 
-            var countLine = BlinkTrainerState.FolderCountLine(AssetPack.FromFolder(folder), includeVideos);
             var info = new StackPanel();
             info.Children.Add(new TextBlock
             {
@@ -487,12 +491,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 FontWeight = FontWeight.Medium, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis,
                 [ToolTip.TipProperty] = folder,
             });
-            info.Children.Add(new TextBlock
-            {
-                Text = countLine ?? Loc.Get("blink_trainer_folder_empty_or_invalid"),
-                Foreground = countLine == null ? (this.FindResource("TextDimBrush") as IBrush ?? muted) : muted,
-                FontSize = 11, Margin = new Thickness(0, 2, 0, 0),
-            });
+            var count = new TextBlock { FontSize = 11, Margin = new Thickness(0, 2, 0, 0) };
+            UpdateFolderCount(count, folder, includeVideos);
+            info.Children.Add(count);
 
             var remove = new Button
             {
@@ -508,12 +509,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 CornerRadius = new CornerRadius(8), Background = new SolidColorBrush(Color.FromArgb(0x11, 0, 0, 0)),
                 BorderBrush = rest, BorderThickness = new Thickness(1), Padding = new Thickness(10, 8),
-                Margin = new Thickness(0, 0, 0, 8),
+                Margin = new Thickness(0, 0, 0, 8), Tag = count,
                 Child = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = { info, remove } },
             };
             card.PointerEntered += (_, _) => card.BorderBrush = pink;
             card.PointerExited += (_, _) => card.BorderBrush = rest;
             return card;
+        }
+
+        private void UpdateFolderCount(TextBlock count, string folder, bool includeVideos)
+        {
+            var line = BlinkTrainerState.FolderCountLine(AssetPack.FromFolder(folder), includeVideos);
+            var muted = this.FindResource("TextMutedBrush") as IBrush ?? Brushes.Gray;
+            count.Text = line ?? Loc.Get("blink_trainer_folder_empty_or_invalid");
+            count.Foreground = line == null ? (this.FindResource("TextDimBrush") as IBrush ?? muted) : muted;
         }
 
         private async void BtnBlinkTrainerAddFolderCard_Click(object? sender, RoutedEventArgs e)

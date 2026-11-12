@@ -97,6 +97,61 @@ public sealed class BlinkTrainerTabLiveTests
         }
     });
 
+    [Theory]
+    [InlineData("add")]
+    [InlineData("delete")]
+    [InlineData("remove-folder")]
+    [InlineData("restore-folder")]
+    public void ReturningToTabRefreshesFolderCounts(string change) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var settings = ConditioningControlPanel.CoreSettings.Current;
+        var oldFolders = settings.BlinkTrainerFolders.ToArray();
+        var oldVideos = settings.BlinkTrainerIncludeVideos;
+        var dir = Directory.CreateTempSubdirectory("ccp-blink-count-").FullName;
+        var file = Path.Combine(dir, "a.png");
+        Window? window = null;
+        try
+        {
+            if (change != "add" && change != "restore-folder") File.WriteAllBytes(file, Array.Empty<byte>());
+            if (change == "restore-folder") Directory.Delete(dir);
+            settings.BlinkTrainerFolders.Clear();
+            settings.BlinkTrainerFolders.Add(dir);
+            settings.BlinkTrainerIncludeVideos = false;
+            var tab = new BlinkTrainerTabView { IsVisible = false };
+            tab.Resources["TextMutedBrush"] = global::Avalonia.Media.Brushes.White;
+            tab.Resources["TextDimBrush"] = global::Avalonia.Media.Brushes.Gray;
+            window = new Window { Content = tab };
+            window.Show();
+            tab.IsVisible = true;
+            var host = tab.FindControl<StackPanel>("BlinkTrainerFolderCardsHost")!;
+            var card = Assert.IsType<Border>(Assert.Single(host.Children));
+            var info = Assert.IsType<StackPanel>(Assert.IsType<Grid>(card.Child).Children[0]);
+            var count = Assert.IsType<TextBlock>(info.Children[1]);
+            tab.IsVisible = false;
+            switch (change)
+            {
+                case "add": File.WriteAllBytes(file, Array.Empty<byte>()); break;
+                case "delete": File.Delete(file); break;
+                case "remove-folder": Directory.Delete(dir, true); break;
+                case "restore-folder": Directory.CreateDirectory(dir); File.WriteAllBytes(file, Array.Empty<byte>()); break;
+            }
+            tab.IsVisible = true;
+            Assert.Same(card, Assert.Single(host.Children));
+            bool valid = change == "add" || change == "restore-folder";
+            Assert.Equal(valid ? "1 images" :
+                ConditioningControlPanel.Localization.Loc.Get("blink_trainer_folder_empty_or_invalid"), count.Text);
+            Assert.Same(valid ? global::Avalonia.Media.Brushes.White : global::Avalonia.Media.Brushes.Gray, count.Foreground);
+        }
+        finally
+        {
+            window?.Close();
+            settings.BlinkTrainerFolders.Clear();
+            settings.BlinkTrainerFolders.AddRange(oldFolders);
+            settings.BlinkTrainerIncludeVideos = oldVideos;
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+    });
+
     [Fact]
     public void DirectStartHandlerDemandsPremiumBeforeOpeningTheCamera() => AvaloniaTestDispatcher.Run(() =>
     {
