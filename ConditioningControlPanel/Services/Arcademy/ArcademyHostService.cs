@@ -989,7 +989,8 @@ internal static class ArcademyHostService
         try
         {
             var live = _meta;
-            var raw = live != null ? (string?)live.Get(EmiOutfitKey) : EmiOutfitOnDisk();
+            if (live == null) return _outfitLocker.Read(Path.Combine(App.UserDataPath, "arcademy_meta.json"));
+            var raw = (string?)live.Get(EmiOutfitKey);
 
             var name = EmiDesk.EmiChains.OutfitName(raw);
             if (name == null) return null;
@@ -1011,48 +1012,7 @@ internal static class ArcademyHostService
         }
     }
 
-    private static readonly object _outfitDiskLock = new();
-    private static string? _outfitDiskValue;
-    private static long _outfitDiskStamp = -1L;   // -1 = never read; any write to the file moves it
-
-    /// <summary>The armed outfit out of the persisted blob, re-read only when the file's stamp
-    /// moves - the same cache shape as <see cref="WalletOwnsOnDisk"/>, so a desk that asks on every
-    /// summon costs one <c>FileInfo</c> and not one parse.</summary>
-    private static string? EmiOutfitOnDisk()
-    {
-        var path = Path.Combine(App.UserDataPath, "arcademy_meta.json");
-        long stamp;
-        try
-        {
-            var info = new FileInfo(path);
-            stamp = info.Exists ? (info.LastWriteTimeUtc.Ticks ^ info.Length) : 0L;
-        }
-        catch { stamp = 0L; }
-
-        lock (_outfitDiskLock)
-        {
-            if (_outfitDiskStamp != stamp)
-            {
-                _outfitDiskValue = ReadArmedOutfit(path);
-                _outfitDiskStamp = stamp;
-            }
-            return _outfitDiskValue;
-        }
-    }
-
-    private static string? ReadArmedOutfit(string path)
-    {
-        try
-        {
-            if (!File.Exists(path)) return null;
-            return (string?)JObject.Parse(File.ReadAllText(path))[EmiOutfitKey];
-        }
-        catch (Exception ex)
-        {
-            App.Logger?.Debug("ArcademyHost.ReadArmedOutfit: {E}", ex.Message);
-            return null;
-        }
-    }
+    private static readonly EmiDesk.EmiOutfitLocker _outfitLocker = new();
 
     /// <summary>
     /// Tell the desk widget to re-read what the Locker armed. Cheap and safe from anywhere: it is a

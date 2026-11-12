@@ -39,7 +39,12 @@ public partial class EmiDeskWindow
         PaintDeskItems();
         if (_equip != null) _ = _equip.PullOnceAsync();
     }
-    internal void StartDeskEquipment() { _equip?.Resume(); RefreshDeskItems(); }
+    private static readonly EmiOutfitLocker OutfitLocker = new();
+    internal void StartDeskEquipment()
+    {
+        SetOutfit(OutfitLocker.Read(System.IO.Path.Combine(CorePaths.UserData, "arcademy_meta.json")));
+        _equip?.Resume(); RefreshDeskItems();
+    }
     internal void StopDeskEquipment() => _equip?.Stop();
     internal void PickDeskItem(string slot, string? id)
     {
