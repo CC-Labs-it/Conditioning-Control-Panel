@@ -178,6 +178,9 @@ public class ChaosDvdVideoRestackTests
                 for (int i = 0; i < 3; i++) ChaosRunHost.Tick();
                 Assert.Equal(new[] { "dvd", "dvd" }, order.Take(2));
                 Assert.True(order.IndexOf("chrome") >= 2);
+                Assert.Equal(1, order.Count(x => x == "watch"));
+                Assert.True(order.IndexOf("watch") >= 2);
+                Assert.True(order.IndexOf("bubbles") > order.IndexOf("watch"));
                 Assert.True(order.IndexOf("bubbles") > order.IndexOf("chrome"));
             }
             finally

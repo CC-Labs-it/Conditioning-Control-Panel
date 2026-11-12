@@ -502,7 +502,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Raise(_hud);
             Raise(_fx);
             if (raiseWave != null) raiseWave();
-            else Raise(ChaosWaveTimerWindow.Active);
+            else ChaosWaveTimerWindow.RaiseActive();
             Raise(_boonBar);
             foreach (var toy in _toyButtons) Raise(toy);
             RaiseBubbles();
