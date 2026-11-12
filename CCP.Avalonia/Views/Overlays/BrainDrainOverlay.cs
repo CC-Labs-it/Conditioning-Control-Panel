@@ -32,7 +32,7 @@ internal static class BrainDrainOverlay
         var now = DateTime.UtcNow;
         if (now - LastNoticeUtc < TimeSpan.FromMinutes(5)) return;
         LastNoticeUtc = now;
-        OsNotifications.Show(Loc.Get("app_title"), Loc.Get("brain_drain_capture_failed"));
+        App.Notifications.Show(Loc.Get("brain_drain_capture_failed"), NotificationType.Warning, TimeSpan.FromSeconds(12));
     }
     internal static Func<PixelRect, BrainDrainCapturePump?> CreatePump = bounds => OperatingSystem.IsWindows()
         ? new BrainDrainCapturePump(bounds, TimeSpan.FromSeconds(1.0 / 30)) : null;
@@ -102,6 +102,7 @@ internal static class BrainDrainOverlay
         { CloseHosts(); return; } // WPF :2247: zero means no picture, not a faint haze.
         if (_refused) return;
         var screens = Screens(_owner);
+        if (screens.Count == 0) { CloseHosts(); NotifyNoFrames(); return; } // WPF OverlayService.cs:2324-2330.
         var targets = screens.Where(x => s.DualMonitorEnabled || x.IsPrimary).ToArray();
         if (targets.Length == 0 && screens.Count > 0) targets = new[] { screens[0] };
         // WPF OverlayService.cs:2985-3023: retain full physical bounds and scaling.

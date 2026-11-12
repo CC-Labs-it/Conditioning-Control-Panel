@@ -14,6 +14,8 @@ using Avalonia.Media.Imaging;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Localization;
+using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Controls.Studio;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
@@ -36,7 +38,10 @@ public sealed class BrainDrainIntegrationTests
         BrainDrainOverlay.CloseAll();
         BrainDrainOverlay.LastNoticeUtc = DateTime.MinValue;
         ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = (_, _) => { };
-        var owner = new Window(); owner.Show();
+        var notices = new StackPanel();
+        global::ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(notices);
+        notices.Children.Clear();
+        var owner = new Window { Content = notices, Tag = notices }; owner.Show();
         CoreSession.IsEngineRunningProvider = () => true; var settings = CoreSettings.Current; settings.BrainDrainEnabled = true; settings.BrainDrainBlurStrength = 100; settings.DualMonitorEnabled = true; settings.BrainDrainKeepPicturesClear = false;
         BrainDrainOverlay.Prepare = _ => supported; BrainDrainOverlay.Capture = (_, _) => { };
         BrainDrainOverlay.Alpha = (w, a) => w.Opacity = a;
@@ -321,8 +326,7 @@ public sealed class BrainDrainIntegrationTests
     [Fact]
     public Task ZeroFramesAndRefusedPreparationShareNoticeCooldown() => Run(async owner =>
     {
-        var notices = new List<string>();
-        ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = (_, body) => notices.Add(body);
+        var notices = ((StackPanel)owner.Tag!).Children;
         BrainDrainOverlay.Screens = _ => new[] { (new PixelRect(0, 0, 8, 8), 1.0, true) };
         BrainDrainOverlay.CreatePump = _ => new BrainDrainCapturePump(() => null, TimeSpan.FromMilliseconds(20));
         BrainDrainOverlay.Start(owner);
@@ -339,8 +343,7 @@ public sealed class BrainDrainIntegrationTests
     [Fact]
     public Task RefusedPreparationRaisesNotice() => Run(owner =>
     {
-        var notices = new List<string>();
-        ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = (_, body) => notices.Add(body);
+        var notices = ((StackPanel)owner.Tag!).Children;
         BrainDrainOverlay.Prepare = _ => false;
         BrainDrainOverlay.Start(owner); BrainDrainOverlay.Reconcile();
         Assert.Single(notices);
@@ -350,14 +353,32 @@ public sealed class BrainDrainIntegrationTests
     [Fact]
     public Task FirstFrameDisarmsFailureNotice() => Run(async owner =>
     {
-        var notices = new List<string>();
-        ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = (_, body) => notices.Add(body);
+        var notices = ((StackPanel)owner.Tag!).Children;
         BrainDrainOverlay.Screens = _ => new[] { (new PixelRect(0, 0, 8, 8), 1.0, true) };
         BrainDrainOverlay.CreatePump = _ => new BrainDrainCapturePump(
             () => new BrainDrainCapturePump.Frame(2, 2, new byte[16]), TimeSpan.FromMilliseconds(20));
         BrainDrainOverlay.Start(owner);
         await Task.Delay(3500);
         Assert.Empty(notices);
+    });
+
+    [Fact]
+    public Task NoScreensShowsOneTwelveSecondWarningAndRecovers() => Run(owner =>
+    {
+        var notices = ((StackPanel)owner.Tag!).Children;
+        BrainDrainOverlay.Screens = _ => Array.Empty<(PixelRect, double, bool)>();
+        BrainDrainOverlay.Start(owner);
+        BrainDrainOverlay.Reconcile();
+        var toast = Assert.IsType<Border>(Assert.Single(notices));
+        Assert.Empty(BrainDrainOverlay.Active);
+        Assert.Equal(Loc.Get("brain_drain_capture_failed"), Assert.IsType<TextBlock>(Assert.IsType<Grid>(toast.Child).Children[0]).Text);
+        Assert.Equal(Color.Parse("#FFB347"), Assert.IsType<SolidColorBrush>(toast.BorderBrush).Color);
+        Assert.Equal(TimeSpan.FromSeconds(12), Assert.IsType<DispatcherTimer>(toast.Tag).Interval);
+        BrainDrainOverlay.Screens = _ => new[] { (new PixelRect(0, 0, 8, 8), 1.0, true) };
+        BrainDrainOverlay.Reconcile();
+        Assert.Single(BrainDrainOverlay.Active);
+        Assert.Single(notices);
+        return Task.CompletedTask;
     });
 
 }
