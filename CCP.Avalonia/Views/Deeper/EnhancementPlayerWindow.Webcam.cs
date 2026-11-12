@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Platform.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
@@ -42,7 +43,7 @@ public partial class EnhancementPlayerWindow
         base.OnClosed(e);
     }
 
-    private void WebcamStateChanged() => EyeButton.Content = Loc.Get((WebcamStatus.IsLive(WebcamTracker.Instance.State) || WebcamTracker.Instance.State == WebcamTrackingState.Starting)
+    private void WebcamStateChanged() => EyeButton.Content = IconLabel.ForKey((WebcamStatus.IsLive(WebcamTracker.Instance.State) || WebcamTracker.Instance.State == WebcamTrackingState.Starting)
         ? "deeper_player_btn_eye_tracking_stop" : "deeper_player_btn_eye_tracking_start");
 
     private void WebcamTick(object? sender, EventArgs e)
@@ -75,7 +76,7 @@ public partial class EnhancementPlayerWindow
     {
         var tracker = WebcamTracker.Instance;
         if (tracker.IsRunning || tracker.IsStarting) { await tracker.StopAsync(); return; }
-        string title = Loc.Get("deeper_player_btn_eye_tracking_start");
+        string title = IconText.BareLoc("deeper_player_btn_eye_tracking_start");
         if (!WebcamConsent.IsCurrent(CoreSettings.Current))
         {
             await MessageDialog.ShowAsync(this, title, Loc.Get("deeper_player_eye_tracking_first_time"));
