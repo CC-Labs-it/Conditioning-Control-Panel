@@ -95,6 +95,7 @@ public sealed class BackRoomFx : IBackRoomFx
     private readonly Func<FxEnvironment> _env;
     private readonly Action<int>? _xp;
     private readonly Random _rng;
+    private readonly Func<FxPrim, bool>? _supports;
     private readonly FxHeroGate _gate;
     private readonly FxStrobePacer _pacer = new();
     private readonly object _lock = new();
@@ -110,12 +111,13 @@ public sealed class BackRoomFx : IBackRoomFx
     private IDisposable? _tunnelTimer;
 
     /// <param name="xp">Pays a primitive's base XP (<see cref="BackRoomFxXp"/>) once it has shown. Null = no XP (tests, rig).</param>
-    public BackRoomFx(IBackRoomFxSink sink, IFxScheduler scheduler, Func<FxEnvironment> env, Random? rng = null, Action<int>? xp = null)
+    public BackRoomFx(IBackRoomFxSink sink, IFxScheduler scheduler, Func<FxEnvironment> env, Random? rng = null, Action<int>? xp = null, Func<FxPrim, bool>? supports = null)
     {
         _sink = sink;
         _scheduler = scheduler;
         _env = env;
         _xp = xp;
+        _supports = supports;
         _rng = rng ?? new Random();
         _gate = new FxHeroGate(() => _scheduler.NowMs);
     }
@@ -146,6 +148,14 @@ public sealed class BackRoomFx : IBackRoomFx
             FxPlan plan;
             lock (_rng) plan = BackRoomFxPlan.Resolve(fxId, env.Intensity, env.Motion, symbolKeys, deal, _rng,
                 args, env.SpiralSource);
+            if (_supports != null)
+            {
+                var unsupported = plan.Steps.Where(s => !_supports(s.Step.Prim))
+                    .Select(s => BackRoomFxPlan.WireName(s.Step.Prim)).Distinct()
+                    .Select(name => new BackRoomFxSkip(name, BackRoomFxSkipReason.Unknown));
+                plan = plan with { Steps = plan.Steps.Where(s => _supports(s.Step.Prim)).ToList(),
+                    Skipped = plan.Skipped.Concat(unsupported).DistinctBy(s => s.Prim).ToList() };
+            }
             if (plan.Steps.Count == 0) return new BackRoomFxAck(Array.Empty<string>(), plan.Skipped);
 
             var admission = _gate.Admit(fxId, plan.HeroMs);
