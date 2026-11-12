@@ -8471,5 +8471,10 @@
   "online_cache_day_line": "在线媒体只会在这台电脑的小缓存里保留一天，从不上传。",
   "chaos_dvd_title": "色情DVD",
   "chaos_dvd_loading": "正在加载",
-  "chaos_thought_fallback": "放下抵抗"
+  "chaos_thought_fallback": "放下抵抗",
+  "chaos_rabbit_storm": "兔子风暴",
+  "chaos_rabbit_armed": "哨声等待着。下次点击就会呼唤它们",
+  "chaos_rabbit_answered": "{0}只兔子回应了你的指尖",
+  "chaos_rabbit_answered_storm": "{0}只兔子回应了。兔穴正在清空",
+  "chaos_rabbit_pointer_unavailable": "此桌面无法使用兔子呼唤"
 }

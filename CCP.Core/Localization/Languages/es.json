@@ -7962,5 +7962,10 @@
   "online_cache_day_line": "Los medios en línea se guardan un día en una pequeña caché de este ordenador y nunca se suben.",
   "chaos_dvd_title": "DVD porno",
   "chaos_dvd_loading": "cargando",
-  "chaos_thought_fallback": "CEDE"
+  "chaos_thought_fallback": "CEDE",
+  "chaos_rabbit_storm": "Tormenta de conejos",
+  "chaos_rabbit_armed": "el silbato espera. tu próximo clic los llama",
+  "chaos_rabbit_answered": "{0} respondieron en tu dedo",
+  "chaos_rabbit_answered_storm": "{0} respondieron. la madriguera se vacía",
+  "chaos_rabbit_pointer_unavailable": "llamada de conejos no disponible en este escritorio"
 }

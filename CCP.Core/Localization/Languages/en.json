@@ -8715,5 +8715,10 @@
   "online_cache_day_line": "Online media is kept in a small cache on this computer for a day, never uploaded.",
   "chaos_dvd_title": "Porn DVD",
   "chaos_dvd_loading": "now loading",
-  "chaos_thought_fallback": "GIVE IN"
+  "chaos_thought_fallback": "GIVE IN",
+  "chaos_rabbit_storm": "Rabbit Storm",
+  "chaos_rabbit_armed": "the whistle waits. your next click calls them",
+  "chaos_rabbit_answered": "{0} answered at your fingertip",
+  "chaos_rabbit_answered_storm": "{0} answered. the burrow is emptying",
+  "chaos_rabbit_pointer_unavailable": "rabbit caller unavailable on this desktop"
 }

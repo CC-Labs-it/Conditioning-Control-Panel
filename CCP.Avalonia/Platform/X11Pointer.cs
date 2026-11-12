@@ -12,9 +12,9 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// <c>XQueryKeymap</c> only look, so a click still lands on whatever it was aimed at, exactly as the
 /// WPF hook returned false and let it through. A grab would swallow it, which is why this is not one.
 ///
-/// <para>Only X11/XWayland surfaces report: under Wayland the pointer over a native Wayland window is
-/// invisible to X clients, so click-away there only sees clicks on X windows. Null when there is no
-/// X display at all (headless, Windows, macOS). One owned connection, opened lazily, UI thread only.</para>
+/// <para>Read is X11 only. ReadLeft also polls the Windows desktop. Under Wayland, an X client
+/// cannot see the pointer over native Wayland surfaces. X11 owns one lazy connection on the UI thread;
+/// unsupported or unavailable desktops return null.</para>
 /// </summary>
 internal static class X11Pointer
 {
@@ -33,7 +33,30 @@ internal static class X11Pointer
     private static IntPtr _display, _root;
     private static byte _esc;
 
-    public static (PixelPoint At, bool Pressed, bool Escape)? Read()
+    public static (PixelPoint At, bool Pressed, bool Escape)? Read() => Read(false);
+
+    [StructLayout(LayoutKind.Sequential)] private struct WinPoint { public int X, Y; }
+    [DllImport("user32.dll")] private static extern bool GetCursorPos(out WinPoint point);
+    [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
+
+    internal static bool CanReadDesktop(string? sessionType, string? waylandDisplay) =>
+        !string.Equals(sessionType, "wayland", StringComparison.OrdinalIgnoreCase) &&
+        !(string.IsNullOrEmpty(sessionType) && !string.IsNullOrEmpty(waylandDisplay));
+
+    internal static (PixelPoint At, bool Pressed, bool Escape)? ReadLeft()
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows())
+                return GetCursorPos(out var p) ? (new PixelPoint(p.X, p.Y), GetAsyncKeyState(1) < 0, false) : null;
+            if (OperatingSystem.IsLinux() && !CanReadDesktop(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"),
+                    Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"))) return null;
+            return Read(true);
+        }
+        catch (Exception ex) { Log.Debug(ex, "[Pointer] desktop pointer unavailable"); return null; }
+    }
+
+    private static (PixelPoint At, bool Pressed, bool Escape)? Read(bool leftOnly)
     {
         try
         {
@@ -55,7 +78,7 @@ internal static class X11Pointer
             XQueryKeymap(_display, ref MemoryMarshal.GetReference(keys));
             bool esc = _esc != 0 && (keys[_esc >> 3] & (1 << (_esc & 7))) != 0;
             keys.Clear();
-            return (new PixelPoint(x, y), (mask & (Button1Mask | Button3Mask)) != 0, esc);
+            return (new PixelPoint(x, y), (mask & (leftOnly ? Button1Mask : Button1Mask | Button3Mask)) != 0, esc);
         }
         catch (Exception ex)
         {
