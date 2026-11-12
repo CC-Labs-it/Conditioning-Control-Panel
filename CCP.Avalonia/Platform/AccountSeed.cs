@@ -54,6 +54,7 @@ internal static class AccountSeed
         patreon.PeerDisplayName = () => discord.CustomDisplayName; // WPF PatreonService
 
         // WPF App.IsLoggedIn / UserDisplayName / the PatreonService gates.
+        CoreAccount.CurrentTierProvider = () => patreon.CurrentTier;
         CoreAccount.IsLoggedInProvider = () => patreon.IsAuthenticated || discord.IsAuthenticated
             || substar.IsAuthenticated || !string.IsNullOrEmpty(CoreAccount.UnifiedUserId);
         CoreAccount.DisplayNameProvider = () =>

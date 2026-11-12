@@ -160,6 +160,28 @@ public sealed class BarkEngineTests : IDisposable
     }
 
     [Fact]
+    public void TierLatchUsesTheCurrentPatreonTierAndFailsClosed()
+    {
+        var previous = CoreAccount.CurrentTierProvider;
+        try
+        {
+            var tier = ConditioningControlPanel.Models.PatreonTier.Level1;
+            CoreAccount.CurrentTierProvider = () => tier;
+            var rule = Rule("AttentionCheckFail", "once");
+            (rule.Repeatable, rule.ScopeRaw) = (false, "tier");
+            Assert.True(Engine(rule).Raise("AttentionCheckFail"));
+            Assert.False(Engine(rule).Raise("AttentionCheckFail", guaranteed: true));
+            tier = ConditioningControlPanel.Models.PatreonTier.Level2;
+            Assert.True(Engine(rule).Raise("AttentionCheckFail"));
+            Assert.True(_s.IsBarkFired(rule.Id + "@Level1"));
+            Assert.True(_s.IsBarkFired(rule.Id + "@Level2"));
+            CoreAccount.CurrentTierProvider = () => throw new InvalidOperationException();
+            Assert.Equal(ConditioningControlPanel.Models.PatreonTier.None, CoreAccount.CurrentTier);
+        }
+        finally { CoreAccount.CurrentTierProvider = previous; }
+    }
+
+    [Fact]
     public void AOneShotLatchOutlivesTheSessionAndASafetyBarkHoldsTheFloor()
     {
         var once = Rule("AttentionCheckFail", "once");

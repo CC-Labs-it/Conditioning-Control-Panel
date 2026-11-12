@@ -17,7 +17,7 @@ namespace ConditioningControlPanel.Services.Bark
     /// cooldown, chance), the no-repeat variant rotation persisted in AppSettings (:1793-1941) and the
     /// {0}/{key} substitutions (:2000). The head owns the event subscriptions and the mouth.
     /// ponytail: the awareness arbiter lands with its host;
-    /// the Chaos-narrator gate with a source; tier latches key on "None" until a tier reaches Core.
+    /// the Chaos-narrator gate with a source.
     /// </summary>
     public sealed class BarkEngine
     {
@@ -390,7 +390,7 @@ namespace ConditioningControlPanel.Services.Bark
             _firedOnceSession.Contains(rule.Id)
             || (rule.Scope != BarkScope.Session && CoreSettings.Current.IsBarkFired(LatchKey(rule)));
 
-        private static string LatchKey(BarkRule rule) => rule.Scope == BarkScope.Tier ? rule.Id + "@None" : rule.Id;
+        private static string LatchKey(BarkRule rule) => rule.Scope == BarkScope.Tier ? rule.Id + "@" + CoreAccount.CurrentTier : rule.Id;
 
         /// <summary>WPF CommitFire (:1793). Caller holds the lock.</summary>
         private void CommitFire(BarkRule rule, int idx, List<BarkVariant> pool)
