@@ -194,6 +194,87 @@ public sealed class DeeperRowsTests
     });
 
 
+    [Theory]
+    [InlineData(95, true)]
+    [InlineData(94.864, false)]
+    public Task PlayerDrawsOnlyCompleteWaveforms(double decodedDuration, bool expected) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("ccp-player-wave-").FullName;
+        var path = Path.Combine(dir, "clip.mp3");
+        File.WriteAllBytes(path, new byte[16]);
+        var originalOpen = DeeperLocalAudio.Open;
+        var originalDecoder = AudioWaveformCache.Decoder;
+        var peaks = new[] { 0.1f, 0.9f, 0.4f };
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(new FakeAudio());
+        AudioWaveformCache.Decoder = _ => new AudioWaveformResult { Peaks = peaks, DurationSeconds = decodedDuration };
+        var player = new EnhancementPlayerWindow(null, null);
+        try
+        {
+            player.Show();
+            player.OpenLocalMediaFile(path);
+            var load = player._waveformLoad;
+            Assert.NotNull(load);
+            await load!.WaitAsync(TimeSpan.FromSeconds(10));
+            var field = typeof(EnhancementPlayerWindow).GetField("_peaks", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            if (expected) Assert.Equal(peaks, (float[]?)field.GetValue(player));
+            else Assert.Null(field.GetValue(player));
+        }
+        finally
+        {
+            player.Close();
+            DeeperLocalAudio.Open = originalOpen;
+            AudioWaveformCache.Decoder = originalDecoder;
+            Directory.Delete(dir, true);
+        }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PlayerDiscardsReplacedOrClosedWaveforms(bool close) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("ccp-player-race-").FullName;
+        var first = Path.Combine(dir, "first.mp3");
+        var second = Path.Combine(dir, "second.mp3");
+        File.WriteAllBytes(first, new byte[16]);
+        File.WriteAllBytes(second, new byte[16]);
+        var originalOpen = DeeperLocalAudio.Open;
+        var originalDecoder = AudioWaveformCache.Decoder;
+        using var started = new System.Threading.ManualResetEventSlim();
+        using var release = new System.Threading.ManualResetEventSlim();
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(new FakeAudio());
+        AudioWaveformCache.Decoder = p =>
+        {
+            if (p == first) { started.Set(); release.Wait(TimeSpan.FromSeconds(10)); }
+            return new AudioWaveformResult { Peaks = p == first ? new[] { 0.2f, 0.2f } : new[] { 0.8f, 0.8f }, DurationSeconds = 95 };
+        };
+        var player = new EnhancementPlayerWindow(null, null);
+        try
+        {
+            player.Show();
+            player.OpenLocalMediaFile(first);
+            var oldLoad = player._waveformLoad!;
+            Assert.True(started.Wait(TimeSpan.FromSeconds(10)));
+            if (close) player.Close();
+            else { player.OpenLocalMediaFile(second); await player._waveformLoad!.WaitAsync(TimeSpan.FromSeconds(10)); }
+            release.Set();
+            await oldLoad.WaitAsync(TimeSpan.FromSeconds(10));
+            var field = typeof(EnhancementPlayerWindow).GetField("_peaks", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            if (close) Assert.Null(field.GetValue(player));
+            else Assert.Equal(new[] { 0.8f, 0.8f }, (float[]?)field.GetValue(player));
+        }
+        finally
+        {
+            release.Set();
+            if (!close) player.Close();
+            DeeperLocalAudio.Open = originalOpen;
+            AudioWaveformCache.Decoder = originalDecoder;
+            Directory.Delete(dir, true);
+        }
+    });
+
     /// <summary>MediaPlayer as the transport sees it: Playing fires on every start AND resume.</summary>
     private sealed class FakeEngine : DeeperLocalAudio.IEngine
     {

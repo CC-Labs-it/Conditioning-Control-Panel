@@ -103,7 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     /// <para><b>What is stubbed, and why.</b> Three families, each marked <c>ponytail:</c> at the
     /// call site:</para>
     /// <list type="bullet">
-    ///   <item><b>Services.</b> Waveform decoding and WebcamTracking remain WPF-side.
+    ///   <item><b>Services.</b> WebcamTracking remains WPF-side.
     ///         Local audio transport uses DeeperLocalAudio; editor jumps are wired below.
     ///         EnhancementLibrary is in Core but this head does not construct one yet. EnhancementHostService and DeeperFetcher no longer block anything: the host's
     ///         load path is EnhancementSerializer + EnhancementValidator, both public in Core, and
@@ -705,6 +705,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 audio.Ended += _audioEnded; audio.Failed += _audioFailed;
                 audio.Volume = (int)_sliderVolume.Value;
                 _durationSec = audio.DurationSeconds;
+                _waveformLoad = LoadWaveformAsync(path, load, _durationSec);
                 audio.Play();
                 _isPlaying = true;
                 _txtTotal.Text = FormatTime(_durationSec);
@@ -718,6 +719,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 AudioFailed();
                 Log.Warning(ex, "Deeper player audio load failed");
             }
+        }
+
+        internal Task? _waveformLoad;
+
+        // WPF EnhancementPlayerWindow.xaml.cs:665: decode off the UI thread and draw the peaks.
+        private async Task LoadWaveformAsync(string path, int load, double duration)
+        {
+            try
+            {
+                var data = await AudioWaveformCache.LoadAsync(path);
+                if (_closing || load != _audioLoad) return;
+                // A truncated transcode must not be stretched over the full player timeline.
+                if (duration <= 0 || data.DurationSeconds <= 0 ||
+                    Math.Abs(data.DurationSeconds - duration) > 0.05) return;
+                _peaks = data.Peaks;
+                RenderWaveform();
+            }
+            catch (Exception ex) { Log.Debug(ex, "EnhancementPlayer: waveform decode failed"); }
         }
 
         // WPF MainWindow.xaml.cs:2046 and player:2527: panic pauses every player, including pending opens.
