@@ -198,6 +198,8 @@ public sealed class CompanionEditorsTests
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
+            shell.CompleteTabTransition(); // settle the entrance before reading pointer geometry
+            shell.UpdateLayout();
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
             // Adjust/traits are dormant Train 3 controls in WPF; drive the two live links.
@@ -205,6 +207,7 @@ public sealed class CompanionEditorsTests
             {
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
                 button.BringIntoView();
+                shell.UpdateLayout(); // the scroll offset must land before translating the button centre
                 Dispatcher.UIThread.RunJobs();
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
