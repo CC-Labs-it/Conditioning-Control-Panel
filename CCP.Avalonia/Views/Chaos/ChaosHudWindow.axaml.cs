@@ -536,19 +536,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         ///
         /// <para>Use desktop coordinates even after the pointer leaves the window. If the platform
         /// cannot query them, the last event is useful only while the panel is still hovered. On
-        /// Wayland an X11 query can return a stale position, so an unconfirmed halo expires.</para>
+        /// Wayland an X11 query can return a stale position. A root child confirms an X surface;
+        /// otherwise the unconfirmed halo expires.</para>
         /// </summary>
         private bool CursorInHudGrace()
         {
             try
             {
-                PixelPoint? screen = OperatingSystem.IsWindows() ? Win32Overlay.CursorPosition() : X11Pointer.Read()?.At;
+                bool overXWindow = false;
+                PixelPoint? screen = OperatingSystem.IsWindows() ? Win32Overlay.CursorPosition() : X11Pointer.Read(out overXWindow)?.At;
                 Point? current = screen is { } p ? this.PointToClient(p) : null;
                 bool wayland = OperatingSystem.IsLinux() &&
                     (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")) ||
                      string.Equals(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), "wayland", StringComparison.OrdinalIgnoreCase));
                 return CursorInHudGrace(ElementBoundsInWindow(_panel), ElementBoundsInWindow(_strip),
-                    current, _lastPointer, _panel.IsPointerOver, wayland, Stopwatch.GetElapsedTime(_leftAt).TotalMilliseconds);
+                    current, _lastPointer, _panel.IsPointerOver, wayland, Stopwatch.GetElapsedTime(_leftAt).TotalMilliseconds, overXWindow);
             }
             catch
             {
@@ -557,8 +559,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         internal static bool CursorInHudGrace(Rect panel, Rect strip, Point? current, Point last, bool over,
-            bool wayland = false, double sinceLeaveMs = 0) =>
-            (current.HasValue || over) && (over || !wayland || sinceLeaveMs < WAYLAND_HALO_LIMIT_MS) &&
+            bool wayland = false, double sinceLeaveMs = 0, bool overXWindow = false) =>
+            (current.HasValue || over) && (over || !wayland || overXWindow || sinceLeaveMs < WAYLAND_HALO_LIMIT_MS) &&
             CursorInGrace(panel, strip, current ?? last, LEAVE_GRACE_MARGIN_DIP);
 
         /// <summary>An element's bounds in this window's coordinate space, honouring render transforms

@@ -37,4 +37,16 @@ public sealed class ChaosHudGraceTests
         Assert.True(ChaosHudWindow.CursorInHudGrace(panel, default, stale, stale, false, false, limit));
         Assert.False(ChaosHudWindow.CursorInHudGrace(panel, default, new Point(150, 50), stale, false, true, 0));
     }
+    [Fact]
+    public void Confirmed_xwayland_halo_or_tooltip_does_not_expire()
+    {
+        var panel = new Rect(0, 0, 100, 100);
+        var last = new Point(105, 50);
+        var limit = ChaosHudWindow.WAYLAND_HALO_LIMIT_MS;
+        // A child of the X root confirms the query, even when the HUD itself is not hovered.
+        Assert.True(ChaosHudWindow.CursorInHudGrace(panel, default, last, last, false, true, limit * 10, true));
+        Assert.True(ChaosHudWindow.CursorInHudGrace(panel, default, new Point(50, 50), last, false, true, limit * 10, true));
+        Assert.False(ChaosHudWindow.CursorInHudGrace(panel, default, new Point(150, 50), last, false, true, limit * 10, true));
+        Assert.False(ChaosHudWindow.CursorInHudGrace(panel, default, last, last, false, true, limit * 10, false));
+    }
 }
