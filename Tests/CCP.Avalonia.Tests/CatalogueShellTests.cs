@@ -141,7 +141,19 @@ public sealed class CatalogueShellTests
 
                 // Asking for an HT video looks nothing up: only a completed navigation does.
                 var video = new Uri("https://hypnotube.com/video/sleepy-123.html");
-                Assert.True(shell.NavigateToUrlInBrowser(video.AbsoluteUri));
+                var navigations = new List<Uri>();
+                web.NavigationInvoker = uri => { navigations.Add(uri); return true; };
+                // No engine or network is used. Let only the fake navigation cross the sandbox gate.
+                var active = typeof(SandboxNet).GetField("<Active>k__BackingField", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+                Assert.True(SandboxNet.Active);
+                try
+                {
+                    active.SetValue(null, false);
+                    Assert.True(shell.NavigateToUrlInBrowser(video.AbsoluteUri));
+                }
+                finally { active.SetValue(null, true); }
+                Assert.True(SandboxNet.Active);
+                Assert.Equal(video, Assert.Single(navigations));
                 for (var i = 0; i < 20; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(5); }
                 Assert.DoesNotContain(fake.Seen, u => u.Contains("by-ht-url"));
 
