@@ -115,7 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // WPF BrowserMediaService.BeginTakeover: claim before navigation, with no queue.
         internal bool TryBeginBrowserTakeover()
         {
-            if (BrowserMediaPlaying || BrowserMediaOwnsSlot || BrowserMediaCooling || _browserDeferredVideo != null
+            if (_browserTakeover || BrowserMediaPlaying || BrowserMediaOwnsSlot || BrowserMediaCooling || _browserDeferredVideo != null
                 || CoreEngine.Video?.IsPlaying == true || CoreEngine.BubbleCount?.IsBusy == true
                 || Windows.BubbleCountWindow.IsAnyOpen() || Windows.BubbleCountResultWindow.OpenWindows.Count > 0
                 || Windows.LockCardWindow.IsAnyOpen()
@@ -155,6 +155,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal const string BrowserTakeoverScript = """
             (async function() {
                 window._ccpTakeoverStopped = false;
+                const loc = window.location;
+                if (loc && /(^|\.)bambicloud\.com$/i.test(loc.hostname) && loc.pathname.toLowerCase().startsWith('/playlist/')) {
+                    let button = document.querySelector('button.play-action');
+                    for (let i = 0; !button && i < 20; i++) {
+                        await new Promise(r => setTimeout(r, 250));
+                        if (window._ccpTakeoverStopped) return; button = document.querySelector('button.play-action');
+                    }
+                    if (window._ccpTakeoverStopped) return;
+                    if (button) button.click(); else {
+                        const msg = JSON.stringify({ type: 'ccpMedia', state: 'stopped', reason: 'noPlayButton' });
+                        if (typeof window.invokeCSharpAction === 'function') window.invokeCSharpAction(msg);
+                        else if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage(msg);
+                    }
+                    return;
+                }
                 let video = document.querySelector('video');
                 for (let i = 0; !video && i < 20; i++) {
                     await new Promise(r => setTimeout(r, 500));
@@ -265,7 +280,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void CheckBrowserMediaHeartbeat()
         {
             var timeout = BrowserMediaPlaying ? 20 : 60;
-            if ((BrowserMediaPlaying || BrowserMediaOwnsSlot) && (BrowserMediaClock() - _browserMediaBeat).TotalSeconds >= timeout)
+            if ((BrowserMediaPlaying || BrowserMediaOwnsSlot || _browserTakeover) && (BrowserMediaClock() - _browserMediaBeat).TotalSeconds >= timeout)
             {
                 if (_browserTakeover) ForceEndBrowserTakeover();
                 else StopBrowserMediaTracking();
@@ -335,12 +350,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void ClearBrowserMediaClaim()
         {
             BrowserMediaOwnsSlot = false;
-            _browserTakeover = false;
-            _browserAutoPlayPending = false;
-            CancelBrowserTakeoverStop();
             CancelBrowserMediaRecovery();
             CancelBrowserDeferredVideo();
-            if (!BrowserMediaPlaying && _browserMediaWatchdog != null)
+            if (!BrowserMediaPlaying && !_browserTakeover && _browserMediaWatchdog != null)
             {
                 _browserMediaWatchdog.Stop();
                 _browserMediaWatchdog.Tick -= BrowserMediaWatchdogTick;

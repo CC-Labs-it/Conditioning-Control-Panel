@@ -22,16 +22,24 @@ const script = source.match(/BrowserTakeoverScript = """\s*([\s\S]*?)\s*""";/)[1
     const window = { invokeCSharpAction: msg => messages.push(JSON.parse(msg)) };
     await vm.runInNewContext(script, { window, document, setTimeout, Promise });
     await Promise.resolve();
-    assert.equal(plays, 1);
-    assert.equal(fullscreen, 1);
+    assert.equal(plays, 1); assert.equal(fullscreen, 1);
     assert.equal(video.muted, false);
     events.ended();
-    assert.equal(exits, 1);
-    assert.equal(messages.length, 1);
+    assert.equal(exits, 1); assert.equal(messages.length, 1);
     assert.equal(messages[0].type, 'ccpFsExit');
     docEvents.fullscreenchange();
     assert.equal(messages.length, 1, 'exit reported only once');
 
+    const playlistMessages = [];
+    const playlistWindow = { location: new URL('https://www.bambicloud.com/playlist/example'), invokeCSharpAction: msg => playlistMessages.push(JSON.parse(msg)) };
+    let clicks = 0, searches = 0;
+    await vm.runInNewContext(script, { window: playlistWindow, document: { querySelector: s => s === 'button.play-action' && ++searches >= 2 ? { click: () => clicks++ } : null }, setTimeout: fn => fn(), Promise });
+    assert.equal(clicks, 1, 'playlist play button is clicked'); assert.equal(searches, 2);
+    await vm.runInNewContext(script, { window: playlistWindow, document: { querySelector: () => null }, setTimeout: fn => fn(), Promise });
+    assert.equal(playlistMessages.at(-1).reason, 'noPlayButton', 'missing playlist button releases the claim');
+    let playlistResume, polls = 0; const cancelledPlaylist = { location: new URL('https://bambicloud.com/playlist/example') };
+    const pendingPlaylist = vm.runInNewContext(script, { window: cancelledPlaylist, document: { querySelector: () => ++polls === 1 ? null : { click: () => clicks++ } }, setTimeout: fn => { playlistResume = fn; }, Promise });
+    cancelledPlaylist._ccpTakeoverStopped = true; playlistResume(); await pendingPlaylist; assert.equal(clicks, 1, 'cancelled playlist cannot start');
     let resume;
     const pendingWindow = {};
     let queries = 0;
