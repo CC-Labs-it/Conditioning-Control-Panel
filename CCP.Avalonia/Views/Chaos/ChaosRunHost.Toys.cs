@@ -113,7 +113,7 @@ internal static partial class ChaosRunHost
             {
                 _thoughtAccumSec = 0;
                 var enabled = CoreSettings.Current.BouncingTextPool.Where(kv => kv.Value).Select(kv => kv.Key).ToArray();
-                var text = enabled is { Length: > 0 } ? enabled[Random.Shared.Next(enabled.Length)] : "GIVE IN";
+                var text = enabled is { Length: > 0 } ? enabled[Random.Shared.Next(enabled.Length)] : Loc.Get("chaos_thought_fallback");
                 LaunchThought(_state.IntrusiveThoughtsSec, 1.3, 0.8, text);
             }
         }
