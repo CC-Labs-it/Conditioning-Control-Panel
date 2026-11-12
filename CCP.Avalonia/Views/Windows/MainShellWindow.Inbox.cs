@@ -4,6 +4,7 @@ using System.Linq;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Startup;
+using ConditioningControlPanel.Services.Startup.Conversion;
 using ConditioningControlPanel.Services.Startup.PostCodes;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using Avalonia.Controls;
@@ -35,6 +36,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             inbox.CollectionChanged += OnInboxCollectionChanged;
             Closed += (_, _) => inbox.CollectionChanged -= OnInboxCollectionChanged;
             RefreshInboxBadge();
+            Activated += (_, _) => MaybePostConversionRows();
+            EntitlementRefresh.Changed += MaybePostConversionRows;
+            Closed += (_, _) => EntitlementRefresh.Changed -= MaybePostConversionRows;
+        }
+
+        // WPF MainWindow.Inbox.cs:156, 176: check on focus and after a profile reading.
+        internal void MaybePostConversionRows()
+        {
+            try
+            {
+                var settings = CoreSettings.Current;
+                if (!EntitlementRefresh.ServerAnsweredThisRun) return;
+                var days = ProfileExtras.PassEndingDays(settings.PassEndsUtc, settings.ServerPaidUntil, DateTime.UtcNow);
+                if (days == 0) return;
+                const string key = ConversionRules.KeyPassEnds;
+                var today = ConversionRules.DayStamp(DateTime.Now);
+                if (!ConversionRules.Owed(settings.InboxStamps, key, today)) return;
+                ConversionRules.Stamp(settings.InboxStamps, key, today);
+                CoreSettings.Save();
+                var title = days <= 1 ? Loc.Get("pass_ends_one") : Loc.GetF("pass_ends_days", days);
+                var body = Loc.Get("pass_ends_body");
+                StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
+                {
+                    Key = "conv:" + key, Glyph = "\u23F3", Title = title, Summary = body,
+                    Open = () => InboxNoticeCard.Present(this, title, body, Loc.Get("pass_ends_action"),
+                        () => ExternalOpener.Open("https://app.cclabs.app/crypto")),
+                });
+            }
+            catch (Exception ex) { Log.Warning(ex, "[Inbox] conversion rows failed"); }
         }
 
         private readonly PostCodeFlow _postCodeFlow = new();

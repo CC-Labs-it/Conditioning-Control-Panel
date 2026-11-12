@@ -39,6 +39,35 @@ public class Sync7bEntitlementTests {
         s.PatreonPremiumValidUntil = null; Assert.False(EntitlementRefresh.Apply(s, "sync7b", user));
         Assert.Null(s.PatreonPremiumValidUntil);
     });
+    [Fact] public Task RawProfilePostsOnePassNoticeAndSignOutStopsIt() => AvaloniaTestDispatcher.RunAsync(async () => {
+        using var isolation = new EntitlementTestScope();
+        var secrets = new Dictionary<string, string?>();
+        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key);
+        CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
+        var s = CoreSettings.Current; s.OfflineMode = false; s.UnifiedId = "pass-test"; s.AuthToken = "test-token";
+        s.InboxStamps = new Dictionary<string, string>();
+        if (Application.Current == null) AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>()
+            .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+            .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var ends = DateTime.UtcNow.AddDays(3).AddMinutes(-1);
+        var handler = new ProfileAnswer(); AccountSeed.NewV2 = () => new V2AuthService(() => s, handler);
+        handler.Profile.SetResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(
+            new JObject { ["user"] = new JObject { ["effective_tier"] = 1, ["patreon_member"] = true,
+                ["paid_until"] = ends.ToString("o"), ["crypto_pass"] = new JObject { ["ends_at"] = ends.ToString("o") },
+                ["post_grants"] = new JObject { ["voice"] = ends.ToString("o") } } }.ToString()) });
+        Assert.True(await EntitlementRefresh.RefreshAsync());
+        Assert.Equal(ends, s.PassEndsUtc); Assert.Equal(ends, s.ServerPaidUntil);
+        Assert.True(s.PatreonMember); Assert.True(s.PostGrants.ContainsKey("voice"));
+        StartupLadder.ResetForTests(); StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(1));
+        var shell = new MainShellWindow();
+        try {
+            shell.MaybePostConversionRows(); shell.MaybePostConversionRows();
+            var row = Assert.Single(StartupLadder.Inbox.Items.Where(row => row.Key == "conv:pass_ends"));
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("pass_ends_days", 3), row.Title);
+            StartupLadder.ResetForTests(); s.InboxStamps.Clear(); ProgressionClear.Apply(s); s.AuthToken = null; s.UnifiedId = null;
+            shell.MaybePostConversionRows(); Assert.Empty(StartupLadder.Inbox.Items.Where(row => row.Key == "conv:pass_ends"));
+        } finally { shell.Close(); StartupLadder.ResetForTests(); }
+    });
     [Fact] public void ButtonShowsFeedbackAndHidesForPrime() => AvaloniaTestDispatcher.Run(() => {
         using var isolation = new EntitlementTestScope();
         if (Application.Current == null) AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>()
