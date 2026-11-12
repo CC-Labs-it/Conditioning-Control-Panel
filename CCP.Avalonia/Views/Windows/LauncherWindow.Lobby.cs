@@ -1,6 +1,10 @@
 using System;
 using System.Linq;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Helpers;
 using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using ConditioningControlPanel.Avalonia.Views.Games;
@@ -77,9 +81,34 @@ public partial class LauncherWindow
         foreach (var row in rows)
         {
             var card = new LobbyCardView(row, ReadLobbyGates());
-            var item = new MenuItem { Header = card.Title + "  " + card.Line + "  " + card.ButtonText,
-                IsEnabled = row.Game is LobbyGame.Chess or LobbyGame.Race or LobbyGame.Remote };
-            item.Click += (_, _) => JoinLobbyRow(row);
+            var artPath = row.Game switch
+            {
+                LobbyGame.Chess => "features/piecebypiece.png",
+                LobbyGame.Goon => "features/goon_game_tile.png",
+                LobbyGame.Race => "features/race.png",
+                _ => "features/lobby_remote.png"
+            };
+            var art = new Image { Width = 36, Height = 36, Stretch = Stretch.UniformToFill,
+                Source = ModArt.TryLoad(artPath, 96), Margin = new Thickness(0, 0, 10, 0) };
+            var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children =
+            {
+                new TextBlock { Text = card.Title, FontSize = 14, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis },
+                new TextBlock { Text = card.Line, FontSize = 11.5, Opacity = 0.72, TextTrimming = TextTrimming.CharacterEllipsis }
+            } };
+            var join = new Button { Content = new TextBlock { Text = card.ButtonText, FontWeight = FontWeight.Bold,
+                Foreground = new SolidColorBrush(Color.Parse("#2A0618")) }, Opacity = card.ButtonOpacity,
+                Background = new SolidColorBrush(Color.Parse("#FF8CC0")), CornerRadius = new CornerRadius(12),
+                Padding = new Thickness(14, 4, 14, 5),
+                IsEnabled = row.Game is LobbyGame.Chess or LobbyGame.Race or LobbyGame.Remote,
+                VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
+            join.Click += (_, e) => { e.Handled = true; _lobbyDrop?.Close(); JoinLobbyRow(row); };
+            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
+            Grid.SetColumn(text, 1); Grid.SetColumn(join, 2);
+            grid.Children.Add(art); grid.Children.Add(text); grid.Children.Add(join);
+            var frame = new Border { Width = 350, CornerRadius = new CornerRadius(13), Padding = new Thickness(8, 7),
+                Background = new SolidColorBrush(Color.Parse("#24FFFFFF")),
+                BorderBrush = new SolidColorBrush(Color.Parse("#55FFFFFF")), BorderThickness = new Thickness(1), Child = grid };
+            var item = new MenuItem { Header = frame };
             menu.Items.Add(item);
         }
         var open = new MenuItem { Header = Loc.Get("launcher_lobby_open_page") };

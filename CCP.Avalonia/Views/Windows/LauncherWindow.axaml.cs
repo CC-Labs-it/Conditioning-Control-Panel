@@ -256,10 +256,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF LauncherHost.OpenPanel: the launcher hides, the panel comes up, then <paramref name="then"/>.</summary>
         internal void OpenPanel(Action<MainShellWindow>? then = null)
         {
+            if (MainShellWindow.LockdownActive) return;
             var panel = Panel;
             if (panel == null) { Log.Warning("[Launcher] OpenPanel with no main window"); return; }
             AfterExitBeat(() =>
             {
+                if (MainShellWindow.LockdownActive) return;
                 Hide();
                 panel.ShowFromLauncher();
                 Platform.StartupLadder.Release();

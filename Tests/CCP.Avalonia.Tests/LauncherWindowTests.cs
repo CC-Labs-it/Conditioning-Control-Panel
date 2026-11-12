@@ -73,6 +73,9 @@ public sealed class LauncherWindowTests
         public void OnUiThread(Action action) => action();
     }
 
+    private static Button JoinButton(MenuItem row) =>
+        (Button)((Grid)((Border)row.Header!).Child!).Children[2];
+
     [Fact]
     public void LobbyChipRefreshesOnShowAndOpensLobby() => Run(shell =>
     {
@@ -95,7 +98,12 @@ public sealed class LauncherWindowTests
             Assert.True(launcher.IsVisible);
             var menu = launcher.FindControl<Button>("LobbyChip")!.ContextMenu!;
             Assert.True(menu.IsOpen);
-            Assert.Contains("Host", ((MenuItem)menu.Items[0]!).Header!.ToString());
+            var card = Assert.IsType<Border>(((MenuItem)menu.Items[0]!).Header);
+            var grid = Assert.IsType<Grid>(card.Child);
+            Assert.NotNull(Assert.IsType<Image>(grid.Children[0]).Source);
+            var words = Assert.IsType<StackPanel>(grid.Children[1]);
+            Assert.Contains(words.Children.OfType<TextBlock>(), text => text.Text!.Contains("Host"));
+            Assert.IsType<Button>(grid.Children[2]);
             Assert.True(calls >= 3);
             ((MenuItem)menu.Items[1]!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             Assert.Equal("availablesubjects", shell.CurrentTab);
@@ -103,6 +111,55 @@ public sealed class LauncherWindowTests
         }
         finally { launcher.Close(); }
     });
+
+    [Fact]
+    public void LobbyDropClosesOnLockdownAndStalePageActionCannotOpenPanel() => Run(shell =>
+    {
+        var ld = LockdownService.Current = new LockdownService();
+        var launcher = new LauncherWindow();
+        typeof(LauncherWindow).GetField("_panel", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(launcher, shell);
+        launcher.CreateLobby = () => new LobbyPoll(new LobbyTimer(), () => false, () => Array.Empty<Friend>(),
+            () => Task.FromResult(PbpLobbyReply.Empty), () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), true)));
+        try
+        {
+            shell.Hide(); launcher.Show();
+            var chip = launcher.FindControl<Button>("LobbyChip")!;
+            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var menu = chip.ContextMenu!;
+            var page = (MenuItem)menu.Items[^1]!;
+            Assert.True(menu.IsOpen);
+            ld.Activate(TimeSpan.FromMinutes(30));
+            Assert.False(menu.IsOpen);
+            page.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.True(launcher.IsVisible); Assert.False(shell.IsVisible);
+        }
+        finally { ld.Deactivate(); launcher.Close(); }
+    });
+
+    [Fact]
+    public void LobbyPageHandoffRechecksLockdownAfterFade() => Run(shell =>
+    {
+        var ld = LockdownService.Current = new LockdownService();
+        var launcher = new LauncherWindow();
+        typeof(LauncherWindow).GetField("_panel", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(launcher, shell);
+        launcher.CreateLobby = () => new LobbyPoll(new LobbyTimer(), () => false, () => Array.Empty<Friend>(),
+            () => Task.FromResult(PbpLobbyReply.Empty), () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), true)));
+        try
+        {
+            shell.Hide(); launcher.Show();
+            var chip = launcher.FindControl<Button>("LobbyChip")!;
+            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            ((MenuItem)chip.ContextMenu!.Items[^1]!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.True(launcher.IsVisible);
+            ld.Activate(TimeSpan.FromMinutes(30));
+            launcher.FinishExit();
+            Assert.True(launcher.IsVisible); Assert.False(shell.IsVisible);
+        }
+        finally { ld.Deactivate(); launcher.Close(); }
+    }, pumpUntilIdle: false);
 
     [Fact]
     public void LobbyChessJoinHonorsLeashAndReturnsAfterGameCloses() => Run(shell =>
@@ -125,7 +182,7 @@ public sealed class LauncherWindowTests
         {
             var chip = launcher.FindControl<Button>("LobbyChip")!;
             chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            ((MenuItem)chip.ContextMenu!.Items[0]!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            JoinButton((MenuItem)chip.ContextMenu!.Items[0]!).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         }
         try
         {
@@ -161,8 +218,9 @@ public sealed class LauncherWindowTests
             var chip = launcher.FindControl<Button>("LobbyChip")!;
             chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var row = (MenuItem)chip.ContextMenu!.Items[0]!;
-            Assert.True(row.IsEnabled);
-            row.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            var join = JoinButton(row);
+            Assert.True(join.IsEnabled);
+            join.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal("subject", claimed);
             Assert.Equal("https://example.invalid/#pin", opened);
         }
@@ -188,7 +246,7 @@ public sealed class LauncherWindowTests
             launcher.Show();
             var chip = launcher.FindControl<Button>("LobbyChip")!;
             chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            ((MenuItem)chip.ContextMenu!.Items[0]!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            JoinButton((MenuItem)chip.ContextMenu!.Items[0]!).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.False(token.IsCancellationRequested);
             ld.Activate(TimeSpan.FromMinutes(30));
             Dispatcher.UIThread.RunJobs();
