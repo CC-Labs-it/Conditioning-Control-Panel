@@ -177,13 +177,25 @@ public sealed class GlowRenderProofTests
             Assert.True(halo.X < plain.X - 2 && halo.Y < plain.Y - 2 && halo.Right > plain.Right + 2 && halo.Bottom > plain.Bottom + 2,
                 $"no halo around the glyph: ink {plain}, with glow {halo}");
 
-            // On screen: 2 DIP left of the glyph's ink, mid-height, the halo tints the frame.
+            // The left edge of the ink bounding box need not contain ink at mid-height. Sample a
+            // four-pixel band outside the whole box, where the bake actually has shadow pixels.
             glow.Opacity = 1;
-            var p = lockGlyph.TranslatePoint(new Point(plain.X - pad - 2, plain.Y - pad + plain.Height / 2.0), w)!.Value;
-            var lit = Pixel(Frame(w, "padlock-glow-on"), p);
+            using var lit = Frame(w, "padlock-glow-on");
             glow.IsVisible = false;
-            var dark = Pixel(Frame(w, "padlock-glow-off"), p);
-            Assert.True(Diff(lit, dark) > 4, $"no halo beside the padlock: {lit:X6} vs {dark:X6}");
+            using var dark = Frame(w, "padlock-glow-off");
+            int tinted = 0, strongest = 0;
+            for (int y = Math.Max(0, plain.Y - 4); y < Math.Min(baked.PixelSize.Height, plain.Bottom + 4); y++)
+                for (int x = Math.Max(0, plain.X - 4); x < Math.Min(baked.PixelSize.Width, plain.Right + 4); x++)
+                {
+                    if (x >= plain.X && x < plain.Right && y >= plain.Y && y < plain.Bottom) continue;
+                    if (Alpha(baked, new Point(x, y)) <= 8) continue;
+                    var p = lockGlyph.TranslatePoint(new Point(x - pad, y - pad), w)!.Value;
+                    if (p.X < 0 || p.Y < 0 || p.X >= lit.Size.Width || p.Y >= lit.Size.Height) continue;
+                    int difference = Diff(Pixel(lit, p), Pixel(dark, p));
+                    strongest = Math.Max(strongest, difference);
+                    if (difference > 4) tinted++;
+                }
+            Assert.True(tinted >= 3, $"no halo beside the padlock: {tinted} pixels, strongest difference {strongest}");
         }
         finally
         {
