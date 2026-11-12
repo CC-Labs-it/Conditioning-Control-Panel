@@ -27,6 +27,17 @@ public partial class WebHost
         catch (Exception ex) { Serilog.Log.Debug(ex, "WebHost: panic blank failed"); }
     }
 
+    // A dashboard request held for the native gate must not start after panic or offline.
+    internal void CancelHeldNavigation()
+    {
+        if (_loadedOnThisEngine || Source is null) return;
+        _panicBlank = true;
+        try { _web?.Stop(); }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "WebHost: held navigation stop failed"); }
+        Source = null;
+        NavigatePanicBlank();
+    }
+
     private static bool IsScrolllerMedia(Uri? uri) => uri is { IsAbsoluteUri: true }
         && (ScrolllerPolicy.IsScrolllerUrl(uri.AbsoluteUri) && !ScrolllerWebRules.IsApiHost(uri.Host)
                 && ScrolllerWebRules.KindOf(uri.AbsoluteUri) != ScrolllerMediaKind.Other

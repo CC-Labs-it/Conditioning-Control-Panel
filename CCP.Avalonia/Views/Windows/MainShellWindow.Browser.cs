@@ -34,7 +34,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Panic surface "browser-media" (WPF b9368d963 PanicEndBrowserMedia): page video stops, fullscreen drops.</summary>
         internal void PanicPauseBrowserMedia()
         {
-            if (BrowserView is { } host) _ = host.InvokeScriptAsync(WebHostMedia.PanicPauseScript);
+            if (BrowserView is { } host)
+            {
+                host.CancelHeldNavigation();
+                _ = host.InvokeScriptAsync(WebHostMedia.PanicPauseScript);
+            }
         }
 
         /// <summary>Homepage of whichever site radio is selected. BambiCloud is the default, as on
@@ -159,6 +163,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (BrowserView is { HasEngine: false })
             {
                 var navigated = NavigateBrowser(url); // retain the requested URL on the fallback panel
+                // Companion watch owns its HTTPS fallback and must see the missing engine.
+                if (autoPlayFullscreen) return false;
                 if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
                     Platform.ExternalOpener.Open(url);
                 return navigated;
