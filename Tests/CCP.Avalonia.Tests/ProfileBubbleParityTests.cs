@@ -257,27 +257,36 @@ public sealed class ProfileBubbleParityTests : IDisposable
             double Angle() => visual.RenderTransform is TransformGroup g
                 ? g.Children.OfType<RotateTransform>().Single().Angle
                 : (visual.RenderTransform as RotateTransform)?.Angle ?? 0;
+            // Avalonia's render ticks use wall time. Pulse the animation clock at known
+            // points so a fast runner cannot sample only the first millisecond.
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic;
+            var clockType = typeof(global::Avalonia.Animation.Animatable).Assembly.GetType("Avalonia.Animation.ClockBase", true)!;
+            var clock = Activator.CreateInstance(clockType, nonPublic: true)!;
+            var pulse = clockType.GetMethod("Pulse", flags | BindingFlags.Instance)!;
+            var clockProperty = (AvaloniaProperty)typeof(global::Avalonia.Animation.Animatable)
+                .GetField("ClockProperty", flags | BindingFlags.Static)!.GetValue(null)!;
+            visual.SetValue(clockProperty, clock);
             double maxTilt = 0, minOpacity = 1;
-            void Run()
+            void Run(params int[] times)
             {
-                for (int i = 0; i < 60; i++)
+                foreach (int ms in times)
                 {
+                    pulse.Invoke(clock, new object[] { TimeSpan.FromMilliseconds(ms) });
                     Dispatcher.UIThread.RunJobs();
-                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
                     maxTilt = Math.Max(maxTilt, Math.Abs(Angle()));
                     minOpacity = Math.Min(minOpacity, visual.Opacity);
                 }
             }
 
             DisplayFlash(shell);
-            Run();
+            Run(0, 90, 220, 340, 480, 570, 600);
             if (animates) Assert.True(maxTilt > 1, $"a flash never tilted the bubble (max {maxTilt})");
             else Assert.Equal(0, maxTilt);
             Assert.Equal(1, minOpacity);
 
             maxTilt = 0;
             DisplaySubliminal();
-            Run();
+            Run(600, 750, 900, 1050, 1200, 1350, 1500);
             if (animates) Assert.True(minOpacity < 0.95, $"a subliminal never dipped the bubble (min {minOpacity})");
             else Assert.Equal(1, minOpacity);
             Assert.Equal(0, maxTilt);
