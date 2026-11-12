@@ -16,9 +16,6 @@ namespace CCP.Avalonia.Tests;
 /// The unshown race window keeps the Glassroad session; the shell owns focus, Escape and its process group.</summary>
 public sealed partial class GameWindowTests
 {
-    private static int PanicPresses(MainShellWindow shell) => (int)typeof(MainShellWindow)
-        .GetField("_panicPressCount", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(shell)!;
-
     private static void RunShellRace(Action<MainShellWindow, GameWindow, LinuxRaceHost, Process, Process> body,
         Action<DateTime>? panic = null, bool listening = false, string? room = null) => RunGlassroad((shell, _, _) =>
     {
@@ -69,9 +66,7 @@ public sealed partial class GameWindowTests
         Assert.True(o.WaitForExit(5000));
     }, room: "abcdef123456");
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(1)] [InlineData(2)]
+    [Theory, InlineData(0), InlineData(1), InlineData(2)]
     public void LinuxShell_StartFailureShowsTheCardSayingSo(int mode) => RunGlassroad((_, _, _) =>
     {
         if (!OperatingSystem.IsLinux()) return;
@@ -108,9 +103,7 @@ public sealed partial class GameWindowTests
 
     /// <summary>P1: after the panic watchdog killed the race (before the reader's Dispose ran), the press the recovered UI
     /// runs, from the X11 listener or queued from the shell pipe, is a full panic: never a pause for a dead race, no exit rung.</summary>
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
+    [Theory, InlineData(true), InlineData(false)]
     public void LinuxShell_PanicAfterWatchdogKillIsAFullPanicNotAPause(bool x11) => RunShellRace((shell, w, host, _, o) =>
     {
         var s = CoreSettings.Current;
@@ -132,7 +125,7 @@ public sealed partial class GameWindowTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, stops);
             Assert.DoesNotContain("kept-escape", sent);
-            Assert.Equal(0, PanicPresses(shell));
+            Assert.Equal(0, shell.PanicPressCountForTest);
             Assert.False(GameWindow.IsAnyOpen());
             Assert.Null(LinuxRaceHost.Current);
             Assert.True(o.WaitForExit(5000));
