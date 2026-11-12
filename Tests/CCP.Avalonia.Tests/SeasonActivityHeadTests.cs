@@ -45,12 +45,12 @@ public class SeasonActivityHeadTests
         var engine = new AchievementEngine(new AchievementStore(achievementPath));
         var previousXp = CoreProgression.AddXPProvider;
         var awarded = 0.0;
-        var popups = new System.Collections.Generic.List<(int Days, int Xp)>();
+        var popups = new System.Collections.Generic.List<(int Days, int Xp)>(); var moments = new System.Collections.Generic.List<(string, int)>();
         CoreProgression.AddXPProvider = (xp, _) => awarded += xp;
         var now = new DateTime(2026, 7, 3, 23, 59, 0, DateTimeKind.Utc);
         try
         {
-            var check = App.StartSeasonActivity(settings, engine, () => now, bonusPopup: (days, xp) => popups.Add((days, xp)));
+            var check = App.StartSeasonActivity(settings, engine, () => now, bonusPopup: (days, xp) => popups.Add((days, xp)), streakMoment: (name, days) => moments.Add((name, days)));
             Assert.Equal(new[] { "2026-07-03" }, settings.Current.SeasonActiveDays);
             Assert.Equal(1, engine.Progress.ConsecutiveDays);
             Assert.Equal(1, settings.Current.SeasonPeakStreak);
@@ -80,7 +80,7 @@ public class SeasonActivityHeadTests
             Assert.Equal(2, engine.Progress.ConsecutiveDays);
             Assert.Equal(2, new AchievementStore(achievementPath).Load().ConsecutiveDays);
             Assert.Equal(50, awarded);
-            Assert.Equal(new[] { (2, 50) }, popups);
+            Assert.Equal(new[] { (2, 50) }, popups); Assert.Equal(new[] { ("streakKept", 2) }, moments);
 
             now = new DateTime(2026, 7, 8, 12, 0, 0, DateTimeKind.Local).ToUniversalTime();
             settings.Current.UnifiedId = "streak-test";

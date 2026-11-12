@@ -97,7 +97,7 @@ namespace ConditioningControlPanel.Avalonia
         }
 
         // WPF AchievementService.cs:93, :146 and AchievementProgressStreak.cs:19, :192.
-        internal static Action StartSeasonActivity(SettingsService settings, AchievementEngine engine, Func<DateTime> clock, SyncPush? sync = null, Action<int, int>? bonusPopup = null)
+        internal static Action StartSeasonActivity(SettingsService settings, AchievementEngine engine, Func<DateTime> clock, SyncPush? sync = null, Action<int, int>? bonusPopup = null, Action<string, int>? streakMoment = null)
         {
             var progress = engine.Progress;
             var wasLive = ReferenceEquals(Achievements, engine);
@@ -125,7 +125,8 @@ namespace ConditioningControlPanel.Avalonia
                 var oldStreak = s.CurrentStreak;
                 var oldDate = s.LastStreakDate;
                 var canDefer = !s.OfflineMode && !string.IsNullOrEmpty(s.UnifiedId);
-                if (SeasonActivity.UpdateStreak(s, progress, now.ToLocalTime().Date, canDefer, resolve, allowProtection: !startup)) Persist();
+                if (SeasonActivity.UpdateStreak(s, progress, now.ToLocalTime().Date, canDefer, resolve,
+                    allowProtection: !startup, moment: (name, days) => { if (streakMoment != null) streakMoment(name, days); else Views.Windows.EmiDesk.EmiDeskService.Instance.Fire(name, new { streak = days }); })) Persist();
                 else if (peak != s.SeasonPeakStreak || oldStreak != s.CurrentStreak || oldDate != s.LastStreakDate) settings.Save();
                 if (credits > s.StreakFixCharges && sync != null && !string.IsNullOrEmpty(s.UnifiedId))
                 {

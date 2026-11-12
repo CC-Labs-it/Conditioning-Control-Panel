@@ -27,9 +27,10 @@ public static class SeasonActivity
 
     // WPF AchievementProgressStreak.cs:19-99, :105-150 and :192-257.
     // Return true when the caller must persist; a deferred gap deliberately keeps its old date.
-    public static bool UpdateStreak(AppSettings s, AchievementProgress p, DateTime today, bool canDefer, bool resolve = false, bool allowProtection = true)
+    public static bool UpdateStreak(AppSettings s, AchievementProgress p, DateTime today, bool canDefer, bool resolve = false, bool allowProtection = true, Action<string, int>? moment = null)
     {
         today = today.Date;
+        void Fire(string name, int streak) { try { moment?.Invoke(name, streak); } catch { } }
         TrackStreakPeak(s, p.ConsecutiveDays);
         if (resolve ? !p.PendingStreakBreak : p.PendingStreakBreak) return false;
         var last = p.LastLaunchDate.Date;
@@ -47,7 +48,7 @@ public static class SeasonActivity
         else if (last == today.AddDays(-1))
         {
             p.ConsecutiveDays++;
-            p.PendingStreakBonus = true;
+            p.PendingStreakBonus = true; if (!resolve) Fire("streakKept", p.ConsecutiveDays);
         }
         else if (!resolve && canDefer)
         {
@@ -58,16 +59,16 @@ public static class SeasonActivity
         {
             s.StreakShieldsRemaining--;
             p.ConsecutiveDays++;
-            p.PendingStreakBonus = true;
+            p.PendingStreakBonus = true; Fire("streakKept", p.ConsecutiveDays);
             for (var d = last.AddDays(1); d < today; d = d.AddDays(1))
                 if (!s.StreakShieldUsedDates.Contains(d)) s.StreakShieldUsedDates.Add(d);
         }
         else if (allowProtection && SkillTreeRules.HasSkill(s, "oopsie_insurance") && s.StreakFixCharges > 0)
         {
             s.StreakFixCharges--;
-            s.SeasonalStreakRecoveryUsed = true;
+            s.SeasonalStreakRecoveryUsed = true; Fire("streakKept", p.ConsecutiveDays);
         }
-        else p.ConsecutiveDays = 1;
+        else { Fire("streakBroken", p.ConsecutiveDays); p.ConsecutiveDays = 1; }
         p.LastLaunchDate = today;
         s.CurrentStreak = p.ConsecutiveDays;
         s.LastStreakDate = today;

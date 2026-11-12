@@ -33,17 +33,17 @@ public class SeasonActivityTests
     public void FreshLaunchAndNextDayBankOnceAndRaisePeak()
     {
         var s = new AppSettings();
-        var p = new AchievementProgress();
+        var p = new AchievementProgress(); var moments = new System.Collections.Generic.List<(string, int)>(); Action<string, int> fire = (name, days) => moments.Add((name, days));
         var day = new DateTime(2026, 7, 3);
-        Assert.True(SeasonActivity.UpdateStreak(s, p, day, false));
+        Assert.True(SeasonActivity.UpdateStreak(s, p, day, false, moment: fire));
         Assert.Equal(1, p.ConsecutiveDays);
-        Assert.False(SeasonActivity.UpdateStreak(s, p, day, false));
-        Assert.True(SeasonActivity.UpdateStreak(s, p, day.AddDays(1), false));
+        Assert.False(SeasonActivity.UpdateStreak(s, p, day, false, moment: fire));
+        Assert.True(SeasonActivity.UpdateStreak(s, p, day.AddDays(1), false, moment: fire));
         Assert.Equal(2, p.ConsecutiveDays);
         Assert.Equal(2, s.CurrentStreak);
         Assert.Equal(2, s.SeasonPeakStreak);
-        Assert.True(p.PendingStreakBonus);
-        Assert.False(SeasonActivity.UpdateStreak(s, p, day.AddDays(1), false));
+        Assert.True(p.PendingStreakBonus); Assert.Equal(new[] { ("streakKept", 2) }, moments);
+        Assert.False(SeasonActivity.UpdateStreak(s, p, day.AddDays(1), false, moment: fire));
     }
 
     [Fact]
@@ -51,19 +51,19 @@ public class SeasonActivityTests
     {
         var day = new DateTime(2026, 7, 8);
         var s = new AppSettings { UnlockedSkills = new() { "good_girl_streak" }, StreakShieldsRemaining = 1 };
-        var p = new AchievementProgress { ConsecutiveDays = 4, LastLaunchDate = day.AddDays(-4) };
-        Assert.False(SeasonActivity.UpdateStreak(s, p, day, true));
+        var p = new AchievementProgress { ConsecutiveDays = 4, LastLaunchDate = day.AddDays(-4) }; var moments = new System.Collections.Generic.List<(string, int)>(); Action<string, int> fire = (name, days) => moments.Add((name, days));
+        Assert.False(SeasonActivity.UpdateStreak(s, p, day, true, moment: fire));
         Assert.True(p.PendingStreakBreak);
         Assert.Equal(day.AddDays(-4), p.LastLaunchDate);
         Assert.True(SeasonActivity.AdoptStreak(s, p, Newtonsoft.Json.Linq.JObject.Parse(
             "{\"consecutive_days\":7,\"last_streak_date\":\"2026-07-07\"}"), day));
-        Assert.True(SeasonActivity.UpdateStreak(s, p, day, false, resolve: true));
+        Assert.True(SeasonActivity.UpdateStreak(s, p, day, false, resolve: true, moment: fire));
         Assert.False(p.PendingStreakBreak);
         Assert.Equal(8, p.ConsecutiveDays);
         Assert.Equal(8, s.SeasonPeakStreak);
-        Assert.Equal(1, s.StreakShieldsRemaining);
+        Assert.Equal(1, s.StreakShieldsRemaining); Assert.Empty(moments);
         Assert.Equal(day, p.LastLaunchDate);
-        Assert.False(SeasonActivity.UpdateStreak(s, p, day, false, resolve: true));
+        Assert.False(SeasonActivity.UpdateStreak(s, p, day, false, resolve: true, moment: fire));
     }
 
     [Theory]
@@ -74,10 +74,10 @@ public class SeasonActivityTests
     {
         var day = new DateTime(2026, 7, 8);
         var s = new AppSettings { UnlockedSkills = new() { skill }, StreakShieldsRemaining = 1, StreakFixCharges = 1 };
-        var p = new AchievementProgress { ConsecutiveDays = 4, LastLaunchDate = day.AddDays(-3) };
-        Assert.False(SeasonActivity.UpdateStreak(s, p, day, true));
-        Assert.True(SeasonActivity.UpdateStreak(s, p, day, false, resolve: true));
-        Assert.Equal(expected, p.ConsecutiveDays);
+        var p = new AchievementProgress { ConsecutiveDays = 4, LastLaunchDate = day.AddDays(-3) }; var moments = new System.Collections.Generic.List<(string, int)>(); Action<string, int> fire = (name, days) => moments.Add((name, days));
+        Assert.False(SeasonActivity.UpdateStreak(s, p, day, true, moment: fire));
+        Assert.True(SeasonActivity.UpdateStreak(s, p, day, false, resolve: true, moment: fire));
+        Assert.Equal(expected, p.ConsecutiveDays); Assert.Equal(new[] { (skill == "none" ? "streakBroken" : "streakKept", skill == "good_girl_streak" ? 5 : 4) }, moments);
         Assert.Equal(shields, s.StreakShieldsRemaining);
         Assert.Equal(credits, s.StreakFixCharges);
         Assert.Equal(Math.Max(4, expected), s.SeasonPeakStreak);
