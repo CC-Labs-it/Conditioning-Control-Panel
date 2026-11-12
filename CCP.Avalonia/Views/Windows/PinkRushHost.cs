@@ -21,6 +21,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Clock and roll seams: tests step them (P08).</summary>
         internal static Func<DateTime> Now = () => DateTime.Now;
         internal static Func<double> Roll = Random.Shared.NextDouble;
+        /// <summary>The screen wash; tests count it to prove the Perk effects gate.</summary>
+        internal static Action Wash = WashScreens;
 
         private static DispatcherTimer? _check;
         private static DispatcherTimer? _expiry;
@@ -108,7 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF's half-second pink wash (FF1493 at alpha 100, window opacity 0.6 -> 0 over 500 ms).
         /// Only where a click-through tint can reach the screen, as PinkFilterOverlay refuses otherwise.</summary>
-        private static void Wash()
+        private static void WashScreens()
         {
             try
             {

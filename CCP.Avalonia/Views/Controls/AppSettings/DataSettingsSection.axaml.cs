@@ -72,13 +72,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         private void OnIdentityChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(SyncFromSettings);
 
         /// <summary>WPF main e22a0cef83: a pure forward to the Profile bin's handler (type-DELETE dialog,
-        /// server call, local wipe); this door is disabled while the request runs.</summary>
+        /// server call, local wipe); DeleteProfileAsync disables both doors while the request runs.</summary>
         private async void BtnDeleteAccount_Click(object? sender, RoutedEventArgs e)
         {
             if (this.FindLogicalAncestorOfType<Windows.MainShellWindow>() is not { } shell) return;
-            BtnDeleteAccount.IsEnabled = false;
-            try { await shell.DeleteProfileAsync(); }
-            finally { BtnDeleteAccount.IsEnabled = true; SyncFromSettings(); }
+            await shell.DeleteProfileAsync();
+            SyncFromSettings();
         }
 
         internal void SyncFromSettings()

@@ -27,7 +27,7 @@ public sealed class PinkRushTests
             var s = CoreSettings.Current;
             var saved = (s.PlayerLevel, s.PlayerXP, s.OfflineMode, s.OfflineUsername, s.PerkEffects,
                 s.PanicKeyEnabled, s.PanicKey, s.UnlockedSkills, s.FlashEnabled);
-            var (now, roll) = (PinkRushHost.Now, PinkRushHost.Roll);
+            var (now, roll, wash) = (PinkRushHost.Now, PinkRushHost.Roll, PinkRushHost.Wash);
             var t0 = new DateTime(2026, 1, 1, 12, 0, 0);
             var clock = t0;
             PinkRushHost.Now = () => clock;
@@ -92,10 +92,20 @@ public sealed class PinkRushTests
                 Assert.Null(PinkRushHost.Popup);
                 Assert.Equal(1.0, PinkRushRules.XpFactor(s));
 
-                // Suppressed perk announcements: the rush runs, the popup does not show.
+                // Perk effects Off (WPF MainWindow.Enhancements.cs:2059): the rush and its 3x run, the wash does not.
+                var washes = 0;
+                PinkRushHost.Wash = () => washes++;
+                s.PerkEffects = ConditioningControlPanel.Models.PerkEffectsMode.Off;
+                PinkRushHost.CheckTick();
+                Assert.True(s.PinkRushActive);
+                Assert.Equal(0, washes);
+                PinkRushHost.End();
+
+                // Suppressed perk announcements: the rush runs and washes, the popup does not show.
                 s.PerkEffects = ConditioningControlPanel.Models.PerkEffectsMode.NoCards;
                 PinkRushHost.CheckTick();
                 Assert.True(s.PinkRushActive);
+                Assert.Equal(1, washes);
                 Assert.Null(PinkRushHost.Popup);
                 s.PerkEffects = ConditioningControlPanel.Models.PerkEffectsMode.Full;
                 PinkRushHost.End();
@@ -121,7 +131,7 @@ public sealed class PinkRushTests
                 CoreEngine.StoppedHook = null;
                 CoreEngine.Stop();
                 PinkRushHost.Stop();
-                (PinkRushHost.Now, PinkRushHost.Roll) = (now, roll);
+                (PinkRushHost.Now, PinkRushHost.Roll, PinkRushHost.Wash) = (now, roll, wash);
                 (s.PlayerLevel, s.PlayerXP, s.OfflineMode, s.OfflineUsername, s.PerkEffects,
                     s.PanicKeyEnabled, s.PanicKey, s.UnlockedSkills, s.FlashEnabled) = saved;
                 shell.Close();
