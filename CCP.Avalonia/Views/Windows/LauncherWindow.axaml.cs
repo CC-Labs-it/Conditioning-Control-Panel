@@ -96,6 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             BuildTiles();
             HookVeil();
             HookFx();
+            HookPress(PanelCta);
             HookLinks();
             PaintSoundButton();
         }
@@ -106,6 +107,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 BuildTiles();
+                StartEntrance();
                 RefreshAccount();
                 RefreshMod();
                 RefreshStatus();
@@ -303,7 +305,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void TitleBar_PointerPressed(object? sender, PointerPressedEventArgs e)
         {
-            if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) BeginMoveDrag(e);
+            if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+            if (e.ClickCount == 2)
+            {
+                WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+                e.Handled = true;
+            }
+            else BeginMoveDrag(e);
         }
 
         private void BtnMinimize_Click(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
@@ -725,6 +733,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 TextTrimming = TextTrimming.CharacterEllipsis, Height = LauncherGridLayout.BlurbHeight,
             });
             var play = PlayButton(hue, locked, needsAccount);
+            HookPress(play);
             // ponytail: no LockdownVeil on this head yet (WPF's swallows every tile click); this refusal stands in for it.
             play.Click += (_, _) => { if (!MainShellWindow.LockdownActive) Play(card); };
             text.Children.Add(play);
