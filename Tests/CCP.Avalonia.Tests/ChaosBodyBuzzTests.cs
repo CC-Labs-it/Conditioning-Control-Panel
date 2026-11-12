@@ -7,6 +7,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
 
@@ -14,6 +15,19 @@ namespace CCP.Avalonia.Tests;
 
 public class ChaosBodyBuzzTests
 {
+    [Fact]
+    public async Task ShockwaveTestRestoresIncomingFieldOverlaySetting()
+    {
+        bool previous = ChaosFieldFxOverlay.SkipPlatformChecksForTests;
+        try
+        {
+            ChaosFieldFxOverlay.SkipPlatformChecksForTests = true;
+            await ShockwaveSelectsRendererAndCancelsHops(false);
+            Assert.True(ChaosFieldFxOverlay.SkipPlatformChecksForTests);
+        }
+        finally { ChaosFieldFxOverlay.SkipPlatformChecksForTests = previous; }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -26,13 +40,17 @@ public class ChaosBodyBuzzTests
         var rng = ChaosRunHost.Rng;
         var checks = ChaosSkiaFxOverlay.SkipPlatformChecksForTests;
         var composited = ChaosSkiaFxOverlay.Composited;
+        var fieldChecks = ChaosFieldFxOverlay.SkipPlatformChecksForTests;
+        var language = LocalizationManager.Instance.CurrentLanguage;
         try
         {
             settings.ChaosSkiaFxEnabled = skia;
             ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
             ChaosSkiaFxOverlay.Composited = () => true;
             ChaosFieldFxOverlay.SkipPlatformChecksForTests = true;
-            field.SetValue(null, new ChaosRunState(new ChaosRunConfig()) { EStimShockwaveChance = 1 });
+            var state = new ChaosRunState(new ChaosRunConfig()) { EStimShockwaveChance = 1 };
+            field.SetValue(null, state);
+            LocalizationManager.Instance.SetLanguage("de");
             ChaosRunHost.Rng = new Random(7);
             BubbleOverlay.BeginChaos(new Border(), _ => { });
             var source = new AmbientBubble { X = -10, Y = -10, Size = 20, Popping = true, Spec = new EffectBubbleSpec() };
@@ -40,6 +58,7 @@ public class ChaosBodyBuzzTests
             var outside = new AmbientBubble { X = 431, Y = -10, Size = 20, Spec = new EffectBubbleSpec() };
             BubbleOverlay.Field.Bubbles.Add(outside);
             ChaosRunHost.BodyBuzz(source);
+            Assert.Equal("⚡ Körperkribbeln: der Strom breitet sich aus", state.RecentEvents[0]);
             Assert.Equal(8, ChaosRunHost.BodyBuzzHopCount);
             if (skia) Assert.Equal(1, ChaosSkiaFxOverlay.Active!.Fx.RippleCount);
             else Assert.Equal(1, ChaosFieldFxOverlay.Active!.Model.TransientCount);
@@ -60,7 +79,8 @@ public class ChaosBodyBuzzTests
         finally
         {
             BubbleOverlay.EndChaos(); BubbleOverlay.Field.Bubbles.Clear();
-            ChaosFieldFxOverlay.CloseActive(); ChaosFieldFxOverlay.SkipPlatformChecksForTests = false;
+            ChaosFieldFxOverlay.CloseActive(); ChaosFieldFxOverlay.SkipPlatformChecksForTests = fieldChecks;
+            LocalizationManager.Instance.SetLanguage(language);
             ChaosSkiaFxOverlay.CloseActive(); ChaosEStimOverlay.CloseActive();
             ChaosSkiaFxOverlay.SkipPlatformChecksForTests = checks; ChaosSkiaFxOverlay.Composited = composited;
             settings.ChaosSkiaFxEnabled = enabled; ChaosRunHost.Rng = rng; field.SetValue(null, old);

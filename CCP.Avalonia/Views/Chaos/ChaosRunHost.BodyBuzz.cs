@@ -6,6 +6,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos;
 
@@ -53,7 +54,7 @@ internal static partial class ChaosRunHost
             }
         }
         Pulse(Color.FromRgb(0x7A, 0xE0, 0xFF), 0.25);
-        _state.PushEvent("⚡ body buzz: the current spreads");
+        _state.PushEvent($"⚡ {Loc.Get("chaos_body_buzz_spreads")}");
     }
 
     internal static void ClearBodyBuzzHops()
