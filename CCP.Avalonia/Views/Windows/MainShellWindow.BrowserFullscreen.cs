@@ -15,6 +15,8 @@ public partial class MainShellWindow
     private WindowDecorations _browserPreviousDecorations;
     private bool _browserPreviousTopmost, _browserPreviousCanResize;
     private WebHost? _browserFullscreenHost;
+    private long _browserFullscreenSession;
+    private long? _browserNavigationFullscreenSession;
 
     // A page may report exit, but only the native engine signal can enter fullscreen.
     private const string BrowserFullscreenExitScript = @"(function(){
@@ -49,14 +51,23 @@ public partial class MainShellWindow
         if (_browserFullscreenHost == null) return;
         _browserFullscreenHost.NativeFullscreenEntered += EnterBrowserPopoutFullscreen;
         _browserFullscreenHost.NativeFullscreenExited += ExitBrowserPopoutFullscreen;
-        _browserFullscreenHost.AcceptedNavigationStarted += ExitBrowserPopoutFullscreen;
+        _browserFullscreenHost.AcceptedNavigationStarted += BrowserFullscreenNavigationStarted;
         _browserFullscreenHost.NavigationCompleted += BrowserFullscreenNavigation;
         _browserFullscreenHost.WebMessage += BrowserFullscreenMessage;
     }
 
+    private void BrowserFullscreenNavigationStarted()
+    {
+        _browserNavigationFullscreenSession = _browserFullscreenWindow == null ? null : _browserFullscreenSession;
+        ExitBrowserPopoutFullscreen();
+    }
+
     private void BrowserFullscreenNavigation(Uri url)
     {
-        ExitBrowserPopoutFullscreen(); // fallback if an adapter omitted NavigationStarted
+        var session = _browserNavigationFullscreenSession;
+        _browserNavigationFullscreenSession = null;
+        // A later fullscreen entry belongs to the loading page, not the navigation being completed.
+        if (session != null && session == _browserFullscreenSession) ExitBrowserPopoutFullscreen();
     }
     private void BrowserFullscreenMessage(string message)
     {
@@ -68,6 +79,7 @@ public partial class MainShellWindow
         var window = _browserPopoutWindow;
         if (window == null || _browserFullscreenWindow != null) return; // embedded takeover is part B
         _browserFullscreenWindow = window;
+        _browserFullscreenSession++;
         if (_browserFullscreenHost is { } host) _ = InstallBrowserFullscreenExitScriptAsync(host);
         _browserPreviousState = window.WindowState;
         _browserPreviousDecorations = window.WindowDecorations;
@@ -126,7 +138,7 @@ public partial class MainShellWindow
         if (_browserFullscreenHost is not { } host) return;
         host.NativeFullscreenEntered -= EnterBrowserPopoutFullscreen;
         host.NativeFullscreenExited -= ExitBrowserPopoutFullscreen;
-        host.AcceptedNavigationStarted -= ExitBrowserPopoutFullscreen;
+        host.AcceptedNavigationStarted -= BrowserFullscreenNavigationStarted;
         host.NavigationCompleted -= BrowserFullscreenNavigation;
         host.WebMessage -= BrowserFullscreenMessage;
         _browserFullscreenHost = null;

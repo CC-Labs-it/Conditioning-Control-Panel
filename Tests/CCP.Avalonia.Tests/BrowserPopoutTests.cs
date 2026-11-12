@@ -286,8 +286,57 @@ public sealed class BrowserPopoutTests
         var popout = shell.BrowserPopoutWindow!;
         host.OnNativeFullscreenEntered();
         Assert.Equal(WindowState.FullScreen, popout.WindowState);
+        // With no recorded navigation start, native exit is the evidence to restore the window.
+        host.OnNativeFullscreenExited();
+        Assert.Equal(WindowState.Normal, popout.WindowState);
         host.OnNavigationCompleted(new Uri("http://127.0.0.1:9/next"));
         Assert.Equal(WindowState.Normal, popout.WindowState);
+        Assert.Same(host, popout.Content);
+    });
+
+    [Fact]
+    public Task FullscreenEnteredWhileNavigationIsLoadingSurvivesItsCompletion() => WithShell((shell, page, host) =>
+    {
+        Click(page, "BtnPopOutBrowser");
+        var popout = shell.BrowserPopoutWindow!;
+        host.NewScrolllerEngine()(true);
+        var url = new Uri("http://127.0.0.1:9/loading");
+        var started = new WebViewNavigationStartingEventArgs { Request = url };
+        host.OnNavigationStarted(null, started);
+        Assert.False(started.Cancel);
+        host.OnNativeFullscreenEntered();
+        Assert.Equal(WindowState.FullScreen, popout.WindowState);
+        host.OnNavigationCompleted(url);
+        Assert.Equal(WindowState.FullScreen, popout.WindowState);
+        Assert.Same(host, popout.Content);
+    });
+
+    [Fact]
+    public Task ANewFullscreenSessionSurvivesAnEarlierFullscreenNavigationCompletion() => WithShell((shell, page, host) =>
+    {
+        Click(page, "BtnPopOutBrowser");
+        var popout = shell.BrowserPopoutWindow!;
+        host.NewScrolllerEngine()(true);
+        var url = new Uri("http://127.0.0.1:9/next");
+        host.OnNativeFullscreenEntered();
+        var started = new WebViewNavigationStartingEventArgs { Request = url };
+        host.OnNavigationStarted(null, started);
+        Assert.False(started.Cancel);
+        Assert.Equal(WindowState.Normal, popout.WindowState);
+        host.OnNativeFullscreenEntered();
+        host.OnNavigationCompleted(url);
+        Assert.Equal(WindowState.FullScreen, popout.WindowState);
+        Assert.Same(host, popout.Content);
+    });
+
+    [Fact]
+    public Task UntrackedNavigationCompletionDoesNotCloseFullscreen() => WithShell((shell, page, host) =>
+    {
+        Click(page, "BtnPopOutBrowser");
+        var popout = shell.BrowserPopoutWindow!;
+        host.OnNativeFullscreenEntered();
+        host.OnNavigationCompleted(new Uri("http://127.0.0.1:9/next"));
+        Assert.Equal(WindowState.FullScreen, popout.WindowState);
         Assert.Same(host, popout.Content);
     });
 
