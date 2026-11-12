@@ -255,7 +255,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var w in Windows) w.Sync();
         }
 
-        /// <summary>WPF SpawnChaosBubble, FloatUp/RainDown. Without an overlay window (headless, or a
+        /// <summary>WPF SpawnChaosBubble, FloatUp/RainDown/SideDrift. Without an overlay window (headless, or a
         /// platform that refuses click-through) the bubble lives on a 1920x1080 model screen.</summary>
         internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec)
         {
@@ -385,6 +385,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             },
         };
         private static readonly Dictionary<uint, IPen> FuseCache = new();
+        private static readonly Dictionary<(string, int), (FormattedText Text, FormattedText Shadow)> LabelCache = new();
+        private static readonly Typeface LabelFace = new(FontFamily.Default, FontStyle.Normal, FontWeight.Bold);
+        private static readonly IBrush LabelShadow = new ImmutableSolidColorBrush(Colors.Black, 0.8);
+
+        /// <summary>WPF variant label (BubbleService.cs:4967): white bold glyph at 30% of the bubble with a
+        /// soft black shadow, centred. Cached per glyph and size so the render pass stays allocation-free.</summary>
+        internal static void DrawLabel(DrawingContext dc, string label, double cx, double cy, double size, double k)
+        {
+            int em = (int)Math.Round(Math.Max(14 * k, size * 0.30));
+            if (!LabelCache.TryGetValue((label, em), out var t))
+                LabelCache[(label, em)] = t = (
+                    new FormattedText(label, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, LabelFace, em, Brushes.White),
+                    new FormattedText(label, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, LabelFace, em, LabelShadow));
+            double x = cx - t.Text.Width / 2, y = cy - t.Text.Height / 2, d = 1.5 * k;
+            dc.DrawText(t.Shadow, new Point(x - d, y));
+            dc.DrawText(t.Shadow, new Point(x + d, y));
+            dc.DrawText(t.Shadow, new Point(x, y - d));
+            dc.DrawText(t.Shadow, new Point(x, y + d));
+            dc.DrawText(t.Text, new Point(x, y));
+        }
         private static readonly Dictionary<uint, (IBrush, IPen)> TintCache = new();
 
         /// <summary>One pen per ring colour+opacity (a few hundred at most), so the render pass stays allocation-free.</summary>
@@ -526,6 +546,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         }
                         if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
                         else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                        // ponytail: no per-variant sprites on this head (ChaosArt is a stub), so WPF's
+                        // no-sprite path applies: the label carries the variant. Only the freeze pickup draws it so far.
+                        if (b.Spec is { IsFreeze: true, Label.Length: > 0 }) DrawLabel(dc, b.Spec.Label, cx, cy, size, k);
                         if (b.FuseTotalMs > 0 && !b.Popping)   // WPF fuse ring: shrinks 1 -> 0.45; yellow, flash, red brink
                         {
                             double rr = (size / 2 - 2) * (0.45 + 0.55 * b.FuseFraction);

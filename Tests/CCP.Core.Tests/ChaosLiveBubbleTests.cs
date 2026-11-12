@@ -27,6 +27,39 @@ public class ChaosLiveBubbleTests
     }
 
     [Fact]
+    public void Side_drift_pickup_enters_from_a_side_edge_crosses_and_leaves_as_a_miss()
+    {
+        // WPF BubbleService.cs:3350,4109: entry one size off a random side at 120..H-size-120,
+        // _vx = +-1.15 speed, the wobble on Y, exit one size past the far edge.
+        bool sawLeft = false, sawRight = false;
+        for (int seed = 0; seed < 20; seed++)
+        {
+            var f = new AmbientBubbleField();
+            var b = AmbientBubble.SpawnChaos(new Random(seed), 0, 0, 0, 1920, 1080, 1, new EffectBubbleSpec
+                { VariantId = "bambifreeze", IsFreeze = true, SizePx = 200, Motion = ChaosMotion.SideDrift });
+            f.Bubbles.Add(b);
+            bool fromLeft = b.X < 0;
+            Assert.Equal(fromLeft ? -200 : 1920, b.X);
+            Assert.InRange(b.Y, 120, 760);
+            double y0 = b.Y, lastX = b.X;
+            int missed = 0, steps = 0;
+            while (f.Bubbles.Count > 0 && steps++ < 20000)
+            {
+                missed += f.Step();
+                if (f.Bubbles.Count == 0) break;
+                Assert.True(fromLeft ? b.X > lastX : b.X < lastX);
+                Assert.InRange(b.Y, y0 - 45, y0 + 45);
+                lastX = b.X;
+            }
+            Assert.Equal(1, missed);
+            Assert.True(fromLeft ? b.X > 1920 : b.X < -200);
+            sawLeft |= fromLeft;
+            sawRight |= !fromLeft;
+        }
+        Assert.True(sawLeft && sawRight);
+    }
+
+    [Fact]
     public void Pickup_freeze_holds_motion_and_fuses_but_allows_a_defuse_channel()
     {
         // WPF BubbleService.cs:3796,4531: channel runs even while frozen.

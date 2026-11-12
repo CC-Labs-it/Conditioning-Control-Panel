@@ -59,6 +59,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>A Chaos run's bubble (WPF Bubble with a spec); null for a plain ambient one.</summary>
         public Chaos.EffectBubbleSpec? Spec;
         private double _startX, _top, _speed, _wobbleOffset, _timeAlive;
+        private double _startY, _vx;   // SideDrift: the entry height and the crossing speed
         private int _animType;
 
         // ---- live chaos bubble (WPF Bubble _fuseRemainingMs / _isChanneling / TickChannel) ----
@@ -156,7 +157,7 @@ namespace ConditioningControlPanel.Services
             return b;
         }
 
-        /// <summary>WPF Bubble ctor (BubbleService.cs:3338,4095), FloatUp/RainDown: the spec's size, the chaos
+        /// <summary>WPF Bubble ctor (BubbleService.cs:3338,4095), FloatUp/RainDown/SideDrift: the spec's size, the chaos
         /// pace (bigger drifts slower, SpeedMult, CHAOS_SPEED_MULT), the ambient wobble and rise.</summary>
         public static AmbientBubble SpawnChaos(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
             double scaling, Chaos.EffectBubbleSpec spec)
@@ -173,6 +174,17 @@ namespace ConditioningControlPanel.Services
             b.Y = spec.Motion == Chaos.ChaosMotion.RainDown
                 ? areaY / scaling - b.Size : (areaY + areaH) / scaling;
             if (spec.Motion == Chaos.ChaosMotion.RainDown) b._top = (areaY + areaH) / scaling + 50;
+            if (spec.Motion == Chaos.ChaosMotion.SideDrift)
+            {
+                // WPF :3350: slide in from a random side edge at a comfortable height; the exit is
+                // one size past the far edge (:4109), kept in _top.
+                double left = areaX / scaling, right = (areaX + areaW) / scaling - b.Size;
+                b.Y = b._startY = (areaY + r.Next(120, (int)Math.Max(240, areaH - b.Size - 120))) / scaling;
+                bool fromLeft = r.Next(2) == 0;
+                b.X = b._startX = fromLeft ? left - b.Size : right + b.Size;
+                b._vx = (fromLeft ? 1 : -1) * b._speed * 1.15;
+                b._top = fromLeft ? right + b.Size : left - b.Size;
+            }
             return b;
         }
 
@@ -281,10 +293,19 @@ namespace ConditioningControlPanel.Services
                 case 2: offset = Math.Cos(_timeAlive * 5.4) * 25; Angle = (Angle - 0.66) % 360; break;
                 case 3: offset = Math.Sin(_timeAlive * 3) * 30 + Math.Cos(_timeAlive * 6) * 15; Angle = (Angle + 0.54) % 360; break;
             }
-            bool raining = Spec?.Motion == Chaos.ChaosMotion.RainDown;
-            Y += raining ? _speed : -_speed;
-            X = _startX + offset;
-            if (raining ? Y <= _top : Y >= _top) return Result.Alive;
+            if (Spec?.Motion == Chaos.ChaosMotion.SideDrift)
+            {
+                X += _vx;
+                Y = _startY + offset;   // WPF :4109: the Float/Rain wobble reads vertical here
+                if (_vx > 0 ? X <= _top : X >= _top) return Result.Alive;
+            }
+            else
+            {
+                bool raining = Spec?.Motion == Chaos.ChaosMotion.RainDown;
+                Y += raining ? _speed : -_speed;
+                X = _startX + offset;
+                if (raining ? Y <= _top : Y >= _top) return Result.Alive;
+            }
             return Spec is { IsLive: true } ? GoOff(null) : Result.Missed;   // WPF :4212: a live that escapes detonates
         }
     }
