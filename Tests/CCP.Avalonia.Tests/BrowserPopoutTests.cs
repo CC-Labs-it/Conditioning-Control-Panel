@@ -151,4 +151,85 @@ public sealed class BrowserPopoutTests
         Assert.False(popout.IsVisible);
         Assert.Equal("about:blank", host.Source!.AbsoluteUri);
     });
+    [Fact]
+    public Task NativeFullscreenRestoresPopoutOnPageExitAndFocusUsesSameWindow() => WithShell((shell, page, host) =>
+    {
+        var scripts = new System.Collections.Generic.List<string>();
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
+        Click(page, "BtnPopOutBrowser");
+        var popout = shell.BrowserPopoutWindow!;
+        var decorations = popout.WindowDecorations;
+        host.OnNativeFullscreenEntered();
+        Assert.Contains(scripts, s => s.Contains("ccp_browser_fullscreen_off"));
+        Assert.Equal(WindowState.FullScreen, popout.WindowState);
+        Assert.Same(host, popout.Content);
+        Click(page, "BtnPopOutBrowser");
+        Assert.Same(popout, shell.BrowserPopoutWindow);
+        Assert.Equal(WindowState.FullScreen, popout.WindowState);
+        host.OnWebMessage("ccp_browser_fullscreen_off");
+        Assert.Equal(WindowState.Normal, popout.WindowState);
+        Assert.Equal(decorations, popout.WindowDecorations);
+        Assert.Same(host, popout.Content);
+        Assert.Contains(scripts, s => s.Contains("document.exitFullscreen") && s.Contains("removeEventListener"));
+        host.OnNativeFullscreenEntered();
+        popout.RaiseEvent(new global::Avalonia.Input.KeyEventArgs { RoutedEvent = global::Avalonia.Input.InputElement.KeyDownEvent, Key = global::Avalonia.Input.Key.Escape });
+        Assert.Equal(WindowState.Normal, popout.WindowState);
+    });
+
+    [Fact]
+    public Task PanicExitsFullscreenEvenUnderStrictLock() => WithShell((shell, page, host) =>
+    {
+        var strict = CoreSettings.Current.StrictLockEnabled;
+        var previousLockdown = ConditioningControlPanel.Services.LockdownService.Current;
+        using var lockdown = new ConditioningControlPanel.Services.LockdownService();
+        try
+        {
+            CoreSettings.Current.StrictLockEnabled = true;
+            ConditioningControlPanel.Services.LockdownService.Current = lockdown;
+            lockdown.Activate(TimeSpan.FromMinutes(30));
+            var panicEnabled = CoreSettings.Current.PanicKeyEnabled;
+            Click(page, "BtnPopOutBrowser");
+            var popout = shell.BrowserPopoutWindow!;
+            host.OnNativeFullscreenEntered();
+            Assert.Equal(WindowState.FullScreen, popout.WindowState);
+            PanicSurfaces.StopAll("browser fullscreen test", shell);
+            Assert.Equal(WindowState.Normal, popout.WindowState);
+            Assert.True(CoreSettings.Current.StrictLockEnabled);
+            Assert.True(lockdown.IsActive);
+            Assert.Equal(panicEnabled, CoreSettings.Current.PanicKeyEnabled);
+            Assert.Same(host, popout.Content);
+        }
+        finally
+        {
+            lockdown.Deactivate();
+            ConditioningControlPanel.Services.LockdownService.Current = previousLockdown;
+            CoreSettings.Current.StrictLockEnabled = strict;
+        }
+    });
+
+    [Fact]
+    public Task ClosingPopoutAndShellRemovesFullscreenHandlers() => WithShell((shell, page, host) =>
+    {
+        var scripts = new System.Collections.Generic.List<string>();
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
+        Click(page, "BtnPopOutBrowser");
+        var popout = shell.BrowserPopoutWindow!;
+        host.OnNativeFullscreenEntered();
+        Assert.Equal(WindowState.FullScreen, popout.WindowState);
+        popout.Close();
+        Assert.False(popout.Topmost);
+        Assert.Contains(host, page.FindControl<Grid>("BrowserContainer")!.Children);
+        Click(page, "BtnPopOutBrowser");
+        var next = shell.BrowserPopoutWindow!;
+        shell.Close();
+        scripts.Clear();
+        host.OnNavigationCompleted(new Uri("https://example.com/closed"));
+        host.OnNativeFullscreenEntered();
+        Assert.DoesNotContain(scripts, s => s.Contains("ccp_browser_fullscreen_off"));
+        var handlers = (Delegate?)typeof(WebHost).GetField("NavigationCompleted", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(host);
+        Assert.DoesNotContain(handlers?.GetInvocationList() ?? Array.Empty<Delegate>(), h => ReferenceEquals(h.Target, shell));
+        Assert.False(next.IsVisible);
+        Assert.NotEqual(WindowState.FullScreen, next.WindowState);
+    });
+
 }
