@@ -31,7 +31,14 @@ internal static class PrizeOwnership
     }
     internal static void Seed()
     {
-        ProviderSubscription.PrizesSink = (requested, answered, prizes, source) => Feed.Apply(requested, answered, prizes, source);
+        ProviderSubscription.PrizesSink = (requested, answered, prizes, source) =>
+        {
+            Feed.Apply(requested, answered, prizes, source);
+            // WPF ProfileSyncService.ApplyValidatePrizes:585-587: Rain's look pulls queued behind the snapshot,
+            // so the clamp sees the grants.
+            if (!string.IsNullOrEmpty(requested) && string.Equals(requested, answered, StringComparison.Ordinal))
+                Post(() => RainLookSyncHead.OnAccountReady(requested));
+        };
         BackRoomApi.DefaultApplyPrizes = ApplySnapshot;
     }
     private static volatile bool _shutdown;
