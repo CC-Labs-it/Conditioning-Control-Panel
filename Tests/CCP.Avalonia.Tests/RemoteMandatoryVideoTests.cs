@@ -24,10 +24,8 @@ public sealed class RemoteMandatoryVideoTests
     public Task Playback_requires_consent_policy_and_a_cached_file_and_shows_the_credit() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         const string url = "https://cdn.scrolller.com/example.mp4";
-        var s = CoreSettings.Current;
-        var saved = (s.MediaSource, s.RemoteMediaConsented, s.FypOnlineConsented, ScrolllerPolicy.Enabled, ScrolllerPolicy.MaxClipShortSide);
-        var oldCache = MandatoryVideoOverlay.CachedScrolllerPath;
-        var oldOpener = MandatoryVideoOverlay.CreditOpener; var opened = 0;
+        var s = CoreSettings.Current; var saved = (s.MediaSource, s.RemoteMediaConsented, s.FypOnlineConsented, ScrolllerPolicy.Enabled, ScrolllerPolicy.MaxClipShortSide);
+        var oldCache = MandatoryVideoOverlay.CachedScrolllerPath; var oldOpener = MandatoryVideoOverlay.CreditOpener; var opened = 0;
         var started = 0;
         var overlay = new MandatoryVideoOverlay(() => { started++; return new Decoder(); });
         try
@@ -70,20 +68,20 @@ public sealed class RemoteMandatoryVideoTests
                 card.Measure(new Size(200, 200)); card.Arrange(new Rect(0, 0, 200, 200)); Assert.Equal(12, lines[0].FontSize); card.Measure(new Size(4000, 4000)); card.Arrange(new Rect(0, 0, 4000, 4000)); Assert.Equal(26, lines[0].FontSize);
                 card.IsVisible = false; var elapsed = new Clock(); overlay.Time = elapsed;
                 overlay.UpdateCredit(7000, 7000, 10000); Assert.False(card.IsVisible); overlay.UpdateCredit(7500, 7500, 10000); Assert.True(card.IsVisible); Assert.Equal(1.0, card.GetBaseValue(Visual.OpacityProperty).Value); Assert.NotEmpty(card.Transitions!); Assert.False(Assert.Single(((Panel)surface.Window.Content!).Children.OfType<ScrolllerCreditBadge>()).Shown);
-                elapsed.Advance(1000); overlay._spawnTimes.Add(0); Assert.Equal(TimeSpan.FromMilliseconds(1500), overlay.PictureEnded()); Assert.Empty(overlay._spawnTimes);
+                Press(press); Assert.Equal(0, opened); elapsed.Advance(1000); overlay._spawnTimes.Add(0); Assert.Equal(TimeSpan.FromMilliseconds(1500), overlay.PictureEnded()); Assert.Empty(overlay._spawnTimes); Assert.Equal(TimeSpan.FromMilliseconds(1500), overlay.PictureEnded()); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.Equal(1, opened); Assert.True(card.IsVisible);
                 void Frames() { surface.Window.UpdateLayout(); var until = DateTime.UtcNow.AddSeconds(5); for (var i = 0; i < 3 || card.Opacity < 1 && DateTime.UtcNow < until; i++) { global::Avalonia.Headless.AvaloniaHeadlessPlatform.ForceRenderTimerTick(); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); } } // the 0.5 s fade runs on the render clock
                 Frames(); var at = press.TranslatePoint(press.Bounds.Center - press.Bounds.Position, surface.Window)!.Value; Assert.True(press.IsVisualAncestorOf((Visual)surface.Window.InputHitTest(at)!));
                 var target = new Border { Background = Brushes.Red, Width = 9999, Height = 9999 }; surface.Layer.Children.Add(target); Frames(); Assert.Same(target, surface.Window.InputHitTest(at)); surface.Layer.Children.Remove(target); // WPF player.css:73: an attention target is never under the card
                 Press(press); overlay.FinishCredit(true);
-                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.Equal(1, opened);
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.Equal(2, opened);
                 Press(press); overlay.FinishCredit(true); overlay.CloseAll();
-                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.Equal(1, opened);
-                Press(press); overlay.FinishCredit(true); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.Equal(1, opened); Assert.False(MandatoryVideoOverlay.CreditAllowed(true));
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.Equal(2, opened);
+                Press(press); overlay.FinishCredit(true); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.Equal(2, opened); Assert.False(MandatoryVideoOverlay.CreditAllowed(true));
                 foreach (var strict in new[] { true, false })
                 {
                     overlay.Show(url, false); var pendingSurface = overlay.Build(null, false);
-                    try { var pending = Card(pendingSurface.Window); overlay.UpdateCredit(7500, 7500, 10000); Assert.True(pending.Card.IsVisible); Press(pending.Press); overlay.FinishCredit(true);
-                        Assert.True(overlay.Scheduler.Trigger(strict, path: "/videos/next.mp4")); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.Equal(1, opened); }
+                    try { var pending = Card(pendingSurface.Window); overlay.UpdateCredit(7500, 7500, 10000); Assert.True(pending.Card.IsVisible); Press(pending.Press); overlay.PictureEnded(); overlay.FinishCredit(true);
+                        Assert.True(overlay.Scheduler.Trigger(strict, path: "/videos/next.mp4")); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.Equal(2, opened); }
                     finally { overlay.Scheduler.Stop(); pendingSurface.Window.Close(); }
                 }
             }
@@ -109,7 +107,7 @@ public sealed class RemoteMandatoryVideoTests
         const string url = "https://cdn.scrolller.com/example.mp4";
         var s = CoreSettings.Current;
         var saved = (s.MediaSource, s.RemoteMediaConsented, s.FypOnlineConsented, s.AttentionChecksEnabled, ScrolllerPolicy.Enabled, ScrolllerPolicy.MaxClipShortSide);
-        var cache = MandatoryVideoOverlay.CachedScrolllerPath;
+        var cache = MandatoryVideoOverlay.CachedScrolllerPath; var oldMeta = ScrolllerItemIndex.MetaFor(url); var opener = MandatoryVideoOverlay.CreditOpener; var opened = 0; Window? surface = null;
         var post = CoreDispatch.PostProvider;
         var freeze = CoreSubliminal.BambiFreezeProvider;
         var clock = new Clock();
@@ -147,13 +145,13 @@ public sealed class RemoteMandatoryVideoTests
             overlay.FrameTs = System.Diagnostics.Stopwatch.GetTimestamp() - 10 * System.Diagnostics.Stopwatch.Frequency;
             overlay.GuardTick(); // the output-heal replay must not pick another clip
             Assert.Equal(1, picks);
-            video.Stop(); MandatoryVideoOverlay.CachedScrolllerPath = _ => "/cache/clip.mp4"; Assert.True(video.Trigger()); clock.Fire(); var played = decoders;
-            overlay._spawnTimes.Add(0); overlay.EndCard(); overlay.Step(1, 0); Assert.Equal(0, video.AttentionSpawned); // WPF VideoService.Browser.cs:653
+            video.Stop(); ScrolllerItemIndex.Remember(url, new ScrolllerCacheMeta("clip", "testsub")); MandatoryVideoOverlay.CreditOpener = _ => { opened++; return true; }; MandatoryVideoOverlay.CachedScrolllerPath = _ => "/cache/clip.mp4"; Assert.True(video.Trigger(false)); clock.Fire(); var played = decoders;
+            surface = overlay.Build(null, false).Window; overlay.QueueCredit("https://scrolller.com/r/testsub"); overlay._spawnTimes.Add(0); Assert.True(overlay.PictureEnded() > TimeSpan.Zero); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.Equal(1, opened); Assert.True(video.IsPlaying); Assert.True(Card(surface).Card.IsVisible); overlay.Step(1, 0); Assert.Equal(0, video.AttentionSpawned); // WPF VideoService.Browser.cs:653
             overlay.FrameTs = System.Diagnostics.Stopwatch.GetTimestamp() - 10 * System.Diagnostics.Stopwatch.Frequency; overlay.GuardTick(); Assert.Equal(played, decoders); // no heal replay under the card
         }
         finally
         {
-            video.Stop();
+            video.Stop(); surface?.Close(); MandatoryVideoOverlay.CreditOpener = opener; if (oldMeta == null) ScrolllerItemIndex.ForgetForTests(url); else ScrolllerItemIndex.Remember(url, oldMeta);
             CoreDispatch.PostProvider = post;
             CoreSubliminal.BambiFreezeProvider = freeze;
             MandatoryVideoOverlay.CachedScrolllerPath = cache;

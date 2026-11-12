@@ -487,7 +487,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal TimeSpan PictureEnded()
         {
             if (_creditCards.Count == 0) { FinishCredit(true); return TimeSpan.Zero; }
-            return EndCard();
+            var left = EndCard();
+            if (_creditQueued is { } link) { _creditQueued = null; if (CreditAllowed(_strict || Scheduler.IsStrict)) OpenCredit(link, _strict, _playGeneration); }
+            return left;
         }
         internal TimeSpan EndCard()
         {
