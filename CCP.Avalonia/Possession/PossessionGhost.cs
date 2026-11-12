@@ -16,6 +16,7 @@ internal sealed class PossessionGhost : IDisposable
     private readonly Canvas _layer;
     private readonly Control _target;
     private readonly RenderTargetBitmap _bitmap;
+    private readonly List<Control> _extras = new();
     private IDisposable? _opacity, _hitTest;
     private bool _disposed;
     internal Image Image { get; }
@@ -43,6 +44,13 @@ internal sealed class PossessionGhost : IDisposable
         catch { bitmap.Dispose(); return null; }
     }
 
+    internal void AddExtra(Control extra, double x, double y)
+    {
+        Canvas.SetLeft(extra, x); Canvas.SetTop(extra, y);
+        _layer.Children.Add(extra);
+        _extras.Add(extra);
+    }
+
     internal void Hide(bool disableHitTesting = false)
     {
         if (_disposed || _opacity != null) return;
@@ -59,6 +67,8 @@ internal sealed class PossessionGhost : IDisposable
         _disposed = true;
         _hitTest?.Dispose();
         _opacity?.Dispose();
+        foreach (var extra in _extras) _layer.Children.Remove(extra);
+        _extras.Clear();
         _layer.Children.Remove(Image);
         _bitmap.Dispose();
         Live.Remove(this);
