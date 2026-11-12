@@ -25,4 +25,5 @@ internal static class ScrolllerItemIndex
 
     public static ScrolllerCacheMeta? MetaFor(string? url)
         => !string.IsNullOrEmpty(url) && Map.TryGetValue(url!, out var m) ? m : null;
+    internal static void ForgetForTests(string url) { if (Map.TryRemove(url, out _)) Interlocked.Decrement(ref _count); }
 }
