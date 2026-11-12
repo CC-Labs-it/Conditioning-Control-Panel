@@ -30,7 +30,7 @@ internal sealed class SpeakPromptRuntime
             var cleaned = System.Text.RegularExpressions.Regex.Replace(text.Trim(), "<[^>]*>", "");
             if (cleaned.Length > 200) cleaned = cleaned.Substring(0, 200);
             if (string.IsNullOrWhiteSpace(cleaned)) return;
-            Views.Overlays.SubliminalWhisperShow.Draw(cleaned);
+            Views.Overlays.SubliminalWhisperShow.DrawSpeak(cleaned);
             CoreProgression.AddXP(10, "Subliminal");
         });
     }

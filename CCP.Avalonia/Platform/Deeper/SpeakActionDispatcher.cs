@@ -9,7 +9,7 @@ using Serilog;
 namespace ConditioningControlPanel.Avalonia.Platform.Deeper;
 
 // Dispatch on the UI context: cue windows, consent and playback belong to that context.
-internal sealed class SpeakActionDispatcher : IActionDispatcher
+internal sealed class SpeakActionDispatcher : IActionDispatcher, IEnhancementRunCleanup
 {
     private readonly Func<TriggerEffectAction, IPlaybackTimeSource, SpeakPromptSession> _create;
     private readonly IActionDispatcher _other;
@@ -51,6 +51,10 @@ internal sealed class SpeakActionDispatcher : IActionDispatcher
             return Task.CompletedTask;
         }
     }
+
+    public void ResetOverlayBands() { }
+    public void StopOneShotFlashes() { }
+    public void StopOneShotSubliminals() => Views.Overlays.SubliminalWhisperShow.StopSpeak();
 
     internal void StopAll()
     {

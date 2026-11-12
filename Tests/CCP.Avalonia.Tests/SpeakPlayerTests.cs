@@ -6,6 +6,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -15,6 +16,7 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
+[Collection(RunsAloneCollection.Name)]
 public class SpeakPlayerTests
 {
     private sealed class Audio : IDeeperLocalAudio
@@ -29,6 +31,49 @@ public class SpeakPlayerTests
         public void Pause() => Playing = false;
         public void Dispose() { }
     }
+
+    [Fact]
+    public Task ReplacementRetiresQueuedAndDisplayedSpeakCards() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var oldAudio = DeeperLocalAudio.Open;
+        var oldDraw = SubliminalWhisperShow.DrawNow;
+        var media = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".mp3");
+        File.WriteAllBytes(media, new byte[16]);
+        var audio = new Audio();
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
+        var player = new EnhancementPlayerWindow(null, null);
+        var cards = new System.Collections.Generic.List<SubliminalOverlayWindow>();
+        SubliminalWhisperShow.DrawNow = text => { SubliminalOverlay.CloseAll(); var card = new SubliminalOverlayWindow(text); cards.Add(card); SubliminalOverlay.Present(card); };
+        var runtime = new SpeakPromptRuntime(() => true, () => true, () => Task.FromResult(true), () => false,
+            () => { }, () => { }, () => false, async (_, _, ct) => { await Task.Delay(Timeout.Infinite, ct); return PhraseResult.NotAvailable; },
+            () => { }, _ => { }, () => { });
+        player.SpeakSessionFactory = runtime.CreateSession;
+        try
+        {
+            player.Show(); player.OpenLocalMediaFile(media);
+            var enhancement = new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*", TimelineItems = {
+                new TimelineItem { Kind = TimelineItemKind.Effect, Start = 1, Duration = 3, EffectType = EffectTypes.Speak,
+                    EffectActivation = EffectActivation.Region, EffectSpeakTarget = "yes", EffectSpeakCueMode = SpeakCueMode.Intermittent } } };
+            void Tick() => player.GetType().GetMethod("UiTimer_Tick", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(player, new object?[] { null, EventArgs.Empty });
+            player.LoadEnhancementFromMemory(enhancement, "test"); Tick(); audio.PositionSeconds = 1.2; Tick();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Single(cards); Assert.True(cards[0].IsVisible);
+            SubliminalWhisperShow.DrawSpeak("queued feedback");
+            player.LoadEnhancementFromMemory(enhancement, "replacement");
+            Assert.False(cards[0].IsVisible);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Single(cards);
+            audio.PositionSeconds = 0; Tick(); audio.PositionSeconds = 1.2; Tick();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, cards.Count);
+            SubliminalWhisperShow.Draw("ambient"); Dispatcher.UIThread.RunJobs();
+            Assert.True(cards[2].IsVisible);
+            player.LoadEnhancementFromMemory(enhancement, "replacement again");
+            Assert.True(cards[2].IsVisible);
+        }
+        finally { player.Close(); SubliminalOverlay.CloseAll(); SubliminalWhisperShow.DrawNow = oldDraw; DeeperLocalAudio.Open = oldAudio; File.Delete(media); }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public Task PanicStopsIntermittentCuesBeforeRecognitionTeardown() => AvaloniaTestDispatcher.RunAsync(async () =>

@@ -52,7 +52,7 @@ internal sealed class SpeakPromptSession
             sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, "<[^>]*>", "");
             if (!string.IsNullOrWhiteSpace(sanitized))
             {
-                Views.Overlays.SubliminalWhisperShow.Draw(sanitized);
+                Views.Overlays.SubliminalWhisperShow.DrawSpeak(sanitized);
                 CoreProgression.AddXP(10, "Subliminal");
             }
         }
