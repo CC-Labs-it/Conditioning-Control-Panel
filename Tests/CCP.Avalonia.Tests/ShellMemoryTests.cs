@@ -6,6 +6,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Tours;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -33,6 +34,43 @@ public sealed class ShellMemoryTests(ITestOutputHelper output)
         // Object liveness, not an allocator/OS-dependent RSS threshold, is the regression guard.
         Assert.All(windows, w => Assert.False(w.IsAlive, "A closed shell is still rooted."));
     });
+
+    [Fact]
+    public Task AFinishedTourDoesNotKeepItsClosedShell() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        LifecycleTestPump.Setup();
+        CoreSettings.Current.Welcomed = true;
+        CoreSettings.Current.HasAcceptedAgeVerification = true;
+        CoreSettings.Current.AvatarEnabled = false;
+        CoreSettings.Current.PerformanceMode = true;
+        var shell = OpenTourAndClose();
+        await LifecycleTestPump.UntilAsync(() => !shell.IsAlive,
+            "A finished tour still roots its closed shell.", collect: true);
+    });
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference OpenTourAndClose()
+    {
+        var previous = TutorialHeadHooks.ShellProvider;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            TutorialHead.Seed();
+            TutorialHead.ResetForTests();
+            TutorialHeadHooks.ShellProvider = () => shell;
+            TutorialHead.StartOnShell(TutorialType.ShortWalk);
+            Assert.True(TutorialHead.Service.IsActive);
+            TutorialHead.Service.Skip();
+        }
+        finally
+        {
+            TutorialHead.ResetForTests();
+            TutorialHeadHooks.ShellProvider = previous;
+            shell.Close();
+        }
+        return new WeakReference(shell);
+    }
 
     [Fact]
     public Task AnAmbientLoopDoesNotKeepItsClosedWindow() => AvaloniaTestDispatcher.RunAsync(async () =>
