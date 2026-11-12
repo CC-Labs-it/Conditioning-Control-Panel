@@ -91,6 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var section = NavSections.SectionForTab(tab);
                 var pageLabel = section == NavSections.Settings ? CurrentSettingsSectionLabel() : null;
                 PageStrip?.Show(section, tab, pageLabel);
+                PageFavorites?.OnNavigated(section);
                 UpdateNavTitle(section, tab, pageLabel);
                 PaintSectionWash(section);
 
