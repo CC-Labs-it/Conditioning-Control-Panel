@@ -20,6 +20,84 @@ namespace CCP.Avalonia.Tests;
 public sealed class BlinkTrainerTabLiveTests
 {
     [Fact]
+    public void FolderCardsAreReusedUntilInputsChange() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var settings = ConditioningControlPanel.CoreSettings.Current;
+        var folders = settings.BlinkTrainerFolders.ToArray();
+        var videos = settings.BlinkTrainerIncludeVideos;
+        try
+        {
+            settings.BlinkTrainerFolders.Clear();
+            settings.BlinkTrainerFolders.Add("/missing-folder");
+            settings.BlinkTrainerFolders.Add("/missing-folder");
+            var tab = new BlinkTrainerTabView();
+            tab.Refresh();
+            var host = tab.FindControl<StackPanel>("BlinkTrainerFolderCardsHost")!;
+            Assert.Equal(2, host.Children.Count);
+            var first = host.Children[0];
+            tab.Refresh();
+            Assert.Same(first, host.Children[0]);
+            settings.BlinkTrainerIncludeVideos = !settings.BlinkTrainerIncludeVideos;
+            tab.Refresh();
+            Assert.NotSame(first, host.Children[0]);
+            first = host.Children[0];
+            tab.Resources["PinkBrush"] = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Colors.Blue);
+            tab.Refresh();
+            Assert.NotSame(first, host.Children[0]);
+            first = host.Children[0];
+            settings.BlinkTrainerFolders.RemoveAt(0);
+            tab.Refresh();
+            Assert.Single(host.Children);
+            Assert.NotSame(first, host.Children[0]);
+        }
+        finally
+        {
+            settings.BlinkTrainerFolders.Clear();
+            settings.BlinkTrainerFolders.AddRange(folders);
+            settings.BlinkTrainerIncludeVideos = videos;
+        }
+    });
+
+    [Theory]
+    [InlineData("folders")]
+    [InlineData("videos")]
+    [InlineData("language")]
+    [InlineData("pink")]
+    public void FolderCardInputsInvalidateReuse(string input) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var settings = ConditioningControlPanel.CoreSettings.Current;
+        var oldFolders = settings.BlinkTrainerFolders.ToArray();
+        var oldVideos = settings.BlinkTrainerIncludeVideos;
+        var localization = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var oldLanguage = localization.CurrentLanguage;
+        try
+        {
+            settings.BlinkTrainerFolders.Clear();
+            settings.BlinkTrainerFolders.Add("/missing-folder");
+            var tab = new BlinkTrainerTabView();
+            tab.Refresh();
+            var host = tab.FindControl<StackPanel>("BlinkTrainerFolderCardsHost")!;
+            var first = Assert.Single(host.Children);
+            switch (input)
+            {
+                case "folders": settings.BlinkTrainerFolders.Add("/another-missing-folder"); break;
+                case "videos": settings.BlinkTrainerIncludeVideos = !oldVideos; break;
+                case "language": localization.SetLanguage(oldLanguage == "en" ? "fr" : "en"); break;
+                case "pink": tab.Resources["PinkBrush"] = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Colors.Blue); break;
+            }
+            tab.Refresh();
+            Assert.NotSame(first, host.Children[0]);
+        }
+        finally
+        {
+            settings.BlinkTrainerFolders.Clear();
+            settings.BlinkTrainerFolders.AddRange(oldFolders);
+            settings.BlinkTrainerIncludeVideos = oldVideos;
+            if (localization.CurrentLanguage != oldLanguage) localization.SetLanguage(oldLanguage);
+        }
+    });
+
+    [Fact]
     public void DirectStartHandlerDemandsPremiumBeforeOpeningTheCamera() => AvaloniaTestDispatcher.Run(() =>
     {
         var old = ConditioningControlPanel.CoreEntitlement.HasPremiumProvider;

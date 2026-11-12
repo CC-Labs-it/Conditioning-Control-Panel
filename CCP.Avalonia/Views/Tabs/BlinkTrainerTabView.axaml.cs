@@ -48,6 +48,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private int _demoIndex;
         private bool _demoUsingA = true;
         private Action? _statusAction;
+        private string[]? _cardFolders;
+        private bool _cardVideos;
+        private string? _cardLanguage;
+        private IBrush? _cardPink;
 
         /// <summary>The status row's current state; read by tests and by nothing else yet.</summary>
         internal BlinkTrainerStatusState StatusState { get; private set; }
@@ -452,10 +456,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void RebuildFolderCards()
         {
-            BlinkTrainerFolderCardsHost.Children.Clear();
             var s = CoreSettings.Current;
-            foreach (var folder in s.BlinkTrainerFolders.ToList())
+            var folders = s.BlinkTrainerFolders.ToArray();
+            var pink = this.FindResource("PinkBrush") as IBrush ?? Brushes.HotPink;
+            var language = LocalizationManager.Instance.CurrentLanguage;
+            if (_cardFolders != null && _cardFolders.SequenceEqual(folders) &&
+                _cardVideos == s.BlinkTrainerIncludeVideos && _cardLanguage == language &&
+                ReferenceEquals(_cardPink, pink)) return;
+            BlinkTrainerFolderCardsHost.Children.Clear();
+            _cardFolders = null;
+            foreach (var folder in folders)
                 BlinkTrainerFolderCardsHost.Children.Add(BuildFolderCard(folder, s.BlinkTrainerIncludeVideos));
+            _cardFolders = folders;
+            _cardVideos = s.BlinkTrainerIncludeVideos;
+            _cardLanguage = language;
+            _cardPink = pink;
         }
 
         private Border BuildFolderCard(string folder, bool includeVideos)
