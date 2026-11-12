@@ -19,15 +19,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 public partial class LeashTabView : UserControl
 {
     private readonly Func<ILeashService?> _resolve;
+    private readonly bool _asDrawer;
+    private bool _drawerOpen;
     private ILeashService? _service;
     private LeashSelfCard? _self;
     private readonly Dictionary<string, LeashHolderCard> _holders = new();
 
     public LeashTabView() : this(() => LeashHead.Service) { }
-    internal LeashTabView(Func<ILeashService?> service)
+    internal LeashTabView(Func<ILeashService?> service, bool asDrawer = false)
     {
         _resolve = service;
+        _asDrawer = asDrawer;
         InitializeComponent();
+        if (asDrawer)
+        {
+            ((Panel)SectionHost.Parent!).Children.Remove(SectionHost);
+            Content = SectionHost;
+        }
         // WPF LeashTabView.xaml.cs:36: LeashLook.Help(LeashExplainRole.Leashed) in the HelpHost.
         HelpHost.Child = LeashExplainWindow.HelpButton("leashed", () => TopLevel.GetTopLevel(this) as Window);
         EmptyButton.Click += (_, _) => (TopLevel.GetTopLevel(this) as MainShellWindow)?.ShowTab("friends");
@@ -39,6 +47,13 @@ public partial class LeashTabView : UserControl
 
     internal bool ShowingEmpty => EmptyPanel.IsVisible;
     internal LeashSelfCard? SelfCard => _self;
+
+    // WPF FriendsDrawer.cs:189-218: the drawer owns the section while open.
+    internal void SetDrawerOpen(bool open)
+    {
+        _drawerOpen = open;
+        if (open) OnShown(); else Unsubscribe();
+    }
 
     internal void OnShown()
     {
@@ -60,7 +75,7 @@ public partial class LeashTabView : UserControl
             global::Avalonia.Threading.Dispatcher.UIThread.Post(OnServiceChanged);
             return;
         }
-        if (IsEffectivelyVisible && VisualRoot != null) OnShown();
+        if (VisualRoot != null && (_asDrawer ? _drawerOpen : IsEffectivelyVisible)) OnShown();
     }
     private void OnSnapshot(LeashSnapshot _) => Render();
 

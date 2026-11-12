@@ -10,6 +10,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -18,6 +19,7 @@ using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Leash;
 using Xunit;
 using Runner = ConditioningControlPanel.Controls.Leash.ILeashTaskRunner;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -207,6 +209,56 @@ public sealed class LeashCardsTests
         Click(card, "leash-btn:reward"); Click(card, "leash-reward:pardon");
         Assert.Equal("reward:Pardon::", Assert.Single(svc.Calls));
         Assert.Same(good ? FriendsDrawer.Mint : FriendsDrawer.Gold, Find<TextBlock>(card, "leash-holder-result").Foreground);
+    });
+    [Fact] // WPF FriendsDrawer.cs:189-218,395 and LeashDrawerSection.cs:113-150.
+    public void FriendsDrawerTracksAndFoldsLiveLeashCardsOnlyWhileOpen() => Run(() =>
+    {
+        var old = LeashHead.Service; var svc = new Service(); LeashHead.Service = svc;
+        try
+        {
+            var drawer = new FriendsDrawer(null);
+            using var cleanup = new WindowCleanup(new Window { Content = drawer });
+            drawer.OnOpened(); svc.Push(Me(), Held());
+            Assert.NotNull(drawer.LeashSection);
+            Assert.NotNull(Find<LeashSelfCard>(drawer, "leash-self-card"));
+            var card = Find<LeashHolderCard>(drawer, "leash-holder-card:friend");
+            Click(card, "leash-btn:reward"); svc.ReceiptsSupported = true; svc.Receipts();
+            Assert.Same(card, Find<LeashHolderCard>(drawer, "leash-holder-card:friend"));
+            Assert.NotNull(Find<LeashSentList>(card, "leash-sent"));
+            var replacement = new Service(); replacement.Push(Me(), Held()); LeashHead.Service = replacement;
+            svc.Push(null); Assert.Same(card, Find<LeashHolderCard>(drawer, "leash-holder-card:friend"));
+            drawer.OnClosed();
+            Assert.DoesNotContain(card.GetLogicalDescendants().OfType<StackPanel>(), p => p.Tag as string == "leash-sheet:reward");
+            replacement.Push(null); Assert.Same(card, Find<LeashHolderCard>(drawer, "leash-holder-card:friend"));
+            LeashHead.Service = new Service(); Assert.Same(card, Find<LeashHolderCard>(drawer, "leash-holder-card:friend"));
+            drawer.OnOpened(); Assert.DoesNotContain(drawer.GetLogicalDescendants().OfType<LeashHolderCard>(), _ => true);
+            drawer.OnClosed(); Assert.Null(new FriendsDrawer(null, asPage: true).LeashSection);
+        }
+        finally { LeashHead.Service = old; }
+    });
+    [Fact] // WPF LeashHolderCard.cs:432-443,505-539,594-645.
+    public void HolderActionsUseFourColoredIconCellsAndSheetsHaveLabeledRows() => Run(() =>
+    {
+        var card = new LeashHolderCard(Held(LeashIntensity.Strict, true), () => new Service());
+        var actions = Find<global::Avalonia.Controls.Primitives.UniformGrid>(card, "leash-holder-actions");
+        Assert.Equal(4, actions.Columns); Assert.Equal(4, actions.Children.Count);
+        foreach (var (id, icon, top, bottom) in new[] { ("assign", IconKind.TaskList, "#FFE3A0", "#FFCF6B"), ("reward", IconKind.Star, "#A8FFE6", "#5FFFD0"),
+            ("punish", IconKind.Flash, "#FF8A9E", "#FF5F7A"), ("tug", IconKind.HandRight, "#2E2046", "#261A3C") })
+        {
+            var button = Find<Button>(card, "leash-btn:" + id);
+            var gradient = Assert.IsType<global::Avalonia.Media.LinearGradientBrush>(button.Background);
+            Assert.Equal(global::Avalonia.Media.Color.Parse(top), gradient.GradientStops[0].Color);
+            Assert.Equal(global::Avalonia.Media.Color.Parse(bottom), gradient.GradientStops[1].Color);
+            Assert.Equal(icon, button.GetLogicalDescendants().OfType<IconGlyph>().Single().Kind);
+        }
+        void CheckRow(string tag)
+        {
+            var row = Find<Grid>(card, tag); Assert.Equal(2, row.Children.Count);
+            Assert.Equal(0, Grid.GetColumn(row.Children[0])); Assert.Equal(1, Grid.GetColumn(row.Children[1]));
+        }
+        Click(card, "leash-btn:assign"); CheckRow("leash-row:assign:Minutes"); CheckRow("leash-row:assign:Video");
+        Click(card, "leash-btn:punish"); CheckRow("leash-row:punish:Lines"); CheckRow("leash-row:punish:Video");
+        Click(card, "leash-btn:reward"); CheckRow("leash-row:reward:praise"); CheckRow("leash-row:reward:pardon"); CheckRow("leash-row:reward:credit");
     });
     [Fact]
     public void PageKeepsHeldCardsAndSheetsAcrossPollsAndReceipts_AndFoldsOnHide() => Run(() =>
