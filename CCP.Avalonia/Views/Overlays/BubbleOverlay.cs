@@ -217,15 +217,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 .Where(id => id != MagnetBubble.VariantId).ToArray();
             if (ids.Length == 0 || random.Next(100) >= s.BubbleTriggerChance) return null;
             var id = ids[random.Next(ids.Length)];
+            var motion = Enum.TryParse<ChaosMotion>(s.ChaosMotionMode, out var selected) ? selected : ChaosMotion.FloatUp;
             EffectBubbleSpec? spec;
             if (id == "glitch")
-                spec = new EffectBubbleSpec { VariantId = id, Payload = new OverlayPayload("braindrain", braindrainOpacity: 0.30) { Strength = 60, DurationMult = 1.2 }, SizePx = 200, Tint = 0xFF9A40FF, Label = "GLITCH", TreatLifeMs = 7000 };
+                spec = new EffectBubbleSpec { VariantId = id, Payload = new OverlayPayload("braindrain", braindrainOpacity: 0.30) { Strength = 60, DurationMult = 1.2 }, SizePx = 200, Tint = 0xFF9A40FF, Label = "GLITCH", Motion = motion, TreatLifeMs = 7000 };
             else if (id == BrainDrainBubble.VariantId)
-                spec = new EffectBubbleSpec { VariantId = id, Payload = new BrainDrainMeltPayload(), SizePx = 220, Tint = 0xFF000000u | ((uint)BrainDrainBubble.TintR << 16) | ((uint)BrainDrainBubble.TintG << 8) | BrainDrainBubble.TintB, TreatLifeMs = 7000 };
+                spec = new EffectBubbleSpec { VariantId = id, Payload = new BrainDrainMeltPayload(), SizePx = 220, Tint = 0xFF000000u | ((uint)BrainDrainBubble.TintR << 16) | ((uint)BrainDrainBubble.TintG << 8) | BrainDrainBubble.TintB, Motion = motion, TreatLifeMs = 7000 };
             else
             {
                 var variant = ChaosBubbleVariants.All.FirstOrDefault(v => v.Id == id);
-                spec = variant == null ? null : ChaosBubbleVariants.Build(variant, intensity: 0.3, ambient: true);
+                spec = variant == null ? null : ChaosBubbleVariants.Build(variant, intensity: 0.3, motionOverride: motion, ambient: true);
                 if (spec != null) spec.Payload.DurationMult = 2.5;
             }
             if (spec != null) spec.Payload.Ambient = true;

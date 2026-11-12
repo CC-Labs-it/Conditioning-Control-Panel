@@ -48,6 +48,25 @@ public sealed class NatashaBubbleTests
         Assert.False(bubble.IsNatasha);
     }
 
+    [Theory]
+    [InlineData("RainDown")]
+    [InlineData("RoamBounce")]
+    public void TriggerUsesSelectedChaosMotion(string motion)
+    {
+        var settings = new ConditioningControlPanel.Models.AppSettings
+        {
+            BubbleTriggersEnabled = true, BubbleTriggerChance = 100,
+            BubbleTriggerVariants = new List<string> { "flash" }, ChaosMotionMode = motion,
+        };
+        var spec = Assert.IsType<EffectBubbleSpec>(BubbleOverlay.RollAmbientTrigger(settings, new FixedRandom(0), false, 0));
+        Assert.Equal(Enum.Parse<ChaosMotion>(motion), spec.Motion);
+        var bubble = AmbientBubble.SpawnChaos(new Random(1), 0, 0, 0, 1920, 1080, 1, spec);
+        bubble.IsAmbientTrigger = true;
+        var initialY = bubble.Y;
+        bubble.Step(false);
+        Assert.True(motion == "RainDown" ? bubble.Y > initialY : bubble.Y != initialY);
+    }
+
     [Fact]
     public Task StopInvalidatesQueuedTriggerPop() => AvaloniaTestDispatcher.RunAsync(() =>
     {
