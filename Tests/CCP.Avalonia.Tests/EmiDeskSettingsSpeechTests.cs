@@ -18,7 +18,7 @@ namespace CCP.Avalonia.Tests;
 public sealed class EmiDeskSettingsSpeechTests
 {
     private const string Lines = """{"version":1,"moments":{"firstContact":{"priority":3,"pools":["greeting"],"limit":{"per":"ever","max":1}},"desktopFirstBoot":{"priority":3,"pools":["boot"]},"resized":{"priority":3,"pools":["spicy"]},"panicPressed":{"hold":true,"holdMs":6000,"pools":["quiet"]},"dismissed":{"hold":true,"holdMs":6000,"pools":["sulk"]},"wordless":{"priority":3,"pools":["face"]}},"pools":{"greeting":[{"id":"hello","t":"hello","spice":0}],"boot":[{"id":"boot","t":"desktop hello","spice":0}],"spicy":[{"id":"spicy","t":"high spice","spice":2,"face":"^_~"}],"quiet":[{"id":"quiet","t":"","spice":0}],"sulk":[{"id":"sulk","t":"","spice":0,"face":"T_T"}],"face":[{"id":"face","t":"","spice":0,"face":"o_o"}]}}""";
-    private static Task InDesk(Func<EmiDeskService, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
+    private static Task InDesk(Func<EmiDeskService, Task> body, bool isolated = false) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
@@ -26,7 +26,7 @@ public sealed class EmiDeskSettingsSpeechTests
                 .SetupWithoutStarting();
         var previous = CoreSettings.ServiceProvider;
         var settings = new SettingsService();
-        var desk = EmiDeskService.Instance;
+        var desk = isolated ? new EmiDeskService() : EmiDeskService.Instance;
         var previousEngine = desk.LineEngine;
         CoreSettings.ServiceProvider = () => settings;
         desk.LineEngine = EmiLineEngine.FromJson(Lines);
@@ -73,6 +73,9 @@ public sealed class EmiDeskSettingsSpeechTests
     public Task RegisteredHotkeySummonsWithHotkeyContext() => InDesk(async desk =>
     {
         desk.Window!.ShutDown();
+        var shared = EmiDeskService.Instance;
+        bool sharedArmed = shared.HotkeyArmed;
+        Assert.NotSame(shared, desk);
         var oldRegister = desk.RegisterChord;
         Action? press = null;
         desk.RegisterChord = (_, _, callback) => { press = callback; return true; };
@@ -80,6 +83,8 @@ public sealed class EmiDeskSettingsSpeechTests
         try
         {
             desk.ApplyHotkey();
+            Assert.True(desk.HotkeyArmed);
+            Assert.Equal(sharedArmed, shared.HotkeyArmed);
             Assert.NotNull(press);
             press!();
             Dispatcher.UIThread.RunJobs();
@@ -89,7 +94,7 @@ public sealed class EmiDeskSettingsSpeechTests
             Assert.Equal("hotkey", desk.Window!.BubbleText);
         }
         finally { desk.RegisterChord = oldRegister; }
-    });
+    }, isolated: true);
 
     [Fact]
     public Task SpicePickerChangesWhichLinesReachTheWidget() => InDesk(desk =>
