@@ -1520,6 +1520,7 @@ public sealed partial class GameWindowTests
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
         var clock = System.Diagnostics.Stopwatch.StartNew();
+        Assert.True(GameWindow.AnyDtrhRunActive); Assert.False(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.CreditAllowed(false));
         GameWindow.CloseAllForPanic();
         Assert.True(GameWindow.IsAnyOpen());
         Assert.False(w.DtrhReady);

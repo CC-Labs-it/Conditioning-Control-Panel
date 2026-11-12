@@ -51,7 +51,7 @@ namespace ConditioningControlPanel.Services
     /// (<c>FinalizeWatchCredit</c> :7424) and the strict-key rules. Drawing is the head's
     /// <see cref="IMandatoryVideoHost"/>.
     /// Content-pack clips come through <see cref="PackVideos"/>.
-    /// ponytail: remote clips, the duration filter
+    /// ponytail: full remote blending, the duration filter
     /// (MetadataCache; the max-length cap in <see cref="Guard"/> still holds the max), browser-media defers and the
     /// interaction queue are WPF-head services; add each here when it reaches Core. The feed hold and
     /// cascade deferral are live; the cascade probe is seeded by the head.
@@ -74,7 +74,10 @@ namespace ConditioningControlPanel.Services
         private readonly FypFeedDefer _feedDefer;
         private readonly TimeProvider _time;
         private readonly Func<IReadOnlyList<string>> _library;
-        private readonly Random _random = new();
+        private Random _random = new();
+        internal Random SelectionRandom { set => _random = value; }
+        private readonly RemoteVideoPool _remote = new();
+        internal Func<string?>? RemotePick { get; set; }
         private Queue<string> _queue = new();
         private ITimer? _scheduler, _preroll, _bubbleWait, _cascadeDefer;
         private bool _deferIsReplay;   // the held request carries a verdict replay: dropping it must run AfterEnd
@@ -93,7 +96,8 @@ namespace ConditioningControlPanel.Services
         public event Action? VideoStarted;
 
         /// <summary>The clip <see cref="VideoStarted"/> announced (WPF VideoService.LastVideoPath).</summary>
-        public string? LastVideoPath { get; private set; }
+        public string? LastVideoPath { get; internal set; }
+        internal int RunGeneration => _retryGeneration;
 
         /// <summary>Replays forced this run (WPF _penalties); reset by <see cref="End"/>.</summary>
         public int Penalties { get; private set; }
@@ -282,6 +286,7 @@ namespace ConditioningControlPanel.Services
         {
             if (_running) return;
             _running = true;
+            if (RemotePick == null) _remote.Prefetch();
             ScheduleNext();
             Log.Information("VideoService started");
         }
@@ -473,9 +478,10 @@ namespace ConditioningControlPanel.Services
                 CoreDiscord.Service?.SetVideoActivity(); // WPF StartVideoPlayback:3133
                 // WPF StartVideoPlayback: presentation can change during the pre-roll.
                 if (!_host.IsFloating(strict) && CoreFlash.IsRunning) CoreFlash.Stop();
+                var previousPath = LastVideoPath; LastVideoPath = path;
                 try { _host.Show(path, strict); }
-                catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); End(); return; }
-                LastVideoPath = path;
+                catch (Exception ex) { LastVideoPath = previousPath; Log.Error(ex, "VideoService: show failed"); End(); return; }
+                path = LastVideoPath ?? path;
                 try { VideoStarted?.Invoke(); }
                 catch (Exception ex) { Log.Debug("VideoStarted handler failed: {Error}", ex.Message); }
                 // WPF VideoService.cs:3372: background vibe and the clip's funscript, once on screen.
@@ -664,6 +670,16 @@ namespace ConditioningControlPanel.Services
                 LastFunnelEnabled = enabled.Count;   // WPF _lastFunnelEnabled / _lastFunnelDuration (#1352)
                 LastFunnelDuration = kept.Count;
                 _queue = new Queue<string>(kept.OrderBy(_ => _random.Next()));
+            }
+            // WPF VideoService.cs:7981-8005: blend ready remote clips, with a local fallback.
+            // Fetching and downloading run in the background and never delay this pick.
+            var settings = CoreSettings.Current;
+            if (settings.MediaSource != "local" && settings.HasRemoteMediaConsent &&
+                VideoSelectionRules.WantsRemote(_queue.Count == 0 && PackVideos?.HasEntries != true,
+                    settings.MediaSource, settings.RemoteMediaRatio, _random))
+            {
+                var remote = (RemotePick ?? _remote.Take)();
+                if (remote != null) return remote;
             }
             // WPF GetNextVideo (VideoService.cs:8015-8049): active pack clips join the local pick,
             // weighted by count; a failed decrypt falls back to the local queue. Pack clips skip the

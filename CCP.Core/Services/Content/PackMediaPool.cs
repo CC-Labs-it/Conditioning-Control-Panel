@@ -42,6 +42,9 @@ namespace ConditioningControlPanel.Services
             _bag = new ShuffleBag<(string PackId, PackFileEntry File)>(e => ContentPackStore.SourceKey(e.PackId, e.File), _rng);
         }
 
+        /// <summary>Whether the active packs contain an entry of this type.</summary>
+        internal bool HasEntries { get { lock (_lock) return Entries().Count > 0; } }
+
         /// <summary>Decrypts on record (tests, diagnostics).</summary>
         public int TempCount => _temps.LiveCount + _temps.HeldCount;
 

@@ -62,7 +62,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private readonly List<Window> _messages = new();
         private readonly List<Target> _targets = new();
         private readonly List<(List<Target> Targets, AttentionToyButtonBinding Binding)> _toyBatches = new();
-        private List<double> _spawnTimes = new();
+        internal List<double> _spawnTimes = new();
         private MediaPlayer? _player;
         private double _videoFadeSeconds;
         private Services.Video.VideoReveal? _videoReveal;
@@ -107,6 +107,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal long FrameTs;
         private bool _healUsed, _strict;
         private string _path = "";
+        private int _playGeneration, _endCardAt = -1;
+        private long? _cardShownAt;
+        private readonly List<Panel> _creditCards = new();
+        private string? _creditQueued;
+        internal static Func<string, bool> CreditOpener = ExternalOpener.Open;
+        internal static bool CreditAllowed(bool strict) => ConditioningControlPanel.Services.Fyp.Online.ScrolllerCreditRules.CanOpenLink(
+            strict, global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.LockdownActive, global::ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsActive
+                || global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow.AnyDtrhRunActive);
         private readonly Stopwatch _sinceFrame = new();
         /// <summary>Max-length cap seconds this clip spent before its one heal replay.</summary>
         private double _capSpent;
@@ -191,13 +199,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Play(path, strict);
         });
 
-        private void Play(string path, bool strict)
+        private void Play(string path, bool strict, bool isVoutRetry = false)
         {
             _videoReveal?.Dispose();
             _videoReveal = null;
             var muted = _userMuted;
             if (_playback != null || _surfaces.Count > 0) CloseAll();
             _userMuted = muted;   // the output heal replays the same clip: its mute button state stays
+            var generation = ++_playGeneration;
             (_path, _strict) = (path, strict);
             _sinceShow.Restart();
             _sinceReady.Reset();
@@ -210,6 +219,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _cutStartChosen = false;
             FillMs = FillCount = 0;
             _graceConsumed = false;   // WPF PlayVideo: one grace pause per clip, replays included
+
+            // WPF VideoService.cs:3040-3054: a Scrolller clip needs a cached copy.
+            // Recheck consent and policy at playback time after the pre-roll.
+            var playbackPath = ResolvePlaybackPath(path);
+            if (playbackPath == null && !isVoutRetry && Scheduler.IsPlaying && Scheduler.PickNext() is { } next &&
+                ResolvePlaybackPath(next) is { } replacement)
+            {
+                _path = path = next;
+                Scheduler.LastVideoPath = next;
+                playbackPath = replacement;
+            }
+            if (playbackPath == null)
+            {
+                Dispatcher.UIThread.Post(() => { if (generation == _playGeneration) Scheduler.End(); });
+                return;
+            }
 
             // The injected decoder omits native allocation and windows; lifecycle methods stay shared.
             if (_playbackFactory != null)
@@ -315,12 +340,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     if (_player != live) return;
                     // WPF OnEnded: a clip that really played to its end earns Circe's "video" note.
                     if (Scheduler.IsPlaying && FirstFrameMs >= 0) App.ChasterNote("video");
-                    OnNaturalVideoEnd();
+                    PictureEnded();
                 });
             };
             _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(Scheduler.End);
-            _media = new Media(vlc, path, VideoSelectionRules.IsRemoteMediaPath(path) ? FromType.FromLocation : FromType.FromPath);
-            foreach (var option in ConditioningControlPanel.Services.Video.RemoteVideoOptions.For(path)) _media.AddOption(option);
+            _media = new Media(vlc, playbackPath, VideoSelectionRules.IsRemoteMediaPath(playbackPath) ? FromType.FromLocation : FromType.FromPath);
+            foreach (var option in ConditioningControlPanel.Services.Video.RemoteVideoOptions.For(playbackPath)) _media.AddOption(option);
             if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
             _player.Play(_media);
             // WPF VideoService.cs:3410: discover the companion script only after playback starts.
@@ -418,6 +443,80 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return targets;
         }
 
+        internal static Func<string, string?> CachedScrolllerPath = ConditioningControlPanel.Services.Fyp.Online.ScrolllerDiskCache.TryGetPath;
+
+        internal static string? ResolvePlaybackPath(string path)
+        {
+            if (!ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.IsScrolllerUrl(path)) return path;
+            var settings = CoreSettings.Current;
+            if (settings.MediaSource == "local" || !settings.HasRemoteMediaConsent ||
+                !ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.Enabled) return null;
+            return CachedScrolllerPath(path);
+        }
+
+        internal static string? CreditSubFor(string url) => ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.IsScrolllerUrl(url)
+            ? ConditioningControlPanel.Services.Fyp.Online.ScrolllerItemIndex.MetaFor(url)?.Sub
+                ?? ConditioningControlPanel.Services.Fyp.Online.ScrolllerDiskCache.Entries(e => e.Url == url).FirstOrDefault()?.Meta.Sub : null;
+        internal static string? CreditLinkFor(string url) => ConditioningControlPanel.Services.Fyp.Online.ScrolllerCreditRules.LinkFor(CreditSubFor(url));
+        internal void QueueCredit(string link)
+        {
+            if (!CreditAllowed(_strict || Scheduler.IsStrict)) return;
+            _creditQueued = link;
+            if (Floating) OpenCredit(link, _strict, _playGeneration);
+        }
+        private void OpenCredit(string link, bool strict, int generation)
+        {
+            _creditQueued = null; var scheduler = Scheduler; var run = scheduler.RunGeneration;
+            Dispatcher.UIThread.Post(() => { if (generation == _playGeneration && ReferenceEquals(Scheduler, scheduler) && run == scheduler.RunGeneration && CreditAllowed(strict || scheduler.IsStrict)) CreditOpener(link); });
+        }
+        internal void FinishCredit(bool natural)
+        {
+            var link = _creditQueued; var strict = _strict; var allowed = CreditAllowed(strict);
+            if (natural) OnNaturalVideoEnd(); else Scheduler.End();
+            if (link != null && allowed && CreditAllowed(strict)) OpenCredit(link, strict, _playGeneration);
+        }
+        internal void UpdateCredit(long position, long played, long length)
+        {
+            if (_gracePaused || PrimaryPaused || _creditCards.Count == 0) return;
+            if (ConditioningControlPanel.Services.Video.CreditOutroTiming.ShouldStart(position, played, length,
+                    CoreSettings.Current.VideoMaxDurationSeconds * 1000L, 2500))
+                foreach (var card in _creditCards) ShowCard(card);
+        }
+        /// <summary>WPF OnBrowserMediaEnded (VideoService.Browser.cs:653): the picture of a credited clip is over and
+        /// only its card is left. The guards and further spawns stand down until it finishes; targets already up stay.</summary>
+        internal TimeSpan PictureEnded()
+        {
+            if (_creditCards.Count == 0) { FinishCredit(true); return TimeSpan.Zero; }
+            var left = EndCard();
+            if (_creditQueued is { } link) { _creditQueued = null; if (CreditAllowed(_strict || Scheduler.IsStrict)) OpenCredit(link, _strict, _playGeneration); }
+            return left;
+        }
+        internal TimeSpan EndCard()
+        {
+            var generation = _endCardAt = _playGeneration; _spawnTimes.Clear(); foreach (var card in _creditCards) ShowCard(card);
+            var left = TimeSpan.FromMilliseconds(Math.Max(0, 2500 - Time.GetElapsedTime(_cardShownAt ?? Time.GetTimestamp()).TotalMilliseconds));
+            if (left == TimeSpan.Zero) FinishCredit(true);
+            else DispatcherTimer.RunOnce(() => { if (generation == _playGeneration && Scheduler.IsPlaying) FinishCredit(true); }, left);
+            return left;
+        }
+        private void ShowCard(Panel card) { _cardShownAt ??= Time.GetTimestamp(); (card.IsVisible, card.Opacity) = (true, 1); (card.Tag as ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditBadge)?.SetShown(false); }   // player.js:225
+        /// <summary>WPF Assets/web/player/player.css:181-206, index.html:32: the end card dims the whole surface, fades in
+        /// over 0.5 s and only its centre takes a press (pointerdown, player.js:986).</summary>
+        private static Panel CreditCard(string sub, out Border press)
+        {
+            static TextBlock Line(string text, double size, double opacity, FontWeight weight = FontWeight.Normal) => new() { Text = text, FontSize = size,
+                Opacity = opacity, FontWeight = weight, Foreground = Brushes.White, HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center };
+            press = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
+                HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center, VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+                Child = new StackPanel { Children = { Line("via", 12, 0.7), Line("Scrolller", 31.2, 1, FontWeight.ExtraBold), Line("r/" + sub, 12, 1), Line("scrolller.com/r/" + sub, 10.2, 0.65) } } };
+            var card = new Panel { IsVisible = false, Opacity = 0, Transitions = new() { new global::Avalonia.Animation.DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromMilliseconds(500) } },
+                Children = { new Border { Background = new SolidColorBrush(Color.FromArgb(184, 0, 0, 0)), IsHitTestVisible = false }, press } };
+            var target = press; var lines = ((StackPanel)press.Child!).Children.OfType<TextBlock>().ToArray();
+            card.SizeChanged += (_, e) => { var size = Math.Clamp(Math.Min(e.NewSize.Width, e.NewSize.Height) * 0.024, 12, 26);
+                target.Padding = new Thickness(size * 1.6, size); lines[0].FontSize = lines[2].FontSize = size; lines[1].FontSize = size * 2.6; lines[3].FontSize = size * 0.85;
+                lines[2].Margin = new Thickness(0, size * 0.3, 0, 0); lines[3].Margin = new Thickness(0, size * 0.6, 0, 0); };
+            return card;
+        }
         internal Surface Build(global::Avalonia.Platform.Screen? screen, bool strict)
         {
             var fill = new Image { Stretch = Stretch.UniformToFill, IsVisible = false };
@@ -429,6 +528,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var layer = new Canvas { ClipToBounds = true };
             var (grace, countdown) = GraceCard();
             var buttons = new VideoButtons(ToggleUserMute, CloseFromButton);
+            var credit = new ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditBadge();
+            credit.SetShown(ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.IsScrolllerUrl(_path));
+            var link = CreditLinkFor(_path); var creditGeneration = _playGeneration; var creditScheduler = Scheduler; var creditRun = creditScheduler.RunGeneration;
+            var card = CreditCard(link == null ? "" : CreditSubFor(_path) ?? "", out var press);
+            if (link != null)
+            {
+                press.IsHitTestVisible = credit.IsHitTestVisible = CreditAllowed(strict);
+                _creditCards.Add(card); card.Tag = credit;
+                foreach (var mark in new Control[] { press, credit })
+                    mark.PointerPressed += (_, e) => { e.Handled = true; if (creditGeneration == _playGeneration && ReferenceEquals(Scheduler, creditScheduler) && creditRun == creditScheduler.RunGeneration) QueueCredit(link); };
+            }
             var w = new Window
             {
                 Title = "CCP Video",
@@ -437,7 +547,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 ShowInTaskbar = false,
                 CanResize = false,
                 Background = Brushes.Black,
-                Content = new Panel { ClipToBounds = true, Children = { picture, layer, grace, buttons.Row } },
+                Content = new Panel { ClipToBounds = true, Children = { picture, credit, card, layer, grace, buttons.Row } },   // WPF player.css:73: targets over the card
             };
             CoverGentleEntrance((Panel)w.Content!);
             var floating = Floating;
@@ -690,13 +800,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal void GuardTick()
         {
             // The injected decoder (tests) has no windows: a live playback is the clip to guard (#3822).
-            if (_gracePaused || PrimaryPaused || _playback == null || !Scheduler.IsPlaying) return;
+            if (_gracePaused || PrimaryPaused || _playback == null || !Scheduler.IsPlaying || _endCardAt == _playGeneration) return;
             SampleCutPlayback();
             var framed = FirstFrameMs >= 0;
             // A playing clip with no frame is revealed at the budget, as WPF FloatingFirstFrame.
             if (UpdateFloatingReveal(_sinceReady.Elapsed.TotalSeconds, _player?.IsPlaying == true)
                     == ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.FirstFrameVerdict.Skip) return;
             var played = (framed ? _sinceFrame.Elapsed.TotalSeconds : Elapsed) + PlayedSkew;
+            if (framed) UpdateCredit(_playback.Time, (long)((_capSpent + (_cutClock == null ? played : _cutClock.PlayedMs / 1000.0 + PlayedSkew)) * 1000), _playback.Length);
             var why = MandatoryVideoScheduler.Guard(Elapsed, played, framed,
                 _playback.HasVideo, _playback.Length / 1000.0,
                 Stopwatch.GetElapsedTime(FrameTs).TotalSeconds, CoreSettings.Current.VideoMaxDurationSeconds, _capSpent,
@@ -713,13 +824,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var watched = CloseAll();
                 if (watched >= 1) CoreProgression.TrackVideoWatched(watched);
                 _userMuted = muted;
-                Play(_path, _strict);
+                Play(_path, _strict, isVoutRetry: true);
                 _capSpent = spent;   // the replay continues the clip's max-length cap (BUG-7NAKK79CZ2)
                 _healUsed = true;
                 return;
             }
             Log.Warning("VideoService: clip guard fired ({Why}) after {Sec:F1}s - ending the clip", why, Elapsed);
-            Scheduler.End();
+            if (why == "max length") FinishCredit(false); else Scheduler.End();
         }
 
         /// <summary>WPF FloatingFirstFrame then player.js:915: present the floating windows (a copied frame or the
@@ -824,7 +935,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private void SetupAttention()
         {
-            if (!_attention || !Scheduler.IsPlaying || _surfaces.Count == 0) return;
+            if (_endCardAt == _playGeneration || !_attention || !Scheduler.IsPlaying || _surfaces.Count == 0) return;
             var s = CoreSettings.Current;
             var total = MandatoryVideoScheduler.AttentionTargetCount(s.AttentionDensity, s.RandomizeAttentionTargets, _random);
             _spawnTimes = MandatoryVideoScheduler.AttentionSpawnTimes(total, (_player?.Length ?? 0) / 1000.0, _random);
@@ -1153,6 +1264,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
         {
+            _playGeneration++;
+            _creditQueued = null;
+            _cardShownAt = null;
+            _creditCards.Clear();
             _floatingOnScreen = false;
             SampleCutPlayback();
             var watched = _cutClock?.PlayedMs;

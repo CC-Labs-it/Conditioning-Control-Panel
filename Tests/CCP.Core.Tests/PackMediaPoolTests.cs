@@ -258,6 +258,34 @@ public sealed class PackMediaPoolTests : IDisposable
     }
 
     [Fact]
+    public void Dry_online_buffer_does_not_displace_an_active_pack_clip()
+    {
+        ContentPackStoreTests.WritePack(_root, "p1", "One", ("v.mp4", "video"));
+        var store = NewStore();
+        var s = CoreSettings.Current;
+        var saved = (s.MediaSource, s.RemoteMediaConsented, s.FypOnlineConsented);
+        var video = new MandatoryVideoScheduler(null!, null, () => Array.Empty<string>())
+        {
+            PackVideos = new PackMediaPool(ContentPackStore.VideoType, new Random(1), () => store),
+            RemotePick = () => null
+        };
+        try
+        {
+            (s.MediaSource, s.RemoteMediaConsented, s.FypOnlineConsented) = ("online", true, false);
+            var selected = video.PickNext();
+            Assert.NotEqual("https://cdn.scrolller.com/clip.mp4", selected);
+            Assert.Equal("p1/v.mp4", Plain(selected!));
+            video.RemotePick = () => "https://cdn.scrolller.com/clip.mp4";
+            Assert.Equal("https://cdn.scrolller.com/clip.mp4", video.PickNext());
+        }
+        finally
+        {
+            video.PackVideos.CleanupTemps();
+            (s.MediaSource, s.RemoteMediaConsented, s.FypOnlineConsented) = saved;
+        }
+    }
+
+    [Fact]
     public void VideoAndBubbleSchedulers_PlayPackClips_WhenTheLibraryIsEmpty()
     {
         ContentPackStoreTests.WritePack(_root, "p1", "One", ("v.mp4", "video"), ("a.png", "image"));
