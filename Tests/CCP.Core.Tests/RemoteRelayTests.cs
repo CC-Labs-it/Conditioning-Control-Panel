@@ -99,8 +99,12 @@ public sealed class RemoteRelayTests
             CoreEngine.Start();
             var f = new FakeRelay();
             using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
-            await r.StartAsync("light");
+            s.SpiralEnabled = false; await r.StartAsync("light");
+            s.StrictLockEnabled = false; Assert.Null(RemoteCommands.Execute("enable_strict_lock", null)); Assert.Null(RemoteCommands.Execute("show_spiral", null));
+            CoreFlash.Start(); Assert.True(CoreFlash.IsRunning);
             Assert.True(await r.SendSignalAsync("stop"));
+            Assert.True(CoreFlash.IsRunning);
+            Assert.False(s.StrictLockEnabled); Assert.False(s.SpiralEnabled);
             Assert.Equal("stop", (string?)f.Seen.Last().Body["text"]);
             Assert.Equal(0, sessionStops);
             Assert.True(CoreEngine.IsRunning);

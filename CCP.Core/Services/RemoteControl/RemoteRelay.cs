@@ -362,14 +362,14 @@ namespace ConditioningControlPanel.Services
         /// Easy and Stop act locally before the network request; no emote debounce.
         /// Stop is never more permissive than the panic key (RemoteHudRules.LocalPanicAllowed): the forced stop
         /// (session, engine, Chaster hold) runs only when the key would; under Lockdown or with the key off it
-        /// stops the remote's effects only. WPF RemoteControlService.V2.cs:53 forces unconditionally; this head gates it.</summary>
+        /// stops remote haptics only; other shared effects lack ownership tracking. WPF RemoteControlService.V2.cs:53 forces unconditionally; this head gates it.</summary>
         public async Task<bool> SendSignalAsync(string kind)
         {
             kind = (kind ?? "").Trim().ToLowerInvariant();
             if (!IsActive || kind is not ("more" or "easy" or "stop")) return false;
             Action? local = kind == "easy" ? RemoteCommands.ApplyEasy
-                : kind == "stop" ? () => _stopEffects(Safety.VoicePanicReach.PanicKeyRuns(
-                    LockdownService.Current?.IsActive == true, CoreSettings.Current.PanicKeyEnabled))
+                : kind == "stop" ? () => { if (Safety.VoicePanicReach.PanicKeyRuns(LockdownService.Current?.IsActive == true, CoreSettings.Current.PanicKeyEnabled)) _stopEffects(true);
+                    else { RemoteCommands.StopHaptics(); var visuals = Remote.RemoteWearer.HandBackAllButStrict(); Remote.RemoteWearer.ReleaseSafetyState(); if (visuals > 0) try { RemoteCommands.RefreshOverlays?.Invoke(); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] overlay restore failed"); } } }
                 : null;
             if (local != null)
             {
