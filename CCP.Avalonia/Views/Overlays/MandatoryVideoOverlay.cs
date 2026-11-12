@@ -465,19 +465,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static string? CreditLinkFor(string url) => ConditioningControlPanel.Services.Fyp.Online.ScrolllerCreditRules.LinkFor(CreditSubFor(url));
         internal void QueueCredit(string link)
         {
-            if (!CreditAllowed(_strict)) return;
+            if (!CreditAllowed(_strict || Scheduler.IsStrict)) return;
             _creditQueued = link;
             if (Floating) OpenCredit(link, _strict, _playGeneration);
         }
         private void OpenCredit(string link, bool strict, int generation)
         {
-            _creditQueued = null;
-            Dispatcher.UIThread.Post(() => { if (generation == _playGeneration && CreditAllowed(strict)) CreditOpener(link); });
+            _creditQueued = null; var scheduler = Scheduler; var run = scheduler.RunGeneration;
+            Dispatcher.UIThread.Post(() => { if (generation == _playGeneration && ReferenceEquals(Scheduler, scheduler) && run == scheduler.RunGeneration && CreditAllowed(strict || scheduler.IsStrict)) CreditOpener(link); });
         }
         internal void FinishCredit(bool natural)
         {
-            var link = _creditQueued;
-            var strict = _strict; var allowed = CreditAllowed(strict);
+            var link = _creditQueued; var strict = _strict; var allowed = CreditAllowed(strict);
             if (natural) OnNaturalVideoEnd(); else Scheduler.End();
             if (link != null && allowed && CreditAllowed(strict)) OpenCredit(link, strict, _playGeneration);
         }
@@ -501,16 +500,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var buttons = new VideoButtons(ToggleUserMute, CloseFromButton);
             var credit = new ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditBadge();
             credit.SetShown(ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.IsScrolllerUrl(_path));
-            var link = CreditLinkFor(_path); var creditGeneration = _playGeneration;
+            var link = CreditLinkFor(_path); var creditGeneration = _playGeneration; var creditScheduler = Scheduler; var creditRun = creditScheduler.RunGeneration;
             var card = new Button { Content = link == null ? "" : "via Scrolller\nr/" + CreditSubFor(_path),
                 IsVisible = false, HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center, VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center };
             if (link != null)
             {
                 card.IsHitTestVisible = CreditAllowed(strict);
-                card.Click += (_, _) => { if (creditGeneration == _playGeneration) QueueCredit(link); };
+                card.Click += (_, _) => { if (creditGeneration == _playGeneration && ReferenceEquals(Scheduler, creditScheduler) && creditRun == creditScheduler.RunGeneration) QueueCredit(link); };
                 _creditCards.Add(card);
                 credit.IsHitTestVisible = CreditAllowed(strict);
-                credit.PointerPressed += (_, _) => { if (creditGeneration == _playGeneration) QueueCredit(link); };
+                credit.PointerPressed += (_, _) => { if (creditGeneration == _playGeneration && ReferenceEquals(Scheduler, creditScheduler) && creditRun == creditScheduler.RunGeneration) QueueCredit(link); };
             }
             var w = new Window
             {

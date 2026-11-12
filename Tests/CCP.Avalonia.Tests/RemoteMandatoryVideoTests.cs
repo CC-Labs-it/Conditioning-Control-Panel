@@ -51,28 +51,28 @@ public sealed class RemoteMandatoryVideoTests
             var surface = overlay.Build(null, false);
             try
             {
-                var mark = Assert.Single(((Panel)surface.Window.Content!).Children.OfType<ScrolllerCreditBadge>());
-                Assert.True(mark.Shown);
+                var mark = Assert.Single(((Panel)surface.Window.Content!).Children.OfType<ScrolllerCreditBadge>()); Assert.True(mark.Shown);
                 Assert.False(mark.IsHitTestVisible);
             }
             finally { surface.Window.Close(); }
-            ScrolllerItemIndex.Remember(url, new ScrolllerCacheMeta("clip", "testsub"));
-            MandatoryVideoOverlay.CreditOpener = _ => { opened++; return true; };
+            ScrolllerItemIndex.Remember(url, new ScrolllerCacheMeta("clip", "testsub")); MandatoryVideoOverlay.CreditOpener = _ => { opened++; return true; };
             overlay.Show(url, false); surface = overlay.Build(null, false);
             try
             {
-                var card = Assert.Single(((Panel)surface.Window.Content!).Children.OfType<Button>());
-                Assert.False(card.IsVisible);
-                Assert.Equal("via Scrolller\nr/testsub", card.Content);
-                overlay.UpdateCredit(7000, 7000, 10000); Assert.False(card.IsVisible);
-                overlay.UpdateCredit(7500, 7500, 10000); Assert.True(card.IsVisible);
-                card.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-                overlay.FinishCredit(true);
-                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-                Assert.Equal(1, opened);
+                var card = Assert.Single(((Panel)surface.Window.Content!).Children.OfType<Button>()); Assert.False(card.IsVisible); Assert.Equal("via Scrolller\nr/testsub", card.Content);
+                overlay.UpdateCredit(7000, 7000, 10000); Assert.False(card.IsVisible); overlay.UpdateCredit(7500, 7500, 10000); Assert.True(card.IsVisible);
+                card.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); overlay.FinishCredit(true);
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.Equal(1, opened);
                 card.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); overlay.FinishCredit(true); overlay.CloseAll();
                 global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.Equal(1, opened);
                 card.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); overlay.FinishCredit(true); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.Equal(1, opened); Assert.False(MandatoryVideoOverlay.CreditAllowed(true));
+                foreach (var strict in new[] { true, false })
+                {
+                    overlay.Show(url, false); var pendingSurface = overlay.Build(null, false);
+                    try { var pending = Assert.Single(((Panel)pendingSurface.Window.Content!).Children.OfType<Button>()); overlay.UpdateCredit(7500, 7500, 10000); Assert.True(pending.IsVisible); pending.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); overlay.FinishCredit(true);
+                        Assert.True(overlay.Scheduler.Trigger(strict, path: "/videos/next.mp4")); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.Equal(1, opened); }
+                    finally { overlay.Scheduler.Stop(); pendingSurface.Window.Close(); }
+                }
             }
             finally { surface.Window.Close(); }
         }

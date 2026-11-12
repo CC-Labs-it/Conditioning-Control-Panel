@@ -97,6 +97,7 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>The clip <see cref="VideoStarted"/> announced (WPF VideoService.LastVideoPath).</summary>
         public string? LastVideoPath { get; internal set; }
+        internal int RunGeneration => _retryGeneration;
 
         /// <summary>Replays forced this run (WPF _penalties); reset by <see cref="End"/>.</summary>
         public int Penalties { get; private set; }
