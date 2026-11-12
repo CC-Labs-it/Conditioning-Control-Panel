@@ -454,6 +454,8 @@
                                         ToolTip.Tip="{loc:Str remote_hud_more_tip}">
                                     <TextBlock Text="{loc:Str remote_hud_more}"/>
                                 </Button>
+                                <TextBlock x:Name="TxtRemoteMoreStatusTab" Foreground="{DynamicResource TextMutedBrush}"
+                                           FontSize="11" Margin="0,0,0,8"/>
 
                                 <!-- 5 preset slots, seeded in code-behind (App.Settings.Current
                                      .RemoteEmotePresets on WPF). -->

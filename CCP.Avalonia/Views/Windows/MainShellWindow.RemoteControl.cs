@@ -35,6 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static TimeProvider RemoteOverlayTime = TimeProvider.System;
         internal static readonly TimeSpan RemoteToastHold = TimeSpan.FromSeconds(2), RemoteOverlayFadeOut = TimeSpan.FromMilliseconds(200);
         private DispatcherTimer? _remoteOverlayTimer;
+        private System.Threading.CancellationTokenSource? _remoteMoreLifetime, _remoteMoreConfirmation;
         private long? _remoteToastShownAt, _remoteOverlayHidingAt;
 
         private static bool RemoteControllerConnected => RemoteControlTabView.Relay.IsValueCreated && RemoteControlTabView.Relay.Value.ControllerConnected;
@@ -70,6 +71,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 r.SessionEnded -= ended;
                 r.CommandReceived -= command;
                 _remoteOverlayTimer?.Stop();
+                CancelRemoteMoreConfirmation();
                 if (RemoteCommands.RefreshOverlays == refreshOverlays) RemoteCommands.RefreshOverlays = null;
             };
             // WPF fades the overlay in 300 ms and the toast in 200 ms (out: 200 / 300 ms).
@@ -127,7 +129,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void ShowRemoteControlOverlay()
         {
             var r = RemoteControlTabView.Relay.Value;
-            if (Named<TextBlock>("TxtRemoteMoreStatus") is { } moreStatus) moreStatus.Text = "";
+            CancelRemoteMoreConfirmation();
             if (LeashBrowser is { } browser) browser.IsVisible = false; // native web view airspace, WPF :904
             var text = string.IsNullOrEmpty(r.SessionCode) ? "" : $"Session: {string.Join(" ", r.SessionCode.ToCharArray())}";
             if (!string.IsNullOrEmpty(r.ConnectPin)) text += $"  PIN: {r.ConnectPin}";
@@ -157,6 +159,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF HideRemoteControlOverlay (:915): fade 200 ms, then collapse; the toast stops too.</summary>
         internal void HideRemoteControlOverlay()
         {
+            CancelRemoteMoreConfirmation();
             if (Named<Border>("RemoteControlOverlay") is not { IsVisible: true } o) return;
             o.Opacity = 0;
             _remoteToastShownAt = null;
@@ -246,11 +249,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             UpdateStartButtonForRemoteControl(false);
         }
 
+        private void CancelRemoteMoreConfirmation()
+        {
+            _remoteMoreLifetime?.Cancel();
+            _remoteMoreLifetime?.Dispose();
+            _remoteMoreLifetime = null;
+            _remoteMoreConfirmation?.Cancel();
+            _remoteMoreConfirmation?.Dispose();
+            _remoteMoreConfirmation = null;
+            if (Named<TextBlock>("TxtRemoteMoreStatus") is { } status) status.Text = "";
+        }
+
+        private System.Threading.CancellationToken RestartRemoteMoreConfirmation()
+        {
+            _remoteMoreConfirmation?.Cancel();
+            _remoteMoreConfirmation?.Dispose();
+            _remoteMoreConfirmation = new System.Threading.CancellationTokenSource();
+            return _remoteMoreConfirmation.Token;
+        }
+
         // The overlay covers the remote tab while connected; More remains available here.
         private async void BtnRemoteMoreOverlay_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
-            if (RemoteControllerConnected && Named<TextBlock>("TxtRemoteMoreStatus") is { } status)
-                await RemoteControlTabView.SendMoreAndReportAsync(status);
+            if (!RemoteControllerConnected || Named<TextBlock>("TxtRemoteMoreStatus") is not { } status) return;
+            _remoteMoreLifetime ??= new System.Threading.CancellationTokenSource();
+            await RemoteControlTabView.SendMoreAndReportAsync(status, _remoteMoreLifetime.Token, RestartRemoteMoreConfirmation);
         }
 
         private async void BtnEmotePresetBig_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)

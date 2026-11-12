@@ -269,6 +269,8 @@ public sealed class RemoteControlShellTests
     {
         var (oldRelay, oldAttention, oldSink) = (RemoteControlTabView.Relay, MainShellWindow.RemoteJoinAttention,
             global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink);
+        var oldDelay = RemoteControlTabView.MoreConfirmationDelay;
+        RemoteControlTabView.MoreConfirmationDelay = (_, token) => Task.Delay(Timeout.InfiniteTimeSpan, token);
         var fake = new FakeRelay();
         using var relay = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", (_, _) => null, _ => { }, fake) { AutoPoll = false };
         MainShellWindow.RemoteJoinAttention = _ => { };
@@ -328,6 +330,7 @@ public sealed class RemoteControlShellTests
         {
             if (relay.IsActive) await relay.StopAsync();
             shell?.Close();
+            RemoteControlTabView.MoreConfirmationDelay = oldDelay;
             (RemoteControlTabView.Relay, MainShellWindow.RemoteJoinAttention,
                 global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink) = (oldRelay, oldAttention, oldSink);
         }

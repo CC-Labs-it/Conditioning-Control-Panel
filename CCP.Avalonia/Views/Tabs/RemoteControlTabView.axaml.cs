@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Data;
@@ -60,6 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             };
             DetachedFromVisualTree += (_, _) =>
             {
+                CancelMoreConfirmation();
                 r.ControllerConnectedChanged -= connected;
                 r.CommandReceived -= received;
                 r.SessionEnded -= ended;
@@ -197,6 +199,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void UpdateRemoteStatus(bool connected, bool idle = false)
         {
             BtnRemoteMore.IsVisible = connected && !idle;
+            if (!connected || idle) CancelMoreConfirmation();
             RemoteStatusDot.Fill = idle ? Grey : connected ? Green : Orange;
             BindKey(TxtRemoteStatus, idle ? "label_remote_idle" : connected ? "label_controller_connected" : "label_waiting_for_controller");
             TxtRemoteStatus.Foreground = connected ? Green : Grey;
@@ -217,16 +220,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ShowSession(null);
         }
 
+        private CancellationTokenSource? _moreLifetime, _moreConfirmation;
+        internal static readonly TimeSpan MoreConfirmationDuration = TimeSpan.FromMilliseconds(1600); // WPF RemoteHudRules.cs:22
+        internal static Func<TimeSpan, CancellationToken, Task> MoreConfirmationDelay = (duration, token) => Task.Delay(duration, token);
+
+        private void CancelMoreConfirmation()
+        {
+            _moreLifetime?.Cancel();
+            _moreLifetime?.Dispose();
+            _moreLifetime = null;
+            _moreConfirmation?.Cancel();
+            _moreConfirmation?.Dispose();
+            _moreConfirmation = null;
+            TxtRemoteMoreStatusTab.Text = "";
+        }
+
+        private CancellationToken RestartMoreConfirmation()
+        {
+            _moreConfirmation?.Cancel();
+            _moreConfirmation?.Dispose();
+            _moreConfirmation = new CancellationTokenSource();
+            return _moreConfirmation.Token;
+        }
+
         // WPF RemoteHudWindow.cs:446: More is a signal, independent of emote debounce.
         private async void BtnRemoteMore_Click(object? sender, RoutedEventArgs e)
-            => await SendMoreAndReportAsync(TxtEmoteStatus);
+        {
+            _moreLifetime ??= new CancellationTokenSource();
+            await SendMoreAndReportAsync(TxtRemoteMoreStatusTab, _moreLifetime.Token, RestartMoreConfirmation);
+        }
 
-        internal static async Task SendMoreAndReportAsync(TextBlock status)
+        internal static async Task SendMoreAndReportAsync(TextBlock status, CancellationToken lifetime, Func<CancellationToken> restart)
         {
             var sent = await Relay.Value.SendMoreSignalAsync();
+            if (lifetime.IsCancellationRequested) return;
+            var token = restart();
             status.Text = sent
                 ? string.Format(Loc.Get("remote_hud_sent"), Loc.Get("remote_hud_more"))
                 : Loc.Get("remote_hud_not_sent");
+            try { await MoreConfirmationDelay(MoreConfirmationDuration, token); }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { return; }
+            if (!token.IsCancellationRequested) status.Text = "";
         }
 
         private async void BtnStopRemote_Click(object? sender, RoutedEventArgs e) => await StopRemoteControl();
