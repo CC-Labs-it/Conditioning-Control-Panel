@@ -7,13 +7,15 @@
 // (mandatory), Bubbles and Bouncing Text as 30 s pulses, Pink Filter as a 30 s pulse (X11 only -
 // only where the compositor can show the tint), Bubble Count (forced game), Comment (AI when chat is on
 // and available, else a preset phrase through the tube), Mind Wipe (only once CoreMindWipe is
-// seeded). Never picked here (CanPerform false, exactly as WPF skips an unavailable action):
-// Spiral/Brain Drain pulses are not WPF candidates. Web Video needs the browser media/fullscreen
-// service; Wallpaper needs the platform wallpaper service. Spoken Mantra uses the voice funnel.
+// seeded), Web Video (browser slot and fullscreen request). Never picked here (CanPerform false, exactly as WPF skips an unavailable action):
+// Spiral/Brain Drain pulses are not WPF candidates. Wallpaper needs the platform wallpaper service. Spoken Mantra uses the voice funnel.
 // Banner, countdown, event audio and diagnostic Test are wired. Force Start is a collapsed WPF
 // debug control. Voice/PTT/wake word: MainShellWindow.VoiceCommands.cs.
 using System;
 using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Linq;
+using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Services.Companion;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -30,6 +32,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>This window's Takeover. Per window so a test's shell never shares one.</summary>
         internal readonly AutonomyScheduler Autonomy = new();
 
+        private readonly HashSet<string> _shownWebVideos = new();
+        internal Func<string, bool, bool, bool>? AutonomyNavigate;
+        internal Func<IReadOnlyDictionary<string, string>?>? AutonomyVideoLinks;
         private bool _bubblesPulse, _bouncingPulse, _pinkPulse;
         private bool _pinkWasEnabled;
         private int _pinkBaseOpacity, _pinkAppliedOpacity;
@@ -150,6 +155,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             AutonomyActionType.Subliminal => CoreSubliminal.ShowProvider != null,
             AutonomyActionType.LockCard => CoreLockCard.ShowHandler != null,
             AutonomyActionType.Video => CoreEngine.Video != null,
+            AutonomyActionType.WebVideo => BrowserPage is { BrowserMediaPlaying: false, BrowserMediaOwnsSlot: false, BrowserMediaCooling: false }
+                                            && CoreEngine.Video?.IsPlaying != true && !GameWindow.IsForYouOnScreen(),
             AutonomyActionType.StartBubbles => CoreBubbles.StartAction != null,
             AutonomyActionType.BouncingText => CoreBouncingText.StartAction != null,
             // WPF SelectAction's mantraOk: engine up and idle, no prompt in flight, the tube shown and the
@@ -175,6 +182,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 case AutonomyActionType.LockCard: CoreLockCard.Show(); break;
                 // No strict override: a Takeover video follows the global StrictLockEnabled (WPF TriggerVideoSafely).
                 case AutonomyActionType.Video: CoreEngine.Video?.Trigger(); break;
+                case AutonomyActionType.WebVideo: TriggerAutonomyWebVideo(); break;
                 case AutonomyActionType.StartBubbles:
                     if (_bubblesPulse || BubbleOverlay.IsRunning) break;
                     _bubblesPulse = true;
@@ -194,6 +202,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // WPF #1458's "switched off during the announcement" recheck is AutonomyScheduler.Run's.
                 case AutonomyActionType.MindWipe: CoreMindWipe.TriggerOnce(); break;
                 case AutonomyActionType.SpokenMantra: _ = RequestVoiceCommandAsync(allowCommands: false); break;
+            }
+        }
+
+        // WPF AutonomyService.cs:1226: reserve before picking, never queue, release on failure.
+        private void TriggerAutonomyWebVideo()
+        {
+            var page = BrowserPage;
+            if (!CanPerformAutonomy(AutonomyActionType.WebVideo) || page?.TryBeginBrowserTakeover() != true) return;
+            try
+            {
+                var pool = CoreMods.Service?.GetVideoLinks();
+                var links = AutonomyVideoLinks != null ? AutonomyVideoLinks()
+                    : pool is { Count: > 0 }
+                        ? pool.Where(v => Uri.TryCreate(v.Value, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
+                              .ToDictionary(v => v.Key, v => v.Value, StringComparer.OrdinalIgnoreCase)
+                        : HypnotubeDefaultLinks.KnownVideoTitles;
+                var pick = AutonomyScheduler.PickWebVideo(links, _shownWebVideos, Autonomy.Rng);
+                if (pick == null || !(AutonomyNavigate ?? NavigateToUrlInBrowser)(pick.Value.Value, true, false))
+                    page.EndBrowserTakeover();
+            }
+            catch
+            {
+                page.EndBrowserTakeover();
+                throw;
             }
         }
 

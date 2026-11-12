@@ -51,6 +51,22 @@ namespace ConditioningControlPanel.Services
     {
         // ---- pure rules (WPF delegates) ----
 
+        /// <summary>WPF AutonomyService's no-repeat rotation, keyed by video name.</summary>
+        public static KeyValuePair<string, string>? PickWebVideo(
+            IReadOnlyDictionary<string, string>? links, HashSet<string> shown, Random rng)
+        {
+            if (links == null || links.Count == 0) return null;
+            var available = links.Where(v => !shown.Contains(v.Key)).ToList();
+            if (available.Count == 0)
+            {
+                shown.Clear();
+                available = links.ToList();
+            }
+            var pick = available[rng.Next(available.Count)];
+            shown.Add(pick.Key);
+            return pick;
+        }
+
         /// <summary>WPF CanStart / CanTakeAction: premium, or the ? box's takeover free day.</summary>
         public static bool HasEntitlement => CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("takeover");
 

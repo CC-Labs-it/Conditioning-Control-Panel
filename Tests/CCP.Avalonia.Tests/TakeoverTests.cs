@@ -131,8 +131,9 @@ public sealed class TakeoverTests
             {
                 // No surface on this head: never picked (WPF skips an unavailable action).
                 foreach (var a in new[] { AutonomyActionType.SpiralPulse, AutonomyActionType.BrainDrainPulse,
-                             AutonomyActionType.WebVideo, AutonomyActionType.WallpaperShuffle, AutonomyActionType.SpokenMantra })
+                             AutonomyActionType.WallpaperShuffle, AutonomyActionType.SpokenMantra })
                     Assert.False(shell.Autonomy.CanPerform(a), a.ToString());
+                Assert.True(shell.Autonomy.CanPerform(AutonomyActionType.WebVideo));
                 Assert.False(shell.Autonomy.CanPerform(AutonomyActionType.MindWipe));   // CoreMindWipe unseeded
                 Assert.False(shell.Autonomy.CanPerform(AutonomyActionType.PinkFilterPulse));   // no compositor headless
 

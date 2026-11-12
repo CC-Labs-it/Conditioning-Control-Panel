@@ -11,6 +11,28 @@ namespace CCP.Core.Tests;
 [Collection(SessionStatics.Name)]
 public class AutonomySchedulerTests : IDisposable
 {
+    [Fact]
+    public void WebVideoRotationExhaustsPoolThenResets()
+    {
+        var links = new Dictionary<string, string> { ["a"] = "one", ["b"] = "two", ["c"] = "three" };
+        var shown = new HashSet<string>();
+        var rng = new Random(42);
+        var picked = new HashSet<string>();
+        for (var i = 0; i < links.Count; i++)
+            Assert.True(picked.Add(AutonomyScheduler.PickWebVideo(links, shown, rng)!.Value.Key));
+        Assert.Equal(links.Count, shown.Count);
+        Assert.Contains(AutonomyScheduler.PickWebVideo(links, shown, rng)!.Value.Key, links.Keys);
+        Assert.Single(shown);
+    }
+
+    [Fact]
+    public void WebVideoRotationReturnsNoPickForEmptyPool()
+    {
+        var shown = new HashSet<string> { "old" };
+        Assert.Null(AutonomyScheduler.PickWebVideo(new Dictionary<string, string>(), shown, new Random(1)));
+        Assert.Contains("old", shown);
+    }
+
     private DateTime _now = new(2026, 1, 1, 14, 0, 0);   // afternoon: Attentive, no mood skew
     private readonly List<AutonomyActionType> _performed = new();
 
