@@ -69,8 +69,12 @@ public sealed class KeywordAudioRuntimeTests
             s.AvatarEnabled, s.BarkChatSuppressionMs, KeywordTriggerHead.Engine.Now);
         var clock = new DateTime(2026, 10, 14, 12, 0, 0);
         var engine = KeywordTriggerHead.Engine;
+        var history = RecentFires(engine);
+        var priorFires = history.ToArray();
+        var rotation = s.BarkVariantRotation;
         try
         {
+            s.BarkVariantRotation = rotation.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
             s.ScreenOcrEnabled = true; s.OcrConfirmationScans = 1; s.OcrHighlightAll = true;
             s.AwarenessLoopProtectionEnabled = false; s.AvatarEnabled = true; s.BarkChatSuppressionMs = 0;
             engine.Now = () => clock; engine.Start();
@@ -93,10 +97,43 @@ public sealed class KeywordAudioRuntimeTests
         }
         finally
         {
+            lock (history) { history.Clear(); foreach (var fire in priorFires) history.AddLast(fire); }
+            s.BarkVariantRotation = rotation;
             (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessLoopProtectionEnabled,
                 s.AvatarEnabled, s.BarkChatSuppressionMs, engine.Now) = saved;
         }
     });
+
+    private static LinkedList<TriggerFireRecord> RecentFires(KeywordAudioRuntime engine) =>
+        (LinkedList<TriggerFireRecord>)typeof(KeywordAudioRuntime).GetField("_recentFires",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(engine)!;
+
+    [Fact]
+    public void SpokenBarkTestRestoresSharedHistoryAndRotation()
+    {
+        var engine = KeywordTriggerHead.Engine;
+        var history = RecentFires(engine);
+        var priorFires = history.ToArray();
+        var settings = CoreSettings.Current;
+        var rotation = settings.BarkVariantRotation;
+        var sentinel = new TriggerFireRecord { Keyword = "prior" };
+        var seededRotation = new Dictionary<string, List<string>> { ["prior"] = ["line"] };
+        try
+        {
+            lock (history) { history.Clear(); history.AddLast(sentinel); }
+            settings.BarkVariantRotation = seededRotation;
+            SpokenBarkMutesItsExactLineForEightSeconds();
+            Assert.Equal(new[] { sentinel }, engine.GetRecentFires());
+            Assert.Same(seededRotation, settings.BarkVariantRotation);
+            Assert.Equal(new[] { "prior" }, settings.BarkVariantRotation.Keys);
+            Assert.Equal(new[] { "line" }, settings.BarkVariantRotation["prior"]);
+        }
+        finally
+        {
+            lock (history) { history.Clear(); foreach (var fire in priorFires) history.AddLast(fire); }
+            settings.BarkVariantRotation = rotation;
+        }
+    }
 
     [Fact] // WPF KeywordTriggerService.cs:193-200,712-739,842-862,913-943
     public void OcrRequiresConsecutivePositionsKeepsThemThroughALapseAndStopAndClearsOnScopeLoss() => Run((engine, s, played) =>
