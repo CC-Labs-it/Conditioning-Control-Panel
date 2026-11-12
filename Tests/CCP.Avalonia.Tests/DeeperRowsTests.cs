@@ -231,9 +231,11 @@ public sealed class DeeperRowsTests
     });
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public Task PlayerDiscardsReplacedOrClosedWaveforms(bool close) => AvaloniaTestDispatcher.RunAsync(async () =>
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public Task PlayerDiscardsReplacedOrClosedWaveforms(bool close, bool stopFirst) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
         var dir = Directory.CreateTempSubdirectory("ccp-player-race-").FullName;
@@ -258,6 +260,7 @@ public sealed class DeeperRowsTests
             player.OpenLocalMediaFile(first);
             var oldLoad = player._waveformLoad!;
             Assert.True(started.Wait(TimeSpan.FromSeconds(10)));
+            if (stopFirst) Invoke(player, "BtnStop_Click");
             if (close) player.Close();
             else { player.OpenLocalMediaFile(second); await player._waveformLoad!.WaitAsync(TimeSpan.FromSeconds(10)); }
             release.Set();
@@ -352,6 +355,140 @@ public sealed class DeeperRowsTests
             Directory.Delete(dir, true);
         }
     });
+
+    [Theory]
+    [InlineData("stop")]
+    [InlineData("end")]
+    [InlineData("replay")]
+    public Task PlayerKeepsDelayedWaveformAfterStopOrEnd(string action) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("ccp-player-stop-wave-").FullName;
+        var path = Path.Combine(dir, "clip.mp3");
+        File.WriteAllBytes(path, new byte[16]);
+        var originalOpen = DeeperLocalAudio.Open;
+        var originalDecoder = AudioWaveformCache.Decoder;
+        using var started = new System.Threading.ManualResetEventSlim();
+        using var release = new System.Threading.ManualResetEventSlim();
+        var audio = new FakeAudio { DurationSeconds = 190, PlaybackDurationSeconds = 95 };
+        var peaks = new[] { 0.2f, 0.8f };
+        int decodes = 0;
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
+        AudioWaveformCache.Decoder = _ => { System.Threading.Interlocked.Increment(ref decodes); started.Set(); release.Wait(TimeSpan.FromSeconds(10)); return new AudioWaveformResult { Peaks = peaks, DurationSeconds = 95 }; };
+        var player = new EnhancementPlayerWindow(null, null);
+        try
+        {
+            player.Show();
+            player.OpenLocalMediaFile(path);
+            var load = player._waveformLoad!;
+            Assert.True(started.Wait(TimeSpan.FromSeconds(10)));
+            if (action == "end") { audio.End(); Dispatcher.UIThread.RunJobs(); }
+            else Invoke(player, "BtnStop_Click");
+            Assert.True(audio.Disposed);
+            if (action == "replay") Invoke(player, "BtnPlayPause_Click");
+            release.Set();
+            await load.WaitAsync(TimeSpan.FromSeconds(10));
+            var field = typeof(EnhancementPlayerWindow).GetField("_peaks", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            Assert.Equal(peaks, (float[]?)field.GetValue(player));
+            Assert.Equal("1:35", player.FindControl<TextBlock>("TxtTotal")!.Text);
+            Assert.Equal(1, decodes);
+        }
+        finally
+        {
+            release.Set();
+            player.Close();
+            DeeperLocalAudio.Open = originalOpen;
+            AudioWaveformCache.Decoder = originalDecoder;
+            Directory.Delete(dir, true);
+        }
+    });
+
+    [Fact]
+    public Task PlayerKeepsUnverifiedPeaksAfterStopUntilReplayHasLiveDuration() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("ccp-player-stop-duration-").FullName;
+        var path = Path.Combine(dir, "clip.mp3");
+        File.WriteAllBytes(path, new byte[16]);
+        var originalOpen = DeeperLocalAudio.Open;
+        var originalDecoder = AudioWaveformCache.Decoder;
+        var audio = new FakeAudio { DurationSeconds = 190, PlaybackDurationSeconds = null };
+        var peaks = new[] { 0.2f, 0.8f };
+        int decodes = 0;
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
+        AudioWaveformCache.Decoder = _ => { System.Threading.Interlocked.Increment(ref decodes); return new AudioWaveformResult { Peaks = peaks, DurationSeconds = 95 }; };
+        var player = new EnhancementPlayerWindow(null, null);
+        try
+        {
+            player.Show();
+            player.OpenLocalMediaFile(path);
+            await player._waveformLoad!.WaitAsync(TimeSpan.FromSeconds(10));
+            Invoke(player, "BtnStop_Click");
+            var field = typeof(EnhancementPlayerWindow).GetField("_peaks", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            Assert.Null(field.GetValue(player));
+            audio.PlaybackDurationSeconds = 95;
+            Invoke(player, "BtnPlayPause_Click");
+            Invoke(player, "UiTimer_Tick", null, EventArgs.Empty);
+            Assert.Equal(peaks, (float[]?)field.GetValue(player));
+            Assert.Equal(1, decodes);
+        }
+        finally
+        {
+            player.Close();
+            DeeperLocalAudio.Open = originalOpen;
+            AudioWaveformCache.Decoder = originalDecoder;
+            Directory.Delete(dir, true);
+        }
+    });
+
+    [Fact]
+    public Task PlayerRetriesFailedWaveformOnReplay() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("ccp-player-retry-wave-").FullName;
+        var path = Path.Combine(dir, "clip.mp3");
+        File.WriteAllBytes(path, new byte[16]);
+        var originalOpen = DeeperLocalAudio.Open;
+        var originalDecoder = AudioWaveformCache.Decoder;
+        var peaks = new[] { 0.2f, 0.8f };
+        int decodes = 0;
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(new FakeAudio());
+        AudioWaveformCache.Decoder = _ =>
+        {
+            if (System.Threading.Interlocked.Increment(ref decodes) == 1) throw new IOException("decode failed");
+            return new AudioWaveformResult { Peaks = peaks, DurationSeconds = 95 };
+        };
+        var player = new EnhancementPlayerWindow(null, null);
+        try
+        {
+            player.Show();
+            player.OpenLocalMediaFile(path);
+            await player._waveformLoad!.WaitAsync(TimeSpan.FromSeconds(10));
+            Invoke(player, "BtnStop_Click");
+            Invoke(player, "BtnPlayPause_Click");
+            await player._waveformLoad!.WaitAsync(TimeSpan.FromSeconds(10));
+            var field = typeof(EnhancementPlayerWindow).GetField("_peaks", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            Assert.Equal(peaks, (float[]?)field.GetValue(player));
+            Assert.Equal(2, decodes);
+        }
+        finally
+        {
+            player.Close();
+            DeeperLocalAudio.Open = originalOpen;
+            AudioWaveformCache.Decoder = originalDecoder;
+            Directory.Delete(dir, true);
+        }
+    });
+
+    [Fact]
+    public void TransportRetainsLiveDurationAtEndBeforeStopping()
+    {
+        var engine = new FakeEngine { State = LibVLCSharp.Shared.VLCState.Ended };
+        var transport = new DeeperLocalAudio.Transport(engine, 12000, () => { });
+        transport.OnEndReached();
+        Assert.Equal(6, transport.PlaybackDurationSeconds);
+        transport.Dispose();
+    }
 
     /// <summary>MediaPlayer as the transport sees it: Playing fires on every start AND resume.</summary>
     private sealed class FakeEngine : DeeperLocalAudio.IEngine

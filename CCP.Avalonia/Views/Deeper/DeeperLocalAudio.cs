@@ -83,6 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             internal readonly object Gate = new();
             private long _pendingMs;   // a seek made before playback could take it; consumed once
+            private long _playbackLengthMs;
             private int _disposed;
             internal bool IsDisposed => _disposed != 0;
 
@@ -99,8 +100,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             {
                 get
                 {
-                    var len = Live ? player.Length : -1;
-                    return len > 0 ? len / 1000.0 : null;
+                    lock (Gate)
+                    {
+                        var length = Live ? player.Length : -1;
+                        if (length > 0) _playbackLengthMs = length;
+                        return _playbackLengthMs > 0 ? _playbackLengthMs / 1000.0 : null;
+                    }
                 }
             }
             public double DurationSeconds => PlaybackDurationSeconds ?? parsedMs / 1000.0;
@@ -161,7 +166,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             /// <summary>WPF OnVlcEndReached: Stop + rewind so the next Play replays.</summary>
             internal void OnEndReached()
             {
-                lock (Gate) { if (IsDisposed) return; player.Stop(); _pendingMs = 0; }
+                lock (Gate)
+                {
+                    if (IsDisposed) return;
+                    var length = player.Length;
+                    if (length > 0) _playbackLengthMs = length;
+                    player.Stop(); _pendingMs = 0;
+                }
                 Ended?.Invoke();
             }
 
