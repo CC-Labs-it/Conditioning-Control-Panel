@@ -495,13 +495,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         // WPF ChaosModeService.KeepChromeTopmost: chrome first, then bubbles.
-        internal static void KeepChromeTopmost()
+        internal static void KeepChromeTopmost(Action? raiseWave = null)
         {
             if (!_spawning || !CoreSettings.Current.ChaosPinOnTop) return;
             void Raise(Window? w) { if (w is { IsVisible: true }) RaiseChromeWindow(w); }
             Raise(_hud);
             Raise(_fx);
-            Raise(ChaosWaveTimerWindow.Active);
+            if (raiseWave != null) raiseWave();
+            else Raise(ChaosWaveTimerWindow.Active);
             Raise(_boonBar);
             foreach (var toy in _toyButtons) Raise(toy);
             RaiseBubbles();
@@ -523,7 +524,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (!_spawning || _state == null || _manualPaused || _lessonCardPaused) return;
             if (_overlay is not { IsVisible: true }) return;   // P01: nothing ticks while hidden
-            if (++_chromeTicks >= 4) { _chromeTicks = 0; KeepChromeTopmost(); if (CoreEngine.Video?.IsPlaying == true) RaiseDvdAboveVideo(); }
+            if (++_chromeTicks >= 4)
+            {
+                _chromeTicks = 0;
+                if (CoreEngine.Video?.IsPlaying == true) RaiseDvdAboveVideo();
+                KeepChromeTopmost();
+            }
             double elapsed = ChaosRunEngine.Advance(_state);
             UpdateHeatTint();
             _hud?.SetCursorOnLive(BubbleOverlay.CursorOnLive);

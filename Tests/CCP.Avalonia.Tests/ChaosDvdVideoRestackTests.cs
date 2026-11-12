@@ -103,4 +103,96 @@ public class ChaosDvdVideoRestackTests
             }
         });
     }
+    [Fact]
+    public async Task VideoEventsAndPlayingTicksKeepDvdBelowClockChromeAndBubbles()
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            var settings = CoreSettings.Current;
+            var (pin, shared) = (settings.ChaosPinOnTop, settings.ChaosDvdSharedHost);
+            var (can, prep, sfx) = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx);
+            var (overlayRaise, chromeRaise, bubbleRaise) = (ChaosRunHost.RaiseOverlayWindow, ChaosRunHost.RaiseChromeWindow, ChaosRunHost.RaiseBubbles);
+            var (watchRaise, skipWatch) = (ChaosWaveTimerWindow.RaiseWindow, ChaosWaveTimerWindow.SkipPlatformChecksForTests);
+            var oldVideo = CoreEngine.Video;
+            var scheduler = MandatoryVideoOverlay.Instance.Scheduler;
+            var playing = scheduler.GetType().GetField("_playing", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var oldPlaying = playing.GetValue(scheduler);
+            var order = new List<string>();
+            Window? video = null;
+            try
+            {
+                settings.ChaosPinOnTop = true;
+                settings.ChaosDvdSharedHost = false;
+                ChaosDvdOverlay.CanOverlay = () => true;
+                ChaosDvdOverlay.PrepareWindow = (_, _) => true;
+                ChaosDvdOverlay.PlaySfx = (_, _) => { };
+                ChaosWaveTimerWindow.SkipPlatformChecksForTests = true;
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.State!.ShowWaveTimer = true;
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                ChaosRunHost.Tick(); // Give the wave timer a measured readout.
+                ChaosDvdOverlay.Launch(ChaosRunHost.Overlay, 30, 1, 1, count: 2);
+                var logos = ChaosDvdOverlay.Windows.Where(w => w.IsVisible).ToArray();
+                Assert.Equal(2, logos.Length);
+                Assert.NotNull(ChaosWaveTimerWindow.Active);
+                ChaosRunHost.RaiseOverlayWindow = w => { if (logos.Contains(w)) order.Add("dvd"); };
+                ChaosWaveTimerWindow.RaiseWindow = _ => order.Add("watch");
+                ChaosRunHost.RaiseChromeWindow = _ => order.Add("chrome");
+                ChaosRunHost.RaiseBubbles = () => order.Add("bubbles");
+
+                void AssertVideoOrder()
+                {
+                    Assert.Contains("watch", order);
+                    Assert.Contains("bubbles", order);
+                    int start = 0;
+                    for (int i = 0; i < order.Count; i++)
+                        if (order[i] == "bubbles")
+                        {
+                            var kick = order.Skip(start).Take(i - start).ToArray();
+                            Assert.Equal(new[] { "dvd", "dvd" }, kick.Take(2));
+                            Assert.True(Array.IndexOf(kick, "chrome") >= 2);
+                            Assert.True(Array.IndexOf(kick, "watch") >= 2);
+                            start = i + 1;
+                        }
+                    Assert.Equal(order.Count, start);
+                }
+
+                video = MandatoryVideoOverlay.Instance.Build(null, false).Window;
+                video.WindowState = WindowState.Normal;
+                video.Width = 800;
+                video.Height = 600;
+                Dispatcher.UIThread.RunJobs();
+                await Task.Delay(120);
+                AssertVideoOrder();
+                order.Clear();
+                var pointer = new global::Avalonia.Input.Pointer(global::Avalonia.Input.Pointer.GetNextFreeId(), PointerType.Mouse, true);
+                video.RaiseEvent(new PointerPressedEventArgs(video, pointer, video, new Point(10, 10), 0,
+                    new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None) { Handled = true });
+                await Task.Delay(120);
+                AssertVideoOrder();
+
+                CoreEngine.Video = scheduler;
+                playing.SetValue(scheduler, true);
+                order.Clear();
+                for (int i = 0; i < 3; i++) ChaosRunHost.Tick();
+                Assert.Equal(new[] { "dvd", "dvd" }, order.Take(2));
+                Assert.True(order.IndexOf("chrome") >= 2);
+                Assert.True(order.IndexOf("bubbles") > order.IndexOf("chrome"));
+            }
+            finally
+            {
+                playing.SetValue(scheduler, oldPlaying);
+                CoreEngine.Video = oldVideo;
+                video?.Close();
+                ChaosRunHost.ForceShutdown();
+                ChaosDvdOverlay.CloseActive();
+                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx) = (can, prep, sfx);
+                (ChaosRunHost.RaiseOverlayWindow, ChaosRunHost.RaiseChromeWindow, ChaosRunHost.RaiseBubbles) = (overlayRaise, chromeRaise, bubbleRaise);
+                (ChaosWaveTimerWindow.RaiseWindow, ChaosWaveTimerWindow.SkipPlatformChecksForTests) = (watchRaise, skipWatch);
+                (settings.ChaosPinOnTop, settings.ChaosDvdSharedHost) = (pin, shared);
+            }
+        });
+    }
+
 }
