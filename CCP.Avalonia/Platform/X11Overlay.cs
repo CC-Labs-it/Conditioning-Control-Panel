@@ -73,6 +73,7 @@ internal static class X11Overlay
     [DllImport(LibX11)] private static extern IntPtr XSetErrorHandler(XErrorHandler handler);
     [DllImport(LibX11)] private static extern IntPtr XDefaultRootWindow(IntPtr display);
     [DllImport(LibX11)] private static extern IntPtr XInternAtom(IntPtr display, string name, bool onlyIfExists);
+    [DllImport(LibX11)] private static extern int XDeleteProperty(IntPtr display, IntPtr window, IntPtr property);
     [DllImport(LibX11)] private static extern int XChangeProperty(IntPtr display, IntPtr window, IntPtr property, IntPtr type, int format, int mode, IntPtr[] data, int count);
     [DllImport(LibX11)] private static extern IntPtr XGetSelectionOwner(IntPtr display, IntPtr selection);
     [DllImport(LibX11)] private static extern int XDefaultScreen(IntPtr display);
@@ -185,6 +186,16 @@ internal static class X11Overlay
             XChangeProperty(_display, id, atom, new IntPtr(6), 32, 0, Array.Empty<IntPtr>(), 0);
             XSync(_display, false);
             return !_xErrored;
+        }
+    }
+    internal static void DisableDesktopBlur(Window w)
+    {
+        if (!TryGetXid(w, out var id)) return;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return;
+            XDeleteProperty(_display, id, XInternAtom(_display, "_KDE_NET_WM_BLUR_BEHIND_REGION", false));
+            XSync(_display, false);
         }
     }
     /// <summary>Makes <paramref name="window"/> transparent to the mouse while it keeps drawing,

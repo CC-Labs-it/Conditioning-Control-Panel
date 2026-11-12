@@ -28,6 +28,61 @@ namespace CCP.Avalonia.Tests;
 /// plays the script's beats on a stepped clock, and Stop, panic and Esc close it and hand her back.</summary>
 public sealed class FirstShowStageTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task LinuxBlurFollowsDrain(bool supported) => Run(stage =>
+    {
+        int enabled = 0, disabled = 0;
+        stage.EnableBlur = () => { enabled++; return supported; };
+        stage.DisableBlur = () => disabled++;
+        double t = 0; stage.Clock = () => t; stage.Start();
+        t = 10.9; stage.Frame(); Assert.Equal(0, enabled);
+        t = 11; stage.Frame(); Assert.Equal(1, enabled);
+        t = 13; stage.Frame(); Assert.Equal(1, enabled); Assert.Equal(0, disabled);
+        t = 15; stage.Frame(); Assert.Equal(supported ? 1 : 0, disabled);
+        t = 35; stage.Frame(); Assert.Equal(1, enabled); Assert.Equal(supported ? 1 : 0, disabled);
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task LinuxBlurFadesBothPhases(bool supported) => Run(stage =>
+    {
+        var opacity = new List<double>();
+        stage.EnableBlur = () => supported;
+        stage.DisableBlur = () => { };
+        stage.SetBlurOpacity = opacity.Add;
+        double t = 0; stage.Clock = () => t; stage.Start();
+        foreach (var (time, edge) in new[] { (11.0, 0.0), (11.15, .5), (11.3, 1.0),
+            (12.85, .5), (13.0, 0.0), (13.15, .5), (13.3, 1.0), (14.85, .5) })
+        {
+            t = time; stage.Frame();
+            if (supported) Assert.Equal(Math.Sqrt(176.0 / 255 * edge), opacity[^1], 6);
+            else Assert.Empty(opacity);
+        }
+        t = 15; stage.Frame();
+        Assert.Equal(supported ? 8 : 0, opacity.Count);
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public Task LinuxBlurClearsOnExit(int exit) => Run(stage =>
+    {
+        int disabled = 0;
+        stage.EnableBlur = () => true; stage.DisableBlur = () => disabled++;
+        double t = 0; stage.Clock = () => t; stage.Start(); t = 12; stage.Frame();
+        if (exit == 0) stage.Close();
+        else if (exit == 1) FirstShowService.Stop();
+        else PanicSurfaces.StopAll("test");
+        Assert.Equal(1, disabled);
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task OpensPlaysTheScriptAndStopHandsEmiBack() => Run(stage =>
     {
