@@ -72,6 +72,14 @@ public class PossessionDropTests
         Intensity = PossessionIntensity.Eerie, Photosafe = false, Rng = new Random(4),
         ElapsedFraction = 0.7, Remaining = TimeSpan.FromMinutes(1), Name = (_, _) => { }
     };
+    private static (TextBlock text, Canvas layer, Window window, FakeFrames frames, Host host, DropEffect effect) Setup(string value, double width = 200)
+    {
+        var text = new TextBlock { Text = value, Width = width, Height = 30 }; var layer = new Canvas();
+        var window = new Window { Width = 400, Height = 300, Content = new Grid { Children = { text, layer } } };
+        window.Show(); Dispatcher.UIThread.RunJobs();
+        var frames = new FakeFrames();
+        return (text, layer, window, frames, new Host(window, layer, frames), new DropEffect());
+    }
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -124,30 +132,23 @@ public class PossessionDropTests
         finally { PossessionRuntime.UndoAllLive(); window.Close(); }
     });
     [Fact]
-    public async Task CancellationAndExternalRewriteDoNotLeaveRubbleOrOverwriteNewText()
+    public Task CancellationAndExternalRewriteDoNotLeaveRubbleOrOverwriteNewText() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        await AvaloniaTestDispatcher.RunAsync(async () =>
+        var (text, layer, window, frames, host, effect) = Setup("Before");
+        using var cts = new CancellationTokenSource();
+        try
         {
-            var text = new TextBlock { Text = "Before", Width = 200, Height = 30 };
-            var layer = new Canvas();
-            var window = new Window { Width = 400, Height = 300, Content = new Grid { Children = { text, layer } } };
-            window.Show(); Dispatcher.UIThread.RunJobs();
-            var frames = new FakeFrames(); var host = new Host(window, layer, frames);
-            var effect = new DropEffect(); using var cts = new CancellationTokenSource();
-            try
-            {
-                await effect.ApplyAsync(Context(host), Target(text), cts.Token);
-                frames.Frame(TimeSpan.Zero); frames.Frame(TimeSpan.FromMilliseconds(5000));
-                Assert.Single(layer.Children);
-                text.Text = "Changed";
-                cts.Cancel(); Dispatcher.UIThread.RunJobs();
-                Assert.Equal("Changed", text.Text);
-                Assert.Empty(layer.Children);
-                Assert.False(effect.IsLive);
-            }
-            finally { PossessionRuntime.UndoAllLive(); window.Close(); }
-        });
-    }
+            await effect.ApplyAsync(Context(host), Target(text), cts.Token);
+            frames.Frame(TimeSpan.Zero); frames.Frame(TimeSpan.FromMilliseconds(5000));
+            Assert.Single(layer.Children);
+            text.Text = "Changed";
+            cts.Cancel(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Changed", text.Text);
+            Assert.Empty(layer.Children);
+            Assert.False(effect.IsLive);
+        }
+        finally { PossessionRuntime.UndoAllLive(); window.Close(); }
+    });
     [Fact]
     public void CatalogEffectRefusesBoundTextAndTimer() => AvaloniaTestDispatcher.Run(() =>
     {
@@ -169,12 +170,8 @@ public class PossessionDropTests
     [Fact]
     public Task PanicDuringReturnRemovesPiecesImmediately() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        var text = new TextBlock { Text = "Returning", Width = 200, Height = 30 };
-        var layer = new Canvas();
-        var window = new Window { Width = 400, Height = 300, Content = new Grid { Children = { text, layer } } };
-        window.Show(); Dispatcher.UIThread.RunJobs();
-        var frames = new FakeFrames(); var host = new Host(window, layer, frames);
-        var effect = new DropEffect(); using var cts = new CancellationTokenSource();
+        var (text, layer, window, frames, host, effect) = Setup("Returning");
+        using var cts = new CancellationTokenSource();
         try
         {
             await effect.ApplyAsync(Context(host), Target(text), cts.Token);
@@ -186,18 +183,13 @@ public class PossessionDropTests
             Assert.Empty(layer.Children);
             Assert.Equal("Returning", text.Text);
             Assert.False(effect.IsLive);
-
         }
         finally { PossessionRuntime.UndoAllLive(); window.Close(); }
     });
     [Fact]
     public void OldCancellationCannotStopAReusedEffect() => AvaloniaTestDispatcher.Run(() =>
     {
-        var text = new TextBlock { Text = "Returning", Width = 200, Height = 30 };
-        var layer = new Canvas();
-        var window = new Window { Width = 400, Height = 300, Content = new Grid { Children = { text, layer } } };
-        window.Show(); Dispatcher.UIThread.RunJobs();
-        var frames = new FakeFrames(); var host = new Host(window, layer, frames); var effect = new DropEffect();
+        var (text, layer, window, frames, host, effect) = Setup("Returning");
         try
         {
             Assert.True(effect.ApplyAsync(Context(host), Target(text), CancellationToken.None).IsCompletedSuccessfully);
@@ -214,11 +206,7 @@ public class PossessionDropTests
     [Fact]
     public Task FinishedPiecesParkTheFrameSourceAndReturnRestartsIt() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        var text = new TextBlock { Text = "Drop", Width = 200, Height = 30 };
-        var layer = new Canvas();
-        var window = new Window { Width = 400, Height = 300, Content = new Grid { Children = { text, layer } } };
-        window.Show(); Dispatcher.UIThread.RunJobs();
-        var frames = new FakeFrames(); var effect = new DropEffect(); var host = new Host(window, layer, frames);
+        var (text, layer, window, frames, host, effect) = Setup("Drop");
         try
         {
             await effect.ApplyAsync(Context(host), Target(text), CancellationToken.None);
@@ -239,11 +227,7 @@ public class PossessionDropTests
     public void DropStopsAtFortyPercentAndNeverDropsTheFirstCharacter() => AvaloniaTestDispatcher.Run(() =>
     {
         const string original = "ABCDEFGHIJKL";
-        var text = new TextBlock { Text = original, Width = 250, Height = 30 };
-        var layer = new Canvas();
-        var window = new Window { Width = 400, Height = 300, Content = new Grid { Children = { text, layer } } };
-        window.Show(); Dispatcher.UIThread.RunJobs();
-        var frames = new FakeFrames(); var effect = new DropEffect(); var host = new Host(window, layer, frames);
+        var (text, layer, window, frames, host, effect) = Setup(original, 250);
         try
         {
             Assert.True(effect.ApplyAsync(Context(host), Target(text), CancellationToken.None).IsCompletedSuccessfully);
