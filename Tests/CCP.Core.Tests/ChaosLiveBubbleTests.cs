@@ -134,6 +134,22 @@ public class ChaosLiveBubbleTests
 
     private static ChaosRunState State() => new(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Rain_starts_above_the_working_area_and_exits_downward(bool live)
+    {
+        var spec = new EffectBubbleSpec { SizePx = 50, IsLive = live, FuseMs = int.MaxValue, Motion = ChaosMotion.RainDown };
+        var bubble = AmbientBubble.SpawnChaos(new Random(3), 0, -300, 200, 600, 100, 2, spec);
+        Assert.Equal(50, bubble.Y); // screen top / scale - bubble size
+        double y = bubble.Y;
+        Assert.Equal(AmbientBubble.Result.Alive, bubble.Step());
+        Assert.True(bubble.Y > y);
+        var result = AmbientBubble.Result.Alive;
+        for (int i = 0; i < 1000 && result == AmbientBubble.Result.Alive; i++) result = bubble.Step();
+        Assert.Equal(live ? AmbientBubble.Result.Detonated : AmbientBubble.Result.Missed, result);
+    }
+
     [Fact]
     public void A_held_snap_pays_its_focus_cost_and_wpf_points()
     {

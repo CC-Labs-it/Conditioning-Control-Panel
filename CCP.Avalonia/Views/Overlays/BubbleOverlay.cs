@@ -352,7 +352,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var w in Windows) w.Sync();
         }
 
-        /// <summary>WPF SpawnChaosBubble, FloatUp only. Without an overlay window (headless, or a
+        /// <summary>WPF SpawnChaosBubble. Without an overlay window (headless, or a
         /// platform that refuses click-through) the bubble lives on a 1920x1080 model screen.</summary>
         internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec)
         {
@@ -436,6 +436,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (cue.Length > 0 && File.Exists(cue)) { CoreAudio.PlayOneShot(cue, Math.Min(vol * scale, 1f), "chaos-cue"); return; }
             var pop = new[] { "Pop.mp3", "Pop2.mp3", "Pop3.mp3" }[Field.Random.Next(3)];
             CoreAudio.PlayOneShot(Path.Combine(AppContext.BaseDirectory, "Resources", "sounds", "bubbles", pop), Math.Min(vol, 1f), "bubble-pop");
+        }
+
+        /// <summary>WPF PlayChime: the lucky-pop chime at bubble volume, with no fallback.</summary>
+        internal static void PlayChime(float scale)
+        {
+            var (path, chime) = ResolvePopSound(true, false, Field.Random);
+            if (!chime) return;
+            var s = CoreSettings.Current;
+            var volume = (float)Math.Pow(s.MasterVolume / 100f * (s.BubblesVolume / 100f), 1.5) * scale;
+            CoreAudio.PlayOneShot(path, Math.Min(volume, 1f), "bubble-pop");
         }
 
         /// <summary>WPF AwardAmbientPop, head half: sound, XP, quest credit.</summary>

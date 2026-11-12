@@ -73,6 +73,40 @@ public sealed class BubbleOverlayTests
         finally { CoreModArt.AudioOverridePathProvider = previous; dir.Delete(true); }
     }
 
+    [Fact]
+    public void Shower_chime_uses_bubble_volume_and_has_no_pop_fallback()
+    {
+        var path = System.IO.Path.GetTempFileName();
+        var oldOverride = CoreModArt.AudioOverridePathProvider;
+        var oldAudio = CoreAudio.PlayOneShotProvider;
+        var settings = CoreSettings.Current;
+        var master = settings.MasterVolume;
+        var bubbles = settings.BubblesVolume;
+        var played = new System.Collections.Generic.List<(string Path, float Volume)>();
+        try
+        {
+            settings.MasterVolume = 50;
+            settings.BubblesVolume = 80;
+            CoreModArt.AudioOverridePathProvider = _ => path;
+            CoreAudio.PlayOneShotProvider = (p, v, _, _, _) => played.Add((p, v));
+            BubbleOverlay.PlayChime(0.25f);
+            var cue = Assert.Single(played);
+            Assert.Equal(path, cue.Path);
+            Assert.Equal(System.Math.Pow(0.5 * 0.8, 1.5) * 0.25, cue.Volume, 5);
+            System.IO.File.Delete(path);
+            BubbleOverlay.PlayChime(0.25f);
+            Assert.Single(played);
+        }
+        finally
+        {
+            CoreModArt.AudioOverridePathProvider = oldOverride;
+            CoreAudio.PlayOneShotProvider = oldAudio;
+            settings.MasterVolume = master;
+            settings.BubblesVolume = bubbles;
+            System.IO.File.Delete(path);
+        }
+    }
+
     /// <summary>WPF BubbleService.cs:221 LoadBubbleImage: each Start re-resolves bubble.png through the
     /// active mod, so after a mod switch the next start draws the new mod's sprite, not the cached one.</summary>
     [Fact]

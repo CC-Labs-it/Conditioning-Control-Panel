@@ -185,8 +185,7 @@ namespace ConditioningControlPanel.Services
             return b;
         }
 
-        /// <summary>WPF Bubble ctor with a Chaos spec, FloatUp only: the spec's size, the chaos
-        /// pace (bigger drifts slower, SpeedMult, CHAOS_SPEED_MULT), the ambient wobble and rise.</summary>
+        /// <summary>WPF Bubble ctor with a Chaos spec: size, pace and vertical motion.</summary>
         public static AmbientBubble SpawnChaos(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
             double scaling, Chaos.EffectBubbleSpec spec)
         {
@@ -199,7 +198,9 @@ namespace ConditioningControlPanel.Services
             b.Angle = r.Next(360);
             b._top = areaY / scaling - b.Size - 50;
             b.X = b._startX = (areaX + r.Next(50, (int)Math.Max(100, areaW - b.Size - 50))) / scaling;
-            b.Y = (areaY + areaH) / scaling;
+            b.Motion = spec.Motion == Chaos.ChaosMotion.RainDown ? BubbleMotionStyle.Rain : BubbleMotionStyle.FloatUp;
+            b._bottom = (areaY + areaH) / scaling + 50;
+            b.Y = b.Motion == BubbleMotionStyle.Rain ? areaY / scaling - b.Size : (areaY + areaH) / scaling;
             return b;
         }
 
@@ -304,7 +305,8 @@ namespace ConditioningControlPanel.Services
                 case BubbleMotionStyle.Rain:
                     Y += _speed;
                     X = _startX + offset;
-                    return Y > _bottom ? Result.Missed : Result.Alive;
+                    if (Y <= _bottom) return Result.Alive;
+                    return Spec is { IsLive: true } ? GoOff(null) : Result.Missed;
                 default:
                     Y -= _speed;
                     X = _startX + offset;
