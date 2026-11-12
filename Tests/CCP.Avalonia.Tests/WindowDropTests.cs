@@ -246,6 +246,40 @@ public sealed class WindowDropTests
         return Task.CompletedTask;
     });
 
+    // WPF player:686-742: an old video command must not overwrite a replacement transport.
+    [Theory]
+    [InlineData("audio")]
+    [InlineData("panic")]
+    [InlineData("stop")]
+    [InlineData("video")]
+    public Task DelayedVideoPlayDoesNotOverwriteReplacement(string replacement) => Run(async (shell, _, _) =>
+    {
+        var player = new EnhancementPlayerWindow(null, null); player.Show(shell);
+        var web = player.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.WebHost>("VideoBrowser")!;
+        var pending = new TaskCompletionSource<string?>(); web.ScriptInvoker = _ => pending.Task;
+        var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+        void Set(string name, object value) => typeof(EnhancementPlayerWindow).GetField(name, flags)!.SetValue(player, value);
+        var original = DeeperLocalAudio.Open; var audio = new ProbeAudio();
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
+        try
+        {
+            Set("_isVideoMode", true); Set("_videoNavigated", true); Set("_durationSec", 10d);
+            if (replacement == "audio") Set("_isPlaying", true);
+            Click(player, "BtnPlayPause");
+            if (replacement == "audio") player.OpenLocalMediaFile("/tmp/track.mp3");
+            else if (replacement == "panic") PanicSurfaces.StopAll("test");
+            else if (replacement == "stop") Click(player, "BtnStop");
+            else player.OpenLocalMediaFile("/tmp/next.mp4");
+            var status = player.FindControl<TextBlock>("TxtStatus")!.Text;
+            var playing = (bool)typeof(EnhancementPlayerWindow).GetField("_isPlaying", flags)!.GetValue(player)!;
+            pending.SetResult("ok");
+            await Task.Yield(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(status, player.FindControl<TextBlock>("TxtStatus")!.Text);
+            Assert.Equal(playing, (bool)typeof(EnhancementPlayerWindow).GetField("_isPlaying", flags)!.GetValue(player)!);
+        }
+        finally { player.Close(); DeeperLocalAudio.Open = original; }
+    });
+
     // WPF player:1325: cancel loading video and discard its outstanding time readback on audio swap.
     [Fact]
     public Task AudioSwapCancelsDelayedVideoAndItsPoll() => Run(async (shell, _, _) =>
