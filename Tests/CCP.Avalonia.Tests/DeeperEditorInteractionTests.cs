@@ -9,6 +9,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
 using ConditioningControlPanel.Models.Deeper;
 using Xunit;
@@ -141,6 +142,32 @@ public sealed class DeeperEditorInteractionTests
         Assert.Contains("ccp_editor_zoom_fit", script);
         Assert.Contains("keydown", script);
     });
+
+    // Focus inside the preview (any frame, cross-origin included): the engine's native key signal is the route.
+    [Fact]
+    public Task PreviewNativeKeyResetsTimelineZoom() => Run((w, _) =>
+    {
+        var wants = w.BrowserPreview.NativeKeyFilter;
+        Assert.NotNull(wants);
+        Assert.True(wants!(global::Avalonia.Input.Key.D0, KeyModifiers.Control));
+        Assert.True(wants(global::Avalonia.Input.Key.NumPad0, KeyModifiers.Control | KeyModifiers.Shift));
+        Assert.False(wants(global::Avalonia.Input.Key.D0, KeyModifiers.None));
+        Assert.False(wants(global::Avalonia.Input.Key.D1, KeyModifiers.Control));
+        Call(w, "SetZoom", 2d, null);
+        w.BrowserPreview.OnNativeKeyDown(global::Avalonia.Input.Key.D0, KeyModifiers.Control);
+        Assert.Equal(1d, Field(w, "_zoomFactor"));
+    });
+
+    [Fact]
+    public void NativeKeySignalTranslatesEngineKeys()
+    {
+        Assert.Equal((global::Avalonia.Input.Key.D0, KeyModifiers.Control), WebKeySignal.FromGdk(0x030, 4));
+        Assert.Equal((global::Avalonia.Input.Key.NumPad0, KeyModifiers.Control | KeyModifiers.Shift), WebKeySignal.FromGdk(0xffb0, 5));
+        Assert.Equal((global::Avalonia.Input.Key.None, KeyModifiers.Alt), WebKeySignal.FromGdk(0x031, 8));
+        Assert.Equal((global::Avalonia.Input.Key.D0, KeyModifiers.Control), WebKeySignal.FromVirtualKey(0x30, true, false, false));
+        Assert.Equal((global::Avalonia.Input.Key.NumPad0, KeyModifiers.Shift), WebKeySignal.FromVirtualKey(0x60, false, true, false));
+        Assert.Equal(global::Avalonia.Input.Key.None, WebKeySignal.FromVirtualKey(0x31, true, false, false).Item1);
+    }
 
     [Fact]
     public Task PreviewZoomMessageResetsTimelineZoom() => Run((w, _) =>

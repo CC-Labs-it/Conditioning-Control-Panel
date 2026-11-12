@@ -64,16 +64,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void TimelineZoom_KeyDown(object? sender, KeyEventArgs e)
         {
-            if ((e.KeyModifiers & KeyModifiers.Control) != 0 &&
-                (e.Key == Key.D0 || e.Key == Key.NumPad0))
+            if (IsZoomResetKey(e.Key, e.KeyModifiers))
             {
                 SetZoom(1.0);
                 e.Handled = true;
             }
         }
 
-        // Native preview keys do not bubble to Avalonia. Install after each navigation, as in
-        // EnhancementPlayerWindow.Fullscreen.cs; WPF routes preview keys at xaml.cs:5006.
+        // WPF xaml.cs:5088. Pure: the preview's native key signal calls it on the engine's input thread.
+        internal static bool IsZoomResetKey(Key key, KeyModifiers mods) =>
+            (mods & KeyModifiers.Control) != 0 && (key == Key.D0 || key == Key.NumPad0);
+
+        // Keys pressed in the preview, in any frame, never bubble to Avalonia: the engine's own input
+        // signal takes them (WebHost.NativeKeyFilter), as WPF routes preview keys at xaml.cs:5006.
+        private void HookPreviewZoomKeys()
+        {
+            BrowserPreview.NativeKeyFilter = IsZoomResetKey;
+            BrowserPreview.NativeKeyDown += (_, _) => SetZoom(1.0);
+        }
+
+        // Fallback where the engine has no key signal (WPE): a top-level page listener after each
+        // navigation, as in EnhancementPlayerWindow.Fullscreen.cs. It cannot see cross-origin frames.
         internal const string PreviewZoomScript = @"(function(){
     if(window.__ccpEditorZoomBound)return;window.__ccpEditorZoomBound=true;
     window.addEventListener('keydown',function(e){

@@ -269,6 +269,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             Closing += (_, _) => StopPart2Timer();
             Closed += (_, _) => { StopPart2Timer(); _part2Overlay?.Close(); _part2Overlay = null; };
             KeyDown += DeeperEditorWindow_KeyDown;
+            HookPreviewZoomKeys();
             Closing += Window_Closing;
 
             _validationTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(220) };
