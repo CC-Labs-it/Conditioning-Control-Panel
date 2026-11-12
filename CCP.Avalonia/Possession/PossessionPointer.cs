@@ -20,6 +20,7 @@ internal sealed class PossessionPointer
     internal Control? Hovered { get; private set; }
     internal Control? LastClicked { get; private set; }
     internal DateTime LastClickAt { get; private set; } = DateTime.MinValue;
+    internal event Action<Point, Vector>? Moved;
     internal event Action<Control?>? HoverChanged;
     internal event Action<Control>? Pressed;
 
@@ -65,6 +66,7 @@ internal sealed class PossessionPointer
                                   Velocity.Y * 0.65 + (point.Y - Position.Y) / dt * 0.35);
         Position = point;
         _lastMoveAt = now;
+        Moved?.Invoke(Position, Velocity);
         var hit = Interesting(source);
         if (ReferenceEquals(hit, Hovered)) return;
         Hovered = hit;
