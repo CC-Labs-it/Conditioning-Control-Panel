@@ -194,8 +194,17 @@ public sealed class ChaosIntroWindowTests
                 try
                 {
                     var hero = (Bitmap)w.GetLogicalDescendants().OfType<Image>().Single().Source!;
-                    // The native dimensions prove which art was decoded, independently of layout.
-                    Assert.Equal(corrupt ? 560 : 23, hero.PixelSize.Width);
+                    // Compare decoded pixels with the selected source, independently of layout.
+                    var expectedPath = corrupt
+                        ? Path.Combine(AppContext.BaseDirectory, "assets", "Chaos", "guide", "intro.png")
+                        : path;
+                    using var expected = new Bitmap(expectedPath);
+                    Assert.Equal(expected.PixelSize, hero.PixelSize);
+                    using var actualPixels = new MemoryStream();
+                    using var expectedPixels = new MemoryStream();
+                    hero.Save(actualPixels);
+                    expected.Save(expectedPixels);
+                    Assert.Equal(expectedPixels.ToArray(), actualPixels.ToArray());
                 }
                 finally { w.Close(); }
             }
