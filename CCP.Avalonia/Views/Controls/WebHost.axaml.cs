@@ -422,7 +422,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 // WebKitGTK unless WPE was chosen: the package picks WPE first, and on wpewebkit 2.54+ its adapter
                 // throws EntryPointNotFoundException in an async void, which takes the whole app down.
                 var preferGtk = LinuxChoice != "wpe";
-                native.EnvironmentRequested += (_, e) =>
+                _web.EnvironmentRequested += (_, e) =>
                 {
                     if (preferGtk && e is LinuxWpeWebViewEnvironmentRequestedEventArgs wpe) wpe.PreferWebKitGtkInstead = true;
                     // Windows: the WebView2 profile under UserData, never beside the exe (Platform/WebViewProfile).
