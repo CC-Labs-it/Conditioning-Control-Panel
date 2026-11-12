@@ -7,7 +7,6 @@
 // since a new document has no flag. The load prompt: WPF builds the WebView2 on that click; here the engine exists
 // from the start but loads nothing until asked, so the prompt stands in the slot until the first page.
 // Pop out preserves the native adapter with BeginReparenting.
-// "Enhance if possible" remains disabled without BrowserEnhanceBridge.
 
 using System;
 using Avalonia.Controls;
@@ -49,12 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Platform.WebcamTracker.Instance.StateChanged -= OnBrowserCardTrackerChanged;
                 CoreMods.ModChanged -= OnBrowserCardModChanged;
             };
-            foreach (Control c in new Control[] { ToggleEnhanceIfPossible })
-            {
-                c.IsEnabled = false;
-                c.Bind(ToolTip.TipProperty, LocBinding("exclusives_not_on_this_build"));
-                ToolTip.SetShowOnDisabled(c, true);
-            }
+            HookBrowserEnhance();
             SyncBrowserCard();
         }
 
@@ -76,7 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void SyncBrowserCard()
         {
             _browserCardSyncing = true;
-            try { ChkForceShowBambiCloud.IsChecked = CoreSettings.Current.ForceShowBambiCloud; }
+            try { ChkForceShowBambiCloud.IsChecked = CoreSettings.Current.ForceShowBambiCloud; ToggleEnhanceIfPossible.IsChecked = CoreSettings.Current.BrowserEnhanceIfPossible; }
             finally { _browserCardSyncing = false; }
             SyncBrowserMuteIcon();
             RefreshBrowserWebcamButton();
@@ -246,6 +240,5 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private void BtnPopOutBrowser_Click(object? sender, RoutedEventArgs e) => Shell?.BtnPopOutBrowser_Click(sender, e);
-        private void ToggleEnhanceIfPossible_Changed(object? sender, RoutedEventArgs e) { } // greyed: see the header
     }
 }
