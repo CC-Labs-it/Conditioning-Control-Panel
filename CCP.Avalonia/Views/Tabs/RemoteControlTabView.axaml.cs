@@ -219,9 +219,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // WPF RemoteHudWindow.cs:446: More is a signal, independent of emote debounce.
         private async void BtnRemoteMore_Click(object? sender, RoutedEventArgs e)
+            => await SendMoreAndReportAsync(TxtEmoteStatus);
+
+        internal static async Task SendMoreAndReportAsync(TextBlock status)
         {
             var sent = await Relay.Value.SendMoreSignalAsync();
-            TxtEmoteStatus.Text = sent
+            status.Text = sent
                 ? string.Format(Loc.Get("remote_hud_sent"), Loc.Get("remote_hud_more"))
                 : Loc.Get("remote_hud_not_sent");
         }

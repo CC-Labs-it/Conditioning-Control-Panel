@@ -127,6 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void ShowRemoteControlOverlay()
         {
             var r = RemoteControlTabView.Relay.Value;
+            if (Named<TextBlock>("TxtRemoteMoreStatus") is { } moreStatus) moreStatus.Text = "";
             if (LeashBrowser is { } browser) browser.IsVisible = false; // native web view airspace, WPF :904
             var text = string.IsNullOrEmpty(r.SessionCode) ? "" : $"Session: {string.Join(" ", r.SessionCode.ToCharArray())}";
             if (!string.IsNullOrEmpty(r.ConnectPin)) text += $"  PIN: {r.ConnectPin}";
@@ -243,6 +244,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             await RemoteControlTabView.Relay.Value.StopAsync();
             HideRemoteControlOverlay();
             UpdateStartButtonForRemoteControl(false);
+        }
+
+        // The overlay covers the remote tab while connected; More remains available here.
+        private async void BtnRemoteMoreOverlay_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            if (RemoteControllerConnected && Named<TextBlock>("TxtRemoteMoreStatus") is { } status)
+                await RemoteControlTabView.SendMoreAndReportAsync(status);
         }
 
         private async void BtnEmotePresetBig_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
