@@ -148,7 +148,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             "mantra" => () => { }, // Core returns this intent to the existing spoken-mantra funnel.
             "lock_once" when CoreLockCard.ShowHandler != null => () => CoreLockCard.Show(),
             "freeze_once" when CoreSubliminal.BambiFreezeProvider != null => CoreSubliminal.TriggerBambiFreeze,
-            "takeover_on" => () => Autonomy.Start(),
+            "takeover_on" => () => StartAutonomyFromUser(),
             "takeover_off" => () => Autonomy.Stop(),
             "mute" => () => ApplyVoiceMute(true),
             "unmute" => () => ApplyVoiceMute(false),

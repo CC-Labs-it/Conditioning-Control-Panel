@@ -227,7 +227,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (WindowState == WindowState.Normal)
             {
                 var recovery = _windowMinimizeRecovery.Restored();
-                if (recovery.ResumeAutonomy) Autonomy.Start();
+                if (recovery.ResumeAutonomy && !AutonomyStoppedForPanic) Autonomy.Start();
                 if (recovery.UnmuteAvatar) tube.SetWindowMute(false);
             }
         }

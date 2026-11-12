@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -90,15 +91,135 @@ public sealed class ProfileLoadedRepaintTests
                 if (!close)
                 {
                     Assert.Equal("LVL 17", shell.FindControl<TextBlock>("TxtLevelLabel")!.Text);
-                    // A later profile load remains eligible; panic invalidates only the queued work.
+                    // A request completing after panic must also leave Takeover stopped.
                     ((Action?)field.GetValue(null))?.Invoke();
                     Dispatcher.UIThread.RunJobs();
-                    Assert.True(shell.Autonomy.IsEnabled);
-                    Assert.Equal(1, starts);
+                    Assert.False(shell.Autonomy.IsEnabled);
+                    Assert.Equal(0, starts);
                 }
             }
             finally { shell.Close(); Dispatcher.UIThread.RunJobs(); }
             return Task.CompletedTask;
         });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task LateProfileDoesNotRestartUntilExplicitStart(bool voice) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var s = CoreSettings.Current;
+        s.AutonomyResumeOnStartup = false;
+        s.AutonomyModeEnabled = false;
+        s.AutonomyConsentGiven = true;
+        s.PlayerLevel = 2;
+        CoreEntitlement.HasPremiumProvider = () => true;
+        CoreEntitlement.IsFreeTodayProvider = _ => false;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show(); Dispatcher.UIThread.RunJobs();
+            s.AutonomyResumeOnStartup = true;
+            s.AutonomyModeEnabled = true;
+            Assert.True(shell.Autonomy.Start(withTimer: false));
+            shell.StopAutonomyForPanic();
+            s.PlayerLevel = 17;
+            s.PlayerXP = 23;
+            var field = typeof(AccountSeed).GetField("ProfileLoaded", BindingFlags.Static | BindingFlags.NonPublic)!;
+            ((Action?)field.GetValue(null))?.Invoke();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(shell.Autonomy.IsEnabled);
+            Assert.Equal("LVL 17", shell.FindControl<TextBlock>("TxtLevelLabel")!.Text);
+            Assert.True(s.AutonomyModeEnabled);
+            if (voice)
+            {
+                var action = typeof(MainShellWindow).GetMethod("VoiceAction", BindingFlags.Instance | BindingFlags.NonPublic)!;
+                ((Action)action.Invoke(shell, new object[] { "takeover_on" })!)();
+            }
+            else
+            {
+                var tab = shell.FindControl<Control>("BambiTakeoverTab")!;
+                tab.FindControl<Button>("BtnAutonomyStartStop")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            }
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(shell.Autonomy.IsEnabled);
+            shell.Autonomy.Stop();
+            ((Action?)field.GetValue(null))?.Invoke();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(shell.Autonomy.IsEnabled);
+        }
+        finally { shell.Close(); Dispatcher.UIThread.RunJobs(); }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PanicBlocksOtherAutomaticStarts(bool restoreWindow) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var s = CoreSettings.Current;
+        s.AutonomyResumeOnStartup = false;
+        s.AutonomyModeEnabled = false;
+        s.AutonomyConsentGiven = true;
+        s.AvatarEnabled = false;
+        CoreEntitlement.HasPremiumProvider = () => true;
+        CoreEntitlement.IsFreeTodayProvider = _ => false;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show(); Dispatcher.UIThread.RunJobs();
+            s.AutonomyResumeOnStartup = true;
+            s.AutonomyModeEnabled = true;
+            Assert.True(shell.Autonomy.Start(withTimer: false));
+            if (restoreWindow)
+            {
+                var recovery = (WindowMinimizeRecovery)typeof(MainShellWindow)
+                    .GetField("_windowMinimizeRecovery", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(shell)!;
+                recovery.Minimized(true, true, false, false);
+                typeof(MainShellWindow).GetMethod("InitializeAvatarTube", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(shell, null);
+            }
+            shell.StopAutonomyForPanic();
+            var method = restoreWindow ? "OnShellStateForTube" : "ResumeAutonomyOnStartup";
+            typeof(MainShellWindow).GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(shell, null);
+            Assert.False(shell.Autonomy.IsEnabled);
+        }
+        finally { shell.Close(); Dispatcher.UIThread.RunJobs(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task FailedUserStartKeepsPanicHold() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var s = CoreSettings.Current;
+        s.AutonomyResumeOnStartup = false;
+        s.AutonomyModeEnabled = false;
+        s.AutonomyConsentGiven = true;
+        CoreEntitlement.HasPremiumProvider = () => true;
+        CoreEntitlement.IsFreeTodayProvider = _ => false;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show(); Dispatcher.UIThread.RunJobs();
+            s.AutonomyResumeOnStartup = true;
+            s.AutonomyModeEnabled = true;
+            shell.StopAutonomyForPanic();
+            CoreEntitlement.HasPremiumProvider = () => false;
+            var action = typeof(MainShellWindow).GetMethod("VoiceAction", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            ((Action)action.Invoke(shell, new object[] { "takeover_on" })!)();
+            Assert.False(shell.Autonomy.IsEnabled);
+            CoreEntitlement.HasPremiumProvider = () => true;
+            var field = typeof(AccountSeed).GetField("ProfileLoaded", BindingFlags.Static | BindingFlags.NonPublic)!;
+            ((Action?)field.GetValue(null))?.Invoke();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(shell.Autonomy.IsEnabled);
+        }
+        finally { shell.Close(); Dispatcher.UIThread.RunJobs(); }
+        return Task.CompletedTask;
+    });
 
 }

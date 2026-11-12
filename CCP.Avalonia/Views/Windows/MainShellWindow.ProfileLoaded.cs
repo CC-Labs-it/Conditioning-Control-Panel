@@ -31,8 +31,8 @@ public partial class MainShellWindow
             if (Volatile.Read(ref _profileLoadClosed) != 0) return;
             UpdateLevelDisplay();
             App.Descent?.RequestRefresh("profile loaded");
-            // Panic cancels the queued re-arm, but the adopted profile still needs its repaint.
-            if (generation != Volatile.Read(ref _profileLoadGeneration)) return;
+            // Panic holds automatic re-arms, but the adopted profile still needs its repaint.
+            if (AutonomyStoppedForPanic || generation != Volatile.Read(ref _profileLoadGeneration)) return;
             var s = CoreSettings.Current;
             if (s.AutonomyResumeOnStartup && s.AutonomyModeEnabled && s.AutonomyConsentGiven
                 && !Autonomy.IsEnabled && AutonomyScheduler.HasEntitlement)
