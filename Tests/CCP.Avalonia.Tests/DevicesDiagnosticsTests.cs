@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -39,11 +40,22 @@ public sealed class DevicesDiagnosticsTests
                 CoreSettings.Current.WebcamConsentGiven = true;
                 CoreSettings.Current.WebcamConsentVersion = WebcamConsent.ConsentVersion;
                 WebcamTracker.SourceFactory = () => throw new System.InvalidOperationException("test camera unavailable");
-                section.FindControl<Button>("BtnWebcamDebugStart")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                for (int i = 0; i < 200 && tracker.IsStarting; i++) await Task.Delay(10);
+                var button = section.FindControl<Button>("BtnWebcamDebugStart")!;
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await Assert.IsAssignableFrom<Task>(section.WebcamDebugStartTask).WaitAsync(TimeSpan.FromSeconds(60));
                 Assert.False(tracker.IsStarting);
+                Assert.True(button.IsEnabled);
             }
-            finally { WebcamTracker.SourceFactory = oldFactory; }
+            finally
+            {
+                // Never restore the real camera factory while a timed-out start can still reach it.
+                if (section.WebcamDebugStartTask is { IsCompleted: false } pending)
+                {
+                    tracker.Stop();
+                    await pending;
+                }
+                WebcamTracker.SourceFactory = oldFactory;
+            }
             Assert.Equal("Face: — | Blinks: 0 | Gaze: —", section.FindControl<TextBlock>("TxtWebcamDebugCounters")!.Text);
             tracker.RaiseMouthForTest();
             Assert.EndsWith("Mouth-open #1", log.Text!.TrimEnd());
@@ -52,6 +64,43 @@ public sealed class DevicesDiagnosticsTests
             tracker.RaiseMouthForTest();
             Assert.Equal(before, log.Text);
 
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StartButtonWaitsForCompletionAndRecoversOnFailure(bool throws)
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            var tracker = WebcamTracker.Instance;
+            tracker.Stop();
+            CoreSettings.Current.WebcamConsentGiven = true;
+            CoreSettings.Current.WebcamConsentVersion = WebcamConsent.ConsentVersion;
+            var section = new DevicesSettingsSection();
+            var window = new Window { Content = section };
+            var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            section.StartWebcamDebug = () => completion.Task;
+            try
+            {
+                window.Show();
+                var button = section.FindControl<Button>("BtnWebcamDebugStart")!;
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var task = Assert.IsAssignableFrom<Task>(section.WebcamDebugStartTask);
+                Assert.False(task.IsCompleted);
+                Assert.False(button.IsEnabled);
+                if (throws) completion.SetException(new InvalidOperationException("test start failed"));
+                else completion.SetResult(false);
+                await task.WaitAsync(TimeSpan.FromSeconds(10));
+                Assert.True(button.IsEnabled);
+            }
+            finally
+            {
+                completion.TrySetResult(false);
+                if (section.WebcamDebugStartTask is { } task) await task;
+                window.Close();
+            }
         });
     }
 }
