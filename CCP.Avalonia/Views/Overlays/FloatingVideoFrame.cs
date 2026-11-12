@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.ComponentModel;
 using Avalonia.Threading;
 using System.Linq;
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -14,6 +15,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 internal sealed class FloatingVideoFrame
 {
     private readonly Window _window;
+    private readonly Func<(PixelPoint Position, bool Down)?>? _nativePointer;
     private readonly FloatingVideoMotion _motion;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly BeatLoop _beat;
@@ -25,9 +27,11 @@ internal sealed class FloatingVideoFrame
     private readonly Border? _frame;
     private readonly Func<bool> _audible;
     internal double MotionSpeed { get => _motion.Speed; set => _motion.Speed = value; }
-    internal FloatingVideoFrame(Window window, Func<double>? nowMs = null, Border? frame = null, Func<bool>? audible = null)
+    internal FloatingVideoFrame(Window window, Func<double>? nowMs = null, Border? frame = null, Func<bool>? audible = null,
+        Func<(PixelPoint Position, bool Down)?>? nativePointer = null)
     {
         _window = window; _frame = frame;
+        _nativePointer = nativePointer ?? (OperatingSystem.IsWindows() ? ReadNativePointer : null);
         _audible = audible ?? (() => false);
         _nowMs = nowMs ?? (() => _clock.Elapsed.TotalMilliseconds);
         var b = window.Screens.ScreenFromWindow(window)?.WorkingArea ?? new PixelRect(0, 0, 1920, 1080);
@@ -41,7 +45,7 @@ internal sealed class FloatingVideoFrame
         };
         _beat = new BeatLoop(window, _ => Tick());
         window.PointerPressed += Press; window.PointerMoved += Move; window.PointerReleased += Release;
-        window.PointerCaptureLost += (_, _) => { if (_motion.Held) _motion.Drop(); };
+        window.PointerCaptureLost += (_, _) => { if (_motion.Held && _nativePointer == null) _motion.Drop(); };
         window.Screens.Changed += DisplaysChanged;
         var settings = CoreSettings.Current;
         PropertyChangedEventHandler changed = (_, e) => { if (e.PropertyName is nameof(CoreSettings.Current.MotionLevel) or nameof(CoreSettings.Current.MandatoryVideoFloatingSpeedPercent)) Dispatcher.UIThread.Post(Refresh); };
@@ -76,16 +80,19 @@ internal sealed class FloatingVideoFrame
     {
         if (!e.GetCurrentPoint(_window).Properties.IsLeftButtonPressed) return;
         if (CompositorDrag) { _window.BeginMoveDrag(e); return; }
+        StartDrag(Pointer(e));
+        if (_nativePointer == null) e.Pointer.Capture(_window);
+    }
+    internal void StartDrag(PixelPoint p)
+    {
         _motion.Resync(_window.Position.X, _window.Position.Y,
             _window.Bounds.Width * _window.RenderScaling, _window.Bounds.Height * _window.RenderScaling, rehome: true);
-        var p = Pointer(e);
         _motion.Press(p.X, p.Y, _nowMs());
-        e.Pointer.Capture(_window);
         Refresh();
     }
     private void Move(object? sender, PointerEventArgs e)
     {
-        if (!_motion.Held) return;
+        if (!_motion.Held || _nativePointer != null) return;
         var p = Pointer(e);
         _motion.Move(p.X, p.Y, _nowMs());
         _motion.Step(0.001);
@@ -93,7 +100,7 @@ internal sealed class FloatingVideoFrame
     }
     private void Release(object? sender, PointerReleasedEventArgs e)
     {
-        if (!_motion.Held || e.InitialPressMouseButton != MouseButton.Left) return;
+        if (!_motion.Held || _nativePointer != null || e.InitialPressMouseButton != MouseButton.Left) return;
         var p = Pointer(e);
         var now = _nowMs();
         _motion.Move(p.X, p.Y, now);
@@ -114,6 +121,16 @@ internal sealed class FloatingVideoFrame
         || (_audioLit && CoreSettings.Current.MotionLevel != ConditioningControlPanel.Models.MotionLevel.Off);
     internal void Tick()
     {
+        if (_motion.Held && _nativePointer != null && _nativePointer() is { } pointer)
+        {
+            var ms = _nowMs();
+            _motion.Move(pointer.Position.X, pointer.Position.Y, ms);
+            if (!pointer.Down)
+            {
+                _motion.Step(0.001);
+                _motion.Release(ms, CoreSettings.Current.MotionLevel);
+            }
+        }
         var now = _nowMs() / 1000.0;
         var dt = Math.Clamp(now - _last, 0, 0.05);
         _lit = FloatingFrameLook.Approach(_lit, _audioLit, dt);
@@ -134,6 +151,18 @@ internal sealed class FloatingVideoFrame
         Place();
         if (!NeedsClock) _beat.Stop();
     }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint { public int X, Y; }
+    [DllImport("user32.dll")] private static extern bool GetCursorPos(out NativePoint point);
+    [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
+    [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
+    private static (PixelPoint Position, bool Down)? ReadNativePointer()
+    {
+        if (!GetCursorPos(out var point)) return null;
+        var key = PrimaryButtonKey(GetSystemMetrics(23) != 0); // SM_SWAPBUTTON, VK_RBUTTON, VK_LBUTTON
+        return (new PixelPoint(point.X, point.Y), (GetAsyncKeyState(key) & 0x8000) != 0);
+    }
+    internal static int PrimaryButtonKey(bool swapped) => swapped ? 2 : 1;
     internal static bool UsesCompositorDrag(bool linux, IPlatformHandle? handle) =>
         linux && handle != null && handle.Handle != IntPtr.Zero && handle.HandleDescriptor != "XID";
     private bool CompositorDrag => UsesCompositorDrag(OperatingSystem.IsLinux(), _window.TryGetPlatformHandle());
