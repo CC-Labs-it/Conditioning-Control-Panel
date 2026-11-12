@@ -689,8 +689,6 @@ namespace ConditioningControlPanel.Avalonia
                         Settings.Save();
                 }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "Session settings heal failed (non-fatal)"); }
-                // WPF App.xaml.cs:2587-2596: heal before this save can offer a cloud backup.
-                RecordInstallDate(Settings);
                 // WPF App.xaml.cs:2571-2577: the installer's Content Folder pick (Windows), then the custom
                 // folder's subdirs (#391), before anything resolves the assets folder.
                 Platform.InstallerAssetsPath.Apply(Settings);
@@ -701,7 +699,6 @@ namespace ConditioningControlPanel.Avalonia
                 global::ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 CorePaths.EffectiveAssetsProvider = ResolveEffectiveAssetsPath;
                 Services.Chaos.EffectPayload.Firer = FireChaosPayload;
-                LocalizationManager.Instance.SetLanguage(Settings.Current.Language);
                 // WPF App.xaml.cs:3088: a run killed mid-lockdown gets its real panic key and Strict
                 // Lock back from lockdown_recovery.json before anything reads them.
                 LockdownService.RecoverIfNeeded();
@@ -711,6 +708,9 @@ namespace ConditioningControlPanel.Avalonia
                 // recovery, which can put a controller's strict lock back first (RemoteHoldings).
                 try { ConditioningControlPanel.Services.Remote.RemoteWearer.HealOnLaunch(); }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "Remote holdings heal failed (non-fatal)"); }
+                // Save only after crash recovery has restored safety settings.
+                RecordInstallDate(Settings);
+                LocalizationManager.Instance.SetLanguage(Settings.Current.Language);
                 LockdownService.Current = new LockdownService();
                 // WPF App.xaml.cs:3295: quest credit for each completed lockdown of 20+ minutes.
                 // LastActiveDuration is set in Deactivate before the event fires.

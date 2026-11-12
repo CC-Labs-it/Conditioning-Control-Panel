@@ -55,6 +55,48 @@ public class InstallDateStartupTests
     }
 
     [Fact]
+    public async Task InstallDateSaveAfterInterruptedLockdownOffersRestoredSafetySettings()
+    {
+        var path = Path.Combine(CorePaths.UserData, "settings.json");
+        var recovery = Path.Combine(CorePaths.UserData, "lockdown_recovery.json");
+        var previousBackup = CoreSettingsHooks.CloudBackup;
+        var previousProvider = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        var offered = new TaskCompletionSource<JObject>(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            CoreSettingsHooks.CloudBackup = null;
+            CoreSettings.ServiceProvider = () => service;
+            service.Current.InstallDate = null;
+            service.Current.PanicKeyEnabled = false;
+            service.Current.StrictLockEnabled = true;
+            service.SaveImmediate(suppressCloudBackup: true);
+            File.WriteAllText(recovery, "{\"PanicKeyEnabled\":true,\"StrictLockEnabled\":false}");
+            CoreSettingsHooks.CloudBackup = () =>
+            {
+                try { offered.TrySetResult(JObject.Parse(File.ReadAllText(path))); }
+                catch (Exception ex) { offered.TrySetException(ex); }
+                return Task.CompletedTask;
+            };
+
+            LockdownService.RecoverIfNeeded();
+            AvApp.RecordInstallDate(service);
+            var backup = await offered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.True((bool)backup[nameof(AppSettings.PanicKeyEnabled)]!);
+            Assert.False((bool)backup[nameof(AppSettings.StrictLockEnabled)]!);
+            Assert.False(File.Exists(recovery));
+            Assert.NotNull(service.Current.InstallDate);
+        }
+        finally
+        {
+            CoreSettingsHooks.CloudBackup = previousBackup;
+            CoreSettings.ServiceProvider = previousProvider;
+            service.SealForReset();
+            if (File.Exists(recovery)) File.Delete(recovery);
+        }
+    }
+
+    [Fact]
     public void StartupRecordsDateOnlyOnceInSandboxSettings()
     {
         var path = Path.Combine(CorePaths.UserData, "settings.json");
