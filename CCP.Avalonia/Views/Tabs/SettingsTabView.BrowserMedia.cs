@@ -221,12 +221,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void ArmBrowserMediaRecovery()
         {
-            var seconds = BrowserMediaTakeover
-                ? (_browserMediaDuration > 0 ? Math.Min(3600, _browserMediaDuration + 15) : 3600)
+            // WPF BrowserMediaService.cs:261-274 schedules a takeover stop only for known durations.
+            // Unknown duration has only the queue recovery, and only if this session holds its slot.
+            var takeoverStop = BrowserMediaTakeover && _browserMediaDuration > 0;
+            if (!takeoverStop && !BrowserMediaOwnsSlot) return;
+            var seconds = takeoverStop
+                ? Math.Min(3600, _browserMediaDuration + 15)
                 : (_browserMediaDuration > 0 ? Math.Max(300, _browserMediaDuration + 45) : 3630);
             var delay = TimeSpan.FromSeconds(Math.Min(seconds, TimeSpan.MaxValue.TotalSeconds - 1));
             // WPF BrowserMediaService.cs:458-490 leaves earlier takeover timers alive.
-            var deadline = BrowserMediaTakeover ? BrowserMediaClock() + delay : (DateTime?)null;
+            var deadline = takeoverStop ? BrowserMediaClock() + delay : (DateTime?)null;
             if (deadline.HasValue && _browserTakeoverDeadline is DateTime earlier && earlier <= deadline.Value) return;
             CancelBrowserMediaRecovery();
             _browserTakeoverDeadline = deadline;

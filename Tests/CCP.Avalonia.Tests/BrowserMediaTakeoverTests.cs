@@ -105,6 +105,64 @@ public sealed class BrowserMediaTakeoverTests
     });
 
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AvatarLinkUnknownDurationUsesOnlySlotRecovery(bool slotAvailable) => WithDesktopBrowser(host =>
+    {
+        var tab = MainShellWindow.Current!.Named<SettingsTabView>("SettingsTab")!;
+        var clock = new BubbleCountQueueTests.Clock();
+        var scripts = new List<string>();
+        tab.BrowserMediaClock = () => clock.GetUtcNow().UtcDateTime;
+        tab.ScheduleBrowserMediaRecovery = (action, delay) =>
+            clock.CreateTimer(_ => action(), null, delay, System.Threading.Timeout.InfiniteTimeSpan);
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
+        try
+        {
+            if (!slotAvailable) LockCardWindow.ShowOnAllMonitors("obey", 1, strictMode: false, isTest: true);
+            tab.ClaimAvatarLink();
+            Assert.Equal(slotAvailable, tab.BrowserMediaOwnsSlot);
+            LockCardWindow.ForceCloseAll();
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\",\"dur\":0}");
+            for (var i = 0; i < 360; i++)
+            {
+                clock.Advance(TimeSpan.FromSeconds(10));
+                host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"progress\",\"dur\":0}");
+            }
+            Assert.True(tab.BrowserMediaPlaying);
+            Assert.True(tab.BrowserMediaTakeover);
+            Assert.Empty(scripts);
+            for (var i = 0; i < 2; i++)
+            {
+                clock.Advance(TimeSpan.FromSeconds(10));
+                host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"progress\",\"dur\":0}");
+            }
+            clock.Advance(TimeSpan.FromSeconds(10) - TimeSpan.FromTicks(1));
+            Assert.True(tab.BrowserMediaPlaying);
+            Assert.Empty(scripts);
+            clock.Advance(TimeSpan.FromTicks(1));
+            Assert.Equal(!slotAvailable, tab.BrowserMediaPlaying);
+            if (slotAvailable)
+                Assert.Equal(new[] { SettingsTabView.BrowserMediaRecoveryScript }, scripts);
+            else
+            {
+                Assert.Empty(scripts);
+                host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"progress\",\"dur\":30}");
+                for (var i = 0; i < 4; i++)
+                {
+                    clock.Advance(TimeSpan.FromSeconds(10));
+                    host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"progress\",\"dur\":30}");
+                }
+                clock.Advance(TimeSpan.FromSeconds(5) - TimeSpan.FromTicks(1));
+                Assert.True(tab.BrowserMediaPlaying);
+                clock.Advance(TimeSpan.FromTicks(1));
+                Assert.False(tab.BrowserMediaPlaying);
+                Assert.Equal(new[] { SettingsTabView.BrowserMediaRecoveryScript }, scripts);
+            }
+        }
+        finally { LockCardWindow.ForceCloseAll(); host.ScriptInvoker = null; }
+    });
+
+    [Theory]
     [InlineData(300, 45)]
     [InlineData(5, 30)]
     public void AvatarLinkDurationChangesKeepEarliestHardStop(double nextDuration, int expectedSeconds) => WithDesktopBrowser(host =>
