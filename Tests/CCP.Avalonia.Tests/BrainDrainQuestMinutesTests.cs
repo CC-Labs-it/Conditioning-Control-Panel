@@ -105,6 +105,55 @@ public class BrainDrainQuestMinutesTests
         }
     });
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void EndingPulsePreservesCreditWhenAnotherOwnerRuns(bool remote) =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldQuests = App.Quests;
+        var oldSessions = App.Sessions;
+        var oldStart = CoreEngine.StartBrainDrain;
+        var oldStop = CoreEngine.StopBrainDrain;
+        var dir = Directory.CreateTempSubdirectory("ccp-brain-owner-").FullName;
+        using var quests = new QuestService(null, dir);
+        var quest = new ActiveQuest("soft_static_d");
+        quests.Progress.DailyQuests = new List<ActiveQuest> { quest };
+        var settings = new SettingsService();
+        settings.Current.BrainDrainEnabled = true;
+        settings.Current.FlashEnabled = false;
+        CoreSettings.ServiceProvider = () => settings;
+        App.Quests = quests;
+        App.Sessions = null;
+        try
+        {
+            CoreEngine.Stop();
+            RemoteCommands.StopOverlays();
+            App.WireBrainDrainQuestMinutes();
+            if (remote) RemoteCommands.EnsureOverlayRunning();
+            else CoreEngine.Start();
+            PinkFilterOverlay.PulseHold = true;
+            App.SampleBrainDrainQuestMinutes(TimeSpan.Zero);
+            PinkFilterOverlay.PulseHold = false;
+            App.SampleBrainDrainQuestMinutes(TimeSpan.FromMinutes(2));
+            Assert.Equal(2, quest.CurrentProgress);
+        }
+        finally
+        {
+            PinkFilterOverlay.PulseHold = false;
+            CoreEngine.Stop();
+            RemoteCommands.StopOverlays();
+            RemoteCommands.ReleaseOverlayStop();
+            App.StopBrainDrainQuestMinutes();
+            CoreEngine.StartBrainDrain = oldStart;
+            CoreEngine.StopBrainDrain = oldStop;
+            CoreSettings.ServiceProvider = oldSettings;
+            App.Quests = oldQuests;
+            App.Sessions = oldSessions;
+            try { Directory.Delete(dir, true); } catch { }
+        }
+    });
+    [Theory]
     [InlineData(false, 2)]
     [InlineData(true, 0)]
     public void PresetEnablingBrainDrainCreditsOnlyAVisualRun(bool audioOnly, int expected) =>

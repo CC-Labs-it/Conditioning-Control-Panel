@@ -42,7 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             get => _pulseHold;
             set
             {
-                if (_pulseHold && !value) App.ResetBrainDrainQuestSample();
+                if (_pulseHold && !value) App.ResetBrainDrainQuestSampleAfterPulse();
                 _pulseHold = value;
             }
         }
