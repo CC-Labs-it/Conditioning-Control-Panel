@@ -101,6 +101,9 @@ namespace ConditioningControlPanel.Services
             _library = library ?? LocalLibrary;
         }
 
+        /// <summary>The head may queue a trigger behind another fullscreen interaction.</summary>
+        public Func<Action, bool>? DeferTrigger { get; set; }
+
         public bool IsRunning => _running;
         /// <summary>A video is in pre-roll or on screen (WPF <c>_videoPlaying</c>).</summary>
         public bool IsPlaying => _playing;
@@ -318,6 +321,7 @@ namespace ConditioningControlPanel.Services
         /// <paramref name="path"/> plays that clip instead of a pick (WPF PlaySpecificVideo).</summary>
         public bool Trigger(bool? strictOverride = null, string? path = null)
         {
+            if (DeferTrigger?.Invoke(() => Trigger(strictOverride, path)) == true) return true;
             if (_playing) return false;
             path ??= PickNext();
             if (path == null)

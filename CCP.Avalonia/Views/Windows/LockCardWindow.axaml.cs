@@ -1155,38 +1155,52 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static void PostNext(bool isTest)
         {
             var gen = CloseGeneration;
-            Dispatcher.UIThread.Post(() => { if (gen == CloseGeneration) RequestNext(isTest); });
+            void Request() { if (gen == CloseGeneration) EnqueueOrRun("card", () => ShowNext(isTest)); }
+            if (Dispatcher.UIThread.CheckAccess()) Request(); else Dispatcher.UIThread.Post(Request);
         }
 
-        // WPF InteractionQueueService.TryStart keeps at most one pending lock card. Like the
-        // bubble-count scheduler's QueuePoll, retry on the UI thread while a fullscreen interaction owns it.
+        // WPF InteractionQueueService.TryStart: one pending request per type, in request order.
         private static DispatcherTimer? _pendingTimer;
-        private static bool _pendingTest;
+        private static readonly Queue<(string Type, Action Run)> _pending = new();
+        private static bool _replaying;
 
         private static bool OtherInteractionActive => IsAnyOpen() || PopQuizWindow.IsAnyOpen()
             || CoreEngine.Video?.IsPlaying == true || CoreEngine.BubbleCount?.IsBusy == true
             || Overlays.MandatoryVideoOverlay.Instance.Messages.Count != 0;
 
-        private static void RequestNext(bool isTest)
+        internal static bool DeferVideo(Action run) => Dispatcher.UIThread.Invoke(() => Defer("video", run));
+        internal static bool DeferBubble(Action run) => Dispatcher.UIThread.Invoke(() => Defer("bubble", run));
+
+        private static bool Defer(string type, Action run)
         {
-            if (_pendingTimer != null) return; // WPF suppresses duplicate pending lock cards
-            if (!OtherInteractionActive) { ShowNext(isTest); return; }
-            _pendingTest = isTest;
-            _pendingTimer = new DispatcherTimer { Interval = BubbleCountScheduler.QueuePoll };
-            _pendingTimer.Tick += (_, _) => RetryPendingCard();
-            _pendingTimer.Start();
+            if (_replaying || (!OtherInteractionActive && _pending.Count == 0)) return false;
+            if (!_pending.Any(item => item.Type == type)) _pending.Enqueue((type, run));
+            if (_pendingTimer == null)
+            {
+                _pendingTimer = new DispatcherTimer { Interval = BubbleCountScheduler.QueuePoll };
+                _pendingTimer.Tick += (_, _) => RetryPendingCard();
+                _pendingTimer.Start();
+            }
+            return true;
+        }
+
+        private static void EnqueueOrRun(string type, Action run)
+        {
+            if (!Defer(type, run)) run();
         }
 
         internal static void RetryPendingCard()
         {
-            if (_pendingTimer == null || OtherInteractionActive) return;
-            var isTest = _pendingTest;
-            DropPendingCard();
-            ShowNext(isTest);
+            if (_pending.Count == 0 || OtherInteractionActive) return;
+            var item = _pending.Dequeue();
+            if (_pending.Count == 0) { _pendingTimer?.Stop(); _pendingTimer = null; }
+            try { _replaying = true; item.Run(); }
+            finally { _replaying = false; }
         }
 
         private static void DropPendingCard()
         {
+            _pending.Clear();
             _pendingTimer?.Stop();
             _pendingTimer = null;
         }

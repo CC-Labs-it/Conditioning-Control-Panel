@@ -565,6 +565,7 @@ namespace ConditioningControlPanel.Avalonia
                 CoreEngine.PopQuiz = Views.Windows.PopQuizHost.Instance.Scheduler;
                 // Mandatory video: Core schedules, the overlay plays (WPF App.Video).
                 CoreEngine.Video = Views.Overlays.MandatoryVideoOverlay.Instance.Scheduler;
+                CoreEngine.Video.DeferTrigger = Views.Windows.LockCardWindow.DeferVideo;
                 CoreEngine.BubbleCount = Views.Windows.BubbleCountHost.Instance.Scheduler;
 
                 await step(0.4, "Initializing flash service...");

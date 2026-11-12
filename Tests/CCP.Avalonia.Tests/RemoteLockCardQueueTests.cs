@@ -27,6 +27,20 @@ public sealed class RemoteLockCardQueueTests
         public void ShowMessage(string text, int ms, Action then) { }
         public void CloseAll() { }
         public double LastVideoDurationSeconds => 0;
+        public bool DeferTrigger(Action trigger) => LockCardWindow.DeferBubble(trigger);
+    }
+
+    [Fact]
+    public async Task QueueTestRestoresTheFlashScheduler()
+    {
+        var wasRunning = CoreFlash.IsRunning;
+        try
+        {
+            CoreFlash.Start();
+            await RemoteCardWaitsForCardVideoAndBubbleCountAndTeardownDropsIt();
+            Assert.True(CoreFlash.IsRunning);
+        }
+        finally { if (wasRunning) CoreFlash.Start(); else CoreFlash.Stop(); }
     }
 
     [Fact]
@@ -39,7 +53,9 @@ public sealed class RemoteLockCardQueueTests
         var s = CoreSettings.Current;
         var saved = (s.LockCardPhrases, s.LockCardStrict, CoreLockCard.ShowHandler, CoreLockCard.CloseAllHandler,
             CoreEngine.Video, CoreEngine.BubbleCount);
-        var video = new MandatoryVideoScheduler(new VideoHost());
+        var flashWasRunning = CoreFlash.IsRunning;
+        var video = new MandatoryVideoScheduler(new VideoHost(), library: () => new[] { "/test/clip.mp4" })
+            { DeferTrigger = LockCardWindow.DeferVideo };
         var bubbles = new BubbleCountScheduler(new BubbleHost());
         try
         {
@@ -81,6 +97,53 @@ public sealed class RemoteLockCardQueueTests
             Assert.True(LockCardWindow.IsAnyOpen());
             CloseCard();
 
+            // Video then card wait behind a card and replay in request order.
+            RemoteCard();
+            Assert.Null(RemoteCommands.Execute("trigger_video", null));
+            RemoteCard();
+            Assert.False(video.IsPlaying);
+            CloseCard();
+            LockCardWindow.RetryPendingCard();
+            Assert.True(video.IsPlaying);
+            Assert.False(LockCardWindow.IsAnyOpen());
+            video.Stop();
+            LockCardWindow.RetryPendingCard();
+            Assert.True(LockCardWindow.IsAnyOpen());
+            CloseCard();
+
+            // Card then video wait behind a video, preserving the reverse order too.
+            Assert.True(video.Trigger(path: "/test/clip.mp4"));
+            RemoteCard();
+            Assert.Null(RemoteCommands.Execute("trigger_video", null));
+            video.Stop();
+            LockCardWindow.RetryPendingCard();
+            Assert.True(LockCardWindow.IsAnyOpen());
+            Assert.False(video.IsPlaying);
+            CloseCard();
+            LockCardWindow.RetryPendingCard();
+            Assert.True(video.IsPlaying);
+            video.Stop();
+
+            // Bubble count and video share that same pending order.
+            RemoteCard();
+            bubbles.Trigger(forceTest: true);
+            Assert.Null(RemoteCommands.Execute("trigger_video", null));
+            Assert.False(bubbles.IsBusy);
+            CloseCard();
+            LockCardWindow.RetryPendingCard();
+            Assert.True(bubbles.IsBusy);
+            Assert.False(video.IsPlaying);
+            bubbles.ForceCleanup();
+            LockCardWindow.RetryPendingCard();
+            Assert.True(video.IsPlaying);
+            video.Stop();
+
+            RemoteCard();
+            Assert.Null(RemoteCommands.Execute("trigger_video", null));
+            CoreLockCard.CloseAll();
+            LockCardWindow.RetryPendingCard();
+            Assert.False(video.IsPlaying);
+
             Assert.True(video.Trigger(path: "/test/clip.mp4"));
             RemoteCard();
             CoreLockCard.CloseAll();
@@ -93,6 +156,7 @@ public sealed class RemoteLockCardQueueTests
             LockCardWindow.ForceCloseAll();
             video.Stop();
             bubbles.ForceCleanup();
+            if (flashWasRunning) CoreFlash.Start(); else CoreFlash.Stop();
             (s.LockCardPhrases, s.LockCardStrict, CoreLockCard.ShowHandler, CoreLockCard.CloseAllHandler,
                 CoreEngine.Video, CoreEngine.BubbleCount) = saved;
         }
