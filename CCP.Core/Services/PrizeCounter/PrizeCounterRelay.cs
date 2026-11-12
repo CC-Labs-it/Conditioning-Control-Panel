@@ -129,7 +129,7 @@ public sealed class PrizeCounterRelay
             catch (HttpRequestException ex)
             {
                 // Never reached the server: once more with the same idem, which the receipt table replays.
-                App.Logger?.Debug("PrizeCounter relay {Op} network failure (attempt {N}): {E}", op, attempt + 1, ex.Message);
+                Serilog.Log.Debug("PrizeCounter relay {Op} network failure (attempt {N}): {E}", op, attempt + 1, ex.Message);
             }
         }
         return Refusal("offline");
@@ -172,7 +172,7 @@ public sealed class PrizeCounterRelay
     private void Adopt(string account, bool fromBuy, int sp)
     {
         try { _adoptSp?.Invoke(account, fromBuy, sp); }
-        catch (Exception ex) { App.Logger?.Debug("PrizeCounter adopt sp failed: {E}", ex.Message); }
+        catch (Exception ex) { Serilog.Log.Debug("PrizeCounter adopt sp failed: {E}", ex.Message); }
     }
 
     private void ApplyPrizes(string sentFor, JToken? prizes)
@@ -181,7 +181,7 @@ public sealed class PrizeCounterRelay
             || p["grants"] is not JArray list) return;
         var grants = list.Where(g => g.Type == JTokenType.String).Select(g => (string)g!).ToArray();
         try { _applyPrizes(sentFor, rev.Value<long>(), grants); }
-        catch (Exception ex) { App.Logger?.Debug("PrizeCounter apply prizes failed: {E}", ex.Message); }
+        catch (Exception ex) { Serilog.Log.Debug("PrizeCounter apply prizes failed: {E}", ex.Message); }
     }
 
     /// <summary>A buy receipt landed (ok:true). The app sets this to the feature day log's <c>e_shop</c>;
@@ -191,7 +191,7 @@ public sealed class PrizeCounterRelay
     private void NoteBuyLanded()
     {
         try { BuyLanded?.Invoke(); }
-        catch (Exception ex) { App.Logger?.Debug("PrizeCounter buy-landed sink failed: {E}", ex.Message); }
+        catch (Exception ex) { Serilog.Log.Debug("PrizeCounter buy-landed sink failed: {E}", ex.Message); }
     }
 
     private (string UnifiedId, string Token)? SafeIdentity()
