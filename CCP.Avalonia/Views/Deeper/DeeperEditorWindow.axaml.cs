@@ -890,7 +890,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     _playLocalPreviewOnce = false;
                     var position = Math.Clamp(double.IsFinite(_panicStoppedVideoTime) ? _panicStoppedVideoTime : 0, 0, dur);
                     var seek = position.ToString("R", CultureInfo.InvariantCulture);
-                    _ = BrowserPreview.InvokeScriptAsync(DeeperPreview.Invoke($"l.currentTime={seek};l.play();", scrollIntoView: true));
+                    await BrowserPreview.InvokeScriptAsync(DeeperPreview.Invoke($"l.currentTime={seek};l.play();", scrollIntoView: true));
+                    return; // This poll read the position before the recovery seek.
                 }
                 if (playing != _isPlaying)
                 {
@@ -1263,6 +1264,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             frac = Math.Clamp(frac, 0, 1);
             _currentSeconds = frac * _totalSeconds;
+            if (_totalSeconds > 0 && (_panicStoppedLocalVideo != null || _playLocalPreviewOnce))
+                _panicStoppedVideoTime = _currentSeconds;
             TxtCurrentTime.Text = FormatTime(_currentSeconds);
             if (_browserNavigated && _totalSeconds > 0)
             {

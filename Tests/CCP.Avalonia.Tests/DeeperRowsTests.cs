@@ -230,6 +230,57 @@ public sealed class DeeperRowsTests
         finally { editor.Close(); Directory.Delete(dir, true); }
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task SeekAroundRecoveryPreservesTheRequestedPosition(bool seekAfterPlay) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("ccp-panic-seek-").FullName;
+        var path = Path.Combine(dir, "clip.mp4");
+        File.WriteAllBytes(path, new byte[16]);
+        var scripts = new List<string>();
+        var editor = new DeeperEditorWindow(new Enhancement { MediaType = MediaTypes.Video, MediaSource = path }, null);
+        editor.BrowserPreview.ScriptInvoker = js =>
+        {
+            scripts.Add(js);
+            return Task.FromResult<string?>(js.Contains("l.currentTime+") ? "0|10|0" : "ok");
+        };
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var poll = typeof(DeeperEditorWindow).GetMethod("PollBrowserTimeAsync", flags)!;
+        var timer = (DispatcherTimer)typeof(DeeperEditorWindow).GetField("_playheadTimer", flags)!.GetValue(editor)!;
+        try
+        {
+            editor.Show();
+            Dispatcher.UIThread.RunJobs();
+            timer.Stop();
+            await (Task)poll.Invoke(editor, null)!; // Learn the clip duration.
+            Invoke(editor, "OnBrowserTimeChanged", 3.0);
+            PanicSurfaces.All.Single(s => s.Id == "deeper-editor-audio").Stop(null);
+            scripts.Clear();
+
+            if (!seekAfterPlay) Invoke(editor, "SeekToFraction", 0.7);
+            Assert.DoesNotContain(scripts, js => js.Contains("l.play();"));
+            Click(editor.BtnPlayPause);
+            timer.Stop();
+            if (seekAfterPlay) Invoke(editor, "SeekToFraction", 0.7);
+            Assert.Equal("0:07", editor.TxtCurrentTime.Text);
+            scripts.Clear();
+            await (Task)poll.Invoke(editor, null)!;
+            Assert.Contains(scripts, js => js.Contains("l.currentTime=7;l.play();"));
+            Assert.Equal("0:07", editor.TxtCurrentTime.Text);
+
+            // Another panic before the next time report must retain the user's seek.
+            PanicSurfaces.All.Single(s => s.Id == "deeper-editor-audio").Stop(null);
+            Click(editor.BtnPlayPause);
+            timer.Stop();
+            scripts.Clear();
+            await (Task)poll.Invoke(editor, null)!;
+            Assert.Contains(scripts, js => js.Contains("l.currentTime=7;l.play();"));
+        }
+        finally { editor.Close(); Directory.Delete(dir, true); }
+    });
+
     [Fact]
     public Task PanicStopsLocalAudioEvenWhenTheEditorThinksItIsPaused() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
