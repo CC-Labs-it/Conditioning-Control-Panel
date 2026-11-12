@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
@@ -12,6 +13,7 @@ using Avalonia.Platform;
 using Avalonia.Media;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Leash;
 using ConditioningControlPanel;
@@ -53,6 +55,63 @@ public class RemoteHudTests
         await relay.PollOnceAsync();
         return relay;
     }
+
+    [Fact]
+    public Task Hud_motion_uses_the_window_beat_and_stops_when_disconnected() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var server = new FakeRelay();
+        using var relay = await Connected(server, _ => { });
+        var clock = new Clock();
+        var hud = new RemoteHudWindow(() => relay, () => false, () => null)
+        { Clock = clock, Motion = () => MotionLevel.Full, AmbientMotion = () => true };
+        try
+        {
+            hud.Refresh();
+            var loop = Assert.Single(BeatLoop.Running.Where(loop => TopLevel.GetTopLevel(loop.Owner) == hud));
+            Assert.True(loop.OnFrameBeat);
+            clock.Now = clock.Now.AddMilliseconds(90);
+            BeatLoop.StepAll();
+            Assert.Equal(.5, hud.Opacity, 2);
+            hud.WindowState = WindowState.Minimized;
+            Assert.False(loop.IsTicking);
+            hud.WindowState = WindowState.Normal;
+            Assert.True(loop.OnFrameBeat);
+            hud.NoteAction("show_spiral");
+            clock.Now = clock.Now.AddMilliseconds(84);
+            BeatLoop.StepAll();
+            Assert.Equal(1.07, hud.PillScale, 2);
+            await relay.StopAsync();
+            hud.Refresh();
+            Assert.False(loop.IsRunning);
+            Assert.DoesNotContain(loop, BeatLoop.Running);
+        }
+        finally { hud.Dispose(); await relay.StopAsync(); }
+    });
+
+    [Fact]
+    public Task Hud_one_shot_motion_releases_the_beat_after_the_fade() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var server = new FakeRelay();
+        using var relay = await Connected(server, _ => { });
+        var clock = new Clock();
+        var hud = new RemoteHudWindow(() => relay, () => false, () => null)
+        { Clock = clock, Motion = () => MotionLevel.Full, AmbientMotion = () => false };
+        try
+        {
+            hud.Refresh();
+            var loop = Assert.Single(BeatLoop.Running.Where(loop => TopLevel.GetTopLevel(loop.Owner) == hud));
+            clock.Now = clock.Now.AddMilliseconds(180);
+            BeatLoop.StepAll();
+            Assert.Equal(1, hud.Opacity);
+            Assert.False(loop.IsRunning);
+            hud.NoteAction("show_spiral");
+            Assert.True(loop.IsRunning);
+            hud.Close();
+            Assert.False(loop.IsRunning);
+            Assert.DoesNotContain(loop, BeatLoop.Running);
+        }
+        finally { hud.Dispose(); await relay.StopAsync(); }
+    });
 
     [Fact]
     public Task Motion_tracks_commands_connection_and_reduced_motion() => AvaloniaTestDispatcher.RunAsync(async () =>
