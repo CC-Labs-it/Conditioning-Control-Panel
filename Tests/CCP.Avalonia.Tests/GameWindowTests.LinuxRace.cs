@@ -11,7 +11,6 @@ using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
-
 /// <summary>B2 (#3702) step 3: the Linux race on the owned shell (LinuxRaceHost), /bin/cat standing in for Electron.
 /// The unshown race window keeps the Glassroad session; the shell owns focus, Escape and its process group.</summary>
 public sealed partial class GameWindowTests
@@ -42,7 +41,6 @@ public sealed partial class GameWindowTests
             Dispatcher.UIThread.RunJobs();
         }
     });
-
     [Fact]
     public void LinuxShell_SessionRunsInTheUnshownWindow_RoomInitPipeAndExit() => RunShellRace((_, w, host, p, o) =>
     {
@@ -65,7 +63,6 @@ public sealed partial class GameWindowTests
         Assert.Null(LinuxRaceHost.Current);
         Assert.True(o.WaitForExit(5000));
     }, room: "abcdef123456");
-
     [Theory, InlineData(0), InlineData(1), InlineData(2)]
     public void LinuxShell_StartFailureShowsTheCardSayingSo(int mode) => RunGlassroad((_, _, _) =>
     {
@@ -91,7 +88,6 @@ public sealed partial class GameWindowTests
         }
         finally { GameWindow.LaunchRaceShell = oldLaunch; }
     });
-
     [Fact]   // P2 (r72): the reader kills for a failed start, then the writer's posted Dispose runs first
     public void LinuxShell_StartFailureSurvivesTheWriterDisposingFirst() => RunShellRace((_, w, host, _, o) =>
     {
@@ -100,7 +96,6 @@ public sealed partial class GameWindowTests
         Assert.NotSame(w, card); Assert.True(o.WaitForExit(5000));
         Assert.Equal(Loc.Get("rt_engine_start_failed"), card.RaceStatus.Text);
     });
-
     /// <summary>P1: after the panic watchdog killed the race (before the reader's Dispose ran), the press the recovered UI
     /// runs, from the X11 listener or queued from the shell pipe, is a full panic: never a pause for a dead race, no exit rung.</summary>
     [Theory, InlineData(true), InlineData(false)]
@@ -132,7 +127,6 @@ public sealed partial class GameWindowTests
         }
         finally { (PanicSurfaces.All, ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.Teardown) = (surfaces, watchdog); Dispatcher.UIThread.RunJobs(); }
     });
-
     [Fact]
     public void LinuxShell_WaylandEscapePausesThenPanicsWithXWaylandListening()
     {
@@ -158,14 +152,9 @@ public sealed partial class GameWindowTests
             Assert.False(GameWindow.IsAnyOpen());
         }, panic: _ => main!.HandlePanicKeyPress(now.AddMilliseconds(100 * press++)), listening: true);
     }
-
-    [Theory]
-    [InlineData("wayland", "F12", true, true, true)]
-    [InlineData("wayland", "Pause", true, true, true)]
-    [InlineData(null, "F12", true, true, true)]
-    [InlineData("x11", "F12", true, true, false)]
-    [InlineData("x11", "F12", false, true, true)]
-    [InlineData("x11", "Escape", false, true, false)]
+    [Theory, InlineData("wayland", "F12", true, true, true), InlineData("wayland", "Pause", true, true, true)]
+    [InlineData(null, "F12", true, true, true), InlineData("x11", "F12", true, true, false)]
+    [InlineData("x11", "F12", false, true, true), InlineData("x11", "Escape", false, true, false)]
     [InlineData("wayland", "F12", false, false, false)]   // a disabled panic key rejects nothing
     public void LinuxShell_UnsupportedPanicKeyFailsClosed(string? backend, string key, bool listening, bool enabled, bool closed) => RunShellRace((_, _, host, _, o) =>
     {
@@ -176,7 +165,17 @@ public sealed partial class GameWindowTests
         if (closed) { Assert.True(o.WaitForExit(5000)); Assert.Null(LinuxRaceHost.Current); }
         else { Assert.False(o.HasExited); Assert.Same(host, LinuxRaceHost.Current); }
     }, listening: listening);
-
+    [Theory, InlineData(true), InlineData(false)]
+    public void LinuxShell_LeashRequiresPanicRouteEvenWhenPanicIsOff(bool initiallyLeashed) => RunShellRace((_, _, host, _, o) =>
+    {
+        var old = ConditioningControlPanel.Avalonia.Platform.LeashHead.Service; var svc = new ConditioningControlPanel.Services.Leash.LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+        try {
+            ConditioningControlPanel.Avalonia.Platform.LeashHead.Service = svc; (CoreSettings.Current.PanicKey, CoreSettings.Current.PanicKeyEnabled) = ("F12", false);
+            if (initiallyLeashed) { svc.ApplyBlock(LeashHeadTests.BlockWithPunishment()); } host.ReadFrame(new JObject { ["type"] = "shell-loaded", ["displayBackend"] = "x11" }); Dispatcher.UIThread.RunJobs();
+            if (!initiallyLeashed) { Assert.False(o.HasExited); svc.ApplyBlock(LeashHeadTests.BlockWithPunishment()); host.CheckPanicKey(); }
+            Assert.True(System.Threading.SpinWait.SpinUntil(() => { Dispatcher.UIThread.RunJobs(); return o.HasExited; }, 8000)); Assert.Null(LinuxRaceHost.Current);
+        } finally { ConditioningControlPanel.Avalonia.Platform.LeashHead.Service = old; }
+    }, listening: false);
     [Fact]
     public void LinuxShell_ReaderEscapeWatchdogKillsWhileUiIsBlocked()
     {
@@ -203,7 +202,6 @@ public sealed partial class GameWindowTests
             finally { ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.Teardown = teardown; Dispatcher.UIThread.RunJobs(); }
         }, panic: _ => { handled++; atPanic = LinuxRaceHost.Current; });
     }
-
     [Fact]
     public void LinuxShell_LaunchUrlTravelsOnStdinAndNotInProcessArguments() => RunGlassroad((_, _, _) =>
     {
@@ -229,7 +227,6 @@ public sealed partial class GameWindowTests
         }
         finally { host?.Dispose(); System.IO.Directory.Delete(dir, true); }
     });
-
     [Fact]
     public void LinuxShell_PanicKillsExactShellAndItsProcessGroup() => RunGlassroad((_, _, _) =>
     {

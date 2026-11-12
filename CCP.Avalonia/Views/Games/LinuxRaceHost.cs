@@ -65,7 +65,7 @@ internal sealed class LinuxRaceHost : IDisposable
         _x11Listening = x11Listening ?? (() => Platform.X11PanicKey.IsListening && Platform.X11PanicKey.BoundKeycode != 0);
         _panic = panic ?? (now => Shell()?.HandlePanicKeyPress(now));
         _watch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-        _watch.Tick += (_, _) => { if (UnsupportedPanicKey) Dispose(); };
+        _watch.Tick += (_, _) => CheckPanicKey();
         _watch.Start(); Current = this;
     }
     internal LinuxRaceHost StartReading()
@@ -88,8 +88,9 @@ internal sealed class LinuxRaceHost : IDisposable
         _ = Task.Run(async () => { try { var b = new char[1024]; while (await _process.StandardError.ReadAsync(b, 0, b.Length) != 0) { } } catch { } });
         return this;
     }
-    // A non-Escape key needs a live X11 listener (WPF MainWindow.xaml.cs:334-337 installs the global hook).
-    private bool UnsupportedPanicKey => _backendKnown && CoreSettings.Current.PanicKeyEnabled && CoreSettings.Current.PanicKey != "Escape" && !(_displayBackend == "x11" && _x11Listening());
+    internal void CheckPanicKey() { if (UnsupportedPanicKey) Dispose(); }
+    // A non-Escape key needs X11 for panic or leash safety (WPF MainWindow.Leash.cs:402-409, 432-437).
+    private bool UnsupportedPanicKey => _backendKnown && MainShellWindow.PanicRouteWanted && CoreSettings.Current.PanicKey != "Escape" && !(_displayBackend == "x11" && _x11Listening());
     // One panic source per session, never both: XInput2 raw events reach the listener AND an X11 shell, on separate
     // channels, so no time window can pair them. The launch fixes the backend; a page reporting another hands it to the shell.
     private bool X11Source => _launchBackend == "x11" && (_displayBackend is null or "x11") && _x11Listening() && CoreSettings.Current.PanicKey == "Escape";
