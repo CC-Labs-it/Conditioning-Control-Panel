@@ -132,6 +132,25 @@ public class HomeBrowserEnhanceTests
     });
 
     [Fact]
+    public void EnhancementCleanupStopsPlayingAudio()
+    {
+        var previous = CoreAudio.PlayStoppableProvider;
+        var path = Path.GetTempFileName();
+        var stops = 0;
+        try
+        {
+            CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => () => stops++;
+            using var source = new WebHostVideoTimeSource(new WebHost());
+            var dispatcher = new BrowserEnhancementDispatcher();
+            dispatcher.DispatchAsync(new PlayAudioAction { Path = path, Volume = 50 },
+                new EnhancementDispatchContext(new Enhancement(), source, 0, null)).GetAwaiter().GetResult();
+            Assert.IsAssignableFrom<IEnhancementRunCleanup>(dispatcher).ResetOverlayBands();
+            Assert.Equal(1, stops);
+        }
+        finally { CoreAudio.PlayStoppableProvider = previous; File.Delete(path); }
+    }
+
+    [Fact]
     public void WebcamAdapterForwardsUntilDisposed() => AvaloniaTestDispatcher.Run(() =>
     {
         var camera = new BrowserEnhancementWebcam();

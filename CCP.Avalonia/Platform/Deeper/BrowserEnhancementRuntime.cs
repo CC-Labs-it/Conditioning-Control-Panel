@@ -10,8 +10,37 @@ using ConditioningControlPanel.Services.Deeper;
 namespace ConditioningControlPanel.Avalonia.Platform.Deeper;
 
 // WPF RealActionDispatcher: the head supplies the actual effects and playback commands.
-internal sealed class BrowserEnhancementDispatcher : IActionDispatcher
+internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhancementRunCleanup
 {
+    private readonly object _audioGate = new();
+    private readonly HashSet<Action> _audioStops = new();
+    private bool _retired;
+
+    // EnhancementEngine.Stop calls this on unbind and panic.
+    public void ResetOverlayBands()
+    {
+        Action[] stops;
+        lock (_audioGate) { _retired = true; stops = _audioStops.ToArray(); _audioStops.Clear(); }
+        foreach (var stop in stops) { try { stop(); } catch { } }
+    }
+    public void StopOneShotFlashes() { }
+    public void StopOneShotSubliminals() { }
+
+    private void PlayAudio(string path, float volume)
+    {
+        lock (_audioGate)
+        {
+            if (_retired || CoreAudio.PlayStoppableProvider == null) return;
+            Action? stop = null;
+            bool finished = false;
+            stop = CoreAudio.PlayStoppable(path, volume, "deeper", onFinished: () =>
+            {
+                lock (_audioGate) { finished = true; if (stop != null) _audioStops.Remove(stop); }
+            });
+            if (!finished) _audioStops.Add(stop);
+        }
+    }
+
     // Do not claim a match is active when this head cannot run its effects.
     internal static bool Supports(Enhancement enhancement)
     {
@@ -37,7 +66,7 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher
                 break;
             case PlayAudioAction audio when !string.IsNullOrEmpty(audio.Path):
                 var path = Path.IsPathRooted(audio.Path) ? audio.Path : Path.Combine(CorePaths.EffectiveAssets, audio.Path);
-                if (File.Exists(path)) CoreAudio.PlayOneShot(path, Math.Clamp(audio.Volume / 100f, 0f, 1f), "deeper");
+                if (File.Exists(path)) PlayAudio(path, Math.Clamp(audio.Volume / 100f, 0f, 1f));
                 break;
             case ScreenShakeAction shake: Views.Deeper.ScreenShake.Shake(shake.Intensity, shake.DurationMs); break;
             case TriggerHapticAction haptic: await Haptic(haptic); break;
