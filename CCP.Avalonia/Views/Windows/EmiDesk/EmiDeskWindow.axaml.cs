@@ -254,15 +254,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private PixelPoint _resizeStartScreen;
         private double _resizeStartWidth;
 
-        /// <summary>True while a chain is on screen.</summary>
-        private readonly EmiChainPlayer _player = new(Dispatcher.UIThread.CheckAccess, a => Dispatcher.UIThread.Post(a), (hold, tick) =>
-        {
-            var timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = hold };
-            EventHandler onTick = (_, _) => tick();
-            timer.Tick += onTick; timer.Start();
-            return () => { timer.Stop(); timer.Tick -= onTick; };
-        });
+        private readonly EmiChainPlayer _player;
+        // A test can step frames without racing the dispatcher timer.
+        internal Func<TimeSpan, Action, Action>? ChainScheduler { get; set; }
         internal EmiChainPlayer ChainPlayer => _player;
+        /// <summary>True while a chain is on screen.</summary>
         public bool ChainLive => _player.IsLive || _patFeedback is not null;
 
         /// <summary>True while a summon or dismiss transition is running.</summary>
@@ -283,6 +279,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// </summary>
         public EmiDeskWindow()
         {
+            _player = new(Dispatcher.UIThread.CheckAccess, a => Dispatcher.UIThread.Post(a), (hold, tick) =>
+            {
+                if (ChainScheduler != null) return ChainScheduler(hold, tick);
+                var timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = hold };
+                EventHandler onTick = (_, _) => tick();
+                timer.Tick += onTick; timer.Start();
+                return () => { timer.Stop(); timer.Tick -= onTick; };
+            });
             AvaloniaXamlLoader.Load(this);
 
             _bodyRoot = this.FindControl<Grid>("BodyRoot")!;

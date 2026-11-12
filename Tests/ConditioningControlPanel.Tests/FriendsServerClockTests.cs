@@ -68,6 +68,7 @@ public class FriendsServerClockTests
         try
         {
             var serverNow = PcFast(TimeSpan.FromMinutes(2));
+            ServerClock.Clock = new FrozenClock(serverNow.AddMinutes(2));
             var sent = serverNow.AddSeconds(-5);
             var invite = new InboxItem(Id1, SendKind.Invite, "u_ann", "Ann", null, null,
                 InviteDestination.BackRoom, null, null, sent, sent.AddSeconds(InviteDestination.LifetimeSeconds));
@@ -82,6 +83,7 @@ public class FriendsServerClockTests
                 card.Content = null;
             });
 
+            Assert.Equal("4:55", shown);
             var parts = shown!.Split(':');
             var left = int.Parse(parts[0]) * 60 + int.Parse(parts[1]);
             Assert.True(left >= 280, $"countdown shows {shown} for an invite sent 5 s ago (PC clock 2 min fast)");
@@ -119,6 +121,11 @@ public class FriendsServerClockTests
 
         var service = SourceRoots.ReadProductFile("Services", "Friends", "FriendsService.cs");
         Assert.Contains("_now = now ?? (() => ServerClock.UtcNow);", service);
+    }
+
+    private sealed class FrozenClock(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 
     // ---------------------------------------------------------------- helpers

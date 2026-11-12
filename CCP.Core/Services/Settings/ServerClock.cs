@@ -29,11 +29,14 @@ namespace ConditioningControlPanel.Services
 
         private static long _offsetTicks;
 
+        // Tests can freeze the local clock while a UI thread starts or paints.
+        internal static TimeProvider Clock { get; set; } = TimeProvider.System;
+
         /// <summary>Server time minus local time, as last learned. Zero until something is learned.</summary>
         public static TimeSpan Offset => TimeSpan.FromTicks(Interlocked.Read(ref _offsetTicks));
 
         /// <summary>Local UTC now, corrected by the learned offset.</summary>
-        public static DateTimeOffset UtcNow => DateTimeOffset.UtcNow + Offset;
+        public static DateTimeOffset UtcNow => Clock.GetUtcNow() + Offset;
 
         /// <summary>
         /// Pure: the offset a Date header implies, or null when it should not be adopted.
@@ -56,7 +59,7 @@ namespace ConditioningControlPanel.Services
         {
             try
             {
-                return Observe(response?.Headers?.Date, DateTimeOffset.UtcNow);
+                return Observe(response?.Headers?.Date, Clock.GetUtcNow());
             }
             catch
             {
@@ -107,7 +110,11 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>Test seam: forget what was learned.</summary>
-        internal static void ResetForTests() => Interlocked.Exchange(ref _offsetTicks, 0);
+        internal static void ResetForTests()
+        {
+            Interlocked.Exchange(ref _offsetTicks, 0);
+            Clock = TimeProvider.System;
+        }
     }
 
     /// <summary>
