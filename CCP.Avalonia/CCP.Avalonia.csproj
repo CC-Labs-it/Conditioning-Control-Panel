@@ -115,6 +115,8 @@
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <Content Include="..\ConditioningControlPanel\assets\Chaos\backdrops\**\*" Link="assets\Chaos\backdrops\%(RecursiveDir)%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\guide\intro.png" Link="assets\Chaos\guide\intro.png"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <Content Include="..\ConditioningControlPanel\assets\Chaos\portraits\*.png"
              Link="assets\Chaos\portraits\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />

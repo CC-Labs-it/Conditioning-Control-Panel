@@ -182,7 +182,7 @@ public class WebAssetServerTests
         var origin = $"http://127.0.0.1:{s.Port}/";
         Assert.Equal(HttpStatusCode.Forbidden, (await http.GetAsync(origin + "__art__/boons/afterglow.png")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await http.GetAsync(s.Url("game/index.html"))).StatusCode);
-        foreach (var rel in new[] { "boons/afterglow.png", "biomes/casino.png", "bubbles/gold_droplet.png" })
+        foreach (var rel in new[] { "boons/afterglow.png", "biomes/casino.png", "bubbles/gold_droplet.png", "guide/intro.png" })
         {
             var expected = await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory, "assets", "Chaos", rel));
             var response = await http.GetAsync(origin + "__art__/" + rel);
