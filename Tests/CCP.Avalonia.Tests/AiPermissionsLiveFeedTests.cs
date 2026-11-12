@@ -183,12 +183,14 @@ public sealed class AiPermissionsLiveFeedTests
             var lab = true;
             CoreAccount.HasLabAccessProvider = () => lab;
             var prompt = CoreSettings.Current.CompanionPrompt;
-            prompt.AllowAiToControlEffects = savedChoice;
-            prompt.AllowAiFlash = true;
-            var grid = new AiPermissionsGrid();
-            var window = new Window { Content = grid };
+            var (oldEffects, oldFlash) = (prompt.AllowAiToControlEffects, prompt.AllowAiFlash);
+            Window? window = null;
             try
             {
+                prompt.AllowAiToControlEffects = savedChoice;
+                prompt.AllowAiFlash = true;
+                var grid = new AiPermissionsGrid();
+                window = new Window { Content = grid };
                 window.Show();
                 foreach (var allowed in new[] { false, true, false, true })
                 {
@@ -202,9 +204,31 @@ public sealed class AiPermissionsLiveFeedTests
                     Assert.True(prompt.AllowAiFlash);
                 }
             }
-            finally { window.Close(); }
+            finally
+            {
+                try { window?.Close(); }
+                finally { (prompt.AllowAiToControlEffects, prompt.AllowAiFlash) = (oldEffects, oldFlash); }
+            }
         });
         return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task TierTheoryRestoresPermissionsBeforeSavingProfile(bool flash) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Assert.Equal(TestUserDataProfile.Root, CorePaths.UserData);
+        var baseline = new SettingsService();
+        baseline.Current.CompanionPrompt.AllowAiToControlEffects = false;
+        baseline.Current.CompanionPrompt.AllowAiFlash = false;
+        baseline.SaveImmediate();
+
+        await EffectiveEffectsChoiceFollowsLiveTierWithoutSaving(true, false);
+
+        var reloaded = new SettingsService();
+        if (flash) Assert.False(reloaded.Current.CompanionPrompt.AllowAiFlash);
+        else Assert.False(reloaded.Current.CompanionPrompt.AllowAiToControlEffects);
     });
 
     [Theory]
