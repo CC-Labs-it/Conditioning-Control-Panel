@@ -392,7 +392,7 @@ public sealed class ChaosUnlockCardOverlayTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Freeze_pickup_keeps_its_remaining_window_across_a_lesson_or_manual_pause(bool manual) => await Run(clock =>
+    public async Task Freeze_pickup_keeps_its_remaining_window_across_a_lesson_or_manual_pause(bool manual) => await Run(KeepingLessons(clock =>
     {
         ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3,
             EnabledVariants = new System.Collections.Generic.List<string> { "bambifreeze" } });
@@ -463,7 +463,28 @@ public sealed class ChaosUnlockCardOverlayTests
         ChaosRunHost.ForceShutdown();
         Assert.Equal(0, ChaosRunHost.FreezeRemainingSec);
         Assert.False(BubbleOverlay.Field.FreezeChaos);
-    });
+    }, "freeze_trigger", "taking_chances"));
+
+    // Lesson state is shared and persisted: put each id's progress, completion and the reveals it queued back.
+    private static Action<SteppedClock> KeepingLessons(Action<SteppedClock> body, params string[] ids) => clock =>
+    {
+        var meta = ChaosMeta.State;
+        var saved = ids.Select(id => (id, meta.LessonsComplete.Contains(id),
+            meta.LessonProgress.TryGetValue(id, out var p) ? p : (long?)null)).ToArray();
+        var reveals = meta.PendingReveals.ToList();
+        try { body(clock); }
+        finally
+        {
+            foreach (var (id, done, progress) in saved)
+            {
+                if (done) meta.LessonsComplete.Add(id); else meta.LessonsComplete.Remove(id);
+                if (progress is long p) meta.LessonProgress[id] = p; else meta.LessonProgress.Remove(id);
+            }
+            meta.PendingReveals.Clear();
+            meta.PendingReveals.UnionWith(reveals);
+            ChaosMeta.Save();
+        }
+    };
 
     private sealed class SteppedClock : TimeProvider
     {
