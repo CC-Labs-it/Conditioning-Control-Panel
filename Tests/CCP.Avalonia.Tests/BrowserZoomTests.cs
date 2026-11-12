@@ -58,7 +58,8 @@ public class BrowserZoomTests
         finally { Marshal.FreeHGlobal(controller); Marshal.FreeHGlobal(table); GC.KeepAlive(get); GC.KeepAlive(set); }
     }
 
-    [Fact] public Task StopWhileNativeReadIsPendingDoesNotEnterFullscreen() => AvaloniaTestDispatcher.RunAsync(async () =>
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public Task StopWhileNativeReadIsPendingDoesNotEnterFullscreen(bool stop) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         AmbientBeatLoopsTests.Setup();
         var old = CoreSettings.ServiceProvider;
@@ -69,10 +70,15 @@ public class BrowserZoomTests
             shell.Show();
             var browser = shell.FindControl<SettingsTabView>("SettingsTab")!.FindControl<WebHost>("BrowserWebHost")!;
             var pending = new TaskCompletionSource<double?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var scripts = new List<string>();
+            browser.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
             browser.ZoomReader = () => pending.Task;
             browser.OnWebMessage("ccp_fullscreen_on");
             Assert.Null(shell.BrowserFullscreenWindow);
-            shell.StopBrowserFullscreen();
+            if (stop) shell.StopBrowserFullscreen(); else shell.ExitBrowserFullscreen();
+            var cleanup = Assert.Single(scripts);
+            Assert.Contains("document.fullscreenElement && document.exitFullscreen", cleanup);
+            Assert.Contains("document.webkitFullscreenElement && document.webkitExitFullscreen", cleanup);
             pending.SetResult(0.8);
             await Task.Delay(50);
             Assert.Null(shell.BrowserFullscreenWindow);
@@ -102,19 +108,41 @@ public class BrowserZoomTests
 
     [Fact] public Task SiteClickAppliesHalf() => WithBrowser((shell, browser, calls) =>
     {
+        shell.FindControl<SettingsTabView>("SettingsTab")!.FindControl<RadioButton>("RbHypnoTube")!.IsChecked = true;
         shell.BrowserSiteToggle_Click(null, new RoutedEventArgs());
-        Assert.Equal(0.5, Assert.Single(calls));
+        Assert.Equal("https://hypnotube.com/", browser.Source!.AbsoluteUri);
+        Assert.Equal(0.75, Assert.Single(calls));
+        shell.BrowserSiteToggle_Click(null, new RoutedEventArgs());
+        Assert.Equal(new[] { 0.75, 0.5 }, calls);
+    });
+
+    [Fact] public Task FirstReloadStartsAtDefaultZoom() => WithBrowser((shell, browser, calls) =>
+    {
+        shell.BtnReloadBrowser_Click(null, new RoutedEventArgs());
+        Assert.Equal(0.75, Assert.Single(calls));
+        shell.BtnReloadBrowser_Click(null, new RoutedEventArgs());
+        Assert.Equal(new[] { 0.75, 0.5 }, calls);
+    });
+
+    [Fact] public Task FirstPopoutStartsAtDefaultZoom() => WithBrowser((shell, browser, calls) =>
+    {
+        shell.PopOutBrowser();
+        Assert.Equal(0.75, Assert.Single(calls));
+        Assert.NotNull(browser.Source);
     });
 
     [Fact] public Task LinkAppliesHalf() => WithBrowser((shell, browser, calls) =>
     {
         Assert.True(shell.NavigateToUrlInBrowser("https://example.com/"));
         Assert.Equal(0.5, Assert.Single(calls));
+        shell.BrowserSiteToggle_Click(null, new RoutedEventArgs());
+        Assert.Equal(new[] { 0.5, 0.5 }, calls);
     });
 
     [Theory] [InlineData(false)] [InlineData(true)]
     public Task FullscreenRestoresZoom(bool popout) => WithBrowser((shell, browser, calls) =>
     {
+        shell.BrowserSiteToggle_Click(null, new RoutedEventArgs());
         shell.BrowserSiteToggle_Click(null, new RoutedEventArgs());
         if (popout) shell.PopOutBrowser();
         calls.Clear();
@@ -148,6 +176,11 @@ public class BrowserZoomTests
 
     [Fact] public Task RebuiltEngineReappliesZoom() => WithBrowser((shell, browser, calls) =>
     {
+        shell.BrowserSiteToggle_Click(null, new RoutedEventArgs());
+        Assert.Equal(0.75, Assert.Single(calls));
+        calls.Clear();
+        browser.ZoomEngineCreated(null);
+        Assert.Equal(0.75, Assert.Single(calls));
         shell.BrowserSiteToggle_Click(null, new RoutedEventArgs());
         calls.Clear();
         browser.ZoomEngineCreated(null);

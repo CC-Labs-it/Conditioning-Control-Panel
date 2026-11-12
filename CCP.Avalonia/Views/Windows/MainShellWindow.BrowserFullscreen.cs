@@ -28,6 +28,7 @@ document.addEventListener('fullscreenchange',change);document.addEventListener('
 document.addEventListener('dblclick',function(e){if(window._ccpForcedFs){e.preventDefault();e.stopImmediatePropagation();post('ccp_exit_fullscreen');}},true);
 window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='Escape'||e.key==='F11')){e.preventDefault();post('ccp_exit_fullscreen');}},true);
 })();";
+    internal const string BrowserExitFullscreenScript = "window._ccpForcedFs = false; try { var p; if(document.fullscreenElement && document.exitFullscreen) p = document.exitFullscreen(); else if(document.webkitFullscreenElement && document.webkitExitFullscreen) p = document.webkitExitFullscreen(); if(p && p.catch) p.catch(function(){}); } catch (_) {}";
     private double _browserPreFullscreenZoom = 1.0;
     private Window? _browserFullscreenWindow;
     private Window? _browserFullscreenPopout;
@@ -156,7 +157,15 @@ window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='
     }
     internal void ExitBrowserFullscreen(bool closeHost = true)
     {
-        if (_browserFullscreenTransition) { if (_browserEntering) _browserStopPending = true; return; }
+        if (_browserFullscreenTransition)
+        {
+            if (_browserEntering)
+            {
+                _browserStopPending = true;
+                if (BrowserView is { } pending) _ = pending.InvokeScriptAsync(BrowserExitFullscreenScript);
+            }
+            return;
+        }
         _browserEffectTimer?.Stop();
         if (_browserFullscreenMirror?.DisableMirror() == true) _browserFullscreenMirror = null;
         var host = _browserFullscreenWindow;
@@ -169,7 +178,7 @@ window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='
         try
         {
             host.Topmost = false;
-            _ = browser.InvokeScriptAsync("window._ccpForcedFs = false; try { if(document.fullscreenElement) document.exitFullscreen(); } catch (_) {}");
+            _ = browser.InvokeScriptAsync(BrowserExitFullscreenScript);
             using (browser.BeginReparenting())
             {
                 if (host.Content == browser) host.Content = null;
@@ -202,8 +211,7 @@ window.addEventListener('keydown',function(e){if(window._ccpForcedFs&&(e.key==='
     {
         _browserFullscreenStopped = true;
         var generation = ++_browserStopGeneration;
-        if (_browserFullscreenTransition) { if (_browserEntering) _browserStopPending = true; }
-        else ExitBrowserFullscreen();
+        ExitBrowserFullscreen();
         // Drain late page events from this teardown without blocking the next user entry.
         Dispatcher.UIThread.Post(() => { if (generation == _browserStopGeneration) _browserFullscreenStopped = false; }, DispatcherPriority.Background);
     }

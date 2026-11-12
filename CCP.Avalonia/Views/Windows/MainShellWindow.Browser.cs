@@ -102,13 +102,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Points the web view at a URL. A missing host (the tab is not in the tree, as in
         /// a single-view render) is a no-op that returns false, never a throw.</summary>
-        private bool NavigateBrowser(string url)
+        private bool NavigateBrowser(string url, double zoom = 0.5)
         {
             try
             {
                 var host = BrowserView;
                 if (host == null) return false;
-                host.SetZoom(0.5);
+                host.SetZoom(zoom);
                 host.Navigate(new Uri(url));   // even when equal: WPF #867, re-click goes home
                 Log.Information("Browser navigated to {Url}", url);
                 return true;
@@ -141,7 +141,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void NavigateBrowserToCurrentSiteHome()
         {
             RevealDashboardBrowser("reload");   // WPF Browser.cs:3153 / :603 (site-toggle)
-            NavigateBrowser(SiteHomeUrl());
+            // WPF initializes on the first site/reload click; BrowserService starts at 75%.
+            NavigateBrowser(SiteHomeUrl(), BrowserView?.Source == null ? 0.75 : 0.5);
         }
 
         /// <summary>The site radios' one entry point. Click, not IsCheckedChanged, for the WPF
