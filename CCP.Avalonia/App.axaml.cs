@@ -98,13 +98,24 @@ namespace ConditioningControlPanel.Avalonia
         // WPF AchievementProgressStreak.cs:25-26 and :99: record each day and retain the peak.
         internal static Action StartSeasonActivity(SettingsService settings, AchievementEngine engine, Func<DateTime> clock)
         {
+            // WPF AchievementProgressStreak.cs:38-51: a profile with no launch history
+            // starts at one without treating the missing history as a broken streak.
+            var progress = engine.Progress;
+            if (progress.LastLaunchDate.Date == default)
+            {
+                progress.ConsecutiveDays = Math.Max(1, progress.ConsecutiveDays);
+                progress.LastLaunchDate = clock().ToLocalTime().Date;
+                settings.Current.CurrentStreak = progress.ConsecutiveDays;
+                settings.Current.LastStreakDate = progress.LastLaunchDate;
+                engine.Save();
+                settings.Save();
+            }
             DateTime? lastDay = null;
             void CheckDay()
             {
                 var now = clock().ToUniversalTime();
-                if (lastDay == now.Date) return;
                 var s = settings.Current;
-                var added = SeasonActivity.MarkActiveToday(s, now);
+                var added = lastDay != now.Date && SeasonActivity.MarkActiveToday(s, now);
                 var peak = s.SeasonPeakStreak;
                 SeasonActivity.TrackStreakPeak(s, engine.Progress.ConsecutiveDays);
                 if (added || peak != s.SeasonPeakStreak) settings.Save();
