@@ -1253,7 +1253,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 App.WindowAwareness.CurrentServiceName, App.WindowAwareness.CurrentDetectedName);
             if (string.IsNullOrWhiteSpace(text)) text = System.IO.Path.GetFileNameWithoutExtension(path);
             _lastOwnVoiceLine = path;
-            GigglePriority(text, playSound: true, aiGenerated: false, phraseAudioPath: path, barkVoice: true, unprompted: true);
+            Giggle(text, unprompted: true, phraseAudioPath: path, barkVoice: true);
             return true;
         }
 
@@ -1278,7 +1278,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>WPF Giggle (Speech.cs:240): a PRESET line. Dropped while an AI request is in
         /// flight or an AI bubble is up, never logged to chat history, sound on every fifth. Queued
         /// behind a line still up, or until the previous line's gap has passed (Speech.cs:273-294).</summary>
-        public void Giggle(string text, bool unprompted = false)
+        public void Giggle(string text, bool unprompted = false, string? phraseAudioPath = null, bool barkVoice = false)
         {
             if (_isPlayingUninterruptibleClip || _isWaitingForAi || _isShowingAiBubble) return;
             RunOnAvatar(() =>
@@ -1292,7 +1292,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     ProcessNextSpeech();
                     return;
                 }
-                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true, unprompted: unprompted);
+                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, phraseAudioPath, barkVoice, preset: true, unprompted: unprompted);
             });
         }
 

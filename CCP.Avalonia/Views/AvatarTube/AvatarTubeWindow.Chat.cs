@@ -19,7 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
     /// </summary>
     public partial class AvatarTubeWindow
     {
-        private bool _isWaitingForAi;   // blocks nothing here but IsCompanionBusy, as WPF's bark gate
+        private bool _isWaitingForAi;   // blocks preset speech and contributes to IsCompanionBusy
         private DispatcherTimer? _thinkingTimer;
         private string _thinkingPhraseBase = string.Empty;
         private int _thinkingTickCount;
