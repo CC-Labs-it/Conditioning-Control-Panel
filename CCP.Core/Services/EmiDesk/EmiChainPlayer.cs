@@ -16,6 +16,8 @@ public sealed class EmiChainPlayer : IDisposable
     private readonly Func<bool> _checkAccess;
     private readonly Action<Action> _post;
     private readonly Func<TimeSpan, Action, Action> _startTimer;
+    // Tests can hold frames until explicitly advanced through ElapsePendingHold.
+    internal Func<TimeSpan, Action, Action>? StartTimerOverride { get; set; }
     private Action? _stopTimer;
     private EmiChain? _chain;
     private EmiChainHooks? _hooks;
@@ -97,7 +99,7 @@ public sealed class EmiChainPlayer : IDisposable
         _index++;
 
         PendingHold = TimeSpan.FromMilliseconds(Math.Max(1, frame.Ms));
-        _stopTimer = _startTimer(PendingHold.Value, OnTick);
+        _stopTimer = (StartTimerOverride ?? _startTimer)(PendingHold.Value, OnTick);
     }
 
     private void OnTick()
