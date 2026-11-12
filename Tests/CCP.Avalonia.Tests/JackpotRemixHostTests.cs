@@ -88,15 +88,17 @@ public class JackpotRemixHostTests
     }
 
     [Fact]
-    public async Task TimeoutCancelsAndDisablesAfterTwoFailures()
+    public async Task TimeoutDoesNotDisableAndLaterBuildSucceeds()
     {
         using var f = new Fixture();
+        var calls = 0;
         using var builder = new JackpotRemixBuilder(f.Root, () => f.Root, f.Output, TimeSpan.FromMilliseconds(50),
-            (_, _) => new TaskCompletionSource<string?>().Task);
+            (request, _) => ++calls <= 2 ? new TaskCompletionSource<string?>().Task : Task.FromResult<string?>(Reply(request)));
         Assert.Null(await builder.BuildAsync(new[] { f.Source }, 1, CancellationToken.None));
         Assert.False(builder.Disabled);
         Assert.Null(await builder.BuildAsync(new[] { f.Source }, 1, CancellationToken.None));
-        Assert.True(builder.Disabled);
+        Assert.False(builder.Disabled);
+        Assert.NotNull(await builder.BuildAsync(new[] { f.Source }, 1, CancellationToken.None));
     }
 
     [Fact]

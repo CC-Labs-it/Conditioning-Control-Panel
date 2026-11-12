@@ -60,16 +60,8 @@ internal sealed partial class JackpotRemixBuilder : IDisposable
             var code = root.TryGetProperty("code", out var c) ? c.GetString() ?? "0" : "0";
             return WriteOutput(_output, code, data.GetString() ?? "", deadline.Token);
         }
-        catch (OperationCanceledException)
-        {
-            if (!ct.IsCancellationRequested && !_closing.IsCancellationRequested && held) Interlocked.Increment(ref _failures);
-            return null;
-        }
-        catch (Exception)
-        {
-            Interlocked.Increment(ref _failures);
-            return null;
-        }
+        catch (OperationCanceledException) { return null; }
+        catch (Exception) { return null; }
         finally { if (held) _one.Release(); }
     }
 
@@ -112,6 +104,8 @@ internal sealed partial class JackpotRemixBuilder : IDisposable
             await Dispatcher.UIThread.InvokeAsync(() => _ = web!.InvokeScriptAsync("window.__ccpRemixPush(" + request + ");"));
             return await result.Task.WaitAsync(ct).ConfigureAwait(false);
         }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception) { return null; }
         finally
         {
             if (window != null)
