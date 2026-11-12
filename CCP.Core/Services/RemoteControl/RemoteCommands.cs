@@ -196,16 +196,20 @@ namespace ConditioningControlPanel.Services
             CoreAudio.Unduck();
             // Keep the base's wearer restoration; never clear the subject's saved switches.
             if (force || !CoreEngine.IsRunning) StopOverlays();
+            var playerStopped = force || !CoreEngine.IsRunning;
             if (force) CoreEngine.Stop();
             else
             {
                 CoreFlash.Stop(); CoreSubliminal.Stop(); CoreBubbles.Stop(); CoreBouncingText.Stop();
                 CoreEngine.Video?.Stop(); CoreEngine.BubbleCount?.Stop(); LockCardScheduler.Instance.Stop(); CoreMindWipe.Stop();
+                if (playerStopped)
+                    try { CoreEngine.StopBrainDrain?.Invoke(); }
+                    catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] Brain Drain stop failed"); }
             }
             // WPF (main 4adc4c476, 2a712d9da): never a blanket strict-off. The strict lock goes back to the
             // wearer's own (a running Lockdown keeps the one it forced, its record corrected), the panic key
             // comes back on except while a running Lockdown holds it off; its own end restores it.
-            var restoredVisuals = Remote.RemoteWearer.HandBackAllButStrict();
+            var restoredVisuals = Remote.RemoteWearer.HandBackAllButStrict(playerStopped);
             Remote.RemoteWearer.ReleaseSafetyState(); // WPF RemoteControlService.cs:1036-1043: safety before head refresh
             if (restoredVisuals > 0)
                 try { RefreshOverlays?.Invoke(); }
