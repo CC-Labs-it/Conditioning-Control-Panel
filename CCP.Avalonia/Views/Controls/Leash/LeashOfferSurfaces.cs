@@ -15,7 +15,7 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 
 // WPF LeashSurfaces.OnSnapshot/TryShowWaitingAsk (:104-124): a newly arrived offer pops up as the one ask
-// (LeashAskWindow), held until the panel or launcher is up and until no ask or snap is on screen.
+// (LeashAskWindow), held until the panel or launcher is up and until no ask is on screen.
 internal sealed class LeashOfferSurfaces : IDisposable
 {
     private readonly Func<Window?> _owner;
@@ -75,11 +75,8 @@ internal sealed class LeashOfferSurfaces : IDisposable
         {
             if (!ReferenceEquals(source, _service) || !ReferenceEquals(source, LeashHead.Service) || _account != CoreSettings.Current.UnifiedId) return;
             if (e.Kind == LeashEventKind.Ended && SelfCut) { SelfCut = false; return; }
-            if (e.Kind == LeashEventKind.Answered && e.Accepted == true)
-            {
-                LeashAskWindow.ShowHolderSnap(e.From, _owner());
-                return;
-            }
+            // WPF shows the holder's snap here and nothing else (LeashSurfaces.cs:137-139); the snap is owed.
+            if (e.Kind == LeashEventKind.Answered && e.Accepted == true) return;
             LeashSound.Event(e.Kind, DateTime.UtcNow);
             var owner = _owner();
             var wobbles = e.Kind == LeashEventKind.Tug && StartTug(owner);
@@ -169,10 +166,16 @@ internal sealed class LeashOfferSurfaces : IDisposable
     private void OnSnapshot(LeashSnapshot snapshot)
     {
         var source = _service;
+        var account = CoreSettings.Current.UnifiedId; // the account this snapshot was published for
         void Apply()
         {
             if (!ReferenceEquals(source, _service)) return;
-            if (!ReferenceEquals(source, LeashHead.Service) || _account != CoreSettings.Current.UnifiedId) { Rebind(); return; }
+            if (!ReferenceEquals(source, LeashHead.Service) || _account != CoreSettings.Current.UnifiedId)
+            {
+                Rebind();
+                // Core never republishes an identical snapshot, so a new account's first one is kept, not dropped.
+                if (!ReferenceEquals(source, _service) || account != _account) return;
+            }
             if (source?.Available == true) Process(snapshot);
         }
         if (Dispatcher.UIThread.CheckAccess()) Apply(); else Dispatcher.UIThread.Post(Apply);
@@ -190,7 +193,7 @@ internal sealed class LeashOfferSurfaces : IDisposable
     }
     private void TryShow()
     {
-        if (_service?.Available != true || _waiting.Count == 0 || LeashAskWindow.Current != null || LeashAskWindow.Snap != null) return;
+        if (_service?.Available != true || _waiting.Count == 0 || LeashAskWindow.Current != null) return;
         var owner = _owner();
         if (owner == null || !owner.IsVisible || owner.WindowState == WindowState.Minimized) return;
         var offer = _waiting[0];
