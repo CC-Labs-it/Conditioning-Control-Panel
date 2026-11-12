@@ -109,6 +109,49 @@ public sealed class ChasterMenuTests
         Dispatcher.UIThread.RunJobs();
     }
 
+    private sealed class PopClock : TimeProvider
+    {
+        public DateTimeOffset Now = DateTimeOffset.UnixEpoch;
+        public override DateTimeOffset GetUtcNow() => Now;
+        public void Advance(int milliseconds) => Now = Now.AddMilliseconds(milliseconds);
+    }
+
+    [Fact]
+    public Task RowPopContinuesFromItsCurrentScaleOnAnotherClick() => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, _, tab, w) =>
+    {
+        var oldClock = ChasterTabView.RowPopTime;
+        var oldMotion = CoreSettings.Current.MotionLevel;
+        var clock = new PopClock();
+        try
+        {
+            ChasterTabView.RowPopTime = clock;
+            CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+            var row = tab.PriceRows["session"];
+            Click(w, row);
+            var scale = Assert.IsType<ScaleTransform>(row.RenderTransform);
+            clock.Advance(80);
+            tab.TickRowPop(row);
+            var before = scale.ScaleX;
+            Assert.InRange(before, 1.001, 1.059);
+            Click(w, row);
+            tab.TickRowPop(row);
+            Assert.Equal(before, scale.ScaleX, 8);
+            clock.Advance(133);
+            tab.TickRowPop(row);
+            Assert.InRange(scale.ScaleX, 1.059, 1.061);
+            clock.Advance(247);
+            tab.TickRowPop(row);
+            Assert.Equal(1, scale.ScaleX, 8);
+            Assert.Equal(scale.ScaleX, scale.ScaleY, 8);
+        }
+        finally
+        {
+            ChasterTabView.RowPopTime = oldClock;
+            CoreSettings.Current.MotionLevel = oldMotion;
+        }
+        await Task.CompletedTask;
+    }));
+
     [Fact]
     public Task TheMenuIsTwoBoardsOfRowsThatWriteThePricesAndTheRedFlashLineFollowsNatasha() => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, _, tab, w) =>
     {
