@@ -118,7 +118,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             _dollhouseView = Part<Grid>("DollhouseView");
             UnlockCards = new ChaosUnlockCardLayer(Part<Grid>("UnlockCardLayer"));
-            Closed += (_, _) => { UnlockCards.Stop(); StopRevealFlashes(); };
+            Closed += (_, _) =>
+            {
+                UnlockCards.Stop();
+                StopRevealFlashes();
+                foreach (var timer in _balanceAnims.Values) timer.Stop();
+                _balanceAnims.Clear();
+                _balanceTickOwner = null;
+            };
             _menuView = Part<Grid>("MenuView");
             _menuLeftCol = Part<Grid>("MenuLeftCol");
             _panelImprove = Part<Grid>("PanelImprove");
