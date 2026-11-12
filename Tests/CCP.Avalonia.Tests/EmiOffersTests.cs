@@ -43,6 +43,7 @@ public class EmiOffersTests
     public void OpenTargetUsesRingPick() => AvaloniaTestDispatcher.Run(() =>
     {
         var state = EmiState.Current;
+        var hadUsage = state.Usage.TryGetValue("vault", out var usage);
         var hadScore = state.OpenScore.TryGetValue("vault", out var score);
         var hadAt = state.UsageAt.TryGetValue("vault", out var at);
         try
@@ -53,6 +54,7 @@ public class EmiOffersTests
         }
         finally
         {
+            if (hadUsage) state.Usage["vault"] = usage; else state.Usage.Remove("vault");
             if (hadScore) state.OpenScore["vault"] = score; else state.OpenScore.Remove("vault");
             if (hadAt) state.UsageAt["vault"] = at; else state.UsageAt.Remove("vault");
         }
@@ -72,22 +74,30 @@ public class EmiOffersTests
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public void OpenTargetTestRestoresUsageEntries(bool scoreExists, bool atExists)
+    [InlineData(false, false, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    public void OpenTargetTestRestoresUsageEntries(bool scoreExists, bool atExists, bool usageExists)
     {
         var state = EmiState.Current;
+        var hadUsage = state.Usage.TryGetValue("vault", out var oldUsage);
         var hadScore = state.OpenScore.TryGetValue("vault", out var oldScore);
         var hadAt = state.UsageAt.TryGetValue("vault", out var oldAt);
         try
         {
+            if (usageExists) state.Usage["vault"] = 7; else state.Usage.Remove("vault");
             if (scoreExists) state.OpenScore["vault"] = 10; else state.OpenScore.Remove("vault");
             if (atExists) state.UsageAt["vault"] = System.DateTime.UtcNow.Ticks; else state.UsageAt.Remove("vault");
             var expectedScore = state.OpenScore.GetValueOrDefault("vault");
             var expectedAt = state.UsageAt.GetValueOrDefault("vault");
             OpenTargetUsesRingPick();
+            Assert.Equal(usageExists, state.Usage.ContainsKey("vault"));
+            if (usageExists) Assert.Equal(7, state.Usage["vault"]);
             Assert.Equal(scoreExists, state.OpenScore.ContainsKey("vault"));
             Assert.Equal(atExists, state.UsageAt.ContainsKey("vault"));
             if (scoreExists) Assert.Equal(expectedScore, state.OpenScore["vault"]);
@@ -95,6 +105,7 @@ public class EmiOffersTests
         }
         finally
         {
+            if (hadUsage) state.Usage["vault"] = oldUsage; else state.Usage.Remove("vault");
             if (hadScore) state.OpenScore["vault"] = oldScore; else state.OpenScore.Remove("vault");
             if (hadAt) state.UsageAt["vault"] = oldAt; else state.UsageAt.Remove("vault");
         }
