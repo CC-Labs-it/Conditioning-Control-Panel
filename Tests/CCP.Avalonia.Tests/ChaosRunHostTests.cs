@@ -42,6 +42,82 @@ public sealed class ChaosRunHostTests
     }
 
     [Fact]
+    public async Task Freeze_pickup_holds_field_allows_free_snap_and_thaws()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var audio = CoreAudio.PlayOneShotProvider;
+            var cues = new List<string>();
+            CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => cues.Add(System.IO.Path.GetFileNameWithoutExtension(path));
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                var state = ChaosRunHost.State!;
+                var live = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsLive = true, FuseMs = 5000, SizePx = 100 });
+                var freeze = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsFreeze = true, SizePx = 100 });
+                double score = state.Score;
+                double mult = state.TotalMult;
+                BubbleOverlay.Press(freeze, freeze.CenterX, freeze.CenterY);
+                Assert.True(BubbleOverlay.Field.FreezeChaos);
+                Assert.Equal(score + 140 * mult, state.Score, 3);
+                Assert.Contains("freeze_catch", cues);
+                double y = live.Y, fuse = live.FuseRemainingMs;
+                BubbleOverlay.Field.Step();
+                Assert.Equal(y, live.Y);
+                Assert.Equal(fuse, live.FuseRemainingMs);
+                state.Focus = 0;
+                BubbleOverlay.Press(live, live.CenterX, live.CenterY);
+                Assert.True(live.Channeling);
+                state.Focus = 1;
+                BubbleOverlay.PopChaos(live);
+                Assert.Equal(1, state.Focus);
+                Ticks(7);
+                var refresh = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsFreeze = true, SizePx = 100 });
+                BubbleOverlay.PopChaos(refresh);
+                Ticks(7);
+                Assert.True(BubbleOverlay.Field.FreezeChaos);
+                Ticks(7);
+                Assert.False(BubbleOverlay.Field.FreezeChaos);
+                Assert.Equal(1, EffectPayload.GlobalDurationMult);
+                Assert.Contains("freeze_shatter", cues);
+            }
+            finally { ChaosRunHost.ForceShutdown(); CoreAudio.PlayOneShotProvider = audio; }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Freeze_spawns_are_capped_and_pause_during_freeze()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            try
+            {
+                var cfg = Cfg();
+                cfg.EnabledVariants = new List<string> { "bambifreeze" };
+                ChaosRunHost.StartRun(cfg);
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                ChaosRunHost.SpawnTick();
+                ChaosRunHost.SpawnTick();
+                ChaosRunHost.SpawnTick();
+                Assert.Equal(2, BubbleOverlay.Field.Bubbles.Count(b => b.Spec?.IsFreeze == true));
+                var pickup = BubbleOverlay.Field.Bubbles.First(b => b.Spec?.IsFreeze == true);
+                BubbleOverlay.PopChaos(pickup);
+                int count = BubbleOverlay.Field.Bubbles.Count;
+                ChaosRunHost.SpawnTick();
+                Assert.Equal(count, BubbleOverlay.Field.Bubbles.Count);
+            }
+            finally { ChaosRunHost.ForceShutdown(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task Live_bubble_hover_lights_focus_and_clears_on_exit_and_teardown()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>

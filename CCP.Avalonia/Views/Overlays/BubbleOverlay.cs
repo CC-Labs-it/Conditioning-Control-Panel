@@ -330,6 +330,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void EndChaos()
         {
             Field.HoldChaos = false;
+            Field.FreezeChaos = false;
             ChaosRipples.Clear();
             _hoverScreen = -1;
             _chaosPopped = null;
@@ -387,7 +388,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             ChaosSkiaFxOverlay.Burst(new Point(b.CenterX * scaling, b.CenterY * scaling),
                 b.Spec.IsLive ? Color.FromRgb(0x7A, 0xE0, 0xFF) : Color.FromUInt32(b.Spec.Tint),
                 b.Spec.IsLive ? 1.3 : 1.0);
-            PlayChaosCue(null, 1f);   // WPF onBenignPop: PlayPopSound(false)
+            PlayChaosCue(b.Spec.IsFreeze ? "freeze_catch" : null, b.Spec.IsFreeze ? 0.6f : 1f);
             _chaosPopped?.Invoke(b);
             RequestFrame();
         }

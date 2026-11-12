@@ -344,6 +344,8 @@ namespace ConditioningControlPanel.Services
         public Action<int>? LuckyProc;
         /// <summary>WPF SetChaosFrozen: a held Chaos run's live bubbles do not move (a pop burst still plays).</summary>
         public bool HoldChaos;
+        /// <summary>Freeze holds motion and fuses while allowing defuse channels and pop animations.</summary>
+        public bool FreezeChaos;
         /// <summary>WPF ChaosMouseHeld + CursorPx: the player's press, in global DIPs, for a defuse channel.</summary>
         public bool Held;
         public double CursorX, CursorY;
@@ -407,6 +409,7 @@ namespace ConditioningControlPanel.Services
                 if (i >= Bubbles.Count) continue;   // a callback cleared the field
                 var b = Bubbles[i];
                 if (HoldChaos && b.Spec != null && !b.Popping) { b.CancelChannel(); continue; }
+                if (FreezeChaos && b.Spec != null && !b.Popping && !b.Channeling) continue;
                 var r = b.Step(Held, CursorX, CursorY, now);
                 if (r == AmbientBubble.Result.Alive) continue;
                 if (r == AmbientBubble.Result.Detonated) { ChaosDetonated?.Invoke(b); continue; }
