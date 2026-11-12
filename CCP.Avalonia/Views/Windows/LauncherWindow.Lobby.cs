@@ -73,7 +73,7 @@ public partial class LauncherWindow
         LobbyDrop.IsOpen = !LobbyDrop.IsOpen;
     }
     private void PaintLobbyOpacity() => LobbyChip.Opacity = NavBadges.Get(NavSections.Social) <= 0 || NavBadges.IsFresh(NavSections.Social) ? 1 : 0.60;
-    /// <summary>Goon has no host on this head (GameWindow.Escape.cs:7), so its Join stays off.</summary>
+    /// <summary>Goon Join stays off: WPF joins through GoonHostService.Launch(joinCode) (WPF LauncherWindow.Lobby.cs:263), a WPF-only host this head lacks (GameWindow.Escape.cs:7, PlayTabView.axaml.cs:245).</summary>
     private static bool LobbyDoorOpen(LobbyGame game) => game != LobbyGame.Goon;
     /// <summary>WPF LauncherWindow.Lobby.cs:244 JoinFromDrop: the account and tier gate ask for sign-in,
     /// then each game opens on the table.</summary>
