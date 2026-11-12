@@ -240,11 +240,12 @@ public sealed class DeeperRowsTests
         var path = Path.Combine(dir, "clip.mp4");
         File.WriteAllBytes(path, new byte[16]);
         var scripts = new List<string>();
+        var report = "0|10|0";
         var editor = new DeeperEditorWindow(new Enhancement { MediaType = MediaTypes.Video, MediaSource = path }, null);
         editor.BrowserPreview.ScriptInvoker = js =>
         {
             scripts.Add(js);
-            return Task.FromResult<string?>(js.Contains("l.currentTime+") ? "0|10|0" : "ok");
+            return Task.FromResult<string?>(js.Contains("l.currentTime+") ? report : "ok");
         };
         var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
         var poll = typeof(DeeperEditorWindow).GetMethod("PollBrowserTimeAsync", flags)!;
@@ -265,6 +266,13 @@ public sealed class DeeperRowsTests
             timer.Stop();
             if (seekAfterPlay) Invoke(editor, "SeekToFraction", 0.7);
             Assert.Equal("0:07", editor.TxtCurrentTime.Text);
+            report = "0|0|0";
+            await (Task)poll.Invoke(editor, null)!;
+            Assert.Equal("0:07", editor.TxtCurrentTime.Text);
+            PanicSurfaces.All.Single(s => s.Id == "deeper-editor-audio").Stop(null);
+            Click(editor.BtnPlayPause);
+            timer.Stop();
+            report = "0|10|0";
             scripts.Clear();
             await (Task)poll.Invoke(editor, null)!;
             Assert.Contains(scripts, js => js.Contains("l.currentTime=7;l.play();"));

@@ -893,6 +893,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     await BrowserPreview.InvokeScriptAsync(DeeperPreview.Invoke($"l.currentTime={seek};l.play();", scrollIntoView: true));
                     return; // This poll read the position before the recovery seek.
                 }
+                // Until metadata permits the recovery seek, the saved position owns the playhead.
+                if (_playLocalPreviewOnce) return;
+
                 if (playing != _isPlaying)
                 {
                     _isPlaying = playing;
