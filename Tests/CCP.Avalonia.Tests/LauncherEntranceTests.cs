@@ -142,4 +142,89 @@ public sealed class LauncherEntranceTests
         DoublePress(); Assert.Equal(WindowState.Maximized, w.WindowState);
         DoublePress(); Assert.Equal(WindowState.Normal, w.WindowState);
     });
+    [Theory]
+    [InlineData(LauncherTileTrigger.ModChanged)]
+    [InlineData(LauncherTileTrigger.GrantsChanged)]
+    public void RefreshTiles_RebuildRestartsEntrance(LauncherTileTrigger trigger) => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        w.StepFx(1);
+        var grid = w.FindControl<UniformGrid>("GamesGrid")!;
+        var old = (Border)grid.Children[0];
+        if (trigger == LauncherTileTrigger.GrantsChanged)
+        {
+            // Simulate a changed reveal snapshot. Current catalogue entries are all revealed.
+            var snapshot = (Dictionary<string, bool>)typeof(LauncherWindow)
+                .GetField("_revealedAtBuild", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(w)!;
+            snapshot[(string)old.Tag!] = false;
+        }
+        w.RefreshTiles(trigger);
+        var tile = (Border)grid.Children[0];
+        Assert.NotSame(old, tile);
+        Assert.Equal(0, tile.Opacity); Assert.Equal(10, Slide(tile).Y);
+        w.StepFx(0.04);
+        Assert.InRange(tile.Opacity, 0.32, 0.34);
+        Assert.Equal(0, ((Border)grid.Children[1]).Opacity, 5);
+        w.StepFx(1);
+        Assert.Equal(1, tile.Opacity); Assert.Equal(0, Slide(tile).Y);
+    });
+
+    [Fact]
+    public void RefreshTiles_OffIsInstant_AndUnchangedGrantsDoNotRebuild() => Run(MotionLevel.Off, (_, w, _) =>
+    {
+        var grid = w.FindControl<UniformGrid>("GamesGrid")!;
+        var old = grid.Children[0];
+        w.RefreshTiles(LauncherTileTrigger.GrantsChanged);
+        Assert.Same(old, grid.Children[0]);
+        w.RefreshTiles(LauncherTileTrigger.ModChanged);
+        var tile = (Border)grid.Children[0];
+        Assert.NotSame(old, tile);
+        Assert.Equal(1, tile.Opacity); Assert.Equal(0, Slide(tile).Y);
+    });
+
+    [Fact]
+    public void SignInClose_RebuildRestartsEntrance() => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        w.StepFx(1);
+        var grid = w.FindControl<UniformGrid>("GamesGrid")!;
+        var old = grid.Children[0];
+        var opacities = new List<double>();
+        var rises = new List<double>();
+        grid.Children.CollectionChanged += (_, e) =>
+        {
+            if (e.NewItems == null) return;
+            foreach (Border added in e.NewItems)
+            {
+                added.PropertyChanged += (_, change) => { if (change.Property == Visual.OpacityProperty) opacities.Add(added.Opacity); };
+                var slide = Slide(added);
+                slide.PropertyChanged += (_, change) => { if (change.Property == TranslateTransform.YProperty) rises.Add(slide.Y); };
+            }
+        };
+        w.OpenSignIn();
+        Dispatcher.UIThread.RunJobs();
+        var dialog = Assert.Single(w.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.LoginDialog>());
+        dialog.Close();
+        Dispatcher.UIThread.RunJobs();
+        var tile = (Border)grid.Children[0];
+        Assert.NotSame(old, tile);
+        Assert.Contains(0, opacities); Assert.Contains(10, rises);
+        w.StepFx(1);
+        Assert.Equal(1, tile.Opacity); Assert.Equal(0, Slide(tile).Y);
+    });
+
+    [Fact]
+    public void MaximisedTitleBarPress_RestoresUnderPointer() => Run(MotionLevel.Off, (_, w, _) =>
+    {
+        w.WindowState = WindowState.Maximized;
+        var bar = w.FindControl<Border>("TitleBar")!;
+        var at = new Point(200, 20);
+        var screen = w.PointToScreen(at);
+        var expected = new PixelPoint(screen.X - LauncherPlacement.ToPx(w.Width / 2, w.RenderScaling),
+            screen.Y - LauncherPlacement.ToPx(15, w.RenderScaling));
+        var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
+        bar.RaiseEvent(new PointerPressedEventArgs(bar, pointer, w, at, 0,
+            new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None, 1));
+        Assert.Equal(WindowState.Normal, w.WindowState);
+        Assert.Equal(expected, w.Position);
+    });
+
 }

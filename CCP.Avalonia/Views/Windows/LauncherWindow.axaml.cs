@@ -311,7 +311,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
                 e.Handled = true;
             }
-            else BeginMoveDrag(e);
+            else
+            {
+                if (WindowState == WindowState.Maximized)
+                {
+                    var point = this.PointToScreen(e.GetPosition(this));
+                    double scale = RenderScaling;
+                    WindowState = WindowState.Normal;
+                    Position = new PixelPoint(point.X - LauncherPlacement.ToPx(Width / 2, scale),
+                        point.Y - LauncherPlacement.ToPx(15, scale));
+                }
+                try { BeginMoveDrag(e); } catch (InvalidOperationException) { }
+            }
         }
 
         private void BtnMinimize_Click(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
@@ -466,6 +477,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (!LauncherTileRefresh.ShouldRebuild(trigger, IsVisible, _revealedAtBuild, now)) return;
                 Log.Information("[Launcher] {Trigger} redrawing tiles", trigger);
                 BuildTiles();
+                StartEntrance();
             }
             catch (Exception ex) { Log.Warning(ex, "[Launcher] tile refresh on {Trigger} failed", trigger); }
         }
@@ -586,6 +598,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             FriendsChip.UpdatePill();
             RefreshStats();
             BuildTiles();
+            StartEntrance();
         }
 
         internal void BuildTiles()
