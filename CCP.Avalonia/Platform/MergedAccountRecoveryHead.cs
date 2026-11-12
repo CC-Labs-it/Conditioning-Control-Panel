@@ -10,10 +10,10 @@ using ConditioningControlPanel.Services.Startup;
 using ConditioningControlPanel.Services.Invites;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
-
 /// <summary>WPF MergedAccountRecoveryHead: preserve the merged person's local data.</summary>
 internal static class MergedAccountRecoveryHead
 {
+    private static readonly System.Threading.SemaphoreSlim AuthGate = new(1, 1);
     internal static void Seed()
     {
         MergedAccountRecovery.StopSync = () => { CoreSettings.Current.MergedSignInPending = true; AccountSeed.Sync?.Reset(); };
@@ -56,20 +56,21 @@ internal static class MergedAccountRecoveryHead
         V2AuthService.MergedRecovery = MergedAccountRecovery.TryHandleAsync;
         AiService.MergedAccountHook = response => MergedAccountRecovery.TryHandleAsync(response);
     }
-
-    // WPF App.xaml.cs:4615: try the signed-in providers in order until one mints a V2 token.
+    // WPF App.xaml.cs:4581-4590 serializes upgrades and rechecks the session inside the gate.
     internal static async Task<bool> ReauthenticateAsync()
     {
-        if (AccountSeed.Patreon?.IsAuthenticated == true &&
-            await ExchangeAsync(AccountSeed.Patreon.GetAccessToken, (v, t) => v.AuthenticateWithPatreonAsync(t))) return true;
-        if (AccountSeed.Discord?.IsAuthenticated == true &&
-            await ExchangeAsync(AccountSeed.Discord.GetAccessToken, (v, t) => v.AuthenticateWithDiscordAsync(t))) return true;
-        if (AccountSeed.SubscribeStar?.IsAuthenticated == true &&
-            await ExchangeAsync(AccountSeed.SubscribeStar.GetAccessToken, (v, t) => v.AuthenticateWithSubstarAsync(t))) return true;
-        CoreSettings.Current.MergedSignInPending = true;
-        return false;
+        await AuthGate.WaitAsync();
+        try
+        {
+            if (!string.IsNullOrEmpty(CoreAccount.UnifiedUserId) && !string.IsNullOrEmpty(CoreSettings.Current.AuthToken)) return true;
+            if (AccountSeed.Patreon?.IsAuthenticated == true && await ExchangeAsync(AccountSeed.Patreon.GetAccessToken, (v, t) => v.AuthenticateWithPatreonAsync(t))) return true;
+            if (AccountSeed.Discord?.IsAuthenticated == true && await ExchangeAsync(AccountSeed.Discord.GetAccessToken, (v, t) => v.AuthenticateWithDiscordAsync(t))) return true;
+            if (AccountSeed.SubscribeStar?.IsAuthenticated == true && await ExchangeAsync(AccountSeed.SubscribeStar.GetAccessToken, (v, t) => v.AuthenticateWithSubstarAsync(t))) return true;
+            CoreSettings.Current.MergedSignInPending = true;
+            return false;
+        }
+        finally { AuthGate.Release(); }
     }
-
     private static async Task<bool> ExchangeAsync(Func<string?> getToken,
         Func<V2AuthService, string, Task<V2AuthService.V2AuthResponse>> authenticate)
     {
@@ -94,7 +95,6 @@ internal static class MergedAccountRecoveryHead
             return false;
         }
     }
-
     private static async Task OpenSignInAsync()
     {
         var shell = MainShellWindow.Current;
