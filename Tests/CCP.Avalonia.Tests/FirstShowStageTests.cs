@@ -466,66 +466,97 @@ public sealed class FirstShowStageTests
     [Fact]
     public Task PreviewPlaysCuesWithoutStartupAudioAndUsesWpfVolume() => Run(_ =>
     {
-        FirstShowService.Stop();
-        EmiDeskService.Instance.Window?.ShutDown();
-        var oldSettings = CoreSettings.ServiceProvider;
-        var oldFactory = FirstShowService.PreviewAudioPlayer;
-        var path = Path.GetTempFileName();
-        var volumes = new List<float>();
-        int created = 0, stopped = 0;
-        using var desktop = new global::Avalonia.Controls.ApplicationLifetimes.ClassicDesktopStyleApplicationLifetime
-        {
-            Args = new[] { "--first-show-preview" },
-        };
+        var originalStoppable = CoreAudio.PlayStoppableProvider;
+        var originalOneShot = CoreAudio.PlayOneShotProvider;
+        var originalSuppressed = CoreAudio.IsOutputSuppressedProvider;
+        var originalModAudio = CoreModArt.AudioOverridePathProvider;
         try
         {
-            CoreSettings.ServiceProvider = null;
-            CoreAudio.PlayStoppableProvider = null;
-            CoreAudio.PlayOneShotProvider = null;
+            // Non-null sentinels prove that all four providers are restored, including null overrides.
+            CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => () => { };
+            CoreAudio.PlayOneShotProvider = (_, _, _, _, _) => { };
             CoreAudio.IsOutputSuppressedProvider = () => false;
-            CoreModArt.AudioOverridePathProvider = _ => path;
-            FirstShowService.PreviewAudioPlayer = () =>
+            CoreModArt.AudioOverridePathProvider = _ => null;
+            var oldStoppable = CoreAudio.PlayStoppableProvider;
+            var oldOneShot = CoreAudio.PlayOneShotProvider;
+            var oldSuppressed = CoreAudio.IsOutputSuppressedProvider;
+            var oldModAudio = CoreModArt.AudioOverridePathProvider;
+            FirstShowService.Stop();
+            EmiDeskService.Instance.Window?.ShutDown();
+            var oldSettings = CoreSettings.ServiceProvider;
+            var oldFactory = FirstShowService.PreviewAudioPlayer;
+            var path = Path.GetTempFileName();
+            var volumes = new List<float>();
+            int created = 0, stopped = 0;
+            using var desktop = new global::Avalonia.Controls.ApplicationLifetimes.ClassicDesktopStyleApplicationLifetime
             {
-                created++;
-                return (p, volume, tag) =>
-                {
-                    Assert.Equal(path, p);
-                    Assert.Equal("first-show-cue", tag);
-                    volumes.Add(volume);
-                    return () => stopped++;
-                };
+                Args = new[] { "--first-show-preview" },
             };
-            Assert.True(ConditioningControlPanel.Avalonia.App.TryStartFirstShowPreview(desktop));
-            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            var stage = Assert.IsType<FirstShowStageWindow>(desktop.MainWindow);
-            Assert.Equal(1, created);
-            stage.Audio.Cue("pop");
-            Assert.Equal((float)(.65 * S.CueScale), Assert.Single(volumes));
-            CoreSettings.ServiceProvider = oldSettings;
-            CoreSettings.Current.MasterVolume = 50;
-            stage.Audio.Cue("pop");
-            Assert.Equal((float)(.5 * S.CueScale), volumes[1]);
-            Assert.Equal(1, stopped);
-            CoreAudio.IsOutputSuppressedProvider = () => true;
-            stage.Audio.Cue("pop");
-            CoreAudio.IsOutputSuppressedProvider = () => false;
-            CoreSettings.Current.MasterVolume = 0;
-            stage.Audio.Cue("pop");
-            Assert.Equal(2, volumes.Count);
-            stage.Close();
-            Assert.Equal(2, stopped);
+            try
+            {
+                CoreSettings.ServiceProvider = null;
+                CoreAudio.PlayStoppableProvider = null;
+                CoreAudio.PlayOneShotProvider = null;
+                CoreAudio.IsOutputSuppressedProvider = () => false;
+                CoreModArt.AudioOverridePathProvider = _ => path;
+                FirstShowService.PreviewAudioPlayer = () =>
+                {
+                    created++;
+                    return (p, volume, tag) =>
+                    {
+                        Assert.Equal(path, p);
+                        Assert.Equal("first-show-cue", tag);
+                        volumes.Add(volume);
+                        return () => stopped++;
+                    };
+                };
+                Assert.True(ConditioningControlPanel.Avalonia.App.TryStartFirstShowPreview(desktop));
+                desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                var stage = Assert.IsType<FirstShowStageWindow>(desktop.MainWindow);
+                Assert.Equal(1, created);
+                stage.Audio.Cue("pop");
+                Assert.Equal((float)(.65 * S.CueScale), Assert.Single(volumes));
+                CoreSettings.ServiceProvider = oldSettings;
+                CoreSettings.Current.MasterVolume = 50;
+                stage.Audio.Cue("pop");
+                Assert.Equal((float)(.5 * S.CueScale), volumes[1]);
+                Assert.Equal(1, stopped);
+                CoreAudio.IsOutputSuppressedProvider = () => true;
+                stage.Audio.Cue("pop");
+                CoreAudio.IsOutputSuppressedProvider = () => false;
+                CoreSettings.Current.MasterVolume = 0;
+                stage.Audio.Cue("pop");
+                Assert.Equal(2, volumes.Count);
+                stage.Close();
+                Assert.Equal(2, stopped);
+            }
+            finally
+            {
+                desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                FirstShowService.Stop();
+                EmiDeskService.Instance.Window?.ShutDown();
+                desktop.MainWindow = null;
+                FirstShowService.PreviewAudioPlayer = oldFactory;
+                CoreSettings.ServiceProvider = oldSettings;
+                CoreAudio.PlayStoppableProvider = oldStoppable;
+                CoreAudio.PlayOneShotProvider = oldOneShot;
+                CoreAudio.IsOutputSuppressedProvider = oldSuppressed;
+                CoreModArt.AudioOverridePathProvider = oldModAudio;
+                File.Delete(path);
+            }
+            Assert.Same(oldStoppable, CoreAudio.PlayStoppableProvider);
+            Assert.Same(oldOneShot, CoreAudio.PlayOneShotProvider);
+            Assert.Same(oldSuppressed, CoreAudio.IsOutputSuppressedProvider);
+            Assert.Same(oldModAudio, CoreModArt.AudioOverridePathProvider);
+            return Task.CompletedTask;
         }
         finally
         {
-            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            FirstShowService.Stop();
-            EmiDeskService.Instance.Window?.ShutDown();
-            desktop.MainWindow = null;
-            FirstShowService.PreviewAudioPlayer = oldFactory;
-            CoreSettings.ServiceProvider = oldSettings;
-            File.Delete(path);
+            CoreAudio.PlayStoppableProvider = originalStoppable;
+            CoreAudio.PlayOneShotProvider = originalOneShot;
+            CoreAudio.IsOutputSuppressedProvider = originalSuppressed;
+            CoreModArt.AudioOverridePathProvider = originalModAudio;
         }
-        return Task.CompletedTask;
     });
 
     [Theory]
