@@ -54,9 +54,8 @@ internal static class AccountSeed
         patreon.PeerDisplayName = () => discord.CustomDisplayName; // WPF PatreonService
 
         // WPF App.IsLoggedIn / UserDisplayName / the PatreonService gates.
-        CoreAccount.IsLoggedInProvider = () => (!CoreSettings.Current.MergedSignInPending ||
-            (!string.IsNullOrEmpty(CoreAccount.UnifiedUserId) && !string.IsNullOrEmpty(CoreSettings.Current.AuthToken))) &&
-            (patreon.IsAuthenticated || discord.IsAuthenticated || substar.IsAuthenticated || !string.IsNullOrEmpty(CoreAccount.UnifiedUserId));
+        CoreAccount.IsLoggedInProvider = () => patreon.IsAuthenticated || discord.IsAuthenticated
+            || substar.IsAuthenticated || !string.IsNullOrEmpty(CoreAccount.UnifiedUserId);
         CoreAccount.DisplayNameProvider = () =>
         {
             var s = CoreSettings.Current;
@@ -95,12 +94,12 @@ internal static class AccountSeed
 
     /// <summary>WPF App.xaml.cs:2267 restore: the unified id persisted from the previous session. Unlike WPF,
     /// only when something can still prove it (an auth token, or a signed-in provider): with no Secret Service
-    /// the token is gone after a restart, and showing "signed in" with nothing behind it is worse than signed out.</summary>
+    /// the token is gone after a restart, so the identity is not restored except for a pending merged swap.</summary>
     internal static void RestoreSession()
     {
         var id = CoreSettings.Current.UnifiedId;
         if (string.IsNullOrEmpty(id)) return;
-        if (string.IsNullOrEmpty(CoreSettings.Current.AuthToken)
+        if (!CoreSettings.Current.MergedSignInPending && string.IsNullOrEmpty(CoreSettings.Current.AuthToken)
             && Patreon?.IsAuthenticated != true && Discord?.IsAuthenticated != true && SubscribeStar?.IsAuthenticated != true)
         {
             Log.Information("Stored UnifiedUserId not restored: no auth token and no signed-in provider");

@@ -114,8 +114,8 @@ public class MergedAccountRecoveryReviewTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("u_canon123", settings.UnifiedId);
             if (provider != null) CoreSettings.Current.MergedSignInPending = true;
-            Assert.Equal(provider != null, CoreAccount.IsLoggedIn);
-            Assert.Equal(provider != null ? "u_canon123" : null, CoreAccount.UnifiedUserId);
+            Assert.True(CoreAccount.IsLoggedIn);
+            Assert.Equal("u_canon123", CoreAccount.UnifiedUserId);
             Assert.Equal(7, settings.PlayerLevel);
             Assert.Equal(42, settings.PlayerXP);
             var expected = provider switch
@@ -135,9 +135,9 @@ public class MergedAccountRecoveryReviewTests
             // The pending merge survives a restart; the startup exchange clears it.
             (settings.AuthToken, settings.MergedSignInPending, CoreAccount.UnifiedUserId) = (null, JsonConvert.DeserializeObject<AppSettings>(JsonConvert.SerializeObject(settings))!.MergedSignInPending, null);
             AccountSeed.RestoreSession();
-            Assert.False(CoreAccount.IsLoggedIn);
+            Assert.True(CoreAccount.IsLoggedIn);
             await AccountSeed.ValidateRestoredSessionAsync();
-            Assert.Equal(provider != null, CoreAccount.IsLoggedIn);
+            Assert.True(CoreAccount.IsLoggedIn && CoreAccount.UnifiedUserId == "u_canon123");
             Assert.Equal(provider != null ? "canonical-token" : null, settings.AuthToken);
         }
         finally
@@ -189,7 +189,9 @@ public class MergedAccountRecoveryReviewTests
             Dispatcher.UIThread.RunJobs();
             Assert.Contains(server.Requests, r => r.Path == (purchase ? "/v2/backroom/counter/buy" : "/v2/ai/chat"));
             Assert.Equal("u_canon123", settings.UnifiedId);
-            Assert.Null(settings.AuthToken);
+            CoreAccount.UnifiedUserId = null;
+            AccountSeed.RestoreSession();
+            Assert.True(CoreAccount.IsLoggedIn && CoreAccount.UnifiedUserId == "u_canon123" && settings.AuthToken == null);
             Assert.True(StartupLadder.Inbox.Contains("merged-account-signin:u_canon123"));
             Assert.Equal(Loc.Get("btn_link_discord"), discord.Text); // WPF MainWindow.Login.cs:56 UpdateDiscordUI
         }

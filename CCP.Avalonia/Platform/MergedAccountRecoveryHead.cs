@@ -67,7 +67,6 @@ internal static class MergedAccountRecoveryHead
         if (AccountSeed.SubscribeStar?.IsAuthenticated == true &&
             await ExchangeAsync(AccountSeed.SubscribeStar.GetAccessToken, (v, t) => v.AuthenticateWithSubstarAsync(t))) return true;
         CoreSettings.Current.MergedSignInPending = true;
-        CoreAccount.UnifiedUserId = null;
         return false;
     }
 

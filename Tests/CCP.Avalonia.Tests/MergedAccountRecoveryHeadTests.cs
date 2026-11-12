@@ -45,9 +45,9 @@ public class MergedAccountRecoveryHeadTests
             MergedAccountRecovery.LastSwap.GetAwaiter().GetResult();
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("u_canon123", settings.UnifiedId);
-            Assert.Null(CoreAccount.UnifiedUserId);
+            Assert.Equal("u_canon123", CoreAccount.UnifiedUserId);
             Assert.Null(settings.AuthToken);
-            Assert.False(sync.Loaded);
+            Assert.False(sync.Loaded || sync.PushAsync("test").GetAwaiter().GetResult());
             Assert.Equal("u_canon123", quests.Progress.OwnerUnifiedId);
             Assert.Equal(3, quests.Progress.DailyQuestsCompletedToday);
             Assert.Equal(7, settings.PlayerLevel);
