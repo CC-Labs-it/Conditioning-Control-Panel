@@ -163,7 +163,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             SetLabel(text, color);
             base.Show();   // first call maps it; later calls just unhide
-            if (reshow && CoreSettings.Current.ChaosPinOnTop) RaiseWindow(this);
+            if (reshow && CoreSettings.Current.ChaosPinOnTop && CoreEngine.Video?.IsPlaying == true) RaiseWindow(this);
             _beat.Start();   // steps t=0 at once (alpha 0, rise +6) in this same job, before any frame
         }
 

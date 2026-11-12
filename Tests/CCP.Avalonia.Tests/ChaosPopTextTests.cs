@@ -230,6 +230,11 @@ public sealed class ChaosPopTextTests
             var prepare = ChaosPopText.Prepare;
             var canShow = ChaosPopText.PlatformCanShow;
             var raise = ChaosPopText.RaiseWindow;
+            var previousVideo = CoreEngine.Video;
+            var video = new MandatoryVideoScheduler(null!);
+            var playing = typeof(MandatoryVideoScheduler).GetField("_playing", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            playing.SetValue(video, true);
+            CoreEngine.Video = video;
             bool pinned = CoreSettings.Current.ChaosPinOnTop;
             var raised = new List<Window>();
             ChaosPopText.RaiseWindow = w => raised.Add(w);
@@ -289,6 +294,25 @@ public sealed class ChaosPopTextTests
                 Assert.Equal((int)Math.Round((800 - 140) * k), w.Position.X);
 
                 w.Frame(490);
+                playing.SetValue(video, false);
+                raised.Clear();
+                ChaosPopText.Show(800, 300, "gold", Colors.Gold);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Same(w, Assert.Single(ChaosPopText.Pool.All));
+                Assert.True(w.IsVisible);
+                Assert.Empty(raised);   // pinned but video idle
+
+                w.Frame(490);
+                CoreEngine.Video = null;
+                ChaosPopText.Show(800, 300, "gold", Colors.Gold);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Same(w, Assert.Single(ChaosPopText.Pool.All));
+                Assert.True(w.IsVisible);
+                Assert.Empty(raised);   // no scheduler
+
+                w.Frame(490);
+                playing.SetValue(video, true);
+                CoreEngine.Video = video;
                 CoreSettings.Current.ChaosPinOnTop = false;
                 raised.Clear();
                 ChaosPopText.Show(800, 300, "gold", Colors.Gold);
@@ -302,6 +326,7 @@ public sealed class ChaosPopTextTests
                 ChaosPopText.ShutdownPool();
                 ChaosPopText.Prepare = prepare;
                 ChaosPopText.RaiseWindow = raise;
+                CoreEngine.Video = previousVideo;
                 CoreSettings.Current.ChaosPinOnTop = pinned;
                 BeatLoop.Time = clock;
                 ChaosPopText.PlatformCanShow = canShow;
