@@ -73,23 +73,44 @@ public sealed class FirstShowStageTests
         void FinishPat(int ms) { clock.Advance(ms); emi.AdvancePatFeedback(); }
 
         Assert.True(FirstShowService.Stop());
-        Pat();                         // first pat is counted
-        FinishPat(1000);
-        Pat();                         // second touch is a cooldown flick
-        Assert.Equal("^_~", emi.Face);
-        FinishPat(1000);
-        int pets = EmiState.Current.PetsTotal;
+        var state = EmiState.Current;
+        int pets = state.PetsTotal;
+        bool gist = state.PetGistGot;
+        // Start inside the existing cooldown so the ladder is exercised without recording a pet
+        // or scheduling an EMI state save. A six-second cooldown matches WPF React.cs:115-118/153-170.
+        typeof(EmiDeskWindow).GetField("_petCooldownUntil",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .SetValue(emi, clock.GetUtcNow().UtcDateTime.AddSeconds(6));
+        try
+        {
+            Pat();
+            FinishPat(1000);
+            Pat();
+            Assert.Equal("^_~", emi.Face);
+            FinishPat(1000);
 
-        Assert.True(FirstShowService.Open());
-        Assert.True(emi.PresentationActive);
-        Assert.True(FirstShowService.Stop());
-        Assert.False(emi.PresentationActive);
-        Pat();                         // still in cooldown, but no inherited third-touch glee
-        Assert.Equal("^_~", emi.Face);
-        FinishPat(300);
-        Assert.Equal("^_~", emi.Face); // stale ladder would show (≧◡≦) here
-        Assert.Equal(pets, EmiState.Current.PetsTotal);
-        return Task.CompletedTask;
+            Assert.True(FirstShowService.Open());
+            Assert.True(emi.PresentationActive);
+            Assert.True(FirstShowService.Stop());
+            Assert.False(emi.PresentationActive);
+            Pat();                     // no inherited third-touch glee
+            Assert.Equal("^_~", emi.Face);
+            FinishPat(300);
+            Assert.Equal("^_~", emi.Face);
+            Assert.Equal(pets, state.PetsTotal);
+            Assert.Equal(gist, state.PetGistGot);
+            return Task.CompletedTask;
+        }
+        finally
+        {
+            // Also clean up if a regression causes a pet to be recorded or an assertion fails.
+            if (state.PetsTotal != pets || state.PetGistGot != gist)
+            {
+                state.PetsTotal = pets;
+                state.PetGistGot = gist;
+                EmiState.SaveNow(); // any queued save will also see the restored state
+            }
+        }
     });
 
     private sealed class PresentationPatClock : TimeProvider
