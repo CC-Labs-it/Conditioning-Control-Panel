@@ -125,15 +125,11 @@ internal static class WpfRenderHarness
         "Resources/Theme/MainWindow.xaml"
     };
 
-    private static readonly object Gate = new();
-    private static bool _ready;
-
     /// <summary>The one bootstrap pump, its completion signal and what escaped it. Started once
     /// per process: a slow runner that outlives the wait must not get a rival pump racing the
     /// first one over the same Application (2026-11-04 windows CI: a 30 s timeout, then
     /// NullReferenceExceptions inside ResourceDictionary as two threads merged at once).</summary>
-    private static ManualResetEventSlim? _booted;
-    private static Exception? _bootFailure;
+    private static readonly BootstrapOnce Bootstrap = new();
     private static Dispatcher? _dispatcher;
 
     /// <summary>The app theme, parked while no render body is running.</summary>
@@ -144,29 +140,18 @@ internal static class WpfRenderHarness
 
     /// <summary>
     /// Brings up the STA thread and the themed Application. Safe to call from every test; the first
-    /// call does the work and the rest are a lock and a bool.
+    /// call starts the work and later calls observe the same completion.
     /// </summary>
     internal static void EnsureApplication()
     {
-        lock (Gate)
-        {
-            if (_ready) return;
-            if (_booted == null) StartBootstrap();
-            if (!_booted!.Wait(TimeSpan.FromSeconds(120)))
-                throw new InvalidOperationException("WPF render harness: Application bootstrap timed out");
-            if (_bootFailure != null)
-                throw new InvalidOperationException("WPF render harness: Application bootstrap failed", _bootFailure);
-
-            _ready = true;
-        }
+        Bootstrap.Ensure(StartBootstrap, TimeSpan.FromSeconds(120));
     }
 
-    private static void StartBootstrap()
+    private static void StartBootstrap(Action<Exception?> complete)
     {
-        var ready = _booted = new ManualResetEventSlim(false);
-
         var pump = new Thread(() =>
         {
+            Exception? failure = null;
             try
             {
                 if (Application.Current == null)
@@ -204,12 +189,12 @@ internal static class WpfRenderHarness
 
                 _dispatcher = Dispatcher.CurrentDispatcher;
             }
-            catch (Exception ex) { _bootFailure = ex; }
-            finally { ready.Set(); }
+            catch (Exception ex) { failure = ex; }
+            finally { complete(failure); }
 
             // Keep the Application's dispatcher alive for the rest of the run, so anything
             // reaching for Application.Current.Dispatcher finds a pump and not a dead thread.
-            if (_bootFailure == null) Dispatcher.Run();
+            if (failure == null) Dispatcher.Run();
         });
 
         pump.SetApartmentState(ApartmentState.STA);
