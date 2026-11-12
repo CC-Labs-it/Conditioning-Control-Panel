@@ -54,6 +54,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         internal static Action<Window> RaiseWindow = w => X11Overlay.Raise(w);
+        internal static Func<TopLevel, bool, bool> SetClickThrough = X11Overlay.SetClickThrough;
+        internal static Func<Window, PixelRect, bool, bool, bool> SetOverrideRedirect = X11Overlay.SetOverrideRedirect;
 
         /// <summary>WPF ChaosEStimOverlay.cs:46,329: realize both windows once, then idle hidden.</summary>
         public static void EnsureCreated() => OnUi(() =>
@@ -167,7 +169,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (CoreSettings.Current.DualMonitorEnabled)
                 foreach (var s in Screens!.All) bounds = bounds.Union(s.Bounds);
             if (SkipPlatformChecksForTests) return true;
-            if (!X11Overlay.SetClickThrough(this, true) | !X11Overlay.SetOverrideRedirect(this, bounds))
+            if (!SetClickThrough(this, true) | !SetOverrideRedirect(this, bounds, false, Topmost))
             {
                 Log.Warning("ChaosEStim: the platform refused a click-through topmost overlay, no lightning");
                 return false;

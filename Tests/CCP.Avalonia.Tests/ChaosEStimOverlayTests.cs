@@ -144,6 +144,50 @@ public sealed class ChaosEStimOverlayTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void Bolt_preparation_receives_the_birth_stacking_band(bool pinned) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var oldProvider = CoreSettings.ServiceProvider;
+        var canShow = ChaosEStimOverlay.CanShow;
+        var clickThrough = ChaosEStimOverlay.SetClickThrough;
+        var overrideRedirect = ChaosEStimOverlay.SetOverrideRedirect;
+        var skipChecks = ChaosEStimOverlay.SkipPlatformChecksForTests;
+        var raise = ChaosEStimOverlay.RaiseWindow;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        settings.Current.ChaosPinOnTop = pinned;
+        var calls = 0;
+        ChaosEStimOverlay.CanShow = () => true;
+        ChaosEStimOverlay.SkipPlatformChecksForTests = false;
+        ChaosEStimOverlay.SetClickThrough = (_, _) => true;
+        ChaosEStimOverlay.SetOverrideRedirect = (window, bounds, passive, topmost) =>
+        {
+            calls++;
+            Assert.Equal(pinned, topmost);
+            Assert.Equal(window.Topmost, topmost);
+            return true;
+        };
+        ChaosEStimOverlay.RaiseWindow = _ => { };
+        try
+        {
+            ChaosEStimOverlay.Strike(new[] { (new PixelPoint(0, 0), new PixelPoint(100, 100)) });
+            Assert.NotNull(ChaosEStimOverlay.Active);
+            Assert.Equal(1, calls);
+        }
+        finally
+        {
+            ChaosEStimOverlay.CloseActive();
+            ChaosEStimOverlay.CanShow = canShow;
+            ChaosEStimOverlay.SetClickThrough = clickThrough;
+            ChaosEStimOverlay.SetOverrideRedirect = overrideRedirect;
+            ChaosEStimOverlay.SkipPlatformChecksForTests = skipChecks;
+            ChaosEStimOverlay.RaiseWindow = raise;
+            CoreSettings.ServiceProvider = oldProvider;
+        }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void Bolt_pinning_controls_birth_and_raises(bool pinned) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
