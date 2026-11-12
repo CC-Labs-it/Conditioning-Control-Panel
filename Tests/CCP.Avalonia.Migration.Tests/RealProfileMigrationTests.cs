@@ -179,6 +179,7 @@ public sealed class RealProfileMigrationTests
             try
             {
                 AppBuilder.Configure<ProfileApp>()
+                    .WithInterFont()
                     .UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithLifetime(lifetime);
@@ -261,6 +262,8 @@ public sealed class RealProfileMigrationTests
         // runner is UTC, the fixture +01:00) re-serializes as different text for the same instant.
         var (beforeToken, afterToken) = (AsUtc(ReadToken(sourcePath)), AsUtc(ReadToken(copyPath)));
         if (JToken.DeepEquals(beforeToken, afterToken)) return "exit-flush-same-content";
+        if (relative == "achievements.json" && IsUnchangedChatBackfill(beforeToken, afterToken))
+            return "companion-chat-backfill";
         if (relative != "quests.json" || beforeToken is not JObject before || afterToken is not JObject after) return null;
         // A day (week) passed since WPF last ran: the quests roll exactly as WPF rolls them.
         var progress = new QuestProgress
@@ -273,6 +276,43 @@ public sealed class RealProfileMigrationTests
         if (rolled.Length == 0) return null;
         foreach (var key in rolled) { before.Remove(key); after.Remove(key); }
         return JToken.DeepEquals(before, after) ? "quest-roll" : null;
+    }
+
+    // WPF GamificationBridge.cs:336-347 sets the one-time latch even when it finds no
+    // new chat credit. Accept that transition only if every other achievement value is equal.
+    private static bool IsUnchangedChatBackfill(JToken source, JToken saved)
+    {
+        if (source is not JObject before || saved is not JObject after) return false;
+        var oldLatch = before["CompanionChatBackfilled"];
+        if (oldLatch is not null && (oldLatch.Type != JTokenType.Boolean || (bool)oldLatch)) return false;
+        if (after["CompanionChatBackfilled"]?.Type != JTokenType.Boolean || (bool)after["CompanionChatBackfilled"]! != true) return false;
+        var normalized = (JObject)after.DeepClone();
+        if (oldLatch is null) normalized.Remove("CompanionChatBackfilled");
+        else normalized["CompanionChatBackfilled"] = false;
+        return JToken.DeepEquals(before, normalized);
+    }
+
+    [Theory]
+    [InlineData("{\"CompanionMessages\":0,\"CompanionChatBackfilled\":true,\"TotalXPEarned\":42}", true)]
+    [InlineData("{\"CompanionMessages\":0,\"CompanionChatBackfilled\":true,\"TotalXPEarned\":0}", false)]
+    [InlineData("{\"CompanionMessages\":1,\"CompanionChatBackfilled\":true,\"TotalXPEarned\":42}", false)]
+    [InlineData("{\"CompanionMessages\":0,\"CompanionChatBackfilled\":false,\"TotalXPEarned\":42}", false)]
+    [InlineData("{\"CompanionMessages\":0,\"CompanionChatBackfilled\":true}", false)]
+    public void Only_an_unchanged_chat_backfill_is_an_expected_transform(string saved, bool expected)
+    {
+        var source = JObject.Parse("{\"CompanionMessages\":0,\"CompanionChatBackfilled\":false,\"TotalXPEarned\":42}");
+        Assert.Equal(expected, IsUnchangedChatBackfill(source, JObject.Parse(saved)));
+        Assert.False(IsUnchangedChatBackfill(JObject.Parse(saved), JObject.Parse(saved)));
+    }
+
+    [Fact]
+    public void A_missing_backfill_latch_may_only_be_added_as_true()
+    {
+        var source = JObject.Parse("{\"CompanionMessages\":0,\"TotalXPEarned\":42}");
+        Assert.True(IsUnchangedChatBackfill(source,
+            JObject.Parse("{\"CompanionMessages\":0,\"TotalXPEarned\":42,\"CompanionChatBackfilled\":true}")));
+        Assert.False(IsUnchangedChatBackfill(source,
+            JObject.Parse("{\"CompanionMessages\":0,\"TotalXPEarned\":43,\"CompanionChatBackfilled\":true}")));
     }
 
     private static readonly System.Text.RegularExpressions.Regex OffsetDate =
