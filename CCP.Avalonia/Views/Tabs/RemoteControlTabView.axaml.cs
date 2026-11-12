@@ -196,6 +196,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF UpdateRemoteStatus; <paramref name="idle"/> is the no-session line the markup starts with.</summary>
         private void UpdateRemoteStatus(bool connected, bool idle = false)
         {
+            BtnRemoteMore.IsVisible = connected && !idle;
             RemoteStatusDot.Fill = idle ? Grey : connected ? Green : Orange;
             BindKey(TxtRemoteStatus, idle ? "label_remote_idle" : connected ? "label_controller_connected" : "label_waiting_for_controller");
             TxtRemoteStatus.Foreground = connected ? Green : Grey;
@@ -214,6 +215,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             await Relay.Value.StopAsync();
             ShowSession(null);
+        }
+
+        // WPF RemoteHudWindow.cs:446: More is a signal, independent of emote debounce.
+        private async void BtnRemoteMore_Click(object? sender, RoutedEventArgs e)
+        {
+            var sent = await Relay.Value.SendMoreSignalAsync();
+            TxtEmoteStatus.Text = sent
+                ? string.Format(Loc.Get("remote_hud_sent"), Loc.Get("remote_hud_more"))
+                : Loc.Get("remote_hud_not_sent");
         }
 
         private async void BtnStopRemote_Click(object? sender, RoutedEventArgs e) => await StopRemoteControl();
