@@ -52,7 +52,7 @@ public class BrowserAdBlockTests
         using var normal = JsonDocument.Parse(ScrolllerWebKitFilter.RulesFor(false));
         using var home = JsonDocument.Parse(ScrolllerWebKitFilter.RulesFor(true));
         Assert.Equal(1, normal.RootElement.GetArrayLength());
-        Assert.Equal(79, home.RootElement.GetArrayLength());
+        Assert.Equal(157, home.RootElement.GetArrayLength());
         Assert.Contains("hypnotube", home.RootElement.GetRawText());
         Assert.DoesNotContain("hypnotube", normal.RootElement.GetRawText());
     }
