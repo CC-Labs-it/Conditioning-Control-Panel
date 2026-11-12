@@ -8,7 +8,8 @@
 #      after installing just libpulse0 + libasound2, nothing is unresolved and no symbol undefined.
 #   2. No GLIBC symbol above GLIBC_CEILING, no GLIBCXX above GLIBCXX_CEILING.
 #   3. The plugin tree equals plugins.allow exactly, and no plugin declares a GPL license.
-#   4. probe.py decodes H.264+AAC (mp4), VP9+Opus (webm) and MP3 through the bundled libvlc
+#   4. probe.py decodes H.264+AAC (mp4, ts), VP9+Opus (webm), WMV2+WMA2 (wmv), FLV1+MP3 (flv)
+#      and MP3 through the bundled libvlc
 #      into vmem/amem, headless, with the default plugin discovery (no VLC_PLUGIN_PATH).
 # Test clips come from ffmpeg in CLIP_IMAGE and are cached in out/clips; nothing from it ships.
 set -euo pipefail
@@ -56,7 +57,8 @@ if [ "${1:-}" = --inside ]; then
     echo "$(find "$rt/vlc/plugins" -name '*.so' | wc -l) modules, runtime $(du -sh /rt | cut -f1) unpacked"
 
     echo "== 4. decode"
-    for c in "h264_aac.mp4 40 1.5" "vp9_opus.webm 40 1.5" "audio.mp3 0 1.5"; do
+    for c in "h264_aac.mp4 40 1.5" "vp9_opus.webm 40 1.5" "audio.mp3 0 1.5" \
+        "h264_aac.ts 40 1.5" "wmv2_wma.wmv 40 1.5" "flv1_mp3.flv 40 1.5"; do
         read -r clip frames secs <<<"$c"
         python3 /src/probe.py "$rt/libvlc.so.5" "/clips/$clip" "$frames" "$secs" || bad "decode $clip"
     done
@@ -68,7 +70,7 @@ runtime=$(realpath "${1:-$here/out/$ARTIFACT.tar.gz}")
 engine=${CONTAINER_ENGINE:-$(command -v podman || command -v docker || true)}
 [ -n "$engine" ] || { echo "check.sh: neither podman nor docker found" >&2; exit 1; }
 clips=$here/out/clips
-if [ ! -f "$clips/audio.mp3" ]; then
+if [ ! -f "$clips/flv1_mp3.flv" ]; then
     mkdir -p "$clips"
     # shellcheck disable=SC2016 # expanded by the container's sh
     "$engine" run --rm -v "$clips:/clips:z" "$CLIP_IMAGE" sh -euc '
@@ -78,6 +80,9 @@ if [ ! -f "$clips/audio.mp3" ]; then
         ffmpeg -v error -y $v $a -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest /clips/h264_aac.mp4
         ffmpeg -v error -y $v $a -c:v libvpx-vp9 -c:a libopus -shortest /clips/vp9_opus.webm
         ffmpeg -v error -y $a -c:a libmp3lame /clips/audio.mp3
+        ffmpeg -v error -y $v $a -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest /clips/h264_aac.ts
+        ffmpeg -v error -y $v $a -c:v wmv2 -c:a wmav2 -shortest /clips/wmv2_wma.wmv
+        ffmpeg -v error -y $v $a -c:v flv -c:a libmp3lame -ar 44100 -shortest /clips/flv1_mp3.flv
         chown '"$(id -u):$(id -g)"' /clips/*'
 fi
 tmp=$(mktemp -d)

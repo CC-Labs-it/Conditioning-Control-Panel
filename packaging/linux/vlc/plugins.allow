@@ -6,8 +6,12 @@ access/libfilesystem_plugin.so
 access/libimem_plugin.so
 stream_filter/libcache_read_plugin.so
 stream_filter/libcache_block_plugin.so
-# Containers. rawaud = the quiz drone's raw f32 stream.
+# Containers. rawaud = the quiz drone's raw f32 stream. asf = .wmv, ts = .ts (dvbpsi), avformat =
+# FFmpeg's demuxers for what VLC 3 has no native one for, .flv first (WPF MiniPlayerWindow.xaml.cs:16).
 demux/libmp4_plugin.so
+demux/libasf_plugin.so
+demux/libts_plugin.so
+demux/libavformat_plugin.so
 demux/libmkv_plugin.so
 demux/libavi_plugin.so
 demux/libes_plugin.so

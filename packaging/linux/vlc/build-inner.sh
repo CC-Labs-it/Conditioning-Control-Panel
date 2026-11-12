@@ -44,15 +44,14 @@ exec pkg-config "$@"
 EOF
 chmod +x /build/pkg-config
 export CPREFIX=$cprefix
-# avformat stays enabled although its demux is not shipped: 3.0.24 avcommon.h reads
-# LIBAVFORMAT_VERSION_MICRO and calls the removed avcodec_register_all() without it.
+# avformat = the demux plugin for .flv; 3.0.24 avcommon.h also needs it for avcodec to build.
 config=(--prefix="$prefix" --with-contrib="$cprefix" PKG_CONFIG=/build/pkg-config
     BUILDCC="gcc -std=gnu99"
     --disable-vlc --disable-lua --disable-qt --disable-skins2 --disable-ncurses --disable-dbus
     --disable-nls --disable-xcb --disable-wayland --disable-libgcrypt --disable-sout --disable-vlm
     --disable-postproc --disable-a52 --disable-update-check
-    --enable-avcodec --enable-swscale --enable-mpg123 --enable-vorbis --enable-opus --enable-flac
-    --enable-vpx --enable-dav1d --enable-soxr --enable-ogg --enable-mkv --enable-pulse --enable-alsa)
+    --enable-avcodec --enable-avformat --enable-swscale --enable-mpg123 --enable-vorbis --enable-opus --enable-flac
+    --enable-vpx --enable-dav1d --enable-soxr --enable-ogg --enable-mkv --enable-dvbpsi --enable-pulse --enable-alsa)
 ../configure "${config[@]}"
 make -j"$jobs" --no-print-directory
 make install --no-print-directory >/dev/null
