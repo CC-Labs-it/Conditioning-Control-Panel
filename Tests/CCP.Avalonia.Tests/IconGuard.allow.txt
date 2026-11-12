@@ -9,6 +9,7 @@
 # --- temporary (removed by L10 icons-shell-chrome) ---
 Views/Windows/EmiDesk/EmiFace.cs :: "Noto Sans Symbols 2, Segoe UI Symbol, Segoe UI Emoji, Nirmala UI, MS Gothic, Courier New, monospace" :: font: content - Emi's kaomoji mood text (chat content, not an icon); WPF EmiFace.cs fallback chain for its glyphs
 
+Views/Overlays/GazeRefineOverlay.cs :: new Path { Stroke = Brushes.HotPink :: path: animated gaze dwell progress ring, not an icon
 # --- content (c).1: companion/chat text ---
 Views/Controls/Companion/ChatThresholdView.axaml.cs :: good. it should~ 💕 :: chat sample bubble, companion text (content (c).1)
 
