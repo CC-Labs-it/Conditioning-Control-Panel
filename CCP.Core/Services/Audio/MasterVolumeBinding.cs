@@ -14,7 +14,8 @@ public sealed class MasterVolumeBinding : IDisposable
     {
         _apply = apply;
         _service = service ?? CoreSettings.Service;
-        // Subscribe before reading Current, so a replacement in between is always seen.
+        // Subscribe before reading Current. SettingsService orders the subscription against its swap,
+        // so a replacement is either delivered to this handler or already visible to the read below.
         if (_service != null) _service.CurrentReplaced += Replaced;
         Replaced();
     }

@@ -86,7 +86,30 @@ namespace ConditioningControlPanel.Services
         /// <c>ModService</c>'s <c>PropertyChanged</c> hook) must re-bind to the new
         /// <see cref="Current"/>, otherwise their edits silently stop persisting.
         /// </summary>
-        public event Action? CurrentReplaced;
+        public event Action? CurrentReplaced
+        {
+            add { lock (_replaceGate) _currentReplaced += value; }
+            remove { lock (_replaceGate) _currentReplaced -= value; }
+        }
+        private Action? _currentReplaced;
+        // Orders a swap of Current against subscription. Without it a subscriber could miss the
+        // swap entirely: the swapping thread reads the handler list before its store to Current
+        // is visible (store-load reordering), the subscriber is not in that list and still reads
+        // the old instance. Under the gate a subscriber is either in the list or sees the new one.
+        private readonly object _replaceGate = new();
+        // Test seam: runs inside the gate between taking the handler list and the swap.
+        internal Action? ReplacingSeam;
+
+        private Action? Swap(AppSettings settings)
+        {
+            lock (_replaceGate)
+            {
+                var handlers = _currentReplaced;
+                ReplacingSeam?.Invoke();
+                Current = settings;
+                return handlers;
+            }
+        }
 
         /// <summary>
         /// True if the settings file did not exist when the service was initialized (fresh install).
@@ -1148,22 +1171,22 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public void RestoreFrom(AppSettings settings)
         {
-            Current = settings ?? throw new ArgumentNullException(nameof(settings));
+            var handlers = Swap(settings ?? throw new ArgumentNullException(nameof(settings)));
             // A cloud backup taken before the Circe neutral pass carries the old pools and an unset
             // flag. Migrate it here, before ModService re-derives the pools from it, or the old
             // text is live until the next launch.
             RunCirceNeutralMigration(settings);
             // Notify listeners (ModService re-binds its per-mod pool sync + re-derives the
             // active pools) BEFORE we persist, so any backups they seed get written too.
-            try { CurrentReplaced?.Invoke(); } catch (Exception ex) { Log.Warning("CurrentReplaced handler failed: {Error}", ex.Message); }
+            try { handlers?.Invoke(); } catch (Exception ex) { Log.Warning("CurrentReplaced handler failed: {Error}", ex.Message); }
             SaveImmediate();
             Log.Information("Settings restored from external source");
         }
 
         public void Reset()
         {
-            Current = new AppSettings();
-            try { CurrentReplaced?.Invoke(); } catch (Exception ex) { Log.Warning("CurrentReplaced handler failed: {Error}", ex.Message); }
+            var handlers = Swap(new AppSettings());
+            try { handlers?.Invoke(); } catch (Exception ex) { Log.Warning("CurrentReplaced handler failed: {Error}", ex.Message); }
             SaveImmediate();
         }
     }

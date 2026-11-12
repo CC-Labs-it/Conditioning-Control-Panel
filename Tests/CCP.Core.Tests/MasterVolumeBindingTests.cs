@@ -58,6 +58,33 @@ public sealed class MasterVolumeBindingTests
         finally { Volatile.Write(ref go, -1); worker.Join(); service.RestoreFrom(original); }
     }
     [Fact]
+    public void Binding_built_while_the_handler_list_is_taken_still_sees_the_swap()
+    {
+        // Holds Reset where a reordered store would leave it: handler list already read, new
+        // settings not yet visible. A binding built then must wait for the swap, not miss it.
+        var service = new SettingsService(); var original = service.Current;
+        original.MasterVolume = 0;
+        MasterVolumeBinding? built = null;
+        using var done = new ManualResetEventSlim();
+        Thread? builder = null;
+        service.ReplacingSeam = () =>
+        {
+            // A thread, not a Task: Task.Wait may inline the work here, inside the gate.
+            builder = new Thread(() => { built = new MasterVolumeBinding(_ => { }, service); done.Set(); });
+            builder.Start();
+            done.Wait(TimeSpan.FromMilliseconds(500));   // finishes here only if it skipped the gate
+        };
+        try
+        {
+            service.Reset();
+            builder!.Join();
+            using var watch = built!;
+            Assert.NotEqual(0, service.Current.MasterVolume);
+            Assert.Equal(service.Current.MasterVolume, watch.Level);
+        }
+        finally { service.ReplacingSeam = null; service.RestoreFrom(original); }
+    }
+    [Fact]
     public void Replacement_in_flight_at_disposal_does_not_reattach()
     {
         var service = new SettingsService(); var original = service.Current;
