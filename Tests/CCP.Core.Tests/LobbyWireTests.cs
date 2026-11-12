@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Lobby;
 using Xunit;
 
@@ -35,6 +37,23 @@ public class LobbyWireTests
         Assert.Equal("w", game.White);
         Assert.Equal("b", game.Black);
         Assert.Equal(4, game.Moves);
+    }
+
+    [Fact]
+    public void Pbp_lobby_cosmetics_use_the_head_registry_and_drop_unknown_frames()
+    {
+        var previous = PlayerLook.KnownIdsProvider;
+        const string known = "{\"players\":[{\"id\":\"p\",\"cosmetics\":{\"frame_id\":\"profile.frame.lace\"}}]}";
+        const string unknown = "{\"players\":[{\"id\":\"p\",\"cosmetics\":{\"frame_id\":\"unshipped\"}}]}";
+        try
+        {
+            PlayerLook.KnownIdsProvider = null;
+            Assert.Null(Assert.Single(PbpLobbyApi.Parse(known).Open).Look.FrameId);
+            PlayerLook.KnownIdsProvider = () => (new HashSet<string>(), new HashSet<string> { "profile.frame.lace" });
+            Assert.Equal("profile.frame.lace", Assert.Single(PbpLobbyApi.Parse(known).Open).Look.FrameId);
+            Assert.Same(PlayerLook.None, Assert.Single(PbpLobbyApi.Parse(unknown).Open).Look);
+        }
+        finally { PlayerLook.KnownIdsProvider = previous; }
     }
 
     [Theory]
