@@ -1,5 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
+using Tmds.DBus.Protocol;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
@@ -15,6 +17,37 @@ internal static class DesktopIdle
             || string.Equals(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), "wayland", StringComparison.OrdinalIgnoreCase)
             || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"))) return null;
         return ReadX11(null);
+    }
+
+    internal static Task<int?> ReadSecondsAsync()
+    {
+        if (OperatingSystem.IsLinux() && (string.Equals(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), "wayland", StringComparison.OrdinalIgnoreCase)
+            || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"))))
+            return ReadWaylandAsync(ReadMutterMillisecondsAsync);
+        return Task.FromResult(ReadSeconds());
+    }
+
+    // Mutter's idle monitor measures desktop-wide input and returns milliseconds. A missing or
+    // unresponsive session bus is an unavailable probe, bounded independently of the UI thread.
+    internal static async Task<int?> ReadWaylandAsync(Func<Task<ulong>> readMilliseconds)
+    {
+        try { return (int)Math.Min((await readMilliseconds().WaitAsync(TimeSpan.FromSeconds(2))) / 1000, int.MaxValue); }
+        catch { return null; }
+    }
+
+    private static async Task<ulong> ReadMutterMillisecondsAsync()
+    {
+        using var bus = new DBusConnection(DBusAddress.Session!);
+        // Disposing this connection on timeout also ends any outstanding call.
+        async Task<ulong> ReadAsync()
+        {
+            await bus.ConnectAsync();
+            var writer = bus.GetMessageWriter();
+            writer.WriteMethodCallHeader(destination: "org.gnome.Mutter.IdleMonitor",
+                path: "/org/gnome/Mutter/IdleMonitor/Core", @interface: "org.gnome.Mutter.IdleMonitor", member: "GetIdletime");
+            return await bus.CallMethodAsync(writer.CreateMessage(), (Message m, object? _) => m.GetBodyReader().ReadUInt64(), null);
+        }
+        return await ReadAsync().WaitAsync(TimeSpan.FromSeconds(2));
     }
 
     // XScreenSaver reports the time since the last input across the X11 desktop. Each read owns

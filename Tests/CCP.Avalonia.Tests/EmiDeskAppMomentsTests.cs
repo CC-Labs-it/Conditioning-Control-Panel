@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
@@ -113,6 +114,66 @@ public class EmiDeskAppMomentsTests
     public void X11ProbeReturnsNoValueForUnavailableDisplay()
     {
         if (OperatingSystem.IsLinux()) Assert.Null(DesktopIdle.ReadX11("not-a-display"));
+    }
+
+    [Fact]
+    public Task WaylandIdleFlowsThroughClockAndStopsAfterUnwire() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var desk = new EmiDeskService();
+        var now = new DateTime(2026, 1, 1, 12, 0, 0);
+        ulong idleMs = 0;
+        var seen = new List<(string name, object? context)>();
+        desk.ClockLocal = () => now;
+        desk.ClockUtc = () => now;
+        desk.ReadIdleAsync = () => DesktopIdle.ReadWaylandAsync(() => Task.FromResult(idleMs));
+        desk.ClockMoment = (name, context) => seen.Add((name, context));
+        typeof(EmiDeskService).GetProperty(nameof(EmiDeskService.IsOut))!.SetValue(desk, true);
+        desk.StartClock();
+        try
+        {
+            foreach (var value in new ulong[] { 299999, 300000, 1199999, 1200000, 1201000, 1000, 1200000 })
+            { idleMs = value; await desk.ClockTickAsync(now); }
+            Assert.Equal(new[] { "ambient", "idleShort", "idleShort", "appIdleLong", "ambient", "appIdleLong" }, seen.Select(x => x.name));
+            Assert.Equal(new[] { 5, 19, 20, 20 }, seen.Where(x => x.context != null)
+                .Select(x => (int)x.context!.GetType().GetProperty("minutes")!.GetValue(x.context)!));
+            var pending = new TaskCompletionSource<int?>();
+            desk.ReadIdleAsync = () => pending.Task;
+            var tick = desk.ClockTickAsync(now);
+            desk.StopClock();
+            seen.Clear();
+            pending.SetResult(1200);
+            await tick;
+            Assert.Empty(seen);
+        }
+        finally { desk.StopClock(); }
+    });
+
+    [Fact]
+    public Task WaylandPendingReadCannotFireAfterStop() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var desk = new EmiDeskService();
+        var seen = new List<string>();
+        var pending = new TaskCompletionSource<int?>();
+        desk.ReadIdleAsync = () => pending.Task;
+        desk.ClockMoment = (name, _) => seen.Add(name);
+        typeof(EmiDeskService).GetProperty(nameof(EmiDeskService.IsOut))!.SetValue(desk, true);
+        desk.StartClock();
+        try
+        {
+            var tick = desk.ClockTickAsync(DateTime.UtcNow);
+            desk.StopClock();
+            pending.SetResult(1200);
+            await tick;
+            Assert.Empty(seen);
+        }
+        finally { desk.StopClock(); }
+    });
+
+    [Fact]
+    public async Task WaylandUnavailableProbeFallsBackSafely()
+    {
+        Assert.Null(await DesktopIdle.ReadWaylandAsync(() => Task.FromException<ulong>(new InvalidOperationException())));
+        Assert.Equal(int.MaxValue, await DesktopIdle.ReadWaylandAsync(() => Task.FromResult(ulong.MaxValue)));
     }
 
     private static void Raise(object? source, Type type, string name, params object[] args)

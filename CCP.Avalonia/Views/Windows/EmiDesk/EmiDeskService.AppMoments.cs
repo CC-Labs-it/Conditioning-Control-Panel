@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.EmiDesk;
 using ConditioningControlPanel.Services;
@@ -15,6 +16,8 @@ internal sealed partial class EmiDeskService
     internal Func<DateTime> ClockLocal = () => DateTime.Now;
     internal Func<DateTime> ClockUtc = () => DateTime.UtcNow;
     internal Func<int?> IdleSeconds = Platform.DesktopIdle.ReadSeconds;
+    internal Func<Task<int?>> ReadIdleAsync = Platform.DesktopIdle.ReadSecondsAsync;
+    private bool _clockPending;
     internal Action<string, object?>? ClockMoment;
     private AutonomyScheduler? _momentAutonomy;
     private SpeechEngine? _momentSpeech;
@@ -120,13 +123,32 @@ internal sealed partial class EmiDeskService
         _clockTimer = null;
     }
 
-    private void OnClockTick(object? sender, EventArgs e)
+    private async void OnClockTick(object? sender, EventArgs e) => await ClockTickAsync(LaunchedUtc);
+
+    internal async Task ClockTickAsync(DateTime launchedUtc)
     {
-        try { ClockTick(LaunchedUtc); }
+        var timer = _clockTimer;
+        if (timer == null || !IsOut || _clockPending) return;
+        _clockPending = true;
+        try
+        {
+            int idle;
+            try { idle = await ReadIdleAsync() ?? 0; } catch { idle = 0; }
+            if (_clockTimer == timer && IsOut) ClockTick(launchedUtc, idle);
+        }
         catch (Exception ex) { Serilog.Log.Debug(ex, "[EmiDesk] clock tick failed"); }
+        finally { _clockPending = false; }
     }
 
     internal void ClockTick(DateTime launchedUtc)
+    {
+        if (!IsOut) return;
+        int idle = 0;
+        try { idle = IdleSeconds() ?? 0; } catch { }
+        ClockTick(launchedUtc, idle);
+    }
+
+    private void ClockTick(DateTime launchedUtc, int idle)
     {
         if (!IsOut) return;
         var now = ClockLocal();
@@ -144,8 +166,6 @@ internal sealed partial class EmiDeskService
         if (!_saidLongSitting && open.TotalHours >= 2)
         { _saidLongSitting = true; Moment("longSitting", new { minutes = (int)open.TotalMinutes }); }
         // WPF EmiDeskService.cs:2035-2059: a failed probe falls back to zero idle.
-        int idle = 0;
-        try { idle = IdleSeconds() ?? 0; } catch { }
         if (idle >= 1200)
         {
             if (!_saidIdleLong) { _saidIdleLong = true; Moment("appIdleLong", new { minutes = idle / 60 }); }
