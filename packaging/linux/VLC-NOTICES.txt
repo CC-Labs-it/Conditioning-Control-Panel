@@ -1,0 +1,30 @@
+Bundled media runtime: libVLC (Linux x86_64)
+
+lib/libvlc.so.5, lib/libvlccore.so.9, lib/libvlc_pulse.so.0 and lib/vlc/plugins/ are
+libVLC from VideoLAN (https://www.videolan.org/vlc/), built by packaging/linux/vlc/build.sh.
+Exact version, configure flags and module list: lib/vlc/BUILDINFO.txt.
+
+Licence: GNU Lesser General Public License 2.1 or later (lib/vlc/licenses/VLC-COPYING.LIB).
+Only LGPL or more permissive modules ship; GPL-only modules are excluded at build time.
+LibVLCSharp.dll (the .NET binding) is also LGPL-2.1.
+
+Linked statically into the plugins (licence texts in lib/vlc/licenses/<name>/):
+  FFmpeg                                       LGPL-2.1+, built without GPL or nonfree parts
+  mpg123                                       LGPL-2.1
+  soxr                                         LGPL-2.1+
+  libebml, libmatroska                         LGPL-2.1+
+  libogg, libvorbis, opus, flac, libvpx        BSD-style (Xiph.Org / WebM project)
+  dav1d, openjpeg                              BSD-2-Clause
+  gsm, zlib                                    permissive
+
+Codecs: the FFmpeg build includes H.264, HEVC and AAC decoders, as the Windows build of
+this app (VideoLAN.LibVLC.Windows) does. These formats may be covered by patents in some
+countries; you are responsible for any licences your use requires.
+
+Corresponding source (LGPL-2.1 section 6): see SOURCES.txt beside this file for the
+source archive (VLC, every contrib library and the build scripts) published with this
+release.
+
+Replacing the library: the app loads libVLC dynamically from lib/. Replace those files
+with your own build, or start the app with CCP_VLC=system to use the distribution's
+libVLC instead.

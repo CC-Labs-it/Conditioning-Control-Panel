@@ -81,6 +81,16 @@ jobs:
       # build-tarball.sh refuses any pointer that is still left.
       - name: Fetch the LFS media the tarball ships
         run: git lfs pull --include "Assets/**"
+      # The bundled libVLC runtime: no published one yet (RUNTIME_URL empty, owner decision D2), so build it in
+      # docker once per change to packaging/linux/vlc and check it; check.sh's stamp lets build-tarball.sh accept it.
+      - uses: actions/cache@v4
+        id: vlc-runtime
+        with:
+          path: packaging/linux/vlc/out
+          key: ccp-vlc-runtime-${{ hashFiles('packaging/linux/vlc/**') }}
+      - name: Build and check the libVLC runtime
+        if: steps.vlc-runtime.outputs.cache-hit != 'true'
+        run: bash packaging/linux/vlc/build.sh && bash packaging/linux/vlc/check.sh
       - name: Build the linux-x64 tarball and smoke it extracted
         run: |
           tar=$(bash packaging/linux/build-tarball.sh)

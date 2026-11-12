@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Proves a runtime built by build.sh is shippable. Exits non-zero on any failure.
+# Proves a runtime built by build.sh is shippable. Exits non-zero on any failure. On PASS writes
+# <runtime>.checked (its sha256), which build-tarball.sh accepts instead of re-checking.
 #
 #   packaging/linux/vlc/check.sh [RUNTIME_TAR_GZ]     (default: out/ccp-vlc-runtime-<ver>-linux-x64.tar.gz)
+#   packaging/linux/vlc/check.sh --clips              only make the test clips in out/clips
 #
 # In a clean BUILD_IMAGE (ubuntu:22.04, no VLC, no FFmpeg):
 #   1. ldd -r: the only unresolved libraries are libpulse.so.0 / libasound.so.2 (distro deps);
@@ -66,7 +68,6 @@ if [ "${1:-}" = --inside ]; then
     exit "$fail"
 fi
 
-runtime=$(realpath "${1:-$here/out/$ARTIFACT.tar.gz}")
 engine=${CONTAINER_ENGINE:-$(command -v podman || command -v docker || true)}
 [ -n "$engine" ] || { echo "check.sh: neither podman nor docker found" >&2; exit 1; }
 clips=$here/out/clips
@@ -85,8 +86,12 @@ if [ ! -f "$clips/flv1_mp3.flv" ]; then
         ffmpeg -v error -y $v $a -c:v flv -c:a libmp3lame -ar 44100 -shortest /clips/flv1_mp3.flv
         chown '"$(id -u):$(id -g)"' /clips/*'
 fi
+[ "${1:-}" != --clips ] || exit 0   # smoke-tarball.sh: only the clips
+runtime=$(realpath "${1:-$here/out/$ARTIFACT.tar.gz}")
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 tar xzf "$runtime" -C "$tmp"
 "$engine" run --rm -v "$here:/src:ro,z" -v "$tmp:/rt:ro,z" -v "$clips:/clips:ro,z" \
     "$BUILD_IMAGE" bash /src/check.sh --inside
+# Reached only on PASS: build-tarball.sh accepts this exact local runtime without re-checking it.
+sha256sum < "$runtime" | cut -d' ' -f1 > "$runtime.checked"

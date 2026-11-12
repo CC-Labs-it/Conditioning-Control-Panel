@@ -16,6 +16,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// Distro-check F3: LibVLCSharp P/Invokes "libvlc"/"libvlccore", which .NET probes only as
     /// libvlc.so; Debian/Ubuntu/Fedora runtime packages ship just the soname (libvlc.so.5,
     /// libvlccore.so.9; the bare .so is in -dev). Resolve to the unversioned name, then the soname.
+    /// The Linux tarball bundles a pinned libVLC 3.0.24 (packaging/linux/vlc) under &lt;app&gt;/lib, which
+    /// wins unless CCP_VLC=system. Loaded in-process only: an LD_LIBRARY_PATH would leak into the browser,
+    /// pactl and the RT engine.
     /// </summary>
     internal static class LibVlcNative
     {
@@ -25,23 +28,59 @@ namespace ConditioningControlPanel.Avalonia.Platform
             ["libvlccore"] = new[] { "libvlccore.so", "libvlccore.so.9" },
         };
         private static int _installed;
+        private static string? _bundle;
+
+        /// <summary>The libvlc file that loaded: an absolute path for the bundle, the soname for the system.</summary>
+        internal static string? Loaded { get; set; }
+
+        /// <summary>The bundled runtime's dir (holds libvlc.so.5, libvlccore.so.9 and vlc/plugins),
+        /// or null for the distro libvlc: not Linux, no bundle, or CCP_VLC=system.</summary>
+        internal static string? BundleDir(string baseDir, string? ccpVlc, bool linux, Func<string, bool> exists)
+        {
+            var dir = Path.Combine(baseDir, "lib");
+            return linux && !string.Equals(ccpVlc?.Trim(), "system", StringComparison.OrdinalIgnoreCase)
+                && exists(Path.Combine(dir, "libvlc.so.5")) ? dir : null;
+        }
+
+        [System.Runtime.InteropServices.DllImport("libc", SetLastError = true)]
+        private static extern int setenv(string name, string value, int overwrite);
 
         public static void Install()
         {
             if (Interlocked.Exchange(ref _installed, 1) == 1) return;   // one resolver per assembly
+            var ccpVlc = Environment.GetEnvironmentVariable("CCP_VLC");
+            _bundle = BundleDir(AppContext.BaseDirectory, ccpVlc, OperatingSystem.IsLinux(), File.Exists);
+            if (_bundle != null)
+            {
+                // Only our plugins: a user's VLC_PLUGIN_PATH could add the distro's (Fedora's pipewire aout, #4441).
+                // Environment.SetEnvironmentVariable alone never reaches libvlc's getenv on Unix.
+                var plugins = Path.Combine(_bundle, "vlc", "plugins");
+                Environment.SetEnvironmentVariable("VLC_PLUGIN_PATH", plugins);
+                if (setenv("VLC_PLUGIN_PATH", plugins, 1) != 0) Log.Warning("[Audio] setenv VLC_PLUGIN_PATH failed");
+            }
+            Log.Information("[Audio] libVLC source: {Source}", _bundle != null ? "bundled " + _bundle
+                : string.Equals(ccpVlc?.Trim(), "system", StringComparison.OrdinalIgnoreCase) ? "system (CCP_VLC=system)" : "system (no bundle)");
             System.Runtime.InteropServices.NativeLibrary.SetDllImportResolver(typeof(Core).Assembly, (name, _, _) =>
-                Resolve(name, f => System.Runtime.InteropServices.NativeLibrary.TryLoad(f, out var h) ? h : IntPtr.Zero));
+                Resolve(name, f => System.Runtime.InteropServices.NativeLibrary.TryLoad(f, out var h) ? h : IntPtr.Zero, _bundle));
         }
 
-        /// <summary>First candidate <paramref name="tryLoad"/> opens; Zero = let .NET probe as usual.</summary>
-        internal static IntPtr Resolve(string name, Func<string, IntPtr> tryLoad)
+        /// <summary>First candidate <paramref name="tryLoad"/> opens; Zero = let .NET probe as usual.
+        /// With a bundle only the bundle's files are tried, so bundled and system libs never mix: a bundle
+        /// that does not load throws, since Zero would let .NET load the distro libvlc against the bundle's
+        /// VLC_PLUGIN_PATH. CCP_VLC=system is the way to the distro libvlc.</summary>
+        internal static IntPtr Resolve(string name, Func<string, IntPtr> tryLoad, string? bundleDir = null)
         {
             if (!Candidates.TryGetValue(name, out var files)) return IntPtr.Zero;
+            if (bundleDir != null) files = new[] { Path.Combine(bundleDir, files[1]) };
             foreach (var f in files)
             {
                 var h = tryLoad(f);
-                if (h != IntPtr.Zero) return h;
+                if (h == IntPtr.Zero) continue;
+                if (name == "libvlc") Loaded = f;
+                return h;
             }
+            if (bundleDir != null)
+                throw new DllNotFoundException($"bundled {name} did not load from {bundleDir} (CCP_VLC=system uses the distro libVLC)");
             return IntPtr.Zero;
         }
     }
@@ -79,6 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             // No global --no-video: video shares this instance. Audio media opt out per item instead.
             _vlc = new LibVLC(WithOutput(options, OperatingSystem.IsWindows()).Append("--quiet").ToArray());
             Shared ??= _vlc;
+            if (OperatingSystem.IsLinux()) Log.Information("[Audio] libVLC {Version} loaded from {File}", _vlc.Version, LibVlcNative.Loaded ?? "default probing");
             _vlc.SetUserAgent("Conditioning Control Panel", "CCP"); // the name pactl shows for our streams
         }
 

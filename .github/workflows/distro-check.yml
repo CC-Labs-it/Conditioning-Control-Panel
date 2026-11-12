@@ -33,6 +33,15 @@ jobs:
           key: vosk-model-small-en-us-0.15-30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498
       # Real media, not LFS pointers (build-tarball.sh refuses a pointer); only Assets/ ships.
       - run: git lfs pull --include "Assets/**"
+      # The bundled libVLC runtime, built in docker once per change to packaging/linux/vlc (see build.yml).
+      - uses: actions/cache@v4
+        id: vlc-runtime
+        with:
+          path: packaging/linux/vlc/out
+          key: ccp-vlc-runtime-${{ hashFiles('packaging/linux/vlc/**') }}
+      - name: Build and check the libVLC runtime
+        if: steps.vlc-runtime.outputs.cache-hit != 'true'
+        run: bash packaging/linux/vlc/build.sh && bash packaging/linux/vlc/check.sh
       - run: bash packaging/linux/build-tarball.sh
       - uses: actions/upload-artifact@v4
         with:
