@@ -107,6 +107,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal long FrameTs;
         private bool _healUsed, _strict;
         private string _path = "";
+        private int _playGeneration;
         private readonly Stopwatch _sinceFrame = new();
         /// <summary>Max-length cap seconds this clip spent before its one heal replay.</summary>
         private double _capSpent;
@@ -198,6 +199,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var muted = _userMuted;
             if (_playback != null || _surfaces.Count > 0) CloseAll();
             _userMuted = muted;   // the output heal replays the same clip: its mute button state stays
+            var generation = ++_playGeneration;
             (_path, _strict) = (path, strict);
             _sinceShow.Restart();
             _sinceReady.Reset();
@@ -210,6 +212,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _cutStartChosen = false;
             FillMs = FillCount = 0;
             _graceConsumed = false;   // WPF PlayVideo: one grace pause per clip, replays included
+
+            // Scrolller clips may only be played from a complete device-cache copy. Recheck
+            // consent and policy at playback time, since either can change during the pre-roll.
+            var playbackPath = ResolvePlaybackPath(path);
+            if (playbackPath == null)
+            {
+                Dispatcher.UIThread.Post(() => { if (generation == _playGeneration) Scheduler.End(); });
+                return;
+            }
 
             // The injected decoder omits native allocation and windows; lifecycle methods stay shared.
             if (_playbackFactory != null)
@@ -319,8 +330,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 });
             };
             _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(Scheduler.End);
-            _media = new Media(vlc, path, VideoSelectionRules.IsRemoteMediaPath(path) ? FromType.FromLocation : FromType.FromPath);
-            foreach (var option in ConditioningControlPanel.Services.Video.RemoteVideoOptions.For(path)) _media.AddOption(option);
+            _media = new Media(vlc, playbackPath, VideoSelectionRules.IsRemoteMediaPath(playbackPath) ? FromType.FromLocation : FromType.FromPath);
+            foreach (var option in ConditioningControlPanel.Services.Video.RemoteVideoOptions.For(playbackPath)) _media.AddOption(option);
             if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
             _player.Play(_media);
             // WPF VideoService.cs:3410: discover the companion script only after playback starts.
@@ -418,6 +429,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return targets;
         }
 
+        internal static Func<string, string?> CachedScrolllerPath = ConditioningControlPanel.Services.Fyp.Online.ScrolllerDiskCache.TryGetPath;
+
+        internal static string? ResolvePlaybackPath(string path)
+        {
+            if (!ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.IsScrolllerUrl(path)) return path;
+            var settings = CoreSettings.Current;
+            if (settings.MediaSource == "local" || !settings.HasRemoteMediaConsent ||
+                !ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.Enabled) return null;
+            return CachedScrolllerPath(path);
+        }
+
         internal Surface Build(global::Avalonia.Platform.Screen? screen, bool strict)
         {
             var fill = new Image { Stretch = Stretch.UniformToFill, IsVisible = false };
@@ -429,6 +451,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var layer = new Canvas { ClipToBounds = true };
             var (grace, countdown) = GraceCard();
             var buttons = new VideoButtons(ToggleUserMute, CloseFromButton);
+            var credit = new ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditBadge();
+            credit.SetShown(ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicy.IsScrolllerUrl(_path));
             var w = new Window
             {
                 Title = "CCP Video",
@@ -437,7 +461,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 ShowInTaskbar = false,
                 CanResize = false,
                 Background = Brushes.Black,
-                Content = new Panel { ClipToBounds = true, Children = { picture, layer, grace, buttons.Row } },
+                Content = new Panel { ClipToBounds = true, Children = { picture, layer, grace, buttons.Row, credit } },
             };
             CoverGentleEntrance((Panel)w.Content!);
             var floating = Floating;
@@ -1153,6 +1177,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
         {
+            _playGeneration++;
             _floatingOnScreen = false;
             SampleCutPlayback();
             var watched = _cutClock?.PlayedMs;
