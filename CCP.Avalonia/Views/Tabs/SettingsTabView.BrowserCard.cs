@@ -7,7 +7,7 @@
 // since a new document has no flag. The load prompt: WPF builds the WebView2 on that click; here the engine exists
 // from the start but loads nothing until asked, so the prompt stands in the slot until the first page.
 // Pop out preserves the native adapter with BeginReparenting.
-// "Enhance if possible" remains disabled without BrowserEnhanceBridge.
+// WPF browser enhancement matching is owned by the shell.
 
 using System;
 using Avalonia.Controls;
@@ -43,18 +43,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 CoreMods.ModChanged -= OnBrowserCardModChanged;
                 CoreMods.ModChanged += OnBrowserCardModChanged;
                 SyncBrowserCard();
+                Shell?.InitializeBrowserEnhancement(this);
+                LocalizationManager.Instance.LanguageChanged += BrowserEnhanceLanguageChanged;
             };
             DetachedFromVisualTree += (_, _) =>
             {
                 Platform.WebcamTracker.Instance.StateChanged -= OnBrowserCardTrackerChanged;
                 CoreMods.ModChanged -= OnBrowserCardModChanged;
+                LocalizationManager.Instance.LanguageChanged -= BrowserEnhanceLanguageChanged;
             };
-            foreach (Control c in new Control[] { ToggleEnhanceIfPossible })
-            {
-                c.IsEnabled = false;
-                c.Bind(ToolTip.TipProperty, LocBinding("exclusives_not_on_this_build"));
-                ToolTip.SetShowOnDisabled(c, true);
-            }
             SyncBrowserCard();
         }
 
@@ -76,7 +73,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void SyncBrowserCard()
         {
             _browserCardSyncing = true;
-            try { ChkForceShowBambiCloud.IsChecked = CoreSettings.Current.ForceShowBambiCloud; }
+            try { ChkForceShowBambiCloud.IsChecked = CoreSettings.Current.ForceShowBambiCloud;
+                ToggleEnhanceIfPossible.IsChecked = CoreSettings.Current.BrowserEnhanceIfPossible; }
             finally { _browserCardSyncing = false; }
             SyncBrowserMuteIcon();
             RefreshBrowserWebcamButton();
@@ -246,6 +244,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private void BtnPopOutBrowser_Click(object? sender, RoutedEventArgs e) => Shell?.BtnPopOutBrowser_Click(sender, e);
-        private void ToggleEnhanceIfPossible_Changed(object? sender, RoutedEventArgs e) { } // greyed: see the header
+        private void BrowserEnhanceLanguageChanged(object? sender, EventArgs e) => SetBrowserEnhanceMatch(_browserMatch);
+        private ConditioningControlPanel.Services.Deeper.EnhancementLibraryEntry? _browserMatch;
+        internal void SetBrowserEnhanceMatch(ConditioningControlPanel.Services.Deeper.EnhancementLibraryEntry? match)
+        {
+            _browserMatch = match;
+            TxtEnhanceMatchStatus.Text = !CoreSettings.Current.BrowserEnhanceIfPossible ? Loc.Get("browser_enhance_match_off")
+                : match == null ? Loc.Get("browser_enhance_match_none")
+                : Loc.GetF("browser_enhance_match_fmt", string.IsNullOrEmpty(match.Name) ? "(untitled)" : match.Name);
+        }
+        private void ToggleEnhanceIfPossible_Changed(object? sender, RoutedEventArgs e)
+        {
+            if (_browserCardSyncing) return;
+            CoreSettings.Current.BrowserEnhanceIfPossible = ToggleEnhanceIfPossible.IsChecked == true;
+            CoreSettings.Save();
+            Shell?.RefreshBrowserEnhancement();
+            SetBrowserEnhanceMatch(CoreSettings.Current.BrowserEnhanceIfPossible ? _browserMatch : null);
+        }
     }
 }
