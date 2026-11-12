@@ -86,16 +86,17 @@ internal sealed partial class GameWindow
             _breakoutRemote = pool;
             _breakoutSnapshot = Snapshot;
         }
-        // Start only once per empty wave. Start() is a no-op for a running or populated pool.
+        // WPF BackRoomRemotePool.cs:271-280: refill a completed pool below 16 clips.
         var now = BreakoutClockForTests?.Invoke() ?? Environment.TickCount64;
-        if (start && _breakoutClips.Count == 0 && _breakoutWaveFinished
+        if (start && _breakoutClips.Count < 16 && _breakoutWaveFinished
             && (_breakoutLastWarmMs == null || now - _breakoutLastWarmMs >= BreakoutWarmGapMs))
         {
             _breakoutLastWarmMs = now;
             _breakoutWaveFinished = false;
             _breakoutWarm = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             if (BreakoutStartForTests is { } fake) fake(_breakoutSnapshot!);
-            else _breakoutRemote!.Start(channels);
+            else if (_breakoutClips.Count == 0) _breakoutRemote!.Start(channels);
+            else _breakoutRemote!.More();
         }
         return _breakoutClips;
     }

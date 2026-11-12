@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using System.Threading;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using ConditioningControlPanel.Services.GoonGame;
 using Avalonia.Threading;
 using ConditioningControlPanel;
@@ -289,6 +290,53 @@ public sealed partial class GameWindowTests
         PumpUntil(() => frames.Count == 4);
         Assert.Equal(4, frames.Count);
         Assert.Equal("online", (string?)frames[3]["gifs"]![0]!["src"]);
+        window.Close();
+    });
+
+    [Fact]
+    public void Breakout_PartialWaveRetriesWithoutDelayingDeals() => Run((_, launcher) =>
+    {
+        launcher.Hide();
+        var window = GameWindow.Launch("breakoutdemo")!;
+        var s = CoreSettings.Current;
+        s.RemoteMediaConsented = true;
+        s.BackRoomMediaSource = "online";
+        Dispatcher.UIThread.RunJobs();
+        Action<GoonOnlineMedia.Snapshot>? send = null;
+        int starts = 0;
+        long now = 1000;
+        window.BreakoutClockForTests = () => now;
+        window.BreakoutStartForTests = callback => { starts++; send = callback; };
+        var frames = new List<JObject>();
+        window.Posted += json => { var frame = JObject.Parse(json); if ((string?)frame["type"] == "media") frames.Add(frame); };
+        void Request(string id) => window.HandleMessage($"{{\"type\":\"media-request\",\"station\":\"breakout\",\"reqId\":\"{id}\"}}");
+        Request("first");
+        send!(BreakoutSnapshot("error", clip: true));
+        PumpUntil(() => frames.Count == 1);
+        Assert.Single(frames);
+        Request("early");
+        PumpUntil(() => frames.Count == 2);
+        Assert.Equal(1, starts);
+        now += 8000;
+        Request("retry");
+        Assert.Equal(2, starts);
+        PumpUntil(() => frames.Count == 3, 1000);
+        Assert.Equal(3, frames.Count);
+        Assert.Equal("online", (string?)frames[2]["gifs"]![0]!["src"]);
+        send!(BreakoutSnapshot("loading", clip: true));
+        Dispatcher.UIThread.RunJobs();
+        Request("running");
+        Assert.Equal(2, starts);
+        var first = BreakoutSnapshot("ready", clip: true);
+        var second = new GoonOnlineMedia.Item("second", "ignored",
+            Path.Combine(CorePaths.EffectiveAssets, ".temp", "ccp_temp_remote_second.webm"));
+        send!(new GoonOnlineMedia.Snapshot("ready", first.Subs, first.Images,
+            first.Videos.Concat(new[] { second }).ToArray(), 2, 1));
+        Dispatcher.UIThread.RunJobs();
+        Request("recovered");
+        PumpUntil(() => frames.Any(f => (string?)f["reqId"] == "recovered"));
+        var recovered = Assert.Single(frames.Where(f => (string?)f["reqId"] == "recovered"));
+        Assert.Equal(2, recovered["gifs"]!.Count());
         window.Close();
     });
 
