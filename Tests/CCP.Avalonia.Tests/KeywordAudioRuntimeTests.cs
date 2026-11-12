@@ -205,8 +205,7 @@ public sealed class KeywordAudioRuntimeTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void KeywordHapticAndXpUseConfiguredValuesAndSessionMultiplier(bool legacy) => Run((engine, s, _) =>
-    {
+    public void KeywordHapticAndXpUseConfiguredValuesAndSessionMultiplier(bool legacy) => Run((engine, s, _) => {
         var old = (CoreHaptics.Service, CoreProgression.AddXPProvider, s.KeywordSessionMultiplier, s.AwarenessLoopProtectionEnabled);
         var hs = new HapticSettings { Enabled = true }; hs.EnsureV2Migrated();
         hs.V2.Rule(ConditioningControlPanel.Services.Haptics.Core.HapticEventKind.KeywordTrigger).Enabled = true;
@@ -214,8 +213,7 @@ public sealed class KeywordAudioRuntimeTests
         using var haptics = new ConditioningControlPanel.Services.HapticService(hs);
         var pulses = new List<string>(); var xp = new List<(double, string)>();
         haptics.HapticTriggered += (_, message) => { if (message.StartsWith("KeywordTrigger:")) pulses.Add(message); };
-        try
-        {
+        try {
             CoreHaptics.Service = haptics; CoreProgression.AddXPProvider = (amount, source) => xp.Add((amount, source));
             s.KeywordSessionMultiplier = 2; s.AwarenessLoopProtectionEnabled = false;
             var t = s.KeywordTriggers[0];
@@ -237,14 +235,11 @@ public sealed class KeywordAudioRuntimeTests
         }
         finally { (CoreHaptics.Service, CoreProgression.AddXPProvider, s.KeywordSessionMultiplier, s.AwarenessLoopProtectionEnabled) = old; }
     });
-
     [Theory, InlineData(false), InlineData(true)]
-    public void MindWipeRequiresAClipAndRunningEngineOrSession(bool legacy) => Run((engine, s, _) =>
-    {
+    public void MindWipeRequiresAClipAndRunningEngineOrSession(bool legacy) => Run((engine, s, _) => {
         var old = (CoreMindWipe.ClipCountProvider, CoreMindWipe.TriggerOnceProvider, s.AwarenessLoopProtectionEnabled);
         var count = 0; var plays = 0; var engineRunning = false; var session = false;
-        try
-        {
+        try {
             CoreMindWipe.ClipCountProvider = () => count; CoreMindWipe.TriggerOnceProvider = () => plays++;
             CoreSession.IsEngineRunningProvider = () => engineRunning; CoreSession.IsSessionRunningProvider = () => session;
             s.AwarenessLoopProtectionEnabled = false;
@@ -261,13 +256,10 @@ public sealed class KeywordAudioRuntimeTests
         }
         finally { (CoreMindWipe.ClipCountProvider, CoreMindWipe.TriggerOnceProvider, s.AwarenessLoopProtectionEnabled) = old; }
     });
-
     [Fact]
-    public Task ActionOrderWaitsForRepeatGapsAndKeepsDuplicatesForSingleTrigger() => RunAsync(async (engine, s, played) =>
-    {
+    public Task ActionOrderWaitsForRepeatGapsAndKeepsDuplicatesForSingleTrigger() => RunAsync(async (engine, s, played) => {
         var old = (CoreFlash.ShowProvider, CoreProgression.AddXPProvider); var events = new List<string>(); var gap = new TaskCompletionSource();
-        try
-        {
+        try {
             CoreFlash.ShowProvider = () => events.Add("flash"); CoreProgression.AddXPProvider = (amount, _) => events.Add($"xp:{amount}");
             var audio = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
             audio.PlayCount = 2; audio.DelayBetweenMs = 250;
@@ -280,14 +272,11 @@ public sealed class KeywordAudioRuntimeTests
         }
         finally { (CoreFlash.ShowProvider, CoreProgression.AddXPProvider) = old; }
     });
-
     [Fact]
-    public void MergedActionsKeepFirstOfEachTypeInOrder() => Run((engine, s, _) =>
-    {
+    public void MergedActionsKeepFirstOfEachTypeInOrder() => Run((engine, s, _) => {
         var old = (CoreFlash.ShowProvider, CoreProgression.AddXPProvider);
         var events = new List<string>();
-        try
-        {
+        try {
             CoreFlash.ShowProvider = () => events.Add("flash");
             CoreProgression.AddXPProvider = (amount, _) => events.Add($"xp:{amount}");
             s.KeywordTriggers[0].Actions = new() { new VisualEffectAction { Effect = KeywordVisualEffect.ImageFlash }, new AddXpAction { Amount = 8 } };
@@ -298,10 +287,8 @@ public sealed class KeywordAudioRuntimeTests
         }
         finally { (CoreFlash.ShowProvider, CoreProgression.AddXPProvider) = old; }
     });
-
     [Fact]
-    public Task OverlappingKeywordAudioKeepsTheFirstFireResponses() => RunAsync(async (engine, s, played) =>
-    {
+    public Task OverlappingKeywordAudioKeepsTheFirstFireResponses() => RunAsync(async (engine, s, played) => {
         var old = (CoreHaptics.Service, CoreFlash.ShowProvider, CoreProgression.AddXPProvider, s.AwarenessLoopProtectionEnabled);
         var settings = new HapticSettings { Enabled = true }; settings.EnsureV2Migrated();
         var rule = settings.V2.Rule(ConditioningControlPanel.Services.Haptics.Core.HapticEventKind.KeywordTrigger);
@@ -309,8 +296,7 @@ public sealed class KeywordAudioRuntimeTests
         using var haptics = new ConditioningControlPanel.Services.HapticService(settings);
         var events = new List<string>(); var gap = new TaskCompletionSource();
         haptics.HapticTriggered += (_, message) => { if (message.StartsWith("KeywordTrigger:")) events.Add("haptic"); };
-        try
-        {
+        try {
             CoreHaptics.Service = haptics;
             CoreFlash.ShowProvider = () => events.Add("flash");
             CoreProgression.AddXPProvider = (amount, _) => events.Add($"xp:{amount}");
@@ -330,11 +316,9 @@ public sealed class KeywordAudioRuntimeTests
         }
         finally { (CoreHaptics.Service, CoreFlash.ShowProvider, CoreProgression.AddXPProvider, s.AwarenessLoopProtectionEnabled) = old; }
     });
-
     [Theory]
     [InlineData(true, false)] [InlineData(false, true)]
-    public Task AudioActionsDuckOnceForTheWholeList(bool firstDucks, bool secondDucks) => RunAsync(async (engine, s, _) =>
-    {
+    public Task AudioActionsDuckOnceForTheWholeList(bool firstDucks, bool secondDucks) => RunAsync(async (engine, s, _) => {
         var events = new List<string>(); var delays = new List<int>(); var release = new TaskCompletionSource(); var play = 0;
         s.AudioDuckingEnabled = true;
         CoreAudio.DuckProvider = _ => events.Add("duck");
@@ -355,10 +339,8 @@ public sealed class KeywordAudioRuntimeTests
         release.SetResult(); await Task.Yield();
         Assert.Equal("unduck:31", events.Last()); Assert.Single(events.Where(e => e.StartsWith("unduck:")));
     });
-
     [Fact]
-    public Task ReplacedClipKeepsItsParsedDurationWithoutBlockingTheNextFire() => RunAsync(async (engine, s, _) =>
-    {
+    public Task ReplacedClipKeepsItsParsedDurationWithoutBlockingTheNextFire() => RunAsync(async (engine, s, _) => {
         var release = new TaskCompletionSource(); var full = new TaskCompletionSource(); var delays = new List<int>();
         var firstProbe = new TaskCompletionSource<double?>(); var probes = 0; var unducked = new TaskCompletionSource(); var play = 0;
         s.AudioDuckingEnabled = true; s.AwarenessLoopProtectionEnabled = false;
@@ -379,10 +361,8 @@ public sealed class KeywordAudioRuntimeTests
         Assert.False(unducked.Task.IsCompleted);
         release.SetResult(); await unducked.Task.WaitAsync(TimeSpan.FromSeconds(5));
     });
-
     [Theory, InlineData(3000, 7500), InlineData(12000, -1)]   // WPF :1383-1387 times the release from dispatch end.
-    public Task SlowLengthParseCountsAgainstTheDuckRelease(long parseMs, int expected) => RunAsync(async (engine, s, _) =>
-    {
+    public Task SlowLengthParseCountsAgainstTheDuckRelease(long parseMs, int expected) => RunAsync(async (engine, s, _) => {
         var probe = new TaskCompletionSource<double?>(); var delays = new List<int>(); var unducked = new TaskCompletionSource(); long clock = 0;
         s.AudioDuckingEnabled = true; ((PlayAudioAction)s.KeywordTriggers[0].Actions[0]).DuckSystemAudio = true;
         (engine.Clock, engine.DurationProbe) = (() => clock, (_, _) => probe.Task);
@@ -391,11 +371,9 @@ public sealed class KeywordAudioRuntimeTests
         Type(engine, "sit"); clock = parseMs; probe.SetResult(10);
         await unducked.Task.WaitAsync(TimeSpan.FromSeconds(5)); Assert.Equal(expected < 0 ? Array.Empty<int>() : new[] { expected }, delays);
     });
-
     [Theory]
     [InlineData(false)] [InlineData(true)]
-    public Task ParsedDurationSurvivesReplacementBeforePlaybackStarts(bool replace) => RunAsync(async (engine, s, _) =>
-    {
+    public Task ParsedDurationSurvivesReplacementBeforePlaybackStarts(bool replace) => RunAsync(async (engine, s, _) => {
         var firstProbe = new TaskCompletionSource<double?>(); var delay = new TaskCompletionSource<int>();
         var release = new TaskCompletionSource(); var unducked = new TaskCompletionSource(); var probes = 0; var plays = 0;
         s.AudioDuckingEnabled = true;
@@ -415,10 +393,8 @@ public sealed class KeywordAudioRuntimeTests
         Assert.Equal(10500, await delay.Task.WaitAsync(TimeSpan.FromSeconds(5))); Assert.Equal(replace ? 2 : 1, plays); Assert.False(unducked.Task.IsCompleted);
         release.SetResult(); await unducked.Task.WaitAsync(TimeSpan.FromSeconds(5));
     });
-
     [Fact]
-    public Task PendingDurationNeitherDelaysNorReordersOverlappingFires() => RunAsync(async (engine, s, played) =>
-    {
+    public Task PendingDurationNeitherDelaysNorReordersOverlappingFires() => RunAsync(async (engine, s, played) => {
         var pending = new TaskCompletionSource<double?>(); var other = Path.GetTempFileName();
         try
         {
@@ -436,12 +412,44 @@ public sealed class KeywordAudioRuntimeTests
         }
         finally { engine.StopAudio(); File.Delete(other); }
     });
-
     [Fact]
-    public async Task KeywordAndVideoLengthsShareOneSavedCache()
+    public async Task CacheTestLeavesSharedVlcAndMetadataUnchanged() {
+        var field = typeof(MandatoryVideoOverlay).GetField("_lengths", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var shared = LibVlcAudio.Shared; var lengths = field.GetValue(null);
+        var file = Path.Combine(CorePaths.UserData, "video_metadata.json"); var before = File.Exists(file) ? File.ReadAllBytes(file) : null;
+        await KeywordAndVideoLengthsShareOneSavedCache();
+        Assert.Same(shared, LibVlcAudio.Shared); Assert.Same(lengths, field.GetValue(null));
+        Assert.Equal(before, File.Exists(file) ? File.ReadAllBytes(file) : null);
+    }
+    [Fact]
+    public async Task CacheInitializerErrorsAreNotSkipped() {
+        Exception? caught = null;
+        try { await RunCacheProbe(() => throw new InvalidOperationException("injected failure")); }
+        catch (Exception e) { caught = e; }
+        Assert.IsType<InvalidOperationException>(caught);
+    }
+    [Fact]
+    public async Task KeywordAndVideoLengthsShareOneSavedCache() {
+        if (Environment.GetEnvironmentVariable("CCP_KEYWORD_CACHE_CHILD") != "1")
+        {
+            var start = new System.Diagnostics.ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
+                { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
+            foreach (var arg in new[] { "test", typeof(KeywordAudioRuntimeTests).Assembly.Location, "--filter",
+                "FullyQualifiedName=CCP.Avalonia.Tests.KeywordAudioRuntimeTests.KeywordAndVideoLengthsShareOneSavedCache", "--logger", "console;verbosity=normal" }) start.ArgumentList.Add(arg);
+            start.Environment["CCP_KEYWORD_CACHE_CHILD"] = "1"; start.Environment["DOTNET_CLI_UI_LANGUAGE"] = "en";
+            using var child = System.Diagnostics.Process.Start(start) ?? throw new InvalidOperationException("Could not start cache test");
+            var stdout = child.StandardOutput.ReadToEndAsync(); var stderr = child.StandardError.ReadToEndAsync();
+            try { await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(60)); }
+            catch { if (!child.HasExited) child.Kill(entireProcessTree: true); throw; }
+            var output = await stdout + await stderr; Assert.True(child.ExitCode == 0, output);
+            Assert.Contains("Total tests: 1", output); Assert.Contains("Passed: 1", output);
+            return;
+        }
+        await RunCacheProbe(() => new LibVlcAudio("--aout=dummy"));
+    }
+    private static async Task RunCacheProbe(Func<LibVlcAudio> create)
     {
-        try { _ = new LibVlcAudio("--aout=dummy"); }
-        catch (Exception e) { Assert.Skip("libvlc not available: " + e.Message); }
+        _ = create();
         var lengths = MandatoryVideoOverlay.Lengths!;
         var files = Enumerable.Range(0, 3).Select(_ => Path.Combine(Path.GetTempPath(), $"ccp-kw-{Guid.NewGuid():N}.wav")).ToArray();
         try
@@ -458,10 +466,8 @@ public sealed class KeywordAudioRuntimeTests
         }
         finally { foreach (var f in files) File.Delete(f); }
     }
-
     [Fact]
-    public Task StopWhileDurationIsLoadingStopsTheClip() => RunAsync(async (engine, s, played) =>
-    {
+    public Task StopWhileDurationIsLoadingStopsTheClip() => RunAsync(async (engine, s, played) => {
         var pending = new TaskCompletionSource<double?>();
         s.AudioDuckingEnabled = true;
         ((PlayAudioAction)s.KeywordTriggers[0].Actions[0]).DuckSystemAudio = true;
@@ -470,10 +476,8 @@ public sealed class KeywordAudioRuntimeTests
         engine.StopAudio(); pending.SetResult(10); await Task.Yield();
         Assert.Equal(new[] { "stopped" }, played.Skip(1).Select(p => p.Path));
     });
-
     [Fact]
-    public Task MissingClipStillDucksForHalfASecond() => RunAsync(async (engine, s, played) =>
-    {
+    public Task MissingClipStillDucksForHalfASecond() => RunAsync(async (engine, s, played) => {
         var events = new List<string>(); var release = new TaskCompletionSource();
         s.AudioDuckingEnabled = true;
         CoreAudio.DuckProvider = _ => events.Add("duck");
@@ -487,10 +491,8 @@ public sealed class KeywordAudioRuntimeTests
         release.SetResult(); await Task.Yield();
         Assert.Equal(new[] { "duck", "unduck:17" }, events);
     });
-
     [Fact]
-    public Task UnknownClipDurationStaysDuckedUntilPlaybackEnds() => RunAsync(async (engine, s, _) =>
-    {
+    public Task UnknownClipDurationStaysDuckedUntilPlaybackEnds() => RunAsync(async (engine, s, _) => {
         var events = new List<string>(); var release = new TaskCompletionSource();
         var delayed = new TaskCompletionSource(); var unducked = new TaskCompletionSource(); Action? finish = null;
         s.AudioDuckingEnabled = true;
@@ -509,10 +511,8 @@ public sealed class KeywordAudioRuntimeTests
         release.SetResult(); await unducked.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal(new[] { "duck", "play", "delay", "unduck" }, events);
     });
-
     [Fact]
-    public Task StopCancelsOverlappingResponsesAndReleasesEachDuck() => RunAsync(async (engine, s, played) =>
-    {
+    public Task StopCancelsOverlappingResponsesAndReleasesEachDuck() => RunAsync(async (engine, s, played) => {
         var ducks = 0; var unducks = 0; var flashes = 0; var gap = new TaskCompletionSource();
         s.AudioDuckingEnabled = true; s.AwarenessLoopProtectionEnabled = false;
         CoreAudio.DuckProvider = _ => ducks++;
