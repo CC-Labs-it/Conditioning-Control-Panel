@@ -755,18 +755,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 _txtTotal.Text = FormatTime(live);
             }
             if (_waveformData is not { } data) return;
-            // Without playback, the header parse and the decoded sample count are independent: a
-            // truncated decode is shorter than the file, a misread header is longer, so agreement
-            // verifies both (WPF EnhancementPlayerWindow.xaml.cs:671 draws as soon as decoded).
+            // Use an agreeing parse for the timeline until a live player length is available.
             if (_waveformDuration == null && _parsedDuration is { } parsed && Matches(data.DurationSeconds, parsed))
             {
                 _waveformDuration = _durationSec = parsed;
                 _txtTotal.Text = FormatTime(parsed);
             }
-            if (_waveformDuration is not { } duration) return;
-            // A truncated transcode must not be stretched over the full player timeline.
-            var complete = Matches(data.DurationSeconds, duration);
-            var peaks = complete ? data.Peaks : null;
+            // WPF EnhancementPlayerWindow.xaml.cs:671 draws every successful decode.
+            var peaks = data.Peaks;
             if (ReferenceEquals(_peaks, peaks)) return;
             _peaks = peaks;
             RenderWaveform();

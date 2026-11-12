@@ -196,9 +196,9 @@ public sealed class DeeperRowsTests
 
 
     [Theory]
-    [InlineData(95, true)]
-    [InlineData(94.864, false)]
-    public Task PlayerDrawsOnlyCompleteWaveforms(double decodedDuration, bool expected) => AvaloniaTestDispatcher.RunAsync(async () =>
+    [InlineData(95)]
+    [InlineData(94.864)]
+    public Task PlayerDrawsDecodedWaveformsRegardlessOfDuration(double decodedDuration) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
         var dir = Directory.CreateTempSubdirectory("ccp-player-wave-").FullName;
@@ -218,8 +218,7 @@ public sealed class DeeperRowsTests
             Assert.NotNull(load);
             await load!.WaitAsync(TimeSpan.FromSeconds(10));
             var field = typeof(EnhancementPlayerWindow).GetField("_peaks", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
-            if (expected) Assert.Equal(peaks, (float[]?)field.GetValue(player));
-            else Assert.Null(field.GetValue(player));
+            Assert.Equal(peaks, (float[]?)field.GetValue(player));
         }
         finally
         {
@@ -280,7 +279,7 @@ public sealed class DeeperRowsTests
     });
 
     [Fact]
-    public Task PlayerWaitsForLiveDurationWhenParsedDurationIsWrong() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task PlayerDrawsPeaksAndUpdatesLiveDurationWhenParseIsWrong() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
         var dir = Directory.CreateTempSubdirectory("ccp-player-duration-").FullName;
@@ -299,11 +298,12 @@ public sealed class DeeperRowsTests
             player.OpenLocalMediaFile(path);
             await player._waveformLoad!.WaitAsync(TimeSpan.FromSeconds(10));
             var field = typeof(EnhancementPlayerWindow).GetField("_peaks", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
-            Assert.Null(field.GetValue(player));
+            Assert.Equal(peaks, (float[]?)field.GetValue(player));
             audio.DurationSeconds = 95;
             audio.PlaybackDurationSeconds = 95;
             Invoke(player, "UiTimer_Tick", null, EventArgs.Empty);
             Assert.Equal(peaks, (float[]?)field.GetValue(player));
+            Assert.Equal("1:35", player.FindControl<TextBlock>("TxtTotal")!.Text);
         }
         finally
         {
@@ -403,8 +403,10 @@ public sealed class DeeperRowsTests
         }
     });
 
-    [Fact]
-    public Task PlayerDrawsWaveformDecodedAfterStopWithoutLiveDuration() => AvaloniaTestDispatcher.RunAsync(async () =>
+    [Theory]
+    [InlineData(95)]
+    [InlineData(190)]
+    public Task PlayerDrawsWaveformDecodedAfterStopWithoutLiveDuration(double parsedDuration) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
         var dir = Directory.CreateTempSubdirectory("ccp-player-stop-parsed-").FullName;
@@ -414,7 +416,7 @@ public sealed class DeeperRowsTests
         var originalDecoder = AudioWaveformCache.Decoder;
         using var started = new System.Threading.ManualResetEventSlim();
         using var release = new System.Threading.ManualResetEventSlim();
-        var audio = new FakeAudio { DurationSeconds = 95, PlaybackDurationSeconds = null };
+        var audio = new FakeAudio { DurationSeconds = parsedDuration, PlaybackDurationSeconds = null };
         var peaks = new[] { 0.2f, 0.8f };
         DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
         AudioWaveformCache.Decoder = _ => { started.Set(); release.Wait(TimeSpan.FromSeconds(10)); return new AudioWaveformResult { Peaks = peaks, DurationSeconds = 95 }; };
@@ -431,7 +433,7 @@ public sealed class DeeperRowsTests
             await load.WaitAsync(TimeSpan.FromSeconds(10));
             var field = typeof(EnhancementPlayerWindow).GetField("_peaks", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
             Assert.Equal(peaks, (float[]?)field.GetValue(player));
-            Assert.Equal("1:35", player.FindControl<TextBlock>("TxtTotal")!.Text);
+            if (parsedDuration == 95) Assert.Equal("1:35", player.FindControl<TextBlock>("TxtTotal")!.Text);
         }
         finally
         {
@@ -444,7 +446,7 @@ public sealed class DeeperRowsTests
     });
 
     [Fact]
-    public Task PlayerKeepsUnverifiedPeaksAfterStopUntilReplayHasLiveDuration() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task PlayerDrawsPeaksAfterStopBeforeReplayHasLiveDuration() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
         var dir = Directory.CreateTempSubdirectory("ccp-player-stop-duration-").FullName;
@@ -465,7 +467,7 @@ public sealed class DeeperRowsTests
             await player._waveformLoad!.WaitAsync(TimeSpan.FromSeconds(10));
             Invoke(player, "BtnStop_Click");
             var field = typeof(EnhancementPlayerWindow).GetField("_peaks", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
-            Assert.Null(field.GetValue(player));
+            Assert.Equal(peaks, (float[]?)field.GetValue(player));
             audio.PlaybackDurationSeconds = 95;
             Invoke(player, "BtnPlayPause_Click");
             Invoke(player, "UiTimer_Tick", null, EventArgs.Empty);
