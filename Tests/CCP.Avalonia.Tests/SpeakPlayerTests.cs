@@ -31,11 +31,13 @@ public class SpeakPlayerTests
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    [InlineData(true, true)]
-    public Task PlayerDispatchesSpeakAndStopsOnBandExitOrPanic(bool panic, bool intermittent) => AvaloniaTestDispatcher.RunAsync(async () =>
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, true)]
+    public Task PlayerDispatchesSpeakAndStopsOnBandExitOrPanic(bool panic, bool intermittent, bool pausedSeek) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var old = DeeperLocalAudio.Open;
         var oldHaptics = ConditioningControlPanel.CoreHaptics.Service;
@@ -48,7 +50,7 @@ public class SpeakPlayerTests
         DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
         var media = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".mp3");
         File.WriteAllBytes(media, new byte[16]);
-        int shows = 0, hides = 0, listens = 0;
+        int shows = 0, hides = 0, listens = 0, stops = 0;
         var shown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var hidden = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var player = new EnhancementPlayerWindow(null, null);
@@ -60,7 +62,7 @@ public class SpeakPlayerTests
                 try { await Task.Delay(Timeout.Infinite, ct); }
                 finally { if (intermittent) hidden.TrySetResult(); }
                 return PhraseResult.NotAvailable;
-            }, () => { },
+            }, () => stops++,
             _ => { shows++; shown.TrySetResult(); }, () => { hides++; hidden.TrySetResult(); },
             _ => { shows++; shown.TrySetResult(); });
         player.SpeakSessionFactory = runtime.CreateSession;
@@ -93,7 +95,21 @@ public class SpeakPlayerTests
                 Assert.False(audio.Playing);
                 EnhancementPlayerWindow.PanicPauseAll();
             }
-            else { audio.PositionSeconds = 5; Tick(); }
+            else
+            {
+                if (pausedSeek) player.GetType().GetMethod("BtnPlayPause_Click", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(player, null);
+                if (pausedSeek && !intermittent)
+                {
+                    var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+                    var canvas = (global::Avalonia.Controls.Canvas)player.GetType().GetField("_miniTimelineCanvas", flags)!.GetValue(player)!;
+                    canvas.Measure(new global::Avalonia.Size(600, 40)); canvas.Arrange(new global::Avalonia.Rect(0, 0, 600, 40));
+                    player.GetType().GetField("_miniTotalSeconds", flags)!.SetValue(player, 20d);
+                    player.GetType().GetMethod("SeekToMiniPosition", flags)!.Invoke(player, new object[] { canvas.Bounds.Width / 4 });
+                    Assert.Equal(1, stops);
+                }
+                else { audio.PositionSeconds = 5; Tick(); }
+                if (pausedSeek) Assert.False(audio.Playing);
+            }
             await hidden.Task.WaitAsync(TimeSpan.FromSeconds(10));
             if (intermittent)
             {
@@ -103,7 +119,21 @@ public class SpeakPlayerTests
                 Assert.Equal(last, shows);
             }
             else Assert.Equal(1, hides);
-            if (panic) Assert.False(audio.Playing);
+            if (panic) { Assert.False(audio.Playing); var before = shows; Tick(); await Task.Delay(20); Assert.Equal(before, shows); }
+            if (!audio.Playing) player.GetType().GetMethod("BtnPlayPause_Click", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(player, null);
+            audio.PositionSeconds = 0; shows = 0;
+            shown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            player.LoadEnhancementFromMemory(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*", TimelineItems = {
+                new TimelineItem { Id = "band", Kind = TimelineItemKind.Rule, Start = 1, Duration = 2,
+                    Trigger = new TimeReachedTrigger { Time = 1.2 }, Action = new TriggerEffectAction { EffectType = EffectTypes.Haptic, PatternName = "pulse" } },
+                new TimelineItem { Kind = TimelineItemKind.Rule, Duration = double.MaxValue,
+                    Trigger = panic ? new RegionExitedTrigger { RegionId = "band" } : new RegionEnteredTrigger { RegionId = "band" },
+                    Action = new TriggerEffectAction { EffectType = EffectTypes.Speak, SpeakTarget = "yes", SpeakCueMode = SpeakCueMode.Persistent, SpeakHoldMode = SpeakHoldMode.KeepPlaying } }
+            } }, "region");
+            Tick(); audio.PositionSeconds = 1.2; Tick();
+            if (panic) { Assert.Equal(0, shows); audio.PositionSeconds = 3.2; Tick(); }
+            await shown.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal(1, shows);
             player.Close();
             Assert.Equal(0.5, haptics.GetLayer(HapticLayer.Manual));
         }

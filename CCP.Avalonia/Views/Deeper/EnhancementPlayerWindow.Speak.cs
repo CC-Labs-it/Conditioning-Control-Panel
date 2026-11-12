@@ -16,7 +16,7 @@ public partial class EnhancementPlayerWindow
 
     private void TickDeeper()
     {
-        if (_closing || !_isPlaying || _loadedEnhancement == null) return;
+        if (_closing || _loadedEnhancement == null || (_deeperEngine == null && !_isPlaying)) return;
         if (_deeperEngine == null)
         {
             _deeperSource = new PlayerTimeSource(this);
@@ -30,8 +30,9 @@ public partial class EnhancementPlayerWindow
                 MediaSource = _loadedEnhancement.MediaSource,
                 Regions = _loadedEnhancement.Regions,
                 TimelineItems = _loadedEnhancement.TimelineItems.Where(item => item != null &&
-                    (item.Kind == TimelineItemKind.Effect && item.EffectType == EffectTypes.Speak ||
-                     item.Kind == TimelineItemKind.Rule && item.Action is TriggerEffectAction { EffectType: EffectTypes.Speak })).ToList(),
+                    (item.Kind == TimelineItemKind.Rule || item.Kind == TimelineItemKind.Effect && item.EffectType == EffectTypes.Speak))
+                    .Select(item => item.Kind == TimelineItemKind.Rule && item.Action is not TriggerEffectAction { EffectType: EffectTypes.Speak }
+                        ? new TimelineItem { Id = item.Id, Kind = item.Kind, Start = item.Start, Duration = item.Duration, Enabled = false } : item).ToList(),
                 Rules = _loadedEnhancement.Rules.Where(rule => rule != null &&
                     rule.Action is TriggerEffectAction { EffectType: EffectTypes.Speak }).ToList()
             };
@@ -55,9 +56,10 @@ public partial class EnhancementPlayerWindow
     {
         private readonly EnhancementPlayerWindow _player;
         private bool _valid = true;
+        private double _lastTick = double.NaN;
         internal PlayerTimeSource(EnhancementPlayerWindow player) => _player = player;
         public event Action<double>? PlaybackTimeChanged;
-        internal void Tick(double t) => PlaybackTimeChanged?.Invoke(t);
+        internal void Tick(double t) { if (_player._isPlaying || t != _lastTick) { _lastTick = t; PlaybackTimeChanged?.Invoke(t); } }
         internal void Invalidate() => _valid = false;
         public double GetCurrentTimeSeconds() => _player._currentSec;
         public double GetDurationSeconds() => _player._durationSec;

@@ -1130,6 +1130,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // WPF EnhancementPlayerWindow.xaml.cs:1180.
             if (_localAudio != null) _localAudio.PositionSeconds = frac * _durationSec;
             _currentSec = frac * _durationSec;
+            TickDeeper();
             UpdatePlayhead(frac);
         }
 
@@ -1727,7 +1728,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _currentSec = frac * _miniTotalSeconds;
             UpdateMiniPlayheadX();
             // WPF EnhancementPlayerWindow.xaml.cs:2855: seek the current transport.
-            if (_localAudio != null) _localAudio.PositionSeconds = _currentSec;
+            if (_localAudio != null) { _localAudio.PositionSeconds = _currentSec; TickDeeper(); }
             if (_isVideoMode && _videoNavigated)
             {
                 _ = _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke(
