@@ -10,10 +10,11 @@ internal sealed partial class EmiDeskService
 {
     private DispatcherTimer? _clockTimer;
     private string? _clockDay, _lateNightNight, _smallHoursNight, _morningDay;
-    private bool _saidLongSitting;
+    private bool _saidLongSitting, _saidIdleLong;
     private static readonly DateTime LaunchedUtc = ResolveLaunchUtc();
     internal Func<DateTime> ClockLocal = () => DateTime.Now;
     internal Func<DateTime> ClockUtc = () => DateTime.UtcNow;
+    internal Func<int?> IdleSeconds = Platform.DesktopIdle.ReadSeconds;
     internal Action<string, object?>? ClockMoment;
     private AutonomyScheduler? _momentAutonomy;
     private SpeechEngine? _momentSpeech;
@@ -142,7 +143,14 @@ internal sealed partial class EmiDeskService
         var open = ClockUtc() - launchedUtc;
         if (!_saidLongSitting && open.TotalHours >= 2)
         { _saidLongSitting = true; Moment("longSitting", new { minutes = (int)open.TotalMinutes }); }
-        // There is no desktop idle probe on this head yet.
-        Moment("ambient");
+        // WPF EmiDeskService.cs:2035-2059: a failed probe falls back to zero idle.
+        int idle = 0;
+        try { idle = IdleSeconds() ?? 0; } catch { }
+        if (idle >= 1200)
+        {
+            if (!_saidIdleLong) { _saidIdleLong = true; Moment("appIdleLong", new { minutes = idle / 60 }); }
+        }
+        else if (idle >= 300) Moment("idleShort", new { minutes = idle / 60 });
+        else { _saidIdleLong = false; Moment("ambient"); }
     }
 }

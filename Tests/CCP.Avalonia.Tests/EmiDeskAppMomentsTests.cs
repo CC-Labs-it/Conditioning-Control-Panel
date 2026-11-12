@@ -8,6 +8,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Speech;
 using ConditioningControlPanel.Services.EmiDesk;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
+using ConditioningControlPanel.Avalonia.Platform;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -23,6 +24,7 @@ public class EmiDeskAppMomentsTests
         var utc = now;
         desk.ClockLocal = () => now;
         desk.ClockUtc = () => utc;
+        desk.IdleSeconds = () => 0;
         desk.ClockMoment = (name, _) => moments.Add(name);
         var launched = utc;
         desk.ClockTick(launched);
@@ -51,6 +53,7 @@ public class EmiDeskAppMomentsTests
         var now = new DateTime(2026, 1, 2, 3, 0, 0);
         desk.ClockLocal = () => now;
         desk.ClockUtc = () => now;
+        desk.IdleSeconds = () => 0;
         desk.ClockMoment = (name, _) => seen.Add(name);
         typeof(EmiDeskService).GetProperty(nameof(EmiDeskService.IsOut))!.SetValue(desk, true);
         desk.ClockTick(now); desk.ClockTick(now);
@@ -58,6 +61,58 @@ public class EmiDeskAppMomentsTests
         desk.ClockTick(now); desk.ClockTick(now);
         Assert.Single(seen.Where(x => x == "smallHours"));
         Assert.Single(seen.Where(x => x == "morningFirst"));
+    }
+
+    [Fact]
+    public void ClockUsesIdleThresholdsAndRearmsLongIdleAfterInput()
+    {
+        var desk = new EmiDeskService();
+        var now = new DateTime(2026, 1, 1, 12, 0, 0);
+        int idle = 0;
+        var seen = new List<(string name, object? context)>();
+        desk.ClockLocal = () => now;
+        desk.ClockUtc = () => now;
+        desk.IdleSeconds = () => idle;
+        desk.ClockMoment = (name, context) => seen.Add((name, context));
+        typeof(EmiDeskService).GetProperty(nameof(EmiDeskService.IsOut))!.SetValue(desk, true);
+        void Tick(int seconds) { idle = seconds; desk.ClockTick(now); }
+        Tick(299); Tick(300); Tick(1199); Tick(1200); Tick(1201); Tick(300); Tick(1200); Tick(299); Tick(1200);
+        Assert.Equal(new[] { "ambient", "idleShort", "idleShort", "appIdleLong", "idleShort", "ambient", "appIdleLong" }, seen.Select(x => x.name));
+        Assert.Equal(new[] { 5, 19, 20, 5, 20 }, seen.Where(x => x.context != null)
+            .Select(x => (int)x.context!.GetType().GetProperty("minutes")!.GetValue(x.context)!));
+        desk.IdleSeconds = () => throw new InvalidOperationException();
+        seen.Clear(); desk.ClockTick(now);
+        Assert.Equal("ambient", Assert.Single(seen).name);
+    }
+
+    private static List<string> IdleSequence(params int[] values)
+    {
+        var desk = new EmiDeskService();
+        var now = new DateTime(2026, 1, 1, 12, 0, 0);
+        var seen = new List<string>();
+        int idle = 0;
+        desk.ClockLocal = () => now;
+        desk.ClockUtc = () => now;
+        desk.IdleSeconds = () => idle;
+        desk.ClockMoment = (name, _) => seen.Add(name);
+        typeof(EmiDeskService).GetProperty(nameof(EmiDeskService.IsOut))!.SetValue(desk, true);
+        foreach (var value in values) { idle = value; desk.ClockTick(now); }
+        return seen;
+    }
+
+    [Fact]
+    public void IdleShortStartsAtFiveMinutes() => Assert.Equal(new[] { "ambient", "idleShort" }, IdleSequence(299, 300));
+
+    [Fact]
+    public void LongIdleStartsAtTwentyMinutesAndLatches() => Assert.Equal(new[] { "idleShort", "appIdleLong" }, IdleSequence(1199, 1200, 1201));
+
+    [Fact]
+    public void InputRearmsLongIdle() => Assert.Equal(new[] { "appIdleLong", "ambient", "appIdleLong" }, IdleSequence(1201, 1, 1201));
+
+    [Fact]
+    public void X11ProbeReturnsNoValueForUnavailableDisplay()
+    {
+        if (OperatingSystem.IsLinux()) Assert.Null(DesktopIdle.ReadX11("not-a-display"));
     }
 
     private static void Raise(object? source, Type type, string name, params object[] args)
