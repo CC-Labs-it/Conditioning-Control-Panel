@@ -12,6 +12,7 @@ using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -31,10 +32,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var panel = CreateSectionPanel("eventaudio");
             var stack = new StackPanel();
             panel.Child = stack;
-            stack.Children.Add(CreateSectionHeader("Event Audio"));
+            stack.Children.Add(CreateSectionHeader(Loc.Get("mod_event_title")));
             stack.Children.Add(CreateSectionDescription(
-                "Attach mp3 audio to an exact companion phrase. The clip name is based on the phrase text."));
-            stack.Children.Add(CreateSubHeader("Lines"));
+                Loc.Get("mod_event_intro")));
+            stack.Children.Add(CreateSubHeader(Loc.Get("mod_event_lines")));
             _eventAudioRowsPanel = new StackPanel();
             var rowsScroll = new ScrollViewer
             {
@@ -55,16 +56,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             };
             stack.Children.Add(_eventAudioStatusLabel);
             var buttonsRow = new StackPanel { Orientation = Orientation.Horizontal };
-            var addBtn = CreateEventAudioActionButton("+ Add line");
+            var addBtn = CreateEventAudioActionButton(Loc.Get("mod_event_add"));
             addBtn.Click += (_, _) =>
             {
                 AddEventAudioRow("", null, isFixedText: false);
                 UpdateStatusBar();
             };
             buttonsRow.Children.Add(addBtn);
-            var importBtn = CreateEventAudioActionButton("Import folder…");
+            var importBtn = CreateEventAudioActionButton(Loc.Get("mod_event_import"));
             importBtn.Margin = new Thickness(8, 0, 0, 0);
-            ToolTip.SetTip(importBtn, "Add one line per *.mp3 in a folder, using each filename as the phrase text.");
+            ToolTip.SetTip(importBtn, Loc.Get("mod_event_help"));
             importBtn.Click += (_, _) => ImportEventAudioFolder();
             buttonsRow.Children.Add(importBtn);
             stack.Children.Add(buttonsRow);
@@ -104,7 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 textBox.IsReadOnly = true;
                 textBox.Foreground = new SolidColorBrush(Color.FromRgb(160, 160, 192));
-                ToolTip.SetTip(textBox, "Loaded from the pack: the slug filename is shown as the text. Slugs can't be reversed to the original phrase.");
+                ToolTip.SetTip(textBox, Loc.Get("mod_event_fixed"));
             }
             state.TextBox = textBox;
             row.Children.Add(textBox);
@@ -122,14 +123,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             void RefreshSlug()
             {
                 var slug = Services.CompanionPhraseIds.Slugify(textBox.Text);
-                slugLabel.Text = slug.Length > 0 ? slug + ".mp3" : "(type a phrase)";
+                slugLabel.Text = slug.Length > 0 ? slug + ".mp3" : Loc.Get("mod_event_phrase");
                 ToolTip.SetTip(slugLabel, slugLabel.Text);
             }
             textBox.TextChanged += (_, _) => RefreshSlug();
             RefreshSlug();
             var attachBtn = new Button
             {
-                Content = "Attach mp3…",
+                Content = Loc.Get("mod_event_attach"),
                 Background = new SolidColorBrush(Color.FromRgb(50, 50, 80)),
                 Foreground = Brushes.White,
                 BorderThickness = new Thickness(0),
@@ -142,7 +143,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             row.Children.Add(attachBtn);
             var fileLabel = new TextBlock
             {
-                Text = "No file",
+                Text = Loc.Get("label_no_file"),
                 Foreground = new SolidColorBrush(Color.FromRgb(96, 96, 128)),
                 FontSize = 11,
                 FontStyle = FontStyle.Italic,
@@ -155,7 +156,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var playBtn = new Button
             {
                 Content = new IconGlyph { Kind = IconKind.Play, Size = 10 },
-                [AutomationProperties.NameProperty] = "Play preview",
+                [AutomationProperties.NameProperty] = Loc.Get("mod_event_preview"),
                 Width = 24, Height = 24,
                 Background = Brushes.Transparent,
                 Foreground = new SolidColorBrush(Color.FromRgb(100, 200, 100)),
@@ -183,7 +184,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (filePath != null) ShowFile(filePath);
             attachBtn.Click += async (_, _) =>
             {
-                var files = await PickFilesAsync("Select event audio (mp3)", new[] { "*.mp3" }, multiple: false);
+                var files = await PickFilesAsync(Loc.Get("mod_event_pick"), new[] { "*.mp3", "*.MP3" }, multiple: false);
                 if (files.Count == 0) return;
                 ShowFile(files[0]);
                 UpdateStatusBar();
@@ -191,7 +192,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var removeBtn = new Button
             {
                 Content = new IconGlyph { Kind = IconKind.Dismiss, Size = 10 },
-                [AutomationProperties.NameProperty] = "Remove line",
+                [AutomationProperties.NameProperty] = Loc.Get("mod_event_remove"),
                 Width = 20, Height = 20,
                 Background = Brushes.Transparent,
                 Foreground = new SolidColorBrush(Color.FromRgb(255, 100, 100)),
@@ -212,7 +213,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 container.Children.Add(new TextBlock
                 {
-                    Text = "Filename is not a clean slug. Enter the exact phrase.",
+                    Text = Loc.Get("mod_event_flag"),
                     Foreground = new SolidColorBrush(Color.FromRgb(255, 165, 80)),
                     FontSize = 10,
                     TextWrapping = TextWrapping.Wrap,
@@ -228,7 +229,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private async void ImportEventAudioFolder()
         {
             var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-            { Title = "Select a folder of event-audio mp3 files", AllowMultiple = false });
+            { Title = Loc.Get("mod_event_folder"), AllowMultiple = false });
             var folder = folders.FirstOrDefault()?.TryGetLocalPath();
             if (folder != null) ImportEventAudioFrom(folder);
         }
@@ -238,11 +239,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             string[] files;
             try
             {
-                files = Directory.GetFiles(folder, "*.mp3");
+                files = Directory.EnumerateFiles(folder).Where(f => string.Equals(Path.GetExtension(f), ".mp3", StringComparison.OrdinalIgnoreCase)).ToArray();
             }
             catch
             {
-                SetEventAudioStatus("Could not read that folder.");
+                SetEventAudioStatus(Loc.Get("mod_event_error"));
                 return;
             }
             int added = 0, flagged = 0;
@@ -257,8 +258,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (!isCleanSlug) flagged++;
             }
             SetEventAudioStatus(files.Length == 0
-                ? "No *.mp3 files found in that folder."
-                : $"Imported {added} file(s)" + (flagged > 0 ? $", {flagged} flagged with non-slug names." : "."));
+                ? Loc.Get("mod_event_empty")
+                : flagged > 0 ? Loc.GetF("mod_event_flagged", added, flagged) : Loc.GetF("mod_event_imported", added));
             UpdateStatusBar();
         }
 
@@ -291,7 +292,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 File.Copy(sourcePath, Path.Combine(destDir, slug + ".mp3"), overwrite: true);
             }
             SetEventAudioStatus(skipped.Count > 0
-                ? $"Exported {written.Count} event audio clip(s). Skipped {skipped.Count} duplicate slug(s): {string.Join(", ", skipped.Distinct())}."
+                ? Loc.GetF("mod_event_duplicate", written.Count, skipped.Count, string.Join(", ", skipped.Distinct()))
                 : "");
         }
 
@@ -300,7 +301,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             ClearEventAudioSection();
             var dir = Path.Combine(resourcesDir, "sounds", "event_audio");
             if (!Directory.Exists(dir)) return;
-            foreach (var file in Directory.GetFiles(dir, "*.mp3").OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
+            foreach (var file in Directory.EnumerateFiles(dir).Where(f => string.Equals(Path.GetExtension(f), ".mp3", StringComparison.OrdinalIgnoreCase)).OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
             {
                 var stem = Path.GetFileNameWithoutExtension(file);
                 AddEventAudioRow(stem, file, isFixedText: true);

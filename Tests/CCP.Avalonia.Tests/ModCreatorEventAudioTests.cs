@@ -9,6 +9,8 @@ using Avalonia.LogicalTree;
 using Avalonia.Automation;
 using Avalonia.Interactivity;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Localization;
+using Newtonsoft.Json.Linq;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -73,4 +75,70 @@ public sealed class ModCreatorEventAudioTests
         }
         finally { w.Close(); Dispatcher.UIThread.RunJobs(); Directory.Delete(root, true); }
     });
+    [Fact]
+    public void UppercaseMp3ImportsAndLoadsForReexport() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current == null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var root = Path.Combine(Path.GetTempPath(), "ccp-event-case-" + Guid.NewGuid());
+        Directory.CreateDirectory(root);
+        var w = new ModCreatorWindow();
+        try
+        {
+            var input = Path.Combine(root, "input"); Directory.CreateDirectory(input);
+            File.WriteAllText(Path.Combine(input, "Imported.MP3"), "imported");
+            File.WriteAllText(Path.Combine(input, "ignore.txt"), "ignore");
+            w.ImportEventAudioFrom(input);
+            var output = Path.Combine(root, "out"); w.WriteEventAudioTo(output);
+            Assert.Equal("imported", File.ReadAllText(Path.Combine(output, "sounds", "event_audio", "imported.mp3")));
+            var pack = Path.Combine(root, "pack", "sounds", "event_audio"); Directory.CreateDirectory(pack);
+            File.WriteAllText(Path.Combine(pack, "loaded.MP3"), "loaded");
+            File.WriteAllText(Path.Combine(pack, "ignore.txt"), "ignore");
+            w.LoadEventAudioFrom(Path.Combine(root, "pack"));
+            var reexport = Path.Combine(root, "reexport"); w.WriteEventAudioTo(reexport);
+            Assert.Equal("loaded", File.ReadAllText(Path.Combine(reexport, "sounds", "event_audio", "loaded.mp3")));
+            Assert.Single(Directory.GetFiles(Path.Combine(reexport, "sounds", "event_audio")));
+        }
+        finally { w.Close(); Dispatcher.UIThread.RunJobs(); Directory.Delete(root, true); }
+    });
+
+    [Fact]
+    public void EventAudioCopyIsTranslatedAndResourcesExistInEveryLanguage() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var keys = "title intro lines add import help fixed phrase attach preview remove flag folder pick error empty imported flagged duplicate".Split(' ');
+        foreach (var (code, _, _) in LocalizationManager.AvailableLanguages)
+        {
+            var file = Path.Combine(AppContext.BaseDirectory, "Localization", "Languages", code + ".json");
+            var strings = JObject.Parse(File.ReadAllText(file));
+            foreach (var key in keys) Assert.False(string.IsNullOrWhiteSpace((string?)strings["mod_event_" + key]));
+        }
+        if (Application.Current == null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var loc = LocalizationManager.Instance; var previous = loc.CurrentLanguage;
+        var root = Path.Combine(Path.GetTempPath(), "ccp-event-loc-" + Guid.NewGuid()); Directory.CreateDirectory(root);
+        try
+        {
+            loc.SetLanguage("fr");
+            var w = new ModCreatorWindow();
+            try
+            {
+                var elements = w.GetLogicalDescendants().ToList();
+                Assert.Contains(elements.OfType<Button>(), b => Equals(b.Tag, "eventaudio") && Equals(b.Content, Loc.Get("mod_event_title")));
+                Assert.Contains(elements.OfType<TextBlock>(), t => t.Text == Loc.Get("mod_event_intro"));
+                Assert.Contains(elements.OfType<Button>(), b => Equals(b.Content, Loc.Get("mod_event_import")) && Equals(ToolTip.GetTip(b), Loc.Get("mod_event_help")));
+                Assert.Contains(elements.OfType<Button>(), b => Equals(b.Content, Loc.Get("mod_event_add")));
+                File.WriteAllText(Path.Combine(root, "Bad Name.MP3"), "audio"); w.ImportEventAudioFrom(root);
+                Assert.Contains(w.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("mod_event_flag"));
+                Assert.Contains(w.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.GetF("mod_event_flagged", 1, 1));
+                Assert.Contains(w.GetLogicalDescendants().OfType<Button>(), b => AutomationProperties.GetName(b) == Loc.Get("mod_event_preview"));
+                Assert.Contains(w.GetLogicalDescendants().OfType<Button>(), b => AutomationProperties.GetName(b) == Loc.Get("mod_event_remove"));
+                Assert.Contains(w.GetLogicalDescendants().OfType<Button>(), b => Equals(b.Content, Loc.Get("mod_event_attach")));
+            }
+            finally { w.Close(); Dispatcher.UIThread.RunJobs(); }
+        }
+        finally { loc.SetLanguage(previous); Directory.Delete(root, true); }
+    });
+
 }

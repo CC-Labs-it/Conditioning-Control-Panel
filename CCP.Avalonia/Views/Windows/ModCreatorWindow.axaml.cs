@@ -356,7 +356,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var btn = new Button
                 {
-                    Content = label,
+                    Content = key == "eventaudio" ? Loc.Get("mod_event_title") : label,
                     Tag = key,
                     HorizontalContentAlignment = HorizontalAlignment.Left,
                     Padding = new Thickness(13, 9, 13, 9),
