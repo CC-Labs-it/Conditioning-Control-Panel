@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -26,7 +27,7 @@ public sealed class ModCreatorTutorialTests
     // WPF Windows/ModCreatorWindow.xaml.cs:220-222, 256-267. Exercise the public
     // auto-start route and the live card's buttons, rather than invoking callbacks directly.
     [Fact]
-    public void LiveGuideNavigatesEverySectionAndPreviousAndCanRestart() => AvaloniaTestDispatcher.Run(() =>
+    public Task LiveGuideNavigatesEverySectionAndPreviousAndCanRestart() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current == null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
@@ -63,9 +64,12 @@ public sealed class ModCreatorTutorialTests
                             AssertSection(window, "theme");
                         }
                     }
-                    ClickCard(window, "BtnNext");
+                    ClickCard(window, "BtnNext", pump: !CoreTutorial.IsLastStep);
                 }
                 Assert.Equal(12, sections);
+                // WPF TutorialOverlay.xaml.cs:1300-1310 retains the card during the exit fade.
+                Assert.Contains(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "TextPanel");
+                await Task.Delay(500);
                 Assert.DoesNotContain(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "TextPanel");
                 window.Close();
                 Dispatcher.UIThread.RunJobs();
@@ -81,12 +85,12 @@ public sealed class ModCreatorTutorialTests
         }
     });
 
-    private static void ClickCard(Window window, string name)
+    private static void ClickCard(Window window, string name, bool pump = true)
     {
         var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
         Assert.True(button.IsVisible);
         button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Dispatcher.UIThread.RunJobs();
+        if (pump) Dispatcher.UIThread.RunJobs();
     }
 
     private static void AssertSection(ModCreatorWindow window, string key)
