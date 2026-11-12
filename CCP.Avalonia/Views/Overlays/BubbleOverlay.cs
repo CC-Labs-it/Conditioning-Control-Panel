@@ -577,7 +577,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (payload is BrainDrainMeltPayload)   // WPF EffectPayloadFiring.cs:71-102: a drain up or a dial at 0 pays XP only
             {
                 if (BrainDrainPlayer.Instance?.IsRunning == true || BrainDrainVisualPolicy.IsSilent(CoreSettings.Current.BrainDrainBlurStrength)) return;
-                // ponytail: the timed blur/melt waits on the desktop-capture port (CCP.Avalonia/Platform/BrainDrainPlayer.cs:9).
+                // ponytail: owner-approved deferral; WPF EffectPayloadFiring.cs:97-99 ShowOverlayTimed blur/melt needs the desktop-capture port (BrainDrainPlayer.cs:9).
                 if (!_brainDrainVisualLogged) Log.Information("Bubble: brain drain pop paid XP only - no desktop-capture drain on this head");
                 _brainDrainVisualLogged = true;
                 return;
