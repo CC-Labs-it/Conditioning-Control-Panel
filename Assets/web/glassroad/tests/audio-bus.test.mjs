@@ -196,3 +196,26 @@ test('platform notes use the existing audio bus, stay local and honor pause and 
   assert.equal(log.sets.slice(start).find(([kind, n]) => kind === 'setValueAtTime' && n > 100)[1], 220);
   audio.dispose();
 });
+
+test('Electron is unmuted only after the page audio context actually runs', async () => {
+  const { ctx } = fakeCtx(); let unlocked = 0;
+  const win = { ccpHost: { audioUnlocked: () => unlocked++ }, addEventListener() {}, removeEventListener() {} };
+  const audio = createAudio(createFeel(feelJson), createBus(), { win, makeCtx: () => ctx, fetchFn: async () => { throw Error('offline'); } });
+  assert.equal(unlocked, 0);
+  ctx.resume = async () => {}; await audio.start(); assert.equal(unlocked, 0, 'failed resume stays muted');
+  ctx.resume = async () => { ctx.state = 'running'; }; await audio.start(); assert.equal(unlocked, 1);
+  audio.setPaused(true); await audio.start(); assert.equal(unlocked, 1);
+  audio.dispose(); await audio.start(); assert.equal(unlocked, 1);
+});
+
+
+test('a gesture signals audio only after resume succeeds, and disposal cancels a pending signal', async () => {
+  const { ctx } = fakeCtx(); let unlocked = 0, finish;
+  const listeners = {};
+  const win = { ccpHost: { audioUnlocked: () => unlocked++ },
+    addEventListener: (name, fn) => { listeners[name] = fn; }, removeEventListener() {} };
+  const audio = createAudio(createFeel(feelJson), createBus(), { win, makeCtx: () => ctx, fetchFn: async () => { throw Error('offline'); } });
+  ctx.resume = () => new Promise(resolve => { finish = () => { ctx.state = 'running'; resolve(); }; });
+  listeners.pointerdown(); assert.equal(unlocked, 0); finish(); await Promise.resolve(); assert.equal(unlocked, 1);
+  ctx.state = 'suspended'; listeners.keydown(); audio.dispose(); finish(); await Promise.resolve(); assert.equal(unlocked, 1);
+});

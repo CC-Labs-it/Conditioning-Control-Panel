@@ -312,6 +312,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Test Racing Thoughts shell and packaging
+        run: node --test .github/scripts/glassroad-shell-packaging.test.cjs Assets/web/glassroad-shell/tests/shell.test.cjs Assets/web/glassroad/tests/audio-bus.test.mjs Assets/web/glassroad/tests/host-bridge.test.mjs
+
       - run: node --test Tests/CCP.Avalonia.Tests/BrowserVideoScript.test.mjs
       - name: Check shared Loom renderer exports
         run: node --test Assets/web/dtrh/tests/loom-renderer-exports.test.mjs
