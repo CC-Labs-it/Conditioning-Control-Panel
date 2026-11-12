@@ -26,19 +26,47 @@ public sealed class CompanionLinkLauncherTests
         => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         ChatThresholdLinksTests.Setup();
-        var settings = new SettingsService();
-        CoreSettings.ServiceProvider = () => settings;
-        settings.Current.OfflineMode = false;
-        (settings.Current.Welcomed, settings.Current.HasAcceptedAgeVerification,
-            settings.Current.WhatMovedCardShown, settings.Current.AvatarEnabled) = (true, true, 1, false);
-        using var relay = new RemoteRelay(() => null, () => null, "test", (_, _) => null, _ => { });
-        RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
+        var previousSettings = CoreSettings.ServiceProvider;
+        var previousRelay = RemoteControlTabView.Relay;
+        await RunFallbackCase(hasEngine, url, expectedExternal, () => new MainShellWindow());
+        Assert.Multiple(
+            () => Assert.Same(previousSettings, CoreSettings.ServiceProvider),
+            () => Assert.Same(previousRelay, RemoteControlTabView.Relay));
+    });
+
+    [Fact]
+    public Task ShellConstructionFailureRestoresSharedState() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var previousSettings = CoreSettings.ServiceProvider;
+        var previousRelay = RemoteControlTabView.Relay;
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => RunFallbackCase(false,
+            "https://127.0.0.1/video", 1, () => throw new InvalidOperationException("shell construction")));
+        Assert.Equal("shell construction", error.Message);
+        Assert.Multiple(
+            () => Assert.Same(previousSettings, CoreSettings.ServiceProvider),
+            () => Assert.Same(previousRelay, RemoteControlTabView.Relay));
+    });
+
+    private static async Task RunFallbackCase(bool hasEngine, string url, int expectedExternal,
+        Func<MainShellWindow> createShell)
+    {
+        var previousSettings = CoreSettings.ServiceProvider;
+        var previousRelay = RemoteControlTabView.Relay;
         var previousOpen = AppUpdater.OpenUrl;
         var previousNavigate = CompanionLinkLauncher.Navigate;
-        var external = new List<string>();
-        var shell = new MainShellWindow();
+        using var relay = new RemoteRelay(() => null, () => null, "test", (_, _) => null, _ => { });
+        MainShellWindow? shell = null;
         try
         {
+            var settings = new SettingsService();
+            CoreSettings.ServiceProvider = () => settings;
+            settings.Current.OfflineMode = false;
+            (settings.Current.Welcomed, settings.Current.HasAcceptedAgeVerification,
+                settings.Current.WhatMovedCardShown, settings.Current.AvatarEnabled) = (true, true, 1, false);
+            RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
+            var external = new List<string>();
+            shell = createShell();
             CompanionLinkLauncher.Navigate = value => shell.NavigateToUrlInBrowser(value, autoPlayFullscreen: true);
             shell.Show();
             Dispatcher.UIThread.RunJobs();
@@ -53,12 +81,20 @@ public sealed class CompanionLinkLauncherTests
         }
         finally
         {
-            AppUpdater.OpenUrl = previousOpen;
-            CompanionLinkLauncher.Navigate = previousNavigate;
-            shell.Close();
-            Dispatcher.UIThread.RunJobs();
+            try
+            {
+                shell?.Close();
+                Dispatcher.UIThread.RunJobs();
+            }
+            finally
+            {
+                AppUpdater.OpenUrl = previousOpen;
+                CompanionLinkLauncher.Navigate = previousNavigate;
+                CoreSettings.ServiceProvider = previousSettings;
+                RemoteControlTabView.Relay = previousRelay;
+            }
         }
-    });
+    }
 
     [Theory]
     [InlineData(false, true, "https://127.0.0.1/video", 1, 0)]
