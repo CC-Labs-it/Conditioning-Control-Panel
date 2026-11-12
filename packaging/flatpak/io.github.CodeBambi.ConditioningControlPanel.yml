@@ -22,8 +22,9 @@ finish-args:
   - --device=dri
   - --talk-name=org.kde.StatusNotifierWatcher
   - --talk-name=org.freedesktop.Notifications
-  # Tray: Avalonia owns org.kde.StatusNotifierItem-<pid>-<n>, n +1 per watcher restart; the app is pid 2 in the
-  # sandbox. finish-args reject a "-*" wildcard (Invalid dbus name), so the names are listed.
+  # Tray: Avalonia owns org.kde.StatusNotifierItem-<pid>-<n>; the app is pid 2 in the sandbox and n counts TrayIcon
+  # instances (one per process). Avalonia 12.1.5 keeps the name across watcher restarts; -2-1..-2-3 cover a retry
+  # after a failed RequestName. finish-args reject a "-*" wildcard (Invalid dbus name), so the names are listed.
   - --own-name=org.kde.StatusNotifierItem-2-0
   - --own-name=org.kde.StatusNotifierItem-2-1
   - --own-name=org.kde.StatusNotifierItem-2-2
