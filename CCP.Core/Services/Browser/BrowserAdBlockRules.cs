@@ -13,18 +13,20 @@ public static class BrowserAdBlockRules
         && Uri.TryCreate(requestUrl, UriKind.Absolute, out var target)
         && BrowserPopupRule.IsBlockedHost(target.Host);
 
-    private const string PartnerUrl = @"^https?://([^/:]+\.)?hypnotube\.com([/:?#]|$)";
+    // WebKit does not support regex alternation; emit separate boundary and end-of-URL patterns.
+    private const string PartnerUrl = @"^https?://([^/:]+\.)?hypnotube\.com";
+    private static readonly string[] PartnerUrls = { PartnerUrl + "[/:?#]", PartnerUrl + "$" };
 
     public static string WebKitJson { get; } = JsonSerializer.Serialize(
-        BrowserPopupRule.BlockedDomains.Select(domain => new
+        BrowserPopupRule.BlockedDomains.SelectMany(domain => new[] { "[/:?#]", "$" }.Select(end => new
         {
             trigger = new
             {
-                url_filter = @"^[^:]+://+([^/:]+\.)?" + domain.Replace(".", @"\.") + @"([/:?#]|$)",
-                unless_top_url = new[] { PartnerUrl }
+                url_filter = @"^[^:]+://+([^/:]+\.)?" + domain.Replace(".", @"\.") + end,
+                unless_top_url = PartnerUrls
             },
             action = new { type = "block" }
-        }).Select(rule => new System.Collections.Generic.Dictionary<string, object>
+        })).Select(rule => new System.Collections.Generic.Dictionary<string, object>
         {
             ["trigger"] = new System.Collections.Generic.Dictionary<string, object>
             {
