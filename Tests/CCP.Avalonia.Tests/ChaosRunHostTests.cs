@@ -13,6 +13,7 @@ using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Localization;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -686,6 +687,150 @@ public sealed class ChaosRunHostTests
                 Assert.Equal((1, "nofocus"), (state.Detonated, c.BrokenReason));
             }
             finally { ChaosRunHost.ForceShutdown(); BubbleOverlay.Field.Clock = () => DateTime.UtcNow; FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    private sealed class TeaseDice : Random
+    {
+        public override double NextDouble() => 0;
+        public override int Next(int minValue, int maxValue) => minValue;
+    }
+
+    [Fact]
+    public async Task Tease_spawn_respects_rank_and_scripted_run_and_replaces_a_slot()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            var oldRng = ChaosRunHost.Rng;
+            var oldAnnouncer = CoreSettings.Current.ChaosAnnouncerEnabled;
+            var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
+            try
+            {
+                ChaosRunHost.Rng = new TeaseDice();
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                var cfg = ChaosRunHost.State!.Config;
+                ChaosMeta.State.RunsCompleted = 0;
+                Assert.False(ChaosRunHost.TrySpawnTease(cfg, 0.5));
+                ChaosMeta.State.RunsCompleted = 10;
+                LocalizationManager.Instance.SetLanguage("de");
+                CoreSettings.Current.ChaosAnnouncerEnabled = true;
+                ChaosAnnouncerOverlay.CloseActive();
+                cfg.ScriptedFirstRun = true;
+                Assert.False(ChaosRunHost.TrySpawnTease(cfg, 0.5));
+                cfg.ScriptedFirstRun = false;
+                ChaosRunHost.SpawnTick();
+                Assert.Single(BubbleOverlay.Field.Bubbles, b => b.Spec?.IsTease == true);
+                Assert.True(ChaosMeta.State.SeenTease);
+                Assert.Equal("Tease: nicht berühren", ChaosAnnouncerOverlay.Active!.Current!.Text);
+            }
+            finally { ChaosRunHost.ForceShutdown(); ChaosRunHost.Rng = oldRng; CoreSettings.Current.ChaosAnnouncerEnabled = oldAnnouncer; LocalizationManager.Instance.SetLanguage(oldLanguage); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Tease_press_bursts_once_shield_blocks_payload_and_combo_halves()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            var oldFirer = EffectPayload.Firer;
+            var enabled = CoreSettings.Current.ChaosSkiaFxEnabled;
+            var composited = ChaosSkiaFxOverlay.Composited;
+            var skipChecks = ChaosSkiaFxOverlay.SkipPlatformChecksForTests;
+            try
+            {
+                int fired = 0;
+                EffectPayload.Firer = _ => fired++;
+                CoreSettings.Current.ChaosSkiaFxEnabled = true;
+                ChaosSkiaFxOverlay.Composited = () => true;
+                ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                var state = ChaosRunHost.State!;
+                var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsTease = true, SizePx = 200, Payload = new FlashPayload() });
+                state.Combo = 9; state.Shields = 1; state.Heat = 0.5;
+                BubbleOverlay.PopChaos(b);
+                Assert.False(b.Popping);
+                BubbleOverlay.HoldChaos(true);
+                BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                Assert.False(b.Popping);
+                BubbleOverlay.HoldChaos(false);
+                BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                var fx = ChaosSkiaFxOverlay.Active!;
+                Assert.True(fx.Fx.ParticleCount > 0);
+                Assert.Equal((1, 0, 4, 0), (state.Detonated, state.Shields, state.Combo, fired));
+                Assert.Equal(0.3, state.Heat, 5);
+                int particles = fx.Fx.ParticleCount;
+                BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                Assert.Equal(particles, fx.Fx.ParticleCount);
+                var c = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsTease = true, SizePx = 200, Payload = new FlashPayload() });
+                state.Combo = 3;
+                CoreSettings.Current.ChaosSkiaFxEnabled = false;
+                BubbleOverlay.Press(c, c.CenterX, c.CenterY);
+                Assert.Equal(particles, fx.Fx.ParticleCount);
+                Assert.Equal((2, 1, 1, 1), (state.Detonated, state.Combo, state.EffectsFired, fired));
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown(); EffectPayload.Firer = oldFirer;
+                CoreSettings.Current.ChaosSkiaFxEnabled = enabled;
+                ChaosSkiaFxOverlay.Composited = composited;
+                ChaosSkiaFxOverlay.SkipPlatformChecksForTests = skipChecks;
+                FreshMeta();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Tease_expires_once_and_rewards_restraint()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            var oldRng = ChaosRunHost.Rng;
+            var oldPopText = ChaosRunHost.PopText;
+            var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
+            try
+            {
+                ChaosRunHost.Rng = new TeaseDice();
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                var state = ChaosRunHost.State!;
+                state.Focus = 20;
+                LocalizationManager.Instance.SetLanguage("de");
+                string? label = null;
+                ChaosRunHost.PopText = (_, _, text, _) => label = text;
+                var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsTease = true, SizePx = 200 });
+                double x = b.X, y = b.Y;
+                BubbleOverlay.HoldChaos(true);
+                for (int i = 0; i < 200; i++) BubbleOverlay.Field.Step();
+                Assert.False(b.Popping);
+                Assert.Equal((x, y), (b.X, b.Y));
+                BubbleOverlay.HoldChaos(false);
+                for (int i = 0; i < 187; i++) BubbleOverlay.Field.Step();
+                Assert.False(b.Popping);
+                Assert.NotEqual((x, y), (b.X, b.Y));
+                BubbleOverlay.Field.Step();
+                Assert.True(b.Popping && b.Deflating);
+                Assert.Equal(30, state.Focus);
+                Assert.Equal("WIDERSTANDEN", label);
+                Assert.True(state.Score > 0);
+                Assert.Equal(5, ChaosMeta.State.Gold);
+                Assert.Equal(0, state.Detonated);
+                double score = state.Score;
+                for (int i = 0; i < 30; i++) BubbleOverlay.Field.Step();
+                Assert.Equal(score, state.Score);
+                Assert.Equal(5, ChaosMeta.State.Gold);
+            }
+            finally { ChaosRunHost.ForceShutdown(); ChaosRunHost.Rng = oldRng; ChaosRunHost.PopText = oldPopText; LocalizationManager.Instance.SetLanguage(oldLanguage); FreshMeta(); }
             return Task.CompletedTask;
         });
     }

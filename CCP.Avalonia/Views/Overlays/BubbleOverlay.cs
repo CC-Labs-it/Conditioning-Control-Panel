@@ -267,6 +267,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
         }
         private static Func<AmbientBubble, bool>? _chaosCanChannel;
+        private static Action<AmbientBubble>? _chaosTeaseTouched;
 
         /// <summary>WPF Detonate/CompleteDefuse anchor the pop point at the bubble's centre.</summary>
         private static void AnchorPop(AmbientBubble b) { ChaosLastPopX = b.CenterX; ChaosLastPopY = b.CenterY; }
@@ -275,6 +276,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// focus gate allows) at the press point (global DIPs); every other bubble pops.</summary>
         internal static void Press(AmbientBubble b, double x, double y)
         {
+            if (b.Spec?.IsTease == true)
+            {
+                if (Field.HoldChaos || b.Popping) return;
+                b.Popping = true;
+                AnchorPop(b);
+                if (ChaosSkiaFxOverlay.Enabled)
+                    ChaosSkiaFxOverlay.Burst(CenterPx(b), Color.FromRgb(0xFF, 0x3D, 0x5A), 1.4);
+                _chaosTeaseTouched?.Invoke(b);
+                RequestFrame();
+                return;
+            }
             if (!b.IsLiveThreat) { Pop(b); return; }
             Field.PressLive(b, _chaosCanChannel?.Invoke(b) ?? true, x, y);
             RequestFrame();
@@ -300,10 +312,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// if the ambient field is not already running.</summary>
         internal static void BeginChaos(Visual host, Action<AmbientBubble> onPop,
             Action<AmbientBubble>? onDefuse = null, Action<AmbientBubble>? onDetonate = null,
-            Func<AmbientBubble, bool>? canChannel = null)
+            Func<AmbientBubble, bool>? canChannel = null,
+            Action<AmbientBubble>? onTeaseTouched = null, Action<AmbientBubble>? onTeaseDenied = null)
         {
             _chaosPopped = onPop;
             _chaosCanChannel = canChannel;
+            _chaosTeaseTouched = onTeaseTouched;
+            Field.ChaosTeaseDenied = onTeaseDenied == null ? null : b => { AnchorPop(b); onTeaseDenied(b); };
             Field.Held = false;
             Field.ChaosDefused = onDefuse == null ? null : b =>
             {
@@ -334,6 +349,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _hoverScreen = -1;
             _chaosPopped = null;
             _chaosCanChannel = null;
+            _chaosTeaseTouched = null;
+            Field.ChaosTeaseDenied = null;
             Field.ChaosDefused = Field.ChaosDetonated = null;
             Field.Held = false;
             Field.Bubbles.RemoveAll(b => b.Spec != null);
@@ -507,6 +524,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             GradientStops = { new GradientStop(Color.FromArgb(180, 200, 220, 255), 0), new GradientStop(Color.FromArgb(80, 255, 255, 255), 1) },
         };
         private static readonly IPen FallbackPen = new Pen(Brushes.White, 2);
+        private static readonly IPen TeasePen = new Pen(Brushes.White, 5);
         private static readonly Dictionary<uint, IPen> FuseCache = new();
         private static readonly Dictionary<uint, (IBrush, IPen)> TintCache = new();
 
@@ -687,6 +705,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         }
                         if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
                         else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                        if (b.Spec?.IsTease == true && !b.Popping)
+                        {
+                            double r = size * 0.12;
+                            dc.DrawLine(TeasePen, new Point(cx - r, cy - r), new Point(cx + r, cy + r));
+                            dc.DrawLine(TeasePen, new Point(cx + r, cy - r), new Point(cx - r, cy + r));
+                        }
                         if (b.FuseTotalMs > 0 && !b.Popping)   // WPF fuse ring: shrinks 1 -> 0.45; yellow, flash, red brink
                         {
                             double rr = (size / 2 - 2) * (0.45 + 0.55 * b.FuseFraction);
