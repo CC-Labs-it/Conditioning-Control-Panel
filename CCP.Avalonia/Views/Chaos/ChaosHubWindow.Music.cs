@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.IO;
 using Avalonia;
-using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         // WPF ChaosHubWindow.xaml.cs:2789-2913.
         private static readonly HashSet<ChaosHubWindow> MusicHubs = new();
         private LibVlcAudio.IPausableVoice? _menuMusic;
-        private DispatcherTimer? _menuMusicTimer;
+        private BeatLoop? _menuMusicTimer;
         private AppSettings? _menuMusicSettings;
         private double _menuMusicVolume, _menuMusicFrom, _menuMusicTo, _menuMusicLevel;
         private int _menuMusicStep, _menuMusicSteps;
@@ -29,7 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _menuMusicInitialized = true;
             _menuView.PropertyChanged += MenuMusicVisibilityChanged;
             Closed += (_, _) => DisposeMenuMusic();
-            StartMenuMusic();
+            if (IsVisible) StartMenuMusic(); else Opened += (_, _) => StartMenuMusic();
         }
 
         private void MenuMusicVisibilityChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
@@ -77,8 +77,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _menuMusicLeaving = leaving;
             if (_menuMusicTimer == null)
             {
-                _menuMusicTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
-                _menuMusicTimer.Tick += (_, _) => MenuMusicTick();
+                _menuMusicTimer = new BeatLoop(this, t => { if (t > 0) MenuMusicTick(); }, TimeSpan.FromMilliseconds(50))
+                { OnParked = () => { _menuMusicStep = _menuMusicSteps - 1; MenuMusicTick(); } };
             }
             _menuMusicTimer.Start();
         }
@@ -98,7 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (e.PropertyName != nameof(AppSettings.MasterVolume) || _menuMusic == null) return;
             _menuMusicTo = Math.Clamp(_menuMusicLevel * CoreSettings.Current.MasterVolume / 100.0, 0, 1);
-            if (_menuMusicTimer?.IsEnabled != true) _menuMusic.Volume = _menuMusicVolume = _menuMusicTo;
+            if (_menuMusicTimer?.IsRunning != true) _menuMusic.Volume = _menuMusicVolume = _menuMusicTo;
         }
 
         private void ReleaseMenuMusic()

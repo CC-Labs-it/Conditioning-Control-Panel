@@ -5,6 +5,7 @@ using Avalonia.Interactivity;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Safety;
@@ -37,8 +38,7 @@ public class ChaosHubMusicTests
             ChaosHubWindow? hub = null;
             try
             {
-                settings.MasterVolume = 100;
-                settings.ChaosMenuMusicMuted = false;
+                settings.MasterVolume = 100; settings.ChaosMenuMusicMuted = false;
                 hub = new ChaosHubWindow();
                 var voice = new Voice();
                 hub.MenuMusicPlay = (path, volume, loop, ended) =>
@@ -48,6 +48,8 @@ public class ChaosHubMusicTests
                     Assert.True(loop);
                     return voice;
                 };
+                global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = true; try { hub.Show(); }
+                finally { global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = false; }
                 hub.StartMenuMusic();
                 for (int i = 0; i < 20; i++) hub.MenuMusicTick();
                 Assert.Equal(0.25, voice.Last, 5);
@@ -59,7 +61,7 @@ public class ChaosHubMusicTests
                 for (int i = 0; i < 12; i++) hub.MenuMusicTick();
                 Assert.Equal(0, voice.Last, 5);
                 global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = true;
-                try { hub.Show(); hub.Close(); }
+                try { hub.Close(); }
                 finally { global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = false; }
                 Assert.True(voice.Disposed);
                 var field = typeof(ConditioningControlPanel.Models.AppSettings).GetField("PropertyChanged", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
@@ -91,9 +93,13 @@ public class ChaosHubMusicTests
             {
                 int starts = 0;
                 hub.MenuMusicPlay = (_, _, _, _) => { starts++; return voice; };
-                hub.StartMenuMusic();
+                global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = true; try { hub.Show(); }
+                finally { global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = false; }
+                hub.StartMenuMusic(); var beat = Assert.Single(BeatLoop.Running.Where(b => ReferenceEquals(b.Owner, hub)));
                 for (int i = 0; i < 40; i++) hub.MenuMusicTick();
                 hub.FindControl<Grid>("MenuView")!.IsVisible = false;
+                beat.OnParked!(); Assert.True(voice.Paused);
+                hub.FindControl<Grid>("MenuView")!.IsVisible = true; hub.FindControl<Grid>("MenuView")!.IsVisible = false;
                 for (int i = 0; i < 39; i++) hub.MenuMusicTick();
                 Assert.False(voice.Disposed);
                 Assert.False(voice.Paused);
@@ -115,7 +121,7 @@ public class ChaosHubMusicTests
                 hub.DisposeMenuMusic();
                 Assert.True(voice.Disposed);
             }
-            finally { hub.DisposeMenuMusic(); LibVlcAudio.Instance = priorAudio; }
+            finally { hub.Close(); hub.DisposeMenuMusic(); LibVlcAudio.Instance = priorAudio; }
         });
     }
     [Fact]
