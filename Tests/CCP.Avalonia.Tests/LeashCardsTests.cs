@@ -260,6 +260,32 @@ public sealed class LeashCardsTests
         Click(card, "leash-btn:punish"); CheckRow("leash-row:punish:Lines"); CheckRow("leash-row:punish:Video");
         Click(card, "leash-btn:reward"); CheckRow("leash-row:reward:praise"); CheckRow("leash-row:reward:pardon"); CheckRow("leash-row:reward:credit");
     });
+    [Fact] // WPF LeashHolderCard.cs:790-794: feedback expires even if the card leaves the tree.
+    public void DetachedAndReattachedHolderDoesNotKeepStaleFeedback() => Run(() =>
+    {
+        var svc = new Service(); var card = new LeashHolderCard(Held(), () => svc); var window = new Window { Content = card };
+        using var cleanup = new WindowCleanup(window);
+        Click(card, "leash-btn:reward"); Click(card, "leash-reward:pardon");
+        Assert.NotNull(Find<TextBlock>(card, "leash-holder-result"));
+        window.Content = null; Dispatcher.UIThread.RunJobs(); window.Content = card; Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain(card.GetLogicalDescendants().OfType<TextBlock>(), t => t.Tag as string == "leash-holder-result");
+    });
+    [Fact] // WPF LeashHolderCard.cs:613-634 and LeashLook.cs:351-383: artwork buttons and names.
+    public void StickerDiscsShowArtworkAndTooltipsAndSendEachSticker() => Run(() =>
+    {
+        var svc = new Service(); var card = new LeashHolderCard(Held(), () => svc);
+        foreach (var id in new[] { "good", "star", "pet", "heart", "wow" })
+        {
+            Click(card, "leash-btn:reward"); var button = Find<Button>(card, "leash-reward:sticker:" + id);
+            Assert.Equal(Loc.Get("leash_rew_sticker_" + id), ToolTip.GetTip(button));
+            var disc = Assert.IsType<Grid>(button.Content); Assert.Equal("leash-sticker:" + id, disc.Tag);
+            Assert.Equal(32, disc.Width); Assert.Equal(32, disc.Height);
+            Assert.Contains(disc.Children, c => c is global::Avalonia.Controls.Shapes.Ellipse);
+            if (id is "star" or "heart") Assert.Contains(disc.Children, c => c is IconGlyph);
+            else Assert.Contains(disc.Children, c => c is TextBlock t && t.Text == id.ToUpperInvariant());
+            Click(card, "leash-reward:sticker:" + id); Assert.Equal("reward:Sticker:" + id + ":", svc.Calls.Last());
+        }
+    });
     [Fact]
     public void PageKeepsHeldCardsAndSheetsAcrossPollsAndReceipts_AndFoldsOnHide() => Run(() =>
     {

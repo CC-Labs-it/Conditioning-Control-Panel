@@ -90,7 +90,7 @@ public sealed class LeashHolderCard : Border
         (_held, _service, _readOnly) = (held, service, readOnly);
         LeashCardUi.Frame(this, _body, readOnly ? "leash-preview" : "leash-holder-card:" + held.Who.Id);
         _resultTimer.Tick += (_, _) => { _resultTimer.Stop(); _result = null; Render(); };
-        DetachedFromVisualTree += (_, _) => _resultTimer.Stop();
+        DetachedFromVisualTree += (_, _) => { _resultTimer.Stop(); _result = null; Render(); };
         Render();
     }
     internal void Update(HeldLeash held) { _held = held; Render(); }
@@ -191,8 +191,7 @@ public sealed class LeashHolderCard : Border
             }
             else
             {
-                panel.Children.Add(Helped(LeashCardUi.Choices(R.Stickers.Select(id =>
-                    (Loc.Get("leash_rew_sticker_" + id), "leash-reward:sticker:" + id, (Func<Task>)(() => Reward(RewardKind.Sticker, id))))), RewardKind.Sticker));
+                panel.Children.Add(Helped(StickerChoices(), RewardKind.Sticker));
                 panel.Children.Add(Row(Label(Loc.Get("leash_rew_praise"), LeashHelpCatalog.ForReward(RewardKind.Praise)), LeashCardUi.Choices(R.Praise.Select(id =>
                     (Loc.Get("leash_praise_" + id), "leash-reward:praise:" + id, (Func<Task>)(() => Reward(RewardKind.Praise, id))))), "leash-row:reward:praise"));
                 panel.Children.Add(Row(Label(Loc.Get("leash_rew_pardon"), LeashHelpCatalog.ForReward(RewardKind.Pardon)), LeashCardUi.Action(Loc.Get("leash_give"), "leash-reward:pardon", () => Reward(RewardKind.Pardon)), "leash-row:reward:pardon"));
@@ -261,6 +260,20 @@ public sealed class LeashHolderCard : Border
     {
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Tag = tag, Margin = new Thickness(0, 2) };
         row.Children.Add(label); Grid.SetColumn(choices, 1); row.Children.Add(choices); return row;
+    }
+    // WPF LeashHolderCard.cs:613-634: the disc is the button, with its localized name as tooltip.
+    private WrapPanel StickerChoices()
+    {
+        var row = new WrapPanel();
+        foreach (var (id, seed) in R.Stickers.Select((id, i) => (id, i)))
+        {
+            var disc = LeashSelfCard.StickerDisc(id, seed, 32); disc.Margin = new Thickness(0);
+            var button = LeashCardUi.Action("", "leash-reward:sticker:" + id, () => Reward(RewardKind.Sticker, id));
+            button.Content = disc; button.Background = Brushes.Transparent; button.BorderBrush = Brushes.Transparent;
+            button.Padding = new Thickness(2); button.CornerRadius = new CornerRadius(18); button.Margin = new Thickness(0, 0, 6, 0);
+            ToolTip.SetTip(button, Loc.Get("leash_rew_sticker_" + id)); row.Children.Add(button);
+        }
+        return row;
     }
     private int _videoCap = LeashVideoCap.Default;
     private Control VideoPicker(Func<LeashWatch, Task> send, bool punish)
