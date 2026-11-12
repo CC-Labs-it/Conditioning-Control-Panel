@@ -105,6 +105,24 @@ public sealed class TeaseReviewTests
         }
         finally { Directory.Delete(dir, true); }
     });
+    [Fact]
+    public Task Animated_face_plays_with_motion_off() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var old = CoreSettings.Current.MotionLevel; CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        var window = new BubbleOverlayWindow(0, new PixelRect(0, 0, 200, 200), 1) { Width = 200, Height = 200 }; window.Show();
+        var bubble = AmbientBubble.SpawnChaos(new Random(1), 0, 0, 0, 200, 200, 1, new EffectBubbleSpec { IsTease = true, SizePx = 200 });
+        bubble.X = bubble.Y = bubble.Angle = 0; BubbleOverlay.Field.Bubbles.Add(bubble);
+        global::Avalonia.Media.Imaging.Bitmap Frame(SKColor color) { using var pixels = new SKBitmap(2, 2); pixels.Erase(color); using var data = pixels.Encode(SKEncodedImageFormat.Png, 100); return new(data.AsStream()); }
+        var frames = new List<global::Avalonia.Media.Imaging.Bitmap> { Frame(SKColors.Red), Frame(SKColors.Blue) };
+        try
+        {
+            BubbleOverlay.TeaseFaces[bubble] = (frames, 500000, Environment.TickCount64 - 500000, true);
+            window.Sync(); var pixel = Pixel(window, .5, .35); Assert.True(pixel.B > pixel.R + 10, $"{pixel}");
+        }
+        finally { BubbleOverlay.TeaseFaces.Remove(bubble); foreach (var frame in frames) frame.Dispose(); BubbleOverlay.Field.Bubbles.Remove(bubble); window.Close(); CoreSettings.Current.MotionLevel = old; }
+        return Task.CompletedTask;
+    });
+
     private static void Strip(string path)
     {
         using var bitmap = new SKBitmap(1, 2); bitmap.SetPixel(0, 0, SKColors.Red); bitmap.SetPixel(0, 1, SKColors.Blue);

@@ -782,7 +782,7 @@ public sealed class ChaosRunHostTests
         Assert.False(b.Popping);
         Assert.Equal((x, y), (b.X, b.Y));
         BubbleOverlay.HoldChaos(false);
-        for (int i = 0; i < 187; i++) BubbleOverlay.Field.Step();
+        for (int i = 0; i < 234; i++) BubbleOverlay.Field.Step();
         Assert.False(b.Popping);
         Assert.NotEqual((x, y), (b.X, b.Y));
         Assert.True(BubbleOverlay.ShowsTeaseHint(b));

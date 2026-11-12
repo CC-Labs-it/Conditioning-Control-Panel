@@ -297,10 +297,10 @@ namespace ConditioningControlPanel.Services
             if (Spec?.IsTease == true)
             {
                 double dx = _teaseCenterX - X, dy = _teaseCenterY - Y, d = Math.Sqrt(dx * dx + dy * dy);
-                if (d > 8) { X += dx / d * Chaos.ChaosTuning.TEASE_CENTER_PULL_DIP; Y += dy / d * Chaos.ChaosTuning.TEASE_CENTER_PULL_DIP; }
+                if (d > 8) { X += dx / d * Chaos.ChaosTuning.TEASE_CENTER_PULL_DIP * Chaos.ChaosTuning.FIELD_PACE; Y += dy / d * Chaos.ChaosTuning.TEASE_CENTER_PULL_DIP * Chaos.ChaosTuning.FIELD_PACE; }
                 X += Math.Sin(_timeAlive * 9) * 1.6;
                 Y += Math.Cos(_timeAlive * 7) * 1.2;
-                _teaseLifeMs -= FuseStepMs;
+                _teaseLifeMs -= FuseStepMs * Chaos.ChaosTuning.FIELD_PACE;
                 if (_teaseLifeMs <= 0) { Popping = Deflating = true; return Result.TeaseDenied; }
                 return Result.Alive;
             }

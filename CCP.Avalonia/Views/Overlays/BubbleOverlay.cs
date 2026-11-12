@@ -808,7 +808,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
                         if (b.Spec?.IsTease == true && BubbleOverlay.TeaseFaces.TryGetValue(b, out var face)) using (dc.PushTransform(m.TryInvert(out var inverse) ? inverse : Matrix.Identity))
                         {
-                            var frame = face.Frames[face.Animated && global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level != MotionLevel.Off
+                            var frame = face.Frames[face.Animated
                                 ? (int)((Environment.TickCount64 - face.Start) / face.Delay % face.Frames.Count) : 0];
                             double edge = size * .86, x = cx - edge / 2, y = cy - edge / 2;
                             var rect = new Rect(x, y, edge, edge);
