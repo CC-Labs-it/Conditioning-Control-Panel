@@ -61,7 +61,7 @@ internal sealed partial class FirstShowStageWindow : Window
     private readonly TextBlock _loadingStatus = new() { Foreground = Brushes.LightGray, FontSize = 13, Margin = new Thickness(0, 7, 0, 0), TextWrapping = TextWrapping.Wrap };
     private readonly WrapPanel _choices = new() { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 14, 0, 0) };
     private readonly Border _logo = new() { Width = 460, CornerRadius = new CornerRadius(22), Padding = new Thickness(5), BorderThickness = new Thickness(3), Opacity = 0, IsHitTestVisible = false };
-    private readonly FirstShowAudio _audio = new();
+    private readonly FirstShowAudio _audio;
     private readonly FrameClock _clock;
     private readonly Stopwatch _life = Stopwatch.StartNew();
     private readonly List<string> _files = new();
@@ -113,8 +113,9 @@ internal sealed partial class FirstShowStageWindow : Window
     internal double LogoOpacity => _logo.Opacity;
     /// <summary>--render-all: the stage at the reveal (logo up), nothing else on it.</summary>
     internal FirstShowStageWindow() : this(null) => _logo.Opacity = 1;
-    public FirstShowStageWindow(MainShellWindow? main)
+    public FirstShowStageWindow(MainShellWindow? main, bool preview = false)
     {
+        _audio = new FirstShowAudio(preview);
         Clock = () => _life.Elapsed.TotalSeconds;
         _main = main;
         _panic = CoreSettings.Current?.PanicKey ?? "Escape";
