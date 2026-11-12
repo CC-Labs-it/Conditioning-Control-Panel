@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// <c>keep</c> turns this off, <c>strip</c> writes the hint under any X11 WM (for probes).</para>
 ///
 /// <para><b>Hooked on <see cref="Window.WindowOpenedEvent"/></b>, which Avalonia raises at the top of
-/// <c>Window.ShowCore</c>, before <c>PlatformImpl.Show</c> maps the window (Avalonia 12.1.5,
+/// <c>Window.ShowCore</c>, before <c>PlatformImpl.Show</c> maps the window (Avalonia 12.1.5-12.1.6,
 /// Window.cs ShowCore). That timing matters: xwm paints the frame when the window maps, so a
 /// later hint leaves the shadow already drawn.</para>
 /// </summary>

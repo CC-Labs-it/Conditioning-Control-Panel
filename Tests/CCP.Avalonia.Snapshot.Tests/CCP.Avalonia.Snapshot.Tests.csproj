@@ -18,8 +18,8 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
     <PackageReference Include="xunit.v3" Version="3.2.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
-    <PackageReference Include="Avalonia.Headless" Version="12.1.5" />
-    <PackageReference Include="Avalonia.Skia" Version="12.1.5" />
+    <PackageReference Include="Avalonia.Headless" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Skia" Version="12.1.6" />
     <!-- 32.0.1 is the newest Verify.XunitV3 built against xunit.v3 3.2.2 (33.x needs xunit.v3 4.x). -->
     <PackageReference Include="Verify.XunitV3" Version="32.0.1" />
     <PackageReference Include="Verify.Avalonia" Version="1.4.1" />

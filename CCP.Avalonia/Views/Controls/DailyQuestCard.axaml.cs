@@ -198,7 +198,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         /// <summary>WPF's "+9%🔥 +10%🔃" multipliers: the text plus Fluent Fire / ArrowSync inline.
         /// Shared with the weekly card. False (and empty) when neither applies.</summary>
-        // shortcut: Avalonia #22339 (12.1.3-12.1.5): a TextBlock hidden on its own IsVisible that still holds an
+        // shortcut: Avalonia #22339 (12.1.3-12.1.6): a TextBlock hidden on its own IsVisible that still holds an
         // InlineUIContainer measures it inside the render pass and throws. Hide these lines with SetBonus(t, 0, 0),
         // which empties the inlines, never with IsVisible = false alone. Drop when #22339 is fixed upstream.
         internal static bool SetBonus(TextBlock t, int streakPct, int rerollPct, string open = "", string close = "")
