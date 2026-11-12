@@ -53,6 +53,13 @@ public sealed class X11VideoEscapePartATests
         return Task.CompletedTask;
     });
 
+    private static void WithCleanSurfaceClaims(Action body)
+    {
+        EscapeClaim.ClearSurfaceKeysForTest();
+        try { body(); }
+        finally { EscapeClaim.ClearSurfaceKeysForTest(); }
+    }
+
     private static void Open(MandatoryVideoOverlay o, bool strict = false)
     {
         Assert.True(o.Scheduler.Trigger(strict, "/test/video.mp4"));
@@ -157,8 +164,9 @@ public sealed class X11VideoEscapePartATests
     });
 
     [Fact]
-    public Task SurfaceClaimOwnsOnlyItsOwnPhysicalEscape() => WithVideo(o =>
+    public Task SurfaceClaimOwnsOnlyItsOwnPhysicalEscape() => WithVideo(o => WithCleanSurfaceClaims(() =>
     {
+        Assert.False(EscapeClaim.SurfaceOwnsEscape(421337));
         Open(o);
         bool down = false;
         EscapeClaim.RecordSurfaceEscape(421337);
@@ -169,33 +177,55 @@ public sealed class X11VideoEscapePartATests
         X11PanicKey.RouteVideoEscape(true, 9, 9, ref down, () => X11PanicKey.QueueVideoEscape(421338));
         Dispatcher.UIThread.RunJobs();
         Assert.False(o.Scheduler.IsPlaying);
-    });
+    }));
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void FocusedSurfaceRecordsItsNativeEscapeTimestamp(bool palette) => AvaloniaTestDispatcher.Run(() =>
+    public void FocusedSurfaceRecordsItsNativeEscapeTimestamp(bool palette) => AvaloniaTestDispatcher.Run(() => WithCleanSurfaceClaims(() =>
     {
         EscapeClaim.StartTracking(trackX11: true);
         global::Avalonia.Controls.Window window = palette
             ? new ConditioningControlPanel.Avalonia.Views.Windows.SettingsPaletteWindow()
             : new ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow();
-        var root = typeof(global::Avalonia.Controls.TopLevel).GetProperty("InputRoot", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(window)!;
-        var assembly = typeof(global::Avalonia.AvaloniaObject).Assembly;
-        var device = Activator.CreateInstance(assembly.GetType("Avalonia.Input.KeyboardDevice")!)!;
-        ulong stamp = palette ? 421339UL : 421340UL;
-        var key = Activator.CreateInstance(assembly.GetType("Avalonia.Input.Raw.RawKeyEventArgs")!, device, stamp, root,
-            global::Avalonia.Input.Raw.RawKeyEventType.KeyDown, global::Avalonia.Input.Key.Escape,
-            global::Avalonia.Input.RawInputModifiers.None, global::Avalonia.Input.PhysicalKey.Escape, null,
-            global::Avalonia.Input.KeyDeviceType.Keyboard)!;
-        var locator = assembly.GetType("Avalonia.AvaloniaLocator")!.GetProperty("Current")!.GetValue(null)!;
-        var inputType = assembly.GetType("Avalonia.Input.IInputManager")!;
-        var input = locator.GetType().GetMethod("GetService", new[] { typeof(Type) })!.Invoke(locator, new object[] { inputType })!;
-        var stream = inputType.GetProperty("PreProcess")!.GetValue(input)!;
-        stream.GetType().GetMethod("OnNext")!.Invoke(stream, new[] { key });
-        Assert.True(EscapeClaim.SurfaceOwnsEscape(stamp));
-        window.Close();
-    });
+        try
+        {
+            var root = typeof(global::Avalonia.Controls.TopLevel).GetProperty("InputRoot", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(window)!;
+            var assembly = typeof(global::Avalonia.AvaloniaObject).Assembly;
+            var device = Activator.CreateInstance(assembly.GetType("Avalonia.Input.KeyboardDevice")!)!;
+            ulong stamp = palette ? 421339UL : 421340UL;
+            Assert.False(EscapeClaim.SurfaceOwnsEscape(stamp));
+            var key = Activator.CreateInstance(assembly.GetType("Avalonia.Input.Raw.RawKeyEventArgs")!, device, stamp, root,
+                global::Avalonia.Input.Raw.RawKeyEventType.KeyDown, global::Avalonia.Input.Key.Escape,
+                global::Avalonia.Input.RawInputModifiers.None, global::Avalonia.Input.PhysicalKey.Escape, null,
+                global::Avalonia.Input.KeyDeviceType.Keyboard)!;
+            var locator = assembly.GetType("Avalonia.AvaloniaLocator")!.GetProperty("Current")!.GetValue(null)!;
+            var inputType = assembly.GetType("Avalonia.Input.IInputManager")!;
+            var input = locator.GetType().GetMethod("GetService", new[] { typeof(Type) })!.Invoke(locator, new object[] { inputType })!;
+            var stream = inputType.GetProperty("PreProcess")!.GetValue(input)!;
+            stream.GetType().GetMethod("OnNext")!.Invoke(stream, new[] { key });
+            Assert.True(EscapeClaim.SurfaceOwnsEscape(stamp));
+        }
+        finally { window.Close(); }
+    }));
+
+    [Fact]
+    public void SurfaceClaimsAreClearedEvenWhenTheTestBodyThrows()
+    {
+        const uint stamp = 421341;
+        try
+        {
+            Assert.Throws<InvalidOperationException>(() => WithCleanSurfaceClaims(() =>
+            {
+                EscapeClaim.RecordSurfaceEscape(stamp);
+                Assert.True(EscapeClaim.SurfaceOwnsEscape(stamp));
+                throw new InvalidOperationException();
+            }));
+            Assert.False(EscapeClaim.SurfaceOwnsEscape(stamp));
+            WithCleanSurfaceClaims(() => Assert.False(EscapeClaim.SurfaceOwnsEscape(stamp)));
+        }
+        finally { EscapeClaim.ClearSurfaceKeysForTest(); }
+    }
 
     [Fact]
     public void SharedPanicBindingDoesNotQueueVideo()

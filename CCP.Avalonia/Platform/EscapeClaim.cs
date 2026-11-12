@@ -130,6 +130,11 @@ internal static class EscapeClaim
         }
     }
 
+    internal static void ClearSurfaceKeysForTest()
+    {
+        lock (SurfaceGate) SurfaceKeys.Clear();
+    }
+
     internal static bool SurfaceOwnsEscape(ulong? stamp)
     {
         if (stamp == null) return false;
