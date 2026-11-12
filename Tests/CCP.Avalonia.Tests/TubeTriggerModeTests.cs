@@ -75,46 +75,68 @@ public sealed class TubeTriggerModeTests
     [InlineData("HTTPS://EXAMPLE.COM/ACTIVE-MOD-LOOP", "A Mod's Own Title")]
     public void TriggerBareUrlUsesCanonicalTitle(string url, string expected) => AvaloniaTestDispatcher.Run(() =>
     {
-        if (CoreMods.Service is null) global::ConditioningControlPanel.Avalonia.App.StartMods();
-        var settings = CoreSettings.Current;
-        var saved = (settings.TriggerModeEnabled, settings.TriggerIntervalSeconds, settings.CustomTriggers,
-            settings.AvatarMuted, settings.AvatarTubeDetached, settings.AvatarEnabled, settings.VideoLinksByMod);
-        var loops = new List<Action>();
-        var delays = new List<Action>();
-        AvatarTubeWindow? tube = null;
+        // Startup binds a mod service to settings and installs process-wide hooks. Keep both private to this test.
+        var snapshot = ProcessStateSnapshot.Take();
+        var resources = Application.Current!.Resources;
+        var keys = new[] { "FxMistColor", "FxMistBrush", "FxParticleColor", "FxParticleBrush",
+            "FxGlowColor", "FxGlowBrush", "FxFlashTintColor", "FxFlashTintBrush" };
+        var palette = keys.ToDictionary(k => k, k => (resources.ContainsKey(k), resources.ContainsKey(k) ? resources[k] : null));
+        ConditioningControlPanel.Services.SettingsService? isolatedSettings = null;
         try
         {
-            PanicAftermath.EndQuiet();
-            settings.TriggerModeEnabled = true;
-            settings.TriggerIntervalSeconds = 45;
-            settings.CustomTriggers = new() { "Watch " + url };
-            settings.AvatarMuted = false;
-            settings.AvatarTubeDetached = true;
-            settings.AvatarEnabled = true;
-            settings.VideoLinksByMod = new Dictionary<string, Dictionary<string, string>>
+            isolatedSettings = new ConditioningControlPanel.Services.SettingsService();
+            CoreSettings.ServiceProvider = () => isolatedSettings;
+            if (CoreMods.Service is null) global::ConditioningControlPanel.Avalonia.App.StartMods();
+            var settings = CoreSettings.Current;
+            var saved = (settings.TriggerModeEnabled, settings.TriggerIntervalSeconds, settings.CustomTriggers,
+                settings.AvatarMuted, settings.AvatarTubeDetached, settings.AvatarEnabled, settings.VideoLinksByMod);
+            var loops = new List<Action>();
+            var delays = new List<Action>();
+            AvatarTubeWindow? tube = null;
+            try
             {
-                [CoreMods.Service!.ActiveModId] = new() { ["A Mod's Own Title"] = "https://example.com/active-mod-loop" }
-            };
-            tube = new AvatarTubeWindow(null);
-            tube.SpeechClock = new Stepped();
-            tube.TriggerLoopScheduler = (_, tick) => { loops.Add(tick); return () => { }; };
-            tube.SpeechDelayScheduler = (_, fire) => { delays.Add(fire); return () => { }; };
-            tube.Show();
-            Dispatcher.UIThread.RunJobs();
-            loops[0]();
-            delays[^1]();
-            for (var i = 0; i < settings.CustomTriggers[0].Length; i++) loops[^1]();
-            var text = tube.FindControl<TextBlock>("TxtSpeech")!;
-            var link = Assert.IsType<global::ConditioningControlPanel.Avalonia.Controls.SafeHyperlinkButton>(
-                Assert.Single(text.Inlines!.OfType<InlineUIContainer>()).Child);
-            Assert.Equal(expected, link.Content);
+                PanicAftermath.EndQuiet();
+                settings.TriggerModeEnabled = true;
+                settings.TriggerIntervalSeconds = 45;
+                settings.CustomTriggers = new() { "Watch " + url };
+                settings.AvatarMuted = false;
+                settings.AvatarTubeDetached = true;
+                settings.AvatarEnabled = true;
+                settings.VideoLinksByMod = new Dictionary<string, Dictionary<string, string>>
+                {
+                    [CoreMods.Service!.ActiveModId] = new() { ["A Mod's Own Title"] = "https://example.com/active-mod-loop" }
+                };
+                tube = new AvatarTubeWindow(null);
+                tube.SpeechClock = new Stepped();
+                tube.TriggerLoopScheduler = (_, tick) => { loops.Add(tick); return () => { }; };
+                tube.SpeechDelayScheduler = (_, fire) => { delays.Add(fire); return () => { }; };
+                tube.Show();
+                Dispatcher.UIThread.RunJobs();
+                loops[0]();
+                delays[^1]();
+                for (var i = 0; i < settings.CustomTriggers[0].Length; i++) loops[^1]();
+                var text = tube.FindControl<TextBlock>("TxtSpeech")!;
+                var link = Assert.IsType<global::ConditioningControlPanel.Avalonia.Controls.SafeHyperlinkButton>(
+                    Assert.Single(text.Inlines!.OfType<InlineUIContainer>()).Child);
+                Assert.Equal(expected, link.Content);
+            }
+            finally
+            {
+                tube?.Close();
+                (settings.TriggerModeEnabled, settings.TriggerIntervalSeconds, settings.CustomTriggers,
+                    settings.AvatarMuted, settings.AvatarTubeDetached, settings.AvatarEnabled, settings.VideoLinksByMod) = saved;
+                PanicAftermath.EndQuiet();
+            }
         }
         finally
         {
-            tube?.Close();
-            (settings.TriggerModeEnabled, settings.TriggerIntervalSeconds, settings.CustomTriggers,
-                settings.AvatarMuted, settings.AvatarTubeDetached, settings.AvatarEnabled, settings.VideoLinksByMod) = saved;
-            PanicAftermath.EndQuiet();
+            isolatedSettings?.SealForReset();
+            snapshot.Restore();
+            foreach (var key in keys)
+            {
+                if (palette[key].Item1) resources[key] = palette[key].Item2!;
+                else resources.Remove(key);
+            }
         }
     });
 
