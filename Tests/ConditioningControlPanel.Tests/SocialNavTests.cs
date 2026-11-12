@@ -47,7 +47,7 @@ public class SocialNavTests
     {
         var src = Read("MainWindow", "MainWindow.Lobby.cs");
         Assert.Contains("NavBadges.Set(NavSections.Social, snap.OpenCount)", src);
-        Assert.Contains("_lobbyBadgeLease ??= lobby.Watch()", src);
+        Assert.Contains("_lobbyBadgeLease ??= lobby.WatchBadge()", src);
         Assert.Contains("_lobbyBadgeLease?.Dispose()", src);
         Assert.Contains("HookLobbyBadge();", Read("MainWindow", "MainWindow.SocialTabs.cs"));
     }

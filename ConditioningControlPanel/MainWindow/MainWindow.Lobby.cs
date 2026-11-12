@@ -28,7 +28,7 @@ namespace ConditioningControlPanel
         private IDisposable? _lobbyLease;
         private bool _lobbyHooked;
 
-        /// <summary>The rail badge's own lease ("3 open" on Social): held while the panel is on
+        /// <summary>The rail badge's own SLOW lease (LobbyService.WatchBadge, one round every 2 min) while the panel is on
         /// screen, released when it hides to the tray, minimises or closes. LobbyService counts
         /// leases and runs ONE timer, so this lease and the Lobby tab's (or the launcher's) never
         /// poll twice; each new lease only asks for one round at once.</summary>
@@ -59,7 +59,7 @@ namespace ConditioningControlPanel
                 if (!_lobbyHooked) { lobby.Changed += OnLobbyChanged; _lobbyHooked = true; }
                 if (LobbyBadgeWanted(IsVisible, WindowState))
                 {
-                    _lobbyBadgeLease ??= lobby.Watch();
+                    _lobbyBadgeLease ??= lobby.WatchBadge();
                     NavBadges.Set(NavSections.Social, lobby.Snapshot.OpenCount);
                 }
                 else
