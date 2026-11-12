@@ -148,7 +148,7 @@ public class SyncPushHealthTests
     }
 
     [Fact]
-    public async Task UnhandledConflictsCountButCooldownAndHandledConflictsDoNot()
+    public async Task HandledAndUnhandledConflictsCountButCooldownSkipsDoNot()
     {
         var oldSettings = CoreSettings.ServiceProvider;
         var oldLogin = CoreAccount.IsLoggedInProvider;
@@ -171,22 +171,27 @@ public class SyncPushHealthTests
             sync.MarkLoaded(null);
             V2AuthService.MergedRecovery = (_, _) => Task.FromResult(true);
             Assert.False(await sync.PushAsync("handled"));
-            Assert.Empty(events);
+            Assert.Equal(new[] { 1 }, events);
             V2AuthService.MergedRecovery = (_, _) => Task.FromResult(false);
-            for (var i = 0; i < 3; i++)
+            wire.FailureStatus = (HttpStatusCode)429;
+            Assert.False(await sync.PushAsync("rate limited after merge"));
+            Assert.Equal(new[] { 1, 2 }, events);
+            now += SyncPush.Cooldown + TimeSpan.FromSeconds(1);
+            wire.FailureStatus = HttpStatusCode.Conflict;
+            for (var i = 0; i < 2; i++)
             {
                 Assert.False(await sync.PushAsync("conflict"));
                 Assert.False(await sync.PushAsync("cooldown"));
                 now += SyncPush.Cooldown + TimeSpan.FromSeconds(1);
             }
-            Assert.Equal(new[] { 1, 2, 3 }, events);
+            Assert.Equal(new[] { 1, 2, 3, 4 }, events);
             wire.FailureStatus = (HttpStatusCode)429;
             Assert.False(await sync.PushAsync("rate limited"));
-            Assert.Equal(new[] { 1, 2, 3, 4 }, events);
+            Assert.Equal(new[] { 1, 2, 3, 4, 5 }, events);
             now += SyncPush.Cooldown + TimeSpan.FromSeconds(1);
             wire.Succeed = true;
             Assert.True(await sync.PushAsync("success"));
-            Assert.Equal(new[] { 1, 2, 3, 4, 0 }, events);
+            Assert.Equal(new[] { 1, 2, 3, 4, 5, 0 }, events);
         }
         finally
         {

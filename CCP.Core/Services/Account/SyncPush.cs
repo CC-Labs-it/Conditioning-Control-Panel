@@ -315,7 +315,14 @@ namespace ConditioningControlPanel.Services
                 if (!response.IsSuccessStatusCode)
                 {
                     // Contract D: merged tombstone; the head's recovery re-signs in and reloads.
-                    if (V2AuthService.MergedRecovery is { } merged && await merged(response, json)) return false;
+                    if (V2AuthService.MergedRecovery is { } merged && await merged(response, json))
+                    {
+                        // WPF records the deferred merge as an error without starting backoff.
+                        _hasSyncError = true;
+                        ConsecutiveSyncFailures++;
+                        SyncHealthChanged?.Invoke(this, ConsecutiveSyncFailures);
+                        return false;
+                    }
                     // 429, and a 409 no recovery handled: cool down rather than retry on every trigger.
                     if (response.StatusCode is (HttpStatusCode)429 or HttpStatusCode.Conflict)
                     {
