@@ -13,8 +13,8 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
-using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Chaster;
@@ -28,22 +28,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private readonly Dictionary<string, Border> _rowDims = new();
         private bool _menuBuilt;
         internal static TimeProvider RowPopTime = TimeProvider.System;
-        private readonly Dictionary<ToggleButton, (DispatcherTimer Timer, DateTimeOffset Start, double From)> _rowPops = new();
+        private readonly Dictionary<ToggleButton, (BeatLoop Beat, DateTimeOffset Start, double From)> _rowPops = new();
 
         private void PopRow(ToggleButton row)
         {
             if (!Motion) return;
-            if (_rowPops.Remove(row, out var old)) old.Timer.Stop();
+            if (_rowPops.Remove(row, out var old)) old.Beat.Stop();
             if (row.RenderTransform is not ScaleTransform scale)
             {
                 scale = new ScaleTransform(1, 1);
                 row.RenderTransform = scale;
                 row.RenderTransformOrigin = RelativePoint.Center;
             }
-            var timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(16) };
-            _rowPops[row] = (timer, RowPopTime.GetUtcNow(), scale.ScaleX);
-            timer.Tick += (_, _) => TickRowPop(row);
-            timer.Start();
+            var beat = new BeatLoop(row, _ => TickRowPop(row)) { OnParked = () => CancelRowPop(row) };
+            _rowPops[row] = (beat, RowPopTime.GetUtcNow(), scale.ScaleX);
+            beat.Start();
         }
 
         internal void TickRowPop(ToggleButton row)
@@ -63,7 +62,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 value = 1.06 + (1 - 1.06) * eased;
             }
             scale.ScaleX = scale.ScaleY = value;
-            if (t >= 1) { pop.Timer.Stop(); _rowPops.Remove(row); }
+            if (t >= 1) CancelRowPop(row);
+        }
+
+        private void CancelRowPop(ToggleButton row)
+        {
+            if (!_rowPops.Remove(row, out var pop)) return;
+            pop.Beat.Stop();
+            if (row.RenderTransform is ScaleTransform scale) scale.ScaleX = scale.ScaleY = 1;
         }
 
         internal IReadOnlyDictionary<string, ToggleButton> PriceRows => _priceToggles;
@@ -182,6 +188,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ToolTip.SetTip(row, tip);
             }
             row.Click += PriceToggle_Changed;
+            row.DetachedFromVisualTree += (_, _) => CancelRowPop(row);
             row.PointerEntered += Row_PointerEntered;
             row.PointerExited += Row_PointerExited;
             _priceToggles[price.Id] = row;

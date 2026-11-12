@@ -16,6 +16,7 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
@@ -129,20 +130,38 @@ public sealed class ChasterMenuTests
             var row = tab.PriceRows["session"];
             Click(w, row);
             var scale = Assert.IsType<ScaleTransform>(row.RenderTransform);
+            Assert.Contains(BeatLoop.Running, beat => beat.Owner == row && beat.IsTicking);
             clock.Advance(80);
-            tab.TickRowPop(row);
+            BeatLoop.StepAll();
             var before = scale.ScaleX;
             Assert.InRange(before, 1.001, 1.059);
             Click(w, row);
-            tab.TickRowPop(row);
+            BeatLoop.StepAll();
             Assert.Equal(before, scale.ScaleX, 8);
             clock.Advance(133);
-            tab.TickRowPop(row);
+            BeatLoop.StepAll();
             Assert.InRange(scale.ScaleX, 1.059, 1.061);
             clock.Advance(247);
-            tab.TickRowPop(row);
+            BeatLoop.StepAll();
             Assert.Equal(1, scale.ScaleX, 8);
             Assert.Equal(scale.ScaleX, scale.ScaleY, 8);
+            Assert.DoesNotContain(BeatLoop.Running, beat => beat.Owner == row);
+
+            Click(w, row);
+            clock.Advance(80);
+            BeatLoop.StepAll();
+            Assert.True(scale.ScaleX > 1);
+            row.IsVisible = false;
+            Assert.Equal(1, scale.ScaleX, 8);
+            Assert.DoesNotContain(BeatLoop.Running, beat => beat.Owner == row);
+            row.IsVisible = true;
+            Click(w, row);
+            clock.Advance(80);
+            BeatLoop.StepAll();
+            Assert.True(scale.ScaleX > 1);
+            Assert.IsAssignableFrom<Panel>(row.Parent).Children.Remove(row);
+            Assert.Equal(1, scale.ScaleX, 8);
+            Assert.DoesNotContain(BeatLoop.Running, beat => beat.Owner == row);
         }
         finally
         {
