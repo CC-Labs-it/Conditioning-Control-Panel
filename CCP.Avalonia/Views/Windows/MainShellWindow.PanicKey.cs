@@ -50,7 +50,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void OnX11PanicPress()
         {
             Serilog.Log.Information("Panic trigger: XInput2 key press");
-            if (!ConditioningControlPanel.Services.Race.RaceShellProtocol.Claim(false, Environment.TickCount64)) return;   // the race shell took it
             if (!AdmitPanicRoute(PanicRouteGate.Route.X11)) return;
             QueuePanic(() => HandlePanicKeyPress(DateTime.Now));
             Dispatcher.UIThread.Post(OnX11HoldPressed);   // after the panic: hold-to-cut (MainShellWindow.LeashHold.cs)

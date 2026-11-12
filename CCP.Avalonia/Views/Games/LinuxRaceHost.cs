@@ -26,7 +26,7 @@ internal sealed class LinuxRaceHost : IDisposable
     private Task _writes = Task.CompletedTask;
     private int _closed; private long _lastEscape; private bool _escapeHeld, _disposed;
     private volatile string? _displayBackend; private volatile bool _backendKnown, _loaded;
-    private readonly Func<bool> _x11Listening;
+    private readonly Func<bool> _x11Listening; private readonly string? _launchBackend;   // the session's ozone platform; null = unknown
     internal bool InFront { get; private set; }
     internal bool IsAlive => Volatile.Read(ref _closed) == 0;
     /// <summary>The race session window while the live shell has focus (TryGamePauseOnEscape's front game).</summary>
@@ -34,7 +34,7 @@ internal sealed class LinuxRaceHost : IDisposable
     internal static string? EnginePath => RuntimeInformation.ProcessArchitecture is Architecture.X64 or Architecture.Arm64
         ? Path.Combine(RaceEngineFetcher.DefaultRoot, RaceEngineManifest.For(RuntimeInformation.ProcessArchitecture).DirectoryName, "electron") : null;
     internal static string ShellPath => Path.Combine(AppContext.BaseDirectory, "Resources", "web", "glassroad-shell", "main.js");
-    internal static LinuxRaceHost? TryLaunch(GameWindow window, Uri url) => TryLaunch(window, url, EnginePath, ShellPath);
+    private const string LaunchBackend = "x11"; internal static LinuxRaceHost? TryLaunch(GameWindow window, Uri url) => TryLaunch(window, url, EnginePath, ShellPath);
     /// <summary>Null when the engine or shell is not installed; throws when they are and the shell did not start.</summary>
     internal static LinuxRaceHost? TryLaunch(GameWindow window, Uri url, string? enginePath, string shellPath)
     {
@@ -42,13 +42,13 @@ internal sealed class LinuxRaceHost : IDisposable
         var start = new ProcessStartInfo("/usr/bin/setsid") { UseShellExecute = false, RedirectStandardInput = true,
             RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
         // setsid execs without forking: this child's pid is its process group, never CCP's group.
-        foreach (var arg in new[] { enginePath, "--ozone-platform=x11", shellPath }) start.ArgumentList.Add(arg);
+        foreach (var arg in new[] { enginePath, "--ozone-platform=" + LaunchBackend, shellPath }) start.ArgumentList.Add(arg);
         var process = new Process { StartInfo = start };
         LinuxRaceHost? host = null;
         try
         {
             if (!process.Start()) throw new IOException("Race shell did not start");
-            host = new LinuxRaceHost(window, process);
+            host = new LinuxRaceHost(window, process, launchBackend: LaunchBackend);
             host.Send(new { type = "launch", url = url.AbsoluteUri }); return host.StartReading();
         }
         catch
@@ -59,9 +59,9 @@ internal sealed class LinuxRaceHost : IDisposable
             throw; // the caller shows the race card with rt_engine_start_failed
         }
     }
-    internal LinuxRaceHost(GameWindow window, Process process, Action<DateTime>? panic = null, Func<bool>? x11Listening = null)
+    internal LinuxRaceHost(GameWindow window, Process process, Action<DateTime>? panic = null, Func<bool>? x11Listening = null, string? launchBackend = null)
     {
-        _window = window; _process = process; _pid = process.Id;
+        _window = window; _process = process; _pid = process.Id; _launchBackend = launchBackend;
         _x11Listening = x11Listening ?? (() => Platform.X11PanicKey.IsListening && Platform.X11PanicKey.BoundKeycode != 0);
         _panic = panic ?? (now => Shell()?.HandlePanicKeyPress(now));
         _watch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
@@ -90,6 +90,9 @@ internal sealed class LinuxRaceHost : IDisposable
     }
     // A non-Escape key needs a live X11 listener (WPF MainWindow.xaml.cs:334-337 installs the global hook).
     private bool UnsupportedPanicKey => _backendKnown && CoreSettings.Current.PanicKeyEnabled && CoreSettings.Current.PanicKey != "Escape" && !(_displayBackend == "x11" && _x11Listening());
+    // One panic source per session, never both: XInput2 raw events reach the listener AND an X11 shell, on separate
+    // channels, so no time window can pair them. The launch fixes the backend; a page reporting another hands it to the shell.
+    private bool X11Source => _launchBackend == "x11" && (_displayBackend is null or "x11") && _x11Listening() && CoreSettings.Current.PanicKey == "Escape";
     // Runs on the pipe reader: arm the watchdog before anything is queued behind a wedged UI.
     internal void ReadFrame(JObject frame)
     {
@@ -101,8 +104,9 @@ internal sealed class LinuxRaceHost : IDisposable
             if (UnsupportedPanicKey) { Kill(); Dispatcher.UIThread.Post(Dispose); return; }
         }
         if (type != RaceShellProtocol.Escape) { Dispatcher.UIThread.Post(() => Receive(frame)); return; }
-        if (!RaceShellProtocol.AcceptEscape(ref _lastEscape, (long?)frame["sequence"] ?? 0, _x11Listening()
-            && CoreSettings.Current.PanicKey == "Escape", (string?)frame["displayBackend"] ?? _displayBackend, Environment.TickCount64)) return;
+        bool x11 = X11Source;
+        if (!RaceShellProtocol.AcceptEscape(ref _lastEscape, (long?)frame["sequence"] ?? 0, x11))
+            { if (x11) Serilog.Log.Debug("Glassroad: shell Escape ignored, X11 is this race's panic source"); return; }
         void Handle()
         {
             bool escapePanics = CoreSettings.Current.PanicKey == "Escape";
