@@ -12,6 +12,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -36,6 +37,40 @@ public sealed class ChaosGifCascadeOverlayTests
         public override long GetTimestamp() => Now;
         public override long TimestampFrequency => TimeSpan.TicksPerSecond;
         public void Advance(double sec) => Now += TimeSpan.FromSeconds(sec).Ticks;
+    }
+
+    [Fact]
+    public void PackBatchRetriesDuplicatesAcrossShuffleCyclesAndCapsAtPoolSize()
+    {
+        var root = Directory.CreateTempSubdirectory("ccp-cascade-packs-").FullName;
+        var dir = Directory.CreateDirectory(Path.Combine(root, ".packs", "pack", "content")).FullName;
+        var manifest = new InstalledPackManifest { PackId = "pack", PackGuid = "pack" };
+        for (int i = 0; i < 4; i++)
+        {
+            var name = $"{i}.enc";
+            File.WriteAllBytes(Path.Combine(dir, name), PackEncryptionService.Encrypt(new byte[] { (byte)i }));
+            manifest.Files.Add(new PackFileEntry { OriginalName = $"{i}.png", ObfuscatedName = name, FileType = "image", Extension = ".png" });
+        }
+        PackEncryptionService.SaveEncryptedManifest(Newtonsoft.Json.JsonConvert.SerializeObject(manifest), Path.Combine(Directory.GetParent(dir)!.FullName, ".manifest.enc"));
+        var settings = new AppSettings();
+        var store = new ContentPackStore(() => root, () => settings, () => { }, tempDir: () => Path.Combine(root, "temp"));
+        try
+        {
+            for (int seed = 0; seed < 20; seed++)
+            {
+                var pool = new PackMediaPool(ContentPackStore.ImageType, new Random(seed), () => store);
+                try
+                {
+                    Assert.NotNull(pool.TryDraw(0)); // leave the next batch crossing a cycle boundary
+                    var batch = ChaosGifCascadeOverlay.PickFiles(20, Array.Empty<string>(), pool);
+                    Assert.Equal(4, batch.Count);
+                    Assert.Equal(4, batch.Select(p => File.ReadAllBytes(p)[0]).Distinct().Count());
+                    Assert.Equal(5, pool.TempCount); // duplicate draws do not decrypt
+                }
+                finally { pool.CleanupTemps(); }
+            }
+        }
+        finally { Directory.Delete(root, true); }
     }
 
     [Fact]
