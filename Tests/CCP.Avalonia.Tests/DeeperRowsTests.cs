@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -168,6 +169,65 @@ public sealed class DeeperRowsTests
         finally { editor.Close(); }
         Assert.False(timer.IsEnabled);
         return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PanicStoppedLocalVideoRestartsOnlyOnExplicitPlay() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("ccp-panic-video-").FullName;
+        var path = Path.Combine(dir, "clip.mp4");
+        File.WriteAllBytes(path, new byte[16]);
+        var scripts = new List<string>();
+        TaskCompletionSource<string?>? pendingRead = null;
+        var editor = new DeeperEditorWindow(new Enhancement { MediaType = MediaTypes.Video, MediaSource = path }, null);
+        editor.BrowserPreview.ScriptInvoker = js =>
+        {
+            scripts.Add(js);
+            if (js.Contains("l.currentTime+") && pendingRead != null) return pendingRead.Task;
+            return Task.FromResult<string?>(js.Contains("l.currentTime+") ? "0|10|0" : "ok");
+        };
+        var poll = typeof(DeeperEditorWindow).GetMethod("PollBrowserTimeAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        try
+        {
+            editor.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new Uri(path), editor.BrowserPreview.Source);
+            Invoke(editor, "OnBrowserTimeChanged", 3.0);
+            pendingRead = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var oldPoll = (Task)poll.Invoke(editor, null)!;
+            Assert.False(oldPoll.IsCompleted);
+            PanicSurfaces.All.Single(s => s.Id == "deeper-editor-audio").Stop(null);
+            Assert.Equal("about:blank", editor.BrowserPreview.Source!.ToString());
+            scripts.Clear();
+            Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain(scripts, js => js.Contains("l.play();"));
+
+            Click(editor.BtnPlayPause);
+            var timer = (DispatcherTimer)typeof(DeeperEditorWindow).GetField("_playheadTimer", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(editor)!;
+            Assert.True(timer.IsEnabled);
+            timer.Stop(); // Step the polls below in a deterministic order.
+            Assert.Equal(new Uri(path), editor.BrowserPreview.Source);
+            Assert.True(editor.BrowserPreview.AllowNavigation!(new Uri(path)));
+            Assert.False(editor.BrowserPreview.AllowNavigation!(new Uri(Path.Combine(dir, "other.mp4"))));
+            pendingRead.SetResult("0|10|0");
+            pendingRead = null;
+            await oldPoll;
+            Assert.DoesNotContain(scripts, js => js.Contains("l.play();"));
+            await (Task)poll.Invoke(editor, null)!;
+            Assert.Contains(scripts, js => js.Contains("l.currentTime=3;l.play();"));
+            Assert.DoesNotContain(scripts, js => js.Contains("l.autoplay=false;l.pause();"));
+
+            // A second panic while recovery is pending must cancel it too.
+            PanicSurfaces.All.Single(s => s.Id == "deeper-editor-audio").Stop(null);
+            Click(editor.BtnPlayPause);
+            PanicSurfaces.All.Single(s => s.Id == "deeper-editor-audio").Stop(null);
+            scripts.Clear();
+            await (Task)poll.Invoke(editor, null)!;
+            Assert.DoesNotContain(scripts, js => js.Contains("l.play();"));
+            Assert.Equal("about:blank", editor.BrowserPreview.Source!.ToString());
+        }
+        finally { editor.Close(); Directory.Delete(dir, true); }
     });
 
     [Fact]

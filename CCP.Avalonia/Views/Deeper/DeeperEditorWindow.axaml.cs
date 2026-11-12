@@ -702,6 +702,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             {
                 // A swap from a URL to a local file must blank the old page first, or its audio
                 // keeps playing behind the waveform this method is about to show.
+                _panicStoppedLocalVideo = null;
                 StopBrowserPreview();
                 DisposeLocalAudio();
                 _waveformPeaks = null;
@@ -828,6 +829,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             if (_browserPollInFlight || _browserPollDisabled) return;
             _browserPollInFlight = true;
+            var generation = _browserGeneration;
             try
             {
                 var raw = await BrowserPreview.InvokeScriptAsync(DeeperPreview.ReadTime(scrollIntoView: true));
@@ -836,7 +838,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 // has since been blanked would rebuild the timeline against a dead duration, and a
                 // scrub that began during the round-trip would have it yanked out from under the
                 // pointer. WPF's handler took the same three guards before touching anything.
-                if (!_browserNavigated || _isScrubbing || _fsTransitionInFlight) return;
+                if (!_browserNavigated || generation != _browserGeneration || _isScrubbing || _fsTransitionInFlight) return;
 
                 var parts = DeeperPreview.Unquote(raw).Split('|');
                 if (parts.Length != 3) return;
@@ -883,6 +885,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                         DeeperPreview.Invoke("l.autoplay=false;l.pause();", scrollIntoView: true));
                     playing = false; // don't flash ⏸ for one tick over a video we are pausing
                 }
+                else if (_playLocalPreviewOnce && dur > 0 && double.IsFinite(dur))
+                {
+                    _playLocalPreviewOnce = false;
+                    var position = Math.Clamp(double.IsFinite(_panicStoppedVideoTime) ? _panicStoppedVideoTime : 0, 0, dur);
+                    var seek = position.ToString("R", CultureInfo.InvariantCulture);
+                    _ = BrowserPreview.InvokeScriptAsync(DeeperPreview.Invoke($"l.currentTime={seek};l.play();", scrollIntoView: true));
+                }
                 if (playing != _isPlaying)
                 {
                     _isPlaying = playing;
@@ -910,9 +919,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             if (!_browserNavigated) return;
             _browserNavigated = false;
+            _browserGeneration++;
             // Cleared with the page, not left armed: a swap from a video to a URL would otherwise
             // pause the site's own player once, for a rule that only applies to a local clip.
             _pauseLocalPreviewOnce = false;
+            _playLocalPreviewOnce = false;
             // The page owned _isPlaying while it was up. Leaving it true would make the next press
             // of a local-media transport toggle straight to "paused" and do nothing visible.
             _isPlaying = false;
@@ -948,7 +959,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// shows a black cell where LibVLC decoded it), and the preferred-output-device routing WPF
         /// got from <c>App.Audio.ApplyPreferredDevice</c> - the page plays on the system default.</para>
         /// </summary>
-        private void InitializeVideo(string path)
+        private void InitializeVideo(string path, bool playWhenReady = false)
         {
             WaveformCanvas.IsVisible = false;
             PreviewPlaceholder.IsVisible = false;
@@ -988,7 +999,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             BrowserPreview.Source = new Uri(full);
             _browserNavigated = true;
             _browserPollDisabled = false;
-            _pauseLocalPreviewOnce = true;
+            _pauseLocalPreviewOnce = !playWhenReady;
+            _playLocalPreviewOnce = playWhenReady;
 
             // As in the remote branch: the poll runs whether or not we think anything is playing,
             // because the media document starts and stops itself.
@@ -1096,7 +1108,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             foreach (var ed in s_open.ToArray())
             {
                 var localVideo = ed._browserNavigated && ed.BrowserPreview.Source?.IsFile == true;
-                if (localVideo) ed.StopBrowserPreview();
+                if (localVideo)
+                {
+                    ed._panicStoppedLocalVideo = ed.BrowserPreview.Source!.LocalPath;
+                    ed._panicStoppedVideoTime = ed._currentSeconds;
+                    ed.StopBrowserPreview();
+                }
                 if (ed._localAudio == null && !localVideo) continue;
                 try { ed._localAudio?.Pause(); }
                 catch (Exception ex) { Log.Warning(ex, "DeeperEditor: panic pause failed"); ed.DisposeLocalAudio(); }
@@ -1196,6 +1213,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             {
                 _ = BrowserPreview.InvokeScriptAsync(
                     DeeperPreview.Invoke(_isPlaying ? "l.pause();" : "l.play();", scrollIntoView: true));
+                return;
+            }
+            if (_panicStoppedLocalVideo is { } stoppedPath)
+            {
+                _panicStoppedLocalVideo = null;
+                var source = _enhancement.MediaSource;
+                if (IsLocalFile(source) && DeeperPreview.IsLocalVideoFile(source)
+                    && DeeperPreview.PathsEqual(source, stoppedPath))
+                    InitializeVideo(source, playWhenReady: true);
                 return;
             }
             // Nothing to play and no clock to run: leave the glyph alone. A press then reads as
@@ -3253,6 +3279,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// the foot of the file.</summary>
         private void TeardownPreview()
         {
+            _panicStoppedLocalVideo = null;
             StopBrowserPreview();
             try { _playheadTimer?.Stop(); } catch { }
             try { _validationTimer?.Stop(); } catch { }
@@ -3302,6 +3329,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private bool _browserNavigated;
         private bool _browserPollInFlight;
         private bool _browserPollDisabled;
+        private string? _panicStoppedLocalVideo;
+        private double _panicStoppedVideoTime;
+        private int _browserGeneration;
+        private bool _playLocalPreviewOnce;
         /// <summary>Armed by <see cref="InitializeVideo"/> only: pause a LOCAL clip's media
         /// document once, the first time the poll sees it running, so the editor opens on a still
         /// frame the way WPF's one-shot Playing handler made it.</summary>
