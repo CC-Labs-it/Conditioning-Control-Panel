@@ -4,7 +4,7 @@
 // Services/Launcher/LauncherSfx.cs (the cues; the melody is Core's LauncherMelody).
 // WPF runs one storyboard per tween; here ONE frame clock steps every tween, and only while the launcher is shown
 // and not minimised (P01) and something is moving. It stops the moment nothing is. No allocation per frame.
-// Not ported (docs/avalonia-parity.html win-launcher): sparkle trail, wordmark sheen, running-dot breath, embers layer.
+// Not ported (docs/avalonia-parity.html win-launcher): sparkle trail, wordmark sheen, running-dot breath.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -186,7 +186,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (Env.AllowAmbientLoops)
                     Ambient.StartLayers(new AmbientFxConfig
                     {
-                        Layers = AmbientFxLayers.FogDrift | AmbientFxLayers.DustField | AmbientFxLayers.AuroraWash,
+                        Layers = AmbientFxLayers.FogDrift | AmbientFxLayers.DustField | AmbientFxLayers.AuroraWash | AmbientFxLayers.Embers,
                         Intensity = 0.95, FogPuffs = 4, DustDensity = 1.4,
                     });
                 else Ambient.Stop();

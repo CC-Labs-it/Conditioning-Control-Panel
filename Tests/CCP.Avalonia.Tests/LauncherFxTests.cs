@@ -84,6 +84,14 @@ public sealed class LauncherFxTests
         for (double t = 0; t < seconds; t += 0.02) w.StepFx(0.02);
     }
 
+    // WPF LauncherWindow.Fx.cs:258-268: the shown launcher starts all four ambient layers.
+    [Fact]
+    public void Ambient_IncludesEmbers() => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        var ambient = w.FindControl<ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas>("Ambient")!;
+        Assert.True((ambient.Layers & ConditioningControlPanel.Avalonia.Controls.AmbientFxLayers.Embers) != 0);
+    });
+
     // WPF LauncherWindow.xaml.cs:626-645, MotionFx.cs:151-166/198-214.
     [Fact]
     public void Badge_WobblesEveryEightSeconds_PopsAndParks() => Run(MotionLevel.Full, (_, w, _) =>
