@@ -62,7 +62,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// <c>CoreSettings</c>, screens from <c>ScreenList.Enumerate</c>) and the result window, so a
     /// finished game asks for the count and resolves on the answer instead of being written off.</para>
     ///
-    /// <para><b>Stubbed:</b> the shared LibVLC retire/rebuild and startup wedge watchdog, the
+    /// <para><b>Stubbed:</b> the shared LibVLC retire/rebuild, the
     /// metadata-cache duration (LengthChanged corrects the 30 s fallback) and VideoDiag.</para>
     ///
     /// <para><c>Loaded</c> became <c>Opened</c>: WPF's Loaded fires synchronously inside Show(),
@@ -247,12 +247,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Action<bool> complete = ok =>
             {
                 if (System.Threading.Interlocked.Exchange(ref completionDelivered, 1) != 0) return;
+                BubbleCountWedgeWatchdog.Game.Disarm();
                 onComplete?.Invoke(ok);
             };
 
             Action skip = () =>
             {
                 if (System.Threading.Interlocked.Exchange(ref completionDelivered, 1) != 0) return;
+                BubbleCountWedgeWatchdog.Game.Disarm();
                 if (onSkipped != null) onSkipped(); else onComplete(false);
             };
 
@@ -289,11 +291,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Screens is what the set is drawn from; WPF read App.GetAllScreensCached() up front.
             // An empty enumeration (headless, or no platform impl yet) is the single-screen path,
             // NOT WPF's onComplete(false): here empty means "no topology reported", not "no display".
+            BubbleCountWedgeWatchdog.Game.Arm();
             try
             {
                 var primaryWindow = new BubbleCountWindow(videoPath, difficulty, strictMode, complete, null, true, skip);
                 primaryWindow._useBrowser = BrowserVideoSurface.TryAcquire(primaryWindow, videoPath);
-                if (primaryWindow._useBrowser) _browserOwner = primaryWindow;
+                if (primaryWindow._useBrowser) { _browserOwner = primaryWindow; BubbleCountWedgeWatchdog.Game.Disarm(); }
                 primaryWindow.Show();
                 if (primaryWindow._closed) return;
                 primaryWindow.WindowState = WindowState.Maximized;
@@ -332,6 +335,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// </summary>
         public static void ForceCloseAll()
         {
+            BubbleCountWedgeWatchdog.Game.Disarm();
             _completionGeneration++;
             lock (_cleanupLock)
             {
@@ -374,10 +378,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void OnOpened(object? sender, EventArgs e)
         {
-            // ponytail: WPF registered this window's HWND with VideoService here
-            // (RegisterManagedWindow) so a wedged UI thread could still be rescued, and armed the
-            // wedge watchdog before the first window existed. Both are VideoService, and both only
-            // guard an in-process LibVLC decoder - browser mode never armed them at all.
+            if (!_useBrowser) BubbleCountWedgeWatchdog.Game.Register(this);
 
             // ponytail: the WPF original installed an HwndSource hook returning MA_NOACTIVATE for
             // WM_MOUSEACTIVATE. LOST BEHAVIOUR, no X11 equivalent in the head today: a click on
@@ -401,6 +402,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     BrowserVideoSurface.Release(this);
                     _browserOwner = null;
                     _useBrowser = false;
+                    BubbleCountWedgeWatchdog.Game.Arm();
+                    BubbleCountWedgeWatchdog.Game.Register(this);
                 }
                 // WPF :308-319 skips a poisoned native start, including browser fallback.
                 if (_isPrimary && NativeBlocked)
@@ -1097,6 +1100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             };
 
             _window.Show();
+            BubbleCountWedgeWatchdog.Game.Register(_window);
 
             // IsHitTestVisible only silences Avalonia's own hit testing; the compositor would still
             // send the click here. This is the WS_EX_TRANSPARENT the original got implicitly.
