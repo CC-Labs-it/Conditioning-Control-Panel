@@ -22,6 +22,35 @@ namespace CCP.Avalonia.Tests;
 public sealed class MindWipeTests
 {
     [Fact]
+    public void App_retains_and_disposes_the_player_before_audio_shutdown()
+    {
+        var root = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(
+            typeof(MindWipeTests).Assembly.Location)!, "..", "..", "..", "..", ".."));
+        var source = File.ReadAllText(Path.Combine(root, "CCP.Avalonia", "App.axaml.cs"));
+        Assert.Contains("_mindWipe = new Platform.MindWipePlayer", source);
+        var dispose = source.IndexOf("_mindWipe?.Dispose()", StringComparison.Ordinal);
+        var shutdown = source.IndexOf("Platform.LibVlcAudio.Instance?.Shutdown()", StringComparison.Ordinal);
+        Assert.True(dispose >= 0 && shutdown > dispose);
+    }
+
+    [Fact]
+    public void Disposal_stops_voices_and_timers_and_detaches_master() => Run((player, voices, clock) =>
+    {
+        player.Start(180, 0.5);
+        player.TriggerOnce();
+        player.StartLoop(0.7);
+        player.Dispose();
+        Assert.All(voices, voice => Assert.True(voice.Disposed));
+        var gain = voices[0].Vol;
+        CoreSettings.Current.MasterVolume = 10;
+        clock.Advance(TimeSpan.FromMinutes(2));
+        Assert.Equal(gain, voices[0].Vol);
+        Assert.Equal(2, voices.Count);
+        Assert.False(player.IsRunning);
+        Assert.False(player.IsLooping);
+    });
+
+    [Fact]
     public void PlayedClipFeedsMemoryButFailedPlaybackDoesNot() => Run((player, voices, clock) =>
     {
         var uses = new List<string>();
