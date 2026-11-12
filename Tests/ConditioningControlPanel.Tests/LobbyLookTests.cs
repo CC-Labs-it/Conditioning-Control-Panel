@@ -84,7 +84,9 @@ public class LobbyLookTests
         try
         {
             PlayerLook.KnownIdsProvider = null;
-            Wires_without_cosmetics_parse_as_before_and_junk_is_none();
+            var worn = PbpLobbyApi.Parse("{\"players\":[{\"id\":\"p_1\",\"name\":\"ann\",\"time_control\":{\"initial_ms\":600000,\"increment_ms\":0},\"since_ms\":1,\"cosmetics\":{\"avatar_id\":\"avatar_bambi_1\",\"frame_id\":\"profile.frame.lace\"}}]}");
+            Assert.Equal("avatar_bambi_1", worn.Open.Single().Look.AvatarId);
+            Assert.Null(worn.Open.Single().Look.FrameId);
         }
         finally { PlayerLook.KnownIdsProvider = previous; }
     }
