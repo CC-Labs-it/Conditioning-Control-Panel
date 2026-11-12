@@ -153,6 +153,8 @@ namespace ConditioningControlPanel.Avalonia.Possession
             list.Add(new DokiDialogEffect());
             list.Add(new DeleteDialogEffect());
             list.Add(new DodgeEffect());
+            list.Add(new SliderCreepEffect());
+            list.Add(new ScrollHijackEffect());
             return list;
         }
 
