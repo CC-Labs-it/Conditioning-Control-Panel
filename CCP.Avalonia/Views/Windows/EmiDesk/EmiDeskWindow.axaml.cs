@@ -2675,8 +2675,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <inheritdoc cref="LayoutProp"/>
         private void HideProp() { }
 
-        /// <summary>ponytail: EmiDeskWindow.Bubble.cs - drops the voice hooks.</summary>
-        private void TearDownVox() => StopTourSpeech();
+        /// <summary>WPF EmiDeskWindow.Bubble.cs:187 - cut the voice and let it go.</summary>
+        private void TearDownVox() { StopTourSpeech(); _vox?.Dispose(); _vox = null; }
 
         /// <summary>WPF EmiDeskWindow.xaml.cs:1832 - the pat sound.</summary>
         private void PlayPatSfx() => EmiSfx.Pat();

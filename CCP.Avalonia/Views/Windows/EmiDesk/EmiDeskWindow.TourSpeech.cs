@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -10,6 +11,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 
 public partial class EmiDeskWindow
 {
+    private IEmiVox? _vox;
+    private string _voxMood = "idle";
     private DispatcherTimer? _tourSpeechTimer;
     private EmiChain? _tourSpeech;
     private int _tourSpeechFrame;
@@ -27,6 +30,7 @@ public partial class EmiDeskWindow
     {
         if (DismissWinkLive) return;
         CancelChain();
+        _voxMood = EmiChains.FrameForFace(face);   // WPF EmiDeskWindow.xaml.cs:1076
         _tourSpeech = EmiChains.MakeSay(text, face, EmiChains.SayHoldMs(text));
         _tourSpeechDone = done;
         _tourSpeechFrame = 0;
@@ -75,6 +79,7 @@ public partial class EmiDeskWindow
             Resized += (_, _) => LayoutTourBubble();
             Moved += (_, _) => { if (_book != null) PostTourBubbleRelayout(); };
         }
+        Vox(frame.Bubble);
         _tourText!.Text = frame.Bubble;
         _tourBubble.IsVisible = !string.IsNullOrEmpty(frame.Bubble);
         _tourBubbleTail!.IsVisible = _tourBubble.IsVisible;
@@ -127,6 +132,21 @@ public partial class EmiDeskWindow
         }, DispatcherPriority.Background);
     }
 
+    // WPF EmiDeskWindow.Bubble.cs:168-184: a cleared bubble cuts the voice, a dot frame ticks,
+    // anything else is babbled in the current mood.
+    private void Vox(string? text)
+    {
+        try
+        {
+            _vox ??= new EmiVox(new EmiVoxOutput());
+            if (string.IsNullOrEmpty(text)) { _vox.Stop(); return; }
+            var t = text.Trim();
+            if (t.Length is > 0 and <= 3 && t.All(c => c == '.')) { _vox.Tick(); return; }
+            _vox.Speak(t, _voxMood);
+        }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "[EmiDesk] vox seam threw"); }
+    }
+
     partial void OnBubbleTextCore(string? text)
     {
         if (string.IsNullOrEmpty(text)) StopTourSpeech();
@@ -135,6 +155,7 @@ public partial class EmiDeskWindow
     internal void StopTourSpeech()
     {
         _tourSpeechTimer?.Stop();
+        _vox?.Stop();
         _tourSpeech = null;
         _tourSpeechDone = null;
         if (_tourBubble != null) _tourBubble.IsVisible = false;
