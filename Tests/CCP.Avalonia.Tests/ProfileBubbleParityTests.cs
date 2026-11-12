@@ -299,6 +299,8 @@ public sealed class ProfileBubbleParityTests : IDisposable
         AvaloniaTestDispatcher.RunAsync(() =>
     {
         var shell = Shell();
+        var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        shell.ProfileBubbleUtcNow = () => now;
         var field = typeof(MainShellWindow).GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance)!;
         void Fire()
         {
@@ -309,18 +311,17 @@ public sealed class ProfileBubbleParityTests : IDisposable
         {
             Fire();
             var first = (DateTime)field.GetValue(shell)!;
-            Assert.True(first > DateTime.UtcNow.AddSeconds(-1));
+            Assert.Equal(now, first);
             Fire();
             Assert.Equal(first, field.GetValue(shell));
-            // Just inside the throttle stays suppressed; just outside is accepted.
-            var recent = DateTime.UtcNow.AddMilliseconds(-interval + 100);
-            field.SetValue(shell, recent);
+            // One millisecond inside the throttle is suppressed; the boundary is accepted.
+            now = first.AddMilliseconds(interval - 1);
             Fire();
-            Assert.Equal(recent, field.GetValue(shell));
-            field.SetValue(shell, DateTime.UtcNow.AddMilliseconds(-interval - 100));
+            Assert.Equal(first, field.GetValue(shell));
+            now = first.AddMilliseconds(interval);
             Fire();
             var accepted = (DateTime)field.GetValue(shell)!;
-            Assert.True(accepted > DateTime.UtcNow.AddSeconds(-1));
+            Assert.Equal(now, accepted);
             shell.Close();
             field.SetValue(shell, DateTime.MinValue);
             Fire();

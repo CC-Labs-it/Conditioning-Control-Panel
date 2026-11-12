@@ -320,6 +320,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private DateTime _profileBubbleLastXpPulse;
         private DateTime _profileBubbleLastWobble;
         private DateTime _profileBubbleLastShimmer;
+        internal Func<DateTime> ProfileBubbleUtcNow { get; set; } = () => DateTime.UtcNow;
 
         /// <summary>WPF InitializeProfileBubble's service half: the reaction events (static or app-lived,
         /// so they come off when the window closes, P41) and the first paint.</summary>
@@ -446,16 +447,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                var now = ProfileBubbleUtcNow();
                 if (feature == ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureFlash)
                 {
-                    if ((DateTime.UtcNow - _profileBubbleLastWobble).TotalMilliseconds < 2500) return;
-                    _profileBubbleLastWobble = DateTime.UtcNow;
+                    if ((now - _profileBubbleLastWobble).TotalMilliseconds < 2500) return;
+                    _profileBubbleLastWobble = now;
                     WobbleProfileBubble();
                 }
                 else if (feature == ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureSubliminal)
                 {
-                    if ((DateTime.UtcNow - _profileBubbleLastShimmer).TotalMilliseconds < 4000) return;
-                    _profileBubbleLastShimmer = DateTime.UtcNow;
+                    if ((now - _profileBubbleLastShimmer).TotalMilliseconds < 4000) return;
+                    _profileBubbleLastShimmer = now;
                     ShimmerProfileBubble();
                 }
             }
