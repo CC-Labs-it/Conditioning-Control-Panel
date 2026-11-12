@@ -253,7 +253,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             TxtPreviewGlyph.IsVisible = source == null;
             if (source == null || !AmbientFxCanvas.Env.AllowTransitions)
             {
-                ImgPreview.Opacity = 1;
+                ImgPreview.ClearValue(OpacityProperty);
                 return;
             }
             ImgPreview.Opacity = 0.2;
