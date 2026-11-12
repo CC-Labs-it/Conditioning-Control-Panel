@@ -24,9 +24,11 @@ for name in ("libvlc_media_player_play", "libvlc_media_player_get_state",
 
 W, H = 320, 240
 frame = C.create_string_buffer(W * H * 4)
-counts = {"frames": 0, "samples": 0}
+counts = {"frames": 0, "samples": 0, "chroma": b""}
 
-FORMAT = C.CFUNCTYPE(C.c_uint, C.POINTER(C.c_void_p), C.c_char_p, C.POINTER(C.c_uint),
+# chroma is LibVLC's own 4-byte in/out buffer. A c_char_p argument would hand Python a bytes copy,
+# so the write would never reach LibVLC; take it as a raw pointer and write through it.
+FORMAT = C.CFUNCTYPE(C.c_uint, C.POINTER(C.c_void_p), C.POINTER(C.c_char), C.POINTER(C.c_uint),
                      C.POINTER(C.c_uint), C.POINTER(C.c_uint), C.POINTER(C.c_uint))
 LOCK = C.CFUNCTYPE(C.c_void_p, C.c_void_p, C.POINTER(C.c_void_p))
 DISPLAY = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p)
@@ -35,7 +37,9 @@ PLAY = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.c_uint, C.c_int64)
 
 @FORMAT
 def on_format(_opaque, chroma, width, height, pitches, lines):
-    C.memmove(chroma, b"RV32", 4)
+    buf = C.addressof(chroma.contents)  # raises on a bytes copy, so no frame is ever accepted
+    C.memmove(buf, b"RV32", 4)
+    counts["chroma"] = C.string_at(buf, 4)  # read back from LibVLC's buffer: the format it will use
     width[0], height[0], pitches[0], lines[0] = W, H, W * 4, H
     return 1
 
@@ -81,8 +85,9 @@ vlc.libvlc_media_release(media)
 vlc.libvlc_release(inst)
 
 audio_s = counts["samples"] / 48000
-ok = state == ENDED and counts["frames"] >= min_frames and audio_s >= min_audio
+ok = (state == ENDED and counts["chroma"] == b"RV32" and counts["frames"] >= min_frames
+      and audio_s >= min_audio)
 print(f"{'ok  ' if ok else 'FAIL'} {clip}: libvlc {vlc.libvlc_get_version().decode()}, "
-      f"state={state}, video frames={counts['frames']} (min {min_frames}), "
+      f"state={state}, chroma={counts['chroma'].decode(errors='replace')}, video frames={counts['frames']} (min {min_frames}), "
       f"audio={audio_s:.2f}s (min {min_audio})")
 sys.exit(0 if ok else 1)
