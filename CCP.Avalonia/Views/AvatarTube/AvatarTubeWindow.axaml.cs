@@ -1114,6 +1114,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _txtAvatarLevel.IsVisible = false;
         }
 
+        internal void RefreshTitleDisplay() => RunOnAvatar(UpdateTitleDisplay);
+
         private void OnTubeLanguageChanged(object? sender, EventArgs e) => RunOnAvatar(UpdateTitleDisplay);
 
         /// <summary>Avatar-set titles, in set order. Loc keys, from AvatarTubeWindow.Avatar.cs.</summary>

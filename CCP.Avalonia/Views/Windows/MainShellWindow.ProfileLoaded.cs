@@ -30,6 +30,7 @@ public partial class MainShellWindow
         {
             if (Volatile.Read(ref _profileLoadClosed) != 0) return;
             UpdateLevelDisplay();
+            _avatarTubeWindow?.RefreshTitleDisplay();
             App.Descent?.RequestRefresh("profile loaded");
             // Panic holds automatic re-arms, but the adopted profile still needs its repaint.
             if (AutonomyStoppedForPanic || generation != Volatile.Read(ref _profileLoadGeneration)) return;

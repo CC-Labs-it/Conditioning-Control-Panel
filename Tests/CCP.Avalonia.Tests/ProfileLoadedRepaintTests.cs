@@ -16,6 +16,46 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class ProfileLoadedRepaintTests
 {
+    [Fact]
+    public Task ProfileLoadRefreshesOpenTubeCompanionLevel() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var s = CoreSettings.Current;
+        s.MotionLevel = MotionLevel.Off;
+        s.AvatarEnabled = true;
+        s.SelectedAvatarSet = 3;
+        s.CompanionProgressData[(int)CompanionId.OGBambiSprite] = new CompanionProgress { Level = 2 };
+        var packageProvider = CoreMods.ActiveModPackageProvider;
+        var idProvider = CoreMods.ActiveModIdProvider;
+        CoreMods.ActiveModPackageProvider = () => new ModPackage(new ModManifest { Id = "tube-test" }, null, false);
+        CoreMods.ActiveModIdProvider = () => "tube-test";
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show(); Dispatcher.UIThread.RunJobs();
+            shell.Tube!.AvatarSwitchScheduler = (_, fire) => { fire(); return () => { }; };
+            shell.Tube.SwitchToCompanionAvatar(CompanionId.OGBambiSprite);
+            Dispatcher.UIThread.RunJobs();
+            var level = shell.Tube.FindControl<TextBlock>("TxtAvatarLevel")!;
+            Assert.True(level.IsVisible);
+            var before = level.Text;
+            s.CompanionProgressData[(int)CompanionId.OGBambiSprite] = new CompanionProgress { Level = 17 };
+            var field = typeof(AccountSeed).GetField("ProfileLoaded", BindingFlags.Static | BindingFlags.NonPublic)!;
+            ((Action?)field.GetValue(null))?.Invoke();
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotEqual(before, level.Text);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("avatar_level_format", 17), level.Text);
+        }
+        finally
+        {
+            shell.Close(); Dispatcher.UIThread.RunJobs();
+            CoreMods.ActiveModPackageProvider = packageProvider;
+            CoreMods.ActiveModIdProvider = idProvider;
+        }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(true, false, true)]
     [InlineData(false, false, false)]
