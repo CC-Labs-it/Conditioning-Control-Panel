@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.GoonGame;
@@ -62,15 +63,30 @@ public class LobbyLookTests
     [Fact]
     public void Wires_without_cosmetics_parse_as_before_and_junk_is_none()
     {
-        var chess = PbpLobbyApi.Parse("{\"players\":[{\"id\":\"p_1\",\"name\":\"ann\",\"time_control\":{\"initial_ms\":600000,\"increment_ms\":0},\"since_ms\":1}]}");
-        Assert.Same(PlayerLook.None, chess.Open.Single().Look);
-        var junk = PbpLobbyApi.Parse("{\"players\":[{\"id\":\"p_1\",\"name\":\"ann\",\"time_control\":{\"initial_ms\":600000,\"increment_ms\":0},\"since_ms\":1,\"cosmetics\":[1]}]}");
-        Assert.Same(PlayerLook.None, junk.Open.Single().Look);
-        if (ShopCosmetics.FrameIds()?.Contains("profile.frame.lace") == true)
+        var previous = PlayerLook.KnownIdsProvider;
+        try
         {
+            PlayerLook.KnownIdsProvider = () => (new HashSet<string>(), new HashSet<string> { "profile.frame.lace" });
+            var chess = PbpLobbyApi.Parse("{\"players\":[{\"id\":\"p_1\",\"name\":\"ann\",\"time_control\":{\"initial_ms\":600000,\"increment_ms\":0},\"since_ms\":1}]}");
+            Assert.Same(PlayerLook.None, chess.Open.Single().Look);
+            var junk = PbpLobbyApi.Parse("{\"players\":[{\"id\":\"p_1\",\"name\":\"ann\",\"time_control\":{\"initial_ms\":600000,\"increment_ms\":0},\"since_ms\":1,\"cosmetics\":[1]}]}");
+            Assert.Same(PlayerLook.None, junk.Open.Single().Look);
             var worn = PbpLobbyApi.Parse("{\"players\":[{\"id\":\"p_1\",\"name\":\"ann\",\"time_control\":{\"initial_ms\":600000,\"increment_ms\":0},\"since_ms\":1,\"cosmetics\":{\"frame_id\":\"profile.frame.lace\"}}]}");
             Assert.Equal("profile.frame.lace", worn.Open.Single().Look.FrameId);
         }
+        finally { PlayerLook.KnownIdsProvider = previous; }
+    }
+
+    [Fact]
+    public void Wires_parse_when_the_app_has_not_seeded_known_ids()
+    {
+        var previous = PlayerLook.KnownIdsProvider;
+        try
+        {
+            PlayerLook.KnownIdsProvider = null;
+            Wires_without_cosmetics_parse_as_before_and_junk_is_none();
+        }
+        finally { PlayerLook.KnownIdsProvider = previous; }
     }
 
     [Fact]
