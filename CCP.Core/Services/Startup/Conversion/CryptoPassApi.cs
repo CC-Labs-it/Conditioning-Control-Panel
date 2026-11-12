@@ -45,7 +45,7 @@ namespace ConditioningControlPanel.Services.Startup.Conversion
             if (normal == null) return new CryptoPassRedeem(false, 0, null, "bad_code");
             (string UnifiedId, string Token)? id;
             try { id = BackRoomApi.AppIdentity(); }
-            catch (Exception ex) { App.Logger?.Debug("[Pass] no identity: {E}", ex.GetType().Name); id = null; }
+            catch (Exception ex) { Serilog.Log.Debug("[Pass] no identity: {E}", ex.GetType().Name); id = null; }
             if (id == null) return new CryptoPassRedeem(false, 0, null, "offline");
 
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -63,7 +63,7 @@ namespace ConditioningControlPanel.Services.Startup.Conversion
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("[Pass] redeem failed: {E}", ex.GetType().Name);
+                Serilog.Log.Debug("[Pass] redeem failed: {E}", ex.GetType().Name);
                 return new CryptoPassRedeem(false, 0, null, "offline");
             }
         }

@@ -121,13 +121,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         // ------------------------------------------------------------------ page 3
 
-        /// <summary>WPF BtnConnect_Click (HapticsSetupWindow.xaml.cs:109): the premium gate (or the
-        /// "haptics" free day), provider settings, then a real ConnectAsync through
+        /// <summary>WPF BtnConnect_Click (HapticsSetupWindow.xaml.cs:109): the access gate (HapticsAccess, open
+        /// to everyone), provider settings, then a real ConnectAsync through
         /// <see cref="CoreHaptics"/>; "connected, no toys yet" is a nearly-there, not a failure.</summary>
         private async void BtnConnect_Click()
         {
             if (_connecting || CoreHaptics.Service is not { } haptics) return;
-            if (!CoreEntitlement.HasPremium && !CoreEntitlement.IsFreeToday("haptics"))
+            if (!HapticsAccess.IsOpen)
             {
                 ShowResult(false, "gate_premium_locked", "msg_haptic_feedback_patreon_only", Array.Empty<string>());
                 return;

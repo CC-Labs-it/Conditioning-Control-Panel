@@ -1,5 +1,3 @@
-using System;
-using System.IO;
 using System.Linq;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Haptics;
@@ -13,13 +11,8 @@ namespace ConditioningControlPanel.Tests;
 /// </summary>
 public class HapticsFreeTierTests
 {
-    private static string Read(params string[] parts)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources"))) dir = dir.Parent;
-        Assert.NotNull(dir);
-        return File.ReadAllText(Path.Combine(new[] { dir!.FullName, "ConditioningControlPanel" }.Concat(parts).ToArray()));
-    }
+    // SourceRoots: HapticMixer and DailyFreeService live in CCP.Core on the port.
+    private static string Read(params string[] parts) => SourceRoots.ReadProductFile(parts);
 
     [Fact]
     public void ToysAreOpenForEveryone() => Assert.True(HapticsAccess.IsOpen);

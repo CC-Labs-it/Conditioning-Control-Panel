@@ -28,6 +28,15 @@ public class ProgressionClearTests
         Assert.Equal(1, s.PlayerLevel);
     }
 
+    /// <summary>WPF main df24944f27: the old account's pass end never follows to the next one.</summary>
+    [Fact]
+    public void ClearDropsThePassEnd()
+    {
+        var s = new AppSettings { PassEndsUtc = DateTime.UtcNow.AddDays(2) };
+        ProgressionClear.Apply(s);
+        Assert.Null(s.PassEndsUtc);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

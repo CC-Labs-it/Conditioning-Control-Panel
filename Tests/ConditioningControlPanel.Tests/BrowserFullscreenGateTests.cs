@@ -1,5 +1,3 @@
-using System;
-using System.IO;
 using ConditioningControlPanel.Services.Browser;
 using Xunit;
 
@@ -64,24 +62,10 @@ public sealed class BrowserFullscreenGateTests
     [Fact]
     public void TheSwitch_NeverPumpsNorClonesTheDisplays()
     {
-        var browser = File.ReadAllText(Path.Combine(SourceRoot(), "MainWindow", "MainWindow.Browser.cs"));
+        var browser = SourceRoots.ReadProductFile("MainWindow", "MainWindow.Browser.cs");
         Assert.DoesNotContain("Dispatcher.Invoke(() => { }, DispatcherPriority.Render)", browser);
         Assert.DoesNotContain("ScreenMirror.EnableMirror", browser);
         Assert.DoesNotContain("Dispatcher.Invoke(() => HandleBrowserFullscreenChanged", browser);
         Assert.Contains("_browser.FullscreenChanged += (s, isFullscreen) => RequestBrowserFullscreen(isFullscreen);", browser);
-    }
-
-    private static string SourceRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null)
-        {
-            var candidate = Path.Combine(dir.FullName, "ConditioningControlPanel", "ConditioningControlPanel.csproj");
-            if (File.Exists(candidate)) return Path.GetDirectoryName(candidate)!;
-            dir = dir.Parent;
-        }
-
-        throw new DirectoryNotFoundException(
-            "ConditioningControlPanel project not found above " + AppContext.BaseDirectory);
     }
 }

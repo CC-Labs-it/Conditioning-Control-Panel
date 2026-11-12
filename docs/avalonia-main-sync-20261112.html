@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Main sync #15 delta ledger (2026-11-12)</title>
+<style>
+:root{color-scheme:light dark;--fg:#1f2328;--bg:#fff;--muted:#59636e;--line:#d1d9e0;--code:#f6f8fa;--link:#0969da}
+@media (prefers-color-scheme:dark){:root{--fg:#e6edf3;--bg:#0d1117;--muted:#9198a1;--line:#3d444d;--code:#151b23;--link:#4493f8}}
+body{font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--fg);background:var(--bg);max-width:1200px;margin:2rem auto;padding:0 1.25rem}
+h1,h2,h3,h4{line-height:1.25;margin:1.5em 0 .5em}h1,h2{border-bottom:1px solid var(--line);padding-bottom:.3em}
+a{color:var(--link)}code,pre{font:13px/1.5 ui-monospace,Consolas,monospace;background:var(--code);border-radius:5px}
+code{padding:.1em .3em;overflow-wrap:anywhere}pre{padding:1em;overflow:auto}pre code{padding:0;background:none}
+table{border-collapse:collapse;margin:1em 0;width:100%}th,td{border:1px solid var(--line);padding:.35em .6em;vertical-align:top}
+th{background:var(--code);position:sticky;top:0}td{overflow-wrap:anywhere}blockquote{margin:0;padding:0 1em;color:var(--muted);border-left:.25em solid var(--line)}
+.counts{font-weight:600}.src{color:var(--muted);font-size:.85em}
+</style>
+<script type="application/json" id="ledger-meta">{"total": 5, "pin": "aa22c3d5b7", "release_pin": "9e3d94ae34", "base": "e6dba28216", "release_base": "1fcbe57cf9", "note": "main aa22c3d5b7 still has not merged the 7.2.3 release commit 761467494c, so its installer.iss/build-installer.bat say 7.2.2; ours stay byte-identical to release/7.2.3 9e3d94ae34 (7.2.3), as on sync #14."}</script>
+</head>
+<body>
+<h1>Main sync #15 delta ledger (2026-11-12)</h1>
+<p>Branch <code>avalonia-port/main-20261112</code> (two merges) and <code>avalonia-port/main-20261112-compat</code> (ledger, Core replays and hand ports),
+from <code>origin/avalonia-port/main-20261107-compat</code> (<code>97e8fe7457</code>, sync #14 compat).
+Pins: <code>origin/main</code> = <code>aa22c3d5b7</code> (base <code>e6dba28216</code>, 4 non-merge commits) and <code>origin/release/7.2.3</code> = <code>9e3d94ae34</code> (base <code>1fcbe57cf9</code>, 1 cherry-pick).
+<span class="counts">Rows: ported 2, ported-by-merge 0, needs-port 1, n/a 2.</span></p>
+<p>Status legend as in the earlier ledgers: <strong>ported-by-merge</strong>: the change landed in a file both heads use.
+<strong>ported</strong>: done on this sync's <code>-compat</code> branch. <strong>n/a</strong>: no counterpart by design, reason given.
+<strong>needs-port</strong>: a lane is owed; the notes name the Avalonia file it has to build.</p>
+
+<h2>Merge notes (<code>avalonia-port/main-20261112</code>)</h2>
+<p>Conflict resolutions only, proved with <code>git diff $(git merge-tree --write-tree HEAD^1 HEAD^2) HEAD</code>:</p>
+<ul>
+<li><code>origin/main</code> <code>aa22c3d5b7</code>: three content conflicts (the brief expected one).
+<code>CCP.Core/Services/Haptics/Core/HapticMixer.cs</code> takes main's <code>return HapticsAccess.IsOpen;</code> (Core needs <code>HapticsAccess</code>, moved on -compat);
+<code>ConditioningControlPanel/MainWindow/MainWindow.Login.cs</code> keeps the stack's <code>ProgressionClear.Apply(s)</code> (main's <code>PassEndsUtc = null</code> replayed into Core <code>ProgressionClear</code> on -compat);
+<code>ConditioningControlPanel/MainWindow/MainWindow.Patreon.cs</code> keeps the stack's Core <code>EntitlementLapse.Enforce</code> call (main's haptics lapse on <code>HapticsAccess</code> replayed into Core on -compat). Main's veil hunk in the same file auto-merged.</li>
+<li><code>origin/release/7.2.3</code> <code>9e3d94ae34</code>: clean and empty (its only commit is the cherry-pick of main's <code>09b1d8463e</code>); the merge commit's tree equals its first parent.</li>
+</ul>
+<p>Main's edits to files the stack moved into Core (<code>AppSettings</code>, <code>ExclusiveFeature</code>, <code>DailyFreeService</code>, <code>ConversionRules</code>, <code>ProfileExtras</code>, the ten language files) arrived by rename; every added line is present in the Core copy.
+<code>installer.iss</code> and <code>build-installer.bat</code> are byte-identical to <code>origin/release/7.2.3</code> (7.2.3), not to main (still 7.2.2), as on sync #14.</p>
+
+<h2>Compat notes (<code>avalonia-port/main-20261112-compat</code>)</h2>
+<ul>
+<li><code>git mv</code> to Core: <code>Services/Haptics/HapticsAccess.cs</code> (100%), <code>Services/Startup/Conversion/CryptoPassApi.cs</code> (<code>App.Logger?</code> to <code>Serilog.Log</code>), and their pure tests <code>CryptoPassApiTests</code>, <code>PassEndingNoticeTests</code> into <code>Tests/CCP.Core.Tests</code>.</li>
+<li>Core replays of WPF-only hunks: <code>ProgressionClear</code> clears <code>PassEndsUtc</code>; <code>CloudSettingsBackup</code> keeps <code>PassEndsUtc</code> local (WPF ProfileSyncService); <code>EntitlementLapse</code> asks <code>HapticsAccess</code> for haptics.</li>
+<li>WPF tests through <code>SourceRoots</code>: <code>HapticsFreeTierTests</code> (HapticMixer and DailyFreeService are Core), <code>BrowserFullscreenGateTests</code>.</li>
+</ul>
+
+<h2>Rows</h2>
+<table>
+<tr><th>#</th><th>sha</th><th>subject</th><th>files</th><th>Avalonia/Core counterpart</th><th>status</th><th>notes</th></tr>
+<tr><td>1</td><td><code>2ecd886350</code></td><td>feat(account): redeem a pass code in Settings &gt; Account</td><td>15</td><td>CCP.Core/Services/Startup/Conversion/CryptoPassApi.cs (git mv); CCP.Avalonia/Views/Controls/AppSettings/AccountSettingsSection.axaml:67, .axaml.cs:309; CCP.Avalonia/Views/Dialogs/PostCodeDialog.cs:81,93,114</td><td>ported</td><td>The quiet "Redeem a code" link under the tier card opens the code box titled for any code; a pass-shaped code goes to the pass wire, the reply names the tier and end date, refusals keep the box editable. Strings by merge. Deviation: WPF calls <code>EntitlementTierSync.OnAppActivatedAfterCheckout</code> (a re-read only while a checkout watch is armed); this head re-reads the profile with <code>EntitlementRefresh.RefreshAsync</code>, which is what the WPF comment says it wants. Tests <code>PostCodeDialogTests.PassCodeRedeemsOnThePassWire</code> (fails with the pass branch removed), <code>AccountSettingsSectionTests.Redeem_link_opens_the_code_box_as_the_pass_door</code>, Core <code>CryptoPassApiTests</code>.</td></tr>
+<tr><td>2</td><td><code>df24944f27</code></td><td>feat(inbox): tell a pass holder when the pass has three days left</td><td>17</td><td>CCP.Core/Models/AppSettings.cs, Services/Startup/Conversion/ProfileExtras.cs, ConversionRules.cs (merge); CCP.Core/Services/Account/ProgressionClear.cs:89, Services/Settings/CloudSettingsBackup.cs:124,205 (ported); CCP.Avalonia/Platform/EntitlementRefresh.cs, CCP.Avalonia/Views/Windows/MainShellWindow.Inbox.cs (owed)</td><td>needs-port</td><td>Core half done: <code>PassEndsUtc</code>, <code>ProfileExtras.Parse/Apply/PassEndingDays</code>, <code>KeyPassEnds</code> by merge; sign-out clears it and a cloud backup keeps it local (tests <code>ProgressionClearTests.ClearDropsThePassEnd</code>, <code>ConversionBackupTests</code>, <code>PassEndingNoticeTests</code>). Owed on Linux: (a) this head never applies the profile extras (WPF <code>EntitlementTierSync.OfferExtras</code> -&gt; <code>ProfileExtras.Parse/Apply</code>), so <code>PassEndsUtc</code>, <code>ServerPaidUntil</code> and <code>PostGrants</code> are never read here; <code>EntitlementRefresh.Apply</code> sees only the typed <code>V2User</code>, so the read needs the raw profile JSON; (b) the conversion-rows pass (WPF <code>MainWindow.Inbox.cs</code> <code>MaybePostConversionRows</code>) does not exist here, so add <code>MaybePostPassEndsRow</code> (server answered this run, <code>Owed/Stamp</code> on <code>KeyPassEnds</code>, <code>pass_ends_*</code> strings, <code>InboxNoticeCard</code> with "Get another" to app.cclabs.app/crypto via <code>ExternalOpener</code>) on focus and after a tier read.</td></tr>
+<tr><td>3</td><td><code>f54203401b</code></td><td>feat(haptics): toys are free for everyone</td><td>11</td><td>CCP.Core/Services/Haptics/HapticsAccess.cs (git mv); CCP.Core/Services/Haptics/Core/HapticMixer.cs:198 (merge); CCP.Core/Services/EntitlementLapse.cs:34; CCP.Avalonia/Views/Windows/MainShellWindow.Patreon.cs:38,48; CCP.Avalonia/Views/Windows/HapticsSetupWindow.axaml.cs:130; CCP.Avalonia/Views/Tabs/HapticsTabView.Connection.cs:112; CCP.Avalonia/Views/Tabs/SettingsTabView.DashboardFx.cs:102; CCP.Avalonia/Views/Dialogs/VaultGateDialog.cs:395</td><td>ported</td><td>Every Linux haptics door asks <code>HapticsAccess.IsOpen</code>: the mixer gate, the master switch, the tab's Connect, the setup wizard, the page veil (never drawn) and the lapse sweep. The Exclusives card is tier 0 with no daily key and the server can no longer name haptics (Core, merge). Mystery box no longer counts haptics as tier 1; the Basic perk list drops <code>vaultgate_basic_4</code>. Tests <code>HapticsCoreTests.GateIsOpenForEveryoneAndFollowsTheMasterToggle</code>, <code>EntitlementLapseTests</code>, <code>HapticsHeadTests</code> (wizard connects and Enable sticks without premium), <code>PremiumGatesTests</code> (haptics veil down when free; fails with the old premium gate).</td></tr>
+<tr><td>4</td><td><code>09b1d8463e</code></td><td>fix(browser): fullscreen no longer clones the displays or switches inside the WebView2 callback</td><td>4</td><td>none on this head</td><td>n/a</td><td>WPF-only: WebView2 COM-callback reentrancy and the <code>ScreenMirror.EnableMirror</code> display clone in <code>MainWindow.Browser.cs</code>. The Linux main-window browser (<code>CCP.Avalonia/Views/Windows/MainShellWindow.Browser.cs</code>) has no fullscreen host and never clones displays. <code>BrowserFullscreenGate</code> stays in the WPF head; its source test reads through <code>SourceRoots</code>.</td></tr>
+<tr><td>5</td><td><code>c036b5ad03</code></td><td>fix(browser): fullscreen no longer clones the displays or switches inside the WebView2 callback</td><td>4</td><td>see row 4</td><td>n/a</td><td>release/7.2.3 cherry-pick of <code>09b1d8463e</code>; same tree, the merge is empty.</td></tr>
+</table>
+
+<h2>Watch list: on the way to main, not merged here yet</h2>
+<p>Nothing newer on <code>origin/main</code> or <code>origin/release/7.2.3</code> at the fetch. Main still lacks the 7.2.3 release commit <code>761467494c</code>; re-check the installer files when it lands.</p>
+<p>Older open port debt still applies: the needs-port rows of syncs 8 to 14 and the <code>prize-counter-linux</code> lane.</p>
+</body>
+</html>
