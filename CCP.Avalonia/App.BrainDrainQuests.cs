@@ -9,6 +9,7 @@ public partial class App
 {
     private static readonly RunningTimeCredit BrainDrainCredit = new();
     private static DispatcherTimer? _brainDrainQuestTimer;
+    private static int _brainDrainOverlayStopGeneration;
 
     // WPF AchievementService.cs:277-284. The clock runs even without LibVLC.
     internal static void WireBrainDrainQuestMinutes()
@@ -17,6 +18,7 @@ public partial class App
         _brainDrainQuestTimer.Tick -= OnBrainDrainQuestTick;
         _brainDrainQuestTimer.Tick += OnBrainDrainQuestTick;
         BrainDrainCredit.Sample(false, TimeSpan.Zero);
+        _brainDrainOverlayStopGeneration = RemoteCommands.OverlayStopGeneration;
         _brainDrainQuestTimer.Start();
         CoreEngine.StartBrainDrain = () =>
         {
@@ -40,8 +42,17 @@ public partial class App
 
     internal static void SampleBrainDrainQuestMinutes(TimeSpan now)
     {
-        var minutes = BrainDrainCredit.Sample(CoreEngine.IsVisualRun
-            && CoreSettings.Current.BrainDrainEnabled, now);
+        var stopGeneration = RemoteCommands.OverlayStopGeneration;
+        if (stopGeneration != _brainDrainOverlayStopGeneration)
+        {
+            BrainDrainCredit.Sample(false, now);
+            _brainDrainOverlayStopGeneration = stopGeneration;
+        }
+        // WPF SessionEngine.cs:530,582,1628; RemoteControlService.cs:587,1204.
+        var overlayRunning = !RemoteCommands.OverlaysStopped &&
+            (RemoteCommands.OverlayRunning || (Sessions?.IsPaused != true &&
+             (CoreEngine.IsVisualRun || Sessions?.IsRunning == true)));
+        var minutes = BrainDrainCredit.Sample(overlayRunning && CoreSettings.Current.BrainDrainEnabled, now);
         if (minutes > 0) Quests?.TrackBrainDrainMinutes(minutes);
     }
 }

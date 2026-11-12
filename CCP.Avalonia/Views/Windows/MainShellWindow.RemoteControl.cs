@@ -53,7 +53,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             r.SessionsProvider = () => ConditioningControlPanel.Models.Session.GetAllSessions()
                 .Concat(Named<Tabs.PresetsTabView>("PresetsTab")?.RemoteSessionManager?.CustomSessions ?? Enumerable.Empty<ConditioningControlPanel.Models.Session>());
             r.SessionRunnerProvider = () => App.Sessions;
-            EventHandler connected = (_, _) => Dispatcher.UIThread.Post(OnRemoteControllerChanged);
+            EventHandler connected = (_, _) =>
+            {
+                var joined = r.ControllerConnected;
+                var stopGeneration = RemoteCommands.OverlayStopGeneration;
+                Dispatcher.UIThread.Post(() =>
+                {
+                    // A queued join cannot undo a pause, stop or panic that happened afterward.
+                    if (joined && r.IsActive && r.ControllerConnected && stopGeneration == RemoteCommands.OverlayStopGeneration)
+                        RemoteCommands.EnsureOverlayRunning();
+                    OnRemoteControllerChanged();
+                });
+            };
             EventHandler idle = (_, _) => Dispatcher.UIThread.Post(OnRemoteControllerIdleChanged);
             EventHandler ended = (_, _) => Dispatcher.UIThread.Post(OnRemoteSessionEnded);
             EventHandler<string> command = (_, a) => Dispatcher.UIThread.Post(() => OnRemoteCommandReceived(a));
