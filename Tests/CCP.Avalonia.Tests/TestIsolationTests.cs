@@ -19,6 +19,33 @@ namespace CCP.Avalonia.Tests;
 public class TestIsolationTests
 {
     [Fact]
+    public void MotionPreferenceCacheIsRestoredWithItsTimestamp() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        var oldProbe = UiMotionPreference.OsProbe;
+        try
+        {
+            UiMotionPreference.OsProbe = () => true;
+            UiMotionPreference.CacheStamp = long.MinValue;
+            Assert.True(UiMotionPreference.AnimationsEnabled);
+            // Keep the cache fresh throughout the snapshot and assertion, even on a busy runner.
+            UiMotionPreference.CacheStamp = System.Environment.TickCount64 + 60_000;
+            var snapshot = ProcessStateSnapshot.Take();
+
+            UiMotionPreference.OsProbe = () => false;
+            UiMotionPreference.CacheStamp = long.MinValue;
+            Assert.False(UiMotionPreference.AnimationsEnabled);
+            snapshot.Restore();
+
+            Assert.True(UiMotionPreference.AnimationsEnabled);
+        }
+        finally
+        {
+            UiMotionPreference.OsProbe = oldProbe;
+            UiMotionPreference.CacheStamp = long.MinValue;
+        }
+    });
+
+    [Fact]
     public void HeadlessBootstrapIncludesShippedFontFallbacks() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
     {
         foreach (var family in new[] { "Segoe UI Black, Segoe UI", "Comic Sans MS, Segoe UI", "Consolas, Courier New" })
