@@ -34,14 +34,15 @@ public sealed class NatashaBubbleTests
     public Task TriggerPopsRunTheirOverlays() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         EnsureApp();
-        var (oldHost, oldRun, oldSchedule, oldFirer) = (BubbleOverlay.EffectHost, BubbleOverlay.RunOverlay, TimedOverlayHold.Schedule, EffectPayload.Firer);
+        var (oldHost, oldRun, oldSchedule, oldFirer, oldFlash, oldProvider) = (BubbleOverlay.EffectHost, BubbleOverlay.RunOverlay, TimedOverlayHold.Schedule, EffectPayload.Firer, BubbleOverlay.RunFlash, CoreFlash.ShowProvider);
         var (live, settings) = (CoreSettings.Current, new ConditioningControlPanel.Models.AppSettings { BubbleTriggersEnabled = true, BubbleTriggerChance = 100 });
-        var (oldDay, oldPaid, runs, timers, fired) = (live.AmbientBubbleXpDayKey, live.AmbientBubbleXpPaidToday, new List<string>(), new List<Action>(), 0);
+        var (oldDay, oldPaid, oldRandom, oldMin, oldCount, oldDuration, oldSize, runs, timers, fired) = (live.AmbientBubbleXpDayKey, live.AmbientBubbleXpPaidToday, live.SimultaneousImagesRandom, live.SimultaneousImagesMin, live.SimultaneousImages, live.FlashDuration, live.ImageScale, new List<string>(), new List<Action>(), 0);
         try
         {
-            BubbleOverlay.EffectHost = () => new Border(); TimedOverlayHold.Schedule = (a, _) => timers.Add(a); EffectPayload.Firer = _ => fired++;
-            BubbleOverlay.RunOverlay = (kind, _, ms, opacity) => runs.Add($"{kind}:{ms}:{opacity:0.00}");
-            foreach (var id in new[] { "pink", "spiral", "glitch", BrainDrainBubble.VariantId })
+            BubbleOverlay.EffectHost = () => new Border(); TimedOverlayHold.Schedule = (a, _) => timers.Add(a); EffectPayload.Firer = _ => fired++; CoreFlash.ShowProvider = () => { };
+            BubbleOverlay.RunOverlay = (kind, _, ms, opacity) => runs.Add($"{kind}:{ms}:{opacity:0.00}"); BubbleOverlay.RunFlash = (_, amount, duration, size) => runs.Add($"flash:{amount}:{duration}:{size}");
+            live.SimultaneousImagesRandom = true; live.SimultaneousImagesMin = 1; live.SimultaneousImages = 9; live.FlashDuration = 7; live.ImageScale = 150;
+            foreach (var id in new[] { "pink", "spiral", "glitch", BrainDrainBubble.VariantId, "flash" })
             {
                 settings.BubbleTriggerVariants = new List<string> { id };
                 var spec = BubbleOverlay.RollAmbientTrigger(settings, new FixedRandom(0), true, 0)!;
@@ -49,15 +50,15 @@ public sealed class NatashaBubbleTests
                 BubbleOverlay.PopByPlayer(new AmbientBubble { Clickable = true, IsAmbientTrigger = true, Spec = spec });
                 Dispatcher.UIThread.RunJobs();
             }
-            Assert.Equal(new[] { "pink_filter:7500:0.00", "spiral:7500:0.00", "braindrain:3600:0.30" }, runs);
+            Assert.Equal(new[] { "pink_filter:7500:0.00", "spiral:7500:0.00", "braindrain:3600:0.30", "flash:9:7000:150" }, runs);
             Assert.Equal((0.475, 0.475, 0), (PinkFilterOverlay.Timed.Opacity!.Value, SpiralOverlay.Timed.Opacity!.Value, fired));   // the drain pays XP only
             foreach (var release in timers) release();
-            Assert.Equal((null, null, 5), (PinkFilterOverlay.Timed.Opacity, SpiralOverlay.Timed.Opacity, runs.Count));
+            Assert.Equal((null, null, 6), (PinkFilterOverlay.Timed.Opacity, SpiralOverlay.Timed.Opacity, runs.Count));
         }
         finally
         {
-            (BubbleOverlay.EffectHost, BubbleOverlay.RunOverlay, TimedOverlayHold.Schedule, EffectPayload.Firer) = (oldHost, oldRun, oldSchedule, oldFirer);
-            (live.AmbientBubbleXpDayKey, live.AmbientBubbleXpPaidToday) = (oldDay, oldPaid);
+            (BubbleOverlay.EffectHost, BubbleOverlay.RunOverlay, TimedOverlayHold.Schedule, EffectPayload.Firer, BubbleOverlay.RunFlash, CoreFlash.ShowProvider) = (oldHost, oldRun, oldSchedule, oldFirer, oldFlash, oldProvider);
+            (live.AmbientBubbleXpDayKey, live.AmbientBubbleXpPaidToday, live.SimultaneousImagesRandom, live.SimultaneousImagesMin, live.SimultaneousImages, live.FlashDuration, live.ImageScale) = (oldDay, oldPaid, oldRandom, oldMin, oldCount, oldDuration, oldSize);
             PinkFilterOverlay.Timed.Clear(); SpiralOverlay.Timed.Clear(); BubbleOverlay.Stop();
         }
         return Task.CompletedTask;

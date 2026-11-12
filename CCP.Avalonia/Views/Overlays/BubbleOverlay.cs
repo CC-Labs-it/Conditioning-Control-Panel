@@ -553,7 +553,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // WPF EffectPayloadFiring: the head's one-shot surfaces.
         internal static void FireAmbientPayload(EffectPayload payload)
         {
-            if (payload is FlashPayload) { CoreFlash.ShowProvider?.Invoke(); return; }
+            if (payload is FlashPayload flash) { if (EffectHost() is { } host) { var (amount, duration, size) = flash.ResolveBurst(CoreSettings.Current); RunFlash(host, amount, duration, size); } return; }
             if (payload is VideoPayload) { CoreEngine.Video?.Trigger(userEarned: true, silentIfEmpty: true); return; }
             if (payload is SubliminalPayload or AudioPayload)
             {
@@ -585,6 +585,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             payload.Fire();
         }
         private static bool _brainDrainVisualLogged;
+        internal static Action<Visual, int, int, int> RunFlash = (host, amount, duration, size) => { FlashOverlay.TriggerOnce(host, amount, duration, size); App.NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureFlash); };
         internal static Func<Visual?> EffectHost = () => global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.Current;
         internal static Action<string, Visual, int, double> RunOverlay = (kind, host, ms, opacity) =>
         { if (kind == "braindrain") ChaosFlashOverlay.Show(host, ms, opacity); else if (kind == "spiral") SpiralOverlay.Refresh(host); else PinkFilterOverlay.Refresh(host); };
