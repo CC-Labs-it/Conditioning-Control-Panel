@@ -64,6 +64,15 @@ internal static class CompanionHead
 
     private static void UpdateDrainTimer()
     {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            var prompts = _prompts;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (prompts != null && ReferenceEquals(_prompts, prompts)) UpdateDrainTimer();
+            });
+            return;
+        }
         _drainTimer?.Dispose();
         _drainTimer = null;
         if (!Started || CompanionCore.ActivePerk != CompanionBonusType.XPDrain) return;

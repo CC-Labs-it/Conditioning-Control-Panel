@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
+using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -38,6 +40,66 @@ public class CompanionDrainCadenceTests
         finally
         {
             (CoreModsHooks.ActiveCompanionProvider, CoreModsHooks.SwitchCompanion) = oldHooks;
+        }
+    });
+
+    [Fact]
+    public Task WorkerSwitchKeepsDrainOnUiAndDoesNotRestartANewHead() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var path = Path.Combine(CorePaths.UserData, "settings.json");
+        var originalFile = File.Exists(path) ? File.ReadAllBytes(path) : null;
+        var oldHooks = (CoreModsHooks.ActiveCompanionProvider, CoreModsHooks.SwitchCompanion);
+        var oldEnv = Environment.GetEnvironmentVariable("CCP_COMPANION_V2");
+        var oldProvider = CoreSettings.ServiceProvider;
+        var wasStarted = CompanionHead.Started;
+        SettingsService? service = null;
+        var drained = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnDrain(double _) => drained.TrySetResult(Dispatcher.UIThread.CheckAccess());
+        try
+        {
+            if (wasStarted) CompanionHead.Stop();
+            service = new SettingsService { SaveDebounceDueTimeMilliseconds = 600_000 };
+            CoreSettings.ServiceProvider = () => service;
+            Environment.SetEnvironmentVariable("CCP_COMPANION_V2", "1");
+            var s = service.Current;
+            s.PlayerLevel = 1000;
+            s.PlayerXP = 50;
+            s.CompanionPerk = CompanionBonusType.XPDrain;
+            s.ActiveCompanionId = (int)CompanionId.OGBambiSprite;
+            s.SetCompanionPromptId((int)CompanionId.CultBunny, null);
+            s.SetCompanionPromptId((int)CompanionId.BrainParasite, null);
+            CompanionCore.XPDrained += OnDrain;
+            CompanionHead.Start();
+            await Task.Run(() => CoreModsHooks.SwitchCompanion!(CompanionId.CultBunny));
+            Assert.True(await drained.Task.WaitAsync(TimeSpan.FromSeconds(8)));
+            Assert.Equal(50 - CompanionCore.DrainXpPerTick, s.PlayerXP);
+
+            // Hold the UI thread until the worker has queued its update, then replace the head.
+            Task.Run(() => CoreModsHooks.SwitchCompanion!(CompanionId.BrainParasite)).GetAwaiter().GetResult();
+            CompanionHead.Stop();
+            CompanionHead.Start();
+            var newTimer = CompanionHead.DrainTimer;
+            Assert.NotNull(newTimer);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(newTimer, CompanionHead.DrainTimer);
+        }
+        finally
+        {
+            CompanionCore.XPDrained -= OnDrain;
+            CompanionHead.Stop();
+            service?.SealForReset();
+            try
+            {
+                if (originalFile == null) File.Delete(path);
+                else File.WriteAllBytes(path, originalFile);
+            }
+            finally
+            {
+                CoreSettings.ServiceProvider = oldProvider;
+                Environment.SetEnvironmentVariable("CCP_COMPANION_V2", oldEnv);
+                try { if (wasStarted) CompanionHead.Start(); }
+                finally { (CoreModsHooks.ActiveCompanionProvider, CoreModsHooks.SwitchCompanion) = oldHooks; }
+            }
         }
     });
 
