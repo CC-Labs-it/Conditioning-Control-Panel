@@ -110,11 +110,20 @@ public partial class ModCreatorWindow
         row.Valid = validation.IsValid;
         row.Folder.Text = System.IO.Path.GetFileName(folder.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar));
         ToolTip.SetTip(row.Folder, folder);
-        row.Stats.Text = Loc.GetF("mod_emote_stats", validation.GifCount, validation.TotalBytes / (1024.0 * 1024));
+        row.Stats.Text = Loc.GetF("mod_emote_stats", validation.GifCount, FormatEmoteSize(validation.TotalBytes));
         var issues = validation.Errors.Concat(validation.Warnings).Select(i => Loc.GetF(i.Key, i.Arg ?? "")).ToList();
         if (!row.Valid) issues.Add(Loc.Get("mod_emote_invalid"));
         row.Issues.Text = string.Join("\n", issues);
         row.Issues.Foreground = Brush.Parse(row.Valid ? "#FFA500" : "#FF6464");
+    }
+
+    // WPF ModCreatorWindow.Emotes.cs:471-477.
+    private static string FormatEmoteSize(long bytes)
+    {
+        if (bytes >= 1024L * 1024 * 1024) return $"{bytes / (1024.0 * 1024 * 1024):0.##} GB";
+        if (bytes >= 1024L * 1024) return $"{bytes / (1024.0 * 1024):0.#} MB";
+        if (bytes >= 1024L) return $"{bytes / 1024.0:0.#} KB";
+        return $"{bytes} B";
     }
 
     private void WriteEmotesTo(string resourcesDir)

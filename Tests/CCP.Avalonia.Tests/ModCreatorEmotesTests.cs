@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.IO;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using Avalonia;
@@ -68,6 +69,37 @@ public sealed class ModCreatorEmotesTests
         Assert.Single(Rows(w));
         Assert.Equal(1, Field<ComboBox>(Rows(w)[0]!, "Set").SelectedIndex);
         Assert.True(Field<bool>(Rows(w)[0]!, "Valid"));
+    });
+
+    [Theory]
+    [InlineData(0L, "0 B", "en-US")]
+    [InlineData(1023L, "1023 B", "en-US")]
+    [InlineData(1024L, "1 KB", "en-US")]
+    [InlineData(1536L, "1.5 KB", "en-US")]
+    [InlineData(1048576L, "1 MB", "en-US")]
+    [InlineData(1572864L, "1.5 MB", "en-US")]
+    [InlineData(1073741824L, "1 GB", "en-US")]
+    [InlineData(1342177280L, "1.25 GB", "en-US")]
+    [InlineData(1536L, "1,5 KB", "de-DE")]
+    public void SizeFormattingMatchesWpf(long bytes, string expected, string cultureName)
+    {
+        var culture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(cultureName);
+            var method = typeof(ModCreatorWindow).GetMethod("FormatEmoteSize", BindingFlags.Static | BindingFlags.NonPublic)!;
+            Assert.Equal(expected, method.Invoke(null, new object[] { bytes }));
+        }
+        finally { CultureInfo.CurrentCulture = culture; }
+    }
+
+    [Fact]
+    public void SmallFolderShowsKilobytesInStats() => Run((w, root) =>
+    {
+        var dir = Set(root, "small", "{}");
+        using (var file = File.Create(Path.Combine(dir, "idle.gif"))) file.SetLength(1022);
+        Add(w); Hook(w, "SetEmoteFolder", Rows(w)[0]!, dir);
+        Assert.Equal("1 GIFs, 1 KB", Field<TextBlock>(Rows(w)[0]!, "Stats").Text);
     });
 
     [Fact]
