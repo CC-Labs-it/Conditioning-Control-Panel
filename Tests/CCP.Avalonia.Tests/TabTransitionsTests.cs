@@ -465,7 +465,7 @@ public sealed class TabTransitionsTests
     [Fact]
     public Task MysteryHoverAcknowledgesOnlyTodayAndRearmsTomorrow() => Run(shell =>
     {
-        var time = new SteppedTime();
+        var savedDate = CoreSettings.Current.DailyGiftLastRevealDate; var time = new SteppedTime();
         var savedTime = ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time;
         ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = time;
         try
@@ -516,13 +516,13 @@ public sealed class TabTransitionsTests
             Assert.False(face.IsVisible);
             Assert.Equal(1, scale.ScaleX);
         }
-        finally { ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = savedTime; }
+        finally { CoreSettings.Current.DailyGiftLastRevealDate = savedDate; ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = savedTime; }
     });
 
     [Fact]
     public Task MysteryDoorbellParksResetsAndDoesNotSpendTheGift() => Run(shell =>
     {
-        var time = new SteppedTime();
+        var savedDate = CoreSettings.Current.DailyGiftLastRevealDate; var time = new SteppedTime();
         var savedTime = ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time;
         ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = time;
         try
@@ -558,7 +558,24 @@ public sealed class TabTransitionsTests
             Assert.False(shell.MysteryBreathing);
             Assert.Equal(.55, glow.Opacity);
         }
-        finally { ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = savedTime; }
+        finally { CoreSettings.Current.DailyGiftLastRevealDate = savedDate; ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = savedTime; }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task MysteryTestsRestoreTheRevealDate(bool hover) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var settings = CoreSettings.Current;
+        var savedDate = settings.DailyGiftLastRevealDate;
+        try
+        {
+            settings.DailyGiftLastRevealDate = "2001-02-03";
+            if (hover) await MysteryHoverAcknowledgesOnlyTodayAndRearmsTomorrow();
+            else await MysteryDoorbellParksResetsAndDoesNotSpendTheGift();
+            Assert.Equal("2001-02-03", settings.DailyGiftLastRevealDate);
+        }
+        finally { settings.DailyGiftLastRevealDate = savedDate; }
     });
 
     private sealed class GiftOverrideWire : System.Net.Http.HttpMessageHandler
