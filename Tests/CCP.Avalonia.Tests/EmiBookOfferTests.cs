@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
@@ -25,11 +27,63 @@ public class EmiBookOfferTests
         public void Latch(string name) => Done.Add(name);
     }
 
+    [Fact]
+    public Task EmiScopeRestoresStateEngineAndPendingSave() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var original = EmiState.Current;
+        EmiState.SaveNow();
+        var path = EmiState.FilePath;
+        var before = File.ReadAllBytes(path);
+        var engine = EmiLineEngine.Instance;
+        var fields = new[] { "_file", "_bags", "_rng", "_volatileLimits", "_lastSpokeUtc" };
+        var saved = Array.ConvertAll(fields, name => typeof(EmiLineEngine)
+            .GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(engine));
+        using (new EmiTestScope())
+        {
+            Assert.NotSame(original, EmiState.Current);
+            Assert.Equal(1, EmiState.NoteSummon());
+            Assert.True(engine.Ready);
+            engine.Draw("bookOffer");
+            Assert.True(engine.EverSpent("bookOffer"));
+            EmiState.SaveSoon(); // leave a pending write to exercise scope teardown
+        }
+        Assert.Same(original, EmiState.Current);
+        for (int i = 0; i < fields.Length; i++)
+        {
+            var restored = typeof(EmiLineEngine).GetField(fields[i], BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(engine);
+            if (i == fields.Length - 1) Assert.Equal(saved[i], restored);
+            else Assert.Same(saved[i], restored);
+        }
+        Assert.Null(typeof(EmiState).GetField("_saveTimer", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null));
+        await Task.Delay(750);
+        Assert.Equal(before, File.ReadAllBytes(path));
+    });
+
+    [Fact]
+    public Task SummonTestLeavesCallerStateUntouched() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var state = EmiState.Current;
+        EmiState.SaveNow();
+        var before = Newtonsoft.Json.JsonConvert.SerializeObject(state);
+        var file = File.ReadAllBytes(EmiState.FilePath);
+        var engine = EmiLineEngine.Instance;
+        var bags = typeof(EmiLineEngine).GetField("_bags", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(engine);
+        var random = typeof(EmiLineEngine).GetField("_rng", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(engine);
+        await EndingOffersOnce(false, "tourSkipped");
+        Assert.Same(state, EmiState.Current);
+        Assert.Equal(before, Newtonsoft.Json.JsonConvert.SerializeObject(state));
+        Assert.Same(bags, typeof(EmiLineEngine).GetField("_bags", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(engine));
+        Assert.Same(random, typeof(EmiLineEngine).GetField("_rng", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(engine));
+        await Task.Delay(750);
+        Assert.Equal(file, File.ReadAllBytes(EmiState.FilePath));
+    });
+
     [Theory]
     [InlineData(true, "tourFinished")]
     [InlineData(false, "tourSkipped")]
     public Task EndingOffersOnce(bool completed, string why) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        using var emi = new EmiTestScope();
         var events = new List<EmiMoment>();
         void OnMoment(object? sender, EmiMoment e) { if (e.Id == "bookOffer") events.Add(e); }
         var desk = EmiDeskService.Instance;
@@ -86,6 +140,7 @@ public class EmiBookOfferTests
     [Fact]
     public Task OtherWindowTourDoesNotScheduleAnOffer() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        using var emi = new EmiTestScope();
         var events = new List<EmiMoment>();
         void OnMoment(object? sender, EmiMoment e) { if (e.Id == "bookOffer") events.Add(e); }
         var desk = EmiDeskService.Instance;
@@ -110,6 +165,7 @@ public class EmiBookOfferTests
     [Fact]
     public Task RearmBrakesAndPanic() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        using var emi = new EmiTestScope();
         var events = new List<EmiMoment>();
         void OnMoment(object? sender, EmiMoment e) { if (e.Id == "bookOffer") events.Add(e); }
         var desk = EmiDeskService.Instance;
