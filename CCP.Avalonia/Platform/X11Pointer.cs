@@ -39,12 +39,18 @@ internal static class X11Pointer
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out WinPoint point);
     [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
 
+    internal static bool CanReadDesktop(string? sessionType, string? waylandDisplay) =>
+        !string.Equals(sessionType, "wayland", StringComparison.OrdinalIgnoreCase) &&
+        !(string.IsNullOrEmpty(sessionType) && !string.IsNullOrEmpty(waylandDisplay));
+
     internal static (PixelPoint At, bool Pressed, bool Escape)? ReadLeft()
     {
         try
         {
             if (OperatingSystem.IsWindows())
                 return GetCursorPos(out var p) ? (new PixelPoint(p.X, p.Y), GetAsyncKeyState(1) < 0, false) : null;
+            if (OperatingSystem.IsLinux() && !CanReadDesktop(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"),
+                    Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"))) return null;
             return Read(true);
         }
         catch (Exception ex) { Log.Debug(ex, "[Pointer] desktop pointer unavailable"); return null; }

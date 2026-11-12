@@ -139,6 +139,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
             _chaosOpenedWindows = false;
+            _chaosOriginalTargets = 0;
             _running = false;
             _pending = false;
             _spawnTimer?.Stop();
@@ -161,7 +162,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             var s = CoreSettings.Current;
             if (!_running || Targets.Count == 0 || DisplayChangeCoordinator.SpawnsSuppressed || !Field.CanSpawn(s)) return;
-            var i = Field.Random.Next(Targets.Count);
+            var i = Field.Random.Next(_chaosOriginalTargets > 0 ? _chaosOriginalTargets : Targets.Count);
             var a = Targets[i].WorkingArea;
             // Outside sessions, bubbles are always clickable (no UI toggle exists for the setting).
             var clickable = !CoreSession.IsSessionRunning || s.BubblesClickable;
@@ -201,6 +202,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.CursorX = x; Field.CursorY = y;
         }
         private static bool _chaosOpenedWindows;
+        private static int _chaosOriginalTargets;
         /// <summary>WPF BubbleService.ChaosLastPopXDip/YDip: the last chaos pop's centre, global DIPs.</summary>
         internal static double ChaosLastPopX, ChaosLastPopY;
 
@@ -227,9 +229,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 onDefuse(b);
             };
             Field.ChaosDetonated = onDetonate == null ? null : b => { AnchorPop(b); onDetonate(b); };
-            if (_running) return;
-            Start(host, null, ambient: false);
-            _chaosOpenedWindows = _running;
+            if (!_running)
+            {
+                Start(host, null, ambient: false);
+                _chaosOpenedWindows = _running;
+            }
+            if (!_running) return;
+            // Chaos can summon on any monitor, even when ambient bubbles target only one.
+            _chaosOriginalTargets = Targets.Count;
+            foreach (var sc in ScreenList.Enumerate(host))
+            {
+                if (Targets.Any(t => t.Bounds.Equals(sc.Bounds))) continue;
+                var w = new BubbleOverlayWindow(Targets.Count, sc.Bounds, sc.Scaling > 0 ? sc.Scaling : 1);
+                if (!X11Overlay.SetInputRects(w, w.Rects, 0) || !X11Overlay.SetOverrideRedirect(w, sc.Bounds))
+                {
+                    Log.Warning("Bubbles: could not open chaos overlay on an additional monitor");
+                    w.Close();
+                    continue;
+                }
+                w.Show();
+                Windows.Add(w);
+                Targets.Add(sc);
+            }
         }
 
         /// <summary>WPF SetChaosFrozen + SetChaosInputLocked (manual pause): chaos bubbles hold
@@ -252,22 +273,45 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.Held = false;
             Field.Bubbles.RemoveAll(b => b.Spec != null);
             if (_chaosOpenedWindows) { Stop(); return; }
+            while (_chaosOriginalTargets > 0 && Targets.Count > _chaosOriginalTargets)
+            {
+                int last = Targets.Count - 1;
+                Windows[last].Close();
+                Windows.RemoveAt(last);
+                Targets.RemoveAt(last);
+            }
+            _chaosOriginalTargets = 0;
             foreach (var w in Windows) w.Sync();
         }
 
         /// <summary>WPF SpawnChaosBubble, FloatUp only. Without an overlay window (headless, or a
         /// platform that refuses click-through) the bubble lives on a 1920x1080 model screen.</summary>
-        internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec, PixelPoint? owner = null)
+        internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec)
         {
             AmbientBubble b;
             if (Targets.Count == 0)
                 b = AmbientBubble.SpawnChaos(Field.Random, 0, 0, 0, 1920, 1080, 1, spec);
             else
             {
-                var i = owner.HasValue ? Targets.FindIndex(screen => screen.Bounds.Contains(owner.Value)) : -1;
-                if (i < 0) i = Field.Random.Next(Targets.Count);
+                // WPF BubbleService.PickScreenFor: positioned bubbles use their own point;
+                // otherwise chaos lives on the primary screen. Off-screen points use the nearest.
+                int i = Math.Max(0, Targets.FindIndex(screen => screen.IsPrimary));
+                if (spec.SpawnAtPxX is double x && spec.SpawnAtPxY is double y)
+                {
+                    var point = new PixelPoint((int)x, (int)y);
+                    double best = double.PositiveInfinity;
+                    for (int j = 0; j < Targets.Count; j++)
+                    {
+                        var bounds = Targets[j].Bounds;
+                        double dx = Math.Max(0, Math.Max(bounds.X - (double)point.X, point.X - (bounds.Right - 1.0)));
+                        double dy = Math.Max(0, Math.Max(bounds.Y - (double)point.Y, point.Y - (bounds.Bottom - 1.0)));
+                        double distance = dx * dx + dy * dy;
+                        if (distance < best) { best = distance; i = j; }
+                    }
+                }
                 var a = Targets[i].WorkingArea;
-                b = AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec);
+                var scale = Targets[i].Scaling > 0 ? Targets[i].Scaling : 1;
+                b = AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, scale, spec);
             }
             Field.Bubbles.Add(b);
             RequestFrame();

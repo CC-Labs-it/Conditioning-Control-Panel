@@ -114,7 +114,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 {
                     var spec = ChaosBubbleVariants.BuildDarter(_state.RunIntensity, spotlight: false,
                         pointer.At.X + Rng.Next(-60, 61), pointer.At.Y + Rng.Next(-60, 61));
-                    BubbleOverlay.SpawnChaos(spec, pointer.At);
+                    BubbleOverlay.SpawnChaos(spec);
                 }
                 ChaosMeta.MarkDiscovered("bubble:darter");
                 if (maxed)
