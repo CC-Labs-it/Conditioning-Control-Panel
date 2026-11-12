@@ -1,4 +1,5 @@
 {
+  "possession_target_page": "the page",
   "scheduler_started_title": "Scheduler Active",
   "scheduler_started_body": "Session auto-started based on schedule.",
   "scheduler_ended_title": "Scheduler",

@@ -51,16 +51,28 @@ public class PossessionSliderScrollTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void ScrollUndoRestoresHomeIncludingUserMovement(bool userScroll) => AvaloniaTestDispatcher.Run(() =>
+    [InlineData(false, "en", "the page")]
+    [InlineData(true, "en", "the page")]
+    [InlineData(false, "de", "die Seite")]
+    [InlineData(false, "es", "la página")]
+    [InlineData(false, "fr", "la page")]
+    [InlineData(false, "it", "la pagina")]
+    [InlineData(false, "ja", "そのページ")]
+    [InlineData(false, "ko", "그 페이지")]
+    [InlineData(false, "pt-BR", "a página")]
+    [InlineData(false, "ru", "страница")]
+    [InlineData(false, "zh-CN", "这页")]
+    public void ScrollUndoRestoresHomeIncludingUserMovement(bool userScroll, string language, string expected) => AvaloniaTestDispatcher.Run(() =>
     {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
         var frames = new FakeFrames();
         var viewer = new ScrollViewer { Width = 200, Height = 100, Content = new Border { Height = 1000 } };
         var window = new Window { Content = viewer, Width = 200, Height = 100 };
         window.Show();
         try
         {
+            loc.SetLanguage(language);
             window.UpdateLayout();
             viewer.Offset = new Vector(0, 100);
             var target = new PossessionTarget { Visual = viewer, Role = PossessionRole.Scroll, Key = "scroll" };
@@ -78,9 +90,9 @@ public class PossessionSliderScrollTests
             effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
             Assert.Equal(userScroll ? 120 : 100, viewer.Offset.Y, 2);
             Assert.Equal(0, frames.Count);
-            Assert.Equal("the page", named);
+            Assert.Equal(expected, named);
         }
-        finally { window.Close(); }
+        finally { window.Close(); loc.SetLanguage(previous); }
     });
     [Theory]
     [InlineData(Orientation.Horizontal)]
