@@ -171,8 +171,11 @@ public sealed class GazeRefineFlowTests
         var panel = new GazeRefineOverlay(new object[] { new AmbientBubble(), flash, new object() }, new[] { new Rect(300, 300, 10, 10), new Rect(340, 300, 40, 40), new Rect(380, 300, 100, 100) }, new Rect(0, 0, 1400, 900), 1);
         try
         {
-            panel.Show(); Dispatcher.UIThread.RunJobs();
-            var children = ((Canvas)panel.Content!).Children;
+            var canvas = (Canvas)panel.Content!; var clock = new TestAnimationClock(); clock.Attach(canvas);
+            Assert.Equal(0, canvas.Opacity);
+            panel.Show(); Dispatcher.UIThread.RunJobs(); clock.Step(0); clock.Step(65);
+            Assert.InRange(canvas.Opacity, .49, .51); clock.Step(130); Assert.Equal(1, canvas.Opacity, 3);
+            var children = canvas.Children;
             Assert.IsType<Ellipse>(children[2]); Assert.IsType<Border>(children[4]);
             Assert.IsType<ImageBrush>(((Border)children[4]).Background); Assert.IsType<Polygon>(((Border)children[6]).Child);
             Assert.NotEqual(panel.ChipBounds(0).Width, panel.ChipBounds(2).Width);
