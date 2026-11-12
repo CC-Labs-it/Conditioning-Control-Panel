@@ -326,6 +326,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             RequestFrame();
         }
 
+        /// <summary>WPF PopAllBubbles: silently clear the field without ending chaos delivery.</summary>
+        internal static void ClearForDraft()
+        {
+            Field.Held = false;
+            Field.Bubbles.Clear();
+            ChaosRipples.Clear();
+            _hoverScreen = -1;
+            foreach (var w in Windows) w.Sync();
+            RequestFrame();
+        }
+
         /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>
         internal static void EndChaos()
         {

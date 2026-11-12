@@ -777,9 +777,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         public void ShowResults(ChaosRunState s, double baseXp, double skillMult, double finalXp, long previousBest, int sparksEarned,
                                 ChaosRank? rankUp = null)
         {
+            _onBoonPick = null;
+            HideDraft();
+            _countdownTimer?.Stop();
+            _countdownComplete = null;
+            RemoveCountdownSkipHooks();
             SetClickThrough(false);
             _countdownBox.IsVisible = false;
-            _draftPanel.IsVisible = false;
             _backdrop.IsVisible = true;
             _resultsPanel.IsVisible = true;
             BringToFront();
@@ -1119,6 +1123,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             base.OnClosed(e);
             _closed = true;
+            _onBoonPick = null;
+            HideDraft();
+            _countdownComplete = null;
             // The three forever tweens (the boon pulse, the two ken-burns drifts) would otherwise
             // keep the 16ms pump awake on a dead window for the process's life.
             _tweens.Clear();
