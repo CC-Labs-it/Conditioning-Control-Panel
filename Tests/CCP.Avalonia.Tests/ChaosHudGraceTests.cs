@@ -23,4 +23,18 @@ public sealed class ChaosHudGraceTests
         Assert.True(ChaosHudWindow.CursorInHudGrace(panel, default, null, last, true));
         Assert.False(ChaosHudWindow.CursorInHudGrace(panel, default, null, last, false));
     }
+    [Fact]
+    public void Xwayland_stale_halo_expires_after_leaving_for_native_wayland_window()
+    {
+        var panel = new Rect(0, 0, 100, 100);
+        var stale = new Point(105, 50);
+        var limit = ChaosHudWindow.WAYLAND_HALO_LIMIT_MS;
+        // XQueryPointer keeps returning the last X window position after the leave.
+        Assert.True(ChaosHudWindow.CursorInHudGrace(panel, default, stale, stale, false, true, limit - 1));
+        Assert.False(ChaosHudWindow.CursorInHudGrace(panel, default, stale, stale, false, true, limit));
+        // A confirmed hover stays open, and a real X11 query is not subject to this fallback.
+        Assert.True(ChaosHudWindow.CursorInHudGrace(panel, default, stale, stale, true, true, limit));
+        Assert.True(ChaosHudWindow.CursorInHudGrace(panel, default, stale, stale, false, false, limit));
+        Assert.False(ChaosHudWindow.CursorInHudGrace(panel, default, new Point(150, 50), stale, false, true, 0));
+    }
 }

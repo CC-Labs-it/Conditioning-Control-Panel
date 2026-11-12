@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Linq;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -409,7 +410,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private const double OPEN_DWELL_MS = 1000;   // rest this long on the strip before it opens
         private const double EXPAND_GRACE_MS = 1000;
         private const double LEAVE_RECHECK_MS = 220;
+        internal const double WAYLAND_HALO_LIMIT_MS = 1000;
         private DateTime _expandedAt;
+        private long _leftAt;
         private DispatcherTimer? _collapseRecheck;
         private DispatcherTimer? _openDwell;
         private Point _lastPointer;
@@ -464,6 +467,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             _lastPointer = e.GetPosition(this);
             if (_pinnedOpen || !_expanded) return;
+            _leftAt = Stopwatch.GetTimestamp();
             double sinceOpen = (DateTime.UtcNow - _expandedAt).TotalMilliseconds;
             double wait = Math.Max(LEAVE_RECHECK_MS, EXPAND_GRACE_MS - sinceOpen);
             if (_collapseRecheck == null)
@@ -531,7 +535,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// flip can answer wrongly.</para>
         ///
         /// <para>Use desktop coordinates even after the pointer leaves the window. If the platform
-        /// cannot query them, the last event is useful only while the panel is still hovered.</para>
+        /// cannot query them, the last event is useful only while the panel is still hovered. On
+        /// Wayland an X11 query can return a stale position, so an unconfirmed halo expires.</para>
         /// </summary>
         private bool CursorInHudGrace()
         {
@@ -539,8 +544,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 PixelPoint? screen = OperatingSystem.IsWindows() ? Win32Overlay.CursorPosition() : X11Pointer.Read()?.At;
                 Point? current = screen is { } p ? this.PointToClient(p) : null;
+                bool wayland = OperatingSystem.IsLinux() &&
+                    (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")) ||
+                     string.Equals(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), "wayland", StringComparison.OrdinalIgnoreCase));
                 return CursorInHudGrace(ElementBoundsInWindow(_panel), ElementBoundsInWindow(_strip),
-                    current, _lastPointer, _panel.IsPointerOver);
+                    current, _lastPointer, _panel.IsPointerOver, wayland, Stopwatch.GetElapsedTime(_leftAt).TotalMilliseconds);
             }
             catch
             {
@@ -548,8 +556,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
         }
 
-        internal static bool CursorInHudGrace(Rect panel, Rect strip, Point? current, Point last, bool over) =>
-            (current.HasValue || over) && CursorInGrace(panel, strip, current ?? last, LEAVE_GRACE_MARGIN_DIP);
+        internal static bool CursorInHudGrace(Rect panel, Rect strip, Point? current, Point last, bool over,
+            bool wayland = false, double sinceLeaveMs = 0) =>
+            (current.HasValue || over) && (over || !wayland || sinceLeaveMs < WAYLAND_HALO_LIMIT_MS) &&
+            CursorInGrace(panel, strip, current ?? last, LEAVE_GRACE_MARGIN_DIP);
 
         /// <summary>An element's bounds in this window's coordinate space, honouring render transforms
         /// (the panel rides a TranslateTransform). An empty rect when the element is not laid out.
