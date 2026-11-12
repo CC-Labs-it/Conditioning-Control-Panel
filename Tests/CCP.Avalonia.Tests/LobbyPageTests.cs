@@ -188,6 +188,32 @@ public sealed class LobbyPageTests
         finally { window.Close(); }
     });
     [Fact]
+    public void ReloadAfterAnUnheardAccountSwitchPaintsTheFeedNotTheOldAccount() => Run(() =>
+    {
+        var account = "A";
+        Task<PbpLobbyReply>? hold = null;
+        using var feed = new LobbyPoll(new LobbyTimer(), () => true, () => Array.Empty<Friend>(),
+            () => hold ?? Task.FromResult(new PbpLobbyReply(new[] { new PbpOpenSeat("p_" + account, account, 0, 0, 0) }, Array.Empty<PbpPlayingGame>(), true)),
+            () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((System.Collections.Generic.IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), true)), account: () => account);
+        var page = new AvailableSubjectsTabView { SharedLobby = feed, ReadGates = () => LobbyGates.From(true, false, false) };
+        var rows = Named<ItemsControl>(page, "AvailableSubjectsList");
+        var window = new Window { Content = page };
+        window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("A", Assert.IsType<LobbyCardView>(rows.Items.Single()).Row.HostName);
+            window.Content = null; Dispatcher.UIThread.RunJobs();
+            account = "B";
+            feed.RefreshAsync().GetAwaiter().GetResult(); // the launcher's round, unheard by the page
+            hold = new TaskCompletionSource<PbpLobbyReply>().Task; // the reload's own round never lands
+            window.Content = page; Dispatcher.UIThread.RunJobs();
+            Assert.Equal("B", Assert.IsType<LobbyCardView>(rows.Items.Single()).Row.HostName);
+        }
+        finally { window.Close(); }
+    });
+    [Fact]
     public void HostLocksFollowTheirOwnGates() => Run(() =>
     {
         var page = new AvailableSubjectsTabView();

@@ -27,6 +27,7 @@ public partial class AvailableSubjectsTabView : UserControl
     internal static LobbyGates CurrentGates() => LobbyGates.From(Platform.FriendsHead.Identity() != null,
         TierGate.HasPremium, TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed);
     internal Func<LobbyPoll>? CreateLobby;
+    internal LobbyPoll? SharedLobby; // stands in for LobbyHead.Service in tests; never disposed by the page
     private LobbyPoll? _lobby;
     private bool _ownsLobby;
     private IDisposable? _lease;
@@ -47,8 +48,10 @@ public partial class AvailableSubjectsTabView : UserControl
             {
                 // One feed with the launcher chip, as WPF App.Lobby; a test's own poll is disposed with the page.
                 _ownsLobby = CreateLobby != null;
-                _lobby = CreateLobby?.Invoke() ?? Platform.LobbyHead.Service;
+                _lobby = CreateLobby?.Invoke() ?? SharedLobby ?? Platform.LobbyHead.Service;
                 _lobby.Changed += OnLobbyChanged;
+                // WPF EnterLobbyTab paints App.Lobby.Snapshot (MainWindow.Lobby.cs:87); rows painted before the first load stay.
+                if (_snapshot.IsEmpty) _snapshot = _lobby.Snapshot;
             }
             Repaint();
             SyncWatch();
@@ -59,6 +62,7 @@ public partial class AvailableSubjectsTabView : UserControl
         {
             _lease?.Dispose(); _lease = null;
             if (_lobby != null) { _lobby.Changed -= OnLobbyChanged; if (_ownsLobby) _lobby.Dispose(); _lobby = null; }
+            _snapshot = LobbySnapshot.Empty; // unheard rounds may belong to another account: reload reads the feed
             SubjectsAmbientFx.Stop();
         };
     }

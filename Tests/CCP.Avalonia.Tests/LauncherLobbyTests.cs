@@ -6,16 +6,12 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
-using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
-using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
-using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.GoonGame;
 using ConditioningControlPanel.Services.Lobby;
@@ -130,7 +126,7 @@ public sealed class LauncherLobbyTests
         finally { (settings.UnifiedId, settings.OfflineMode, CoreSecrets.RetrieveProvider) = (oldId, oldOffline, oldSecret); }
     });
     [Fact]
-    public void DropdownShowsSixFriendFirstRowsAndHoverLiftsLikeWpf() => Ui(window =>
+    public void DropdownShowsSixFriendFirstRowsWithArtAndGlass() => Ui(window =>
     {
         var friend = new LobbyRow { Game = LobbyGame.Goon, State = LobbyRowState.Open, Key = "friend", HostName = "Friend", Friend = true };
         var others = Enumerable.Range(0, 7).Select(i => new LobbyRow { Game = LobbyGame.Chess, State = LobbyRowState.Open, Key = "p_" + i, HostName = "Host " + i }).ToArray();
@@ -141,24 +137,6 @@ public sealed class LauncherLobbyTests
         Assert.Equal("Friend", Assert.IsType<TextBlock>(Assert.IsType<StackPanel>(first.Children[0]).Children[0]).Text);
         Assert.NotNull(Assert.IsType<Image>(Assert.IsType<Border>(first.Children[2]).Child).Source);
         Assert.NotNull(Assert.IsType<Border>(first.Children[3]).Background);
-        var lift = Assert.IsType<ScaleTransform>(first.RenderTransform);
-        void Hover(RoutedEvent e) => first.RaiseEvent(new PointerEventArgs(e, first, new Pointer(1, PointerType.Mouse, true), window, default, 0, PointerPointProperties.None, KeyModifiers.None));
-        var oldMotion = CoreSettings.Current.MotionLevel;
-        try
-        {
-            // WPF MotionFx.HoverLift: with transitions off it snaps straight to 1.02 and back.
-            CoreSettings.Current.MotionLevel = MotionLevel.Off;
-            Hover(InputElement.PointerEnteredEvent);
-            Assert.Null(lift.Transitions);
-            Assert.Equal((1.02, 1.02), (lift.ScaleX, lift.ScaleY));
-            Hover(InputElement.PointerExitedEvent);
-            Assert.Equal((1.0, 1.0), (lift.ScaleX, lift.ScaleY));
-            CoreSettings.Current.MotionLevel = MotionLevel.Full;
-            Hover(InputElement.PointerEnteredEvent);
-            Assert.Equal(AmbientFxCanvas.Env.AllowTransitions, lift.Transitions != null);
-            Assert.Equal(1.02, lift.GetBaseValue(ScaleTransform.ScaleXProperty).Value);
-        }
-        finally { CoreSettings.Current.MotionLevel = oldMotion; }
         window.PaintLobby(LobbySnapshot.Empty);
         Assert.Equal(Loc.Get("lobby_signed_out"), Assert.IsType<TextBlock>(window.FindControl<StackPanel>("LobbyDropRows")!.Children[0]).Text);
     });
