@@ -18,9 +18,7 @@ using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Lobby;
 using ConditioningControlPanel.Services.UI;
-
 namespace ConditioningControlPanel.Avalonia.Views.Windows;
-
 public partial class LauncherWindow
 {
     internal LobbyPoll? LobbyForTest;
@@ -100,7 +98,7 @@ public partial class LauncherWindow
     internal async Task ClaimRemoteRowAsync(string key)
     {
         var url = await ClaimRemote(key);
-        if (string.IsNullOrEmpty(url)) return;
+        if (string.IsNullOrEmpty(url)) { if (_lobbyHooked) _ = _lobby?.RefreshAsync(); return; }
         try { OpenSession(url); } catch (Exception ex) { Serilog.Log.Warning(ex, "[Launcher] failed to open browser for claimed session"); }
         if (_lobbyHooked) _ = _lobby?.RefreshAsync();
     }

@@ -21,9 +21,7 @@ using ConditioningControlPanel.Services.GoonGame;
 using ConditioningControlPanel.Services.Lobby;
 using ConditioningControlPanel.Services.UI;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 /// <summary>WPF LauncherWindow.Lobby.cs: the chip, its dropdown and the shared feed.</summary>
 public sealed class LauncherLobbyTests
 {
@@ -36,14 +34,11 @@ public sealed class LauncherLobbyTests
         public void OnUiThread(Action action) => action();
         public void Fire() { if (Running) Tick?.Invoke(this, EventArgs.Empty); }
     }
-
     private static LobbyPoll Poll(Timer timer, Func<PbpLobbyReply> chess) =>
         new(timer, () => true, () => Array.Empty<Friend>(), () => Task.FromResult(chess()), () => Task.FromResult(OpenTablesReply.Empty),
             () => Task.FromResult(((IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), false)), account: () => "account");
-
     private static PbpLobbyReply Seats(int n) =>
         new(Enumerable.Range(0, n).Select(i => new PbpOpenSeat("p_" + i, "Host", 0, 0, 0)).ToArray(), Array.Empty<PbpPlayingGame>(), true);
-
     private static void Ui(Action<LauncherWindow> body, LobbyPoll? poll = null) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
@@ -53,9 +48,7 @@ public sealed class LauncherLobbyTests
         try { body(window); }
         finally { window.Close(); Dispatcher.UIThread.RunJobs(); NavBadges.ResetForTests(); }
     });
-
     private static Grid Row(LauncherWindow w, int i = 0) => Assert.IsType<Grid>(w.FindControl<StackPanel>("LobbyDropRows")!.Children[i]);
-
     [Fact]
     public void VisibilityAndDropdownOwnTheirSubscriptionsAndWatch()
     {
@@ -93,7 +86,18 @@ public sealed class LauncherLobbyTests
             Assert.Contains("2", window.FindControl<TextBlock>("LobbyChipText")!.Text);
         }, poll);
     }
-
+    [Fact]
+    public void LostRemoteClaimRefreshesLobby()
+    {
+        var calls = 0;
+        using var poll = Poll(new Timer(), () => { calls++; return Seats(calls); });
+        Ui(window =>
+        {
+            window.Show(); window.ClaimRemote = _ => Task.FromResult<string?>(null); // 409 returns null
+            window.ClaimRemoteRowAsync("subject").GetAwaiter().GetResult();
+            Assert.Equal(2, calls); Assert.Equal(2, poll.Snapshot.OpenCount);
+        }, poll);
+    }
     [Fact]
     public void GoonJoinIsOffAndRemoteJoinClaimsAndOpensTheSession() => Ui(window =>
     {
@@ -125,7 +129,6 @@ public sealed class LauncherLobbyTests
         }
         finally { (settings.UnifiedId, settings.OfflineMode, CoreSecrets.RetrieveProvider) = (oldId, oldOffline, oldSecret); }
     });
-
     [Fact]
     public void DropdownShowsSixFriendFirstRowsAndHoverLiftsLikeWpf() => Ui(window =>
     {
