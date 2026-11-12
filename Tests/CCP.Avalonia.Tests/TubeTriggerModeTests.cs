@@ -69,6 +69,56 @@ public sealed class TubeTriggerModeTests
     });
 
     [Theory]
+    [InlineData("https://hypnotube.com/video/bambis-naughty-tiktok-collection-117314.html", "Bambi's Naughty TikTok Collection")]
+    [InlineData("https://bambicloud.com/playlist/ff15f538-6e6b-433c-b68b-b4af5ee5d14d", "IQ Programming")]
+    [InlineData("https://example.com/active-mod-loop", "A Mod's Own Title")]
+    [InlineData("HTTPS://EXAMPLE.COM/ACTIVE-MOD-LOOP", "A Mod's Own Title")]
+    public void TriggerBareUrlUsesCanonicalTitle(string url, string expected) => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (CoreMods.Service is null) global::ConditioningControlPanel.Avalonia.App.StartMods();
+        var settings = CoreSettings.Current;
+        var saved = (settings.TriggerModeEnabled, settings.TriggerIntervalSeconds, settings.CustomTriggers,
+            settings.AvatarMuted, settings.AvatarTubeDetached, settings.AvatarEnabled, settings.VideoLinksByMod);
+        var loops = new List<Action>();
+        var delays = new List<Action>();
+        AvatarTubeWindow? tube = null;
+        try
+        {
+            PanicAftermath.EndQuiet();
+            settings.TriggerModeEnabled = true;
+            settings.TriggerIntervalSeconds = 45;
+            settings.CustomTriggers = new() { "Watch " + url };
+            settings.AvatarMuted = false;
+            settings.AvatarTubeDetached = true;
+            settings.AvatarEnabled = true;
+            settings.VideoLinksByMod = new Dictionary<string, Dictionary<string, string>>
+            {
+                [CoreMods.Service!.ActiveModId] = new() { ["A Mod's Own Title"] = "https://example.com/active-mod-loop" }
+            };
+            tube = new AvatarTubeWindow(null);
+            tube.SpeechClock = new Stepped();
+            tube.TriggerLoopScheduler = (_, tick) => { loops.Add(tick); return () => { }; };
+            tube.SpeechDelayScheduler = (_, fire) => { delays.Add(fire); return () => { }; };
+            tube.Show();
+            Dispatcher.UIThread.RunJobs();
+            loops[0]();
+            delays[^1]();
+            for (var i = 0; i < settings.CustomTriggers[0].Length; i++) loops[^1]();
+            var text = tube.FindControl<TextBlock>("TxtSpeech")!;
+            var link = Assert.IsType<global::ConditioningControlPanel.Avalonia.Controls.SafeHyperlinkButton>(
+                Assert.Single(text.Inlines!.OfType<InlineUIContainer>()).Child);
+            Assert.Equal(expected, link.Content);
+        }
+        finally
+        {
+            tube?.Close();
+            (settings.TriggerModeEnabled, settings.TriggerIntervalSeconds, settings.CustomTriggers,
+                settings.AvatarMuted, settings.AvatarTubeDetached, settings.AvatarEnabled, settings.VideoLinksByMod) = saved;
+            PanicAftermath.EndQuiet();
+        }
+    });
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public Task TriggerLoopShowsCustomTriggersAndFollowsTheSetting(bool closeDuringTyping) => AvaloniaTestDispatcher.RunAsync(() =>

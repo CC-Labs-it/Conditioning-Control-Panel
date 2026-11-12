@@ -5,6 +5,8 @@
 
 using System;
 using System.ComponentModel;
+using System.Collections.Generic;
+using System.Linq;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Safety;
@@ -162,13 +164,26 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _txtSpeech.Text = "";
             _txtSpeech.Inlines!.Clear();
             var at = 0;
+            Dictionary<string, string>? knownLinks = null;
             foreach (System.Text.RegularExpressions.Match match in matches)
             {
                 _txtSpeech.Inlines!.Add(new Run(text[at..match.Index]));
                 var raw = match.Groups["raw"].Value;
                 var target = raw.Length > 0 ? raw : match.Groups["url"].Value.Trim();
+                if (raw.Length > 0 && knownLinks == null)
+                {
+                    // WPF Speech.cs:1323-1343: active mod first, then built-in videos and playlists.
+                    knownLinks = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    if (CoreMods.Service?.GetVideoLinks() is { } modLinks)
+                        foreach (var (title, url) in modLinks)
+                            if (Uri.TryCreate(url, UriKind.Absolute, out var link) && link.Scheme == "https")
+                                knownLinks[title] = url;
+                    foreach (var (title, url) in HypnotubeDefaultLinks.KnownVideoTitles)
+                        knownLinks.TryAdd(title, url);
+                }
                 var label = raw.Length > 0
-                    ? global::ConditioningControlPanel.Helpers.HtUrlHelper.DeriveTitleFromUrl(target)
+                    ? knownLinks!.FirstOrDefault(pair => string.Equals(pair.Value, target, StringComparison.OrdinalIgnoreCase)).Key
+                      ?? global::ConditioningControlPanel.Helpers.HtUrlHelper.DeriveTitleFromUrl(target)
                     : match.Groups["label"].Value;
                 if (Uri.TryCreate(target, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")
                     _txtSpeech.Inlines.Add(new InlineUIContainer(new global::ConditioningControlPanel.Avalonia.Controls.SafeHyperlinkButton
