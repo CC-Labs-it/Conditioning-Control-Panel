@@ -257,30 +257,33 @@ public sealed class ProfileBubbleParityTests : IDisposable
             double Angle() => visual.RenderTransform is TransformGroup g
                 ? g.Children.OfType<RotateTransform>().Single().Angle
                 : (visual.RenderTransform as RotateTransform)?.Angle ?? 0;
+            var clock = new ProfileStepClock();
+            visual.SetValue(ProfileStepClock.Property, clock.Instance);
             double maxTilt = 0, minOpacity = 1;
-            void Run()
+            void Step(int milliseconds)
             {
-                for (int i = 0; i < 60; i++)
-                {
-                    Dispatcher.UIThread.RunJobs();
-                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-                    maxTilt = Math.Max(maxTilt, Math.Abs(Angle()));
-                    minOpacity = Math.Min(minOpacity, visual.Opacity);
-                }
+                clock.Step(milliseconds);
+                Dispatcher.UIThread.RunJobs();
+                maxTilt = Math.Max(maxTilt, Math.Abs(Angle()));
+                minOpacity = Math.Min(minOpacity, visual.Opacity);
             }
 
             DisplayFlash(shell);
-            Run();
+            Dispatcher.UIThread.RunJobs();
+            Step(0); Step(90); Step(220); Step(340); Step(480); Step(481);
             if (animates) Assert.True(maxTilt > 1, $"a flash never tilted the bubble (max {maxTilt})");
             else Assert.Equal(0, maxTilt);
             Assert.Equal(1, minOpacity);
+            Assert.Equal(0, Angle(), 6);
 
             maxTilt = 0;
             DisplaySubliminal();
-            Run();
+            Dispatcher.UIThread.RunJobs();
+            Step(500); Step(650); Step(800); Step(950); Step(1100); Step(1101);
             if (animates) Assert.True(minOpacity < 0.95, $"a subliminal never dipped the bubble (min {minOpacity})");
             else Assert.Equal(1, minOpacity);
             Assert.Equal(0, maxTilt);
+            Assert.Equal(1, visual.Opacity, 6);
         }
         finally
         {
@@ -290,6 +293,18 @@ public sealed class ProfileBubbleParityTests : IDisposable
         }
         return Task.CompletedTask;
     });
+
+    // Avalonia 12 keeps IClock internal. Pulse its real clock, as FriendsRailMotionTests does.
+    private sealed class ProfileStepClock
+    {
+        private const BindingFlags Any = BindingFlags.Public | BindingFlags.NonPublic;
+        private static readonly Type Base = typeof(global::Avalonia.Animation.Animatable).Assembly.GetType("Avalonia.Animation.ClockBase", true)!;
+        private static readonly MethodInfo Pulse = Base.GetMethod("Pulse", Any | BindingFlags.Instance)!;
+        public static readonly AvaloniaProperty Property = (AvaloniaProperty)typeof(global::Avalonia.Animation.Animatable)
+            .GetField("ClockProperty", Any | BindingFlags.Static)!.GetValue(null)!;
+        public readonly object Instance = Activator.CreateInstance(Base, nonPublic: true)!;
+        public void Step(int milliseconds) => Pulse.Invoke(Instance, new object[] { TimeSpan.FromMilliseconds(milliseconds) });
+    }
 
     // WPF MainWindow.ProfileBubble.cs:623-649: independent 2.5 s / 4 s throttles.
     [Theory]
