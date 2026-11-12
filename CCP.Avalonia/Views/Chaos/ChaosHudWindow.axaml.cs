@@ -21,6 +21,7 @@ using Avalonia.Threading;
 using Serilog;
 
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services.Chaos;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
@@ -62,8 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///  - <b>Settings.</b> The persisted edge (<c>ChaosHudOnRight</c>) and the panic-key hint
     ///    read and write <c>CoreSettings.Current</c>, one for one with the <c>App.Settings</c>
     ///    pair WPF used, so the side switch survives a restart again.
-    ///  - <c>Mouse.GetPosition</c> has no Avalonia twin (there is no global cursor query), so the
-    ///    collapse grace tests the LAST SEEN pointer position instead; see CursorInHudGrace.
+    ///  - The collapse grace reads the desktop pointer on Windows and X11; see CursorInHudGrace.
     ///  - <c>SystemParameters.WorkArea</c> -> <c>Screens</c>; <c>Left</c>/<c>Top</c> ->
     ///    <c>Position</c> (physical pixels, so the DIP sizes are scaled by <c>screen.Scaling</c>).
     ///  - <c>Visibility</c> -> <c>IsVisible</c>; <c>IsMouseOver</c> -> <c>IsPointerOver</c>;
@@ -530,27 +530,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// laid-out bounds, grown by a hysteresis margin - which no popup, transform or visibility
         /// flip can answer wrongly.</para>
         ///
-        /// <para>ponytail: WPF asked <c>Mouse.GetPosition(this)</c>, which answers even while the
-        /// pointer is outside the window. Avalonia has no global cursor query, so this reads the
-        /// LAST SEEN pointer position instead. Inside the window they agree; once the pointer has
-        /// left, the halo test is answered against where it crossed the edge rather than where it
-        /// is now, so a cursor that leaves and stops dead just outside can hold the panel open for
-        /// one extra re-check tick. Needs a platform cursor probe to close.</para>
+        /// <para>Use desktop coordinates even after the pointer leaves the window. If the platform
+        /// cannot query them, the last event is useful only while the panel is still hovered.</para>
         /// </summary>
         private bool CursorInHudGrace()
         {
             try
             {
-                return CursorInGrace(ElementBoundsInWindow(_panel), ElementBoundsInWindow(_strip),
-                                     _lastPointer, LEAVE_GRACE_MARGIN_DIP);
+                PixelPoint? screen = OperatingSystem.IsWindows() ? Win32Overlay.CursorPosition() : X11Pointer.Read()?.At;
+                Point? current = screen is { } p ? this.PointToClient(p) : null;
+                return CursorInHudGrace(ElementBoundsInWindow(_panel), ElementBoundsInWindow(_strip),
+                    current, _lastPointer, _panel.IsPointerOver);
             }
             catch
             {
-                // Never collapse on a transform/layout hiccup: the pinned-open and dwell paths can
-                // reopen it, but a spurious collapse mid-run is what was reported.
-                return true;
+                return _panel.IsPointerOver;
             }
         }
+
+        internal static bool CursorInHudGrace(Rect panel, Rect strip, Point? current, Point last, bool over) =>
+            (current.HasValue || over) && CursorInGrace(panel, strip, current ?? last, LEAVE_GRACE_MARGIN_DIP);
 
         /// <summary>An element's bounds in this window's coordinate space, honouring render transforms
         /// (the panel rides a TranslateTransform). An empty rect when the element is not laid out.
