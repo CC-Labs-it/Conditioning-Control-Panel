@@ -677,7 +677,6 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.BrowserVideoSurface.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
-                RecordInstallDate(Settings);
                 // WPF App.xaml.cs:2928: launch only sweeps retention on disk (creates nothing, arms no timer);
                 // the ledger starts when awareness turns on. No observer feeds it on this head yet.
                 InstallPrivacyLedger(new ConditioningControlPanel.Services.Awareness.ActivityLedger());
@@ -690,6 +689,8 @@ namespace ConditioningControlPanel.Avalonia
                         Settings.Save();
                 }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "Session settings heal failed (non-fatal)"); }
+                // WPF App.xaml.cs:2587-2596: heal before this save can offer a cloud backup.
+                RecordInstallDate(Settings);
                 // WPF App.xaml.cs:2571-2577: the installer's Content Folder pick (Windows), then the custom
                 // folder's subdirs (#391), before anything resolves the assets folder.
                 Platform.InstallerAssetsPath.Apply(Settings);
