@@ -16,7 +16,7 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
 {
     private readonly object _audioGate = new();
     private readonly HashSet<Action> _audioStops = new();
-    private bool _retired;
+    private volatile bool _retired;
 
     // EnhancementEngine.Stop calls this on unbind and panic.
     public void ResetOverlayBands()
@@ -89,7 +89,7 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
                 break;
             case TriggerEffectAction effect when effect.EffectType == EffectTypes.Flash && effect.Phase != EffectPhase.Stop:
                 // WPF RealActionDispatcher.cs:188-194 -> FlashService.cs:793: one picture for the authored duration.
-                Dispatcher.UIThread.Post(() => { if (Host is { } h) Views.Overlays.FlashOverlay.TriggerOnce(h, amount: 1, durationMs: effect.DurationMs); }); break;
+                Dispatcher.UIThread.Post(() => { if (!ct.IsCancellationRequested && !_retired && Host is { } h) Views.Overlays.FlashOverlay.TriggerOnce(h, amount: 1, durationMs: effect.DurationMs); }); break;
             case TriggerEffectAction effect when effect.EffectType == EffectTypes.Bubble: BubbleBurst(effect.DurationMs, ct); break;
             case TriggerEffectAction effect when effect.EffectType == EffectTypes.Subliminal && effect.Phase != EffectPhase.Stop && !string.IsNullOrWhiteSpace(effect.Text):
                 CoreSubliminal.CustomShowProvider?.Invoke(effect.Text); break;
