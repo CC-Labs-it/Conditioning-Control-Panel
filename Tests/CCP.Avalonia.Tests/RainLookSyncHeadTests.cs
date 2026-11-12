@@ -12,8 +12,8 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
-using ConditioningControlPanel.Services.BackRoom;
 using ConditioningControlPanel.Services.Companion.Rain;
+using ConditioningControlPanel.Services.Prizes;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -47,18 +47,20 @@ public sealed class RainLookSyncHeadTests
     {
         var s = CoreSettings.Current;
         var old = (s.UnifiedId, s.OfflineMode, s.RainLook, s.RainPackHash, s.RainLookPushOwed, s.RainLookAgreedUtc);
-        var (sink, apply, account) = (ProviderSubscription.PrizesSink, BackRoomApi.DefaultApplyPrizes, CoreAccount.UnifiedUserId);
-        var (client, root, secrets) = (RainLookSyncHead.Client, RainLookSyncHead.PackRoot, CoreSecrets.RetrieveProvider);
+        var (client, root, secrets, grants) = (RainLookSyncHead.Client, RainLookSyncHead.PackRoot, CoreSecrets.RetrieveProvider, RainLookSyncHead.Grants);
+        var account = CoreAccount.UnifiedUserId;
         var dir = Path.Combine(Path.GetTempPath(), "ccp-rainhead-" + Guid.NewGuid().ToString("N"));
         try
         {
-            PrizeOwnership.ResetHeld();
             RainLookSyncHead.ForgetPulled();
             (s.UnifiedId, s.OfflineMode) = ("rain-u1", false);
             CoreSecrets.RetrieveProvider = n => n == CoreSecrets.AuthToken ? "tok-1" : null;
             (s.RainLook, s.RainPackHash, s.RainLookPushOwed, s.RainLookAgreedUtc) = ("", "", false, null);
-            CoreAccount.UnifiedUserId = "rain-u1";
-            PrizeOwnership.Seed();
+            // This test's own ownership service and feed: the app's shared grants are never touched.
+            var ownership = new OwnershipService(() => "rain-u1", null, a => a());
+            var sink = PrizeOwnership.SinkFor(new PrizesFeed(() => ownership, () => "rain-u1", a => a()), ownership);
+            CoreAccount.UnifiedUserId = "rain-u1";   // the receipt pulls only for the signed-in account
+            RainLookSyncHead.Grants = () => ownership.Grants;
             var wire = new Wire();
             RainLookSyncHead.Client = new RainLookSync(new HttpClient(wire), RainLookSyncHead.Hooks("https://proxy.test"));
             var expected = owned ? RainLookCodec.Normalize(ServerLook)
@@ -66,11 +68,11 @@ public sealed class RainLookSyncHeadTests
             RainLookSyncHead.PackRoot = dir;
             WritePack(dir, RainLookHash.Compute(expected));
 
-            ProviderSubscription.PrizesSink!("rain-u1", "other", new PrizesBlock { Revision = 1, Grants = new() }, "Discord validate");
+            sink("rain-u1", "other", new PrizesBlock { Revision = 1, Grants = new() }, "Discord validate");
             Dispatcher.UIThread.RunJobs();
             Assert.Empty(wire.Seen);   // a block answered for another record is no readiness
 
-            ProviderSubscription.PrizesSink!("rain-u1", "rain-u1",
+            sink("rain-u1", "rain-u1",
                 new PrizesBlock { Revision = 2, Grants = owned ? new() { Grant } : new() }, "Patreon validate");
             for (var i = 0; i < 200 && s.RainLookAgreedUtc == null; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(10); }
 
@@ -83,7 +85,7 @@ public sealed class RainLookSyncHeadTests
             Assert.False(s.RainLookPushOwed);
             Assert.Equal(new DateTime(2026, 11, 1, 12, 0, 0, DateTimeKind.Utc), s.RainLookAgreedUtc);
 
-            ProviderSubscription.PrizesSink!("rain-u1", "rain-u1", null, "Discord validate");
+            sink("rain-u1", "rain-u1", null, "Discord validate");
             Dispatcher.UIThread.RunJobs();
             Assert.Single(wire.Seen);   // once per account per run
         }
@@ -92,9 +94,7 @@ public sealed class RainLookSyncHeadTests
             RainLookSyncHead.ForgetPulled();
             RainLookSyncHead.Client = client;
             RainLookSyncHead.PackRoot = root;
-            PrizeOwnership.ResetHeld();
-            ProviderSubscription.PrizesSink = sink;
-            BackRoomApi.DefaultApplyPrizes = apply;
+            RainLookSyncHead.Grants = grants;
             CoreAccount.UnifiedUserId = account;
             CoreSecrets.RetrieveProvider = secrets;
             (s.UnifiedId, s.OfflineMode, s.RainLook, s.RainPackHash, s.RainLookPushOwed, s.RainLookAgreedUtc) = old;
@@ -107,9 +107,10 @@ public sealed class RainLookSyncHeadTests
     {
         var s = CoreSettings.Current;
         var old = (s.RainLook, s.RainPackHash, s.RainLookPushOwed, s.RainLookAgreedUtc);
-        var root = RainLookSyncHead.PackRoot;
+        var (root, grants) = (RainLookSyncHead.PackRoot, RainLookSyncHead.Grants);
         try
         {
+            RainLookSyncHead.Grants = () => Array.Empty<string>();
             RainLookSyncHead.PackRoot = Path.Combine(Path.GetTempPath(), "ccp-rainhead-missing-" + Guid.NewGuid().ToString("N"));
             (s.RainPackHash, s.RainLookPushOwed) = ("stale", true);
             RainLookSyncHead.Adopt("{\"rev\":1,\"items\":{\"hair\":\"" + Hair + "\"},\"colors\":{}}", null);
@@ -119,7 +120,7 @@ public sealed class RainLookSyncHeadTests
         }
         finally
         {
-            RainLookSyncHead.PackRoot = root;
+            (RainLookSyncHead.PackRoot, RainLookSyncHead.Grants) = (root, grants);
             (s.RainLook, s.RainPackHash, s.RainLookPushOwed, s.RainLookAgreedUtc) = old;
         }
     }

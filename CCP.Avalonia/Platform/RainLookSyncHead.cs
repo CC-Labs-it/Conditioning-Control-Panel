@@ -39,6 +39,9 @@ internal static class RainLookSyncHead
         set { _built = true; _client = value; }
     }
 
+    /// <summary>The held grants the clamp reads. Tests point it at their own ownership service (and restore it).</summary>
+    internal static Func<IEnumerable<string>> Grants = () => PrizeOwnership.Grants;
+
     /// <summary>Test cleanup: the next pull is a first pull again.</summary>
     internal static void ForgetPulled() => _pulledFor = null;
 
@@ -77,7 +80,7 @@ internal static class RainLookSyncHead
     {
         var s = CoreSettings.Current;
         var look = RainLookClamp.Clamp(serverLook,
-            new RainItemAccess(RainItemManifest.Shipped, new RainGrantSet(PrizeOwnership.Grants), new Progress()));
+            new RainItemAccess(RainItemManifest.Shipped, new RainGrantSet(Grants()), new Progress()));
         s.RainLook = look;
         s.RainPackHash = RainLookSync.PackFor(look, hash => RainPackReader.TryRead(PackRoot, hash) != null);
         s.RainLookPushOwed = false;
