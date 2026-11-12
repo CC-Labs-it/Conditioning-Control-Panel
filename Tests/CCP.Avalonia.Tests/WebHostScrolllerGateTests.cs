@@ -18,6 +18,45 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed class WebHostScrolllerGateTests
 {
+    [Fact]
+    public Task DocumentStartFinishesBeforeGateAndOldEngineCannotReleaseNewEngine() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var pending = new TaskCompletionSource();
+        var web = new WebHost { WindowsDocumentStartScript = "test", DocumentStartInstaller = script =>
+        {
+            Assert.Equal("test", script);
+            return pending.Task;
+        }};
+        web.NewScrolllerEngine();
+        var first = web.PrepareScrolllerGate(1, true);
+        Assert.Null(web.ScrolllerGate);
+        web.NewScrolllerEngine();
+        pending.SetResult();
+        await first;
+        Assert.Null(web.ScrolllerGate);
+        await web.PrepareScrolllerGate(2, true);
+        Assert.True(web.ScrolllerGate);
+    });
+
+    [Fact]
+    public Task FailedDocumentStartDoesNotLeaveNavigationHeld() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var web = new WebHost { WindowsDocumentStartScript = "test", DocumentStartInstaller = _ => Task.FromException(new InvalidOperationException()) };
+        web.NewScrolllerEngine();
+        await web.PrepareScrolllerGate(1, true);
+        Assert.True(web.ScrolllerGate);
+    });
+
+    [Fact]
+    public Task StalledDocumentStartDoesNotLeaveNavigationHeld() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var pending = new TaskCompletionSource();
+        var web = new WebHost { WindowsDocumentStartScript = "test", DocumentStartInstaller = _ => pending.Task };
+        web.NewScrolllerEngine();
+        await web.PrepareScrolllerGate(1, true).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(web.ScrolllerGate);
+    });
+
     private static readonly Uri Page = new("https://scrolller.com/r/x");
     private static readonly Uri Media = new("https://images.scrolller.com/a/b.jpg");
 

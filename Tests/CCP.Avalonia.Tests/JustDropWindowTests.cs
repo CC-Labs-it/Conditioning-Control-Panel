@@ -128,6 +128,9 @@ public sealed class JustDropWindowTests
         Assert.Equal(tab, shell.CurrentTab);              // a window, not a tab
         Assert.Equal("https://app.cclabs.app/dashboard/express", w!.PageUrl!.ToString());   // signed out: no handoff
         Assert.True(w.Web.InjectCarrier);                 // the remote page gets the shared chrome.webview carrier
+        Assert.Equal(GameWindow.JustDropEscapeScript, w.Web.WindowsDocumentStartScript);
+        Assert.Contains("keydown", w.Web.WindowsDocumentStartScript);
+        Assert.Contains("ccp-host-escape", w.Web.WindowsDocumentStartScript);
         Assert.False(w.Web.AllowNavigation!(new Uri("https://evil.example/")));
         Assert.True(w.Web.AllowNavigation!(new Uri("https://app.cclabs.app/express/play?order=A")));
 

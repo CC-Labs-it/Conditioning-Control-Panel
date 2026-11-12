@@ -478,6 +478,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>Count of <see cref="Navigate"/> calls the sandbox kept from the engine.</summary>
         internal int RefusedNavigations { get; private set; }
 
+        // A caller sets this before the native adapter is attached. WebView2 installs it on each
+        // recreated core before the held first navigation; other engines retain the load fallback.
+        internal string? WindowsDocumentStartScript { get; set; }
+        internal Func<string, Task>? DocumentStartInstaller { get; set; }
+
+        internal async Task PrepareScrolllerGate(int engine, bool gated)
+        {
+            if (engine != _scrolllerEngine) return;
+            if (WindowsDocumentStartScript is { } script && (OperatingSystem.IsWindows() || DocumentStartInstaller != null))
+            {
+                try
+                {
+                    if (DocumentStartInstaller is { } install) await install(script).WaitAsync(TimeSpan.FromSeconds(5));
+                    else if (OperatingSystem.IsWindows()) await InstallWindowsDocumentStart(script).WaitAsync(TimeSpan.FromSeconds(5));
+                }
+                catch (Exception ex) { Log.Warning("WebHost: document-start script failed: {Error}", ex.Message); }
+            }
+            OnScrolllerGate(engine, gated);
+        }
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+        private async Task InstallWindowsDocumentStart(string script)
+        {
+            if (_web?.TryGetPlatformHandle() is not IWindowsWebView2PlatformHandle win || win.CoreWebView2 == IntPtr.Zero)
+                throw new InvalidOperationException("WebView2 core unavailable");
+            var core = Microsoft.Web.WebView2.Core.CoreWebView2.CreateFromComICoreWebView2(win.CoreWebView2);
+            await core.AddScriptToExecuteOnDocumentCreatedAsync(script);
+        }
+
         private bool _explicitNavigate;
 
         /// <summary>The Scrolller gate on this engine: null = not reported yet (every navigation held), true = gated,
@@ -499,7 +529,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _loadedOnThisEngine = false;
             if (_panicBlank) NavigatePanicBlank();
             var engine = ++_scrolllerEngine;
-            return gated => OnScrolllerGate(engine, gated);
+            return gated => _ = PrepareScrolllerGate(engine, gated);
         }
 
         /// <summary>One engine's gate report (UI thread): the held page loads now. A rebuilt engine already carries
