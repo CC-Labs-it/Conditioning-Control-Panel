@@ -208,6 +208,8 @@ internal static class X11PanicKey
     {
         var ev = Marshal.AllocHGlobal(XEventSize);
         string? boundName = null;
+        bool escapeDown = false;
+        var escapeCode = XKeysymToKeycode(display, KeysymOf("Escape"));
         void Resolve()
         {
             var name = currentKey();
@@ -226,6 +228,7 @@ internal static class X11PanicKey
                 {
                     // Layout/keymap change: refresh Xlib's cache and re-resolve the keycode.
                     XRefreshKeyboardMapping(ev);
+                    escapeCode = XKeysymToKeycode(display, KeysymOf("Escape"));
                     boundName = null;
                     Resolve();
                     continue;
@@ -233,14 +236,21 @@ internal static class X11PanicKey
                 if (Marshal.ReadInt32(ev) != GenericEvent || Marshal.ReadInt32(ev, CookieExtension) != opcode) continue;
                 if (!XGetEventData(display, ev)) continue;
                 int keycode = -1;
+                ulong eventTime = 0;
                 var evType = Marshal.ReadInt32(ev, CookieEvType);
                 if (evType is XI_RawKeyPress or XI_RawKeyRelease or XI_RawButtonPress)
-                    keycode = Marshal.ReadInt32(Marshal.ReadIntPtr(ev, CookieData), RawDetail);
+                {
+                    var data = Marshal.ReadIntPtr(ev, CookieData);
+                    keycode = Marshal.ReadInt32(data, RawDetail);
+                    if (evType is XI_RawKeyPress or XI_RawKeyRelease)
+                        eventTime = (ulong)Marshal.ReadInt64(data, 40); // XIRawEvent.time
+                }
                 XFreeEventData(display, ev);
                 if (keycode < 0) continue;
                 if (evType == XI_RawButtonPress) { RouteCountdownPress(evType, keycode); continue; }
 
                 Resolve();
+                RouteVideoEscape(evType == XI_RawKeyPress, keycode, escapeCode, ref escapeDown, () => QueueVideoEscape(eventTime));
                 if (evType == XI_RawKeyRelease) { Route(false, keycode, onPress); continue; }
                 Route(true, keycode, onPress);
                 // Preserve the base safety order: panic posts before countdown completion.
@@ -257,6 +267,29 @@ internal static class X11PanicKey
                 Log.Warning(ex, "Panic key: listener event failed");
             }
         }
+    }
+
+    // XI2 raw events reach the listener even when another X11 client has focus. Keep this
+    // separate from the panic binding: panic always takes precedence, including duplicate downs.
+    internal static void RouteVideoEscape(bool press, int code, int escapeCode, ref bool down, Action queue)
+    {
+        if (escapeCode == 0 || code != escapeCode) return;
+        if (!press) { down = false; return; }
+        if (down) return;
+        down = true;
+        if (code != _boundCode) queue();
+    }
+
+    internal static void QueueVideoEscape(ulong? timestamp = null)
+    {
+        var video = Views.Overlays.MandatoryVideoOverlay.Instance;
+        var generation = video.EscapeGeneration;
+        if (!video.WantsGlobalEscape || generation != video.EscapeGeneration) return;
+        global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (generation == video.EscapeGeneration && !EscapeClaim.SurfaceOwnsEscape(timestamp))
+                Win32Input.EscapeDoor();
+        });
     }
 
     // WPF/Avalonia Key names (the setting stores Key.ToString()) whose X keysym name differs.
