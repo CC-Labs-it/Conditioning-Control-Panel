@@ -249,7 +249,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state.Heat = Math.Min(1.0, _state.Heat + 0.05);
                 App.Achievements?.TrackBubblePopped();
                 ChaosLessons.Tick("freeze_trigger");
-                _state.PushEvent("❄ frozen. the field holds");
+                _state.PushEvent("❄ " + Loc.Get("chaos_freeze_event"));
                 CheckComboMilestone();
                 ActivateFreeze();
                 return;
@@ -790,9 +790,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             _freezeRemainingSec = 3.5;
             BubbleOverlay.Field.FreezeChaos = true;
+            BubbleOverlay.Field.FreezeVibrateRemainingMs = 200;
             EffectPayload.GlobalDurationMult = 2.5;
             var edge = Color.FromRgb(150, 210, 255);
-            ChaosEffectBannerOverlay.Show("freeze", "Freeze", edge);
+            ChaosEffectBannerOverlay.Show("freeze", Loc.Get("chaos_freeze_banner"), edge);
             if (_state?.Config.ColorFlashesEnabled == true) { _fx?.FreezeBurst(edge); _fx?.BeginEdgeHold(edge, 0.5); }
             Shake(0.3, 200);
         }
@@ -802,6 +803,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!BubbleOverlay.Field.FreezeChaos) return;
             _freezeRemainingSec = 0;
             BubbleOverlay.Field.FreezeChaos = false;
+            BubbleOverlay.Field.ClearFreezeVisuals();
             EffectPayload.GlobalDurationMult = 1.0;
             ChaosEffectBannerOverlay.End("freeze");
             _fx?.EndEdgeHold();

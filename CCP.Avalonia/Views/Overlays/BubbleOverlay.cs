@@ -331,6 +331,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             Field.HoldChaos = false;
             Field.FreezeChaos = false;
+            Field.ClearFreezeVisuals();
             ChaosRipples.Clear();
             _hoverScreen = -1;
             _chaosPopped = null;
@@ -665,6 +666,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             private readonly BubbleOverlayWindow _w;
             public Layer(BubbleOverlayWindow w) { _w = w; IsHitTestVisible = false; }
 
+            private static readonly IBrush FreezeAura = new RadialGradientBrush
+            {
+                Center = RelativePoint.Center, GradientOrigin = RelativePoint.Center,
+                GradientStops = { new GradientStop(Color.FromArgb(0, 150, 210, 255), 0.30),
+                    new GradientStop(Color.FromArgb(190, 150, 210, 255), 0.66),
+                    new GradientStop(Color.FromArgb(0, 150, 210, 255), 1.0) }
+            };
+
             public override void Render(DrawingContext dc)
             {
                 var k = _w.K;
@@ -681,6 +690,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     using (dc.PushTransform(m))
                     using (dc.PushOpacity(Math.Clamp(b.Fade * b.MotionFade, 0, 1)))
                     {
+                        if (b.Spec != null && BubbleOverlay.Field.FreezeChaos)
+                        {
+                            using (dc.PushOpacity(BubbleOverlay.Field.FreezeAuraOpacity))
+                                dc.DrawEllipse(FreezeAura, null, new Point(cx, cy), (size + 6 * k) / 2, (size + 6 * k) / 2);
+                        }
                         if (b.Spec != null)   // chaos bubble: its variant tint under the sprite
                         {
                             var (fill, pen) = TintPaint(b.Spec.Tint);

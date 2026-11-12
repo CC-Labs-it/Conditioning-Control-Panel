@@ -41,6 +41,50 @@ public sealed class ChaosRunHostTests
         ChaosMeta.Init();
     }
 
+    [Theory]
+    [InlineData("en", "frozen. the field holds", "Freeze")]
+    [InlineData("de", "eingefroren. das Feld hält still", "Einfrieren")]
+    [InlineData("es", "congelado. el campo se detiene", "Congelar")]
+    [InlineData("fr", "gelé. le champ reste immobile", "Gel")]
+    [InlineData("it", "congelato. il campo si ferma", "Gelo")]
+    [InlineData("ja", "凍結。フィールドが止まる", "凍結")]
+    [InlineData("ko", "얼었다. 필드가 멈춘다", "동결")]
+    [InlineData("pt-BR", "congelado. o campo para", "Congelar")]
+    [InlineData("ru", "замерло. поле застыло", "Заморозка")]
+    [InlineData("zh-CN", "冻结。场域静止", "冻结")]
+    public async Task Freeze_pickup_uses_the_selected_language(string language, string eventText, string bannerText)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var localization = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+            var previousLanguage = localization.CurrentLanguage;
+            var previousSkip = ChaosEffectBannerOverlay.SkipPlatformChecksForTests;
+            try
+            {
+                localization.SetLanguage(language);
+                ChaosEffectBannerOverlay.SkipPlatformChecksForTests = true;
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                BubbleOverlay.PopChaos(BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsFreeze = true, SizePx = 100 }));
+                Assert.Contains("❄ " + eventText, ChaosRunHost.State!.RecentEvents);
+                Assert.Equal(bannerText, Assert.Single(ChaosEffectBannerOverlay.Active!.Strip.Row, e => e.Id == "freeze").Text);
+                Assert.Equal(200, BubbleOverlay.Field.FreezeVibrateRemainingMs);
+                Assert.True(BubbleOverlay.Field.FreezeAuraOpacity > 0);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                Assert.Equal(0, BubbleOverlay.Field.FreezeAuraOpacity);
+                Assert.Equal(0, BubbleOverlay.Field.FreezeVibrateRemainingMs);
+                ChaosEffectBannerOverlay.SkipPlatformChecksForTests = previousSkip;
+                localization.SetLanguage(previousLanguage);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     [Fact]
     public async Task Freeze_pickup_holds_field_allows_free_snap_and_thaws()
     {
