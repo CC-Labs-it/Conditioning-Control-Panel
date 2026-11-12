@@ -1,4 +1,5 @@
 {
+  "chaos_event_reroll": "🎲 neu gezogen", "chaos_event_skip": "♥ widerstanden: +1 Widerstand", "chaos_event_shower": "Willkommensschauer: Leckereien von oben",
   "scheduler_started_title": "Zeitplan aktiv",
   "scheduler_started_body": "Sitzung automatisch nach Zeitplan gestartet.",
   "scheduler_ended_title": "Zeitplan",

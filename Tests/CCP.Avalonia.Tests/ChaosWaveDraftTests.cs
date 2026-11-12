@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using Avalonia.Threading;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Localization;
 using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -90,7 +91,10 @@ public class ChaosWaveDraftTests
                 Assert.False(ChaosWaveTimerWindow.Active!.Pill.IsVisible);
                 var reroll = overlay.FindControl<Button>("BtnReroll")!;
                 Assert.True(reroll.IsVisible);
-                reroll.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                var language = LocalizationManager.Instance.CurrentLanguage;
+                try { LocalizationManager.Instance.SetLanguage("fr"); reroll.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                    Assert.Contains("🎲 nouvelle donne", state.RecentEvents); }
+                finally { LocalizationManager.Instance.SetLanguage(language); }
                 Assert.Equal(0, state.RerollsLeft);
                 Assert.False(reroll.IsVisible);
                 Assert.Equal(0, BubbleOverlay.ChaosCount);
@@ -128,7 +132,7 @@ public class ChaosWaveDraftTests
         });
     }
     [Fact]
-    public async Task Stopping_at_the_draft_cancels_its_pending_pick()
+    public async Task Stopping_at_the_draft_cancels_pick_and_start_boon_waits_for_first_go()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
@@ -148,6 +152,16 @@ public class ChaosWaveDraftTests
                 Assert.True(overlay.FindControl<Border>("ResultsPanel")!.IsVisible);
                 Assert.False(overlay.FindControl<Border>("DraftPanel")!.IsVisible);
                 Assert.False(BubbleOverlay.Field.HoldChaos);
+                ChaosRunHost.ForceShutdown();
+                ChaosMeta.State.EquippedStartBoon = "welcome_shower";
+                ChaosRunHost.StartRun(new ChaosRunConfig());
+                Assert.Empty(BubbleOverlay.Field.Bubbles);
+                ChaosRunHost.Overlay!.FinishCountdown();
+                Assert.Equal(6, BubbleOverlay.ChaosCount);
+                ChaosRunHost.ForceShutdown();
+                ChaosRunHost.StartRun(new ChaosRunConfig { ScriptedFirstRun = true });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                Assert.Equal(0, BubbleOverlay.ChaosCount);
             }
             finally { ChaosRunHost.ForceShutdown(); }
             });
@@ -167,7 +181,10 @@ public class ChaosWaveDraftTests
                 ChaosMeta.State.LessonsComplete.Add("silk_touch");
                 var overlay = BeginDraft();
                 var boon = pick == 0 ? null : ChaosBoonPool.All.First(b => b.IsCurse == (pick == 2));
-                Choose(overlay, boon);
+                var language = LocalizationManager.Instance.CurrentLanguage;
+                try { LocalizationManager.Instance.SetLanguage("fr"); Choose(overlay, boon);
+                    if (pick == 0) Assert.Contains("♥ refus : +1 résistance", ChaosRunHost.State!.RecentEvents); }
+                finally { LocalizationManager.Instance.SetLanguage(language); }
                 Assert.Equal(draft, ChaosLessons.Progress("draft4"));
                 Assert.Equal(surrender, ChaosLessons.Progress("surrender"));
             });
@@ -186,7 +203,10 @@ public class ChaosWaveDraftTests
                 var overlay = BeginDraft();
                 Choose(overlay, ChaosBoonPool.All.Single(b => b.Id == "welcome_shower"));
                 Assert.Empty(BubbleOverlay.Field.Bubbles);
-                overlay.FinishCountdown();
+                var language = LocalizationManager.Instance.CurrentLanguage;
+                try { LocalizationManager.Instance.SetLanguage("fr"); overlay.FinishCountdown();
+                    Assert.Contains("pluie de bienvenue : friandises venues du ciel", ChaosRunHost.State!.RecentEvents); }
+                finally { LocalizationManager.Instance.SetLanguage(language); }
                 var bubbles = BubbleOverlay.Field.Bubbles.ToArray();
                 Assert.Equal(6, bubbles.Length);
                 Assert.All(bubbles, b =>
@@ -277,7 +297,7 @@ public class ChaosWaveDraftTests
     }
 
     [Fact]
-    public async Task Fresh_meta_restores_live_state_and_all_slot_files()
+    public async Task Fresh_meta_restores_all_slots_and_languages_have_event_keys()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
@@ -286,6 +306,11 @@ public class ChaosWaveDraftTests
             var before = paths.Select(p => File.Exists(p) ? File.ReadAllBytes(p) : null).ToArray();
             InFreshMeta(() => { ChaosFirstTimes.TryAward(ChaosFirstTimes.Whisper); });
             Assert.Same(original, ChaosMeta.State);
+            foreach (var (code, _, _) in LocalizationManager.AvailableLanguages)
+            {
+                var strings = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Localization", "Languages", code + ".json")));
+                foreach (var key in new[] { "chaos_event_reroll", "chaos_event_skip", "chaos_event_shower" }) Assert.False(string.IsNullOrWhiteSpace((string?)strings[key]));
+            }
             for (int i = 0; i < paths.Length; i++)
                 Assert.Equal(before[i], File.Exists(paths[i]) ? File.ReadAllBytes(paths[i]) : null);
             return Task.CompletedTask;

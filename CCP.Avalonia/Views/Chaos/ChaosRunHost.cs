@@ -184,6 +184,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _spawnTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };   // WPF :510
             _spawnTimer.Tick += (_, _) => SpawnTick();
             _spawnTimer.Start();
+            if (_state.WelcomeShowerEnabled) SpawnWelcomeShower(); // WPF ChaosModeService.cs:437-438
         }
 
         /// <summary>WPF SpawnTick (:1101), the treat half. Re-times its own timer like WPF.</summary>
@@ -588,7 +589,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (!_draftPaused || _state == null || _state.RerollsLeft <= 0) return null;
             _state.RerollsLeft--;
-            _state.PushEvent("🎲 tempted fate again");
+            _state.PushEvent(Loc.Get("chaos_event_reroll"));
             return (DraftOptions(), _state.RerollsLeft);
         }
 
@@ -598,7 +599,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (boon == null)
             {
                 _state.Shields++;
-                _state.PushEvent("♥ resisted → +1 resistance");
+                _state.PushEvent(Loc.Get("chaos_event_skip"));
             }
             else
             {
@@ -657,7 +658,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     BubbleOverlay.SpawnChaos(spec);
                 }
                 BubbleOverlay.PlayChime(0.25f);
-                _state.PushEvent("welcome shower: treats from above");
+                _state.PushEvent(Loc.Get("chaos_event_shower"));
             }
             catch (Exception ex) { Log.Debug("SpawnWelcomeShower: {E}", ex.Message); }
         }

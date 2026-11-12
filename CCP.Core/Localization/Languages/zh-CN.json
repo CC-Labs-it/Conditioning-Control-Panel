@@ -1,4 +1,5 @@
 {
+  "chaos_event_reroll": "🎲 重新抽取", "chaos_event_skip": "♥ 抵抗：抗性 +1", "chaos_event_shower": "欢迎之雨：奖励从天而降",
   "scheduler_started_title": "计划已启用",
   "scheduler_started_body": "会话已按计划自动开始。",
   "scheduler_ended_title": "计划",

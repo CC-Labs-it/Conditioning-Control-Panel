@@ -1,4 +1,5 @@
 {
+  "chaos_event_reroll": "🎲 nouvelle donne", "chaos_event_skip": "♥ refus : +1 résistance", "chaos_event_shower": "pluie de bienvenue : friandises venues du ciel",
   "scheduler_started_title": "Planification active",
   "scheduler_started_body": "Séance démarrée automatiquement selon le planning.",
   "scheduler_ended_title": "Planification",

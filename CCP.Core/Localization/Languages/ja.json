@@ -1,4 +1,5 @@
 {
+  "chaos_event_reroll": "🎲 引き直した", "chaos_event_skip": "♥ 拒否: 耐性 +1", "chaos_event_shower": "歓迎のシャワー: ごほうびが降る",
   "scheduler_started_title": "スケジュール有効",
   "scheduler_started_body": "スケジュールに従ってセッションを自動的に開始しました。",
   "scheduler_ended_title": "スケジュール",
