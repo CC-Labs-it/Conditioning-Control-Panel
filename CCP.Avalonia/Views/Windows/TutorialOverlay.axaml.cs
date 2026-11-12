@@ -737,9 +737,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             return $"Step {CoreTutorial.CurrentStepIndex + 1} of {CoreTutorial.TotalSteps}";
         }
 
-        private void NextStep() => CoreTutorial.Next();
-        private void PreviousStep() => CoreTutorial.Previous();
-        private void SkipTutorial() => CoreTutorial.Skip();
+        private void NextStep() { if (!_closed) CoreTutorial.Next(); }
+        private void PreviousStep() { if (!_closed) CoreTutorial.Previous(); }
+        private void SkipTutorial() { if (!_closed) CoreTutorial.Skip(); }
 
         /// <summary>
         /// "Skip step", and the entry point an auto-advance trigger would use. Once per step, then
@@ -750,7 +750,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// </summary>
         private void Advance()
         {
-            if (_advanceFiredThisStep) return;
+            if (_closed || _advanceFiredThisStep) return;
             _advanceFiredThisStep = true;
             UnsubscribeAdvanceTrigger();
             var step = _step;
@@ -765,6 +765,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// Falls back to the drawn step when no tour is running (the render's sample card).</summary>
         private void InvokeFollowUp(int which)
         {
+            if (_closed) return;
             var step = (_live ? CoreTutorial.CurrentStep : null) ?? _step;
             if (step is null) return;
             var action = which switch
@@ -780,6 +781,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// hands it to the shell on Windows.</summary>
         private void BtnSupport_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
+            if (_closed) return;
             try
             {
                 Platform.ExternalOpener.Open("https://linktr.ee/CodeBambi");

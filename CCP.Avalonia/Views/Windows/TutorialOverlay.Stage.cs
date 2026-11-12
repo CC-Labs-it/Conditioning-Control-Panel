@@ -106,7 +106,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             CoreTutorial.Finished -= OnSeamFinished;
             if (fade && _stage != null)
             {
-                _stage.IsHitTestVisible = false;
                 _stage.Transitions = new Transitions
                 {
                     new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(200) }

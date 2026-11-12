@@ -145,6 +145,35 @@ public sealed class TutorialStageTests
     });
 
     [Fact]
+    public Task FadingStageKeepsItsInputRegionAndIgnoresOldCardActions() => WithHost(async (host, overlay, target, outside, _) =>
+    {
+        var outsideClicks = 0;
+        var targetClicks = 0;
+        outside.Click += (_, _) => outsideClicks++;
+        target.Click += (_, _) => targetClicks++;
+        var oldSkip = overlay.StageRoot!.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "BtnSkip");
+        CoreTutorial.Skip();
+        Assert.True(overlay.IsOnStage);
+
+        var outsidePoint = outside.TranslatePoint(new Point(outside.Bounds.Width / 2, outside.Bounds.Height / 2), host)!.Value;
+        var targetPoint = target.TranslatePoint(new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), host)!.Value;
+        host.MouseDown(outsidePoint, MouseButton.Left);
+        host.MouseUp(outsidePoint, MouseButton.Left);
+        host.MouseDown(targetPoint, MouseButton.Left);
+        host.MouseUp(targetPoint, MouseButton.Left);
+        Assert.Equal(0, outsideClicks);
+        Assert.Equal(1, targetClicks);
+
+        TutorialHead.Service.Start(TutorialType.DeeperEditorInteractiveHTPart2);
+        oldSkip.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Assert.True(CoreTutorial.IsActive);
+        await Task.Delay(250);
+        Assert.False(overlay.IsOnStage);
+        Click(host, outside);
+        Assert.Equal(1, outsideClicks);
+    });
+
+    [Fact]
     public Task PanicDetachesImmediately() => WithHost((_, overlay, _, _, _) =>
     {
         TutorialHead.OnPanic();
@@ -227,16 +256,17 @@ public sealed class TutorialStageTests
     });
 
     [Fact]
-    public Task HostEscapeEndsTheTourWithoutTakingFocus() => WithHost((host, overlay, target, _, _) =>
+    public Task HostEscapeEndsTheTourWithoutTakingFocus() => WithHost(async (host, overlay, target, _, _) =>
     {
         target.Focus();
         Dispatcher.UIThread.RunJobs();
         Assert.Same(target, host.FocusManager?.GetFocusedElement()); // the card did not pull focus back
         host.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, "");
-        Dispatcher.UIThread.RunJobs();
         Assert.False(CoreTutorial.IsActive);
         Assert.True(overlay.IsOnStage);
         Assert.Same(target, host.FocusManager?.GetFocusedElement()); // Escape reached the host while target kept focus
+        await Task.Delay(700); // dispatcher may be delayed beyond the fade duration
+        Assert.False(overlay.IsOnStage);
     });
 
     [Fact]
