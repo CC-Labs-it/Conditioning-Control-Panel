@@ -242,6 +242,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             var spec = b.Spec;
             if (_state == null || spec == null || _manualPaused || _lessonCardPaused) return;
+            EffectLabel(b);   // WPF BubbleService.cs:4710-4712: label before the pickup or treat callback
             if (spec.IsFreeze)
             {
                 _state.Score += 140 * _state.TotalMult;
@@ -254,7 +255,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ActivateFreeze();
                 return;
             }
-            EffectLabel(b);   // WPF Bubble.Pop: ShowChaosEffectLabel before onBenignPop (:4685)
             CountRegenPop();   // WPF ChaosModeService :1768
             if (spec.IsPrism)
             {

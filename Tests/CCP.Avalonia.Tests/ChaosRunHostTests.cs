@@ -86,6 +86,34 @@ public sealed class ChaosRunHostTests
     }
 
     [Fact]
+    public async Task Freeze_catch_shows_its_effect_label_before_freezing_the_field()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var previous = ChaosRunHost.PopText;
+            var labels = new List<(double X, double Y, string Word, global::Avalonia.Media.Color Color, bool Frozen)>();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                ChaosRunHost.PopText = (x, y, word, color) => labels.Add((x, y, word, color, BubbleOverlay.Field.FreezeChaos));
+                var bubble = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                    { IsFreeze = true, VariantId = "bambifreeze", SizePx = 100, Tint = 0xFF8AE6FF });
+                var x = bubble.CenterX;
+                var y = bubble.CenterY;
+                BubbleOverlay.Press(bubble, x, y);
+                var label = Assert.Single(labels);
+                Assert.Equal((x, y, "FREEZE", global::Avalonia.Media.Color.FromUInt32(0xFF8AE6FF), false), label);
+                Assert.True(BubbleOverlay.Field.FreezeChaos);
+            }
+            finally { ChaosRunHost.ForceShutdown(); ChaosRunHost.PopText = previous; }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task Freeze_pickup_holds_field_allows_free_snap_and_thaws()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
