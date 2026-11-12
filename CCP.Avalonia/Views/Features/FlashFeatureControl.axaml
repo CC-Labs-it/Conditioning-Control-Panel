@@ -264,7 +264,7 @@
                             <!-- Flashes v2 (Back Room prizes). Collapsed while nothing v2 is owned; ownership
                                  is PrizeOwnership's word, never a setting; the Get it row keeps it open while
                                  nothing is owned. Owned prizes expose motion, rounded corners, draggable and
-                                 Shatter (WPF order). Jackpot Remix remains unported. -->
+                                 Shatter (WPF order). -->
                             <Border x:Name="BoxFlashV2" IsVisible="False" Margin="0,10,0,2"
                                     CornerRadius="10" Padding="12,8,12,6" BorderThickness="1"
                                     Background="#14FFE08A" BorderBrush="#33FFE08A"
@@ -347,6 +347,11 @@
                                                    Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
                                         <CheckBox Grid.Column="1" x:Name="ChkFlashShatter"
                                                   Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
+                                    </Grid>
+                                    <Grid x:Name="RowJackpotRemix" Height="34" IsVisible="False" ToolTip.Tip="{loc:Str tooltip_jackpot_remix}">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="{loc:Str setting_jackpot_remix}" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                        <CheckBox Grid.Column="1" x:Name="ChkJackpotRemix" Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </StackPanel>
                             </Border>
