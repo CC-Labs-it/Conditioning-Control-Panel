@@ -25,7 +25,7 @@ internal sealed class LinuxRaceHost : IDisposable
     private readonly object _writeLock = new();
     private Task _writes = Task.CompletedTask;
     private int _closed; private long _lastEscape; private bool _escapeHeld, _disposed;
-    private volatile string? _displayBackend; private volatile bool _backendKnown, _loaded, _startFailed;
+    private volatile string? _displayBackend; private volatile bool _backendKnown, _loaded;
     private readonly Func<bool> _x11Listening;
     internal bool InFront { get; private set; }
     internal bool IsAlive => Volatile.Read(ref _closed) == 0;
@@ -83,12 +83,7 @@ internal sealed class LinuxRaceHost : IDisposable
                 }
             }
             catch { }
-            finally
-            {
-                // Ended on its own before any page loaded: the engine did not start (B2 section 1), not a closed race.
-                bool startFailed = (IsAlive || _startFailed) && !_loaded;
-                Kill(); Dispatcher.UIThread.Post(() => Dispose(startFailed));
-            }
+            finally { Kill(pipeEnded: true); Dispatcher.UIThread.Post(Dispose); }
         });
         _ = Task.Run(async () => { try { var b = new char[1024]; while (await _process.StandardError.ReadAsync(b, 0, b.Length) != 0) { } } catch { } });
         return this;
@@ -156,20 +151,20 @@ internal sealed class LinuxRaceHost : IDisposable
         lock (_writeLock) _writes = _writes.ContinueWith(_ =>
         {
             try { if (IsAlive) { _process.StandardInput.WriteLine(json.ToString(Formatting.None)); _process.StandardInput.Flush(); } }
-            catch { _startFailed = IsAlive && !_loaded; Kill(); Dispatcher.UIThread.Post(() => Dispose(_startFailed)); }
+            catch { Kill(pipeEnded: true); Dispatcher.UIThread.Post(Dispose); }
         });
     }
     [DllImport("libc", SetLastError = true)] private static extern int kill(int pid, int signal);
     /// <summary>Thread-safe (the panic watchdog calls it off the UI thread): the race is gone, never in front again.</summary>
-    internal void Kill()
+    /// <summary>The first kill sets the one end state: a pipe ended before any page loaded is a failed start (B2 section 1).</summary>
+    internal void Kill(bool pipeEnded = false)
     {
         InFront = false;
-        if (Interlocked.Exchange(ref _closed, 1) != 0) return;
+        if (Interlocked.CompareExchange(ref _closed, pipeEnded && !_loaded ? 2 : 1, 0) != 0) return;
         // Exact child first, then its isolated group, including orphaned Chromium helpers.
         kill(_pid, 9); kill(-_pid, 9);
     }
-    public void Dispose() => Dispose(false);
-    private void Dispose(bool startFailed)
+    public void Dispose()
     {
         Kill();
         if (_disposed) return;
@@ -177,7 +172,7 @@ internal sealed class LinuxRaceHost : IDisposable
         if (ReferenceEquals(Current, this)) Current = null;
         _process.Dispose();
         if (_escapeHeld) { _escapeHeld = false; Shell()?.OnRaceEscape(null); }
-        try { if (startFailed) _window.RaceShellFailed(); else _window.Close(); }
+        try { if (Volatile.Read(ref _closed) == 2) _window.RaceShellFailed(); else _window.Close(); }
         catch (Exception ex) { Serilog.Log.Debug(ex, "Glassroad: race window close failed"); }
     }
 }

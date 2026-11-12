@@ -97,6 +97,15 @@ public sealed partial class GameWindowTests
         finally { GameWindow.LaunchRaceShell = oldLaunch; }
     });
 
+    [Fact]   // P2 (r72): the reader kills for a failed start, then the writer's posted Dispose runs first
+    public void LinuxShell_StartFailureSurvivesTheWriterDisposingFirst() => RunShellRace((_, w, host, _, o) =>
+    {
+        host.Kill(pipeEnded: true); host.Kill(pipeEnded: true); host.Dispose(); Dispatcher.UIThread.RunJobs();
+        var card = Assert.Single(GameWindow.OpenWindowsForTests());
+        Assert.NotSame(w, card); Assert.True(o.WaitForExit(5000));
+        Assert.Equal(Loc.Get("rt_engine_start_failed"), card.RaceStatus.Text);
+    });
+
     /// <summary>P1: after the panic watchdog killed the race (before the reader's Dispose ran), the press the recovered UI
     /// runs, from the X11 listener or queued from the shell pipe, is a full panic: never a pause for a dead race, no exit rung.</summary>
     [Theory]

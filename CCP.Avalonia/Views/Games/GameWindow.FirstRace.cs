@@ -107,7 +107,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal LinuxRaceHost? RaceShell { get; private set; }
         internal static Func<GameWindow, Uri, LinuxRaceHost?> LaunchRaceShell = LinuxRaceHost.TryLaunch;
         private string? _shellRoom;
-
         /// <summary>True = the shell runs; null = no engine or shell installed; false = installed and did not start.</summary>
         private bool? StartRaceShell(string? room)
         {
@@ -122,7 +121,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             OpenGlassroad();
             return true;
         }
-
         /// <summary>The shell died before loading a page: close this session and show the card saying so.</summary>
         internal void RaceShellFailed()
         {
@@ -131,7 +129,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             card.ShowRaceCard(_shellRoom, failed: true);
             card.Show();
         }
-
         private void ShowRaceCard(string? room, bool failed)
         {
             ShowRaceCard();
