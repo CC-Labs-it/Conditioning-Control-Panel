@@ -92,6 +92,12 @@ public sealed class LauncherWindowTests
             launcher.Show();
             Assert.Equal(2, calls);
             launcher.FindControl<Button>("LobbyChip")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.True(launcher.IsVisible);
+            var menu = launcher.FindControl<Button>("LobbyChip")!.ContextMenu!;
+            Assert.True(menu.IsOpen);
+            Assert.Contains("Host", ((MenuItem)menu.Items[0]!).Header!.ToString());
+            Assert.True(calls >= 3);
+            ((MenuItem)menu.Items[1]!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             Assert.Equal("availablesubjects", shell.CurrentTab);
             Assert.False(launcher.IsVisible);
         }
