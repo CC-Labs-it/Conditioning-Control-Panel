@@ -16,16 +16,25 @@ namespace CCP.Avalonia.Tests;
 public class ChaosBodyBuzzTests
 {
     [Fact]
-    public async Task ShockwaveTestRestoresIncomingFieldOverlaySetting()
+    public async Task ShockwaveTestRestoresIncomingFieldOverlaySettingAndZapTime()
     {
         bool previous = ChaosFieldFxOverlay.SkipPlatformChecksForTests;
+        var zapField = typeof(ChaosRunHost).GetField("_lastBodyBuzzZap", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var previousZap = zapField.GetValue(null);
+        var sentinel = new DateTime(2001, 2, 3, 4, 5, 6, DateTimeKind.Utc);
         try
         {
             ChaosFieldFxOverlay.SkipPlatformChecksForTests = true;
+            zapField.SetValue(null, sentinel);
             await ShockwaveSelectsRendererAndCancelsHops(false);
             Assert.True(ChaosFieldFxOverlay.SkipPlatformChecksForTests);
+            Assert.Equal(sentinel, zapField.GetValue(null));
         }
-        finally { ChaosFieldFxOverlay.SkipPlatformChecksForTests = previous; }
+        finally
+        {
+            ChaosFieldFxOverlay.SkipPlatformChecksForTests = previous;
+            zapField.SetValue(null, previousZap);
+        }
     }
 
     [Theory]
@@ -35,6 +44,8 @@ public class ChaosBodyBuzzTests
     {
         var field = typeof(ChaosRunHost).GetField("_state", BindingFlags.NonPublic | BindingFlags.Static)!;
         var old = field.GetValue(null);
+        var zapField = typeof(ChaosRunHost).GetField("_lastBodyBuzzZap", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var oldZap = zapField.GetValue(null);
         var settings = CoreSettings.Current;
         var enabled = settings.ChaosSkiaFxEnabled;
         var rng = ChaosRunHost.Rng;
@@ -84,6 +95,7 @@ public class ChaosBodyBuzzTests
             ChaosSkiaFxOverlay.CloseActive(); ChaosEStimOverlay.CloseActive();
             ChaosSkiaFxOverlay.SkipPlatformChecksForTests = checks; ChaosSkiaFxOverlay.Composited = composited;
             settings.ChaosSkiaFxEnabled = enabled; ChaosRunHost.Rng = rng; field.SetValue(null, old);
+            zapField.SetValue(null, oldZap);
         }
     });
 }
