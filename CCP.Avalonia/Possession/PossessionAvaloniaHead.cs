@@ -42,6 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         PossessionRuntime PossessionEffectRuntime { get; }
         /// <summary>Last pointer position in ghost-layer coordinates; (0,0) until the pointer has moved.</summary>
         Point PointerPosition { get; }
+        PossessionPointer PossessionPointer { get; }
         /// <summary>A control's bounds in ghost-layer coordinates, render transform included; null when it has none.</summary>
         Rect? BoundsOnGhostLayer(Control element);
     }
@@ -147,6 +148,8 @@ namespace ConditioningControlPanel.Avalonia.Possession
         {
             var list = new List<IPossessionEffect>();
             foreach (var e in PossessionRuntime.CreateAll()) list.Add(new DirectedHeadEffect(e));
+            list.Add(new SliderCreepEffect());
+            list.Add(new ScrollHijackEffect());
             return list;
         }
 

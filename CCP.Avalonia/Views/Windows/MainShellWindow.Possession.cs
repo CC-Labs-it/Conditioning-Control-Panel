@@ -143,6 +143,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         Point IAvaloniaPossessionHost.PointerPosition => _possessionPointer.Position;
 
+        PossessionPointer IAvaloniaPossessionHost.PossessionPointer => _possessionPointer;
+
         Rect? IAvaloniaPossessionHost.BoundsOnGhostLayer(Control element)
         {
             try
