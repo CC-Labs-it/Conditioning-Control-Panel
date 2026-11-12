@@ -162,17 +162,20 @@ public sealed partial class GameWindowTests
         var second = new Fetch();
         var oldLaunch = GameWindow.LaunchRaceShell;
         int launches = 0;
-        GameWindow.LaunchRaceShell = (_, _) => { launches++; return null; };
-        GameWindow.RaceEngineFetch = second;
-        Click(w.RaceDownload);
-        PanicSurfaces.All.Single(x => x.Id == "games").Stop(null!);
-        Assert.True(second.Token.IsCancellationRequested);
-        second.Reply.SetResult(RaceEngineFetchResult.Installed);
-        Dispatcher.UIThread.RunJobs();
-        Assert.False(GameWindow.IsAnyOpen());
-        Assert.Null(w.PageUrl);
-        GameWindow.LaunchRaceShell = oldLaunch;
-        Assert.Equal(0, launches);
+        try
+        {
+            GameWindow.LaunchRaceShell = (_, _) => { launches++; return null; };
+            GameWindow.RaceEngineFetch = second;
+            Click(w.RaceDownload);
+            PanicSurfaces.All.Single(x => x.Id == "games").Stop(null!);
+            Assert.True(second.Token.IsCancellationRequested);
+            second.Reply.SetResult(RaceEngineFetchResult.Installed);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(GameWindow.IsAnyOpen());
+            Assert.Null(w.PageUrl);
+            Assert.Equal(0, launches);
+        }
+        finally { GameWindow.LaunchRaceShell = oldLaunch; }
     });
 
     [Fact]
