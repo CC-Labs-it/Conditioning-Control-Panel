@@ -132,6 +132,27 @@ public sealed class DeeperEditorInteractionTests
     });
 
     [Fact]
+    public Task PreviewNavigationInstallsZoomShortcut() => Run((w, _) =>
+    {
+        string? script = null;
+        w.BrowserPreview.ScriptInvoker = js => { script = js; return Task.FromResult<string?>(null); };
+        w.BrowserPreview.OnNavigationCompleted(new Uri("https://example.com/video"));
+        Assert.NotNull(script);
+        Assert.Contains("ccp_editor_zoom_fit", script);
+        Assert.Contains("keydown", script);
+    });
+
+    [Fact]
+    public Task PreviewZoomMessageResetsTimelineZoom() => Run((w, _) =>
+    {
+        Call(w, "SetZoom", 2d, null);
+        w.BrowserPreview.OnWebMessage("unrelated");
+        Assert.Equal(2d, Field(w, "_zoomFactor"));
+        w.BrowserPreview.OnWebMessage("ccp_editor_zoom_fit");
+        Assert.Equal(1d, Field(w, "_zoomFactor"));
+    });
+
+    [Fact]
     public Task EndSeeksToMediaEnd() => Run((w, _) =>
     {
         Set(w, "_totalSeconds", 30d);

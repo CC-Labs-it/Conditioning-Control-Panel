@@ -72,6 +72,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             }
         }
 
+        // Native preview keys do not bubble to Avalonia. Install after each navigation, as in
+        // EnhancementPlayerWindow.Fullscreen.cs; WPF routes preview keys at xaml.cs:5006.
+        internal const string PreviewZoomScript = @"(function(){
+    if(window.__ccpEditorZoomBound)return;window.__ccpEditorZoomBound=true;
+    window.addEventListener('keydown',function(e){
+        if(!e.ctrlKey||(e.code!=='Digit0'&&e.code!=='Numpad0'))return;
+        var w=window.chrome&&window.chrome.webview;
+        if(w&&w.postMessage)w.postMessage('ccp_editor_zoom_fit');
+        else if(window.invokeCSharpAction)window.invokeCSharpAction('ccp_editor_zoom_fit');
+        else return;
+        e.preventDefault();e.stopImmediatePropagation();
+    },true);
+})();";
+
+        private void PreviewZoom_NavigationCompleted(Uri uri) =>
+            _ = BrowserPreview.InvokeScriptAsync(PreviewZoomScript);
+
+        private void PreviewZoom_WebMessage(string message)
+        {
+            if (message.Trim().Trim('"') == "ccp_editor_zoom_fit") SetZoom(1.0);
+        }
+
         // -- Right-click context menu --------------------------------------------
 
         /// <summary>
