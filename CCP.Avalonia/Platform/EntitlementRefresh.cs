@@ -85,7 +85,11 @@ internal static class EntitlementRefresh
         if (!ReferenceEquals(s, CoreSettings.Current) || s.OfflineMode || s.UnifiedId != id
             || string.IsNullOrEmpty(s.AuthToken)) return false;
         var before = EffectiveTier;
-        if (ProfileExtras.Apply(s, extras)) CoreSettings.Save();
+        if (ProfileExtras.Apply(s, extras))
+        {
+            CoreSettings.Save();
+            App.PostCodeInputsChanged?.Invoke();
+        }
         // WPF EntitlementTierSync.Offer -> ApplyOnUi: the one grace-aware tier path (a rise unlocks, a tier
         // renews the grace, the same lower reading 90 s later closes it), never a rise-only write.
         AccountSeed.ApplyTierReading(EntitlementTierRule.ParseTier(user.EffectiveTierRaw), source);
