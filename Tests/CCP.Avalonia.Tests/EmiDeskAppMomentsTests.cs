@@ -86,7 +86,9 @@ public class EmiDeskAppMomentsTests
         Assert.Equal("ambient", Assert.Single(seen).name);
     }
 
-    private static List<string> IdleSequence(params int[] values)
+    private static List<string> IdleSequence(params int[] values) => IdleSequence(v => v, values);
+
+    private static List<string> IdleSequence(Func<int, int> idleAt, params int[] values)
     {
         var desk = new EmiDeskService();
         var now = new DateTime(2026, 1, 1, 12, 0, 0);
@@ -97,7 +99,7 @@ public class EmiDeskAppMomentsTests
         desk.IdleSeconds = () => idle;
         desk.ClockMoment = (name, _) => seen.Add(name);
         typeof(EmiDeskService).GetProperty(nameof(EmiDeskService.IsOut))!.SetValue(desk, true);
-        foreach (var value in values) { idle = value; desk.ClockTick(now); }
+        foreach (var value in values) { idle = idleAt(value); desk.ClockTick(now); }
         return seen;
     }
 
@@ -174,6 +176,22 @@ public class EmiDeskAppMomentsTests
     {
         Assert.Null(await DesktopIdle.ReadWaylandAsync(() => Task.FromException<ulong>(new InvalidOperationException())));
         Assert.Equal(int.MaxValue, await DesktopIdle.ReadWaylandAsync(() => Task.FromResult(ulong.MaxValue)));
+    }
+
+    [Fact]
+    public void WaylandIdleNotifyDrivesThresholdsAndRearming()
+    {
+        long t = 0;
+        var notify = new WaylandIdleNotify { Now = () => t };
+        var rx = new System.IO.MemoryStream(new[] { WaylandIdleNotify.Message(2, 0, 7u, "wl_seat", 7u), WaylandIdleNotify.Message(2, 0, 9u, "ext_idle_notifier_v1", 2u),
+            WaylandIdleNotify.Message(3, 0, 1u), WaylandIdleNotify.Message(4, 0, 3u), WaylandIdleNotify.Message(6, 0) }.SelectMany(m => m).ToArray());
+        var tx = new System.IO.MemoryStream();
+        notify.Run(rx, tx);
+        Assert.EndsWith(Convert.ToHexString(WaylandIdleNotify.Message(5, 2, 6u, WaylandIdleNotify.TimeoutMs, 4u)), Convert.ToHexString(tx.ToArray()));
+        // Steps are seconds since start, or -1 idled and -2 resumed at the current time.
+        var seen = IdleSequence(v => { if (v < 0) notify.OnEvent((uint)(-v - 1)); else t = v * 1000L; return notify.Seconds; },
+            0, 899, 900, 950, -2, 1000, -1, 1900);
+        Assert.Equal(new[] { "idleShort", "idleShort", "appIdleLong", "ambient", "ambient", "idleShort", "appIdleLong" }, seen);
     }
 
     private static void Raise(object? source, Type type, string name, params object[] args)
