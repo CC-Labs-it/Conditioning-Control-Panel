@@ -11,6 +11,8 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Possession;
 using ConditioningControlPanel.Services.Possession;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Models;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -32,11 +34,12 @@ public class PossessionSliderScrollTests
     private sealed class Attribution : IPossessionAttribution
     {
         public Task ChargeAsync(object target, CancellationToken ct, int durationMs = 400) => Task.CompletedTask;
-        public IDisposable Possess(object target) => new Release();
+        public IDisposable Possess(object target) { Live++; return new Release(this); }
         public void EdgePulse(double strength) { }
-        public bool AnyPossessed => false;
+        public int Live { get; private set; }
+        public bool AnyPossessed => Live != 0;
         public void ReleaseAll() { }
-        private sealed class Release : IDisposable { public void Dispose() { } }
+        private sealed class Release(Attribution owner) : IDisposable { public void Dispose() => owner.Live--; }
     }
 
     [Fact]
@@ -67,7 +70,7 @@ public class PossessionSliderScrollTests
                 Remaining = TimeSpan.Zero, Name = (_, name) => named = name };
             var effect = new ScrollHijackEffect();
             Assert.True(effect.CanApply(context, target));
-            effect.ApplyAsync(context, target, CancellationToken.None).GetAwaiter().GetResult();
+            _ = effect.ApplyAsync(context, target, CancellationToken.None);
             frames.Frame(TimeSpan.Zero);
             frames.Frame(TimeSpan.FromMilliseconds(600));
             Assert.Equal(140, viewer.Offset.Y, 2);
@@ -105,9 +108,11 @@ public class PossessionSliderScrollTests
             Assert.True(effect.CanApply(context, a));
             int writes = 0;
             first.PropertyChanged += (_, e) => { if (e.Property == Slider.ValueProperty) writes++; };
-            effect.ApplyAsync(context, a, CancellationToken.None).GetAwaiter().GetResult();
+            _ = effect.ApplyAsync(context, a, CancellationToken.None);
             var ghost = Assert.IsType<Border>(Assert.Single(host.GhostLayer!.Children));
             Assert.False(ghost.IsHitTestVisible);
+            Assert.Equal(14, ghost.BoxShadow[0].Blur);
+            Assert.Equal(Color.Parse("#D9FF8A5C"), ghost.BoxShadow[0].Color);
             if (orientation == Orientation.Horizontal) Assert.Equal(122.8, Canvas.GetLeft(ghost), 1);
             else Assert.Equal(32.8, Canvas.GetTop(ghost), 1);
             frames.Frame(TimeSpan.Zero);
@@ -129,7 +134,7 @@ public class PossessionSliderScrollTests
     });
 
     [Fact]
-    public void UserScrollDuringDriftBecomesNewHome() => AvaloniaTestDispatcher.Run(() =>
+    public Task UserScrollDuringDriftBecomesNewHome() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var frames = new FakeFrames();
         var viewer = new ScrollViewer { Width = 200, Height = 100, Content = new Border { Height = 1000 } };
@@ -144,7 +149,7 @@ public class PossessionSliderScrollTests
                 Intensity = PossessionIntensity.Eerie, Photosafe = false, Rng = new Random(1), ElapsedFraction = 0,
                 Remaining = TimeSpan.Zero, Name = (_, _) => { } };
             var effect = new ScrollHijackEffect();
-            effect.ApplyAsync(context, target, CancellationToken.None).GetAwaiter().GetResult();
+            _ = effect.ApplyAsync(context, target, CancellationToken.None);
             frames.Frame(TimeSpan.Zero);
             frames.Frame(TimeSpan.FromMilliseconds(600));
             viewer.Offset = new Vector(0, 160);
@@ -156,6 +161,11 @@ public class PossessionSliderScrollTests
             viewer.Offset = new Vector(0, 145);
             effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
             Assert.Equal(145, viewer.Offset.Y, 2);
+            var pending = effect.ApplyAsync(context, target, CancellationToken.None);
+            await Task.Delay(1700);
+            Assert.True(pending.IsCompleted);
+            Assert.Equal(0, frames.Count);
+            effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
         }
         finally { window.Close(); }
     });
@@ -179,14 +189,14 @@ public class PossessionSliderScrollTests
                 Intensity = PossessionIntensity.Gentle, Photosafe = photosafe, Rng = new Random(1), ElapsedFraction = 0,
                 Remaining = TimeSpan.Zero, Name = (_, _) => { } };
             var effect = new SliderCreepEffect();
-            effect.ApplyAsync(context, target, CancellationToken.None).GetAwaiter().GetResult();
+            _ = effect.ApplyAsync(context, target, CancellationToken.None);
             var ghost = Assert.IsType<Border>(Assert.Single(host.GhostLayer!.Children));
             frames.Frame(TimeSpan.Zero);
             slider.Value = 75;
             frames.Frame(TimeSpan.FromMilliseconds(1750 * (photosafe ? 1.3 : 1)));
             Assert.True(Assert.IsType<TranslateTransform>(ghost.RenderTransform).X < 0);
             Assert.InRange(ghost.Opacity, 0.01, 0.59);
-            frames.Frame(TimeSpan.FromMilliseconds(2000 * (photosafe ? 1.3 : 1)));
+            frames.Frame(TimeSpan.FromMilliseconds(2040 * (photosafe ? 1.3 : 1)));
             Assert.Empty(host.GhostLayer.Children);
             Assert.Equal(0, frames.Count);
             effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
@@ -196,7 +206,7 @@ public class PossessionSliderScrollTests
     });
 
     [Fact]
-    public void SliderGhostDisappearsAfterItsAnimation() => AvaloniaTestDispatcher.Run(() =>
+    public Task SliderGhostDisappearsAfterItsAnimation() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var frames = new FakeFrames();
         var host = new Host(frames);
@@ -211,10 +221,16 @@ public class PossessionSliderScrollTests
                 Intensity = PossessionIntensity.Gentle, Photosafe = false, Rng = new Random(1), ElapsedFraction = 0,
                 Remaining = TimeSpan.Zero, Name = (_, _) => { } };
             var effect = new SliderCreepEffect();
-            effect.ApplyAsync(context, target, CancellationToken.None).GetAwaiter().GetResult();
+            _ = effect.ApplyAsync(context, target, CancellationToken.None);
             frames.Frame(TimeSpan.Zero);
-            frames.Frame(TimeSpan.FromMilliseconds(2000));
+            frames.Frame(TimeSpan.FromMilliseconds(2040));
             Assert.Empty(host.GhostLayer!.Children);
+            Assert.Equal(0, frames.Count);
+            effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+            var pending = effect.ApplyAsync(context, target, CancellationToken.None);
+            await Task.Delay(2800);
+            Assert.True(pending.IsCompleted);
+            Assert.Empty(host.GhostLayer.Children);
             Assert.Equal(0, frames.Count);
             effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
         }
@@ -243,6 +259,67 @@ public class PossessionSliderScrollTests
             Assert.True(effect.CanApply(context, target));
         }
         finally { window.Close(); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task DirectorHoldsAfterAnimationAndUndoCancels(bool scroll) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var frames = new FakeFrames();
+        var host = new Host(frames);
+        Control control = scroll ? new ScrollViewer { Width = 200, Height = 100, Content = new Border { Height = 1000 } }
+            : new Slider { Width = 200, Height = 40, Minimum = 0, Maximum = 100, Value = 60 };
+        var window = new Window { Content = control, Width = 250, Height = 150 };
+        window.Show();
+        using var lockdown = new LockdownService();
+        var attribution = new Attribution();
+        IPossessionEffect effect = scroll ? new ScrollHijackEffect() : new SliderCreepEffect();
+        var head = new PossessionDirectorHead { Settings = () => new AppSettings { LockdownPossessionEnabled = true,
+            LockdownPossessionIntensity = (int)PossessionIntensity.Eerie }, Attribution = _ => attribution };
+        using var director = new PossessionDirector(lockdown, new[] { effect }, head);
+        try
+        {
+            window.UpdateLayout();
+            var target = new PossessionTarget { Visual = control, Role = scroll ? PossessionRole.Scroll : PossessionRole.Slider, Key = "target" };
+            host.Targets = new[] { target };
+            director.AttachHost(host);
+            director.OnLockdownActivated();
+            if (scroll) director.ApplyRestartReset(PossessionRung.Melt);
+            director.RequestReactive(effect.Id, target);
+            Assert.True(target.IsLive);
+            Assert.True(attribution.AnyPossessed);
+            frames.Frame(TimeSpan.Zero);
+            await Task.Delay(900);
+            frames.Frame(TimeSpan.FromMilliseconds(scroll ? 1200 : 2040));
+            await Task.Delay(2400);
+            Assert.Equal(1, director.LiveEffectCount);
+            Assert.True(target.IsLive);
+            Assert.True(attribution.AnyPossessed);
+            await Task.Delay(1100);
+            Assert.Equal(0, director.LiveEffectCount);
+            Assert.False(target.IsLive);
+            Assert.False(attribution.AnyPossessed);
+            director.OnLockdownActivated();
+            if (scroll) director.ApplyRestartReset(PossessionRung.Melt);
+            target.CooldownUntil = DateTime.MinValue;
+            director.RequestReactive(effect.Id, target);
+            Assert.True(target.IsLive);
+            director.UndoAll();
+            await Task.Delay(50);
+            Assert.False(target.IsLive);
+            Assert.False(attribution.AnyPossessed);
+            Assert.Equal(0, frames.Count);
+            director.OnLockdownActivated();
+            if (scroll) director.ApplyRestartReset(PossessionRung.Melt);
+            target.CooldownUntil = DateTime.MinValue;
+            director.RequestReactive(effect.Id, target);
+            Assert.Equal(1, frames.Count);
+            await Task.Delay(scroll ? 1500 : 2300);
+            Assert.Equal(0, frames.Count);
+            Assert.True(target.IsLive);
+        }
+        finally { director.UndoAll(); window.Close(); }
     });
 
 }
