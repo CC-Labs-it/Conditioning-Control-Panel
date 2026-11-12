@@ -25,8 +25,7 @@
 //     CCP.Core/Services/EmiDesk/ carries the book's layout and text, not the desk - so the HOLD
 //     has nothing to hold back on this head. Nothing talks over the wizard here either way.
 //   * `QueueEmiKnock(knockSeenVersion)`, listed as dropped in MainShellWindow.axaml.cs already.
-//   * TryPresentSeasonRecap: the pinned WPF reference retires the automatic modal; only
-//     silent monthly bookkeeping remains. Upgrade What's New is in MainShellWindow.UpgradeIntro.cs.
+//   * The automatic season recap modal is retired; silent bookkeeping runs below.
 
 using System;
 using Avalonia.Threading;
@@ -46,9 +45,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// </summary>
         private void HookFirstRun()
         {
+
             try
             {
                 bool fresh = FirstRunWizard.ShouldRunAndClaim();
+                // WPF MainWindow.Marquee.cs:270: silent monthly bookkeeping.
+                try
+                {
+                    if (!fresh && CoreSettings.Service != null && Services.SeasonRollover.UpdateBookkeeping(CoreSettings.Current,
+                        handle: CoreAccount.DisplayName, isSupporter: CoreAccount.HasPremiumAccess,
+                        lifetimePointsSpent: App.Achievements?.Progress?.LifetimeSkillPointsSpent ?? 0,
+                        fallbackPercentile: _lbPercentile))
+                        CoreSettings.Save();
+                }
+                catch (Exception ex) { Log.Warning(ex, "Failed to update monthly bookkeeping"); }
+
                 // Nav rework (WPF MainWindow.xaml.cs:537/589): the one-time What moved card, upgrades only.
                 if (!fresh) ArmUpgradeIntro();
                 OfferWhatMovedIfNeeded(freshInstall: fresh);
