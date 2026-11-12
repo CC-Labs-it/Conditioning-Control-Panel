@@ -25,11 +25,8 @@ public class ChaosWaveDraftTests
         var paths = Enumerable.Range(1, ChaosMetaStore.SlotCount).Select(ChaosMetaStore.SlotFilePath)
             .Append(Path.Combine(CorePaths.UserData, "chaos_meta.json")).ToArray();
         var bytes = paths.Select(p => File.Exists(p) ? File.ReadAllBytes(p) : null).ToArray();
-        try
-        {
-            stateProperty.SetValue(null, new ChaosMetaState());
-            body();
-        }
+        try { stateProperty.SetValue(null, new ChaosMetaState());
+            body(); }
         finally
         {
             try { ChaosRunHost.ForceShutdown(); }
@@ -133,28 +130,24 @@ public class ChaosWaveDraftTests
     [Fact]
     public Task Stopping_at_the_draft_cancels_pick_and_start_boon_waits_for_first_go() => Run(() =>
     {
-        try
-        {
-            var overlay = BeginDraft();
-            Assert.True(overlay.FindControl<Border>("DraftPanel")!.IsVisible);
-            ChaosRunHost.RequestStop();
-            Assert.True(overlay.FindControl<Border>("ResultsPanel")!.IsVisible);
-            typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(overlay, new object?[] { null });
-            Assert.True(overlay.FindControl<Border>("ResultsPanel")!.IsVisible);
-            Assert.False(overlay.FindControl<Border>("DraftPanel")!.IsVisible);
-            Assert.False(BubbleOverlay.Field.HoldChaos);
-            ChaosRunHost.ForceShutdown();
-            ChaosMeta.State.EquippedStartBoon = "welcome_shower";
-            ChaosRunHost.StartRun(new ChaosRunConfig());
-            Assert.Empty(BubbleOverlay.Field.Bubbles);
-            ChaosRunHost.Overlay!.FinishCountdown();
-            Assert.Equal(6, BubbleOverlay.ChaosCount);
-            ChaosRunHost.ForceShutdown();
-            ChaosRunHost.StartRun(new ChaosRunConfig { ScriptedFirstRun = true });
-            ChaosRunHost.Overlay!.FinishCountdown();
-            Assert.Equal(0, BubbleOverlay.ChaosCount);
-        }
-        finally { ChaosRunHost.ForceShutdown(); }
+        var overlay = BeginDraft();
+        Assert.True(overlay.FindControl<Border>("DraftPanel")!.IsVisible);
+        ChaosRunHost.RequestStop();
+        Assert.True(overlay.FindControl<Border>("ResultsPanel")!.IsVisible);
+        typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(overlay, new object?[] { null });
+        Assert.True(overlay.FindControl<Border>("ResultsPanel")!.IsVisible);
+        Assert.False(overlay.FindControl<Border>("DraftPanel")!.IsVisible);
+        Assert.False(BubbleOverlay.Field.HoldChaos);
+        ChaosRunHost.ForceShutdown();
+        ChaosMeta.State.EquippedStartBoon = "welcome_shower";
+        ChaosRunHost.StartRun(new ChaosRunConfig());
+        Assert.Empty(BubbleOverlay.Field.Bubbles);
+        ChaosRunHost.Overlay!.FinishCountdown();
+        Assert.Equal(6, BubbleOverlay.ChaosCount);
+        ChaosRunHost.ForceShutdown();
+        ChaosRunHost.StartRun(new ChaosRunConfig { ScriptedFirstRun = true });
+        ChaosRunHost.Overlay!.FinishCountdown();
+        Assert.Equal(0, BubbleOverlay.ChaosCount);
     });
     [Theory]
     [InlineData(0, 0, 0)]
@@ -162,7 +155,7 @@ public class ChaosWaveDraftTests
     [InlineData(2, 1, 1)]
     public Task Only_picked_cards_advance_their_lessons(int pick, long draft, long surrender) => Run(() =>
     {
-        var oldAudio = CoreAudio.PlayOneShotProvider;
+        var oldAudio = CoreAudio.PlayOneShotProvider; var oldPulse = ChaosRunHost.PulseFx;
         var oldMod = CoreModArt.AudioOverridePathProvider;
         var modCue = Path.GetTempFileName();   // WPF ChaosSfx.cs:69: the active mod wins
         CoreModArt.AudioOverridePathProvider = rel => rel == "chaos/wave_clear.mp3" ? modCue : null;
@@ -176,11 +169,17 @@ public class ChaosWaveDraftTests
             var overlay = BeginDraft();
             Assert.Contains(Path.GetFileName(modCue), cues);
             Assert.DoesNotContain("lvup.mp3", cues);
-            var boon = pick == 0 ? null : ChaosBoonPool.All.First(b => b.IsCurse == (pick == 2));
+            var boon = pick == 0 ? null : pick == 1 ? ChaosBoonPool.All.Single(b => b.Id == "extra_shield") : ChaosBoonPool.All.First(b => b.IsCurse);
+            var state = ChaosRunHost.State!;
+            if (pick == 2) { state.MaxedBoons.Add("surrender"); state.SinExtraMult = 0.2; }
+            var pulses = new System.Collections.Generic.List<(global::Avalonia.Media.Color, double)>();
+            ChaosRunHost.PulseFx = (color, strength) => pulses.Add((color, strength));
             var language = LocalizationManager.Instance.CurrentLanguage;
             try { LocalizationManager.Instance.SetLanguage("fr"); Choose(overlay, boon);
-                if (pick == 0) Assert.Contains("♥ refus : +1 résistance", ChaosRunHost.State!.RecentEvents); }
+                if (pick == 0) Assert.Contains("♥ refus : +1 résistance", state.RecentEvents);
+                if (pick == 2) { Assert.Contains($"🕯 péché accepté (+{0.2:0.00}x)", state.RecentEvents); Assert.Contains("🕯 la bougie a retiré le revers", state.RecentEvents); Assert.Contains("🕯 vous avez dit oui (+1 résistance)", state.RecentEvents); } }
             finally { LocalizationManager.Instance.SetLanguage(language); }
+            Assert.Equal(new[] { (global::Avalonia.Media.Color.FromRgb(120, 220, 160), 0.22) }, pulses);
             var announcement = ChaosAnnouncerOverlay.Active!.Current!;
             Assert.Equal(pick == 0 ? "+1 RÉSISTANCE" : (pick == 2 ? "☠ " : "◈ ") + boon!.Name, announcement.Text);
             Assert.Equal(pick == 0 ? ChaosAnnounceKind.Willpower : pick == 2 ? ChaosAnnounceKind.Temptation : ChaosAnnounceKind.Mantra, announcement.Kind);
@@ -189,7 +188,7 @@ public class ChaosWaveDraftTests
             Assert.Equal(draft, ChaosLessons.Progress("draft4"));
             Assert.Equal(surrender, ChaosLessons.Progress("surrender"));
         }
-        finally { CoreAudio.PlayOneShotProvider = oldAudio; CoreModArt.AudioOverridePathProvider = oldMod; File.Delete(modCue); CoreSettings.Current.ChaosAnnouncerEnabled = oldAnnouncer; }
+        finally { CoreAudio.PlayOneShotProvider = oldAudio; ChaosRunHost.PulseFx = oldPulse; CoreModArt.AudioOverridePathProvider = oldMod; File.Delete(modCue); CoreSettings.Current.ChaosAnnouncerEnabled = oldAnnouncer; }
     });
 
     [Fact]
@@ -276,23 +275,19 @@ public class ChaosWaveDraftTests
     });
 
     [Fact]
-    public async Task Fresh_meta_restores_all_slots_and_languages_have_event_keys()
+    public Task Fresh_meta_restores_all_slots_and_languages_have_event_keys() => Run(() =>
     {
-        await AvaloniaTestDispatcher.RunAsync(() =>
+        var original = ChaosMeta.State;
+        var paths = Enumerable.Range(1, ChaosMetaStore.SlotCount).Select(ChaosMetaStore.SlotFilePath).ToArray();
+        var before = paths.Select(p => File.Exists(p) ? File.ReadAllBytes(p) : null).ToArray();
+        InFreshMeta(() => { ChaosFirstTimes.TryAward(ChaosFirstTimes.Whisper); });
+        Assert.Same(original, ChaosMeta.State);
+        foreach (var (code, _, _) in LocalizationManager.AvailableLanguages)
         {
-            var original = ChaosMeta.State;
-            var paths = Enumerable.Range(1, ChaosMetaStore.SlotCount).Select(ChaosMetaStore.SlotFilePath).ToArray();
-            var before = paths.Select(p => File.Exists(p) ? File.ReadAllBytes(p) : null).ToArray();
-            InFreshMeta(() => { ChaosFirstTimes.TryAward(ChaosFirstTimes.Whisper); });
-            Assert.Same(original, ChaosMeta.State);
-            foreach (var (code, _, _) in LocalizationManager.AvailableLanguages)
-            {
-                var strings = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Localization", "Languages", code + ".json")));
-                foreach (var key in new[] { "chaos_event_reroll", "chaos_event_skip", "chaos_event_shower", "chaos_announce_resist" }) Assert.False(string.IsNullOrWhiteSpace((string?)strings[key]));
-            }
-            for (int i = 0; i < paths.Length; i++)
-                Assert.Equal(before[i], File.Exists(paths[i]) ? File.ReadAllBytes(paths[i]) : null);
-            return Task.CompletedTask;
-        });
-    }
+            var strings = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Localization", "Languages", code + ".json")));
+            foreach (var key in new[] { "chaos_event_reroll", "chaos_event_skip", "chaos_event_shower", "chaos_announce_resist", "chaos_event_sin_bonus", "chaos_event_sin_shielded", "chaos_event_sin_resistance" }) Assert.False(string.IsNullOrWhiteSpace((string?)strings[key]));
+        }
+        for (int i = 0; i < paths.Length; i++)
+            Assert.Equal(before[i], File.Exists(paths[i]) ? File.ReadAllBytes(paths[i]) : null);
+    });
 }

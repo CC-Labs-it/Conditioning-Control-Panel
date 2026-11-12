@@ -602,6 +602,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 _state.Shields++;
                 _state.PushEvent(Loc.Get("chaos_event_skip"));
+                Pulse(Color.FromRgb(120, 220, 160), 0.22);
                 ChaosAnnouncerOverlay.Announce(Loc.Get("chaos_announce_resist"), ChaosAnnounceKind.Willpower, artKey: "resistance");
             }
             else
@@ -617,10 +618,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 }
                 catch (Exception ex) { Log.Debug("Chaos draft lesson: {E}", ex.Message); }
                 _state.ApplyBoon(boon, shieldDrawback: shielded);
+                if (boon.Id == "extra_shield") Pulse(Color.FromRgb(120, 220, 160), 0.22);
                 if (boon.IsCurse)
                 {
-                    _state.BoonMult += _state.SinExtraMult;
-                    if (_state.MaxedBoons.Contains("surrender")) _state.Shields++;
+                    if (_state.SinExtraMult > 0) { _state.BoonMult += _state.SinExtraMult;
+                        _state.PushEvent(Loc.GetF("chaos_event_sin_bonus", _state.SinExtraMult)); }
+                    if (shielded) _state.PushEvent(Loc.Get("chaos_event_sin_shielded"));
+                    if (_state.MaxedBoons.Contains("surrender")) { _state.Shields++;
+                        _state.PushEvent(Loc.Get("chaos_event_sin_resistance"));
+                        Pulse(Color.FromRgb(120, 220, 160), 0.22); }
                     ChaosOverlayWindow.ChaosSfx.Play("sin_accept", 0.6f);
                 }
                 ChaosAnnouncerOverlay.Announce($"{(boon.IsCurse ? "☠" : "◈")} {boon.Name}",
