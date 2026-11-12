@@ -105,6 +105,71 @@ public sealed class LauncherWindowTests
     });
 
     [Fact]
+    public void LobbyChessJoinHonorsLeashAndReturnsAfterGameCloses() => Run(shell =>
+    {
+        var oldDue = MainShellWindow.LeashGateDueProvider;
+        var oldPresent = MainShellWindow.PresentLeashGateProvider;
+        var due = true; var presented = 0; var launches = 0;
+        MainShellWindow.LeashGateDueProvider = () => due;
+        MainShellWindow.PresentLeashGateProvider = _ => presented++;
+        var launcher = new LauncherWindow();
+        typeof(LauncherWindow).GetField("_panel", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(launcher, shell);
+        launcher.ReadLobbyGates = () => LobbyGates.From(true, true, true);
+        launcher.CreateLobby = () => new LobbyPoll(new LobbyTimer(), () => true, () => Array.Empty<Friend>(),
+            () => Task.FromResult(new PbpLobbyReply(new[] { new PbpOpenSeat("p_table", "Host", 300000, 0, 0) }, Array.Empty<PbpPlayingGame>(), true)),
+            () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), true)));
+        var game = new Window();
+        launcher.OpenLobbyGame = _ => { launches++; game.Show(); return game; };
+        void Join()
+        {
+            var chip = launcher.FindControl<Button>("LobbyChip")!;
+            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            ((MenuItem)chip.ContextMenu!.Items[0]!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        }
+        try
+        {
+            shell.Hide(); launcher.Show(); Join();
+            Assert.Equal(1, presented); Assert.Equal(0, launches);
+            due = false; shell.Hide(); launcher.Show(); Join();
+            Assert.Equal(1, launches); Assert.False(launcher.IsVisible);
+            game.Close(); Assert.True(launcher.IsVisible);
+        }
+        finally
+        {
+            MainShellWindow.LeashGateDueProvider = oldDue;
+            MainShellWindow.PresentLeashGateProvider = oldPresent;
+            game.Close(); launcher.Close();
+        }
+    });
+
+    [Fact]
+    public void LobbyRemoteJoinClaimsAndOpensTheReturnedSession() => Run(shell =>
+    {
+        var launcher = new LauncherWindow();
+        typeof(LauncherWindow).GetField("_panel", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(launcher, shell);
+        launcher.ReadLobbyGates = () => LobbyGates.From(true, true, true);
+        launcher.CreateLobby = () => new LobbyPoll(new LobbyTimer(), () => true, () => Array.Empty<Friend>(),
+            () => Task.FromResult(PbpLobbyReply.Empty), () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((IReadOnlyList<RemoteSeat>)new[] { new RemoteSeat("subject", "Host", 1, "light", Array.Empty<string>(), false) }, true)));
+        string? claimed = null; string? opened = null;
+        launcher.ClaimLobbySubject = key => { claimed = key; return Task.FromResult<string?>("https://example.invalid/#pin"); };
+        launcher.OpenLobbyUrl = url => { opened = url; return true; };
+        try
+        {
+            launcher.Show();
+            var chip = launcher.FindControl<Button>("LobbyChip")!;
+            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var row = (MenuItem)chip.ContextMenu!.Items[0]!;
+            Assert.True(row.IsEnabled);
+            row.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.Equal("subject", claimed);
+            Assert.Equal("https://example.invalid/#pin", opened);
+        }
+        finally { launcher.Close(); }
+    });
+
+    [Fact]
     public void HiddenBoot_ConcealsTheWholeWindowUntilRoutingCompletes() => Run(shell =>
     {
         shell.Hide();

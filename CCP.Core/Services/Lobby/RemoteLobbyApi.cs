@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text;
 using Newtonsoft.Json.Linq;
 namespace ConditioningControlPanel.Services.Lobby;
 /// <summary>WPF AvailableSubjectsService list wire, without its dispatcher-owned collection.
@@ -21,6 +22,26 @@ public sealed class RemoteLobbyApi
         _http = http ?? Shared;
         _identity = identity ?? LobbyWire.DefaultIdentity;
         _baseUrl = baseUrl ?? LobbyWire.DefaultBaseUrl;
+    }
+    public async Task<string?> ClaimAsync(string subject, CancellationToken ct = default)
+    {
+        var id = _identity();
+        var url = _baseUrl();
+        if (id == null || string.IsNullOrEmpty(url) || string.IsNullOrEmpty(subject)) return null;
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, url + "/v2/directory/claim")
+            {
+                Content = new StringContent(new JObject { ["unified_id"] = subject }.ToString(), Encoding.UTF8, "application/json")
+            };
+            request.Headers.Add("X-Auth-Token", id.Value.Token);
+            request.Headers.Add("X-Caller-Unified-Id", id.Value.UnifiedId);
+            using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
+            if ((int)response.StatusCode == 409) { await MergedAccountRecovery.TryHandleAsync(response).ConfigureAwait(false); return null; }
+            if (!response.IsSuccessStatusCode) return null;
+            return JObject.Parse(await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false))["session_url"]?.ToString();
+        }
+        catch { return null; }
     }
     public async Task<(IReadOnlyList<RemoteSeat> Seats, bool Ok)> FetchAsync(CancellationToken ct = default)
     {

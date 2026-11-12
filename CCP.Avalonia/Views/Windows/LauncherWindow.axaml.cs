@@ -544,7 +544,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// that refused leaves the launcher where it is.</summary>
         private void LaunchGameWindow(string id)
         {
-            var game = Games.GameWindow.Launch(id);
+            HandoffGame(Games.GameWindow.Launch(id), id);
+        }
+
+        private void HandoffGame(Window? game, string id)
+        {
             if (game == null) return;
             AfterExitBeat(() =>
             {

@@ -77,6 +77,38 @@ public sealed class LobbyPollTests {
         await round; Assert.Equal(LobbySnapshot.Empty, lobby.Snapshot);
         lobby.Dispose(); timer.Fire(); await lobby.RefreshAsync(); Assert.Equal(1, changed);
     }
+    [Fact]
+    public async Task RaceRoomsAreIncludedInPolling() {
+        using var lobby = new LobbyPoll(new Timer(), () => true, () => Array.Empty<Friend>(),
+            () => Task.FromResult(PbpLobbyReply.Empty), () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), true)),
+            () => Task.FromResult(new RaceOpenReply(new[] { new RaceOpenRoom("room", "track", "Host", 4, 1, 3, false, null, false) }, true)));
+        await lobby.RefreshAsync();
+        Assert.Contains(lobby.Snapshot.Joinable, row => row.Game == LobbyGame.Race && row.Key == "room");
+    }
+    private sealed class ClaimHandler : HttpMessageHandler {
+        public HttpStatusCode Status = HttpStatusCode.OK;
+        public int Calls;
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) {
+            Calls++;
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("/v2/directory/claim", request.RequestUri!.AbsolutePath);
+            Assert.Equal("caller", Assert.Single(request.Headers.GetValues("X-Caller-Unified-Id")));
+            Assert.Equal("test-token", Assert.Single(request.Headers.GetValues("X-Auth-Token")));
+            Assert.Contains("subject", await request.Content!.ReadAsStringAsync(ct));
+            return new HttpResponseMessage(Status) { Content = new StringContent(Status == HttpStatusCode.OK ? "{\"session_url\":\"https://example.invalid/#pin\"}" : "{}") };
+        }
+    }
+    [Fact]
+    public async Task RemoteClaimUsesAuthenticatedPostAndOnlyReturnsSuccessfulUrl() {
+        var handler = new ClaimHandler(); using var http = new HttpClient(handler);
+        var api = new RemoteLobbyApi(http, () => ("caller", "test-token"), () => "https://example.invalid");
+        Assert.Equal("https://example.invalid/#pin", await api.ClaimAsync("subject"));
+        handler.Status = HttpStatusCode.Conflict;
+        Assert.Null(await api.ClaimAsync("subject"));
+        Assert.Null(await api.ClaimAsync(""));
+        Assert.Equal(2, handler.Calls);
+    }
     private sealed class DirectoryHandler : HttpMessageHandler {
         public bool Fail;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) {

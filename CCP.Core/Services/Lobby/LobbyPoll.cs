@@ -13,6 +13,7 @@ public sealed class LobbyPoll : IDisposable
     private readonly Func<bool> _signedIn;
     private readonly Func<Task<PbpLobbyReply>> _chess;
     private readonly Func<Task<OpenTablesReply>> _goon;
+    private readonly Func<Task<RaceOpenReply>> _race;
     private readonly Func<Task<(IReadOnlyList<RemoteSeat> Seats, bool Ok)>> _remote;
     private readonly Func<IReadOnlyList<Friend>> _friends;
     private readonly object _gate = new();
@@ -24,10 +25,10 @@ public sealed class LobbyPoll : IDisposable
     public event Action<LobbySnapshot>? Changed;
     public LobbyPoll(IUiTimer timer, Func<bool> signedIn, Func<IReadOnlyList<Friend>> friends,
         Func<Task<PbpLobbyReply>> chess, Func<Task<OpenTablesReply>> goon,
-        Func<Task<(IReadOnlyList<RemoteSeat> Seats, bool Ok)>> remote)
+        Func<Task<(IReadOnlyList<RemoteSeat> Seats, bool Ok)>> remote, Func<Task<RaceOpenReply>>? race = null)
     {
         _timer = timer; _signedIn = signedIn; _friends = friends;
-        _chess = chess; _goon = goon; _remote = remote;
+        _chess = chess; _goon = goon; _remote = remote; _race = race ?? (() => Task.FromResult(RaceOpenReply.Empty));
         _timer.Interval = LobbyPollPlan.Base;
         _timer.Tick += OnTick;
     }
@@ -71,12 +72,13 @@ public sealed class LobbyPoll : IDisposable
                 var chess = Safe(_chess, PbpLobbyReply.Empty);
                 var goon = Safe(_goon, OpenTablesReply.Empty);
                 var remote = Safe(_remote, ((IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), false));
-                await Task.WhenAll(chess, goon, remote).ConfigureAwait(false);
-                ok = chess.Result.Ok || remote.Result.Item2; // Goon has no error distinction in WPF.
+                var race = Safe(_race, RaceOpenReply.Empty);
+                await Task.WhenAll(chess, goon, remote, race).ConfigureAwait(false);
+                ok = chess.Result.Ok || remote.Result.Item2 || race.Result.Ok; // Goon has no error distinction in WPF.
                 IReadOnlyList<Friend> friends;
                 try { friends = _friends(); } catch { friends = Array.Empty<Friend>(); }
                 snapshot = LobbyMerge.Build(chess.Result, goon.Result, remote.Result.Item1, friends, true,
-                    DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+                    DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), race.Result);
                 if (!_signedIn()) snapshot = LobbySnapshot.Empty;
             }
         }

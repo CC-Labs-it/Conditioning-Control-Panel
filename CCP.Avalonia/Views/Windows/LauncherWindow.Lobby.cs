@@ -15,6 +15,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows;
 public partial class LauncherWindow
 {
     internal Func<LobbyPoll> CreateLobby = AvailableSubjectsTabView.BuildLobby;
+    internal Func<LobbyGates> ReadLobbyGates = () => LobbyGates.From(Platform.FriendsHead.Identity() != null,
+        TierGate.HasPremium, TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed);
+    internal Func<LobbyRow, Window?> OpenLobbyGame = row => row.Game == LobbyGame.Chess
+        ? GameWindow.OpenChessLobby("join", row.Key) : GameWindow.LaunchFriendRace(row.Key);
+    internal Func<string, System.Threading.Tasks.Task<string?>> ClaimLobbySubject = key => new RemoteLobbyApi().ClaimAsync(key);
+    internal Func<string, bool> OpenLobbyUrl = Platform.ExternalOpener.Open;
     private LobbyPoll? _lobby;
     private DispatcherTimer? _lobbyTimer;
     private ContextMenu? _lobbyDrop;
@@ -68,10 +74,9 @@ public partial class LauncherWindow
             menu.Items.Add(new MenuItem { Header = Loc.Get(snapshot.SignedIn ? "lobby_empty_open" : "lobby_signed_out"), IsEnabled = false });
         foreach (var row in rows)
         {
-            var card = new LobbyCardView(row, LobbyGates.From(Platform.FriendsHead.Identity() != null,
-                TierGate.HasPremium, TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed));
+            var card = new LobbyCardView(row, ReadLobbyGates());
             var item = new MenuItem { Header = card.Title + "  " + card.Line + "  " + card.ButtonText,
-                IsEnabled = row.Game == LobbyGame.Chess || row.Game == LobbyGame.Race };
+                IsEnabled = row.Game is LobbyGame.Chess or LobbyGame.Race or LobbyGame.Remote };
             item.Click += (_, _) => JoinLobbyRow(row);
             menu.Items.Add(item);
         }
@@ -82,10 +87,22 @@ public partial class LauncherWindow
     private void JoinLobbyRow(LobbyRow row)
     {
         if (MainShellWindow.LockdownActive || !row.CanJoin) return;
-        var gates = LobbyGates.From(Platform.FriendsHead.Identity() != null, TierGate.HasPremium,
-            TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed);
+        var gates = ReadLobbyGates();
         if (!gates.CanJoin(row.Game)) { if (Panel is { } panel) _ = panel.OpenUnifiedLoginDialog(); return; }
-        if (row.Game == LobbyGame.Chess) GameWindow.OpenChessLobby("join", row.Key);
-        else if (row.Game == LobbyGame.Race) GameWindow.LaunchFriendRace(row.Key);
+        if (row.Game == LobbyGame.Chess && MainShellWindow.LeashBlocksGames)
+        {
+            OpenPanel(p => p.PresentLeashGateFromLauncher());
+            return;
+        }
+        if (row.Game == LobbyGame.Chess) HandoffGame(OpenLobbyGame(row), row.Game.ToString());
+        else if (row.Game == LobbyGame.Race && RaceJoinLink.IsRoomId(row.Key)) _ = OpenLobbyGame(row);
+        else if (row.Game == LobbyGame.Remote) _ = ClaimRemoteLobby(row.Key!);
     }
+    private async System.Threading.Tasks.Task ClaimRemoteLobby(string key)
+    {
+        var url = await ClaimLobbySubject(key);
+        if (!string.IsNullOrEmpty(url)) OpenLobbyUrl(url);
+        _ = _lobby?.RefreshAsync();
+    }
+
 }
