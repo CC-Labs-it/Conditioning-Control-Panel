@@ -57,6 +57,35 @@ public sealed partial class AccountSeedTests
         Assert.Single(wire.Syncs);
     });
 
+    [Fact]
+    public void RecoveryClaimIsCredited() => WithFreshInstall(async () =>
+    {
+        var (wire, _, _) = SignIn("u1", null);
+        var s = CoreSettings.Current;
+        s.PlayerLevel = 2;
+        s.LastWebXpClaimId = null;
+        var xp = ProfileAdopt.TotalXp(s);
+        wire.SyncReply = """{"success":true,"web_xp":{"claim":{"id":"recovery","amount":17}}}""";
+        await AccountSeed.PostLoginAsync();
+        Assert.Equal("recovery", s.LastWebXpClaimId);
+        Assert.Equal(xp + 17, ProfileAdopt.TotalXp(s));
+    });
+
+    [Fact]
+    public void RecoveryEventuallyReadsAndSyncsLaterProgress() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", null);
+        CoreSettings.Current.PlayerLevel = 2;
+        await AccountSeed.PostLoginAsync();
+        wire.Profile = L40Profile("u1");
+        await Task.Delay(1500);
+        Assert.True(sync.Loaded);
+        ProgressionBank.AddClaimed(17);
+        sync.UtcNow = () => T0.AddHours(1);
+        Assert.True(await sync.PushAsync("later progress"));
+        Assert.Equal(ProfileAdopt.TotalXp(CoreSettings.Current), wire.Syncs.Last().Value<double>("xp"));
+    });
+
     [Theory]
     [InlineData(99, 0)]
     [InlineData(100, 1)]

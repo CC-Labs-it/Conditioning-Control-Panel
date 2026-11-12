@@ -173,12 +173,32 @@ internal static class AccountSeed
             if (CoreSettings.Current.UnifiedId == uid && Sync is { } sync)
             {
                 if (loaded || sync.Loaded) await sync.PushAsync("after login");
-                else await sync.PushAfterFailedReadAsync();
+                else
+                {
+                    var session = sync.SessionVersion;
+                    if (await sync.PushAfterFailedReadAsync())
+                        _ = RetryProfileReadAsync(sync, uid, session);
+                }
             }
         }
         finally
         {
             if (achievements != null) achievements.SuppressPopups = false;
+        }
+    }
+
+    private static async Task RetryProfileReadAsync(SyncPush sync, string uid, int session)
+    {
+        var settings = CoreSettings.Current;
+        var delay = 1;
+        while (ReferenceEquals(Sync, sync) && sync.SessionVersion == session && !sync.Loaded
+            && ReferenceEquals(CoreSettings.Current, settings) && settings.UnifiedId == uid && !settings.OfflineMode)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(delay));
+            if (!ReferenceEquals(Sync, sync) || sync.SessionVersion != session || sync.Loaded
+                || !ReferenceEquals(CoreSettings.Current, settings) || settings.UnifiedId != uid || settings.OfflineMode) return;
+            if (await LoadProfileAsync()) return;
+            delay = Math.Min(delay * 2, 60);
         }
     }
 
@@ -350,6 +370,8 @@ internal static class AccountSeed
     {
         var s = CoreSettings.Current;
         var id = s.UnifiedId;
+        var syncAtRead = Sync;
+        var session = syncAtRead?.SessionVersion;
         if (s.OfflineMode || string.IsNullOrEmpty(id)) return false;
         PrizeOwnership.Feed.NoteAccount(id);
         var user = await v2.GetUserProfileAsync(id);
@@ -359,7 +381,8 @@ internal static class AccountSeed
             return false;
         }
         // The request may finish after logout or an account/settings switch.
-        if (!ReferenceEquals(s, CoreSettings.Current) || s.UnifiedId != id || s.OfflineMode) return false;
+        if (!ReferenceEquals(s, CoreSettings.Current) || s.UnifiedId != id || s.OfflineMode
+            || !ReferenceEquals(Sync, syncAtRead) || syncAtRead?.SessionVersion != session) return false;
         // WPF ProfileSyncService: the profile read seeds ownership before the garage opens (#3854).
         PrizeOwnership.Feed.Apply(id, user.UnifiedId, user.Prizes, "V2 profile");
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);

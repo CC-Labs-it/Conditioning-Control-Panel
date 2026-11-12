@@ -138,6 +138,7 @@ namespace ConditioningControlPanel.Services
 
         public PrizesFeed? Prizes { get; set; }
         public bool Loaded { get; private set; }
+        internal int SessionVersion => Volatile.Read(ref _sessionVersion);
         /// <summary>The fuse fed by each successful response's <c>descent_countdown</c> block.</summary>
         public Descent.DescentCountdownService? Countdown { get; set; }
         public Descent.DescentService? DescentReader { get; set; }
@@ -353,7 +354,7 @@ namespace ConditioningControlPanel.Services
                     // WPF ProfileSyncService.cs:1874: ownership precedes other response flags.
                     Prizes?.Apply(id, id, reply["prizes"]?.ToObject<PrizesBlock>(), "V2 sync");
                     if (AdoptFromResponse(s, reply)) _adopted = true;
-                    ClaimWebXp(s, reply);
+                    ClaimWebXp(s, reply, allowUnread, session, id);
                     // Then the level/XP adopt (held while a migration is pending) and WPF's migration handshake
                     // (ProfileSyncService.cs:1903-1904): the ack first, the offer second. A taken offer syncs again.
                     if (ApplyReply(s, reply, DescentReader?.Current?.Stage, UtcNow(), PersistMigration))
@@ -510,18 +511,18 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF SyncProfileAsync:1970-1985: a new web XP claim is persisted (and saved) BEFORE its XP is added, so a
         /// crash under-pays once instead of paying twice; skipped on level_reset, whose level/XP overwrite would eat it. The
         /// id then goes back as <c>web_xp_claim_ack</c> on every push.</summary>
-        internal void ClaimWebXp(AppSettings s, JObject reply)
+        internal void ClaimWebXp(AppSettings s, JObject reply, bool allowUnread = false, int? responseSession = null, string? responseAccount = null)
         {
             if (reply["web_xp"]?["claim"] is not JObject claim || reply["level_reset"]?.Type == JTokenType.Boolean && reply.Value<bool>("level_reset")) return;
             var id = claim["id"]?.Type == JTokenType.String ? (string?)claim["id"] : null;
             var amount = claim["amount"]?.Type == JTokenType.Integer ? (int)claim["amount"]! : 0;
             if (string.IsNullOrEmpty(id) || amount <= 0 || id == s.LastWebXpClaimId) return;
-            var account = s.UnifiedId;
-            var session = Volatile.Read(ref _sessionVersion);
+            var account = responseAccount ?? s.UnifiedId;
+            var session = responseSession ?? Volatile.Read(ref _sessionVersion);
             CoreDispatch.Post(() =>
             {
                 // WPF ProfileSyncService:1970-1985 pays immediately. Keep its id/save/payment together on UI dispatch.
-                if (!Loaded || session != Volatile.Read(ref _sessionVersion) || !ReferenceEquals(s, CoreSettings.Current)
+                if ((!Loaded && !allowUnread) || session != Volatile.Read(ref _sessionVersion) || !ReferenceEquals(s, CoreSettings.Current)
                     || !SignedIn(s) || s.UnifiedId != account || s.LastWebXpClaimId == id) return;
                 s.LastWebXpClaimId = id;
                 CoreSettings.Save();
