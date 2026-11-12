@@ -5,7 +5,7 @@
  * snapshot (never merged): the host init's `identity.grants`, a host `owned { grants }` push (desktop, after a buy)
  * and the `grants` of GET /v2/race/profile (meta/profileSync.js, every platform). Only `cos.kart.*` ids and the two
  * kart Prime families (`cos.prime.paint.*`, `cos.prime.trail.*`) are kept.
- * The last snapshot is remembered per account under `glassroad.owned.v1`, so the garage opens with it before the
+ * The last snapshot is remembered per account under `glassroad.owned.v1.<account>`, so the garage opens with it before the
  * profile answers; another account, or none, owns nothing. A client lock only: rooms take any listed vehicle id
  * (NET.md) and a look never reaches the sim or the course hash. Storage access always in try/catch.
  */
@@ -24,9 +24,10 @@ function defaultStorage() { try { return globalThis.localStorage || null; } catc
 export function createOwned({ storage = defaultStorage(), uid = null } = {}) {
   const idOf = v => (typeof v === 'string' && v ? v : null);
   let account = idOf(uid);
+  const key = () => OWNED_KEY + '.' + encodeURIComponent(account);
   const read = () => {
     if (!account) return [];
-    try { const o = JSON.parse(storage?.getItem(OWNED_KEY) || 'null'); return o && o.uid === account ? cleanGrants(o.grants) || [] : []; } catch (e) { return []; }
+    try { const o = JSON.parse(storage?.getItem(key()) || storage?.getItem(OWNED_KEY) || 'null'); return o && o.uid === account ? cleanGrants(o.grants) || [] : []; } catch (e) { return []; }
   };
   let grants = read();
   return {
@@ -38,7 +39,7 @@ export function createOwned({ storage = defaultStorage(), uid = null } = {}) {
       const next = cleanGrants(list);
       if (!next) return false;
       grants = next;
-      if (account) try { storage?.setItem(OWNED_KEY, JSON.stringify({ uid: account, grants })); } catch (e) { /* private window */ }
+      if (account) try { storage?.setItem(key(), JSON.stringify({ uid: account, grants })); storage?.setItem(OWNED_KEY, JSON.stringify({ uid: account, grants })); } catch (e) { /* private window */ }
       return true;
     },
   };

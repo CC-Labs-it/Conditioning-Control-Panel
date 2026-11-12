@@ -71,3 +71,16 @@ test('owned bodies: boot wires every source into the garage and the host push', 
   assert.match(garage, /ownedKarts\(ownedGrants\(\)\)/);
   assert.ok(!/Math\.PI\/4/.test(garage), 'the ring spacing follows the kart count');
 });
+
+test('owned store: switching accounts preserves each account snapshot', () => {
+  const storage = memory();
+  const owned = createOwned({ storage, uid: 'ann' });
+  owned.adopt(['cos.kart.body.petal']);
+  owned.setAccount('bea');
+  owned.adopt(['cos.kart.body.reverie']);
+  owned.setAccount('ann');
+  assert.deepEqual(owned.grants, ['cos.kart.body.petal']);
+  owned.setAccount('bea');
+  assert.deepEqual(owned.grants, ['cos.kart.body.reverie']);
+  assert.deepEqual(createOwned({ storage, uid: 'ann' }).grants, ['cos.kart.body.petal']);
+});
