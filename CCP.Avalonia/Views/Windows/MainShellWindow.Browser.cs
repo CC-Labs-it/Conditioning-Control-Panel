@@ -34,7 +34,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Panic surface "browser-media" (WPF b9368d963 PanicEndBrowserMedia): page video stops, fullscreen drops.</summary>
         internal void PanicPauseBrowserMedia()
         {
-            EndWebVideoTakeover();
             if (BrowserView is { } host) _ = host.InvokeScriptAsync(WebHostMedia.PanicPauseScript);
         }
 

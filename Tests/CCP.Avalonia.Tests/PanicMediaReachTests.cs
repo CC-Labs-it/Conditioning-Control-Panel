@@ -71,6 +71,8 @@ public sealed class PanicMediaReachTests
             Surface("browser-media").Stop(shell);
 
             Assert.Equal(WebHostMedia.PanicPauseScript, Assert.Single(sent));
+            Assert.Contains("window._ccpTakeoverStopped = true", WebHostMedia.PanicPauseScript);
+            Assert.Contains("window._ccpForcedFs = false", WebHostMedia.PanicPauseScript);
             Assert.Contains("e.pause()", WebHostMedia.PanicPauseScript);
             Assert.Contains("exitFullscreen", WebHostMedia.PanicPauseScript);
             Assert.DoesNotContain("currentTime", WebHostMedia.PanicPauseScript);   // paused, never rewound

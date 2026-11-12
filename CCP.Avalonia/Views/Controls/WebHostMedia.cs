@@ -17,7 +17,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     {
         /// <summary>WPF b9368d963 (MainWindow.xaml.cs PanicEndBrowserMedia, EnhancementPlayerWindow.PanicPauseAll): a
         /// panic pauses every page video/audio (playhead kept) and drops page fullscreen. Never latches the Workshop pause.</summary>
-        internal const string PanicPauseScript = "(function(){var pause=function(d){try{"
+        internal const string PanicPauseScript = "window._ccpForcedFs = false; window._ccpTakeoverStopped = true;"
+            + "(function(){var pause=function(d){try{"
             + "d.querySelectorAll('video,audio').forEach(function(e){e.pause();});"
             + "if(d.fullscreenElement)d.exitFullscreen();"
             + "d.querySelectorAll('iframe').forEach(function(f){try{if(f.contentDocument)pause(f.contentDocument);}catch(e){}});"
