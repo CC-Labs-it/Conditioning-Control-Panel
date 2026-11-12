@@ -1,4 +1,6 @@
 {
+  "first_run_assets_title": "选择内容文件夹",
+  "first_run_assets_body": "选择用于存放图片、视频和下载内容包的文件夹？以后可在设置的资源页面中更改。",
   "scheduler_started_title": "计划已启用",
   "scheduler_started_body": "会话已按计划自动开始。",
   "scheduler_ended_title": "计划",

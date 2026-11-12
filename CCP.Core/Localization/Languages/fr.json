@@ -1,4 +1,6 @@
 {
+  "first_run_assets_title": "Choisir le dossier de contenu",
+  "first_run_assets_body": "Choisir un dossier pour les images, vidéos et packs téléchargés ? Vous pourrez le modifier dans Paramètres > Ressources.",
   "scheduler_started_title": "Planification active",
   "scheduler_started_body": "Séance démarrée automatiquement selon le planning.",
   "scheduler_ended_title": "Planification",

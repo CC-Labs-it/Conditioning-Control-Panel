@@ -331,6 +331,7 @@ public sealed class FeatureIntroUpgradeTests
         var s = service.Current;
         s.PerformanceMode = true;
         s.Welcomed = true;
+        s.FirstRunAssetsPromptShown = true; // upgrade tests start after the legacy folder prompt
         s.HasAcceptedAgeVerification = true;
         s.LastSeenVersion = previous ?? CoreReleaseContent.AppVersion;
         s.SeenFeatureIntros.Clear();

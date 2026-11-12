@@ -230,6 +230,7 @@ public sealed class RemoteMediaOfferModalTests
             var s = service.Current;
             s.Welcomed = true;
             s.HasAcceptedAgeVerification = false;
+            s.FirstRunAssetsPromptShown = true; // this test isolates the age gate, not the legacy folder prompt
             s.MediaSource = "local";
             s.LastSeenVersion = CoreReleaseContent.AppVersion;
             foreach (var key in FeatureIntros.All.Keys) if (!s.SeenFeatureIntros.Contains(key)) s.SeenFeatureIntros.Add(key);

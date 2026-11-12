@@ -1,4 +1,6 @@
 {
+  "first_run_assets_title": "Escolher pasta de conteúdo",
+  "first_run_assets_body": "Escolher uma pasta para imagens, vídeos e pacotes baixados? Você pode alterá-la depois em Configurações > Recursos.",
   "scheduler_started_title": "Agendamento ativo",
   "scheduler_started_body": "Sessão iniciada automaticamente conforme o agendamento.",
   "scheduler_ended_title": "Agendamento",

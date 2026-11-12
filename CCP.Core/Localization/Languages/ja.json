@@ -1,4 +1,6 @@
 {
+  "first_run_assets_title": "コンテンツフォルダーの選択",
+  "first_run_assets_body": "画像、動画、ダウンロードしたパック用のフォルダーを選びますか？ 後で設定のアセットから変更できます。",
   "scheduler_started_title": "スケジュール有効",
   "scheduler_started_body": "スケジュールに従ってセッションを自動的に開始しました。",
   "scheduler_ended_title": "スケジュール",

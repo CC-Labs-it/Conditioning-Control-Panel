@@ -48,6 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             try
             {
                 if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => FlushPending(owner)); return; }
+                if (MainShellWindow.FirstRunAssetsPromptPending) return;
                 if (Interlocked.Exchange(ref _pending, null) is { } pending) Offer(pending.Item1, pending.Item2 ?? owner);
             }
             catch (Exception ex) { Log.Warning(ex, "RemoteMedia: pending offer flush failed"); }

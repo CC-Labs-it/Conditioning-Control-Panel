@@ -1,4 +1,6 @@
 {
+  "first_run_assets_title": "콘텐츠 폴더 선택",
+  "first_run_assets_body": "이미지, 동영상 및 다운로드한 팩을 저장할 폴더를 선택할까요? 나중에 설정의 에셋에서 변경할 수 있습니다.",
   "scheduler_started_title": "일정 활성화",
   "scheduler_started_body": "일정에 따라 세션이 자동으로 시작되었습니다.",
   "scheduler_ended_title": "일정",

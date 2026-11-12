@@ -183,7 +183,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             OnceOpened(ArmPendingRegistration);
             Opened += (_, _) => WireOnlineMeterPill();   // MainShellWindow.OnlineMeter.cs (WPF WireOnlineMeter)
             // WPF MainWindow.xaml.cs:3852: an offer parked at startup surfaces once a window exists.
-            OnceOpened(() => Platform.RemoteMediaOffer.FlushPending(this));
+            ArmFirstRunAssetsPrompt();
+            OnceOpened(async () =>
+            {
+                await CheckFirstRunAssetsPromptAsync();
+                if (IsVisible && CoreSettings.Current.HasAcceptedAgeVerification)
+                    Platform.RemoteMediaOffer.FlushPending(this);
+            });
         }
 
         /// <summary>Uses an already-loaded catalogue without making the parameterless shell open
@@ -378,8 +384,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 //   private System.Windows.Media.Imaging.BitmapImage? LoadQuestImage(…)
 //   private void CenterOnPrimaryScreen(…)
 //   private async void MainWindow_Loaded(…)
-//   private async Task CheckFirstRunAssetsPromptAsync(…)
-//   private static bool HasAnyLocalMedia(…)
 //   private const int WM_GETMINMAXINFO
 //   private const int WM_ENTERSIZEMOVE
 //   private const int WM_EXITSIZEMOVE
