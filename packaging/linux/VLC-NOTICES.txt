@@ -13,6 +13,7 @@ Linked statically into the plugins (licence texts in lib/vlc/licenses/<name>/):
   mpg123                                       LGPL-2.1
   soxr                                         LGPL-2.1+
   libebml, libmatroska                         LGPL-2.1+
+  libdvbpsi                                    LGPL-2.1+
   libogg, libvorbis, opus, flac, libvpx        BSD-style (Xiph.Org / WebM project)
   dav1d, openjpeg                              BSD-2-Clause
   gsm, zlib                                    permissive
