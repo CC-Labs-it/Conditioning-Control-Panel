@@ -88,6 +88,25 @@ public class JackpotRemixHostTests
     }
 
     [Fact]
+    public async Task FailuresSurviveBuilderReplacement()
+    {
+        using var f = new Fixture();
+        var state = new JackpotRemixBuilder.FailureState();
+        var calls = 0;
+        using (var first = new JackpotRemixBuilder(f.Root, () => f.Root, f.Output,
+            exchange: (_, _) => { calls++; return Task.FromResult<string?>(null); }, failures: state))
+        {
+            await first.BuildAsync(new[] { f.Source }, 1, CancellationToken.None);
+            await first.BuildAsync(new[] { f.Source }, 1, CancellationToken.None);
+        }
+        using var next = new JackpotRemixBuilder(f.Root, () => f.Root, f.Output,
+            exchange: (_, _) => { calls++; return Task.FromResult<string?>(null); }, failures: state);
+        Assert.True(next.Disabled);
+        Assert.Null(await next.BuildAsync(new[] { f.Source }, 1, CancellationToken.None));
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
     public async Task TimeoutDoesNotDisableAndLaterBuildSucceeds()
     {
         using var f = new Fixture();

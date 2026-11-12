@@ -21,13 +21,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 internal static partial class FlashOverlay
 {
     private static JackpotRemixBuilder? _remixBuilder;
+    private static readonly JackpotRemixBuilder.FailureState RemixFailures = new();
     internal static JackpotRemixDirector? _remix;
 
     private static JackpotRemixDirector EnsureRemix()
     {
         if (_remix != null) return _remix;
         var folder = Path.Combine(CorePaths.UserData, "cache", "remix");
-        _remixBuilder = new JackpotRemixBuilder(Path.Combine(AppContext.BaseDirectory, "Resources", "web"), () => CorePaths.EffectiveAssets, folder);
+        _remixBuilder = new JackpotRemixBuilder(Path.Combine(AppContext.BaseDirectory, "Resources", "web"), () => CorePaths.EffectiveAssets, folder, failures: RemixFailures);
         var builder = _remixBuilder;
         _remix = new JackpotRemixDirector(() =>
         {

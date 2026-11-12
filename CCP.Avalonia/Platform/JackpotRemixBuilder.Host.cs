@@ -21,14 +21,15 @@ internal sealed partial class JackpotRemixBuilder : IDisposable
     private readonly SemaphoreSlim _one = new(1, 1);
     private readonly CancellationTokenSource _closing = new();
     private readonly Func<string, CancellationToken, Task<string?>>? _exchange;
-    private int _failures;
-    internal bool Disabled => Volatile.Read(ref _failures) >= 2;
+    internal sealed class FailureState { internal int Count; }
+    private readonly FailureState _failures;
+    internal bool Disabled => Volatile.Read(ref _failures.Count) >= 2;
 
     internal JackpotRemixBuilder(string webRoot, Func<string> assetsRoot, string output, TimeSpan? timeout = null,
-        Func<string, CancellationToken, Task<string?>>? exchange = null)
+        Func<string, CancellationToken, Task<string?>>? exchange = null, FailureState? failures = null)
     {
         _webRoot = webRoot; _assetsRoot = assetsRoot; _output = output;
-        _timeout = timeout ?? TimeSpan.FromSeconds(120); _exchange = exchange;
+        _timeout = timeout ?? TimeSpan.FromSeconds(120); _exchange = exchange; _failures = failures ?? new FailureState();
     }
 
     internal async Task<string?> BuildAsync(IReadOnlyList<string> paths, int seed, CancellationToken ct)
@@ -50,7 +51,7 @@ internal sealed partial class JackpotRemixBuilder : IDisposable
             var request = JsonSerializer.Serialize(new { type = "build", id, media, seed, seconds = 3, scale = 1 });
             var reply = _exchange != null ? await _exchange(request, deadline.Token).WaitAsync(deadline.Token).ConfigureAwait(false)
                 : await RunPageAsync(server, request, id, deadline.Token).ConfigureAwait(false);
-            if (reply == null) { Interlocked.Increment(ref _failures); return null; }
+            if (reply == null) { Interlocked.Increment(ref _failures.Count); return null; }
             using var json = JsonDocument.Parse(reply);
             var root = json.RootElement;
             if (!root.TryGetProperty("type", out var type) || type.GetString() != "built" ||

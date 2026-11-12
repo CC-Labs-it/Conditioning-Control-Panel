@@ -33,5 +33,6 @@ for (const native of [false, true]) test(`browser playback monitor ${native ? 'W
     videos[0].offsetWidth = 100;
     now += 2100; tick(); assert.equal(last().active, false); // small muted previews are ignored
     frames = [{ offsetWidth: 300, contentDocument: null }];
-    tick(); assert.equal(last().active, true); // inaccessible player-sized iframe fails closed
+    tick(); assert.equal(last().active, true);
+    now += 11000; tick(); assert.equal(last().active, false); // unknown idle frame eventually releases
 });

@@ -35,7 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private string? _remixMediaId;
 
         // WPF BrowserService.cs:337: watch user-started media, not only takeover playback.
-        // Inaccessible player-sized frames stay busy: this adapter cannot inject into frames.
+        // Give inaccessible frames a bounded grace period because their playback state is unknown.
         internal const string RemixMediaScript = """
             (() => {
               const id = __CCP_TOKEN__;
@@ -43,13 +43,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
               if (window.__ccpRemixAbort) window.__ccpRemixAbort.abort();
               const controller = window.__ccpRemixAbort = new AbortController();
               let lastPlaying = 0;
+              const unknownFrames = new WeakMap();
+              const unknown = f => {
+                if (!unknownFrames.has(f)) unknownFrames.set(f, Date.now());
+                return Date.now() - unknownFrames.get(f) < 8000;
+              };
               const busy = d => {
                 // This head mutes elements, so player-sized video stays busy even while muted.
                 if ([...d.querySelectorAll('video,audio')].some(m => !m.paused && !m.ended && (m.tagName === 'AUDIO' ? !m.muted : m.offsetWidth >= 200))) return true;
                 for (const f of d.querySelectorAll('iframe')) {
                   if (f.offsetWidth < 200) continue;
-                  try { if (!f.contentDocument || busy(f.contentDocument)) return true; }
-                  catch (_) { return true; }
+                  try {
+                    if (!f.contentDocument) { if (unknown(f)) return true; }
+                    else { unknownFrames.delete(f); if (busy(f.contentDocument)) return true; }
+                  } catch (_) { if (unknown(f)) return true; }
                 }
                 return false;
               };
