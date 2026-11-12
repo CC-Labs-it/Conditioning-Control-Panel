@@ -43,6 +43,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // WPF SubliminalService.cs:609-629: notify only after the delayed show is admitted.
         internal static event Action? Displayed;
         private static bool _warnedUnavailable;
+        private static int? _oneShot;
         private static readonly Dictionary<PixelRect, SharedOverlayHost.Lease> Hosts = new();
         private static readonly List<Action> RetireHosted = new();
 
@@ -97,6 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static void ClearCards()
         {
+            _oneShot = null;
             foreach (var retire in RetireHosted) retire();
             RetireHosted.Clear();
             _visibleOwner = null;
@@ -107,6 +109,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             foreach (var lease in Hosts.Values) lease.Dispose();
             Hosts.Clear();
+        }
+
+        internal static void MarkOneShot(int generation) => _oneShot = generation;
+        internal static void CloseOneShot(int retired)
+        {
+            if (_oneShot == retired) ClearCards();
         }
 
         /// <summary>Draw one card for <paramref name="text"/> on every targeted screen; <paramref name="opacity"/>

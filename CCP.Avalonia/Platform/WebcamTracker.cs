@@ -226,6 +226,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal void RaiseGazeSideForTest(GazeSide side) => OnGazeSide?.Invoke(side);
         internal void RaiseMouthForTest() => OnMouthOpen?.Invoke();
         internal void RaiseBlinkForTest() => OnBlink?.Invoke();
+        internal void RaiseGazeForTest(double x, double y) => OnGazeMove?.Invoke(new ScreenPoint(x, y));
         /// <summary>Gaze in DIPs of the calibrated monitor; fires only with a calibration.</summary>
         public event Action<ScreenPoint>? OnGazeMove;
         public event Action<ScreenPoint>? OnLongStare;
