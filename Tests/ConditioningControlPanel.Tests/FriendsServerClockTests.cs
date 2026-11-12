@@ -61,22 +61,28 @@ public class FriendsServerClockTests
         finally { ServerClock.ResetForTests(); }
     }
 
-    [Fact]
-    public void The_knock_countdown_of_a_fresh_invite_reads_about_five_minutes_on_a_fast_pc_clock()
+    [Theory]
+    [InlineData(5)]
+    [InlineData(26)] // Five seconds old, then 21 seconds of delayed setup.
+    public void The_knock_countdown_of_a_fresh_invite_reads_about_five_minutes_on_a_fast_pc_clock(int ageSeconds)
     {
         Assert.True(PackUriBootstrap.Failure == null, PackUriBootstrap.Failure);
         try
         {
             var serverNow = PcFast(TimeSpan.FromMinutes(2));
-            var sent = serverNow.AddSeconds(-5);
+            var sent = serverNow.AddSeconds(-ageSeconds);
             var invite = new InboxItem(Id1, SendKind.Invite, "u_ann", "Ann", null, null,
                 InviteDestination.BackRoom, null, null, sent, sent.AddSeconds(InviteDestination.LifetimeSeconds));
             string? shown = null;
+            DateTimeOffset before = default, after = default;
             WpfRenderHarness.OnStaThread(() =>
             {
                 var ctor = typeof(KnockCard).GetConstructors(BindingFlags.NonPublic | BindingFlags.Instance)[0];
                 Action<InboxItem, KnockOutcome> done = (_, _) => { };
-                var card = (Window)ctor.Invoke(new object?[] { new Window(), invite, "invites you", "Join", "Not now", "Answer later", done, null });
+                var anchor = new Window();
+                before = ServerClock.UtcNow;
+                var card = (Window)ctor.Invoke(new object?[] { anchor, invite, "invites you", "Join", "Not now", "Answer later", done, null });
+                after = ServerClock.UtcNow;
                 var countdown = (TextBlock)typeof(KnockCard).GetField("_countdown", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(card)!;
                 shown = countdown.Text;
                 card.Content = null;
@@ -84,7 +90,13 @@ public class FriendsServerClockTests
 
             var parts = shown!.Split(':');
             var left = int.Parse(parts[0]) * 60 + int.Parse(parts[1]);
-            Assert.True(left >= 280, $"countdown shows {shown} for an invite sent 5 s ago (PC clock 2 min fast)");
+            // The STA and the card can take time to start on a busy CI runner. The display is
+            // calculated during construction, so bound it by server time on either side.
+            var end = sent.AddSeconds(InviteDestination.LifetimeSeconds);
+            int earliest = Math.Max(0, (int)Math.Ceiling((end - after).TotalSeconds));
+            int latest = Math.Max(0, (int)Math.Ceiling((end - before).TotalSeconds));
+            Assert.True(earliest > 0, "the invite expired before the card finished constructing");
+            Assert.InRange(left, earliest, latest);
         }
         finally { ServerClock.ResetForTests(); }
     }
