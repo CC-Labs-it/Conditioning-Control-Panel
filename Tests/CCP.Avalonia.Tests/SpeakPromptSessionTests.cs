@@ -30,7 +30,7 @@ public class SpeakPromptSessionTests
     {
         public readonly Source Source = new();
         public bool Available = true, Consent = true;
-        public int Consents, Borrows, Restores, Shows, Hides, Listens;
+        public int Consents, Borrows, Restores, Shows, Hides, Listens, Feedbacks;
         public string? Cue;
         public TaskCompletionSource<PhraseResult> Heard = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public SpeakPromptSession Create() => new(new TriggerEffectAction
@@ -40,7 +40,24 @@ public class SpeakPromptSessionTests
         }, Source, () => Available, () => { Consents++; return Task.FromResult(Consent); },
         () => { Borrows++; return true; }, () => Restores++,
         async (_, ct) => { Listens++; return await Heard.Task.WaitAsync(ct); },
-        cue => { Shows++; Cue = cue; }, () => Hides++);
+        cue => { Shows++; Cue = cue; }, () => Hides++, (_, _) => Feedbacks++);
+    }
+
+    [Fact]
+    public async Task FixtureFeedbackDoesNotCallGlobalXpProvider()
+    {
+        var previous = ConditioningControlPanel.CoreProgression.AddXPProvider;
+        int awards = 0;
+        ConditioningControlPanel.CoreProgression.AddXPProvider = (_, _) => awards++;
+        try
+        {
+            var f = new Fixture();
+            f.Heard.SetResult(new PhraseResult { Matched = true });
+            await f.Create().RunAsync();
+            Assert.Equal(1, f.Feedbacks);
+            Assert.Equal(0, awards);
+        }
+        finally { ConditioningControlPanel.CoreProgression.AddXPProvider = previous; }
     }
 
     [Theory]
@@ -87,7 +104,7 @@ public class SpeakPromptSessionTests
         int borrows = 0, shows = 0, listens = 0;
         var session = new SpeakPromptSession(new TriggerEffectAction { SpeakTarget = "yes", SpeakCueMode = SpeakCueMode.Persistent }, null,
             () => true, () => consent.Task, () => { borrows++; return true; }, () => { },
-            (_, _) => { listens++; return Task.FromResult(new PhraseResult { Matched = true }); }, _ => shows++, () => { });
+            (_, _) => { listens++; return Task.FromResult(new PhraseResult { Matched = true }); }, _ => shows++, () => { }, (_, _) => { });
         var run = session.RunAsync();
         session.Stop();
         consent.SetResult(true);
@@ -106,7 +123,7 @@ public class SpeakPromptSessionTests
             SpeakHoldMode = SpeakHoldMode.Pause, SpeakRegionStartSec = 1, SpeakRegionEndSec = 10
         }, source, () => true, () => Task.FromResult(true), () => true, () => { },
         async (_, ct) => { await Task.Delay(Timeout.Infinite, ct); return new PhraseResult(); },
-        _ => { }, () => { });
+        _ => { }, () => { }, (_, _) => { });
         var run = session.RunAsync();
         await source.Paused.Task.WaitAsync(TimeSpan.FromSeconds(5));
         session.Stop();
@@ -122,7 +139,7 @@ public class SpeakPromptSessionTests
         {
             SpeakTarget = "yes", SpeakCueMode = SpeakCueMode.Persistent
         }, null, () => true, () => Task.FromResult(true), () => true, () => restores++,
-        (_, _) => Task.FromResult(new PhraseResult()), _ => throw new InvalidOperationException(), () => hides++);
+        (_, _) => Task.FromResult(new PhraseResult()), _ => throw new InvalidOperationException(), () => hides++, (_, _) => { });
         await Assert.ThrowsAsync<InvalidOperationException>(() => session.RunAsync());
         Assert.Equal(1, hides);
         Assert.Equal(1, restores);
@@ -136,7 +153,7 @@ public class SpeakPromptSessionTests
         {
             SpeakTarget = "yes", SpeakCueMode = SpeakCueMode.Intermittent
         }, null, () => true, () => Task.FromResult(true), () => { borrows++; return true; }, () => { },
-        (_, _) => { listens++; return Task.FromResult(new PhraseResult { Matched = true }); }, _ => { }, () => { });
+        (_, _) => { listens++; return Task.FromResult(new PhraseResult { Matched = true }); }, _ => { }, () => { }, (_, _) => { });
         await session.RunAsync();
         Assert.Equal(0, borrows);
         Assert.Equal(0, listens);
@@ -151,7 +168,7 @@ public class SpeakPromptSessionTests
             SpeakTarget = "yes", SpeakCueMode = SpeakCueMode.Persistent
         }, null, () => true, () => Task.FromResult(true), () => false, () => { },
         (_, _) => Task.FromResult(++listens <= 9 ? PhraseResult.NotAvailable : new PhraseResult { Matched = true }),
-        _ => { }, () => hides++);
+        _ => { }, () => hides++, (_, _) => { });
         await session.RunAsync().WaitAsync(TimeSpan.FromSeconds(10));
         Assert.Equal(10, listens);
         Assert.Equal(1, hides);
@@ -168,7 +185,7 @@ public class SpeakPromptSessionTests
         }, source, () => true, () => Task.FromResult(true), () => false, () => { },
         (_, _) => ++listens == 1 ? Task.FromException<PhraseResult>(new InvalidOperationException()) :
             Task.FromResult(new PhraseResult { Matched = true }),
-        _ => { }, () => hides++);
+        _ => { }, () => hides++, (_, _) => { });
         await session.RunAsync().WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal(2, listens);
         Assert.Equal(1, hides);

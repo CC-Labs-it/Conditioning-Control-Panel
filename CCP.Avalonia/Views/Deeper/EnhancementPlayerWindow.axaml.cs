@@ -108,10 +108,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     ///         EnhancementLibrary is in Core but this head does not construct one yet. EnhancementHostService and DeeperFetcher no longer block anything: the host's
     ///         load path is EnhancementSerializer + EnhancementValidator, both public in Core, and
     ///         App.DeeperFetcher IS Core's <c>EnhancementFetcher</c>. Both are wired below. The
-    ///         host's <c>Bind</c> and the rule engine are in Core too, but this head has no
-    ///         <c>IPlaybackTimeSource</c> for the web pane and seeds no
-    ///         <c>EnhancementHostService.DispatcherFactory</c>/<c>WebcamProvider</c>, so a loaded
-    ///         enhancement's rules never fire here.</item>
+    ///         player drives the Core rule engine from its playback clock for speak cues;
+    ///         other effect dispatch and webcam tracking remain unported.</item>
     ///   <item><b>WebView2.</b> The WPF pane hosted a <c>wv2:WebView2</c> driven through
     ///         <c>CoreWebView2</c>. <see cref="Controls.WebHost"/> covers more of that than the
     ///         first pass assumed: NavigationStarted carries a settable Cancel (so the allowlist
@@ -725,6 +723,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             foreach (var p in OpenPlayers.ToArray())
             {
+                p.StopDeeper();
                 ++p._audioLoad; ++p._videoLoad; p._localAudio?.Pause(); p._isPlaying = false;
                 p._txtPlayPauseGlyph.Kind = IconKind.Play;
                 // port/7.2's reach (review 2026-11-06): every video/audio, same-origin iframes and page fullscreen,
@@ -744,6 +743,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void StopAudio()
         {
+            StopDeeper();
             ++_audioLoad; // Invalidate an asynchronous open before it can start sound.
             var audio = _localAudio;
             _localAudio = null;
@@ -1001,6 +1001,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 _durationSec = _localAudio.DurationSeconds;
             }
 
+            if (!_isVideoMode) TickDeeper();
             _txtCurrent.Text = FormatTime(_currentSec);
             if (_durationSec > 0) _txtTotal.Text = FormatTime(_durationSec);
             if (!_isVideoMode) UpdatePlayhead(Fraction());
@@ -1054,6 +1055,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     _isPlaying = playing;
                     _txtPlayPauseGlyph.Kind = playing ? IconKind.Pause : IconKind.Play;
                 }
+                TickDeeper();
             }
             catch (Exception ex)
             {
@@ -1137,6 +1139,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void UpdateHostUi(Enhancement? enh, string? path)
         {
+            StopDeeper();
             _loadedEnhancement = enh;
             _loadedFilePath = path;
 
