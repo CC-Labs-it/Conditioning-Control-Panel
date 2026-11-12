@@ -81,13 +81,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 using var codec = SKCodec.Create(path);
                 if (codec == null) return (new(), 0, false);
-                // The shared animation decoder allocates a native frame, so keep large media on
-                // the bounded still path even if the compressed file is small.
-                if (allowAnimation && codec.FrameCount > 1 && codec.FrameCount <= 600
-                    && Math.Max(codec.Info.Width, codec.Info.Height) <= 2048
+                // WPF AnimatedWebp.cs:173 decode limit (16 Mpx canvas) and the 48-frame AttachAnimation default.
+                if (allowAnimation && codec.FrameCount > 1 && (long)codec.Info.Width * codec.Info.Height <= 4096L * 4096L
                     && new FileInfo(path).Length <= Services.Chaos.ChaosTuning.TEASE_ANIMATED_MAX_BYTES)
                 {
-                    var (frames, delay) = SpiralOverlay.Decode(path, width, 60);
+                    var (frames, delay) = SpiralOverlay.Decode(path, width, 48);
                     if (frames.Count > 0) return (frames, Math.Max(1, delay.TotalMilliseconds), true);
                 }
                 using var stream = File.OpenRead(path);
@@ -108,7 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             var path = PickTeaseFace(CorePaths.EffectiveAssets, Field.Random);
             if (path == null) return;
-            bool slot = _teaseAnimated < 2 && (path.EndsWith(".gif", StringComparison.OrdinalIgnoreCase)
+            bool slot = _teaseAnimated < MaxAnimatedTease(global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier) && (path.EndsWith(".gif", StringComparison.OrdinalIgnoreCase)
                 || path.EndsWith(".webp", StringComparison.OrdinalIgnoreCase));
             if (slot) _teaseAnimated++;
             var (frames, delay, animated) = await Task.Run(() => DecodeTeaseFace(path, Math.Clamp((int)(bubble.Size * .86), 64, 512), slot));
@@ -122,6 +120,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (frames.Count > 0) TeaseFaces[bubble] = (frames, delay, Environment.TickCount64, animated);
             RequestFrame();
         }
+
+        // WPF PerformanceProfile.cs:69 MaxAnimatedTeaseBubbles.
+        internal static int MaxAnimatedTease(PerformanceTier tier) =>
+            tier switch { PerformanceTier.Performance => Services.Chaos.ChaosTuning.TEASE_MAX_ANIMATED, PerformanceTier.Balanced => 6, _ => 10 };
+
+        // WPF BubbleService.cs:5127-5166: the pill shows until the verb is learned or the bubble dies.
+        internal static bool ShowsTeaseHint(AmbientBubble b) =>
+            b.Spec?.IsTease == true && !b.Popping && !Services.Chaos.ChaosMeta.State.BubbleHintsLearned.Contains("tease");
 
         private static void PruneTeaseFaces()
         {
@@ -618,6 +624,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             GradientStops = { new GradientStop(Color.FromArgb(150, 255, 255, 255), 0), new GradientStop(Colors.Transparent, .7) }
         };
         private static readonly IPen TeasePen = new Pen(Brushes.White, 5);
+        private static readonly IBrush HintBack = new SolidColorBrush(Color.FromArgb(0xA0, 0x12, 0x0A, 0x18)), HintFore = new SolidColorBrush(Color.FromRgb(0xFF, 0xE2, 0xF2));
         private static readonly Dictionary<uint, IPen> FuseCache = new();
         private static readonly Dictionary<uint, (IBrush, IPen)> TintCache = new();
 
@@ -828,6 +835,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         {
                             double rr = (size / 2 - 2) * (0.45 + 0.55 * b.FuseFraction);
                             dc.DrawEllipse(null, FusePen(b.FuseRingArgb), new Point(cx, cy), rr, rr);
+                        }
+                    }
+                    if (BubbleOverlay.ShowsTeaseHint(b))   // WPF BubbleService.cs:5137-5160: pulsing 0.55-1 pill under the bubble
+                    {
+                        var hint = new FormattedText(global::ConditioningControlPanel.Localization.Loc.Get("chaos_hint_tease"), System.Globalization.CultureInfo.CurrentUICulture,
+                            FlowDirection.LeftToRight, new Typeface(FontFamily.Default, FontStyle.Normal, FontWeight.SemiBold), 12.5 * k, HintFore);
+                        var box = new Rect(cx - hint.Width / 2 - 8 * k, cy + size / 2 + 8 * k, hint.Width + 16 * k, hint.Height + 5 * k);
+                        using (dc.PushOpacity(Math.Clamp(b.Fade * b.MotionFade, 0, 1) * (.775 + .225 * Math.Cos(Environment.TickCount64 * Math.PI / 800))))
+                        {
+                            dc.DrawRectangle(HintBack, null, box, 9 * k, 9 * k);
+                            dc.DrawText(hint, new Point(box.X + 8 * k, box.Y + 2 * k));
                         }
                     }
                 }

@@ -11,6 +11,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using SkiaSharp;
@@ -25,13 +26,8 @@ public sealed class TeaseReviewTests
     [InlineData("flash"), InlineData("sub"), InlineData("pink"), InlineData("spiral"), InlineData("wash"), InlineData("rain")]
     public Task Tease_payloads_reach_the_production_dispatcher(string kind) => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        var firer = EffectPayload.Firer;
-        var flash = AvApp.FireChaosFlash;
-        var show = CoreSubliminal.ShowProvider;
-        var pool = CoreSettings.Current.SubliminalPool;
-        var pinkChecks = PinkFilterOverlay.SkipPlatformChecksForTests;
-        var spiralChecks = SpiralOverlay.SkipPlatformChecksForTests;
-        var washChecks = ChaosFlashOverlay.SkipPlatformChecksForTests;
+        var (firer, flash, show, pool) = (EffectPayload.Firer, AvApp.FireChaosFlash, CoreSubliminal.ShowProvider, CoreSettings.Current.SubliminalPool);
+        var (pinkChecks, spiralChecks, washChecks) = (PinkFilterOverlay.SkipPlatformChecksForTests, SpiralOverlay.SkipPlatformChecksForTests, ChaosFlashOverlay.SkipPlatformChecksForTests);
         try
         {
             ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
@@ -66,11 +62,8 @@ public sealed class TeaseReviewTests
         finally
         {
             ChaosRunHost.ForceShutdown(); PinkFilterOverlay.Stop(); SpiralOverlay.Stop();
-            EffectPayload.Firer = firer; AvApp.FireChaosFlash = flash; CoreSubliminal.ShowProvider = show;
-            CoreSettings.Current.SubliminalPool = pool;
-            PinkFilterOverlay.SkipPlatformChecksForTests = pinkChecks;
-            SpiralOverlay.SkipPlatformChecksForTests = spiralChecks;
-            ChaosFlashOverlay.SkipPlatformChecksForTests = washChecks;
+            (EffectPayload.Firer, AvApp.FireChaosFlash, CoreSubliminal.ShowProvider, CoreSettings.Current.SubliminalPool) = (firer, flash, show, pool);
+            (PinkFilterOverlay.SkipPlatformChecksForTests, SpiralOverlay.SkipPlatformChecksForTests, ChaosFlashOverlay.SkipPlatformChecksForTests) = (pinkChecks, spiralChecks, washChecks);
         }
         return Task.CompletedTask;
     });
@@ -79,7 +72,7 @@ public sealed class TeaseReviewTests
     [InlineData(0), InlineData(1), InlineData(2), InlineData(3)]
     public Task Tease_sprite_and_oversized_face_use_bounded_still(int stage) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        if (stage == 0) { Assert.NotNull(ChaosArt.Resolve("bubbles", "tease")); return; }
+        if (stage == 0) { Assert.NotNull(ChaosArt.Resolve("bubbles", "tease")); Assert.Equal((2, 6, 10), (BubbleOverlay.MaxAnimatedTease(PerformanceTier.Performance), BubbleOverlay.MaxAnimatedTease(PerformanceTier.Balanced), BubbleOverlay.MaxAnimatedTease(PerformanceTier.Quality))); return; }
         var dir = Path.Combine(Path.GetTempPath(), "ccp-tease-" + Guid.NewGuid().ToString("N"));
         var pool = Path.Combine(dir, "teasebubble");
         Directory.CreateDirectory(pool);
@@ -131,5 +124,4 @@ public sealed class TeaseReviewTests
         }
         finally { Marshal.FreeHGlobal(pixel); }
     }
-
 }

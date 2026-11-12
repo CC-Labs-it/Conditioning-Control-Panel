@@ -178,7 +178,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _runTimer.Tick += (_, _) => Tick();
             _runTimer.Start();
 
-            _spawnSerial = _ordinarySpawns = 0;
+            _spawnSerial = _ordinarySpawns = _teaseDenied = 0; _teaseStreakBarked = false;   // WPF :466
             if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse, OnTeaseTouched, OnTeaseDenied);
             _spawnTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };   // WPF :510
             _spawnTimer.Tick += (_, _) => SpawnTick();
@@ -247,6 +247,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ChaosMeta.State.SeenTease = true;
                 ChaosMeta.Save();
                 ChaosAnnouncerOverlay.Announce(Loc.Get("chaos_tease_debut"), ChaosAnnounceKind.Temptation, artKey: "tease");
+                TeaseBark("ChaosTeaseDebut", null);
             }
             ChaosMeta.MarkDiscovered("bubble:tease");
             BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildTease(intensity, cfg.EffectIntensity, _state.BubbleScale));
@@ -278,7 +279,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _state.Combo = _state.Combo > 1 ? _state.Combo / 2 : 0;
             _lastComboBigFired = 0;
             Pulse(Color.FromRgb(0xFF, 0x3D, 0x5A), 0.38);
+            TeaseBark("ChaosTeaseClicked", null);
         }
+
+        // WPF BarkService.cs:554-562 through the Core engine the head seeds.
+        internal static Action<string, int?> TeaseBark = (t, n) => BarkHead.Engine?.Raise(t, n is int d ? c => c.Set("denied_count", (double)d) : null);
+        private static int _teaseDenied;
+        private static bool _teaseStreakBarked;
 
         // WPF ChaosModeService.cs:1403: restraint pays gold, score and focus once.
         internal static void OnTeaseDenied(AmbientBubble b)
@@ -295,6 +302,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Label(b, Loc.Get("chaos_tease_denied"), Color.FromRgb(0xFF, 0xD7, 0));
             ShowPopScore(pts);
             Pulse(Color.FromRgb(0xFF, 0xD7, 0), 0.25);
+            TeaseBark("ChaosTeaseDenied", ++_teaseDenied);   // WPF :1416-1421
+            if (_teaseDenied >= ChaosTuning.TEASE_DENIED_STREAK_COUNT && !_teaseStreakBarked)
+            { _teaseStreakBarked = true; TeaseBark("ChaosTeaseDeniedStreak", _teaseDenied); }
         }
 
         /// <summary>WPF OnBenignPopped (:1767): the prism and ordinary-treat branches.</summary>
