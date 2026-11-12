@@ -104,6 +104,10 @@ internal sealed partial class FirstShowStageWindow : Window
     internal static string Text(string key) => Loc.Get("first_show_" + key);
     internal string SpeechText => _speech.Text ?? string.Concat(_speech.Inlines?.OfType<Run>().Select(r => r.Text) ?? Array.Empty<string>());
     internal IReadOnlyList<Button> ChoiceButtons => _choices.Children.OfType<Button>().ToArray();
+    /// <summary>The loading bar and its status line are up (tests read it).</summary>
+    internal bool LoadingShown => _loadingPanel.IsVisible;
+    /// <summary>Her speech card is on screen (tests read it).</summary>
+    internal bool SpeechShown => _speechWindow.IsVisible;
     internal bool Playing => _playing;
     internal FirstShowAudio Audio => _audio;
     internal double LogoOpacity => _logo.Opacity;
@@ -147,6 +151,7 @@ internal sealed partial class FirstShowStageWindow : Window
         _clock = new FrameClock(_stage) { Interval = TimeSpan.FromMilliseconds(16) };
         _clock.Tick += (_, _) => Frame();
         Opened += (_, _) => _clock.Start();
+        if (_main != null) _main.Activated += OnShellActivated;
         Closed += (_, _) => Cleanup();
         // P51: Tunnel, and only the stop keys, so a focused choice button cannot swallow them.
         AddHandler(KeyDownEvent, OnStopKey, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
@@ -177,7 +182,39 @@ internal sealed partial class FirstShowStageWindow : Window
     }
     private double ShowTime => double.IsNaN(_showStart) ? _showFrozen : Clock() - _showStart;
     private Point ToScreen(double x, double y) => new(Position.X + x * _scale, Position.Y + y * _scale);
-    internal void BeginEntrance(EmiDeskWindow emi) { _emi = emi; emi.PresentAt(ToScreen(_x, _y), 0, 0, "idle", "^_^"); emi.RunPresentationEntrance(); }
+    internal void BeginEntrance(EmiDeskWindow emi)
+    {
+        _emi = emi; emi.PresentAt(ToScreen(_x, _y), 0, 0, "idle", "^_^"); emi.RunPresentationEntrance();
+        // The stage was just mapped (on top); EMI is the desk widget, mapped long before and wherever
+        // the shell left her. WPF re-owns her to the stage (EmiDeskWindow.Presentation.cs:31), which
+        // lifts her above it and the shell.
+        if (X11Overlay.WmCannotKeepAbove) X11Overlay.Remap(emi);
+    }
+
+    private bool _restackPending;
+
+    /// <summary>
+    /// WPF keeps the show above the shell by ownership: the stage is owned by MainWindow
+    /// (FirstShowService.cs:18) and EMI by the stage (EmiDeskWindow.Presentation.cs:31), so Windows
+    /// never lets the shell cover them, however often it is clicked or activated (Guide.cs:56, 103).
+    /// Here the stage is override-redirect and EMI and her speech card are Topmost, which holds on any
+    /// window manager that keeps the _NET_WM_STATE_ABOVE layer. Where it does not (WSLg), the shell
+    /// coming forward buries them (owner fix3: EMI behind the main window), so they are mapped again on
+    /// top in WPF's order: stage, EMI, speech card. One pass per burst of activations; nothing is activated.
+    /// </summary>
+    private void OnShellActivated(object? sender, EventArgs e)
+    {
+        if (_closed || _restackPending || !X11Overlay.WmCannotKeepAbove) return;
+        _restackPending = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            _restackPending = false;
+            if (_closed) return;
+            X11Overlay.Remap(this);
+            if (_emi?.IsVisible == true) X11Overlay.Remap(_emi);
+            if (_speechWindow.IsVisible) X11Overlay.Remap(_speechWindow);
+        }, DispatcherPriority.Background);
+    }
     private double _spokeAt = -10;
     private string? _pendingSpeech;
     private void Say(string text, bool serious = false)
@@ -209,8 +246,46 @@ internal sealed partial class FirstShowStageWindow : Window
     {
         _centered = true; _moveAt = Clock();
         Ask(Text("pickQuestion") + "\n\n" + Text("pickHint"));
-        foreach (var id in FirstShowPresets.All) AddButton(id == "censored" ? Text("censored") : id, () => _ = Load(id));
+        foreach (var id in FirstShowPresets.All) AddButton(id == "censored" ? Text("censored") : id, () => _ = Pick(id));
         AddButton(Text("later"), Close);
+    }
+    /// <summary>Test seam: the consent card's answer for (title, message). Default: the Assets page's ask.</summary>
+    internal Func<string, string, Task<bool>>? ConsentOverride;
+    private bool _asking;
+    /// <summary>
+    /// Owner decision 2026-11-06 (option B), the same in both heads (WPF FirstShowDesktopWindow.Pick): a preset's
+    /// pictures are Scrolller's, which the device cache refuses until remote media is consented and the source is not
+    /// "local". When that is all that stands in the way (<see cref="FirstShowPresets.AsksForRemoteMedia(AppSettings?)"/>),
+    /// the preset first asks the Assets page's one-time consent card, word for word (AssetsTabView
+    /// RemoteMediaConsentText, WPF MainWindow.Assets.cs AskRemoteMediaConsent). Yes records the consent and the mixed
+    /// source, then loads the preset; no plays the built-in pictures. The card is the only place consent turns on.
+    /// </summary>
+    internal async Task Pick(string preset)
+    {
+        if (_asking || _closed) return;
+        var s = CoreSettings.Current;
+        if (FirstShowPresets.AsksForRemoteMedia(s))
+        {
+            bool yes;
+            _asking = true;
+            try
+            {
+                var (title, message) = ConditioningControlPanel.Avalonia.Views.Tabs.AssetsTabView.RemoteMediaConsentText();
+                Window owner = _speechWindow.IsVisible ? _speechWindow : (Window?)_main ?? this;
+                yes = ConsentOverride != null ? await ConsentOverride(title, message)
+                    : await ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog.ConfirmAsync(owner, title, message, okText: Loc.Get("label_yes"));
+            }
+            catch (Exception ex) { Log.Warning(ex, "First show: the remote media ask failed"); yes = false; }
+            finally { _asking = false; }
+            if (_closed) return;
+            if (!yes) { await Bundled(); return; }
+            FirstShowPresets.AcceptRemoteMedia(s);
+            FypOnlineCoordinator.ResetAllChannels();   // as the source chip does
+            CoreSettings.Save();
+            OnlineMeterHead.Poke();
+            Log.Information("[remote media] first show: consent given, source -> {Source}", s.MediaSource);
+        }
+        await Load(preset);
     }
     private static async Task<IReadOnlyList<FypAssetManifest.Entry>> DefaultFetch(string preset, int attempt, CancellationToken token)
     {
@@ -300,9 +375,16 @@ internal sealed partial class FirstShowStageWindow : Window
         var paths = new List<string>(); FirstShowEffects? candidate = null;
         try
         {
-            int attempt = 0;
-            paths = await FirstShowMediaLoader.LoadAsync(token => FetchFeed(preset, attempt++, token), Download, Release, request.Token,
-                progress => Dispatcher.UIThread.Post(() => { if (!_closed && _load == request) ShowLoading(progress); }));
+            int attempt = 0; bool loading = true;
+            // WPF :172 reports progress inline, so the error or "preparing" line that follows always wins. Posted
+            // here, a report can land after the loader has given up (every picture refused at once): drop it then,
+            // or the error card keeps a stale "0/8 pictures ready" under it.
+            try
+            {
+                paths = await FirstShowMediaLoader.LoadAsync(token => FetchFeed(preset, attempt++, token), Download, Release, request.Token,
+                    progress => Dispatcher.UIThread.Post(() => { if (loading && !_closed && _load == request) ShowLoading(progress); }));
+            }
+            finally { loading = false; }
             if (paths.Count == 0) throw new IOException("No demo images available");
             ShowPreparing();
             candidate = new FirstShowEffects(_audio.Cue);
@@ -498,6 +580,7 @@ internal sealed partial class FirstShowStageWindow : Window
         if (_closed) return;
         ClearGuideTarget();
         _closed = true;
+        if (_main != null) _main.Activated -= OnShellActivated;
         if (OperatingSystem.IsWindows()) Win32PanicKey.KeyDown -= OnGlobalKey;
         _clock.Stop();
         try { _speechWindow.Close(); } catch (Exception ex) { Log.Debug(ex, "First show speech window close failed"); }

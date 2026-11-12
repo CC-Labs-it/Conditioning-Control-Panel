@@ -140,7 +140,7 @@ public sealed class LeashSelfCard : Border
     }
 
     // WPF Controls/Leash/LeashLook.cs:351-383: the same disc artwork and seeded tilt.
-    private static Grid StickerDisc(string id, int seed)
+    internal static Grid StickerDisc(string id, int seed, double size = 26)
     {
         var (brush, word) = id switch
         {
@@ -150,7 +150,7 @@ public sealed class LeashSelfCard : Border
         };
         var disc = new Grid
         {
-            Width = 26, Height = 26, Margin = new Thickness(0, 0, 5, 5),
+            Width = size, Height = size, Margin = new Thickness(0, 0, 5, 5),
             RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative),
             RenderTransform = new RotateTransform(((seed * 37) % 21) - 10),
             Tag = "leash-sticker:" + id,
@@ -165,13 +165,13 @@ public sealed class LeashSelfCard : Border
             disc.Children.Add(new IconGlyph
             {
                 Kind = id == "star" ? IconKind.Star : IconKind.Heart, Variant = IconVariant.Filled,
-                Size = 13, Foreground = new SolidColorBrush(Color.Parse("#1B1026")),
+                Size = size * 0.5, Foreground = new SolidColorBrush(Color.Parse("#1B1026")),
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             });
         else disc.Children.Add(new TextBlock
         {
             Text = word, FontFamily = F.Mono, FontWeight = FontWeight.Bold,
-            FontSize = word.Length > 1 ? 26 * 0.26 : 26 * 0.5,
+            FontSize = word.Length > 1 ? size * 0.26 : size * 0.5,
             Foreground = new SolidColorBrush(Color.Parse("#1B1026")),
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         });

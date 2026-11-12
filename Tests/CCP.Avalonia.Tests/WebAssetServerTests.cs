@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Platform;
+using CCP.Testing;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -125,6 +126,7 @@ public class WebAssetServerTests
     [Fact]
     public void RefusesSymlinksThatLeaveTheRoot()
     {
+        Symlinks.RequireOrSkip();
         var (s, root) = Make();
         using (s)
         {
@@ -165,6 +167,7 @@ public class WebAssetServerTests
                 using var unauth = Client();
                 Assert.Equal(HttpStatusCode.Forbidden, (await unauth.GetAsync(url)).StatusCode);
             }
+            Symlinks.RequireOrSkip();   // last, so the token and traversal checks above always run
             File.CreateSymbolicLink(Path.Combine(audio, "link.mp3"), Path.Combine(dir, "outside.mp3"));
             Assert.Null(server.ResolveFile("/ccp.words/link.mp3"));
         }

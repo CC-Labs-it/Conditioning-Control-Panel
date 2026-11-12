@@ -11,11 +11,12 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
     /// view per card; a key nobody registered leaves the card on its plain ground.</summary>
     public static class BillboardArt
     {
-        private static readonly Dictionary<string, Func<object?, Control>> Factories = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, Func<object?, Control?>> Factories = new(StringComparer.OrdinalIgnoreCase);
 
-        public static void Register(string key, Func<object?, Control> factory) => Factories[key] = factory;
+        public static void Register(string key, Func<object?, Control?> factory) => Factories[key] = factory;
 
-        /// <summary>A new view for the key, or null when no view is registered for it.</summary>
+        /// <summary>A new view for the key, or null when no view is registered for it (or the
+        /// factory has none for this data).</summary>
         public static Control? Create(string key, object? data) =>
             Factories.TryGetValue(key, out var make) ? make(data) : null;
     }

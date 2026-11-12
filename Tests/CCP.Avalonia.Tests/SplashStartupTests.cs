@@ -180,6 +180,23 @@ public sealed class SplashStartupTests
         finally { App.StartupFailure = null; }
     });
 
+    /// <summary>Owner WSLg run: "the splash screen doesn't move". The sweep is a render-thread composition
+    /// animation, so a startup step holding the UI thread cannot freeze it.</summary>
+    [Fact]
+    public Task TheShimmerSweepsOnTheRenderThread() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var splash = SplashScreen.ShowOnOwnThread()!;
+        try
+        {
+            Assert.True(splash.ShimmerStarted);
+            // No UI-thread transform is left driving it (the old Style.Animations sweep froze with startup).
+            Assert.Null(splash.FindControl<Border>("Shimmer")!.RenderTransform);
+        }
+        finally { splash.CloseImmediate(); Dispatcher.UIThread.RunJobs(); }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task AStalledStepCreepsAndTheHintReassures() => AvaloniaTestDispatcher.RunAsync(() =>
     {

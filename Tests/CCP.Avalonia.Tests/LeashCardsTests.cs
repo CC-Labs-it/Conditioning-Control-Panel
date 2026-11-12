@@ -10,6 +10,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -18,6 +19,7 @@ using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Leash;
 using Xunit;
 using Runner = ConditioningControlPanel.Controls.Leash.ILeashTaskRunner;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -70,6 +72,16 @@ public sealed class LeashCardsTests
         body();
     });
     private static T Find<T>(Control root, string tag) where T : Control => root.GetLogicalDescendants().OfType<T>().Single(c => c.Tag as string == tag);
+    private static IEnumerable<Control> Tagged(Control root, string tag) => root.GetLogicalDescendants().OfType<Control>().Where(c => c.Tag as string == tag);
+    [Fact] // WPF LeashHolderCard.cs:307, 443-471, 566-645, LeashLook.cs:393: actions, rows and Let go carry a "?"; Today is an outlined ring.
+    public void HolderHostsHelpOnActionsRowsAndLetGo_AndOutlinesToday() => Run(() =>
+    {
+        var card = new LeashHolderCard(Held(LeashIntensity.Strict, true), () => new Service());
+        var today = (global::Avalonia.Controls.Shapes.Ellipse)Find<StackPanel>(card, "leash-week:Today").Children[0];
+        Assert.Equal(global::Avalonia.Media.Brushes.Transparent, today.Fill); Assert.NotNull(today.Stroke); Assert.NotNull(today.StrokeDashArray);
+        foreach (var id in new[] { "assign", "reward", "punish", "tug", "letgo" }) Assert.Single(Tagged(card, "leash-slip-help:" + id));
+        Click(card, "leash-btn:punish"); Assert.Single(Tagged(card, "leash-slip-help:video")); Click(card, "leash-btn:reward"); Assert.Single(Tagged(card, "leash-slip-help:pardon"));
+    });
     private static void Click(Control root, string tag)
     {
         var b = Find<Button>(root, tag);
@@ -101,7 +113,7 @@ public sealed class LeashCardsTests
         Click(card, "leash-preview-toggle");
         var preview = Find<LeashHolderCard>(card, "leash-preview");
         Assert.Empty(preview.GetLogicalDescendants().OfType<Button>());
-        Assert.Empty(Find<WrapPanel>(preview, "leash-week").Children);
+        Assert.Empty(Find<global::Avalonia.Controls.Primitives.UniformGrid>(preview, "leash-week").Children);
         Assert.Empty(svc.Calls);
         Click(card, "leash-preview-toggle");
         Assert.DoesNotContain(card.GetLogicalDescendants().OfType<LeashHolderCard>(), _ => true);
@@ -115,7 +127,7 @@ public sealed class LeashCardsTests
         Assert.Equal("30", Find<TextBlock>(card, "leash-ring-figure").Text);
         Assert.Equal(360, Find<global::Avalonia.Controls.Shapes.Arc>(card, "leash-ring-arc").SweepAngle);
         Assert.Contains(Find<Border>(card, "leash-fig-quests").GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == "2/3");
-        Assert.Equal(7, Find<WrapPanel>(card, "leash-week").Children.Count);
+        Assert.Equal(7, Find<global::Avalonia.Controls.Primitives.UniformGrid>(card, "leash-week").Children.Count);
         Assert.Equal(Loc.GetF("leash_task_open", Loc.Get("leash_assign_video_n")), Find<TextBlock>(card, "leash-holder-task").Text);
         Assert.DoesNotContain(card.GetLogicalDescendants().OfType<Border>(), t => t.Tag as string == "leash-fig-lock");
         card.Update(Held(linked: true));
@@ -155,7 +167,7 @@ public sealed class LeashCardsTests
         var svc = new Service(); var card = new LeashHolderCard(Held(level, linked), () => svc);
         Click(card, "leash-btn:punish");
         var count = card.GetLogicalDescendants().OfType<Button>().Select(b => b.Tag as string).Where(t => t?.StartsWith("leash-punish:") == true).Select(t => t!.Split(':')[1]).Distinct().Count();
-        Assert.Equal(kinds - (level == LeashIntensity.Soft ? 0 : 1), count); // Video uses its picker instead of size chips.
+        Assert.Equal(kinds, count); // Video shows a Pick chip (WPF :560).
         Click(card, "leash-punish:lines:5"); Assert.Equal("punish:Lines:5", svc.Calls.Single());
         Assert.DoesNotContain(card.GetLogicalDescendants().OfType<StackPanel>(), p => p.Tag as string == "leash-sheet:punish");
         Assert.Equal(Loc.GetF("leash_done_punish", Person.Name), Find<TextBlock>(card, "leash-holder-result").Text);
@@ -177,12 +189,14 @@ public sealed class LeashCardsTests
     [Fact]
     public void AssignRewardVideoAndReleaseButtonsSendTheWpfGrammar() => Run(() =>
     {
-        var svc = new Service(); var card = new LeashHolderCard(Held(LeashIntensity.Strict, true) with { VideoMax = 12 }, () => svc);
-        Click(card, "leash-btn:assign"); Click(card, "leash-assign:minutes:30");
+        var svc = new Service(); var held = Held(LeashIntensity.Strict, true) with { VideoMax = 12 }; var card = new LeashHolderCard(held, () => svc);
+        Click(card, "leash-btn:assign"); Assert.Empty(Tagged(card, "leash-video-picker")); Click(card, "leash-assign:video:1"); Find<Control>(card, "leash-video-picker");
+        Click(card, "leash-assign:video:1"); Assert.Empty(Tagged(card, "leash-video-picker")); Click(card, "leash-assign:minutes:30");
         Click(card, "leash-btn:assign"); Click(card, "leash-assign:quests:2");
         foreach (var tag in new[] { "sticker:star", "praise:proud", "pardon", "credit:900" })
         { Click(card, "leash-btn:reward"); Click(card, "leash-reward:" + tag); }
         Click(card, "leash-btn:punish");
+        Click(card, "leash-punish:video:1"); card.Update(held); // the open picker survives a poll
         var cap = Find<LeashCapSlider>(card, "leash-video-cap");
         Assert.Equal(12, cap.Ceiling); Assert.Equal(12, cap.Value);
         Assert.Equal(Loc.Get("leash_video_max_hint"), ToolTip.GetTip(cap));
@@ -212,6 +226,82 @@ public sealed class LeashCardsTests
         Click(card, "leash-btn:reward"); Click(card, "leash-reward:pardon");
         Assert.Equal("reward:Pardon::", Assert.Single(svc.Calls));
         Assert.Same(good ? FriendsDrawer.Mint : FriendsDrawer.Gold, Find<TextBlock>(card, "leash-holder-result").Foreground);
+    });
+    [Fact] // WPF FriendsDrawer.cs:189-218,395 and LeashDrawerSection.cs:113-150.
+    public void FriendsDrawerTracksAndFoldsLiveLeashCardsOnlyWhileOpen() => Run(() =>
+    {
+        var old = LeashHead.Service; var svc = new Service(); LeashHead.Service = svc;
+        try
+        {
+            var drawer = new FriendsDrawer(null);
+            using var cleanup = new WindowCleanup(new Window { Content = drawer });
+            drawer.OnOpened(); svc.Push(Me(), Held());
+            Assert.NotNull(drawer.LeashSection);
+            Assert.NotNull(Find<LeashSelfCard>(drawer, "leash-self-card"));
+            var card = Find<LeashHolderCard>(drawer, "leash-holder-card:friend");
+            Click(card, "leash-btn:reward"); svc.ReceiptsSupported = true; svc.Receipts();
+            Assert.Same(card, Find<LeashHolderCard>(drawer, "leash-holder-card:friend"));
+            Assert.NotNull(Find<LeashSentList>(card, "leash-sent"));
+            var replacement = new Service(); replacement.Push(Me(), Held()); LeashHead.Service = replacement;
+            svc.Push(null); Assert.Same(card, Find<LeashHolderCard>(drawer, "leash-holder-card:friend"));
+            drawer.OnClosed();
+            Assert.DoesNotContain(card.GetLogicalDescendants().OfType<StackPanel>(), p => p.Tag as string == "leash-sheet:reward");
+            replacement.Push(null); Assert.Same(card, Find<LeashHolderCard>(drawer, "leash-holder-card:friend"));
+            LeashHead.Service = new Service(); Assert.Same(card, Find<LeashHolderCard>(drawer, "leash-holder-card:friend"));
+            drawer.OnOpened(); Assert.DoesNotContain(drawer.GetLogicalDescendants().OfType<LeashHolderCard>(), _ => true);
+            drawer.OnClosed(); Assert.Null(new FriendsDrawer(null, asPage: true).LeashSection);
+        }
+        finally { LeashHead.Service = old; }
+    });
+    [Fact] // WPF LeashHolderCard.cs:432-443,505-539,594-645.
+    public void HolderActionsUseFourColoredIconCellsAndSheetsHaveLabeledRows() => Run(() =>
+    {
+        var card = new LeashHolderCard(Held(LeashIntensity.Strict, true), () => new Service());
+        var actions = Find<global::Avalonia.Controls.Primitives.UniformGrid>(card, "leash-holder-actions");
+        Assert.Equal(4, actions.Columns); Assert.Equal(4, actions.Children.Count);
+        foreach (var (id, icon, top, bottom) in new[] { ("assign", IconKind.TaskList, "#FFE3A0", "#FFCF6B"), ("reward", IconKind.Star, "#A8FFE6", "#5FFFD0"),
+            ("punish", IconKind.Flash, "#FF8A9E", "#FF5F7A"), ("tug", IconKind.HandRight, "#2E2046", "#261A3C") })
+        {
+            var button = Find<Button>(card, "leash-btn:" + id);
+            var gradient = Assert.IsType<global::Avalonia.Media.LinearGradientBrush>(button.Background);
+            Assert.Equal(global::Avalonia.Media.Color.Parse(top), gradient.GradientStops[0].Color);
+            Assert.Equal(global::Avalonia.Media.Color.Parse(bottom), gradient.GradientStops[1].Color);
+            Assert.Equal(icon, button.GetLogicalDescendants().OfType<IconGlyph>().Single().Kind);
+        }
+        void CheckRow(string tag)
+        {
+            var row = Find<Grid>(card, tag); Assert.Equal(2, row.Children.Count);
+            Assert.Equal(0, Grid.GetColumn(row.Children[0])); Assert.Equal(1, Grid.GetColumn(row.Children[1]));
+        }
+        Click(card, "leash-btn:assign"); CheckRow("leash-row:assign:Minutes"); CheckRow("leash-row:assign:Video");
+        Click(card, "leash-btn:punish"); CheckRow("leash-row:punish:Lines"); CheckRow("leash-row:punish:Video");
+        Click(card, "leash-btn:reward"); CheckRow("leash-row:reward:praise"); CheckRow("leash-row:reward:pardon"); CheckRow("leash-row:reward:credit");
+    });
+    [Fact] // WPF LeashHolderCard.cs:790-794: feedback expires even if the card leaves the tree.
+    public void DetachedAndReattachedHolderDoesNotKeepStaleFeedback() => Run(() =>
+    {
+        var svc = new Service(); var card = new LeashHolderCard(Held(), () => svc); var window = new Window { Content = card };
+        using var cleanup = new WindowCleanup(window);
+        Click(card, "leash-btn:reward"); Click(card, "leash-reward:pardon");
+        Assert.NotNull(Find<TextBlock>(card, "leash-holder-result"));
+        window.Content = null; Dispatcher.UIThread.RunJobs(); window.Content = card; Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain(card.GetLogicalDescendants().OfType<TextBlock>(), t => t.Tag as string == "leash-holder-result");
+    });
+    [Fact] // WPF LeashHolderCard.cs:613-634 and LeashLook.cs:351-383: artwork buttons and names.
+    public void StickerDiscsShowArtworkAndTooltipsAndSendEachSticker() => Run(() =>
+    {
+        var svc = new Service(); var card = new LeashHolderCard(Held(), () => svc);
+        foreach (var id in new[] { "good", "star", "pet", "heart", "wow" })
+        {
+            Click(card, "leash-btn:reward"); var button = Find<Button>(card, "leash-reward:sticker:" + id);
+            Assert.Equal(Loc.Get("leash_rew_sticker_" + id), ToolTip.GetTip(button));
+            var disc = Assert.IsType<Grid>(button.Content); Assert.Equal("leash-sticker:" + id, disc.Tag);
+            Assert.Equal(32, disc.Width); Assert.Equal(32, disc.Height);
+            Assert.Contains(disc.Children, c => c is global::Avalonia.Controls.Shapes.Ellipse);
+            if (id is "star" or "heart") Assert.Contains(disc.Children, c => c is IconGlyph);
+            else Assert.Contains(disc.Children, c => c is TextBlock t && t.Text == id.ToUpperInvariant());
+            Click(card, "leash-reward:sticker:" + id); Assert.Equal("reward:Sticker:" + id + ":", svc.Calls.Last());
+        }
     });
     [Fact]
     public void PageKeepsHeldCardsAndSheetsAcrossPollsAndReceipts_AndFoldsOnHide() => Run(() =>

@@ -95,7 +95,13 @@ internal sealed class Win32OptionsDismiss : IDisposable
         return CallNextHookEx(IntPtr.Zero, code, message, data);
     }
 
-    internal static bool AcceptKey(bool anyKey, int key) => anyKey || key == 0x1b;
+    // The panic key belongs to panic alone. The countdown hook and the panic hook are separate low-level
+    // hooks with no fixed order, so a countdown skip on the panic key could start the run (BeginRun,
+    // StartToys) a moment before panic tears it down. X11 already routes the panic key to panic first.
+    internal static Func<int> PanicVirtualKey = () => Win32PanicKey.IsListening ? Win32PanicKey.BoundVirtualKey : 0;
+
+    internal static bool AcceptKey(bool anyKey, int key)
+        => anyKey ? key == 0 || key != PanicVirtualKey() : key == 0x1b;
 
     public void Dispose()
     {

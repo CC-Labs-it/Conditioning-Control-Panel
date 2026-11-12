@@ -19,15 +19,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 public partial class LeashTabView : UserControl
 {
     private readonly Func<ILeashService?> _resolve;
+    private readonly bool _asDrawer;
+    private bool _drawerOpen;
     private ILeashService? _service;
     private LeashSelfCard? _self;
     private readonly Dictionary<string, LeashHolderCard> _holders = new();
 
     public LeashTabView() : this(() => LeashHead.Service) { }
-    internal LeashTabView(Func<ILeashService?> service)
+    internal LeashTabView(Func<ILeashService?> service, bool asDrawer = false)
     {
         _resolve = service;
+        _asDrawer = asDrawer;
         InitializeComponent();
+        if (asDrawer)
+        {
+            ((Panel)SectionHost.Parent!).Children.Remove(SectionHost);
+            Content = SectionHost;
+        }
         // WPF LeashTabView.xaml.cs:36: LeashLook.Help(LeashExplainRole.Leashed) in the HelpHost.
         HelpHost.Child = LeashExplainWindow.HelpButton("leashed", () => TopLevel.GetTopLevel(this) as Window);
         EmptyButton.Click += (_, _) => (TopLevel.GetTopLevel(this) as MainShellWindow)?.ShowTab("friends");
@@ -39,6 +47,13 @@ public partial class LeashTabView : UserControl
 
     internal bool ShowingEmpty => EmptyPanel.IsVisible;
     internal LeashSelfCard? SelfCard => _self;
+
+    // WPF FriendsDrawer.cs:189-218: the drawer owns the section while open.
+    internal void SetDrawerOpen(bool open)
+    {
+        _drawerOpen = open;
+        if (open) OnShown(); else Unsubscribe();
+    }
 
     internal void OnShown()
     {
@@ -60,7 +75,7 @@ public partial class LeashTabView : UserControl
             global::Avalonia.Threading.Dispatcher.UIThread.Post(OnServiceChanged);
             return;
         }
-        if (IsEffectivelyVisible && VisualRoot != null) OnShown();
+        if (VisualRoot != null && (_asDrawer ? _drawerOpen : IsEffectivelyVisible)) OnShown();
     }
     private void OnSnapshot(LeashSnapshot _) => Render();
 
@@ -69,11 +84,13 @@ public partial class LeashTabView : UserControl
         MyLeash? me = null;
         var snap = LeashSnapshot.Empty;
         try { if (_service?.Available == true) snap = _service.Snapshot; me = snap.Me; } catch { }
-        // WPF LeashDrawerSection.cs:113-150: keep each held card and its open sheet across polls.
-        var holding = snap.Holding;
         var cards = new List<Control>();
-        // WPF LeashDrawerSection.cs:118: offers precede the own card.
-        foreach (var offer in snap.Offers) cards.Add(OfferRow(offer));
+        // WPF LeashDrawerSection.cs:118, :94: offers precede the own card and are seen on screen.
+        foreach (var offer in snap.Offers)
+        {
+            cards.Add(OfferRow(offer));
+            if (IsEffectivelyVisible) _service?.NoteShown(offer.Id);
+        }
         if (me != null)
         {
             if (_self == null) _self = new LeashSelfCard(me, () => _service);
@@ -83,14 +100,15 @@ public partial class LeashTabView : UserControl
             if (IsEffectivelyVisible && me.Assignment is { } a) _service?.NoteShown(a.Aid);
         }
         else _self = null;
-        foreach (var held in holding)
+        // WPF LeashDrawerSection.cs:113-150: keep each held card and its open sheet across polls.
+        foreach (var held in snap.Holding)
         {
             if (!_holders.TryGetValue(held.Who.Id, out var card))
                 _holders[held.Who.Id] = card = new LeashHolderCard(held, () => _service);
             else card.Update(held);
             cards.Add(card);
         }
-        foreach (var id in _holders.Keys.Except(holding.Select(h => h.Who.Id)).ToArray()) _holders.Remove(id);
+        foreach (var id in _holders.Keys.Except(snap.Holding.Select(h => h.Who.Id)).ToArray()) _holders.Remove(id);
         foreach (var gone in SectionHost.Children.Where(c => !cards.Contains(c)).ToArray()) SectionHost.Children.Remove(gone);
         for (var i = 0; i < cards.Count; i++)
             if (i >= SectionHost.Children.Count || !ReferenceEquals(SectionHost.Children[i], cards[i]))
@@ -99,9 +117,6 @@ public partial class LeashTabView : UserControl
                 SectionHost.Children.Insert(i, cards[i]);
             }
         EmptyPanel.IsVisible = cards.Count == 0;
-        // WPF LeashDrawerSection.cs:94 NoteOnScreen: an offer is seen once its row is hosted and visible.
-        if (IsEffectivelyVisible)
-            foreach (var offer in snap.Offers) _service?.NoteShown(offer.Id);
     }
 
     // WPF LeashDrawerSection.cs:159-196: sender, copy and Look pill.
