@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Threading;
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Skia;
@@ -13,6 +15,7 @@ using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.JustDrop;
+using ConditioningControlPanel.Services.EmiDesk;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -25,7 +28,7 @@ public sealed class JustDropWindowTests
 {
     private static void Run(Action<MainShellWindow> body)
     {
-        AvaloniaTestDispatcher.Run(() =>
+        AvaloniaTestDispatcher.Run(() => WithRestoredEmiUsage(() =>
         {
             if (Application.Current is null)
                 global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
@@ -55,7 +58,44 @@ public sealed class JustDropWindowTests
                 CoreSettings.ServiceProvider = null;
                 try { File.Delete(ledger); } catch { }
             }
-        });
+        }));
+    }
+
+    private static readonly FieldInfo EmiSaveTimer = typeof(EmiState).GetField("_saveTimer", BindingFlags.Static | BindingFlags.NonPublic)!;
+    private static readonly FieldInfo EmiSaveContext = typeof(EmiState).GetField("_saveCtx", BindingFlags.Static | BindingFlags.NonPublic)!;
+
+    // A shop open mutates the shared singleton and arms a timer whose callback can already be
+    // queued on the UI thread. Stop and join the timer, then drain queued saves after restoring
+    // the entries, so neither memory nor a delayed write carries the test's usage forward.
+    private static void WithRestoredEmiUsage(Action action, SynchronizationContext? saveContext = null)
+    {
+        const string id = GameWindow.JustDropId;
+        var state = EmiState.Current;
+        bool hadUsage = state.Usage.TryGetValue(id, out int usage);
+        bool hadScore = state.OpenScore.TryGetValue(id, out double score);
+        bool hadAt = state.UsageAt.TryGetValue(id, out long at);
+        var oldContext = EmiSaveContext.GetValue(null);
+        // Every save this test schedules posts back to the dispatcher we can drain.
+        EmiSaveContext.SetValue(null, saveContext ?? SynchronizationContext.Current);
+        try { action(); }
+        finally
+        {
+            try
+            {
+                if (EmiSaveTimer.GetValue(null) is Timer timer)
+                {
+                    using var stopped = new ManualResetEvent(false);
+                    if (timer.Dispose(stopped)) stopped.WaitOne();
+                    EmiSaveTimer.SetValue(null, null);
+                }
+                if (hadUsage) state.Usage[id] = usage; else state.Usage.Remove(id);
+                if (hadScore) state.OpenScore[id] = score; else state.OpenScore.Remove(id);
+                if (hadAt) state.UsageAt[id] = at; else state.UsageAt.Remove(id);
+                Dispatcher.UIThread.RunJobs(); // includes saves posted before the timer was joined
+                EmiState.SaveNow(); // replace any write that landed while the test was running
+            }
+            finally { EmiSaveContext.SetValue(null, oldContext); }
+        }
     }
 
     private static GameWindow? Open() => GameWindow.OpenForTests(GameWindow.JustDropId);
@@ -142,6 +182,83 @@ public sealed class JustDropWindowTests
         Dispatcher.UIThread.RunJobs();
         Assert.Null(Open());
     });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ShopTestRestoresEmiUsageAndStopsThePendingSave(bool hadEntries) => AvaloniaTestDispatcher.Run(() =>
+        WithRestoredEmiUsage(() =>
+        {
+            var state = EmiState.Current;
+            const string id = GameWindow.JustDropId;
+            state.Usage.Remove(id); state.OpenScore.Remove(id); state.UsageAt.Remove(id);
+            if (hadEntries) { state.Usage[id] = 12; state.OpenScore[id] = 3.5; state.UsageAt[id] = 1234; }
+            Timer? scheduled = null;
+            Assert.Throws<InvalidOperationException>(() => Run(shell =>
+            {
+                JustDropService.SetServerEnabledForTests(true);
+                shell.ShowTab("justdrop");
+                Assert.NotEqual(hadEntries ? 12 : 0, state.Usage[id]);
+                scheduled = Assert.IsType<Timer>(EmiSaveTimer.GetValue(null));
+                throw new InvalidOperationException(); // cleanup must run after a failed assertion too
+            }));
+            Assert.Equal(hadEntries, state.Usage.ContainsKey(id));
+            Assert.Equal(hadEntries, state.OpenScore.ContainsKey(id));
+            Assert.Equal(hadEntries, state.UsageAt.ContainsKey(id));
+            if (hadEntries) { Assert.Equal(12, state.Usage[id]); Assert.Equal(3.5, state.OpenScore[id]); Assert.Equal(1234, state.UsageAt[id]); }
+            Assert.Null(EmiSaveTimer.GetValue(null));
+            Assert.False(scheduled!.Change(500, Timeout.Infinite));
+        }));
+
+    [Fact]
+    public void PostedEmiSaveRunsAfterUsageIsRestored() => AvaloniaTestDispatcher.Run(() =>
+        WithRestoredEmiUsage(() =>
+        {
+            var state = EmiState.Current;
+            const string id = GameWindow.JustDropId;
+            state.Usage[id] = 71;
+            bool ran = false;
+            int observed = 0;
+            using var posted = new ManualResetEvent(false);
+            var context = new SaveProbeContext(posted, () =>
+            {
+                ran = true;
+                state.Usage.TryGetValue(id, out observed);
+            });
+            WithRestoredEmiUsage(() =>
+            {
+                EmiState.NoteUsage(id);
+                Assert.True(posted.WaitOne(TimeSpan.FromSeconds(5))); // callback is queued, UI is still blocked here
+                Assert.False(ran);
+            }, context);
+            Assert.True(ran);
+            Assert.Equal(71, observed);
+        }));
+
+    [Fact]
+    public void EmiSaveThatAlreadyRanIsRewrittenAfterUsageRestoration() => AvaloniaTestDispatcher.Run(() =>
+        WithRestoredEmiUsage(() =>
+        {
+            var state = EmiState.Current;
+            const string id = GameWindow.JustDropId;
+            state.Usage[id] = 71;
+            WithRestoredEmiUsage(() =>
+            {
+                EmiState.NoteUsage(id);
+                EmiState.SaveNow(); // the timer may have fired before cleanup
+            });
+            var saved = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(EmiState.FilePath));
+            Assert.Equal(71, (int?)saved["usage"]?[id]);
+        }));
+
+    private sealed class SaveProbeContext(ManualResetEvent posted, Action beforeSave) : SynchronizationContext
+    {
+        public override void Post(SendOrPostCallback callback, object? state)
+        {
+            Dispatcher.UIThread.Post(() => { beforeSave(); callback(state); });
+            posted.Set();
+        }
+    }
 
     [Fact]
     public void EscapeDuringTheFirstAllowedNavigationRestoresTheWindow() => Run(shell =>
