@@ -96,6 +96,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal async Task RefreshAfterLoginAsync(Task profileLoad)
         {
             try { await profileLoad; } catch (Exception ex) { Serilog.Log.Debug("ProfileLoad: {E}", ex.Message); }
+            RepaintLoadedProfile();
+        }
+
+        private void RepaintLoadedProfile()
+        {
             UpdateQuickLoginUI();
             Named<Tabs.QuestsTabView>("QuestsTab")?.RefreshQuestUI();
             Named<Tabs.EnhancementsTabView>("EnhancementsTab")?.Repaint();

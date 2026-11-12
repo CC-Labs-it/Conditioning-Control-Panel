@@ -6,6 +6,8 @@ using System.Threading;
 using System.Net;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia;
+using Avalonia.Headless;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services;
@@ -84,6 +86,116 @@ public sealed partial class AccountSeedTests
         sync.UtcNow = () => T0.AddHours(1);
         Assert.True(await sync.PushAsync("later progress"));
         Assert.Equal(ProfileAdopt.TotalXp(CoreSettings.Current), wire.Syncs.Last().Value<double>("xp"));
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReadRetriesAfterFailedOrGuardedRecovery(bool guarded) => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", null);
+        CoreSettings.Current.PlayerLevel = guarded ? 1 : 2;
+        CoreSettings.Current.PlayerXP = 0;
+        wire.SyncStatus = HttpStatusCode.InternalServerError;
+        await AccountSeed.PostLoginAsync();
+        Assert.Equal(guarded ? 0 : 1, wire.Syncs.Count());
+        wire.SyncStatus = HttpStatusCode.OK;
+        wire.Profile = L40Profile("u1");
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        while (!sync.Loaded) await Task.Delay(50, timeout.Token);
+        Assert.Equal(40, CoreSettings.Current.PlayerLevel);
+    });
+
+    [Fact]
+    public void RetryAutomaticallySyncsProgressAfterCooldown() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", null);
+        var s = CoreSettings.Current;
+        s.PlayerLevel = 2;
+        var initial = ProfileAdopt.TotalXp(s);
+        wire.SyncReply = """{"success":true,"web_xp":{"claim":{"id":"retry-claim","amount":17}}}""";
+        var now = T0;
+        sync.UtcNow = () => now;
+        await AccountSeed.PostLoginAsync();
+        Assert.Equal(initial + 17, ProfileAdopt.TotalXp(s));
+        now = T0.AddSeconds(28);
+        wire.Profile = new Newtonsoft.Json.Linq.JObject { ["user"] = new Newtonsoft.Json.Linq.JObject {
+            ["unified_id"] = "u1", ["level"] = 2, ["xp"] = initial, ["current_season"] = "2026-08" } }.ToString();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(9));
+        while (!sync.Loaded) await Task.Delay(50, timeout.Token);
+        now = T0.AddMinutes(1);
+        while (wire.Syncs.Count() < 2) await Task.Delay(50, timeout.Token);
+        Assert.Equal(initial + 17, wire.Syncs.Last().Value<double>("xp"));
+        Assert.Equal("retry-claim", wire.Syncs.Last().Value<string>("web_xp_claim_ack"));
+    });
+
+    [Fact]
+    public void FailedRecoverySyncsAfterItsBackoff() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", null);
+        CoreSettings.Current.PlayerLevel = 2;
+        var now = T0;
+        sync.UtcNow = () => now;
+        wire.SyncStatus = HttpStatusCode.InternalServerError;
+        await AccountSeed.PostLoginAsync();
+        Assert.Single(wire.Syncs);
+        wire.SyncStatus = HttpStatusCode.OK;
+        now = T0.AddSeconds(28);
+        wire.Profile = L40Profile("u1");
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        while (!sync.Loaded) await Task.Delay(50, timeout.Token);
+        await Task.Delay(3300, timeout.Token);
+        Assert.Single(wire.Syncs);
+        now = T0.AddMinutes(1);
+        while (wire.Syncs.Count() < 2) await Task.Delay(50, timeout.Token);
+        Assert.Equal("u1", wire.Syncs.Last().Value<string>("unified_id"));
+    });
+
+    [Fact]
+    public void OldSessionNudgeDoesNotPushTheNewAccount() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", null);
+        sync.MarkLoaded(null);
+        sync.Nudge("old account");
+        sync.Reset();
+        CoreSettings.Current.UnifiedId = "u2";
+        sync.MarkLoaded(null);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await Task.Delay(3500, timeout.Token);
+        Assert.Empty(wire.Syncs);
+        sync.Nudge("new account");
+        while (!wire.Syncs.Any()) await Task.Delay(50, timeout.Token);
+        Assert.Equal("u2", Assert.Single(wire.Syncs).Value<string>("unified_id"));
+    });
+
+    [Fact]
+    public Task RetryRepaintsTheDisplayedLevel() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (global::Avalonia.Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        await Fresh(async () =>
+        {
+            var (wire, sync, _) = SignIn("u1", null);
+            CoreSettings.Current.PlayerLevel = 2;
+            CoreSettings.Current.UserDisplayName = "Tester";
+            var shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+            try
+            {
+                shell.Show();
+                shell.UpdateQuickLoginUI();
+                await AccountSeed.PostLoginAsync();
+                Assert.Equal("LVL 2", shell.FindControl<TextBlock>("TxtLevelLabel")!.Text);
+                wire.Profile = L40Profile("u1");
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                while (!sync.Loaded) await Task.Delay(50, timeout.Token);
+                await Task.Delay(100, timeout.Token);
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.Equal("LVL 40", shell.FindControl<TextBlock>("TxtLevelLabel")!.Text);
+            }
+            finally { shell.Close(); }
+        });
     });
 
     [Theory]

@@ -536,12 +536,24 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF NudgeSyncSoon: one coalesced push, 3 s out or just past the cooldown.</summary>
         public void Nudge(string reason)
         {
-            if (!Loaded || Interlocked.Exchange(ref _nudgePending, 1) == 1) return;
+            if (!Loaded) return;
+            var s = CoreSettings.Current;
+            var account = s.UnifiedId;
+            var session = Volatile.Read(ref _sessionVersion);
+            var ticket = unchecked(session + 1);
+            if (Interlocked.Exchange(ref _nudgePending, ticket) == ticket) return;
+            var now = UtcNow();
             var wait = NudgeSettle;
-            if (LastSyncTime is { } last && UtcNow() - last < Cooldown) wait = Cooldown - (UtcNow() - last) + NudgeCooldownSlack;
+            if (LastSyncTime is { } last && now - last < Cooldown)
+                wait = Cooldown - (now - last) + NudgeCooldownSlack;
+            if (SyncFailureBackoff.ShouldSkip(now, _blockedUntilUtc, _backoffToken, s.AuthToken, _backoffOffset, ServerClock.Offset)
+                && _blockedUntilUtc is { } blocked && blocked - now + NudgeCooldownSlack > wait)
+                wait = blocked - now + NudgeCooldownSlack;
             _ = Task.Delay(wait).ContinueWith(async _ =>
             {
-                Interlocked.Exchange(ref _nudgePending, 0);
+                Interlocked.CompareExchange(ref _nudgePending, 0, ticket);
+                if (session != Volatile.Read(ref _sessionVersion) || !ReferenceEquals(s, CoreSettings.Current)
+                    || s.UnifiedId != account) return;
                 await PushAsync(reason);
             }, TaskScheduler.Default);
         }

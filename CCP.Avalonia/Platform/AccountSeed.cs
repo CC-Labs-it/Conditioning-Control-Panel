@@ -176,8 +176,8 @@ internal static class AccountSeed
                 else
                 {
                     var session = sync.SessionVersion;
-                    if (await sync.PushAfterFailedReadAsync())
-                        _ = RetryProfileReadAsync(sync, uid, session);
+                    await sync.PushAfterFailedReadAsync();
+                    _ = RetryProfileReadAsync(sync, uid, session);
                 }
             }
         }
@@ -197,7 +197,12 @@ internal static class AccountSeed
             await Task.Delay(TimeSpan.FromSeconds(delay));
             if (!ReferenceEquals(Sync, sync) || sync.SessionVersion != session || sync.Loaded
                 || !ReferenceEquals(CoreSettings.Current, settings) || settings.UnifiedId != uid || settings.OfflineMode) return;
-            if (await LoadProfileAsync()) return;
+            if (await LoadProfileAsync())
+            {
+                if (ReferenceEquals(Sync, sync) && sync.SessionVersion == session && settings.UnifiedId == uid)
+                    sync.Nudge("after profile recovery");
+                return;
+            }
             delay = Math.Min(delay * 2, 60);
         }
     }
