@@ -45,6 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
         };
 
         private static bool _seeded;
+        private static bool _shellTour;
         private static TutorialOverlay? _shellOverlay;
         internal static TutorialOverlay? ShellOverlay => _shellOverlay;
         private static readonly ConditionalWeakTable<TutorialStep, CoreTutorial.Step> Projected = new();
@@ -65,7 +66,13 @@ namespace ConditioningControlPanel.Avalonia.Tours
             _seeded = true;
 
             Service.StepChanged += (s, step) => CoreTutorial.RaiseStepChanged(s, Project(step));
-            Service.TutorialFinished += (s, e) => CoreTutorial.RaiseFinished(s, e.Completed);
+            Service.TutorialFinished += (s, e) =>
+            {
+                bool offer = _shellTour;
+                _shellTour = false;
+                CoreTutorial.RaiseFinished(s, e.Completed);
+                if (offer) Views.Windows.EmiDesk.EmiBookOffer.Schedule(e.Completed ? "tourFinished" : "tourSkipped");
+            };
         }
 
         /// <summary>The seam's Start: a WPF TutorialType name. An unknown name starts nothing.</summary>
@@ -97,8 +104,17 @@ namespace ConditioningControlPanel.Avalonia.Tours
                 showDeeper: () => shell.ShowTab("deeper"),
                 showTab: key => shell.ShowTab(key));
 
-            Service.Start(type);
-            if (!Service.IsActive) return;
+            // WPF EmiTourNarrator.OnStarted summons before the first card.
+            _shellTour = true;
+            try
+            {
+                var desk = Views.Windows.EmiDesk.EmiDeskService.Instance;
+                if (!desk.IsOut && CoreSettings.Current.EmiDeskEnabled) _ = desk.Summon("tour");
+            }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "[EmiDesk] tour summon failed"); }
+            try { Service.Start(type); }
+            catch { _shellTour = false; throw; }
+            if (!Service.IsActive) { _shellTour = false; return; }
 
             var browser = shell.Named<Views.Tabs.SettingsTabView>("SettingsTab")?.BrowserContainer;
             if (browser != null) browser.IsVisible = false;
@@ -116,6 +132,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
         internal static void OnPanic()
         {
             try { if (Service.IsActive) Service.Skip(); } catch { /* panic never throws */ }
+            Views.Windows.EmiDesk.EmiBookOffer.Stop();
         }
 
         /// <summary>One snapshot per head step, so the overlay's "is this still my step" check holds.</summary>
@@ -159,6 +176,8 @@ namespace ConditioningControlPanel.Avalonia.Tours
         {
             try { if (Service.IsActive) Service.Skip(); } catch { }
             _shellOverlay = null;
+            _shellTour = false;
+            Views.Windows.EmiDesk.EmiBookOffer.Stop();
         }
     }
 }
