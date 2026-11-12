@@ -261,14 +261,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // screen (shrinks from the bottom up). Left/right edge is chosen by ApplySide.
             Height = WorkAreaDip().Height * 0.6;
             if (double.IsNaN(Height) || Height < 200) Height = 780;   // headless, or no screen yet
-            if (_haloBand)
-            {
-                // Wayland has no global pointer query, so the grace halo becomes part of this
-                // window: entering and leaving it raise real pointer events (see CursorInHudGrace).
-                _hudRoot = (Control)Content!;
-                Width += LEAVE_GRACE_MARGIN_DIP;
-                Height += LEAVE_GRACE_MARGIN_DIP;
-            }
             ApplySide(CoreSettings.Current.ChaosHudOnRight);
             LoadPortrait();
             AttachHudTips();
@@ -541,9 +533,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <para>Use desktop coordinates even after the pointer leaves the window. If the platform
         /// cannot query them, the last event is useful only while this window is still hovered.
         /// On Wayland an X11 query keeps the last X position once a native surface takes the
-        /// pointer, and XWayland then reports no root child. So there the window also covers the
-        /// halo (<see cref="_haloBand"/>): a pointer in the halo hovers this X surface, and an
-        /// unconfirmed position is never trusted.</para>
+        /// pointer, and XWayland then reports no root child. An unconfirmed position is never
+        /// trusted. A pointer on a native surface outside this window cannot hold the halo open.</para>
         /// </summary>
         private bool CursorInHudGrace()
         {
@@ -553,7 +544,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 PixelPoint? screen = OperatingSystem.IsWindows() ? Win32Overlay.CursorPosition() : X11Pointer.Read(out overXWindow)?.At;
                 Point? current = screen is { } p ? this.PointToClient(p) : null;
                 return CursorInHudGrace(ElementBoundsInWindow(_panel), ElementBoundsInWindow(_strip),
-                    current, _lastPointer, IsPointerOver || _panel.IsPointerOver, _haloBand, overXWindow);
+                    current, _lastPointer, IsPointerOver || _panel.IsPointerOver, _wayland, overXWindow);
             }
             catch
             {
@@ -568,13 +559,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             return at is { } p && CursorInGrace(panel, strip, p, LEAVE_GRACE_MARGIN_DIP);
         }
 
-        /// <summary>Wayland: grow the window over the inner and bottom halo; the root keeps its slot.
-        /// That transparent band receives the pointer, so it takes clicks; WPF passed them through.</summary>
         internal static bool? WaylandOverride;
-        private readonly bool _haloBand = WaylandOverride ?? (OperatingSystem.IsLinux() &&
+        private readonly bool _wayland = WaylandOverride ?? (OperatingSystem.IsLinux() &&
             (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")) ||
              string.Equals(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), "wayland", StringComparison.OrdinalIgnoreCase)));
-        private Control? _hudRoot;
 
         /// <summary>An element's bounds in this window's coordinate space, honouring render transforms
         /// (the panel rides a TranslateTransform). An empty rect when the element is not laid out.
@@ -651,9 +639,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var align = onRight ? HorizontalAlignment.Right : HorizontalAlignment.Left;
             _strip.HorizontalAlignment = align;
             _panel.HorizontalAlignment = align;
-            if (_hudRoot != null)
-                _hudRoot.Margin = onRight ? new Thickness(LEAVE_GRACE_MARGIN_DIP, 0, 0, LEAVE_GRACE_MARGIN_DIP)
-                                          : new Thickness(0, 0, LEAVE_GRACE_MARGIN_DIP, LEAVE_GRACE_MARGIN_DIP);
 
             // Mirror the one rounded inner corner + the painted right/bottom borders to the new edge.
             _strip.CornerRadius = _panel.CornerRadius = onRight

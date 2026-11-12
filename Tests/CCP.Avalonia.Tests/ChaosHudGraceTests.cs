@@ -37,7 +37,7 @@ public sealed class ChaosHudGraceTests
         var stale = new Point(105, 50);
         // XQueryPointer keeps the last X position after a native Wayland surface takes the pointer.
         Assert.False(ChaosHudWindow.CursorInHudGrace(panel, default, stale, stale, false, true, false));
-        // The halo band is this window, so a pointer resting in it hovers the window.
+        // A last position is usable while the window itself is hovered.
         Assert.True(ChaosHudWindow.CursorInHudGrace(panel, default, null, stale, true, true, false));
         // A root child (this window, its tooltip, another X app) makes the position live.
         Assert.True(ChaosHudWindow.CursorInHudGrace(panel, default, stale, stale, false, true, true));
@@ -49,7 +49,7 @@ public sealed class ChaosHudGraceTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void Wayland_window_covers_the_halo_with_a_hit_tested_band(bool onRight)
+    public void Wayland_does_not_extend_the_window_into_the_halo(bool onRight)
     {
         AvaloniaTestDispatcher.Run(() =>
         {
@@ -63,25 +63,29 @@ public sealed class ChaosHudGraceTests
             try
             {
                 CoreSettings.Current.ChaosHudOnRight = onRight;
+                double baselineHeight = 0;
                 foreach (bool wayland in new[] { false, true })
                 {
                     ChaosHudWindow.WaylandOverride = wayland;
                     hud = new ChaosHudWindow(new ChaosRunState(new ChaosRunConfig()));
                     hud.Show();
+                    if (!wayland) baselineHeight = hud.Height;
+                    Assert.Equal(300, hud.Width);
+                    Assert.Equal(baselineHeight, hud.Height);
                     hud.SetPreRunExpanded(true);
                     hud.UpdateLayout();
                     // the panel's layout parent; the panel itself is still mid-slide
                     var root = (Control)hud.FindControl<Border>("Panel")!.Parent!;
                     var at = root.TranslatePoint(new Point(0, 0), hud)!.Value;
-                    double band = wayland ? 26 : 0;
-                    Assert.Equal(300 + band, hud.Width);
-                    Assert.Equal(onRight ? band : 0, at.X);
+                    Assert.Equal(300, hud.Width);
+                    Assert.Equal(baselineHeight, hud.Height);
+                    Assert.Equal(0, at.X);
                     // just inside the inner halo edge, beside the panel
-                    var halo = new Point(onRight ? band - 1 : 301, 50);
+                    var halo = new Point(onRight ? -1 : 301, 50);
                     AvaloniaHeadlessPlatform.ForceRenderTimerTick();   // hit testing reads the last rendered frame
                     hud.MouseMove(halo, RawInputModifiers.None);
                     Dispatcher.UIThread.RunJobs();
-                    Assert.Equal(wayland, hud.IsPointerOver);
+                    Assert.False(hud.IsPointerOver);
                     hud.Close();
                     hud = null;
                 }
