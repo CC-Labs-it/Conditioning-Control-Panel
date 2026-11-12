@@ -9,6 +9,7 @@ using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Controls.Shapes;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Models;
 using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
@@ -35,7 +36,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly Border _pill, _tag;
         private readonly Ellipse _liveDot;
         private readonly ScaleTransform _pillScale = new(1, 1);
-        private readonly DispatcherTimer _motionTick = new() { Interval = TimeSpan.FromMilliseconds(16) };
+        private readonly BeatLoop _motionTick;
         private DateTime? _entranceAt, _bumpAt, _pulseAt, _pressAt;
         private double _bumpPeak, _bumpMs, _pressFrom, _pressTo, _pressMs;
         private ScaleTransform? _pressScale;
@@ -114,14 +115,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Content = _pill;
             SizeChanged += (_, _) => Place();
             _tick.Tick += (_, _) => Refresh();
-            _motionTick.Tick += (_, _) => StepMotion();
+            _motionTick = new BeatLoop(_pill, _ => StepMotion());
             // WPF Closed += Teardown (:224): a window manager close ends the tick, so a late Refresh never shows it again.
             Closed += (_, _) => { _disposed = true; _tick.Stop(); _motionTick.Stop(); };
         }
 
         internal double PillScale => _pillScale.ScaleX;
         internal double DotOpacity => _liveDot.Opacity;
-        internal bool MotionRunning => _motionTick.IsEnabled;
+        internal bool MotionRunning => _motionTick.IsRunning;
         internal string Headline => _headline.Text ?? "";
         internal string Subline => _subline.Text ?? "";
         internal string? StrengthTag => _tag.IsVisible ? _tagText.Text : null;
