@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
@@ -37,12 +38,30 @@ public class SeasonNudgeTests
         AmbientBeatLoopsTests.Setup();
         var settingsPath = Path.Combine(CorePaths.UserData, "settings.json");
         var original = File.Exists(settingsPath) ? File.ReadAllBytes(settingsPath) : null;
+        var originalBackups = CaptureBackups();
         var sentinel = System.Text.Encoding.UTF8.GetBytes("{\"Welcomed\":true}");
         try
         {
             if (settingsExisted) File.WriteAllBytes(settingsPath, sentinel);
             else if (File.Exists(settingsPath)) File.Delete(settingsPath);
+            for (var i = 0; i < originalBackups.Length; i++)
+            {
+                var path = originalBackups[i].Path;
+                if (settingsExisted || i == 1)
+                {
+                    File.WriteAllText(path, $"backup {i}");
+                    File.SetLastWriteTimeUtc(path, DateTime.UtcNow.Date.AddDays(-5 - i));
+                }
+                else if (File.Exists(path)) File.Delete(path);
+            }
+            var expectedBackups = CaptureBackups();
             await RunSeasonScenario(readBeforeWrite);
+            var actualBackups = CaptureBackups();
+            Assert.Multiple(expectedBackups.Select((expected, i) => (Action)(() =>
+            {
+                Assert.Equal(expected.Data, actualBackups[i].Data);
+                Assert.Equal(expected.LastWriteUtc, actualBackups[i].LastWriteUtc);
+            })).ToArray());
             Assert.Equal(settingsExisted, File.Exists(settingsPath));
             if (settingsExisted) Assert.Equal(sentinel, File.ReadAllBytes(settingsPath));
         }
@@ -50,13 +69,32 @@ public class SeasonNudgeTests
         {
             if (original != null) File.WriteAllBytes(settingsPath, original);
             else if (File.Exists(settingsPath)) File.Delete(settingsPath);
+            RestoreBackups(originalBackups);
         }
     });
+
+    private static (string Path, byte[]? Data, DateTime LastWriteUtc)[] CaptureBackups() =>
+        Enumerable.Range(1, 3).Select(i =>
+        {
+            var path = Path.Combine(CorePaths.UserData, $"settings.bak-{i}.json");
+            return File.Exists(path) ? (path, File.ReadAllBytes(path), File.GetLastWriteTimeUtc(path))
+                : (path, (byte[]?)null, default(DateTime));
+        }).ToArray();
+
+    private static void RestoreBackups((string Path, byte[]? Data, DateTime LastWriteUtc)[] backups)
+    {
+        foreach (var (path, data, lastWriteUtc) in backups)
+        {
+            if (data == null) { if (File.Exists(path)) File.Delete(path); }
+            else { File.WriteAllBytes(path, data); File.SetLastWriteTimeUtc(path, lastWriteUtc); }
+        }
+    }
 
     private static async Task RunSeasonScenario(bool readBeforeWrite)
     {
         var settingsPath = Path.Combine(CorePaths.UserData, "settings.json");
         var originalSettings = File.Exists(settingsPath) ? File.ReadAllBytes(settingsPath) : null;
+        var originalBackups = CaptureBackups();
         var service = new SettingsService();
         var oldSettings = CoreSettings.ServiceProvider;
         var oldLogin = CoreAccount.IsLoggedInProvider;
@@ -102,6 +140,10 @@ public class SeasonNudgeTests
             Assert.True(tab.FindControl<Button>("BtnViewSeasonRecap")!.IsVisible);
             // Force a write so both restoration cases prove cleanup, regardless of debounce timing.
             service.SaveImmediate();
+            service.SaveImmediate(); // A missing settings file needs the first save before rotation can run.
+            var newestBackup = Path.Combine(CorePaths.UserData, "settings.bak-1.json");
+            Assert.True(File.Exists(newestBackup));
+            Assert.Equal(DateTime.Today, File.GetLastWriteTime(newestBackup).Date);
         }
         finally
         {
@@ -112,6 +154,7 @@ public class SeasonNudgeTests
             service.SealForReset();
             if (originalSettings != null) File.WriteAllBytes(settingsPath, originalSettings);
             else if (File.Exists(settingsPath)) File.Delete(settingsPath);
+            RestoreBackups(originalBackups);
             CoreSettings.ServiceProvider = oldSettings;
             CoreAccount.IsLoggedInProvider = oldLogin;
             AccountSeed.Sync = oldSync;
