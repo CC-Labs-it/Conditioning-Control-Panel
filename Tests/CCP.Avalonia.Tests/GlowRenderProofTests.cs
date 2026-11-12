@@ -138,8 +138,10 @@ public sealed class GlowRenderProofTests
         return x1 < 0 ? default : new PixelRect(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
     }
 
-    [Fact]
-    public Task PadlockGlowIsTheGlyphsBakedShadow() => AvaloniaTestDispatcher.RunAsync(() =>
+    [Theory]
+    [InlineData(650)]
+    [InlineData(900)]
+    public Task PadlockGlowIsTheGlyphsBakedShadow(int height) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         EnsureApp();
         var s = CoreSettings.Current;
@@ -156,13 +158,17 @@ public sealed class GlowRenderProofTests
             CoreEntitlement.HasPremiumProvider = null;
             CoreEntitlement.HasLabProvider = null;
             CoreEntitlement.IsFreeTodayProvider = null;
-            w = new MainShellWindow { Width = 1400, Height = 900 };
+            w = new MainShellWindow { Width = 1400, Height = height };
             w.Show();
             Dispatcher.UIThread.RunJobs();
             w.ShowTab("exclusives");
             Dispatcher.UIThread.RunJobs();
             var view = w.Named<ExclusivesTabView>("ExclusivesTab")!;
             var lockGlyph = view.GetVisualDescendants().OfType<IconGlyph>().First(t => t.Name == "VeilLock" && t.IsEffectivelyVisible);
+            // IsEffectivelyVisible does not account for ScrollViewer clipping. Include the halo
+            // in the requested rectangle so the screen proof samples the actual card.
+            lockGlyph.BringIntoView(new Rect(-24, -24, lockGlyph.Bounds.Width + 48, lockGlyph.Bounds.Height + 48));
+            Dispatcher.UIThread.RunJobs();
             var glow = ExclusivesTabView.LockGlow(lockGlyph)!;
             Assert.True(glow.IsVisible, "the padlock glow is not shown - the proof proves nothing");
             Assert.Null(lockGlyph.Effect);                                    // no live Effect on the glyph
@@ -177,13 +183,26 @@ public sealed class GlowRenderProofTests
             Assert.True(halo.X < plain.X - 2 && halo.Y < plain.Y - 2 && halo.Right > plain.Right + 2 && halo.Bottom > plain.Bottom + 2,
                 $"no halo around the glyph: ink {plain}, with glow {halo}");
 
-            // On screen: 2 DIP left of the glyph's ink, mid-height, the halo tints the frame.
+            // Freeze the actual beat as well as its time source: MotionFrame writes this
+            // image's opacity on every tick and would override the two values below.
+            var motion = (ConditioningControlPanel.Avalonia.Helpers.BeatLoop)typeof(ExclusivesTabView)
+                .GetField("_motion", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(view)!;
+            motion.Stop();
+
+            // Sample a band outside the bare ink. A single pixel can coincide with the
+            // foreground or similarly coloured art after platform-specific layout rounding.
             glow.Opacity = 1;
-            var p = lockGlyph.TranslatePoint(new Point(plain.X - pad - 2, plain.Y - pad + plain.Height / 2.0), w)!.Value;
-            var lit = Pixel(Frame(w, "padlock-glow-on"), p);
-            glow.IsVisible = false;
-            var dark = Pixel(Frame(w, "padlock-glow-off"), p);
-            Assert.True(Diff(lit, dark) > 4, $"no halo beside the padlock: {lit:X6} vs {dark:X6}");
+            using var lit = Frame(w, "padlock-glow-on");
+            glow.Opacity = 0;
+            using var dark = Frame(w, "padlock-glow-off");
+            int tinted = 0;
+            for (int y = 0; y < plain.Height; y++)
+            {
+                var p = lockGlyph.TranslatePoint(new Point(plain.X - pad - 2, plain.Y - pad + y), w)!.Value;
+                if (p.X >= 0 && p.Y >= 0 && p.X < lit.Size.Width && p.Y < lit.Size.Height &&
+                    Diff(Pixel(lit, p), Pixel(dark, p)) > 4) tinted++;
+            }
+            Assert.True(tinted >= 3, $"no halo beside the padlock: {tinted} tinted pixels; lock {lockGlyph.Bounds} at {lockGlyph.TranslatePoint(default, w)}, glow {glow.Bounds} at {glow.TranslatePoint(default, w)}, plain {plain}, halo {halo}, pad {pad}");
         }
         finally
         {
