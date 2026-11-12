@@ -122,6 +122,7 @@ public sealed class AwarenessPrivacyCardTests
         s.AwarenessModeEnabled = false;
         s.AwarenessConsentGiven = false;
         s.AwarenessConsentShownV2 = false;
+        s.UseAwarenessV2 = true;
         s.AwarenessTitleAllowList = new();
         var oldPremium = CoreEntitlement.HasPremiumProvider;
         var ledger = Path.Combine(CorePaths.UserData, "awareness_ledger.json");
@@ -157,8 +158,19 @@ public sealed class AwarenessPrivacyCardTests
             Assert.False(vm.IsWireLive);
             Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("companion_awareness_wire_legacy"), vm.WireLine);
 
-            // Review always asks again. Decline changes nothing; accept bounces the poll.
-            Assert.True(vm.CanReviewConsent);
+            // Until the observer exists, the review action cannot switch on v2 protections.
+            var reviewButton = Assert.Single(card.GetLogicalDescendants().OfType<Button>(),
+                button => ReferenceEquals(button.Command, vm.ReviewConsentCommand));
+            Assert.False(vm.CanReviewConsent);
+            Assert.False(reviewButton.IsVisible);
+            s.UseAwarenessV2 = false;
+            vm.Sync();
+            Assert.False(vm.CanReviewConsent);
+            Assert.False(reviewButton.IsVisible);
+            s.UseAwarenessV2 = true;
+            vm.Sync();
+
+            // The retained command still asks again. Decline changes nothing; accept bounces the poll.
             var calls = new System.Collections.Generic.List<bool>();
             var lifecycle = ConditioningControlPanel.Services.WindowAwarenessService.V2Lifecycle;
             try

@@ -161,7 +161,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public string LegacyHead => Loc.Get("companion_awareness_legacy_head");
         public string LegacyBody => Loc.Get("companion_awareness_legacy_body");
         public string LegacyAction => Loc.Get("companion_awareness_legacy_action");
-        public bool CanReviewConsent => _isLegacyPipeline && CoreSettings.Current.UseAwarenessV2;
+        // The current lifecycle starts only the ledger. Show this action when an observer can start.
+        public bool CanReviewConsent => false;
 
         // ------------------------------- the wire -------------------------------
 
