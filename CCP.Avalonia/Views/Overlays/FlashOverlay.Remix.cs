@@ -72,6 +72,9 @@ internal static partial class FlashOverlay
         DispatcherTimer? timer = null;
         var creating = true;
         var capped = false;
+        // WPF FlashService.cs:1868: only the first copy rolls lucky (mirrors stay 1); each copy then
+        // takes the ordinary glow rules (:1903-1909) and motion resolver (:2069).
+        var multiplier = FlashFxRules.RollLucky(SkillTreeRules.HasSkill(s, FlashFxRules.LuckySkillId), 0, remixMirror: false, Rng);
         void Cleanup()
         {
             if (creating || windows.Count > 0) return;
@@ -84,10 +87,12 @@ internal static partial class FlashOverlay
             var screen = screens[index];
             var b = screen.Bounds;
             var (x, y, w, h) = JackpotRemixRoll.CentredGeometry(b.X, b.Y, b.Width, b.Height, frames[0].PixelSize.Width, frames[0].PixelSize.Height);
-            var win = new FlashOverlayWindow(frames[0], ownsPicture: false) { IsRemix = true, Ambient = ambient, InheritMotion = FlashMotionStyle.Still, SpawnScreen = screen };
+            var win = new FlashOverlayWindow(frames[0], ownsPicture: false) { IsRemix = true, Ambient = ambient, SpawnScreen = screen };
+            var glow = FlashFxRules.ResolveGlow(s.FlashGlowEnabled, ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier,
+                multiplier > 1 && windows.Count == 0, SkillTreeRules.GetSparkleBoostTier(s), natasha: false);
             windows.Add(win);
             win.Closed += (_, _) => { windows.Remove(win); Cleanup(); };
-            if (!Spawn(win, new PixelRect(x, y, w, h), b, screen.Scaling, default,
+            if (!Spawn(win, new PixelRect(x, y, w, h), b, screen.Scaling, glow,
                 Math.Clamp(s.FlashOpacity / 100.0, 0, 1), TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent),
                 Lifetime(s, ambient, durationMs), s.FlashClickable)) windows.Remove(win);
         }
@@ -96,7 +101,6 @@ internal static partial class FlashOverlay
         if (windows.Count == 0) { Cleanup(); return capped; }
         Platform.BarkHead.Engine?.Raise("FlashDisplayed");
         Displayed?.Invoke();
-        var multiplier = FlashFxRules.RollLucky(SkillTreeRules.HasSkill(s, FlashFxRules.LuckySkillId), 0, remixMirror: false, Rng);
         if (multiplier > 1) LuckyProc(App.Mods?.GetLuckyFlashLabel() ?? ConditioningControlPanel.Localization.Loc.Get("skill_lucky_flash"), multiplier);
         Paid(path, s, 0, multiplier); // Mirrors do not pay again.
         var frame = 0;

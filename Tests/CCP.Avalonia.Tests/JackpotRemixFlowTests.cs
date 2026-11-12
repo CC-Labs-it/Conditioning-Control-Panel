@@ -27,6 +27,9 @@ public class JackpotRemixFlowTests
         var present = FlashOverlay.Present;
         var multiply = FlashOverlay.Multiply;
         var xp = CoreProgression.AddXPProvider;
+        var look = (s.FlashGlowEnabled, s.FlashMotionStyle, s.LighterEffects, s.PerformanceMode, s.AutoPerformanceMode);
+        var hadLucky = s.UnlockedSkills.Contains("lucky_bimbo");
+        var (rng, proc, chime) = (FlashOverlay.Rng, FlashOverlay.LuckyProc, FlashOverlay.LuckyChime);
         var dir = Directory.CreateTempSubdirectory("ccp-remix-flow-").FullName;
         var fixture = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(Here())!, "..", "..", "Assets/web/dtrh/assets/bubbles/effects/spirals/sp6.gif"));
         var cached = Path.Combine(dir, "remix-fixture.gif");
@@ -49,6 +52,12 @@ public class JackpotRemixFlowTests
             FlashOverlay.Present = (_, _, _) => { s.HydraLimit = 1; return true; };
             var children = 0; FlashOverlay.Multiply = (_, _, _, _) => children++;
             var payments = 0; CoreProgression.AddXPProvider = (_, _) => payments++;
+            // WPF FlashService.cs:1868, 1903-1909, 2069: a remix keeps the lucky glow and the motion setting.
+            (s.FlashGlowEnabled, s.FlashMotionStyle, s.LighterEffects, s.PerformanceMode, s.AutoPerformanceMode)
+                = (true, FlashMotionStyle.DriftBounce, LighterEffectsMode.Off, false, false);
+            if (!hadLucky) s.UnlockedSkills.Add("lucky_bimbo");
+            FlashOverlay.Rng = new LuckyRandom();
+            var procs = 0; FlashOverlay.LuckyProc = (_, _) => procs++; FlashOverlay.LuckyChime = _ => { };
             FlashOverlay._remix = new JackpotRemixDirector(() => new[] { cached }, () => false, () => false,
                 () => s.JackpotRemixEnabled, dir, () => true, () => MotionLevel.Full, () => false,
                 (_, _, _) => Task.FromResult<string?>(null), () => ulong.MaxValue, odds: 1);
@@ -59,6 +68,9 @@ public class JackpotRemixFlowTests
             var window = Assert.Single(FlashOverlay.Active).Window;
             Assert.True(window.IsRemix);
             Assert.Equal(1, payments);
+            Assert.Equal(1, procs);
+            Assert.True(window.GlowPadPx > 0);
+            Assert.Equal(FlashMotionStyle.DriftBounce, window.MotionStyle);
             File.Copy(fixture, cached);
             FlashOverlay._remix!.Dispose();
             FlashOverlay._remix = new JackpotRemixDirector(() => new[] { cached }, () => false, () => false,
@@ -80,10 +92,15 @@ public class JackpotRemixFlowTests
             FlashOverlay.CloseAll(false); shell.Close();
             PrizeOwnership.IsGranted = own; FlashOverlay.Present = present; FlashOverlay.Multiply = multiply;
             CoreProgression.AddXPProvider = xp;
+            (s.FlashGlowEnabled, s.FlashMotionStyle, s.LighterEffects, s.PerformanceMode, s.AutoPerformanceMode) = look;
+            if (!hadLucky) s.UnlockedSkills.Remove("lucky_bimbo");
+            (FlashOverlay.Rng, FlashOverlay.LuckyProc, FlashOverlay.LuckyChime) = (rng, proc, chime);
             (s.JackpotRemixEnabled, s.MotionLevel, s.FlashClickable, s.CorruptionMode, s.HydraLimit, s.FlashStayUntilPopped, s.GlobalTargetMonitor) = old;
             Directory.Delete(dir, true);
         }
     });
+
+    private sealed class LuckyRandom : Random { public override double NextDouble() => 0; }
 
     [Fact]
     public void ProfileSnapshotAndRevocationRefreshTheToggle() => AvaloniaTestDispatcher.Run(() =>
