@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using ConditioningControlPanel;
 using Avalonia;
 using Avalonia.Controls;
 using CCP.Avalonia.Testing;
@@ -12,24 +14,53 @@ namespace CCP.Avalonia.Tests;
 public sealed class SubliminalSolidHostTests
 {
     [Fact]
-    public System.Threading.Tasks.Task Hosted_card_fades_holds_and_retires() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public void Hosted_card_fades_holds_and_retires() => AvaloniaTestDispatcher.Run(() =>
     {
         SubliminalSilentHintTests.EnsureAvalonia();
         var configure = SharedOverlayHost.Configure;
+        var schedule = SubliminalOverlay.ScheduleHosted;
+        var settings = CoreSettings.Current;
+        var gentle = settings.GentleVisuals;
+        var pending = new List<(TimeSpan At, Action Run)>();
         Window? stage = null;
         SharedOverlayHost.Configure = (w, _) => { stage = w; w.Width = 300; w.Height = 200; return true; };
+        SubliminalOverlay.ScheduleHosted = (action, delay) => pending.Add((delay, action));
+        settings.GentleVisuals = false;
+        void Advance(int milliseconds)
+        {
+            var until = TimeSpan.FromMilliseconds(milliseconds);
+            while (pending.Any(x => x.At <= until))
+            {
+                var next = pending.OrderBy(x => x.At).First();
+                pending.Remove(next);
+                next.Run();
+            }
+        }
         try
         {
             Assert.True(SubliminalOverlay.ShowHosted(new PixelRect(0, 0, 300, 200), "TEST", 0.8, TimeSpan.FromMilliseconds(500)));
             var canvas = Assert.IsType<Grid>(stage!.Content);
             var card = Assert.Single(canvas.Children);
             Assert.Equal(0, card.Opacity);
-            await System.Threading.Tasks.Task.Delay(150);
+            Advance(25);
+            Assert.Equal(0.8 / 3, card.Opacity, 3);
+            Advance(50);
             Assert.Equal(0.8, card.Opacity, 3);
-            await System.Threading.Tasks.Task.Delay(650);
+            Advance(550);
+            Assert.Equal(0.8, card.Opacity, 3);
+            Advance(575);
+            Assert.Equal(0.8 * 2 / 3, card.Opacity, 3);
+            Advance(600);
             Assert.Empty(canvas.Children);
+            Assert.Empty(pending);
         }
-        finally { SubliminalOverlay.CloseAll(); SharedOverlayHost.Configure = configure; }
+        finally
+        {
+            SubliminalOverlay.CloseAll();
+            settings.GentleVisuals = gentle;
+            SubliminalOverlay.ScheduleHosted = schedule;
+            SharedOverlayHost.Configure = configure;
+        }
     });
 
     [Fact]
