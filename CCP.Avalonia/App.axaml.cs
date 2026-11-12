@@ -97,7 +97,7 @@ namespace ConditioningControlPanel.Avalonia
         }
 
         // WPF AchievementService.cs:93, :146 and AchievementProgressStreak.cs:19, :192.
-        internal static Action StartSeasonActivity(SettingsService settings, AchievementEngine engine, Func<DateTime> clock, SyncPush? sync = null)
+        internal static Action StartSeasonActivity(SettingsService settings, AchievementEngine engine, Func<DateTime> clock, SyncPush? sync = null, Action<int, int>? bonusPopup = null)
         {
             var progress = engine.Progress;
             var wasLive = ReferenceEquals(Achievements, engine);
@@ -112,7 +112,9 @@ namespace ConditioningControlPanel.Avalonia
                 if (!bonusReady || !progress.PendingStreakBonus || CoreProgression.AddXPProvider == null) return;
                 progress.PendingStreakBonus = false;
                 var days = progress.ConsecutiveDays;
-                CoreProgression.AddXP(days <= 3 ? 50 : days <= 6 ? 100 : days <= 13 ? 150 : days <= 29 ? 200 : 300, "Other");
+                var xp = days <= 3 ? 50 : days <= 6 ? 100 : days <= 13 ? 150 : days <= 29 ? 200 : 300;
+                CoreProgression.AddXP(xp, "Other");
+                if (bonusPopup != null) bonusPopup(days, xp); else Dispatcher.UIThread.Post(() => { try { new Views.Windows.AchievementPopup(Loc.GetF("skill_streak_bonus_name", days), Loc.GetF("skill_streak_bonus_flavor", xp, days), "skills/milestone_rewards.png", "🎁", Loc.Get("skill_daily_streak_bonus_header")).Show(); } catch (Exception ex) { Serilog.Log.Warning(ex, "Daily streak popup failed"); } }, DispatcherPriority.ApplicationIdle);
                 engine.Save();
             }
             void Update(DateTime now, bool resolve = false, bool startup = false)
@@ -155,7 +157,7 @@ namespace ConditioningControlPanel.Avalonia
                     if (sync?.Loaded == true) sync.Nudge("login streak");
                 }
                 var s = settings.Current;
-                var added = lastUtcDay != now.Date && SeasonActivity.MarkActiveToday(s, now);
+                var added = AchievementProgress.ShouldBankDayRollover(progress.LastLaunchDate, now.ToLocalTime().Date) && SeasonActivity.MarkActiveToday(s, now);
                 var peak = s.SeasonPeakStreak;
                 SeasonActivity.TrackStreakPeak(s, progress.ConsecutiveDays);
                 if (added || peak != s.SeasonPeakStreak) settings.Save();
