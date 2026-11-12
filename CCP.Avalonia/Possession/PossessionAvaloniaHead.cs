@@ -164,6 +164,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         internal static PossessionDirectorHead CreateDirectorHead() => new()
         {
             OnUi = OnUi,
+            StopReturningEffectsOnUndoAll = true,
             UiAlive = () => Application.Current != null && !_shutdownStarted,
             Settings = () => CoreSettings.Service?.Current,
             MainHost = () => (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as IPossessionHost,

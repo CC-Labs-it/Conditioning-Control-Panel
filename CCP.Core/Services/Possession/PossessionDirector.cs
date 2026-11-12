@@ -152,6 +152,16 @@ public sealed class PossessionDirector : IDisposable
             // Release() (inside UndoGhostSync) is what owns the ledger; these two are a belt, and they
             // are only safe HERE because there is no await above them for a new ghost to arrive in.
             foreach (var g in _live.ToArray()) UndoGhostSync(g);
+            // The Avalonia head can still have an effect easing home after Release removed its ghost.
+            if (_head.StopReturningEffectsOnUndoAll)
+                foreach (var effect in _effects)
+                    try
+                    {
+                        if (effect.IsLive)
+                            effect.UndoAsync(TimeSpan.Zero).ContinueWith(t => Log.Warning("Possession undo failed: {Error}",
+                                t.Exception?.GetBaseException().Message), TaskContinuationOptions.OnlyOnFaulted);
+                    }
+                    catch (Exception ex) { Log.Warning("Possession undo failed: {Error}", ex.Message); }
             _live.Clear();
             _liveKeys.Clear();
             foreach (var h in _hosts) { try { h.Attribution.ReleaseAll(); } catch (Exception ex) { Diag.Swallowed(ex); } }
@@ -1165,6 +1175,8 @@ public sealed class PossessionDirectorHead
 {
     /// <summary>Run on the UI thread (inline when already there; WPF DispatcherHelper.RunOnUI).</summary>
     public Action<Action> OnUi { get; init; } = a => a();
+    /// <summary>Also stop effects already released from the ledger but still easing home.</summary>
+    public bool StopReturningEffectsOnUndoAll { get; init; }
     /// <summary>False once the UI is gone or shutting down; ticks are ignored then.</summary>
     public Func<bool> UiAlive { get; init; } = () => true;
     public Func<Models.AppSettings?> Settings { get; init; } = () => CoreSettings.Service?.Current;
