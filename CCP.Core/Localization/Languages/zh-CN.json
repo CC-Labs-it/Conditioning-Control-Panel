@@ -114,6 +114,9 @@
   "title_select_companion_personality": "为{0}选择 AI 人格",
   "filter_personality_json_files": "人格 JSON 文件",
   "chaos_heavy_fizzle": "深处正忙。{0}未生效",
+  "chaos_last_loop": "最后一轮",
+  "chaos_last_loop_sub": "此后不再继续",
+  "chaos_event_last_loop": "最后一轮。",
   "chaos_draft_reroll": "再次试探了命运",
   "chaos_welcome_shower": "欢迎之雨：从天而降的奖励",
   "chaos_event_skip": "抵抗：抗性 +1",
@@ -8962,5 +8965,7 @@
   "chaos_expiry_name_pink": "粉色滤镜",
   "chaos_expiry_name_spiral": "螺旋",
   "chaos_expiry_name_braindrain": "脑力消耗",
-  "chaos_expiry_name_gif": "GIF 瀑布"
+  "chaos_expiry_name_gif": "GIF 瀑布",
+  "webcam_camera_unavailable_detail": "摄像头不可用。它可能正被其他应用使用，或被摄像头隐私设置阻止。",
+  "webcam_capture_retry_fmt": "摄像头响应缓慢。正在尝试其他方法（{0}/{1}）。"
 }

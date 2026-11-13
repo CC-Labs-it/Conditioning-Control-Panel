@@ -351,7 +351,7 @@ namespace ConditioningControlPanel.Avalonia
         /// that is the write WPF makes at launch (StartModsTests pins it against the Core golden).
         /// The brain is built after the mod service, so its callback reads Brain lazily as WPF does.
         /// The shared prompt prefix is also invalidated when a mod changes its content. BarkHead and
-        /// CompanionHead seed their own hooks later; the remaining head cache/host hooks stay unseeded.
+        /// CompanionHead seed their own hooks later; portrait, voice-index and Arcademy hooks stay unseeded.
         /// ponytail: the remaining startup services and global hotkeys are the follow-up lane.
         /// </summary>
         internal static void StartMods()
@@ -362,7 +362,9 @@ namespace ConditioningControlPanel.Avalonia
             // WPF App.xaml.cs:317/327: discard stale voice context on a switch or content replacement.
             CoreModsHooks.ModSwitched = name => Brain?.OnModSwitched(name);
             CoreModsHooks.CloseDtrhHost = Views.Games.GameWindow.CloseDtrhForModSwitch;
-            CoreModsHooks.ClearModResourceCache = Helpers.StartupArt.InvalidateOverrides;
+            // WPF App.xaml.cs:358: drop cached art (the startup prewarm and the program art chains)
+            // before mod or pack change notifications.
+            CoreModsHooks.ClearModResourceCache = () => { Helpers.StartupArt.InvalidateOverrides(); Helpers.ModArt.ClearModCache(); };
             CoreModsHooks.InvalidateStablePrompt = BambiSprite.InvalidateStablePrompt;
             Mods = new ModService();
             var mods = Mods;

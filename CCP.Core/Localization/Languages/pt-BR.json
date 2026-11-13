@@ -115,6 +115,9 @@
   "title_select_companion_personality": "Selecionar personalidade de IA para {0}",
   "filter_personality_json_files": "Arquivos JSON de personalidade",
   "chaos_heavy_fizzle": "As profundezas estão ocupadas. {0} se dissipa",
+  "chaos_last_loop": "a última volta",
+  "chaos_last_loop_sub": "depois desta não há mais",
+  "chaos_event_last_loop": "a última volta.",
   "chaos_draft_reroll": "tentou a sorte de novo",
   "chaos_welcome_shower": "chuva de boas-vindas: mimos lá de cima",
   "chaos_event_skip": "resistiu: +1 resistência",
@@ -8457,5 +8460,7 @@
   "chaos_expiry_name_pink": "filtro rosa",
   "chaos_expiry_name_spiral": "espiral",
   "chaos_expiry_name_braindrain": "brain drain",
-  "chaos_expiry_name_gif": "cascata de GIFs"
+  "chaos_expiry_name_gif": "cascata de GIFs",
+  "webcam_camera_unavailable_detail": "Câmera indisponível. Outro aplicativo pode estar usando a câmera ou as configurações de privacidade podem estar bloqueando o acesso.",
+  "webcam_capture_retry_fmt": "A câmera está demorando para responder. Tentando outro método ({0}/{1})."
 }

@@ -115,6 +115,9 @@
   "title_select_companion_personality": "{0}のAIパーソナリティを選択",
   "filter_personality_json_files": "パーソナリティのJSONファイル",
   "chaos_heavy_fizzle": "深淵は使用中です。{0}は不発です",
+  "chaos_last_loop": "最後のループ",
+  "chaos_last_loop_sub": "この先はない",
+  "chaos_event_last_loop": "最後のループ。",
   "chaos_draft_reroll": "もう一度運を試した",
   "chaos_welcome_shower": "歓迎の雨：上からごほうび",
   "chaos_event_skip": "拒否: 耐性 +1",
@@ -8457,5 +8460,7 @@
   "chaos_expiry_name_pink": "ピンクフィルター",
   "chaos_expiry_name_spiral": "スパイラル",
   "chaos_expiry_name_braindrain": "ブレインドレイン",
-  "chaos_expiry_name_gif": "GIFの連続表示"
+  "chaos_expiry_name_gif": "GIFの連続表示",
+  "webcam_camera_unavailable_detail": "カメラを使用できません。別のアプリが使用中か、カメラのプライバシー設定でブロックされている可能性があります。",
+  "webcam_capture_retry_fmt": "カメラの応答が遅いため、別の方法を試しています（{0}/{1}）。"
 }

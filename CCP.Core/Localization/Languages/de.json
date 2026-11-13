@@ -115,6 +115,9 @@
   "title_select_companion_personality": "KI-Persönlichkeit für {0} auswählen",
   "filter_personality_json_files": "JSON-Persönlichkeitsdateien",
   "chaos_heavy_fizzle": "Die Tiefe ist beschäftigt. {0} verpufft",
+  "chaos_last_loop": "die letzte Runde",
+  "chaos_last_loop_sub": "danach kommt nichts mehr",
+  "chaos_event_last_loop": "die letzte Runde.",
   "chaos_draft_reroll": "das Schicksal erneut herausgefordert",
   "chaos_welcome_shower": "Willkommensschauer: Leckereien von oben",
   "chaos_event_skip": "widerstanden: +1 Widerstand",
@@ -8457,5 +8460,7 @@
   "chaos_expiry_name_pink": "Pinkfilter",
   "chaos_expiry_name_spiral": "Spirale",
   "chaos_expiry_name_braindrain": "Brain Drain",
-  "chaos_expiry_name_gif": "GIF-Kaskade"
+  "chaos_expiry_name_gif": "GIF-Kaskade",
+  "webcam_camera_unavailable_detail": "Kamera nicht verfügbar. Sie wird möglicherweise von einer anderen App verwendet oder durch die Kamera-Datenschutzeinstellungen blockiert.",
+  "webcam_capture_retry_fmt": "Die Kamera reagiert langsam. Eine andere Methode wird versucht ({0}/{1})."
 }
