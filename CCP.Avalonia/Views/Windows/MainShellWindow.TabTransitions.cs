@@ -65,7 +65,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void FadeLeavingTab(string target)
         {
             CompleteTabTransition();
-            if (!AmbientFxCanvas.Env.AllowTransitions || ChromeFxNav.IsAirspaceTab(CurrentTab)
+            // --render/--render-all photograph one frame: never leave a half-faded old tab in it.
+            if (RenderProof.Rendering || !AmbientFxCanvas.Env.AllowTransitions || ChromeFxNav.IsAirspaceTab(CurrentTab)
                 || !TabPanels.TryGetValue(CurrentTab, out var oldName) || oldName == target
                 || Named<Control>(oldName) is not { IsVisible: true } old
                 || ElementComposition.GetElementVisual(old) is not { } visual) return;
