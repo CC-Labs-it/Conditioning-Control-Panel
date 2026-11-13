@@ -1188,8 +1188,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 packs?.InstalledPackIds.Count ?? 0, packs?.GetActivePackIds().Count ?? 0);
         }
 
+        private int _escapeGeneration;
+        internal int EscapeGeneration => System.Threading.Volatile.Read(ref _escapeGeneration);
+
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
         {
+            System.Threading.Interlocked.Increment(ref _escapeGeneration);
             _floatingOnScreen = false;
             SampleCutPlayback();
             var watched = _cutClock?.PlayedMs;
