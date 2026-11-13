@@ -29,7 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// <see cref="InvokeScriptAsync"/>, plus the live URL (<see cref="CurrentUrl"/>,
     /// <see cref="NavigationCompleted"/>). NativeWebView additionally offers WebMessageReceived,
     /// GoBack/GoForward, Stop and Refresh; nothing needs
-    /// them yet, so they are not wrapped. Home browser popups are routed in place. It has NO zoom factor, no document-created script
+    /// them yet, so they are not wrapped. Home browser popups are routed in place. Native zoom is applied through WebViewZoom; it has no document-created script
     /// injection, and no fullscreen-element signal.
     ///
     /// The whole point is the fallback. A Linux box without webkit2gtk installed is the DEFAULT,
@@ -431,6 +431,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             try
             {
+                BrowserZoomAdapterDestroyed();
                 ClearNativeWatches();
                 if (_web is { } old) _webSlot.Children.Remove(old);
                 _web = null;
@@ -469,11 +470,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 // gate has to be live for the FIRST navigation too, and a caller that assigns
                 // the predicate and the Source in that order would otherwise race the engine.
                 native.EnvironmentRequested += (_, e) => EnvironmentRequested?.Invoke(e);
-                native.AdapterDestroyed += (_, _) => { if (ReferenceEquals(_web, native)) ClearNativeWatches(); };
-                native.AdapterCreated += (_, _) =>
+                native.AdapterDestroyed += (_, _) => { if (ReferenceEquals(_web, native)) { BrowserZoomAdapterDestroyed(); ClearNativeWatches(); } };
+                native.AdapterCreated += (_, e) =>
                 {
-                    if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) AttachFailureWatch(native, false);
-                    else global::Avalonia.Threading.Dispatcher.UIThread.Post(() => AttachFailureWatch(native, false));
+                    if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) { AttachFailureWatch(native, false); ZoomAdapterCreated(native, () => e.TryGetPlatformHandle()); }
+                    else global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { AttachFailureWatch(native, false); if (ReferenceEquals(_web, native)) TryBrowserZoomAdapterReady(); });
                 };
                 native.NavigationStarted += (_, e) => { if (ReferenceEquals(_web, native)) OnNavigationStarted(native, e); else e.Cancel = true; };
                 native.NavigationCompleted += (_, e) => {
@@ -523,6 +524,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // Panic teardown must pass a caller's page allowlist, including on reattachment.
             // Late redirects from the stopped document must not replace the blank page.
             if (_panicBlank) { e.Cancel = target != PanicBlank; return; }
+            TryBrowserZoomAdapterReady();
             _scrolllerPanicTarget = target;
             if (RefusesScrolller(target)) { e.Cancel = true; return; }
             // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
@@ -699,6 +701,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal void OnScrolllerGate(int engine, bool gated)
         {
             if (engine != _scrolllerEngine) return;
+            TryBrowserZoomAdapterReady();
             if (BlockWhenOffline && CoreSettings.Current.OfflineMode && Source is { IsAbsoluteUri: true, Scheme: not "about" })
             {
                 CancelHeldNavigation();

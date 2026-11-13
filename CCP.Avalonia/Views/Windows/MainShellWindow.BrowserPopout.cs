@@ -75,7 +75,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF MainWindow.xaml.cs:1987 disposes the browser on shell close; unload the page and close its unowned window.</summary>
         private void CloseBrowserSurfaces()
         {
-            if (BrowserView is { Source: not null } host) host.Navigate(new Uri("about:blank"));
+            if (BrowserView is { } host)
+            {
+                host.CancelBrowserZoom();
+                if (host.Source != null) host.Navigate(new Uri("about:blank"));
+            }
             _browserPopoutWindow?.Close();
         }
 

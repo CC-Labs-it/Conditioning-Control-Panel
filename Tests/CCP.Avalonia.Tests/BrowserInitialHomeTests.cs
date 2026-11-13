@@ -63,6 +63,258 @@ public sealed class BrowserInitialHomeTests
         });
 
     [Fact]
+    public Task AdapterReadyBeforeFirstPageCompletesMakesNextLinkHalf() => Run((shell, page, host, mod) =>
+    {
+        double applied = 0;
+        host.ZoomInvoker = (zoom, _) => applied = zoom;
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/first");
+        host.BrowserZoomAdapterReady();
+        Assert.True(host.BrowserZoomReady);
+        Assert.Equal(0.75, applied);
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/second");
+        Assert.Equal(0.5, host.BrowserZoom);
+        Assert.Equal(0.5, applied);
+    });
+
+    [Fact]
+    public Task UserZoomDuringLoadingSurvivesCompletion() => Run((shell, page, host, mod) =>
+    {
+        double actualZoom = 0;
+        host.ZoomInvoker = (zoom, _) => actualZoom = zoom;
+        host.BrowserZoomAdapterReady();
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/");
+        Assert.Equal(0.75, actualZoom);
+        actualZoom = 0.9;
+        host.OnNavigationCompleted(new Uri("http://127.0.0.1:9/"));
+        Assert.Equal(0.9, actualZoom);
+    });
+
+    [Fact]
+    public Task LaterLinkBeforeInitializationAppliesHalfWhenReady() => Run((shell, page, host, mod) =>
+    {
+        double applied = 0;
+        host.ZoomInvoker = (zoom, _) => applied = zoom;
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:9/one"));
+        Assert.Equal(0.75, host.BrowserZoom);
+        Assert.Equal(0, applied);
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:9/two"));
+        Assert.Equal("http://127.0.0.1:9/two", host.Source!.AbsoluteUri);
+        host.BrowserZoomAdapterReady();
+        Assert.Equal(0.5, applied);
+        Assert.Equal(0.5, host.BrowserZoom);
+    });
+
+    [Fact]
+    public Task AdditionalLinksWhileInitializingKeepHalfZoom() => Run((shell, page, host, mod) =>
+    {
+        double applied = 0;
+        host.ZoomInvoker = (zoom, _) => applied = zoom;
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/one");
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/two");
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/three");
+        Assert.Equal("http://127.0.0.1:9/three", host.Source!.AbsoluteUri);
+        host.BrowserZoomAdapterReady();
+        Assert.Equal(0.5, host.BrowserZoom);
+        Assert.Equal(0.5, applied);
+    });
+
+    [Fact]
+    public Task SiteToggleDuringInitializationKeepsInitialZoom() => Run((shell, page, host, mod) =>
+    {
+        double applied = 0;
+        host.ZoomInvoker = (zoom, _) => applied = zoom;
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/one");
+        var requests = host.NavigationRequests;
+        shell.BrowserSiteToggle_Click(null, new global::Avalonia.Interactivity.RoutedEventArgs());
+        Assert.Equal(requests + 1, host.NavigationRequests);
+        host.BrowserZoomAdapterReady();
+        Assert.Equal(0.75, applied);
+    });
+
+    [Fact]
+    public Task LaterLinkUsesHalfZoom() => Run((shell, page, host, mod) =>
+    {
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/one");
+        host.BrowserZoomAdapterReady();
+        host.OnNavigationCompleted(new Uri("http://127.0.0.1:9/one"));
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:9/two"));
+        Assert.Equal(0.5, host.BrowserZoom);
+    });
+
+    [Fact]
+    public Task InitialHomeUsesDefaultZoomAndReloadUsesHalf() => Run((shell, page, host, mod) =>
+    {
+        page.OnBrowserPromptClick();
+        Assert.Equal(0.75, host.BrowserZoom);
+        host.BrowserZoomAdapterReady();
+        host.OnNavigationCompleted(new Uri(mod.DefaultUrl));
+        shell.BtnReloadBrowser_Click(null, new global::Avalonia.Interactivity.RoutedEventArgs());
+        Assert.Equal(0.5, host.BrowserZoom);
+    });
+
+    [Fact]
+    public Task FailedFirstPageStillLeavesAnInitializedBrowser() => Run((shell, page, host, mod) =>
+    {
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/");
+        host.BrowserZoomAdapterReady();
+        host.OnNavigationCompleted(new Uri("http://127.0.0.1:9/"), success: false);
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/next");
+        Assert.Equal(0.5, host.BrowserZoom);
+    });
+
+    [Fact]
+    public Task OfflineRefusalDoesNotConsumeInitialZoom() => Run((shell, page, host, mod) =>
+    {
+        CoreSettings.Current.OfflineMode = true;
+        Assert.False(shell.NavigateToUrlInBrowser("http://127.0.0.1:9/"));
+        Assert.Null(host.BrowserZoom);
+        CoreSettings.Current.OfflineMode = false;
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:9/"));
+        Assert.Equal(0.75, host.BrowserZoom);
+        CoreSettings.Current.OfflineMode = true;
+        Assert.False(shell.NavigateToUrlInBrowser("http://127.0.0.1:9/blocked"));
+        Assert.Equal(0.75, host.BrowserZoom);
+        CoreSettings.Current.OfflineMode = false;
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:9/next"));
+        Assert.Equal(0.5, host.BrowserZoom);
+    });
+
+    [Fact]
+    public Task AdapterReadinessAppliesDeferredZoomBeforeCompletion() => Run((shell, page, host, mod) =>
+    {
+        double applied = 0;
+        host.ZoomInvoker = (zoom, _) => applied = zoom;
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/");
+        Assert.Equal(0, applied);
+        host.BrowserZoomAdapterReady();
+        host.OnNavigationCompleted(new Uri("http://127.0.0.1:9/"));
+        Assert.Equal(host.BrowserZoom, applied);
+    });
+
+    [Fact]
+    public Task InPageNavigationDoesNotOverrideTheUsersZoom() => Run((shell, page, host, mod) =>
+    {
+        var calls = 0;
+        host.ZoomInvoker = (_, _) => calls++;
+        host.BrowserZoomAdapterReady();
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/");
+        host.OnNavigationCompleted(new Uri("http://127.0.0.1:9/"));
+        calls = 0;
+        host.OnNavigationCompleted(new Uri("http://127.0.0.1:9/next"));
+        Assert.Equal(0, calls);
+    });
+
+    [Fact]
+    public Task RecreatedAdapterReappliesZoom() => Run((shell, page, host, mod) =>
+    {
+        var calls = 0;
+        host.ZoomInvoker = (_, _) => calls++;
+        host.BrowserZoomAdapterReady();
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/");
+        host.OnNavigationCompleted(new Uri("http://127.0.0.1:9/"));
+        host.BrowserZoomAdapterDestroyed();
+        calls = 0;
+        host.BrowserZoomAdapterReady();
+        host.OnNavigationCompleted(new Uri("http://127.0.0.1:9/"));
+        Assert.Equal(1, calls);
+    });
+
+    [Fact]
+    public Task AdapterTeardownFromWorkerRunsOnDispatcher() => Run((shell, page, host, mod) =>
+    {
+        System.Threading.CancellationToken pending = default;
+        host.ZoomInvoker = (_, token) => pending = token;
+        host.BrowserZoomAdapterReady();
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/");
+        Task.Run(host.BrowserZoomAdapterDestroyed).GetAwaiter().GetResult();
+        Assert.False(pending.IsCancellationRequested);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(pending.IsCancellationRequested);
+    });
+
+    [Fact]
+    public Task DelayedAdapterTeardownDoesNotCancelNewerZoom() => Run((shell, page, host, mod) =>
+    {
+        System.Threading.CancellationToken pending = default;
+        host.ZoomInvoker = (_, token) => pending = token;
+        host.BrowserZoomAdapterReady();
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/one");
+        Task.Run(host.BrowserZoomAdapterDestroyed).GetAwaiter().GetResult();
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/two");
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(pending.IsCancellationRequested);
+    });
+
+    [Fact]
+    public Task ZoomDoesNotDisableStrictLock() => Run((shell, page, host, mod) =>
+    {
+        CoreSettings.Current.StrictLockEnabled = true;
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/");
+        Assert.True(CoreSettings.Current.StrictLockEnabled);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PanicAndCloseCancelPendingZoomAndLateCompletions(bool close) => Run((shell, page, host, mod) =>
+    {
+        var calls = 0;
+        System.Threading.CancellationToken pending = default;
+        host.ZoomInvoker = (_, token) => { calls++; pending = token; };
+        host.BrowserZoomAdapterReady();
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:9/"));
+        Assert.Equal(1, calls);
+        Assert.False(pending.IsCancellationRequested);
+        if (close) shell.Close(); else PanicSurfaces.StopAll("zoom test", shell);
+        Assert.True(pending.IsCancellationRequested);
+        host.OnNavigationCompleted(new Uri("http://127.0.0.1:9/"));
+        Assert.Equal(1, calls);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PanicOrCloseBeforeAdapterReadyCancelsDeferredZoom(bool close) => Run((shell, page, host, mod) =>
+    {
+        var calls = 0;
+        host.ZoomInvoker = (_, _) => calls++;
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/");
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/next");
+        Assert.Equal(0.5, host.BrowserZoom);
+        Assert.Equal(0, calls);
+        if (close) shell.Close(); else PanicSurfaces.StopAll("zoom test", shell);
+        host.BrowserZoomAdapterReady();
+        Assert.Equal(0, calls);
+    });
+
+    [Fact]
+    public Task ZoomNavigationDoesNotReleaseLockdownOrStrictLock() => Run((shell, page, host, mod) =>
+    {
+        var previous = LockdownService.Current;
+        var strict = CoreSettings.Current.StrictLockEnabled;
+        var force = CoreSettings.Current.LockdownForceStrictLock;
+        using var lockdown = new LockdownService();
+        try
+        {
+            LockdownService.Current = lockdown;
+            CoreSettings.Current.StrictLockEnabled = true;
+            CoreSettings.Current.LockdownForceStrictLock = false;
+            lockdown.Activate(TimeSpan.FromMinutes(30));
+            Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:9/"));
+            Assert.False(shell.RunVoicePanic());
+            Assert.True(lockdown.IsActive);
+            Assert.True(CoreSettings.Current.StrictLockEnabled);
+        }
+        finally
+        {
+            if (lockdown.IsActive) lockdown.Deactivate();
+            LockdownService.Current = previous;
+            CoreSettings.Current.StrictLockEnabled = strict;
+            CoreSettings.Current.LockdownForceStrictLock = force;
+        }
+    });
+
+    [Fact]
     public Task FirstPromptUsesTheModsExactDefaultWhileReloadUsesTheSelectedSiteHome() => Run((shell, page, host, mod) =>
     {
         Assert.Null(host.Source); // synchronization alone never loads the browser
