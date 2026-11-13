@@ -1280,6 +1280,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private int _escapeGeneration;
         internal int EscapeGeneration => System.Threading.Volatile.Read(ref _escapeGeneration);
 
+        /// <summary>WPF VideoService.cs:1843-1898: lock or suspend force-cleans an active video,
+        /// including pre-roll, without scheduling a replacement. OS callbacks may be off-thread.</summary>
+        internal void SystemUnavailable()
+        {
+            var scheduler = Scheduler;
+            if (!scheduler.IsPlaying && _surfaces.Count == 0) return;
+            Dispatcher.UIThread.Post(() =>
+            {
+                try { scheduler.ForceCleanup(); }
+                catch (Exception ex) { Log.Warning(ex, "VideoService: system-away cleanup failed"); }
+            });
+        }
+
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
         {
             EndEnhancement();
