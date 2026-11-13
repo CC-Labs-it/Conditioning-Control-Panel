@@ -1,4 +1,5 @@
 {
+  "webcam_drift_unavailable": "이 데스크톱에서는 전역 클릭을 사용할 수 없어 자동 보정이 꺼져 있습니다.",
   "scheduler_started_title": "일정 활성화",
   "scheduler_started_body": "일정에 따라 세션이 자동으로 시작되었습니다.",
   "scheduler_ended_title": "일정",

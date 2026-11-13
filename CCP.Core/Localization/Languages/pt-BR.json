@@ -1,4 +1,5 @@
 {
+  "webcam_drift_unavailable": "Cliques globais não estão disponíveis nesta área de trabalho. A correção está desativada.",
   "scheduler_started_title": "Agendamento ativo",
   "scheduler_started_body": "Sessão iniciada automaticamente conforme o agendamento.",
   "scheduler_ended_title": "Agendamento",

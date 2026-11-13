@@ -1,4 +1,5 @@
 {
+  "webcam_drift_unavailable": "このデスクトップではグローバルクリックを利用できないため、自動補正はオフです。",
   "scheduler_started_title": "スケジュール有効",
   "scheduler_started_body": "スケジュールに従ってセッションを自動的に開始しました。",
   "scheduler_ended_title": "スケジュール",

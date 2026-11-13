@@ -69,6 +69,85 @@ public sealed class WebcamTrackerTests
         }
     });
 
+    private sealed class DriftHook : IDisposable
+    {
+        public bool Disposed;
+        public IDisposable? Native;
+        public void Dispose() { Disposed = true; Native?.Dispose(); }
+    }
+
+    [System.Runtime.InteropServices.DllImport("libX11.so.6")] private static extern IntPtr XOpenDisplay(IntPtr name);
+    [System.Runtime.InteropServices.DllImport("libX11.so.6")] private static extern int XCloseDisplay(IntPtr display);
+    [System.Runtime.InteropServices.DllImport("libX11.so.6")] private static extern int XFlush(IntPtr display);
+    [System.Runtime.InteropServices.DllImport("libXtst.so.6")] private static extern int XTestFakeMotionEvent(IntPtr display, int screen, int x, int y, ulong delay);
+    [System.Runtime.InteropServices.DllImport("libXtst.so.6")] private static extern int XTestFakeButtonEvent(IntPtr display, uint button, bool press, ulong delay);
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DriftHookTracksConsentCalibrationAndAppliesClicksUntilStopped(bool native)
+    {
+        if (native) Assert.SkipWhen(!X11GazeDriftMouseHook.Available(), "XInput2 display unavailable");
+        if (native)
+        {
+            var oldWayland = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
+            try { Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", "wayland-test"); Assert.False(GazeDriftMouseHook.Available()); }
+            finally { Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", oldWayland); }
+        }
+        WithConsent(true, () =>
+        {
+            var t = WebcamTracker.Instance;
+            var settings = ConditioningControlPanel.CoreSettings.Current;
+            var oldCal = t.Calibration;
+            var oldEnabled = settings.WebcamAutoDriftCorrection;
+            var hook = new DriftHook();
+            Action<int, int>? click = null;
+            int installs = 0, delivered = 0;
+            try
+            {
+                WebcamTracker.SourceFactory = () => new FakeSource();
+                settings.WebcamAutoDriftCorrection = true;
+                t.SetCalibrationLive(null);
+                using var drift = new ConditioningControlPanel.Avalonia.Platform.GazeDriftCorrection(t, settings, cb =>
+                { installs++; click = cb; if (native) { hook.Native = X11GazeDriftMouseHook.Start((x, y) => { Interlocked.Increment(ref delivered); cb(x, y); }); Assert.NotNull(hook.Native); } return hook; });
+                Assert.True(t.Start(), t.LastError);
+                drift.Refresh();
+                Assert.Equal(0, installs);
+                t.SetCalibrationLive(new WebcamCalibrationData());
+                drift.Refresh();
+                Assert.Equal(1, installs);
+                for (int i = 0; i < 5; i++) t.EmitProjectedGaze(100, 100, DateTime.UtcNow);
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                if (native)
+                {
+                    var display = XOpenDisplay(IntPtr.Zero);
+                    try { XTestFakeMotionEvent(display, -1, 200, 100, 0); XTestFakeButtonEvent(display, 1, true, 0); XTestFakeButtonEvent(display, 1, false, 0); XFlush(display); }
+                    finally { XCloseDisplay(display); }
+                    for (int i = 0; i < 25 && t.Calibration!.RuntimeOffset == null; i++) { Thread.Sleep(10); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); }
+                }
+                else click!(200, 100);
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.Equal(15, t.Calibration!.RuntimeOffset!.Dx, 4);
+                click(200, 100); // queued before disable must not apply after it
+                settings.WebcamAutoDriftCorrection = false;
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.True(hook.Disposed);
+                if (native) { var d = XOpenDisplay(IntPtr.Zero); XTestFakeButtonEvent(d, 1, true, 0); XTestFakeButtonEvent(d, 1, false, 0); XFlush(d); XCloseDisplay(d); Thread.Sleep(40); Assert.Equal(1, Volatile.Read(ref delivered)); }
+                Assert.Equal(15, t.Calibration!.RuntimeOffset!.Dx, 4);
+                drift.Dispose();
+                settings.WebcamAutoDriftCorrection = true;
+                drift.Refresh();
+                Assert.Equal(1, installs);
+            }
+            finally
+            {
+                t.Stop();
+                t.SetCalibrationLive(oldCal);
+                settings.WebcamAutoDriftCorrection = oldEnabled;
+            }
+        });
+    }
+
     [Fact]
     public void NoConsent_NeverOpensTheSource()
     {

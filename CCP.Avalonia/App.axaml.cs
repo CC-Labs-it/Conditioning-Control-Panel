@@ -633,6 +633,8 @@ namespace ConditioningControlPanel.Avalonia
             completed?.Invoke(); // WPF App.xaml.cs:4069-4074: initialization has finished successfully.
         }
 
+        private Platform.GazeDriftCorrection? _gazeDrift;
+
         private async Task StartDesktop(Func<double, string, Task> step)
         {
             await step(0.0, "Starting...");
@@ -1000,6 +1002,7 @@ namespace ConditioningControlPanel.Avalonia
                 // Start, which fails with a message; revoke keeps all four of the consent dialog's promises.
                 CoreWebcam.IsAvailableProvider = () => true;
                 CoreWebcam.RevokeConsentAction = Platform.WebcamTracker.RevokeConsent;
+                _gazeDrift = new Platform.GazeDriftCorrection(Platform.WebcamTracker.Instance, Settings.Current);
                 // The plain engine (Start/Stop) is CoreEngine; the one SessionRunner seeds
                 // IsSessionRunningProvider, so the feature lock fires for a session, not a plain Start.
                 CoreSession.IsEngineRunningProvider = () => CoreEngine.IsRunning;
@@ -1556,6 +1559,7 @@ namespace ConditioningControlPanel.Avalonia
             // WPF CleanupTempPackFiles (FlashService.cs:4322, VideoService.cs:8508, BubbleCountService.cs:83):
             // a clean exit leaves no decrypted pack file (a crash's leftovers go at the next startup sweep).
             try { ContentPackStore.Current?.CleanupTempFiles(); } catch { }
+            try { _gazeDrift?.Dispose(); } catch { }
             try { Platform.WebcamTracker.Instance.Stop(); } catch { /* WPF App.OnExit:6185 Webcam.Dispose */ }
             try { Platform.Win32PanicKey.Stop(); } catch { /* WPF GlobalKeyboardHook.Dispose; no-op off Windows */ }
 

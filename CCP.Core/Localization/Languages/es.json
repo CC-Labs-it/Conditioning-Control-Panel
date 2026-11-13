@@ -1,4 +1,5 @@
 {
+  "webcam_drift_unavailable": "Los clics globales no están disponibles en este escritorio. La corrección está desactivada.",
   "scheduler_started_title": "Programación activa",
   "scheduler_started_body": "Sesión iniciada automáticamente según el horario.",
   "scheduler_ended_title": "Programación",

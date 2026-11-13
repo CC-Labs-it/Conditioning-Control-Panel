@@ -1,4 +1,5 @@
 {
+  "webcam_drift_unavailable": "Les clics globaux sont indisponibles sur ce bureau. La correction est désactivée.",
   "scheduler_started_title": "Planification active",
   "scheduler_started_body": "Séance démarrée automatiquement selon le planning.",
   "scheduler_ended_title": "Planification",
