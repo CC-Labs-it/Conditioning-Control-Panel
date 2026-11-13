@@ -37,6 +37,8 @@ public sealed class RemoteQuestCreditTests
         Assert.True(start >= 0);
         var end = source.IndexOf("private readonly ObservableCollection", start, StringComparison.Ordinal);
         Assert.Contains("App.WireRemoteQuestProgress(new RemoteRelay(", source[start..end]);
+        Assert.Contains("ExecuteRemoteCommand, RemoteCommands.StopEffects", source[start..end]);
+        Assert.Contains("return Platform.ChasterHead.ExecuteRemote(action, parameters);", source[start..end]);
     }
 
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string path = "") => path;
