@@ -37,9 +37,6 @@ public sealed class RaceEngineFetcherTests : IDisposable
             entry.ExternalAttributes = mode << 16;
             using var writer = new StreamWriter(entry.Open());
             writer.Write("test engine");
-            writer.Dispose();
-            foreach (var licence in new[] { "LICENSE", "LICENSES.chromium.html" }.Where(x => x != name))
-                using (var w = new StreamWriter(zip.CreateEntry(licence).Open())) w.Write("licence");
         }
         return output.ToArray();
     }
