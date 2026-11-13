@@ -66,6 +66,11 @@ internal sealed class PossessionGhost : IDisposable
 
     internal static void UndoAll()
     {
-        foreach (var ghost in Live.ToArray()) ghost.Dispose();
+        // Panic path: one failed restore must not skip the other ghosts or the runtime undo after it.
+        foreach (var ghost in Live.ToArray())
+        {
+            try { ghost.Dispose(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Possession ghost restore failed"); Live.Remove(ghost); }
+        }
     }
 }
