@@ -26,6 +26,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
         public const string InviteSubscribedKey = "invite.subscribed";
         public const string PatronGalleryKey = "conv.patron-gallery"; // WPF MainWindow.Inbox.cs:511 "🏅" row, rendered as Trophy.
         public const string CompanionCapKey = "conv.companion-cap";   // WPF MainWindow.Inbox.cs:476 "💬" row, rendered as Chat.
+        public const string LapseKey = "conv.lapse";                  // WPF MainWindow.Inbox.cs lapse "⏳" rows, rendered as HourglassHalf.
+        public const string LapseReconnectKey = "conv.lapse-reconnect"; // WPF MainWindow.Inbox.cs reconnect "🔑" row, rendered as Key.
 
         public const string PossessionRules = "🕶"; // WPF MainWindow.Lab.cs:1122: the warden's rules Inbox row, rendered as Glasses.
         private const IconVariant R = IconVariant.Regular, F = IconVariant.Filled;
@@ -61,7 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             M(IconKind.QuestionCircle, R, null, "❓"); M(IconKind.Info, R, null, "ℹ");
             M(IconKind.Prohibited, R, Danger, "🚫");
             M(IconKind.Prohibited, F, Danger, "⛔");
-            M(IconKind.HourglassHalf, R, null, "⏳", "⌛"); M(IconKind.Timer, R, null, "⏱"); M(IconKind.Clock, R, null, "🕰");
+            M(IconKind.HourglassHalf, R, null, "⏳", "⌛", LapseKey); M(IconKind.Timer, R, null, "⏱"); M(IconKind.Clock, R, null, "🕰");
             M(IconKind.ArrowSync, R, null, "🔄"); M(IconKind.ArrowClockwise, R, null, "↻"); M(IconKind.ArrowRepeatAll, R, null, "🔁");
             M(IconKind.Lightbulb, R, null, "💡"); M(IconKind.Search, R, null, "🔍", "🔎"); M(IconKind.Alert, R, null, "🔔");
             M(IconKind.Megaphone, R, null, "📣"); M(IconKind.Settings, R, null, "⚙"); M(IconKind.WrenchScrewdriver, R, null, "🛠");
@@ -101,7 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             M(IconKind.LockClosed, F, Tier1, "🔒");
             M(IconKind.LockOpen, R, null, "🔓");
             M(IconKind.LockClosedKey, F, null, "🔐");
-            M(IconKind.Key, R, null, "🔑");
+            M(IconKind.Key, R, null, "🔑", LapseReconnectKey);
             M(IconKind.Beaker, F, Tier2, "🧪", "⚗");
             M(IconKind.Shield, F, null, "🛡", "🛟");       // Lifebuoy missing -> listed fallback
             M(IconKind.Diamond, F, Gem, "💎");

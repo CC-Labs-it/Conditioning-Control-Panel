@@ -5974,6 +5974,7 @@
   "profile_spiral_plate": "ESPIRAL",
   "profile_spiral_plate_tip": "Tu descenso hasta ahora. Haz clic para abrir la espiral.",
   "_comment_descent_spiral_explainer": "THE SPIRAL, EXPLAINED. The seven stage names are the owner-locked set already shipping on web (cclabs-web src/lib/descent/stages.ts) - do not re-word them here without re-wording them there. The help topic is read at runtime by SpiralTabView, which is why it is loc keys and not one of the 56 hardcoded English topics in HelpContentService.",
+  "descent_stage_drip": "Etapa {0}. Ya recorriste este camino una vez. Vuelve a recorrerlo conmigo.",
   "descent_stage_0_name": "El Borde",
   "descent_stage_0_flavor": "Estás en el borde y todavía no has guardado ningún día.",
   "descent_stage_1_name": "Bajíos",

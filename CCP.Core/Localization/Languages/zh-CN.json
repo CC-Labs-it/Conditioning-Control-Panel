@@ -6479,6 +6479,7 @@
   "profile_spiral_plate": "螺旋",
   "profile_spiral_plate_tip": "你至今的沉沦轨迹。点击打开螺旋。",
   "_comment_descent_spiral_explainer": "THE SPIRAL, EXPLAINED. The seven stage names are the owner-locked set already shipping on web (cclabs-web src/lib/descent/stages.ts) - do not re-word them here without re-wording them there. The help topic is read at runtime by SpiralTabView, which is why it is loc keys and not one of the 56 hardcoded English topics in HelpContentService.",
+  "descent_stage_drip": "阶段{0}。这条路你已经走过一次。再和我走一遍吧。",
   "descent_stage_0_name": "边缘",
   "descent_stage_0_flavor": "你正站在边缘上，还没有任何一天被存下来。",
   "descent_stage_1_name": "浅滩",

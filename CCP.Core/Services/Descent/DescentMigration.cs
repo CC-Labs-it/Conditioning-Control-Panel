@@ -83,6 +83,20 @@ namespace ConditioningControlPanel.Services.Descent
         /// </summary>
         public static double XpBonusFor(Models.AppSettings? settings) => DescentCycleXp.XpBonusFor(settings);
 
+        /// <summary>WPF DescentMigrationService.TickStageDrip (:390-412): after an acknowledged migration,
+        /// release at most one queued stage ceremony per LOCAL day. Returns the stage, or null. Does not save.</summary>
+        public static int? ReleaseStageCeremony(Models.AppSettings settings, DateTime localNow)
+        {
+            var queue = settings.DescentPendingStageCeremonies;
+            if (!settings.DescentMigrationCompleted || queue is not { Count: > 0 }) return null;
+            var today = localNow.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+            if (string.Equals(settings.DescentLastStageDripDate, today, StringComparison.Ordinal)) return null;
+            var stage = queue[0];
+            settings.DescentPendingStageCeremonies = queue.GetRange(1, queue.Count - 1);
+            settings.DescentLastStageDripDate = today;
+            return stage;
+        }
+
         /// <summary>
         /// What a choice does to the ledger, in one place, with no side effects.
         ///

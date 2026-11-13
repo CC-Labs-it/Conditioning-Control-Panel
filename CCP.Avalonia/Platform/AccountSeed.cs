@@ -231,6 +231,12 @@ internal static class AccountSeed
             Prizes = PrizeOwnership.Feed,
             Countdown = App.DescentCountdown,
             DescentReader = App.Descent,
+            // WPF DescentMigrationService.RaiseStageCeremonyDue (:421-440): the companion carries the moment,
+            // scripted copy, no sound, no AI badge.
+            StageCeremonyDue = stage => Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(
+                ConditioningControlPanel.Localization.Loc.GetF("descent_stage_drip",
+                    ConditioningControlPanel.Services.Descent.DescentStageCopy.RomanNumeral(stage)),
+                playSound: false, aiGenerated: false),
         };
 
     /// <summary>The push, seeded by the app at startup only: unseeded (every test that does not set it) nothing is pushed.</summary>
@@ -250,6 +256,11 @@ internal static class AccountSeed
     /// <summary>WPF EntitlementTierSync.TierRaised: a live rise, with the new tier (1 or 2), raised BEFORE the
     /// provider's TierChanged so the shell can arm the immediate card and the profile-bubble fanfare.</summary>
     internal static event Action<int>? TierRaised;
+
+    /// <summary>WPF EntitlementTierSync.ReadingApplied: raised after a reading moved the lower tier the server
+    /// reported (<c>ServerTierSeen</c> stored or cleared again), for the lapse rows. A close raises
+    /// <see cref="GraceClosed"/> instead.</summary>
+    internal static event Action? TierReadingApplied;
 
     /// <summary>Tests only: the clock every reading and the focus throttle read.</summary>
     internal static Func<DateTime> UtcNow = () => DateTime.UtcNow;
@@ -372,8 +383,14 @@ internal static class AccountSeed
             if (serverTier.HasValue && !string.IsNullOrEmpty(s.UnifiedId) && !string.IsNullOrEmpty(s.AuthToken))
                 EntitlementRefresh.NoteAnswered(s.UnifiedId);
             var before = EffectiveTierNow();
+            var seenBefore = s.ServerTierSeen;
             var reading = Readings.Apply(s, serverTier, HoldGraceClose, UtcNow());
             if (reading.Dirty) CoreSettings.Save();
+            if (s.ServerTierSeen != seenBefore && !reading.Closed)
+            {
+                try { TierReadingApplied?.Invoke(); }
+                catch (Exception ex) { Log.Debug("[Entitlement] reading listener failed: {Error}", ex.Message); }
+            }
             // WPF: a lower reading keeps the stored tier for its second look (and while a session or a game
             // holds the close); logged once per value.
             if (reading.Verdict == EntitlementVerdict.Lower && !reading.Closed && _lastLowerLogged != serverTier)
