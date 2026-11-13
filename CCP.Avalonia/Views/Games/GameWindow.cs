@@ -180,6 +180,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Web.WebMessage += OnPageMessage;
             // The page never leaves the served origin; anything else is refused before the engine loads it.
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);
+            if (IsDtrh)
+            {
+                Opened += (_, _) => CaptureDtrhWindowedFrame();
+                PositionChanged += (_, _) => CaptureDtrhWindowedFrame();
+                SizeChanged += (_, _) => CaptureDtrhWindowedFrame();
+            }
             Opened += (_, _) => { lock (Open) { if (!Open.Contains(this)) Open.Add(this); } if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); StartBreakoutAccessWatch(); };
             Activated += (_, _) => FunnelPageMessage.OnAppActivated();   // WPF's Application.Activated covers every window
             Closing += (_, _) => { _closing = true; CancelRaceFetch(); };
