@@ -1004,7 +1004,7 @@ namespace ConditioningControlPanel.Avalonia
                 CoreHaptics.Service = new Services.HapticService(Settings.Current.Haptics);
                 Platform.AudioSyncHost.Start(CoreHaptics.Service, Settings.Current.Haptics.AudioSync);
                 _ = CoreHaptics.Service.AutoConnectOnStartupAsync();
-                StartRichPresence();
+                // Presence connects only after the shell has rendered; its settings are read then.
                 // WPF ProgressionService.cs:294: the level shown in presence follows a level-up (online only).
                 ProgressionBank.LevelUp += level => { if (!Settings.Current.OfflineMode) DiscordRpc?.UpdateLevel(level); };
                 // WPF SkillTreeService.OnLevelUp:636: a level-up Sparkle counts toward the lifetime earned stat.
@@ -1380,6 +1380,7 @@ namespace ConditioningControlPanel.Avalonia
                 TierGate.ReconnectIsTheAnswerProvider = Views.Windows.MainShellWindow.ReconnectIsTheAnswerNow;
                 // Dropped: WPF's EmiDesk "premiumTeaseSeen" fire - no EmiDesk service on this head.
                 var shell = (Views.Windows.MainShellWindow)desktop.MainWindow;
+                Platform.AfterFirstFrame.Schedule(shell, StartRichPresence);
                 CoreEngine.StartedHook = shell.OnEngineStarted;
                 CoreEngine.StoppedHook = shell.OnEngineStopped;
                 Sessions.Ticked += shell.OnSessionTick;
@@ -1477,7 +1478,7 @@ namespace ConditioningControlPanel.Avalonia
                 ConditioningControlPanel.Services.UI.DndGuard.ForegroundProcess = Platform.Win32Windows.ForegroundSource;
                 // Linux: one toast naming the distro's install command for any missing runtime library
                 // (docs/avalonia-linux-install.html). dlopen off the UI thread; nothing when all load.
-                Dispatcher.UIThread.Post(async () =>
+                Platform.AfterFirstFrame.Schedule(shell, async () =>
                 {
                     if (await System.Threading.Tasks.Task.Run(() => LinuxDependencies.Check(
                         // CCP_LINUX_WEBVIEW=off: web view packages are not missing, they are not wanted.
@@ -1489,7 +1490,7 @@ namespace ConditioningControlPanel.Avalonia
                         command is null ? null : () => _ = shell.Clipboard?.SetTextAsync(command));
                 });
                 // WPF App.xaml.cs:4858: pending-outcome report + background update check.
-                Dispatcher.UIThread.Post(async () => await Platform.AppUpdater.StartupAsync(shell));
+                Platform.AfterFirstFrame.Schedule(shell, async () => await Platform.AppUpdater.StartupAsync(shell));
                 // The startup art list for the next launch: what the shell, the boot surface and their first
                 // repaints loaded. Nothing is recorded without a splash (tests, renders, checks).
                 if (Helpers.StartupArt.Recording)

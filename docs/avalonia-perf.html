@@ -87,6 +87,28 @@ Measured on windows-latest (rgate 41830667836, ~/ccp-port/evidence/perf-combined
 <tr><td>default (ANGLE on WARP)</td><td>92</td><td>77</td><td>75</td><td>108</td><td>81</td></tr>
 <tr><td>software (now automatic on WARP)</td><td>35</td><td>38</td><td>35</td><td>75</td><td>57</td></tr>
 </table>
+<h2 id="startup-followup">Startup lane and local second-gate follow-up</h2>
+<p>Authoritative base: <code>avalonia-port/r72-perf-bench-wpf-compare</code> at <code>abe6c1925</code>.
+PR #3785's merge ref had parents abe6c1925 and c7af95a38. The earlier c7af95a38 reconciliation used
+74ac6ce3d incorrectly; this follow-up restores every non-startup file to abe6c1925, preserving the parent
+WPF benchmark twin, comparison script and Windows CI job. Size is measured only against abe6c1925.</p>
+<ul>
+<li>Hidden vault catalogue/backdrop and Studio art remain lazy. Presence, dependency diagnostics and
+updater startup wait for render acknowledgement; AfterFirstFrame handles shell cancellation, disappearing
+launcher/game surfaces, no-frame tray boot and once-only execution. Safety recovery/gates remain eager.</li>
+<li>Local P2 fixes: visibility posts a background ensure pass; navigation builds Premium once and that
+pass loads its backdrop without rebuilding the catalogue. Once built, a vault repaints while hidden,
+as WPF MainWindow.Exclusives.cs:962-965 requires. Studio remembers whether art was ever loaded and
+repaints it on hidden mod changes. Never-built hidden views still pay no catalogue/art load.</li>
+<li>Real-shell tests count first-visit shelf rebuilds and check hidden tier/veil/art updates and tray restore.
+Existing render-order, lifecycle recovery and hidden-first-build guards are retained. Parity rows append
+this evidence without deleting earlier notes; rows with missing WPF behaviour remain stub.</li>
+</ul>
+<p>Retained historical lane evidence on abe6c1925: Linux three-pair startup medians 7903.6 → 6939.2 ms,
+final-binary sample 7766.9 ms. Contended full-tab runs were slower (7696.4 → 8473.4 ms, memory
+890.9 → 1319.5 MB, Exclusives median 768.71 → 1271.37 ms); these are not stable performance conclusions.
+The 6443.4 ms sample was on the discarded 74ac6ce3d reconciliation and is not comparable to this parent.
+No new Windows parity result is claimed by this review fix.</p>
 <h2 id="ledger">Ledger</h2>
 <p>One line per run: date, machine/runner, commit, artifact or evidence path, headline numbers.</p>
 <ul>
@@ -129,7 +151,30 @@ before 1.68 ms median / 52.87 ms p95 (15 of 200 above 20 ms), after 1.61 / 5.72 
 Every slow sample is Avalonia's <code>UiThreadRender</code> job, a whole-window software draw (about 50-65 ms, the same on RemoteControl, Subjects and Bambi, and unchanged when
 the Subjects fog, backgrounds or lobby columns are hidden) landing in the switch. The view's own work is under 0.1 ms, so the remaining tail is frame phase and shell-wide draw cost.
 The p95 shift sits at the 5% edge and is not a Windows result.</li>
+<li>2026-10-31, cloud local-second-gate follow-up to c7af95a38: corrected PR #3785 scope to abe6c1925,
+retained startup lifecycle fixes, fixed duplicate first Premium build and hidden built-view refresh.
+Validation: 34/34 focused view/startup/lifecycle tests, 0 skipped. Fail-proof: forcing a repeated catalogue
+refresh and reinstating both hidden-view guards made all three new regression cases fail (exit 1);
+fixed sources restored and rebuilt before the 34/34 run. Core guards and comparison self-test passed.
+Ten language files match the parent; no performance benchmark rerun for this review fix.
+Earlier evidence above remains historical; Windows parity remains unverified.</li>
 </ul>
+<pre><code># SDK installed under /tmp/ccp-dotnet, .NET 10.0.100.
+dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release \
+  --filter 'FullyQualifiedName~AfterFirstFrameTests|FullyQualifiedName~PerfBenchTests|FullyQualifiedName~Exclusives|FullyQualifiedName~Studio'
+# exit 0: Passed: 34, Failed: 0, Skipped: 0; builds Core, Avalonia and the test project.
+# Fail-proof filter: FirstPremiumVisitBuildsTheCatalogueOnce, BuiltPremiumRepaintsTierAndArtWhileShellIsHidden,
+# BuiltStudioRepaintsArtWhileShellIsHidden: expected exit 1, Failed: 3, Passed: 0; then restore/rebuild.
+bash .github/scripts/core-guards.sh
+# exit 0: All Core guards passed.
+python3 .github/scripts/perf-compare.py --self-test
+# exit 0: self-test: PASS.
+git diff --exit-code abe6c1925 -- .github ConditioningControlPanel CCP.Core Assets Tests/ConditioningControlPanel.Tests
+# exit 0: parent benchmark/CI/WPF/Core/assets/tests preserved byte-for-byte.
+# Scope/JSON/ledger audit: 8 startup/evidence files, all 10 languages parse/match parent,
+# existing parity-note prefixes preserved; incomplete rows stub. git diff --stat abe6c1925 HEAD is the size check.
+</code></pre>
+
 
 <script>
 (()=>{const all={};for(const t of document.querySelectorAll('table')){const h=[...t.querySelectorAll('tr:first-child th')].map(x=>x.textContent.trim());const i=h.indexOf('status');if(i<0)continue;const c={};for(const r of t.querySelectorAll('tr')){const d=r.children[i];if(!d||d.tagName!=='TD')continue;const k=d.textContent.trim().split(/[ (]/)[0];c[k]=(c[k]||0)+1;all[k]=(all[k]||0)+1;}const p=document.createElement('p');p.className='src';p.textContent=Object.entries(c).map(([k,v])=>v+' '+k).join(', ');t.before(p);}
