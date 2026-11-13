@@ -13,10 +13,38 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The Linux app id: .desktop file, WM_CLASS, portal registration (packaging/linux).</summary>
         internal const string AppId = "io.github.CodeBambi.ConditioningControlPanel";
 
+        // .NET on Unix keeps its own copy of the environment: Environment.SetEnvironmentVariable is invisible to getenv in
+        // WebKitGTK (same process) and to the WebKitWebProcess it spawns, so libc setenv too (overwrite 0 keeps a user value).
+        [System.Runtime.InteropServices.DllImport("libc")] private static extern int setenv(string name, string value, int overwrite);
+        [System.Runtime.InteropServices.DllImport("libc")] private static extern IntPtr getenv(string name);
+
+        private static void ApplyWebKitEnv()
+        {
+            var name = ConditioningControlPanel.Services.LinuxWebKitEnv.DisableDmabuf;
+            // CCP_NVIDIA_PROBE replaces the probe paths, as in the tarball launcher: the test seam (WebKitEnvStartupTests).
+            var seam = Environment.GetEnvironmentVariable("CCP_NVIDIA_PROBE")?.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            static bool Exists(string p) => System.IO.File.Exists(p) || System.IO.Directory.Exists(p);
+            if (ConditioningControlPanel.Services.LinuxWebKitEnv.DmabufDefault(Environment.GetEnvironmentVariable(name),
+                    p => seam is null ? Exists(p) : Array.Exists(seam, Exists)) is not { } value) return;
+            Environment.SetEnvironmentVariable(name, value);
+            setenv(name, value, 0);
+        }
+
         [STAThread]
         public static int Main(string[] args)
         {
             PerfBench.SinceMain.Start();   // --perf-bench startup clock: the first line of Main, by definition
+            if (OperatingSystem.IsLinux())
+            {
+                ApplyWebKitEnv();   // before any thread or WebKitGTK init (LinuxWebKitEnv)
+                // --webkit-env-check prints the value WebKitGTK's own getenv sees, then exits (WebKitEnvStartupTests).
+                if (Array.IndexOf(args, "--webkit-env-check") >= 0)
+                {
+                    var native = getenv(ConditioningControlPanel.Services.LinuxWebKitEnv.DisableDmabuf);
+                    Console.WriteLine(native == IntPtr.Zero ? "unset" : "=" + System.Runtime.InteropServices.Marshal.PtrToStringUTF8(native));
+                    return 0;
+                }
+            }
             // WPF logs to a file under UserData/logs (App.xaml.cs:1967, LogPipeline.cs); stderr stays for CI and kc.
             // ponytail: WPF's path redaction, flight recorder and per-run naming come with the bug-report port.
             Serilog.Log.Logger = new Serilog.LoggerConfiguration().MinimumLevel.Information()

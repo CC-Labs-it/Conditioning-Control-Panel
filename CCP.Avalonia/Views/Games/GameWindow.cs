@@ -192,9 +192,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 SizeChanged += (_, _) => CaptureDtrhWindowedFrame();
             }
             Opened += (_, _) => { lock (Open) { if (!Open.Contains(this)) Open.Add(this); } if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); StartBreakoutAccessWatch(); };
-            Activated += (_, _) => FunnelPageMessage.OnAppActivated();   // WPF's Application.Activated covers every window
+            Activated += (_, _) => { FunnelPageMessage.OnAppActivated(); ResumeBreakoutAfterPanic(DateTime.Now); };   // WPF's Application.Activated covers every window
             Closing += (_, _) => { _closing = true; _backRoomFx?.CancelAll(); CancelRaceFetch(); };
-            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); if (Spec.Id == FypId) DisableFypEyes(); StopBreakoutAccessWatch(); _raceRooms.Clear(); };
+            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); if (Spec.Id == FypId) DisableFypEyes(); StopBreakoutAccessWatch(); DisposeBreakoutMedia(); _raceRooms.Clear(); };
             // WPF BackRoom/BackRoomHostService.cs:390,792: Breakout presence lasts until close.
             if (spec.Id == BreakoutDemoId || spec.Id == "breakout")
             {
@@ -275,6 +275,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case "media-request":
                     // WPF BackRoomBridge.cs:208 -> OnMediaRequestAsync: the station's pictures for this sit-down.
                     // The walk touches every library file, so it runs off the UI thread (WPF OffUi); the reply is posted back.
+                    if (IsBreakout) { HandleBreakoutMedia(o); break; }
                     var reqId = (string?)o["reqId"];
                     int count = GameMediaManifest.MediaCount(o["count"]?.Type == JTokenType.Integer ? (int?)o["count"] : null);
                     // The library is walked once per window, like WPF's FlashService snapshot, not on every sit-down.
@@ -368,6 +369,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var motion = CoreSettings.Current.MotionLevel;
             frame["motion"] = motion.ToString().ToLowerInvariant();
             frame["reduced"] = motion != ConditioningControlPanel.Models.MotionLevel.Full;
+            var settings = CoreSettings.Current;
+            frame["intensity"] = ConditioningControlPanel.Services.BackRoom.BackRoomWire.IntensityWire(settings, motion);
+            frame["intensityChoice"] = ConditioningControlPanel.Services.BackRoom.BackRoomWire.IntensityChoiceWire(settings);
+            frame["gates"] = JToken.FromObject(ConditioningControlPanel.Services.BackRoom.BackRoomWire.GatesWire(settings));
+            frame["media"] = JToken.FromObject(ConditioningControlPanel.Services.BackRoom.BackRoomWire.MediaWire(settings));
+            frame["sp"] = settings.SkillPoints;
+            frame["invertLook"] = settings.BackRoomInvertLook;
             return frame;
         }
 

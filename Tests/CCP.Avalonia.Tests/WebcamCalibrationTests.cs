@@ -318,6 +318,41 @@ public sealed class WebcamCalibrationTests
         Assert.False(win.IsVisible);
     });
 
+    [Fact]
+    public void SavingCalibrationDismissesTheLegacyNotice() => WithTracker(start: true, (_, _) =>
+    {
+        var notices = global::ConditioningControlPanel.Avalonia.App.Notifications;
+        var oldRemove = notices.RemoveLater;
+        var dismissed = CoreSettings.Current.DismissedNotificationKeys;
+        var hadDismissal = dismissed.Remove(WebcamCalibrationWindow.LegacyNoticeKey);
+        var host = new StackPanel();
+        try
+        {
+            notices.RemoveLater = (remove, _) => remove();
+            notices.AttachHost(host);
+            notices.ShowSticky(WebcamCalibrationWindow.LegacyNoticeKey, "legacy");
+            bool LegacyVisible() => host.Children.OfType<Border>().Any(b => b.Child is Grid g &&
+                g.Children.OfType<TextBlock>().Any(t => t.Text == "legacy"));
+            Assert.True(LegacyVisible());
+            var win = OpenAndContinue();
+            try
+            {
+                var verify = win.FindControl<Border>("VerifyPanel")!;
+                Assert.True(Gaze(win, () => verify.IsVisible), win.FindControl<TextBlock>("TxtErrorDetail")!.Text);
+                Assert.False(LegacyVisible());
+                Assert.DoesNotContain(WebcamCalibrationWindow.LegacyNoticeKey, CoreSettings.Current.DismissedNotificationKeys);
+            }
+            finally { win.Close(); }
+        }
+        finally
+        {
+            notices.Dismiss(WebcamCalibrationWindow.LegacyNoticeKey);
+            notices.RemoveLater = oldRemove;
+            notices.AttachHost(new StackPanel());
+            if (hadDismissal) dismissed.Add(WebcamCalibrationWindow.LegacyNoticeKey);
+        }
+    });
+
     [Theory]
     [InlineData(true)]    // Escape during the gesture checks, with the candidate already live
     [InlineData(false)]   // panic: tracking stops during the gesture checks

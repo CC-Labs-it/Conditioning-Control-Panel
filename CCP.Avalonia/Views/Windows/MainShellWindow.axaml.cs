@@ -49,6 +49,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -88,6 +89,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public MainShellWindow()
         {
             AvaloniaXamlLoader.Load(this);
+            if (Platform.AccountSeed.Sync is { } sync)
+            {
+                sync.SyncHealthChanged += OnSyncHealthChanged;
+                Closed += (_, _) => sync.SyncHealthChanged -= OnSyncHealthChanged;
+                OnSyncHealthChanged(sync, sync.ConsecutiveSyncFailures);
+            }
+            void RefreshSyncTitle(object? sender, EventArgs e)
+            {
+                if (_syncIssueTitle) OnSyncHealthChanged(sender, 3);
+            }
+            ConditioningControlPanel.Localization.LocalizationManager.Instance.LanguageChanged += RefreshSyncTitle;
+            Closed += (_, _) => ConditioningControlPanel.Localization.LocalizationManager.Instance.LanguageChanged -= RefreshSyncTitle;
             Closed += (_, _) => Platform.FriendsLanding.Stop(); // WPF Services/Friends/FriendsLanding.cs:75-82: ownerless notices must not hold exit.
             Closed += (_, _) => _directoryPillView.Dispose();
             Opened += (_, _) => StartChatHotkey();
@@ -188,6 +201,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Opened += (_, _) => WireOnlineMeterPill();   // MainShellWindow.OnlineMeter.cs (WPF WireOnlineMeter)
             // WPF MainWindow.xaml.cs:3852: an offer parked at startup surfaces once a window exists.
             OnceOpened(() => Platform.RemoteMediaOffer.FlushPending(this));
+            // WPF MainWindow.xaml.cs:3619-3649: offer an update for pre-multi-monitor calibration.
+            Opened += (_, _) =>
+            {
+                try
+                {
+                    var cal = Platform.WebcamTracker.Instance.Calibration;
+                    if (cal?.MonitorBounds != null && string.IsNullOrEmpty(cal.MonitorBounds.DeviceName))
+                        App.Notifications.ShowSticky(WebcamCalibrationWindow.LegacyNoticeKey,
+                            Loc.Get("toast_legacy_calibration"), Helpers.NotificationType.Warning,
+                            Loc.Get("toast_legacy_calibration_action"), async () =>
+                            {
+                                try { await WebcamCalibrationWindow.ShowDialogWithRecalibrate(this); }
+                                catch (Exception ex) { Serilog.Log.Warning(ex, "Recalibrate toast: failed to open calibration window"); }
+                            });
+                }
+                catch (Exception ex) { Serilog.Log.Debug("Recalibrate-suggest check failed: {Error}", ex.Message); }
+            };
         }
 
         /// <summary>Uses an already-loaded catalogue without making the parameterless shell open

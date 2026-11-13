@@ -111,5 +111,41 @@ class LauncherOpenSslTests(unittest.TestCase):
         self.assert_started(result)
 
 
+class LauncherWebKitDmabufTests(unittest.TestCase):
+    """live-safety S18: on NVIDIA the launcher sets WEBKIT_DISABLE_DMABUF_RENDERER=1 unless the user set it (CCP.Core LinuxWebKitEnv)."""
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        app = self.root / 'app'
+        app.mkdir()
+        self.launcher = app / LAUNCHER.name
+        shutil.copy(LAUNCHER, self.launcher)
+        self.seen = self.root / 'seen'
+        stub = app / 'CCP.Avalonia'
+        stub.write_text(f'#!/bin/sh\nprintf "%s" "${{WEBKIT_DISABLE_DMABUF_RENDERER-unset}}" > "{self.seen}"\n')
+        stub.chmod(0o755)
+        self.nvidia = self.root / 'nvidia-version'
+
+    def value(self, **extra):
+        env = {'PATH': '/usr/bin:/bin', 'CCP_SKIP_OPENSSL_CHECK': '1', 'CCP_NVIDIA_PROBE': f'/nonexistent {self.nvidia}', **extra}
+        result = subprocess.run([str(self.launcher)], env=env, text=True, capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return self.seen.read_text()
+
+    def test_nvidia_disables_the_dmabuf_renderer(self):
+        self.nvidia.touch()
+        self.assertEqual(self.value(), '1')
+
+    def test_without_nvidia_it_stays_unset(self):
+        self.assertEqual(self.value(), 'unset')
+
+    def test_a_value_the_user_set_wins(self):
+        self.nvidia.touch()
+        for v in ('0', ''):
+            with self.subTest(v):
+                self.assertEqual(self.value(WEBKIT_DISABLE_DMABUF_RENDERER=v), v)
+
+
 if __name__ == '__main__':
     unittest.main()
