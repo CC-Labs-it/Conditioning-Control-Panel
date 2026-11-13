@@ -103,7 +103,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var audio = CompanionEventAudio.Resolve(phrase);
                 _avatarTubeWindow?.GigglePriority(phrase, audio != null, aiGenerated: false, phraseAudioPath: audio);
             });
-            Closed += (_, _) => { if (RemoteCommands.AutonomyCommand == RemoteAutonomyCommand) RemoteCommands.AutonomyCommand = null;
+            // WPF UiUpdates.cs:252-259,278: repaint after the palette handler on a mod switch. The button follows the
+            // running scheduler here, as EnabledChanged above does (after panic it reads Start; see BtnAutonomyStartStop_Click).
+            var closed = false;
+            void OnModChanged(object? _, ConditioningControlPanel.Models.ModPackage __) =>
+                Dispatcher.UIThread.Post(() => { if (!closed) UpdateAutonomyButtonState(Autonomy.IsEnabled); }, DispatcherPriority.Background);
+            CoreMods.ModChanged += OnModChanged;
+            Closed += (_, _) => { closed = true; CoreMods.ModChanged -= OnModChanged;
+                if (RemoteCommands.AutonomyCommand == RemoteAutonomyCommand) RemoteCommands.AutonomyCommand = null;
                 if (RemoteCommands.CancelAutonomyPulses == CancelAutonomyPulses) RemoteCommands.CancelAutonomyPulses = null;
                 if (RemoteCommands.AutonomyRunning == AutonomyRunning) RemoteCommands.AutonomyRunning = null;
                 CancelAutonomyPulses(); Autonomy.Stop(); TakeoverAnnouncerOverlay.CloseActive(); _takeoverQuestTick?.Stop(); StopVoiceInput(); };

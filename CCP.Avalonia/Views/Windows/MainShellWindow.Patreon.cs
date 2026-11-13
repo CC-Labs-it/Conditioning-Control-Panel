@@ -96,6 +96,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // Do not re-attach a user-disabled keyboard source on ordinary tab refreshes.
                 if (!Platform.KeywordTriggerHead.Engine.IsActive || !Platform.KeywordAudioRuntime.HasAccess)
                     Platform.KeywordTriggerHead.Sync();
+                // WPF MainWindow.Patreon.cs:326: the day it closes is no longer silent (proposal 4b), the closed row once.
+                MaybePostLapseRow();
                 if (cleared.Count == 0) return;
                 SyncAwareness();
                 SyncHero();
