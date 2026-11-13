@@ -29,6 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         // Headless tests exercise exactly the script payload sent to WebHost without a browser.
         internal Func<string, Task>? SendJson { get; set; }
         internal WebHost? Host => _web;
+        internal Func<WebHost>? CreateHost { get; set; }
 
         public SpiralEmbedView(string mode)
         {
@@ -42,7 +43,14 @@ namespace ConditioningControlPanel.Avalonia.Controls
             _started = true;
             try
             {
-                _web = new WebHost { Background = Background, AllowNavigation = SpiralEmbedBridge.AllowsNavigation, InjectCarrier = true };
+                _web = CreateHost?.Invoke() ?? new WebHost();
+                _web.Background = Background;
+                _web.AllowNavigation = SpiralEmbedBridge.AllowsNavigation;
+                _web.InjectCarrier = true;
+                // WPF SpiralEmbedView.cs:178-190,229-233: browser chrome off on the Windows core, and a dead
+                // browser process fails the embed (the host's one native failure watch, Windows and Linux).
+                _web.ConfigureNative = Platform.SpiralWebView2Policy.Attach;
+                _web.BrowserProcessFailed += OnBrowserProcessFailed;
                 _web.EnvironmentRequested += OnEnvironmentRequested;
                 _web.WebMessage += Receive;
                 _web.NavigationFinished += OnNavigated;
@@ -88,8 +96,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
                     wpe.CacheDirectory = Path.Combine(folder, "cache");
                     break;
             }
-            // ponytail: 12.1's public adapter API has no context-menu, accelerator, zoom,
-            // status/error-page settings, document-created script or process-failure signal.
+            // Context-menu, accelerator, zoom, status and error-page switches are set on the native
+            // Windows core (Platform/SpiralWebView2Policy); a WebKit document-created carrier is still unported.
         }
 
         public void PostState(DescentBlock? block)
@@ -134,6 +142,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
             catch (Exception ex) { Log.Debug("[Spiral] Navigated handler threw: {Error}", ex.Message); }
         }
 
+        internal void OnBrowserProcessFailed() => Fail("browser process failed");
+
         private void Fail(string reason)
         {
             if (_disposed) return;
@@ -151,6 +161,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
             if (_web is { } web)
             {
                 _web = null;
+                web.BrowserProcessFailed -= OnBrowserProcessFailed;
+                web.ConfigureNative = null;
                 web.EnvironmentRequested -= OnEnvironmentRequested;
                 web.WebMessage -= Receive;
                 web.NavigationFinished -= OnNavigated;

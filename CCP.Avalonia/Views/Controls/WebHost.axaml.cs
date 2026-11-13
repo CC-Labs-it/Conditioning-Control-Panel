@@ -59,6 +59,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         public Func<Uri, bool>? AllowNavigation { get; set; }
         internal bool SuppressNewWindows { get; set; }
         internal event Action? BrowserProcessFailed;
+        /// <summary>Per-host native settings, run on the UI thread once for every engine the view builds
+        /// (Spiral's WebView2 chrome switches). A throwing hook is logged, never fatal.</summary>
+        internal Action<IPlatformHandle?>? ConfigureNative { get; set; }
         private IDisposable? _failureWatch;
         internal void OnBrowserProcessFailed() => BrowserProcessFailed?.Invoke();
         /// <summary>The engine granted a page's fullscreen request (WPF ContainsFullScreenElementChanged).
@@ -412,6 +415,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             try { _keyWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Key signal cleanup failed"); } finally { _keyWatch = null; }
         }
 
+        private void ApplyNativeSettings(NativeWebView native, IPlatformHandle? handle)
+        {
+            if (!ReferenceEquals(_web, native) || ConfigureNative is not { } configure) return;
+            try { configure(handle ?? native.TryGetPlatformHandle()); }
+            catch (Exception ex) { Log.Debug(ex, "Native browser settings failed"); }
+        }
+
         private void AttachFailureWatch(NativeWebView native, bool reportFailure)
         {
             if (!ReferenceEquals(_web, native) || BrowserProcessFailed == null || _failureWatch != null) return;
@@ -475,8 +485,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 native.AdapterDestroyed += (_, _) => { if (ReferenceEquals(_web, native)) { BrowserZoomAdapterDestroyed(); ClearNativeWatches(); } };
                 native.AdapterCreated += (_, e) =>
                 {
-                    if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) { AttachFailureWatch(native, false); ZoomAdapterCreated(native, () => e.TryGetPlatformHandle()); }
-                    else global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { AttachFailureWatch(native, false); if (ReferenceEquals(_web, native)) TryBrowserZoomAdapterReady(); });
+                    if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) { ApplyNativeSettings(native, e.TryGetPlatformHandle()); AttachFailureWatch(native, false); ZoomAdapterCreated(native, () => e.TryGetPlatformHandle()); }
+                    else global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { ApplyNativeSettings(native, null); AttachFailureWatch(native, false); if (ReferenceEquals(_web, native)) TryBrowserZoomAdapterReady(); });
                 };
                 native.NavigationStarted += (_, e) => { if (ReferenceEquals(_web, native)) OnNavigationStarted(native, e); else e.Cancel = true; };
                 native.NavigationCompleted += (_, e) => {
