@@ -13,8 +13,8 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// WPF hook returned false and let it through. A grab would swallow it, which is why this is not one.
 ///
 /// <para>Only X11/XWayland surfaces report: under Wayland the pointer over a native Wayland window is
-/// invisible to X clients, so click-away there only sees clicks on X windows. Null when there is no
-/// X display at all (headless, Windows, macOS). One owned connection, opened lazily, UI thread only.</para>
+/// invisible to X clients, so click-away there only sees clicks on X windows. Windows uses Win32 pointer polling; null when no
+/// desktop pointer is available (headless or macOS). One owned connection, opened lazily, UI thread only.</para>
 /// </summary>
 internal static class X11Pointer
 {
@@ -33,7 +33,9 @@ internal static class X11Pointer
     private static IntPtr _display, _root;
     private static byte _esc;
 
-    public static (PixelPoint At, bool Pressed, bool Escape)? Read() => Read(out _);
+    // Windows polls Win32 (physical pixels, like the X root); the out overload stays X11-only.
+    public static (PixelPoint At, bool Pressed, bool Escape)? Read() =>
+        OperatingSystem.IsWindows() ? Win32Pointer.Read() : Read(out _);
 
     // On XWayland, a root child confirms an X surface has pointer focus. Coordinates alone
     // can remain at the last position after the pointer enters a native Wayland surface.

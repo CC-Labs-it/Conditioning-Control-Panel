@@ -168,7 +168,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static bool _lessonCardsAfterDraft;
         private static readonly List<ChaosUnlockCardInfo> _pendingLessonCards = new();
 
-        static ChaosRunHost() => ChaosLessons.LessonCompleted += OnLessonCompleted;
+        static ChaosRunHost()
+        {
+            ChaosLessons.LessonCompleted += OnLessonCompleted;
+            // WPF ChaosModeService.cs:126, :210-224: one subscription for every first-time award
+            // (pop, defuse, draft pick, sin, toy), so each one floats and feeds once (#3505).
+            ChaosFirstTimes.Awarded += OnFirstTimeAwarded;
+        }
         private static readonly List<ChaosToyButtonWindow> _toyButtons = new();
         internal static IReadOnlyList<ChaosToyButtonWindow> ToyButtons => _toyButtons;
 
@@ -254,6 +260,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _state.StartShields = _state.Shields;
             _thoughtAccumSec = 0;
             StartToys();
+            if (ChaosMeta.IsBoonActive("vibe_popping")) ChaosVibeTrailOverlay.EnsureCreated();   // WPF :454-455 (#3506)
             _waveDetonatedAt = _state.Detonated;
             _lastComboBigFired = 0;
             _invulnUntilUtc = DateTime.MinValue;
@@ -720,15 +727,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Pulse(Color.FromRgb(120, 220, 160), 0.18);   // SHIELD_GAIN_COLOR
         }
 
-        /// <summary>WPF ChaosFirstTimes.TryAward + OnFirstTimeAwarded (:209): bank once, then a feed
-        /// line and a float where the hand was.</summary>
+        /// <summary>WPF ChaosFirstTimes.TryAward: bank once; <see cref="OnFirstTimeAwarded"/> shows it.</summary>
         private static void FirstTime(string bonusId)
         {
-            if (_state == null || ChaosFirstTimes.IsAwarded(bonusId) || !ChaosFirstTimes.TryAward(bonusId)) return;
-            int amount = ChaosFirstTimes.Amounts[bonusId];
-            string text = $"+{amount} {ChaosGlyphs.Drops} {ChaosFirstTimes.Labels.GetValueOrDefault(bonusId, bonusId)}";
-            _state.PushEvent(text);
-            PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY - 30, text, Color.FromRgb(0xC8, 0xA8, 0xFF));
+            if (_state == null || ChaosFirstTimes.IsAwarded(bonusId)) return;
+            ChaosFirstTimes.TryAward(bonusId);
+        }
+
+        /// <summary>WPF OnFirstTimeAwarded (:209): a feed line and a float where the hand was. Inline on
+        /// the UI thread (every award site is there), posted otherwise; the run is captured, so a queued
+        /// award never lands in a later descent after panic.</summary>
+        private static void OnFirstTimeAwarded(string bonusId, int amount)
+        {
+            var run = _state;
+            if (run == null) return;
+            void Show()
+            {
+                try
+                {
+                    if (!ReferenceEquals(_state, run)) return;
+                    string label = ChaosFirstTimes.Labels.ContainsKey(bonusId) ? Loc.Get("chaos_bonus_" + bonusId) : bonusId;
+                    string text = $"+{amount} {ChaosGlyphs.Drops} {label}";
+                    run.PushEvent(text);
+                    PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY - 30, text, Color.FromRgb(0xC8, 0xA8, 0xFF));
+                }
+                catch (Exception ex) { Log.Debug(ex, "Chaos first-time feedback failed"); }
+            }
+            if (Dispatcher.UIThread.CheckAccess()) Show();
+            else Dispatcher.UIThread.Post(Show);
         }
 
         /// <summary>WPF ShowPopScore (:1685), Blank Eyes.</summary>
@@ -861,7 +887,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 try { RaiseOverlayWindow(w); } catch (Exception ex) { Log.Debug("Chaos video restack: {E}", ex.Message); }
             }
             ChaosFieldFxOverlay.RaiseActive();
-            Raise(ChaosSkiaFxOverlay.Active);
+            if (ChaosSkiaFxOverlay.Active is { } skiaFx) foreach (var host in skiaFx.Hosts) Raise(host);   // every per-monitor host (restack b123 #4247)
             foreach (var w in ChaosPopText.Pool.All) Raise(w);
             RaiseDvdAboveVideo();
             ChaosEffectBannerOverlay.RaiseActive();
@@ -1397,6 +1423,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 return;
             }
             // WPF UseToy :2690: a wave draft holds the run (_paused), so toys wait for GO.
+            if (!ToyEffectPorted(toy.Id)) return;   // #4225: an inert toy spends no charge or cooldown
             var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused && !_lessonCardPaused && !_draftPaused && _overlay is { IsVisible: true });
             if (r == ChaosToyRules.UseResult.Denied) ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
             if (r == ChaosToyRules.UseResult.Fired && FireToyEffect(toy))

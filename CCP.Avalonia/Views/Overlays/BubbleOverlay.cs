@@ -332,9 +332,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // distances, advanced once per logical field tick, never by the render clock.
         private static readonly List<(Point Center, double AgeMs)> ChaosRipples = new();
 
+        /// <summary>The bubble owner's scale: its screen index is into the target-filtered list (WPF BubbleService.cs:4336-4337).</summary>
+        internal static double ScaleFor(AmbientBubble b) => b.Screen >= 0 && b.Screen < Targets.Count ? Targets[b.Screen].Scaling : 1;
+
         internal static Point CenterPx(AmbientBubble b)
         {
-            double scale = b.Screen >= 0 && b.Screen < Targets.Count ? Targets[b.Screen].Scaling : 1;
+            double scale = ScaleFor(b);
             return new Point(b.CenterX * scale, b.CenterY * scale);
         }
 

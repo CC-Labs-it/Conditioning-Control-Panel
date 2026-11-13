@@ -76,6 +76,31 @@ public sealed class ChaosVibeTrailOverlayTests
         });
     }
 
+    // A refusal is remembered only until run teardown (restack b124, #4319), so one refused run
+    // never disables the trail for later runs. The refusal path closes the window without clearing it.
+    [Fact]
+    public async Task Refusal_is_cached_until_teardown()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var refused = typeof(ChaosVibeTrailOverlay).GetField("_refused",
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+            try
+            {
+                refused.SetValue(null, true);
+                ChaosVibeTrailOverlay.Start();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(ChaosVibeTrailOverlay.Active);
+                Assert.True((bool)refused.GetValue(null)!);
+                ChaosVibeTrailOverlay.CloseActive();
+                Assert.False((bool)refused.GetValue(null)!);
+            }
+            finally { refused.SetValue(null, false); ChaosVibeTrailOverlay.CloseActive(); }
+            return Task.CompletedTask;
+        });
+    }
+
     [Fact]
     public async Task Panic_closes_the_trail_window()
     {

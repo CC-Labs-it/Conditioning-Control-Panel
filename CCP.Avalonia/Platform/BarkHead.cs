@@ -122,6 +122,8 @@ internal static class BarkHead
             e.RegisterAvatarClick();
             e.Raise("AvatarClicked", c => c.Set("clicks_60s", (double)e.AvatarClicksWithin(BarkEngine.RapidClickWindow)));
         };
+        // WPF ChaosLessons.cs:187 -> BarkService.cs:583 NotifyChaosFirstTime (#3505).
+        Services.Chaos.ChaosLessons.FirstTimeBark = id => e.Raise("ChaosFirstTime", c => c.Set("bonus_id", id));
         CoreBark.ChaosDraftAutopick = () => e.Raise("ChaosDraftAutopick");
         CoreBark.ChaosRankUp = rank => e.Raise("ChaosRankUp", c => c.Set("rank", rank));
         CoreBark.ChaosResultsShown = (score, best, pbDelta, isPb, defused, detonated, bestCombo, difficulty) =>

@@ -1,4 +1,9 @@
 {
+  "chaos_bonus_first_taste": "初めての味",
+  "chaos_bonus_first_snap": "初めてのスナップ",
+  "chaos_bonus_first_whisper": "初めてのささやき",
+  "chaos_bonus_first_yes": "初めての肯定",
+  "chaos_bonus_first_play": "初めての遊び",
   "media_drop_player_error_title": "プレーヤーを開けませんでした",
   "media_drop_editor_error_title": "エディターを開けませんでした",
   "media_drop_player_error_fmt": "Deeper Player を開けませんでした: {0}: {1}",
