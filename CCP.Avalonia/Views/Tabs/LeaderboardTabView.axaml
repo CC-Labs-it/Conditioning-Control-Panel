@@ -253,7 +253,7 @@
                 </ControlTemplate>
             </Setter>
             <Style Selector="^:selected">
-                <Setter Property="Background" Value="{DynamicResource LeaderboardTint40Brush}"/>
+                <Setter Property="Background" Value="Transparent"/>
             </Style>
         </ControlTheme>
     </UserControl.Resources>
@@ -286,7 +286,10 @@
         </Style>
         <!-- last, so hover wins over the OG wash exactly as the WPF trigger order did -->
         <Style Selector="Border.lbrow:pointerover">
-            <Setter Property="Background" Value="{DynamicResource LeaderboardTint20Brush}"/>
+            <Setter Property="Background" Value="{DynamicResource LeaderboardHoverBrush}"/>
+        </Style>
+        <Style Selector="ListBoxItem:selected Border.lbrow">
+            <Setter Property="Background" Value="{DynamicResource LeaderboardSelectedBrush}"/>
         </Style>
 
         <!-- == rank delta arrow colour (DataTrigger on DeltaState) == -->
@@ -430,7 +433,7 @@
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
                                 <Border x:Name="MonthlyBorder" Background="{TemplateBinding Background}" CornerRadius="10,0,0,10"
-                                        Padding="{TemplateBinding Padding}" BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1">
+                                        Padding="{TemplateBinding Padding}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1">
                                     <ContentPresenter Content="{TemplateBinding Content}"
                                                       ContentTemplate="{TemplateBinding ContentTemplate}"
                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -451,7 +454,7 @@
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
                                 <Border x:Name="AllTimeBorder" Background="{TemplateBinding Background}" CornerRadius="0,10,10,0"
-                                        Padding="{TemplateBinding Padding}" BorderBrush="{DynamicResource LeaderboardAccentBrush}" BorderThickness="1">
+                                        Padding="{TemplateBinding Padding}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1">
                                     <ContentPresenter Content="{TemplateBinding Content}"
                                                       ContentTemplate="{TemplateBinding ContentTemplate}"
                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>

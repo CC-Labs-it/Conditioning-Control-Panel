@@ -154,6 +154,19 @@ namespace ConditioningControlPanel.Models
         OwnImage
     }
 
+    /// <summary>How Studio > Wallpaper's Static and Own image pictures sit on each screen (#1544).
+    /// Windows = the user's own Windows fit, untouched (the behaviour before 7.2.3). Any other is written
+    /// with each picture, and the user's own fit comes back on stop, panic included.</summary>
+    public enum WallpaperFit
+    {
+        Windows,
+        Fill,
+        Fit,
+        Stretch,
+        Span,
+        Center
+    }
+
     /// <summary>
     /// Flashes v2 (Back Room prizes): how a compositor flash moves while it is up. Still is the
     /// base; DriftBounce and Pendulum are owned styles (Services/Prizes/PrizeGrants); Mix rolls
@@ -654,7 +667,6 @@ namespace ConditioningControlPanel.Models
             set { _lastPerfectWeekStreakAwarded = Math.Max(0, value); OnPropertyChanged(); }
         }
 
-        private bool _suppressPerkNotifications = false;
         /// <summary>
         /// Silences the ANNOUNCEMENT of a progression payout - never the payout. When true the
         /// app stops raising the four interrupting celebrations meadow reported as immersion
@@ -672,12 +684,42 @@ namespace ConditioningControlPanel.Models
         /// would be solving the wrong half.
         ///
         /// Defaults false: nobody's experience changes until they ask for it.
+        ///
+        /// 2026-11-05: now a view of <see cref="PerkEffects"/> (true = anything but Full). Still
+        /// written to disk so an older build reading a newer file keeps the cards off; reading
+        /// true lifts Full to NoCards and never lowers Off (<see cref="PerkEffectsRules.FromLegacySuppress"/>).
         /// </summary>
         [JsonProperty]
         public bool SuppressPerkNotifications
         {
-            get => _suppressPerkNotifications;
-            set { _suppressPerkNotifications = value; OnPropertyChanged(); }
+            get => _perkEffects != PerkEffectsMode.Full;
+            set
+            {
+                var next = PerkEffectsRules.FromLegacySuppress(_perkEffects, value);
+                if (next == _perkEffects) return;
+                _perkEffects = next;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(PerkEffects));
+            }
+        }
+
+        private PerkEffectsMode _perkEffects = PerkEffectsMode.Full;
+        /// <summary>
+        /// Settings > Notifications "Perk effects: Full / No cards / Off" (owner, 2026-11-05). See
+        /// <see cref="PerkEffectsMode"/>. XP never depends on it.
+        /// </summary>
+        [JsonProperty]
+        public PerkEffectsMode PerkEffects
+        {
+            get => _perkEffects;
+            set
+            {
+                var next = PerkEffectsRules.Clamp(value);
+                if (next == _perkEffects) return;
+                _perkEffects = next;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(SuppressPerkNotifications));
+            }
         }
 
         #region Bark system
@@ -5464,11 +5506,11 @@ namespace ConditioningControlPanel.Models
             set { _brainDrainEnabled = value; OnPropertyChanged(); }
         }
 
-        private int _brainDrainIntensity = 20; // 1-100%
+        private int _brainDrainIntensity = 20; // 0-100%, 0 = no clips (ccp-bugs #1536)
         public int BrainDrainIntensity
         {
             get => _brainDrainIntensity;
-            set { _brainDrainIntensity = Math.Clamp(value, 1, 100); OnPropertyChanged(); }
+            set { _brainDrainIntensity = Math.Clamp(value, 0, 100); OnPropertyChanged(); }
         }
 
         private int _brainDrainVolume = 100; // 0-100%
@@ -5816,11 +5858,23 @@ namespace ConditioningControlPanel.Models
             set { _chasterFlashDodge = value; OnPropertyChanged(); }
         }
 
+        private int _chasterNatashaTriggerWeight = 1;
+
+        /// <summary>ccp-bugs #1566: how much likelier a trigger bubble is to be Natasha's red one
+        /// than a plain bubble, 1-10. 1 (the default) = the same one in ten as before. Machine-local
+        /// like every Chaster* setting.</summary>
+        [JsonProperty]
+        public int ChasterNatashaTriggerWeight
+        {
+            get => _chasterNatashaTriggerWeight;
+            set { _chasterNatashaTriggerWeight = Services.Chaster.NatashasFavourite.ClampTriggerWeight(value); OnPropertyChanged(); }
+        }
+
         private int _chasterDailyLimitMinutes = 180;
         private int _chasterBacklogLimitMinutes = 720;
 
         /// <summary>The most a day can add to the lock, in minutes (owner default 3 hours).
-        /// Clamped by TabLimits when read, so a hand edit cannot go past 12 hours.</summary>
+        /// Clamped by TabLimits when read, so a hand edit cannot go past 24 hours.</summary>
         [JsonProperty]
         public int ChasterDailyLimitMinutes
         {
@@ -7517,6 +7571,32 @@ namespace ConditioningControlPanel.Models
             set { _wallpaperOriginalPath = value ?? ""; OnPropertyChanged(); }
         }
 
+        private string _wallpaperOriginalStyle = "";
+        /// <summary>
+        /// The user's own WallpaperStyle|TileWallpaper, taken before Studio > Wallpaper writes a fit of
+        /// its own (<see cref="CollageWallpaperFit"/>), cleared with <see cref="WallpaperOriginalPath"/> once
+        /// it is back. Empty while CCP writes no fit. Not user-facing; local to this PC.
+        /// </summary>
+        [JsonProperty]
+        public string WallpaperOriginalStyle
+        {
+            get => _wallpaperOriginalStyle;
+            set { _wallpaperOriginalStyle = value ?? ""; OnPropertyChanged(); }
+        }
+
+        private WallpaperFit _collageWallpaperFit = WallpaperFit.Windows;
+        /// <summary>
+        /// Fit for Studio > Wallpaper's Static and Own image pictures (ccp-bugs #1544: stretched on a
+        /// vertical monitor). Windows (default) keeps the user's own fit, as before. Dynamic ignores it:
+        /// it draws one collage per monitor at that monitor's own size.
+        /// </summary>
+        [JsonProperty]
+        public WallpaperFit CollageWallpaperFit
+        {
+            get => _collageWallpaperFit;
+            set { _collageWallpaperFit = Enum.IsDefined(value) ? value : WallpaperFit.Windows; OnPropertyChanged(); }
+        }
+
         private string _wallpaperSourceFolder = "";
         /// <summary>
         /// Folder the wallpaper takeover pulls images from. Empty = default to the
@@ -7641,6 +7721,7 @@ namespace ConditioningControlPanel.Models
 
         #region V5.5 Season System
 
+        public bool MergedSignInPending { get; set; }
         private string? _unifiedId = null;
         /// <summary>
         /// Unified user ID from v5.5+ server. Persists across logout to enable
@@ -8388,6 +8469,19 @@ namespace ConditioningControlPanel.Models
         {
             get => _keywordTriggersEnabled;
             set { _keywordTriggersEnabled = value; OnPropertyChanged(); }
+        }
+
+        private bool _awarenessStartOnLaunch = false;
+        /// <summary>
+        /// ccp-bugs #1562: switch Awareness (<see cref="KeywordTriggersEnabled"/>) on at launch,
+        /// like the companion's resume. Off by default, so Awareness still starts off. The launch
+        /// only flips the session flag; the usual access check starts it once the tier is known,
+        /// and the entitlement lapse switches it off again for an account without access.
+        /// </summary>
+        public bool AwarenessStartOnLaunch
+        {
+            get => _awarenessStartOnLaunch;
+            set { _awarenessStartOnLaunch = value; OnPropertyChanged(); }
         }
 
         private int _keywordBufferTimeoutMs = 3000;
@@ -10163,6 +10257,16 @@ namespace ConditioningControlPanel.Models
         {
             get => _deeperPlayerWindowTop;
             set { _deeperPlayerWindowTop = value; OnPropertyChanged(); }
+        }
+
+        // Avalonia's display scale and the WPF-compatible coordinates it was saved with.
+        // Null for WPF saves made before the hint existed.
+        private double[]? _deeperPlayerWindowPositionHint;
+        [JsonProperty]
+        public double[]? DeeperPlayerWindowPositionHint
+        {
+            get => _deeperPlayerWindowPositionHint;
+            set { _deeperPlayerWindowPositionHint = value; OnPropertyChanged(); }
         }
 
         private double _deeperPlayerWindowWidth;

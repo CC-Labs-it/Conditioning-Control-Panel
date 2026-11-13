@@ -43,6 +43,18 @@ namespace ConditioningControlPanel.AvatarTubeLayout
         public const double CornerRadius = 20;
         public const double MinWidth = 120;
 
+        /// <summary>
+        /// ccp-bugs #1535: the avatar box the bubble is placed against while the chat box is open.
+        /// Its top rises to the chat box's top when the box overlaps her column, so "above her head"
+        /// lands above the box and "below her" stays below her. An empty input changes nothing.
+        /// </summary>
+        public static Box ClearOfInput(Box avatar, Box input)
+        {
+            if (input.IsEmpty || input.Right < avatar.X || input.X > avatar.Right) return avatar;
+            if (input.Y >= avatar.Y) return avatar;
+            return Box.FromEdges(avatar.X, input.Y, avatar.Right, avatar.Bottom);
+        }
+
         /// <param name="canvas">The area the bubble can physically paint in (the tube window).</param>
         /// <param name="workArea">The monitor work area the avatar is on, in the same units.</param>
         /// <param name="obstacle">The main window when the tube is docked to it, else null.</param>

@@ -1,6 +1,7 @@
 using System;
 using System.Reflection;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 
@@ -125,8 +126,6 @@ internal static class WpfRenderHarness
         "Resources/Theme/MainWindow.xaml"
     };
 
-    private static readonly object Gate = new();
-    private static bool _ready;
     private static Dispatcher? _dispatcher;
 
     /// <summary>The app theme, parked while no render body is running.</summary>
@@ -135,78 +134,66 @@ internal static class WpfRenderHarness
     /// <summary>What Application.Resources holds the rest of the time: nothing.</summary>
     private static readonly ResourceDictionary Empty = new();
 
-    /// <summary>
-    /// Brings up the STA thread and the themed Application. Safe to call from every test; the first
-    /// call does the work and the rest are a lock and a bool.
-    /// </summary>
-    internal static void EnsureApplication()
+    // One process-wide startup survives a caller timing out; WPF resources must never be
+    // initialized again on a second STA thread while the first is still running.
+    private static readonly WpfBootstrapWait Bootstrap = new(() =>
     {
-        lock (Gate)
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pump = new Thread(() =>
         {
-            if (_ready) return;
-
-            Exception? escaped = null;
-            using var ready = new ManualResetEventSlim(false);
-
-            var pump = new Thread(() =>
+            try
             {
-                try
+                if (Application.Current == null)
                 {
-                    if (Application.Current == null)
+                    _ = new Application
                     {
-                        _ = new Application
-                        {
-                            // Nothing here opens a Window, so the default OnLastWindowClose would
-                            // shut the Application down the moment a test closed one.
-                            ShutdownMode = ShutdownMode.OnExplicitShutdown
-                        };
-                    }
-
-                    // Merged into a live, Application-owned dictionary one at a time and in
-                    // App.xaml's order. That ordering is not cosmetic: Resources/Theme/
-                    // MainWindow.xaml carries setters like
-                    //   <Setter Property="Foreground" Value="{StaticResource TextLightBrush}"/>
-                    // whose key lives in Brushes.xaml, and those resolve against what is already
-                    // merged when MainWindow.xaml's deferred content is first realized. Build the
-                    // set off to the side and assign it in one go and they resolve to
-                    // DependencyProperty.UnsetValue instead - which surfaces far from the cause, as
-                    // a TextBlock wearing SettingLabel throwing inside MeasureOverride.
-                    _theme = new ResourceDictionary();
-                    Application.Current!.Resources = _theme;
-                    foreach (var relative in AppThemeDictionaries)
-                    {
-                        _theme.MergedDictionaries.Add(new ResourceDictionary
-                        {
-                            Source = new Uri(
-                                "pack://application:,,,/ConditioningControlPanel;component/" + relative,
-                                UriKind.Absolute)
-                        });
-                    }
-
-                    Application.Current.Resources = Empty;
-
-                    _dispatcher = Dispatcher.CurrentDispatcher;
+                        // Nothing here opens a Window, so the default OnLastWindowClose would
+                        // shut the Application down the moment a test closed one.
+                        ShutdownMode = ShutdownMode.OnExplicitShutdown
+                    };
                 }
-                catch (Exception ex) { escaped = ex; }
-                finally { ready.Set(); }
 
-                // Keep the Application's dispatcher alive for the rest of the run, so anything
-                // reaching for Application.Current.Dispatcher finds a pump and not a dead thread.
-                if (escaped == null) Dispatcher.Run();
-            });
+                // Merged into a live, Application-owned dictionary one at a time and in
+                // App.xaml's order. That ordering is not cosmetic: Resources/Theme/
+                // MainWindow.xaml carries setters like
+                //   <Setter Property="Foreground" Value="{StaticResource TextLightBrush}"/>
+                // whose key lives in Brushes.xaml, and those resolve against what is already
+                // merged when MainWindow.xaml's deferred content is first realized. Build the
+                // set off to the side and assign it in one go and they resolve to
+                // DependencyProperty.UnsetValue instead - which surfaces far from the cause, as
+                // a TextBlock wearing SettingLabel throwing inside MeasureOverride.
+                _theme = new ResourceDictionary();
+                Application.Current!.Resources = _theme;
+                foreach (var relative in AppThemeDictionaries)
+                {
+                    _theme.MergedDictionaries.Add(new ResourceDictionary
+                    {
+                        Source = new Uri(
+                            "pack://application:,,,/ConditioningControlPanel;component/" + relative,
+                            UriKind.Absolute)
+                    });
+                }
 
-            pump.SetApartmentState(ApartmentState.STA);
-            pump.IsBackground = true;   // never keeps the test host alive
-            pump.Start();
+                Application.Current.Resources = Empty;
 
-            if (!ready.Wait(TimeSpan.FromSeconds(30)))
-                throw new InvalidOperationException("WPF render harness: Application bootstrap timed out");
-            if (escaped != null)
-                throw new InvalidOperationException("WPF render harness: Application bootstrap failed", escaped);
+                _dispatcher = Dispatcher.CurrentDispatcher;
+            }
+            catch (Exception ex) { ready.SetException(ex); return; }
+            ready.SetResult();
 
-            _ready = true;
-        }
-    }
+            // Keep the Application's dispatcher alive for the rest of the run.
+            Dispatcher.Run();
+        });
+
+        pump.SetApartmentState(ApartmentState.STA);
+        pump.IsBackground = true;
+        pump.Start();
+        return ready.Task;
+    });
+
+    /// <summary>Starts the shared STA once and waits for its themed application.</summary>
+    internal static void EnsureApplication() =>
+        Bootstrap.Wait(TimeSpan.FromSeconds(120));
 
     /// <summary>
     /// Runs <paramref name="body"/> on the harness thread with the app theme installed, and

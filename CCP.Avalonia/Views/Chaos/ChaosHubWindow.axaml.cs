@@ -1043,7 +1043,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF Bench.cs BenchBuy_Click: Core prices, gates, the gift and the save.</summary>
         private void BenchBuy(string id)
         {
-            if (ChaosBench.TryBuy(id) == ChaosBenchBuy.Denied) return;
+            var item = ChaosBench.Items.FirstOrDefault(i => i.Id == id);
+            if (item == null) return;
+            var bought = ChaosBench.TryBuy(id);
+            if (bought == ChaosBenchBuy.Denied)
+            {
+                if (!ChaosBench.IsOwned(item) && !ChaosBench.IsRankShort(item) && !ChaosBench.IsHazy(item))
+                    ChaosOverlayWindow.ChaosSfx.Play("ui_denied", 0.45f);
+                return;
+            }
+            if (bought == ChaosBenchBuy.Gift)
+            {
+                try { Platform.BarkHead.Engine?.Raise("ChaosGiftGiven"); } catch { }
+            }
+            var card = ChaosUnlockCardRules.ForBench(id);
+            if (card == null) ChaosOverlayWindow.ChaosSfx.Play("ui_unlock", 0.55f);
             RevealService.Sync("purchase");
             ApplyUnlocks();   // WPF Bench.cs:223 ApplyReveals: the Diary / start-mantra buys show up now
             BuildBench();
@@ -1052,7 +1066,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             BuildLoadoutTiles();
             RefreshTopBar();
             RefreshStats();
-            UnlockCards.Show(ChaosUnlockCardRules.ForBench(id));   // pockets only (WPF Bench.cs:234)
+            UnlockCards.Show(card);   // pockets only; the card plays their cue (WPF Bench.cs:234)
         }
 
         private void AfterBoonChange()

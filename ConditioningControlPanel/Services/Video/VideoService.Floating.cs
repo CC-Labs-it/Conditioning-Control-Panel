@@ -26,6 +26,18 @@ namespace ConditioningControlPanel.Services
         /// <summary>The clip on screen (or the last one) is the floating window, not full screen.</summary>
         internal bool IsFloating => _floatBounds != null && _floatScreen != null;
 
+        /// <summary>The video on screen floats: the single LibVLC window or the equal browser instances.</summary>
+        private bool FloatingOnScreen => IsFloating || (_floatRunOpen && _floaters.Count > 0);
+
+        /// <summary>Escape is a video key right now (PanicPolicy.VideoTakesEscape, #1594 #1595):
+        /// always on a full-screen video, on a floating one only when Escape is the panic key.</summary>
+        private bool VideoTakesEscape()
+        {
+            var s = App.Settings?.Current;
+            return Services.Safety.PanicPolicy.VideoTakesEscape(
+                FloatingOnScreen, s?.PanicKeyEnabled ?? false, s?.PanicKey);
+        }
+
         /// <summary>Read once per clip, before any window exists. A LibVLC fallback of the same clip
         /// does not come back through here, so it keeps the mode and the spot.</summary>
         private void DecidePresentation(bool strict)

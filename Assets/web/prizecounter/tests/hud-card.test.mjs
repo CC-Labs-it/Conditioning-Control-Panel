@@ -15,6 +15,7 @@ const CARDS = {
   short: { ...base, face: 'short', action: null, short: 680 },
   soon: { ...base, face: 'soon', action: null },
   gone: { ...base, face: 'gone', action: null },
+  discord: { ...base, face: 'discord', action: null, reasonKey: 'shop_link_discord' },
 };
 const draw = (card, sp = 1850) => {
   const sent = [], doc = fakeDocument();
@@ -23,7 +24,7 @@ const draw = (card, sp = 1850) => {
 };
 
 test('every face shows its buttons and nothing more', () => {
-  const want = { buy: ['Buy', 'Keep looking'], owned: ['Wear', 'Keep looking'], prime: ['Keep looking'], short: ['Keep looking'], soon: [], gone: [] };
+  const want = { buy: ['Buy', 'Keep looking'], owned: ['Wear', 'Keep looking'], prime: ['Keep looking'], short: ['Keep looking'], soon: [], gone: [], discord: ['Keep looking'] };
   for (const [face, labels] of Object.entries(want)) {
     const { el, buttons } = draw(CARDS[face]);
     assert.deepEqual(buttons.map((b) => b.textContent), labels, face);
@@ -55,6 +56,8 @@ test('owned stamps OWNED, prime shows the lock badge and the reason, soon and go
   assert.match(prime.text(), /Prime members can buy this one/);
   assert.match(draw(CARDS.soon).el.text(), /On the shelf soon/);
   assert.match(draw(CARDS.gone).el.text(), /Gone from this week's shelf/);
+  assert.match(draw(CARDS.discord).el.text(), /Link Discord first/);
+  assert.match(draw(CARDS.discord).el.text(), /730/);
 });
 
 test('pending: aria-busy, the buy button disabled, the note says so; a note key shows its line', () => {

@@ -1208,6 +1208,7 @@ namespace ConditioningControlPanel
                 App.Audio?.ApplyPreferredDevice(_droneOutput);
                 _droneOutput.Init(_droneLoop);
                 _droneOutput.Play();
+                global::ConditioningControlPanel.Services.Audio.EngineOffAudioLog.Note("quiz-drone", path);
             }
             catch (Exception ex)
             {

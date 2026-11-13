@@ -84,16 +84,21 @@ public sealed class BubbleCountQueueTests
             Dispatcher.UIThread.RunJobs();
             var card = new BubbleCountFeatureControl();
             card.FindControl<Button>("BtnTest")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.True(b.IsQueued);
+            // WPF BubbleCountService.cs:433-440 (TryStart queue: true): the game waits in the ONE
+            // interaction queue behind the card (LockCardWindow.DeferBubble, #4394), in request order.
             Assert.False(b.IsBusy);
             clock.Advance(TimeSpan.FromSeconds(10));               // the card is still up
             Dispatcher.UIThread.RunJobs();
-            Assert.True(b.IsQueued);
+            LockCardWindow.RetryPendingCard();
+            Assert.False(b.IsBusy);
             Assert.Equal(0, freezes);
 
-            LockCardWindow.ForceCloseAll();
+            // The card is solved and leaves: a normal close, not the panic ForceCloseAll (that drops
+            // every queued interaction). The queue's next poll replays the game.
+            LockCardWindow.Primary!.Close();
             Dispatcher.UIThread.RunJobs();
-            clock.Advance(BubbleCountScheduler.QueuePoll);
+            Assert.False(LockCardWindow.IsAnyOpen());
+            LockCardWindow.RetryPendingCard();
             Dispatcher.UIThread.RunJobs();
             Assert.False(b.IsQueued);
             Assert.True(b.IsBusy);                                 // the game starts its lead-in
@@ -216,6 +221,7 @@ public sealed class BubbleCountQueueTests
             feed.Show();
             Dispatcher.UIThread.RunJobs();
             Assert.True(host.FeedOwnsTheScreen);
+            Assert.False(global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow.IsAnyStartupGameOpen());
             var button = new BubbleCountFeatureControl().FindControl<Button>("BtnTest")!;
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

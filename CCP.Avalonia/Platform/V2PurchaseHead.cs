@@ -21,7 +21,6 @@ internal static class V2PurchaseHead
     {
         if (FriendsHead.BaseUrl(userDataDir, overrideUrl) is not { } url) return null;
         // adoptSp is null on the relay for WPF's reason: a state read must never lower the wallet.
-        // ponytail: no Contract D hook on this head (WPF MergedAccountRecovery is head-only), as FriendsHead.
         return new V2PurchaseService(
             new BackRoomApi(http, FriendsHead.Identity, adoptSp: null, PrizeOwnership.ApplySnapshot, url),
             () => FriendsHead.Identity()?.UnifiedId,

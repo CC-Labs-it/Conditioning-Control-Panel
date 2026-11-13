@@ -793,8 +793,14 @@ public class AwarenessReviewFixTests : IDisposable
     public void TheObserversEnabledPredicate_RequiresTheV2Consent()
     {
         var source = SourceRoots.ReadProductFile("Services", "Awareness", "AwarenessObserver.cs");
-        var predicate = Between(source, "public static bool IsEnabled", "/// <summary>\n        /// Starts the ledger");
+        var observerPredicate = Between(source, "public static bool IsEnabled", "/// <summary>\n        /// Starts the ledger");
+        Assert.Contains("return AwarenessObserverPolicy.IsEnabled(s, HasEntitlement);", observerPredicate, StringComparison.Ordinal);
 
+        var policy = SourceRoots.ReadProductFile("Services", "Awareness", "AwarenessObserverPolicy.cs");
+        var predicate = Between(policy, "public static bool IsEnabled(AppSettings? settings, bool hasEntitlement)",
+            "/// <summary>Real input idle");
+        Assert.Contains("settings != null && hasEntitlement && settings.UseAwarenessV2 && settings.AwarenessModeEnabled &&", predicate, StringComparison.Ordinal);
+        Assert.Contains("settings.AwarenessConsentGiven && settings.AwarenessConsentShownV2;", predicate, StringComparison.Ordinal);
         Assert.Contains("UseAwarenessV2", predicate, StringComparison.Ordinal);
         Assert.Contains("AwarenessModeEnabled", predicate, StringComparison.Ordinal);
         Assert.Contains("AwarenessConsentGiven", predicate, StringComparison.Ordinal);

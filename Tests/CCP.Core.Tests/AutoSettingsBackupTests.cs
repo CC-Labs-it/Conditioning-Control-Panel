@@ -47,7 +47,7 @@ public sealed class AutoSettingsBackupTests : IDisposable
             var url = r.RequestUri!.AbsoluteUri;
             Seen.Add(url);
             var status = url == Upload ? UploadStatus : HttpStatusCode.OK;
-            return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent("{\"success\":true}") });
+            return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent("{\"backup\":null}") });
         }
     }
 

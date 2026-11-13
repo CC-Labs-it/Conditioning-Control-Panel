@@ -158,6 +158,25 @@
                         <fx:IconLabel Key="set2_btn_factory_reset" Kind="ArrowReset"/>
 
                     </Button>
+
+                    <!-- WPF main e22a0cef83: Delete account, the Profile bin given a findable door. Same
+                         MainShellWindow.DeleteProfileAsync (type-DELETE dialog); signed in only. -->
+                    <StackPanel x:Name="RowDeleteAccount" IsVisible="False">
+                        <Border Height="1" Margin="0,12,0,10" Background="{DynamicResource GlassBorderBrush}"/>
+                        <TextBlock Text="{loc:Str set2_data_delete_account_body}" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextLightBrush}" FontSize="11" Margin="0,0,0,4"/>
+                        <TextBlock Text="{loc:Str set2_data_delete_account_keeps}" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextMutedBrush}" FontSize="11" Margin="0,0,0,10"/>
+                        <Button x:Name="BtnDeleteAccount"
+                                Theme="{StaticResource OutlineButton}"
+                                Foreground="{DynamicResource DangerBrush}"
+                                BorderBrush="{DynamicResource DangerBrush}"
+                                Padding="14,6" HorizontalAlignment="Left"
+                                Click="BtnDeleteAccount_Click"
+                                ToolTip.Tip="{loc:Str tooltip_delete_your_profile}">
+                            <fx:IconLabel Key="set2_btn_delete_account" Kind="Delete"/>
+                        </Button>
+                    </StackPanel>
                 </StackPanel>
             </Grid>
         </Border>

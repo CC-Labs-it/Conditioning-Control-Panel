@@ -124,7 +124,7 @@ namespace ConditioningControlPanel.Services
         public double Intensity
         {
             get => _intensity;
-            set => _intensity = Math.Clamp(value, 1, 100);
+            set => _intensity = Math.Clamp(value, 0, 100);   // 0 = no clips, visual only (ccp-bugs #1536)
         }
         
         public BrainDrainService()

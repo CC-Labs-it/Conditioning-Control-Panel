@@ -39,6 +39,8 @@ public static class LauncherCards
         // Piece by Piece: free for everyone (owner, 2026-09-27); its lobby asks a signed-out player.
         new("piecebypiece", "features/piecebypiece.png", "♟", 0x7B5CFF, RequiresAccount: false, IsNew: true),
         new("race", "features/race.png", "☕", 0xFFB36B),
+        // Racing Thoughts Classic: the 2D race back beside the 3D one, free for everyone (WPF 7.2.3, owner 2026-11-05).
+        new("raceclassic", "features/race_classic.png", "☕", 0xFF8FB8),
         new("dtrh", "features/dtrh.png", "▼", 0x8CF5C8),
         new("arcademy", "features/arcademy.png", "★", 0xFF69B4),
         new("goon", "features/goon_game_tile.png", "●", 0x76C893),

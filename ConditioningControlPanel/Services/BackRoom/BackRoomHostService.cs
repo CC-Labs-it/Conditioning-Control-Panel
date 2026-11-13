@@ -661,7 +661,7 @@ internal static class BackRoomHostService
         {
             type = "init",
             protocol = BackRoomBridge.Protocol,
-            racingTracks = RacingAccess.OwnedTracks,
+            racingTracks = RacingAccess.PurchasedTracks,
             breakout = BreakoutAccess.Current(_breakoutPage && _breakoutDemo),
             breakoutStandalone = _breakoutPage,
             sp = s?.SkillPoints ?? 0,

@@ -112,6 +112,10 @@ public sealed class RealProfileMigrationTests
         // Open drawers on a tab the run never shows (the exit write used to reset them).
         settings["CompanionSectionOpen"] = new JObject { ["EngineRoom"] = true, ["Workshop"] = true };
         if (inPlace) settings["PatreonTier"] = 2;
+        // From #3615: a non-default volume must not reset, and user-owned files outside the manifest
+        // must survive startup and exit unchanged.
+        settings["VideoVolume"] = 63;
+        File.WriteAllBytes(Path.Combine(fixture, "mods", "premove", "custom.bin"), new byte[] { 0, 255, 13, 10, 42 });
         File.WriteAllText(Path.Combine(fixture, "settings.json"), settings.ToString());
         File.Copy(Fixture("mod_manifest_premove.json"), Path.Combine(fixture, "mods", "premove", "manifest.json"));
         File.Copy(Fixture("session_log_premove.json"), Path.Combine(fixture, "session_logs", "premove.json"));
@@ -204,6 +208,29 @@ public sealed class RealProfileMigrationTests
         var failures = CompareSettings(before, new JObject { ["PatreonTier"] = 0 }, _ => { }, false).ToArray();
         Assert.Contains("unknown key (dropped on load): UnknownWpfKey", failures);
         Assert.Contains("value changed: PatreonTier", failures);
+    }
+
+    [Fact]
+    public void EvidenceRejectsVideoVolumeResetAndChangedOpaqueFiles()
+    {
+        var before = new JObject { ["VideoVolume"] = 63 };
+        var reset = new JObject { ["VideoVolume"] = 50 };
+        Assert.Contains("value changed: VideoVolume", CompareSettings(before, reset, _ => { }));
+        Assert.Empty(CompareSettings(before, before, _ => { }));
+        var fixture = Path.Combine(MigrationTestProfile.Root, "comparison");
+        var relative = Path.Combine("mods", "premove", "custom.bin");
+        var file = Path.Combine(fixture, relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllBytes(file, new byte[] { 0, 255, 13, 10, 42 });
+        Assert.Contains(relative, Files(fixture));
+        var hashes = new Dictionary<string, string> { [relative] = Sha256(file) };
+        var inputs = new Dictionary<string, string> { [relative] = file };
+        var none = new Dictionary<string, string>();
+        Assert.Empty(CompareFiles(fixture, hashes, inputs, none, false, _ => { }));
+        File.WriteAllBytes(file, new byte[] { 0, 255, 13, 10, 43 });
+        Assert.Equal(new[] { "file changed: " + relative }, CompareFiles(fixture, hashes, inputs, none, false, _ => { }));
+        File.Delete(file);
+        Assert.Equal(new[] { "file removed: " + relative }, CompareFiles(fixture, hashes, inputs, none, false, _ => { }));
     }
 
     private static string Fixture(string name, [CallerFilePath] string here = "") =>
@@ -324,18 +351,24 @@ public sealed class RealProfileMigrationTests
             failures.Add("settings.json was not saved on shutdown (the round trip did not run)");
         failures.AddRange(CompareSettings(original, ReadJson(savedPath), Expect, allowMissingTokens: !inPlace));
 
-        foreach (var (relative, hash) in sourceHashes.Where(kv => !IsSettingsFile(kv.Key)))
-        {
-            var copy = inPlace && relative == "achievements.json" ? AchievementStore.DefaultPath : Path.Combine(profile, relative);
-            if (!File.Exists(copy)) failures.Add("file removed: " + relative);
-            else if (Sha256(copy) == hash) continue;
-            else if (ExpectedChange(relative, comparisons.GetValueOrDefault(relative, inputs[relative]), copy) is { } transform) Expect(transform);
-            else failures.Add("file changed: " + relative);
-        }
+        failures.AddRange(CompareFiles(profile, sourceHashes, inputs, comparisons, inPlace, Expect));
 
         TestContext.Current.TestOutputHelper?.WriteLine($"migration: {original.Count} settings keys, {sourceHashes.Count} files checked, "
             + $"expected transforms [{string.Join(", ", expected.Select(kv => kv.Key + " " + kv.Value))}], {failures.Count} failure(s)");
         Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
+    }
+
+    internal static IEnumerable<string> CompareFiles(string profile, IReadOnlyDictionary<string, string> sourceHashes,
+        IReadOnlyDictionary<string, string> inputs, IReadOnlyDictionary<string, string> comparisons, bool inPlace, Action<string> expect)
+    {
+        foreach (var (relative, hash) in sourceHashes.Where(kv => !IsSettingsFile(kv.Key)))
+        {
+            var copy = inPlace && relative == "achievements.json" ? AchievementStore.DefaultPath : Path.Combine(profile, relative);
+            if (!File.Exists(copy)) yield return "file removed: " + relative;
+            else if (Sha256(copy) == hash) continue;
+            else if (ExpectedChange(relative, comparisons.GetValueOrDefault(relative, inputs[relative]), copy) is { } transform) expect(transform);
+            else yield return "file changed: " + relative;
+        }
     }
 
     private static readonly string[] DailyRollKeys =
@@ -382,6 +415,14 @@ public sealed class RealProfileMigrationTests
         // runner is UTC, the fixture +01:00) re-serializes as different text for the same instant.
         var (beforeToken, afterToken) = (AsUtc(ReadToken(sourcePath)), AsUtc(ReadToken(copyPath)));
         if (JToken.DeepEquals(beforeToken, afterToken)) return "exit-flush-same-content";
+        // The login streak banked at launch (see LoginStreakBankedToday): only the streak fields move.
+        if (relative == "achievements.json" && beforeToken is JObject wasAch && afterToken is JObject nowAch
+            && ReadToken(copyPath)["LastLaunchDate"] is { } launch && launch.ToObject<DateTime>().Date == DateTime.Today)
+        {
+            foreach (var key in new[] { "LastLaunchDate", "ConsecutiveDays", "PendingStreakBreak", "PendingStreakBonus" })
+            { wasAch.Remove(key); nowAch.Remove(key); }
+            return JToken.DeepEquals(wasAch, nowAch) ? "login-streak-banked-at-launch" : null;
+        }
         if (relative != "quests.json" || beforeToken is not JObject before || afterToken is not JObject after) return null;
         // A day (week) passed since WPF last ran: the quests roll exactly as WPF rolls them.
         var progress = new QuestProgress
@@ -442,6 +483,15 @@ public sealed class RealProfileMigrationTests
                 // does (MainWindow.Patreon.cs TierOnNoticePass records the first reading and saves).
                 else if (key == "last_known_effective_tier" && value.Type == JTokenType.Null && now.Type == JTokenType.Integer)
                     expect("first-tier-reading-recorded");
+                // Expected: a day passed since WPF last ran, so launch banks the login streak exactly as WPF
+                // 7.2 does (AchievementProgressStreak.UpdateStreak at startup): today's date, the new count
+                // mirrored into settings, and the highest streak lifted to it.
+                else if (LoginStreakBankedToday(key, value, now, saved))
+                    expect("login-streak-banked-at-launch");
+                // Expected (restack b57, #4696): launch records today's UTC date in the season bucket and
+                // lifts the season peak to the banked streak, as WPF SeasonRecapService.cs:146/:159 does.
+                else if (SeasonActivityRecordedToday(key, value, now, saved))
+                    expect("season-activity-recorded-at-launch");
                 else yield return "value changed: " + key;
                 continue;
             }
@@ -449,6 +499,38 @@ public sealed class RealProfileMigrationTests
             var defaultToken = fallback is null ? JValue.CreateNull() : JToken.FromObject(fallback);
             if (!JToken.DeepEquals(value, defaultToken)) yield return "key dropped with a non-default value: " + key;
         }
+    }
+
+    private static bool SeasonActivityRecordedToday(string key, JToken original, JToken now, JObject saved)
+    {
+        var today = DateTime.UtcNow.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        var current = saved["CurrentStreak"]?.Type == JTokenType.Integer ? (int)saved["CurrentStreak"]! : -1;
+        return key switch
+        {
+            "SeasonActiveDays" => original is JArray was && now is JArray days
+                && days.Count == was.Count + 1 && was.All(d => days.Any(n => JToken.DeepEquals(d, n)))
+                && days.Any(n => (string?)n == today),
+            "SeasonStatsSeason" => string.IsNullOrEmpty((string?)original) && now.Type == JTokenType.String
+                && System.Text.RegularExpressions.Regex.IsMatch((string)now!, @"^\d{4}-\d{2}$"),
+            "SeasonPeakStreak" => original.Type == JTokenType.Integer && now.Type == JTokenType.Integer
+                && (int)now == Math.Max((int)original, current),
+            _ => false,
+        };
+    }
+
+    private static bool LoginStreakBankedToday(string key, JToken original, JToken now, JObject saved)
+    {
+        static bool IsToday(JToken? t) => t is { Type: JTokenType.Date or JTokenType.String }
+            && t.ToObject<DateTime>().Date == DateTime.Today;
+        var current = saved["CurrentStreak"]?.Type == JTokenType.Integer ? (int)saved["CurrentStreak"]! : -1;
+        return key switch
+        {
+            "LastStreakDate" => IsToday(now),
+            "CurrentStreak" => IsToday(saved["LastStreakDate"]) && current >= 1,
+            "HighestStreak" => IsToday(saved["LastStreakDate"]) && now.Type == JTokenType.Integer && original.Type == JTokenType.Integer
+                && (int)now == Math.Max((int)original, current),
+            _ => false,
+        };
     }
 
     /// <summary>True when the saved haptics block differs from the original only by v2 layer or event

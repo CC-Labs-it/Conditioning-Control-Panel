@@ -58,17 +58,18 @@ public class RacingAccessTests
         Assert.False(RacingAccess.AllowsCloud(personal, null, Owns("rt.original.00")));
     }
 
-    /// <summary>2026-09-18 owner decision: Racing Thoughts is a Back Room unlock. The door is
-    /// armed in exactly one place; this pins it so a merge cannot quietly reopen it.</summary>
+    /// <summary>2026-11-05 owner decision: Racing Thoughts Classic is free for everyone with every
+    /// track (the 7.2 Prize Counter sells no rt.original grants). The door lives in exactly one
+    /// place; this pins it so a merge cannot quietly close it again.</summary>
     [Fact]
-    public void PurchaseDoorIsArmed()
+    public void PurchaseDoorIsOpen()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null && !File.Exists(Path.Combine(dir.FullName, "CCP.Core", "CCP.Core.csproj")))
             dir = dir.Parent;
         Assert.NotNull(dir);
         var source = File.ReadAllText(Path.Combine(dir!.FullName, "CCP.Core", "Services", "Race", "RacingAccess.cs"));
-        Assert.Contains("private const bool PurchaseDoorArmed = true;", source, StringComparison.Ordinal);
+        Assert.Contains("private const bool PurchaseDoorArmed = false;", source, StringComparison.Ordinal);
     }
 
     [Fact]

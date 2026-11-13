@@ -1,8 +1,7 @@
 // PORTED from ConditioningControlPanel/Views/Tabs/ChasterTabView.xaml.cs: the calendar (:434-560),
 // CalendarSpan (:451), BuildCalendar (:466), Cell (:511), Cross (:576), on Core LockCalendar.
-// ponytail: the cross is two straight marker strokes plus the splat (WPF bends them and dashes them
-// in), the padlock stamp is a glyph not the padlock art mask, the key is the key glyph on gold not
-// the foil sticker, tonight's ring a plain ellipse; the draw-in, sheet nudge, tonight's tag and its bob (Fx.cs) are not ported.
+// ponytail: the cross is two straight marker strokes plus the splat (WPF bends them), the padlock stamp is a glyph not the padlock art mask, the key is the key glyph on gold not
+// the foil sticker, tonight's tag and its bob (Fx.cs) are not ported.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -45,6 +44,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (span is not { } lockSpan)
             {
+                StopCalendarFx();
                 _calendarKey = null;
                 _calendarCells.Clear();
                 CalendarRaffleKey.IsVisible = false;
@@ -54,6 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
             var key = (lockSpan.Start.Date, lockSpan.End.Date, today.Date);
             if (_calendarKey == key && CalendarRow.IsVisible) { RefreshCalendarRaffle(); return; }   // a tick that changes nothing redraws nothing
+            StopCalendarFx();
             _calendarKey = key;
             Calendar.Children.Clear();
             _calendarCells.Clear();
@@ -67,6 +68,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
             RefreshCalendarRaffle();
             CalendarRow.IsVisible = true;
+            RefreshCalendarLoops();
+            StartCalendarDraw();
         }
 
         // Re-dot in place: a new card must not redraw crosses or replace the sheet's cells.
@@ -126,7 +129,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
             else if (day.Today)
             {
-                plate.Children.Add(new Ellipse { Width = CellSize - 8, Height = CellSize - 10, Stroke = CalMarker, StrokeThickness = 2.4, Opacity = 0.9 });
+                plate.Children.Add(new Ellipse { Width = CellSize - 8, Height = CellSize - 10, Stroke = CalMarker, StrokeThickness = 2.4, Opacity = 0.9, Tag = "tonight-ring", RenderTransform = new ScaleTransform(), RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative) });
                 tip = Loc.Get("chaster_chain_tonight");
             }
             else

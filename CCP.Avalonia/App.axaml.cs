@@ -20,6 +20,9 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The settings service, or null on the headless render path.</summary>
         public static SettingsService? Settings { get; private set; }
 
+        /// <summary>The daily-free service (WPF App.DailyFree), or null on the headless render path.</summary>
+        internal static DailyFreeService? DailyFree { get; set; }
+
         /// <summary>The haunted-UI layer that rides a running lockdown (WPF App.Possession; Core director,
         /// this head's effects and attribution). Arms only when a lockdown starts with Possession on.</summary>
         public static global::ConditioningControlPanel.Services.Possession.PossessionDirector? Possession { get; internal set; }
@@ -82,17 +85,27 @@ namespace ConditioningControlPanel.Avalonia
         }
 
         /// <summary>The achievement engine (achievements.json), or null on the headless render path.
-        /// Local-only: no sync, no streak writes, no ResetProgress on this head (oracle-achievements.md).</summary>
+        /// Login streak startup is handled by LoginStreakHead.</summary>
         internal static AchievementEngine? Achievements { get; private set; }
         private DispatcherTimer? _achievementSaveTimer;
 
         /// <summary>WPF AchievementService.cs:99-107: periodically save dirty progress off the UI thread.</summary>
-        internal static DispatcherTimer StartAchievementAutosave(AchievementEngine engine)
+        internal static DispatcherTimer StartAchievementAutosave(AchievementEngine engine, Action? checkDay = null)
         {
             var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
-            timer.Tick += (_, _) => _ = engine.SaveIfDirtyAsync();
+            timer.Tick += (_, _) => { checkDay?.Invoke(); _ = engine.SaveIfDirtyAsync(); };
             timer.Start();
             return timer;
+        }
+
+        /// <summary>WPF SeasonRecapService.cs:146 and :159, AchievementService.cs:93: mark today's UTC date
+        /// active and sample the season peak streak, at startup and on each autosave tick (UTC day rollover).
+        /// Saves settings only when something changed.</summary>
+        internal static void NoteSeasonActivity(SettingsService settings, ConditioningControlPanel.Models.AchievementProgress progress, DateTime utcNow)
+        {
+            var s = settings.Current;
+            var added = SeasonActivity.MarkActiveToday(s, utcNow);
+            if (SeasonActivity.TrackStreakPeak(s, progress.ConsecutiveDays) || added) settings.Save();
         }
 
         /// <summary>The automatic cloud settings backup (WPF ProfileSyncService.BackupSettingsAsync, force: false).</summary>
@@ -145,6 +158,11 @@ namespace ConditioningControlPanel.Avalonia
             if (!Services.ProfileAdopt.ApplyCurveEpoch(CoreSettings.Current, epoch)) return;
             CoreSettings.Save();
             Dispatcher.UIThread.Post(() => shell()?.UpdateLevelDisplay());
+        }
+
+        internal static void WireRecoveredProfileRefresh(SyncPush sync, Func<Views.Windows.MainShellWindow?> shell)
+        {
+            sync.RecoveredProgressionChanged = () => Dispatcher.UIThread.Post(() => shell()?.UpdateLevelDisplay());
         }
 
         /// <summary>WPF App.xaml.cs:3126: built always, armed only if asked AND a Discord is linked. The client
@@ -224,7 +242,24 @@ namespace ConditioningControlPanel.Avalonia
             global::ConditioningControlPanel.Services.Companion.ConversationDelivery.QuestsOpenProvider = () => Quests?.HasUnfinishedQuest();
             definitions.QuestDefinitionsUpdated += () => Quests?.CheckAndGenerateQuests();
             // WPF ProgressionService.AddXP:120 feeds every award to the "earn X XP" quests.
-            ProgressionBank.QuestAwarded += (amount, _) => Quests?.TrackXPEarned((int)amount);
+            WireQuestXpAndPay(Achievements);
+            CreditBankedLoginStreak(Quests, Achievements?.Progress, DateTime.Today);
+        }
+
+        internal static void TrackQuestXp(double amount, string source) => Quests?.TrackXPEarned((int)amount);
+
+        internal static void WireQuestXpAndPay(AchievementEngine? engine)
+        {
+            ProgressionBank.QuestAwarded += TrackQuestXp;
+            Platform.LoginStreakHead.QuestXpReady(engine);
+        }
+
+        /// <summary>Credit only a day already banked by the login streak writer. A stale local
+        /// streak may have a gap or a newer cloud value and must not complete a quest yet.</summary>
+        internal static void CreditBankedLoginStreak(QuestService quests, Models.AchievementProgress? progress, DateTime today)
+        {
+            if (progress != null && progress.LastLaunchDate.Date == today.Date && !progress.PendingStreakBreak)
+                quests.TrackStreak(progress.ConsecutiveDays);
         }
 
         /// <summary>WPF App.xaml.cs:414. WPF plays SystemSounds.Exclamation; Linux has no stock
@@ -306,6 +341,7 @@ namespace ConditioningControlPanel.Avalonia
             CoreMods.Attach(Mods);
             Mods.Initialize(CoreSettings.Current.ActiveModId);
             Controls.AmbientFxCanvas.Env.ApplyPalette(Mods);
+            Platform.Win32Window.RegisterDarkTitleBars();
         }
 
         /// <summary>The cclabs catalogue client (WPF App.Catalogue): the same Core client and inputs as WPF's
@@ -366,8 +402,8 @@ namespace ConditioningControlPanel.Avalonia
             ConditioningControlPanel.Services.Companion.ConversationDelivery.AskCardsShown =
                 ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.Instance.CanOfferFor;
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.BrainProvider = () => Brain;
-            ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.ShowCardSurface = card =>
-                Views.AvatarTube.AvatarTubeWindow.Live?.RunOnAvatar(() => Views.AvatarTube.AvatarTubeWindow.Live?.ShowAskCard(card));
+            ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.ShowCardSurface = (card, unprompted) =>
+                Views.AvatarTube.AvatarTubeWindow.Live?.RunOnAvatar(() => Views.AvatarTube.AvatarTubeWindow.Live?.ShowAskCard(card, unprompted));
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.SaySurface = text =>
                 Views.AvatarTube.AvatarTubeWindow.Live?.RunOnAvatar(() => Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(text, aiGenerated: false));
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.BusyProvider = () => CoreSession.IsSessionRunning
@@ -630,6 +666,23 @@ namespace ConditioningControlPanel.Avalonia
             completed?.Invoke(); // WPF App.xaml.cs:4069-4074: initialization has finished successfully.
         }
 
+        private Platform.GazeDriftCorrection? _gazeDrift;
+
+        internal static void RepairLaunchSettings(SettingsService settings)
+        {
+            // WPF App.xaml.cs:380,463,2952,3282: re-clones must see the live AI availability (the one seed).
+            CoreAi.IsAvailableProvider = () => Ai?.IsAvailable == true;
+            var presets = new KeywordTriggerPresetService();
+            try { presets.SyncInstalledCustomSources(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Custom preset source sync failed"); }
+            foreach (var id in settings.PendingPresetReinstalls.ToList())
+            {
+                try { presets.InstallPreset(id, presets.ChasterTimeWasAllowed(id)); }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Pending preset reinstall failed for {Id}", id); }
+            }
+            settings.PendingPresetReinstalls.Clear();
+        }
+
         private async Task StartDesktop(Func<double, string, Task> step)
         {
             await step(0.0, "Starting...");
@@ -644,6 +697,7 @@ namespace ConditioningControlPanel.Avalonia
                 _desktopDispatch = new AvaloniaCoreDispatch(Dispatcher.UIThread);
                 _desktopDispatch.Attach();
                 desktop.Exit += OnDesktopExit;
+                RecoverEngineCrash(() => Views.Windows.EmiDesk.EmiDeskService.Instance.Fire("crashRecovered", null));
                 Platform.EntitlementRefresh.Install();
 
                 // Real settings on this head: SettingsService now lives in Core and reads and
@@ -666,6 +720,7 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.BrowserVideoSurface.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
+                Platform.WallpaperHead.Initialize();
                 // WPF App.xaml.cs:2928: launch only sweeps retention on disk (creates nothing, arms no timer);
                 // the ledger starts when awareness turns on. No observer feeds it on this head yet.
                 InstallPrivacyLedger(new ConditioningControlPanel.Services.Awareness.ActivityLedger());
@@ -678,6 +733,8 @@ namespace ConditioningControlPanel.Avalonia
                         Settings.Save();
                 }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "Session settings heal failed (non-fatal)"); }
+                try { InstallDateRecorder.EnsureRecorded(Settings, CorePaths.UserData, AppDomain.CurrentDomain.BaseDirectory); }
+                catch (Exception ex) { Serilog.Log.Debug(ex, "Install date recording failed"); }
                 // WPF App.xaml.cs:2571-2577: the installer's Content Folder pick (Windows), then the custom
                 // folder's subdirs (#391), before anything resolves the assets folder.
                 Platform.InstallerAssetsPath.Apply(Settings);
@@ -729,13 +786,14 @@ namespace ConditioningControlPanel.Avalonia
                 // scheduler's tick arrives on a thread-pool thread. Everything after the hop -
                 // including the phrase draw - therefore runs on the UI thread, which is what keeps
                 // the scheduler's rotation state single-threaded.
-                CoreLockCard.ShowHandler = isTest => global::Avalonia.Threading.Dispatcher.UIThread.Post(
-                    () => Views.Windows.LockCardWindow.ShowNext(isTest));
+                CoreLockCard.ShowHandler = Views.Windows.LockCardWindow.PostNext;
+                CoreLockCard.CloseAllHandler = Views.Windows.LockCardWindow.ForceCloseAll;   // callers are on the UI thread (RemoteRelay marshals)
 
                 // Pop quiz: Core schedules, PopQuizHost opens the window (WPF App.PopQuiz).
                 CoreEngine.PopQuiz = Views.Windows.PopQuizHost.Instance.Scheduler;
                 // Mandatory video: Core schedules, the overlay plays (WPF App.Video).
                 CoreEngine.Video = Views.Overlays.MandatoryVideoOverlay.Instance.Scheduler;
+                CoreEngine.Video.DeferTrigger = Views.Windows.LockCardWindow.DeferVideo;
                 CoreEngine.BubbleCount = Views.Windows.BubbleCountHost.Instance.Scheduler;
 
                 await step(0.4, "Initializing flash service...");
@@ -797,6 +855,7 @@ namespace ConditioningControlPanel.Avalonia
                 var dailyFree = new DailyFreeService(
                     fetchOverride: string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
                 PostCodeInputsChanged = dailyFree.NotifyInputsChanged;
+                DailyFree = dailyFree;
                 _ = dailyFree.RefreshAsync();
                 CoreEntitlement.IsFreeTodayProvider = dailyFree.IsFreeToday;
                 CoreEntitlement.DailyFreeKeyProvider = () => dailyFree.TodayKey;
@@ -834,12 +893,18 @@ namespace ConditioningControlPanel.Avalonia
                     // WPF MainWindow.JustDrop.cs:66: the Just Drop door flag, 9 s after startup.
                     Views.Windows.MainShellWindow.JustDropAvailabilityCheck = Services.JustDrop.JustDropService.RefreshAvailabilityAsync;
                 }
+                // A restored profile can pay a web claim during startup, before later splash steps.
+                Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
+                _achievementSaveTimer?.Stop();
+                _achievementSaveTimer = StartAchievementAutosave(Achievements);
+                SeedAchievementXp(Achievements);
                 if (Platform.AccountSeed.Seed())
                 {
                     // Unit 7c, with the logout clear: the push, XP banking and its two triggers (WPF
                     // MainWindow OnLevelUp -> sync, ProfileSyncService.AttachXpNudge outside sessions).
                     var sync = Platform.AccountSeed.Sync = Platform.AccountSeed.NewSync(
                         () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true);
+                    WireRecoveredProfileRefresh(sync, () => desktop.MainWindow as Views.Windows.MainShellWindow);
                     // WPF ProfileSyncService: the heartbeat body is also a server tier reading (#4073).
                     sync.HeartbeatBody = body => Dispatcher.UIThread.Post(() =>
                         Platform.AccountSeed.ApplyTierReading(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat"));
@@ -871,6 +936,10 @@ namespace ConditioningControlPanel.Avalonia
                         await Platform.WelcomeBackOffer.TryOfferAsync("startup");
                     });
                 }
+                // WPF App.xaml.cs:2303: moderation is seeded BEFORE the AI services; RepairLaunchSettings
+                // makes the AI provider live (the one seed), so moderation goes first.
+                SeedModeration();
+                RepairLaunchSettings(Settings);
                 // After the version seed: installing / loading a mod checks its MinAppVersion.
                 StartMods();
                 // Once the active mod is known (its overrides key the entries): decode the art the last
@@ -996,6 +1065,7 @@ namespace ConditioningControlPanel.Avalonia
                 // Start, which fails with a message; revoke keeps all four of the consent dialog's promises.
                 CoreWebcam.IsAvailableProvider = () => true;
                 CoreWebcam.RevokeConsentAction = Platform.WebcamTracker.RevokeConsent;
+                _gazeDrift = new Platform.GazeDriftCorrection(Platform.WebcamTracker.Instance, Settings.Current);
                 // The plain engine (Start/Stop) is CoreEngine; the one SessionRunner seeds
                 // IsSessionRunningProvider, so the feature lock fires for a session, not a plain Start.
                 CoreSession.IsEngineRunningProvider = () => CoreEngine.IsRunning;
@@ -1015,8 +1085,6 @@ namespace ConditioningControlPanel.Avalonia
                 if (CoreEngine.Video is { } recapVideo)
                     recapVideo.VideoStarted += () => MediaHistory?.RecordVideo(recapVideo.LastVideoPath);
                 //
-                SeedModeration();
-                CoreAi.IsAvailableProvider = () => Ai?.IsAvailable == true;   // WPF App.xaml.cs:380
                 await step(0.85, "Initializing companion...");
                 // WPF App.xaml.cs:2690: built unconditionally, UseCompanionBrain decides per send. The bark
                 // echo is attached by Platform.BarkHead.Start below; command executor and
@@ -1046,9 +1114,18 @@ namespace ConditioningControlPanel.Avalonia
                 // Achievements: the Core engine over the same achievements.json WPF uses, seeded the
                 // way WPF App.xaml.cs:384/:394 seeds the two unlock seams. Unlocked is raised on the
                 // caller's thread; the popup hops to the UI thread as WPF's DispatcherHelper does.
-                Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
+                // The engine itself is created before AccountSeed.Seed (restack b08, #4544).
+                Platform.LoginStreakHead.Start(Achievements, CoreSettings.Current);
+                var seasonEngine = Achievements;
+                void CheckSeasonActivity()
+                {
+                    if (!ReferenceEquals(Achievements, seasonEngine) || Settings is not { } live) return;
+                    try { NoteSeasonActivity(live, seasonEngine.Progress, DateTime.UtcNow); }
+                    catch (Exception exSeason) { Serilog.Log.Warning(exSeason, "Season activity write failed"); }
+                }
+                CheckSeasonActivity();
                 _achievementSaveTimer?.Stop();
-                _achievementSaveTimer = StartAchievementAutosave(Achievements);
+                _achievementSaveTimer = StartAchievementAutosave(Achievements, CheckSeasonActivity);
                 WireAchievementUnlocks(Achievements);
                 SeedCompanionRecall();
                 WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
@@ -1306,14 +1383,23 @@ namespace ConditioningControlPanel.Avalonia
             Views.Overlays.BouncingTextOverlay.Stop();
             Views.Overlays.ChaosFlashOverlay.CloseActive();
             Views.Overlays.CornerGifOverlay.StopAll();
-            Views.Overlays.SpiralOverlay.Stop();       // WPF StopEngine -> App.Overlay.Stop(); panic and exit too; drops the voice hold
+            Views.Overlays.BubbleOverlay.Stop();   // ambient trigger payloads stop with it (BubblePayloadHost)
+            Views.Overlays.SpiralOverlay.Stop();
+            if (final) Views.Overlays.SpiralOverlay.CloseAll();
             Views.Overlays.PinkFilterOverlay.Stop();   // WPF MainWindow.StartStop.cs:527 Overlay.Stop
         }
 
         /// <summary>WPF App.OnAchievementUnlocked (App.xaml.cs:3815): one popup per unlock, shown at once.
         /// ponytail: no sound, no Discord webhook - neither service exists on this head.</summary>
-        /// <summary>WPF ProgressionService.cs:285 (a level-up celebrates) and App.xaml.cs:3174 (retroactive,
-        /// silent). Returns the LevelUp handler so a test can detach it.</summary>
+        // WPF ProgressionService.cs:104,162: achievements count settled XP from awards and claims.
+        internal static Action<ProgressionBank.XpAward> SeedAchievementXp(AchievementEngine engine)
+        {
+            Action<ProgressionBank.XpAward> onXp = award => engine.TrackXPEarned(award.Amount);
+            ProgressionBank.XPAwarded += onXp;
+            return onXp;
+        }
+
+        /// <summary>WPF ProgressionService.cs:285 and App.xaml.cs:3174. Returns the handler for tests.</summary>
         internal static Action<int> SeedLevelAchievements(AchievementEngine engine)
         {
             Action<int> onLevel = engine.CheckLevelAchievements;
@@ -1482,10 +1568,23 @@ namespace ConditioningControlPanel.Avalonia
             Platform.ToneWav.DeleteFiles();
         }
 
+        /// <summary>Launch: consume a sentinel the last session left (the shell's OnEngineStarted marks it,
+        /// OnEngineStopped clears it, WPF MainWindow.StartStop.cs:426,582) and, only when one was found,
+        /// let EMI say so (WPF App.xaml.cs:2424,2856 "crashRecovered").</summary>
+        internal static void RecoverEngineCrash(Action? fire = null)
+        {
+            if (Services.EngineCrashSentinel.ConsumeAndReport(Serilog.Log.Logger) && fire != null)
+                try { fire(); } catch (Exception ex) { Serilog.Log.Debug(ex, "EMI crash recovery failed"); }
+        }
+
+        internal static void ClearEngineCrashOnExit() => Services.EngineCrashSentinel.Clear();
+
         private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
         {
             if (Interlocked.Exchange(ref _exitHandled, 1) != 0) return;
             _exiting = true;
+            Platform.LoginStreakHead.ClearProfile();
+            ClearEngineCrashOnExit();
 
             // WPF App.OnExit:5965: haptics FIRST and synchronously (bounded ~2 s). A Lovense level has no
             // server-side watchdog, so a toy not countermanded here keeps running after the app is gone.
@@ -1510,6 +1609,7 @@ namespace ConditioningControlPanel.Avalonia
             try { MantraChant.Dispose(); } catch { } // WPF App.xaml.cs:6529
             try { Platform.LibVlcAudio.Instance?.Shutdown(); } catch { }
             try { Platform.LayeredAudio.Instance?.Shutdown(); } catch { }
+            try { Platform.WallpaperHead.Service?.ShutdownAsync().Wait(TimeSpan.FromSeconds(3)); } catch { }
             try { ReleaseContent?.Dispose(); } catch { }
             try { Platform.ChasterHead.Service?.Dispose(); } catch { }
 
@@ -1552,6 +1652,7 @@ namespace ConditioningControlPanel.Avalonia
             // WPF CleanupTempPackFiles (FlashService.cs:4322, VideoService.cs:8508, BubbleCountService.cs:83):
             // a clean exit leaves no decrypted pack file (a crash's leftovers go at the next startup sweep).
             try { ContentPackStore.Current?.CleanupTempFiles(); } catch { }
+            try { _gazeDrift?.Dispose(); } catch { }
             try { Platform.WebcamTracker.Instance.Stop(); } catch { /* WPF App.OnExit:6185 Webcam.Dispose */ }
             try { Platform.Win32PanicKey.Stop(); } catch { /* WPF GlobalKeyboardHook.Dispose; no-op off Windows */ }
 

@@ -47,8 +47,9 @@ Tabs in order: `rain-clothes rain-hair kart chess profile desk prime backroom`.
 
 `POST /v2/shop/buy { idem, itemId, catalogVersion, week }` -> receipt `{ ok, idem, itemId, paidSp, spBefore, sp,
 catalogVersion, prizes }` or HTTP 200 `{ ok:false, reason }`, reasons: `bad_input idem_mismatch catalog_changed
-stock_changed not_in_stock unavailable owned needs_prime insufficient busy`. `stock_changed` and `catalog_changed`
-carry a fresh state. One idem per confirm card; a retry reuses it.
+stock_changed not_in_stock unavailable owned needs_prime discord_required insufficient busy`. `stock_changed` and `catalog_changed`
+carry a fresh state. `needs` is `prime` or `discord`; a `discord` row (High Roller, no Discord on the record) and a
+`discord_required` refusal show the Back Room counter's "Link Discord first", with no Buy. One idem per confirm card; a retry reuses it.
 
 ## Host seam
 

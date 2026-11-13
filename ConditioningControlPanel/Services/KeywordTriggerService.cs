@@ -45,6 +45,27 @@ namespace ConditioningControlPanel.Services
         // Session awareness callback
         private Func<bool>? _isSessionActive;
 
+        // ccp-bugs #1533: a paused session pauses detection too. Derived on every input, never
+        // latched, so a resume (or a session ending while paused) needs no matching call.
+        private Func<bool>? _isSessionPaused;
+
+        /// <summary>
+        /// The one listen gate for every input (keys, OCR, external text). Pure for tests.
+        /// </summary>
+        internal static bool ShouldListen(bool active, bool disposed, bool sessionPaused)
+            => active && !disposed && !sessionPaused;
+
+        private bool IsListening
+        {
+            get
+            {
+                bool paused;
+                try { paused = _isSessionPaused?.Invoke() == true; }
+                catch { paused = false; }
+                return ShouldListen(_isActive, _disposed, paused);
+            }
+        }
+
         /// <summary>
         /// True when the last OCR scan found keyword matches awaiting a quick confirmation scan.
         /// ScreenOcrService checks this after each scan to decide whether to re-scan immediately.
@@ -208,12 +229,20 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
+        /// Set a callback that says whether the running session is paused (#1533).
+        /// </summary>
+        public void SetSessionPausedCallback(Func<bool> callback)
+        {
+            _isSessionPaused = callback;
+        }
+
+        /// <summary>
         /// Called from the keyboard hook on every key press.
         /// Translates vkCode → character, appends to buffer, checks for matches.
         /// </summary>
         public void OnKeyPressed(Key key, int vkCode)
         {
-            if (!_isActive || _disposed) return;
+            if (!IsListening) return;
             var settings = App.Settings?.Current;
             if (settings == null || !settings.KeywordTriggersEnabled || !HasAccess()) return;
             if (!IsForegroundAppAllowed("Keyboard")) { _input.Clear(); return; }
@@ -713,7 +742,7 @@ namespace ConditioningControlPanel.Services
         {
             NeedsOcrConfirmation = false;
 
-            if (!_isActive || _disposed) return;
+            if (!IsListening) return;
             // Live entitlement re-check (see OnKeyPressed). Placed ahead of the scan diagnostic
             // below on purpose: once access has lapsed, the user's screen contents are none of our
             // business - not even at log level.
@@ -949,7 +978,7 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public void CheckTextForMatches(string text)
         {
-            if (!_isActive || _disposed) return;
+            if (!IsListening) return;
             if (string.IsNullOrEmpty(text)) return;
             // Live entitlement re-check (see OnKeyPressed).
             if (!HasAccess()) return;

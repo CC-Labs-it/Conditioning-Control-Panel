@@ -79,6 +79,11 @@ namespace ConditioningControlPanel.Views.Tabs
             if (Window.GetWindow(this) is MainWindow mw)
                 mw.ChkAwarenessMaster_Changed(sender, e);
         }
+        private void ChkAwarenessStartOnLaunch_Changed(object sender, RoutedEventArgs e)
+        {
+            if (Window.GetWindow(this) is MainWindow mw)
+                mw.ChkAwarenessStartOnLaunch_Changed(sender, e);
+        }
         private void ChkAwarenessOcr_Changed(object sender, RoutedEventArgs e)
         {
             if (Window.GetWindow(this) is MainWindow mw)

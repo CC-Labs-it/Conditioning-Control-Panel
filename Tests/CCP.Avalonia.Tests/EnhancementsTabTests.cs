@@ -46,6 +46,42 @@ public sealed class EnhancementsTabTests
     private static IconKind[] Kinds(Control c) => c.GetLogicalDescendants().OfType<IconGlyph>().Select(g => g.Kind).ToArray();
 
     [Fact]
+    public Task TreeAndSecretCardUseEnglishModVocabulary() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldProvider = CoreMods.MakeModAwareProvider;
+        var language = LocalizationManager.Instance.CurrentLanguage;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        try
+        {
+            LocalizationManager.Instance.SetLanguage("fr");
+            var skill = SkillDefinition.All.Single(x => x.Id == "night_shift");
+            CoreMods.MakeModAwareProvider = text => text == skill.Name ? "Mod name" :
+                text == skill.FlavorText ? "Mod flavor" : text == skill.Description ? "Mod description" : text;
+            var tab = new EnhancementsTabView();
+            var node = tab.Node(skill);
+            var card = tab.SecretSkillCard(skill);
+            Assert.Contains("Mod name", Texts(node));
+            Assert.Contains("Mod name", Texts(card));
+            foreach (var control in new[] { node, card })
+            {
+                var tip = Assert.IsType<Border>(ToolTip.GetTip(control));
+                Assert.Contains("Mod flavor", Texts(tip));
+                Assert.Contains("Mod description", Texts(tip));
+            }
+        }
+        finally
+        {
+            CoreSettings.ServiceProvider = oldSettings;
+            CoreMods.MakeModAwareProvider = oldProvider;
+            LocalizationManager.Instance.SetLanguage(language);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task TreeDrawsWpfStatesHeaderAndSecretRailAndBreathesOnlyOnScreen() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         using var culture = new CultureScope();   // the "1.10x" bonus label is display text in the user's culture

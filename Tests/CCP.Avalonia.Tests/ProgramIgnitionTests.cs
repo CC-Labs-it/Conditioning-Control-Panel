@@ -33,6 +33,34 @@ namespace CCP.Avalonia.Tests;
 public sealed class ProgramIgnitionTests
 {
     [Fact]
+    public void RunEntranceStaggersAndMotionOffSettles() => WithRun(lastDay: false, (shell, tab, svc, _) =>
+    {
+        var header = tab.FindControl<Border>("RunHeaderPanel")!;
+        var today = tab.FindControl<Border>("TodayPanel")!;
+        var rail = (ScaleTransform)tab.FindControl<Border>("RailProgressFill")!.RenderTransform!;
+        tab.IsVisible = false;
+        tab.IsVisible = true;
+        Assert.Equal(0, header.Opacity);
+        Assert.Equal(0, today.Opacity);
+        Assert.Equal(0, rail.ScaleX);
+        Step(.12);
+        Assert.True(header.Opacity > today.Opacity);
+        Assert.Equal(0, rail.ScaleX);
+        Step(.6);
+        Assert.Equal(1, header.Opacity);
+        Assert.Equal(1, today.Opacity);
+        Assert.Equal(1, rail.ScaleX);
+        Assert.Equal(0, ((TranslateTransform)today.RenderTransform!).Y);
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        tab.IsVisible = false;
+        tab.IsVisible = true;
+        Assert.Equal(1, header.Opacity);
+        Assert.Equal(1, today.Opacity);
+        Assert.Equal(1, rail.ScaleX);
+    });
+
+    [Fact]
     public void PanicStopsQueuedAndLiveProgramFxUntilReentryOrNewRun() => WithRun(lastDay: true, (shell, tab, svc, _) =>
     {
         Assert.True(tab.IgnitionLoopsRunning);
@@ -219,6 +247,27 @@ public sealed class ProgramIgnitionTests
         tab.IsVisible = false;
         Assert.DoesNotContain(BeatLoop.Running, loop => loop.Owner == glow);
         Assert.Equal(.65, glow.Opacity, 3);
+    });
+
+    [Fact]
+    public void SyncIgnitionTwiceKeepsTodayPipBreathPhase() => WithRun(lastDay: true, (shell, tab, _, _) =>
+    {
+        var glow = global::Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(tab)
+            .OfType<Ellipse>().Single(e => e.Name == "PipGlow" && e.DataContext is ProgramDayPip { IsCurrent: true });
+        Step(.6);
+        Assert.Equal(.65, glow.Opacity, 3);
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Dispatcher.UIThread.RunJobs();
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(.65, glow.Opacity, 3);
+        shell.WindowState = WindowState.Maximized;
+        Dispatcher.UIThread.RunJobs();
+        shell.WindowState = WindowState.Normal;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(.65, glow.Opacity, 3);
+        Step(.6);
+        Assert.Equal(.95, glow.Opacity, 3);
     });
 
     [Theory]

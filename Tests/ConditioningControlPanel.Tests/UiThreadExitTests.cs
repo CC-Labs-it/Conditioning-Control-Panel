@@ -42,6 +42,8 @@ public sealed class UiThreadExitTests
         Assert.False(UiThreadExit.IsRenderFailure(null));
         Assert.False(UiThreadExit.IsRenderFailure(new InvalidOperationException("Collection was modified")));
         Assert.False(UiThreadExit.IsRenderFailure(new IndexOutOfRangeException()));
+        // A message that merely says RENDER is not the composition channel failing (#4445 review).
+        Assert.False(UiThreadExit.IsRenderFailure(new InvalidOperationException("Cannot RENDER the preview while it loads")));
     }
 
     [Fact]

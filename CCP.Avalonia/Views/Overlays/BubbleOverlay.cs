@@ -35,7 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para>Chaos runs share the field: ChaosRunHost spawns treat bubbles here (BeginChaos/
     /// SpawnChaos/EndChaos) and gets their pops; they draw tinted and pay no ambient XP.</para>
     ///
-    /// <para>ponytail: ambient trigger bubbles, Bubbles v2 motions (Rain/Spiral In),
+    /// <para>ponytail: Bubbles v2 motions (Rain/Spiral In),
     /// Brain Drain, Natasha's red bubble, the avatar egg, lucky gold glow/sparkles
     /// and the milestone popup remain unported.
     /// Gaze pops, pop haptics, mod pop audio and achievement credit are wired.
@@ -48,6 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             LuckyProc = multiplier => FlashOverlay.LuckyProc(App.Mods?.GetLuckyBubbleLabel()
                 ?? ConditioningControlPanel.Localization.Loc.Get("skill_lucky_bubble"), multiplier),
         };
+        internal static readonly AmbientPayloadRunner Payloads = new();
         private static readonly List<BubbleOverlayWindow> Windows = new();
         private static readonly List<Screen> Targets = new();
         private static DispatcherTimer? _spawnTimer;
@@ -136,6 +137,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         public static void Stop()
         {
+            BubblePayloadHost.Stop();
             // WPF Stop returns early when the ambient game is idle, so a chaos-only teardown keeps presence.
             var wasRunning = IsRunning;
             if (_chaosPopped != null && _running)
@@ -143,7 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 // The ambient game stops mid-run: its bubbles go, the run keeps the windows.
                 _spawnTimer?.Stop();
                 _spawnTimer = null;
-                Field.Bubbles.RemoveAll(b => b.Spec == null);
+                Field.Bubbles.RemoveAll(b => b.Spec == null || b.AmbientTrigger);
                 _chaosOpenedWindows = true;
                 foreach (var w in Windows) w.Sync();
                 if (wasRunning) App.DiscordRpc?.SetIdleActivity();   // WPF BubbleService.cs:853
@@ -178,14 +180,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // Outside sessions, bubbles are always clickable (no UI toggle exists for the setting).
             var clickable = !CoreSession.IsSessionRunning || s.BubblesClickable;
             var mod = (CoreMods.ActiveModTokenProvider?.Invoke() as ModManifest)?.BubbleScale;
-            // WPF AmbientBubbleMotion.RollForSpawn: picker + grants + motion level -> one concrete style.
-            var level = global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level; // WPF MotionFx.Level, capped by OS and Gentle Visuals
-            var motion = BubbleMotionRoll.Resolve(s.BubbleMotionStyle,
-                PrizeOwnership.IsGranted(PrizeOwnership.BubbleRain),
-                PrizeOwnership.IsGranted(PrizeOwnership.BubbleSpiralIn),
-                level, Field.Random.NextDouble());
-            Field.Bubbles.Add(AmbientBubble.Spawn(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, s, mod, clickable, level, motion));
+            Field.Bubbles.Add(CreateAmbient(i, a, Windows[i].Scaling, s, mod, clickable));
             RequestFrame();
+        }
+
+        // WPF BubbleService.cs:1230-1265: ambient triggers share the field and its reward path.
+        internal static AmbientBubble CreateAmbient(int screen, PixelRect a, double scaling,
+            AppSettings settings, double? mod, bool clickable, Random? random = null)
+        {
+            var rng = random ?? Field.Random;
+            var spec = AmbientBubblePayloads.Roll(settings, rng,
+                Field.Bubbles.Count(b => b.AmbientTrigger || b.Spec is { IsLive: false }));
+            AmbientBubble b;
+            if (spec == null)
+            {
+                // WPF AmbientBubbleMotion.RollForSpawn: picker + grants + motion level -> one concrete style.
+                var level = global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level; // WPF MotionFx.Level, capped by OS and Gentle Visuals
+                var motion = BubbleMotionRoll.Resolve(settings.BubbleMotionStyle,
+                    PrizeOwnership.IsGranted(PrizeOwnership.BubbleRain),
+                    PrizeOwnership.IsGranted(PrizeOwnership.BubbleSpiralIn),
+                    level, rng.NextDouble());
+                b = AmbientBubble.Spawn(rng, screen, a.X, a.Y, a.Width, a.Height, scaling, settings, mod, clickable, level, motion);
+            }
+            else
+                b = AmbientBubble.SpawnChaos(rng, screen, a.X, a.Y, a.Width, a.Height, scaling, spec, spec.Motion, settings.BubbleSpeedBoost);
+            b.AmbientTrigger = spec != null;
+            b.Clickable = clickable;
+            return b;
         }
 
         /// <summary>WPF StartAnimationDriver/StopAnimationTimerIfIdle: one chain, parked while empty.</summary>
@@ -293,7 +314,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Live (not popping) chaos bubbles: WPF ActiveBubbles during a run.</summary>
         internal static int ChaosCount
         {
-            get { var n = 0; foreach (var b in Field.Bubbles) if (b.Spec != null && !b.Popping) n++; return n; }
+            get { var n = 0; foreach (var b in Field.Bubbles) if (b.Spec != null && !b.AmbientTrigger && !b.Popping) n++; return n; }
         }
 
         /// <summary>WPF BeginChaosMode: chaos pops go to <paramref name="onPop"/>; opens the windows
@@ -326,6 +347,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             RequestFrame();
         }
 
+        /// <summary>WPF PopAllBubbles at a wave boundary, retaining the chaos callbacks.</summary>
+        internal static void ClearChaos()
+        {
+            Field.Held = false;
+            Field.Bubbles.Clear();
+            foreach (var w in Windows) w.Sync();
+        }
+
         /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>
         internal static void EndChaos()
         {
@@ -336,23 +365,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _chaosCanChannel = null;
             Field.ChaosDefused = Field.ChaosDetonated = null;
             Field.Held = false;
-            Field.Bubbles.RemoveAll(b => b.Spec != null);
+            Field.Bubbles.RemoveAll(b => b.Spec != null && !b.AmbientTrigger);
             if (_chaosOpenedWindows) { Stop(); return; }
             foreach (var w in Windows) w.Sync();
         }
 
-        /// <summary>WPF SpawnChaosBubble, FloatUp only. Without an overlay window (headless, or a
+        /// <summary>WPF SpawnChaosBubble, FloatUp and RainDown. Without an overlay window (headless, or a
         /// platform that refuses click-through) the bubble lives on a 1920x1080 model screen.</summary>
-        internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec)
+        internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec, Random? random = null,
+            Services.Chaos.ChaosMotion motion = Services.Chaos.ChaosMotion.FloatUp)
         {
             AmbientBubble b;
             if (Targets.Count == 0)
-                b = AmbientBubble.SpawnChaos(Field.Random, 0, 0, 0, 1920, 1080, 1, spec);
+                b = AmbientBubble.SpawnChaos((random ?? Field.Random), 0, 0, 0, 1920, 1080, 1, spec, motion);
             else
             {
-                var i = Field.Random.Next(Targets.Count);
+                var i = (random ?? Field.Random).Next(Targets.Count);
+                if (spec.SpawnAtPxX is double x && spec.SpawnAtPxY is double y)
+                {
+                    for (var n = 0; n < Targets.Count; n++)
+                    {
+                        var bounds = Targets[n].Bounds;
+                        if (x >= bounds.X && x < bounds.Right && y >= bounds.Y && y < bounds.Bottom)
+                        { i = n; break; }
+                    }
+                }
                 var a = Targets[i].WorkingArea;
-                b = AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec);
+                b = AmbientBubble.SpawnChaos((random ?? Field.Random), i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec, motion);
             }
             Field.Bubbles.Add(b);
             RequestFrame();
@@ -431,10 +470,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void Pop(AmbientBubble b)
         {
             if (b.Popping) return;   // WPF BubbleService.cs:4647 rejects an already popping bubble.
-            if (b.Spec != null) { PopChaos(b); return; }
+            if (b.Spec != null && !b.AmbientTrigger) { PopChaos(b); return; }
             var s = CoreSettings.Current;
             var paid = Field.Pop(b, s);
             if (paid > 0) CoreProgression.AddXP(paid, "Bubble");
+            if (b.AmbientTrigger && b.Spec?.Payload is { } payload) BubblePayloadHost.Run(payload);
             XpBudgetChanged?.Invoke();
             App.NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureBubbles);   // WPF OnBubblePopped
             var master = s.MasterVolume / 100f;

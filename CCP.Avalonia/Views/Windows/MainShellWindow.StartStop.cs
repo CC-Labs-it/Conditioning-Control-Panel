@@ -115,6 +115,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF MainWindow.StartStop.cs:365-367: Audio Only forces the existing layered bed.</summary>
         internal void OnEngineStarted()
         {
+            var settings = CoreSettings.Current;
+            Services.EngineCrashSentinel.Mark(
+                $"started {System.DateTime.Now:yyyy-MM-dd HH:mm:ss} | flash {settings.FlashFrequency}/min x{settings.SimultaneousImages}" +
+                $" | bubbles {(settings.BubblesEnabled ? "on" : "off")} | video {(settings.MandatoryVideosEnabled ? "on" : "off")}" +
+                $" | subliminal {(settings.SubliminalEnabled ? "on" : "off")}");
             if (CoreSettings.Current.AudioOnlySession) Platform.LayeredAudio.Instance?.Start(ignoreMasterToggle: true);
         }
 
@@ -130,6 +135,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary><see cref="CoreEngine.StoppedHook"/>: the head half of StopEngineCore.</summary>
         internal void OnEngineStopped()
         {
+            Named<Views.Tabs.SettingsTabView>("SettingsTab")?.StopBrowserEnhancement();
+            Services.EngineCrashSentinel.Clear();
             Platform.ProgramEngineBridge.RaiseSessionChanged();   // any session end repaints the Programs row
             // WPF StartStop.cs:480-482: Stop stops everything (owner, 7.1.8): the audio player with a playlist
             // goes quiet with the engine. The list stays. StartEngine never touches the player.
@@ -146,6 +153,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             App.StopDesktopOverlays(final: false);
             PopQuizHost.Instance.CloseAll();   // first: drops a queued quiz before cards close; WPF StartStop.cs:521
             LockCardWindow.ForceCloseAll();
+            QuizWindow.ForceCloseAll();
+            DescentFuseWindow.ForceCloseAll();
+            Deeper.EnhancementPlayerWindow.ForceExitFullscreenAll();
             PinkFilterOverlay.Refresh(this);
             UpdateStartButton();
             StopEngineRamp();

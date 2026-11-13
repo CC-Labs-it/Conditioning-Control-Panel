@@ -35,6 +35,7 @@
     <Compile Include="..\ConditioningControlPanel.Tests\ChasterLinkTests.cs" Link="ChasterLinkTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\InviteClaimNoticeTests.cs" Link="InviteClaimNoticeTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\SourceRoots.cs" Link="SourceRoots.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\WpfBootstrapWait.cs" Link="WpfBootstrapWait.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\LockdownDoseRecoverySharingTests.cs" Link="LockdownDoseRecoverySharingTests.cs" />
   </ItemGroup>
 

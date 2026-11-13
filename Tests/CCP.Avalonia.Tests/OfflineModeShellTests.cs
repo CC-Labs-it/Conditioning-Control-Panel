@@ -52,6 +52,32 @@ public sealed class OfflineModeShellTests
         finally { System.IO.Directory.Delete(dir, true); }
     }
 
+    /// <summary>WPF main e22a0cef83: Settings · Data ▸ Danger zone shows Delete account only while signed in.</summary>
+    [Fact]
+    public void TheDeleteAccountRowShowsOnlyWhileSignedIn() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var old = s.UnifiedId;
+        var data = new DataSettingsSection();
+        var host = new Window { Content = data };
+        try
+        {
+            s.UnifiedId = null;
+            host.Show();
+            var row = data.FindControl<StackPanel>("RowDeleteAccount")!;
+            Assert.False(row.IsVisible);
+            s.UnifiedId = "u_abc";
+            data.SyncFromSettings();
+            Assert.True(row.IsVisible);
+            Assert.NotNull(data.FindControl<Button>("BtnDeleteAccount"));
+        }
+        finally { host.Close(); s.UnifiedId = old; }
+    });
+
     [Fact]
     public async Task TickingOfflineStopsTheHeartbeatAndGreysTheOnlineControls_UntickingRestoresThem()
     {

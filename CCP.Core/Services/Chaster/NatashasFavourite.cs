@@ -44,6 +44,19 @@ public static class NatashasFavourite
 
     public static bool Roll(Random rng) => rng.Next(OneIn) == 0;
 
+    /// <summary>ccp-bugs #1566: how much likelier a trigger bubble is to wear red than a plain
+    /// one. 1 = the same one in ten; 5 = five in ten. Plain bubbles always keep one in ten.</summary>
+    public const int TriggerWeightMin = 1, TriggerWeightMax = 10;
+
+    public static int ClampTriggerWeight(int weight) => Math.Clamp(weight, TriggerWeightMin, TriggerWeightMax);
+
+    /// <summary>Chance in <see cref="OneIn"/> for one bubble: plain = 1, trigger = the weight.</summary>
+    public static int ChanceInTen(bool triggerBubble, int triggerWeight)
+        => triggerBubble ? ClampTriggerWeight(triggerWeight) : 1;
+
+    public static bool Roll(Random rng, bool triggerBubble, int triggerWeight)
+        => rng.Next(OneIn) < ChanceInTen(triggerBubble, triggerWeight);
+
     // ============================== pop, hold, let go ==============================
     // Tier-2 feedback (2026-09-29): red "feels like RNG, I didn't do anything to deserve that".
     // So the red bubble is a choice now. A quick click pops it (+5:00, as before). Press and HOLD

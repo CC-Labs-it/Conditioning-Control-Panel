@@ -10,11 +10,8 @@
        Image + EmojiToImageSource (x5)     -> plain TextBlock (Avalonia draws colour emoji natively)
        Line X1/X2/Y1/Y2                    -> StartPoint / EndPoint
        wv2:WebView2 x:Name="BrowserPreview"-> controls:WebHost - Microsoft.Web.WebView2 is Windows-only
-       vlc:VideoView x:Name="VideoPreview" -> controls:WebHost as well. A local clip is navigated to
-                                              and the engine wraps it in its own <video> media
-                                              document, so the two branches share one surface; the
-                                              Border named VideoPreview is now only the no-engine /
-                                              not-a-video fallback
+       vlc:VideoView x:Name="VideoPreview" -> Image LocalVideoImage fed by the LibVLC frame sink. The
+                                              Border named VideoPreview is only the fallback stub.
        ContextMenu x:Shared="False"        -> inlined as <Canvas.ContextMenu> and, for the hero
                                               "+ Effect" button, a <MenuFlyout>. Avalonia has no
                                               x:Shared and no FindResource-a-menu; item names and
@@ -42,6 +39,7 @@
         MinHeight="672" MinWidth="980"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource DarkerBgBrush}"
+        KeyDown="TimelineZoom_KeyDown"
         DragDrop.AllowDrop="True">
 
     <Window.Resources>
@@ -311,16 +309,6 @@
                 <Border Grid.Row="0" Background="{DynamicResource DeeperPreviewSurfaceBgBrush}" Margin="10,10,10,5"
                         CornerRadius="8">
                     <Grid x:Name="PreviewHost">
-                        <!-- Was <vlc:VideoView x:Name="VideoPreview"/>. LibVLCSharp is NOT what
-                             blocks local video any more: since wire/78 a local clip plays through
-                             BrowserPreview below, which the engine wraps in its own <video> media
-                             document. This Border is now the FALLBACK surface for the two cases
-                             that have no picture - a machine with no web engine, and a source whose
-                             extension is not video - and InitializeVideo writes the reason into the
-                             TextBlock for whichever it is. The literal here is only what shows if
-                             the Border is ever made visible by some other path; it is a plain
-                             literal and not {loc:Str} precisely so that assignment is not the
-                             "local value under a live binding" trap. -->
                         <Border x:Name="VideoPreview" IsVisible="False"
                                 Background="{DynamicResource DeeperWaveformBgBrush}">
                             <TextBlock x:Name="TxtVideoPreviewStub"
@@ -332,7 +320,10 @@
 
                         <!-- Remote http(s):// preview (HypnoTube etc). WebHost draws its own
                              fallback panel wherever no web engine is installed. -->
-                        <controls:WebHost x:Name="BrowserPreview" IsVisible="False"/>
+                        <controls:WebHost x:Name="BrowserPreview" IsVisible="False"
+                                          NavigationCompleted="PreviewZoom_NavigationCompleted"
+                                          WebMessage="PreviewZoom_WebMessage"/>
+                        <Image x:Name="LocalVideoImage" IsVisible="False" Stretch="Uniform"/>
 
                         <Canvas x:Name="WaveformCanvas" IsVisible="False" Background="{DynamicResource DeeperWaveformBgBrush}">
                             <Path x:Name="WaveformPath" Stroke="{DynamicResource DeeperAccentBrush}"

@@ -23,7 +23,7 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed partial class AccountSeedTests
 {
-    private static readonly string[] Allowed = { "unified_id", "xp", "level", "descent_epoch", "descent_auto", "achievements", "total_conditioning_minutes" };
+    private static readonly string[] Allowed = { "unified_id", "xp", "level", "descent_epoch", "descent_auto", "achievements", "total_conditioning_minutes", "reset_daily_quest", "reset_weekly_quest" };
 
     /// <summary>Records every request with its body; profile GET answers <see cref="Profile"/> (500 when null).</summary>
     private sealed class SyncWire : HttpMessageHandler
@@ -140,8 +140,10 @@ public sealed partial class AccountSeedTests
         var body = Assert.Single(wire.Syncs);
         Assert.All(body.Properties(), p => Assert.Contains(p.Name, Allowed));
         foreach (var k in new[] { "stats", "allow_discord_dm", "public_share_avatar", "web_xp_claim_ack", "install_date",
-                     "reset_weekly_quest", "reset_daily_quest", "force_streak_override", "force_skills_reset", "cosmetics" })
+                     "force_streak_override", "force_skills_reset", "cosmetics" })
             Assert.Null(body[k]);
+        Assert.False(body.Value<bool>("reset_daily_quest"));
+        Assert.False(body.Value<bool>("reset_weekly_quest"));
         Assert.Equal(CoreSettings.Current.TotalConditioningMinutes, body.Value<double>("total_conditioning_minutes"));
         Assert.Equal("u1", (string?)body["unified_id"]);
         Assert.True((int)body["xp"]! >= L40Xp, $"xp {body["xp"]} < {L40Xp}");

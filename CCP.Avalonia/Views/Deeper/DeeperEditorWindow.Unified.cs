@@ -62,6 +62,49 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 [EffectTypes.Speak]      = "#FF8A5C",
             };
 
+        private void TimelineZoom_KeyDown(object? sender, KeyEventArgs e)
+        {
+            if (IsZoomResetKey(e.Key, e.KeyModifiers))
+            {
+                SetZoom(1.0);
+                e.Handled = true;
+            }
+        }
+
+        // WPF xaml.cs:5088. Pure: the preview's native key signal calls it on the engine's input thread.
+        internal static bool IsZoomResetKey(Key key, KeyModifiers mods) =>
+            (mods & KeyModifiers.Control) != 0 && (key == Key.D0 || key == Key.NumPad0);
+
+        // Keys pressed in the preview, in any frame, never bubble to Avalonia: the engine's own input
+        // signal takes them (WebHost.NativeKeyFilter), as WPF routes preview keys at xaml.cs:5006.
+        private void HookPreviewZoomKeys()
+        {
+            BrowserPreview.NativeKeyFilter = IsZoomResetKey;
+            BrowserPreview.NativeKeyDown += (_, _) => SetZoom(1.0);
+        }
+
+        // Fallback where the engine has no key signal (WPE): a top-level page listener after each
+        // navigation, as in EnhancementPlayerWindow.Fullscreen.cs. It cannot see cross-origin frames.
+        internal const string PreviewZoomScript = @"(function(){
+    if(window.__ccpEditorZoomBound)return;window.__ccpEditorZoomBound=true;
+    window.addEventListener('keydown',function(e){
+        if(!e.ctrlKey||(e.code!=='Digit0'&&e.code!=='Numpad0'))return;
+        var w=window.chrome&&window.chrome.webview;
+        if(w&&w.postMessage)w.postMessage('ccp_editor_zoom_fit');
+        else if(window.invokeCSharpAction)window.invokeCSharpAction('ccp_editor_zoom_fit');
+        else return;
+        e.preventDefault();e.stopImmediatePropagation();
+    },true);
+})();";
+
+        private void PreviewZoom_NavigationCompleted(Uri uri) =>
+            _ = BrowserPreview.InvokeScriptAsync(PreviewZoomScript);
+
+        private void PreviewZoom_WebMessage(string message)
+        {
+            if (message.Trim().Trim('"') == "ccp_editor_zoom_fit") SetZoom(1.0);
+        }
+
         // -- Right-click context menu --------------------------------------------
 
         /// <summary>

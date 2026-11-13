@@ -191,27 +191,55 @@ namespace ConditioningControlPanel.Services
                 using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers"))
                     if (key?.GetValue("BackgroundType") is int bt) type = bt;   // 0 picture, 1 solid colour, 2 slideshow
 
-                if (type == 1)
+                string? path;
+                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop"))
+                    path = key?.GetValue("WallPaper") as string;
+
+                var target = RepaintTarget(type, path, File.Exists, WallpaperService.IsTranscodedCachePath);
+                if (target != null)
                 {
-                    App.Wallpaper?.QueueDesktopRepaint("");
+                    App.Wallpaper?.QueueDesktopRepaint(target);
                     return;
                 }
-                if (type == 0)
-                {
-                    string? path;
-                    using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop"))
-                        path = key?.GetValue("WallPaper") as string;
-                    if (!string.IsNullOrEmpty(path) && File.Exists(path))
-                    {
-                        App.Wallpaper?.QueueDesktopRepaint(path);
-                        return;
-                    }
-                }
-                var progman = FindWindow("Progman", null);
-                if (progman != IntPtr.Zero)
-                    RedrawWindow(progman, IntPtr.Zero, IntPtr.Zero, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+
+                int redrawn = RedrawDesktopWindows();
+                App.Logger?.Information("[DynamicWallpaper] Desktop redraw only (BackgroundType {Type}, wallpaper {Kind}): {N} window(s)",
+                    type, WallpaperService.IsTranscodedCachePath(path) ? "Windows' cache" : string.IsNullOrEmpty(path) ? "none" : "a file", redrawn);
             }
             catch (Exception ex) { Diag.Swallowed(ex, "dynamic desktop refresh"); }
+        }
+
+        /// <summary>What the stop repaint re-sets, pure: "" clears to the solid colour, a path re-sets that
+        /// picture, null only redraws. Never Windows' own TranscodedWallpaper: re-setting that file from itself
+        /// is the white desktop of ccp-bugs #1584, and a picture set from Photos or a browser reads type 0
+        /// with exactly that path.</summary>
+        internal static string? RepaintTarget(int backgroundType, string? registryPath,
+            Func<string, bool> exists, Func<string?, bool> isTranscodedCache)
+        {
+            if (backgroundType == 1) return "";
+            if (backgroundType == 0 && !string.IsNullOrEmpty(registryPath) && !isTranscodedCache(registryPath)
+                && exists(registryPath))
+                return registryPath;
+            return null;
+        }
+
+        /// <summary>Redraw Progman and every top-level WorkerW. On a classic (Windows 10) desktop the WorkerW
+        /// that Dynamic drew into is its own top-level window, not a child of Progman, so redrawing Progman
+        /// alone left it blank until the slideshow's next picture (#1584).</summary>
+        private static int RedrawDesktopWindows()
+        {
+            const uint flags = RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW;
+            int n = 0;
+            var progman = FindWindow("Progman", null);
+            if (progman != IntPtr.Zero && RedrawWindow(progman, IntPtr.Zero, IntPtr.Zero, flags)) n++;
+            EnumWindows((hwnd, _) =>
+            {
+                var name = new System.Text.StringBuilder(16);
+                GetClassName(hwnd, name, name.Capacity);
+                if (name.ToString() == "WorkerW" && RedrawWindow(hwnd, IntPtr.Zero, IntPtr.Zero, flags)) n++;
+                return true;
+            }, IntPtr.Zero);
+            return n;
         }
 
         // ================================================================ types

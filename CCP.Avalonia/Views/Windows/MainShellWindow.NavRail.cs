@@ -127,8 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF ApplyDoorArt (:825): points the medallions at the active mod's art. The paths
         /// (nav/door_*.png) are the mod compatibility surface. A null resolve leaves the authored
         /// Source alone. Social's XAML placeholder (the Lobby picture under a shade) gives way to the
-        /// shipped or modded nav/door_social.png, and the shade goes with it. ponytail: WPF's
-        /// per-mod embedded twins (nav/mods/&lt;mod-id&gt;/, polish wave 11) are lane wire-shell-nav-rail-b-next.</summary>
+        /// shipped or modded nav/door_social.png, and the shade goes with it.</summary>
         internal void ApplyDoorArt()
         {
             try
@@ -139,6 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     if (img == null) continue;
                     var art = Helpers.ModArt.TryLoad($"nav/door_{key}.png", NavDoorArtDecodeWidth);
                     if (art != null) img.Source = art;
+                    else if (key == "social") img.Source = Helpers.ModArt.TryLoadBuiltIn("skills/hive_mind.png", NavDoorArtDecodeWidth);
                     if (key == "social" && Named<Border>("ShadeDoorSocial") is { } shade) shade.IsVisible = art == null;
                 }
                 var glow = AmbientFxCanvas.Env.GlowColor;

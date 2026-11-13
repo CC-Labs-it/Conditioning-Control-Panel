@@ -15,7 +15,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF HostCompanionPrivacy (Loaded / IsVisibleChanged there; ShowTab("awareness") here).</summary>
         internal void HostCompanionPrivacy(CompanionRoomView? room)
         {
-            if (_companionPrivacyHosted || room?.FindControl<AwarenessPrivacyView>("AwarenessZone") is not { } privacy) return;
+            if (!global::ConditioningControlPanel.Services.Companion.CompanionExperience.IsV2Enabled || _companionPrivacyHosted || room?.FindControl<AwarenessPrivacyView>("AwarenessZone") is not { } privacy) return;
             CompanionPageHost.Adopt(privacy, this.FindControl<ContentControl>("CompanionPrivacyHost")!);
             if (room.FindControl<WorkshopAccordion>("WorkshopZone")?.DataContext is WorkshopRuntimeVm workshop)
                 CompanionPageHost.Adopt(workshop.Parts.Awareness, this.FindControl<ContentControl>("CompanionTuningHost")!);

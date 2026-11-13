@@ -2,6 +2,10 @@ using System;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Net.Http;
+using Avalonia.Threading;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services.Startup;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using Serilog;
 
@@ -15,6 +19,7 @@ internal static class AccountSeed
     internal static ProviderSubscription? Patreon { get; private set; }
     internal static ProviderSubscription? SubscribeStar { get; private set; }
     internal static DiscordAccount? Discord { get; private set; }
+    internal static Func<MainShellWindow?> RecoveryShell = () => MainShellWindow.Current;
 
     /// <summary>True when the last <see cref="Seed"/> granted the local sandbox whitelist (see
     /// <see cref="SandboxWhitelistRequested"/>). Always false in a Release build.</summary>
@@ -76,6 +81,8 @@ internal static class AccountSeed
             ? NewV2().ChangeDisplayNameAsync(id, name) : null;
         CoreAccount.DeleteAccountProvider = () => CoreSettings.Current.UnifiedId is { Length: > 0 } id
             ? NewV2().DeleteAccountAsync(id) : null;
+        // WPF App.xaml.cs:416-419: contract D's swap seams, one owner (MergedAccountRecoveryHead).
+        MergedAccountRecoveryHead.Seed();
         // WPF ProfileSyncService.HandleUnauthorizedAsync (StartHeartbeat on success) / TryProviderRevalidateAsync.
         AuthRecovery.Recovered = () => { if (Sync is { Loaded: true } sync) sync.StartHeartbeat(); };
         AuthRecovery.ProviderRevalidate = async () =>
@@ -92,14 +99,17 @@ internal static class AccountSeed
         return true;
     }
 
+    /// <summary>WPF App.ReauthenticateAfterMergedSwapAsync: mint a fresh token from an existing provider.</summary>
+    internal static Task<bool> ReauthenticateAfterMergedSwapAsync() => MergedAccountRecoveryHead.ReauthenticateAsync();
+
     /// <summary>WPF App.xaml.cs:2267 restore: the unified id persisted from the previous session. Unlike WPF,
     /// only when something can still prove it (an auth token, or a signed-in provider): with no Secret Service
-    /// the token is gone after a restart, and showing "signed in" with nothing behind it is worse than signed out.</summary>
+    /// the token is gone after a restart, so the identity is not restored except for a pending merged swap.</summary>
     internal static void RestoreSession()
     {
         var id = CoreSettings.Current.UnifiedId;
         if (string.IsNullOrEmpty(id)) return;
-        if (string.IsNullOrEmpty(CoreSettings.Current.AuthToken)
+        if (!CoreSettings.Current.MergedSignInPending && string.IsNullOrEmpty(CoreSettings.Current.AuthToken)
             && Patreon?.IsAuthenticated != true && Discord?.IsAuthenticated != true && SubscribeStar?.IsAuthenticated != true)
         {
             Log.Information("Stored UnifiedUserId not restored: no auth token and no signed-in provider");
@@ -117,14 +127,17 @@ internal static class AccountSeed
     {
         var id = CoreAccount.UnifiedUserId;
         if (string.IsNullOrEmpty(id) || CoreSettings.Current.OfflineMode) return;
+        // A pending merge: a provider mints the token (WPF App.xaml.cs:4690,4757); when none can, restore-session does (WPF :4805).
+        var unproven = CoreSettings.Current.MergedSignInPending && !await MergedAccountRecoveryHead.ReauthenticateAsync();
         v2 ??= NewV2();
         // If a provider already authenticated, it validated the session (and owns the load in WPF).
-        if (Patreon?.IsAuthenticated != true && Discord?.IsAuthenticated != true)
+        if (unproven || (Patreon?.IsAuthenticated != true && Discord?.IsAuthenticated != true))
         {
             Log.Information("Validating restored session for {Id}...", id);
             var outcome = await v2.ValidateRestoredSessionAsync(id);
-            if (outcome == V2AuthService.RestoreOutcome.Cleared) CoreAccount.UnifiedUserId = null;
+            if (outcome == V2AuthService.RestoreOutcome.Cleared) { CoreAccount.UnifiedUserId = null; CoreSettings.Current.MergedSignInPending = false; CoreSettings.Save(); }
             if (outcome != V2AuthService.RestoreOutcome.Validated) return;
+            if (unproven && !string.IsNullOrEmpty(CoreSettings.Current.AuthToken)) { CoreSettings.Current.MergedSignInPending = false; CoreSettings.Save(); }
         }
         await LoadProfileAsync(v2);
     }
@@ -154,12 +167,67 @@ internal static class AccountSeed
         }
     }
 
+    // WPF MainWindow.Login.cs:155-187. The failed-read fallback has its own guards.
+    internal static async Task PostLoginAsync(Func<Task<bool>>? load = null, AchievementEngine? achievements = null)
+    {
+        var uid = CoreSettings.Current.UnifiedId;
+        Sync?.StartHeartbeat();
+        await Task.Delay(500);
+        if (CoreSettings.Current.UnifiedId != uid || string.IsNullOrEmpty(uid)) return;
+        achievements ??= App.Achievements;
+        if (achievements != null) achievements.SuppressPopups = true;
+        try
+        {
+            load ??= () => LoadProfileAsync();
+            var loaded = await load();
+            if (!loaded && CoreSettings.Current.UnifiedId == uid)
+                loaded = await load();
+            // WPF Login.cs:170-181 calls sync even after a failed read.
+            if (CoreSettings.Current.UnifiedId == uid && Sync is { } sync)
+            {
+                if (loaded || sync.Loaded) await sync.PushAsync("after login");
+                else
+                {
+                    var session = sync.SessionVersion;
+                    await sync.PushAfterFailedReadAsync();
+                    _ = RetryProfileReadAsync(sync, uid, session);
+                }
+            }
+        }
+        finally
+        {
+            if (achievements != null) achievements.SuppressPopups = false;
+        }
+    }
+
+    private static async Task RetryProfileReadAsync(SyncPush sync, string uid, int session)
+    {
+        var settings = CoreSettings.Current;
+        var delay = 1;
+        while (ReferenceEquals(Sync, sync) && sync.SessionVersion == session && !sync.Loaded
+            && ReferenceEquals(CoreSettings.Current, settings) && settings.UnifiedId == uid && !settings.OfflineMode)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(delay));
+            if (!ReferenceEquals(Sync, sync) || sync.SessionVersion != session || sync.Loaded
+                || !ReferenceEquals(CoreSettings.Current, settings) || settings.UnifiedId != uid || settings.OfflineMode) return;
+            if (await LoadProfileAsync())
+            {
+                if (ReferenceEquals(Sync, sync) && sync.SessionVersion == session && settings.UnifiedId == uid)
+                    sync.Nudge("after profile recovery");
+                return;
+            }
+            delay = Math.Min(delay * 2, 60);
+        }
+    }
+
     /// <summary>The sync configuration used by desktop startup and account tests.</summary>
     internal static SyncPush NewSync(Func<IEnumerable<string>?> unlocked, Func<bool> running, HttpMessageHandler? http = null)
         => new(unlocked, running, http, Views.Windows.MainShellWindow.SanitizeOwnWardrobe)
         {
             // A minutes lift rebaselines the day log once, through ProfileAdopt.ConditioningMinutesLifted
             // (RebaselineDayLogAfterCloudMerge), for the profile read and the sync reply alike.
+            ResetDailyQuest = () => App.Quests?.ForceRegenerateDailyQuest(),
+            ResetWeeklyQuest = () => App.Quests?.ForceRegenerateWeeklyQuest(),
             Prizes = PrizeOwnership.Feed,
             Countdown = App.DescentCountdown,
             DescentReader = App.Descent,
@@ -322,18 +390,24 @@ internal static class AccountSeed
     {
         var s = CoreSettings.Current;
         var id = s.UnifiedId;
+        var syncAtRead = Sync;
+        var session = syncAtRead?.SessionVersion;
         if (s.OfflineMode || string.IsNullOrEmpty(id)) return false;
         PrizeOwnership.Feed.NoteAccount(id);
+        var streakGeneration = LoginStreakHead.ProfileGeneration;
         var user = await v2.GetUserProfileAsync(id);
         if (user == null)
         {
             Log.Warning("Profile load: server profile could not be read for {Id}", id);
             return false;
         }
-        // The request may finish after logout or an account/settings switch.
-        if (!ReferenceEquals(s, CoreSettings.Current) || s.UnifiedId != id || s.OfflineMode) return false;
+        // The request may finish after logout or an account/settings switch (or a streak profile clear).
+        if (!ReferenceEquals(s, CoreSettings.Current) || s.UnifiedId != id || s.OfflineMode
+            || streakGeneration != LoginStreakHead.ProfileGeneration
+            || !ReferenceEquals(Sync, syncAtRead) || syncAtRead?.SessionVersion != session) return false;
         // WPF ProfileSyncService: the profile read seeds ownership before the garage opens (#3854).
         PrizeOwnership.Feed.Apply(id, user.UnifiedId, user.Prizes, "V2 profile");
+        LoginStreakHead.ProfileLoaded(id, user.Stats);
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);
         ApplyTierReading(EntitlementTierRule.ParseTier(user.EffectiveTierRaw), "profile");
         // WPF ProfileSyncService read-before-write: the Patreon confirmation keeps a Discord sign-in's grace alive.
@@ -382,6 +456,7 @@ internal static class AccountSeed
         Discord?.Logout();
         SubscribeStar?.Logout();
         CoreAccount.UnifiedUserId = null;
+        CoreSettings.Current.MergedSignInPending = false;
         var s = CoreSettings.Current;
         s.UnifiedId = null;
         s.AuthToken = null;
@@ -391,6 +466,7 @@ internal static class AccountSeed
         ProgressionClear.Apply(s, clearMigration: true);
         if (accountDeleted) App.Quests?.ResetProgress();
         CoreSettings.Save();
+        LoginStreakHead.ClearProfile();
         App.Achievements?.Reset();
         // SyncPush.Reset clears its Prizes feed (seeded with PrizeOwnership.Feed); unseeded, clear it here.
         if (Sync is { } push) push.Reset();

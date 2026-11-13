@@ -38,5 +38,14 @@ namespace ConditioningControlPanel
         {
             try { ShowHandler?.Invoke(isTest); } catch { }
         }
+
+        /// <summary>Close every card now (WPF LockCardWindow.ForceCloseAll). The head's own close also
+        /// drops a card it posted but has not shown yet.</summary>
+        public static volatile Action? CloseAllHandler;
+
+        public static void CloseAll()
+        {
+            try { CloseAllHandler?.Invoke(); } catch { }
+        }
     }
 }

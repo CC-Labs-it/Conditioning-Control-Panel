@@ -301,4 +301,39 @@ public sealed class MergedSwapRunTests : IDisposable
         Assert.Null(_settings.AuthToken);
         Assert.False(reauthed);
     }
+    private sealed class MergedRelayHandler : System.Net.Http.HttpMessageHandler
+    {
+        protected override Task<System.Net.Http.HttpResponseMessage> SendAsync(System.Net.Http.HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.Conflict)
+            { Content = new System.Net.Http.StringContent("{\"error\":\"merged\",\"canonical_unified_id\":\"u_canon123\"}") });
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Relay_response_can_drive_the_existing_account_swap(bool reauth)
+    {
+        var oldHook = RemoteRelay.MergedRecovery;
+        var finished = 0;
+        RemoteRelay.MergedRecovery = response => MergedAccountRecovery.TryHandleAsync(response);
+        MergedAccountRecovery.Reauthenticate = () =>
+        {
+            if (reauth) _settings.AuthToken = "canonical-token";
+            return Task.FromResult(reauth);
+        };
+        MergedAccountRecovery.Finished = (_, ok) => { Assert.Equal(reauth, ok); finished++; };
+        try
+        {
+            using var relay = new RemoteRelay(() => _settings.AuthToken, () => _settings.UnifiedId,
+                "1", (_, _) => null, _ => { }, new MergedRelayHandler()) { AutoPoll = false };
+            Assert.Null(await relay.StartAsync("light"));
+            await MergedAccountRecovery.LastSwap;
+            Assert.Equal(1, finished);
+            Assert.Equal("u_canon123", CoreAccount.UnifiedUserId);
+            Assert.Equal("u_canon123", _settings.UnifiedId);
+            Assert.Equal(reauth ? "canonical-token" : null, _settings.AuthToken);
+        }
+        finally { RemoteRelay.MergedRecovery = oldHook; }
+    }
+
 }

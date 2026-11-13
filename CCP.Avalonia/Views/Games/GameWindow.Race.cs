@@ -12,6 +12,7 @@ using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Prizes;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.Race;
@@ -111,7 +112,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     });
                     return true;
                 case "run-started":
-                    if (_raceRun.TryStart()) Log.Information("RaceHost: run started (seed={Seed})", (string?)o["seed"]);
+                    if (_raceRun.TryStart())
+                    {
+                        SeasonFeatureTracking.Track(CoreSettings.Current, ConditioningControlPanel.Models.SeasonFeatureKeys.Race, ev => App.FeatureDayLog?.Note(ev), DateTime.UtcNow);
+                        Log.Information("RaceHost: run started (seed={Seed})", (string?)o["seed"]);
+                    }
                     return true;
                 case "run-ended":
                     OnRaceRunEnded(o);

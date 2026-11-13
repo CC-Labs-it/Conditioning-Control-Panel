@@ -30,6 +30,23 @@ public class ChasterTabCopyTests
     private static JObject Lang(string lang) =>
         JObject.Parse(File.ReadAllText(Path.Combine(SourceRoots.LanguagesDirectory, lang + ".json")));
 
+    /// <summary>The line under a big row (2026-11-05): both sentences in every language, the day
+    /// sentence with the mark its limit goes in.</summary>
+    [Fact]
+    public void Every_language_warns_about_a_big_row_and_names_the_day_limit()
+    {
+        foreach (var lang in Languages)
+        {
+            var json = Lang(lang);
+            var big = (string?)json["chaster_price_warn_big"];
+            var day = (string?)json["chaster_price_warn_day"];
+            Assert.False(string.IsNullOrEmpty(big), $"{lang}: no big-row line");
+            Assert.False(string.IsNullOrEmpty(day), $"{lang}: no day-limit line");
+            Assert.Contains("{0}", day!);
+            Assert.DoesNotContain("!", big + day);
+        }
+    }
+
     [Fact]
     public void Every_fixed_figure_row_says_its_figure_through_the_mark_in_every_language()
     {

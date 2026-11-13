@@ -20,7 +20,9 @@ namespace ConditioningControlPanel.Services
         private static string PathFor(string seasonKey) =>
             Path.Combine(SnapshotDir, $"{seasonKey}.json");
 
-        public static void Save(SeasonRecapSnapshot snapshot)
+        public static void Save(SeasonRecapSnapshot snapshot) => TrySave(snapshot);
+
+        public static bool TrySave(SeasonRecapSnapshot snapshot)
         {
             try
             {
@@ -28,10 +30,12 @@ namespace ConditioningControlPanel.Services
                 var json = JsonConvert.SerializeObject(snapshot, Formatting.Indented);
                 File.WriteAllText(PathFor(snapshot.SeasonKey), json);
                 Log.Information("SeasonRecap: saved snapshot for {Season}", snapshot.SeasonKey);
+                return true;
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "SeasonRecap: failed to save snapshot for {Season}", snapshot.SeasonKey);
+                return false;
             }
         }
 

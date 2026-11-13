@@ -581,6 +581,32 @@
                             </Grid>
                         </Border>
                     </Grid>
+                    <!-- Racing Thoughts Classic (2026-11-05): the 2D race, free for everyone, so no
+                         lock band and no tier badge. -->
+                    <Grid x:Name="SlotRacingThoughtsClassic" x:FieldModifier="internal">
+                        <Border Style="{StaticResource PlayCard}">
+                            <Grid>
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <Border Grid.Row="0" Style="{StaticResource PlayCardArtPlate}">
+                                        <Border CornerRadius="16,16,0,0"><Border.Background><ImageBrush ImageSource="pack://application:,,,/Resources/features/race_classic.png" Stretch="UniformToFill"/></Border.Background></Border>
+                                    </Border>
+                                    <TextBlock Grid.Row="1" Text="{loc:Str launcher_game_raceclassic_title}" Style="{StaticResource PlayCardTitle}" Margin="0,0,0,6"/>
+                                    <TextBlock Grid.Row="2" Text="{loc:Str launcher_game_raceclassic_blurb}" Style="{StaticResource PlayCardBlurb}" Margin="0,0,0,14"/>
+                                    <Button Grid.Row="3" x:Name="BtnPlayRacingThoughtsClassic" x:FieldModifier="internal" Content="{loc:Str launcher_play}" Cursor="Hand" HorizontalAlignment="Left" Padding="16,8"
+                                            Background="{DynamicResource AccentGradientBrush}" Foreground="White" BorderThickness="0" FontWeight="Bold" FontSize="13"
+                                            Click="BtnPlayRacingThoughtsClassic_Click">
+                                        <Button.Resources><Style TargetType="Border"><Setter Property="CornerRadius" Value="10"/></Style></Button.Resources>
+                                    </Button>
+                                </Grid>
+                            </Grid>
+                        </Border>
+                    </Grid>
                     <Grid x:Name="SlotWebApp" x:FieldModifier="internal">
                         <Border Style="{StaticResource PlayCard}">
                             <Grid>

@@ -93,6 +93,17 @@
                                     VerticalAlignment="Center" Margin="0,0,14,0"
                                     Click="BtnAwarenessTutorial_Click"
                                     ToolTip="{loc:Str awareness_tutorial_tooltip}"/>
+                            <!-- ccp-bugs #1562: re-arm the master switch at launch, like the
+                                 companion's resume. A stored preference only; it starts nothing now. -->
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,14,0"
+                                        Background="Transparent" ToolTip="{loc:Str tooltip_awareness_start_on_launch}">
+                                <TextBlock Text="{loc:Str label_awareness_start_on_launch}" FontSize="11.5"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <CheckBox x:Name="ChkAwarenessStartOnLaunch" x:FieldModifier="internal"
+                                          Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                          Checked="ChkAwarenessStartOnLaunch_Changed" Unchecked="ChkAwarenessStartOnLaunch_Changed"/>
+                            </StackPanel>
                             <Ellipse x:Name="AwarenessStatusDot" x:FieldModifier="internal" Width="8" Height="8"
                                      Fill="#606060" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBlock x:Name="TxtAwarenessStatus" x:FieldModifier="internal" Text="Off"
@@ -101,7 +112,7 @@
                             <Border CornerRadius="99" Background="#8C131320" VerticalAlignment="Center"
                                     BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1"
                                     Padding="12,5,12,5">
-                                <CheckBox x:Name="ChkAwarenessMaster" x:FieldModifier="internal" feat:SessionLock.Owned="True"
+                                <CheckBox x:Name="ChkAwarenessMaster" x:FieldModifier="internal"
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkAwarenessMaster_Changed" Unchecked="ChkAwarenessMaster_Changed">
                                     <CheckBox.ToolTip>

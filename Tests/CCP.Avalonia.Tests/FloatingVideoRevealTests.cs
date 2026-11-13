@@ -130,7 +130,15 @@ public class FloatingVideoRevealTests
                 Assert.True(window.IsVisible);
                 Assert.True(overlay.Scheduler.IsPlaying);
                 Assert.True(overlay.OnScreen);
+                // WPF main 642a040e9e (#1594 #1595): a floating clip hears Escape only when Escape is the panic key.
+                var s = ConditioningControlPanel.CoreSettings.Current;
+                var panic = (s.PanicKeyEnabled, s.PanicKey);
+                (s.PanicKeyEnabled, s.PanicKey) = (true, "F12");
+                Assert.False(overlay.WantsGlobalEscape);
+                Assert.False(overlay.TryEscapeFromGlobalKey());
+                (s.PanicKeyEnabled, s.PanicKey) = (true, "Escape");
                 Assert.True(overlay.WantsGlobalEscape);
+                (s.PanicKeyEnabled, s.PanicKey) = panic;
                 Assert.Equal(ConditioningControlPanel.Services.GraceDecision.Pause, overlay.EvaluateGraceRequest(true, double.MaxValue));
                 Assert.True(overlay.Surfaces[0].Buttons.Row.IsVisible);
                 Assert.True(overlay.EffectivePlayerVolume > 0);

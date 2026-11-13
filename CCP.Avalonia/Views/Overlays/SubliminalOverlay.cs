@@ -43,8 +43,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static bool UseSolidHost(bool solidMode, bool stealsFocus, int liveVideoWindows) =>
             solidMode && !stealsFocus && liveVideoWindows == 0;
 
-        internal static bool ShowHosted(PixelRect bounds, string text, double alpha, TimeSpan hold)
+        internal static bool ShowHosted(PixelRect bounds, string text, double alpha, TimeSpan hold,
+            Action<Action, TimeSpan>? schedule = null)
         {
+            schedule ??= (action, delay) => DispatcherTimer.RunOnce(action, delay);
             if (!Hosts.TryGetValue(bounds, out var lease))
             {
                 lease = SharedOverlayHost.Acquire(bounds);
@@ -64,7 +66,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 lease.Canvas.Children.Remove(card);
             };
             RetireHosted.Add(retire);
-            void Step(double value, TimeSpan at) => DispatcherTimer.RunOnce(() =>
+            void Step(double value, TimeSpan at) => schedule(() =>
             {
                 if (!retired) card.Opacity = Math.Clamp(value, 0, 1);
             }, at);
@@ -77,7 +79,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Step(alpha * i / steps, fade * i / steps);
                 Step(alpha * (1 - (double)i / steps), fade + hold + fade * i / steps);
             }
-            DispatcherTimer.RunOnce(() =>
+            schedule(() =>
             {
                 retire();
                 RetireHosted.Remove(retire);
@@ -161,7 +163,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (focus(w)) return;
             global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                if (!w.IsVisible || focus(w) || _warnedFocus) return;
+                if (!w.IsVisible) return;
+                if (focus(w)) { StackOverVideo(w); return; }
+                if (_warnedFocus) return;
                 _warnedFocus = true;
                 Log.Warning("Subliminal: the platform refused the focus request; cards show without focus");
             }, global::Avalonia.Threading.DispatcherPriority.Background);
@@ -185,10 +189,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Platform.BarkHead.Engine?.Raise("SubliminalDisplayed");
                 Displayed?.Invoke();
             }
-            if (!stealsFocus) return;
-            try { ActivateCard(card); }
-            catch (Exception ex) { Log.Debug("Subliminal: focus steal refused: {E}", ex.Message); }
+            if (stealsFocus)
+            {
+                try { ActivateCard(card); }
+                catch (Exception ex) { Log.Debug("Subliminal: focus steal refused: {E}", ex.Message); }
+            }
+            StackOverVideo(card);
         }
+
+        // WPF SubliminalService.cs:1045-1062 (ccp-bugs #1422): directly above the clip, under everything
+        // already above it (lock cards, the Lockdown veil, panic UI).
+        // Separate per-screen windows are already used here, so no compositor routing is needed.
+        internal static Action<Window> StackOverVideo = card =>
+            X11Overlay.SlotAboveVideo(card, MandatoryVideoOverlay.Instance.Windows);
 
         /// <summary>Take every card off screen now (WPF <c>TearDownSurfaces</c> on Stop).</summary>
         public static void CloseAll()
@@ -270,6 +283,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             RequestFrame(this, _ =>
             {
                 if (closed) return;
+                // Mapping on X11 can overtake our separate native connection. Reapply the
+                // video slot after the first frame, while the card is still transparent.
+                SubliminalOverlay.StackOverVideo(this);
                 Ramp(0, alpha, TimeSpan.Zero, fade, () => closed);
                 Ramp(alpha, 0, fade + hold, fade, () => closed);
                 DispatcherTimer.RunOnce(() => { if (!closed) Close(); }, fade + hold + fade + TimeSpan.FromMilliseconds(1));

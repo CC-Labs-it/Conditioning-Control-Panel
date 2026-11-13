@@ -816,7 +816,7 @@
           </TransformGroup>
         </Grid.RenderTransform>
 
-        <features:FeatureCard x:Name="CardMystery" Icon="/Resources/features/mysterybox.png"
+        <features:FeatureCard x:Name="CardMystery" DashboardDepth="True" Icon="/Resources/features/mysterybox.png"
                               Title="FREE TODAY"/>
 
         <!-- The reveal face: today's feature, full-bleed. Art + name are painted by
@@ -904,7 +904,7 @@
       <!-- Row 4: the vault (double-wide) + the two games -->
       <!-- THE VAULT: the Exclusives storefront (Velvet Vault + the premium T2 shelf).
            Double-wide because it is a billboard as much as a door. -->
-      <features:FeatureCard Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" x:Name="CardVault" Icon="/Resources/features/vault.png"
+      <features:FeatureCard Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" x:Name="CardVault" DashboardDepth="True" Icon="/Resources/features/vault.png"
                             Title="The Vault"/>
       <!-- The vault's animated CTA: big, slightly diagonal, breathing. Overlaid on the CELL
            rather than inside FeatureCard so the card control stays generic. IsHitTestVisible
@@ -1323,7 +1323,7 @@
                      CoreWebView2 message handlers, the cookie + user-data-folder setup and the
                      mute/enhance script injection. None of that has a wrapper API yet, so the
                      Source stays unset and the panel is what draws. -->
-                <controls:WebHost x:Name="BrowserWebHost" GateScrolller="False"/>
+                <controls:WebHost x:Name="BrowserWebHost" GateScrolller="False" BlockWhenOffline="True"/>
                 <TextBlock x:Name="BrowserLoadingText"
                            IsVisible="False"
                            Text="{loc:StrBare label_click_to_load_browser}"

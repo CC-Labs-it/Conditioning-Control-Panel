@@ -656,6 +656,11 @@ public sealed class LauncherWindowTests
         Dispatcher.UIThread.RunJobs();
         Assert.False(shell.IsVisible);
         Assert.True(LauncherWindow.Instance!.IsVisible);
+        Assert.True(global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.LauncherHolding);
+        // restack b07 (#4413): a panel shown by a door other than the launcher's own OpenPanel still lets go.
+        LauncherWindow.Instance!.Hide();
+        shell.ShowFromTray();
+        Assert.False(global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.LauncherHolding);
     });
 
     [Fact]

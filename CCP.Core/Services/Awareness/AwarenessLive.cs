@@ -29,6 +29,10 @@ namespace ConditioningControlPanel.Services.Awareness
         private static ContextFrame? _lastFrame;
         private static DateTime? _lastFrameAt;
 
+        /// <summary>Whether the v2 observer is enabled. Unset means legacy.</summary>
+        private static volatile bool _observerEnabled;
+        public static bool ObserverEnabled { get => _observerEnabled; set => _observerEnabled = value; }
+
         /// <summary>The live ledger, set by whoever owns the observer. Null before it is constructed.</summary>
         public static ActivityLedger? Ledger { get; set; }
 

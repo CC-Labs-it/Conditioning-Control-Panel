@@ -450,6 +450,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             else ChaosSfx.PlayBoonReveal(dc.Boon.Rarity == ChaosRarity.Rare);
         }
 
+        internal void CancelDraftAndCountdown()
+        {
+            _onBoonPick = null;
+            HideDraft();
+            _countdownComplete = null;
+            _countdownFinished = true;
+            _countdownTimer?.Stop();
+            _countdownTimer = null;
+            RemoveCountdownSkipHooks();
+        }
+
         private void HideDraft()
         {
             _revealTimer?.Stop();
@@ -1119,6 +1130,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             base.OnClosed(e);
             _closed = true;
+            CancelDraftAndCountdown();
             // The three forever tweens (the boon pulse, the two ken-burns drifts) would otherwise
             // keep the 16ms pump awake on a dead window for the process's life.
             _tweens.Clear();

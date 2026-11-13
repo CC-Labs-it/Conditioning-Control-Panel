@@ -19,9 +19,10 @@ namespace ConditioningControlPanel.Services
     /// <c>POST /v2/user/sync</c> for a head that loaded only <c>GET /v2/user/profile</c> (WPF ProfileSyncService.SyncProfileAsync,
     /// cut to what is known): baseline fields, owned consents, adopted skills/progress, cosmetics and claim ack only.
     /// Achievements = server-loaded ∪ local. Gates, all
-    /// required: signed in, loaded THIS session (<see cref="MarkLoaded"/>; stricter than WPF's defaults-guard), the 30 s
-    /// cooldown and the XP watermark. Also the 120 s heartbeat and the coalesced XP nudge. No periodic push (WPF has none).
-    /// ponytail: no restore-from-backup reconcile, 401 recovery or heartbeat adopt - add with the features that need them.
+    /// required: signed in, loaded THIS session (<see cref="MarkLoaded"/>), the 30 s cooldown and the XP watermark.
+    /// The post-login failed-read fallback alone may send guarded XP and level without opening the loaded gate.
+    /// Also the 120 s heartbeat and the coalesced XP nudge. No periodic push (WPF has none).
+    /// ponytail: no 401 recovery or heartbeat adopt - add with the features that need them.
     /// </summary>
     public sealed class SyncPush
     {
@@ -106,6 +107,8 @@ namespace ConditioningControlPanel.Services
         public bool Adopted => _adopted;
         public const SyncBody.Field AfterAdopt = SyncBody.Field.UnlockedSkills | SyncBody.Field.SkillPoints;
         public Action? LifetimeLifted { get; set; }
+        public Action? ResetDailyQuest { get; set; }
+        public Action? ResetWeeklyQuest { get; set; }
 
         /// <summary>WPF ProfileSyncService.PendingCosmeticsClear: set by an EMPTY Customize save (unequip everything),
         /// cleared once a sync carrying the clear succeeds. In memory, as WPF.</summary>
@@ -137,12 +140,15 @@ namespace ConditioningControlPanel.Services
 
         public PrizesFeed? Prizes { get; set; }
         public bool Loaded { get; private set; }
+        internal int SessionVersion => Volatile.Read(ref _sessionVersion);
         /// <summary>The fuse fed by each successful response's <c>descent_countdown</c> block.</summary>
         public Descent.DescentCountdownService? Countdown { get; set; }
         public Descent.DescentService? DescentReader { get; set; }
         public DateTime? LastSyncTime { get; private set; }
         private int _syncSuccesses;
         internal Func<TimeSpan, Task> PurchaseRetryDelay = Task.Delay;
+        /// <summary>Called when recovery changes the level or XP displayed by the head.</summary>
+        public Action? RecoveredProgressionChanged { get; set; }
 
         /// <param name="localAchievements">This install's unlocked achievement ids.</param>
         /// <param name="inSession">The heartbeat's in_session.</param>
@@ -193,6 +199,7 @@ namespace ConditioningControlPanel.Services
         {
             Known = (achievements == null ? Sent & ~SyncBody.Field.Achievements : Sent)
                     | (cosmetics == null ? SyncBody.Field.None : SyncBody.Field.Cosmetics) | (consent & Privacy)
+                    | SyncBody.Field.ResetDailyQuest | SyncBody.Field.ResetWeeklyQuest
                     | (adopted ? AfterAdopt : SyncBody.Field.None)
                     | (knownProgress & (SyncBody.Field.CompanionProgress | SyncBody.Field.TotalConditioningMinutes))
                     | (adopted && s.PendingSkillsResetAck ? SyncBody.Field.ForceSkillsReset : SyncBody.Field.None)
@@ -242,10 +249,16 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <param name="waitForGate">Logout: wait (bounded) for an in-flight push instead of skipping.</param>
-        public async Task<bool> PushAsync(string reason, bool waitForGate = false)
+        public Task<bool> PushAsync(string reason, bool waitForGate = false) => PushCoreAsync(reason, waitForGate, false);
+
+        // WPF Login.cs:175-181: only the post-login fallback can try without a profile read.
+        internal Task<bool> PushAfterFailedReadAsync() => PushCoreAsync("after login", false, true);
+
+        private async Task<bool> PushCoreAsync(string reason, bool waitForGate, bool allowUnread)
         {
             var s = CoreSettings.Current;
-            if (!Loaded || !SignedIn(s)) { Log.Debug("Profile sync skipped ({Reason}) - not loaded this session or not signed in", reason); return false; }
+            var session = Volatile.Read(ref _sessionVersion);
+            if ((!Loaded && !allowUnread) || !SignedIn(s)) { Log.Debug("Profile sync skipped ({Reason}) - not loaded this session or not signed in", reason); return false; }
             if (!await _gate.WaitAsync(waitForGate ? TimeSpan.FromSeconds(5) : TimeSpan.Zero)) return false;
             try
             {
@@ -255,7 +268,32 @@ namespace ConditioningControlPanel.Services
                     Log.Debug("Profile sync skipped - backing off after {Failures} failure(s)", _backoffFailures);
                     return false;
                 }
+                var settings = CoreSettings.Service;
+                // A failed-read fallback never reconciles (it refuses a restored backup below).
+                if (Loaded && settings?.RestoredFromBackup == true)
+                {
+                    var idBeforeRead = s.UnifiedId!;
+                    var user = await new V2AuthService(() => s, _handler).GetUserProfileAsync(idBeforeRead);
+                    if (user == null || !string.Equals(user.UnifiedId, idBeforeRead, StringComparison.Ordinal) || !Loaded || !SignedIn(s) || !ReferenceEquals(settings, CoreSettings.Service)
+                        || !ReferenceEquals(s, settings.Current) || !string.Equals(idBeforeRead, s.UnifiedId, StringComparison.Ordinal)) return false;
+                    var beforeLevel = s.PlayerLevel;
+                    var beforeXp = s.PlayerXP;
+                    RecoveredProfileReconcile.Apply(s, user, settings.RestoredSeason, UtcNow());
+                    if (s.PlayerLevel != beforeLevel || Math.Abs(s.PlayerXP - beforeXp) >= 0.01)
+                    {
+                        try { RecoveredProgressionChanged?.Invoke(); }
+                        catch (Exception ex) { Log.Warning(ex, "Recovered progression notification failed"); }
+                    }
+                    if (!settings.TrySaveImmediate(suppressCloudBackup: true)) return false;
+                    settings.ClearRestoredFromBackupFlag();
+                }
                 var totalXp = ProfileAdopt.TotalXp(s);
+                var unread = !Loaded;
+                // WPF ProfileSyncService.cs:1473-1479,1513-1518: an unreconciled backup or
+                // default-looking profile cannot be asserted to the server after a failed read.
+                if (unread && (CoreSettings.Service?.RestoredFromBackup == true
+                    || (s.PlayerLevel <= 1 && totalXp < ProfileAdopt.MeaningfulProgressXp)
+                    || Descent.DescentMigrationChoices.IsValid(s.PendingDescentMigrationChoice))) return false;
                 var watermark = Descent.DescentMigrationChoices.IsValid(s.PendingDescentMigrationChoice)
                     ? 0 : ProfileAdopt.ActiveXpWatermark(s);
                 if (watermark > 0 && totalXp < watermark)
@@ -264,12 +302,22 @@ namespace ConditioningControlPanel.Services
                     return false;
                 }
                 var id = s.UnifiedId!;
-                if (!Loaded || !SignedIn(s)) return false;   // a logout between the check above and the gate
+                if ((!Loaded && !allowUnread) || !SignedIn(s) || !ReferenceEquals(s, CoreSettings.Current)
+                    || session != Volatile.Read(ref _sessionVersion)) return false;
                 Prizes?.NoteAccount(id);
                 var server = _serverAchievements;
-                var clearing = _pendingCosmeticsClear;
-                var cosmetics = CosmeticsPayload(s, clearing);
-                var body = SerializeBody(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics, ConsentFields(s), _adopted, _knownProgress);
+                var clearing = !unread && _pendingCosmeticsClear;
+                var cosmetics = unread ? null : CosmeticsPayload(s, clearing);
+                string body;
+                if (unread)
+                {
+                    // Unknown account fields must not be overwritten by local defaults.
+                    var recovery = Body(s, null);
+                    recovery.Known &= SyncBody.Field.UnifiedId | SyncBody.Field.Xp | SyncBody.Field.Level
+                        | SyncBody.Field.DescentEpoch | SyncBody.Field.DescentAuto;
+                    body = JsonConvert.SerializeObject(recovery);
+                }
+                else body = SerializeBody(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics, ConsentFields(s), _adopted, _knownProgress);
                 var tokenUsed = s.AuthToken;
                 HttpRequestMessage NewRequest()
                 {
@@ -297,7 +345,8 @@ namespace ConditioningControlPanel.Services
                 }
                 using var _ = response;
                 // Signed out (or into another account) while this was in flight: the answer is not ours to apply.
-                if (!Loaded || !string.Equals(s.UnifiedId, id, StringComparison.Ordinal))
+                if ((!Loaded && !allowUnread) || !SignedIn(s) || !ReferenceEquals(s, CoreSettings.Current)
+                    || session != Volatile.Read(ref _sessionVersion) || !string.Equals(s.UnifiedId, id, StringComparison.Ordinal))
                 {
                     Log.Information("Profile sync response dropped - the account changed while it was in flight");
                     return false;
@@ -329,7 +378,8 @@ namespace ConditioningControlPanel.Services
                     // WPF ProfileSyncService.cs:1874: ownership precedes other response flags.
                     Prizes?.Apply(id, id, reply["prizes"]?.ToObject<PrizesBlock>(), "V2 sync");
                     if (AdoptFromResponse(s, reply)) _adopted = true;
-                    ClaimWebXp(s, reply);
+                    ClaimWebXp(s, reply, allowUnread, session, id);
+                    ApplyQuestResets(s, id, session, reply);
                     // Then the level/XP adopt (held while a migration is pending) and WPF's migration handshake
                     // (ProfileSyncService.cs:1903-1904): the ack first, the offer second. A taken offer syncs again.
                     if (ApplyReply(s, reply, DescentReader?.Current?.Stage, UtcNow(), PersistMigration))
@@ -353,6 +403,22 @@ namespace ConditioningControlPanel.Services
                 return false;
             }
             finally { _gate.Release(); }
+        }
+
+        // WPF ProfileSyncService.cs:1791-1800. The queued action belongs to the request's
+        // account and session, even if logout or another login happens before UI dispatch.
+        private void ApplyQuestResets(AppSettings s, string account, int session, JObject reply)
+        {
+            bool daily = reply["reset_daily_quest"]?.Type == JTokenType.Boolean && reply.Value<bool>("reset_daily_quest");
+            bool weekly = reply["reset_weekly_quest"]?.Type == JTokenType.Boolean && reply.Value<bool>("reset_weekly_quest");
+            if (!daily && !weekly) return;
+            CoreDispatch.Post(() =>
+            {
+                if (!Loaded || session != Volatile.Read(ref _sessionVersion) || !ReferenceEquals(s, CoreSettings.Current)
+                    || !SignedIn(s) || s.UnifiedId != account) return;
+                if (daily) ResetDailyQuest?.Invoke();
+                if (weekly) ResetWeeklyQuest?.Invoke();
+            });
         }
 
         private static void PersistMigration()
@@ -486,18 +552,18 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF SyncProfileAsync:1970-1985: a new web XP claim is persisted (and saved) BEFORE its XP is added, so a
         /// crash under-pays once instead of paying twice; skipped on level_reset, whose level/XP overwrite would eat it. The
         /// id then goes back as <c>web_xp_claim_ack</c> on every push.</summary>
-        internal void ClaimWebXp(AppSettings s, JObject reply)
+        internal void ClaimWebXp(AppSettings s, JObject reply, bool allowUnread = false, int? responseSession = null, string? responseAccount = null)
         {
             if (reply["web_xp"]?["claim"] is not JObject claim || reply["level_reset"]?.Type == JTokenType.Boolean && reply.Value<bool>("level_reset")) return;
             var id = claim["id"]?.Type == JTokenType.String ? (string?)claim["id"] : null;
             var amount = claim["amount"]?.Type == JTokenType.Integer ? (int)claim["amount"]! : 0;
             if (string.IsNullOrEmpty(id) || amount <= 0 || id == s.LastWebXpClaimId) return;
-            var account = s.UnifiedId;
-            var session = Volatile.Read(ref _sessionVersion);
+            var account = responseAccount ?? s.UnifiedId;
+            var session = responseSession ?? Volatile.Read(ref _sessionVersion);
             CoreDispatch.Post(() =>
             {
                 // WPF ProfileSyncService:1970-1985 pays immediately. Keep its id/save/payment together on UI dispatch.
-                if (!Loaded || session != Volatile.Read(ref _sessionVersion) || !ReferenceEquals(s, CoreSettings.Current)
+                if ((!Loaded && !allowUnread) || session != Volatile.Read(ref _sessionVersion) || !ReferenceEquals(s, CoreSettings.Current)
                     || !SignedIn(s) || s.UnifiedId != account || s.LastWebXpClaimId == id) return;
                 s.LastWebXpClaimId = id;
                 CoreSettings.Save();
@@ -511,12 +577,24 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF NudgeSyncSoon: one coalesced push, 3 s out or just past the cooldown.</summary>
         public void Nudge(string reason)
         {
-            if (!Loaded || Interlocked.Exchange(ref _nudgePending, 1) == 1) return;
+            if (!Loaded) return;
+            var s = CoreSettings.Current;
+            var account = s.UnifiedId;
+            var session = Volatile.Read(ref _sessionVersion);
+            var ticket = unchecked(session + 1);
+            if (Interlocked.Exchange(ref _nudgePending, ticket) == ticket) return;
+            var now = UtcNow();
             var wait = NudgeSettle;
-            if (LastSyncTime is { } last && UtcNow() - last < Cooldown) wait = Cooldown - (UtcNow() - last) + NudgeCooldownSlack;
+            if (LastSyncTime is { } last && now - last < Cooldown)
+                wait = Cooldown - (now - last) + NudgeCooldownSlack;
+            if (SyncFailureBackoff.ShouldSkip(now, _blockedUntilUtc, _backoffToken, s.AuthToken, _backoffOffset, ServerClock.Offset)
+                && _blockedUntilUtc is { } blocked && blocked - now + NudgeCooldownSlack > wait)
+                wait = blocked - now + NudgeCooldownSlack;
             _ = Task.Delay(wait).ContinueWith(async _ =>
             {
-                Interlocked.Exchange(ref _nudgePending, 0);
+                Interlocked.CompareExchange(ref _nudgePending, 0, ticket);
+                if (session != Volatile.Read(ref _sessionVersion) || !ReferenceEquals(s, CoreSettings.Current)
+                    || s.UnifiedId != account) return;
                 await PushAsync(reason);
             }, TaskScheduler.Default);
         }

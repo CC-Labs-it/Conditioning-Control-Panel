@@ -8,7 +8,7 @@ using ConditioningControlPanel.Services.EmiDesk;
 using Serilog;
 namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 {
-    // WPF EmiDeskWindow.Bubble.cs:40-493. Voice and book-side preference remain missing.
+    // WPF EmiDeskWindow.Bubble.cs:40-493. Voice remains missing; the book dodge is WPF :346-361.
     public partial class EmiDeskWindow
     {
         private static readonly IBrush BubbleFill = new ImmutableSolidColorBrush(Color.FromRgb(0x18, 0x18, 0x32));
@@ -76,6 +76,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             if (_bubbleTail != null) _bubbleTail.IsVisible = true;
             LayoutBubble();
         }
+        /// <summary>WPF EmiBook.SideChanged subscriber: the book opened, closed or changed side.</summary>
+        internal void OnBookSideChanged() => LayoutBubble();
+
         private void HideBubble()
         {
             if (_bubble != null) _bubble.IsVisible = false;
@@ -106,9 +109,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     workLeft = this.PointToClient(screen.WorkingArea.TopLeft).X;
                     workRight = this.PointToClient(screen.WorkingArea.TopRight).X;
                 }
+                // WPF :355-361 THE BOOK DODGE: the book on her right (+1) sends the bubble to her left;
+                // the screen-edge arbitration still has the final word.
+                int bookSide = 0;
+                try { bookSide = _book?.SideOfHer ?? 0; }
+                catch (Exception ex) { Log.Debug(ex, "[EmiDesk] book side unreadable, bubble keeps its default"); }
                 var placement = EmiBubblePlacement.Resolve(
                     left, bodyX + bw * (1.0 - BubbleLeftFrac) - size.Width, size.Width,
-                    false, winW, workLeft, workRight);
+                    bookSide > 0, winW, workLeft, workRight);
                 left = placement.Left;
                 bool flip = placement.Flip;
                 if (top < 2) top = 2;

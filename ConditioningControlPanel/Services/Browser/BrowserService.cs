@@ -223,6 +223,10 @@ namespace ConditioningControlPanel.Services
                     return;
                 }
 
+                // ccp-bugs #1549/#1558: the Browser tab was the one WebView2 host outside the
+                // recent-sounds ring. Records only; it never mutes or changes what plays.
+                Audio.WebAudioWatch.Attach(_webView.CoreWebView2);
+
                 // Configure settings
                 ConfigureBrowser();
 

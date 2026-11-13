@@ -5,6 +5,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Animation;
+using ConditioningControlPanel.Services.Safety;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -44,6 +46,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static DispatcherTimer? _timer;
         private static int _index;
         private static bool _refused;
+        private static readonly List<Action> Fading = new();
 
         /// <summary>The off-thread decode in flight, if any (tests await it).</summary>
         internal static Task? Decoding { get; private set; }
@@ -96,12 +99,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             VoiceOpacity = next;
             return changed;
         }
-        internal static void Stop() { VoiceOpacity = null; CloseAll(); }
+        internal static void Stop() { VoiceOpacity = null; FadeOut(); }
 
         /// <summary>The painted alpha: the slider through WPF's #722 curve. A ramping session's value
         /// holds it instead (WPF _rampSpiralOpacity; SetSustainedOverlayOpacity clamps to 0..1).</summary>
-        internal static double PaintedOpacity => SpiralFrames.Paint(
-            VoiceOpacity ?? Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
+        // WPF ResolveAdHocOverlayOpacity: a bubble payload raises a live spiral, never lowers it.
+        internal static double PaintedOpacity => SpiralFrames.Paint(HasTimedPayload
+            ? Math.Max(VoiceOpacity ?? (CoreSettings.Current.SpiralEnabled && ShouldShow() ? SliderFraction : 0), PayloadHold.Opacity)
+            : VoiceOpacity ?? SliderFraction);
+        private static double SliderFraction => Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1);
 
         private static double? _pulseWeight;
         private static double _pulseBase, _pulsePeak;
@@ -120,12 +126,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var w in Windows) w.Spiral.Opacity = PulseOpacity;
         }
 
+        internal static readonly TimedOverlayHold PayloadHold = new();
+        internal static bool HasTimedPayload => PayloadHold.IsActive;
+        internal static void ShowTimed(Visual host, int ms, double opacity)
+        {
+            var release = PayloadHold.Acquire(opacity);
+            Refresh(host);
+            global::Avalonia.Threading.DispatcherTimer.RunOnce(() =>
+            {
+                if (release()) Refresh(host);
+            }, TimeSpan.FromMilliseconds(Math.Max(50, ms)));
+        }
+
         /// <summary>WPF RefreshOverlays' spiral half: show, hide, move or repaint to match the settings.</summary>
         public static void Refresh(Visual host)
         {
             Refreshes++;
             var s = CoreSettings.Current;
-            if (VoiceOpacity == null && (!s.SpiralEnabled || !ShouldShow())) { CloseAll(); return; }
+            if (VoiceOpacity == null && !HasTimedPayload && (!s.SpiralEnabled || !ShouldShow())) { FadeOut(); return; }
 
             var path = SourcePath();
             var video = IsVideo(path);
@@ -185,14 +203,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     CloseAll();
                     return;
                 }
+                if (GentleVisuals.On)
+                {
+                    w.Opacity = 0;
+                    w.Transitions = new Transitions { new DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromSeconds(GentleVisuals.FadeSeconds) } };
+                }
                 w.Show();
                 Windows.Add(w);
+                if (GentleVisuals.On) w.Opacity = 1;
             }
             _shownOn = want;
             QuestMinutes.Follow(Windows.Count > 0);
             if (video && Windows.Count > 0)
             {
-                try { _videoPlayer = VideoStart(path, ShowVideoFrame); }
+                var videoWindows = Windows.ToArray();
+                try { _videoPlayer = VideoStart(path, frame => ShowVideoFrame(videoWindows, frame)); }
                 catch (Exception ex) { Log.Warning(ex, "Spiral: video could not start"); }
                 if (_videoPlayer == null) { CloseWindows(); return; }
             }
@@ -218,16 +243,72 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             for (var i = 0; i < Windows.Count; i++) Windows[i].Spiral.Source = frame;
         }
 
-        /// <summary>WPF StopSpiral: the windows and the clock go; the decoded frames stay cached.</summary>
+        private static void FadeOut()
+        {
+            if (Windows.Count == 0) { ResetRun(); return; } // do not cut an earlier fade
+            if (!GentleVisuals.On) { CloseAll(); return; }
+
+            _timer?.Stop();
+            _timer = null;
+            var windows = Windows.ToArray();
+            Windows.Clear();
+            _shownOn = Array.Empty<int>();
+            var player = _videoPlayer;
+            _videoPlayer = null;
+            // A later decode must not dispose the last frame while the old windows use it.
+            var frames = _frames;
+            frames.RemoveAll(frame =>
+            {
+                if (windows.Any(window => ReferenceEquals(window.Spiral.Source, frame))) return false;
+                frame.Dispose();
+                return true;
+            });
+            _frames = new List<Bitmap>();
+            _framesKey = "";
+            _index = 0;
+            ResetRun();
+            App.Sessions?.RefreshCornerGifPolicy();
+
+            var duration = TimeSpan.FromSeconds(GentleVisuals.FadeSeconds);
+            foreach (var window in windows)
+            {
+                window.Transitions = new Transitions { new DoubleTransition { Property = Visual.OpacityProperty, Duration = duration } };
+                window.Opacity = 0;
+            }
+            IDisposable? timer = null;
+            void Finish()
+            {
+                if (!Fading.Remove(Finish)) return;
+                timer?.Dispose();
+                StopVideo(player, windows);
+                foreach (var window in windows)
+                {
+                    try { window.Close(); }
+                    catch (Exception ex) { Log.Debug("Spiral: failed to close a window: {E}", ex.Message); }
+                }
+                foreach (var frame in frames) frame.Dispose();
+            }
+            Fading.Add(Finish);
+            timer = DispatcherTimer.RunOnce(Finish, duration);
+        }
+
+        /// <summary>Cut active and fading windows immediately, including their media.</summary>
         public static void CloseAll()
+        {
+            while (Fading.Count > 0) Fading[0]();
+            ResetRun();
+            CloseWindows();
+        }
+
+        private static void ResetRun()
         {
             _pulseWeight = null;
             _sourcePath = null;
             _configuredPath = null;
             _randomizeAtStart = null;
             _repicked = false;
-            CloseWindows();
-            QuestMinutes.Follow(false);   // WPF AchievementService.cs:250-253: actual deactivation resets the run.
+            PayloadHold.Clear();
+            QuestMinutes.Follow(false);
         }
 
         private static void CloseWindows()

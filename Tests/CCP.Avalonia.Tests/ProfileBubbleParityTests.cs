@@ -257,30 +257,27 @@ public sealed class ProfileBubbleParityTests : IDisposable
             double Angle() => visual.RenderTransform is TransformGroup g
                 ? g.Children.OfType<RotateTransform>().Single().Angle
                 : (visual.RenderTransform as RotateTransform)?.Angle ?? 0;
-            double maxTilt = 0, minOpacity = 1;
-            void Run()
+            var clock = new TestAnimationClock();
+            clock.Attach(visual);
+            DisplayFlash(shell);
+            Dispatcher.UIThread.RunJobs(); // deliver the overlay notification before starting the timeline
+            clock.Step(0);
+            foreach (var (ms, angle) in new[] { (90, -12.0), (220, 9.0), (340, -5.0), (480, 0.0) })
             {
-                for (int i = 0; i < 60; i++)
-                {
-                    Dispatcher.UIThread.RunJobs();
-                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-                    maxTilt = Math.Max(maxTilt, Math.Abs(Angle()));
-                    minOpacity = Math.Min(minOpacity, visual.Opacity);
-                }
+                clock.Step(ms);
+                Assert.Equal(animates ? angle : 0, Angle(), 5);
+                Assert.Equal(1, visual.Opacity);
             }
 
-            DisplayFlash(shell);
-            Run();
-            if (animates) Assert.True(maxTilt > 1, $"a flash never tilted the bubble (max {maxTilt})");
-            else Assert.Equal(0, maxTilt);
-            Assert.Equal(1, minOpacity);
-
-            maxTilt = 0;
             DisplaySubliminal();
-            Run();
-            if (animates) Assert.True(minOpacity < 0.95, $"a subliminal never dipped the bubble (min {minOpacity})");
-            else Assert.Equal(1, minOpacity);
-            Assert.Equal(0, maxTilt);
+            Dispatcher.UIThread.RunJobs();
+            clock.Step(1000); // establish the new animation's starting time
+            clock.Step(1300);
+            Assert.Equal(animates ? 0.55 : 1, visual.Opacity, 5);
+            Assert.Equal(0, Angle(), 5);
+            clock.Step(1600);
+            Assert.Equal(1, visual.Opacity, 5);
+            Assert.Equal(0, Angle(), 5);
         }
         finally
         {

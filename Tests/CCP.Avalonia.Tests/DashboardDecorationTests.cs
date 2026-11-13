@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -116,6 +117,36 @@ public sealed class DashboardDecorationTests
             ConditioningControlPanel.Avalonia.Views.Features.FeatureCard.ClickEvent, box));
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("play", shell.CurrentTab);
+    });
+
+    // WPF MainWindow.UiUpdates.cs:134: ApplyModFeatureNames repaints the ? box, so a mod switch reloads its reveal art.
+    [Fact]
+    public Task ModSwitchRepaintsMysteryRevealArt() => WithShell((shell, tab, time) =>
+    {
+        var oldDaily = CoreEntitlement.DailyFreeKeyProvider;
+        var oldMod = CoreMods.ActiveModIdProvider;
+        var oldArt = CoreModArt.OverridePathProvider;
+        try
+        {
+            CoreEntitlement.DailyFreeKeyProvider = () => "fyp";
+            tab.ApplyDashboardDecoration(false, false);
+            var brush = tab.FindControl<Border>("MysteryRevealFace")!.GetLogicalDescendants().OfType<Border>()
+                .Select(b => b.Background).OfType<ImageBrush>().First();
+            var before = brush.Source;
+            Assert.NotNull(before);
+            CoreModArt.OverridePathProvider = _ => null;
+            CoreMods.ActiveModIdProvider = () => "mystery-tile-test-mod";
+            CoreMods.RaiseModChanged(null, new ConditioningControlPanel.Models.ModPackage(new ConditioningControlPanel.Models.ModManifest(), null, false));
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotNull(brush.Source);
+            Assert.NotSame(before, brush.Source); // repainted for the new mod, not left on the old decode
+        }
+        finally
+        {
+            CoreEntitlement.DailyFreeKeyProvider = oldDaily;
+            CoreMods.ActiveModIdProvider = oldMod;
+            CoreModArt.OverridePathProvider = oldArt;
+        }
     });
 
     [Fact]

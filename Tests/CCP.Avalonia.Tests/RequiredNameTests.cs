@@ -42,7 +42,11 @@ public sealed class RequiredNameTests
         public int Checks;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
-            Checks++;
+            // Only the availability probe (V2AuthService.IsDisplayNameAvailableAsync) counts. AccountSeed.NewV2
+            // is process-wide, so while this test awaits the dialog another class's V2 call (profile recovery,
+            // sync) can land on this wire too; counting those read as a phantom check on CI.
+            if (request.RequestUri?.AbsolutePath.EndsWith("/v2/auth/check-name", StringComparison.Ordinal) == true)
+                Interlocked.Increment(ref Checks);
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
                 { Content = new StringContent("""{"available":false}""") });
         }

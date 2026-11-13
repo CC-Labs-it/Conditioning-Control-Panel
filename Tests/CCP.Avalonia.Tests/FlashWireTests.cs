@@ -184,20 +184,20 @@ public sealed class FlashWireTests
     {
         var chimes = 0;
         FlashOverlay.LuckyChime = _ => chimes++;
-        var quiet = s.SuppressPerkNotifications;
+        var quiet = s.PerkEffects;
         try
         {
-            s.SuppressPerkNotifications = false;
+            s.PerkEffects = ConditioningControlPanel.Models.PerkEffectsMode.Full;
             FlashOverlay.Paid("a.png", s, 0, FlashFxRules.LuckyMultiplier);
             Assert.Equal(1, chimes);
             Assert.Equal(new[] { (40.0, "Flash") }, xp);
 
-            s.SuppressPerkNotifications = true;   // WPF PlayLuckyFlashSound returns early; the XP still pays
+            s.PerkEffects = ConditioningControlPanel.Models.PerkEffectsMode.NoCards;   // WPF PlayLuckyFlashSound returns early; the XP still pays
             FlashOverlay.Paid("a.png", s, 0, FlashFxRules.LuckyMultiplier);
             Assert.Equal(1, chimes);
             Assert.Equal(2, xp.Count);
         }
-        finally { s.SuppressPerkNotifications = quiet; }
+        finally { s.PerkEffects = quiet; }
     });
 
     [Fact]

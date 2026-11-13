@@ -56,6 +56,7 @@ internal sealed class EmergencyExitWindow : Window
             window._page = new Uri(server.Url("emergency-exit/index.html", "game=" + _last + "&avalonia=1"));
             if (owner?.IsVisible == true) window.Show(owner); else window.Show();
             window._web.Navigate(window._page);
+            BarkHead.Engine?.Raise("EmergencyExitOpened", c => c.Set("game", _last).Set("attempt", (double)_attempt));
         }
         catch (Exception ex) { Log.Warning(ex, "Emergency Exit open failed"); window.Close(); }
     }
@@ -128,6 +129,7 @@ internal sealed class EmergencyExitWindow : Window
                 Post(new { type = "verdict", outcome = back ? "sendback" : "escape" });
                 _deadline = DispatcherTimer.RunOnce(() => { if (!_closed) Close(); }, OutroTimeout);
                 if (back) _lockdown.RestartTimer(_game); else _lockdown.Deactivate();
+                BarkHead.Engine?.Raise("EmergencyExitVerdict", c => c.Set("game", _game).Set("outcome", back ? "sendback" : "escape"));
                 break;
             case "quit":
             case "outro-done":

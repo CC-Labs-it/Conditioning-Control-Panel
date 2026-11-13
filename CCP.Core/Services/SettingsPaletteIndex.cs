@@ -775,8 +775,8 @@ namespace ConditioningControlPanel.Services
             Setting("intake_nudge", "label_intake_nudge_enabled", "🔔", "notifications",
                     new[] { "ChkIntakeNudge" }, "set2_section_notifications", "intake pass reminder nudge weekly");
             Setting("suppress_perk_notifications", "label_suppress_perk_notifications", "🔕", "notifications",
-                    new[] { "ChkSuppressPerkNotifications" }, "set2_section_notifications",
-                    "silence mute perk popup toast lucky 10x 20x xp multiplier pink rush quest complete ping sound immersion");
+                    new[] { "CmbPerkEffects" }, "set2_section_notifications",
+                    "perk effects silence mute popup toast lucky 10x 20x xp multiplier pink rush wash glow sparkle sparkly quest complete ping sound immersion off");
             Setting("banner_pool", "banner_pool_enabled", "💬", "notifications",
                     new[] { "ChkBannerPool" }, "set2_section_notifications",
                     "banner header line pool taglines trivia rotating message");
@@ -952,6 +952,7 @@ namespace ConditioningControlPanel.Services
 
             Game("backroom", "🎰", "back room casino slots slot machine wheel blackjack roulette sparkle points");
             Game("race", "🏎️", "racing racing thoughts race kart");
+            Game("raceclassic", "🏁", "racing thoughts classic 2d race original old race");
             Game("dtrh", "🕳️", "rabbit hole down the rabbit hole descent dtrh");
             Game("arcademy", "🎓", "arcademy academy campus school");
             Game("goon", "🎮", "goon goon game 1v1 duel");

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Fyp.Online;
 using Xunit;
 using FakeClock = CCP.Core.Tests.PopQuizSchedulerTests.FakeClock;
 
@@ -171,6 +172,39 @@ public sealed class MandatoryVideoSchedulerTests
     });
 
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
+
+    [Theory]
+    [InlineData("end")]
+    [InlineData("ended")]
+    [InlineData("force")]
+    [InlineData("stop")]
+    [InlineData("retry")]
+    public void VideoEnded_fires_once_after_the_clip_closes(string ending) => With(6, false, () =>
+    {
+        var attention = CoreSettings.Current.AttentionChecksEnabled;
+        CoreSettings.Current.AttentionChecksEnabled = true;
+        try
+        {
+            var host = new Host();
+            var video = new MandatoryVideoScheduler(host, new FakeClock(), () => Clips);
+            int ended = 0;
+            video.VideoEnded += () =>
+            {
+                Assert.False(video.IsPlaying);
+                Assert.Equal(1, host.Closes);
+                ended++;
+            };
+            Assert.True(video.Trigger());
+            if (ending == "retry") video.NoteSpawn();
+            if (ending == "end") video.End();
+            else if (ending is "ended" or "retry") video.Ended(); // natural end or an attention retry
+            else if (ending == "force") video.ForceCleanup();
+            else video.Stop();
+            video.End(); video.ForceCleanup(); // idle cleanup must not notify twice
+            Assert.Equal(1, ended);
+        }
+        finally { CoreSettings.Current.AttentionChecksEnabled = attention; }
+    });
 
     [Fact]
     public void Idle_panic_contains_a_host_close_failure()
@@ -368,6 +402,23 @@ public sealed class MandatoryVideoSchedulerTests
         v.Trigger(); // a stopped deferred request cannot latch future earned triggers
         clock.Advance(MandatoryVideoScheduler.PreRoll);
         Assert.Single(host.Shown);
+        v.Stop();
+    });
+
+    [Theory]   // WPF ChaosGifCascadeOverlay.cs:173-182: a poll at the deadline replays when the rain has cleared
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CascadeClearingExactlyAtTheDeadlineStillReplays(bool clearAtDeadline) => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var deadline = clock.GetUtcNow() + TimeSpan.FromSeconds(90);
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips)
+        { CascadeIsRaining = () => !clearAtDeadline || clock.GetUtcNow() < deadline };
+        Assert.True(v.Trigger(path: Clips[0]));
+        clock.Advance(TimeSpan.FromSeconds(90));
+        Assert.Equal(clearAtDeadline, v.IsPlaying);
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Equal(clearAtDeadline ? 1 : 0, host.Shown.Count);
         v.Stop();
     });
 
@@ -626,6 +677,67 @@ public sealed class MandatoryVideoSchedulerTests
     });
 
     [Fact]
+    public void Scrolller_clip_requires_a_cached_file_and_plays_that_file() => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        const string url = "https://cdn.scrolller.com/video.mp4";
+        string? cached = null;
+        v.CachedScrolllerPath = _ => cached;
+        var enabled = ScrolllerPolicy.Enabled; var cap = ScrolllerPolicy.MaxClipShortSide;
+        try
+        {
+            ScrolllerPolicy.Apply(true, null);
+            Assert.True(v.Trigger(path: url));
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Contains(Assert.Single(host.Shown).Path, Clips);
+            v.End();
+            host.Shown.Clear();
+            cached = "/cache/video.mp4";
+            Assert.True(v.Trigger(path: url));
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal(cached, Assert.Single(host.Shown).Path);
+            v.End();
+        }
+        finally { ScrolllerPolicy.Apply(enabled, cap); }
+    });
+
+    [Fact]
+    public void Scrolller_licence_is_rechecked_after_preroll() => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips)
+            { CachedScrolllerPath = _ => "/cache/video.mp4" };
+        var enabled = ScrolllerPolicy.Enabled; var cap = ScrolllerPolicy.MaxClipShortSide;
+        try
+        {
+            ScrolllerPolicy.Apply(true, null);
+            Assert.True(v.Trigger(path: "https://cdn.scrolller.com/video.mp4"));
+            ScrolllerPolicy.Apply(false, null);
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Empty(host.Shown);
+            Assert.False(v.IsPlaying);
+            Assert.True(v.Trigger(path: "https://cdn.scrolller.com/video.mp4"));
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Contains(Assert.Single(host.Shown).Path, Clips);
+            v.End();
+        }
+        finally { ScrolllerPolicy.Apply(enabled, cap); }
+    });
+
+    [Fact]
+    public void Uncached_Scrolller_with_empty_library_does_not_start() => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var v = new MandatoryVideoScheduler(host, clock, () => Array.Empty<string>())
+            { CachedScrolllerPath = _ => null };
+        Assert.False(v.Trigger(path: "https://cdn.scrolller.com/video.mp4"));
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.False(v.IsPlaying);
+        Assert.Empty(host.Shown);
+    });
+
+    [Fact]
     public void Attention_rules_match_WPF()
     {
         var r = new Random(1);
@@ -856,6 +968,8 @@ public sealed class MandatoryVideoSchedulerTests
         var v = new MandatoryVideoScheduler(new Host(), new FakeClock(), () => Array.Empty<string>());
         var n = 0;
         v.NoVideos += () => n++;
+        Assert.False(v.Trigger(silentIfEmpty: true)); Assert.False(v.Trigger(silentIfEmpty: true));
+        Assert.Equal(0, n);
         v.Trigger(); v.Trigger();
         Assert.Equal(1, n);
     }

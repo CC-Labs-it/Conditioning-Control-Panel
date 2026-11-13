@@ -95,17 +95,27 @@ public sealed class SplashStartupTests
             SingleInstance.KillStale = () => { Interlocked.Increment(ref kills); return 0; };
             bool pumped = false, completed = false;
             Dispatcher.UIThread.Post(() => pumped = true);
-            relaunch = Task.Run(() =>
+            var launchResult = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            relaunch = launchResult.Task;
+            // Claim blocks while the pipe listener uses the thread pool. A separate thread models
+            // the second process without starving that listener on a loaded test runner.
+            var launch = new Thread(() =>
             {
+                bool exited = false;
+                Exception? failure = null;
                 try
                 {
                     Assert.True(blocked.Wait(TimeSpan.FromSeconds(10)));
                     using var second = SingleInstance.Claim(suffix, _ => Task.CompletedTask);
                     Thread.Sleep(300); // Keep the UI blocked beyond the 100 ms acknowledgement timeout.
-                    return second is null;
+                    exited = second is null;
                 }
+                catch (Exception ex) { failure = ex; }
                 finally { release.Set(); }
-            });
+                if (failure is null) launchResult.TrySetResult(exited);
+                else launchResult.TrySetException(failure);
+            }) { IsBackground = true };
+            launch.Start();
             var start = App.StartBehindSplash(null, async step =>
             {
                 await step(0.2, "Loading settings...");
@@ -116,7 +126,7 @@ public sealed class SplashStartupTests
             }, () => null, () => { completed = true; primary!.EndStartupPhase(); });
             Dispatcher.UIThread.RunJobs();
             await start;
-            Assert.True(await relaunch);
+            Assert.True(await relaunch, $"Second launch did not exit; stale takeover attempted {Volatile.Read(ref kills)} times.");
             Assert.True(completed);
             Assert.Equal(0, Volatile.Read(ref kills));
         }

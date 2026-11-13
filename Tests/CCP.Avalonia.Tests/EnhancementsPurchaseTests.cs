@@ -1,3 +1,6 @@
+using System;
+using System.IO;
+using System.Reflection;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -14,6 +17,9 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
+using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Helpers;
+using AvApp = ConditioningControlPanel.Avalonia.App;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -35,6 +41,65 @@ public sealed class EnhancementsPurchaseTests
     private static Dictionary<string, Control> Nodes(EnhancementsTabView tab) =>
         tab.FindControl<Canvas>("SkillTreeCanvas")!.Children.OfType<Control>()
             .Where(c => c.Tag is string).ToDictionary(c => (string)c.Tag!);
+    [Fact]
+    public Task PurchaseCelebratesAndPrestigeSheenStops() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        AmbientBeatLoopsTests.Setup();
+        var oldSettings = CoreSettings.ServiceProvider;
+        var prop = typeof(AvApp).GetProperty("Achievements", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var oldAchievements = prop.GetValue(null);
+        var dir = Directory.CreateTempSubdirectory("ccp-purchase-fx-").FullName;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        MainShellWindow? shell = null;
+        try
+        {
+            var s = service.Current;
+            s.Welcomed = s.HasAcceptedAgeVerification = true;
+            s.WhatMovedCardShown = 1;
+            s.MotionLevel = MotionLevel.Full;
+            s.PerformanceMode = false;
+            s.SkillPoints = 1000;
+            s.UnifiedId = "u_k2";
+            s.UnlockedSkills = new List<string> { "pink_hours" };
+            var engine = new AchievementEngine(new AchievementStore(Path.Combine(dir, "achievements.json")));
+            prop.SetValue(null, engine);
+            shell = new MainShellWindow { Width = 1400, Height = 900 };
+            shell.Show();
+            shell.ShowTab("enhancements");
+            Dispatcher.UIThread.RunJobs();
+            var tab = shell.Named<EnhancementsTabView>("EnhancementsTab")!;
+            var skill = SkillDefinition.All.Single(x => x.Id == "sparkle_boost_1");
+            var http = new Fake { Answer = "{'success':false,'error':'No'}" };
+            tab.PurchaseService = new SkillPurchase(() => s, http) { Save = () => { }, PointsSpent = cost => engine.Progress.LifetimeSkillPointsSpent += cost };
+            tab.AskPurchase = (_, _, _) => Task.FromResult(true);
+            tab.TellFailure = (_, _, _) => Task.CompletedTask;
+            var before = ShellEventFxTests.Bursts(shell);
+            await tab.PurchaseAsync(Nodes(tab)[skill.Id], skill.Id);
+            Assert.Equal(before, ShellEventFxTests.Bursts(shell));
+            http.Answer = "{'success':true,'skill_points':990,'unlocked_skills':['sparkle_boost_1']}";
+            await tab.PurchaseAsync(Nodes(tab)[skill.Id], skill.Id);
+            Assert.Equal(before + 1, ShellEventFxTests.Bursts(shell));
+            s.UnlockedSkills = new List<string> { "pink_hours" };
+            Dispatcher.UIThread.RunJobs();
+            engine.Progress.LifetimeSkillPointsSpent = 99;
+            await tab.PurchaseAsync(Nodes(tab)[skill.Id], skill.Id);
+            Assert.Equal(before + 3, ShellEventFxTests.Bursts(shell));
+            var band = shell.Named<Border>("PrestigeSheen")!;
+            Assert.Contains(BeatLoop.Running, beat => ReferenceEquals(beat.Owner, band));
+            shell.StopEventFx();
+            Assert.DoesNotContain(BeatLoop.Running, beat => ReferenceEquals(beat.Owner, band));
+            Assert.Equal(0, band.Opacity);
+        }
+        finally
+        {
+            shell?.Close();
+            prop.SetValue(null, oldAchievements);
+            CoreSettings.ServiceProvider = oldSettings;
+            Directory.Delete(dir, true);
+        }
+    });
+
     [Fact]
     public Task PurchaseConfirmationClosesForPanic() => AvaloniaTestDispatcher.RunAsync(async () =>
     {

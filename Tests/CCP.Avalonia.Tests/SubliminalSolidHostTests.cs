@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using CCP.Avalonia.Testing;
@@ -12,7 +14,56 @@ namespace CCP.Avalonia.Tests;
 public sealed class SubliminalSolidHostTests
 {
     [Fact]
-    public System.Threading.Tasks.Task Hosted_card_fades_holds_and_retires() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public void Hosted_card_fades_holds_and_retires() => AvaloniaTestDispatcher.Run(() =>
+    {
+        SubliminalSilentHintTests.EnsureAvalonia();
+        var configure = SharedOverlayHost.Configure;
+        var settingsProvider = ConditioningControlPanel.CoreSettings.ServiceProvider;
+        ConditioningControlPanel.CoreSettings.ServiceProvider = null;
+        Window? stage = null;
+        SharedOverlayHost.Configure = (w, _) => { stage = w; w.Width = 300; w.Height = 200; return true; };
+        var scheduled = new List<(TimeSpan At, Action Fire)>();
+        void Advance(TimeSpan at)
+        {
+            foreach (var item in scheduled.Where(item => item.At <= at).OrderBy(item => item.At).ToArray())
+            {
+                scheduled.Remove(item);
+                item.Fire();
+            }
+        }
+        try
+        {
+            var hold = TimeSpan.FromMilliseconds(500);
+            var fade = SubliminalOverlayWindow.FadeDuration;
+            Assert.Equal(TimeSpan.FromMilliseconds(50), fade);
+            var steps = Math.Max(3, (int)Math.Ceiling(fade.TotalMilliseconds / 17));
+            Assert.True(SubliminalOverlay.ShowHosted(new PixelRect(0, 0, 300, 200), "TEST", 0.8, hold,
+                (fire, at) => scheduled.Add((at, fire))));
+            var canvas = Assert.IsType<Grid>(stage!.Content);
+            var card = Assert.Single(canvas.Children);
+            Assert.Equal(0, card.Opacity);
+            Advance(fade / steps);
+            Assert.Equal(0.8 / steps, card.Opacity, 3);
+            Advance(fade);
+            Assert.Equal(0.8, card.Opacity, 3);
+            Advance(fade + hold);
+            Assert.Same(card, Assert.Single(canvas.Children));
+            Assert.Equal(0.8, card.Opacity, 3);
+            Advance(fade + hold + fade / steps);
+            Assert.Equal(0.8 * (1 - 1.0 / steps), card.Opacity, 3);
+            Advance(fade + hold + fade);
+            Assert.Empty(canvas.Children);
+        }
+        finally
+        {
+            SubliminalOverlay.CloseAll();
+            SharedOverlayHost.Configure = configure;
+            ConditioningControlPanel.CoreSettings.ServiceProvider = settingsProvider;
+        }
+    });
+
+    [Fact]
+    public Task Hosted_card_uses_dispatcher_timers() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         SubliminalSilentHintTests.EnsureAvalonia();
         var configure = SharedOverlayHost.Configure;
@@ -24,9 +75,14 @@ public sealed class SubliminalSolidHostTests
             var canvas = Assert.IsType<Grid>(stage!.Content);
             var card = Assert.Single(canvas.Children);
             Assert.Equal(0, card.Opacity);
-            await System.Threading.Tasks.Task.Delay(150);
-            Assert.Equal(0.8, card.Opacity, 3);
-            await System.Threading.Tasks.Task.Delay(650);
+            var reached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            card.PropertyChanged += (_, args) =>
+            {
+                if (args.Property == Visual.OpacityProperty && Math.Abs(card.Opacity - 0.8) < 0.0001)
+                    reached.TrySetResult();
+            };
+            await reached.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await LifecycleTestPump.UntilAsync(() => !canvas.Children.Contains(card), "Hosted card did not retire.");
             Assert.Empty(canvas.Children);
         }
         finally { SubliminalOverlay.CloseAll(); SharedOverlayHost.Configure = configure; }

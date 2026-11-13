@@ -182,6 +182,51 @@ namespace ConditioningControlPanel
             triggers.Add(newTrigger);
             App.Settings.Save();
             RefreshKeywordTriggerList();
+            RevealKeywordTriggerRow(newTrigger.Id);
+        }
+
+        /// <summary>
+        /// ccp-bugs #1518: the new blank row lands at the bottom of a list that is often taller
+        /// than its scroller, so "+Add Trigger" looked like it did nothing and people pressed it
+        /// again. Scroll the row into view and put the caret in its keyword box. Background
+        /// priority so the rebuilt list has been laid out first (a click, not startup work).
+        /// </summary>
+        private void RevealKeywordTriggerRow(string? triggerId)
+        {
+            var panel = AwarenessTab.KeywordTriggerListPanel;
+            if (panel == null || triggerId == null) return;
+            TextBox? box = null;
+            FrameworkElement? row = null;
+            foreach (var child in panel.Children)
+            {
+                if (child is FrameworkElement fe && FindTaggedTextBox(fe, triggerId) is TextBox t)
+                {
+                    row = fe;
+                    box = t;
+                    break;
+                }
+            }
+            if (row == null) return;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                try
+                {
+                    row.BringIntoView();
+                    box?.Focus();
+                    if (box != null) Keyboard.Focus(box);
+                }
+                catch (Exception ex) { Diag.Swallowed(ex, "reveal new trigger row"); }
+            }), DispatcherPriority.Background);
+        }
+
+        private static TextBox? FindTaggedTextBox(DependencyObject parent, string tag)
+        {
+            foreach (var child in LogicalTreeHelper.GetChildren(parent))
+            {
+                if (child is TextBox t && t.Tag as string == tag) return t;
+                if (child is DependencyObject d && FindTaggedTextBox(d, tag) is TextBox found) return found;
+            }
+            return null;
         }
 
         internal void BtnImportFromCustomTriggers_Click(object sender, RoutedEventArgs e)

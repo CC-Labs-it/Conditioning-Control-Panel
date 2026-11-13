@@ -28,14 +28,17 @@ namespace ConditioningControlPanel.Services
         public bool IsBusy => Volatile.Read(ref _pending) > 0;
 
         /// <summary>Queue a write and return at once. The task says whether Windows took it.</summary>
-        public Task<bool> Enqueue(string path)
+        public Task<bool> Enqueue(string path) => Enqueue(() => _apply(path));
+
+        /// <summary>Queue any desktop write (a set with a fit, a fit alone) in the same order as the rest.</summary>
+        public Task<bool> Enqueue(Func<bool> write)
         {
             lock (_gate)
             {
                 Interlocked.Increment(ref _pending);
                 var next = _tail.ContinueWith(_ =>
                 {
-                    try { return _apply(path); }
+                    try { return write(); }
                     catch { return false; }
                     finally { Interlocked.Decrement(ref _pending); }
                 }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);

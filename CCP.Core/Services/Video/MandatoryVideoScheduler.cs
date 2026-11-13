@@ -6,6 +6,7 @@ using System.Threading;
 using Serilog;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Fyp;
+using ConditioningControlPanel.Services.Fyp.Online;
 
 namespace ConditioningControlPanel.Services
 {
@@ -92,6 +93,10 @@ namespace ConditioningControlPanel.Services
         /// <summary>A clip is on screen (WPF VideoService.VideoStarted, VideoService.cs:3370).</summary>
         public event Action? VideoStarted;
 
+        /// <summary>A playing clip has closed, including attention retries and forced cleanup.
+        /// WPF VideoService.Cleanup:7950; fires once after the host closes and IsPlaying clears.</summary>
+        public event Action? VideoEnded;
+
         /// <summary>The clip <see cref="VideoStarted"/> announced (WPF VideoService.LastVideoPath).</summary>
         public string? LastVideoPath { get; private set; }
 
@@ -119,6 +124,9 @@ namespace ConditioningControlPanel.Services
             _library = library ?? LocalLibrary;
             _feedDefer = new FypFeedDefer(_time, "VideoService", () => _host.FeedOwnsTheScreen);
         }
+
+        /// <summary>The head may queue a trigger behind another fullscreen interaction.</summary>
+        public Func<Action, bool>? DeferTrigger { get; set; }
 
         public bool IsRunning => _running;
         /// <summary>A video is in pre-roll or on screen (WPF <c>_videoPlaying</c>).</summary>
@@ -335,6 +343,13 @@ namespace ConditioningControlPanel.Services
             }
         }
 
+        // WPF VideoService.cs:8197: never hand an uncached Scrolller URL to the player.
+        // Resolve again after pre-roll because the licence or cache can change in the meantime.
+        internal Func<string, string?> CachedScrolllerPath { get; set; } = ScrolllerDiskCache.TryGetPath;
+
+        private string? PlaybackPath(string path) => !ScrolllerPolicy.IsScrolllerUrl(path) ? path
+            : ScrolllerPolicy.Enabled ? CachedScrolllerPath(path) : null;
+
         /// <summary>WPF TriggerVideo -> PlayVideo: pick a clip, stop the flash, and show it after the
         /// pre-roll. False when nothing was started (no clip, or one is already playing).</summary>
         public bool TriggerStartup()
@@ -353,6 +368,7 @@ namespace ConditioningControlPanel.Services
         public bool Trigger(bool? strictOverride = null, string? path = null, bool userInitiated = false, bool userEarned = false,
             bool scheduled = false, bool silentIfEmpty = false, bool freezeBeforePreroll = false)
         {
+            if (DeferTrigger?.Invoke(() => Trigger(strictOverride, path)) == true) return true;
             if (_playing) return false;
             // WPF VideoService.cs:2226: the cascade guard comes before the feed guard.
             if (_cascadeDefer != null) return true; // WPF: coalesce, retain the first request
@@ -366,16 +382,18 @@ namespace ConditioningControlPanel.Services
                     var replay = _deferIsReplay;
                     try
                     {
-                        if (_time.GetUtcNow() >= deadline ||
-                            (scheduled && (!_running || !CoreSettings.Current.MandatoryVideosEnabled)))
+                        // WPF ChaosGifCascadeOverlay.cs:173-182: expire only while it still rains;
+                        // a poll that finds the rain cleared replays, even at the deadline.
+                        var raining = CascadeIsRaining?.Invoke() == true;
+                        if (raining && _time.GetUtcNow() < deadline)
+                        {
+                            pending!.Change(TimeSpan.FromMilliseconds(250), Timeout.InfiniteTimeSpan);
+                            return;
+                        }
+                        if (raining || (scheduled && (!_running || !CoreSettings.Current.MandatoryVideosEnabled)))
                         {
                             if (DropDefer()) AfterEnd();
                             else if (_running) ScheduleNext();
-                            return;
-                        }
-                        if (CascadeIsRaining?.Invoke() == true)
-                        {
-                            pending!.Change(TimeSpan.FromMilliseconds(250), Timeout.InfiniteTimeSpan);
                             return;
                         }
                         replay = DropDefer();
@@ -434,6 +452,12 @@ namespace ConditioningControlPanel.Services
                 if (!silentIfEmpty && Interlocked.Exchange(ref _noVideosShown, 1) == 0) NoVideos?.Invoke();
                 return false;
             }
+            // WPF PlayVideo :3044: try one fresh pick before ending a refused run.
+            if (PlaybackPath(path) == null)
+            {
+                path = PickNext();
+                if (path == null || PlaybackPath(path) == null) return false;
+            }
             // WPF TriggerVideo :2479-2485 and PlaySpecificVideo :2587: every clip gets the Freeze, not only the
             // startup one, unless attention checks (or, for a picked clip, the bubble-count game) need alert
             // input. Only on a head with a Freeze surface (CoreSubliminal.BambiFreezeProvider).
@@ -469,11 +493,13 @@ namespace ConditioningControlPanel.Services
                     return;
                 }
                 Dispose(ref _preroll);
+                var playbackPath = PlaybackPath(path);
+                if (playbackPath == null) { End(); return; }
                 CoreBubbles.Pause();   // WPF StartVideoPlayback: App.Bubbles?.PauseAndClear(), until the run ends
                 CoreDiscord.Service?.SetVideoActivity(); // WPF StartVideoPlayback:3133
                 // WPF StartVideoPlayback: presentation can change during the pre-roll.
                 if (!_host.IsFloating(strict) && CoreFlash.IsRunning) CoreFlash.Stop();
-                try { _host.Show(path, strict); }
+                try { _host.Show(playbackPath, strict); }
                 catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); End(); return; }
                 LastVideoPath = path;
                 try { VideoStarted?.Invoke(); }
@@ -642,6 +668,8 @@ namespace ConditioningControlPanel.Services
             _ = CoreHaptics.Service?.StopVideoBackgroundVibeAsync();
             try { CoreHaptics.Service?.FunScript.OnVideoStopped(); }
             catch (Exception ex) { Log.Debug("FunScript stop hook failed: {Error}", ex.Message); }
+            try { VideoEnded?.Invoke(); }
+            catch (Exception ex) { Log.Debug("VideoEnded handler failed: {Error}", ex.Message); }
             return true;
         }
 

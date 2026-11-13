@@ -65,6 +65,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
+        /// <summary>WPF MainWindow.Login.cs:67: explain the merge before asking for sign-in.</summary>
+        internal async Task OpenLoginAfterMergedSwap()
+        {
+            if (await MessageDialog.ConfirmAsync(this, Loc.Get("account_merged_signin_title"),
+                    Loc.Get("account_merged_signin_body")))
+                await OpenUnifiedLoginDialog();
+        }
+
         private static bool _notRememberedShown;
 
         /// <summary>WPF OpenUnifiedLoginDialog, up to the sync it starts (units 6-7). Then, once per run,
@@ -75,6 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (await dialog.ShowDialogSafe<bool>(owner ?? this) && dialog.Result is not null)
             {
                 UpdateQuickLoginUI(accountChanged: true);
+                var profileRefresh = RefreshAfterLoginAsync(dialog.ProfileLoad);
                 // WPF MainWindow.Login.cs:207-209: the required name comes before every other post-login prompt.
                 await AskDisplayNameAfterSignIn(owner ?? this, dialog.Result.DisplayName, dialog.Result.ServerNeedsDisplayName);
                 if (SecretStore.NotRemembered && !_notRememberedShown)
@@ -87,11 +96,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // The name ask finishes before the sharing question.
                 var offer = AccountSeed.Discord?.IsAuthenticated == true
                     ? OfferAchievementSharingAfterDiscordLink() : Task.CompletedTask;
-                // Profile loading runs beside the question, as in WPF; repaint when it lands.
-                try { await dialog.ProfileLoad; } catch (Exception ex) { Serilog.Log.Debug("ProfileLoad: {E}", ex.Message); }
-                UpdateLevelDisplay();
+                await profileRefresh;
                 await offer;
             }
+        }
+
+        internal async Task RefreshAfterLoginAsync(Task profileLoad)
+        {
+            try { await profileLoad; } catch (Exception ex) { Serilog.Log.Debug("ProfileLoad: {E}", ex.Message); }
+            RepaintLoadedProfile();
+        }
+
+        private void RepaintLoadedProfile()
+        {
+            UpdateQuickLoginUI();
+            Named<Tabs.QuestsTabView>("QuestsTab")?.RefreshQuestUI();
+            Named<Tabs.EnhancementsTabView>("EnhancementsTab")?.Repaint();
         }
 
         /// <summary>WPF BtnQuickLogout_Click (AccountSeed.Logout carries the pre-logout sync and progression clear).</summary>

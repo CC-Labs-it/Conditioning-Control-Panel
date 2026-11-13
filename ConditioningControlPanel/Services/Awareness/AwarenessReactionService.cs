@@ -8,39 +8,6 @@ using ConditioningControlPanel.Services.Moderation;
 namespace ConditioningControlPanel.Services.Awareness
 {
     /// <summary>
-    /// The parsed result of one awareness LLM call.
-    /// </summary>
-    /// <param name="Line">The line to speak. Empty whenever <see cref="Passed"/> is true or nothing usable came back.</param>
-    /// <param name="Callback">
-    /// The optional past-tense variant the model was invited to add (doc 02 §4.3). The arbiter speaks
-    /// this one instead when the user has already moved on by the time the reply lands — the delivery
-    /// re-tag, rather than dropping the line or delivering a stale one.
-    /// </param>
-    /// <param name="Passed">The model answered <c>[PASS]</c>: it had nothing good, and we honour that.</param>
-    /// <param name="IsAiGenerated">True only for genuine model text. Same badge semantics as everywhere else.</param>
-    /// <param name="Refusal">Non-null when the moderation spine blocked the call in either direction.</param>
-    /// <param name="Reason">Log-safe outcome token: <c>ok</c>, <c>pass</c>, <c>refused</c>, <c>no-text</c>, …</param>
-    public sealed record AwarenessReaction(
-        string Line,
-        string? Callback,
-        bool Passed,
-        bool IsAiGenerated,
-        ModerationRefusalInfo? Refusal,
-        string Reason)
-    {
-        /// <summary>Nothing to say, for the stated reason. Never a delivery, so no cooldown is burnt.</summary>
-        public static AwarenessReaction None(string reason) =>
-            new(string.Empty, null, Passed: false, IsAiGenerated: false, Refusal: null, Reason: reason);
-
-        /// <summary>The model declined, on purpose. Distinct from a failure so the arbiter can refund the slot.</summary>
-        public static AwarenessReaction Pass { get; } =
-            new(string.Empty, null, Passed: true, IsAiGenerated: true, Refusal: null, Reason: "pass");
-
-        /// <summary>True when there is a line worth putting in a bubble.</summary>
-        public bool HasLine => !Passed && Line.Length > 0;
-    }
-
-    /// <summary>
     /// The v2 awareness LLM path: one cut frame in, at most one line out (doc 02 §3.1).
     ///
     /// <para><b>It is only ever reached from a frame.</b> There is no timer, no poll and no "check in
@@ -63,7 +30,7 @@ namespace ConditioningControlPanel.Services.Awareness
     /// stays false, so a blocked ambient line is logged for compliance but never escalates the
     /// user-facing Content Policy Notice for text the user did not type.</para>
     /// </summary>
-    public sealed class AwarenessReactionService
+    public sealed partial class AwarenessReactionService
     {
         /// <summary>The output contract's hard cap. Anything longer is trimmed rather than dropped.</summary>
         public const int MaxLineLength = 140;
@@ -171,123 +138,6 @@ namespace ConditioningControlPanel.Services.Awareness
             App.Logger?.Debug("[AWARE] reaction key={Key} tier={Tier} outcome={Outcome} len={Len}",
                 AwarenessText.SanitizeId(prompt.CardKey), prompt.Tier, parsed.Reason, parsed.Line.Length);
             return parsed;
-        }
-
-        /// <summary>
-        /// Pulls the contracted shape out of a raw reply: the one line, the optional
-        /// <c>CALLBACK:</c> variant, and the <c>[PASS]</c> silence token.
-        ///
-        /// <para>Runs the same hygiene every other reply path runs first — reasoning blocks, tokenizer
-        /// artifacts, echoed context tags and the bark-echo sigil — because a small model imitating the
-        /// prompt's own scaffolding is a live failure mode, not a hypothetical one.</para>
-        ///
-        /// <para>That includes <see cref="AiTextHygiene.StripUnsanctionedLinks"/>. This leg
-        /// deliberately routes around <c>CompanionBrain</c>, where the chat path's strip lives, so it
-        /// inherited none of it — and the speech bubble renders a bare URL as a CLICKABLE hyperlink
-        /// whose display text is derived from the URL itself, so a hallucinated link arrives looking
-        /// like a curated title. The awareness prompt carries no media catalogue at all, so every URL
-        /// on this path is invented by construction and the strip can never eat a legitimate one.</para>
-        /// </summary>
-        internal static AwarenessReaction Parse(string? raw)
-        {
-            string? speaker;
-            try { speaker = App.Mods?.GetCompanionName(); } catch { speaker = null; }
-            var cleaned = AiTextHygiene.StripMetadataTags(
-                AiTextHygiene.UnwrapSpokenSigil(AiTextHygiene.Clean(raw), speaker));
-            if (cleaned.Length == 0) return AwarenessReaction.None("empty");
-
-            string? line = null;
-            string? callback = null;
-
-            foreach (var rawLine in cleaned.Replace("\r\n", "\n").Split('\n'))
-            {
-                var text = Unquote(rawLine.Trim());
-                if (text.Length == 0) continue;
-
-                if (text.StartsWith(CallbackPrefix, StringComparison.OrdinalIgnoreCase))
-                {
-                    callback ??= Clamp(Unquote(text.Substring(CallbackPrefix.Length).Trim()));
-                    continue;
-                }
-
-                line ??= text;
-            }
-
-            // Per-field rather than over the whole reply, so the LINE:/CALLBACK: structure survives:
-            // the strip drops the whole sentence carrying an unsanctioned URL, which over the raw
-            // blob could take a "CALLBACK:" prefix with it. An emptied field falls back to null so
-            // the callback-only path below still applies, and a reply that was nothing but an
-            // invented link ends as silence — the right outcome for a line nobody can trust.
-            if (line != null)
-            {
-                line = AiTextHygiene.StripUnsanctionedLinks(line);
-                if (line.Length == 0) line = null;
-            }
-            if (callback != null)
-            {
-                callback = AiTextHygiene.StripUnsanctionedLinks(callback);
-                if (callback.Length == 0) callback = null;
-            }
-
-            if (line == null)
-            {
-                // A reply that was nothing but a CALLBACK line still said something usable — the
-                // arbiter would rather have the past-tense variant than silence.
-                return callback is { Length: > 0 }
-                    ? new AwarenessReaction(callback, null, false, true, null, "callback-only")
-                    : AwarenessReaction.None("no-line");
-            }
-
-            if (IsPass(line)) return AwarenessReaction.Pass;
-
-            var clamped = Clamp(line);
-            if (clamped.Length == 0) return AwarenessReaction.None("no-line");
-
-            return new AwarenessReaction(clamped, string.IsNullOrEmpty(callback) ? null : callback,
-                Passed: false, IsAiGenerated: true, Refusal: null, Reason: "ok");
-        }
-
-        /// <summary>
-        /// True for the silence token in the shapes models actually emit it in: bare, quoted, with a
-        /// trailing full stop, or lowercased.
-        /// </summary>
-        internal static bool IsPass(string? line)
-        {
-            var text = Unquote((line ?? string.Empty).Trim()).TrimEnd('.', '!', '~', ' ');
-            return string.Equals(text, PassToken, StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(text, "PASS", StringComparison.OrdinalIgnoreCase);
-        }
-
-        /// <summary>
-        /// Trims to <see cref="MaxLineLength"/> at a word boundary. Truncation is a last resort — the
-        /// contract asks for 140 — but a clipped line still reads better than a wall of text in a
-        /// speech bubble sized for one.
-        /// </summary>
-        internal static string Clamp(string? text)
-        {
-            var line = (text ?? string.Empty).Trim();
-            if (line.Length <= MaxLineLength) return line;
-
-            var cut = line.Substring(0, MaxLineLength - 1);
-            int lastSpace = cut.LastIndexOf(' ');
-            if (lastSpace > MaxLineLength / 2) cut = cut.Substring(0, lastSpace);
-            return cut.TrimEnd() + "…";
-        }
-
-        /// <summary>Sheds one symmetric layer of wrapping quotes, which models add despite being told not to.</summary>
-        internal static string Unquote(string text)
-        {
-            if (text.Length < 2) return text;
-
-            char first = text[0];
-            char last = text[text.Length - 1];
-            bool matched =
-                (first == '"' && last == '"') ||
-                (first == '\'' && last == '\'') ||
-                (first == '“' && last == '”') ||
-                (first == '‘' && last == '’');
-
-            return matched ? text.Substring(1, text.Length - 2).Trim() : text;
         }
 
         private static bool DefaultIsMachineLocal()

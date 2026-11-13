@@ -50,9 +50,9 @@ public sealed class NotificationsSettingsSectionTests
 
             var page = section!;
             var intake = page.FindControl<CheckBox>("ChkIntakeNudge")!;
-            var suppress = page.FindControl<CheckBox>("ChkSuppressPerkNotifications")!;
+            var perk = page.FindControl<ComboBox>("CmbPerkEffects")!;   // WPF 7.2.3: Full / No cards / Off
             Assert.True(intake.IsChecked == true);
-            Assert.False(suppress.IsChecked == true);
+            Assert.Equal(0, perk.SelectedIndex);
             Thread.Sleep(650); // longer than SettingsService.Save's 500ms debounce
             Assert.Equal(before, File.ReadAllBytes(settingsPath));
             Assert.Equal(writtenAt, File.GetLastWriteTimeUtc(settingsPath));
@@ -60,15 +60,16 @@ public sealed class NotificationsSettingsSectionTests
             OnUi(() =>
             {
                 intake.IsChecked = false;
-                suppress.IsChecked = true;
+                perk.SelectedIndex = (int)PerkEffectsMode.Off;
             });
             WaitFor(() => HasValues(settingsPath, intake: false, suppress: true));
 
             var reloaded = new SettingsService();
             Assert.False(reloaded.Current.IntakeNudgeEnabled);
             Assert.True(reloaded.Current.SuppressPerkNotifications);
+            Assert.Equal(PerkEffectsMode.Off, reloaded.Current.PerkEffects);
 
-            OnUi(() => suppress.IsChecked = false);
+            OnUi(() => perk.SelectedIndex = (int)PerkEffectsMode.Full);   // a checkbox could never lower it again
             WaitFor(() => HasValues(settingsPath, intake: false, suppress: false));
             var falseValues = new SettingsService();
             Assert.False(falseValues.Current.IntakeNudgeEnabled);
@@ -85,7 +86,7 @@ public sealed class NotificationsSettingsSectionTests
             var restoreWrittenAt = File.GetLastWriteTimeUtc(settingsPath);
             OnUi(() => { }); // drain the posted CurrentReplaced repaint
             Assert.True(intake.IsChecked == true);
-            Assert.True(suppress.IsChecked == true);
+            Assert.Equal((int)PerkEffectsMode.NoCards, perk.SelectedIndex);
             Thread.Sleep(650);
             Assert.Equal(afterRestore, File.ReadAllBytes(settingsPath));
             Assert.Equal(restoreWrittenAt, File.GetLastWriteTimeUtc(settingsPath));
@@ -104,7 +105,7 @@ public sealed class NotificationsSettingsSectionTests
                 Dispatcher.UIThread.RunJobs();
             });
             Assert.True(intake.IsChecked == true);
-            Assert.False(suppress.IsChecked == true);
+            Assert.Equal(0, perk.SelectedIndex);
             Thread.Sleep(650);
             Assert.Equal(beforeReattach, File.ReadAllBytes(settingsPath));
             Assert.Equal(reattachWrittenAt, File.GetLastWriteTimeUtc(settingsPath));

@@ -37,7 +37,8 @@ namespace ConditioningControlPanel.Services.Diagnostics
             if (ex is OutOfMemoryException) return true;
             if (ex.HResult == RenderThreadFailureHResult) return true;
             var message = ex.Message ?? "";
-            return message.Contains("RENDER") || message.Contains("0x88980406");
+            // Only the composition channel's own names: a bare "RENDER" also matched unrelated messages.
+            return message.Contains("UCEERR_") || message.Contains("0x88980406");
         }
 
         /// <summary>

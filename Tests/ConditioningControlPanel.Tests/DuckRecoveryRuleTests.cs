@@ -68,6 +68,68 @@ public class DuckRecoveryRuleTests
         Assert.DoesNotContain("giving up", src);
     }
 
+    // ccp-bugs #1531: a new duck while an app is still owed a parked restore. The live volume is the
+    // DUCKED level then; storing it as the original is how Discord stayed almost muted.
+    [Fact]
+    public void A_duck_claims_a_parked_original_instead_of_the_ducked_live_level()
+    {
+        var ducked = new Dictionary<int, float>();
+        var parked = new Dictionary<int, float> { [10] = 1.0f };
+        var names = new Dictionary<int, string> { [10] = "Discord" };
+
+        Assert.Equal(1.0f, DuckRecoveryRule.ClaimOriginal(10, "Discord", 0.2f, ducked, parked, names));
+        Assert.Equal(1.0f, ducked[10]);
+        Assert.Empty(parked);   // a restore retry can no longer undo the live duck
+    }
+
+    [Fact]
+    public void A_restarted_app_claims_its_parked_original_by_name()
+    {
+        var ducked = new Dictionary<int, float>();
+        var parked = new Dictionary<int, float> { [10] = 0.9f };
+        var names = new Dictionary<int, string> { [10] = "discord" };
+
+        Assert.Equal(0.9f, DuckRecoveryRule.ClaimOriginal(42, "Discord", 0.18f, ducked, parked, names));
+        Assert.Equal(0.9f, ducked[42]);
+        Assert.Empty(parked);
+    }
+
+    [Fact]
+    public void A_recycled_pid_never_claims_another_apps_parked_volume()
+    {
+        var ducked = new Dictionary<int, float>();
+        var parked = new Dictionary<int, float> { [10] = 0.9f };
+        var names = new Dictionary<int, string> { [10] = "discord" };
+
+        Assert.Equal(0.5f, DuckRecoveryRule.ClaimOriginal(10, "chrome", 0.5f, ducked, parked, names));
+        Assert.Equal(0.9f, parked[10]);
+    }
+
+    [Fact]
+    public void Nothing_parked_takes_the_live_level_and_an_already_ducked_pid_is_left_alone()
+    {
+        var ducked = new Dictionary<int, float>();
+        var parked = new Dictionary<int, float>();
+        var names = new Dictionary<int, string>();
+
+        Assert.Equal(0.7f, DuckRecoveryRule.ClaimOriginal(10, "spotify", 0.7f, ducked, parked, names));
+        Assert.Null(DuckRecoveryRule.ClaimOriginal(10, "spotify", 0.14f, ducked, parked, names));
+        Assert.Equal(0.7f, ducked[10]);
+        // The rescan leaves a silent session alone unless something is parked for it.
+        Assert.Null(DuckRecoveryRule.ClaimOriginal(11, "vlc", 0f, ducked, parked, names, skipSilent: true));
+        parked[11] = 0.6f;
+        Assert.Equal(0.6f, DuckRecoveryRule.ClaimOriginal(11, "vlc", 0f, ducked, parked, names, skipSilent: true));
+    }
+
+    [Fact]
+    public void Both_duck_sweeps_go_through_the_claim()
+    {
+        var src = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "AudioService.cs"));
+        var claims = src.Split("Audio.DuckRecoveryRule.ClaimOriginal(").Length - 1;
+        Assert.Equal(2, claims);
+        Assert.DoesNotContain("_originalVolumes[processId] = currentVolume;", src);
+    }
+
     private static string RepoRoot()
     {
         var d = new DirectoryInfo(AppContext.BaseDirectory);

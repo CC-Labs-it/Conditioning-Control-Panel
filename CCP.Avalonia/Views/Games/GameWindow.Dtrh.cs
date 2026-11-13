@@ -11,14 +11,17 @@
 // ponytail: slice game-dtrh-host-d, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
 // meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.spirals / ccp.content / ccp.mod origins, loom-list and
 // loom-*, favorites + asset-stats, bark routing, sfx,
-// fire-payload, freeze/mute (native video), vn-speaking, haptics, fullscreen-set, report-bug, session stats,
+// fire-payload, freeze/mute (native video), vn-speaking, haptics, report-bug, session stats,
 // achievements bubble credit, RevealService.Sync, crash sentinel, EMI desk fires, the audio-web pack request,
-// tucking the panel to the tray, and SeasonRecap TrackFeature. WebHost has no process-failed signal;
+// tucking the panel to the tray. WebHost has no process-failed signal;
 // the heartbeat watch recovers silent ready pages only, not failures before ready.
 using System;
 using System.IO;
 using System.Linq;
+using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
@@ -49,6 +52,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private bool _dtrhRunActive, _dtrhExiting;
         private IDisposable? _dtrhExitWatchdog;
         private JObject? _dtrhLastProgress;
+        private global::Avalonia.PixelPoint _dtrhWindowPosition;
+        private double _dtrhWindowWidth, _dtrhWindowHeight;
+        private global::Avalonia.Controls.WindowState _dtrhWindowState;
+        private bool _dtrhFullscreen, _dtrhHasWindowedFrame;
         private DateTime _dtrhRunStartedUtc = DateTime.MinValue;
 
         private DispatcherTimer? _dtrhHeartbeatWatch;
@@ -60,6 +67,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal bool DtrhWatchRunning => _dtrhHeartbeatWatch?.IsEnabled == true;
 
         internal bool DtrhRunActive => _dtrhRunActive;
+        internal static bool IsDtrhRunning { get { lock (Open) return Open.Any(w => w.IsDtrh && w._dtrhRunActive); } }
 
         /// <summary>WPF IsReady: the page said ready and is not on its way out.</summary>
         internal bool DtrhReady => IsReady && !_dtrhExiting && !_closing;
@@ -93,6 +101,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     _dtrhLastHeartbeatUtc = DtrhUtcNow(); // WPF OnPageReady :275: loading does not spend the deadline
                     OnDtrhPageReady();
                     return true;
+                case "fullscreen-set":
+                    SetDtrhFullscreen((bool?)o["on"] ?? false);
+                    Post(new { type = "fullscreen", on = _dtrhFullscreen });
+                    return true;
                 case "funnel":
                     FunnelPageMessage.Handle(o, !_dtrhRunActive && !_dtrhExiting && !_closing);
                     return true;
@@ -108,6 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     if (_dtrhRunActive) _dtrhLastProgress = o;
                     return true;
                 case "run-started":
+                    SeasonFeatureTracking.Track(CoreSettings.Current, ConditioningControlPanel.Models.SeasonFeatureKeys.Dtrh, ev => App.FeatureDayLog?.Note(ev), DateTime.UtcNow);
                     _dtrhRunActive = true;
                     _dtrhLastProgress = null;
                     _dtrhRunStartedUtc = DtrhUtcNow();
@@ -171,6 +184,65 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             hub = new Chaos.ChaosHubWindow();
             if (desktop?.MainWindow is { IsVisible: true } owner) hub.Show(owner);
             else hub.Show();
+        }
+
+        // Avalonia has no RestoreBounds. Remember the normal frame while the user moves or resizes it.
+        private void CaptureDtrhWindowedFrame()
+        {
+            if (_dtrhFullscreen || WindowState != WindowState.Normal || !IsVisible) return;
+            if (ClientSize.Width <= 0 || ClientSize.Height <= 0) return;
+            _dtrhWindowPosition = Position;
+            _dtrhWindowWidth = ClientSize.Width;
+            _dtrhWindowHeight = ClientSize.Height;
+            _dtrhHasWindowedFrame = true;
+        }
+
+        // WPF DtrhHostService.ApplyHostFullscreen and ChaosWebViewHost.ApplyWindowMode.
+        private void SetDtrhFullscreen(bool on)
+        {
+            if (_dtrhFullscreen == on) return;
+            if (on)
+            {
+                _dtrhWindowState = WindowState;
+                CaptureDtrhWindowedFrame();
+                _dtrhFullscreen = true;
+                WindowState = WindowState.FullScreen;
+            }
+            else
+            {
+                var screens = ScreenList.Enumerate(this);
+                // Position and screen bounds are physical pixels; sizes are DIPs.
+                bool reachable = _dtrhHasWindowedFrame && screens.Any(s =>
+                    _dtrhWindowPosition.X < s.Bounds.Right && _dtrhWindowPosition.Y < s.Bounds.Bottom &&
+                    _dtrhWindowPosition.X + _dtrhWindowWidth * s.Scaling > s.Bounds.X &&
+                    _dtrhWindowPosition.Y + _dtrhWindowHeight * s.Scaling > s.Bounds.Y);
+                var target = screens.FirstOrDefault(s => s.Bounds.Contains(Position))
+                    ?? screens.FirstOrDefault(s => s.IsPrimary) ?? screens.FirstOrDefault();
+                WindowState = WindowState.Normal;
+                if (reachable || target == null)
+                {
+                    if (_dtrhHasWindowedFrame)
+                    {
+                        Width = _dtrhWindowWidth;
+                        Height = _dtrhWindowHeight;
+                        Position = _dtrhWindowPosition;
+                    }
+                }
+                else
+                {
+                    var bounds = target.Bounds;
+                    var scale = target.Scaling > 0 ? target.Scaling : 1;
+                    Width = Math.Min(_dtrhWindowWidth, bounds.Width / scale);
+                    Height = Math.Min(_dtrhWindowHeight, bounds.Height / scale);
+                    Position = new PixelPoint(bounds.X + (int)((bounds.Width - Width * scale) / 2),
+                                              bounds.Y + (int)((bounds.Height - Height * scale) / 2));
+                }
+                if (reachable && _dtrhWindowState == WindowState.Maximized)
+                    WindowState = WindowState.Maximized;
+                _dtrhFullscreen = false;
+                CaptureDtrhWindowedFrame();
+            }
+            Activate();
         }
 
         /// <summary>WPF OnPageReady (:271): init, then the manifest.</summary>

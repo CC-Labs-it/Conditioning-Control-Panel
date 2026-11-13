@@ -160,7 +160,7 @@
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
                                 <Slider Grid.Column="1" x:Name="SliderIntensity" x:FieldModifier="internal"
                                         feat:SessionLock.Owned="True"
-                                        Minimum="1" Maximum="100" Value="50"
+                                        Minimum="0" Maximum="100" Value="50"
                                         VerticalAlignment="Center" Margin="10,0"
                                         ValueChanged="SliderIntensity_Changed"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtIntensity" x:FieldModifier="internal" Text="50%"

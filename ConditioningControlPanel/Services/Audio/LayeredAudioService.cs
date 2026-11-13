@@ -70,6 +70,7 @@ namespace ConditioningControlPanel.Services.Audio
 
                 var mixer = new MixingSampleProvider(MixFormat) { ReadFully = true };
                 int added = 0;
+                string? firstPath = null;
 
                 foreach (var track in tracks)
                 {
@@ -93,6 +94,7 @@ namespace ConditioningControlPanel.Services.Audio
 
                         mixer.AddMixerInput(vol);
                         _readers.Add(reader);
+                        firstPath ??= track.Path;
                         _trackVolumes[track] = vol;
                         added++;
                     }
@@ -121,6 +123,7 @@ namespace ConditioningControlPanel.Services.Audio
                     _output.Play();
                     _isPlaying = true;
                     App.Logger?.Information("LayeredAudio: started with {Count} track(s)", added);
+                    global::ConditioningControlPanel.Services.Audio.EngineOffAudioLog.Note("layers", firstPath + (added > 1 ? " +" + (added - 1) : ""));
                 }
                 catch (Exception ex)
                 {

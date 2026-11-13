@@ -1,0 +1,31 @@
+RACING THOUGHTS CLASSIC: 7.2.3
+
+RACING THOUGHTS CLASSIC IS BACK
+the original 2D race returns beside the 3D one, as its own door on Play and in the launcher. free for everyone, every track open. the 3D Racing Thoughts stays Prime. Classic is also on the website and, soon, on the phone.
+
+NEW
+- Perk effects: Full, No cards or Off, in Settings > Notifications. Off also turns off the Pink Rush wash and the gold and pink sparkles on flashes and bubbles. XP still pays the same.
+- Circe's Tab: a price and the day limit can go up to 24 hours. anything over an hour shows a warning line.
+- Awareness: a new "On at launch" switch. it can now be turned off during a session, and pausing a session pauses it.
+- quests: click a daily or weekly quest to open the page that completes it. Lockdown included.
+- Wallpaper: a Fit choice (Fill, Fit, Stretch, Span, Center), so a vertical or mixed setup can span instead of stretch. your own fit comes back after.
+- Natasha's bubbles: trigger words can come up more often, in Circe's Tab costs.
+- Brain Drain: the audio clip rate goes down to 0, for blur only.
+- "+Add Trigger" jumps to the new row and puts the cursor in it.
+- fewer popups: the online media offer, the "share achievements on Discord?" question and the tier celebration cards are gone. online media and Discord sharing are still one switch away.
+
+FIXES
+- Wallpaper no longer leaves a white desktop when Windows rotates your wallpapers: Dynamic redraws the whole desktop when it stops, and Static and the session wallpaper leave a rotating, Spotlight or per-monitor desktop alone.
+- other apps such as Discord no longer stay turned down after a session.
+- the spiral clears when a session ends.
+- the companion's speech bubble no longer covers the chat box, and the tube no longer covers its own menu.
+- the Prize Counter plays its sounds as soon as it opens.
+- Bubble Count time counts for the "watch videos" quests, including a clip you leave early.
+- a strict lock card with panic turned off says that Escape closes it.
+
+HUNTING A STRAY SOUND
+thanks to your reports, most "random" sounds now have a name. the giggle while idle was the companion asking you something on its own: with nothing running it now shows the question quietly, unless you let it speak while idle. it also waits while a Deeper session plays. the sounds right at launch are the launcher's own chimes and hover notes (its speaker button mutes them). still hearing something? send an in-app bug report right away, it now names more sources.
+
+ALSO LOGGED FOR THE NEXT REPORT
+- a crash when the in-app browser goes full screen now saves your graphics card and window sizes.
+- corner GIFs log how long they take to load and show.

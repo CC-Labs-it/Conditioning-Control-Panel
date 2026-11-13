@@ -19,8 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// org.freedesktop.Notifications Notify / ActionInvoked / NotificationClosed, raw over
 /// Tmds.DBus.Protocol like <see cref="PortalPanicShortcut"/>. No server (or not Linux): the in-app
 /// toast when the window is visible, otherwise dropped and logged once.
-/// ponytail: Windows has no Avalonia toast API, so it always takes the fallback; add a WinRT
-/// toast if balloons matter there.
+/// Windows uses the existing native tray icon for balloons.
 /// </summary>
 internal static class OsNotifications
 {
@@ -30,6 +29,7 @@ internal static class OsNotifications
     private static Task<DBusConnection>? _bus;
     private static readonly Dictionary<uint, Action> _clicks = new();
     private static bool _droppedLogged;
+    private static WindowsNotifications? _windows;
 
     /// <summary>Test seam: when set, every notification goes here instead of D-Bus and counts as not delivered
     /// (so <see cref="Decide"/> still picks toast/drop). Tests assert "a notification was requested" with it.</summary>
@@ -43,7 +43,7 @@ internal static class OsNotifications
         osDelivered ? Route.Os : windowVisible ? Route.Toast : Route.Drop;
 
     /// <summary>Fire and forget. <paramref name="onClick"/> runs on the UI thread when the user
-    /// clicks the OS notification (the toast fallback, like a WPF balloon, has no click).</summary>
+    /// clicks a Linux OS notification. Windows balloons and toast fallback have no click.</summary>
     internal static void Show(string title, string body, Action? onClick = null) => _ = ShowAsync(title, body, onClick);
 
     internal static async Task ShowAsync(string title, string body, Action? onClick)
@@ -59,7 +59,18 @@ internal static class OsNotifications
 
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            var visible = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow?.IsVisible == true;
+            var window = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+            if (Sink == null && OperatingSystem.IsWindows() && !SandboxNet.Active)
+            {
+                try
+                {
+                    var tray = (window as Views.Windows.MainShellWindow)?.Tray;
+                    _windows ??= WindowsNotifications.Create(tray);
+                    if (_windows?.Show(title, body) == true) id = 1;
+                }
+                catch (Exception ex) { Log.Debug("OS notification failed: {Error}", ex.Message); }
+            }
+            var visible = window?.IsVisible == true;
             switch (Decide(id != 0, visible))
             {
                 case Route.Toast:
@@ -71,6 +82,14 @@ internal static class OsNotifications
                     break;
             }
         });
+    }
+
+    internal static void DismissWindowsBalloon()
+    {
+        var windows = _windows;
+        _windows = null;
+        try { windows?.Dispose(); }
+        catch (Exception ex) { Log.Debug("OS notification cleanup failed: {Error}", ex.Message); }
     }
 
     // One cached task: concurrent first calls share one connection; a failed connect is retried next time.

@@ -26,7 +26,9 @@ namespace ConditioningControlPanel.Services
     ///
     /// Mandatory videos and the session audio duck level follow WPF SessionEngine too.
     ///
-    /// ponytail: not driven here - bubble count, brain drain, phase events,
+    /// Bubble count follows WPF SessionEngine too (schedule, pause, resume).
+    ///
+    /// ponytail: not driven here - brain drain, phase events,
     /// EMI Desk, friends, season recap and achievement tracking. No settings are written for them,
     /// so the snapshot restore writes their own values back; each arrives with its Core service.
     /// </summary>
@@ -271,6 +273,16 @@ namespace ConditioningControlPanel.Services
             }
             else CoreEngine.Video?.Stop();
 
+            // WPF Services/Session/SessionEngine.cs:1605-1625.
+            s.BubbleCountEnabled = ss.BubbleCountEnabled;
+            if (ss.BubbleCountEnabled)
+            {
+                if (ss.BubbleCountFrequency.HasValue) s.BubbleCountFrequency = ss.BubbleCountFrequency.Value;
+                StartAt("bubble count", ss.BubbleCountStartMinute,
+                    () => CoreEngine.BubbleCount?.Start(), () => CoreEngine.BubbleCount?.Stop());
+            }
+            else CoreEngine.BubbleCount?.Stop();
+
             // SessionEngine.cs:1627: pop quiz is a user-level toggle (AppSettings), not per-session.
             if (s.PopQuizEnabled) CoreEngine.PopQuiz?.Start();
             else CoreEngine.PopQuiz?.Stop();
@@ -309,6 +321,7 @@ namespace ConditioningControlPanel.Services
             CoreMindWipe.Stop();   // WPF SessionEngine.cs:528
             RemoteCommands.StopOverlays();   // WPF SessionEngine.cs:530: pause stops all overlays
             CoreEngine.Video?.Stop();   // WPF SessionEngine.cs:531
+            CoreEngine.BubbleCount?.Stop();   // WPF SessionEngine.cs:526
             CoreAudio.StopSound();   // WPF SessionEngine.cs:532, companion Audio action too
             CloseCornerGif(handBack: false);   // SessionEngine.cs:531: hide only, the claim survives
             CoreEngine.StopBrainDrain?.Invoke();   // WPF SessionEngine.cs:529
@@ -339,6 +352,7 @@ namespace ConditioningControlPanel.Services
             if (CoreSettings.Current.PopQuizEnabled) Step("pop-quiz", () => CoreEngine.PopQuiz?.Start());   // SessionEngine.cs:574
             if (ss.BubblesEnabled) Step("bubbles", CoreBubbles.Start); // WPF SessionEngine.cs:570
             if (ss.MandatoryVideosEnabled && !_deferred.IsPending("mandatory videos")) Step("mandatory-videos", () => CoreEngine.Video?.Start());   // WPF :580
+            if (ss.BubbleCountEnabled && !_deferred.IsPending("bubble count")) Step("bubble-count", () => CoreEngine.BubbleCount?.Start());   // WPF :573
             // SessionEngine.cs:575: the pause closed it; admission is asked afresh.
             var minutes = Elapsed.TotalMinutes;
             if (!CornerGifShown && CanRaiseCornerGif(ss) && minutes >= ss.CornerGifStartMinute

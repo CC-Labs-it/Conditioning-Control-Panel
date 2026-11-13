@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -12,9 +13,12 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using Serilog.Core;
+using Serilog.Events;
 using Xunit;
 
 [assembly: CollectionBehavior(DisableTestParallelization = true)]
@@ -62,6 +66,13 @@ public sealed class RealCatalogueFailureFallbackTests
         }
     }
 
+    private sealed class Capture : ILogEventSink
+    {
+        private readonly ConcurrentQueue<string> _messages = new();
+        public string Message => string.Join("\n", _messages);
+        public void Emit(LogEvent entry) => _messages.Enqueue(entry.RenderMessage());
+    }
+
     [Fact]
     public async Task RealDesktopFailureKeepsHardcodedFallbackInsteadOfPartialCandidate()
     {
@@ -70,6 +81,12 @@ public sealed class RealCatalogueFailureFallbackTests
         var builtInFolder = Path.Combine(root, "built-in");
         var customFolder = Path.Combine(root, "custom");
 
+        var oldLogger = Serilog.Log.Logger;
+        var capture = new Capture();
+        Serilog.Log.Logger = new Serilog.LoggerConfiguration().WriteTo.Sink(capture).CreateLogger();
+        var marker = Path.Combine(profile, "logs", "engine_session.active");
+        Directory.CreateDirectory(Path.GetDirectoryName(marker)!);
+        File.WriteAllText(marker, "prior test session");
         try
         {
             await AvaloniaTestDispatcher.RunAsync(() =>
@@ -116,9 +133,13 @@ public sealed class RealCatalogueFailureFallbackTests
                     AppBuilder.Configure<FailingCatalogueApp>(() =>
                             new FailingCatalogueApp(customFolder, builtInFolder))
                         .UseSkia()
+                        .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                         .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithLifetime(lifetime);
 
+                    Assert.False(File.Exists(marker));
+                    Assert.Contains("[ENGINECRASH]", capture.Message);
+                    Assert.Contains("prior test session", capture.Message);
                     var app = Assert.IsType<FailingCatalogueApp>(Application.Current);
                     Assert.Equal(firstAssets, CorePaths.EffectiveAssets);
                     CoreSettings.Current.CustomAssetsPath = secondAssets;
@@ -157,6 +178,27 @@ public sealed class RealCatalogueFailureFallbackTests
                         row => (row.Tag as Session)?.Id == "real_failure_builtin");
                     Assert.All(rows, row => Assert.IsType<Session>(row.Tag));
 
+                    // Use the hooks installed by desktop startup, not direct calls to the shell.
+                    var engineSettings = CoreSettings.Current;
+                    engineSettings.AudioOnlySession = true;
+                    engineSettings.FlashFrequency = 17;
+                    engineSettings.SimultaneousImages = 3;
+                    engineSettings.BubblesEnabled = true;
+                    engineSettings.MandatoryVideosEnabled = false;
+                    engineSettings.SubliminalEnabled = true;
+                    CoreEngine.Start();
+                    Assert.True(CoreEngine.IsRunning);
+                    var context = File.ReadAllText(marker);
+                    Assert.Matches(@"^started \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \| flash 17/min x3 \| bubbles on \| video off \| subliminal on$", context);
+                    CoreEngine.Stop();
+                    Assert.False(File.Exists(marker));
+                    CoreEngine.Start();
+                    Assert.True(CoreEngine.IsRunning);
+                    Assert.True(File.Exists(marker));
+                    // The shell's Closed handler stops the engine during shutdown. Disable that
+                    // hook so only the desktop Exit handler can clear this running-session marker.
+                    CoreEngine.StoppedHook = null;
+
                     // A tracked counter dirties the engine; the exit handler must flush it, and into
                     // this test's profile, never the real ~/.config achievements.json.
                     CoreProgression.TrackBubbleCountResult(false);
@@ -173,6 +215,7 @@ public sealed class RealCatalogueFailureFallbackTests
                     }
                 }
 
+                Assert.False(File.Exists(marker));
                 Assert.Contains("\"TotalBubbleCountFailed\": 1",
                     File.ReadAllText(Path.Combine(profile, "achievements.json")));
                 return Task.CompletedTask;
@@ -180,6 +223,7 @@ public sealed class RealCatalogueFailureFallbackTests
         }
         finally
         {
+            Serilog.Log.Logger = oldLogger;
             if (Directory.Exists(profile))
                 Directory.Delete(profile, recursive: true);
         }

@@ -127,15 +127,64 @@ test('the stamp slams in big, hits once, dips under size and settles at 1; off i
   assert.deepEqual([fades[0], fades[fades.length - 1]], [0, 1]);
 });
 
-test('the sfx bus is silent until a gesture, then plays and ducks', () => {
+// A context that starts suspended and only runs once `policy.allowed` (a browser after a gesture, or a host
+// started with --autoplay-policy=no-user-gesture-required from the first frame).
+function mockAudio(policy) {
   const made = [], node = () => ({ connect: (n) => n || node(), start() {}, stop() {}, gain: { value: 1, setValueAtTime() {}, exponentialRampToValueAtTime() {}, setTargetAtTime(v) { this.value = v; } },
     frequency: { value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {} }, Q: { value: 0 } });
-  class Ctx { constructor() { made.push(this); this.currentTime = 0; this.sampleRate = 8000; this.destination = node(); this.made = 0; }
+  class Ctx { constructor() { made.push(this); this.state = 'suspended'; this.currentTime = 0; this.sampleRate = 8000; this.destination = node(); this.made = 0; }
     createGain() { this.made++; return (this.bus = this.bus ? node() : node()); } createOscillator() { this.made++; return node(); } createBiquadFilter() { return node(); }
-    createBufferSource() { return node(); } createBuffer(c, n) { return { getChannelData: () => new Float32Array(n) }; } resume() {} close() {} }
+    createBufferSource() { return node(); } createBuffer(c, n) { return { getChannelData: () => new Float32Array(n) }; }
+    resume() { if (policy.allowed) this.state = 'running'; return Promise.resolve(); } close() { this.state = 'closed'; } }
+  return { made, Ctx };
+}
+
+test('the sfx bus plays from the first frame where the host waives the gesture rule (ccp-bugs #1574)', () => {
+  const { made, Ctx } = mockAudio({ allowed: true });
   const target = new EventTarget(), sfx = createSfx({ target, Ctx });
+  assert.deepEqual([made.length, sfx.live], [1, true]);
+  const before = made[0].made;
+  sfx.thud(); sfx.slam();
+  assert.ok(made[0].made > before, 'the shelves sound with no click');
+  sfx.dispose();
+});
+
+test('a touch that is not an audio gesture keeps the listeners for the tap that is (phone browsers)', async () => {
+  const policy = { allowed: false }, { made, Ctx } = mockAudio(policy);
+  let resumes = 0;
+  const origResume = Ctx.prototype.resume;
+  Ctx.prototype.resume = function () { resumes++; return origResume.call(this); };
+  const target = new EventTarget(), sfx = createSfx({ target, Ctx });
+  target.dispatchEvent(new Event('touchstart'));
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(sfx.live, false, 'touchstart did not activate audio');
+  policy.allowed = true;
+  const tries = resumes;
+  target.dispatchEvent(new Event('touchend'));
+  await Promise.resolve(); await Promise.resolve();
+  assert.deepEqual([sfx.live, resumes, made.length], [true, tries + 1, 1], 'touchend still reached unlock');
+  target.dispatchEvent(new Event('click'));
+  assert.equal(resumes, tries + 1, 'listeners leave once the context runs');
+  sfx.dispose();
+});
+
+test('an interrupted context (Safari) is not live, so cues do not pile up at a frozen clock', () => {
+  const { made, Ctx } = mockAudio({ allowed: true });
+  const sfx = createSfx({ target: new EventTarget(), Ctx });
+  made[0].state = 'interrupted';
+  const before = made[0].made;
+  sfx.thud(); sfx.slam();
+  assert.deepEqual([sfx.live, made[0].made], [false, before]);
+  sfx.dispose();
+});
+
+test('the sfx bus is silent until a gesture, then plays and ducks', () => {
+  const policy = { allowed: false }, { made, Ctx } = mockAudio(policy);
+  const target = new EventTarget(), sfx = createSfx({ target, Ctx });
+  const idle = made[0].made;
   sfx.thud(); sfx.rattle();
-  assert.deepEqual([made.length, sfx.live], [0, false]);
+  assert.deepEqual([made.length, sfx.live, made[0].made], [1, false, idle], 'a suspended context queues nothing');
+  policy.allowed = true;
   target.dispatchEvent(new Event('keydown'));
   assert.equal(sfx.live, true);
   const before = made[0].made;

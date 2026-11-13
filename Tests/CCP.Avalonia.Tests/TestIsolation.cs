@@ -274,8 +274,14 @@ internal sealed class ProcessStateSnapshot
         // Whole seam classes: the head's service locator and Core's static Core* seams.
         foreach (var t in types.Where(t => t == typeof(ConditioningControlPanel.Avalonia.App)
                      || t == typeof(ConditioningControlPanel.Services.RemoteCommands)
+                     || t == typeof(ConditioningControlPanel.Services.MergedAccountRecovery)
+                     || t == typeof(ConditioningControlPanel.Services.V2AuthService)
                      || (t.Assembly == core && t.IsAbstract && t.IsSealed && t.Name.StartsWith("Core", StringComparison.Ordinal))))
             foreach (var m in t.GetMembers(AnyStatic).Where(Settable)) found.Add(m);
+
+        // The cached motion value and its timestamp are one state. Restoring only the public
+        // test seam leaves a fresh timestamp paired with another test's cached result.
+        found.Add(typeof(UiMotionPreference).GetField("_cached", AnyStatic)!);
 
         // Panic is raised through methods, so the assignment scanner cannot see its private state.
         // Restore the quiet deadline, engine hold and count together after every test.

@@ -19,6 +19,33 @@ namespace CCP.Avalonia.Tests;
 public class TestIsolationTests
 {
     [Fact]
+    public void MotionPreferenceCacheIsRestoredWithItsTimestamp() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        var oldProbe = UiMotionPreference.OsProbe;
+        try
+        {
+            UiMotionPreference.OsProbe = () => true;
+            UiMotionPreference.CacheStamp = long.MinValue;
+            Assert.True(UiMotionPreference.AnimationsEnabled);
+            // Keep the cache fresh throughout the snapshot and assertion, even on a busy runner.
+            UiMotionPreference.CacheStamp = System.Environment.TickCount64 + 60_000;
+            var snapshot = ProcessStateSnapshot.Take();
+
+            UiMotionPreference.OsProbe = () => false;
+            UiMotionPreference.CacheStamp = long.MinValue;
+            Assert.False(UiMotionPreference.AnimationsEnabled);
+            snapshot.Restore();
+
+            Assert.True(UiMotionPreference.AnimationsEnabled);
+        }
+        finally
+        {
+            UiMotionPreference.OsProbe = oldProbe;
+            UiMotionPreference.CacheStamp = long.MinValue;
+        }
+    });
+
+    [Fact]
     public void HeadlessBootstrapIncludesShippedFontFallbacks() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
     {
         foreach (var family in new[] { "Segoe UI Black, Segoe UI", "Comic Sans MS, Segoe UI", "Consolas, Courier New" })
@@ -245,6 +272,8 @@ public class TestIsolationTests
     public void EveryTestRunsInsideTheHook() => Assert.NotNull(IsolateProcessStateAttribute.Current);
 
     [Theory]
+    [InlineData(typeof(ConditioningControlPanel.Services.V2AuthService), nameof(ConditioningControlPanel.Services.V2AuthService.MergedRecovery))]
+    [InlineData(typeof(ConditioningControlPanel.Services.MergedAccountRecovery), nameof(ConditioningControlPanel.Services.MergedAccountRecovery.ReloadProfile))]
     [InlineData(typeof(CoreSettings), nameof(CoreSettings.ServiceProvider))]
     [InlineData(typeof(CoreEntitlement), nameof(CoreEntitlement.HasPremiumProvider))]
     [InlineData(typeof(CoreSecrets), nameof(CoreSecrets.RetrieveProvider))]
@@ -377,6 +406,77 @@ public class TestIsolationTests
             }
             finally { snapshot.Restore(); }
         });
+
+    [Fact]
+    public void PrivacyRingTestRestoresProviderAndLeavesRunningEngineAlone() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var provider = CoreSettings.ServiceProvider;
+        var premium = ConditioningControlPanel.CoreEntitlement.HasPremiumProvider;
+        var engine = KeywordTriggerHead.Engine;
+        bool wasActive = engine.IsActive;
+        try
+        {
+            var service = new ConditioningControlPanel.Services.SettingsService();
+            CoreSettings.ServiceProvider = () => service;
+            var expectedProvider = CoreSettings.ServiceProvider;
+            ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => true;
+            engine.Start();
+            Assert.True(engine.IsActive);
+            var before = engine.GetRecentForegroundApps();
+            new AwarenessPrivacyCandidatesTests().KeywordRingFeedsSeenAndCandidates();
+            Assert.Same(expectedProvider, CoreSettings.ServiceProvider);
+            Assert.True(engine.IsActive);
+            Assert.Equal(before, engine.GetRecentForegroundApps());
+        }
+        finally
+        {
+            if (!wasActive) engine.Stop();
+            CoreSettings.ServiceProvider = provider;
+            ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = premium;
+        }
+    });
+
+    [Fact]
+    public System.Threading.Tasks.Task PrivacyFrameTestRestoresGlobalState() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var provider = CoreSettings.ServiceProvider;
+        var observer = ConditioningControlPanel.Services.Awareness.AwarenessLive.ObserverEnabled;
+        var pause = ConditioningControlPanel.Services.Awareness.AwarenessPause.PausedUntil;
+        var flags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic;
+        var type = typeof(ConditioningControlPanel.Services.Awareness.AwarenessLive);
+        var gate = type.GetField("Lock", flags)!.GetValue(null)!;
+        var frame = type.GetField("_lastFrame", flags)!;
+        var at = type.GetField("_lastFrameAt", flags)!;
+        object? oldFrame, oldAt;
+        lock (gate) { oldFrame = frame.GetValue(null); oldAt = at.GetValue(null); }
+        try
+        {
+            var service = new ConditioningControlPanel.Services.SettingsService();
+            CoreSettings.ServiceProvider = () => service;
+            var expectedProvider = CoreSettings.ServiceProvider;
+            ConditioningControlPanel.Services.Awareness.AwarenessPause.Resume();
+            ConditioningControlPanel.Services.Awareness.AwarenessPause.Pause(System.TimeSpan.FromMinutes(10));
+            var expectedPause = ConditioningControlPanel.Services.Awareness.AwarenessPause.PausedUntil;
+            var expectedFrame = new ConditioningControlPanel.Services.Awareness.ContextFrame { AppId = "sentinel" };
+            ConditioningControlPanel.Services.Awareness.AwarenessLive.Publish(expectedFrame);
+            var expectedAt = ConditioningControlPanel.Services.Awareness.AwarenessLive.LastFrameAt;
+            ConditioningControlPanel.Services.Awareness.AwarenessLive.ObserverEnabled = true;
+            await new AwarenessPrivacyCardTests().PublishedAdultFrameUsesProjection();
+            Assert.Same(expectedProvider, CoreSettings.ServiceProvider);
+            Assert.Same(expectedFrame, ConditioningControlPanel.Services.Awareness.AwarenessLive.LastFrame);
+            Assert.Equal(expectedAt, ConditioningControlPanel.Services.Awareness.AwarenessLive.LastFrameAt);
+            Assert.Equal(expectedPause, ConditioningControlPanel.Services.Awareness.AwarenessPause.PausedUntil);
+            Assert.True(ConditioningControlPanel.Services.Awareness.AwarenessLive.ObserverEnabled);
+        }
+        finally
+        {
+            lock (gate) { frame.SetValue(null, oldFrame); at.SetValue(null, oldAt); }
+            ConditioningControlPanel.Services.Awareness.AwarenessLive.ObserverEnabled = observer;
+            ConditioningControlPanel.Services.Awareness.AwarenessPause.Resume();
+            if (pause is { } until) ConditioningControlPanel.Services.Awareness.AwarenessPause.Pause(System.TimeSpan.FromTicks(1), until.AddTicks(-1));
+            CoreSettings.ServiceProvider = provider;
+        }
+    });
 
     /// <summary>A debounce that already FIRED is no longer armed. Its write used to land after Restore
     /// and became every later test's baseline (Welcomed, no age acceptance: an extra Age Verification

@@ -175,8 +175,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _shownSinceStart = true;   // asked for: a late StartMinimized must not undo it
             _trayRecheckStale = true;
             if (_windowClosed) return;
+            Platform.OsNotifications.DismissWindowsBalloon();
             RestoreLauncherPanelOpacity();
             Show();
+            // WPF LauncherHost.ShowPanel (:265): the panel on screen releases the boot launcher hold, whichever door showed it.
+            Platform.StartupLadder.Release();
             WindowState = WindowState.Normal;
             Activate();
             ShowAvatarTube();

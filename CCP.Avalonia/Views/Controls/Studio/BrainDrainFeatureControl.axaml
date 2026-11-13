@@ -106,7 +106,7 @@
                                 <TextBlock Grid.Column="0" Text="{loc:Str st4_braindrain_audio_rate}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
                                 <Slider Grid.Column="1" x:Name="SliderIntensity" sessionLock:SessionLock.Owned="True"
-                                        Minimum="1" Maximum="100" Value="50"
+                                        Minimum="0" Maximum="100" Value="50"
                                         VerticalAlignment="Center" Margin="10,0"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtIntensity" Text="50%"
                                            HorizontalAlignment="Right" VerticalAlignment="Center"

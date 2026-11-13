@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
+using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -38,8 +40,8 @@ public sealed class EngineRampLifecycleTests
             var service = new SettingsService();
             CoreSettings.ServiceProvider = () => service;
             var s = service.Current;
-            s.IntensityRampEnabled = true; s.RampLinkFlashOpacity = true;
-            s.FlashOpacity = 30; s.SchedulerMultiplier = 2;
+            s.IntensityRampEnabled = true; s.RampLinkFlashOpacity = true; s.RampLinkSpiralOpacity = true;
+            s.FlashOpacity = 30; s.SpiralOpacity = 20; s.SchedulerMultiplier = 2;
             s.RampDurationMinutes = 10; s.EndSessionOnRampComplete = true;
             var shell = new MainShellWindow(); shell.Show();
             var now = new DateTime(2026, 10, 19, 17, 0, 0);
@@ -76,7 +78,9 @@ public sealed class EngineRampLifecycleTests
                 shell.StartEngineFromUser(); Dispatcher.UIThread.RunJobs();
                 Assert.True(CoreEngine.IsRunning); Assert.True(shell.Ramp.IsActive);
                 Assert.True(File.Exists(journal));
+                var refreshes = SpiralOverlay.Refreshes;
                 now = now.AddMinutes(5); shell.TickEngineRamp(); Assert.Equal(45, s.FlashOpacity);
+                Assert.Equal(30, s.SpiralOpacity); Assert.True(SpiralOverlay.Refreshes > refreshes); // linked overlay repaints
                 AssertAudio(60); Assert.Empty(notices);
                 MainShellWindow.StopEngine();
                 Assert.False(shell.Ramp.IsActive); Assert.Equal(30, s.FlashOpacity);
@@ -106,6 +110,71 @@ public sealed class EngineRampLifecycleTests
             }
             finally { player.Throw = false; MainShellWindow.StopEngine(); shell.Close(); PinkFilterOverlay.CloseAll(); File.Delete(file); }
         });
+    }
+
+    [Fact]
+    public async Task RampRepaintsVisibleOverlaysOnlyOutsideSession()
+    {
+        var gif = Path.Combine(Path.GetTempPath(), $"ccp-ramp-{Guid.NewGuid()}.gif");
+        File.WriteAllBytes(gif, Convert.FromBase64String(
+            "R0lGODlhBAAEAIEAAP8AAAAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQAAwAAACwAAAAABAAEAAAICQABCBxIsCCAgAAh+QQBAwABACwAAAAABAAEAIEA/wAAAAAAAAAAAAAICQABCBxIsCCAgAAh+QQBAwABACwAAAAABAAEAIEAAP8AAAAAAAAAAAAICQABCBxIsCCAgAA7"));
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (Application.Current is null)
+                    ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                        .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+                var service = new SettingsService(); CoreSettings.ServiceProvider = () => service;
+                var s = service.Current;
+                s.IntensityRampEnabled = true; s.RampDurationMinutes = 10; s.SchedulerMultiplier = 2;
+                s.RampLinkPinkFilterOpacity = true; s.RampLinkSpiralOpacity = true;
+                s.PinkFilterEnabled = true; s.PinkFilterOpacity = 20;
+                s.SpiralEnabled = true; s.SpiralOpacity = 20; s.SpiralPath = gif;
+                var shell = new MainShellWindow(); shell.Show();
+                var runner = ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService());
+                var provider = CoreSession.IsEngineRunningProvider;
+                CoreSession.IsEngineRunningProvider = () => CoreEngine.IsRunning;
+                CoreEngine.StoppedHook = shell.OnEngineStopped;
+                PinkFilterOverlay.SkipPlatformChecksForTests = true; SpiralOverlay.SkipPlatformChecksForTests = true;
+                var now = new DateTime(2026, 10, 19); shell.EngineNow = () => now;
+                try
+                {
+                    while (SpiralOverlay.Decoding is { IsCompleted: false } pending) await pending;
+                    shell.StartEngineFromUser(); Dispatcher.UIThread.RunJobs();
+                    while (SpiralOverlay.Decoding is { IsCompleted: false } pending) await pending;
+                    Assert.NotEmpty(PinkFilterOverlay.Shown); Assert.NotEmpty(SpiralOverlay.Shown);
+                    var pink = PinkFilterOverlay.Shown[0]; var spiral = SpiralOverlay.Shown[0];
+                    byte Alpha() => ((SolidColorBrush)((Border)pink.Content!).Background!).Color.A;
+                    Assert.True(pink.IsVisible); Assert.True(spiral.IsVisible);
+                    Assert.Equal((byte)(0.2 * 255), Alpha());
+                    Assert.Equal(SpiralFrames.Paint(0.2), spiral.Spiral.Opacity, 10);
+                    now = now.AddMinutes(5); shell.TickEngineRamp();
+                    Assert.Same(pink, PinkFilterOverlay.Shown[0]); Assert.Same(spiral, SpiralOverlay.Shown[0]);
+                    Assert.Equal((byte)(0.3 * 255), Alpha());
+                    Assert.Equal(SpiralFrames.Paint(0.3), spiral.Spiral.Opacity, 10);
+
+                    shell.StartSession(new ConditioningControlPanel.Models.Session { Id = "gate", Name = "Gate", DurationMinutes = 10 });
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.True(runner.IsRunning);
+                    var pinkBefore = Alpha(); var spiralBefore = spiral.Spiral.Opacity;
+                    var pinkSetting = s.PinkFilterOpacity; var spiralSetting = s.SpiralOpacity;
+                    var refreshes = SpiralOverlay.Refreshes;
+                    now = now.AddMinutes(2); shell.TickEngineRamp();
+                    Assert.Equal(pinkSetting, s.PinkFilterOpacity); Assert.Equal(spiralSetting, s.SpiralOpacity);
+                    Assert.Equal(pinkBefore, Alpha()); Assert.Equal(spiralBefore, spiral.Spiral.Opacity);
+                    Assert.Equal(refreshes, SpiralOverlay.Refreshes);
+                }
+                finally
+                {
+                    runner.Stop(completed: false); MainShellWindow.StopEngine(); shell.Close();
+                    PinkFilterOverlay.CloseAll(); SpiralOverlay.CloseAll();
+                    PinkFilterOverlay.SkipPlatformChecksForTests = false; SpiralOverlay.SkipPlatformChecksForTests = false;
+                    CoreSession.IsEngineRunningProvider = provider;
+                }
+            });
+        }
+        finally { File.Delete(gif); }
     }
 
     [Fact]

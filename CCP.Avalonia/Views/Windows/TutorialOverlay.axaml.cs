@@ -26,7 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///
     /// Adapted from WPF's TutorialOverlay: card, spotlight and automatic advance subscriptions.
     /// Live cards use the host overlay layer, including a real spotlight input hole. Narration,
-    /// guide navigation, keyword demo and fade timing remain in wire-win-tutorial-overlay-c. The parameterless constructor renders a
+    /// guide navigation and keyword demo remain in wire-win-tutorial-overlay-c; the 300 ms fade in and 200 ms fade out (WPF :108, :1305) are in the Stage partial. The parameterless constructor renders a
     /// sample and never subscribes to the live tour.
     /// </summary>
     public partial class TutorialOverlay : Window
@@ -182,12 +182,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>The tour ended, by any route. The overlay goes with it — WPF fades out over
-        /// 200ms and closes; the fade is dropped here for the reason in the header.</summary>
+        /// 200 ms and closes (WPF TutorialOverlay.xaml.cs:1305).</summary>
         private void OnSeamFinished(object? sender, bool completed)
         {
             _ = completed;
-            if (Dispatcher.UIThread.CheckAccess()) Close();
-            else Dispatcher.UIThread.Post(Close);
+            if (Dispatcher.UIThread.CheckAccess()) FadeOutAndTeardown();
+            else Dispatcher.UIThread.Post(FadeOutAndTeardown);
         }
 
         protected override void OnClosed(EventArgs e)
@@ -209,7 +209,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // every "not while a tutorial is up" gate in the app for the rest of the session.
                 // Skip never latches the tour as completed, and the head guards re-entry, so the
                 // ordinary close-after-Finished path lands on a no-op.
-                if (CoreTutorial.IsActive) CoreTutorial.Skip();
+                if (!_fadingOut && CoreTutorial.IsActive) CoreTutorial.Skip();
             }
 
             base.OnClosed(e);
@@ -487,19 +487,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// settles).</summary>
         private bool PrepareDoorForStep(TutorialStep step)
         {
-            // ponytail: needs MainShellWindow.ExpandDoorForTab, which does not exist on this head
-            // (MainShellWindow.TabNavigation.cs has ShowTab, which also NAVIGATES — and a step can
-            // spotlight a nav entry filed under a door other than the tab it requires, so ShowTab
-            // would jump the user off the page the card is talking about). The door key itself is
-            // deliberately not on CoreTutorial.Step either: TutorialService.DoorTabKeyFor is a pure
-            // function of the step, but with no way to act on the answer a field carrying it would
-            // just be seam surface nothing reads.
-            //
-            // Until that method exists, no door is opened, so a step whose target sits behind a
-            // collapsed door falls through to the full-overlay path below — the same degraded card
-            // WPF draws when an element cannot be found.
-            _ = step;
-            return false;
+            // WPF TutorialOverlay.xaml.cs:689-706 -> MainWindow.ExpandDoorForTab, which is only
+            // RefreshSectionRail (MainWindow.TabNavigation.cs:881): light the owning row, never navigate.
+            if (_targetWindow is not MainShellWindow shell) return false;
+            var head = HeadStepFor(step);
+            var tabKey = head == null ? null : ConditioningControlPanel.Avalonia.Tours.TutorialService.DoorTabKeyFor(head);
+            if (string.IsNullOrEmpty(tabKey)) return false;
+            try
+            {
+                shell.RefreshSectionRail(tabKey);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Debug("TutorialOverlay ExpandDoorForTab({Tab}) failed: {Err}", tabKey, ex.Message);
+                return false;
+            }
         }
 
         private void DrawFullOverlay(bool blockClicks = true)

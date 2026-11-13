@@ -84,7 +84,11 @@ public sealed class CompanionCloudModerationTests
     {
         var src = Regex.Replace(File.ReadAllText(Path.Combine(Root(), "CCP.Avalonia", "App.axaml.cs")),
             @"//[^\n]*|/\*.*?\*/|@?""(?:[^""\\]|\\.)*""", " ", RegexOptions.Singleline);
-        Assert.Matches(@"\bSeedModeration\(\);\s*CoreAi\.IsAvailableProvider\s*=", src);
+        // b08 (#4541) made RepairLaunchSettings the one provider seed; startup seeds moderation right before it.
+        Assert.Matches(@"\bSeedModeration\(\);\s*RepairLaunchSettings\(Settings\);", src);
+        Assert.Matches(@"void RepairLaunchSettings\(SettingsService settings\)\s*\{\s*CoreAi\.IsAvailableProvider\s*=", src);
+        Assert.Single(Regex.Matches(src, @"\bSeedModeration\(\);"));
+        Assert.Single(Regex.Matches(src, @"\bCoreAi\.IsAvailableProvider\s*="));
     }
 
     private static string Root([CallerFilePath] string here = "") =>

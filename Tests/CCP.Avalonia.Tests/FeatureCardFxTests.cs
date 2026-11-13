@@ -52,6 +52,40 @@ public sealed class FeatureCardFxTests
     });
 
     [Fact]
+    public void InterruptedMuteFadeReversesFromDisplayedOpacity() => WithCard((window, host, card) =>
+    {
+        var mute = card.FindControl<Border>("ImgIconMute")!;
+        var clock = new TestAnimationClock();
+        mute.SetValue(TestAnimationClock.Property, clock.Instance);
+        card.DimWhenInactive = true;
+        clock.Step(0); clock.Step(100);
+        Assert.Equal(0.75, mute.Opacity, 6);
+        Hover(card, window, true);
+        Assert.Equal(0.75, mute.Opacity, 6);
+        clock.Step(200); clock.Step(250);
+        double from = mute.Opacity;
+        Assert.Equal(0.421875, from, 6);
+        Hover(card, window, false);
+        Assert.Equal(from, mute.Opacity, 6); // no jump to the old target
+        card.IsActive = true;
+        Assert.Equal(from, mute.Opacity, 6);
+        clock.Step(300); clock.Step(500);
+        Assert.Equal(0, mute.Opacity, 6);
+    });
+
+    [Fact]
+    public void V2BadgeIsOptInAndReversible() => WithCard((window, host, card) =>
+    {
+        var badge = card.FindControl<Border>("V2BadgeHost")!;
+        Assert.False(badge.IsVisible);
+        card.ShowV2Badge = true;
+        Assert.True(badge.IsVisible);
+        card.ShowV2Badge = false;
+        Assert.False(badge.IsVisible);
+        Assert.False(badge.IsHitTestVisible);
+    });
+
+    [Fact]
     public void PointerMovesRetargetOneTiltTransitionAndIgnoreRepeatedTargets() => WithCard((window, host, card) =>
     {
         card.DashboardDepth = true;

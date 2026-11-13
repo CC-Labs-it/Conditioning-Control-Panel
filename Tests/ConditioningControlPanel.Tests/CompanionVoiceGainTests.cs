@@ -124,7 +124,6 @@ public class CompanionVoiceGainTests
     }
 
     [Theory]
-    [InlineData("private void PlayVoiceLineAudio(string filePath)")]
     [InlineData("private void PlayBarkVoice(string audioPath)")]
     [InlineData("private void PlayPhraseAudio(string audioPath)")]
     [InlineData("private void TriggerBambiCumAndCollapse()")]

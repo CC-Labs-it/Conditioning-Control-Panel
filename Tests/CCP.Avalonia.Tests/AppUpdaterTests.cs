@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
@@ -94,11 +95,24 @@ public sealed class AppUpdaterTests
                 CoreSettings.Current.HasAcceptedAgeVerification = false;
                 ReleaseFeed.ClearSkippedUpdateVersion(CorePaths.UserData);
                 var shell = new MainShellWindow();
+                StartupLadder.ModalWindowReady = () => shell.IsVisible;
                 shell.Show();
+                var prior = new TaskCompletionSource();
+                StartupLadder.EnqueueModal("prior", 20, () => prior.Task);
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupLadder.ModalSettle);
+                for (var i = 0; i < 5; i++) await Task.Yield();
                 var startup = AppUpdater.StartupAsync(shell);
                 await Task.Delay(1500);
                 Assert.Null(AppUpdater.OpenDialog);   // waits behind the age gate
                 CoreSettings.Current.HasAcceptedAgeVerification = true;
+                await startup;
+                Assert.True(MainShellWindow.IsStartupDialogShowing);
+                Assert.Null(AppUpdater.OpenDialog);
+                prior.SetResult();
+                for (var i = 0; i < 5; i++) await Task.Yield();
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupLadder.ModalSettle);
                 for (var i = 0; i < 100 && AppUpdater.OpenDialog is null; i++) await Task.Delay(50);
                 var dialog = AppUpdater.OpenDialog;
                 Assert.NotNull(dialog);   // offered once at startup, as WPF App.xaml.cs:4903
@@ -118,7 +132,7 @@ public sealed class AppUpdaterTests
 
                 // "Later": the version is skipped for 24h, so the next startup neither lights nor asks.
                 dialog.FindControl<Button>("BtnLater")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-                await startup;
+                for (var i = 0; i < 100 && ReleaseFeed.GetSkippedUpdateVersion(CorePaths.UserData) != "99.1.0"; i++) await Task.Delay(50);
                 Assert.Equal("99.1.0", ReleaseFeed.GetSkippedUpdateVersion(CorePaths.UserData));
                 var shell2 = new MainShellWindow();
                 shell2.Show();
@@ -139,6 +153,54 @@ public sealed class AppUpdaterTests
             }
         });
     }
+
+    [Theory, InlineData(false), InlineData(true)]
+    public Task FailedUpdateReportWaitsForTheEarlierModal(bool tray) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var version = CoreReleaseContent.AppVersionProvider;
+        var accepted = CoreSettings.Current.HasAcceptedAgeVerification;
+        MainShellWindow? shell = null;
+        try
+        {
+            CoreReleaseContent.AppVersionProvider = () => "99.1.0";
+            CoreSettings.Current.HasAcceptedAgeVerification = true;
+            Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", "http://127.0.0.1:9/api");
+            AppUpdater.Handler = new FakeFeed();
+            ReleaseFeed.SetPendingUpdateAttempt(CorePaths.UserData, "99.2.0");
+            shell = new MainShellWindow();
+            var ready = true;   // tray: the ladder never sees a ready panel and abandons the report
+            StartupLadder.ModalWindowReady = () => ready && shell.IsVisible;
+            shell.Show();
+            var prior = new TaskCompletionSource();
+            StartupLadder.EnqueueModal("prior", 5, () => prior.Task);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupLadder.ModalSettle);
+            for (var i = 0; i < 5; i++) await Task.Yield();
+            await AppUpdater.StartupAsync(shell);
+            Assert.Empty(shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.UpdateFailedDialog>());
+            ready = !tray;
+            prior.SetResult();
+            for (var i = 0; i < 5; i++) await Task.Yield();
+            ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupLadder.ModalSettle);
+            for (var i = 0; tray && i <= (int)(StartupLadder.ModalMaxWait / StartupLadder.ModalPoll); i++)
+            { ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupLadder.ModalPoll); for (var j = 0; j < 5; j++) await Task.Yield(); }
+            for (var i = 0; i < 100 && !shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.UpdateFailedDialog>().Any(); i++) await Task.Delay(20);
+            Assert.Single(shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.UpdateFailedDialog>()).Close();
+        }
+        finally
+        {
+            shell?.Close();
+            AppUpdater.Handler = null;
+            CoreReleaseContent.AppVersionProvider = version;
+            CoreSettings.Current.HasAcceptedAgeVerification = accepted;
+            ReleaseFeed.ClearSkippedUpdateVersion(CorePaths.UserData);
+            Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", null);
+        }
+    });
 
     /// <summary>
     /// WPF ddc9dd047 on this head: a loopback server sends the installer's headers and 1000 bytes, then

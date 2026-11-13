@@ -207,7 +207,38 @@ namespace ConditioningControlPanel
                 RerollTooltip = canReroll
                     ? Loc.Get("quest_card_reroll_tip")
                     : Loc.Get("quest_card_reroll_tip_none"),
+                CanNavigate = QuestDestinations.For(def.Category) != null,
             };
+        }
+
+        /// <summary>
+        /// ccp-bugs#1534: a quest card is a door to the page that finishes it. Same verb as a
+        /// Ctrl+K hit (ShowTab, the rack module, a ring on the start control): it only navigates,
+        /// it never starts anything. A category with no single home does nothing (its card is not
+        /// clickable in the first place).
+        /// </summary>
+        internal void OpenQuestDestination(Models.QuestCategory category)
+        {
+            var dest = QuestDestinations.For(category);
+            if (dest == null) return;
+            App.Logger?.Information("Quest card: open {Category} -> {Tab}", category, dest.TabKey);
+            SettingsPaletteWindow.Navigate(this, dest.ToPaletteEntry(category));
+        }
+
+        /// <summary>The daily seat's quest, opened. See <see cref="OpenQuestDestination"/>.</summary>
+        internal void OpenDailyQuestDestination(int slot)
+        {
+            var board = App.Quests?.GetDailySlots();
+            var def = board != null && slot >= 0 && slot < board.Count ? board[slot].Definition : null;
+            if (def != null) OpenQuestDestination(def.Category);
+        }
+
+        /// <summary>The weekly quest, opened. See <see cref="OpenQuestDestination"/>.</summary>
+        internal void OpenWeeklyQuestDestination()
+        {
+            var def = App.Quests?.GetCurrentWeeklyDefinition();
+            if (def == null || App.Quests?.Progress.WeeklyQuest?.IsCompleted == true) return;
+            OpenQuestDestination(def.Category);
         }
 
         /// <summary>
@@ -288,6 +319,7 @@ namespace ConditioningControlPanel
             if (weeklyDef != null && weeklyProgress != null)
             {
                 QuestsTab.TxtWeeklyQuestIcon.Text = weeklyDef.Icon;
+                QuestsTab.SetWeeklyNavigable(QuestDestinations.For(weeklyDef.Category) != null && !weeklyProgress.IsCompleted);
                 QuestsTab.TxtWeeklyQuestName.Text = App.Mods?.MakeModAware(weeklyDef.Name) ?? weeklyDef.Name;
                 QuestsTab.TxtWeeklyQuestDesc.Text = App.Mods?.MakeModAware(weeklyDef.Description) ?? weeklyDef.Description;
                 QuestsTab.TxtWeeklyProgress.Text = $"{weeklyProgress.CurrentProgress} / {weeklyDef.TargetValue}";

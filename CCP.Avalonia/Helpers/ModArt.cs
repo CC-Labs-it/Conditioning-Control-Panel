@@ -57,24 +57,57 @@ namespace ConditioningControlPanel.Avalonia.Helpers
         /// "features/flash.png", "achievements/lv_10.png". Traversal is rejected inside
         /// <see cref="CoreModArt.OverridePath"/>.
         /// </param>
-        internal static Bitmap? TryLoad(string? resourceName, int? decodeWidth = null)
+        internal static Bitmap? TryLoad(string? resourceName, int? decodeWidth = null) =>
+            TryLoad(resourceName, out _, decodeWidth);
+
+        internal static Bitmap? TryLoad(string? resourceName, out bool modApplied, int? decodeWidth = null)
         {
+            modApplied = false;
             if (string.IsNullOrWhiteSpace(resourceName)) return null;
 
             var overridePath = CoreModArt.OverridePath(resourceName);
             // A launch's first loads come decoded off the UI thread when the last launch listed them (StartupArt).
-            if (StartupArt.Take(new("o", resourceName, decodeWidth), overridePath, out var warm)) return warm;
-            return Load(resourceName, overridePath, decodeWidth);
+            if (StartupArt.Take(new("o", resourceName, decodeWidth), overridePath, out var warm))
+            {
+                // The warm decode ran Load with this same override path (Play framing reads modApplied).
+                modApplied = warm != null && overridePath != null && File.Exists(overridePath);
+                return warm;
+            }
+            return Load(resourceName, overridePath, decodeWidth, out modApplied);
         }
 
-        private static Bitmap? Load(string resourceName, string? overridePath, int? decodeWidth)
+        private static Bitmap? Load(string resourceName, string? overridePath, int? decodeWidth) =>
+            Load(resourceName, overridePath, decodeWidth, out _);
+
+        private static Bitmap? Load(string resourceName, string? overridePath, int? decodeWidth, out bool modApplied)
         {
+            modApplied = false;
             if (overridePath != null)
             {
-                try { if (File.Exists(overridePath)) { using var file = File.OpenRead(overridePath); return Decode(file, decodeWidth); } }
+                try
+                {
+                    if (File.Exists(overridePath))
+                    {
+                        using var file = File.OpenRead(overridePath);
+                        var bitmap = Decode(file, decodeWidth);
+                        modApplied = true;
+                        return bitmap;
+                    }
+                }
                 catch (Exception ex) { Log.Warning(ex, "[ModArt] mod override {Path} would not load", overridePath); }
             }
 
+            // WPF ModResourceResolver.EmbeddedModTwin (polish wave 11): after the pack override, a nav/ path
+            // takes the active mod's embedded twin (nav/mods/<mod-id>/...), then our own default.
+            var modId = CoreMods.ActiveModId;
+            if (resourceName.StartsWith("nav/", StringComparison.Ordinal)
+                && !resourceName.StartsWith("nav/mods/", StringComparison.Ordinal)
+                && !string.IsNullOrEmpty(modId) && !modId.Contains("..")
+                && !modId.Contains('/') && !modId.Contains('\\') && !Path.IsPathRooted(modId))
+            {
+                var twin = LoadBuiltIn("nav/mods/" + modId + "/" + resourceName.Substring(4), decodeWidth);
+                if (twin != null) return twin;
+            }
             return LoadBuiltIn(resourceName, decodeWidth);
         }
 

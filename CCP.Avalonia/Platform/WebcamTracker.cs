@@ -429,6 +429,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static void RevokeConsent()
         {
             Views.Overlays.BlinkTrainerSession.Stop();
+            Views.Overlays.GazeDebugCursor.CloseActive();
             Instance.Stop();
             WebcamCalibrationData.DeleteIfExists();   // WPF ClearCalibration (WebcamTrackingService.cs:1112)
             Instance.Calibration = null;
@@ -511,6 +512,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             Calibration = data;
             _gaze.ResetSideHysteresis();
+            Dispatcher.UIThread.Post(() => StateChanged?.Invoke());
         }
 
         /// <summary>WPF Quick Recal's SetRuntimeOffset: swap the whole calibration (the capture thread

@@ -24,6 +24,7 @@ public sealed class LeashSelfCard : Border
     private readonly Func<ILeashService?> _service;
     private readonly StackPanel _body = new();
     private MyLeash _me;
+    private bool _preview;
 
     // RenderProof constructs every control in Views with a no-argument sample constructor.
     internal LeashSelfCard() : this(new MyLeash(new LeashPerson("sample", "Juno", null),
@@ -42,7 +43,7 @@ public sealed class LeashSelfCard : Border
         Padding = new Thickness(12);
         Margin = new Thickness(0, 4, 0, 6);
         Child = _body;
-        // ponytail: holder preview, help and LeashFx need the remaining drawer lane.
+        // ponytail: help and LeashFx need the remaining drawer lane.
         Render();
     }
 
@@ -123,10 +124,23 @@ public sealed class LeashSelfCard : Border
             shelf.Children.Add(wrap);
             _body.Children.Add(shelf);
         }
+        // WPF LeashSelfCard.cs:267-299: the local report, read-only, with no guessed week strip.
+        var preview = Button(Loc.GetF(_preview ? "leash_self_preview_hide" : "leash_self_preview", _me.Holder.Name),
+            "leash-preview-toggle", F.Raised, F.Text, IconKind.Eye);
+        preview.Click += (_, _) => { _preview = !_preview; Render(); };
+        _body.Children.Add(preview);
+        if (_preview)
+        {
+            var report = (_service() as LeashService)?.LastReport;
+            _body.Children.Add(new LeashHolderCard(new HeldLeash(new LeashPerson("me", Loc.Get("leash_you"), null), true,
+                _me.Intensity, _me.Since, _me.Day, _me.DndUntil, report, Array.Empty<WeekDay>(), _me.Pending, _me.Assignment, 0),
+                () => null, true) { IsHitTestVisible = false, Opacity = 0.92 });
+            _body.Children.Add(Label(Loc.GetF("leash_self_preview_note", _me.Holder.Name), 11, F.Dim));
+        }
     }
 
     // WPF Controls/Leash/LeashLook.cs:351-383: the same disc artwork and seeded tilt.
-    private static Grid StickerDisc(string id, int seed)
+    internal static Grid StickerDisc(string id, int seed, double size = 26)
     {
         var (brush, word) = id switch
         {
@@ -136,7 +150,7 @@ public sealed class LeashSelfCard : Border
         };
         var disc = new Grid
         {
-            Width = 26, Height = 26, Margin = new Thickness(0, 0, 5, 5),
+            Width = size, Height = size, Margin = new Thickness(0, 0, 5, 5),
             RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative),
             RenderTransform = new RotateTransform(((seed * 37) % 21) - 10),
             Tag = "leash-sticker:" + id,
@@ -151,13 +165,13 @@ public sealed class LeashSelfCard : Border
             disc.Children.Add(new IconGlyph
             {
                 Kind = id == "star" ? IconKind.Star : IconKind.Heart, Variant = IconVariant.Filled,
-                Size = 13, Foreground = new SolidColorBrush(Color.Parse("#1B1026")),
+                Size = size * 0.5, Foreground = new SolidColorBrush(Color.Parse("#1B1026")),
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             });
         else disc.Children.Add(new TextBlock
         {
             Text = word, FontFamily = F.Mono, FontWeight = FontWeight.Bold,
-            FontSize = word.Length > 1 ? 26 * 0.26 : 26 * 0.5,
+            FontSize = word.Length > 1 ? size * 0.26 : size * 0.5,
             Foreground = new SolidColorBrush(Color.Parse("#1B1026")),
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         });

@@ -93,7 +93,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var enrollment = AvApp.Programs?.ActiveEnrollment;
             var boundaryCrossed = _builtStale is { } built && enrollment != null &&
                                   built != IsSnapshotStale(enrollment, Clock.GetLocalNow().DateTime);
+            var runWasVisible = Find<StackPanel>("ProgramsRunPanel").IsVisible;
             if (_refreshPending || boundaryCrossed) RefreshPrograms();
+            if (runWasVisible && Find<StackPanel>("ProgramsRunPanel").IsVisible) StartRunEntrance();
             SyncIgnition();   // WPF :1661: clocks stop behind a hidden tab and re-arm on the way back
         }
 
@@ -107,6 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 return;
             }
             _refreshPending = false;
+            var runWasVisible = Find<StackPanel>("ProgramsRunPanel").IsVisible;
             SubscribePrograms();
 
             var svc = AvApp.Programs;
@@ -145,6 +148,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Find<StackPanel>("ProgramsLapsedPanel").IsVisible = lapsed;
                 Find<StackPanel>("ProgramsGraduatedPanel").IsVisible = graduated;
                 Find<StackPanel>("ProgramsRunPanel").IsVisible = run;
+                if (run && !runWasVisible && IsVisible && VisualRoot is not null) StartRunEntrance();
                 // A newer build's file: nothing here may write it, so every lifecycle door greys.
                 var readOnly = svc?.IsReadOnly == true;
                 Find<Border>("RunReadOnlyNote").IsVisible = !browse && readOnly;

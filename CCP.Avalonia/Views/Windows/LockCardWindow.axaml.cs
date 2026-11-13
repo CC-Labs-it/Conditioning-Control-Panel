@@ -18,6 +18,7 @@ using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Speech;
+using ConditioningControlPanel.Services.Safety;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -88,6 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private int _completedRepeats;
         private bool _isCompleted;
         private DispatcherTimer? _closeTimer;
+        private bool _fadingOut;
 
         // ── Anti-cheat: the phrase must actually be TYPED (#734) ───────────────
         // Blocking the clipboard keys alone was never enough, and undo was the bigger hole:
@@ -352,6 +354,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
 
             _closeTimer?.Stop();
+            _fadingOut = false;
             _voiceMode = false;
             StopVoiceSolve();   // the mic closes with the card, not 10 s later
             base.OnClosing(e);
@@ -610,7 +613,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _closeTimer.Tick += (_, _) =>
             {
                 _closeTimer?.Stop();
-                CloseAllWindows();
+                if (GentleVisuals.On) FadeOutThenDismiss();
+                else CloseAllWindows();
             };
             _closeTimer.Start();
         }
@@ -691,7 +695,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // #1547 (WPF 7.2.2): a strict card with a live panic key names it; when it IS Escape, say
             // Escape still ends the card (panic always does), not "only the panic key (Escape)".
             var panicKey = CoreSettings.Current.PanicKey;
-            var hintKey = LockCardStrictCopy.HintKey(EscClosesCard, panicKey);
+            // #1582 (WPF 7.2.3): a strict card with panic switched off closes on Escape by design; say why.
+            var strictPanicOff = _strictMode && !CoreSettings.Current.PanicKeyEnabled;
+            var hintKey = LockCardStrictCopy.HintKey(EscClosesCard, panicKey, strictPanicOff);
             if (hintKey == LockCardStrictCopy.HintOnlyPanicKey) SetPlain(_txtEscHint, Loc.GetF(hintKey, panicKey ?? "?"));
             else SetLocalized(_txtEscHint, hintKey);
         }
@@ -1045,6 +1051,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
+        private void FadeOutThenDismiss()
+        {
+            var windows = Fanout();
+            var duration = TimeSpan.FromSeconds(GentleVisuals.FadeSeconds);
+            foreach (var window in windows)
+            {
+                window._fadingOut = true;
+                window.Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = duration } };
+                window.Opacity = 0;
+            }
+            DispatcherTimer.RunOnce(() =>
+            {
+                // A closed or replaced card must never dismiss its successor.
+                foreach (var window in windows)
+                    if (window._fadingOut && window.IsVisible)
+                    {
+                        window._isCompleted = true;
+                        try { window.Close(); } catch { }
+                    }
+            }, duration);
+        }
+
+        private void ShowWithGentle()
+        {
+            if (GentleVisuals.On) Opacity = 0;
+            Show();
+            if (!GentleVisuals.On) return;
+            var duration = TimeSpan.FromMilliseconds(GentleVisuals.RiseMs(GentleVisuals.FadeMs(0)));
+            Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = duration } };
+            Opacity = 1;
+        }
+
         /// <summary>
         /// Put a lock card up: one cover on the primary, plus one per further monitor when
         /// <c>DualMonitorEnabled</c> is on, with the primary owning the keyboard and the rest
@@ -1071,7 +1109,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             // A card is already up. Reconfiguring live covers would drop the lock mid-solve, which
             // is also why the WPF original deferred a second show rather than reusing the set.
-            if (_allWindows.Count > 0) return;
+            if (_allWindows.Count > 0)
+            {
+                if (!_allWindows.All(w => w._fadingOut)) return;
+                ForceCloseAll();
+            }
 
             // #763 (WPF LockCardService.cs:157): a visible pop quiz blocks the card. Hold one
             // replay until the last quiz closes, as PopQuizHost does the other way round.
@@ -1092,14 +1134,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var all = Features.ScreenList.Enumerate(primary);
                 var primaryScreen = all.FirstOrDefault(s => s.IsPrimary) ?? all.FirstOrDefault();
                 primary.CoverScreen(primaryScreen);   // the keyboard card sits on the primary (WPF :1705-1717)
-                primary.Show();
+                primary.ShowWithGentle();
 
                 // Lock cards always cover every monitor, as WPF does (:1705-1717).
                 foreach (var screen in all.Where(s => s != primaryScreen))
                 {
                     var mirror = Build(phrase, repeats, strictMode, voiceMode, isTest, isPrimary: false);
                     mirror.CoverScreen(screen);
-                    mirror.Show();
+                    mirror.ShowWithGentle();
                 }
 
                 // Last, so the card that can be typed into owns the foreground.
@@ -1155,6 +1197,61 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// count through the three modes exactly as WPF LockCardService.ShowLockCard does.</summary>
         internal static void ShowNext(bool isTest) => ShowNext(isTest, null);
 
+        /// <summary>The CoreLockCard.ShowHandler hop from any thread. A ForceCloseAll between the post and
+        /// the show (panic, remote teardown, engine stop) drops the card, as WPF's synchronous show would.</summary>
+        internal static void PostNext(bool isTest)
+        {
+            var gen = CloseGeneration;
+            void Request() { if (gen == CloseGeneration) EnqueueOrRun("card", () => ShowNext(isTest)); }
+            if (Dispatcher.UIThread.CheckAccess()) Request(); else Dispatcher.UIThread.Post(Request);
+        }
+
+        // WPF InteractionQueueService.TryStart: one pending request per type, in request order.
+        private static DispatcherTimer? _pendingTimer;
+        private static readonly Queue<(string Type, Action Run)> _pending = new();
+        private static bool _replaying;
+
+        private static bool OtherInteractionActive => IsAnyOpen() || PopQuizWindow.IsAnyOpen()
+            || CoreEngine.Video?.IsPlaying == true || CoreEngine.BubbleCount?.IsBusy == true
+            || Overlays.MandatoryVideoOverlay.Instance.Messages.Count != 0;
+
+        internal static bool DeferVideo(Action run) => Dispatcher.UIThread.Invoke(() => Defer("video", run));
+        internal static bool DeferBubble(Action run) => Dispatcher.UIThread.Invoke(() => Defer("bubble", run));
+
+        private static bool Defer(string type, Action run)
+        {
+            if (_replaying || (!OtherInteractionActive && _pending.Count == 0)) return false;
+            if (!_pending.Any(item => item.Type == type)) _pending.Enqueue((type, run));
+            if (_pendingTimer == null)
+            {
+                _pendingTimer = new DispatcherTimer { Interval = BubbleCountScheduler.QueuePoll };
+                _pendingTimer.Tick += (_, _) => RetryPendingCard();
+                _pendingTimer.Start();
+            }
+            return true;
+        }
+
+        private static void EnqueueOrRun(string type, Action run)
+        {
+            if (!Defer(type, run)) run();
+        }
+
+        internal static void RetryPendingCard()
+        {
+            if (_pending.Count == 0 || OtherInteractionActive) return;
+            var item = _pending.Dequeue();
+            if (_pending.Count == 0) { _pendingTimer?.Stop(); _pendingTimer = null; }
+            try { _replaying = true; item.Run(); }
+            finally { _replaying = false; }
+        }
+
+        private static void DropPendingCard()
+        {
+            _pending.Clear();
+            _pendingTimer?.Stop();
+            _pendingTimer = null;
+        }
+
         /// <param name="strict">Null: the player's own setting. The leash passes false (never a strict card).</param>
         internal static void ShowNext(bool isTest, bool? strict)
         {
@@ -1192,10 +1289,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         static LockCardWindow() =>
             PopQuizWindow.AllClosed += () => { var r = _heldForQuiz; _heldForQuiz = null; r?.Invoke(); };
 
+        /// <summary>Moves on every ForceCloseAll: a card posted before it is dropped (WPF shows synchronously).</summary>
+        internal static int CloseGeneration => System.Threading.Volatile.Read(ref _closeGeneration);
+        private static int _closeGeneration;
+
         /// <summary>Drop every card, solved or not - the panic exit. Strict mode does not survive
         /// this: <c>_isCompleted</c> is set first on each window so OnClosing cannot refuse.</summary>
         public static void ForceCloseAll()
         {
+            System.Threading.Interlocked.Increment(ref _closeGeneration);
+            DropPendingCard();
             _heldForQuiz = null;
             var windows = _allWindows.ToList();
             _allWindows.Clear();

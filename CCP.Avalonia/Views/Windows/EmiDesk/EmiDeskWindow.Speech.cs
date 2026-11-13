@@ -14,6 +14,7 @@ public partial class EmiDeskWindow
         CancelHold();
         engine.Ack(line.Id, spoke: !line.Hold);
         if (line.Hold) { HoldFace(line); return; }
+        EmiDeskService.Instance.NoteEmiSpoke();
         // WPF EmiDeskWindow.Bubble.cs:524-530: a wordless row is a chain, or just a face.
         if (string.IsNullOrWhiteSpace(line.Text))
         {

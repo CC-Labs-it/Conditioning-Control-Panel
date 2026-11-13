@@ -28,6 +28,9 @@ namespace ConditioningControlPanel.Views.Controls
         public bool CanReroll { get; init; }
         public string RerollText { get; init; } = "";
         public string? RerollTooltip { get; init; }
+        /// <summary>ccp-bugs#1534: the card is a door to the page that finishes it
+        /// (QuestDestinations). False for a finished quest or one with no single home.</summary>
+        public bool CanNavigate { get; init; }
     }
 
     /// <summary>
@@ -52,6 +55,13 @@ namespace ConditioningControlPanel.Views.Controls
         /// <summary>Raised when this seat's reroll button is pressed. MainWindow spends the
         /// reroll; the card never touches quest state.</summary>
         internal event EventHandler? RerollRequested;
+
+        /// <summary>Raised when a navigable card is clicked (anywhere but the reroll button, which
+        /// handles its own click). MainWindow navigates; nothing starts.</summary>
+        internal event EventHandler? NavigateRequested;
+
+        private bool _canNavigate;
+        private bool _pressArmed; // the press began on this card (a drag ending here must not navigate)
 
         /// <summary>Zero-based seat index, echoed back on <see cref="RerollRequested"/> by way of
         /// the sender. Set by <see cref="Apply"/>.</summary>
@@ -86,6 +96,29 @@ namespace ConditioningControlPanel.Views.Controls
             Track.SizeChanged += (_, _) => ApplyFraction(animate: false);
             Root.MouseEnter += OnCardMouseEnter;
             Root.MouseLeave += OnCardMouseLeave;
+            Root.MouseLeftButtonDown += OnCardMouseDown;
+            Root.MouseLeftButtonUp += OnCardMouseUp;
+        }
+
+        /// <summary>Clickable or plain. A plain card shows no hand, lift or glow.</summary>
+        private void SetNavigable(bool on)
+        {
+            _canNavigate = on;
+            Root.Cursor = on ? System.Windows.Input.Cursors.Hand : null;
+            if (!on) _pressArmed = false;
+            if (!on && Root.IsMouseOver) OnCardMouseLeave(Root, null!);
+        }
+
+        private void OnCardMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+            => _pressArmed = _canNavigate;
+
+        private void OnCardMouseUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            bool armed = _pressArmed;
+            _pressArmed = false;
+            if (!armed || !_canNavigate || !Root.IsMouseOver) return;
+            e.Handled = true;
+            NavigateRequested?.Invoke(this, EventArgs.Empty);
         }
 
         // ---- PAINT ---------------------------------------------------------------
@@ -151,6 +184,7 @@ namespace ConditioningControlPanel.Views.Controls
             BtnReroll.Visibility = m.IsCompleted ? Visibility.Collapsed : Visibility.Visible;
             BtnReroll.ToolTip = m.RerollTooltip;
 
+            SetNavigable(m.CanNavigate && !m.IsCompleted);
             SetFraction(fraction);
         }
 
@@ -178,6 +212,7 @@ namespace ConditioningControlPanel.Views.Controls
             TxtRemaining.Text = "";
             BtnReroll.Visibility = Visibility.Collapsed;
 
+            SetNavigable(false);
             SetFraction(0);
         }
 
@@ -232,6 +267,7 @@ namespace ConditioningControlPanel.Views.Controls
         {
             try
             {
+                if (!_canNavigate) return;
                 MotionFx.HoverLift(Root, true);
 
                 if (!MotionFx.AllowTransitions) return;

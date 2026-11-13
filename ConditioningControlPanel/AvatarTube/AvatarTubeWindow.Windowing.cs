@@ -1925,6 +1925,10 @@ namespace ConditioningControlPanel
             // Don't fight with pop quiz for topmost z-order
             if ((PopQuizWindow.IsOpen || QuizWindow.IsOpen)) return;
 
+            // ccp-bugs #1535: her own right-click menu is a topmost popup; a raise to HWND_TOPMOST
+            // while it is open put the tube over the menu twice a second.
+            if (AvatarContextMenu?.IsOpen == true) return;
+
             // The speech bubble is its own non-topmost window owned by the tube. A non-topmost window
             // can never sit above a topmost one, and SWP_NOOWNERZORDER moves the tube alone, so this
             // raise used to bury the bubble under the widget twice a second (ccp-bugs #1296). While

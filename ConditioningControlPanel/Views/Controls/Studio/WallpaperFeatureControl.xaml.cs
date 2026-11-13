@@ -34,7 +34,7 @@ namespace ConditioningControlPanel.Views.Controls.Studio
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
             // The rack keeps this mounted, so "too few images" can go stale while it sits hidden.
-            IsVisibleChanged += (_, e) => { if (e.NewValue is true) RefreshHint(); };
+            IsVisibleChanged += (_, e) => { if (e.NewValue is true) { RefreshHint(); RefreshSaveButton(); } };
         }
 
         private void OnLoaded(object sender, RoutedEventArgs e)
@@ -42,12 +42,91 @@ namespace ConditioningControlPanel.Views.Controls.Studio
             RebindToCurrentSettings();
             ApplyFeatureArt();
             if (App.Mods != null) App.Mods.ModChanged += OnModChanged;
+            if (App.Wallpaper != null)
+            {
+                App.Wallpaper.SavableWallpaperChanged -= OnSavableWallpaperChanged;
+                App.Wallpaper.SavableWallpaperChanged += OnSavableWallpaperChanged;
+            }
+            RefreshSaveButton();
         }
 
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
             _settingsHook?.Unhook();
             if (App.Mods != null) App.Mods.ModChanged -= OnModChanged;
+            if (App.Wallpaper != null) App.Wallpaper.SavableWallpaperChanged -= OnSavableWallpaperChanged;
+        }
+
+        // ---------------------------------------------------------------- Save this wallpaper (#1542)
+
+        private string? _lastSavedFolder;
+
+        // A compose lands off the UI thread.
+        private void OnSavableWallpaperChanged(object? sender, EventArgs e) =>
+            Dispatcher.BeginInvoke(new Action(() => { ResetSaveHint(); RefreshSaveButton(); }));
+
+        private void RefreshSaveButton()
+        {
+            string? current = null;
+            try { current = App.Wallpaper?.CurrentSavableWallpaper(); }
+            catch (Exception ex) { Diag.Swallowed(ex, "wallpaper save state"); }
+            BtnWpSave.IsEnabled = current != null;
+        }
+
+        /// <summary>Back to the plain hint once the picture it named is gone. Rebinds rather than sets, so
+        /// a language switch still repaints it.</summary>
+        private void ResetSaveHint() =>
+            System.Windows.Data.BindingOperations.SetBinding(TxtWpSaveHint, TextBlock.TextProperty,
+                new System.Windows.Data.Binding("[hint_wallpaper_save]") { Source = Localization.LocalizationManager.Instance });
+
+        private void BtnWpSave_Click(object sender, RoutedEventArgs e)
+        {
+            var source = App.Wallpaper?.CurrentSavableWallpaper();
+            if (source == null) { RefreshSaveButton(); return; }
+
+            BtnWpSave.IsEnabled = false;
+            var folder = Services.WallpaperSaver.DefaultFolder();
+            var now = DateTime.Now;
+            // Off the UI thread: Pictures can sit on a slow or synced drive. The collage may rotate away
+            // mid-copy; that lands as the quiet failure line.
+            _ = System.Threading.Tasks.Task.Run(() =>
+            {
+                string? saved = null;
+                try { saved = Services.WallpaperSaver.SaveCopy(source, folder, now); }
+                catch (Exception ex) { App.Logger?.Warning("[Wallpaper] Save copy failed: {E}", ex.Message); }
+
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    TxtWpSaveHint.Text = saved != null
+                        ? Localization.Loc.GetF("wallpaper_saved", Path.GetFileName(saved))
+                        : Localization.Loc.Get("wallpaper_save_failed");
+                    if (saved != null)
+                    {
+                        App.Logger?.Information("[Wallpaper] Saved a copy to {Path}", saved);
+                        _lastSavedFolder = folder;
+                        BtnWpOpenSaved.Visibility = Visibility.Visible;
+                    }
+                    RefreshSaveButton();
+                }));
+            });
+        }
+
+        private void BtnWpOpenSaved_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var folder = _lastSavedFolder ?? Services.WallpaperSaver.DefaultFolder();
+                Directory.CreateDirectory(folder);
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = folder,
+                    UseShellExecute = true,
+                });
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Warning(ex, "Wallpaper: open saved folder failed");
+            }
         }
 
         private void OnModChanged(object? sender, Models.ModPackage mod) =>
@@ -107,6 +186,7 @@ namespace ConditioningControlPanel.Views.Controls.Studio
                 ChkWpRotate.IsChecked = s.CollageWallpaperRotate;
                 ChkWpRunWithCcp.IsChecked = s.CollageRunWithCcp;
                 ApplyIntervalToUi(s.CollageWallpaperIntervalSeconds);
+                CmbWpFit.SelectedIndex = (int)s.CollageWallpaperFit;
                 UpdateVisibility();
             }
             finally { _isLoading = false; }
@@ -156,6 +236,7 @@ namespace ConditioningControlPanel.Views.Controls.Studio
                 e.PropertyName == nameof(Models.AppSettings.CollageOwnImagePath) ||
                 e.PropertyName == nameof(Models.AppSettings.CollageWallpaperRotate) ||
                 e.PropertyName == nameof(Models.AppSettings.CollageWallpaperIntervalSeconds) ||
+                e.PropertyName == nameof(Models.AppSettings.CollageWallpaperFit) ||
                 e.PropertyName == nameof(Models.AppSettings.CollageRunWithCcp))
             {
                 Dispatcher.BeginInvoke(new Action(LoadFromSettings));
@@ -306,6 +387,20 @@ namespace ConditioningControlPanel.Views.Controls.Studio
             catch (Exception ex) { App.Logger?.Warning("[Wallpaper] run-with-CCP apply failed: {E}", ex.Message); }
         }
 
+        /// <summary>Fit (#1544). Applied by a restart while the wallpaper is up: the stop puts the user's own
+        /// fit back first, so the next start captures theirs and never ours.</summary>
+        private void CmbWpFit_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null || CmbWpFit.SelectedIndex < 0) return;
+            var fit = (Models.WallpaperFit)CmbWpFit.SelectedIndex;
+            if (fit == s.CollageWallpaperFit) return;
+            s.CollageWallpaperFit = fit;
+            App.Settings?.Save();
+            if (Services.WallpaperService.ShouldBeUp(s, App.IsEngineRunning)) ApplyWallpaperEngine();
+        }
+
         private void ChkWpRotate_Changed(object sender, RoutedEventArgs e)
         {
             if (_isLoading) return;
@@ -374,6 +469,8 @@ namespace ConditioningControlPanel.Views.Controls.Studio
             RowWpOwnImage.Visibility = own ? Visibility.Visible : Visibility.Collapsed;
             RowWpRotate.Visibility = !own ? Visibility.Visible : Visibility.Collapsed;
             RowWpInterval.Visibility = (!own && rotate) ? Visibility.Visible : Visibility.Collapsed;
+            // Dynamic draws each monitor at its own size, so a fit has nothing to do there.
+            RowWpFit.Visibility = _mode != Models.WallpaperMode.Dynamic ? Visibility.Visible : Visibility.Collapsed;
         }
 
         /// <summary>Apply an on/off or mode change. Outside a session nothing runs; the next session start

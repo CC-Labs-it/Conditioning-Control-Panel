@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
@@ -76,6 +77,38 @@ public class AwarenessPrivacyCandidatesTests
             Directory.Delete(dir, true);
         }
     });
+
+    [Fact]
+    public void KeywordRingFeedsSeenAndCandidates()
+    {
+        var previousProvider = CoreSettings.ServiceProvider;
+        var ring = (System.Collections.Generic.LinkedList<string>)typeof(KeywordAudioRuntime).GetField("_seenApps", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(KeywordTriggerHead.Engine)!;
+        var prior = ring.ToArray();
+        try
+        {
+            var settings = new SettingsService();
+            CoreSettings.ServiceProvider = () => settings;
+            var s = CoreSettings.Current;
+            s.KeywordTriggersEnabled = true;
+            s.AwarenessDenySeeded = true;
+            s.AwarenessDenyList = new();
+            ring.Clear();
+            ring.AddFirst("ring-test-app");
+            var vm = new AwarenessPrivacyViewModel(() => null);
+            Assert.Contains(vm.SeenApps, c => c.Label == "ring-test-app");
+            Assert.Contains("ring-test-app", AwarenessPrivacyViewModel.Candidates(Array.Empty<string>()));
+            s.AwarenessDenyList = new() { "ring-test-app" };
+            vm.Sync();
+            Assert.DoesNotContain(vm.SeenApps, c => c.Label == "ring-test-app");
+            Assert.DoesNotContain("ring-test-app", AwarenessPrivacyViewModel.Candidates(s.AwarenessDenyList));
+        }
+        finally
+        {
+            ring.Clear();
+            foreach (var app in prior) ring.AddLast(app);
+            CoreSettings.ServiceProvider = previousProvider;
+        }
+    }
 
     [Fact]
     public void TransitionCandidatesAreSanitizedExcludedDeduplicatedAndCapped()

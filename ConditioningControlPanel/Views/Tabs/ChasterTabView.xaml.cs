@@ -802,6 +802,7 @@ namespace ConditioningControlPanel.Views.Tabs
             var settings = App.Settings?.Current;
             PaintPending(TxtDayPending, settings?.ChasterDayLimit);
             PaintPending(TxtBacklogPending, settings?.ChasterBacklogLimit);
+            PaintWarnings();
         }
 
         private static void PaintPending(TextBlock line, LimitSetting? setting)
@@ -1221,8 +1222,23 @@ namespace ConditioningControlPanel.Views.Tabs
                     PaintRowLit(id, on.Contains(id));
                 }
                 ChkFlashDodge.IsChecked = App.Settings?.Current?.ChasterFlashDodge == true;
+                var weight = App.Settings?.Current?.ChasterNatashaTriggerWeight ?? 1;
+                SliderNatashaTriggerWeight.Value = weight;
+                TxtNatashaTriggerWeight.Text = $"{weight}x";
+                if (weight != 1) NatashaFold.IsOpen = true;
             }
             finally { _loading = false; }
+        }
+
+        /// <summary>ccp-bugs #1566: 1 = a trigger bubble is red as often as a plain one (one in
+        /// ten); 5 = five times as often. Read at each bubble's spawn, so it applies at once.</summary>
+        private void SliderNatashaTriggerWeight_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            var weight = Services.Chaster.NatashasFavourite.ClampTriggerWeight((int)Math.Round(e.NewValue));
+            if (TxtNatashaTriggerWeight != null) TxtNatashaTriggerWeight.Text = $"{weight}x";
+            if (_loading || App.Settings?.Current is not { } settings) return;
+            settings.ChasterNatashaTriggerWeight = weight;
+            App.Settings?.Save();
         }
 
         /// <summary>Red flashes, with a 4 s ring to dodge them, or no red flashes at all (the
@@ -1307,6 +1323,18 @@ namespace ConditioningControlPanel.Views.Tabs
             var signRoom = tier > 0 ? 52.0 : 0.0;
             words.SizeChanged += (_, e) => where.MaxWidth = Math.Max(0, e.NewSize.Width - signRoom);
             where.SetBinding(FrameworkElement.ToolTipProperty, Bound(TabMenuCopy.WhereKey(price.Id)));
+            // A figure past an hour, or past the day limit, says so in place of the "where" line
+            // (same height, so the board never jumps). The whole line shows on hover.
+            if (TabPriceEdit.Editable(price.Id))
+            {
+                var warn = new TextBlock
+                {
+                    FontSize = 10.5, Margin = new Thickness(0, 1, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis,
+                    Foreground = Frozen(Color.FromRgb(0xE0, 0xB0, 0x52)), Visibility = Visibility.Collapsed,
+                };
+                words.Children.Add(warn);
+                _warnings[price.Id] = (whereRow, warn);
+            }
             Grid.SetColumn(words, 1);
             grid.Children.Add(words);
 

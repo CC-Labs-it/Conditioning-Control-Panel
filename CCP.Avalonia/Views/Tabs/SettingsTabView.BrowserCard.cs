@@ -7,7 +7,6 @@
 // since a new document has no flag. The load prompt: WPF builds the WebView2 on that click; here the engine exists
 // from the start but loads nothing until asked, so the prompt stands in the slot until the first page.
 // Pop out preserves the native adapter with BeginReparenting.
-// "Enhance if possible" remains disabled without BrowserEnhanceBridge.
 
 using System;
 using Avalonia.Controls;
@@ -26,12 +25,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     public partial class SettingsTabView
     {
         private bool _browserCardSyncing;
+        /// <summary>The mod the card last followed: WPF only re-syncs the site on a real switch (ApplyActiveModChange),
+        /// while this head's ModChanged also fires on a same-mod asset refresh (#4330).</summary>
+        private string? _browserCardModId;
+
 
         /// <summary>Tests: how many times the mute script was sent to the page.</summary>
         internal int BrowserMuteApplies { get; private set; }
 
         private void HookBrowserCard()
         {
+            BrowserWebHost.RouteBrowserPopups = true; // WPF BrowserService.cs:538-562
             BrowserWebHost.NavigationCompleted += _ => ApplyBrowserMute();
             BrowserWebHost.NavigationFinished += (url, success) =>
                 _ = Browser.BrowserAdCss.ApplyAsync(url, success, BrowserWebHost.InvokeScriptAsync);
@@ -40,6 +44,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 Platform.WebcamTracker.Instance.StateChanged -= OnBrowserCardTrackerChanged;
                 Platform.WebcamTracker.Instance.StateChanged += OnBrowserCardTrackerChanged;
+                _browserCardModId = App.Mods?.ActiveModId;
                 CoreMods.ModChanged -= OnBrowserCardModChanged;
                 CoreMods.ModChanged += OnBrowserCardModChanged;
                 SyncBrowserCard();
@@ -49,17 +54,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Platform.WebcamTracker.Instance.StateChanged -= OnBrowserCardTrackerChanged;
                 CoreMods.ModChanged -= OnBrowserCardModChanged;
             };
-            foreach (Control c in new Control[] { ToggleEnhanceIfPossible })
-            {
-                c.IsEnabled = false;
-                c.Bind(ToolTip.TipProperty, LocBinding("exclusives_not_on_this_build"));
-                ToolTip.SetShowOnDisabled(c, true);
-            }
+            HookBrowserEnhance();
             SyncBrowserCard();
         }
 
         private void OnBrowserCardTrackerChanged() => Dispatcher.UIThread.Post(RefreshBrowserWebcamButton);
-        private void OnBrowserCardModChanged(object? sender, ModPackage? mod) => Dispatcher.UIThread.Post(OnBrowserModSwitched);
+        private void OnBrowserCardModChanged(object? sender, ModPackage? mod) => Dispatcher.UIThread.Post(() =>
+        {
+            var active = App.Mods?.ActiveModId;
+            var switched = !string.Equals(_browserCardModId, active, StringComparison.OrdinalIgnoreCase);
+            _browserCardModId = active;
+            // A same-mod asset refresh does not own the page or the radios: the user keeps what is open.
+            if (switched) OnBrowserModSwitched();
+        });
 
         /// <summary>WPF MainWindow/MainWindow.xaml.cs:3244-3262: the radios follow the new mod, and a mod that does not offer
         /// BambiCloud also sends an open page to its own default, even when the override reveals the radio. Only a
@@ -76,7 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void SyncBrowserCard()
         {
             _browserCardSyncing = true;
-            try { ChkForceShowBambiCloud.IsChecked = CoreSettings.Current.ForceShowBambiCloud; }
+            try { ChkForceShowBambiCloud.IsChecked = CoreSettings.Current.ForceShowBambiCloud; ToggleEnhanceIfPossible.IsChecked = CoreSettings.Current.BrowserEnhanceIfPossible; }
             finally { _browserCardSyncing = false; }
             SyncBrowserMuteIcon();
             RefreshBrowserWebcamButton();
@@ -246,6 +253,5 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private void BtnPopOutBrowser_Click(object? sender, RoutedEventArgs e) => Shell?.BtnPopOutBrowser_Click(sender, e);
-        private void ToggleEnhanceIfPossible_Changed(object? sender, RoutedEventArgs e) { } // greyed: see the header
     }
 }

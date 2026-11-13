@@ -75,7 +75,7 @@ public sealed class ChatThresholdLinksTests
             var chips = view.GetVisualDescendants().OfType<Button>().Where(b => b.Name == "WatchChip").ToList();
             var chip = Assert.Single(chips, b => b.IsVisible);
             string? navigated = null;
-            CompanionLinkLauncher.Navigate = url => { navigated = url; return true; };
+            CompanionLinkLauncher.Navigate = url => { navigated = url; return Task.FromResult<bool?>(true); };
             var point = chip.TranslatePoint(new Point(chip.Bounds.Width / 2, chip.Bounds.Height / 2), window)!.Value;
             window.MouseDown(point, MouseButton.Left);
             window.MouseUp(point, MouseButton.Left);

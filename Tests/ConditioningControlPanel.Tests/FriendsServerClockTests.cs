@@ -65,26 +65,31 @@ public class FriendsServerClockTests
     public void The_knock_countdown_of_a_fresh_invite_reads_about_five_minutes_on_a_fast_pc_clock()
     {
         Assert.True(PackUriBootstrap.Failure == null, PackUriBootstrap.Failure);
+        // Theme bootstrap is unrelated to the invite's age and can be slow on a cold runner.
+        WpfRenderHarness.EnsureApplication();
         try
         {
-            var serverNow = PcFast(TimeSpan.FromMinutes(2));
-            var sent = serverNow.AddSeconds(-5);
-            var invite = new InboxItem(Id1, SendKind.Invite, "u_ann", "Ann", null, null,
-                InviteDestination.BackRoom, null, null, sent, sent.AddSeconds(InviteDestination.LifetimeSeconds));
-            string? shown = null;
             WpfRenderHarness.OnStaThread(() =>
             {
+                var fast = TimeSpan.FromMinutes(2);
+                var serverNow = PcFast(fast);
+                var sent = serverNow.AddSeconds(-5);
+                var end = sent.AddSeconds(InviteDestination.LifetimeSeconds);
+                var invite = new InboxItem(Id1, SendKind.Invite, "u_ann", "Ann", null, null,
+                    InviteDestination.BackRoom, null, null, sent, end);
                 var ctor = typeof(KnockCard).GetConstructors(BindingFlags.NonPublic | BindingFlags.Instance)[0];
                 Action<InboxItem, KnockOutcome> done = (_, _) => { };
+                var before = DateTimeOffset.UtcNow - fast;
                 var card = (Window)ctor.Invoke(new object?[] { new Window(), invite, "invites you", "Join", "Not now", "Answer later", done, null });
+                var after = DateTimeOffset.UtcNow - fast;
                 var countdown = (TextBlock)typeof(KnockCard).GetField("_countdown", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(card)!;
-                shown = countdown.Text;
+                var parts = countdown.Text.Split(':');
+                var left = int.Parse(parts[0]) * 60 + int.Parse(parts[1]);
+                // Card construction can take seconds on a busy CI runner. Bracket the instant it
+                // sampled the clock, while still rejecting the PC clock (which is two minutes fast).
+                Assert.InRange(left, LandingRules.SecondsLeft(end, after), LandingRules.SecondsLeft(end, before));
                 card.Content = null;
             });
-
-            var parts = shown!.Split(':');
-            var left = int.Parse(parts[0]) * 60 + int.Parse(parts[1]);
-            Assert.True(left >= 280, $"countdown shows {shown} for an invite sent 5 s ago (PC clock 2 min fast)");
         }
         finally { ServerClock.ResetForTests(); }
     }

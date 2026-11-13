@@ -34,7 +34,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Panic surface "browser-media" (WPF b9368d963 PanicEndBrowserMedia): page video stops, fullscreen drops.</summary>
         internal void PanicPauseBrowserMedia()
         {
-            if (BrowserView is { } host) _ = host.InvokeScriptAsync(WebHostMedia.PanicPauseScript);
+            if (BrowserView is not { } host) return;
+            // A watch-chip request still waiting for the gate must not load after panic.
+            host.CancelPendingNavigation();
+            _ = host.InvokeScriptAsync(WebHostMedia.PanicPauseScript);
         }
 
         /// <summary>Homepage of whichever site radio is selected. BambiCloud is the default, as on
@@ -69,7 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var host = BrowserView;
                 if (host == null) return false;
-                host.Navigate(new Uri(url));   // even when equal: WPF #867, re-click goes home
+                if (!host.Navigate(new Uri(url))) return false;   // even when equal: WPF #867, re-click goes home
                 Log.Information("Browser navigated to {Url}", url);
                 return true;
             }
@@ -137,6 +140,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// navigation still happens, which is what every caller needs first.</param>
         public bool NavigateToUrlInBrowser(string url, bool autoPlayFullscreen = false, bool userInitiated = true)
         {
+            if (!PrepareBrowserNavigation(url, autoPlayFullscreen, userInitiated)) return false;
+            // WPF MainWindow/MainWindow.Browser.cs:487-498: HTTPS only, after the offline gate.
+            // ponytail: an unavailable adapter is known immediately; no 12-second ready poll is needed.
+            if (BrowserView is { HasEngine: false })
+            {
+                NavigateBrowser(url); // reports false with no engine; the fallback panel still names the URL
+                if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
+                    Platform.ExternalOpener.Open(url);
+                return true;
+            }
+            return NavigateBrowser(url);
+        }
+
+        internal async System.Threading.Tasks.Task<bool?> NavigateCompanionUrlAsync(string url)
+        {
+            if (!PrepareBrowserNavigation(url, true, true)) return false;
+            var host = BrowserView;
+            return host == null ? false : await host.NavigateWhenReadyAsync(new Uri(url));
+        }
+
+        private bool PrepareBrowserNavigation(string url, bool autoPlayFullscreen, bool userInitiated)
+        {
             if (string.IsNullOrWhiteSpace(url)) return false;
             if (BrowserBlockedOffline(userInitiated)) return false;
 
@@ -154,16 +179,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (autoPlayFullscreen)
                 Log.Warning("Auto-play/fullscreen takeover is not ported; navigating without takeover");
 
-            // WPF MainWindow/MainWindow.Browser.cs:487-498: HTTPS only, after the offline gate.
-            // ponytail: an unavailable adapter is known immediately; no 12-second ready poll is needed.
-            if (BrowserView is { HasEngine: false })
-            {
-                var navigated = NavigateBrowser(url); // retain the requested URL on the fallback panel
-                if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
-                    Platform.ExternalOpener.Open(url);
-                return navigated;
-            }
-            return NavigateBrowser(url);
+            return true;
         }
 
         // ============================== the profile viewer ==============================
@@ -250,12 +266,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// full sign-out that pushes nothing and wipes the quest file (AccountSeed.Logout(accountDeleted: true)).</summary>
         internal async System.Threading.Tasks.Task DeleteProfileAsync()
         {
-            var button = ProfilePage?.FindControl<Button>("BtnDeleteProfile");
+            // WPF MainWindow.Browser.cs:1826-1828: both doors (Profile bin, Settings > Data) are off during the request.
+            Button?[] doors = { ProfilePage?.FindControl<Button>("BtnDeleteProfile"), AppSettingsPage?.SectionData.BtnDeleteAccount };
             try
             {
                 if (!await new Dialogs.DisplayNameDialog("delete").ShowDialog<bool>(this)) return;
 
-                if (button != null) button.IsEnabled = false;
+                foreach (var d in doors) if (d != null) d.IsEnabled = false;
                 var (success, error) = await CoreAccount.DeleteAccountAsync();
                 if (success)
                 {
@@ -274,7 +291,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             finally
             {
-                if (button != null) button.IsEnabled = true;
+                foreach (var d in doors) if (d != null) d.IsEnabled = true;
             }
         }
     }

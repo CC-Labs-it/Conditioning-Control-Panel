@@ -16,7 +16,7 @@ export function readRow(r) {
   if (!obj(r) || typeof r.id !== 'string' || !r.id) return null;
   const o = obj(r.owned);
   return { id: r.id, tier: typeof r.tier === 'string' ? r.tier : null, priceSp: Math.max(0, int(r.priceSp)), grants: strs(r.grants),
-    needs: r.needs === 'prime' ? 'prime' : null, owned: o ? { at: o.at ?? null, paidSp: int(o.paidSp) } : null,
+    needs: r.needs === 'prime' || r.needs === 'discord' ? r.needs : null, owned: o ? { at: o.at ?? null, paidSp: int(o.paidSp) } : null,
     sale: r.sale === 'on' ? 'on' : 'soon' };
 }
 
@@ -42,11 +42,15 @@ export function readState(body, { rain = true } = {}) {
     tabs: TAB_ORDER.filter((id) => byId.has(id)).map((id) => byId.get(id)) };
 }
 
-/** Owned, then soon, then a Prime row below tier 2, then short by N, then buy. */
+/** The face of a row that needs a linked Discord (Back Room High Roller): the Back Room counter's "Link Discord first". */
+const DISCORD_FACE = Object.freeze({ face: 'discord', action: null, reasonKey: 'shop_link_discord' });
+
+/** Owned, then soon, then a Prime row below tier 2, then Link Discord first, then short by N, then buy. */
 export function faceOf(row, sp, tier) {
   if (row.owned) return { face: 'owned', action: 'wear' };
   if (row.sale !== 'on') return { face: 'soon', action: null };
   if (row.needs === 'prime' && tier < 2) return { face: 'prime', action: 'prime', reasonKey: 'shop_prime_reason' };
+  if (row.needs === 'discord') return { ...DISCORD_FACE };
   const short = row.priceSp - sp;
   return short > 0 ? { face: 'short', action: null, short } : { face: 'buy', action: 'buy' };
 }
@@ -248,6 +252,7 @@ export function createShop({ request, newIdem, tab: startTab = null, wears = und
         if (RETRY[reason]) { c.retry = true; c.noteKey = RETRY[reason]; }
         else if (reason === 'owned') { for (const r of rowsOf(c.itemId)) if (!r.owned) r.owned = { at: now(), paidSp: 0 }; out.owned = c.itemId; }
         else if (reason === 'needs_prime') c.forced = { face: 'prime', action: 'prime', reasonKey: 'shop_prime_reason' };
+        else if (reason === 'discord_required') { for (const r of rowsOf(c.itemId)) r.needs = 'discord'; c.forced = { ...DISCORD_FACE }; }
         else if (reason === 'not_in_stock') c.forced = { face: 'gone', action: null };
         else if (reason === 'unavailable') c.forced = { face: 'soon', action: null };
         else if (reason === 'insufficient') {

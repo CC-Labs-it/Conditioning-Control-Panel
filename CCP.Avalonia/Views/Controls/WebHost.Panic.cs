@@ -27,6 +27,18 @@ public partial class WebHost
         catch (Exception ex) { Serilog.Log.Debug(ex, "WebHost: panic blank failed"); }
     }
 
+    // Offline mode cancels a request still held for the Scrolller gate (BlockWhenOffline hosts).
+    internal void CancelHeldNavigation()
+    {
+        CancelPendingNavigation();
+        if (_loadedOnThisEngine || Source is null) return;
+        _panicBlank = true;
+        try { _web?.Stop(); }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "WebHost: held navigation stop failed"); }
+        Source = null;
+        NavigatePanicBlank();
+    }
+
     private static bool IsScrolllerMedia(Uri? uri) => uri is { IsAbsoluteUri: true }
         && (ScrolllerPolicy.IsScrolllerUrl(uri.AbsoluteUri) && !ScrolllerWebRules.IsApiHost(uri.Host)
                 && ScrolllerWebRules.KindOf(uri.AbsoluteUri) != ScrolllerMediaKind.Other

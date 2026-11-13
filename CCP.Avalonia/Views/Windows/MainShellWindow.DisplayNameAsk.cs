@@ -25,7 +25,12 @@ public partial class MainShellWindow
         Closed += (_, _) => { _nameAskClosed = true; _nameAskGeneration++; AccountSeed.ProfileLoaded -= OnNameProfileLoaded; };
     }
 
-    private void OnNameProfileLoaded() => Dispatcher.UIThread.Post(QueueDisplayNameAskIfNeeded, DispatcherPriority.Normal);
+    private void OnNameProfileLoaded() => Dispatcher.UIThread.Post(() =>
+    {
+        if (_nameAskClosed) return;
+        RepaintLoadedProfile();
+        QueueDisplayNameAskIfNeeded();
+    }, DispatcherPriority.Normal);
 
     private void QueueDisplayNameAskIfNeeded()
     {

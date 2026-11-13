@@ -214,6 +214,9 @@ namespace ConditioningControlPanel.Services
             [JsonProperty("achievements")]
             public string[]? Achievements { get; set; }
 
+            [JsonProperty("stats")]
+            public JObject? Stats { get; set; }
+
             [JsonProperty("is_season0_og")]
             public bool IsSeason0Og { get; set; }
 

@@ -9,7 +9,7 @@
 // and available, else a preset phrase through the tube), Mind Wipe (only once CoreMindWipe is
 // seeded). Never picked here (CanPerform false, exactly as WPF skips an unavailable action):
 // Spiral/Brain Drain pulses are not WPF candidates. Web Video needs the browser media/fullscreen
-// service; Wallpaper needs the platform wallpaper service. Spoken Mantra uses the voice funnel.
+// service. Local wallpaper uses WallpaperHost. Spoken Mantra uses the voice funnel.
 // Banner, countdown, event audio and diagnostic Test are wired. Force Start is a collapsed WPF
 // debug control. Voice/PTT/wake word: MainShellWindow.VoiceCommands.cs.
 using System;
@@ -70,6 +70,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (_autonomyHooked) return;
             _autonomyHooked = true;
+            RemoteCommands.AutonomyCommand = RemoteAutonomyCommand;
+            RemoteCommands.CancelAutonomyPulses = CancelAutonomyPulses;
+            RemoteCommands.AutonomyRunning = AutonomyRunning;
             Autonomy.CanPerform = CanPerformAutonomy;
             // WPF CanTakeAction: never over a fullscreen interaction (InteractionQueue.IsBusy).
             Autonomy.IsBusy = () => CoreEngine.Video?.IsPlaying == true || LockCardWindow.IsAnyOpen()
@@ -89,10 +92,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var audio = CompanionEventAudio.Resolve(phrase);
                 _avatarTubeWindow?.GigglePriority(phrase, audio != null, aiGenerated: false, phraseAudioPath: audio);
             });
-            Closed += (_, _) => { CancelAutonomyPulses(); Autonomy.Stop(); TakeoverAnnouncerOverlay.CloseActive(); _takeoverQuestTick?.Stop(); StopVoiceInput(); };
+            Closed += (_, _) => { if (RemoteCommands.AutonomyCommand == RemoteAutonomyCommand) RemoteCommands.AutonomyCommand = null;
+                if (RemoteCommands.CancelAutonomyPulses == CancelAutonomyPulses) RemoteCommands.CancelAutonomyPulses = null;
+                if (RemoteCommands.AutonomyRunning == AutonomyRunning) RemoteCommands.AutonomyRunning = null;
+                CancelAutonomyPulses(); Autonomy.Stop(); TakeoverAnnouncerOverlay.CloseActive(); _takeoverQuestTick?.Stop(); StopVoiceInput(); };
             OnceOpened(ResumeAutonomyOnStartup);
             Opened += (_, _) => RefreshVoiceInputModes();
         }
+
+        // WPF RemoteControlService.cs:1476: start/stop the runtime, not the saved switch.
+        private bool RemoteAutonomyCommand(bool start)
+        {
+            if (start) return Autonomy.Start();
+            Autonomy.Stop();
+            return true;
+        }
+
+        private bool AutonomyRunning() => Autonomy.IsEnabled;
 
         private bool CanPerformAutonomy(AutonomyActionType a) => a switch
         {
@@ -104,6 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             AutonomyActionType.Subliminal => CoreSubliminal.ShowProvider != null,
             AutonomyActionType.LockCard => CoreLockCard.ShowHandler != null,
             AutonomyActionType.Video => CoreEngine.Video != null,
+            AutonomyActionType.WallpaperShuffle => Platform.WallpaperHead.Service != null,
             AutonomyActionType.StartBubbles => CoreBubbles.StartAction != null,
             AutonomyActionType.BouncingText => CoreBouncingText.StartAction != null,
             // WPF SelectAction's mantraOk: engine up and idle, no prompt in flight, the tube shown and the
@@ -122,6 +139,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (announced) TakeoverAnnouncerOverlay.Announce(AutonomyScheduler.TakeoverEffectLabel(a));
             switch (a)
             {
+                case AutonomyActionType.WallpaperShuffle: _ = TriggerWallpaperChangeAsync(); break;
                 case AutonomyActionType.Flash: CoreFlash.ShowProvider?.Invoke(); break;
                 case AutonomyActionType.Subliminal:
                     if (CoreSubliminal.PickPhrase() is { } phrase) CoreSubliminal.ShowProvider?.Invoke(phrase);
@@ -149,6 +167,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 case AutonomyActionType.MindWipe: CoreMindWipe.TriggerOnce(); break;
                 case AutonomyActionType.SpokenMantra: _ = RequestVoiceCommandAsync(allowCommands: false); break;
             }
+        }
+
+        private int _wallpaperGen, _wallpaperStopGen;
+        /// <summary>WPF Services/AutonomyService.cs:1158-1165 + WallpaperService.cs:130: one local shuffle, reverted
+        /// after the pulse unless Keep is on; a newer pulse or a stop cancels the older revert.</summary>
+        internal async System.Threading.Tasks.Task TriggerWallpaperChangeAsync()
+        {
+            var host = Platform.WallpaperHead.Service;
+            if (host == null) return;
+            var stopGen = _wallpaperStopGen;
+            if (!await host.ShuffleAsync() || stopGen != _wallpaperStopGen) return;
+            var gen = ++_wallpaperGen;
+            if (CoreSettings.Current.WallpaperEnabled) return;
+            PulseTimer(() =>
+            {
+                if (gen == _wallpaperGen && !CoreSettings.Current.WallpaperEnabled)
+                    _ = host.DeactivateAsync();
+            }, TimeSpan.FromSeconds(CoreSettings.Current.WallpaperPulseSeconds));
         }
 
         /// <summary>WPF PulsePinkFilter: boost the tint for 30 s, then hand it back. Skipped while a
@@ -248,6 +284,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void CancelAutonomyPulses()
         {
             _pulseGen++;
+            _wallpaperGen++;
+            _wallpaperStopGen++;
+            if (!CoreSettings.Current.WallpaperEnabled) _ = Platform.WallpaperHead.Service?.DeactivateAsync();
             if (_bubblesPulse) { _bubblesPulse = false; CoreBubbles.Stop(); }
             if (_bouncingPulse) { _bouncingPulse = false; CoreBouncingText.Stop(); }
             EndPinkPulse(cancelled: true);

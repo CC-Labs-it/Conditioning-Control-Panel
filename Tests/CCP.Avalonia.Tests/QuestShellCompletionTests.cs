@@ -33,7 +33,7 @@ public sealed class QuestShellCompletionTests
         var s = settings.Current;
         (s.Welcomed, s.HasAcceptedAgeVerification, s.WhatMovedCardShown, s.AvatarEnabled) = (true, true, 1, false);
         s.MotionLevel = MotionLevel.Full;
-        s.SuppressPerkNotifications = true; // WPF's opt-out does not suppress the in-app burst.
+        s.PerkEffects = ConditioningControlPanel.Models.PerkEffectsMode.NoCards; // WPF's opt-out does not suppress the in-app burst.
         var dir = Directory.CreateTempSubdirectory("ccp-quest-shell-").FullName;
         using var quests = new QuestService(null, dir);
         quests.Progress.DailyQuests = new List<ActiveQuest> { new("pop_parade_d"), new("flash_rush_d"), new("spiral_sink_d") };
@@ -74,7 +74,7 @@ public sealed class QuestShellCompletionTests
             quests.TrackBubblesPopped(10_000);
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(0, played);
-            CoreSettings.Current.SuppressPerkNotifications = false;
+            CoreSettings.Current.PerkEffects = ConditioningControlPanel.Models.PerkEffectsMode.Full;
             quests.TrackSpiralMinutes(10_000);
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, played);

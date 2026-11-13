@@ -855,6 +855,68 @@ public sealed class SessionRunnerTests : IDisposable
         }
     }
 
+    private sealed class NoCountHost : IBubbleCountHost
+    {
+        public void Show(string path, int difficulty, bool strict, Action<bool> onComplete) { }
+        public void ShowMessage(string text, int ms, Action then) { }
+        public void CloseAll() { }
+        public double LastVideoDurationSeconds => 60;
+    }
+
+    /// <summary>WPF SessionEngine.cs:1605-1625 (schedule), :526 (pause stops it), :573 (resume restarts it
+    /// unless still deferred); the stop hands the user's own values back.</summary>
+    [Fact]
+    public void BubbleCount_FollowsTheSession_ThroughDeferPauseResumeAndRestore()
+    {
+        var previous = CoreEngine.BubbleCount;
+        var count = new BubbleCountScheduler(new NoCountHost(), new PopQuizSchedulerTests.FakeClock(), () => Array.Empty<string>());
+        var s = CoreSettings.Current;
+        var saved = (s.BubbleCountEnabled, s.BubbleCountFrequency);
+        try
+        {
+            CoreEngine.BubbleCount = count;
+            (s.BubbleCountEnabled, s.BubbleCountFrequency) = (true, 2);
+            var session = OneMinute();
+            session.DurationMinutes = 20;
+            var ss = session.Settings;
+            (ss.BubbleCountEnabled, ss.BubbleCountFrequency, ss.BubbleCountStartMinute) = (true, 4, 7);
+
+            _runner.Start(session);
+            Assert.Equal((true, 4), (s.BubbleCountEnabled, s.BubbleCountFrequency));
+            Assert.False(count.IsRunning);                              // minute 7: deferred, the engine start undone
+            _runner.Pause(); _runner.Resume();
+            Assert.False(count.IsRunning);                              // still deferred after a resume
+
+            _runner.Tick(TimeSpan.FromMinutes(7));
+            Assert.True(count.IsRunning);
+            _runner.Pause();
+            Assert.False(count.IsRunning);
+            _runner.Resume();
+            Assert.True(count.IsRunning);
+
+            _runner.Stop();
+            Assert.False(count.IsRunning);
+            Assert.Equal((true, 2), (s.BubbleCountEnabled, s.BubbleCountFrequency));
+
+            ss.BubbleCountStartMinute = 0;
+            _runner.Start(session);
+            Assert.True(count.IsRunning);
+            _runner.Stop();
+
+            ss.BubbleCountEnabled = false;
+            _runner.Start(session);
+            Assert.False(count.IsRunning);
+            Assert.False(s.BubbleCountEnabled);
+        }
+        finally
+        {
+            _runner.Stop();
+            count.Stop();
+            CoreEngine.BubbleCount = previous;
+            (s.BubbleCountEnabled, s.BubbleCountFrequency) = saved;
+        }
+    }
+
     [Theory]
     [InlineData(true, 0, true)]
     [InlineData(true, 1, false)]

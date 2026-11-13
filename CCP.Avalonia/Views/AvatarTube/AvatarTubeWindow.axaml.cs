@@ -21,6 +21,7 @@ using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
@@ -1226,6 +1227,14 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _idleTimer.Start();
         });
 
+        /// <summary>WPF ResetIdleTimer (Speech.cs:1672): a line restarts the cadence and counts as activity
+        /// for autonomy.</summary>
+        private void ResetIdleTimer()
+        {
+            RestartIdleTimer();
+            QuickShell?.Autonomy.ReportUserActivity();
+        }
+
         internal void IdleTick()
         {
             if (_idleTimer != null) _idleTimer.Interval = TimeSpan.FromSeconds(CoreSettings.Current.IdleGiggleIntervalSeconds);
@@ -1254,7 +1263,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>WPF Giggle (Speech.cs:240): a PRESET line. Dropped while an AI request is in
         /// flight or an AI bubble is up, never logged to chat history, sound on every fifth. Queued
         /// behind a line still up, or until the previous line's gap has passed (Speech.cs:273-294).</summary>
-        public void Giggle(string text, bool unprompted = false)
+        public void Giggle(string text, bool unprompted = false, string? phraseAudioPath = null, bool barkVoice = false)
         {
             if (_isPlayingUninterruptibleClip || _isWaitingForAi || _isShowingAiBubble) return;
             RunOnAvatar(() =>
@@ -1268,7 +1277,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     ProcessNextSpeech();
                     return;
                 }
-                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true, unprompted: unprompted);
+                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, phraseAudioPath, barkVoice, preset: true, unprompted: unprompted);
             });
         }
 
@@ -1278,7 +1287,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private void ShowSpeech(string text, bool playSound, bool aiGenerated, string? phraseAudioPath,
                                 bool barkVoice, bool preset, Action? onSpoken = null, bool unprompted = false, bool trigger = false)
         {
-            RestartIdleTimer();
+            ResetIdleTimer();
                 if (!trigger) CancelTriggerAnimation(); // a newer line owns the bubble
                 var spokenHandled = false;
                 var clipDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1385,7 +1394,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 };
                 _listeningDotsTimer = timer;
                 timer.Start();
-                RestartIdleTimer();   // WPF AvatarTubeWindow.Speech.cs:789: keep idle off the mic prompt.
+                ResetIdleTimer();   // WPF AvatarTubeWindow.Speech.cs:789: keep idle off the mic prompt.
             });
         }
 
@@ -1559,12 +1568,23 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         }
 
         /// <summary>Opens the chat input panel and puts the caret in it.</summary>
+        internal Action<Window> FocusChatWindow = Platform.Win32Windows.FocusChatWindow;
+
         public void OpenChatInput() => RunOnAvatar(() =>
         {
             _inputPanel.IsVisible = true;
-            // Input priority, not inline: the panel has just become visible and is not laid out yet,
-            // so focusing it in the same beat silently does nothing.
-            Dispatcher.UIThread.Post(() => _txtUserInput.Focus(), DispatcherPriority.Input);
+            // WPF waits until input has drained and the panel has been laid out.
+            Dispatcher.UIThread.Post(() =>
+            {
+                try
+                {
+                    // WPF ChatInput.cs:685: keep an attached tube at the shell level while a host is open.
+                    if (IsDetached || (!Games.GameWindow.IsAnyOpen() && !Windows.IntakeHostWindow.IsAnyOpen())) FocusChatWindow(this);
+                    _txtUserInput.Focus();
+                    _txtUserInput.SelectAll();
+                }
+                catch (Exception ex) { Log.Debug(ex, "AvatarTube: focus chat input failed"); }
+            }, DispatcherPriority.ContextIdle);
         });
 
         /// <summary>
@@ -1613,7 +1633,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// The stored shortcut, defaulted. One reader for both the label and the binding so they can
         /// never disagree about what an unparseable setting means.
         /// </summary>
-        private static (Key Key, KeyModifiers Mods) CurrentChatShortcut()
+        internal static (Key Key, KeyModifiers Mods) CurrentChatShortcut()
         {
             var s = CoreSettings.Current.CompanionPrompt;
             var keyName = string.IsNullOrWhiteSpace(s?.ChatShortcutKey) ? "T" : s!.ChatShortcutKey;
@@ -1697,8 +1717,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// history, memory) while UseCompanionBrain is on, its default, and takes the stateless call when
         /// it is off or the brain failed to build, with WPF's thinking bubble, double bounce and the asks
         /// offer after a brain reply. The "user talked" signal feeds the memory chat counter (App.UserMessageSent).
-        /// ponytail: still missing - SeasonRecapService.TrackFeature and the companion-chat
-        /// achievement listener on that signal (both head services with no Avalonia twin) and the
+        /// ponytail: still missing - the companion-chat achievement listener on that signal
+        /// and the
         /// enabled-phrases filter (App.CompanionPhrases).</para>
         /// </summary>
         internal async System.Threading.Tasks.Task SendChatAsync()
@@ -1713,6 +1733,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _txtUserInput.Text = string.Empty;
             // WPF b248a7b91: Send closes the box. Click her or use the chat key for the next line.
             _inputPanel.IsVisible = false;
+            SeasonFeatureTracking.Track(CoreSettings.Current, ConditioningControlPanel.Models.SeasonFeatureKeys.Companion, ev => App.FeatureDayLog?.Note(ev), DateTime.UtcNow);
 
             var ai = App.Ai;
             var brain = App.Brain;   // decided once, up front, as WPF (ChatInput.cs:772)

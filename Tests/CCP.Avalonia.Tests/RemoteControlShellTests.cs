@@ -61,6 +61,63 @@ public sealed class RemoteControlShellTests
         return Task.CompletedTask;
     });
 
+    // WPF RemoteControlService.cs:1476 start/stop; :1159 a leave only cancels pulses; :980 panic and session
+    // end stop and re-arm on the saved switch; :1488 trigger_lock_card shows a card, :1179 teardown closes it.
+    [Fact]
+    public void RemoteAutonomyAndLockCardReachTheShellAndTeardownFollowsWpf() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var old = (s.AutonomyModeEnabled, s.AutonomyConsentGiven, CoreEntitlement.HasPremiumProvider, s.LockCardPhrases,
+            s.LockCardStrict, CoreLockCard.ShowHandler, CoreLockCard.CloseAllHandler);
+        MainShellWindow? shell = null;
+        try
+        {
+            CoreEntitlement.HasPremiumProvider = () => true;
+            shell = new MainShellWindow();
+            shell.Show();
+            s.AutonomyModeEnabled = s.AutonomyConsentGiven = true;
+            Assert.Null(RemoteCommands.Execute("start_autonomy", null));
+            Assert.True(shell.Autonomy.IsEnabled);
+            Assert.True(RemoteCommands.AutonomyRunning?.Invoke());   // the status lists "autonomy"
+            Assert.Null(RemoteCommands.Execute("stop_autonomy", null));
+            Assert.False(shell.Autonomy.IsEnabled);
+            Assert.False(RemoteCommands.AutonomyRunning?.Invoke());
+
+            Assert.True(shell.Autonomy.Start());   // the wearer's own run
+            RemoteCommands.StopEffects(false);      // the controller left
+            Assert.True(shell.Autonomy.IsEnabled);
+            Assert.Null(RemoteCommands.Execute("stop_autonomy", null));
+            RemoteCommands.ResetAutonomy();         // panic or session end: back on the saved switch
+            Assert.True(shell.Autonomy.IsEnabled);
+            s.AutonomyModeEnabled = false;
+            RemoteCommands.ResetAutonomy();
+            Assert.False(shell.Autonomy.IsEnabled);
+
+            (s.LockCardPhrases, s.LockCardStrict) = (new Dictionary<string, bool> { ["GOOD GIRL"] = true }, false);
+            (CoreLockCard.ShowHandler, CoreLockCard.CloseAllHandler) = (LockCardWindow.PostNext, LockCardWindow.ForceCloseAll);
+            Assert.Null(RemoteCommands.Execute("trigger_lock_card", null));
+            RemoteCommands.StopEffects(false);      // teardown before the posted card drew
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(LockCardWindow.IsAnyOpen());
+            Assert.Null(RemoteCommands.Execute("trigger_lock_card", null));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(LockCardWindow.IsAnyOpen());
+            RemoteCommands.StopEffects(false);
+            Assert.False(LockCardWindow.IsAnyOpen());
+        }
+        finally
+        {
+            LockCardWindow.ForceCloseAll();
+            shell?.Close();
+            (s.AutonomyModeEnabled, s.AutonomyConsentGiven, CoreEntitlement.HasPremiumProvider, s.LockCardPhrases,
+                s.LockCardStrict, CoreLockCard.ShowHandler, CoreLockCard.CloseAllHandler) = old;
+        }
+    });
+
     private sealed class FakeRelay : HttpMessageHandler
     {
         public readonly List<string> Paths = new();
@@ -73,6 +130,73 @@ public sealed class RemoteControlShellTests
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
         }
     }
+
+    [Theory]
+    [InlineData("panic")]
+    [InlineData("end")]
+    [InlineData("wearer")]
+    [InlineData("disconnect")]
+    public Task Remote_stop_reaches_head_audio(string cause) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var playlistSlot = typeof(global::ConditioningControlPanel.Avalonia.App).GetProperty("AudioPlaylist")!;
+        var oldPlaylist = playlistSlot.GetValue(null);
+        var playlist = new AudioPlaylistCardModelTests.FakePlaylist { IsPlaying = true };
+        var chant = global::ConditioningControlPanel.Avalonia.App.MantraChant;
+        var settings = CoreSettings.Current;
+        var oldChant = settings.MantraChantEnabled;
+        var oldDisconnect = settings.StopEffectsOnRemoteDisconnect;
+        var fake = new FakeRelay();
+        var oldMod = (CoreMods.ActiveModIdProvider, CoreMods.ActiveModPackageProvider);
+        var id = "remote-chant-" + Guid.NewGuid().ToString("N");
+        var root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), id);
+        var sounds = System.IO.Path.Combine(root, "resources", "sounds", "companion_audio");
+        System.IO.Directory.CreateDirectory(sounds);
+        System.IO.File.WriteAllText(System.IO.Path.Combine(sounds, "p.mp3"), "audio");
+        System.IO.File.WriteAllText(System.IO.Path.Combine(sounds, "mantras.json"),
+            "{\"mantras\":[{\"id\":\"a\",\"phrase\":\"Obey\",\"promptAudio\":\"p.mp3\"}]}");
+        CoreMods.ActiveModIdProvider = () => id;
+        CoreMods.ActiveModPackageProvider = () => new ModPackage(new ModManifest { Id = id }, root, false);
+        using var relay = global::ConditioningControlPanel.Avalonia.App.WireRemoteQuestProgress(
+            new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, RemoteCommands.StopEffects, fake) { AutoPoll = false });
+        try
+        {
+            playlistSlot.SetValue(null, playlist);
+            settings.MantraChantEnabled = true;
+            settings.StopEffectsOnRemoteDisconnect = cause == "disconnect";
+            chant.Start();
+            Assert.True(chant.IsRunning);
+            if (cause == "wearer") CoreEngine.Start();
+            Assert.Equal("ABC123", await relay.StartAsync("light"));
+            if (cause == "panic")
+            {
+                fake.Poll = "{\"controller_connected\":true,\"commands\":[{\"id\":\"1\",\"action\":\"trigger_panic\"}]}";
+                await relay.PollOnceAsync();
+            }
+            else if (cause == "disconnect")
+            {
+                fake.Poll = "{\"controller_connected\":true}";
+                await relay.PollOnceAsync();
+                fake.Poll = "{\"controller_connected\":false}";
+                await relay.PollOnceAsync();
+            }
+            else await relay.StopAsync();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(cause == "wearer", chant.IsRunning);
+            Assert.Equal(cause == "wearer", playlist.IsPlaying);
+        }
+        finally
+        {
+            if (relay.IsActive) await relay.StopAsync();
+            Dispatcher.UIThread.RunJobs();
+            chant.Stop();
+            CoreEngine.Stop();
+            settings.MantraChantEnabled = oldChant;
+            settings.StopEffectsOnRemoteDisconnect = oldDisconnect;
+            playlistSlot.SetValue(null, oldPlaylist);
+            (CoreMods.ActiveModIdProvider, CoreMods.ActiveModPackageProvider) = oldMod;
+            System.IO.Directory.Delete(root, true);
+        }
+    });
 
     private sealed class SteppedClock : TimeProvider
     {
@@ -253,6 +377,71 @@ public sealed class RemoteControlShellTests
             relay.Dispose();
             (RemoteControlTabView.Relay, MainShellWindow.RemoteOverlayTime, CoreSettings.ServiceProvider) = (oldRelay, oldTime, oldProvider);
             global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = oldSink;
+        }
+    });
+
+    [Fact]
+    public Task Teardown_restores_tray_shell_and_avatar_but_continuity_does_not() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var oldRelay = RemoteControlTabView.Relay;
+        var oldProvider = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        service.Current.AvatarEnabled = true;
+        // A fresh settings file is a first run: the wizard opens on Show, and hiding the shell to the
+        // tray ends that dialog unaccepted, which really closes the shell (FirstRunWizard.Run abort).
+        service.Current.Welcomed = service.Current.HasAcceptedAgeVerification = true;
+        var f = new FakeRelay();
+        var relay = new RemoteRelay(() => "tok", () => "uid", "9.9.9", (_, _) => null, _ => { }, f) { AutoPoll = false };
+        RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
+        MainShellWindow? shell = null;
+        try
+        {
+            shell = new MainShellWindow();
+            shell.CreateTray();
+            shell.TrayHostPresent = () => true;
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            void HideToTray() { shell.Close(); Dispatcher.UIThread.RunJobs(); Assert.False(shell.IsVisible); }
+            void Restored() { Dispatcher.UIThread.RunJobs(); Assert.True(shell.IsVisible); Assert.True(shell.Tube!.IsVisible); }
+            await relay.StartAsync("light");
+            f.Poll = "{\"controller_connected\":true}";
+            await relay.PollOnceAsync();
+            Dispatcher.UIThread.RunJobs();
+            HideToTray();
+            f.Poll = "{\"controller_connected\":false}";
+            await relay.PollOnceAsync();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(shell.IsVisible);
+            Assert.False(shell.Tube!.IsVisible);
+            f.Poll = "{\"controller_connected\":true}";
+            await relay.PollOnceAsync();
+            Dispatcher.UIThread.RunJobs();
+            service.Current.StopEffectsOnRemoteDisconnect = true;
+            f.Poll = "{\"controller_connected\":false}";
+            await relay.PollOnceAsync();
+            Restored();
+            f.Poll = "{\"controller_connected\":true}";
+            await relay.PollOnceAsync();
+            Dispatcher.UIThread.RunJobs();
+            HideToTray();
+            f.Poll = "{\"controller_connected\":true,\"commands\":[{\"id\":\"1\",\"action\":\"trigger_panic\"}]}";
+            await relay.PollOnceAsync();
+            Restored();
+            HideToTray();
+            await relay.StopAsync();
+            Restored();
+        }
+        finally
+        {
+            if (shell != null) { shell.TrayHostPresent = () => false; shell.Close(); }
+            relay.Dispose();
+            RemoteControlTabView.Relay = oldRelay;
+            CoreSettings.ServiceProvider = oldProvider;
         }
     });
 

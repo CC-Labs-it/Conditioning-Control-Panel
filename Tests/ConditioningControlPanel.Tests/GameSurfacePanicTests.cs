@@ -45,6 +45,7 @@ public class GameSurfacePanicTests : IDisposable
     {
         // The reported one, named outright so a refactor that drops it fails loudly.
         Assert.Contains("race", GameSurfaces.Ids());
+        Assert.Contains("raceclassic", GameSurfaces.Ids());
         Assert.Contains("goon", GameSurfaces.Ids());
         Assert.Contains("intake", GameSurfaces.Ids());
     }

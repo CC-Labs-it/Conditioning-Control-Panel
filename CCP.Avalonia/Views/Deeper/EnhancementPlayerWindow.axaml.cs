@@ -119,7 +119,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     ///         genuinely has no counterpart is ZoomFactor, AddScriptToExecuteOnDocumentCreatedAsync
     ///         and ContainsFullScreenElementChanged. Zoom stays stubbed; fullscreen entry reads the engine's
     ///         own signal through the platform handle (Platform/WebFullscreenSignal), exit uses page messages.</item>
-    ///   <item>Dark title bars remain unported. Fullscreen uses Avalonia windows.</item>
+    ///   <item>Dark title bars are tinted globally by Win32Window on Windows. Fullscreen uses Avalonia windows.</item>
     /// </list>
     /// </summary>
     public partial class EnhancementPlayerWindow : Window
@@ -139,6 +139,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private static readonly List<EnhancementPlayerWindow> OpenPlayers = new();
         private string? _audioPath;
         private int _audioLoad;
+        private bool _audioDurationRemembered;
+        internal Action<string?, double> RememberAudioDuration = MediaDurationCache.Remember;
         private bool _closing;
 
 
@@ -227,11 +229,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         public EnhancementPlayerWindow(Enhancement? enhancement, string? sourceTag)
         {
             AvaloniaXamlLoader.Load(this);
+            InitializeWindowBounds();
 
-            // ponytail: needs WindowChromeHelper.ApplyDarkTitleBar (DwmSetWindowAttribute) and
-            // RestoreOwnerOnClose. The title-bar tint has no Linux equivalent short of
-            // SystemDecorations="None" plus a hand-drawn bar, which would cost this resizable
-            // window its native move/resize/maximize for a colour. Left native and untinted.
+            // Windows title bars are tinted globally by Win32Window (WPF App.xaml.cs:2075); Linux keeps native decoration.
+            // RestoreOwnerOnClose:
             Opened += (_, _) => OpenPlayers.Add(this);
             Closed += (_, _) => { OpenPlayers.Remove(this); try { (Owner as Window)?.Activate(); } catch { } };
             // WPF EnhancementPlayerWindow.xaml.cs:111-114: friends see "in Deeper" while the player is on
@@ -680,6 +681,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             StopAudio();
             var load = _audioLoad;
             _audioPath = path;
+            _audioDurationRemembered = false;
             _txtAudioPath.Text = path;
             _txtStatus.Text = Loc.Get("deeper_player_status_loading_audio");
             ShowMediaPaneFor(MediaTypes.Audio);
@@ -889,8 +891,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // letting the poll correct it would show ⏸ / LIVE / "Playing" in the meantime, and on
             // a page that never grows a video element it would never be corrected at all.
             var want = !_isPlaying;
-            if (DeeperPreview.Unquote(await _videoBrowser.InvokeScriptAsync(
-                    DeeperPreview.Invoke(want ? "l.play();" : "l.pause();"))) != "ok")
+            var load = _videoLoad;
+            var result = await _videoBrowser.InvokeScriptAsync(
+                DeeperPreview.Invoke(want ? "l.play();" : "l.pause();"));
+            if (_closing || load != _videoLoad || !_isVideoMode || !_videoNavigated
+                || DeeperPreview.Unquote(result) != "ok")
                 return;
             _isPlaying = want;
             _txtPlayPauseGlyph.Kind = _isPlaying ? IconKind.Pause : IconKind.Play;
@@ -900,6 +905,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void BtnStop_Click()
         {
+            ++_videoLoad; // Discard a pending Play/Pause result and time readback.
             StopAudio();
             if (_isVideoMode && _videoNavigated)
                 _ = _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke("l.pause(); l.currentTime=0;"));
@@ -974,15 +980,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void SliderVolume_PropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
         {
             if (e.Property != RangeBase.ValueProperty) return;
-            _volumeBeforeMute = null;
-            // WPF EnhancementPlayerWindow.xaml.cs:1017-1025.
+            // WPF EnhancementPlayerWindow.xaml.cs:1017-1029: a hand-moved slider ends a mute, the
+            // value reaches the page's video too, and a muted 0 is never persisted.
+            if (!_muteChanging) _volumeBeforeMute = null;
             if (_localAudio != null) _localAudio.Volume = (int)_sliderVolume.Value;
+            if (_isVideoMode && _videoNavigated && !_pollDisabled)
+                _ = _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke(VideoVolumeScript()));
             var volume = (int)_sliderVolume.Value;
-            if (CoreSettings.Current.DeeperPlayerVolume != volume)
+            if (_volumeBeforeMute == null && CoreSettings.Current.DeeperPlayerVolume != volume)
             {
                 CoreSettings.Current.DeeperPlayerVolume = volume;
                 CoreSettings.Save();
             }
+        }
+
+        // WPF xaml.cs:1025,1431,1841 set the slider's volume on the video source at bind time and on
+        // every NavigationCompleted. There is no navigation event here, so the poll carries it: the
+        // stamp lives on the element, which a new page or a late-mounted player starts without.
+        private string VideoVolumeScript()
+        {
+            var v = (_sliderVolume.Value / 100.0).ToString("0.###", CultureInfo.InvariantCulture);
+            return "l.volume=" + v + ";l._ccpVol=" + v + ";";
         }
 
         // ====================================================================================
@@ -999,6 +1017,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             {
                 _currentSec = _localAudio.PositionSeconds;
                 _durationSec = _localAudio.DurationSeconds;
+                if (!_audioDurationRemembered && _durationSec > 0 && double.IsFinite(_durationSec))
+                {
+                    _audioDurationRemembered = true;
+                    RememberAudioDuration(_audioPath, _durationSec);
+                }
             }
 
             _txtCurrent.Text = FormatTime(_currentSec);
@@ -1030,7 +1053,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             var load = _videoLoad;
             try
             {
-                var raw = await _videoBrowser.InvokeScriptAsync(DeeperPreview.ReadTime());
+                var v = (_sliderVolume.Value / 100.0).ToString("0.###", CultureInfo.InvariantCulture);
+                var raw = await _videoBrowser.InvokeScriptAsync(DeeperPreview.LargestVideo(
+                    "if(l._ccpVol!==" + v + "){" + VideoVolumeScript() + "}"
+                    + "return l.currentTime+'|'+(l.duration||0)+'|'+(l.paused?0:1);"));
 
                 if (load != _videoLoad || _pollDisabled || !_videoNavigated) return;
                 var parts = DeeperPreview.Unquote(raw).Split('|');
@@ -1139,6 +1165,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             _loadedEnhancement = enh;
             _loadedFilePath = path;
+            var name = string.IsNullOrEmpty(enh?.Metadata?.Name) ? "(untitled)" : enh.Metadata.Name;
+            Title = enh == null ? Loc.Get("deeper_player_title")
+                : string.Format(Loc.Get("deeper_player_window_title_fmt"), name);
 
             if (enh == null)
             {
@@ -1181,6 +1210,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                      && File.Exists(enh.MediaSource))
             {
                 LoadLocalVideo(enh.MediaSource);
+            }
+            else if (!string.Equals(enh.MediaType, MediaTypes.Video, StringComparison.OrdinalIgnoreCase))
+            {
+                // WPF EnhancementPlayerWindow.xaml.cs:1303-1307: an audio enhancement over a still-loaded
+                // video (editor Preview, a catalogue pick) tears the video down first.
+                TearDownVideo();
             }
 
             RefreshFileContextStrip(enh, path);
@@ -1267,7 +1302,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // the moment zoom is real. Same call and same reason in DeeperEditorWindow.axaml's
             // PreviewZoomCluster.
             _browserZoomCluster.IsVisible = false;
-            _volumePanel.IsVisible = !isVideo;
+            // WPF xaml.cs:1361-1364: volume stays up in video mode, the slider drives the page's video.
+            _volumePanel.IsVisible = true;
             _btnPictureInPicture.IsVisible = isVideo;
         }
 

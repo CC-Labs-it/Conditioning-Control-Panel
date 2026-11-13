@@ -3,10 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Animation;
+using Avalonia.Threading;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Services.UI;               // MonitorTarget
 using Serilog;
 
@@ -98,6 +101,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             && X11Overlay.IsAvailable && X11Overlay.IsCompositing;
 
         private static readonly List<TintOverlayWindow> Windows = new();
+        private static readonly List<TintOverlayWindow> FadingWindows = new();
+
+        private static bool GentleWindows => GentleVisuals.On && !CoreSettings.Current.UnifiedOverlayHost;
+        private static Transitions FadeTransition(double seconds) => new()
+        {
+            new DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromSeconds(seconds) }
+        };
 
         /// <summary>WPF AchievementService:226-238 - achievement and quest minutes while the tint is on screen.</summary>
         internal static readonly OverlayQuestMinutes QuestMinutes = new(
@@ -116,6 +126,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 ? rgb
                 : CoreMods.GetFilterColorRgb();
 
+        internal static readonly TimedOverlayHold PayloadHold = new();
+        internal static bool HasTimedPayload => PayloadHold.IsActive;
+        internal static void ShowTimed(Visual host, int ms, double opacity)
+        {
+            var release = PayloadHold.Acquire(opacity);
+            Refresh(host);
+            global::Avalonia.Threading.DispatcherTimer.RunOnce(() =>
+            {
+                if (release()) Refresh(host);
+            }, TimeSpan.FromMilliseconds(Math.Max(50, ms)));
+        }
+
         /// <summary>
         /// Bring the tint in line with the current settings: show it, hide it, move it or repaint
         /// it as those say. Idempotent, so every card handler can just call this.
@@ -125,7 +147,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static void Refresh(Visual host)
         {
             var s = CoreSettings.Current;
-            if (VoiceOpacity == null && (!s.PinkFilterEnabled || !ShouldShow())) { CloseAll(); return; }
+            if (VoiceOpacity == null && !HasTimedPayload && (!s.PinkFilterEnabled || !ShouldShow())) { HideAll(); return; }
 
             var screens = ScreenList.Enumerate(host);
             var primary = -1;
@@ -134,6 +156,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var want = ResolveScreenIndices(s.PinkFilterTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
             var (r, g, b) = EffectiveColor();
             var opacity = PaintedOpacity;   // a session ramps it without writing it (#471)
+            // WPF ResolveAdHocOverlayOpacity: an effect raises a live tint, never lowers it.
+            if (HasTimedPayload)
+                opacity = VoiceOpacity != null || (s.PinkFilterEnabled && ShouldShow()) ? Math.Max(opacity, PayloadHold.Opacity) : PayloadHold.Opacity;
 
             // Same monitors as last time: repaint the brushes and leave the windows alone. This is
             // the whole reason the slider does not tear down a full-screen window per tick.
@@ -143,7 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
 
-            CloseAll();
+            CloseWindows();
 
             // Checked BEFORE anything is created, not only inside Accept: without this, a slider
             // drag on a platform that cannot do click-through flashes a topmost full-screen window
@@ -163,12 +188,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var w = new TintOverlayWindow();
                 w.PlaceOn(screens[i]);
                 w.SetTint(r, g, b, opacity);
+                if (GentleWindows) w.Opacity = 0;
                 w.Show();                       // Position -> Show -> click-through, the order
                                                 // BubbleCountWindow uses; there is no XID before Show
                 // A refusal is about the platform, not about this monitor, so drop the whole set
                 // rather than tinting some screens and not others.
-                if (!SkipPlatformChecksForTests && !Accept(w)) { CloseAll(); return; }
+                // A refusal is not a stop: the payload timer still ends its hold.
+                if (!SkipPlatformChecksForTests && !Accept(w)) { CloseWindows(); return; }
                 Windows.Add(w);
+                if (GentleWindows)
+                {
+                    w.Transitions = FadeTransition(GentleVisuals.FadeSeconds);
+                    Dispatcher.UIThread.Post(() => { if (Windows.Contains(w)) w.Opacity = 1; });
+                }
             }
             _shownOn = want;
             QuestMinutes.Follow(Windows.Count > 0);
@@ -202,9 +234,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
         }
 
+        private static void HideAll()
+        {
+            if (Windows.Count == 0) return;
+            if (!GentleWindows) { CloseAll(); return; }
+            _pulseWeight = null;
+            var fading = Windows.ToArray();
+            Windows.Clear();
+            _shownOn = Array.Empty<int>();
+            QuestMinutes.Follow(false);
+            var duration = TimeSpan.FromSeconds(GentleVisuals.FadeSeconds);
+            foreach (var w in fading)
+            {
+                FadingWindows.Add(w);
+                var opacity = w.Opacity;
+                w.Transitions = null;
+                w.Opacity = opacity;
+                w.Transitions = FadeTransition(duration.TotalSeconds);
+                w.Opacity = 0;
+                DispatcherTimer.RunOnce(() => { FadingWindows.Remove(w); Close(w); }, duration);
+            }
+        }
+
         public static void CloseAll()
         {
+            PayloadHold.Clear();
+            CloseWindows();
+        }
+
+        /// <summary><see cref="CloseAll"/> without dropping a bubble payload's timed hold.</summary>
+        private static void CloseWindows()
+        {
             _pulseWeight = null;
+            foreach (var w in FadingWindows.ToArray()) Close(w);
+            FadingWindows.Clear();
             foreach (var w in Windows)
             {
                 try { w.Close(); }

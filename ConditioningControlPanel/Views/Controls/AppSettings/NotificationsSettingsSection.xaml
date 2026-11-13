@@ -28,7 +28,7 @@
          tooltips: this card is two rows, so each hint is short enough to
          read as part of its own row.
 
-         SECOND ROW (meadow, 2026-08-18): ChkSuppressPerkNotifications. The
+         SECOND ROW (meadow, 2026-08-18; a Full / No cards / Off CmbPerkEffects since 2026-11-05). The
          reporter had stopped TAKING skill-tree perks purely to avoid their
          popups and pings, so the announcement had to become optional
          without the perk following it out. Unlike ChkIntakeNudge above
@@ -77,11 +77,10 @@
                                    Foreground="{StaticResource SectionHueNotificationsBrush}"
                                    Text="{loc:Str label_suppress_perk_notifications}"
                                    Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
-                        <CheckBox Grid.Column="1" x:Name="ChkSuppressPerkNotifications" x:FieldModifier="internal"
-                                  Style="{StaticResource ToggleStyle}" IsChecked="False"
+                        <ComboBox Grid.Column="1" x:Name="CmbPerkEffects" x:FieldModifier="internal" Width="130"
+                                  Style="{StaticResource DarkComboBoxStyle}" FontSize="11"
                                   VerticalAlignment="Center"
-                                  Checked="ChkSuppressPerkNotifications_Changed"
-                                  Unchecked="ChkSuppressPerkNotifications_Changed"/>
+                                  SelectionChanged="CmbPerkEffects_SelectionChanged"/>
                     </Grid>
                     <TextBlock Text="{loc:Str set2_suppress_perk_notifications_hint}"
                                Foreground="{DynamicResource TextMutedBrush}" FontSize="11"

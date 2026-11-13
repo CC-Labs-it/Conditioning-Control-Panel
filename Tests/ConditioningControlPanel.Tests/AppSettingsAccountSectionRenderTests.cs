@@ -125,14 +125,16 @@ public class AppSettingsAccountSectionRenderTests
     public void NotificationsSectionOwnsTheIntakeNudgeToggle()
     {
         // Both rows. ChkIntakeNudge is read at launch by MainWindow.Marquee and round-trips
-        // through LoadSettings/SaveSettings; ChkSuppressPerkNotifications is the live editor
-        // the lucky-proc / Pink Rush / quest-complete raise sites all gate on. Either one going
-        // missing still compiles and then either never nudges or silently un-mutes the app.
+        // through LoadSettings/SaveSettings; CmbPerkEffects (Full / No cards / Off) is the live
+        // editor the lucky-proc / Pink Rush / quest-complete raise sites all gate on. Either one
+        // going missing still compiles and then either never nudges or silently un-mutes the app.
         OnStaThread(() =>
         {
             var s = new NotificationsSettingsSection();
             Assert.NotNull(s.ChkIntakeNudge);
-            Assert.NotNull(s.ChkSuppressPerkNotifications);
+            Assert.NotNull(s.CmbPerkEffects);
+            // One item per PerkEffectsMode, in enum order (the index IS the stored value).
+            Assert.Equal(3, s.CmbPerkEffects.Items.Count);
         });
     }
 }

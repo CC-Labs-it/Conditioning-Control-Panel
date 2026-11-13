@@ -3,7 +3,7 @@
 // the live hero clock (:301), the ends line (:277), the pills (:372), the account chip (:871),
 // the link flow (:830-863) on the Core loopback OAuth, the lock pick (:962-1053) and the fact cap.
 // Circe's mood is the CircesMoodMeter heat row and her lines land in PageSays (WPF ChasterTabView.Mood.cs).
-// ponytail: the ground (spiral/glow/ambient), hero art, paper tag,
+// ponytail: the ground (spiral/glow/ambient), hero art drift, paper tag,
 // LockTitle letters and most Fx. The numbers + receipt (Numbers.cs), calendar (Calendar.cs), keys (Keys.cs),
 // menu (Menu.cs), how-it-works/hint/reset (Help.cs), the price box (PriceEdit.cs) and the limits (Limits.cs) are partials.
 // The heads-up clock, raffle card and ladder scrap are ChasterTabView.Ladder.cs (ChasterTabView.Fx.cs: FxSwitch/FxConsentShown/FxConsentOk
@@ -50,6 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             InitializeComponent();
             HookLinkComet();
+            InitializeCalendarFx();
             _tick.Tick += (_, _) => { PaintHeroClock(); PaintChasterChip(ChasterHead.Service); };
             SlowTick.Tick += (_, _) => RefreshHero();
             // WPF (:99) only listens and ticks while the page is on screen; the shell hides tabs with IsVisible.
@@ -57,6 +58,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             DetachedFromVisualTree += (_, _) => { _attached = false; Subscribe(false); };
             PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) Subscribe(_attached && IsVisible); };
             InitializeHeroSheen();
+            InitArrival();
             // WPF :102: a long lock name shrinks to the hero's inner width instead of clipping.
             HeroCard.SizeChanged += (_, _) => HeroTitle.FitWidth = Math.Max(0, HeroCard.Bounds.Width - 52);
             LadderInit();
@@ -87,6 +89,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // Back on screen: a RaffleChanged missed while hidden may have dropped the card (another
             // account), so it repaints from PageRaffleCard, as WPF's OpenLadder does before it opens.
             if (on) PaintLadder();
+            if (!on) StopCalendarFx();
+            else RefreshCalendarLoops();
             if (!on) HeroTitle.Stop(); // WPF Fx.cs:262 on hide, linked or not
             if (on && _subscribed == null && ChasterHead.Service is { } c)
             {
@@ -128,7 +132,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void OnBooked(string eventId, TabBooking booking) => Dispatcher.UIThread.Post(() =>
         {
             RefreshHero(); RefreshAdded(); RefreshNumbers();
-            if (booking.AppliedSeconds != 0) HeroTitle.Jolt(); // WPF :157 -> Fx.cs:676, the padlocks take a tug
+            if (booking.AppliedSeconds != 0) { NudgeCalendarSheet(); HeroTitle.Jolt(); } // WPF :157 -> Fx.cs:676, the padlocks take a tug
         });
 
         internal void Refresh()
@@ -143,7 +147,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             AddedRow.IsVisible = linked;
             NumbersPanel.IsVisible = linked;
             MenuPanel.IsVisible = linked; // WPF: the menu and limits sit inside LinkedPanel (ChasterTabView.xaml:642)
-            if (linked) { RefreshNumbers(); RefreshPresets(); }
+            if (linked) { RefreshNumbers(animate: false); RefreshPresets(); } // WPF :220 snaps on show
             if (linked) RefreshAdded(); else { HideLadder(); HideTrailer(); }
             SwitchPill.IsVisible = linked;
             PausePill.IsVisible = linked;

@@ -33,7 +33,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
                     catch (Exception ex) { Serilog.Log.Warning(ex, "Brain Drain: open clip folder failed"); }
                 };
 
-            SliderLabel.Wire(this, "SliderIntensity", "TxtIntensity", v => $"{(int)v}%");
+            // WPF SliderIntensity_Changed (.xaml.cs:246-262): saves the clip rate BrainDrainPlayer.Tick reads.
+            _intensity = SliderLabel.Wire(this, "SliderIntensity", "TxtIntensity", v => $"{(int)v}%");
+            _intensity.ValueChanged += (_, e) =>
+            { if (!_loadingVolume && CoreSettings.Current.BrainDrainIntensity != (int)e.NewValue) { CoreSettings.Current.BrainDrainIntensity = (int)e.NewValue; CoreSettings.Save(); } };
             SliderLabel.Wire(this, "SliderBlurStrength", "TxtBlurStrength", v => $"{(int)v}%");
 
             RefreshClipCount();
@@ -72,7 +75,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
         }
 
         private readonly CheckBox _keepClear;
-        private readonly Slider _volume;
+        private readonly Slider _volume, _intensity;
         private readonly TextBlock _volumeText;
         private bool _loadingVolume;
 
@@ -83,6 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
             try
             {
                 _volume.Value = v;
+                _intensity.Value = CoreSettings.Current.BrainDrainIntensity; // WPF .xaml.cs:96-97
                 _volumeText.Text = $"{v}%";
                 if (v != 100) this.FindControl<MoreFold>("FoldMore")!.IsOpen = true; // never hide a changed setting
             }

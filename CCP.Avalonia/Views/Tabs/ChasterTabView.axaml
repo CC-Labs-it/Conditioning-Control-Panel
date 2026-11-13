@@ -208,8 +208,22 @@
 
             <!-- 1. THE LOCK -->
             <Border x:Name="HeroCard" Grid.Row="1" Background="{DynamicResource SurfaceBgBrush}" BorderBrush="{DynamicResource PanelAccentBrush}"
-                    BorderThickness="1" CornerRadius="18" MinHeight="368" Margin="0,0,0,10">
-                <Panel>
+                    BorderThickness="1" CornerRadius="18" ClipToBounds="True" MinHeight="368" Margin="0,0,0,10">
+                <Panel ClipToBounds="True">
+                <!-- WPF ChasterTabView.xaml:432: art bleeds into the hero from the right. -->
+                <Grid x:Name="HeroArtPlate" Width="380" HorizontalAlignment="Right" ClipToBounds="True" IsHitTestVisible="False">
+                    <Image x:Name="HeroArt" Source="avares://CCP.Avalonia/Resources/features/Phrase_Lock.png" Stretch="UniformToFill" Opacity="0.85"/>
+                    <Border Background="{DynamicResource SurfaceBgBrush}">
+                        <Border.OpacityMask>
+                            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                                <GradientStop Color="#FFFFFFFF" Offset="0"/>
+                                <GradientStop Color="#D0FFFFFF" Offset="0.28"/>
+                                <GradientStop Color="#40FFFFFF" Offset="0.62"/>
+                                <GradientStop Color="#00FFFFFF" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.OpacityMask>
+                    </Border>
+                </Grid>
                 <!-- CIRCE'S MOOD: the heat row drawn, bottom right. Hidden with heat off (WPF :495). -->
                 <fx:CircesMoodMeter x:Name="MoodMeter" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,24,16" ZIndex="5"/>
                 <!-- CIRCE SAYS: her line, above the meter. Hidden between lines. -->
@@ -653,7 +667,7 @@
                         </Grid.RowDefinitions>
                         <TextBlock Text="{loc:Str chaster_limit_day}" FontSize="13" Foreground="{DynamicResource TextLightBrush}"
                                    VerticalAlignment="Center" Margin="0,0,16,0"/>
-                        <Slider x:Name="SliderDayLimit" Grid.Column="1" Minimum="15" Maximum="720" TickFrequency="15"
+                        <Slider x:Name="SliderDayLimit" Grid.Column="1" Minimum="15" Maximum="1440" TickFrequency="15"
                                 IsSnapToTickEnabled="True" SmallChange="15" LargeChange="60" VerticalAlignment="Center"
                                 ValueChanged="LimitSlider_ValueChanged"/>
                         <StackPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0">

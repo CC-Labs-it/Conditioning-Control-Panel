@@ -23,6 +23,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>Another fullscreen interaction (mandatory video, lock card, pop quiz) is on screen:
         /// the game waits for it (WPF InteractionQueue.CanStart / TryStart(queue: true)).</summary>
         bool OtherInteractionActive => false;
+        /// <summary>Queue behind the head's fullscreen interactions when supported.</summary>
+        bool DeferTrigger(Action trigger) => false;
         /// <summary>The game can play at all (Avalonia: the shared LibVLC loaded). False skips it,
         /// as WPF skips before counting it started (BubbleCountService.cs:373).</summary>
         bool CanPlay => true;
@@ -190,6 +192,7 @@ namespace ConditioningControlPanel.Services
             }
             Dispose(ref _feedDefer);
             _feedDeadline = null;
+            if (_host.DeferTrigger(() => Trigger(forceTest))) return;
             if (_host.OtherInteractionActive)
             {
                 if (_queued != null) return;   // already waiting

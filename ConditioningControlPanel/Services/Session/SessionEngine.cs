@@ -1954,7 +1954,10 @@ namespace ConditioningControlPanel.Services
                 // Bug #625: a degenerate (0x0) image makes the scale below divide by zero, and
                 // assigning the resulting NaN/Infinity to Window.Width/Height throws deep inside WPF
                 // layout. Bail out loudly instead of handing WPF non-finite geometry.
-                if (!CornerGifMedia.TryGetPixelSize(gifUri, out var gifWidth, out var gifHeight)
+                var cornerUiClock = System.Diagnostics.Stopwatch.StartNew();
+                bool cornerSizeRead = CornerGifMedia.TryGetPixelSize(gifUri, out var gifWidth, out var gifHeight);
+                long cornerHeaderMs = cornerUiClock.ElapsedMilliseconds;
+                if (!cornerSizeRead
                     || gifWidth <= 0 || gifHeight <= 0)
                 {
                     App.Logger?.Warning("Corner GIF has unreadable or degenerate size {W}x{H} ({Path}) - skipping overlay",
@@ -2061,7 +2064,8 @@ namespace ConditioningControlPanel.Services
                 // CornerGifMedia decodes ONCE, OFF the UI thread, downscaled to the pixels this
                 // overlay actually occupies and capped for frames and bytes - the same discipline
                 // #572 gave the fullscreen spiral (OverlayService.DecodeGifFrames).
-                CornerGifMedia.Attach(imageElement, gifUri, windowWidth, windowHeight, dpiScale);
+                CornerGifMedia.Attach(imageElement, gifUri, windowWidth, windowHeight, dpiScale,
+                    diagTag: "SessionEngine: corner GIF frames");
 
                 _cornerGifImage = imageElement;
                 _cornerGifWindow.Content = imageElement;
@@ -2087,6 +2091,7 @@ namespace ConditioningControlPanel.Services
                 {
                     using (VideoDiag.UiScope("SessionEngine.ShowCornerGif(layered Show)"))
                     {
+                        cornerUiClock.Restart();
                         _cornerGifWindow.Show();
                     }
                 }
@@ -2098,6 +2103,12 @@ namespace ConditioningControlPanel.Services
                     CloseCornerGif();
                     throw;
                 }
+                // ccp-bugs #1577 ("during session" too): the same facts line as the standalone slots.
+                long cornerShowMs = cornerUiClock.ElapsedMilliseconds;
+                long cornerBytes = -1;
+                try { if (gifUri.IsFile) cornerBytes = new System.IO.FileInfo(gifUri.LocalPath).Length; } catch { }
+                App.Logger?.Information("SessionEngine: corner GIF {Facts}",
+                    CornerGifMedia.DescribeSource(gifWidth, gifHeight, cornerBytes, cornerHeaderMs, cornerShowMs, App.CompositorEnabled));
 
                 _sessionCornerGifActive = true;
                 // From here on this session OWES the user's own slots a handback: they stand

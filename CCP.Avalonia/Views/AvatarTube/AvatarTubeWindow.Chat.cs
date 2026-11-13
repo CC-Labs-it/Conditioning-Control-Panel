@@ -128,8 +128,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             };
         }
 
-        /// <summary>WPF ShowAskCard (Asks.cs): says the card's question and puts its answers under it.</summary>
-        internal void ShowAskCard(AskCard card)
+        /// <summary>WPF ShowAskCard (Asks.cs): says the card's question and puts its answers under it. An
+        /// unprompted card (the service's 60 s pacing) obeys the idle-voice hold (WPF 7.2.3 0729c3644).</summary>
+        internal void ShowAskCard(AskCard card, bool unprompted = false)
         {
             if (_askHook == null)
             {
@@ -139,7 +140,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _askCardId = card.Id;
             _askQuestion = card.Question;
             RenderAskButtons(card);
-            GigglePriority(card.Question, playSound: true, aiGenerated: false);
+            GigglePriority(card.Question, playSound: true, aiGenerated: false, unprompted: unprompted);
         }
 
         /// <summary>OnClosed: the singleton must not keep a closed tube alive (P41).</summary>

@@ -237,11 +237,18 @@ public static class LauncherCatalogue
             // Racing Thoughts is the 3D race (Glassroad), PRIME ONLY, solo included (owner, 2026-10-29:
             // "THE whole feature is for primes"). Always revealed: below Prime the tile wears the
             // padlock and the click goes to Launch, whose DemandPrime paints the refusal. The 2D race
-            // is RETIRED: no door opens it (the code stays). Online is tier 2+ on the server too.
+            // has its own tile since 2026-11-05 (raceclassic, below). Online is tier 2+ on the server too.
             ["race"] = (Always,
                 () => !Glassroad.GlassroadHostService.PrimeAllowed,
                 () => Glassroad.GlassroadHostService.Launch(),
                 () => Glassroad.GlassroadHostService.IsActive, null),
+
+            // Racing Thoughts Classic: the original 2D race, back beside the 3D one (owner, 2026-11-05).
+            // Free for everyone with every track (RacingAccess.PurchaseDoorArmed is off), so no lock
+            // and no Prime badge. Its own key art: the pre-3D race picture.
+            ["raceclassic"] = (Always, Never,
+                () => Chaos.CaucusHostService.Launch(),
+                () => Chaos.CaucusHostService.IsActive, null),
 
             // Down the Rabbit Hole: Basic since 2026-10-31 (Racing Thoughts 3D is the Prime game now). The
             // Play handler gates it; Launch does not, so the tile asks the gate itself and lets

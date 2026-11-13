@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -100,24 +99,20 @@ namespace ConditioningControlPanel.Avalonia.Platform
             catch (FormatException) { return template; }
         }
 
-        private static async Task PresentOnShellAsync(WelcomeBackSheetContent content)
+        // The default entry path queues the sheet at WPF's priority (App.xaml.cs:4968). The ladder owns
+        // IsStartupDialogShowing and flushes a parked remote-media offer once the sheet has gone.
+        internal static Func<WelcomeBackSheetContent, Task> ShowSheet = ShowOnShellAsync;
+
+        private static Task PresentOnShellAsync(WelcomeBackSheetContent content)
+        {
+            StartupLadder.EnqueueModal("welcome-back", 30, () => ShowSheet(content));
+            return Task.CompletedTask;
+        }
+
+        private static async Task ShowOnShellAsync(WelcomeBackSheetContent content)
         {
             var desktop = global::Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
-            // The ladder runs one startup modal at a time (WPF EnqueueModal :4748): wait out the wizard.
-            while (desktop?.Windows.FirstOrDefault(w => w is FirstRunWizard && w.IsVisible) is { } wizard)
-            {
-                var closed = new TaskCompletionSource();
-                wizard.Closed += (_, _) => closed.TrySetResult();
-                await closed.Task;
-            }
-            // WPF StartupPresenter.cs:572-587: the flag every startup surface (feature intros) defers to.
-            MainShellWindow.IsStartupDialogShowing = true;
-            try { await new WelcomeBackSheet(content).ShowDialogSafe<bool>(desktop?.MainWindow); }
-            finally
-            {
-                MainShellWindow.IsStartupDialogShowing = false;
-                RemoteMediaOffer.FlushPending();
-            }
+            await new WelcomeBackSheet(content).ShowDialogSafe<bool>(desktop?.MainWindow);
         }
 
         /// <summary>WPF ConsumeFactoryResetMarker (:5033); the marker DataSettingsSection drops.</summary>
@@ -137,6 +132,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             _eligible = _hooked = false;
             _claimed = 0;
             Present = PresentOnShellAsync;
+            ShowSheet = ShowOnShellAsync;
         }
     }
 }

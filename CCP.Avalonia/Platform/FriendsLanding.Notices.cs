@@ -79,4 +79,39 @@ internal static partial class FriendsLanding
         });
         if (waiting.Count == 1) FriendsSeen.Shared.RequestSeen(Service(), newest);
     }
+    // WPF Services/Friends/FriendsLanding.cs:238-251,419-433: the poke corner notice and its Poke back.
+    /// <summary>Shows the poke notice; false when the stack could not come up, so the caller files the row.</summary>
+    private static bool ShowPoke(Window? anchor, InboxItem item)
+    {
+        FriendNotices.Present(anchor, Notice(NoticeKind.Poke, item.FromId, item.FromName, item, item.At), new NoticeLook
+        {
+            Line = Str("friends_notice_poked", "poked you:"),
+            Word = Str("friends_poke_" + item.PokeId, LandingRules.PokeFallback(item.PokeId)),
+            Pink = LandingRules.PokeIsPink(item.PokeId),
+            AvatarUrl = item.FromAvatarUrl,
+            ActionLabel = Str("friends_notice_poke_back", "Poke back"),
+            Act = p => { if (p is InboxItem i) PokeBack(i); },
+            Open = p => OpenDrawer((p as InboxItem)?.FromId),
+            // Ran out unseen (or pushed off the stack, or folded by a hold): it waits in the Inbox instead.
+            Missed = p => { if (p is InboxItem i) TheSink.Inbox(i); },
+        });
+        if (FriendNotices.Current is not { IsVisible: true }) return false;
+        FriendsSeen.Shared.Seen(Service(), item.Id);   // on screen now: the sender's trail may say seen
+        return true;
+    }
+    /// <summary>The same preset straight back, through the drawer's own send path.</summary>
+    private static async void PokeBack(InboxItem item)
+    {
+        try
+        {
+            if (Service() is not { } svc || string.IsNullOrEmpty(item.FromId)) return;
+            SfxClick();
+            var r = await svc.PokeAsync(item.FromId, string.IsNullOrEmpty(item.PokeId) ? "hi" : item.PokeId);
+            // A good send has its own beat (the router's SentBeat); only a refusal needs words here.
+            if (FriendsDrawerRules.IsGood(r)) return;
+            SfxDenied();
+            Tell(Loc.Get(FriendsDrawerRules.SendResultKey(r)), false);
+        }
+        catch (Exception ex) { Serilog.Log.Debug("[Friends] poke back: {E}", ex.Message); }
+    }
 }

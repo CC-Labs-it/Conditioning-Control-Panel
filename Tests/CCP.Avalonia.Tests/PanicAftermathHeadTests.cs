@@ -127,7 +127,7 @@ public sealed class PanicAftermathHeadTests
     [Theory]
     [InlineData("CCP.Avalonia/Views/Windows/MainShellWindow.PanicKey.cs", "internal bool StartPanicKey()", "SeedPanicAftermath();")]
     [InlineData("CCP.Avalonia/Platform/PanicWatchdog.cs", "private static void RunEmergencyTeardown()", "PanicAftermath.ArmQuiet()")]
-    [InlineData("CCP.Core/Services/RemoteControl/RemoteCommands.cs", "public static void StopEffects(bool force)", "if (force) Safety.PanicAftermath.ArmQuiet();")]
+    [InlineData("CCP.Core/Services/RemoteControl/RemoteCommands.cs", "public static void StopEffects(bool force", "if (force) Safety.PanicAftermath.ArmQuiet();")]
     [InlineData("CCP.Avalonia/Views/Windows/MainShellWindow.SessionRun.cs", "private async void BtnPauseSession_Click(", "PanicAftermath.EndQuiet();")]
     public void EveryRouteArmsOrEndsTheQuiet(string file, string signature, string call)
     {

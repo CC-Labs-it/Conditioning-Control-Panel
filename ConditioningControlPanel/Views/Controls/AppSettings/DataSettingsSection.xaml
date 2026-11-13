@@ -192,6 +192,24 @@
                             Padding="14,6" HorizontalAlignment="Left"
                             Click="BtnFactoryReset_Click"
                             ToolTip="{loc:Str set2_tooltip_factory_reset}"/>
+
+                    <!-- Delete account: the Profile tab's bin, given a findable door. Same handler and the
+                         same type-DELETE dialog (MainWindow.BtnDeleteProfile_Click); signed in only. -->
+                    <StackPanel x:Name="RowDeleteAccount" x:FieldModifier="internal" Visibility="Collapsed">
+                        <Border Height="1" Margin="0,12,0,10" Background="{DynamicResource GlassBorderBrush}"/>
+                        <TextBlock Text="{loc:Str set2_data_delete_account_body}" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextLightBrush}" FontSize="11" Margin="0,0,0,4"/>
+                        <TextBlock Text="{loc:Str set2_data_delete_account_keeps}" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextMutedBrush}" FontSize="11" Margin="0,0,0,10"/>
+                        <Button x:Name="BtnDeleteAccount" x:FieldModifier="internal"
+                                Content="{loc:Str set2_btn_delete_account}"
+                                Style="{StaticResource OutlineButton}"
+                                Foreground="{DynamicResource DangerBrush}"
+                                BorderBrush="{DynamicResource DangerBrush}"
+                                Padding="14,6" HorizontalAlignment="Left"
+                                Click="BtnDeleteAccount_Click"
+                                ToolTip="{loc:Str tooltip_delete_your_profile}"/>
+                    </StackPanel>
                 </StackPanel>
             </Grid>
         </Border>

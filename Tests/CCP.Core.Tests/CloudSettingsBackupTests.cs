@@ -45,7 +45,7 @@ public sealed class CloudSettingsBackupTests : IDisposable
     {
         public readonly List<(string Url, string? Token, string Body)> Seen = new();
         public HttpStatusCode Status = HttpStatusCode.OK;
-        public string Body = "{\"success\":true}";
+        public string Body = "{\"backup\":null}";   // the server always names the slot (null = none yet)
         public Func<string, string?>? BodyFor;   // per url; null falls back to Body
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
@@ -656,6 +656,26 @@ public sealed class CloudSettingsBackupTests : IDisposable
         Assert.Empty(Uploads);
     }
 
+    /// <summary>WPF main c1f6226799 (#1488): a backup taken while a ramp or session runs carries the user's own
+    /// values from the journal on disk, never the session's.</summary>
+    [Fact]
+    public async Task ABackupTakenMidSessionCarriesTheJournalledValues()
+    {
+        var journal = Path.Combine(CorePaths.UserData, SessionSettingsJournal.RampFileName);
+        Assert.StartsWith(Path.GetTempPath(), journal);
+        Directory.CreateDirectory(CorePaths.UserData);
+        SessionSettingsJournal.WriteRamp(CorePaths.UserData, SessionSettingsJournal.BuildRamp(new Dictionary<string, double> { [nameof(AppSettings.FlashOpacity)] = 20 }));
+        try
+        {
+            var s = Signed();
+            s.FlashOpacity = 90;
+            Assert.True(await new CloudSettingsBackup(_fake).BackupAsync(s));
+            Assert.Equal(20, (int)Unpack((string)JObject.Parse(Uploads.Single().Body)["settings_data"]!)["FlashOpacity"]!);
+            Assert.Equal(90, s.FlashOpacity);   // the live session keeps its value
+        }
+        finally { File.Delete(journal); }
+    }
+
     /// <summary>Review R3 (fix-before-latest): the slot is shared with Windows and frozen WPF restores the whole blob,
     /// so a path field missing from a backup made here came back EMPTY on Windows (keyword triggers, audio layers,
     /// corner GIFs, spiral, wallpapers wiped). A backup made here carries the slot's own path fields unchanged.</summary>
@@ -732,6 +752,28 @@ public sealed class CloudSettingsBackupTests : IDisposable
     public async Task ASlotThatCannotBeReadIsNeverOverwritten()
     {
         _fake.Status = HttpStatusCode.InternalServerError;
+        Assert.False(await new CloudSettingsBackup(_fake).BackupAsync(Signed()));
+        Assert.Empty(Uploads);
+    }
+
+    // #4323: only an explicit empty slot may be overwritten; a missing or odd one is a failed read.
+    [Theory]
+    [InlineData("{\"backup\":42}", false)]
+    [InlineData("{\"backup\":[]}", false)]
+    [InlineData("{}", false)]
+    [InlineData("{\"backup\":null}", true)]
+    public async Task OnlyAnExplicitEmptySlotCanBeOverwritten(string body, bool allowed)
+    {
+        _fake.Body = body;
+        Assert.Equal(allowed, await new CloudSettingsBackup(_fake).BackupAsync(Signed()));
+        Assert.Equal(allowed ? 1 : 0, Uploads.Count);
+    }
+
+    // #4323: a slot that is there but unreadable is never replaced (its path fields would be lost).
+    [Fact]
+    public async Task AnUnreadableExistingSlotIsNeverOverwritten()
+    {
+        _fake.Body = "{\"backup\":{\"settings_data\":\"invalid\"}}";
         Assert.False(await new CloudSettingsBackup(_fake).BackupAsync(Signed()));
         Assert.Empty(Uploads);
     }

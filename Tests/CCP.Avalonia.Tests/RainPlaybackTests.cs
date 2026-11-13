@@ -68,7 +68,8 @@ public class RainPlaybackTests
             CoreSettings.ServiceProvider = () => service; CoreMods.ActiveModIdProvider = () => "builtin-bambisleep";
             tube = new AvatarTubeWindow(null) { RainPackRoot = root };
             // The release switch is off: a saved "v2" plays V1 and stays saved (WPF CirceEmotes.cs:169).
-            tube.Show(); await tube.RefreshRainPlayback(); Assert.Null(tube.RainFolder); Assert.Equal("v2", service.Current.AvatarGeneration); tube.Hide();
+            // V1 is the mod's embedded avatar0 emote set (WPF ResolveV1EmoteFolder, CirceEmotes.cs:178-188).
+            tube.Show(); await tube.RefreshRainPlayback(); Assert.Equal("avatar0_emotes", tube.RainFolder); Assert.Equal("v2", service.Current.AvatarGeneration); tube.Hide();
             tube.RainGateOn = () => true;
             await tube.RefreshRainPlayback(); Assert.Null(tube.RainActivePlayer); tube.Show(); await tube.RefreshRainPlayback();
             Assert.Equal(folder, tube.RainFolder); Assert.True(tube.RainActivePlayer!.IsReady); Assert.Equal(2, tube.RainActivePlayer.FrameCount);
@@ -77,7 +78,14 @@ public class RainPlaybackTests
             clock += 59; paused.Tick(clock); Assert.Equal(0, paused.FrameIndex); clock++; paused.Tick(clock); Assert.Equal(1, paused.FrameIndex);
             clock += 100; paused.Tick(clock); Assert.True(paused.IsComplete); for (var i = 0; i < 40 && ReferenceEquals(paused, tube.RainActivePlayer); i++) await Task.Delay(50); Assert.NotSame(paused, tube.RainActivePlayer); Assert.True(tube.RainActivePlayer!.IsReady);
             service.Current.AvatarGeneration = "v1";
+            Assert.Equal("avatar0_emotes", tube.RainFolder);
+            // The V1 clips are GIFs (WPF ResolveEmoteClipUri, CirceEmotes.cs:1238): the tube swaps to them once decoded.
+            for (var i = 0; i < 100 && tube.RainActivePlayer?.IsReady != true; i++) await Task.Delay(50);
+            Assert.True(tube.RainActivePlayer!.IsReady); Assert.True(tube.RainActivePlayer.FrameCount > 1); Assert.False(tube.FindControl<Image>("ImgAvatar")!.IsVisible);
+            // A mod row whose clips this head does not embed keeps the static poses.
+            CoreMods.ActiveModIdProvider = () => "builtin-locked"; await tube.RefreshRainPlayback();
             Assert.Null(tube.RainFolder); Assert.True(tube.FindControl<Image>("ImgAvatar")!.IsVisible);
+            CoreMods.ActiveModIdProvider = () => "builtin-bambisleep";
             service.Current.AvatarGeneration = "v2"; await tube.RefreshRainPlayback();
             Assert.Equal(folder, tube.RainFolder);
             Assert.True(tube.FindControl<Image>("ImgAvatarAnimated")!.IsVisible || tube.FindControl<Image>("ImgAvatarAnimatedB")!.IsVisible);

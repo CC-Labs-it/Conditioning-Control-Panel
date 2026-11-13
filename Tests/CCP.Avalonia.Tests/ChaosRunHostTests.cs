@@ -10,6 +10,9 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Games;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Services.Bark;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Chaos;
@@ -30,7 +33,7 @@ public sealed class ChaosRunHostTests
                 .SetupWithoutStarting();
     }
 
-    private static ChaosRunConfig Cfg() => new() { DurationSec = 60, WaveCount = 3 };
+    private static ChaosRunConfig Cfg() => new() { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false };
 
     private static void Ticks(int n) { for (int i = 0; i < n; i++) ChaosRunHost.Tick(); }
 
@@ -172,6 +175,197 @@ public sealed class ChaosRunHostTests
             return Task.CompletedTask;
         });
     }
+
+    private static Task WithFreshRun(Action action) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup(); FreshMeta();
+        try { action(); }
+        finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task Wave_draft_holds_clears_rerolls_picks_and_resumes() => WithFreshRun(() =>
+    {
+        ChaosMeta.State.LessonsComplete.Add("silk_touch");
+        var cfg = Cfg(); cfg.BoonDraftEnabled = true; cfg.AllowCurses = false;
+        ChaosRunHost.StartRun(cfg); var overlay = ChaosRunHost.Overlay!;
+        overlay.FinishCountdown();
+        ChaosRunHost.StopTimerForTests();
+        var state = ChaosRunHost.State!;
+        state.RerollsLeft = 1;
+        state.AllLiveNextWave = true;
+        ChaosRunHost.SpawnTick();
+        Assert.True(BubbleOverlay.ChaosCount > 0);
+        Ticks(80);
+        Assert.Equal(1, state.WaveIndex);
+        Assert.False(state.AllLiveNextWave);
+        Assert.Equal(0, BubbleOverlay.ChaosCount);
+        double elapsed = state.ElapsedSec;
+        Ticks(4); ChaosRunHost.SpawnTick();
+        Assert.Equal(elapsed, state.ElapsedSec);
+        Assert.Equal(0, BubbleOverlay.ChaosCount);
+        overlay.FindControl<Button>("BtnReroll")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(0, state.RerollsLeft);
+        Assert.Null(ChaosRunHost.RerollDraft());
+        var cards = (System.Collections.IList)typeof(ChaosOverlayWindow).GetField("_draftCards", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(overlay)!;
+        var card = cards[0]!;
+        var boon = (ChaosBoon)card.GetType().GetField("Boon")!.GetValue(card)!;
+        typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(overlay, new object?[] { boon });
+        Assert.Single(state.ActiveBoons);
+        Assert.Equal(2, state.WaveIndex);
+        Ticks(4); Assert.Equal(elapsed, state.ElapsedSec);
+        overlay.FinishCountdown(); Ticks(4);
+        Assert.True(state.ElapsedSec > elapsed);
+    });
+
+    [Fact]
+    public Task Wave_draft_skip_and_panic_are_safe() => WithFreshRun(() =>
+    {
+        ChaosMeta.State.LessonsComplete.Add("silk_touch");
+        var cfg = Cfg(); cfg.BoonDraftEnabled = true;
+        ChaosRunHost.StartRun(cfg);
+        var overlay = ChaosRunHost.Overlay!; overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+        var state = ChaosRunHost.State!; Ticks(80);
+        int shields = state.Shields;
+        typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(overlay, new object?[] { null });
+        Assert.Equal(shields + 1, state.Shields);
+        overlay.FinishCountdown(); Ticks(80);
+        Assert.Equal(2, state.WaveIndex);
+        ChaosRunHost.ForceShutdown();
+        Assert.False(ChaosRunHost.IsActive);
+        Assert.Null(ChaosRunHost.State);
+        Assert.Equal(0, ChaosMeta.State.RunsCompleted);
+        Assert.Equal(0, BubbleOverlay.ChaosCount);
+        Assert.Null(ChaosRunHost.RerollDraft());
+    });
+
+    [Theory]
+    [InlineData(false), InlineData(true)]
+    public Task Draft_picks_award_first_times_and_advance_lessons(bool sin) => WithFreshRun(() =>
+    {
+        var meta = ChaosMeta.State;
+        meta.LessonsComplete.Add("silk_touch");
+        var cfg = Cfg(); cfg.BoonDraftEnabled = true;
+        ChaosRunHost.StartRun(cfg);
+        ChaosRunHost.Overlay!.FinishCountdown();
+        ChaosRunHost.StopTimerForTests();
+        Ticks(80);
+        var card = ChaosBoonPool.All.First(b => b.IsCurse == sin);
+        ChaosRunHost.ChooseBoon(card);
+        Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Whisper));
+        Assert.Equal(sin, ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Yes));
+        Assert.Equal(sin ? 25 : 10, meta.Sparks);
+        Assert.Equal(1, ChaosLessons.Progress("draft4"));
+        Assert.Equal(sin ? 1 : 0, ChaosLessons.Progress("surrender"));
+    });
+
+    [Theory]
+    [InlineData(true), InlineData(false)]
+    public Task First_descent_deals_one_scripted_draft_after_the_threat_or_fallback(bool snapped) => WithFreshRun(() =>
+    {
+        ChaosMeta.State.LessonsComplete.Add("silk_touch");
+        var web = new GameWindow(GameWindow.Games[GameWindow.DtrhId]); web.Show();
+        web.HandleMessage("{\"type\":\"boot-error\"}");
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.True(ChaosRunHost.State!.Config.ScriptedFirstRun);
+        var overlay = ChaosRunHost.Overlay!;
+        overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests(); Ticks(216);
+        var threat = Assert.Single(BubbleOverlay.Field.Bubbles.Where(b => b.Spec?.VariantId == "pink"));
+        if (snapped) ChaosRunHost.OnDefused(threat);
+        Ticks(180);
+        if (!snapped) { Assert.False(overlay.FindControl<Border>("DraftPanel")!.IsVisible); Ticks(108); }
+        Assert.True(overlay.FindControl<Border>("DraftPanel")!.IsVisible);
+        var cards = (System.Collections.IList)typeof(ChaosOverlayWindow).GetField("_draftCards", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(overlay)!;
+        var ids = new[] { "extra_shield", "defuse_chain", "golden_touch", "welcome_shower", "heavy_drop" };
+        Assert.Equal(3, cards.Count);
+        Assert.All(cards.Cast<object>(), c => Assert.Contains(((ChaosBoon)c.GetType().GetField("Boon")!.GetValue(c)!).Id, ids));
+        var state = ChaosRunHost.State!; int wave = state.WaveIndex; double elapsed = state.ElapsedSec;
+        Ticks(4); Assert.Equal(elapsed, state.ElapsedSec);
+        ChaosRunHost.ChooseBoon(null); overlay.FinishCountdown();
+        Assert.Equal(wave, state.WaveIndex); Ticks(4); Assert.True(state.ElapsedSec > elapsed);
+        Ticks(60); Assert.False(overlay.FindControl<Border>("DraftPanel")!.IsVisible);
+    });
+
+    [Theory]
+    [InlineData(true, true), InlineData(false, true), InlineData(false, false)]
+    public Task Fourth_descent_rigs_first_sin_and_spends_demo_on_pick_or_skip(bool pick, bool allow) => WithFreshRun(() =>
+    {
+        var meta = ChaosMeta.State; meta.RunsCompleted = 3; meta.LessonsComplete.Add("silk_touch");
+        CoreSettings.Current.ChaosAnnouncerEnabled = true;
+        var cfg = Cfg(); cfg.BoonDraftEnabled = true; cfg.AllowCurses = allow; cfg.SinChance = 0;
+        ChaosRunHost.StartRun(cfg); var overlay = ChaosRunHost.Overlay!;
+        overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests(); Ticks(80);
+        var cards = (System.Collections.IList)typeof(ChaosOverlayWindow).GetField("_draftCards", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(overlay)!;
+        Assert.Equal(allow, cards.Cast<object>().Any(c => ((ChaosBoon)c.GetType().GetField("Boon")!.GetValue(c)!).Id == "double_or_nothing"));
+        Assert.False(meta.SeenFirstSin);
+        if (allow) { Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("chaos_first_sin_demo"), ChaosAnnouncerOverlay.Active!.Current!.Text); Assert.Equal(3000, ChaosAnnouncerOverlay.Active.Current.HoldMs); }
+        bool shielded = false, downside = false;
+        var sin = new ChaosBoon("double_or_nothing", "test", "", ChaosRarity.Rare, true, 0, _ => downside = true) { ApplyShielded = _ => shielded = true };
+        ChaosRunHost.ChooseBoon(pick ? sin : null);
+        Assert.Equal(allow, meta.SeenFirstSin); Assert.Equal(pick && allow, shielded); Assert.False(downside);
+        overlay.FinishCountdown(); Ticks(80);
+        cards = (System.Collections.IList)typeof(ChaosOverlayWindow).GetField("_draftCards", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(overlay)!;
+        Assert.DoesNotContain(cards.Cast<object>(), c => ((ChaosBoon)c.GetType().GetField("Boon")!.GetValue(c)!).Id == "double_or_nothing");
+    });
+
+    [Fact]
+    public Task Eligible_loadout_deals_the_duo_demo_once() => WithFreshRun(() =>
+    {
+        var oldEngine = BarkHead.Engine; var settings = CoreSettings.Current;
+        var oldAvatar = settings.AvatarEnabled; var oldVolume = settings.MasterVolume;
+        int spoken = 0;
+        var rule = new BarkRule { Id = "duo", Trigger = "ChaosDuoDemo", VariantPool = new() { new BarkVariant("duo") } };
+        var engine = new BarkEngine(() => new BarkRuleSet(new[] { rule })) { Speak = _ => spoken++ };
+        engine.Start(); BarkHead.Engine = engine; settings.AvatarEnabled = true; settings.MasterVolume = 50;
+        try
+        {
+            var meta = ChaosMeta.State; meta.LessonsComplete.Add("silk_touch");
+            foreach (var id in new[] { "the_spanker", "e_stim" }) { meta.LifetimeBoonLevels[id] = 1; meta.ActiveLifetimeBoons.Add(id); }
+            CoreSettings.Current.ChaosAnnouncerEnabled = true;
+            var cfg = Cfg(); cfg.BoonDraftEnabled = true; cfg.AllowCurses = false;
+            ChaosRunHost.StartRun(cfg); var overlay = ChaosRunHost.Overlay!;
+            overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests(); Ticks(80);
+            var cards = (System.Collections.IList)typeof(ChaosOverlayWindow).GetField("_draftCards", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(overlay)!;
+            Assert.Contains(cards.Cast<object>(), c => ((ChaosBoon)c.GetType().GetField("Boon")!.GetValue(c)!).Id == "electrified_rabbits");
+            Assert.True(meta.SeenDuoDemo); Assert.Equal(1, spoken);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("chaos_duo_demo"), ChaosAnnouncerOverlay.Active!.Current!.Text);
+            Assert.Equal(3000, ChaosAnnouncerOverlay.Active.Current.HoldMs);
+            ChaosAnnouncerOverlay.CloseActive();
+            engine = new BarkEngine(() => new BarkRuleSet(new[] { rule })) { Speak = _ => spoken++ }; engine.Start(); BarkHead.Engine = engine;
+            ChaosRunHost.ChooseBoon(null); overlay.FinishCountdown(); Ticks(80);
+            Assert.True(meta.SeenDuoDemo); Assert.Equal(1, spoken); Assert.Null(ChaosAnnouncerOverlay.Active);
+            ChaosRunHost.ForceShutdown(); ChaosRunHost.StartRun(cfg); overlay = ChaosRunHost.Overlay!;
+            overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests(); Ticks(80);
+            Assert.Equal(1, spoken); Assert.Null(ChaosAnnouncerOverlay.Active);
+        }
+        finally { BarkHead.Engine = oldEngine; settings.AvatarEnabled = oldAvatar; settings.MasterVolume = oldVolume; }
+    });
+
+    [Fact]
+    public Task Draft_events_use_the_active_language() => WithFreshRun(() =>
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        string language = loc.CurrentLanguage;
+        try
+        {
+            foreach (var (code, _, _) in ConditioningControlPanel.Localization.LocalizationManager.AvailableLanguages)
+            {
+                var path = System.IO.Path.Combine(AppContext.BaseDirectory, "Localization", "Languages", code + ".json");
+                var strings = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(path));
+                foreach (var key in new[] { "chaos_draft_reroll", "chaos_welcome_shower", "chaos_first_sin_demo", "chaos_duo_demo" }) Assert.False(string.IsNullOrWhiteSpace((string?)strings[key]));
+            }
+            loc.SetLanguage("de"); ChaosMeta.State.LessonsComplete.Add("silk_touch");
+            var cfg = Cfg(); cfg.BoonDraftEnabled = true;
+            ChaosRunHost.StartRun(cfg); var overlay = ChaosRunHost.Overlay!;
+            overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+            var state = ChaosRunHost.State!; state.RerollsLeft = 1; Ticks(80);
+            ChaosRunHost.RerollDraft(); Assert.Contains(loc.Get("chaos_draft_reroll"), state.RecentEvents);
+            state.WelcomeShowerEnabled = true; ChaosRunHost.ChooseBoon(null); overlay.FinishCountdown();
+            Assert.Contains(loc.Get("chaos_welcome_shower"), state.RecentEvents);
+        }
+        finally { loc.SetLanguage(language); }
+    });
 
     /// <summary>WPF ChaosToyButtonWindow: one hero button per equipped toy; a real click fires the
     /// toy (cooldown starts, the status counts down on the run clock); the toy key rides the panic
@@ -554,12 +748,17 @@ public sealed class ChaosRunHostTests
             ChaosHubWindow? hub = null;
             try
             {
+                var settings = new SettingsService();
+                CoreSettings.ServiceProvider = () => settings;
+                settings.Current.ChaosBoonDraftEnabled = false;
                 hub = new ChaosHubWindow();
                 hub.FindControl<Button>("BtnMenuFallIn")!
                     .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
                 global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
                 Assert.True(ChaosRunHost.IsActive);
                 Assert.Equal(ChaosPlayMode.Story, ChaosRunHost.State!.Config.PlayMode);
+                Assert.False(ChaosRunHost.State.Config.ScriptedFirstRun);
+                Assert.False(ChaosRunHost.State.Config.BoonDraftEnabled);
 
                 ChaosRunHost.Overlay!.FinishCountdown();
                 var state = ChaosRunHost.State!;

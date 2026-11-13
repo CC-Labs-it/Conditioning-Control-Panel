@@ -101,6 +101,30 @@ public class AppSettingsGeneralDataSectionRenderTests
         });
     }
 
+    /// <summary>The Settings door to account deletion sits in the Danger zone beside Factory reset,
+    /// and stays hidden while nobody is signed in (nothing to delete), like the Profile tab's bin.</summary>
+    [Fact]
+    public void DeleteAccountRowLivesInTheDangerZoneAndHidesWhenSignedOut()
+    {
+        OnStaThread(() =>
+        {
+            var s = new DataSettingsSection();
+            Assert.NotNull(s.BtnDeleteAccount);
+
+            DependencyObject? up = s.RowDeleteAccount;
+            while (up != null && !ReferenceEquals(up, s.DangerZoneSection))
+                up = LogicalTreeHelper.GetParent(up);
+            Assert.Same(s.DangerZoneSection, up);
+
+            Assert.Equal(Visibility.Collapsed, s.RowDeleteAccount.Visibility);
+            if (string.IsNullOrEmpty(App.Settings?.Current?.UnifiedId))
+            {
+                s.RefreshDeleteAccountRow();
+                Assert.Equal(Visibility.Collapsed, s.RowDeleteAccount.Visibility);
+            }
+        });
+    }
+
     [Fact]
     public void TheLanguageListStartsEmpty_MainWindowFillsIt()
     {

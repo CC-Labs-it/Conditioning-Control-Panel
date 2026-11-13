@@ -203,7 +203,7 @@ public class ChasterServiceTests : IDisposable
 
         string Src(params string[] p) => File.ReadAllText(Path.Combine(new[] { RepoRoot() }.Concat(p).ToArray()));
         var commands = Src("CCP.Core", "Services", "RemoteControl", "RemoteCommands.cs");
-        var stop = commands.Substring(commands.IndexOf("public static void StopEffects(bool force)", StringComparison.Ordinal));
+        var stop = commands.Substring(commands.IndexOf("public static void StopEffects(bool force", StringComparison.Ordinal));
         Assert.Contains("if (force) Safety.PanicChasterHold.Open(", stop);
         Assert.Contains("new(\"chaster-hold\", _ => ConditioningControlPanel.Services.Safety.PanicChasterHold.Open(",
             Src("CCP.Avalonia", "Views", "Windows", "PanicSurfaces.cs"));

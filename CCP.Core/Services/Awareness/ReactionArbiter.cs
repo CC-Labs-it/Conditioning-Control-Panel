@@ -26,7 +26,7 @@ namespace ConditioningControlPanel.Services.Awareness
     /// literal meaning of "the budget slot is refunded", and it is why nothing here records anything
     /// before the speaker has said it did.</para>
     ///
-    /// <para><b>Moderation is untouched.</b> The LLM path goes through <c>App.Brain.ReactAsync</c> →
+    /// <para><b>Moderation is untouched.</b> The LLM path goes through <c>the awareness line source</c> →
     /// <c>IAiService.SendAsync</c>, which is where <c>ModerationGuard.CheckInput</c>/<c>CheckOutput</c>,
     /// the <c>ModerationLog</c> write and the refusal sentinels live. The arbiter deliberately does not
     /// re-check: a second check would double the compliance log and halve the hits needed to trip the
@@ -112,7 +112,7 @@ namespace ConditioningControlPanel.Services.Awareness
             catch (Exception ex)
             {
                 // A background awareness failure is a missed joke, never a crash log.
-                App.Logger?.Warning(ex, "ReactionArbiter: submit failed");
+                Serilog.Log.Warning(ex, "ReactionArbiter: submit failed");
                 return Log(frame, ArbiterDecision.Silent("error"));
             }
             finally
@@ -152,7 +152,7 @@ namespace ConditioningControlPanel.Services.Awareness
                     _ = call.ContinueWith(static t => _ = t.Exception,
                         CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
 
-                    App.Logger?.Debug("[AWARE] llm timed out after {Seconds}s", (int)_llmTimeout.TotalSeconds);
+                    Serilog.Log.Debug("[AWARE] llm timed out after {Seconds}s", (int)_llmTimeout.TotalSeconds);
                     return FallbackBark(frame, "llm-timeout");
                 }
 
@@ -164,7 +164,7 @@ namespace ConditioningControlPanel.Services.Awareness
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "ReactionArbiter: awareness line request failed");
+                Serilog.Log.Warning(ex, "ReactionArbiter: awareness line request failed");
                 return FallbackBark(frame, "llm-error");
             }
 
@@ -172,7 +172,7 @@ namespace ConditioningControlPanel.Services.Awareness
             // "refund" is structural — no cooldown was burned to get here.
             if (reply.IsPass)
             {
-                App.Logger?.Debug("[AWARE] llm passed on {App}", AwarenessText.SanitizeId(frame.AppId));
+                Serilog.Log.Debug("[AWARE] llm passed on {App}", AwarenessText.SanitizeId(frame.AppId));
                 return ArbiterDecision.Silent("pass");
             }
 
@@ -187,7 +187,7 @@ namespace ConditioningControlPanel.Services.Awareness
                 if (stale)
                 {
                     // Not a bark either: a canned line about the same app is exactly as stale.
-                    App.Logger?.Debug("[AWARE] dropped a stale line for {App} (no alternate offered)",
+                    Serilog.Log.Debug("[AWARE] dropped a stale line for {App} (no alternate offered)",
                         AwarenessText.SanitizeId(frame.AppId));
                     return ArbiterDecision.Silent("stale");
                 }
@@ -202,7 +202,7 @@ namespace ConditioningControlPanel.Services.Awareness
             // would violate the very floor that just refused the line.
             if (!_cooldowns.CanSpeak(ReactionSource.AwarenessLlm, frame.AppId, _clock(), out var raced))
             {
-                App.Logger?.Debug("[AWARE] dropped a line for {App}: something else spoke during the call ({Gate})",
+                Serilog.Log.Debug("[AWARE] dropped a line for {App}: something else spoke during the call ({Gate})",
                     AwarenessText.SanitizeId(frame.AppId), raced);
                 return ArbiterDecision.Silent(Gate("raced", raced));
             }
@@ -272,7 +272,7 @@ namespace ConditioningControlPanel.Services.Awareness
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("ReactionArbiter: ban-list write failed: {Error}", ex.Message);
+                Serilog.Log.Debug("ReactionArbiter: ban-list write failed: {Error}", ex.Message);
             }
         }
 
@@ -287,7 +287,7 @@ namespace ConditioningControlPanel.Services.Awareness
             try { live = _speaker?.CurrentAppId; }
             catch (Exception ex)
             {
-                App.Logger?.Debug("ReactionArbiter: foreground read failed: {Error}", ex.Message);
+                Serilog.Log.Debug("ReactionArbiter: foreground read failed: {Error}", ex.Message);
                 return false;
             }
 
@@ -304,7 +304,7 @@ namespace ConditioningControlPanel.Services.Awareness
         /// </summary>
         private static bool AdultReactionsAllowed()
         {
-            try { return App.Settings?.Current?.AwarenessAdultReactionsEnabled == true; }
+            try { return CoreSettings.Service?.Current?.AwarenessAdultReactionsEnabled == true; }
             catch { return false; }
         }
 
@@ -328,7 +328,7 @@ namespace ConditioningControlPanel.Services.Awareness
             try
             {
                 var now = _clock();
-                App.Logger?.Debug(
+                Serilog.Log.Debug(
                     "[AWARE] app={App} score={Score} tier={Tier} verdict={Verdict} gate={Gate} lines_hr={Lines}",
                     AwarenessText.SanitizeId(frame?.AppId),
                     AwarenessText.Num(frame?.Worthiness ?? 0),

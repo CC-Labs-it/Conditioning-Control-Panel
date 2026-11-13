@@ -35,8 +35,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             };
         }
 
+        // WPF UiUpdates.cs:134: a mod switch also repaints the ? box's reveal art.
         private void OnTileTitlesModChanged(object? sender, ModPackage mod) =>
-            global::Avalonia.Threading.Dispatcher.UIThread.Post(ApplyTileTitles);
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { ApplyTileTitles(); RefreshMysteryFace(); });
 
         private void OnTileTitlesLanguageChanged(object? sender, EventArgs e) =>
             global::Avalonia.Threading.Dispatcher.UIThread.Post(ApplyTileTitles);

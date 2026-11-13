@@ -30,6 +30,30 @@ namespace ConditioningControlPanel.Services
         /// <summary>The frozen copy of the user's wallpaper, kept only until the real one is back.</summary>
         internal const string FrozenOriginalName = "ccp_original_wallpaper.jpg";
 
+        /// <summary>Raised (on any thread) when the picture "Save this wallpaper" would copy changes: a new
+        /// collage, an own image going up, a stop.</summary>
+        public event EventHandler? SavableWallpaperChanged;
+
+        private void RaiseSavableWallpaperChanged()
+        {
+            try { SavableWallpaperChanged?.Invoke(this, EventArgs.Empty); }
+            catch (Exception ex) { Diag.Swallowed(ex, "savable wallpaper changed"); }
+        }
+
+        /// <summary>The picture on the desktop right now that "Save this wallpaper" can copy: the current
+        /// Static collage (a temp file the next rotation deletes) or the Own image. Null while nothing of
+        /// ours is up, and always in Dynamic mode (it never writes a file).</summary>
+        public string? CurrentSavableWallpaper()
+        {
+            string? path;
+            lock (_lock)
+            {
+                if (!_collageRunning) return null;
+                path = _ownImageRunning ? App.Settings?.Current?.CollageOwnImagePath : _collageCurrentFile;
+            }
+            return !string.IsNullOrWhiteSpace(path) && File.Exists(path) ? path : null;
+        }
+
         /// <summary>Clamped recompose interval in seconds (10 s to 24 h). Shared with Dynamic mode.</summary>
         internal static int CollageInterval()
             => Math.Clamp(App.Settings?.Current?.CollageWallpaperIntervalSeconds ?? 60, 10, 86400);
@@ -46,22 +70,79 @@ namespace ConditioningControlPanel.Services
         /// wallpaper for a solid colour, then the user's own file while it exists, then the frozen copy.
         /// The own file comes first on purpose: pointing Windows at a copy in our temp folder would leave
         /// the desktop hanging off CCP's assets folder for good.</summary>
-        internal static string RestoreTarget(string original, Func<string, bool> exists, string frozenCopy)
+        internal static string RestoreTarget(string original, Func<string, bool> exists, string frozenCopy,
+            string? transcodedCache = null)
         {
             if (original == SolidColorMarker) return "";
+            // Windows' own cache is never handed back as itself: by now it holds OUR picture, and setting
+            // the file Windows transcodes into from itself leaves a white desktop (ccp-bugs #1584).
+            if (IsTranscodedCache(original, transcodedCache)) return frozenCopy;
             if (exists(original)) return original;
             return exists(frozenCopy) ? frozenCopy : original;
         }
 
         /// <summary>Can <paramref name="original"/> be put back at all? Never hand Windows an empty or
-        /// missing path unless it is the solid-colour clear (#692).</summary>
-        internal static bool IsRestorable(string? original, Func<string, bool> exists, string frozenCopy)
-            => original == SolidColorMarker
-               || (!string.IsNullOrWhiteSpace(original) && (exists(original) || exists(frozenCopy)));
+        /// missing path unless it is the solid-colour clear (#692), nor its own transcoded cache unless a
+        /// frozen copy of it was taken (#1584).</summary>
+        internal static bool IsRestorable(string? original, Func<string, bool> exists, string frozenCopy,
+            string? transcodedCache = null)
+        {
+            if (original == SolidColorMarker) return true;
+            if (string.IsNullOrWhiteSpace(original)) return false;
+            if (IsTranscodedCache(original, transcodedCache)) return exists(frozenCopy);
+            return exists(original) || exists(frozenCopy);
+        }
 
-        private static string RestoreTarget(string original) => RestoreTarget(original, File.Exists, FrozenOriginalPath());
+        private static string RestoreTarget(string original)
+            => RestoreTarget(original, File.Exists, FrozenOriginalPath(), TranscodedCachePath());
 
-        private static bool IsRestorable(string? original) => IsRestorable(original, File.Exists, FrozenOriginalPath());
+        private static bool IsRestorable(string? original)
+            => IsRestorable(original, File.Exists, FrozenOriginalPath(), TranscodedCachePath());
+
+        /// <summary>%AppData%\Microsoft\Windows\Themes\TranscodedWallpaper: the copy Windows makes of every
+        /// wallpaper it sets. On a slideshow SPI_GETDESKWALLPAPER names this file, not a source.</summary>
+        private static string? TranscodedCachePath()
+        {
+            try
+            {
+                return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "Microsoft", "Windows", "Themes", "TranscodedWallpaper");
+            }
+            catch { return null; }
+        }
+
+        /// <summary>Is <paramref name="path"/> Windows' transcoded cache? Pure. Every wallpaper write lands
+        /// in that file, so it is never a source to put back.</summary>
+        internal static bool IsTranscodedCache(string? path, string? transcodedCache)
+        {
+            if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(transcodedCache)) return false;
+            try { return string.Equals(Path.GetFullPath(path), Path.GetFullPath(transcodedCache), StringComparison.OrdinalIgnoreCase); }
+            catch { return string.Equals(path, transcodedCache, StringComparison.OrdinalIgnoreCase); }
+        }
+
+        /// <summary>The original to remember for a path Windows reports: the path itself, or, when it is
+        /// Windows' own cache (a picture set from Photos, a browser or theme sync), a frozen copy of it, since
+        /// our first write overwrites that file (#1584). Null when the copy could not be made.</summary>
+        private static string? OriginalFromReported(string path)
+        {
+            if (!IsTranscodedCache(path, TranscodedCachePath())) return path;
+            try
+            {
+                var frozen = FrozenOriginalPath();
+                File.Copy(path, frozen, overwrite: true);
+                App.Logger?.Information("[Wallpaper] Desktop reports Windows' own cache; a frozen copy is the original");
+                return frozen;
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Warning("[Wallpaper] Could not freeze Windows' wallpaper cache: {Error}", ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>For Dynamic's stop repaint (<see cref="DynamicWallpaperService"/>): is this registry path
+        /// Windows' own cache, which must never be re-set from itself?</summary>
+        internal static bool IsTranscodedCachePath(string? path) => IsTranscodedCache(path, TranscodedCachePath());
 
         /// <summary>The real wallpaper is back: the frozen copy has done its job. Kept when Windows is
         /// pointing at it (the source was gone), since Windows re-reads that path on logon.</summary>
@@ -77,18 +158,101 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>HKCU\Control Panel\Desktop WallpaperStyle as a word: Center, Tile, Stretch, Fit, Fill,
-        /// Span, or the raw value. Read only, for the log; CCP never changes the user's fit.</summary>
+        /// Span, or the raw value. For the log.</summary>
         internal static string ReadWallpaperStyle()
+        {
+            var raw = ReadWallpaperStyleRaw();
+            return TryUnpackStyle(raw, out var style, out var tile) ? WallpaperStyleName(style, tile) : "unknown";
+        }
+
+        // ---------------------------------------------------------------- fit (#1544)
+
+        /// <summary>The user's own WallpaperStyle + TileWallpaper, packed "style|tile", taken before CCP
+        /// writes a fit of its own. Null while CCP writes none (Fit = Windows setting).</summary>
+        private string? _originalStyle;
+
+        /// <summary>The registry pair Windows reads at SPI_SETDESKWALLPAPER time for a fit. Null for
+        /// <see cref="Models.WallpaperFit.Windows"/>: today's behaviour, the user's fit is never touched.</summary>
+        internal static string? FitStyle(Models.WallpaperFit fit) => fit switch
+        {
+            Models.WallpaperFit.Fill => PackStyle("10", "0"),
+            Models.WallpaperFit.Fit => PackStyle("6", "0"),
+            Models.WallpaperFit.Stretch => PackStyle("2", "0"),
+            Models.WallpaperFit.Span => PackStyle("22", "0"),
+            Models.WallpaperFit.Center => PackStyle("0", "0"),
+            _ => null,
+        };
+
+        internal static string PackStyle(string style, string tile) => style.Trim() + "|" + tile.Trim();
+
+        internal static bool TryUnpackStyle(string? packed, out string style, out string tile)
+        {
+            style = tile = "";
+            if (string.IsNullOrWhiteSpace(packed)) return false;
+            int bar = packed.IndexOf('|');
+            if (bar < 0) return false;
+            style = packed[..bar];
+            tile = packed[(bar + 1)..];
+            return style.Length > 0;
+        }
+
+        /// <summary>The fit Studio > Wallpaper writes with its own pictures, or null to leave the user's.</summary>
+        private static string? OurFitStyle() => FitStyle(App.Settings?.Current?.CollageWallpaperFit ?? Models.WallpaperFit.Windows);
+
+        private static string? ReadWallpaperStyleRaw()
         {
             try
             {
                 using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop");
                 var style = key?.GetValue("WallpaperStyle")?.ToString() ?? "";
-                var tile = key?.GetValue("TileWallpaper")?.ToString() ?? "";
-                return WallpaperStyleName(style, tile);
+                var tile = key?.GetValue("TileWallpaper")?.ToString() ?? "0";
+                return style.Length == 0 ? NoStyleMarker : PackStyle(style, tile);
             }
-            catch (Exception ex) { Diag.Swallowed(ex, "wallpaper style"); return "unknown"; }
+            catch (Exception ex) { Diag.Swallowed(ex, "wallpaper style"); return null; }
         }
+
+        /// <summary>Captured when the desktop has no WallpaperStyle value at all: the restore deletes ours, so
+        /// the registry ends exactly as it was.</summary>
+        internal const string NoStyleMarker = "none";
+
+        /// <summary>Write the pair, or delete it for <see cref="NoStyleMarker"/>. Windows applies it at the next
+        /// SPI_SETDESKWALLPAPER, so this runs on the write queue right before the set. REG_SZ, as Windows
+        /// itself writes them.</summary>
+        private static void WriteWallpaperStyle(string? packed)
+        {
+            try
+            {
+                if (packed == NoStyleMarker)
+                {
+                    using var desk = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop", writable: true);
+                    desk?.DeleteValue("WallpaperStyle", throwOnMissingValue: false);
+                    desk?.DeleteValue("TileWallpaper", throwOnMissingValue: false);
+                    return;
+                }
+                if (!TryUnpackStyle(packed, out var style, out var tile)) return;
+                using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Control Panel\Desktop");
+                key?.SetValue("WallpaperStyle", style, Microsoft.Win32.RegistryValueKind.String);
+                key?.SetValue("TileWallpaper", tile, Microsoft.Win32.RegistryValueKind.String);
+            }
+            catch (Exception ex) { App.Logger?.Warning("[Wallpaper] Could not write the desktop fit: {Error}", ex.Message); }
+        }
+
+        /// <summary>Take the user's own fit once, before the first write that carries ours. Caller holds _lock.</summary>
+        private void CaptureOriginalStyleIfNeeded()
+        {
+            if (_originalStyle != null || OurFitStyle() == null) return;
+            _originalStyle = ReadWallpaperStyleRaw();
+            if (_originalStyle == null)
+            {
+                App.Logger?.Warning("[Collage] Could not read the desktop fit - the chosen fit is not applied this time");
+                return;
+            }
+            PersistOriginalStyle(_originalStyle);
+            App.Logger?.Information("[Collage] Captured desktop fit {Style}; it comes back on stop", ReadWallpaperStyle());
+        }
+
+        /// <summary>The fit to write with our next picture: ours only once the user's own was taken. Caller holds _lock.</summary>
+        private string? RunningFitStyle() => _originalStyle != null ? OurFitStyle() : null;
 
         internal static string WallpaperStyleName(string style, string tile) => style.Trim() switch
         {
@@ -118,15 +282,54 @@ namespace ConditioningControlPanel.Services
         /// Spotlight, or a different picture per monitor. SPI can only put ONE file back, so Static and Own
         /// image stay off there; a skipped effect is far cheaper than a desktop the user can never get
         /// back (#692). Dynamic never writes, so it is fine on all of them.</summary>
-        public static bool WriteWouldLoseDesktop() => WouldLoseDesktop(ReadBackgroundType(), MonitorWallpapers());
+        public static bool WriteWouldLoseDesktop() => WriteWouldLoseDesktop(out _);
+
+        /// <summary>The same check, naming what would be lost for the log. Shared by Studio > Wallpaper and
+        /// the Takeover wallpaper (<see cref="Activate"/>, #1584).</summary>
+        internal static bool WriteWouldLoseDesktop(out string? why)
+        {
+            int backgroundType = ReadBackgroundType();
+            int slideshow = ReadSlideshowStatus();
+            why = DesktopLossReason(backgroundType, slideshow, MonitorWallpapers());
+            if (why != null)
+                App.Logger?.Information("[Wallpaper] Desktop check: {Why} (BackgroundType {Type}, slideshow status {Status})",
+                    why, backgroundType, slideshow);
+            return why != null;
+        }
 
         internal static bool WouldLoseDesktop(int backgroundType, IReadOnlyList<string> monitorWallpapers)
+            => DesktopLossReason(backgroundType, 0, monitorWallpapers) != null;
+
+        /// <summary>DESKTOP_SLIDESHOW_STATE.DSS_SLIDESHOW: a slideshow is configured.</summary>
+        internal const int SlideshowConfiguredFlag = 0x2;
+
+        /// <summary>What one wallpaper write would destroy, or null. Pure. The slideshow is asked twice:
+        /// BackgroundType is missing on some Windows 10 desktops, and IDesktopWallpaper.GetStatus is the
+        /// answer Windows itself gives (ccp-bugs #1584: a Windows 10 slideshow ended on a white desktop).</summary>
+        internal static string? DesktopLossReason(int backgroundType, int slideshowStatus, IReadOnlyList<string> monitorWallpapers)
         {
-            if (backgroundType >= 2) return true;
+            if (backgroundType == 2 || (slideshowStatus > 0 && (slideshowStatus & SlideshowConfiguredFlag) != 0)) return "slideshow";
+            if (backgroundType >= 3) return "Spotlight";
             for (int i = 1; i < monitorWallpapers.Count; i++)
                 if (!string.Equals(monitorWallpapers[0], monitorWallpapers[i], StringComparison.OrdinalIgnoreCase))
-                    return true;
-            return false;
+                    return "a different picture per monitor";
+            return null;
+        }
+
+        /// <summary>IDesktopWallpaper.GetStatus, or -1 when Windows will not say.</summary>
+        private static int ReadSlideshowStatus()
+        {
+            try
+            {
+                var dw = (IDesktopWallpaper)new DesktopWallpaperClass();
+                try { return dw.GetStatus(); }
+                finally { Marshal.ReleaseComObject(dw); }
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Debug("[Wallpaper] IDesktopWallpaper.GetStatus failed: {Error}", ex.Message);
+                return -1;
+            }
         }
 
         private static List<string> MonitorWallpapers()
@@ -168,8 +371,9 @@ namespace ConditioningControlPanel.Services
                 return null;
             }
 
-            // Windows' own transcoded cache has no stable path: our collage overwrites that very file.
-            bool mustUseCopy = source == "transcoded-cache";
+            // Windows' own transcoded cache has no stable path: our collage overwrites that very file. The
+            // registry or IDesktopWallpaper can name it too, so the path decides, not the source (#1584).
+            bool mustUseCopy = source == "transcoded-cache" || IsTranscodedCache(path, TranscodedCachePath());
             try
             {
                 var frozen = FrozenOriginalPath();
@@ -239,7 +443,7 @@ namespace ConditioningControlPanel.Services
                 && !name.StartsWith("ccp_original_wallpaper", StringComparison.OrdinalIgnoreCase);
         }
 
-        // IDesktopWallpaper: only the first four vtable slots are declared, in order, since only reads are used.
+        // IDesktopWallpaper: the vtable up to GetStatus, in order (shobjidl_core.h). Only reads are called.
         [ComImport, Guid("B92B56A9-8B55-4E14-9A89-0199BBB6F93B"),
          InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
         private interface IDesktopWallpaper
@@ -251,7 +455,21 @@ namespace ConditioningControlPanel.Services
             [return: MarshalAs(UnmanagedType.LPWStr)]
             string GetMonitorDevicePathAt(uint monitorIndex);
             uint GetMonitorDevicePathCount();
+            void GetMonitorRECT([MarshalAs(UnmanagedType.LPWStr)] string monitorID, out NativeRect displayRect);
+            void SetBackgroundColor(uint color);
+            uint GetBackgroundColor();
+            void SetPosition(int position);
+            int GetPosition();
+            void SetSlideshow(IntPtr items);
+            IntPtr GetSlideshow();
+            void SetSlideshowOptions(int options, uint slideshowTick);
+            void GetSlideshowOptions(out int options, out uint slideshowTick);
+            void AdvanceSlideshow([MarshalAs(UnmanagedType.LPWStr)] string? monitorID, int direction);
+            int GetStatus();
         }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NativeRect { public int Left, Top, Right, Bottom; }
 
         [ComImport, Guid("C2CF3110-460E-4fc1-B9D0-8A1C0C9CC4BD")]
         private class DesktopWallpaperClass { }
@@ -295,15 +513,16 @@ namespace ConditioningControlPanel.Services
                 return;
             }
 
+            string? fit;
             lock (_lock)
             {
                 if (_collageRunning) return;
 
                 if (!_isActive)
                 {
-                    if (WriteWouldLoseDesktop())
+                    if (WriteWouldLoseDesktop(out var lost))
                     {
-                        App.Logger?.Warning("[Collage] Slideshow, Spotlight or per-monitor wallpapers: not writing over them");
+                        App.Logger?.Warning("[Collage] {Why} on the desktop: not writing over it", lost);
                         return;
                     }
                     var original = CaptureOriginalWallpaper();
@@ -312,6 +531,9 @@ namespace ConditioningControlPanel.Services
                     _originalWallpaperPath = original;
                     _isActive = true;
                 }
+                // Before the first write that carries our fit; the restore puts it back (#1544).
+                CaptureOriginalStyleIfNeeded();
+                fit = RunningFitStyle();
                 _collageRunning = true;
                 _ownImageRunning = ownImage != null;
             }
@@ -319,18 +541,19 @@ namespace ConditioningControlPanel.Services
             if (ownImage != null)
             {
                 // Used where it is: never copied, and never held as _collageCurrentFile (Stop deletes that).
-                SetWallpaper(ownImage, "own image");
-                App.Logger?.Information("[Collage] Own image up");
+                SetWallpaper(ownImage, "own image", fit);
+                App.Logger?.Information("[Collage] Own image up (fit {Fit})", App.Settings?.Current?.CollageWallpaperFit);
+                RaiseSavableWallpaperChanged();
                 return;
             }
 
             // Recolour at once when the active mod changes.
             if (App.Mods != null) App.Mods.ModChanged += OnModChanged;
 
-            // Static rides the user's own Windows fit (Fill/Fit/Stretch/Span): CCP never writes it. Logged so a
-            // "stretched on my vertical monitor" report (#1544) shows whether that fit was Stretch.
-            App.Logger?.Information("[Collage] Started (rotate={Rotate}, every {Sec}s, desktop fit {Style})",
-                RotateOn(), CollageInterval(), ReadWallpaperStyle());
+            // Fit "Windows setting" rides the user's own Windows fit; any other writes ours with each picture
+            // and the user's comes back on stop (#1544).
+            App.Logger?.Information("[Collage] Started (rotate={Rotate}, every {Sec}s, fit {Fit}, desktop fit {Style})",
+                RotateOn(), CollageInterval(), App.Settings?.Current?.CollageWallpaperFit, ReadWallpaperStyle());
             TriggerCollageCompose();   // the first one immediately
             RefreshCollageSchedule();  // the rotation timer only if rotation is on
         }
@@ -358,6 +581,7 @@ namespace ConditioningControlPanel.Services
             string? held;
             lock (_lock) { held = _collageCurrentFile; _collageCurrentFile = null; }
             TryDeleteCollageFile(held);
+            RaiseSavableWallpaperChanged();
             App.Logger?.Information("[Collage] Stopped; original wallpaper restored");
         }
 
@@ -447,10 +671,12 @@ namespace ConditioningControlPanel.Services
                 string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return;
 
             bool up;
-            lock (_lock) up = _ownImageRunning;
+            string? fit;
+            lock (_lock) { up = _ownImageRunning; fit = RunningFitStyle(); }
             if (!up) { StartCollage(); return; }
-            SetWallpaper(path, "own image");
+            SetWallpaper(path, "own image", fit);
             App.Logger?.Information("[Collage] Own image changed");
+            RaiseSavableWallpaperChanged();
         }
 
         private static readonly CollageLayout[] AllCollageLayouts =
@@ -503,7 +729,7 @@ namespace ConditioningControlPanel.Services
                 // A rotation never stacks behind a write still in flight, same rule as Shuffle.
                 if (_collageCurrentFile != null && _setQueue.IsBusy) { TryDeleteCollageFile(newFile); return; }
 
-                SetWallpaper(newFile, "collage");
+                SetWallpaper(newFile, "collage", RunningFitStyle());
 
                 previous = _collageCurrentFile;
                 _collageCurrentFile = newFile;
@@ -513,6 +739,7 @@ namespace ConditioningControlPanel.Services
             if (!string.IsNullOrEmpty(previous) &&
                 !string.Equals(previous, newFile, StringComparison.OrdinalIgnoreCase))
                 TryDeleteCollageFile(previous);
+            RaiseSavableWallpaperChanged();
         }
 
         private static void TryDeleteCollageFile(string? path)

@@ -106,6 +106,9 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.CollageRunWithCcp),
             // A path on this PC: means nothing elsewhere, and names the user's folders.
             nameof(AppSettings.CollageOwnImagePath),
+            // WPF 7.2.3: the #692 wallpaper breadcrumb and its fit, this PC's desktop until it is put back.
+            nameof(AppSettings.WallpaperOriginalPath),
+            nameof(AppSettings.WallpaperOriginalStyle),
             nameof(AppSettings.ModPersonalityPreset),
             // Conversion rows (C9): machine-local stamps and the last server tier reading.
             // A restore must not bring back a stale reading or re-open a once-ever row.
@@ -186,6 +189,8 @@ namespace ConditioningControlPanel.Services
             restored.FriendsPresenceShared = current.FriendsPresenceShared;
             restored.CollageRunWithCcp = current.CollageRunWithCcp;
             restored.CollageOwnImagePath = current.CollageOwnImagePath;
+            restored.WallpaperOriginalPath = current.WallpaperOriginalPath;
+            restored.WallpaperOriginalStyle = current.WallpaperOriginalStyle;
             // Conversion state lives on this PC only (it is left out of the backup): a restore must
             // not wipe it, or the once-ever rows post again and a post-code grant goes missing.
             restored.InboxStamps = current.InboxStamps;
@@ -450,6 +455,10 @@ namespace ConditioningControlPanel.Services
             try
             {
                 var obj = StripForUpload(settings);
+                // WPF 7.2.3 (#1488): a session or ramp still running keeps the user's own values in its
+                // journal; the backup carries those, never the session's Hydra / ducking / pink.
+                try { SessionSettingsJournal.OverlayOnBackup(obj, CorePaths.UserData); }
+                catch (Exception ex) { Log.Debug("Settings backup: session journal overlay failed: {E}", ex.Message); }
                 // The slot is shared with Windows, and frozen WPF restores the whole blob: a path field missing from
                 // it comes back EMPTY there. So the slot's own path fields ride along unchanged (review R3).
                 var slot = await FetchSlotAsync(settings);
@@ -458,7 +467,10 @@ namespace ConditioningControlPanel.Services
                     Log.Warning("Settings backup skipped: the current backup could not be read, so its file paths could not be kept");
                     return (false, null);
                 }
-                CarryPathFields(obj, SlotSettings(slot.Backup));
+                // #4323: a slot that exists but cannot be read keeps its paths only if we do not overwrite it.
+                var slotSettings = SlotSettings(slot.Backup);
+                if (slot.Backup != null && slotSettings == null) return (false, null);
+                CarryPathFields(obj, slotSettings);
                 var encoded = SettingsBackupBudget.Encode(obj);
                 if (!encoded.Fits)
                 {
@@ -615,7 +627,11 @@ namespace ConditioningControlPanel.Services
             // Dates stay strings (WPF read backed_up_at as a string and parsed it itself).
             var root = JsonConvert.DeserializeObject<JObject>(await response.Content.ReadAsStringAsync(),
                 new JsonSerializerSettings { DateParseHandling = DateParseHandling.None });
-            return (true, root?["backup"] as JObject);
+            // #4323: only an explicit null is "no backup yet"; a missing or odd slot is a failed read, never an empty one.
+            var backup = root?["backup"];
+            if (backup == null || (backup.Type != JTokenType.Null && backup.Type != JTokenType.Object))
+                return (false, null);
+            return (true, backup as JObject);
         }
 
         private Task<HttpResponseMessage> PostAsync(string path, AppSettings settings, object body)

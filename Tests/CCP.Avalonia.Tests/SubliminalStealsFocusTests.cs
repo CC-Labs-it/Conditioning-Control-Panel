@@ -57,6 +57,9 @@ public sealed class SubliminalStealsFocusTests
         var steals = settings.SubliminalStealsFocus;
         settings.SubliminalFont = AppFonts.Inter;
         var before = SubliminalOverlay.ActivateCard;
+        var stackBefore = SubliminalOverlay.StackOverVideo;
+        var stacked = 0;
+        SubliminalOverlay.StackOverVideo = card => { Assert.True(card.IsVisible); stacked++; };
         var activated = 0;
         SubliminalOverlay.ActivateCard = _ => activated++;
         var off = new SubliminalOverlayWindow("OBEY");
@@ -75,6 +78,7 @@ public sealed class SubliminalStealsFocusTests
             Assert.Equal(1, activated);
             Assert.False(on.IsHitTestVisible);
             Assert.False(on.Focusable);
+            Assert.Equal(2, stacked); // every show is placed relative to video, even focus opt-in
             Assert.False(on.ShowActivated);   // shown passive first, as WPF's SWP_NOACTIVATE show, then activated
 
             // X11 map race: a refused first request is retried once after Avalonia's queue runs;
@@ -83,10 +87,25 @@ public sealed class SubliminalStealsFocusTests
             SubliminalOverlay.RequestFocus(on, _ => ++calls > 1);
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             Assert.Equal(2, calls);
+            Assert.Equal(3, stacked); // the delayed focus retry also preserves lock-card order
             calls = 0;
             SubliminalOverlay.RequestFocus(on, _ => ++calls > 0);
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, calls);
+
+            // X11 mapping may overtake the native call made by Present. The first frame
+            // reapplies the slot before the card fades in.
+            var requestFrame = SubliminalOverlayWindow.RequestFrame;
+            Action<TimeSpan>? frame = null;
+            try
+            {
+                SubliminalOverlayWindow.RequestFrame = (_, callback) => frame = callback;
+                on.Run(0.5, TimeSpan.FromMilliseconds(100));
+                Assert.NotNull(frame);
+                frame(TimeSpan.Zero);
+                Assert.Equal(4, stacked);
+            }
+            finally { SubliminalOverlayWindow.RequestFrame = requestFrame; }
 
             // A platform that refuses the focus never breaks the card.
             SubliminalOverlay.ActivateCard = _ => throw new InvalidOperationException("refused");
@@ -103,6 +122,7 @@ public sealed class SubliminalStealsFocusTests
             settings.SubliminalFont = font;
             settings.SubliminalStealsFocus = steals;
             SubliminalOverlay.ActivateCard = before;
+            SubliminalOverlay.StackOverVideo = stackBefore;
             off.Close(); on.Close();
         }
         return Task.CompletedTask;

@@ -85,6 +85,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             RefreshDashboardToggleHint();
             ApplyDashboardFxLoops();
+            // WPF Presets.cs:1167-1170: an opportunistic same-day override check; the service gates it.
+            _ = ConditioningControlPanel.Avalonia.App.DailyFree?.RefreshAsync();
             var dash = SettingsPage;
             var s = CoreSettings.Current;
             if (dash?.FavoritesList == null || dash.RecentList == null || s == null) return;

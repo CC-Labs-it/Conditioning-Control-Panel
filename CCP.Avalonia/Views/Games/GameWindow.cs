@@ -39,7 +39,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal sealed record Game(string Id, string TitleKey, string Page, Func<bool>? Gate = null, string? Query = null);
 
         /// <summary>WPF 7.1.5's game hosts, StartUrl for StartUrl.</summary>
-        internal static readonly IReadOnlyDictionary<string, Game> Games = new Dictionary<string, Game>(StringComparer.OrdinalIgnoreCase)
+        internal static readonly Dictionary<string, Game> Games = BuildGames();
+
+        private static Dictionary<string, Game> BuildGames()
+        {
+            var games = new Dictionary<string, Game>(StringComparer.OrdinalIgnoreCase)
         {
             // WPF BreakoutHostService.cs:8 StartUrl; LaunchDemo (:13) is free and needs no account. demo=1 holds the
             // page to 3 levels even before init lands (access.js reads it wherever chrome.webview is absent).
@@ -60,6 +64,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             [GlassroadId] = new(GlassroadId, "launcher_game_race_title", "glassroad/index.html", GlassroadGate),
         };
 
+            RegisterGoon(games);
+            RegisterBackRoom(games);
+            RegisterArcademy(games);
+            return games;
+        }
+
+        static partial void RegisterGoon(Dictionary<string, Game> games);
+        static partial void RegisterBackRoom(Dictionary<string, Game> games);
+        static partial void RegisterArcademy(Dictionary<string, Game> games);
+        partial void HandleGoonMessage(JObject message, ref bool handled);
+        partial void HandleBackRoomMessage(JObject message, ref bool handled);
+        partial void HandleArcademyMessage(JObject message, ref bool handled);
+
         internal const string BreakoutDemoId = "breakoutdemo";
 
         private static readonly List<GameWindow> Open = new();
@@ -75,12 +92,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>WPF LauncherHost.LaunchGame -> each host's LaunchCore: one live window per game, focused
         /// rather than relaunched (a second click mid-match must never restart it). Null when refused.</summary>
-        internal static GameWindow? Launch(string id)
+        internal static GameWindow? Launch(string id, Windows.MainShellWindow? panel = null)
         {
             id = ResolveDoor(id);   // one routing seam for the Racing Thoughts host
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
             if (spec.Id == JustDropId && !JustDropDoorOpen()) return null;
-            return spec.Id == GlassroadId ? LaunchRacingThoughts() : LaunchWindow(spec);
+            return spec.Id == GlassroadId ? LaunchRacingThoughts() : LaunchWindow(spec, panel: panel);
         }
 
         /// <summary>A friend's Racing Thoughts invite: the same race gate and window, plus the room to join
@@ -102,7 +119,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", spec.Id); return false; }
         }
 
-        private static GameWindow? LaunchWindow(Game spec, bool gated = false, string? room = null)
+        private static GameWindow? LaunchWindow(Game spec, bool gated = false, string? room = null,
+            Windows.MainShellWindow? panel = null)
         {
             GameWindow? live;
             lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase)
@@ -140,6 +158,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             }
             else window.Load(Server(), room);
             window.Show();
+            // WPF ChaosWebViewHost.cs:904-1013 AttachMainWindowGlue: the shop window is owned by the panel.
+            if (spec.Id == JustDropId && (panel ?? Windows.MainShellWindow.Current) is { } shell)
+                window.AttachJustDropOwner(shell);
             return window;
         }
 
@@ -159,7 +180,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Web.WebMessage += OnPageMessage;
             // The page never leaves the served origin; anything else is refused before the engine loads it.
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);
-            Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); StartBreakoutAccessWatch(); };
+            if (IsDtrh)
+            {
+                Opened += (_, _) => CaptureDtrhWindowedFrame();
+                PositionChanged += (_, _) => CaptureDtrhWindowedFrame();
+                SizeChanged += (_, _) => CaptureDtrhWindowedFrame();
+            }
+            Opened += (_, _) => { lock (Open) { if (!Open.Contains(this)) Open.Add(this); } if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); StartBreakoutAccessWatch(); };
             Activated += (_, _) => FunnelPageMessage.OnAppActivated();   // WPF's Application.Activated covers every window
             Closing += (_, _) => { _closing = true; CancelRaceFetch(); };
             Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); if (Spec.Id == FypId) DisableFypEyes(); StopBreakoutAccessWatch(); _raceRooms.Clear(); };
@@ -222,6 +249,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             JObject o;
             try { o = JObject.Parse(Unwrap(json)); }
             catch (Exception ex) { Log.Debug("[Game] {Id}: unreadable page message: {E}", Spec.Id, ex.Message); return; }
+            bool handled = false;
+            if (Spec.Id == "goon") HandleGoonMessage(o, ref handled);
+            if (Spec.Id == "backroom") HandleBackRoomMessage(o, ref handled);
+            if (Spec.Id == "arcademy") HandleArcademyMessage(o, ref handled);
+            if (handled) return;
             if (Spec.Id == "loom") { HandleLoom(o); return; } // only the Loom bridge subset
             if (Spec.Id == FypId && HandleFyp(o)) return;
             if (Spec.Id == JustDropId) { HandleJustDrop(o); return; }   // the remote site never gets the games' frames
@@ -345,6 +377,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         // ---- panic (PanicSurfaces "games", WPF GameSurfaces.cs:53-55 -> CloseActive("panic")) ----
 
         internal static bool IsAnyOpen() { lock (Open) return Open.Count > 0; }
+        internal static bool IsAnyStartupGameOpen() { lock (Open) return Open.Any(w => w.Spec.Id != FypId && w.Spec.Id != "loom"); }
 
         internal static GameWindow[] OpenWindowsForTests() { lock (Open) return Open.ToArray(); }
 

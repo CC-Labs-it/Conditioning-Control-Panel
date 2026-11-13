@@ -9,10 +9,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// The ring half of the widget: a click on her toggles the card fan, which lives in its own
     /// <see cref="EmiRingWindow"/>. Port of ConditioningControlPanel/Windows/EmiDesk/EmiDeskWindow.Ring.cs.
     ///
-    /// <para>ponytail: the moments WPF fires around the ring (<c>ringOpen</c>, <c>ringDismissed</c>,
-    /// <c>suggestionIgnored3x</c>, <c>pinAdded</c>) and the nudge after an opening need
-    /// <c>App.EmiDesk.Fire</c> / EmiNudges, which this head does not have. The counters behind them
-    /// (<see cref="EmiState.NoteRingOpen"/>, <see cref="EmiState.Current"/>.RingIgnoreStreak) are kept.</para>
+    /// <para>The ring moments fire as WPF does (<c>ringOpen</c> :106, <c>ringDismissed</c> :287,
+    /// <c>suggestionIgnored3x</c> :293). ponytail: <c>pinAdded</c> and the nudge after an opening
+    /// (EmiNudges) are not wired on this head yet.</para>
     /// </summary>
     public partial class EmiDeskWindow
     {
@@ -31,6 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         partial void OnTearDownCore()
         {
+            TearDownRain();
             try { _ring?.CloseRing(); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] ring tear-down failed"); }
         }
@@ -59,6 +59,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             ring.SetWidgetGeometry(BodyPx(), AnchorPx());
             ring.OpenRing();
             if (!ring.IsOpen) return;
+            try { EmiDeskService.Instance.Fire("ringOpen"); }   // WPF EmiDeskWindow.Ring.cs:106
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] ringOpen moment failed"); }
             try { EmiState.NoteRingOpen(); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] ring-open bookkeeping failed"); }
         }
@@ -128,9 +130,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     if (st.RingIgnoreStreak == 0) return;
                     st.RingIgnoreStreak = 0;
                 }
-                else if (++st.RingIgnoreStreak >= 3)
+                else
                 {
-                    st.RingIgnoreStreak = 0;   // ponytail: WPF fires suggestionIgnored3x here
+                    EmiDeskService.Instance.Fire("ringDismissed");   // WPF EmiDeskWindow.Ring.cs:287
+                    if (++st.RingIgnoreStreak >= 3)
+                    {
+                        st.RingIgnoreStreak = 0;
+                        EmiDeskService.Instance.Fire("suggestionIgnored3x");   // WPF :293
+                    }
                 }
                 EmiState.SaveSoon();
             }

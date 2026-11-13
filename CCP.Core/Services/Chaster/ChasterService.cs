@@ -496,7 +496,7 @@ public sealed partial class ChasterService : IDisposable
                 plan = CircesTab.PlanPush(_tab, canRemove: false, options.Caps, _localNow());
             }
             if (plan.Kind != TabPushKind.Add) return SettleOutcome.Nothing;
-            // A backlog from days Chaster was unreachable still lands an hour at a time.
+            // A backlog from days Chaster was unreachable still lands one day limit at a time.
             plan = plan with { Seconds = Math.Min(plan.Seconds, ChasterClient.MaxAddSeconds) };
 
             var access = await AccessTokenAsync(ct).ConfigureAwait(false);

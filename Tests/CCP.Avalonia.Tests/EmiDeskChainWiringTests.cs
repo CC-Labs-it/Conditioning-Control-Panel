@@ -14,8 +14,15 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-public sealed class EmiDeskChainWiringTests
+public sealed class EmiDeskChainWiringTests : IDisposable
 {
+    // Opening the fan fires WPF's ringOpen / ringDismissed moments (#4834). On the bundled lines they speak about
+    // one time in six, and a spoken line replaces the chain these tests pin, so the desk talks from an empty table.
+    internal const string QuietLines = """{"version":1,"moments":{},"pools":{}}""";
+    private readonly EmiLineEngine _previousEngine = EmiDeskService.Instance.LineEngine;
+    public EmiDeskChainWiringTests() => EmiDeskService.Instance.LineEngine = EmiLineEngine.FromJson(QuietLines);
+    public void Dispose() => EmiDeskService.Instance.LineEngine = _previousEngine;
+
     private static EmiDeskWindow OpenDesk(List<Action> deferred)
     {
         if (Application.Current is null)

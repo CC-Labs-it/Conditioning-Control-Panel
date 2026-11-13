@@ -140,8 +140,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 watched = null;
             };
 
+            UpdateLeaderboardTheme();
             InitializeLeaderboardFx();
-            AttachedToVisualTree += (_, _) => { CoreMods.ModChanged += OnLeaderboardModChanged; UpdateModeButtons(); };
+            AttachedToVisualTree += (_, _) => { CoreMods.ModChanged += OnLeaderboardModChanged; UpdateLeaderboardTheme(); UpdateModeButtons(); };
             DetachedFromVisualTree += (_, _) => CoreMods.ModChanged -= OnLeaderboardModChanged;
             Loaded += OnLeaderboardTabLoaded;
             PropertyChanged += OnLeaderboardTabPropertyChanged;
@@ -189,6 +190,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             foreach (var row in _ranked) row.IsAllTimeView = isAllTime;
             _sortKey = "rank";
             UpdateModeButtons();
+            UpdateLeaderboardTheme();
             RefreshSeasonHeader();
             ApplyModeLabels();
             RebuildLeaderboardView();
@@ -212,11 +214,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             Set(monthly, IsAllTimeMode ? inactive : pink, IsAllTimeMode ? pink : Brushes.White);
             Set(allTime, IsAllTimeMode ? gold : inactive, IsAllTimeMode ? Res("DarkerBgBrush") : pink);
-
-            var boardAccent = IsAllTimeMode ? gold.Color : pink.Color;
-            Resources["LeaderboardAccentBrush"] = new SolidColorBrush(boardAccent);
-            Resources["LeaderboardTint20Brush"] = new SolidColorBrush(Color.FromArgb(0x20, boardAccent.R, boardAccent.G, boardAccent.B));
-            Resources["LeaderboardTint40Brush"] = new SolidColorBrush(Color.FromArgb(0x40, boardAccent.R, boardAccent.G, boardAccent.B));
+            monthly.BorderBrush = pink;
+            allTime.BorderBrush = IsAllTimeMode ? gold : pink;
 
             // A missing resource leaves the markup's own brush alone; blanking a button's
             // foreground would hide its label, which is worse than the wrong half looking active.
@@ -230,7 +229,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private void OnLeaderboardModChanged(object? sender, ModPackage mod) =>
-            Dispatcher.UIThread.Post(() => { if (VisualRoot != null) UpdateModeButtons(); });
+            Dispatcher.UIThread.Post(() => { if (VisualRoot != null) { UpdateLeaderboardTheme(); UpdateModeButtons(); } });
+
+        // WPF MainWindow.Leaderboard.cs:858: repaint existing containers without fetching data
+        // (accent, tints, hover 0x22 and selected 0x3C, as the WPF row style does).
+        private void UpdateLeaderboardTheme()
+        {
+            var accent = IsAllTimeMode ? Color.FromRgb(255, 215, 0)
+                : Color.TryParse(CoreMods.AccentColorHex, out var color) ? color : Color.Parse("#FF69B4");
+            Resources["LeaderboardAccentBrush"] = new SolidColorBrush(accent);
+            Resources["LeaderboardTint20Brush"] = Tint(0x20);
+            Resources["LeaderboardTint40Brush"] = Tint(0x40);
+            Resources["LeaderboardHoverBrush"] = Tint(0x22);
+            Resources["LeaderboardSelectedBrush"] = Tint(0x3C);
+            SolidColorBrush Tint(byte alpha) => new(Color.FromArgb(alpha, accent.R, accent.G, accent.B));
+        }
 
         /// <summary>
         /// Retitle the Level column for the active board.

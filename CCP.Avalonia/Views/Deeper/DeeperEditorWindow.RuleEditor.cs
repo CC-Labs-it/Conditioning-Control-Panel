@@ -296,10 +296,41 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             RebuildCurveEditor();
         }
 
-        /// <summary>ponytail: needs the haptics bus (App's device manager). The WPF handler fired a
-        /// one-shot buzz on the selected pattern so the author could feel it.</summary>
-        private void BtnTestHaptic_Click(object? sender, RoutedEventArgs e)
-            => Log.Debug("DeeperEditor: test-haptic needs the haptics device bus");
+        // WPF DeeperEditorWindow.xaml.cs:2740-2775: feel the selected pattern on the connected toy; a missing
+        // device, a switched-off Pattern row or a refused preview says so on the strip.
+        private async void BtnTestHaptic_Click(object? sender, RoutedEventArgs e)
+        {
+            if (_selectedHaptic == null) return;
+            IList<double[]>? kf = null;
+            if (_selectedHaptic.CustomPattern != null && _selectedHaptic.CustomPattern.Count > 0)
+                kf = _selectedHaptic.CustomPattern;
+            else if (!string.IsNullOrEmpty(_selectedHaptic.PatternName)
+                     && StockHapticPatterns.TryGet(_selectedHaptic.PatternName, out var named) && named != null)
+                kf = named;
+            if (kf == null) return;
+            var durationMs = (int)Math.Max(50, _selectedHaptic.Duration * 1000);
+            var samples = StockHapticPatterns.Sample(kf, _selectedHaptic.Intensity, durationMs);
+            try
+            {
+                var haptics = CoreHaptics.Service;
+                if (haptics == null || !haptics.IsConnected)
+                {
+                    ShowStripMessage(Loc.Get("deeper_editor_haptic_test_no_device"), "PinkSoftBrush", 4000);
+                    return;
+                }
+                if (!haptics.Settings.V2.Rule(ConditioningControlPanel.Services.Haptics.Core.HapticLayer.Pattern).Enabled)
+                {
+                    ShowStripMessage(Loc.Get("deeper_editor_haptic_test_row_off"), "PinkSoftBrush", 4000);
+                    return;
+                }
+                var ok = await haptics.PreviewSyncPatternAsync(samples, durationMs, _selectedHaptic.Target);
+                if (!ok) ShowStripMessage(Loc.Get("deeper_editor_haptic_test_premium"), "PinkSoftBrush", 4000);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "DeeperEditor: haptic test failed");
+            }
+        }
 
         private void BtnDeleteHaptic_Click(object? sender, RoutedEventArgs e)
         {
@@ -1546,14 +1577,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         // Preview button
         // ---------------------------------------------------------------------------------
 
-        /// <summary>ponytail: needs App.DeeperPlayer + App.DeeperHost. The player window itself is
-        /// already ported (EnhancementPlayerWindow), but it takes the live enhancement plus those
-        /// two services, so opening it is left to the layer that moves them. HealEmptyTriggerRegionIds
-        /// below is real and still runs, since it is pure data repair.</summary>
-        private void BtnPreview_Click(object? sender, RoutedEventArgs e)
+        // WPF DeeperEditorWindow.xaml.cs:4164: pass the live editor model to the shared player.
+        private async void BtnPreview_Click(object? sender, RoutedEventArgs e)
         {
-            HealEmptyTriggerRegionIds();
-            Log.Debug("DeeperEditor: preview needs App.DeeperPlayer + App.DeeperHost");
+            try
+            {
+                EnhancementPlayerWindow player;
+                if (Owner is EnhancementPlayerWindow owner)
+                {
+                    player = owner;
+                    if (player.WindowState == WindowState.Minimized) player.WindowState = WindowState.Normal;
+                    player.Activate();
+                }
+                else if ((Owner as Views.Windows.MainShellWindow ?? Views.Windows.MainShellWindow.Current) is { IsVisible: true } shell)
+                    player = shell.ShowOrActivateDeeperPlayer();
+                else
+                {
+                    await MessageDialog.ShowAsync(this, Loc.Get("deeper_editor_preview_failed_title"),
+                        Loc.Get("deeper_editor_preview_not_initialized"));
+                    return;
+                }
+                HealEmptyTriggerRegionIds();
+                player.LoadEnhancementFromMemory(_enhancement, "editor-preview");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Deeper editor: opening player from preview failed");
+                await MessageDialog.ShowAsync(this, Loc.Get("deeper_editor_preview_failed_title"),
+                    Loc.GetF("deeper_editor_preview_open_failed_fmt", $"{ex.GetType().Name}: {ex.Message}"));
+            }
         }
 
         /// <summary>

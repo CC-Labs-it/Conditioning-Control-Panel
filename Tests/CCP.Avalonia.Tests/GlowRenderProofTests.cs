@@ -160,6 +160,9 @@ public sealed class GlowRenderProofTests
             w.Show();
             Dispatcher.UIThread.RunJobs();
             w.ShowTab("exclusives");
+            // P08: settle the tab entrance and the leaving tab's 100 ms compositor fade (b30) before reading
+            // pixels; on a loaded runner either one still covers the padlock when the frames are captured.
+            w.CompleteTabTransition();
             Dispatcher.UIThread.RunJobs();
             var view = w.Named<ExclusivesTabView>("ExclusivesTab")!;
             var lockGlyph = view.GetVisualDescendants().OfType<IconGlyph>().First(t => t.Name == "VeilLock" && t.IsEffectivelyVisible);
@@ -177,13 +180,21 @@ public sealed class GlowRenderProofTests
             Assert.True(halo.X < plain.X - 2 && halo.Y < plain.Y - 2 && halo.Right > plain.Right + 2 && halo.Bottom > plain.Bottom + 2,
                 $"no halo around the glyph: ink {plain}, with glow {halo}");
 
-            // On screen: 2 DIP left of the glyph's ink, mid-height, the halo tints the frame.
+            // Compare the strip 2 DIP left of the ink. The halo's strongest pixel
+            // varies with font rasterization, so sample its height rather than one pixel.
             glow.Opacity = 1;
-            var p = lockGlyph.TranslatePoint(new Point(plain.X - pad - 2, plain.Y - pad + plain.Height / 2.0), w)!.Value;
-            var lit = Pixel(Frame(w, "padlock-glow-on"), p);
+            using var lit = Frame(w, "padlock-glow-on");
             glow.IsVisible = false;
-            var dark = Pixel(Frame(w, "padlock-glow-off"), p);
-            Assert.True(Diff(lit, dark) > 4, $"no halo beside the padlock: {lit:X6} vs {dark:X6}");
+            using var dark = Frame(w, "padlock-glow-off");
+            int maxDiff = 0, litPixels = 0;
+            for (int y = 0; y < plain.Height; y++)
+            {
+                var p = lockGlyph.TranslatePoint(new Point(plain.X - pad - 2, plain.Y - pad + y), w)!.Value;
+                int diff = Diff(Pixel(lit, p), Pixel(dark, p));
+                maxDiff = Math.Max(maxDiff, diff);
+                if (diff > 4) litPixels++;
+            }
+            Assert.True(litPixels >= 3, $"no halo beside the padlock: {litPixels} pixels, max difference {maxDiff}");
         }
         finally
         {

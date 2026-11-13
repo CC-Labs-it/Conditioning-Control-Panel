@@ -73,6 +73,9 @@ internal static class BarkHead
             Wire<Action<TimeSpan>>(h => ld.CountdownTick += h, h => ld.CountdownTick -= h,
                 ts => e.Raise("LockdownCountdownTick", c => c.Set("remaining_sec", ts.TotalSeconds)));
         }
+        if (BrainDrainPlayer.Instance is { } brainDrain)
+            Wire<EventHandler>(h => brainDrain.Triggered += h, h => brainDrain.Triggered -= h,
+                (_, _) => e.Raise("BrainDrainTriggered")); // WPF BarkService.cs:749-751
         Wire<Action>(h => Views.Overlays.BubbleOverlay.Popped += h, h => Views.Overlays.BubbleOverlay.Popped -= h, () => e.Raise("BubblePopped"));
     }
 
@@ -132,14 +135,19 @@ internal static class BarkHead
     // The desktop lifetime owns the live tube; headless tests supply their shown tube.
     internal static Func<Views.AvatarTube.AvatarTubeWindow?> TubeProvider = () => Views.AvatarTube.AvatarTubeWindow.Live;
 
-    /// <summary>WPF Speak (:1985): preempting barks through GigglePriority, the clip as her voice.
-    /// ponytail: an ordinary VOICED bark goes the same way (this tube's Giggle takes no clip); the gate has
-    /// already dropped it if she was speaking, so it never cuts a line off.</summary>
-    internal static void Speak(BarkSpeech s)
+    /// <summary>WPF Speak (BarkService.cs:1996-2004): priority barks preempt through GigglePriority; ordinary
+    /// barks queue as presets through Giggle, a voiced one carrying its clip (a queued line drops it, as WPF).</summary>
+    internal static void Speak(BarkSpeech s) => Speak(s, TubeProvider());
+
+    internal static void Speak(BarkSpeech s, Views.AvatarTube.AvatarTubeWindow? tube)
     {
-        var tube = TubeProvider();
         if (tube == null) return;
-        if (s.SilentEgg || (!s.Priority && s.AudioPath == null)) { tube.Giggle(s.Text, unprompted: s.Unprompted); return; }
+        if (s.SilentEgg || !s.Priority)
+        {
+            var voiced = !s.SilentEgg && s.AudioPath != null;
+            tube.Giggle(s.Text, unprompted: s.Unprompted, phraseAudioPath: voiced ? s.AudioPath : null, barkVoice: voiced);
+            return;
+        }
         tube.GigglePriority(s.Text, playSound: s.AudioPath == null, aiGenerated: false,
             phraseAudioPath: s.AudioPath, barkVoice: s.AudioPath != null, mood: s.Mood, unprompted: s.Unprompted);
     }

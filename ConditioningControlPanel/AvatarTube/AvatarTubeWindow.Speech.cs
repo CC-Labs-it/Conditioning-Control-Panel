@@ -34,7 +34,7 @@ namespace ConditioningControlPanel
         // non-bark speech (AI/triggers/canned) → no emotion change.
         // unprompted (ccp-bugs #1468) rides along too, so a queued idle line is still held when it
         // finally renders with the engine off.
-        private readonly Queue<(string text, SpeechSource source, string? emotionLineId, string? mood, bool unprompted)> _speechQueue = new();
+        private readonly Queue<(string text, SpeechSource source, string? emotionLineId, string? mood, bool unprompted, string? caller)> _speechQueue = new();
         private bool _isGiggling = false;
         private bool _isWaitingForAi = false; // Blocks other giggles while waiting for AI
         private DispatcherTimer? _speechTimer;
@@ -187,7 +187,7 @@ namespace ConditioningControlPanel
                 return;
             }
 
-            var (nextText, source, nextEmotionLineId, nextMood, nextUnprompted) = _speechQueue.Dequeue();
+            var (nextText, source, nextEmotionLineId, nextMood, nextUnprompted, nextCaller) = _speechQueue.Dequeue();
             App.Logger?.Debug("Dequeued speech ({Source}, line={LineId}, {Chars} chars)",
                 source, nextEmotionLineId ?? "-", (nextText ?? "").Length);
 
@@ -204,7 +204,7 @@ namespace ConditioningControlPanel
                 _speechDelayTimer.Tick += (s, e) =>
                 {
                     _speechDelayTimer.Stop();
-                    ShowSpeechBySource(nextText, source, nextEmotionLineId, nextMood, nextUnprompted);
+                    ShowSpeechBySource(nextText, source, nextEmotionLineId, nextMood, nextUnprompted, nextCaller);
                 };
                 _speechDelayTimer.Start();
                 App.Logger?.Debug("Delaying speech by {Delay:F1}s", remainingDelay);
@@ -212,14 +212,14 @@ namespace ConditioningControlPanel
             else
             {
                 // Show immediately
-                ShowSpeechBySource(nextText, source, nextEmotionLineId, nextMood, nextUnprompted);
+                ShowSpeechBySource(nextText, source, nextEmotionLineId, nextMood, nextUnprompted, nextCaller);
             }
         }
 
         /// <summary>
         /// Shows speech based on its source (triggers play audio, others don't)
         /// </summary>
-        private void ShowSpeechBySource(string text, SpeechSource source, string? emotionLineId = null, string? mood = null, bool unprompted = false)
+        private void ShowSpeechBySource(string text, SpeechSource source, string? emotionLineId = null, string? mood = null, bool unprompted = false, string? soundCaller = null)
         {
             if (source == SpeechSource.Trigger)
             {
@@ -230,7 +230,8 @@ namespace ConditioningControlPanel
             {
                 // Determine sound: always for AI, 1 in 5 for presets
                 bool playSound = source == SpeechSource.AI || (source == SpeechSource.Preset && ++_presetGiggleCounter % 5 == 0);
-                ShowGiggle(text, playSound, source, emotionLineId: emotionLineId, mood: mood, unprompted: unprompted);
+                ShowGiggle(text, playSound, source, emotionLineId: emotionLineId, mood: mood, unprompted: unprompted,
+                    soundCaller: soundCaller);
             }
         }
 
@@ -241,9 +242,13 @@ namespace ConditioningControlPanel
         /// <paramref name="unprompted"/>: an idle-timer line (ccp-bugs #1468); its sound obeys
         /// <see cref="Services.Companion.CompanionIdleVoice"/>, its bubble shows regardless.
         /// </summary>
-        public void Giggle(string text, string? phraseAudioPath = null, bool barkVoice = false, string? mood = null, bool unprompted = false)
+        public void Giggle(string text, string? phraseAudioPath = null, bool barkVoice = false, string? mood = null, bool unprompted = false,
+            [System.Runtime.CompilerServices.CallerFilePath] string callerFile = "",
+            [System.Runtime.CompilerServices.CallerMemberName] string callerMember = "")
         {
             if (_isPlayingUninterruptibleClip) return; // an uninterruptible clip is speaking
+            // Sting hunt: this path plays a giggle on every fifth preset line; name who asked.
+            var who = Services.Audio.RecentSounds.DuckCaller(callerFile, callerMember);
 
             // Block if waiting for AI response
             if (_isWaitingForAi)
@@ -277,8 +282,8 @@ namespace ConditioningControlPanel
 
                 if (_isGiggling)
                 {
-                    _speechQueue.Enqueue((text, SpeechSource.Preset, emotionLineId, mood, unprompted));
-                    App.Logger?.Debug("Queued preset speech (line={LineId}, {Chars} chars)", emotionLineId ?? "-", (text ?? "").Length);
+                    _speechQueue.Enqueue((text, SpeechSource.Preset, emotionLineId, mood, unprompted, who));
+                    App.Logger?.Debug("Queued preset speech (line={LineId}, {Chars} chars, from {Caller})", emotionLineId ?? "-", (text ?? "").Length, who);
                     return;
                 }
 
@@ -291,7 +296,7 @@ namespace ConditioningControlPanel
                     // Queue it and let the delay system handle it. The queue now carries emotionLineId so
                     // the portrait emotion still fires when the bubble renders; audio is still text-only on
                     // this delayed path (barks normally fire idle, so the immediate path below is the norm).
-                    _speechQueue.Enqueue((text, SpeechSource.Preset, emotionLineId, mood, unprompted));
+                    _speechQueue.Enqueue((text, SpeechSource.Preset, emotionLineId, mood, unprompted, who));
                     _isGiggling = true;
                     ProcessNextSpeech();
                 }
@@ -303,7 +308,8 @@ namespace ConditioningControlPanel
                     _presetGiggleCounter++;
                     bool playSound = _presetGiggleCounter % 5 == 0;
                     ShowGiggle(text, playSound, SpeechSource.Preset, phraseAudioPath, barkVoice: barkVoice,
-                        emotionLineId: emotionLineId, mood: mood, unprompted: unprompted);
+                        emotionLineId: emotionLineId, mood: mood, unprompted: unprompted, soundCaller: who);
+                    if (playSound) App.Logger?.Debug("Preset giggle (from {Caller}, unprompted={Unprompted})", who, unprompted);
                 }
             });
         }
@@ -323,9 +329,14 @@ namespace ConditioningControlPanel
             return windowMs > 0 && (DateTime.UtcNow - _lastAiBubbleUtc).TotalMilliseconds < windowMs;
         }
 
-        public void GigglePriority(string text, bool playSound = true, bool aiGenerated = true, string? phraseAudioPath = null, bool barkVoice = false, string? mood = null, bool unprompted = false)
+        public void GigglePriority(string text, bool playSound = true, bool aiGenerated = true, string? phraseAudioPath = null, bool barkVoice = false, string? mood = null, bool unprompted = false,
+            [System.Runtime.CompilerServices.CallerFilePath] string callerFile = "",
+            [System.Runtime.CompilerServices.CallerMemberName] string callerMember = "")
         {
             if (_isPlayingUninterruptibleClip) return; // an uninterruptible clip is speaking
+            // Random-sting hunt (ccp-bugs #1569 #1573 #1575 #1576): idle giggles with the engine off
+            // came from a caller that does not pass unprompted. Name it in the log and the sound ring.
+            var who = Services.Audio.RecentSounds.DuckCaller(callerFile, callerMember);
             string? emotionLineId = phraseAudioPath != null
                 ? System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath)
                 : null;
@@ -361,9 +372,10 @@ namespace ConditioningControlPanel
                 // to canned phrases when the AI is unavailable — those callers pass false.
                 ShowGiggle(text, playSound: playSound, source: SpeechSource.AI, aiGenerated: aiGenerated,
                     phraseAudioPath: phraseAudioPath, barkVoice: barkVoice, emotionLineId: emotionLineId, mood: mood,
-                    unprompted: unprompted);
+                    unprompted: unprompted, soundCaller: who);
 
-                App.Logger?.Debug("Priority speech, queue cleared (line={LineId}, {Chars} chars)", emotionLineId ?? "-", (text ?? "").Length);
+                App.Logger?.Debug("Priority speech, queue cleared (line={LineId}, {Chars} chars, from {Caller}, unprompted={Unprompted})",
+                    emotionLineId ?? "-", (text ?? "").Length, who, unprompted);
             });
         }
 
@@ -418,7 +430,7 @@ namespace ConditioningControlPanel
         /// <param name="playSound">Whether to play a giggle sound</param>
         /// <param name="source">The source of the speech (for delay calculation)</param>
         /// <param name="unprompted">An idle-timer line: no sound with the engine off unless opted in (#1468)</param>
-        private void ShowGiggle(string text, bool playSound = false, SpeechSource source = SpeechSource.Preset, string? phraseAudioPath = null, bool aiGenerated = false, bool bypassClipLock = false, bool barkVoice = false, string? emotionLineId = null, string? mood = null, bool unprompted = false)
+        private void ShowGiggle(string text, bool playSound = false, SpeechSource source = SpeechSource.Preset, string? phraseAudioPath = null, bool aiGenerated = false, bool bypassClipLock = false, bool barkVoice = false, string? emotionLineId = null, string? mood = null, bool unprompted = false, string? soundCaller = null)
         {
             // An uninterruptible recorded clip owns the bubble — only its own (bypassing) call may render.
             if (_isPlayingUninterruptibleClip && !bypassClipLock) return;
@@ -531,7 +543,7 @@ namespace ConditioningControlPanel
                     else if (playSound)
                     {
                         // Explicitly requested giggle sound (AI responses, etc.)
-                        PlayGiggleSound();
+                        PlayGiggleSound(soundCaller);
                     }
                     else if (source != SpeechSource.AI)
                     {
@@ -913,6 +925,18 @@ namespace ConditioningControlPanel
                 var avatar = AvatarTubeLayout.Box.FromEdges(Math.Min(a0.X, a1.X), Math.Min(a0.Y, a1.Y),
                     Math.Max(a0.X, a1.X), Math.Max(a0.Y, a1.Y));
 
+                // ccp-bugs #1535: the chat box sits above her head, right where the bubble goes, and
+                // the bubble's window is owned by the tube so it always paints over it. While the
+                // box is open the bubble clears it instead of covering it.
+                if (_isInputVisible && InputPanel.IsVisible && InputPanel.ActualWidth > 0)
+                {
+                    var i0 = InputPanel.PointToScreen(new Point(0, 0));
+                    var i1 = InputPanel.PointToScreen(new Point(InputPanel.ActualWidth, InputPanel.ActualHeight));
+                    avatar = AvatarTubeLayout.SpeechBubblePlacement.ClearOfInput(avatar,
+                        AvatarTubeLayout.Box.FromEdges(Math.Min(i0.X, i1.X), Math.Min(i0.Y, i1.Y),
+                            Math.Max(i0.X, i1.X), Math.Max(i0.Y, i1.Y)));
+                }
+
                 var screen = System.Windows.Forms.Screen.FromPoint(new System.Drawing.Point(
                     (int)Math.Round(avatar.X + avatar.W / 2), (int)Math.Round(avatar.Y + avatar.H / 2)));
                 if (screen == null) return;
@@ -1187,6 +1211,11 @@ namespace ConditioningControlPanel
             Closed += (_, __) => ChaosWebViewHost.GameActiveChanged -= onGameChanged;
 
             SpeechBubble.SizeChanged += (_, __) =>
+            {
+                if (SpeechBubble.Visibility == Visibility.Visible) ApplySpeechBubblePlacement();
+            };
+            // The chat box opening or closing moves the bubble's clear spot (#1535).
+            InputPanel.IsVisibleChanged += (_, __) =>
             {
                 if (SpeechBubble.Visibility == Visibility.Visible) ApplySpeechBubblePlacement();
             };
@@ -1616,6 +1645,11 @@ namespace ConditioningControlPanel
             // Skip if speech is on cooldown or currently showing
             if (!IsSpeechReady()) return;
 
+            // The player's own recorded Voice Line clips get one tick in IdleVoiceLines.OneIn
+            // (lost in 54b4c5c653, when idle chatter moved to the barks). Unprompted, so the
+            // engine-off hold keeps it silent with nothing running; none in the panic quiet.
+            if (!Services.Safety.PanicAftermath.TriggersSilenced() && TrySpeakOwnVoiceLine()) return;
+
             // Idle chatter IS the bark system now: this timer only sets the cadence (the
             // companion-tab slider); the line itself comes from the Idle bark pool with its
             // pool-wide no-repeat rotation. Preset phrases are just the no-barks fallback.
@@ -1833,43 +1867,32 @@ namespace ConditioningControlPanel
             }
         }
 
-        /// <summary>
-        /// Gets a random voice line file path (filtered by phrase manager)
-        /// </summary>
-        private string? GetRandomVoiceLinePath()
-        {
-            // Use service filtering if available
-            var enabledFiles = App.CompanionPhrases?.GetEnabledVoiceLineFiles();
-            if (enabledFiles != null && enabledFiles.Count > 0)
-                return enabledFiles[_random.Next(enabledFiles.Count)];
-
-            // Fallback to unfiltered list
-            if (_voiceLineFiles.Count == 0)
-                RefreshVoiceLines();
-
-            if (_voiceLineFiles.Count == 0)
-                return null;
-
-            return _voiceLineFiles[_random.Next(_voiceLineFiles.Count)];
-        }
+        // The own voice line spoken last, so two idle turns in a row never repeat one clip.
+        private string? _lastOwnVoiceLine;
 
         /// <summary>
-        /// Plays a voice line audio file. Follows the master volume only; when MasterVolume is 0 the
-        /// bubble + text still show, only the attached voiceline goes silent. (No longer tied to the
-        /// subliminal "Mute Whispers" toggle — see bug #436.)
+        /// The idle timer's own-voice-line turn (<see cref="Services.Companion.IdleVoiceLines"/>): one
+        /// tick in OneIn speaks one of the player's own recorded VoiceLine clips. It goes through
+        /// <see cref="Giggle"/> as a voiced, UNPROMPTED line, so every gate a bark meets applies: the
+        /// engine-off hold (CompanionIdleVoice), avatar mute, EMI Desk mute, "Mute Voice Lines"
+        /// (fallback pop instead), master volume and the Voice level. False = the tick is not ours.
         /// </summary>
-        private void PlayVoiceLineAudio(string filePath)
+        private bool TrySpeakOwnVoiceLine()
         {
-            // Companion voice follows the master volume only (like the giggle/pop SFX) — it is no
-            // longer gated behind the subliminal "Mute Whispers" toggle, which defaulted OFF and left
-            // the companion silent even with audio up at max (bug #436).
-            var masterVolume = (App.Settings?.Current?.MasterVolume ?? 100) / 100f;
-            if (masterVolume <= 0f) return;
-            // Idle voicelines were full-volume (×1.0); -20% so today's hotter v3 lines sit under the barks.
-            // The player's Voice level rides on top (CompanionVoiceGain; its default changes nothing).
-            var volume = Services.CompanionVoiceGain.Current(Services.CompanionVoiceGain.IdleTrim);
-            if (volume <= 0f) return; // Voice level 0: the bubble still shows, the line is silent
-            PlaySpokenAudio(filePath, volume);
+            var clips = App.CompanionPhrases?.GetEnabledCustomVoiceLineFiles();
+            if (clips == null || !Services.Companion.IdleVoiceLines.TakesTurn(clips.Count,
+                    _random.Next(Services.Companion.IdleVoiceLines.OneIn))) return false;
+
+            var path = Services.Companion.IdleVoiceLines.Pick(clips, _lastOwnVoiceLine, _random);
+            if (path == null) return false;
+
+            var text = App.CompanionPhrases?.GetVoiceLineDisplayText(path);
+            text = Services.CompanionPhraseService.ResolveVoiceLinePlaceholder(text);
+            if (string.IsNullOrWhiteSpace(text)) text = System.IO.Path.GetFileNameWithoutExtension(path);
+
+            _lastOwnVoiceLine = path;
+            Giggle(text, phraseAudioPath: path, barkVoice: true, unprompted: true);
+            return true;
         }
 
         /// <summary>
@@ -2012,77 +2035,6 @@ namespace ConditioningControlPanel
             try { h?.Resume(); } catch { }
         }
 
-        /// <summary>
-        /// Shows a voice line as a speech bubble with synchronized audio playback
-        /// </summary>
-        private void ShowVoiceLineBubble(string filePath)
-        {
-            RunOnAvatar(() =>
-            {
-                if (_isMuted || !IsAvatarVisibleOnScreen) return;
-
-                var text = App.CompanionPhrases?.GetVoiceLineDisplayText(filePath)
-                    ?? System.IO.Path.GetFileNameWithoutExtension(filePath);
-                // Activity voicelines bake the "{0}" app placeholder into their
-                // filename ("target application"); swap it for the focused app so
-                // the bubble names what's actually on screen instead of the literal.
-                text = Services.CompanionPhraseService.ResolveVoiceLinePlaceholder(text);
-                if (string.IsNullOrWhiteSpace(text)) return;
-
-                // Clear the queue - voice line takes priority
-                _speechQueue.Clear();
-                _speechTimer?.Stop();
-                _speechDelayTimer?.Stop();
-
-                _isGiggling = true;
-                PopulateSpeechBubble(text);
-                var plainText = MarkdownLinkRegex.Replace(text ?? "", "$1");
-                AdjustBubbleSize(plainText);
-
-                SpeechBubble.UpdateLayout();
-                SpeechBubble.Visibility = Visibility.Visible;
-
-
-                // Play the voice line audio in sync with the bubble
-                PlayVoiceLineAudio(filePath);
-
-                // Drive the portrait emotion: idle affirmations are unmapped → seductive mix
-                // (alluring/dreamy/entrancing/teasing), pose count scaled to the line's audio length.
-                PlayEmotionForLine(System.IO.Path.GetFileNameWithoutExtension(filePath), filePath, text);
-
-                App.Logger?.Information("VoiceLine: Displayed {Line} ({Chars} chars)",
-                    System.IO.Path.GetFileNameWithoutExtension(filePath), (text ?? "").Length);
-
-                // Calculate display duration based on text length
-                double baseDuration = 5.0;
-                double perCharDuration = 0.05;
-                double calculatedDuration = baseDuration + (text.Length * perCharDuration);
-                double displayDuration = Math.Clamp(calculatedDuration, 5.0, 14.0);
-
-                var textLength = text.Length;
-                _speechTimer?.Stop();
-                _speechTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(displayDuration) };
-                _speechTimer.Tick += (s, e) =>
-                {
-                    if (_isMouseOverSpeechBubble)
-                    {
-                        _speechTimer.Interval = TimeSpan.FromSeconds(1);
-                        return;
-                    }
-                    _speechTimer.Stop();
-                    _isGiggling = false;
-                    _isShowingAiBubble = false; // Clear AI bubble flag when any bubble hides
-                    CollapseSpeechBubble();
-
-                    _lastSpeechEndTime = DateTime.Now;
-                    _lastSpeechSource = SpeechSource.Preset;
-                    _lastSpeechLength = textLength;
-                    ProcessNextSpeech();
-                };
-                _speechTimer.Start();
-            });
-        }
-
         private void OnTriggerTick(object? sender, EventArgs e)
         {
             // Post-panic quiet: no trigger, sound or haptic pulse, muted or not (PanicAftermath).
@@ -2126,7 +2078,7 @@ namespace ConditioningControlPanel
                 if (_isGiggling || timeSinceLastSpeech < requiredDelay)
                 {
                     // Queue the trigger and let delay system handle it
-                    _speechQueue.Enqueue((trigger, SpeechSource.Trigger, null, null, false));
+                    _speechQueue.Enqueue((trigger, SpeechSource.Trigger, null, null, false, null));
                     App.Logger?.Debug("Queued trigger speech: {Trigger}", trigger);
                     if (!_isGiggling)
                     {
@@ -2486,10 +2438,14 @@ namespace ConditioningControlPanel
             }
         }
 
+        /// <summary>Ring tag for a giggle: "giggle (File.Member)" when the caller is known.</summary>
+        internal static string GiggleRingTag(string? caller)
+            => string.IsNullOrEmpty(caller) ? "giggle" : "giggle (" + caller + ")";
+
         /// <summary>
         /// Plays a random giggle sound (giggle1-4.mp3) for AI responses or preset phrases
         /// </summary>
-        private void PlayGiggleSound()
+        private void PlayGiggleSound(string? caller = null)
         {
             try
             {
@@ -2513,7 +2469,7 @@ namespace ConditioningControlPanel
                     // Mute egg / silenced audio (Fork F): MasterVolume == 0 means don't attempt audio.
                     if (masterVolume <= 0f) return;
 
-                    App.Audio?.PlayOneShot(gigglePath, volume, "giggle");
+                    App.Audio?.PlayOneShot(gigglePath, volume, GiggleRingTag(caller));
                 }
             }
             catch (Exception ex)

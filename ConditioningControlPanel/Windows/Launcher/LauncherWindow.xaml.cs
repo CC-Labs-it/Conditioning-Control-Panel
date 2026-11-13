@@ -67,6 +67,9 @@ public partial class LauncherWindow : Window
         // on a fresh launch, so a bought Racing Thoughts tile would stay a mystery card.
         Services.Prizes.PrizeGrants.GrantsChanged += OnGrantsChanged;
 
+        // The background update check lands a few seconds after boot (#1580).
+        App.PendingUpdateChanged += OnPendingUpdateChanged;
+
         var lockdown = App.Lockdown;
         if (lockdown != null)
         {
@@ -104,6 +107,7 @@ public partial class LauncherWindow : Window
             RefreshStatus();
             RefreshStats();
             RefreshLockdownVeil();
+            RefreshUpdateChip();
             HookEngine();
             _statusTimer.Start();
             StartOpenTables();
@@ -174,6 +178,7 @@ public partial class LauncherWindow : Window
         var mods = App.Mods;
         if (mods != null) mods.ModChanged -= OnModChanged;
         Services.Prizes.PrizeGrants.GrantsChanged -= OnGrantsChanged;
+        App.PendingUpdateChanged -= OnPendingUpdateChanged;
         var lockdown = App.Lockdown;
         if (lockdown != null)
         {
@@ -722,6 +727,7 @@ public partial class LauncherWindow : Window
         try
         {
             LockdownVeil.Visibility = App.Lockdown?.IsActive == true ? Visibility.Visible : Visibility.Collapsed;
+            RefreshUpdateChip();
         }
         catch (Exception ex) { Log.Debug(ex, "[Launcher] veil refresh failed"); }
     }

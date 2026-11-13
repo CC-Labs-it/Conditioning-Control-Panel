@@ -29,7 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// <see cref="InvokeScriptAsync"/>, plus the live URL (<see cref="CurrentUrl"/>,
     /// <see cref="NavigationCompleted"/>). NativeWebView additionally offers WebMessageReceived,
     /// GoBack/GoForward, Stop and Refresh; nothing needs
-    /// them yet, so they are not wrapped. It has NO zoom factor, no document-created script
+    /// them yet, so they are not wrapped. Home browser popups are routed in place. It has NO zoom factor, no document-created script
     /// injection, and no fullscreen-element signal.
     ///
     /// The whole point is the fallback. A Linux box without webkit2gtk installed is the DEFAULT,
@@ -66,6 +66,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal event Action? NativeFullscreenEntered;
         private IDisposable? _fullscreenWatch;
         internal void OnNativeFullscreenEntered() => NativeFullscreenEntered?.Invoke();
+        /// <summary>Keys the page never sees, taken at the engine's input (Platform/WebKeySignal), any frame.
+        /// Runs on the engine's input thread, so it must be pure. Set before the first navigation.</summary>
+        internal Func<global::Avalonia.Input.Key, global::Avalonia.Input.KeyModifiers, bool>? NativeKeyFilter { get; set; }
+        internal event Action<global::Avalonia.Input.Key, global::Avalonia.Input.KeyModifiers>? NativeKeyDown;
+        private IDisposable? _keyWatch;
+        internal void OnNativeKeyDown(global::Avalonia.Input.Key key, global::Avalonia.Input.KeyModifiers mods) => NativeKeyDown?.Invoke(key, mods);
         internal IDisposable? PreserveForMove() => _web?.BeginReparenting();
 
         /// <summary>Per-host WebView2 options, set before attachment. Other adapters ignore these.</summary>
@@ -95,6 +101,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// hangs its status line and catalogue lookup on.
         /// </summary>
         public event Action<Uri>? NavigationCompleted;
+        internal event Action? NavigationStarting;
 
         /// <summary>Completion outcome, for decorative embeds that must fall back on a failed load.</summary>
         public event Action<Uri, bool>? NavigationFinished;
@@ -149,6 +156,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// Scrolller (WPF ScrolllerWebGate leaves MainWindow.Browser untouched). Every other page is gated.
         /// </summary>
         public bool GateScrolller { get; set; } = true;
+
+        // The dashboard browser is subject to the app offline setting, including held requests.
+        public bool BlockWhenOffline { get; set; }
 
         /// <summary>Scrolller requests that left with the honest user-agent (a headless test's view).</summary>
         internal int ScrolllerRewrites { get; private set; }
@@ -360,7 +370,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     // the predicate and the Source in that order would otherwise race the engine.
                     _web.EnvironmentRequested += (_, e) => EnvironmentRequested?.Invoke(e);
                     _web.AdapterDestroyed += (_, _) => { try { _failureWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Trailer failure cleanup failed"); } finally { _failureWatch = null; }
-                        try { _fullscreenWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Fullscreen signal cleanup failed"); } finally { _fullscreenWatch = null; } };
+                        try { _fullscreenWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Fullscreen signal cleanup failed"); } finally { _fullscreenWatch = null; }
+                        try { _keyWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Key signal cleanup failed"); } finally { _keyWatch = null; } };
                     _web.NavigationStarted += OnNavigationStarted;
                     _web.NavigationCompleted += (_, e) => {
                         // The native core exists now; subscribe before observers can reveal a scene.
@@ -370,9 +381,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                         if (NativeFullscreenEntered != null && _fullscreenWatch == null)
                             try { _fullscreenWatch = Platform.WebFullscreenSignal.Attach(_web.TryGetPlatformHandle(), OnNativeFullscreenEntered); }
                             catch (Exception ex) { Log.Debug(ex, "Fullscreen signal subscription failed"); }
+                        if (NativeKeyFilter is { } wants && _keyWatch == null)
+                            try { _keyWatch = Platform.WebKeySignal.Attach(_web.TryGetPlatformHandle(), wants, OnNativeKeyDown); }
+                            catch (Exception ex) { Log.Debug(ex, "Key signal subscription failed"); }
                         OnNavigationCompleted(e.Request ?? _web?.Source, e.IsSuccess);
                     };
-                    _web.NewWindowRequested += (_, e) => { if (SuppressNewWindows) e.Handled = true; };
+                    _web.NewWindowRequested += (_, e) => { if (SuppressNewWindows) e.Handled = true; else e.Handled = OnBrowserPopup(e.Request); };
                     _web.WebMessageReceived += (_, e) => OnWebMessage(e.Body);
                     _web.WebResourceRequested += (_, e) => StampRequestHeader(e);
                     // The Scrolller licence on pages that load Scrolller themselves (WPF ScrolllerWebGate on every core):
@@ -410,11 +424,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             ApplySource();
         }
 
+        // Only the Home browser opts in. Other embeds keep their existing popup policy.
+        public bool RouteBrowserPopups { get; set; }
+
+        // Native URL boundary, like ScriptInvoker. No cached URL fallback: unknown pages get no exemption.
+        internal Func<string?>? DocumentUrlReader { get; set; }
+
+        // WPF BrowserService.cs:538-562: handled even when blocked, never a second OS window.
+        internal bool OnBrowserPopup(Uri? target)
+        {
+            if (!RouteBrowserPopups) return false;
+            if (target is not { IsAbsoluteUri: true }) return true;
+            if (ConditioningControlPanel.Services.Browser.BrowserPopupRule.ShouldBlock(
+                    (DocumentUrlReader ?? (() => Platform.ScrolllerWebHostGate.CurrentDocumentUrl(_web?.TryGetPlatformHandle())))(), target.AbsoluteUri)) return true;
+            Navigate(target);
+            return true;
+        }
+
         internal void BindNativeBackground(NativeWebView native) =>
             native.Bind(NativeWebView.BackgroundProperty, this.GetObservable(BackgroundProperty));
 
         internal void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
         {
+            NavigationStarting?.Invoke();
             var target = e.Request;
             // Panic teardown must pass a caller's page allowlist, including on reattachment.
             // Late redirects from the stopped document must not replace the blank page.
@@ -449,19 +481,70 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// the site you are on takes you home and Reload reloads. Assigning an equal Source raises no
         /// change, so it would do nothing. Source is kept in step (the fallback panel names it).
         /// </summary>
-        public void Navigate(Uri url)
+        public bool Navigate(Uri url)
         {
             _panicBlank = false;
+            CancelPendingNavigation();
+            NavigationRequests++;
+            // Do not retain a request the reported gate refuses: a later gate report must not load it after fallback.
+            if (_scrolllerGate is not null && !ScrolllerGateAllows(_scrolllerGate, url)) return false;
+            var previous = Source;
             _explicitNavigate = true;
             try { Source = url; } finally { _explicitNavigate = false; }
-            NavigationRequests++;
-            if (RefusesScrolller(url)) { RefusedNavigations++; return; }
+            // Refused or engine-less requests stay named on the fallback panel; the caller learns nothing loaded.
+            if (RefusesScrolller(url)) { RefusedNavigations++; return false; }
             // A sandbox never loads a real site (as ApplySource): the panel may name it, the engine never gets it.
-            if (!ConditioningControlPanel.Services.SandboxNet.Allows(url)) { RefusedNavigations++; return; }
-            if (_web is null) return;
-            if (_scrolllerGate is null) return;   // held: the gate's report loads Source
-            try { _web.Navigate(url); }
-            catch (Exception ex) { Log.Debug("WebHost: Navigate failed: {Error}", ex.Message); }
+            if (!ConditioningControlPanel.Services.SandboxNet.Allows(url)) { RefusedNavigations++; return false; }
+            if (_web is null && NavigationInvoker is null) return false;
+            if (_scrolllerGate is null) return true; // held until the gate reports
+            try
+            {
+                if (NavigationInvoker is { } navigate)
+                {
+                    if (!navigate(url)) { RestoreSource(previous); return false; }
+                }
+                else _web!.Navigate(url);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                RestoreSource(previous);
+                Log.Debug("WebHost: Navigate failed: {Error}", ex.Message);
+                return false;
+            }
+        }
+
+        private void RestoreSource(Uri? previous)
+        {
+            _explicitNavigate = true;
+            try { Source = previous; } finally { _explicitNavigate = false; }
+        }
+
+        // Null means a newer navigation superseded this request, so the caller must not fall back.
+        internal async Task<bool?> NavigateWhenReadyAsync(Uri url)
+        {
+            CancelPendingNavigation();
+            if (_web is null && NavigationInvoker is null) return false;
+            while (_scrolllerGate is null)
+            {
+                var pending = new TaskCompletionSource<bool?>(TaskCreationOptions.RunContinuationsAsynchronously);
+                _pendingNavigation = pending;
+                var completed = await Task.WhenAny(pending.Task, Task.Delay(TimeSpan.FromSeconds(15)));
+                if (_pendingNavigation != pending) return null;
+                _pendingNavigation = null;
+                if (completed != pending.Task) return false;
+                var ready = await pending.Task;
+                if (ready is null) return null;
+            }
+            return Navigate(url);
+        }
+
+        private TaskCompletionSource<bool?>? _pendingNavigation;
+        internal void CancelPendingNavigation()
+        {
+            var pending = _pendingNavigation;
+            _pendingNavigation = null;
+            pending?.TrySetResult(null);
         }
 
         /// <summary>The URL as the fallback panel names it: WebAssetServer's ccp_t token never reaches the screen.</summary>
@@ -478,6 +561,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>Count of <see cref="Navigate"/> calls the sandbox kept from the engine.</summary>
         internal int RefusedNavigations { get; private set; }
 
+        // Headless tests supply an engine without loading a native web view.
+        internal Func<Uri, bool>? NavigationInvoker { get; set; }
         private bool _explicitNavigate;
 
         /// <summary>The Scrolller gate on this engine: null = not reported yet (every navigation held), true = gated,
@@ -507,7 +592,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal void OnScrolllerGate(int engine, bool gated)
         {
             if (engine != _scrolllerEngine) return;
+            if (BlockWhenOffline && CoreSettings.Current.OfflineMode && Source is { IsAbsoluteUri: true, Scheme: not "about" })
+            {
+                CancelHeldNavigation();
+                _scrolllerGate = gated;
+                return;
+            }
             _scrolllerGate = gated;
+            _pendingNavigation?.TrySetResult(gated);
             var src = Source;
             if (ReloadAfterGate(_web?.Source, src, _loadedOnThisEngine) && ConditioningControlPanel.Services.SandboxNet.Allows(src))
             {
@@ -535,6 +627,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (change.Property == SourceProperty)
             {
                 if (Source != null) _panicBlank = false; // a new explicit request may load normally
+                if (!_explicitNavigate) CancelPendingNavigation();
                 ApplySource();
             }
         }

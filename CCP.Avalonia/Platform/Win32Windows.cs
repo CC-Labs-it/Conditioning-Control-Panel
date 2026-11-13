@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Avalonia.Controls;
 using ConditioningControlPanel.Services.UI;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
@@ -16,6 +17,34 @@ internal static class Win32Windows
 {
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+    [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool AttachThreadInput(uint from, uint to, bool attach);
+
+    // WPF AvatarTubeWindow.ChatInput.cs:680. Never leave input threads attached.
+    internal static void FocusChatWindow(Window window)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        try
+        {
+            try { window.Activate(); } catch { /* Continue with the native fallback. */ }
+            var handle = window.TryGetPlatformHandle();
+            if (handle?.HandleDescriptor != "HWND" || handle.Handle == IntPtr.Zero) return;
+            var foreground = GetForegroundWindow();
+            if (foreground == handle.Handle) return;
+            var otherThread = GetWindowThreadProcessId(foreground, out _);
+            var thisThread = GetCurrentThreadId();
+            bool attached = false;
+            try
+            {
+                if (otherThread != 0 && otherThread != thisThread)
+                    attached = AttachThreadInput(thisThread, otherThread, true);
+                SetForegroundWindow(handle.Handle);
+            }
+            finally { if (attached) AttachThreadInput(thisThread, otherThread, false); }
+        }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "Chat foreground failed"); }
+    }
 
     /// <summary>The do-not-disturb sources for this OS: user32 on Windows, X11 elsewhere.</summary>
     internal static Func<string> ForegroundSource => OperatingSystem.IsWindows() ? ForegroundProcess : X11Windows.ForegroundProcess;

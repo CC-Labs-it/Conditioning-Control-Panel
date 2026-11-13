@@ -258,6 +258,83 @@ public sealed class ChaosUnlockCardOverlayTests
     }
 
     [Fact]
+    public Task Draft_lessons_wait_for_go_and_shower_waits_for_both_cards() => Run(clock =>
+    {
+        var meta = ChaosMeta.State; meta.LessonsComplete.Add("silk_touch");
+        foreach (var id in new[] { "draft4", "surrender" })
+        {
+            meta.LessonsComplete.Remove(id);
+            meta.LessonProgress[id] = ChaosLessons.ById(id)!.Target - 1;
+        }
+        Begin();
+        var state = ChaosRunHost.State!; state.WelcomeShowerEnabled = true;
+        for (int i = 0; i < 80; i++) ChaosRunHost.Tick();
+        ChaosRunHost.ChooseBoon(ChaosBoonPool.All.First(b => b.IsCurse));
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(ChaosUnlockCardOverlay.IsShowing);
+        Assert.Equal(0, BubbleOverlay.ChaosCount);
+        double elapsed = state.ElapsedSec;
+        ChaosRunHost.Overlay!.FinishCountdown();
+        Assert.True(ChaosUnlockCardOverlay.IsShowing); Assert.False(ChaosUnlockCardOverlay.Active!.AutoDismiss);
+        ChaosRunHost.Tick(); ChaosRunHost.SpawnTick();
+        Assert.Equal(elapsed, state.ElapsedSec); Assert.Equal(0, BubbleOverlay.ChaosCount);
+        Click();
+        Assert.True(ChaosUnlockCardOverlay.IsShowing);
+        ChaosRunHost.Tick();
+        Assert.Equal(elapsed, state.ElapsedSec);
+        Assert.Equal(0, BubbleOverlay.ChaosCount);
+        Click(); Step(clock, 150);
+        Assert.False(ChaosUnlockCardOverlay.IsShowing);
+        Assert.Equal(6, BubbleOverlay.ChaosCount);
+        Assert.All(BubbleOverlay.Field.Bubbles.Where(b => b.Spec != null), b =>
+        {
+            Assert.Equal(ChaosMotion.RainDown, b.Spec!.Motion);
+            Assert.Contains(b.Spec.VariantId, new[] { "flash", "subliminal" });
+        });
+        ChaosRunHost.Tick();
+        Assert.Equal(elapsed + ChaosRunEngine.TICK_SEC, state.ElapsedSec);
+    });
+
+    [Fact]
+    public Task Loop_completion_defers_its_card_and_panic_discards_pending_cards() => Run(clock =>
+    {
+        var meta = ChaosMeta.State;
+        meta.LessonsComplete.Remove("silk_touch");
+        meta.LessonProgress.Remove("silk_touch");
+        Begin();
+        for (int i = 0; i < 80; i++) ChaosRunHost.Tick();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(ChaosLessons.IsComplete("silk_touch"));
+        Assert.False(ChaosUnlockCardOverlay.IsShowing);
+        ChaosRunHost.ChooseBoon(null);
+        ChaosRunHost.Overlay!.FinishCountdown();
+        Assert.Equal(ChaosUnlockCardRules.ForLesson("silk_touch")!.Title, ChaosUnlockCardOverlay.Active!.Current!.Title);
+        var elapsed = ChaosRunHost.State!.ElapsedSec;
+        ChaosRunHost.Tick();
+        Assert.Equal(elapsed, ChaosRunHost.State!.ElapsedSec);
+        ChaosRunHost.ForceShutdown();
+        Assert.False(ChaosUnlockCardOverlay.IsShowing); Assert.False(ChaosRunHost.IsActive);
+    });
+
+    [Theory]
+    [InlineData(false, 0)]
+    [InlineData(true, 6)]
+    public Task Draft_without_lesson_cards_resumes_with_optional_shower(bool enabled, int count) => Run(clock =>
+    {
+        ChaosMeta.State.LessonsComplete.Add("silk_touch");
+        Begin();
+        var state = ChaosRunHost.State!; state.WelcomeShowerEnabled = enabled;
+        for (int i = 0; i < 80; i++) ChaosRunHost.Tick();
+        ChaosRunHost.ChooseBoon(null);
+        Assert.Equal(0, BubbleOverlay.ChaosCount);
+        ChaosRunHost.Overlay!.FinishCountdown();
+        Assert.Equal(count, BubbleOverlay.ChaosCount);
+        var elapsed = state.ElapsedSec;
+        ChaosRunHost.Tick();
+        Assert.Equal(elapsed + ChaosRunEngine.TICK_SEC, state.ElapsedSec);
+    });
+
+    [Fact]
     public async Task Lesson_pause_survives_queued_cards_and_cannot_be_lifted_by_manual_pause()
     {
         await Run(clock =>

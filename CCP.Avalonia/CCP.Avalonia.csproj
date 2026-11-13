@@ -35,6 +35,8 @@
 
   <ItemGroup>
     <Compile Include="..\ConditioningControlPanel\Services\ChromeFxNav.cs" Link="Services\ChromeFxNav.cs" />
+    <!-- Where a subliminal card sits while a mandatory video is up (ccp-bugs #1422): pure z-order rule, one source for both heads. -->
+    <Compile Include="..\ConditioningControlPanel\Services\Subliminal\SubliminalOverVideo.cs" Link="Services\Subliminal\SubliminalOverVideo.cs" />
     <!-- The audio player's order rules (list, loop, shuffle): no UI, no audio, one source for both heads. -->
     <Compile Include="..\ConditioningControlPanel\Services\AudioPlayer\AudioPlaylistRules.cs" Link="Services\AudioPlayer\AudioPlaylistRules.cs" />
     <PackageReference Include="Avalonia" Version="12.1.5" />
@@ -277,7 +279,8 @@
     <AvaloniaResource Include="..\Assets\fonts\display\*.ttf" Link="Resources\fonts\display\%(Filename)%(Extension)" />
     <Content Include="..\ConditioningControlPanel\Fonts\OFL-Fredoka.txt;..\Assets\fonts\OFL-NotoEmoji.txt;..\Assets\emi\fonts\OFL-NotoSansMono.txt;..\Assets\fonts\OFL-CCPSans.txt;..\Assets\fonts\OFL-Anton.txt;..\Assets\fonts\OFL-ComicNeue.txt" Link="ThirdPartyNotices\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <AvaloniaResource Include="..\Assets\avatar0_emotes\idle.gif" Link="Resources\avatar0_emotes\idle.gif" />
+    <!-- WPF ConditioningControlPanel.csproj:393-394: the V1 avatar0 emote set (BambiSleep, Sissy, CCP Default) plays on the tube. -->
+    <AvaloniaResource Include="..\Assets\avatar0_emotes\*.gif;..\Assets\avatar0_emotes\emotes.json" Link="Resources\avatar0_emotes\%(Filename)%(Extension)" />
     <AvaloniaResource Include="..\Assets\circe_emotes\idle.gif" Link="Resources\circe_emotes\idle.gif" />
     <AvaloniaResource Include="..\Assets\circe_emotes_p2\idle.gif" Link="Resources\circe_emotes_p2\idle.gif" />
     <AvaloniaResource Include="..\Assets\circe_emotes_p3\idle.gif" Link="Resources\circe_emotes_p3\idle.gif" />

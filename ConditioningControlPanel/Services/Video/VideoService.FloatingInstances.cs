@@ -163,8 +163,14 @@ namespace ConditioningControlPanel.Services
             try
             {
                 if (!FloatingWanted(strict)) return false;
-                if (!BrowserVideoEngine.Instance.IsAvailable || !BrowserVideoGate.ShouldUseBrowser(path)) return false;
-                if (BrowserVideoEngine.BuildPageUrl(path) == null) return false;
+                // ccp-bugs #1551: off the browser route a floating video is ONE window, whatever
+                // "Most at once" says. Say why in the log, so a report shows which door closed.
+                var single = FloatingSingleWindowReason(path);
+                if (single != null)
+                {
+                    VideoDiag.Log("VIDEO", $"floating: one window only ({single})");
+                    return false;
+                }
             }
             catch (Exception ex) { Diag.Swallowed(ex); return false; }
 
@@ -213,6 +219,19 @@ namespace ConditioningControlPanel.Services
             // two windows almost never met.
             if (_isRunning) ScheduleNext(FloatingJoinDelay());
             return true;
+        }
+
+        /// <summary>Why this clip cannot open a run of instances (the LibVLC route plays one window),
+        /// or null when it can. Order follows BrowserVideoGate.ShouldUseBrowser.</summary>
+        private static string? FloatingSingleWindowReason(string path)
+        {
+            var s = App.Settings?.Current;
+            if (s?.BrowserVideoEngineEnabled != true) return "browser video engine off";
+            if (!string.IsNullOrEmpty(s.AudioOutputDeviceId)) return "a chosen audio output device";
+            if (!BrowserVideoEngine.Instance.IsAvailable) return "browser video engine unavailable";
+            if (BrowserVideoEngine.BuildPageUrl(path) == null) return "clip outside the served folders";
+            if (!BrowserVideoGate.ShouldUseBrowser(path)) return "clip routed to LibVLC";
+            return null;
         }
 
         /// <summary>When the next window may join the open run (MandatoryVideoPresentation.JoinDelaySeconds).

@@ -89,7 +89,8 @@ public class CircesTabTests
 
     [Theory]
     [InlineData(0, 0, 15 * 60, 60 * 60)]
-    [InlineData(100000, 100000, 12 * 3600, 48 * 3600)]
+    [InlineData(100000, 100000, 24 * 3600, 48 * 3600)]
+    [InlineData(1440, 60, 24 * 3600, 24 * 3600)]
     [InlineData(600, 60, 600 * 60, 600 * 60)]
     [InlineData(180, 720, 3 * 3600, 12 * 3600)]
     public void Limits_stay_inside_their_range_and_the_backlog_never_under_the_day(int day, int backlog, int wantDay, int wantBacklog)

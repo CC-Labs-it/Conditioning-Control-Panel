@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -295,7 +296,13 @@ public sealed class EmiDeskSummonTests
             Assert.True(win.ChainLive);
             if (panic) win.StopChainForPanic(); else win.Say("x");
             Assert.Equal(1, completed);
-            win.PlayChain("shock");
+            // Keep the actual shock sequence, but step its holds ourselves. The first real hold is
+            // only 160 ms and may elapse while a loaded runner is delivering the click.
+            var shock = ConditioningControlPanel.Services.EmiDesk.EmiChains.Get("shock")!;
+            var controlledShock = shock with { Seq = shock.Seq.Select(frame => frame with { Ms = 600_000 }).ToArray() };
+            win.PlayChain(controlledShock);
+            var pets = ConditioningControlPanel.Services.EmiDesk.EmiState.Current.PetsTotal;
+            Assert.Equal("o_o", win.Face);
             var body = (Control)typeof(EmiDeskWindow).GetField("_bodyRoot",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(win)!;
             var point = body.TranslatePoint(new Point(body.Bounds.Width / 2, body.Bounds.Height / 2), win)!.Value;
@@ -303,8 +310,17 @@ public sealed class EmiDeskSummonTests
             win.MouseUp(point, global::Avalonia.Input.MouseButton.Left);
             Assert.Equal("o_o", win.Face);
             Assert.True(win.ChainLive);
+            Assert.Same(controlledShock, win.ChainPlayer.Current);
+            Assert.Equal(pets, ConditioningControlPanel.Services.EmiDesk.EmiState.Current.PetsTotal);
             await Pump(2000);
             Assert.Equal(1, completed);
+            win.ChainPlayer.ElapsePendingHold();
+            Assert.Equal("0_0", win.Face);
+            win.ChainPlayer.ElapsePendingHold();
+            Assert.Equal("(◉_◉)", win.Face);
+            win.ChainPlayer.ElapsePendingHold();
+            Assert.False(win.ChainLive);
+            Assert.Equal("0_0", win.Face);
         }
         finally { win.ShutDown(); }
     });
@@ -360,6 +376,9 @@ public sealed class EmiDeskSummonTests
         await svc.Summon();
         Assert.Equal(before + 1, ConditioningControlPanel.Services.EmiDesk.EmiState.Current.SummonCount);
         var win = svc.Window!;
+        // Summon restores whatever place an earlier test saved in the shared EmiState, so park
+        // her first: the round trip below is what this test pins.
+        win.ParkBottomRightOfMain();
         var parked = win.Position;
         var moved = new PixelPoint(parked.X - 137, parked.Y - 91);
         win.Position = moved;

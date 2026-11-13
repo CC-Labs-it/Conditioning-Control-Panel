@@ -169,7 +169,7 @@ public sealed class ShellEventFxTests
         s.WhatMovedCardShown = 1;
         s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
         s.AvatarEnabled = false;
-        s.SuppressPerkNotifications = true;
+        s.PerkEffects = ConditioningControlPanel.Models.PerkEffectsMode.NoCards;
         s.MotionLevel = MotionLevel.Full;
         s.PerformanceMode = false;
         MainShellWindow? shell = null;

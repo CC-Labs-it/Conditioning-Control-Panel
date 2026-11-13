@@ -100,6 +100,7 @@ public partial class EnhancementPlayerWindow {
     private DateTimeOffset _lastEscape;
     private bool _escapeConsumed;
     private double? _volumeBeforeMute;
+    private bool _muteChanging;
     private readonly HashSet<Key> _pressed = new();
     private bool StrictInput => CoreSettings.Current.StrictLockEnabled || LockdownService.Current?.IsActive == true;
     private void OnVideoHostKeyDown(object? sender, KeyEventArgs e) {
@@ -122,18 +123,27 @@ public partial class EnhancementPlayerWindow {
                 return true;
             case Key.F11: ExitVideoFullscreen(); return true;
             case Key.F: if (!repeat) { if (_videoFullscreenWindow != null) ExitVideoFullscreen(); else if (_isVideoMode && _videoNavigated) EnterVideoFullscreen(); } return true;
-            case Key.Space: if (!repeat) BtnPlayPause_Click(); return true;
+            case Key.Space: if (!repeat) { OfferWebcamBeforePlay(); BtnPlayPause_Click(); } return true;
             case Key.Left: case Key.Right:
                 if (!_isVideoMode) { _currentSec = Math.Clamp(_currentSec + (key == Key.Left ? -1 : 1) * (shift ? 30 : 5), 0, Math.Max(0, _durationSec)); UpdatePlayhead(Fraction()); return true; }
                 _ = _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke("l.currentTime=Math.max(0,Math.min(isFinite(l.duration)&&l.duration>0?l.duration:Infinity,l.currentTime+(" + ((key == Key.Left ? -1 : 1) * (shift ? 30 : 5)) + "));")); return true;
+            // WPF player:2811-2889: in both modes the keys move the slider, and the slider drives the
+            // page's <video>.volume (SliderVolume_PropertyChanged), so the two never disagree.
             case Key.Up: case Key.Down:
-                if (!_isVideoMode) { _volumeBeforeMute = null; _sliderVolume.Value = Math.Clamp(_sliderVolume.Value + (key == Key.Up ? 5 : -5), 0, 100); return true; }
-                _ = _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke("delete l._ccpMuteVolume;l.volume=Math.max(0,Math.min(1,l.volume+" + (key == Key.Up ? "0.05" : "-0.05") + "));")); return true;
+                _volumeBeforeMute = null; _sliderVolume.Value = Math.Clamp(_sliderVolume.Value + (key == Key.Up ? 5 : -5), 0, 100); return true;
             case Key.M:
-                if (!_isVideoMode) { if (!repeat) { var old = _sliderVolume.Value; var restore = _volumeBeforeMute; _sliderVolume.Value = restore ?? 0; _volumeBeforeMute = restore == null ? old : null; } return true; }
-                if (!repeat) _ = _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke("if(l._ccpMuteVolume!=null){l.volume=l._ccpMuteVolume;delete l._ccpMuteVolume;}else{l._ccpMuteVolume=l.volume;l.volume=0;}")); return true;
+                if (!repeat) ToggleMute(); return true;
             default: return false;
         }
+    }
+    // WPF player:2871-2889. A muted 0 is never persisted (SliderVolume_PropertyChanged).
+    private void ToggleMute() {
+        try {
+            _muteChanging = true;
+            if (_volumeBeforeMute is double restore) { _volumeBeforeMute = null; _sliderVolume.Value = restore; }
+            else { _volumeBeforeMute = _sliderVolume.Value; _sliderVolume.Value = 0; }
+        }
+        finally { _muteChanging = false; }
     }
     private void ArmCursor() { _cursorDue = InputNow().AddSeconds(2); if (_videoFullscreenWindow != null) _videoFullscreenWindow.Cursor = null; _ = _videoBrowser.InvokeScriptAsync("document.documentElement.style.cursor='';"); }
     private void OnVideoPointerMoved(object? sender, PointerEventArgs e) => ArmCursor();

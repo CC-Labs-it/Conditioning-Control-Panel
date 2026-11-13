@@ -103,6 +103,7 @@ namespace ConditioningControlPanel.Services.Deeper
                 _output.PlaybackStopped += OnPlaybackStopped;
                 _output.Play();
                 _currentPath = path;
+                global::ConditioningControlPanel.Services.Audio.EngineOffAudioLog.Note("enhancement-audio", path);
 
                 EnsureTimer();
                 _tickTimer?.Start();

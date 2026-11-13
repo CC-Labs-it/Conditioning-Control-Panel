@@ -250,6 +250,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private PixelPoint _dragStartScreen;
         private PixelPoint _dragStartPosition;
         private bool _dragging, _dragMoved;
+        private IPointer? _dragPointer;
         private bool _resizing;
         private PixelPoint _resizeStartScreen;
         private double _resizeStartWidth;
@@ -1214,7 +1215,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             if (PresentationActive || InputLocked || _transiting) { e.Handled = true; return; }   // the show owns her
             try
             {
-                RaiseActivity();
+                _rainGlassClick = _rainGlass && GlassRect.Contains(e.GetPosition(_bodyRoot));
+                try { RaiseActivity(); } finally { _rainGlassClick = false; }
                 DisarmPet();
                 // Moving her walks the pointer off her silhouette in the first few pixels at any
                 // speed worth calling a drag. Hold the chrome open for the whole gesture, or the x
@@ -1225,6 +1227,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 _dragStartScreen = this.PointToScreen(e.GetPosition(this));
                 _dragStartPosition = Position;
                 BeginWobble();
+                _dragPointer = e.Pointer;
                 e.Pointer.Capture(_bodyRoot);
                 e.Handled = true;
             }
@@ -1238,10 +1241,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private void OnBodyPointerMoved(object? sender, PointerEventArgs e)
         {
+            if (PresentationActive) { e.Handled = true; return; }
             try
             {
                 if (!_dragging)
                 {
+                    if (_rainGlass) CloseRainGlass();
                     UpdatePetHover(e.GetPosition(_bodyRoot));
                     return;
                 }
@@ -1316,6 +1321,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     if (handled) return;
                 }
 
+                if (glassLive) CloseRainGlass();
+
                 // QA ONLY, and deliberately awkward to hit by accident: Ctrl+Shift+Alt+click replays
                 // the gesture tutorial. Checked BEFORE the pat so the pat cannot eat it.
                 const KeyModifiers qa = KeyModifiers.Control | KeyModifiers.Shift | KeyModifiers.Alt;
@@ -1345,6 +1352,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// </summary>
         private void OnBodyRightClick(PointerReleasedEventArgs e)
         {
+            if (PresentationActive) { e.Handled = true; return; }
             try
             {
                 e.Handled = true;
@@ -1366,6 +1374,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private void EndDragHold()
         {
+            _dragPointer = null;
             if (!_dragging) return;
             _dragging = false;
             ChromeHold(EmiChromeHold.Drag, false);
@@ -1382,6 +1391,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// </summary>
         private void OnGearClick(object? sender, RoutedEventArgs e)
         {
+            if (PresentationActive) { e.Handled = true; return; }
             try
             {
                 if (InputLocked || _transiting) return;
@@ -1409,6 +1419,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// </summary>
         private void OnHelpClick(object? sender, RoutedEventArgs e)
         {
+            if (PresentationActive) { e.Handled = true; return; }
             try
             {
                 if (InputLocked || _transiting) return;
@@ -1521,8 +1532,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// rather than building a second panel.</para>
         ///
         /// <para>Bookmark and the lifetime open count are the router's own (EmiBook.cs Open):
-        /// <c>EmiState.BookBookmark</c> / <c>NoteCodexOpened</c> in Core. ponytail: still missing
-        /// <c>NoteSideChanged</c> (the bubble dodge in EmiDeskWindow.Bubble.cs).</para>
+        /// <c>EmiState.BookBookmark</c> / <c>NoteCodexOpened</c> in Core. Opening, closing and a side change re-lay the bubble
+        /// (WPF <c>EmiBook.NoteSideChanged</c>, the dodge in EmiDeskWindow.Bubble.cs).</para>
         /// </summary>
         internal void OpenBook(string? cardId = null)
         {
@@ -1543,6 +1554,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 win.Closed += OnBookClosed;
                 _book = win;
                 win.OpenBook(cardId);
+                OnBookSideChanged();   // WPF EmiBook.cs:170: opening moves the side from 0
             }
             catch (Exception ex)
             {
@@ -1556,6 +1568,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             var win = _book;
             _book = null;
+            OnBookSideChanged();   // WPF EmiBook.cs:202: closing restores the default side
             if (win == null) return;
             try
             {
@@ -1569,6 +1582,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             if (!ReferenceEquals(sender, _book)) return;
             _book = null;
+            OnBookSideChanged();
         }
 
         /// <summary>Clear the resize hold, whichever way the drag ended.</summary>
@@ -2198,7 +2212,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// Bring her in: smoke bomb, CRT power-on, then the <c>wake</c> chain. Input is locked for
         /// the whole transition so a click cannot land mid-CRT and open a ring onto a 2 % tall EMI.
         /// </summary>
-        public void RunSummon(Action? done = null)
+        public void RunSummon(Action? done = null, bool presentation = false)
         {
             try
             {
@@ -2247,8 +2261,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                         _summonDone = done;
                         _summonChainLive = true;
                         PlayChain("wake", FinishSummon);
-                    });
-                });
+                    }, presentation);
+                }, presentation);
             }
             catch (Exception ex)
             {
@@ -2580,9 +2594,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// </summary>
         /// <summary>Test seam (P08): when set, deferred FX steps are handed here instead of a timer.</summary>
         internal Action<int, Action>? AfterScheduler;
+        internal static TimeProvider FxClock = TimeProvider.System;   // tests step it
+        private readonly HashSet<ITimer> _fxTimers = new();           // roots each pending step
 
-        private void After(int ms, Action act)
+        private void After(int ms, Action act, bool presentation = false)
         {
+            int epoch = _presentationEpoch;
             try
             {
                 Action step = () =>
@@ -2590,6 +2607,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     try
                     {
                         if (_closingForGood) return;
+                        // WPF Fx.cs:447: old FX cannot take the body back from the stage or its return.
+                        if (epoch != _presentationEpoch || (PresentationActive && !presentation)) return;
                         act();
                     }
                     catch (Exception ex)
@@ -2598,12 +2617,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     }
                 };
                 if (AfterScheduler != null) { AfterScheduler(ms, step); return; }
-                DispatcherTimer.RunOnce(step, TimeSpan.FromMilliseconds(Math.Max(1, ms)), DispatcherPriority.Background);
+                ITimer? timer = null;
+                timer = FxClock.CreateTimer(_ => Dispatcher.UIThread.Post(() =>
+                {
+                    if (timer == null || !_fxTimers.Remove(timer)) return;   // already delivered or cancelled
+                    timer.Dispose();
+                    step();
+                }, DispatcherPriority.Background), null,
+                    TimeSpan.FromMilliseconds(Math.Max(1, ms)), Timeout.InfiniteTimeSpan);
+                _fxTimers.Add(timer);
             }
             catch (Exception ex)
             {
                 Log.Debug(ex, "[EmiDesk] After({Ms}) failed", ms);
             }
+        }
+
+        /// <summary>Drop every pending FX step so a closed window roots no timers.</summary>
+        private void CancelFxTimers()
+        {
+            foreach (var t in _fxTimers) t.Dispose();
+            _fxTimers.Clear();
         }
 
         // ---------------------------------------------------------------- sibling-partial stubs
@@ -2728,6 +2762,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 CancelChain();
                 CancelHold();
                 SweepFx(all: true);
+                CancelFxTimers();
                 Close();
             }
             catch (Exception ex)
@@ -2755,6 +2790,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 TearDownReactions();
                 TearDownVox();
                 CancelChain(); CancelHold();
+                CancelFxTimers();
             }
             catch (Exception ex)
             {

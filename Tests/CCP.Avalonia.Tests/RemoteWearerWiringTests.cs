@@ -24,9 +24,13 @@ public sealed class RemoteWearerWiringTests
     public void The_relay_runs_cores_executor_and_stop_so_every_end_path_hands_back()
     {
         var tab = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Views", "Tabs", "RemoteControlTabView.axaml.cs"));
-        Assert.Contains("RemoteCommands.Execute, RemoteCommands.StopEffects", tab);
+        // The head intercepts only pause_session (it needs the shell); every other verb falls through to Core.
+        Assert.Contains("ExecuteRemoteCommand, RemoteCommands.StopEffects", tab);
+        var exec = tab.Substring(tab.IndexOf("internal static string? ExecuteRemoteCommand(", StringComparison.Ordinal));
+        exec = exec.Substring(0, exec.IndexOf("\n        }", StringComparison.Ordinal));
+        Assert.EndsWith("return RemoteCommands.Execute(action, parameters);", exec.TrimEnd());
         var commands = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Core", "Services", "RemoteControl", "RemoteCommands.cs"));
-        var stop = commands.Substring(commands.IndexOf("public static void StopEffects(bool force)", StringComparison.Ordinal));
+        var stop = commands.Substring(commands.IndexOf("public static void StopEffects(bool force", StringComparison.Ordinal));
         Assert.Contains("Remote.RemoteWearer.ReleaseSafetyState();", stop);
         Assert.DoesNotContain("s.StrictLockEnabled = false;", stop);
     }

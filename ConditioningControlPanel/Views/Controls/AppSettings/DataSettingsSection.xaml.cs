@@ -26,9 +26,26 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
         public DataSettingsSection()
         {
             InitializeComponent();
+            // Sign-in state can change while the page sits hidden; repaint the delete row on show.
+            IsVisibleChanged += (_, e) => { if (e.NewValue is true) RefreshDeleteAccountRow(); };
         }
 
         private MainWindow? Main => Window.GetWindow(this) as MainWindow ?? App.MainWindowRef;
+
+        /// <summary>The Delete account row shows only while signed in (a unified account to delete),
+        /// the same rule as the Profile tab's bin. Also called by MainWindow.UpdateAccountLinkingUI.</summary>
+        internal void RefreshDeleteAccountRow()
+        {
+            RowDeleteAccount.Visibility = !string.IsNullOrEmpty(App.Settings?.Current?.UnifiedId)
+                ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        /// <summary>A pure forward to the Profile tab bin's handler: same type-DELETE dialog, same
+        /// server call, same local wipe. No deletion logic lives here.</summary>
+        private void BtnDeleteAccount_Click(object sender, RoutedEventArgs e)
+        {
+            if (Main is { } mw) mw.BtnDeleteProfile_Click(sender, e);
+        }
 
         // =====================================================================================
         //  offline mode + phrase backup - pure forwards

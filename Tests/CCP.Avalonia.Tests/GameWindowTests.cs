@@ -13,6 +13,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
+using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
@@ -817,7 +818,8 @@ public sealed partial class GameWindowTests
         w.Posted += json => sent.Add(JObject.Parse(json));
         w.HandleMessage("{\"type\":\"ready\"}");
         Assert.Equal(new[] { "init", "manifest", "loom-list" }, sent.Select(o => (string?)o["type"]));
-        Assert.Equal(new[] { 3 }, sent[0]["settings"]!["racingTracks"]!.Values<int>());
+        // WPF 7.2.3: the door is open, so init hands every track, not just the one owned.
+        Assert.Equal(Enumerable.Range(0, ConditioningControlPanel.Services.Prizes.PrizeGrants.RacingTrackMax + 1), sent[0]["settings"]!["racingTracks"]!.Values<int>());
         Assert.False((bool)sent[0]["settings"]!["cloud"]!);
         sent.Clear();
         w.HandleMessage("{\"type\":\"run-ended\",\"score\":5000,\"durationSec\":60}");   // no run-started: nothing
@@ -835,58 +837,33 @@ public sealed partial class GameWindowTests
         Assert.Equal((40, 40), GameWindow.RacePayout(200, 60, 1.0));
     });
 
+    /// <summary>WPF 7.2.3 (owner 2026-11-05): the purchase door is open, Classic is free with every track.
+    /// The page gets every track whatever the store says, so a grant change neither restages the menu nor
+    /// closes the host; the 3D tile stays (Prime padlock). The armed-door branch stays in RacingAccess.</summary>
     [Fact]
-    public void Race_and_launcher_follow_grant_additions_and_close_on_any_revocation() => RunRace("rt.original.03", (launcher, _, _) =>
+    public void Race_with_the_door_open_ignores_grant_changes() => RunRace("rt.original.03", (launcher, _, _) =>
     {
         var tracks = new HashSet<string> { "rt.original.03" };
         RacingAccess.IsGrantedProvider = tracks.Contains;
         launcher.BuildTiles();
-        // WPF #3126: no production door opens the 2D bridge; its grant regressions run on it directly.
         var w = OpenRetiredRace();
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
         tracks.Add("rt.original.04");
         ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
-        Dispatcher.UIThread.RunJobs();
-        var update = Assert.Single(sent);
-        Assert.Equal("race-ownership", (string?)update["type"]);
-        Assert.Equal(new[] { 3, 4 }, update["tracks"]!.Values<int>());
-        sent.Clear();
-        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
-        Dispatcher.UIThread.RunJobs();
-        Assert.Empty(sent); // An unrelated grant cannot restage the race menu.
-        tracks.Remove("rt.original.03");
-        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
-        Dispatcher.UIThread.RunJobs();
-        Assert.False(GameWindow.IsAnyOpen());
-        Assert.False(w.RaceWatchRunning);
-        // WPF 7.2 LauncherCatalogue.cs:238: the Racing Thoughts tile is always revealed (Prime padlock), owned tracks or not.
         tracks.Clear();
         ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
         Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain(sent, m => (string?)m["type"] == "race-ownership");
+        Assert.True(GameWindow.IsAnyOpen());
+        Assert.Equal(ConditioningControlPanel.Services.Prizes.PrizeGrants.RacingTrackMax + 1, RacingAccess.OwnedTracks.Length);
+        Assert.Empty(RacingAccess.PurchasedTracks);
         Assert.Contains(launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Children,
             c => Equals(c.Tag, "race"));
-        tracks.Add("rt.original.00");
-        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        w.Close();
         Dispatcher.UIThread.RunJobs();
-        Assert.Contains(launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Children,
-            c => Equals(c.Tag, "race"));
     });
 
-    [Fact]
-    public void Race_revocation_then_regrant_without_dispatching_closes_the_host() => RunRace("rt.original.03", (_, _, _) =>
-    {
-        var granted = true;
-        RacingAccess.IsGrantedProvider = id => granted && id == "rt.original.03";
-        var w = OpenRetiredRace();
-        granted = false;
-        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
-        granted = true;
-        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
-        Dispatcher.UIThread.RunJobs();
-        Assert.False(GameWindow.IsAnyOpen());
-        Assert.False(w.RaceWatchRunning);
-    });
     /// <summary>WPF StartHeartbeatWatch :595: idle until ready; silent past 20 s on the menu (10 s mid-run)
     /// gets one ping, a pong resets it, still silent on the next tick closes the window.</summary>
     [Fact]
@@ -1173,6 +1150,86 @@ public sealed partial class GameWindowTests
     /// and runSetup, then the manifest with videos), OnRequestRun :523, OnRunEnded :583 (one payout per descent)
     /// and DisposeAll :1002 (a window closed mid-descent banks its last snapshot, paid by the host's clock).</summary>
     [Fact]
+    public void Dtrh_FullscreenSetRestoresFrameAndReplies() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var w = GameWindow.Launch("dtrh")!;
+        w.Position = new PixelPoint(120, 80);
+        w.Width = 800;
+        w.Height = 600;
+        Dispatcher.UIThread.RunJobs();
+        var position = w.Position;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
+        Assert.Equal(WindowState.FullScreen, w.WindowState);
+        Assert.True((bool)Assert.Single(sent)["on"]!);
+        sent.Clear();
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":false}");
+        Assert.Equal(WindowState.Normal, w.WindowState);
+        Assert.Equal(position, w.Position);
+        Assert.Equal(800, w.Width);
+        Assert.Equal(600, w.Height);
+        Assert.False((bool)Assert.Single(sent)["on"]!);
+    });
+
+    private static global::Avalonia.Platform.Screen DtrhScreen(PixelRect bounds, double scale, bool primary)
+    {
+        var screen = (global::Avalonia.Platform.Screen)Activator.CreateInstance(typeof(global::Avalonia.Platform.PlatformScreen),
+            new object[] { new global::Avalonia.Platform.PlatformHandle(new IntPtr(bounds.X + 1), "headless-test") })!;
+        typeof(global::Avalonia.Platform.Screen).GetProperty("Bounds")!.SetValue(screen, bounds);
+        typeof(global::Avalonia.Platform.Screen).GetProperty("WorkingArea")!.SetValue(screen, bounds);
+        typeof(global::Avalonia.Platform.Screen).GetProperty("Scaling")!.SetValue(screen, scale);
+        typeof(global::Avalonia.Platform.Screen).GetProperty("IsPrimary")!.SetValue(screen, primary);
+        return screen;
+    }
+
+    [Fact]
+    public void Dtrh_FullscreenFromMaximizedPreservesNormalFrame() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var w = GameWindow.Launch("dtrh")!;
+        w.Position = new PixelPoint(120, 80);
+        w.Width = 800;
+        w.Height = 600;
+        Dispatcher.UIThread.RunJobs();
+        w.WindowState = WindowState.Maximized;
+        w.Position = new PixelPoint(0, 0); // model the native maximized position
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":false}");
+        Assert.Equal(WindowState.Maximized, w.WindowState);
+        w.WindowState = WindowState.Normal;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(new PixelPoint(120, 80), w.Position);
+        Assert.Equal(800, w.Width);
+        Assert.Equal(600, w.Height);
+    });
+
+    [Fact]
+    public void Dtrh_RemovedMonitorCentersFrameOnLiveMonitor() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var previous = ScreenList.QueryOverride;
+        var primary = DtrhScreen(new PixelRect(0, 0, 1600, 900), 1, true);
+        var secondary = DtrhScreen(new PixelRect(1600, 0, 1600, 900), 1, false);
+        var screens = new[] { primary, secondary };
+        ScreenList.QueryOverride = _ => screens;
+        try
+        {
+            var w = GameWindow.Launch("dtrh")!;
+            w.Position = new PixelPoint(2000, 100);
+            w.Width = 800;
+            w.Height = 600;
+            Dispatcher.UIThread.RunJobs();
+            w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
+            screens = new[] { primary };
+            w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":false}");
+            Assert.Equal(WindowState.Normal, w.WindowState);
+            Assert.Equal(new PixelPoint(400, 150), w.Position);
+            Assert.Equal(800, w.Width);
+            Assert.Equal(600, w.Height);
+        }
+        finally { ScreenList.QueryOverride = previous; }
+    });
+
+    [Fact]
     public void Dtrh_BasicDoor_BootRunLifecycle_AndCloseBanks()
     {
         RunDtrh(lab: false, (_, _, _, denied) =>
@@ -1215,8 +1272,15 @@ public sealed partial class GameWindowTests
             Assert.Empty(sent);
             w.HandleMessage("{\"type\":\"run-started\",\"difficulty\":\"Easy\"}");
             Assert.True(w.DtrhRunActive);
+            Assert.True(GameWindow.IsDtrhRunning);
+            var opener = global::ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditLine.Opener;
+            global::ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditLine.Opener = _ => true;
+            s.StrictLockEnabled = false;
+            try { Assert.False(global::ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditLine.OpenHome()); }
+            finally { global::ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditLine.Opener = opener; }
             w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");
             w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");   // a second end pays nothing
+            Assert.False(GameWindow.IsDtrhRunning);
             var pay = Assert.Single(sent);
             Assert.Equal("payout-result", (string?)pay["type"]);
             Assert.Equal(300, (double)pay["baseXp"]!);

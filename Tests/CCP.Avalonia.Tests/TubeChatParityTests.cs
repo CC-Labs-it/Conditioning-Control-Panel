@@ -103,7 +103,7 @@ public sealed class TubeChatParityTests
             CoreDispatch.PostProvider = a => Dispatcher.UIThread.Post(a);
             Assert.NotNull(PromptAssembler.NoticeSurface?.Invoke());       // the oversize toast has a surface
             CompanionAskService.RequestDelay = TimeSpan.Zero;
-            CompanionAskService.ShowCardSurface = c => Dispatcher.UIThread.Post(() => tube.ShowAskCard(c));
+            CompanionAskService.ShowCardSurface = (c, unprompted) => Dispatcher.UIThread.Post(() => tube.ShowAskCard(c, unprompted));
             CompanionAskService.SessionOptions = () => new[] { new AskOption("s-one", "Session one", () => true) };
             CompanionAskService.StartSession = id => { started.Add(id); return true; };
             Assert.True(ConversationDelivery.AskCardsShown?.Invoke("what can I do"));   // a Session card can follow

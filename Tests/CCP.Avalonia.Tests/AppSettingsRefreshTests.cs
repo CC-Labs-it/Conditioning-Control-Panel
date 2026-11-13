@@ -11,6 +11,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Models;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -35,7 +36,7 @@ public sealed class AppSettingsRefreshTests
             var mics = new[] { new SpeechInputDevice(-1, "System default") };
             var s = CoreSettings.Current;
             var (oldRun, oldVideo, oldPerf, oldSuppress) =
-                (s.RunOnStartup, s.StartupVideoPath, s.PerformanceMode, s.SuppressPerkNotifications);
+                (s.RunOnStartup, s.StartupVideoPath, s.PerformanceMode, s.PerkEffects);
             MainShellWindow? shell = null;
             try
             {
@@ -47,7 +48,7 @@ public sealed class AppSettingsRefreshTests
                 s.RunOnStartup = false;
                 s.StartupVideoPath = "old.mp4";
                 s.PerformanceMode = false;
-                s.SuppressPerkNotifications = false;
+                s.PerkEffects = PerkEffectsMode.Full;
                 shell = new MainShellWindow();
                 shell.Show();
                 shell.ShowTab("appsettings");
@@ -81,7 +82,7 @@ public sealed class AppSettingsRefreshTests
                 Assert.True(general.FindControl<CheckBox>("ChkWinStart")!.IsChecked);
                 Assert.True(s.RunOnStartup); // adopts external registration, as WPF does
                 Assert.True(performance.FindControl<CheckBox>("ChkPerformanceMode")!.IsChecked);
-                Assert.True(notifications.FindControl<CheckBox>("ChkSuppressPerkNotifications")!.IsChecked);
+                Assert.Equal((int)PerkEffectsMode.NoCards, notifications.FindControl<ComboBox>("CmbPerkEffects")!.SelectedIndex);
                 Assert.Contains(cameras.Items.Cast<ComboBoxItem>(), i => Equals(i.Content, "[4] New camera"));
                 Assert.Contains(devices.FindControl<ComboBox>("CmbMicDevice")!.Items.Cast<ComboBoxItem>(),
                     i => Equals(i.Content, "New microphone"));
@@ -96,7 +97,7 @@ public sealed class AppSettingsRefreshTests
                 WindowsStartupShortcut.DirectoryOverride = oldWinStartup;
                 CoreWebcam.IsAvailableProvider = oldAvailable;
                 CoreSpeech.EnumerateInputDevicesProvider = oldMics;
-                (s.RunOnStartup, s.StartupVideoPath, s.PerformanceMode, s.SuppressPerkNotifications) =
+                (s.RunOnStartup, s.StartupVideoPath, s.PerformanceMode, s.PerkEffects) =
                     (oldRun, oldVideo, oldPerf, oldSuppress);
                 Directory.Delete(root, true);
             }
