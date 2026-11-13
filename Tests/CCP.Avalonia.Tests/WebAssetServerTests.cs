@@ -175,6 +175,26 @@ public class WebAssetServerTests
     }
 
     [Fact]
+    public async Task ArtPrefix_ServesShippedImagesWithCookie_AndConfinesPaths()
+    {
+        using var s = Make().server;
+        using var http = Client();
+        var origin = $"http://127.0.0.1:{s.Port}/";
+        Assert.Equal(HttpStatusCode.Forbidden, (await http.GetAsync(origin + "__art__/boons/afterglow.png")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await http.GetAsync(s.Url("game/index.html"))).StatusCode);
+        foreach (var rel in new[] { "boons/afterglow.png", "biomes/casino.png", "bubbles/gold_droplet.png", "guide/intro.png" })
+        {
+            var expected = await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory, "assets", "Chaos", rel));
+            var response = await http.GetAsync(origin + "__art__/" + rel);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal("image/png", response.Content.Headers.ContentType!.MediaType);
+            Assert.Equal(expected, await response.Content.ReadAsByteArrayAsync());
+        }
+        Assert.Null(s.ResolveFile("/__art__/%2e%2e/secret.txt"));
+        Assert.Null(s.ResolveFile("/__art__/missing.png"));
+    }
+
+    [Fact]
     public async Task SharedServer_ServesTheShippedIntakePage()
     {
         using var http = Client();

@@ -26,7 +26,7 @@ internal static class PrizeCounterHostService
 {
     public const string ProductName = "Prize Counter";
     public const string StartUrl = "https://ccp.game/prizecounter/index.html";
-    internal const string GameId = "prizecounter";
+    internal const string GameId = PrizeCounterRules.GameId;
 
     /// <summary>Constant on purpose: the argument string must not vary per launch for one user-data folder.</summary>
     public const string BrowserArguments = "--autoplay-policy=no-user-gesture-required";
@@ -50,23 +50,17 @@ internal static class PrizeCounterHostService
 
     /// <summary>Why the counter went, as an opener under it hears it: <c>back</c> returns to the game,
     /// <c>panic</c> and <c>app-exit</c> never hand focus back, <c>wear</c> hands it to Rain's dressing room.</summary>
-    internal const string CloseBack = "back", ClosePanic = "panic", CloseWear = "wear", CloseAppExit = "app-exit", CloseFailed = "failed";
+    internal const string CloseBack = PrizeCounterRules.CloseBack, ClosePanic = PrizeCounterRules.ClosePanic, CloseWear = PrizeCounterRules.CloseWear, CloseAppExit = PrizeCounterRules.CloseAppExit, CloseFailed = PrizeCounterRules.CloseFailed;
 
     /// <summary>The counter's tabs, in the server's order (CONTRACT "Server body").</summary>
-    internal static readonly string[] Tabs = { "rain-clothes", "rain-hair", "kart", "chess", "profile", "desk", "prime", "backroom" };
+    internal static readonly string[] Tabs = PrizeCounterRules.Tabs;
 
     /// <summary>The game pages that may ask for the counter (contract 1, <c>open-prize-counter</c>).</summary>
     internal static readonly string[] GameDoors = { "glassroad", "piecebypiece", "backroom", "rain-wardrobe" };
 
     /// <summary>A door's tab as the page knows it: contract 1's <c>rain</c> is the clothes tab, any
     /// other unknown name is null (the page opens on its first tab).</summary>
-    internal static string? CounterTab(string? tab)
-    {
-        if (string.IsNullOrWhiteSpace(tab)) return null;
-        var t = tab.Trim().ToLowerInvariant();
-        if (t == "rain") return "rain-clothes";
-        return Array.IndexOf(Tabs, t) >= 0 ? t : null;
-    }
+    internal static string? CounterTab(string? tab) => PrizeCounterRules.CounterTab(tab);
 
     /// <summary>A game page's <c>{ type:'open-prize-counter', tab, from }</c> (contract 1). False for any
     /// other frame or an unknown door; the tab is normalised (<see cref="CounterTab"/>).</summary>
@@ -83,11 +77,10 @@ internal static class PrizeCounterHostService
 
     /// <summary>An open counter asked again from another door: it reloads only when that door names a
     /// different tab (a door with no tab just brings it forward).</summary>
-    internal static bool ReopensOnTab(string? current, string? wanted)
-        => wanted != null && !string.Equals(current, wanted, StringComparison.Ordinal);
+    internal static bool ReopensOnTab(string? current, string? wanted) => PrizeCounterRules.ReopensOnTab(current, wanted);
 
     /// <summary>The page's own <c>close {reason}</c>: only <c>panic</c> is kept, anything else is back.</summary>
-    internal static string PageCloseReason(string? reason) => reason == ClosePanic ? ClosePanic : CloseBack;
+    internal static string PageCloseReason(string? reason) => PrizeCounterRules.PageCloseReason(reason);
 
     /// <summary>The panel's account sign-in, centred over the counter (the launcher's and the Back
     /// Room's flow). Settable so a test can answer without a dialog.</summary>
@@ -97,8 +90,7 @@ internal static class PrizeCounterHostService
 
     /// <summary>True when somebody is signed in now who is not the account the counter is pinned to:
     /// the counter must pin them and load again (a signed-out counter has no pin).</summary>
-    internal static bool SignedInSince(string? pinned, string? now)
-        => !string.IsNullOrEmpty(now) && !string.Equals(pinned, now, StringComparison.Ordinal);
+    internal static bool SignedInSince(string? pinned, string? now) => PrizeCounterRules.SignedInSince(pinned, now);
 
     private static PrizeCounterRelay NewRelay() => new(null,
         () => BackRoomApi.AppIdentity() is { } id && id.UnifiedId == _opener ? id : null,
@@ -179,39 +171,18 @@ internal static class PrizeCounterHostService
     // ============================ Rain V2 gate (owner 2026-10-30, postponed out of 7.2.0) ============================
 
     /// <summary>True for a Rain row id (<c>rain.*</c>) or a Rain tab id (<c>rain-*</c>).</summary>
-    internal static bool IsRainId(string? id)
-        => id != null && (id.StartsWith("rain.", StringComparison.Ordinal) || id.StartsWith("rain-", StringComparison.Ordinal));
+    internal static bool IsRainId(string? id) => PrizeCounterRules.IsRainId(id);
 
     /// <summary>
     /// A server body as the page may see it. With the Rain V2 gate off the Rain tabs go, and any other
     /// <c>rain.*</c> row becomes a hole (null keeps the server's slot layout); the same for a refusal's
     /// fresh <c>state</c>. Gate on, or a body with no tabs: untouched. Never throws.
     /// </summary>
-    internal static JObject? HideRain(JObject? body, bool rainOn)
-    {
-        if (rainOn || body == null) return body;
-        var copy = (JObject)body.DeepClone();
-        HideRainTabs(copy);
-        if (copy["state"] is JObject state) HideRainTabs(state);
-        return copy;
-    }
-
-    private static void HideRainTabs(JObject body)
-    {
-        if (body["tabs"] is not JArray tabs) return;
-        foreach (var tab in tabs.OfType<JObject>().Where(t => IsRainId(t["id"]?.Type == JTokenType.String ? (string?)t["id"] : null)).ToList())
-            tab.Remove();
-        foreach (var rows in tabs.SelectTokens("[*].shelves[*].rows").OfType<JArray>())
-            for (int i = 0; i < rows.Count; i++)
-                if (rows[i] is JObject row && row["id"]?.Type == JTokenType.String && ((string?)row["id"])!.StartsWith("rain.", StringComparison.Ordinal))
-                    rows[i] = JValue.CreateNull();
-    }
+    internal static JObject? HideRain(JObject? body, bool rainOn) => PrizeCounterRules.HideRain(body, rainOn);
 
     /// <summary>A <c>shop-buy</c> for a Rain row while the gate is off: the host answers <c>unavailable</c>
     /// itself and never relays it.</summary>
-    internal static bool RefusesBuy(string? op, JObject? body, bool rainOn)
-        => !rainOn && op == PrizeCounterRelay.OpBuy
-           && body?["itemId"]?.Type == JTokenType.String && ((string?)body["itemId"])!.StartsWith("rain.", StringComparison.Ordinal);
+    internal static bool RefusesBuy(string? op, JObject? body, bool rainOn) => PrizeCounterRules.RefusesBuy(op, body, rainOn);
 
     /// <summary>The kart a Wear closed the counter for (reason <see cref="CloseWear"/>): the garage under
     /// it reads this in its close hook and selects it. Cleared at every launch.</summary>
@@ -464,14 +435,7 @@ internal static class PrizeCounterHostService
     }
 
     /// <summary>Each game under the counter hears the close once; one that throws cannot starve the rest.</summary>
-    internal static void NotifyOpeners(IEnumerable<Action<string>> openers, string reason)
-    {
-        foreach (var opener in openers)
-        {
-            try { opener(reason); }
-            catch (Exception ex) { App.Logger?.Warning("PrizeCounter: an opener's close hook threw: {E}", ex.Message); }
-        }
-    }
+    internal static void NotifyOpeners(IEnumerable<Action<string>> openers, string reason) => PrizeCounterRules.NotifyOpeners(openers, reason);
 
     private static void OnPageMessage(JObject m, int generation)
     {
@@ -593,12 +557,7 @@ internal static class PrizeCounterHostService
     }
 
     /// <summary>The page's three levels. Gentle visuals caps motion at less, as it does for UI motion.</summary>
-    internal static string MotionWire(Models.MotionLevel m, bool gentle) => m switch
-    {
-        Models.MotionLevel.Off => "off",
-        Models.MotionLevel.Reduced => "less",
-        _ => gentle ? "less" : "full",
-    };
+    internal static string MotionWire(Models.MotionLevel m, bool gentle) => PrizeCounterRules.MotionWire(m, gentle);
 
     /// <summary>The account is checked AGAIN inside the marshalled write: the player may be somebody
     /// else by then (the shape App's V2Purchase wiring uses).</summary>

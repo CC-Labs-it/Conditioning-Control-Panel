@@ -34,6 +34,16 @@ pkgs = {k.split("/")[0].lower(): k.split("/")[1] for k in a["libraries"]}
 for fw in a["project"]["frameworks"].values():
     for d in fw.get("downloadDependencies", []):
         pkgs[d["name"].lower()] = d["version"].strip("[]").split(",")[0].strip()
+# A Linux SDK carries its own linux-x64 apphost pack, so restore lists no download for it (a Windows SDK does).
+# Then the apphost comes from <dotnet root>/packs at the runtime pack's version; prove that folder exists.
+HOST, RUNTIME = "microsoft.netcore.app.host.linux-x64", "microsoft.netcore.app.runtime.linux-x64"
+if HOST not in pkgs and RUNTIME in pkgs:
+    import shutil
+    exe = shutil.which("dotnet")
+    for base in filter(None, [os.environ.get("DOTNET_ROOT"), exe and os.path.dirname(os.path.realpath(exe))]):
+        if os.path.isdir(os.path.join(base, "packs", "Microsoft.NETCore.App.Host.linux-x64", pkgs[RUNTIME])):
+            pkgs[HOST] = pkgs[RUNTIME] + " (.NET SDK pack)"
+            break
 LISTED = ["microsoft.netcore.app.runtime.linux-x64", "microsoft.netcore.app.host.linux-x64", "skiasharp",
           "skiasharp.nativeassets.linux", "harfbuzzsharp", "harfbuzzsharp.nativeassets.linux", "microsoft.ml.onnxruntime",
           "opencvsharp4", "opencvsharp4.official.runtime.linux-x64", "vosk", "libvlcsharp", "avalonia",

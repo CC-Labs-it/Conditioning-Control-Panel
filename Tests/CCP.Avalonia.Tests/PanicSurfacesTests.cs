@@ -342,6 +342,7 @@ public sealed class PanicSurfacesTests
         ["MediaHistoryWindow"] = "WPF parity: the Media Log's muted preview of a user-picked row; WPF panic leaves that window alone",
         ["HelpVideoWindow"] = "WPF parity: the help window's muted tutorial clip (freed on close); WPF panic leaves that window alone",
         ["LinuxRaceHost"] = "owned by its GameWindow (GameWindow.FirstRace.cs:119 disposes it on Closed); panic closes it through the 'games' surface (GameWindow.CloseAllForPanic), see GameWindowTests.LinuxShell_PanicAfterWatchdogKillIsAFullPanicNotAPause",
+        ["SpeakPromptRuntime"] = "the Deeper player's speak sessions (cue timer, mic capture): the 'deeper-player' surface (EnhancementPlayerWindow.PanicPauseAll -> StopDeeper) cancels them, see SpeakPlayerTests.PlayerDispatchesSpeakAndStopsOnBandExitOrPanic",
     };
 
     [Fact]
