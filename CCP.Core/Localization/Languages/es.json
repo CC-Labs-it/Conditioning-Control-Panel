@@ -1,4 +1,8 @@
 {
+  "media_drop_player_error_title": "No se pudo abrir el reproductor",
+  "media_drop_editor_error_title": "No se pudo abrir el editor",
+  "media_drop_player_error_fmt": "No se pudo abrir Deeper Player: {0}: {1}",
+  "media_drop_editor_error_fmt": "No se pudo abrir Deeper Editor: {0}: {1}",
   "Chaos_EStim_Conduct": "carga lista - tus próximos {0} estallidos conducen",
   "Chaos_EStim_Chain": "carga lista - tus próximos {0} estallidos crean cadenas",
   "Chaos_EStim_Arc": "salta la corriente (quedan {0})",
