@@ -140,6 +140,33 @@ public class RecentSoundsTests
         Assert.True(hang > 0 && sounds > hang && scrub > sounds, $"hang={hang} sounds={sounds} scrub={scrub}");
     }
 
+    // ccp-bugs #1564: a duck every ~30 s and nothing in the ring. A duck names its caller, by type
+    // file and member only, never the build machine's path.
+    [Fact]
+    public void A_duck_names_its_caller_without_a_path()
+    {
+        Assert.Equal("FlashService.ShowImages",
+            RecentSounds.DuckCaller(@"D:\a\repo\ConditioningControlPanel\Services\Flash\FlashService.cs", "ShowImages"));
+        Assert.Equal("SubliminalService.Timer_Tick", RecentSounds.DuckCaller("/src/SubliminalService.cs", "Timer_Tick"));
+        Assert.Equal("unknown", RecentSounds.DuckCaller(null, null));
+    }
+
+    [Fact]
+    public void Untracked_players_now_write_into_the_ring()
+    {
+        var root = Path.Combine(RepoRoot(), "ConditioningControlPanel");
+        string Read(params string[] p) => File.ReadAllText(Path.Combine(new[] { root }.Concat(p).ToArray()));
+
+        Assert.Contains("Audio.RecentSounds.Shared.Note(\"duck\", caller", Read("Services", "AudioService.cs"));
+        Assert.Contains("Audio.WebAudioWatch.Attach(_webView.CoreWebView2)", Read("Services", "Browser", "BrowserService.cs"));
+        Assert.Contains("Note(\"layers\"", Read("Services", "Audio", "LayeredAudioService.cs"));
+        Assert.Contains("Note(\"race-track\"", Read("Services", "Race", "TrackPlayer.cs"));
+        Assert.Contains("Note(\"dual-monitor-video\"", Read("Services", "Video", "DualMonitorVideoService.cs"));
+        Assert.Contains("Note(\"video-mediaelement\"", Read("Services", "Video", "VideoService.cs"));
+        Assert.Contains("Note(\"enhancement-audio\"", Read("Services", "Deeper", "EnhancementAudioPlayer.cs"));
+        Assert.Contains("Note(\"system:attention-check\"", Read("Services", "AttentionCheckService.cs"));
+    }
+
     private static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

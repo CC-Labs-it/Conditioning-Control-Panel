@@ -397,6 +397,7 @@ namespace ConditioningControlPanel
                 App.Audio?.ApplyPreferredDevice(_droneOutput);
                 _droneOutput.Init(_droneMixer);
                 _droneOutput.Play();
+                global::ConditioningControlPanel.Services.Audio.EngineOffAudioLog.Note("mantra-drone", "(synth drone)");
 
                 var watch = Services.Audio.MasterVolumeWatch.Shared;
                 watch.EnsureHooked();
@@ -448,6 +449,7 @@ namespace ConditioningControlPanel
                     try { output.Dispose(); } catch { }
                 };
                 output.Play();
+                global::ConditioningControlPanel.Services.Audio.EngineOffAudioLog.Note("mantra-tone", "(synth tone)");
             }
             catch (Exception ex)
             {

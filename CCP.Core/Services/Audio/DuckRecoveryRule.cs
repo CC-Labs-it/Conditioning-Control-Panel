@@ -33,6 +33,53 @@ namespace ConditioningControlPanel.Services.Audio
         }
 
         /// <summary>
+        /// ccp-bugs #1531 ("Discord stays almost muted after a session, I have to reset the Windows
+        /// mixer"): the original volume a duck sweep stores for one live session, or null to leave
+        /// that session alone.
+        ///
+        /// <para>An unduck that could not reach an app parks its original for a retry. A new duck
+        /// inside that window used to read the app's live, still-ducked volume as its "original", and
+        /// the next unduck handed that ducked level back: a stuck slider that sank a little further
+        /// with every cycle. A parked original for the same app (same PID, or the same name when the
+        /// PID changed) is now claimed instead, and leaves the parked list so a retry can never undo
+        /// the live duck. <paramref name="skipSilent"/>: the rescan leaves a silent session alone
+        /// unless it has a parked original (a 0 there is most likely one of our own old ducks).</para>
+        /// </summary>
+        public static float? ClaimOriginal(int pid, string? name, float live,
+            IDictionary<int, float> ducked, IDictionary<int, float> parked,
+            IReadOnlyDictionary<int, string> names, bool skipSilent = false)
+        {
+            if (ducked.ContainsKey(pid)) return null;
+
+            float original = live;
+            bool fromParked = false;
+            var known = !string.IsNullOrEmpty(name);
+            if (parked.TryGetValue(pid, out var samePid)
+                && (!known || !names.TryGetValue(pid, out var parkedName) || string.IsNullOrEmpty(parkedName)
+                    || string.Equals(parkedName, name, StringComparison.OrdinalIgnoreCase)))
+            {
+                original = samePid;
+                parked.Remove(pid);
+                fromParked = true;
+            }
+            else if (known)
+            {
+                foreach (var kv in parked)
+                {
+                    if (!names.TryGetValue(kv.Key, out var n) || !string.Equals(n, name, StringComparison.OrdinalIgnoreCase)) continue;
+                    original = kv.Value;
+                    parked.Remove(kv.Key);
+                    fromParked = true;
+                    break;
+                }
+            }
+
+            if (!fromParked && skipSilent && live <= 0.001f) return null;
+            ducked[pid] = original;
+            return original;
+        }
+
+        /// <summary>
         /// The live PID a stored entry restores, or null. <paramref name="live"/> maps each live
         /// session's PID to its process name (empty when unknown). Our own process never matches.
         /// </summary>

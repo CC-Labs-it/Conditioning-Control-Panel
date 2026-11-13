@@ -795,6 +795,9 @@ namespace ConditioningControlPanel.Services
                     return;
                 }
 
+                // #1594 #1595: a floating video leaves Escape alone unless Escape is the panic key.
+                if (isEscape && !VideoTakesEscape()) return;
+
                 if (isEscape)
                 {
                     // Twin of the LibVLC window's ESC door: a panic press only when Escape is the

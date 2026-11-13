@@ -2055,7 +2055,9 @@ namespace ConditioningControlPanel
                 // Full-screen pink wash, half a second. ccp-bugs #1415: never a WPF AllowsTransparency
                 // window here (a per-pixel surface the size of every monitor stalled the UI thread
                 // for over a second and dragged the whole desktop down while it faded).
-                Helpers.ScreenWash.Flash(0xFF, 0x14, 0x93, Helpers.ScreenWash.PinkRushPeak, Helpers.ScreenWash.PinkRushFadeMs);
+                // Perk effects Off (owner, 2026-11-05) drops the wash; the indicator above stays.
+                if (App.PerkEffectsShown)
+                    Helpers.ScreenWash.Flash(0xFF, 0x14, 0x93, Helpers.ScreenWash.PinkRushPeak, Helpers.ScreenWash.PinkRushFadeMs);
 
                 // Show toast notification popup.
                 //

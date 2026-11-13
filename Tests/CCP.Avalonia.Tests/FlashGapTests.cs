@@ -62,10 +62,10 @@ public class FlashGapTests
         FlashOverlay.Clock = clock;
         LuckyFlashToast.ScreenOwned = () => false;
         LuckyFlashToast.Prepare = (_, _) => true;
-        CoreSettings.Current.SuppressPerkNotifications = true;
+        CoreSettings.Current.PerkEffects = ConditioningControlPanel.Models.PerkEffectsMode.NoCards;
         FlashOverlay.LuckyProc("Lucky Flash", 10);
         Assert.Null(LuckyFlashToast.Active);
-        CoreSettings.Current.SuppressPerkNotifications = false;
+        CoreSettings.Current.PerkEffects = ConditioningControlPanel.Models.PerkEffectsMode.Full;
         LuckyFlashToast.ScreenOwned = () => true;
         FlashOverlay.LuckyProc("Lucky Flash", 10);
         Assert.Null(LuckyFlashToast.Active);

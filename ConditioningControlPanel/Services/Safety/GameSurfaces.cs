@@ -58,6 +58,9 @@ internal static class GameSurfaces
         // The four the two copies had missed. Racing Thoughts is the reported one; the other three
         // are the same shape (a WebView2 game window the player is sitting in).
         new("race", () => Chaos.CaucusHostService.IsActive, Chaos.CaucusHostService.CloseActive),
+        // Racing Thoughts Classic (2026-11-05): the launcher id of the 2D race's own tile. The same
+        // window as "race" above; both closes are idempotent, so naming it twice costs nothing.
+        new("raceclassic", () => Chaos.CaucusHostService.IsActive, Chaos.CaucusHostService.CloseActive),
         new("goon", () => GoonGame.GoonHostService.IsActive, GoonGame.GoonHostService.CloseActive),
         new("piecebypiece", () => PieceByPiece.PieceByPieceHostService.IsActive, PieceByPiece.PieceByPieceHostService.Close),
         new("intake", () => Quiz.IntakeHostService.IsActive, Quiz.IntakeHostService.CloseActive),

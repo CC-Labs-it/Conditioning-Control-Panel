@@ -1070,7 +1070,8 @@ public class BubbleService : IDisposable
         try
         {
             if (App.Chaster?.CanBook(Chaster.NatashasFavourite.EventId) == true
-                && Chaster.NatashasFavourite.Roll(_random))
+                && Chaster.NatashasFavourite.Roll(_random, bubble.IsAmbientTrigger,
+                       App.Settings?.Current?.ChasterNatashaTriggerWeight ?? 1))
                 bubble.MarkNatasha();
         }
         catch (Exception ex) { Diag.Swallowed(ex, "natasha mark"); }
@@ -1105,7 +1106,10 @@ public class BubbleService : IDisposable
         // that paid nothing gets the ordinary pop: no gold glow, no lucky sparkle burst.
         var paidLucky = isLucky && paidXp > 0;
         var hasSparkleBoost = (App.SkillTree?.GetSparkleBoostTier() ?? 0) > 0 && (App.Settings?.Current?.FlashGlowEnabled ?? true);
-        bubble.SetLucky(paidLucky, hasSparkleBoost);
+        // Perk effects Off (owner, 2026-11-05): a plain pop, no gold glow or sparkle burst. The
+        // 20x and the boost XP were paid above either way.
+        var perkFx = App.PerkEffectsShown;
+        bubble.SetLucky(paidLucky && perkFx, hasSparkleBoost && perkFx);
 
         // Play appropriate sound (the avatar easter-egg pop comes through 50% louder)
         PlayPopSound(paidLucky, bubble.AvatarPopVolumeMult);
@@ -2782,6 +2786,10 @@ internal class Bubble
     internal bool IsMagnetBubble => _isMagnetBubble;
 
     internal bool IsNatasha => _isNatasha;
+
+    /// <summary>Built as a dashboard trigger bubble (payload or not), alive or not: the spawn-time
+    /// read for Natasha's trigger weight (ccp-bugs #1566).</summary>
+    internal bool IsAmbientTrigger => _isAmbientTrigger;
 
     /// <summary>Who ended this red bubble; read by <see cref="BubbleService.NoteNatashaEnd"/>.</summary>
     internal Chaster.NatashasFavourite.PopCause NatashaCause => _natashaCause;

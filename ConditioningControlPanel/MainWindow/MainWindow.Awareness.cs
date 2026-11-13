@@ -51,6 +51,7 @@ namespace ConditioningControlPanel
             {
                 bool masterOn = settings.KeywordTriggersEnabled;
                 if (AwarenessTab.ChkAwarenessMaster != null) AwarenessTab.ChkAwarenessMaster.IsChecked = masterOn;
+                if (AwarenessTab.ChkAwarenessStartOnLaunch != null) AwarenessTab.ChkAwarenessStartOnLaunch.IsChecked = settings.AwarenessStartOnLaunch;
                 if (AwarenessTab.ChkAwarenessOcr != null) AwarenessTab.ChkAwarenessOcr.IsChecked = settings.ScreenOcrEnabled;
                 if (AwarenessTab.ChkAwarenessKeyboard != null) AwarenessTab.ChkAwarenessKeyboard.IsChecked = settings.KeywordTriggersEnabled;
                 if (AwarenessTab.ChkAwarenessIgnoreOwnUi != null) AwarenessTab.ChkAwarenessIgnoreOwnUi.IsChecked = settings.AwarenessIgnoreOwnUi;
@@ -437,6 +438,17 @@ namespace ConditioningControlPanel
             finally { _isLoading = false; }
 
             UpdateAwarenessStatusIndicator(on);
+            App.Settings?.Save();
+        }
+
+        /// <summary>ccp-bugs #1562: stored preference only, read once at launch
+        /// (MainWindow.xaml.cs, keyboard hook setup). Flipping it never starts or stops anything now.</summary>
+        internal void ChkAwarenessStartOnLaunch_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var settings = App.Settings?.Current;
+            if (settings == null) return;
+            settings.AwarenessStartOnLaunch = AwarenessTab.ChkAwarenessStartOnLaunch?.IsChecked == true;
             App.Settings?.Save();
         }
 

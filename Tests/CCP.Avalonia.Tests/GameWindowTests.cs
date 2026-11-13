@@ -817,7 +817,8 @@ public sealed partial class GameWindowTests
         w.Posted += json => sent.Add(JObject.Parse(json));
         w.HandleMessage("{\"type\":\"ready\"}");
         Assert.Equal(new[] { "init", "manifest", "loom-list" }, sent.Select(o => (string?)o["type"]));
-        Assert.Equal(new[] { 3 }, sent[0]["settings"]!["racingTracks"]!.Values<int>());
+        // WPF 7.2.3: the door is open, so init hands every track, not just the one owned.
+        Assert.Equal(Enumerable.Range(0, ConditioningControlPanel.Services.Prizes.PrizeGrants.RacingTrackMax + 1), sent[0]["settings"]!["racingTracks"]!.Values<int>());
         Assert.False((bool)sent[0]["settings"]!["cloud"]!);
         sent.Clear();
         w.HandleMessage("{\"type\":\"run-ended\",\"score\":5000,\"durationSec\":60}");   // no run-started: nothing
@@ -835,58 +836,33 @@ public sealed partial class GameWindowTests
         Assert.Equal((40, 40), GameWindow.RacePayout(200, 60, 1.0));
     });
 
+    /// <summary>WPF 7.2.3 (owner 2026-11-05): the purchase door is open, Classic is free with every track.
+    /// The page gets every track whatever the store says, so a grant change neither restages the menu nor
+    /// closes the host; the 3D tile stays (Prime padlock). The armed-door branch stays in RacingAccess.</summary>
     [Fact]
-    public void Race_and_launcher_follow_grant_additions_and_close_on_any_revocation() => RunRace("rt.original.03", (launcher, _, _) =>
+    public void Race_with_the_door_open_ignores_grant_changes() => RunRace("rt.original.03", (launcher, _, _) =>
     {
         var tracks = new HashSet<string> { "rt.original.03" };
         RacingAccess.IsGrantedProvider = tracks.Contains;
         launcher.BuildTiles();
-        // WPF #3126: no production door opens the 2D bridge; its grant regressions run on it directly.
         var w = OpenRetiredRace();
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
         tracks.Add("rt.original.04");
         ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
-        Dispatcher.UIThread.RunJobs();
-        var update = Assert.Single(sent);
-        Assert.Equal("race-ownership", (string?)update["type"]);
-        Assert.Equal(new[] { 3, 4 }, update["tracks"]!.Values<int>());
-        sent.Clear();
-        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
-        Dispatcher.UIThread.RunJobs();
-        Assert.Empty(sent); // An unrelated grant cannot restage the race menu.
-        tracks.Remove("rt.original.03");
-        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
-        Dispatcher.UIThread.RunJobs();
-        Assert.False(GameWindow.IsAnyOpen());
-        Assert.False(w.RaceWatchRunning);
-        // WPF 7.2 LauncherCatalogue.cs:238: the Racing Thoughts tile is always revealed (Prime padlock), owned tracks or not.
         tracks.Clear();
         ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
         Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain(sent, m => (string?)m["type"] == "race-ownership");
+        Assert.True(GameWindow.IsAnyOpen());
+        Assert.Equal(ConditioningControlPanel.Services.Prizes.PrizeGrants.RacingTrackMax + 1, RacingAccess.OwnedTracks.Length);
+        Assert.Empty(RacingAccess.PurchasedTracks);
         Assert.Contains(launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Children,
             c => Equals(c.Tag, "race"));
-        tracks.Add("rt.original.00");
-        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        w.Close();
         Dispatcher.UIThread.RunJobs();
-        Assert.Contains(launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Children,
-            c => Equals(c.Tag, "race"));
     });
 
-    [Fact]
-    public void Race_revocation_then_regrant_without_dispatching_closes_the_host() => RunRace("rt.original.03", (_, _, _) =>
-    {
-        var granted = true;
-        RacingAccess.IsGrantedProvider = id => granted && id == "rt.original.03";
-        var w = OpenRetiredRace();
-        granted = false;
-        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
-        granted = true;
-        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
-        Dispatcher.UIThread.RunJobs();
-        Assert.False(GameWindow.IsAnyOpen());
-        Assert.False(w.RaceWatchRunning);
-    });
     /// <summary>WPF StartHeartbeatWatch :595: idle until ready; silent past 20 s on the menu (10 s mid-run)
     /// gets one ping, a pong resets it, still silent on the next tick closes the window.</summary>
     [Fact]

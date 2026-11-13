@@ -224,6 +224,42 @@ public class LauncherBootTests
     }
 
     [Fact]
+    public void Classic_tile_opens_the_2d_race_free_for_everyone_and_race_stays_Glassroad()
+    {
+        // Owner 2026-11-05: the 2D race is back as its own tile, free for every tier. The test host
+        // has no Patreon service (reads as tier 0), so Classic must be open where race is padlocked.
+        var classic = LauncherCatalogue.Find("raceclassic");
+        Assert.NotNull(classic);
+        Assert.True(classic!.Revealed);
+        Assert.True(classic.Available);
+        Assert.False(classic.Locked);
+        Assert.Equal("features/race_classic.png", classic.ArtPath);
+        Assert.True(LauncherCatalogue.Find("race")!.Locked);
+        Assert.True(ConditioningControlPanel.Services.Race.RacingAccess.CanLaunch);
+        Assert.Equal(ConditioningControlPanel.Services.Prizes.PrizeGrants.RacingTrackMax + 1, ConditioningControlPanel.Services.Race.RacingAccess.OwnedTracks.Length);
+
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "ConditioningControlPanel.csproj")))
+            dir = dir.Parent;
+        Assert.NotNull(dir);
+        var app = Path.Combine(dir!.FullName, "ConditioningControlPanel");
+        var catalogue = File.ReadAllText(Path.Combine(app, "Services", "Launcher", "LauncherCatalogue.cs"));
+        // The head's catalogue is a host table over Core's LauncherCards since the port: one entry per id, ending "null),".
+        int at = catalogue.IndexOf("[\"raceclassic\"] = (", StringComparison.Ordinal);
+        Assert.True(at >= 0);
+        var entry = catalogue.Substring(at, catalogue.IndexOf("null),", at, StringComparison.Ordinal) - at);
+        Assert.Contains("Chaos.CaucusHostService.Launch()", entry);
+        Assert.DoesNotContain("Glassroad", entry);
+        int race = catalogue.IndexOf("[\"race\"] = (", StringComparison.Ordinal);
+        var raceEntry = catalogue.Substring(race, catalogue.IndexOf("null),", race, StringComparison.Ordinal) - race);
+        Assert.Contains("Glassroad.GlassroadHostService.Launch()", raceEntry);
+        Assert.Contains("PrimeAllowed", raceEntry);
+        // The key art is a real picture, not an LFS pointer.
+        var png = File.ReadAllBytes(Path.Combine(SourceRoots.RepoRoot, "Assets", "features", "race_classic.png"));   // the art lives in Assets/
+        Assert.True(png.Length > 1000 && png[0] == 0x89 && png[1] == (byte)'P' && png[2] == (byte)'N' && png[3] == (byte)'G');
+    }
+
+    [Fact]
     public void Mystery_decision_is_pure_null_reveals_false_hides_throw_hides()
     {
         static LauncherEntry Entry(Func<bool>? revealed) => new("x", "t", "b", null, "?", default,
