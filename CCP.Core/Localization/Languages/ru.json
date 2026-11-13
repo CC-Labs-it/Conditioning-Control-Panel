@@ -8372,5 +8372,8 @@
   "chaos_dvd_title": "Порно-DVD",
   "chaos_dvd_loading": "загрузка",
   "chaos_inescapable_unlock_tip": "дверь глубже. она продаёт ключ в Toybox: заверши {0} спусков на Relentless, достигни Devoted ({1} спусков), затем обучись за ✦{2}.",
-  "chaos_resistance_regrows": "сопротивление восстанавливается"
+  "chaos_resistance_regrows": "сопротивление восстанавливается",
+  "account_merged_signin_title": "Ваши аккаунты объединены",
+  "account_merged_signin_summary": "Войдите снова, чтобы продолжить.",
+  "account_merged_signin_body": "Два ваших аккаунта объединены в один. Войдите снова, чтобы продолжить.\n\nЛокальный прогресс сохранён."
 }

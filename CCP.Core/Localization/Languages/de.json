@@ -8372,5 +8372,8 @@
   "chaos_dvd_title": "Porno-DVD",
   "chaos_dvd_loading": "wird geladen",
   "chaos_inescapable_unlock_tip": "eine tiefere tür. sie verkauft den schlüssel in der Toybox: schließe {0} abstiege auf Relentless ab, erreiche Devoted ({1} abstiege) und trainiere es dann für ✦{2}.",
-  "chaos_resistance_regrows": "Widerstand regeneriert sich"
+  "chaos_resistance_regrows": "Widerstand regeneriert sich",
+  "account_merged_signin_title": "Deine Konten wurden zusammengeführt",
+  "account_merged_signin_summary": "Melde dich erneut an, um fortzufahren.",
+  "account_merged_signin_body": "Deine beiden Konten wurden zu einem zusammengeführt. Melde dich erneut an, um fortzufahren.\n\nDein lokaler Fortschritt bleibt erhalten."
 }
