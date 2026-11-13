@@ -45,7 +45,7 @@ public sealed class CloudSettingsBackupTests : IDisposable
     {
         public readonly List<(string Url, string? Token, string Body)> Seen = new();
         public HttpStatusCode Status = HttpStatusCode.OK;
-        public string Body = "{\"success\":true}";
+        public string Body = "{\"backup\":null}";   // the server always names the slot (null = none yet)
         public Func<string, string?>? BodyFor;   // per url; null falls back to Body
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
@@ -752,6 +752,28 @@ public sealed class CloudSettingsBackupTests : IDisposable
     public async Task ASlotThatCannotBeReadIsNeverOverwritten()
     {
         _fake.Status = HttpStatusCode.InternalServerError;
+        Assert.False(await new CloudSettingsBackup(_fake).BackupAsync(Signed()));
+        Assert.Empty(Uploads);
+    }
+
+    // #4323: only an explicit empty slot may be overwritten; a missing or odd one is a failed read.
+    [Theory]
+    [InlineData("{\"backup\":42}", false)]
+    [InlineData("{\"backup\":[]}", false)]
+    [InlineData("{}", false)]
+    [InlineData("{\"backup\":null}", true)]
+    public async Task OnlyAnExplicitEmptySlotCanBeOverwritten(string body, bool allowed)
+    {
+        _fake.Body = body;
+        Assert.Equal(allowed, await new CloudSettingsBackup(_fake).BackupAsync(Signed()));
+        Assert.Equal(allowed ? 1 : 0, Uploads.Count);
+    }
+
+    // #4323: a slot that is there but unreadable is never replaced (its path fields would be lost).
+    [Fact]
+    public async Task AnUnreadableExistingSlotIsNeverOverwritten()
+    {
+        _fake.Body = "{\"backup\":{\"settings_data\":\"invalid\"}}";
         Assert.False(await new CloudSettingsBackup(_fake).BackupAsync(Signed()));
         Assert.Empty(Uploads);
     }
