@@ -65,6 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static Visual? _host;
         private static DispatcherTimer? _pump;
         private static bool _refused;
+        private static int _sessionOpacity;
 
         internal static Task? LastDecode { get; private set; }
         internal static IReadOnlyCollection<int> ShownSlots => Windows.Keys;
@@ -96,6 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             });
             CoreCornerGif.SessionShowHandler = setting => OnUi(() => { if (host() is { } h) ShowSession(h, setting); });
             CoreCornerGif.SessionCloseHandler = handBack => OnUi(() => CloseSession(handBack ? host() : null));
+            CoreCornerGif.SessionOpacityHandler = opacity => OnUi(() => SetSessionOpacity(opacity));
             CoreCornerGif.StandaloneActiveProvider = () => HasActiveOverlays;
             CoreCornerGif.SpiralOverlayActiveProvider = () => SpiralOverlay.IsShowing;
         }
@@ -117,8 +119,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void ShowSession(Visual host, CornerGifOverlaySetting setting)
         {
             _host = host;
+            _sessionOpacity = Math.Clamp(setting.Opacity, 1, 100);
             CloseSlot(SessionSlot);
             QueueShow(SessionSlot, setting);
+        }
+
+        // WPF SessionEngine.cs:2389: update the existing surface, preserving its animation.
+        // A decode in flight uses the latest value when its window is realized.
+        private static void SetSessionOpacity(int opacity)
+        {
+            _sessionOpacity = opacity;
+            if (Windows.TryGetValue(SessionSlot, out var shown))
+                shown.Window.Spiral.Opacity = Math.Clamp(opacity / 100.0, 0, 1);
         }
 
         /// <summary>WPF SessionEngine.CloseCornerGif: a non-null host is the handback, which
@@ -310,7 +322,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var w = new SpiralOverlayWindow();
             w.Spiral.Stretch = global::Avalonia.Media.Stretch.Uniform;
             w.Spiral.Source = frames[0];
-            w.Spiral.Opacity = opacity;
+            w.Spiral.Opacity = index == SessionSlot ? Math.Clamp(_sessionOpacity / 100.0, 0, 1) : opacity;
             if (!X11Overlay.SetClickThrough(w, true) | !X11Overlay.SetOverrideRedirect(w, bounds) && !SkipPlatformChecksForTests)
             {
                 Log.Warning("CornerGif: the platform refused a click-through topmost overlay window, so no corner GIF");
