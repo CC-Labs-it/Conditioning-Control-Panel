@@ -68,7 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// answers "the built-in default" on a head with no mod layer, so the ctor touches no disk.
     ///
     /// Preview playback is stoppable through CoreAudio. UI Art uses the existing image slots, and text
-    /// Barks are a ported partial. Mantras, Event Audio, Portraits, Emotes and Art Framing remain deferred.
+    /// Barks, Mantras and Event Audio are ported partials. Portraits, Emotes and the Art Framing editor remain deferred.
     /// </summary>
     public partial class ModCreatorWindow : Window
     {
@@ -356,7 +356,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var btn = new Button
                 {
-                    Content = key == "eventaudio" ? Loc.Get("mod_event_title") : label,
+                    Content = key switch { "eventaudio" => Loc.Get("mod_event_title"), "mantras" => Loc.Get("pl6_mantra_title"), _ => label },
                     Tag = key,
                     HorizontalContentAlignment = HorizontalAlignment.Left,
                     Padding = new Thickness(13, 9, 13, 9),
@@ -429,7 +429,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             BuildPersonalitiesSection();
             BuildAdvancedSection();
             BuildBarksSection();
-            BuildDeferredSection("mantras", "Mantras", "ModCreatorWindow.Mantras.cs");
+            BuildMantrasSection();
             BuildEventAudioSection();
             BuildDeferredSection("portraits", "Portraits", "ModCreatorWindow.Portraits.cs");
             BuildDeferredSection("emotes", "Animated Emotes", "ModCreatorWindow.Emotes.cs");
@@ -451,13 +451,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         // ─── Side-file seams ─────────────────────────────────────
-        // Barks and Event Audio are wired below. Remaining panel partials (Mantras/Portraits/Emotes) join
+        // Barks, Mantras and Event Audio are wired below. Remaining panel partials (Portraits/Emotes) join
         // when each is ported. In the WPF head these three aggregate hooks let export write each
         // panel's side files into the .ccpmod resources tree, let load repopulate the panels from
         // an extracted tree, and let reset clear them.
-        private void WriteSideFilesTo(string resourcesDir) { WriteBarksTo(resourcesDir); WriteEventAudioTo(resourcesDir); }
-        private void LoadSideFilesFrom(string resourcesDir) { LoadBarksFrom(resourcesDir); LoadEventAudioFrom(resourcesDir); }
-        private void ClearSideFileState() { ClearBarksSection(); ClearEventAudioSection(); }
+        private async Task WriteSideFilesTo(string resourcesDir) { WriteBarksTo(resourcesDir); WriteEventAudioTo(resourcesDir); var skipped = WriteMantrasTo(resourcesDir); if (skipped.Count > 0) await MessageDialog.ShowAsync(this, Loc.Get("mod_mantra_skipped_title"), string.Join("\n", skipped)); }
+        private void LoadSideFilesFrom(string resourcesDir) { LoadBarksFrom(resourcesDir); _ = LoadMantrasFrom(resourcesDir); LoadEventAudioFrom(resourcesDir); }
+        private void ClearSideFileState() { ClearBarksSection(); ClearMantrasSection(); ClearEventAudioSection(); }
 
         private void ApplyPanelSectionsToManifest(ModManifest manifest)
         {
@@ -2520,7 +2520,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
 
                 // Barks / mantras / event audio / portraits / emotes.
-                WriteSideFilesTo(resourcesDir);
+                await WriteSideFilesTo(resourcesDir);
 
                 // Create ZIP
                 if (File.Exists(savePath)) File.Delete(savePath!);
