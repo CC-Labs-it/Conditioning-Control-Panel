@@ -138,7 +138,7 @@ public sealed class ChaosWaveTimerWindowTests
                 Assert.Null(ChaosWaveTimerWindow.Active);
                 ChaosRunHost.ForceShutdown();
 
-                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
                 ChaosRunHost.State!.ShowWaveTimer = true;
                 ChaosRunHost.Overlay!.FinishCountdown();
                 var w = ChaosWaveTimerWindow.Active!;   // born at BeginRun, pill still hidden
