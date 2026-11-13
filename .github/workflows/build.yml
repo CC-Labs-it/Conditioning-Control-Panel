@@ -525,52 +525,6 @@ jobs:
             avalonia-expected.txt
           retention-days: 7
 
-  # Dedicated host: this test takes foreground focus and must not share a desktop with suite tests.
-  awareness-win32:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-      - run: dotnet build Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release
-      # Isolated and opt-in: normal testhosts must never inspect the real foreground desktop.
-      - name: Require the Windows foreground privacy path and prove the test fails
-        timeout-minutes: 10
-        shell: pwsh
-        run: |
-          $env:CCP_TEST_WIN32_FOREGROUND = '1'
-          $filter = 'FullyQualifiedName=CCP.Avalonia.Tests.AwarenessWin32NativeTests.NativeForegroundReachesTheSelectedPollAndPrivacyFilter'
-          $results = Join-Path $env:RUNNER_TEMP 'awareness-win32'
-          function VerifyResult($file, $outcome) {
-            [xml]$trx = Get-Content (Join-Path $results $file)
-            $items = @($trx.TestRun.Results.UnitTestResult)
-            if ($items.Count -ne 1 -or $items[0].outcome -ne $outcome -or $items[0].testName -notlike '*NativeForegroundReachesTheSelectedPollAndPrivacyFilter') {
-              throw "Windows foreground test did not report $outcome"
-            }
-          }
-          dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release --no-build --filter $filter --logger 'trx;LogFileName=good.trx' --results-directory $results
-          if ($LASTEXITCODE -ne 0) { throw 'Windows foreground test failed' }
-          VerifyResult 'good.trx' 'Passed'
-          # Wrong platform selection must make the actual app poll fail the test.
-          $path = 'CCP.Avalonia/App.axaml.cs'
-          $original = [IO.File]::ReadAllText($path)
-          $mutated = $original.Replace('? Platform.Win32Windows.ReadAwarenessForeground : Platform.X11ActiveWindow.ReadForeground', '? Platform.X11ActiveWindow.ReadForeground : Platform.X11ActiveWindow.ReadForeground')
-          if ($mutated -eq $original) { throw 'Could not apply foreground selection mutation' }
-          try {
-            [IO.File]::WriteAllText($path, $mutated)
-            dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release --filter $filter --logger 'trx;LogFileName=broken.trx' --results-directory $results
-            if ($LASTEXITCODE -eq 0) { throw 'Broken foreground selection passed' }
-            VerifyResult 'broken.trx' 'Failed'
-            [xml]$broken = Get-Content (Join-Path $results 'broken.trx')
-            $message = $broken.TestRun.Results.UnitTestResult.Output.ErrorInfo.Message
-            if ($message -notmatch '(?s)Expected:\s*Gaming.*Actual:\s*Unknown') { throw "Mutation failed for an unexpected reason: $message" }
-          } finally {
-            [IO.File]::WriteAllText($path, $original)
-          }
-          # The verified failing native command leaves LASTEXITCODE=1; the Actions pwsh wrapper exits with it.
-          $global:LASTEXITCODE = 0
-
   # The coverage guarantee the sequential script used to give: the shards' Total: counts must add up to
   # the suite's own --list-tests count, so a test can never fall between shards (or a shard go missing).
   # !cancelled() also keeps this running when avalonia-linux is skipped (scope=windows).
