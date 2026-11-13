@@ -721,7 +721,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             }
         }
 
-        // WPF MainWindow.xaml.cs:2046 and player:2527: panic pauses every player, including pending opens.
+        // WPF MainWindow.xaml.cs:2067 and player:2527: panic pauses every player, including pending opens.
         internal static void PanicPauseAll()
         {
             foreach (var p in OpenPlayers.ToArray())
@@ -1757,9 +1757,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             if (w <= 0 || _miniTotalSeconds <= 0) return;
             var frac = Math.Clamp(xInCanvas / w, 0, 1);
             _currentSec = frac * _miniTotalSeconds;
+            // WPF EnhancementPlayerWindow.Mission3.cs:777-789 clamps audio to its duration.
+            if (_localAudio != null)
+            {
+                _currentSec = Math.Clamp(_currentSec, 0, _durationSec);
+                _localAudio.PositionSeconds = _currentSec;
+            }
             UpdateMiniPlayheadX();
-            // WPF EnhancementPlayerWindow.xaml.cs:2855: seek the current transport.
-            if (_localAudio != null) _localAudio.PositionSeconds = _currentSec;
             if (_isVideoMode && _videoNavigated)
             {
                 _ = _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke(

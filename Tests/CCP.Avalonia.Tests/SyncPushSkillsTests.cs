@@ -56,6 +56,28 @@ public sealed partial class AccountSeedTests
         finally { ProgressionBank.Awarded -= nudge; ProgressionBank.QuestAwarded -= quest; }
     });
 
+    // Restack b76 (#3300): a wallet_net drop adopts a spend made on another device (V2WalletNet).
+    [Fact]
+    public void WalletNetDropAdoptsSpentPointsAndSendsNewBalance() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
+        var s = CoreSettings.Current; var old = s.WalletNetSeen;
+        try
+        {
+            s.WalletNetSeen = new Dictionary<string, int> { ["other"] = 11, ["u1"] = 100 }; s.SkillPoints = 20;
+            wire.SyncReply = """{"success":true,"skill_points":15,"unlocked_skills":[],"wallet_net":100}""";
+            Assert.True(await AccountSeed.LoadProfileAsync());
+            Assert.Equal(20, s.SkillPoints); Assert.Equal(100, s.WalletNetSeen["u1"]);
+            wire.SyncReply = """{"success":true,"skill_points":7,"unlocked_skills":[],"wallet_net":90}""";
+            sync.UtcNow = () => T0.AddSeconds(31); Assert.True(await sync.PushAsync("spent elsewhere"));
+            Assert.Equal(7, s.SkillPoints); Assert.Equal(90, s.WalletNetSeen["u1"]); Assert.Equal(11, s.WalletNetSeen["other"]);
+            wire.SyncReply = """{"success":true,"skill_points":5,"unlocked_skills":[]}""";
+            sync.UtcNow = () => T0.AddSeconds(62); Assert.True(await sync.PushAsync("after spend"));
+            Assert.Equal(7, (int)wire.Syncs.Last()["skill_points"]!); Assert.Equal(7, s.SkillPoints); Assert.Equal(90, s.WalletNetSeen["u1"]);
+        }
+        finally { s.WalletNetSeen = old; }
+    });
+
     [Fact]
     public void FreshInstall_SendsNoSkills_UntilAResponseWasAdopted_ThenTheMergedValues() => WithFreshInstall(async () =>
     {

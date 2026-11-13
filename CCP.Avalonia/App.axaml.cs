@@ -494,11 +494,21 @@ namespace ConditioningControlPanel.Avalonia
         internal static event Action<string>? FeatureUsed;
         internal static void NoteFeatureUsed(string feature) => FeatureUsed?.Invoke(feature);
 
+        internal static void SeedSubliminalFeatureUse()
+        {
+            CoreSubliminal.ShowProvider = Views.Overlays.SubliminalWhisperShow.Phrase;
+            Views.Overlays.SubliminalOverlay.Displayed -= NoteSubliminalFeatureUse;
+            Views.Overlays.SubliminalOverlay.Displayed += NoteSubliminalFeatureUse;
+        }
+
+        private static void NoteSubliminalFeatureUse() =>
+            NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureSubliminal);
+
         /// <summary>
         /// WPF App.xaml.cs SignalMirrorFactory + WireMemorySignalSources: the brain's memory profile gets
         /// level, streak, sessions, archetype (CoreSettings), level-ups, favourite features and per-mod
         /// chat turns and mantra reps (WPF's DeferredSourcesHook; App.Mantra exists from the start here).
-        /// ponytail: brain-drain playback is absent; mind-wipe one-shots emit through FeatureUsed.
+        /// Brain Drain triggers and mind-wipe playback emit through FeatureUsed.
         /// </summary>
         internal static void SeedMemorySignals()
         {
@@ -879,11 +889,7 @@ namespace ConditioningControlPanel.Avalonia
                 // Subliminal and bouncing-text surfaces. Core owns the schedule / the motion;
                 // these draw on click-through overlays (Views/Overlays), hosted like the flash.
                 // SubliminalWhisperShow plays the linked whisper first, then draws SubliminalOverlay.
-                CoreSubliminal.ShowProvider = text =>
-                {
-                    Views.Overlays.SubliminalWhisperShow.Phrase(text);
-                    NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureSubliminal);
-                };
+                SeedSubliminalFeatureUse();
                 CoreSubliminal.CustomShowProvider = text => Views.Overlays.SubliminalWhisperShow.Custom(text);
                 CoreSubliminal.BambiFreezeProvider = Views.Overlays.SubliminalWhisperShow.Freeze;
                 CoreSubliminal.RunStateChanged = running =>

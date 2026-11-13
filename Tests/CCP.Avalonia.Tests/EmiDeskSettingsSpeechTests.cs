@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.IO;
 using System.Threading;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -8,6 +9,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -64,6 +66,61 @@ public sealed class EmiDeskSettingsSpeechTests
             CoreSettings.ServiceProvider = previous;
         }
     });
+    [Fact]
+    public Task FypOpen_DrawsRealAskAndPinsOnlyOnYes() => InDesk(async desk =>
+    {
+        var oldPremium = CoreEntitlement.HasPremiumProvider;
+        var state = EmiState.Current;
+        var pins = state.Pins.ToList();
+        var bedtime = state.BedtimeUntil;
+        try
+        {
+            state.Pins.Clear();
+            state.BedtimeUntil = DateTime.MinValue;
+            CoreEntitlement.HasPremiumProvider = () => true;
+            CoreSettings.Current.EmiDeskOffers = true;
+            CoreSettings.Current.EmiDeskSpice = 2;
+            var lines = JObject.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Resources", "emi", "desk-lines.json")));
+            var moment = (JObject)lines["moments"]!["fypOpened"]!;
+            moment["priority"] = 3; moment["scripted"] = true; moment["askOdds"] = 1;
+            moment.Remove("limit");
+            desk.LineEngine = EmiLineEngine.FromJson(lines.ToString());
+            var window = desk.Window!;
+            for (int i = 0; window.Transiting && i < 150; i++) { await Task.Delay(20); Dispatcher.UIThread.RunJobs(); }
+            Assert.False(window.Transiting);
+            desk.Fire("fypOpened");
+            Assert.True(window.AskLive);
+            Assert.Equal("put the feed up top?", window.BubbleText);
+            var border = window.BubbleHost.Children.OfType<Border>().Single();
+            var panel = Assert.IsType<StackPanel>(border.Child);
+            var chips = Assert.IsType<StackPanel>(panel.Children[1]);
+            Assert.Equal(2, chips.Children.Count);
+            Assert.Empty(state.Pins);
+            Assert.IsType<Button>(chips.Children[1]).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False(window.AskLive);
+            Assert.Empty(state.Pins);
+            desk.LineEngine = EmiLineEngine.FromJson(lines.ToString());
+            desk.Fire("fypOpened");
+            Assert.True(window.AskLive);
+            Assert.IsType<Button>(chips.Children[0]).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False(window.AskLive);
+            Assert.Equal("fyp", state.Pins[0]);
+            Assert.False(EmiLineEngine.EffectFeasibleProbe!("pinTop:fyp"));
+            state.Pins.Clear();
+            desk.LineEngine = EmiLineEngine.FromJson(lines.ToString());
+            desk.Fire("fypOpened");
+            Assert.True(window.AskLive);
+            desk.PanicSilence();
+            Assert.False(window.AskLive);
+            Assert.Empty(state.Pins);
+        }
+        finally
+        {
+            state.Pins.Clear(); state.Pins.AddRange(pins); state.BedtimeUntil = bedtime;
+            CoreEntitlement.HasPremiumProvider = oldPremium;
+        }
+    });
+
     [Fact]
     public async Task DeskHelperRestoresEmiStateAndItsPendingSave()
     {

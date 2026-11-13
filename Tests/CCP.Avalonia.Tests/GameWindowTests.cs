@@ -965,6 +965,30 @@ public sealed partial class GameWindowTests
 
     // ---- Racing Thoughts own tracks (WPF CaucusHostService.cs :353-368, :736-1035) ----
 
+    // Restack b76 (#3286). WPF CaucusHostService.cs:383,435: both paths stop the file clock.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Race_RunEndAndExit_StopTheAudio(bool exit) => RunRace("rt.original.03", (_, _, _) =>
+        WithTrackFiles((_, _) => Tone(1), paths =>
+    {
+        var player = new FakeTrackPlayer();
+        try
+        {
+            var w = OpenRetiredRace();
+            w.RacePickFile = () => Task.FromResult<string?>(paths[0]);
+            w.RaceNewPlayer = () => player;
+            w.HandleMessage("{\"type\":\"track-pick\"}");
+            Settle(w);
+            w.HandleMessage("{\"type\":\"track-play\"}");
+            w.HandleMessage("{\"type\":\"run-started\"}");
+            w.HandleMessage(exit ? "{\"type\":\"exit\"}" : "{\"type\":\"run-ended\"}");
+            Assert.False(player.IsPlaying);
+            Assert.False(w.RaceTrackClockRunning);
+        }
+        finally { GameWindow.CloseAllForPanic(); }
+    }));
+
     private sealed class FakeTrackPlayer : IRaceTrackPlayer
     {
         public readonly List<string> Calls = new();
