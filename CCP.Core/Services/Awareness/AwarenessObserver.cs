@@ -2,8 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Threading;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Awareness
 {
@@ -81,7 +80,11 @@ namespace ConditioningControlPanel.Services.Awareness
         private readonly IAppStateProbe _appState;
         private readonly Func<AwarenessPolicySettings?> _policy;
 
-        private DispatcherTimer? _pollTimer;
+        private ITimer? _pollTimer;
+        private readonly TimeProvider _timeProvider;
+        private readonly Action? _attachAppState;
+        public static Func<bool>? EntitlementProvider { get; set; }
+        public static Action<Action>? PostToUi { get; set; }
 
         // Cancels anything still in flight when she is told to stop watching. The LLM leg can take
         // eight seconds; without this a user who closes her eyes mid-call still gets a line about what
@@ -134,10 +137,9 @@ namespace ConditioningControlPanel.Services.Awareness
         private DateTime _lastTallyFlush;
 
         /// <summary>
-        /// Production constructor. The four collaborators are required: an observer with no ledger, no
-        /// scorer, no arbiter or no memory is not a degraded observer, it is a bug with a heartbeat.
+        /// Compatibility constructor for existing head tests that do not observe a desktop.
         /// </summary>
-        public AwarenessObserver(
+        internal AwarenessObserver(
             ActivityLedger ledger,
             WorthinessScorer scorer,
             IReactionArbiter arbiter,
@@ -148,10 +150,9 @@ namespace ConditioningControlPanel.Services.Awareness
         }
 
         /// <summary>
-        /// Test/diagnostic constructor: every edge that needs a desktop, an audio stack, WinRT or a
-        /// settings object is behind one of these seams, so the whole pipeline runs headlessly.
+        /// The head supplies the probes; the timer and policy can be injected for headless tests.
         /// </summary>
-        internal AwarenessObserver(
+        public AwarenessObserver(
             ActivityLedger ledger,
             WorthinessScorer scorer,
             IReactionArbiter arbiter,
@@ -162,7 +163,8 @@ namespace ConditioningControlPanel.Services.Awareness
             IMicrophoneProbe? microphone,
             IMediaWatcher? media,
             IAppStateProbe? appState,
-            Func<AwarenessPolicySettings?>? policy)
+            Func<AwarenessPolicySettings?>? policy,
+            TimeProvider? timeProvider = null, Action? attachAppState = null)
         {
             _ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
             _scorer = scorer ?? throw new ArgumentNullException(nameof(scorer));
@@ -170,11 +172,13 @@ namespace ConditioningControlPanel.Services.Awareness
             _memory = memory ?? throw new ArgumentNullException(nameof(memory));
             _clock = localClock ?? (() => DateTime.Now);
 
-            _foreground = foreground ?? new Win32ForegroundProbe();
-            _input = input ?? new Win32InputProbe();
-            _microphone = microphone ?? new WasapiMicrophoneProbe();
-            _media = media ?? new SmtcMediaWatcher();
-            _appState = appState ?? new AppStateProbe();
+            _foreground = foreground!;
+            _input = input!;
+            _microphone = microphone!;
+            _media = media;
+            _appState = appState!;
+            _timeProvider = timeProvider ?? TimeProvider.System;
+            _attachAppState = attachAppState;
             _policy = policy ?? AwarenessPolicySettings.FromSettings;
 
             _pendingSince = _clock();
@@ -232,7 +236,7 @@ namespace ConditioningControlPanel.Services.Awareness
         /// the update, for a dialog the user has never seen. Until the v2 explanation is accepted the
         /// legacy pipeline runs exactly as it does today and nothing is written.</para>
         ///
-        /// <para>Reads defensively — headless and during early startup <c>App.Settings</c> is null, and
+        /// <para>Reads defensively — headless and during early startup settings is null, and
         /// a null settings object must read as "no consent", never as "sure, go ahead".</para>
         /// </summary>
         public static bool IsEnabled
@@ -241,7 +245,7 @@ namespace ConditioningControlPanel.Services.Awareness
             {
                 try
                 {
-                    var s = App.Settings?.Current;
+                    var s = CoreSettings.Service?.Current;
                     if (s == null) return false;
                     return AwarenessObserverPolicy.IsEnabled(s, HasEntitlement);
                 }
@@ -269,7 +273,7 @@ namespace ConditioningControlPanel.Services.Awareness
         /// lapsed account does. The free-day rotation is OR'd in because the ? box can put awareness
         /// in the window for a day.</para>
         ///
-        /// <para>Fails CLOSED when <c>App.Patreon</c> is null (early startup, or a service that failed
+        /// <para>Fails CLOSED when the entitlement service is null (early startup, or a service that failed
         /// to construct): a missing gate must never read as an open door. Safe here because every
         /// start path runs after the Patreon service is constructed — the avatar tube's Loaded handler
         /// and the companion room's dial — and <c>RefreshEntitlementVeils</c> re-arms the service if
@@ -281,8 +285,7 @@ namespace ConditioningControlPanel.Services.Awareness
             {
                 try
                 {
-                    return App.Patreon?.HasPremiumAccess == true
-                           || App.DailyFree?.IsFreeToday("awareness") == true;
+                    return EntitlementProvider?.Invoke() == true;
                 }
                 catch { return false; }
             }
@@ -299,7 +302,7 @@ namespace ConditioningControlPanel.Services.Awareness
 
             if (!IsEnabled)
             {
-                App.Logger?.Debug("AwarenessObserver: not starting (not entitled, v2 off, awareness off, or no consent)");
+                Log.Debug("AwarenessObserver: not starting (not entitled, v2 off, awareness off, or no consent)");
                 return;
             }
 
@@ -316,26 +319,24 @@ namespace ConditioningControlPanel.Services.Awareness
             _lastTickAt = now;
             _lastTallyFlush = now;
 
-            try { _input.Start(); } catch (Exception ex) { App.Logger?.Debug("AwarenessObserver: input probe start failed - {Error}", ex.Message); }
-            try { _media?.Start(); } catch (Exception ex) { App.Logger?.Debug("AwarenessObserver: media watcher start failed - {Error}", ex.Message); }
-            try { (_appState as AppStateProbe)?.Attach(); } catch { }
+            try { _input.Start(); } catch (Exception ex) { Log.Debug("AwarenessObserver: input probe start failed - {Error}", ex.Message); }
+            try { _media?.Start(); } catch (Exception ex) { Log.Debug("AwarenessObserver: media watcher start failed - {Error}", ex.Message); }
+            try { _attachAppState?.Invoke(); } catch { }
 
-            var dispatcher = Application.Current?.Dispatcher;
-            if (dispatcher == null)
+            if (PostToUi != null)
             {
-                App.Logger?.Warning("AwarenessObserver: no dispatcher — ledger is live, polling is not");
-                return;
+                var token = _lifetime.Token;
+                _pollTimer = _timeProvider.CreateTimer(_ => PostToUi?.Invoke(() =>
+                {
+                    if (!token.IsCancellationRequested) OnPollTick(null, EventArgs.Empty);
+                }), null, PollInterval, PollInterval);
             }
-
-            _pollTimer = new DispatcherTimer(DispatcherPriority.Normal, dispatcher) { Interval = PollInterval };
-            _pollTimer.Tick += OnPollTick;
-            _pollTimer.Start();
 
             // The dial state belongs in the ONE line that is guaranteed to reach a bug report. #1176
             // arrived saying "no filter, all my programs on the title allow list" with no way to check
             // either claim against the running config. Counts and the enum name only — never entries.
             var settings = _policy();
-            App.Logger?.Information(
+            Log.Information(
                 "AwarenessObserver: started (poll {Ms}ms, dwell gate {Gate}s, intensity={Intensity}, " +
                 "deny={Deny} entries, title-allow={Allow} entries, adult react/record={Reactions}/{Recording})",
                 (int)PollInterval.TotalMilliseconds, DwellGateSeconds,
@@ -349,8 +350,7 @@ namespace ConditioningControlPanel.Services.Awareness
         {
             if (_pollTimer != null)
             {
-                _pollTimer.Stop();
-                _pollTimer.Tick -= OnPollTick;
+                _pollTimer.Dispose();
                 _pollTimer = null;
             }
 
@@ -375,7 +375,7 @@ namespace ConditioningControlPanel.Services.Awareness
             // was quiet, which is the common shape for "I switched it on, nothing happened, I gave up".
             FlushTally(force: true);
             ResetTransientState();
-            App.Logger?.Debug("AwarenessObserver: stopped");
+            Log.Debug("AwarenessObserver: stopped");
         }
 
         /// <inheritdoc />
@@ -448,7 +448,7 @@ namespace ConditioningControlPanel.Services.Awareness
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("AwarenessObserver: AwarenessLive.Publish threw - {Error}", ex.Message);
+                Log.Debug("AwarenessObserver: AwarenessLive.Publish threw - {Error}", ex.Message);
             }
 
             try
@@ -457,7 +457,7 @@ namespace ConditioningControlPanel.Services.Awareness
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "AwarenessObserver: a FrameCut subscriber threw");
+                Log.Warning(ex, "AwarenessObserver: a FrameCut subscriber threw");
             }
 
             _ = SubmitAsync(frame, trends);
@@ -482,21 +482,19 @@ namespace ConditioningControlPanel.Services.Awareness
                     ? decision.Reason
                     : decision.Verdict.ToString());
 
-                App.Logger?.Debug("[AWARE] arbiter verdict={Verdict} tier={Tier} gate={Reason}",
+                Log.Debug("[AWARE] arbiter verdict={Verdict} tier={Tier} gate={Reason}",
                     decision.Verdict, decision.Tier, decision.Reason);
             }
             catch (Exception ex)
             {
                 // A background awareness failure is a missed joke. It must never be a crash log.
-                App.Logger?.Warning(ex, "AwarenessObserver: arbiter submit failed");
+                Log.Warning(ex, "AwarenessObserver: arbiter submit failed");
             }
         }
 
         private void OnPollTick(object? sender, EventArgs e)
         {
             if (_disposed || !_running) return;
-            if (Application.Current?.Dispatcher == null) return;
-            if (Application.Current.Dispatcher.HasShutdownStarted) return;
 
             // Re-asked EVERY tick, not only at Start(): entitlement can lapse mid-run (a free day
             // rotating out at midnight, a subscription expiring, a logout) and a timer armed while the
@@ -527,7 +525,7 @@ namespace ConditioningControlPanel.Services.Awareness
                 var summary = _tally.Drain();
                 if (summary.Length == 0) return;
 
-                App.Logger?.Information("[AWARE] {Minutes}m summary: {Summary}",
+                Log.Information("[AWARE] {Minutes}m summary: {Summary}",
                     (int)AwarenessTally.FlushInterval.TotalMinutes, summary);
             }
             catch (Exception ex)
@@ -556,7 +554,7 @@ namespace ConditioningControlPanel.Services.Awareness
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "AwarenessObserver: poll tick failed");
+                Log.Warning(ex, "AwarenessObserver: poll tick failed");
             }
             finally
             {
@@ -607,7 +605,7 @@ namespace ConditioningControlPanel.Services.Awareness
             bool watching = (sample?.IsFullscreen ?? false) || (media?.IsPlaying ?? false);
             if (idle >= AfkSuspendSeconds && !watching)
             {
-                if (!_afk) App.Logger?.Debug("AwarenessObserver: suspending accrual (idle {Idle}s)", idle);
+                if (!_afk) Log.Debug("AwarenessObserver: suspending accrual (idle {Idle}s)", idle);
                 _afk = true;
                 _peakIdleSeconds = Math.Max(_peakIdleSeconds, idle);
 
@@ -627,7 +625,7 @@ namespace ConditioningControlPanel.Services.Awareness
                 _wakeIdleSeconds = Math.Max(_peakIdleSeconds, idle);
                 _wakePending = true;
                 _peakIdleSeconds = 0;
-                App.Logger?.Debug("AwarenessObserver: wake after {Idle}s idle", _wakeIdleSeconds);
+                Log.Debug("AwarenessObserver: wake after {Idle}s idle", _wakeIdleSeconds);
             }
 
             // --- privacy, BEFORE anything is written anywhere ---
@@ -783,7 +781,7 @@ namespace ConditioningControlPanel.Services.Awareness
                 // Invariant: every candidate leaves exactly one [AWARE] line. Debug, not Information:
                 // it names the resolved app id, and Serilog's floor is Information (see
                 // ReactionArbiter.Log for the whole argument).
-                App.Logger?.Debug(
+                Log.Debug(
                     "[AWARE] app={App} score=gated tier=- verdict=Silence gate=dnd-{Gate} transition={Transition}",
                     AwarenessText.SanitizeId(verdict.AppId), dnd.ToString().ToLowerInvariant(), candidate.Transition);
                 return;
@@ -913,7 +911,7 @@ namespace ConditioningControlPanel.Services.Awareness
             var signature = drop + "|" + context;
             if (signature == _lastDropSignature) return;
             _lastDropSignature = signature;
-            App.Logger?.Debug("[AWARE] foreground dropped: {Drop}", drop);
+            Log.Debug("[AWARE] foreground dropped: {Drop}", drop);
         }
 
         private int TakeWakeIdle()
@@ -994,7 +992,7 @@ namespace ConditioningControlPanel.Services.Awareness
             try { return await _memory.GetHabitsAsync(appId, cluster).ConfigureAwait(false) ?? Array.Empty<HabitRecord>(); }
             catch (Exception ex)
             {
-                App.Logger?.Debug("AwarenessObserver: habit lookup failed - {Error}", ex.Message);
+                Log.Debug("AwarenessObserver: habit lookup failed - {Error}", ex.Message);
                 return Array.Empty<HabitRecord>();
             }
         }
@@ -1008,7 +1006,7 @@ namespace ConditioningControlPanel.Services.Awareness
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("AwarenessObserver: ban-list lookup failed - {Error}", ex.Message);
+                Log.Debug("AwarenessObserver: ban-list lookup failed - {Error}", ex.Message);
                 return Array.Empty<ReactionSummary>();
             }
         }

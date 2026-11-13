@@ -861,10 +861,13 @@ public class AwarenessReviewFixTests : IDisposable
     [Fact]
     public void ThereIsExactlyOneAwarenessReplyParser()
     {
-        var source = SourceRoots.ReadProductFile("Services", "Companion", "Brain", "AwarenessSpeech.cs");
+        var source = SourceRoots.ReadProductFile("Services", "Awareness", "AwarenessSpeech.cs");
+
+        var service = SourceRoots.ReadProductFile("Services", "Awareness", "AwarenessReactionService.cs");
 
         Assert.DoesNotContain("\"ALT:\"", source, StringComparison.Ordinal);
-        Assert.Contains("AwarenessReactionService.Parse", source, StringComparison.Ordinal);
+        Assert.Contains("ParseReaction", source, StringComparison.Ordinal);
+        Assert.Contains("=> AwarenessReply.ParseReaction(raw)", service, StringComparison.Ordinal);
     }
 
     // =====================================================================================
