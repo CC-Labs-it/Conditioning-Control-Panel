@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '../../../CCP.Core/Services/Browser/BrowserAudioSyncScript.cs'), 'utf8')
+    .replace(/\r\n/g, '\n') // a Windows checkout reads CRLF
     .split('public const string Source = """\n')[1].split('\n""";')[0];
 new vm.Script(source); // Also fails if the ported JavaScript is syntactically invalid.
 const messages = [], listeners = {}, frames = [];
