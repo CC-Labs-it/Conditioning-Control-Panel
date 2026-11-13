@@ -41,6 +41,7 @@
   "rt_engine_browser": "在浏览器中打开",
   "rt_engine_browser_warning": "紧急停止无法关闭浏览器标签页。",
   "rt_engine_progress": "正在下载：{0}%",
+  "rt_engine_downloading": "正在下载...",
   "rt_engine_unavailable": "此版本无法下载赛车引擎。",
   "rt_engine_network": "下载失败，请检查网络连接。",
   "rt_engine_checksum": "赛车引擎的校验值不匹配。",

@@ -42,6 +42,7 @@
   "rt_engine_browser": "ブラウザで開く",
   "rt_engine_browser_warning": "パニックではブラウザのタブを閉じられません。",
   "rt_engine_progress": "ダウンロード中: {0}%",
+  "rt_engine_downloading": "ダウンロード中...",
   "rt_engine_unavailable": "このビルドではエンジンをダウンロードできません。",
   "rt_engine_network": "ダウンロードに失敗しました。接続を確認してください。",
   "rt_engine_checksum": "エンジンのチェックサムが一致しません。",

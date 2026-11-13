@@ -88,18 +88,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
             var shell = TutorialHeadHooks.Shell;
             if (shell == null) return;
 
-            Service.ConfigureCallbacks(
-                showSettings: () => shell.ShowTab("settings"),
-                showPresets: () => shell.ShowTab("presets"),
-                showProgression: () => shell.ShowTab("progression"),
-                showAchievements: () => shell.ShowTab("achievements"),
-                showCompanion: () => shell.ShowTab("companion"),
-                // WPF routes the dead "patreon" key to the App Info popup; no step asks for it
-                // since the account cards moved to Settings, Account.
-                showPatreon: () => shell.ShowTab("appsettings"),
-                showAwareness: () => shell.ShowTab("awareness"),
-                showDeeper: () => shell.ShowTab("deeper"),
-                showTab: key => shell.ShowTab(key));
+            ConfigureShellCallbacks(shell);
 
             Service.Start(type);
             if (!Service.IsActive) return;
@@ -116,6 +105,24 @@ namespace ConditioningControlPanel.Avalonia.Tours
                 if (browser != null && _shellOverlay?.StageWindow != shell) shell.RestoreBrowser();
             };
             overlay.Show();
+        }
+
+        // The process-wide service and its last step list outlive the overlay. Keep their navigation
+        // callbacks from retaining a closed shell; each new shell tour installs its own target.
+        private static void ConfigureShellCallbacks(MainShellWindow shell)
+        {
+            var weak = new WeakReference<MainShellWindow>(shell);
+            void Show(string tab) { if (weak.TryGetTarget(out var target)) target.ShowTab(tab); }
+            Service.ConfigureCallbacks(
+                showSettings: () => Show("settings"),
+                showPresets: () => Show("presets"),
+                showProgression: () => Show("progression"),
+                showAchievements: () => Show("achievements"),
+                showCompanion: () => Show("companion"),
+                showPatreon: () => Show("appsettings"),
+                showAwareness: () => Show("awareness"),
+                showDeeper: () => Show("deeper"),
+                showTab: Show);
         }
 
         /// <summary>Panic: a tour ends at once, by the abandon route (never latched as walked).</summary>
