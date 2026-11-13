@@ -95,6 +95,33 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>The linked shield-bearer (WPF BubbleService.cs:2708-2709,2730).</summary>
         public AmbientBubble? Escort { get; set; }
+        public AmbientBubble? OrbitTarget { get; set; }
+        public int OrbitFrames { get; private set; }
+        private double _orbitPhase;
+        private double _roamLeft, _roamRight, _roamTop, _roamBottom, _shieldFlashMs;
+        private DateTime _bounceCueUtc;
+        public double ShieldOpacity => _shieldFlashMs > 0 && !Safety.GentleVisuals.On ? 0.95 : 0.45 + 0.10 * Math.Sin(_timeAlive * 4);
+        public bool BounceShield(DateTime now)
+        {
+            _shieldFlashMs = 320;
+            if ((now - _bounceCueUtc).TotalMilliseconds < 200) return false;
+            _bounceCueUtc = now;
+            return true;
+        }
+
+        /// <summary>WPF BubbleService.cs:2716: reserve the escort orbit inside the work area.</summary>
+        public void InsetChaperoneBounds(double escortSize)
+        {
+            double ring = Math.Max(Chaos.ChaosTuning.CHAPERONE_ORBIT_RADIUS_DIP,
+                (Size + escortSize) / 2 + Chaos.ChaosTuning.CHAPERONE_ORBIT_GAP_DIP);
+            double inset = ring + escortSize / 2 - Size / 2;
+            _roamLeft += inset; _roamRight -= inset;
+            _roamTop += inset; _roamBottom -= inset;
+            if (_roamRight < _roamLeft) _roamLeft = _roamRight = (_roamLeft + _roamRight) / 2;
+            if (_roamBottom < _roamTop) _roamTop = _roamBottom = (_roamTop + _roamBottom) / 2;
+            X = Math.Clamp(X, _roamLeft, _roamRight);
+            Y = Math.Clamp(Y, _roamTop, _roamBottom);
+        }
         /// <summary>A live threat the player defuses by holding (WPF NeedsHoldDefuse for the plain lives).</summary>
         public bool IsLiveThreat => Spec is { IsLive: true, IsDarter: false, IsFreeze: false, IsTease: false };
         public double FuseSecLeft => Math.Max(0, FuseRemainingMs) / 1000.0;
@@ -193,7 +220,7 @@ namespace ConditioningControlPanel.Services
             return b;
         }
 
-        /// <summary>WPF Bubble ctor with a Chaos spec on its motion row (chaos runs pass FloatUp): the spec's size, the chaos
+        /// <summary>WPF Bubble ctor with a Chaos spec on its motion row (chaos runs pass FloatUp; a Chaperone roams): the spec's size, the chaos
         /// pace (bigger drifts slower, SpeedMult, CHAOS_SPEED_MULT), the ambient wobble and rise.</summary>
         public static AmbientBubble SpawnChaos(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
             double scaling, Chaos.EffectBubbleSpec spec, Chaos.ChaosMotion motion = Chaos.ChaosMotion.FloatUp, int ambientSpeedBoost = 0)
@@ -241,6 +268,17 @@ namespace ConditioningControlPanel.Services
                 b._teaseCenterX = (areaX / scaling + (areaX + areaW) / scaling - b.Size) / 2;
                 b._teaseCenterY = (areaY / scaling - b.Size - 50 + (areaY + areaH) / scaling + 50) / 2;
                 b._teaseLifeMs = Chaos.ChaosTuning.TEASE_LIFE_MS;
+            }
+            if (spec.IsChaperoneLive)
+            {
+                b._roamLeft = areaX / scaling;
+                b._roamRight = (areaX + areaW) / scaling - b.Size;
+                b._roamTop = areaY / scaling;
+                b._roamBottom = (areaY + areaH) / scaling - b.Size;
+                b.Y = b._roamTop + r.NextDouble() * Math.Max(0, b._roamBottom - b._roamTop);
+                double a = r.NextDouble() * 2 * Math.PI;
+                b._vx = Math.Cos(a) * b._speed * 1.4;
+                b._vy = Math.Sin(a) * b._speed * 1.4;
             }
             return b;
         }
@@ -329,6 +367,24 @@ namespace ConditioningControlPanel.Services
                 Angle += 2;
                 return Fade <= 0 ? Result.Done : Result.Alive;
             }
+            if (Spec is { IsEscort: true })
+            {
+                _timeAlive += 0.02;   // WPF BubbleService.cs:3957: breathe while orbiting
+                var target = OrbitTarget;
+                if (target == null || target.Popping)
+                {
+                    Popping = Deflating = true;
+                    return Result.Alive;
+                }
+                _orbitPhase += 2 * Math.PI * 0.032 / Chaos.ChaosTuning.CHAPERONE_ORBIT_PERIOD_SEC;
+                double radius = Math.Max(Chaos.ChaosTuning.CHAPERONE_ORBIT_RADIUS_DIP,
+                    (target.Size + Size) / 2 + Chaos.ChaosTuning.CHAPERONE_ORBIT_GAP_DIP);
+                X = target.CenterX + Math.Cos(_orbitPhase) * radius - Size / 2;
+                Y = target.CenterY + Math.Sin(_orbitPhase) * radius - Size / 2;
+                OrbitFrames++;
+                return Result.Alive;
+            }
+            if (_shieldFlashMs > 0) _shieldFlashMs = Math.Max(0, _shieldFlashMs - FuseStepMs);
             if (Spec?.IsBrittle == true)
             {
                 // WPF BubbleService.cs:4156-4170: the natural disc is touch-only.
@@ -365,6 +421,15 @@ namespace ConditioningControlPanel.Services
                 case 1: offset = Math.Sin(_timeAlive * 7.5) * 30; Angle = (Angle + 0.14) % 360; break;
                 case 2: offset = Math.Cos(_timeAlive * 5.4) * 25; Angle = (Angle - 0.66) % 360; break;
                 case 3: offset = Math.Sin(_timeAlive * 3) * 30 + Math.Cos(_timeAlive * 6) * 15; Angle = (Angle + 0.54) % 360; break;
+            }
+            if (Spec is { IsChaperoneLive: true })
+            {
+                X += _vx; Y += _vy;
+                if (X < _roamLeft) { X = _roamLeft; _vx = Math.Abs(_vx); }
+                else if (X > _roamRight) { X = _roamRight; _vx = -Math.Abs(_vx); }
+                if (Y < _roamTop) { Y = _roamTop; _vy = Math.Abs(_vy); }
+                else if (Y > _roamBottom) { Y = _roamBottom; _vy = -Math.Abs(_vy); }
+                return Result.Alive;
             }
             bool exited;
             switch (TriggerMotion)
@@ -469,10 +534,18 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>WPF DefuseAllLive: snap every live chaos bubble on the field (full pay).</summary>
-        public void DefuseAllLive()
+        public void DefuseAllLive(Action<AmbientBubble>? onShielded = null)
         {
             foreach (var b in Bubbles.ToArray())
+            {
+                if (b.Popping || !b.IsLiveThreat) continue;
+                if (b.Spec is { IsChaperoneLive: true } && b.Escort is { Popping: false } escort && Bubbles.Contains(escort))
+                {
+                    onShielded?.Invoke(b);
+                    continue;
+                }
                 if (b.Snap()) ChaosDefused?.Invoke(b);
+            }
         }
 
         public bool CanSpawn(AppSettings s) => Bubbles.Count < Cap(s);
@@ -520,6 +593,8 @@ namespace ConditioningControlPanel.Services
                 }
                 else b.FreezeOffsetX = b.FreezeOffsetY = 0;
                 if (HoldChaos && b.Spec != null && !b.AmbientTrigger && !b.Popping) { b.CancelChannel(); continue; }
+                if (b.Spec is { IsEscort: true } && b.OrbitTarget != null && !Bubbles.Contains(b.OrbitTarget))
+                    b.OrbitTarget = null;
                 if (FreezeChaos && b.Spec != null && !b.AmbientTrigger && !b.Popping && !b.Channeling) continue;
                 var r = b.Step(Held, CursorX, CursorY, now);
                 if (r == AmbientBubble.Result.Alive) continue;

@@ -181,4 +181,50 @@ public class ChaosHudGraceTests
         });
     }
 
+    // Hand-ported from #4754 onto the trunk's hold-while-unknown model.
+    [Fact]
+    public void Wayland_trusts_the_query_only_while_an_x_surface_has_the_pointer()
+    {
+        var panel = new Rect(0, 0, 100, 100);
+        var stale = new Point(105, 50);
+        // XQueryPointer keeps the last X position after a native Wayland surface takes the pointer.
+        Assert.False(ChaosHudWindow.CursorInHudGrace(panel, default, stale, false, wayland: true, xSurfaceHasPointer: false));
+        // The window's own hover still holds it open.
+        Assert.True(ChaosHudWindow.CursorInHudGrace(panel, default, stale, true, wayland: true, xSurfaceHasPointer: false));
+        // A root child (this window, its tooltip, another X app) makes the position live.
+        Assert.True(ChaosHudWindow.CursorInHudGrace(panel, default, stale, false, wayland: true, xSurfaceHasPointer: true));
+        Assert.False(ChaosHudWindow.CursorInHudGrace(panel, default, new Point(150, 50), true, wayland: true, xSurfaceHasPointer: true));
+        // Plain X11 and Windows are not subject to this.
+        Assert.True(ChaosHudWindow.CursorInHudGrace(panel, default, stale, false, wayland: false, xSurfaceHasPointer: false));
+    }
+
+    [Fact]
+    public async Task Wayland_stale_position_off_every_x_surface_lets_the_hud_fold()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var old = ChaosHudWindow.WaylandOverride;
+            ChaosHudWindow.WaylandOverride = true;
+            ChaosHudWindow? hud = null;
+            try
+            {
+                hud = new ChaosHudWindow();
+                hud.Show();
+                hud.UpdateLayout();
+                var inside = hud.PointToScreen(new Point(50, 50));
+                hud.ReadPointer = () => inside;
+                hud.XSurfaceHasPointerForTests = true;
+                Assert.True(hud.CursorInHudGrace());
+                hud.XSurfaceHasPointerForTests = false;
+                Assert.False(hud.CursorInHudGrace());
+            }
+            finally
+            {
+                hud?.Close();
+                ChaosHudWindow.WaylandOverride = old;
+            }
+            return Task.CompletedTask;
+        });
+    }
 }

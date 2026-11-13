@@ -386,6 +386,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF OnPlayerPress: a live chaos bubble starts a hold-to-defuse channel (if the
         /// focus gate allows) at the press point (global DIPs); every other bubble pops.</summary>
+        internal static bool IsShielded(AmbientBubble b) => b.Spec is { IsChaperoneLive: true }
+            && b.Escort is { Popping: false } escort && Field.Bubbles.Contains(escort);
+
+        internal static void BounceShield(AmbientBubble b)
+        {
+            if (b.BounceShield(Field.Clock()))
+            {
+                var cue = File.Exists(ChaosCuePath("shield_thunk")) ? "shield_thunk" : "toy_denied";
+                if (File.Exists(ChaosCuePath(cue))) PlayChaosCue(cue, 0.45f);
+            }
+            RequestFrame();
+        }
+
         internal static void Press(AmbientBubble b, double x, double y)
         {
             if (b.Spec?.IsTease == true)
@@ -406,6 +419,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (!wasPopping && b.Popping) EStimClick(b);   // WPF BubbleService.cs:352: a player pop conducts
                 return;
             }
+            if (Field.HoldChaos) return;
+            if (IsShielded(b)) { BounceShield(b); return; }
             Field.PressLive(b, _chaosCanChannel?.Invoke(b) ?? true, x, y);
             RequestFrame();
         }
@@ -464,7 +479,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             Field.Held = false;
             Field.Bubbles.Clear();
+            ChaosRipples.Clear();   // hand-ported from #4776: no ripple or hover outlives the field
+            _hoverScreen = -1;
             foreach (var w in Windows) w.Sync();
+            RequestFrame();
         }
 
         /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>
@@ -517,8 +535,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             ChaosEStimOverlay.Disarm();
         }
 
-        private static bool EscortShielded(AmbientBubble b) => b.Spec?.IsChaperoneLive == true
-            && b.Escort is { Popping: false } escort && Field.Bubbles.Contains(escort);
+        private static bool EscortShielded(AmbientBubble b) => IsShielded(b);
 
         private static void EStimClick(AmbientBubble source)
         {
@@ -582,7 +599,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             EStimArc?.Invoke(_estimCharges);
         }
 
-        /// <summary>WPF SpawnChaosBubble, FloatUp and RainDown. Without an overlay window (headless, or a
+        /// <summary>WPF SpawnChaosBubble (FloatUp, RainDown, Chaperone roaming). Without an overlay window (headless, or a
         /// platform that refuses click-through) the bubble lives on a 1920x1080 model screen.</summary>
         internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec, Random? random = null,
             Services.Chaos.ChaosMotion motion = Services.Chaos.ChaosMotion.FloatUp)
@@ -617,7 +634,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (b.Popping || b.Spec == null || Field.HoldChaos) return;   // held: the click is swallowed
             // WPF BubbleService.cs:4645-4669: instant pops preserve touch-only and escort immunity.
             if (b.Spec.IsTease || b.Spec.IsBrittle) return;
-            if (b.Spec.IsChaperoneLive && b.Escort is { Popping: false } escort && Field.Bubbles.Contains(escort)) return;
+            if (IsShielded(b)) { BounceShield(b); return; }
             if (b.IsLiveThreat)
             {
                 if (!b.Snap()) return;
@@ -656,6 +673,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 // WPF BubbleService.cs:4652-4660: instant sweeps cannot end Tease or Brittle.
                 if (b.Popping || b.Spec == null || b.Spec.IsDarter || b.Spec.IsFreeze || b.Spec.IsTease || b.Spec.IsBrittle) continue;
                 if (!rect.Intersects(new Rect(b.X, b.Y, b.Size, b.Size))) continue;
+                if (IsShielded(b)) { BounceShield(b); continue; }
                 if (b.IsLiveThreat)
                 {
                     if (b.Snap()) { Field.ChaosDefused?.Invoke(b); RequestFrame(); }
@@ -724,7 +742,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 _lastStep = now;
                 var t0 = Stats ? Stopwatch.GetTimestamp() : 0;
-                Field.Step();
+                StepChaosField();
                 PruneTeaseFaces();
                 TickChaosRipples();
                 foreach (var w in Windows) w.Sync();
@@ -732,6 +750,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (Field.Bubbles.Count == 0 && ChaosRipples.Count == 0) { _lastStep = null; return; }   // idle until the next spawn
             }
             RequestFrame();
+        }
+
+        internal static void StepChaosField()
+        {
+            Field.Step();
+            if (Field.HoldChaos) return;
+            foreach (var b in Field.Bubbles)
+            {
+                if (b.Spec is not { IsEscort: true } || b.Popping || b.OrbitFrames == 0 || b.OrbitFrames % 7 != 0 || b.OrbitTarget is not { Popping: false } live) continue;
+                double t = Field.Random.NextDouble();
+                var a = CenterPx(b);
+                var z = CenterPx(live);
+                var p = new Point(a.X + (z.X - a.X) * t, a.Y + (z.Y - a.Y) * t);
+                if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.TrailDot(p, 0.35);
+                else ChaosFieldFxOverlay.TrailDot(p, 0.35);
+            }
         }
 
         private static void Sample(double ms)
@@ -773,6 +807,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         };
         private static readonly IPen TeasePen = new Pen(Brushes.White, 5);
         private static readonly IBrush HintBack = new SolidColorBrush(Color.FromArgb(0xA0, 0x12, 0x0A, 0x18)), HintFore = new SolidColorBrush(Color.FromRgb(0xFF, 0xE2, 0xF2));
+        internal static readonly IPen ShieldPen = new Pen(new SolidColorBrush(Color.FromRgb(0x9C, 0xE8, 0xFF)), 3.5,
+            dashStyle: new DashStyle(new[] { 3.0, 2.0 }, 0));
         private static readonly Dictionary<uint, IPen> FuseCache = new();
         private static readonly Dictionary<uint, (IBrush, IPen)> TintCache = new();
 
@@ -991,6 +1027,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                             double r = size * 0.12;
                             dc.DrawLine(TeasePen, new Point(cx - r, cy - r), new Point(cx + r, cy + r));
                             dc.DrawLine(TeasePen, new Point(cx + r, cy - r), new Point(cx - r, cy + r));
+                        }
+                        if (!b.Popping && BubbleOverlay.IsShielded(b))
+                        {
+                            using (dc.PushOpacity(b.ShieldOpacity))
+                                dc.DrawEllipse(null, ShieldPen, new Point(cx, cy), size / 2 + 6 * k, size / 2 + 6 * k);
                         }
                         if (b.FuseTotalMs > 0 && !b.Popping)   // WPF fuse ring: shrinks 1 -> 0.45; yellow, flash, red brink
                         {
