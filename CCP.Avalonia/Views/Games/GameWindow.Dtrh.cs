@@ -138,6 +138,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             }
         }
 
+        /// <summary>WPF MainWindow.xaml.cs:1741: DtRH takes an unclaimed ladder press before the Back Room.</summary>
+        internal static bool HandleDtrhPanic()
+        {
+            GameWindow? w;
+            lock (Open) w = Open.FirstOrDefault(w => w.IsDtrh);
+            if (w == null) return false;
+            _dtrhPanicEpoch++; // a queued heartbeat recovery must not relaunch after panic
+            w.CloseDtrhForPanic();
+            return true;
+        }
+
         /// <summary>WPF DtrhHostService.cs:250-266: panic asks a ready page to settle its run.
         /// A booting page, or a second close while exiting, closes immediately.</summary>
         private void CloseDtrhForPanic()
