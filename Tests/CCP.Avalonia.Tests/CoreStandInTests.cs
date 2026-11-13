@@ -114,6 +114,9 @@ public sealed class CoreStandInTests
         var export = tab.FindControl<Button>("BtnExportPreset")!;
         Assert.False(export.IsEnabled);
         var first = ConditioningControlPanel.Models.Preset.GetDefaultPresets()[0];
+        var chip = panel.Children.OfType<Border>().Single(b => Equals(b.Tag, first.Id));
+        Assert.Equal(ConditioningControlPanel.Services.PresetNaming.DisplayName(first),
+            Assert.IsType<StackPanel>(chip.Child).Children.OfType<TextBlock>().Single().Text);
         typeof(PresetsTabView).GetMethod("SelectPreset", BindingFlags.NonPublic | BindingFlags.Instance)!
             .Invoke(tab, new object[] { first });
         Assert.True(export.IsEnabled);
