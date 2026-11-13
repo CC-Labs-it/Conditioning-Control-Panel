@@ -2,7 +2,7 @@
 // StepBrush, ItemIcon, SentRow): the holder's receipts. The last few things sent to one leashed friend,
 // each with its steps (sent, arrived, seen, then done / skipped / refused), its step word and how long
 // ago. The rules (rows kept, lit dots, words, times, tooltip timeline) are Core LeashUiRules / LeashSentLog.
-// Hosted by LeashHolderCard on the Leash page; Friends drawer hosting remains a gap.
+// Hosted by LeashHolderCard on the Leash page and in the Friends rail drawer's leash section.
 using System;
 using System.Collections.Generic;
 using System.Linq;

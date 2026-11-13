@@ -6,8 +6,9 @@
 // Open goon tables are in FriendsDrawer.Tables.cs.
 // The "What happened" feed and the send trails are in FriendsDrawer.Feed.cs.
 // The blocked fallback and once-only presence ask share Core rules with WPF.
-// ponytail: no leash section and no shared row juice; a friend card hosts only the leash offer
-// chip (FriendLeashOffer.cs). A word WPF throws outside the drawer
+// The rail drawer hosts the leash section (Tabs.LeashTabView asDrawer: offers, own card, held
+// cards, WPF LeashDrawerSection.cs); the Friends page leaves it to the Leash page.
+// ponytail: no shared row juice; a friend card hosts the leash offer chip (FriendLeashOffer.cs). A word WPF throws outside the drawer
 // (FriendsLanding.Tell) is a FloatingWord over the rail chip's window (OwnerWindow).
 using System;
 using System.Linq;
