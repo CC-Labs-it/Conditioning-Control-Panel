@@ -16,7 +16,7 @@ using RowItem = ConditioningControlPanel.Services.Startup.InboxItem;
 namespace ConditioningControlPanel.Avalonia.Platform;
 
 /// <summary>
-/// PORTED (invites only) from ConditioningControlPanel/Services/Friends/FriendsLanding.cs: what a delivery
+/// PORTED (invites and pokes) from ConditioningControlPanel/Services/Friends/FriendsLanding.cs: what a delivery
 /// does when it lands. Core's <see cref="FriendsLandingRouter"/> decides (hold, Inbox, knock); this sink
 /// knocks an invite with a <see cref="KnockCard"/>, files Inbox rows, and throws the words a delivery or a send
 /// leaves through <see cref="FloatingWord"/> (poke received with Emi's line, the sent beat, Say/Tell from outside
@@ -226,17 +226,21 @@ internal static partial class FriendsLanding
     private static bool NoticesOn => CoreSettings.Current.FriendNotificationsEnabled;
 
     /// <summary>An Inbox row opened later: the card again while it is still answerable (WPF Reopen :465).
-    /// Opened by hand, so it comes up whatever the bell says.</summary>
+    /// An invite opened by hand comes up whatever the bell says; pokes follow the bell.</summary>
     private static void Reopen(InboxItem item)
     {
-        if (item.IsExpired(KnockCard.Clock())) return;   // ponytail: WPF's Emi "that one already left" line
+        if (item.IsExpired(KnockCard.Clock()))
+        {
+            EmiSays(Str("friends_land_too_late", "that one already left"), ";_;");
+            return;
+        }
+        // WPF Reopen :487: a poke row goes back through the arrival path, bell included.
+        if (item.Kind == SendKind.Poke) { TheSink.Poke(item, inGame: false); return; }
         if (item.Kind == SendKind.Invite)
         {
             if (Anchor() is { } anchor) ShowCard(anchor, item);
             else TheSink.Inbox(item);   // WPF :478 Knock -> no anchor -> the row again
         }
-        // WPF Reopen :481: a poke row comes back as its corner notice. Opened by hand, so whatever the bell says.
-        else if (item.Kind == SendKind.Poke && !ShowPoke(ActiveGameWindow() ?? Anchor(), item)) TheSink.Inbox(item);
         // ponytail: a watch row reopens as its corner notice in WPF (watch notices are not on this head).
     }
 
