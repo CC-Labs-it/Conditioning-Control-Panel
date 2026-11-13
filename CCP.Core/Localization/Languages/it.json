@@ -9200,5 +9200,7 @@
   "chaos_expiry_name_pink": "filtro rosa",
   "chaos_expiry_name_spiral": "spirale",
   "chaos_expiry_name_braindrain": "brain drain",
-  "chaos_expiry_name_gif": "cascata di GIF"
+  "chaos_expiry_name_gif": "cascata di GIF",
+  "webcam_camera_unavailable_detail": "Fotocamera non disponibile. Potrebbe essere usata da un’altra app o bloccata dalle impostazioni di privacy.",
+  "webcam_capture_retry_fmt": "La fotocamera risponde lentamente. Provo un altro metodo ({0}/{1})."
 }

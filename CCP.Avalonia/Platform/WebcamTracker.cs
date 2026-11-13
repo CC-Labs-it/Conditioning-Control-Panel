@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Webcam;
 using OpenCvSharp;
@@ -86,6 +87,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal Func<DateTime> Now = () => DateTime.UtcNow;
         internal Action<int> Delay = Thread.Sleep;
         internal Func<bool> Abandoned = () => false;
+        /// <summary>WPF WebcamTrackingService.cs:1512-1516: each attempt after the first reports (attempt, total).</summary>
+        internal Action<int, int>? Retrying;
 
         // WPF WebcamTrackingService.cs:239. Keep the default format first for each backend.
         internal static (VideoCaptureAPIs Api, string? Fourcc)[] Attempts(bool linux, bool windows) =>
@@ -107,9 +110,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal bool Open(int index, bool linux, bool windows)
         {
             AnyOpened = false;
-            foreach (var attempt in Attempts(linux, windows))
+            var attempts = Attempts(linux, windows);
+            int tried = 0;
+            foreach (var attempt in attempts)
             {
                 if (Abandoned()) return false;
+                if (++tried > 1) Retrying?.Invoke(tried, attempts.Length);
                 ICapture? candidate = null;
                 try
                 {
@@ -297,8 +303,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         private Run? _run;
         private Thread? _wedged;
-        /// <summary>A loop a timed-out Stop abandoned still holds the camera; Start refuses until it exits.</summary>
-        internal bool IsClosing => _wedged is { IsAlive: true };
+        private volatile Task? _openCleanup;
+        /// <summary>WPF WebcamTrackingService.cs:617-629 (CameraOpenTimeoutSeconds): a native open that never
+        /// returns is abandoned after this long and reads as CameraInUse.</summary>
+        internal TimeSpan CameraOpenTimeout = TimeSpan.FromSeconds(90);
+        /// <summary>A loop a timed-out Stop abandoned, or an open the timeout abandoned, still holds the camera;
+        /// Start refuses until it exits.</summary>
+        internal bool IsClosing => _wedged is { IsAlive: true } || _openCleanup is { IsCompleted: false };
         private readonly BlinkDetector _blink = new();
         private readonly MouthOpenDetector _mouth = new();
         private readonly GazeEngine _gaze = new();
@@ -374,12 +385,42 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 }
                 Progress(0.55, "Opening camera…");
                 run.Source = SourceFactory();
-                if (run.Source is OpenCvFrameSource capture) capture.Abandoned = () => gen != Volatile.Read(ref _gen);
+                int timedOut = 0; // apart from Stop: a timeout must not read as StartWasStopped
+                if (run.Source is OpenCvFrameSource capture)
+                {
+                    capture.Abandoned = () => gen != Volatile.Read(ref _gen) || Volatile.Read(ref timedOut) != 0;
+                    capture.Retrying = (attempt, total) =>
+                    {
+                        if (!capture.Abandoned())
+                            Progress(0.55 + 0.37 * (attempt - 1) / total, Loc.GetF("webcam_capture_retry_fmt", attempt, total));
+                    };
+                }
                 bool opened;
                 try
                 {
-                    opened = run.Source.Open();
-                    if (!opened) failureState = FailedOpenState(run.Source);
+                    // WPF WebcamTrackingService.cs:617-645: a native open can wedge in the driver. Past the
+                    // timeout this start gives up; the opener keeps its source and disposes it only after the
+                    // driver returns, and IsClosing holds the next Start until then.
+                    var source = run.Source;
+                    var opening = Task.Run(source.Open);
+                    if (Task.WaitAny(new Task[] { opening }, CameraOpenTimeout) < 0)
+                    {
+                        Interlocked.Exchange(ref timedOut, 1);
+                        run.Source = null;
+                        _openCleanup = opening.ContinueWith(t =>
+                        {
+                            _ = t.Exception; // observe a late fault
+                            try { source.Dispose(); } catch (Exception ex) { Log.Warning(ex, "[Webcam] late open cleanup failed"); }
+                        }, TaskScheduler.Default);
+                        Log.Warning("[Webcam] camera open did not return within {Seconds}s; abandoned", CameraOpenTimeout.TotalSeconds);
+                        failureState = WebcamTrackingState.CameraInUse;
+                        opened = false;
+                    }
+                    else
+                    {
+                        opened = opening.GetAwaiter().GetResult();
+                        if (!opened) failureState = FailedOpenState(source);
+                    }
                 }
                 catch (UnauthorizedAccessException ex)
                 {
@@ -397,7 +438,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 }
                 if (!opened)
                 {
-                    LastError = "No camera could be opened. Check that a webcam is connected, camera access is allowed, and it is not in use by another app.";
+                    LastError = failureState == WebcamTrackingState.CameraInUse
+                        ? Loc.Get("webcam_camera_unavailable_detail")
+                        : "No camera could be opened. Check that a webcam is connected, camera access is allowed, and it is not in use by another app.";
                     run.Release();
                     return false;
                 }

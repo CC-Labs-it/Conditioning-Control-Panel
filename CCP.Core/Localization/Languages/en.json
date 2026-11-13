@@ -9203,5 +9203,7 @@
   "chaos_expiry_name_pink": "pink_filter",
   "chaos_expiry_name_spiral": "spiral",
   "chaos_expiry_name_braindrain": "braindrain",
-  "chaos_expiry_name_gif": "gif cascade"
+  "chaos_expiry_name_gif": "gif cascade",
+  "webcam_camera_unavailable_detail": "Camera unavailable. It may be in use by another app or blocked by camera privacy settings.",
+  "webcam_capture_retry_fmt": "Camera slow to respond. Trying another method ({0}/{1})."
 }

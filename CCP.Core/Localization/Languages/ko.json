@@ -8460,5 +8460,7 @@
   "chaos_expiry_name_pink": "핑크 필터",
   "chaos_expiry_name_spiral": "나선",
   "chaos_expiry_name_braindrain": "브레인 드레인",
-  "chaos_expiry_name_gif": "GIF 연속 표시"
+  "chaos_expiry_name_gif": "GIF 연속 표시",
+  "webcam_camera_unavailable_detail": "카메라를 사용할 수 없습니다. 다른 앱에서 사용 중이거나 카메라 개인정보 설정에 의해 차단되었을 수 있습니다.",
+  "webcam_capture_retry_fmt": "카메라 응답이 느립니다. 다른 방법을 시도하는 중입니다 ({0}/{1})."
 }
