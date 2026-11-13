@@ -12,8 +12,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 internal static class CompanionLinkLauncher
 {
     // Small host seam: tests capture navigation without creating a native browser or real desktop.
-    internal static Func<string, bool> Navigate = url =>
-        MainShellWindow.Current?.NavigateToUrlInBrowser(url, autoPlayFullscreen: true) == true;
+    internal static Func<string, Task<bool?>> Navigate = url =>
+        MainShellWindow.Current?.NavigateCompanionUrlAsync(url) ?? Task.FromResult<bool?>(false);
 
     internal static ICommand CommandFor(string url) => new OpenCommand(url);
 
@@ -26,7 +26,7 @@ internal static class CompanionLinkLauncher
             if (!CompanionLinkNavigation.TryBrowserUri(url, out var uri)) return;
             // ponytail: browser media-session ownership and the native autoplay/fullscreen hook
             // still belong to the browser follow-up. Plain navigation is already hosted here.
-            if (Navigate(url!)) return;
+            if (await Navigate(url!) != false) return;
             // WPF MainWindow/MainWindow.Browser.cs:657-667: offline also blocks external fallback.
             if (CoreSettings.Current.OfflineMode) return;
             if (CompanionLinkNavigation.CanOpenExternally(uri!))

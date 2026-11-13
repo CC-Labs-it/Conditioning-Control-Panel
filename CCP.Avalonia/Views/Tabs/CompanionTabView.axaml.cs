@@ -29,7 +29,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // shell it forwards both to MainShellWindow (WPF WorkshopRosterCell -> MainWindow).
 
             // WPF CompanionTabView.xaml.cs:36-40: the room is collapsed (XAML) and the page reads its zones.
-            Conversation.Room = Room;
+            if (global::ConditioningControlPanel.Services.Companion.CompanionExperience.IsV2Enabled)
+                Conversation.Room = Room;
+            else
+            {
+                Conversation.IsVisible = false;
+                PageHost.Children.Remove(Conversation);
+                Room.IsVisible = true;
+            }
         }
 
         // WPF hooks IsVisibleChanged here (MainWindow.OnCompanionTabVisibilityChanged) and the
@@ -68,7 +75,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 // WPF MainWindow.TabNavigation.cs:505 ShowTab("companion") -> InitializePhrasePresets, v2 or not:
                 // the Triggers cell's combo (on Companion > AI under v2) re-reads presets saved elsewhere.
                 Room.WorkshopZone.RefreshPhrasePresets();
-                Conversation.Resume();
+                if (!Room.IsVisible) Conversation.Resume();
             }
             else Conversation.Park();
             (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.OnCompanionTabVisibilityChanged(shown, Room);

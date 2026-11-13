@@ -107,7 +107,7 @@ public sealed class VoiceRemainingCommandsTests
             var saved = (s.AttentionChecksEnabled, s.VideoBlurredBackgroundEnabled, s.VideoMaxDurationSeconds);
             var shell = new MainShellWindow();
             shell.Show();
-            var clip = Path.Combine(AppContext.BaseDirectory, "Assets", "bubblecount-2s.mp4");
+            var clip = Path.Combine(AppContext.BaseDirectory, "Assets", "voice-video-30s.mp4");
             var scheduler = new MandatoryVideoScheduler(o, library: () => new[] { clip });
             try
             {
@@ -116,7 +116,13 @@ public sealed class VoiceRemainingCommandsTests
                 async Task Open(bool strict)
                 {
                     var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                    Action onStarted = () => started.TrySetResult();
+                    Action onStarted = () =>
+                    {
+                        // A busy dispatcher can outlast the old 2 s fixture before it presents two frames.
+                        // Exercise that delay once while the real player continues decoding.
+                        if (!strict) System.Threading.Thread.Sleep(2500);
+                        started.TrySetResult();
+                    };
                     scheduler.VideoStarted += onStarted;
                     try
                     {

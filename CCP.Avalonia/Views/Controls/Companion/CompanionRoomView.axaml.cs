@@ -299,7 +299,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public void RevealWorkshop(string? cellTitle = null)
         {
             // WPF CompanionRoomView.xaml.cs:274: under v2 the Awareness cell is on the Awareness tab.
-            if (cellTitle == CompanionRoomAnchors.WorkshopAwarenessCell && TopLevel.GetTopLevel(this) is Windows.MainShellWindow shell)
+            if (global::ConditioningControlPanel.Services.Companion.CompanionExperience.IsV2Enabled &&
+                cellTitle == CompanionRoomAnchors.WorkshopAwarenessCell && TopLevel.GetTopLevel(this) is Windows.MainShellWindow shell)
             {
                 shell.ShowTab("awareness");
                 shell.Named<Tabs.AwarenessTabView>("AwarenessTab")?.RevealCompanionTuning(this);
@@ -313,6 +314,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// priority is starved in this app, and the card may not have been arranged yet.</remarks>
         public void FocusAwareness()
         {
+            if (global::ConditioningControlPanel.Services.Companion.CompanionExperience.IsV2Enabled &&
+                TopLevel.GetTopLevel(this) is Windows.MainShellWindow shell) shell.ShowTab("awareness");
             Dispatcher.UIThread.Post(() =>
             {
                 try
