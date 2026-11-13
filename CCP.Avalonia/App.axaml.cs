@@ -85,7 +85,7 @@ namespace ConditioningControlPanel.Avalonia
         }
 
         /// <summary>The achievement engine (achievements.json), or null on the headless render path.
-        /// Local-only: no sync, no streak writes, no ResetProgress on this head (oracle-achievements.md).</summary>
+        /// Login streak startup is handled by LoginStreakHead.</summary>
         internal static AchievementEngine? Achievements { get; private set; }
         private DispatcherTimer? _achievementSaveTimer;
 
@@ -148,6 +148,11 @@ namespace ConditioningControlPanel.Avalonia
             if (!Services.ProfileAdopt.ApplyCurveEpoch(CoreSettings.Current, epoch)) return;
             CoreSettings.Save();
             Dispatcher.UIThread.Post(() => shell()?.UpdateLevelDisplay());
+        }
+
+        internal static void WireRecoveredProfileRefresh(SyncPush sync, Func<Views.Windows.MainShellWindow?> shell)
+        {
+            sync.RecoveredProgressionChanged = () => Dispatcher.UIThread.Post(() => shell()?.UpdateLevelDisplay());
         }
 
         /// <summary>WPF App.xaml.cs:3126: built always, armed only if asked AND a Discord is linked. The client
@@ -227,7 +232,24 @@ namespace ConditioningControlPanel.Avalonia
             global::ConditioningControlPanel.Services.Companion.ConversationDelivery.QuestsOpenProvider = () => Quests?.HasUnfinishedQuest();
             definitions.QuestDefinitionsUpdated += () => Quests?.CheckAndGenerateQuests();
             // WPF ProgressionService.AddXP:120 feeds every award to the "earn X XP" quests.
-            ProgressionBank.QuestAwarded += (amount, _) => Quests?.TrackXPEarned((int)amount);
+            WireQuestXpAndPay(Achievements);
+            CreditBankedLoginStreak(Quests, Achievements?.Progress, DateTime.Today);
+        }
+
+        internal static void TrackQuestXp(double amount, string source) => Quests?.TrackXPEarned((int)amount);
+
+        internal static void WireQuestXpAndPay(AchievementEngine? engine)
+        {
+            ProgressionBank.QuestAwarded += TrackQuestXp;
+            Platform.LoginStreakHead.QuestXpReady(engine);
+        }
+
+        /// <summary>Credit only a day already banked by the login streak writer. A stale local
+        /// streak may have a gap or a newer cloud value and must not complete a quest yet.</summary>
+        internal static void CreditBankedLoginStreak(QuestService quests, Models.AchievementProgress? progress, DateTime today)
+        {
+            if (progress != null && progress.LastLaunchDate.Date == today.Date && !progress.PendingStreakBreak)
+                quests.TrackStreak(progress.ConsecutiveDays);
         }
 
         /// <summary>WPF App.xaml.cs:414. WPF plays SystemSounds.Exclamation; Linux has no stock
@@ -846,6 +868,7 @@ namespace ConditioningControlPanel.Avalonia
                     // MainWindow OnLevelUp -> sync, ProfileSyncService.AttachXpNudge outside sessions).
                     var sync = Platform.AccountSeed.Sync = Platform.AccountSeed.NewSync(
                         () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true);
+                    WireRecoveredProfileRefresh(sync, () => desktop.MainWindow as Views.Windows.MainShellWindow);
                     // WPF ProfileSyncService: the heartbeat body is also a server tier reading (#4073).
                     sync.HeartbeatBody = body => Dispatcher.UIThread.Post(() =>
                         Platform.AccountSeed.ApplyTierReading(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat"));
@@ -1054,6 +1077,7 @@ namespace ConditioningControlPanel.Avalonia
                 // way WPF App.xaml.cs:384/:394 seeds the two unlock seams. Unlocked is raised on the
                 // caller's thread; the popup hops to the UI thread as WPF's DispatcherHelper does.
                 Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
+                Platform.LoginStreakHead.Start(Achievements, CoreSettings.Current);
                 _achievementSaveTimer?.Stop();
                 _achievementSaveTimer = StartAchievementAutosave(Achievements);
                 WireAchievementUnlocks(Achievements);
@@ -1493,6 +1517,7 @@ namespace ConditioningControlPanel.Avalonia
         {
             if (Interlocked.Exchange(ref _exitHandled, 1) != 0) return;
             _exiting = true;
+            Platform.LoginStreakHead.ClearProfile();
 
             // WPF App.OnExit:5965: haptics FIRST and synchronously (bounded ~2 s). A Lovense level has no
             // server-side watchdog, so a toy not countermanded here keeps running after the app is gone.
