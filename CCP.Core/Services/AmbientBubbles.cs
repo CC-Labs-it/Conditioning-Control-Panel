@@ -608,8 +608,10 @@ namespace ConditioningControlPanel.Services
             if (multiplier > 1) LuckyProc?.Invoke(multiplier);
             var paid = AmbientBubbleXp.Take(s, 5 * multiplier);
             b.Lucky = multiplier > 1 && paid > 0;
-            // WPF BubbleService.cs:1105-1108: dry lucky rolls lose gold, boost respects FlashGlow.
-            b.StartSparkles(Random, SkillTreeRules.GetSparkleBoostTier(s) > 0 && s.FlashGlowEnabled);
+            // WPF BubbleService.cs:1105-1111: dry lucky rolls lose gold, boost respects FlashGlow,
+            // and Perk effects Off is a plain pop with no burst (the XP above is paid either way).
+            if (PerkEffectsRules.ShowsVisuals(s.PerkEffects))
+                b.StartSparkles(Random, SkillTreeRules.GetSparkleBoostTier(s) > 0 && s.FlashGlowEnabled);
             return paid;
         }
 

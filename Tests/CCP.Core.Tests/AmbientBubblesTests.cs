@@ -76,6 +76,19 @@ public sealed class AmbientBubblesTests
         Assert.Empty(field.Bubbles); // particles cannot keep a completed bubble alive
     }
 
+    [Fact]
+    public void Perk_effects_off_pops_plain_but_still_pays_the_lucky_roll()
+    {
+        // WPF BubbleService.cs:1108-1111 (owner 2026-11-05): no gold glow or sparkle burst.
+        var s = new AppSettings { FlashGlowEnabled = true, PerkEffects = PerkEffectsMode.Off };
+        s.UnlockedSkills.Add("sparkle_boost_1");
+        s.UnlockedSkills.Add("lucky_bubbles");
+        var field = new AmbientBubbleField(new LuckyRandom());
+        var b = new AmbientBubble { Size = 100 };
+        Assert.Equal(100, field.Pop(b, s));
+        Assert.Empty(b.Sparkles);
+    }
+
     private sealed class LuckyRandom : Random
     {
         public override double NextDouble() => 0.01; // force a lucky roll without a probabilistic test
