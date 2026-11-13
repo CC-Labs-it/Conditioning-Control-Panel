@@ -649,6 +649,13 @@ namespace ConditioningControlPanel.Avalonia
 
         public override void OnFrameworkInitializationCompleted()
         {
+#if DEBUG
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime preview && TryStartFirstShowPreview(preview))
+            {
+                base.OnFrameworkInitializationCompleted();
+                return;
+            }
+#endif
             // "[SANDBOX] " on every window title of a CCP_USERDATA_DIR run. Desktop only: offscreen renders/snapshots
             // reach this callback too and must keep the real titles.
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime) Platform.SandboxMarker.Install();
@@ -672,6 +679,37 @@ namespace ConditioningControlPanel.Avalonia
                 TaskContinuationOptions.OnlyOnFaulted);
             base.OnFrameworkInitializationCompleted();
         }
+
+#if DEBUG
+        internal static bool TryStartFirstShowPreview(IClassicDesktopStyleApplicationLifetime desktop, Func<Action?>? startHook = null)
+        {
+            if (desktop.Args?.Contains("--first-show-preview", StringComparer.Ordinal) != true) return false;
+            var stopHook = (startHook ?? (() => StartFirstShowPreviewHook(OperatingSystem.IsWindows(),
+                () => Platform.Win32PanicKey.IsListening, Platform.Win32PanicKey.EnsureListening, Platform.Win32PanicKey.Stop)))();
+            void StopHook() { var stop = stopHook; stopHook = null; stop?.Invoke(); }
+            try
+            {
+                desktop.ShutdownMode = global::Avalonia.Controls.ShutdownMode.OnMainWindowClose;
+                if (Views.Windows.WelcomeShow.FirstShowService.Open(preview: true))
+                {
+                    var stage = Views.Windows.WelcomeShow.FirstShowService.Window!;
+                    stage.Closed += (_, _) => StopHook();
+                    desktop.MainWindow = stage;
+                }
+                else { StopHook(); desktop.Shutdown(1); }
+                return true;
+            }
+            catch { StopHook(); throw; }
+        }
+
+        internal static Action? StartFirstShowPreviewHook(bool windows, Func<bool> isListening, Func<bool> ensure, Action stop)
+        {
+            if (!windows || isListening()) return null;
+            // WPF FirstShowDesktopWindow.cs:98: the isolated preview needs its own global Esc hook.
+            ensure();
+            return stop;
+        }
+#endif
 
         /// <summary>Runs <paramref name="start"/>, painting each step on the splash; then shows the
         /// shell (the lifetime found no MainWindow to show yet) and fades the splash out (WPF
@@ -1524,7 +1562,11 @@ namespace ConditioningControlPanel.Avalonia
             {
                 if (Directory.Exists(customPath)) return customPath;
                 if (Interlocked.Exchange(ref _warnedMissingCustomAssetsPath, 1) == 0)
+                {
                     Serilog.Log.Warning("CustomAssetsPath '{Path}' does not exist — falling back to default assets folder. Imports/extractions will go to the default location.", customPath);
+                    // Only recorded here, drained once the shell is open (WPF App.xaml.cs:228).
+                    Platform.RemoteMediaOffer.Park("custom-assets-path-missing");
+                }
             }
             return DefaultAssetsRoot;
         }

@@ -199,6 +199,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow.xaml.cs:3837 (end of MainWindow_Loaded): MainShellWindow.PendingRegistration.cs.
             OnceOpened(ArmPendingRegistration);
             Opened += (_, _) => WireOnlineMeterPill();   // MainShellWindow.OnlineMeter.cs (WPF WireOnlineMeter)
+            // WPF MainWindow.xaml.cs:3852: an offer parked at startup surfaces once a window exists.
+            OnceOpened(() => Platform.RemoteMediaOffer.FlushPending(this));
             // WPF MainWindow.xaml.cs:3619-3649: offer an update for pre-multi-monitor calibration.
             Opened += (_, _) =>
             {

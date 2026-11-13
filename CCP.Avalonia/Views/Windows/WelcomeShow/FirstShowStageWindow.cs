@@ -61,7 +61,7 @@ internal sealed partial class FirstShowStageWindow : Window
     private readonly TextBlock _loadingStatus = new() { Foreground = Brushes.LightGray, FontSize = 13, Margin = new Thickness(0, 7, 0, 0), TextWrapping = TextWrapping.Wrap };
     private readonly WrapPanel _choices = new() { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 14, 0, 0) };
     private readonly Border _logo = new() { Width = 460, CornerRadius = new CornerRadius(22), Padding = new Thickness(5), BorderThickness = new Thickness(3), Opacity = 0, IsHitTestVisible = false };
-    private readonly FirstShowAudio _audio = new();
+    private readonly FirstShowAudio _audio;
     private readonly FrameClock _clock;
     private readonly Stopwatch _life = Stopwatch.StartNew();
     private readonly List<string> _files = new();
@@ -78,6 +78,9 @@ internal sealed partial class FirstShowStageWindow : Window
     internal int InputPushes { get; private set; }
     internal PixelRect[] InputRects => _inputBuf[..InputRectCount];
     internal FirstShowEffects? Effects => _effects;
+    // Headless tests can exercise the Windows event path without installing a native hook.
+    internal static bool TestWindowsKeys;
+    private bool _windowsKeys;
     private bool _closed, _greeted, _centered, _playing, _ending, _serious, _moving, _bundled;
     private double _last, _moveAt, _showStart = double.NaN, _showFrozen, _settledAt, _x, _y;
     private int _beat = -1;
@@ -113,8 +116,9 @@ internal sealed partial class FirstShowStageWindow : Window
     internal double LogoOpacity => _logo.Opacity;
     /// <summary>--render-all: the stage at the reveal (logo up), nothing else on it.</summary>
     internal FirstShowStageWindow() : this(null) => _logo.Opacity = 1;
-    public FirstShowStageWindow(MainShellWindow? main)
+    public FirstShowStageWindow(MainShellWindow? main, bool preview = false)
     {
+        _audio = new FirstShowAudio(preview);
         Clock = () => _life.Elapsed.TotalSeconds;
         _main = main;
         _panic = CoreSettings.Current?.PanicKey ?? "Escape";
@@ -168,7 +172,8 @@ internal sealed partial class FirstShowStageWindow : Window
         catch (Exception ex) { ok = false; Log.Debug(ex, "First show stage: click-through failed"); }
         Show();
         // WPF ran its own keyboard hook so Esc stops the show even with the panic key off (:52, :92).
-        if (OperatingSystem.IsWindows()) Win32PanicKey.KeyDown += OnGlobalKey;
+        _windowsKeys = OperatingSystem.IsWindows() || TestWindowsKeys;
+        if (_windowsKeys) Win32PanicKey.KeyDown += OnGlobalKey;
         return ok;
     }
     private void OnGlobalKey(int vk, string? name)
@@ -581,7 +586,7 @@ internal sealed partial class FirstShowStageWindow : Window
         ClearGuideTarget();
         _closed = true;
         if (_main != null) _main.Activated -= OnShellActivated;
-        if (OperatingSystem.IsWindows()) Win32PanicKey.KeyDown -= OnGlobalKey;
+        if (_windowsKeys) Win32PanicKey.KeyDown -= OnGlobalKey;
         _clock.Stop();
         try { _speechWindow.Close(); } catch (Exception ex) { Log.Debug(ex, "First show speech window close failed"); }
         _load?.Cancel(); _load?.Dispose(); _load = null;

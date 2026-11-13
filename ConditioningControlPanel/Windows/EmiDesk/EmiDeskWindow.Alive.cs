@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media;
@@ -314,7 +314,7 @@ public partial class EmiDeskWindow
                 }
                 else
                 {
-                    (tx, ty) = EmiAlive.GazeTarget(cursor, body, _bodyWidth);
+                    (tx, ty) = EmiAlive.GazeTarget(cursor.X, cursor.Y, body.X, body.Y, body.Width, body.Height, _bodyWidth);
                 }
             }
 
@@ -364,7 +364,7 @@ public partial class EmiDeskWindow
     {
         try
         {
-            bool inside = EmiAlive.WithinApproach(cursor, body);
+            bool inside = EmiAlive.WithinApproach(cursor.X, cursor.Y, body.X, body.Y, body.Width, body.Height);
             if (inside == _apInside) return;
             _apInside = inside;
             if (!inside) return;

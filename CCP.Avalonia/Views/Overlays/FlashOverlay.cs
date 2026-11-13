@@ -58,6 +58,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // WPF FlashService.cs:1674: notify at display, after loading and the pre-display wait.
         internal static event Action? Displayed;
         internal static Action<Action, TimeSpan> After = (then, delay) => DispatcherTimer.RunOnce(then, delay);
+        // Test seam: headless has no click-through overlays, so the burst would stop before loading.
+        internal static Func<bool> OverlaysAvailable = () => X11Overlay.IsAvailable;
         private static bool _busy, _warnedUnavailable, _warnedEmpty, _closed;
         private static int _generation;
 
@@ -74,7 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static async void TriggerOnce(Visual host, int? amount = null, int? durationMs = null, int? size = null, bool ambient = false)
         {
             if (_busy) return;
-            if (!X11Overlay.IsAvailable)
+            if (!OverlaysAvailable())
             {
                 if (!_warnedUnavailable) Log.Warning("Flash: this platform cannot show click-through overlays, so flashes are skipped");
                 _warnedUnavailable = true;
@@ -103,6 +105,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     if (!_warnedEmpty) Log.Warning("Flash: no images found in {Path}", ImagesPath());
                     _warnedEmpty = true;
+                    // Outside the warn-once flag: the offer keeps its own once-per-launch budget (WPF FlashService.cs:971).
+                    Platform.RemoteMediaOffer.Offer("flashes");
                     return;
                 }
 

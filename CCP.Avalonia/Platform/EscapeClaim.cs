@@ -7,15 +7,19 @@
 // The dashboard's ClickChoiceBody is marked (SettingsTabView.ClickChoice.cs, WPF SettingsTabView.xaml.cs:18),
 // as is Circe's Tab price box (ChasterTabView.PriceEdit.cs); both call Taken() in their Escape handler.
 // The friends drawer is marked by type below.
-// X11 has no claim yet (X11PanicKey raises no per-key events).
+// X11 also matches palette and lock-card presses by their shared native event timestamp.
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Input.Raw;
+using Avalonia.Reactive;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Services.Safety;
@@ -34,7 +38,7 @@ internal static class EscapeClaim
     private static readonly HashSet<Type> MarkedTypes = new();
     private static long _takenAtTicks;          // 0 = none; UTC ticks
     private static volatile bool _keyboardInSurface;
-    private static bool _tracking;
+    private static bool _tracking, _timestampTracking;
 
     /// <summary>Marks an element whose own Escape handler drops or closes it.</summary>
     internal static void Mark(Control surface) => surface.SetValue(DropsOnEscapeProperty, true);
@@ -56,11 +60,26 @@ internal static class EscapeClaim
         return false;
     }
 
-    /// <summary>Starts the focus snapshot (UI thread, once, desktop path only).</summary>
-    internal static void StartTracking()
+    /// <summary>Starts the focus snapshot; trackX11 lets tests exercise the X11 observer on any OS.</summary>
+    internal static void StartTracking(bool trackX11 = false)
     {
-        if (_tracking) return;
-        _tracking = true;
+        // X11 raw and focused key events carry the same server timestamp. Observe the focused
+        // event before its window closes so only that physical press is owned by the surface.
+        if ((OperatingSystem.IsLinux() || trackX11) && !_timestampTracking)
+        {
+            try
+            {
+                // Avalonia 12 hides these runtime members from its public reference facade.
+                var assembly = typeof(AvaloniaObject).Assembly;
+                var locator = assembly.GetType("Avalonia.AvaloniaLocator")!.GetProperty("Current")!.GetValue(null)!;
+                var inputType = assembly.GetType("Avalonia.Input.IInputManager")!;
+                var input = locator.GetType().GetMethod("GetService", new[] { typeof(Type) })!.Invoke(locator, new object[] { inputType })!;
+                var events = (IObservable<RawInputEventArgs>)inputType.GetProperty("PreProcess")!.GetValue(input)!;
+                events.Subscribe(new AnonymousObserver<RawInputEventArgs>(RecordSurfaceKey)); _timestampTracking = true;
+            }
+            catch (Exception ex) { Log.Warning(ex, "Escape surface timestamp tracking unavailable"); }
+        }
+        if (_tracking) return; _tracking = true;
         // e.Source, not the sender: the class handler runs once per element on the route, and an
         // ancestor above the surface would overwrite the answer.
         InputElement.GotFocusEvent.AddClassHandler<InputElement>((_, e) => _keyboardInSurface = InASurface(e.Source),
@@ -75,6 +94,57 @@ internal static class EscapeClaim
         {
             if (e.Key == Key.Escape && InASurface(e.Source)) Taken();
         }, RoutingStrategies.Tunnel, handledEventsToo: true);
+    }
+
+    private static readonly object SurfaceGate = new();
+    private static readonly Queue<(uint Stamp, long At)> SurfaceKeys = new();
+
+    // These members are public at runtime but hidden by Avalonia 12's reference facade.
+    private static readonly Type? RawKeyType = typeof(AvaloniaObject).Assembly.GetType("Avalonia.Input.Raw.RawKeyEventArgs");
+    private static readonly System.Reflection.PropertyInfo? RawKey = RawKeyType?.GetProperty("Key");
+    private static readonly System.Reflection.PropertyInfo? RawType = RawKeyType?.GetProperty("Type");
+    private static readonly System.Reflection.PropertyInfo? RawRoot = typeof(RawInputEventArgs).GetProperty("Root");
+    private static readonly System.Reflection.PropertyInfo? RawTime = typeof(RawInputEventArgs).GetProperty("Timestamp");
+    private static readonly System.Reflection.PropertyInfo? FocusRoot = typeof(IInputRoot).GetProperty("FocusRoot");
+
+    internal static void RecordSurfaceKey(RawInputEventArgs e)
+    {
+        try
+        {
+            if (RawKeyType?.IsInstanceOfType(e) == true && Equals(RawKey?.GetValue(e), Key.Escape)
+                && Equals(RawType?.GetValue(e), RawKeyEventType.KeyDown)
+                && RawRoot?.GetValue(e) is { } root
+                && FocusRoot?.GetValue(root) is SettingsPaletteWindow or LockCardWindow
+                && RawTime?.GetValue(e) is ulong stamp)
+                RecordSurfaceEscape((uint)stamp);
+        }
+        catch (Exception ex) { Log.Debug(ex, "Escape surface timestamp read failed"); }
+    }
+
+    internal static void RecordSurfaceEscape(uint stamp)
+    {
+        lock (SurfaceGate)
+        {
+            SurfaceKeys.Enqueue((stamp, System.Diagnostics.Stopwatch.GetTimestamp()));
+            while (SurfaceKeys.Count > 64) SurfaceKeys.Dequeue();
+        }
+    }
+
+    internal static void ClearSurfaceKeysForTest()
+    {
+        lock (SurfaceGate) SurfaceKeys.Clear();
+    }
+
+    internal static bool SurfaceOwnsEscape(ulong? stamp)
+    {
+        if (stamp == null) return false;
+        lock (SurfaceGate)
+        {
+            var now = System.Diagnostics.Stopwatch.GetTimestamp();
+            while (SurfaceKeys.Count > 0 && System.Diagnostics.Stopwatch.GetElapsedTime(SurfaceKeys.Peek().At, now).TotalSeconds > 60)
+                SurfaceKeys.Dequeue();
+            return SurfaceKeys.Any(x => x.Stamp == (uint)stamp.Value);
+        }
     }
 
     /// <summary>The snapshot the hook thread reads.</summary>
