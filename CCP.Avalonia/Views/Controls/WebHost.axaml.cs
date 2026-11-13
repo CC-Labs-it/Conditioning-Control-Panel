@@ -335,7 +335,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private readonly Panel _webSlot;
         private readonly Border _fallback;
         private readonly TextBlock _txtReason, _txtSource;
-        private readonly NativeWebView? _web;
+        private NativeWebView? _web;
+
+        // Per-instance factory seam for headless recovery tests.
+        internal Func<NativeWebView>? NativeViewFactory { get; set; }
+        internal NativeWebView? NativeView => _web;
+        internal Func<NativeWebView, Action, IDisposable>? FailureWatchFactory { get; set; }
 
         public WebHost()
         {
@@ -348,58 +353,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
             if (IsAvailable)
             {
-                // try/catch, not a bare new: the probe says an engine is installed, it does not
-                // promise the adapter builds. A throw here must show the panel, not kill the host.
-                try
-                {
-                    _web = new NativeWebView();
-                    // A native child does not inherit the parent's brush (Spiral's no-white-flash sink).
-                    BindNativeBackground(_web);
-                    // WebKitGTK unless WPE was chosen: the package picks WPE first, and on wpewebkit 2.54+ its adapter
-                    // throws EntryPointNotFoundException in an async void, which takes the whole app down.
-                    var preferGtk = LinuxChoice != "wpe";
-                    _web.EnvironmentRequested += (_, e) =>
-                    {
-                        if (preferGtk && e is LinuxWpeWebViewEnvironmentRequestedEventArgs wpe) wpe.PreferWebKitGtkInstead = true;
-                        // Windows: the WebView2 profile under UserData, never beside the exe (Platform/WebViewProfile).
-                        Platform.WebViewProfile.Apply(e);
-                        ApplyWindowsOptions(e);
-                    };
-                    // Subscribed once, here, rather than when a caller sets AllowNavigation: the
-                    // gate has to be live for the FIRST navigation too, and a caller that assigns
-                    // the predicate and the Source in that order would otherwise race the engine.
-                    _web.EnvironmentRequested += (_, e) => EnvironmentRequested?.Invoke(e);
-                    _web.AdapterDestroyed += (_, _) => { try { _failureWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Trailer failure cleanup failed"); } finally { _failureWatch = null; }
-                        try { _fullscreenWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Fullscreen signal cleanup failed"); } finally { _fullscreenWatch = null; }
-                        try { _keyWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Key signal cleanup failed"); } finally { _keyWatch = null; } };
-                    _web.NavigationStarted += OnNavigationStarted;
-                    _web.NavigationCompleted += (_, e) => {
-                        // The native core exists now; subscribe before observers can reveal a scene.
-                        if (BrowserProcessFailed != null && _failureWatch == null)
-                            try { _failureWatch = Platform.TrailerBrowserPolicy.Attach(_web.TryGetPlatformHandle(), OnBrowserProcessFailed); }
-                            catch (Exception ex) { Log.Debug(ex, "Trailer failure subscription failed"); OnBrowserProcessFailed(); }
-                        if (NativeFullscreenEntered != null && _fullscreenWatch == null)
-                            try { _fullscreenWatch = Platform.WebFullscreenSignal.Attach(_web.TryGetPlatformHandle(), OnNativeFullscreenEntered); }
-                            catch (Exception ex) { Log.Debug(ex, "Fullscreen signal subscription failed"); }
-                        if (NativeKeyFilter is { } wants && _keyWatch == null)
-                            try { _keyWatch = Platform.WebKeySignal.Attach(_web.TryGetPlatformHandle(), wants, OnNativeKeyDown); }
-                            catch (Exception ex) { Log.Debug(ex, "Key signal subscription failed"); }
-                        OnNavigationCompleted(e.Request ?? _web?.Source, e.IsSuccess);
-                    };
-                    _web.NewWindowRequested += (_, e) => { if (SuppressNewWindows) e.Handled = true; else e.Handled = OnBrowserPopup(e.Request); };
-                    _web.WebMessageReceived += (_, e) => OnWebMessage(e.Body);
-                    _web.WebResourceRequested += (_, e) => StampRequestHeader(e);
-                    // The Scrolller licence on pages that load Scrolller themselves (WPF ScrolllerWebGate on every core):
-                    // the WebView2 gate on Windows, a WebKitGTK block filter on Linux. The first navigation waits for it.
-                    Platform.ScrolllerWebHostGate.Attach(_web, NewScrolllerEngine);
-                    _webSlot.Children.Add(_web);
-                }
-                catch (Exception ex)
-                {
-                    _web = null;
-                    FailureStatusKey = FailureKey(ex);
-                    _txtReason.Text = ex.Message;
-                }
+                CreateNativeView();
             }
             else
             {
@@ -439,6 +393,114 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     (DocumentUrlReader ?? (() => Platform.ScrolllerWebHostGate.CurrentDocumentUrl(_web?.TryGetPlatformHandle())))(), target.AbsoluteUri)) return true;
             Navigate(target);
             return true;
+        }
+
+        private void ClearNativeWatches()
+        {
+            try { _failureWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Browser failure cleanup failed"); } finally { _failureWatch = null; }
+            try { _fullscreenWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Fullscreen signal cleanup failed"); } finally { _fullscreenWatch = null; }
+            try { _keyWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Key signal cleanup failed"); } finally { _keyWatch = null; }
+        }
+
+        private void AttachFailureWatch(NativeWebView native, bool reportFailure)
+        {
+            if (!ReferenceEquals(_web, native) || BrowserProcessFailed == null || _failureWatch != null) return;
+            try
+            {
+                void Failed() { if (ReferenceEquals(_web, native)) OnBrowserProcessFailed(); }
+                _failureWatch = FailureWatchFactory?.Invoke(native, Failed)
+                    ?? Platform.TrailerBrowserPolicy.Attach(native.TryGetPlatformHandle(), Failed);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Browser failure subscription unavailable");
+                if (reportFailure) OnBrowserProcessFailed();
+            }
+        }
+
+        // The host stays put (including when popped out), but the failed native child must not be reused.
+        internal bool RecreateNativeView()
+        {
+            try
+            {
+                ClearNativeWatches();
+                if (_web is { } old) _webSlot.Children.Remove(old);
+                _web = null;
+                NewScrolllerEngine(); // invalidate delayed reports from the old engine
+                CurrentUrl = null;
+                return CreateNativeView();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Browser replacement failed");
+                return false;
+            }
+        }
+
+        private bool CreateNativeView()
+        {
+            if (!IsAvailable && NativeViewFactory is null) return false;
+            NativeWebView? native = null;
+            try
+            {
+                native = NativeViewFactory?.Invoke() ?? new NativeWebView();
+                _web = native;
+                // A native child does not inherit the parent's brush (Spiral's no-white-flash sink).
+                BindNativeBackground(native);
+                // WebKitGTK unless WPE was chosen: the package picks WPE first, and on wpewebkit 2.54+ its adapter
+                // throws EntryPointNotFoundException in an async void, which takes the whole app down.
+                var preferGtk = LinuxChoice != "wpe";
+                _web.EnvironmentRequested += (_, e) =>
+                {
+                    if (preferGtk && e is LinuxWpeWebViewEnvironmentRequestedEventArgs wpe) wpe.PreferWebKitGtkInstead = true;
+                    // Windows: the WebView2 profile under UserData, never beside the exe (Platform/WebViewProfile).
+                    Platform.WebViewProfile.Apply(e);
+                    ApplyWindowsOptions(e);
+                };
+                // Subscribed once, here, rather than when a caller sets AllowNavigation: the
+                // gate has to be live for the FIRST navigation too, and a caller that assigns
+                // the predicate and the Source in that order would otherwise race the engine.
+                native.EnvironmentRequested += (_, e) => EnvironmentRequested?.Invoke(e);
+                native.AdapterDestroyed += (_, _) => { if (ReferenceEquals(_web, native)) ClearNativeWatches(); };
+                native.AdapterCreated += (_, _) =>
+                {
+                    if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) AttachFailureWatch(native, false);
+                    else global::Avalonia.Threading.Dispatcher.UIThread.Post(() => AttachFailureWatch(native, false));
+                };
+                native.NavigationStarted += (_, e) => { if (ReferenceEquals(_web, native)) OnNavigationStarted(native, e); else e.Cancel = true; };
+                native.NavigationCompleted += (_, e) => {
+                    if (!ReferenceEquals(_web, native)) return;
+                    // The native core exists now; subscribe before observers can reveal a scene.
+                    AttachFailureWatch(native, true);
+                    if (BrowserProcessFailed != null && _failureWatch == null) return;
+                    if (NativeFullscreenEntered != null && _fullscreenWatch == null)
+                        try { _fullscreenWatch = Platform.WebFullscreenSignal.Attach(native.TryGetPlatformHandle(), OnNativeFullscreenEntered); }
+                        catch (Exception ex) { Log.Debug(ex, "Fullscreen signal subscription failed"); }
+                    if (NativeKeyFilter is { } wants && _keyWatch == null)
+                        try { _keyWatch = Platform.WebKeySignal.Attach(native.TryGetPlatformHandle(), wants, OnNativeKeyDown); }
+                        catch (Exception ex) { Log.Debug(ex, "Key signal subscription failed"); }
+                    OnNavigationCompleted(e.Request ?? native?.Source, e.IsSuccess);
+                };
+                native.NewWindowRequested += (_, e) => { if (SuppressNewWindows) e.Handled = true; else e.Handled = OnBrowserPopup(e.Request); };
+                native.WebMessageReceived += (_, e) => OnWebMessage(e.Body);
+                native.WebResourceRequested += (_, e) => StampRequestHeader(e);
+                // The Scrolller licence on pages that load Scrolller themselves (WPF ScrolllerWebGate on every core):
+                // the WebView2 gate on Windows, a WebKitGTK block filter on Linux. The first navigation waits for it.
+                Platform.ScrolllerWebHostGate.Attach(native, () => ReferenceEquals(_web, native) ? NewScrolllerEngine() : _ => { });
+                _webSlot.Children.Add(native);
+                _fallback.IsVisible = false;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                if (native != null) _webSlot.Children.Remove(native);
+                _web = null;
+                FailureStatusKey = FailureKey(ex);
+                _txtReason.Text = ex.Message;
+                _fallback.IsVisible = true;
+                Log.Warning(ex, "Browser creation failed");
+                return false;
+            }
         }
 
         internal void BindNativeBackground(NativeWebView native) =>

@@ -478,6 +478,33 @@ public class TestIsolationTests
         }
     });
 
+    [Fact]
+    public async System.Threading.Tasks.Task ClearConversationTestRestoresSavedSettingsBeforeAssemblyCleanup()
+    {
+        var snapshot = ProcessStateSnapshot.Take();
+        try
+        {
+            var service = new ConditioningControlPanel.Services.SettingsService();
+            var settings = service.Current;
+            settings.AvatarEnabled = false;
+            settings.CompanionPrompt.AiProvider = ConditioningControlPanel.Models.AiProviderType.Cloud;
+            settings.CompanionPrompt.DailyRequestLimit = 37;
+            settings.CompanionPrompt.AiModel = "original-model";
+            settings.CompanionPrompt.AiOllamaHost = "http://original.invalid/";
+            service.SaveImmediate();
+
+            // Invoke the body directly so the assembly hook cannot hide a leak.
+            await new LocalProvidersTests().ClearConversationForgetsTheThreadAndKeepsMemoryOnlyWhenConfirmed();
+            var saved = new ConditioningControlPanel.Services.SettingsService().Current;
+            Assert.False(saved.AvatarEnabled);
+            Assert.Equal(ConditioningControlPanel.Models.AiProviderType.Cloud, saved.CompanionPrompt.AiProvider);
+            Assert.Equal(37, saved.CompanionPrompt.DailyRequestLimit);
+            Assert.Equal("original-model", saved.CompanionPrompt.AiModel);
+            Assert.Equal("http://original.invalid/", saved.CompanionPrompt.AiOllamaHost);
+        }
+        finally { snapshot.Restore(); }
+    }
+
     /// <summary>A debounce that already FIRED is no longer armed. Its write used to land after Restore
     /// and became every later test's baseline (Welcomed, no age acceptance: an extra Age Verification
     /// dialog in JumpRightInTests, flake-stackcapture). Restore must wait for that write.</summary>

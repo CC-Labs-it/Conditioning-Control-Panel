@@ -859,6 +859,8 @@ namespace ConditioningControlPanel.Avalonia
                 _ = dailyFree.RefreshAsync();
                 CoreEntitlement.IsFreeTodayProvider = dailyFree.IsFreeToday;
                 CoreEntitlement.DailyFreeKeyProvider = () => dailyFree.TodayKey;
+                Views.Windows.MainShellWindow.GiftSeededKeyFor = dailyFree.SeededKeyFor;
+                Views.Windows.MainShellWindow.GiftIsFreeToday = dailyFree.IsFreeToday;
                 // WPF App.xaml.cs:494: the weekly Graded Intake pass. Its TierChanged hooks are
                 // attached by AccountSeed.Seed() below, once the providers exist.
                 CoreEntitlement.IntakePassAvailableProvider = () => IntakePass.IsPassAvailable;
