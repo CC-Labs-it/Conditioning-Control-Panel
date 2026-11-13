@@ -369,4 +369,116 @@ public sealed class ShellTrayTests
             return Task.CompletedTask;
         });
     }
+
+    // ---- restack b40 (#3865): a Flatpak can refuse the tray's D-Bus name after a watcher restart ----
+
+    // Synthetic origin frame, not a captured Flatpak refusal. SetRemoteStackTrace survives the
+    // dispatcher rethrow, exercising the same Exception.StackTrace contract as an async tray failure.
+    private static Tmds.DBus.Protocol.DBusErrorReplyException TrayFailure(
+        string name = "org.freedesktop.DBus.Error.AccessDenied", string message = "org.freedesktop.DBus.Error.AccessDenied")
+    {
+        var error = new Tmds.DBus.Protocol.DBusErrorReplyException(name, message);
+        System.Runtime.ExceptionServices.ExceptionDispatchInfo.SetRemoteStackTrace(error,
+            "   at Avalonia.X11.DBusTrayIconImpl.CreateTrayIcon()\n");
+        return error;
+    }
+
+    private static void Deny()
+    {
+        Dispatcher.UIThread.Post(() => throw TrayFailure());
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    [Fact]
+    public void OnlyDeniedTrayOriginsMatchTheFilter()
+    {
+        var denied = TrayFailure();
+        Assert.True(MainShellWindow.IsDeniedBusName(denied));
+        Assert.True(MainShellWindow.IsDeniedBusName(new InvalidOperationException("wrapped", denied)));
+        Assert.False(MainShellWindow.IsDeniedBusName(null));
+        Assert.False(MainShellWindow.IsDeniedBusName(new InvalidOperationException("DBusTrayIconImpl")));
+        Assert.False(MainShellWindow.IsDeniedBusName(TrayFailure("org.freedesktop.DBus.Error.Failed")));
+        Assert.False(MainShellWindow.IsDeniedBusName(new Tmds.DBus.Protocol.DBusErrorReplyException(
+            "org.freedesktop.DBus.Error.AccessDenied", "Not allowed to own org.kde.StatusNotifierItem-2-4")));
+    }
+
+    [Fact]
+    public Task DeniedTrayBusNameDoesNotEndTheApp() => WithListedTray(shell =>
+    {
+        var denied = TrayFailure();
+        Dispatcher.UIThread.Post(() => throw denied);
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.Post(() => throw new InvalidOperationException("wrapped", denied));
+        Dispatcher.UIThread.RunJobs();
+        var other = new Tmds.DBus.Protocol.DBusErrorReplyException(
+            "org.freedesktop.DBus.Error.AccessDenied", "Unrelated service refused access");
+        Dispatcher.UIThread.Post(() => throw other);
+        Assert.Same(other, Assert.Throws<Tmds.DBus.Protocol.DBusErrorReplyException>(() => Dispatcher.UIThread.RunJobs()));
+        Dispatcher.UIThread.Post(() => throw new InvalidOperationException("other"));
+        Assert.Throws<InvalidOperationException>(() => Dispatcher.UIThread.RunJobs());
+        Assert.True(shell.IsVisible);   // a visible panel is left alone
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task DeniedTrayAfterXToTrayBringsThePanelBack() => WithListedTray(shell =>
+    {
+        shell.TrayHostPresent = () => true;
+        shell.Close();                       // X-to-tray
+        Assert.False(shell.IsVisible);
+        Deny();
+        Assert.True(shell.IsVisible);        // the icon it hid behind is gone
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task DeniedTrayAfterStartMinimizedBringsThePanelBack() => WithListedTray(async shell =>
+    {
+        MainShellWindow.TrayItemQuery = () => TrayItemState.Held;
+        await shell.HideToTrayOnceHeld();
+        Assert.False(shell.IsVisible);
+        Deny();
+        Assert.True(shell.IsVisible);
+    });
+
+    [Fact]
+    public Task DeniedTrayLeavesAPanelHiddenForTheLauncher() => WithListedTray(shell =>
+    {
+        shell.TrayHostPresent = () => true;
+        shell.Close();                       // an earlier X-to-tray...
+        shell.ShowFromTray();
+        shell.HideForLauncher(quiet: true);  // ...then the launcher took over: it is the way back, not the tray
+        Assert.False(shell.IsVisible);
+        Deny();
+        Assert.False(shell.IsVisible);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task DeniedTrayAfterLauncherClosedToTrayBringsTheLauncherBack() => WithListedTray(shell =>
+    {
+        var boot = LauncherWindow.Boot;
+        var session = CoreSession.IsSessionRunningProvider;
+        try
+        {
+            shell.TrayHostPresent = () => true;
+            LauncherWindow.Boot = global::ConditioningControlPanel.Services.Launcher.BootDecision.LauncherFirst;
+            LauncherWindow.RouteBoot(shell);
+            Dispatcher.UIThread.RunJobs();
+            CoreSession.IsSessionRunningProvider = () => true;   // a running session hides the launcher, never exits
+            LauncherWindow.Instance!.RequestClose();
+            Assert.False(LauncherWindow.Instance.IsVisible);    // behind the tray icon, as WPF
+            Assert.False(shell.IsVisible);
+            Deny();
+            Assert.True(LauncherWindow.Instance!.IsVisible);    // the icon is gone: the launcher comes back
+            Assert.False(shell.IsVisible);
+        }
+        finally
+        {
+            CoreSession.IsSessionRunningProvider = session;
+            LauncherWindow.Instance?.Close();
+            LauncherWindow.Boot = boot;
+        }
+        return Task.CompletedTask;
+    });
 }
