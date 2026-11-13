@@ -38,12 +38,12 @@ public sealed class SettingsSwitchTests
             s.RailRecent.Clear();
             w = new MainShellWindow();
             w.Show();
-            await PerfBench.NextFrame(w, Stopwatch.StartNew());
+            await Rendered(w, Stopwatch.StartNew());
             var stages = new Dictionary<string, List<double>>();
             for (int i = 0; i < 21; i++)
             {
                 w.ShowTab("progression");
-                await PerfBench.NextFrame(w, Stopwatch.StartNew());
+                await Rendered(w, Stopwatch.StartNew());
                 w.TabSwitchMeasured = (tab, costs) =>
                 {
                     if (tab != "settings" || i == 0) return;
@@ -58,7 +58,7 @@ public sealed class SettingsSwitchTests
                 var layoutWatch = Stopwatch.StartNew();
                 w.UpdateLayout();
                 var layoutMs = layoutWatch.Elapsed.TotalMilliseconds;
-                var total = await PerfBench.NextFrame(w, watch);
+                var total = await Rendered(w, watch);
                 if (i > 0)
                 {
                     if (!stages.ContainsKey("through-render")) stages["through-render"] = new();
@@ -78,4 +78,13 @@ public sealed class SettingsSwitchTests
             s.RailRecent.Clear(); s.RailRecent.AddRange(recent);
         }
     });
+
+    // The benchmark's own frame wait (the rendered batch), so this trace does not depend on
+    // PerfBench.NextFrame's shape (#4425 returns the handoff and the drawn frame).
+    private static async Task<double> Rendered(global::Avalonia.Controls.TopLevel w, Stopwatch clock)
+    {
+        var compositor = global::Avalonia.Rendering.Composition.ElementComposition.GetElementVisual(w)!.Compositor;
+        await compositor.RequestCompositionBatchCommitAsync().Rendered;
+        return clock.Elapsed.TotalMilliseconds;
+    }
 }

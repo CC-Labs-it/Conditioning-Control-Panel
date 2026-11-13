@@ -118,7 +118,7 @@ public sealed class TabSwitchReuseTests
             {
                 Assert.True(app.TryFindResource(key, out var color));
                 Assert.True(app.TryFindResource(key + "Brush", out var brush));
-                Assert.Equal((Color)color!, Assert.IsType<SolidColorBrush>(brush).Color);
+                Assert.Equal((Color)color!, Assert.IsAssignableFrom<ISolidColorBrush>(brush).Color);   // trunk: immutable brushes (SectionInkResources)
             }
             Assert.True(app.TryFindResource("SectionInk", out var ink));
             Assert.Equal(NavStripRules.Ink(NavSections.Play), (Color)ink!);
