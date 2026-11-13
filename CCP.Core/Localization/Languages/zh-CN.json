@@ -6342,6 +6342,7 @@
   "nav_tab_lobby": "Lobby",
   "nav_badge_open": "{0} open",
   "nav_crumb_sep": "›",
+  "cloud_sync_issue": "云同步出现问题",
   "settings_section_monitors": "Monitors",
   "set2_section_wallpaper": "壁纸",
   "settings_section_plans": "Account & Plans",

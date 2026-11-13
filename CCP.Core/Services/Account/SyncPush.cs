@@ -118,6 +118,10 @@ namespace ConditioningControlPanel.Services
         public Func<DateTime> UtcNow = () => DateTime.UtcNow;
 
         // Failure backoff (release/6.11.5, WPF ProfileSyncService.NoteSyncFailureForBackoff). Touched only inside _gate.
+        public event EventHandler<int>? SyncHealthChanged;
+        public int ConsecutiveSyncFailures { get; private set; }
+
+        private bool _hasSyncError;
         private int _backoffFailures;
         private DateTime? _blockedUntilUtc;
         private string? _backoffToken;
@@ -130,6 +134,9 @@ namespace ConditioningControlPanel.Services
 
         private void NoteFailureForBackoff(int? status, string? tokenUsed)
         {
+            _hasSyncError = true;
+            ConsecutiveSyncFailures++;
+            SyncHealthChanged?.Invoke(this, ConsecutiveSyncFailures);
             _backoffFailures++;
             var wait = SyncFailureBackoff.Delay(_backoffFailures);
             _blockedUntilUtc = UtcNow() + wait;
@@ -299,6 +306,9 @@ namespace ConditioningControlPanel.Services
                 if (watermark > 0 && totalXp < watermark)
                 {
                     Log.Error("[XP watermark] Sync REFUSED — would push {Xp} XP, below the {Watermark} XP last agreed", (int)totalXp, (int)watermark);
+                    _hasSyncError = true;
+                    ConsecutiveSyncFailures++;
+                    SyncHealthChanged?.Invoke(this, ConsecutiveSyncFailures);
                     return false;
                 }
                 var id = s.UnifiedId!;
@@ -354,10 +364,24 @@ namespace ConditioningControlPanel.Services
                 if (!response.IsSuccessStatusCode)
                 {
                     // Contract D: merged tombstone; the head's recovery re-signs in and reloads.
-                    if (V2AuthService.MergedRecovery is { } merged && await merged(response, json)) return false;
+                    if (V2AuthService.MergedRecovery is { } merged && await merged(response, json))
+                    {
+                        // WPF records the deferred merge as an error without starting backoff.
+                        _hasSyncError = true;
+                        ConsecutiveSyncFailures++;
+                        SyncHealthChanged?.Invoke(this, ConsecutiveSyncFailures);
+                        return false;
+                    }
                     // 429, and a 409 no recovery handled: cool down rather than retry on every trigger.
                     if (response.StatusCode is (HttpStatusCode)429 or HttpStatusCode.Conflict)
                     {
+                        // WPF retains LastSyncError on 429 and counts it in the finally block.
+                        if (response.StatusCode == HttpStatusCode.Conflict || _hasSyncError)
+                        {
+                            _hasSyncError = true;
+                            ConsecutiveSyncFailures++;
+                            SyncHealthChanged?.Invoke(this, ConsecutiveSyncFailures);
+                        }
                         LastSyncTime = UtcNow();
                         Log.Warning("V2 Profile sync refused by server ({Status}), will retry after the cooldown", (int)response.StatusCode);
                         return false;
@@ -369,6 +393,12 @@ namespace ConditioningControlPanel.Services
                 LastSyncTime = UtcNow();
                 Interlocked.Increment(ref _syncSuccesses);
                 (_backoffFailures, _blockedUntilUtc) = (0, null);
+                _hasSyncError = false;
+                if (ConsecutiveSyncFailures > 0)
+                {
+                    ConsecutiveSyncFailures = 0;
+                    SyncHealthChanged?.Invoke(this, 0);
+                }
                 // The clear has reached the server; an empty loadout goes back to meaning "no change" (WPF).
                 if (clearing && cosmetics?.IsEmpty == true) _pendingCosmeticsClear = false;
                 Log.Information("V2 Profile synced successfully ({Bytes} bytes)", json.Length);

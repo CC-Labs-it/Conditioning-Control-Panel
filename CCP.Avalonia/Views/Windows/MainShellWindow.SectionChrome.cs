@@ -14,8 +14,7 @@
 //
 // The edge lift laps at Full and rests at Reduced. Still missing: the edge fog the band thins for
 // (AmbientFxCanvas.EdgeFog), the depth painters the wash feeds
-// (PaintDepthHome), the "Moved" redirects and their note, and the "Cloud sync
-// issue" title suffix (SetSyncIssueTitle: no cloud profile sync on this head).
+// (PaintDepthHome) and the "Moved" redirects and their note.
 
 using System;
 using System.Linq;
@@ -429,19 +428,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         private string? _navBaseTitle;
+        private (string? Section, string Tab, string? Page) _navTitleParts = (null, "settings", null);
+        private bool _syncIssueTitle;
+
+        internal void OnSyncHealthChanged(object? sender, int failures)
+        {
+            void Apply()
+            {
+                if (_windowClosed) return;
+                if (failures >= 3) _syncIssueTitle = true;
+                else if (failures == 0) _syncIssueTitle = false;
+                else return;
+                UpdateNavTitle(_navTitleParts.Section, _navTitleParts.Tab, _navTitleParts.Page);
+            }
+            if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) Apply();
+            else global::Avalonia.Threading.Dispatcher.UIThread.Post(Apply);
+        }
+
 
         /// <summary>WPF UpdateNavTitle (:364): "Conditioning Control Panel - Play › Lobby", the fourth
         /// "you are here" cue. Home's dashboard names only the section.</summary>
         internal void UpdateNavTitle(string? section, string tab, string? pageLabel)
         {
             _navBaseTitle ??= Title;
+            _navTitleParts = (section, tab, pageLabel);
             var sectionLabel = section == null ? null : Loc.Get(NavSections.Find(section)?.LabelKey ?? string.Empty);
             var page = pageLabel ?? (section == NavSections.Home && (string.IsNullOrEmpty(tab) || tab == "settings")
                 ? null : Loc.Get(NavStripTable.PageLabelKey(tab) ?? string.Empty));
-            Title = string.IsNullOrEmpty(sectionLabel) ? _navBaseTitle
+            var title = string.IsNullOrEmpty(sectionLabel) ? _navBaseTitle
                 : string.IsNullOrEmpty(page)
                     ? $"{_navBaseTitle} - {sectionLabel}"
                     : $"{_navBaseTitle} - {sectionLabel} {Loc.Get("nav_crumb_sep")} {page}";
+            Title = _syncIssueTitle ? $"{title} - {Loc.Get("cloud_sync_issue")}" : title;
         }
 
         /// <summary>The label of the Settings section whose pill is checked (null if none). WPF :340.</summary>

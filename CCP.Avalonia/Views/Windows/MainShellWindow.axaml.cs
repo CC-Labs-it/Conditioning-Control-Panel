@@ -88,6 +88,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public MainShellWindow()
         {
             AvaloniaXamlLoader.Load(this);
+            if (Platform.AccountSeed.Sync is { } sync)
+            {
+                sync.SyncHealthChanged += OnSyncHealthChanged;
+                Closed += (_, _) => sync.SyncHealthChanged -= OnSyncHealthChanged;
+                OnSyncHealthChanged(sync, sync.ConsecutiveSyncFailures);
+            }
+            void RefreshSyncTitle(object? sender, EventArgs e)
+            {
+                if (_syncIssueTitle) OnSyncHealthChanged(sender, 3);
+            }
+            ConditioningControlPanel.Localization.LocalizationManager.Instance.LanguageChanged += RefreshSyncTitle;
+            Closed += (_, _) => ConditioningControlPanel.Localization.LocalizationManager.Instance.LanguageChanged -= RefreshSyncTitle;
             Closed += (_, _) => Platform.FriendsLanding.Stop(); // WPF Services/Friends/FriendsLanding.cs:75-82: ownerless notices must not hold exit.
             Closed += (_, _) => _directoryPillView.Dispose();
             Opened += (_, _) => StartChatHotkey();
