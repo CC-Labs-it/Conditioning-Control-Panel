@@ -65,7 +65,7 @@ public sealed class HeaderLevelLiveTests
             Assert.Equal($"{Loc.Get("label_level")} 11", Text("ProfileMenuLevel"));   // the bubble rail agrees
 
             s.MotionLevel = MotionLevel.Full;          // the fill tweens instead of snapping
-            ProgressionBank.Add(1, "Quest");
+            ProgressionBank.Add(1, "Mantra"); // weather uses the ordinary odometer; BankShellTests covers held completions
             Dispatcher.UIThread.RunJobs();
             Assert.Equal($"5 / {(int)Need(11)} XP", Text("TxtXP"));
             clock.Advance(TimeSpan.FromSeconds(0.7));

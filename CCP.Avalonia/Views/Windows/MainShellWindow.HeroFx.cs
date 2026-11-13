@@ -11,7 +11,7 @@
 // The profile menu's Level/XP rail is painted from the same numbers.
 // XP readout, meniscus and chip pop now follow WPF on the existing shared beat (see below).
 //
-// Remaining: THE BANK counter hold depends on the pot/flight host (MainShellWindow.BankFx.cs).
+// THE BANK counter hold, pot and flights live in MainShellWindow.BankFx.cs (includes #3538).
 // Level-up particles live in MainShellWindow.EventFx.cs (CelebrateLevelUp); HeroMoments calls it, one burst.
 // Save tick/ripple is live through BtnSave_Click (MainShellWindow.Settings.cs) -> FlashSaveAbsorb (HeroMoments.cs).
 // Sign-in, startup profile restore and logout repaint through UpdateQuickLoginUI
@@ -49,8 +49,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// so they come off again when the window closes.</summary>
         private void HookLevelDisplay()
         {
-            Action<double, string> awarded = (_, _) => Dispatcher.UIThread.Post(UpdateLevelDisplay);
-            Action<int> levelUp = level => Dispatcher.UIThread.Post(() => CelebrateHeroLevelUp(level));
+            Action<double, string> awarded = (_, source) => Dispatcher.UIThread.Post(() => { ArmBankHold(source); UpdateLevelDisplay(); });
+            Action<int> levelUp = level => Dispatcher.UIThread.Post(() => { StopBankFx(false); CelebrateHeroLevelUp(level); });
+            HookBankFx();
             HookHeroXpFx();
             HookHeroMoments();
             ProgressionBank.Awarded += awarded;
@@ -85,16 +86,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     });
                 var needed = XpCurve.GetXPForLevel(level, XpCurve.EpochOf(s));
                 if (Named<TextBlock>("TxtLevelLabel") is { } label) label.Text = $"LVL {level}";
-                if (Named<TextBlock>("TxtXP") is { } txt) AnimateXpReadout(txt, xp, needed, level);
-                _xpFraction = Math.Min(1.0, needed > 0 ? xp / needed : 0);
-                FillXpBar(animate: true);
+                if (!_bankHolding)
+                {
+                    if (Named<TextBlock>("TxtXP") is { } txt) AnimateXpReadout(txt, xp, needed, level);
+                    _xpFraction = Math.Min(1.0, needed > 0 ? xp / needed : 0);
+                    FillXpBar(animate: true);
+                }
 
                 // WPF RefreshProfileMenu (MainWindow.ProfileBubble.cs:315-326): same numbers as the bar.
                 if (Named<TextBlock>("ProfileMenuLevel") is { } menuLevel) menuLevel.Text = $"{Loc.Get("label_level")} {level}";
                 if (Named<TextBlock>("ProfileMenuXp") is { } menuXp) menuXp.Text = $"{xp:F0} / {needed:F0} {Loc.Get("label_xp")}";
                 if (Named<Grid>("ProfileMenuXpRail")?.ColumnDefinitions is { Count: 2 } cols)
                 {
-                    var pct = Math.Clamp(_xpFraction, 0.0, 1.0);
+                    var pct = Math.Clamp(needed > 0 ? xp / needed : 0, 0.0, 1.0);
                     cols[0].Width = new GridLength(pct, GridUnitType.Star);
                     cols[1].Width = new GridLength(1.0 - pct, GridUnitType.Star);
                 }
@@ -170,6 +174,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // instead of importing the trunk's independent 16ms DispatcherTimer.
         private void AnimateXpReadout(TextBlock txt, double xp, double needed, int level)
         {
+            _bankStep?.Stop();
             // WPF MainWindow.ChromeFx.cs:681 rounds the odometer; :690 truncates the snap path.
             string target = xp.ToString("F0", System.Globalization.CultureInfo.CurrentCulture) + $" / {(int)needed} XP";
             // Awarded and LevelUp can repaint the same total in one dispatcher turn. Keep the
