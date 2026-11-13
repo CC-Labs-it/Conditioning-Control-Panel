@@ -200,6 +200,11 @@ namespace ConditioningControlPanel.Services
             b._top = areaY / scaling - b.Size - 50;
             b.X = b._startX = (areaX + r.Next(50, (int)Math.Max(100, areaW - b.Size - 50))) / scaling;
             b.Y = (areaY + areaH) / scaling;
+            if (spec.SpawnAtPxX is double px && spec.SpawnAtPxY is double py)
+            {
+                b.X = b._startX = px / scaling - b.Size / 2;
+                b.Y = py / scaling - b.Size / 2;
+            }
             return b;
         }
 

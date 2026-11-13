@@ -351,6 +351,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             else
             {
                 var i = Field.Random.Next(Targets.Count);
+                if (spec.SpawnAtPxX is double x && spec.SpawnAtPxY is double y)
+                {
+                    for (var n = 0; n < Targets.Count; n++)
+                    {
+                        var bounds = Targets[n].Bounds;
+                        if (x >= bounds.X && x < bounds.Right && y >= bounds.Y && y < bounds.Bottom)
+                        { i = n; break; }
+                    }
+                }
                 var a = Targets[i].WorkingArea;
                 b = AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec);
             }
