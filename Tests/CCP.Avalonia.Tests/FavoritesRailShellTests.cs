@@ -61,6 +61,16 @@ public sealed class FavoritesRailShellTests
                 Assert.Equal(new[] { "tab.haptics" }, Tags(recent));
                 Assert.False(dash.FindControl<TextBlock>("RecentEmpty")!.IsVisible);
 
+                // A repeat show must not replace either stack's visuals or build any chips.
+                var chips = recent.Children.ToArray();
+                int builds = w.RailChipBuildCount;
+                w.ShowTab("settings");
+                w.ShowTab("progression");
+                w.ShowTab("settings");
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(builds, w.RailChipBuildCount);
+                Assert.Equal(chips, recent.Children.ToArray());
+
                 // Right-click the Studio strip's Haptics pill (WPF ea2d4cfca; the rail rows left):
                 // the menu reads "Pin to favorites" and pins it.
                 w.ShowTab("haptics");
@@ -80,6 +90,21 @@ public sealed class FavoritesRailShellTests
                 var chip = (Button)favs.Children[0];
                 Assert.IsType<ImageBrush>(chip.Background);   // features/vibe.png, cover-cropped
                 Assert.True(HasPadlock(chip), "a locked destination's chip wears no padlock");
+
+                // Visits change only RECENT; a pinned chip retains its visual and context menu.
+                int pinnedBuilds = w.RailChipBuildCount;
+                w.ShowTab("appsettings");
+                w.ShowTab("settings");
+                Dispatcher.UIThread.RunJobs();
+                Assert.Same(chip, favs.Children[0]);
+                Assert.Equal(pinnedBuilds + 1, w.RailChipBuildCount);
+                var recentChip = Assert.Single(recent.Children);
+                w.ShowTab("studio");
+                w.ShowTab("appsettings"); // reorder existing recents
+                w.ShowTab("settings");
+                Dispatcher.UIThread.RunJobs();
+                Assert.Contains(recentChip, recent.Children);
+                Assert.Same(recentChip, recent.Children[0]);
 
                 // A tier change repaints through RefreshNavPremiumTags (App.axaml.cs RepaintVeils),
                 // exactly as WPF NavPremiumTags.cs:158 repaints the chips.
