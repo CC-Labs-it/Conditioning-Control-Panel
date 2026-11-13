@@ -115,7 +115,8 @@ public sealed class CoreStandInTests
         typeof(PresetsTabView).GetMethod("SelectPreset", BindingFlags.NonPublic | BindingFlags.Instance)!
             .Invoke(tab, new object[] { first });
         Assert.True(export.IsEnabled);
-        Assert.Equal(ConditioningControlPanel.CoreMods.MakeModAware(first.Name), Text(tab, "TxtDetailTitle"));
+        // Built-in presets read their mod-aware variant name (WPF MainWindow.Presets.cs:404, PresetNaming; b05).
+        Assert.Equal(ConditioningControlPanel.Services.PresetNaming.DisplayName(first), Text(tab, "TxtDetailTitle"));
     });
 
     [Fact]
